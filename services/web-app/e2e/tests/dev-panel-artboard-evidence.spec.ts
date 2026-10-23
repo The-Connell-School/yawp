@@ -179,7 +179,10 @@ test.describe('Dev panel artboard evidence', () => {
     });
     await feedbackDialog.getByRole('button', { name: 'Send feedback' }).click();
     await expect(feedbackDialog.getByRole('alert')).toContainText(
-      "Couldn't send your feedback. Your note is still here."
+      "Couldn't send your feedback"
+    );
+    await expect(feedbackDialog.getByRole('alert')).toContainText(
+      'Your note is still here. Check your connection and try again.'
     );
     await shot(page, '60');
 

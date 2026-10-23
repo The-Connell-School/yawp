@@ -16,6 +16,8 @@ export async function ensureDevPanelSignedOutTesterUser() {
     },
     select: { id: true },
   });
+  await prisma.password.deleteMany({ where: { userId: user.id } });
+  await prisma.orgMembership.deleteMany({ where: { userId: user.id } });
   return user.id;
 }
 

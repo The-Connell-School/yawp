@@ -16,6 +16,9 @@ function decodeDataUrl(dataUrl: string) {
   if (!match) return { ok: false as const, reason: 'format' as const };
   const mime = match[1]!.toLowerCase();
   const base64 = match[2]!;
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) {
+    return { ok: false as const, reason: 'decode' as const };
+  }
   let bytes: Uint8Array;
   try {
     const binary = Buffer.from(base64, 'base64');

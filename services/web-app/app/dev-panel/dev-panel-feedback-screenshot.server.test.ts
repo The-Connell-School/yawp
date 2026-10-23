@@ -15,4 +15,11 @@ describe('parseDevPanelFeedbackScreenshot', () => {
     const result = parseDevPanelFeedbackScreenshot('data:text/plain;base64,Ym9v');
     expect(result.ok).toBe(false);
   });
+
+  test('rejects invalid base64 characters', () => {
+    const result = parseDevPanelFeedbackScreenshot(
+      'data:image/jpeg;base64,not-valid-base64!!!'
+    );
+    expect(result.ok).toBe(false);
+  });
 });

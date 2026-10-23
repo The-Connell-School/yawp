@@ -30,6 +30,7 @@ import { useDevPanel } from './dev-panel-provider';
 import {
   FREE_TIER_STATE_GROUPS,
   findFreeTierState,
+  isCatalogFreeTierJumpLabel,
 } from './free-tier-states.catalog';
 const JUMP_TOAST_KEY = 'yawp-dev-panel-jump-toast';
 const JUMP_TOAST_QUERY = 'devPanelJumpToast';
@@ -38,17 +39,26 @@ export function consumeDevPanelJumpToast() {
   if (typeof window === 'undefined') return;
   const params = new URLSearchParams(window.location.search);
   const fromQuery = params.get(JUMP_TOAST_QUERY);
-  if (fromQuery) {
+  if (fromQuery && isCatalogFreeTierJumpLabel(fromQuery)) {
     params.delete(JUMP_TOAST_QUERY);
     const next = `${window.location.pathname}${params.size ? `?${params}` : ''}${window.location.hash}`;
     window.history.replaceState(null, '', next);
-    toast.success(`Jumped to ${fromQuery}`, { className: 'yawp-dev-panel-jump-toast' });
+    showDevPanelJumpToast(fromQuery);
     return;
   }
   const label = window.sessionStorage.getItem(JUMP_TOAST_KEY);
-  if (!label) return;
+  if (!label || !isCatalogFreeTierJumpLabel(label)) return;
   window.sessionStorage.removeItem(JUMP_TOAST_KEY);
-  toast.success(`Jumped to ${label}`, { className: 'yawp-dev-panel-jump-toast' });
+  showDevPanelJumpToast(label);
+}
+
+function showDevPanelJumpToast(label: string) {
+  toast.success(
+    <span>
+      Jumped to: <span className="font-semibold">{label}</span>
+    </span>,
+    { className: 'yawp-dev-panel-jump-toast' }
+  );
 }
 
 function appendJumpToastToRedirect(redirectTo: string, label: string) {
@@ -274,7 +284,7 @@ export function DevPanelFreeTierFlyout({
         >
           <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <div>
-            <p className="font-semibold">{`Couldn't jump to '${error}'`}</p>
+            <p className="font-semibold">{`Couldn't jump to "${error}"`}</p>
             <p>
               Your choice is still selected. Try again, or pick another state.
             </p>

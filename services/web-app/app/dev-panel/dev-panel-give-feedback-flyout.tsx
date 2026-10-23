@@ -69,6 +69,8 @@ export function DevPanelGiveFeedbackFlyout({
   const [screenshotOmitted, setScreenshotOmitted] = useState(false);
   const [status, setStatus] = useState<'idle' | 'submitting' | 'sent' | 'error'>('idle');
   const [error, setError] = useState('');
+  const [serverError, setServerError] = useState('');
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const note = feedbackNoteValue(state.forms.feedbackNote);
   const signedOut = !rootData?.user?.email;
   const sentPathRef = useRef(path);
@@ -124,6 +126,8 @@ export function DevPanelGiveFeedbackFlyout({
     }
     setStatus('submitting');
     setError('');
+    setServerError('');
+    setErrorStatus(null);
     try {
       const response = await fetch('/api/dev-panel/feedback', {
         method: 'POST',
@@ -139,7 +143,11 @@ export function DevPanelGiveFeedbackFlyout({
       });
       const result = await response.json().catch(() => null);
       if (!response.ok || !result?.ok) {
-        setError(result?.error ?? 'Could not send feedback.');
+        const message =
+          typeof result?.error === 'string' ? result.error : 'Could not send feedback.';
+        setServerError(message);
+        setError(message);
+        setErrorStatus(response.status);
         setStatus('error');
         return;
       }
@@ -148,6 +156,8 @@ export function DevPanelGiveFeedbackFlyout({
     } catch {
       setStatus('error');
       setError('');
+      setServerError('');
+      setErrorStatus(null);
     }
   };
 
@@ -310,7 +320,9 @@ export function DevPanelGiveFeedbackFlyout({
             <div>
               <p className="font-semibold">Couldn&apos;t send your feedback</p>
               <p>
-                Your note is still here. Check your connection and try again.
+                {errorStatus === 400 || errorStatus === 413 || errorStatus === 429
+                  ? serverError
+                  : 'Your note is still here. Check your connection and try again.'}
               </p>
             </div>
           </div>

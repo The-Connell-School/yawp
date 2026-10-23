@@ -6,6 +6,7 @@ import {
 } from '~/utils/demo-feedback-context';
 import { getUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { acceptsFeedbackOrigin } from '~/utils/tester-feedback.server';
 import { assertDevPanelRoute } from './dev-panel-route-guard.server';
 import { devPanelFeedbackPath } from './dev-panel-feedback-path';
 import {
@@ -82,14 +83,44 @@ type FeedbackRowInput = {
   screenshot: string | null;
 };
 
-async function saveDevPanelFeedback(input: FeedbackRowInput, rateLimitKey: string) {
+function feedbackEnvironment() {
+  return (
+    process.env.PREVIEW_SLUG ||
+    process.env.YAWP_ENVIRONMENT ||
+    process.env.NODE_ENV ||
+    'development'
+  ).slice(0, 100);
+}
+
+function signedOutSeatAttributionPrefix(seatLabel: string) {
+  return `${SIGNED_OUT_ATTRIBUTION} (${seatLabel.slice(0, 80)})`;
+}
+
+function recentFeedbackCountWhere(
+  userId: string,
+  rateLimitKey: string,
+  signedOutSeatLabel: string | null
+) {
+  const since = { gte: new Date(Date.now() - 600_000) };
+  if (rateLimitKey === userId || !signedOutSeatLabel) {
+    return { userId, createdAt: since };
+  }
+  return {
+    userId,
+    whatIDid: { startsWith: signedOutSeatAttributionPrefix(signedOutSeatLabel) },
+    createdAt: since,
+  };
+}
+
+async function saveDevPanelFeedback(
+  input: FeedbackRowInput,
+  rateLimitKey: string,
+  signedOutSeatLabel: string | null
+) {
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('tester_feedback:' || ${rateLimitKey}))`;
     const count = await tx.testerFeedback.count({
-      where: {
-        userId: input.userId,
-        createdAt: { gte: new Date(Date.now() - 600_000) },
-      },
+      where: recentFeedbackCountWhere(input.userId, rateLimitKey, signedOutSeatLabel),
     });
     if (count >= 5) return false;
     await tx.testerFeedback.create({ data: input });
@@ -97,12 +128,15 @@ async function saveDevPanelFeedback(input: FeedbackRowInput, rateLimitKey: strin
   });
 }
 
-async function resolveFeedbackAuthor(request: Request) {
-  const signedIn = await getUserId(request);
-  if (signedIn) return { userId: signedIn, signedOut: false as const };
-  const seat = await getPreviewAccessSeat(request);
+async function resolveFeedbackAuthor(
+  signedInUserId: string | null,
+  previewSeat: Awaited<ReturnType<typeof getPreviewAccessSeat>>
+) {
+  if (signedInUserId) {
+    return { userId: signedInUserId, signedOut: false as const, seat: previewSeat };
+  }
   const userId = await ensureDevPanelSignedOutTesterUser();
-  return { userId, signedOut: true as const, seat };
+  return { userId, signedOut: true as const, seat: previewSeat };
 }
 
 function actionSummary(actions: FeedbackAction[]) {
@@ -133,9 +167,12 @@ export async function submitDevPanelFeedback(request: Request) {
   if (request.method !== 'POST') {
     return new Response(null, { status: 405, headers: { Allow: 'POST' } });
   }
-  const requestOrigin = new URL(request.url).origin;
-  const origin = request.headers.get('origin');
-  if (origin && origin !== requestOrigin) {
+  const environment = feedbackEnvironment();
+  const originHeader = request.headers.get('origin');
+  if (
+    originHeader &&
+    !acceptsFeedbackOrigin(request, environment)
+  ) {
     return json({ error: 'Invalid origin' }, 403);
   }
   if (request.headers.get('content-type')?.split(';')[0] !== 'application/json') {
@@ -175,16 +212,16 @@ export async function submitDevPanelFeedback(request: Request) {
     }
     screenshot = shot.screenshot;
   }
-  const author = await resolveFeedbackAuthor(request);
-  if (author.signedOut && isPreviewDevLoginAccessCodeRequired()) {
-    if (!author.seat) {
-      return json({ error: 'Preview access code required.' }, 401);
-    }
+  const signedInUserId = await getUserId(request);
+  const previewSeat = signedInUserId ? null : await getPreviewAccessSeat(request);
+  if (!signedInUserId && isPreviewDevLoginAccessCodeRequired() && !previewSeat) {
+    return json({ error: 'Preview access code required.' }, 401);
   }
-  const seatLabel = author.seat?.label?.trim();
+  const author = await resolveFeedbackAuthor(signedInUserId, previewSeat);
+  const seatLabel = author.seat?.label?.trim() ?? null;
   const signedOutPrefix =
     author.signedOut && seatLabel
-      ? `${SIGNED_OUT_ATTRIBUTION} (${seatLabel.slice(0, 80)})`
+      ? signedOutSeatAttributionPrefix(seatLabel)
       : author.signedOut
         ? SIGNED_OUT_ATTRIBUTION
         : '';
@@ -192,12 +229,6 @@ export async function submitDevPanelFeedback(request: Request) {
     .filter(Boolean)
     .join(' ')
     .slice(0, 4000);
-  const environment = (
-    process.env.PREVIEW_SLUG ||
-    process.env.YAWP_ENVIRONMENT ||
-    process.env.NODE_ENV ||
-    'development'
-  ).slice(0, 100);
   const rateLimitKey =
     author.signedOut && author.seat
       ? devPanelSeatRateLimitKey(author.seat)
@@ -216,7 +247,8 @@ export async function submitDevPanelFeedback(request: Request) {
         actions: parsed.data.actions,
         screenshot,
       },
-      rateLimitKey
+      rateLimitKey,
+      author.signedOut && seatLabel ? seatLabel : null
     );
     if (!saved) {
       return json(

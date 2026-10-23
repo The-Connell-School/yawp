@@ -115,48 +115,69 @@ export async function loader({ request }: LoaderFunctionArgs) {
     contrastCookie.contrast === 'high' ? 'high' : 'standard';
 
   if (publicLandingPage && !internal) {
-    const { getUserId } = await import('./utils/auth.server.ts');
-    const { prisma } = await import('./utils/db.server.ts');
-    const userId = await getUserId(request);
     const previewAccessSeat = isPreviewDevLoginAccessCodeRequired()
       ? await getPreviewAccessSeat(request)
       : null;
     const devPanelEnabled = isDevPanelRuntimeEnabled();
-    const userRecord = userId
-      ? await prisma.user.findUnique({
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            username: true,
-            mustChangePassword: true,
-            isTester: process.env.TESTER_FEEDBACK_ENABLED === 'true',
-            isAdmin: true,
-            memberships: {
-              orderBy: { createdAt: 'asc' },
-              select: {
-                id: true,
-                role: true,
-                isOrgOwner: true,
-                organizationId: true,
-                organization: { select: { name: true } },
+    let user = null;
+    if (devPanelEnabled) {
+      const { getUserId } = await import('./utils/auth.server.ts');
+      const { prisma } = await import('./utils/db.server.ts');
+      const userId = await getUserId(request);
+      const membershipWhere = userId
+        ? await getRootMembershipWhere({
+            userId,
+            internal,
+            previewAccessSeat,
+            isolatedPreviewSeatMode: isIsolatedPreviewSeatMode(),
+          })
+        : undefined;
+      const userRecord = userId
+        ? await prisma.user.findUnique({
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              username: true,
+              mustChangePassword: true,
+              isTester: process.env.TESTER_FEEDBACK_ENABLED === 'true',
+              isAdmin: true,
+              memberships: {
+                ...(membershipWhere ? { where: membershipWhere } : {}),
+                orderBy: { createdAt: 'asc' },
+                select: {
+                  id: true,
+                  role: true,
+                  isOrgOwner: true,
+                  organizationId: true,
+                  organization: {
+                    select: {
+                      name: true,
+                      plan: true,
+                      reporterEnabled: true,
+                      classInsightsEnabled: true,
+                      writingPracticeEnabled: true,
+                      submissionActivityEnabled: true,
+                    },
+                  },
+                },
               },
             },
-          },
-          where: { id: userId },
-        })
-      : null;
-    const membershipId = await getMembershipId(request);
-    const selectedMembership =
-      userRecord?.memberships.find((m) => m.id === membershipId) ??
-      userRecord?.memberships[0];
-    const user = userRecord
-      ? {
-          ...userRecord,
-          isAdmin: Boolean(userRecord.isAdmin),
-          selectedMembership,
-        }
-      : null;
+            where: { id: userId },
+          })
+        : null;
+      const membershipId = await getMembershipId(request);
+      const selectedMembership =
+        userRecord?.memberships.find((m) => m.id === membershipId) ??
+        userRecord?.memberships[0];
+      user = userRecord
+        ? {
+            ...userRecord,
+            isAdmin: Boolean(userRecord.isAdmin),
+            selectedMembership,
+          }
+        : null;
+    }
     return data(
       {
         testerFeedbackAvailable: false,
@@ -466,16 +487,23 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         },
       });
 
-      // Identify user if logged in
-      if (data.user) {
-        posthog.identify(data.user.id, {
-          ...(data.user.email ? { email: data.user.email } : {}),
-          ...(data.user.username ? { username: data.user.username } : {}),
-          name: data.user.name,
-          membership_id: data.user.selectedMembership?.id,
-          is_admin: data.user.isAdmin,
-          is_owner: data.user.selectedMembership?.isOrgOwner,
-          ...omit(data.user, ['id', 'email', 'name', 'username']),
+      const publicLandingPath =
+        data.requestInfo.path === '/' ||
+        data.requestInfo.path === '/info' ||
+        data.requestInfo.path === '/privacy' ||
+        data.requestInfo.path === '/terms';
+      const shouldIdentifyUser =
+        data.user && !(publicLandingPath && !data.devPanelEnabled);
+      if (shouldIdentifyUser && data.user) {
+        const identifiedUser = data.user;
+        posthog.identify(identifiedUser.id, {
+          ...(identifiedUser.email ? { email: identifiedUser.email } : {}),
+          ...(identifiedUser.username ? { username: identifiedUser.username } : {}),
+          name: identifiedUser.name,
+          membership_id: identifiedUser.selectedMembership?.id,
+          is_admin: identifiedUser.isAdmin,
+          is_owner: identifiedUser.selectedMembership?.isOrgOwner,
+          ...omit(identifiedUser, ['id', 'email', 'name', 'username']),
         });
       }
     }
