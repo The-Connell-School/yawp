@@ -27,12 +27,13 @@ describe('back to sign in link visibility', () => {
   });
 
   test('is hidden on admin approval pages', () => {
-    expect(shouldShowCardPageBackLink('/free/admin/approve', false)).toBe(
-      false
-    );
-    expect(
-      shouldShowCardPageBackLink('/free/admin/not-right-person', false)
-    ).toBe(false);
+    for (const path of [
+      '/free/admin/approve',
+      '/free/admin/approve/deny',
+      '/free/admin/not-right-person',
+    ] as const) {
+      expect(shouldShowCardPageBackLink(path, false)).toBe(false);
+    }
   });
 
   test('shows on a normal signed-out card page', () => {
