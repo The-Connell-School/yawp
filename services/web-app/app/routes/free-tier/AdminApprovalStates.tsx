@@ -25,7 +25,7 @@ import {
   linkReplacedBody,
   thankYouBody,
 } from '~/domain/free-tier/admin-approval-copy';
-import { useAdminCopyPass1 } from './useAdminCopyPass1';
+import { useFreeTierEnabled } from './useFreeTierLayoutContext';
 import {
   FreeTierAuthCard,
   FreeTierPerson,
@@ -130,7 +130,7 @@ export function AdminLinkInvalidCard({
   teacherName?: string;
   schoolName?: string;
 } = {}) {
-  const pass1 = useAdminCopyPass1();
+  const pass1 = useFreeTierEnabled();
   return (
     <FreeTierAuthCard title="We couldn't open this link" icon={<CircleAlert />} status>
       <p className="text-sm text-muted-foreground">
@@ -153,7 +153,7 @@ export function AdminLinkReplacedCard({
   schoolName: string;
   variant?: AdminLinkReplacedVariant;
 }) {
-  const pass1 = useAdminCopyPass1();
+  const pass1 = useFreeTierEnabled();
   return (
     <FreeTierAuthCard title="This link was replaced" icon={<Info />} status>
       <p className="text-sm text-muted-foreground">
@@ -176,7 +176,7 @@ export function AdminForwardSentCard({
   recipientEmail: string;
   manualReview?: boolean;
 }) {
-  const pass1 = useAdminCopyPass1();
+  const pass1 = useFreeTierEnabled();
   return (
     <FreeTierAuthCard title="Request forwarded" icon={<Send />} status>
       <p className="text-sm text-muted-foreground">
@@ -202,7 +202,7 @@ export function AdminApprovePageIntro({
   schoolName: string;
   teacherEmail?: string;
 }) {
-  const pass1 = useAdminCopyPass1();
+  const pass1 = useFreeTierEnabled();
   return (
     <>
       {pass1 ? (

@@ -12,6 +12,7 @@ import {
   renderAdminApprovalEmailPlainText,
   renderAdminApprovalEmailSubject,
   adminApprovalTeacherRerouteLead,
+  adminApprovalReminderMutedLead,
 } from './admin-approval-copy';
 
 test('initial admin approval subject names teacher and school', () => {
@@ -57,6 +58,31 @@ test('admin approval plain text includes link lines and footer', () => {
     approveUrl: 'https://yawp.school/free/admin/approve?t=a',
     notRightPersonUrl: 'https://yawp.school/free/admin/not-right-person?t=n',
   });
+});
+
+test('pass1 E2 reminder muted lead names teacher at school', () => {
+  expect(
+    adminApprovalReminderMutedLead({
+      teacherName: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+      pass1: true,
+    })
+  ).toBe(
+    'A quick reminder: Jordan Rivera at Lincoln High School is still waiting on your approval.'
+  );
+});
+
+test('pass1 E2f forwarded reminder muted lead names forwarder', () => {
+  expect(
+    adminApprovalReminderMutedLead({
+      teacherName: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+      forwardedByAdminName: 'Sam Chen',
+      pass1: true,
+    })
+  ).toBe(
+    "A quick reminder: Sam Chen forwarded Jordan Rivera's request at Lincoln High School to you, and it's still waiting on your approval."
+  );
 });
 
 test('pass1 E1 preheader names teacher at school', () => {

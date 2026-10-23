@@ -5,14 +5,14 @@ import {
 } from 'react-router';
 import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
-import type { FreeTierAdminLayoutContext } from '../free-tier/useAdminCopyPass1';
+import type { FreeTierLayoutContext } from '../free-tier/useFreeTierLayoutContext';
 
 /** Layout for /free, /free/join, and /free/admin/* public free-tier routes. */
 export async function loader(_args: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
   return {
-    adminCopyPass1: await isFreeTierEnabled(),
-  } satisfies FreeTierAdminLayoutContext;
+    freeTierEnabled: await isFreeTierEnabled(),
+  } satisfies FreeTierLayoutContext;
 }
 
 export default function FreeTierLayoutRoute() {

@@ -17,7 +17,7 @@ import {
 import { redirectSchoolAdmin } from '~/domain/free-tier/approval-flow.server';
 import { approvalForwardError } from '../free-tier/ApprovalForwardForm';
 import type { FreeTierAdminLinkReplacedVariant } from '~/domain/free-tier/admin-link-gate.server';
-import { useAdminCopyPass1 } from '../free-tier/useAdminCopyPass1';
+import { useFreeTierEnabled } from '../free-tier/useFreeTierLayoutContext';
 import { prisma } from '~/utils/db.server';
 import { FreeTierAuthCard } from '../free-tier/FreeTierAuthCard';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
@@ -339,7 +339,7 @@ function terminalFromAction(actionData: NonNullable<ReturnType<typeof useActionD
 export default function FreeAdminNotRightPersonRoute() {
   const data = useLoaderData<LoaderData>();
   const actionData = useActionData<typeof action>();
-  const pass1 = useAdminCopyPass1();
+  const pass1 = useFreeTierEnabled();
 
   if (actionData?.ok) {
     return (

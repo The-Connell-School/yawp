@@ -136,7 +136,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     showExploreClassroom: await userHasPendingFreeTierTeachingLock(userId),
     approvalV2: app ? await getApprovalWaitingDetails(app) : null,
     approvalEmailFrom: getTransactionalEmailFrom(),
-    adminCopyPass1: await isFreeTierEnabled(),
+    freeTierEnabled: await isFreeTierEnabled(),
   };
 }
 
@@ -270,7 +270,7 @@ export default function FreeTierPendingRoute() {
     showExploreClassroom,
     approvalV2,
     approvalEmailFrom,
-    adminCopyPass1,
+    freeTierEnabled,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -383,7 +383,7 @@ export default function FreeTierPendingRoute() {
             {isForwardActionError(actionData) ? (
               <p role="alert" className="text-sm text-destructive">
                 {approvalForwardError(actionData.reason, {
-                  pass1: adminCopyPass1,
+                  pass1: freeTierEnabled,
                   teacherName: app?.name,
                   schoolName: app?.schoolName ?? 'your school',
                   adminName: current?.adminName,

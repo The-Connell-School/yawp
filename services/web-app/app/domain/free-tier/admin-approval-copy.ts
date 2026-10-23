@@ -119,6 +119,24 @@ export function adminApprovalFooterWhy(args: {
   return `You're getting this because ${args.teacherName} named you as an administrator who can approve classroom software at ${args.schoolName}.`;
 }
 
+/** Muted reminder line above the approval headline (pass1 frames E2 / E2f). */
+export function adminApprovalReminderMutedLead(args: {
+  teacherName: string;
+  schoolName: string;
+  forwardedByAdminName?: string | null;
+  pass1?: boolean;
+}) {
+  const pass1 = args.pass1 ?? false;
+  if (!pass1) {
+    return 'This is a reminder about the approval request below.';
+  }
+  const forwarder = args.forwardedByAdminName?.trim();
+  if (forwarder) {
+    return `A quick reminder: ${forwarder} forwarded ${args.teacherName}'s request at ${args.schoolName} to you, and it's still waiting on your approval.`;
+  }
+  return `A quick reminder: ${teacherAtSchool(args.teacherName, args.schoolName)} is still waiting on your approval.`;
+}
+
 export function renderAdminApprovalEmailPlainText(args: {
   teacherName: string;
   teacherEmail: string;
@@ -134,13 +152,23 @@ export function renderAdminApprovalEmailPlainText(args: {
   const origin = defaultTransactionalEmailOrigin();
   const teacherSchool = teacherAtSchool(args.teacherName, args.schoolName);
   const forwarder = args.forwardedByAdminName?.trim();
-  const forwardLead = args.routedByTeacher
-    ? `${adminApprovalTeacherRerouteLead(args.teacherName, args.schoolName, pass1)}\n\n`
-    : forwarder
-      ? `${forwarder} forwarded this to you as the right person to approve classroom software for ${teacherSchool}.\n\n`
-      : '';
+  const skipForwardLeadForPass1Reminder =
+    pass1 && args.reminder && Boolean(forwarder) && !args.routedByTeacher;
+  const forwardLead =
+    skipForwardLeadForPass1Reminder
+      ? ''
+      : args.routedByTeacher
+        ? `${adminApprovalTeacherRerouteLead(args.teacherName, args.schoolName, pass1)}\n\n`
+        : forwarder
+          ? `${forwarder} forwarded this to you as the right person to approve classroom software for ${teacherSchool}.\n\n`
+          : '';
   const reminderLead = args.reminder
-    ? `This is a reminder about the approval request below.\n\n`
+    ? `${adminApprovalReminderMutedLead({
+        teacherName: args.teacherName,
+        schoolName: args.schoolName,
+        forwardedByAdminName: args.forwardedByAdminName,
+        pass1,
+      })}\n\n`
     : '';
   const classroomIntro = `${teacherSchool} would like to use Yawp! in their classroom.`;
   const administratorIntro =

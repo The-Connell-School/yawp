@@ -60,6 +60,21 @@ describe('admin approval email forward context', () => {
     ).toEqual({ forwardedByAdminName: 'Sam Chen' });
   });
 
+  test('pass1 first-admin reminder uses frame 37 muted lead', async () => {
+    const designed = await buildDesignedAdminApprovalEmail({
+      teacherName,
+      teacherEmail,
+      schoolName,
+      approveUrl,
+      notRightPersonUrl,
+      reminder: true,
+      pass1: true,
+    });
+    expect(designed.text).toContain(
+      'A quick reminder: Jordan Rivera at Lincoln High School is still waiting on your approval.'
+    );
+  });
+
   test('forwarded admin reminders keep forward wording', async () => {
     const designed = await buildDesignedAdminApprovalEmail({
       teacherName,
@@ -69,15 +84,16 @@ describe('admin approval email forward context', () => {
       notRightPersonUrl,
       forwardedByAdminName: 'Sam Chen',
       reminder: true,
+      pass1: true,
     });
     const atSchool = teacherAtSchool(teacherName, schoolName);
     expect(designed.subject).toBe(
       `Reminder: Can you approve Yawp! for ${atSchool}?`
     );
-    expect(designed.text).toContain('Sam Chen forwarded this to you');
+    expect(designed.text).toContain('Sam Chen forwarded Jordan Rivera');
     expect(designed.text).not.toContain('They named you as the administrator');
     expect(designed.text).toContain(
-      'This is a reminder about the approval request below.'
+      "A quick reminder: Sam Chen forwarded Jordan Rivera's request at Lincoln High School to you, and it's still waiting on your approval."
     );
   });
 

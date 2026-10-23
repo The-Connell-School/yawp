@@ -9,7 +9,7 @@ import {
   thankYouTeacherEmailFailedBody,
 } from '~/domain/free-tier/admin-approval-copy';
 import type { FreeTierAdminLinkReplacedVariant } from '~/domain/free-tier/admin-link-gate.server';
-import { useAdminCopyPass1 } from '../free-tier/useAdminCopyPass1';
+import { useFreeTierEnabled } from '../free-tier/useFreeTierLayoutContext';
 import { CircleAlert, CircleCheck } from 'lucide-react';
 import {
   applicationIdFromSignedToken,
@@ -282,7 +282,7 @@ function terminalFromAction(actionData: NonNullable<ReturnType<typeof useActionD
 export default function FreeAdminApproveRoute() {
   const data = useLoaderData<LoaderData>();
   const actionData = useActionData<typeof action>();
-  const pass1 = useAdminCopyPass1();
+  const pass1 = useFreeTierEnabled();
 
   if (actionData?.ok && 'idempotent' in actionData && actionData.idempotent) {
     const teacherName = data.ok ? data.teacherName : 'A teacher';

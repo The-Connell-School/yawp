@@ -1,6 +1,7 @@
 import * as React from 'react';
 import {
   adminApprovalEmailPreheader,
+  adminApprovalReminderMutedLead,
   adminApprovalTeacherRerouteLead,
   adminApprovalFooterWhy,
   FREE_TIER_ADMIN_MODEL_TRAINING_LINE,
@@ -267,7 +268,12 @@ export function AdminApprovalEmail(props: {
     >
       {props.reminder ? (
         <EmailMutedLead>
-          This is a reminder about the approval request below.
+          {adminApprovalReminderMutedLead({
+            teacherName: props.teacherName,
+            schoolName: props.schoolName,
+            forwardedByAdminName: forwarder,
+            pass1,
+          })}
         </EmailMutedLead>
       ) : null}
       <EmailBodyBlocks paragraphs={[intro]} />
