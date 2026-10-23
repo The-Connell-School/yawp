@@ -30,7 +30,7 @@ import {
   ApprovalForwardForm,
   approvalForwardError,
 } from '../free-tier/ApprovalForwardForm';
-import { Clock } from 'lucide-react';
+import { Clock, Info } from 'lucide-react';
 import { getTransactionalEmailFrom } from '~/utils/email.server';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -47,6 +47,7 @@ import {
 import { freeTierConfigErrorMessage } from '~/domain/free-tier/free-tier-config.server';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 import { Button } from '~/components/ui/button';
+import { yawpE2eForwardShouldFail } from '~/domain/free-tier/e2e-stub.server';
 
 const FORWARD_ERROR_REASONS = new Set([
   'validation',
@@ -205,6 +206,9 @@ export async function action({ request }: ActionFunctionArgs) {
       perTargetPerHour: 10,
     });
     if (!gate.allowed) return { ok: false as const, reason: 'rate_limited' };
+    if (yawpE2eForwardShouldFail(request)) {
+      return { ok: false as const, reason: 'unavailable' };
+    }
     try {
       return await forwardApprovalRequest({
         applicationId: app.id,
@@ -341,8 +345,17 @@ export default function FreeTierPendingRoute() {
     return (
       <FreeTierAuthCard
         title={teacherDeniedStatusTitle()}
-        icon={<Clock />}
-        footer={<FreeTierSignOut />}
+        icon={<Info className="h-5 w-5" aria-hidden />}
+        footer={
+          <div className="flex flex-col items-center gap-1">
+            {showExploreClassroom ? (
+              <Button type="button" variant="link" asChild className="h-auto p-0">
+                <Link to="/app">Explore my classroom</Link>
+              </Button>
+            ) : null}
+            <FreeTierSignOut />
+          </div>
+        }
       >
         <p className="text-sm text-muted-foreground">
           {teacherDeniedStatusBody(denied.adminName, app?.schoolName ?? 'your school')}
@@ -374,7 +387,6 @@ export default function FreeTierPendingRoute() {
             </FreeTierButton>
           </>
         )}
-        {showExploreClassroom ? <LockedPreviewExploreButton /> : null}
         {actionData?.ok && 'queued' in actionData ? (
           <p role="status" className="text-sm text-muted-foreground">
             Request sent to {actionData.adminName}!

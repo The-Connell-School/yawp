@@ -59,6 +59,16 @@ async function capture(page: import('@playwright/test').Page, id: string) {
   });
 }
 
+async function setYawpE2eStub(
+  page: import('@playwright/test').Page,
+  stub: string | null
+) {
+  const base = process.env.APPROVAL_V2_BASE_URL!;
+  await page.context().addCookies([
+    { name: 'yawp_e2e_stub', value: stub ?? 'clear', url: base },
+  ]);
+}
+
 async function loginTeacher(page: import('@playwright/test').Page, userId: string) {
   const session = await db.session.create({
     data: { userId, expirationDate: new Date(Date.now() + 3600000) },
@@ -153,6 +163,17 @@ test.beforeAll(async () => {
     },
     update: { value: JSON.stringify({ mode: 'everyone', orgIds: [] }) },
   });
+  await db.setting.upsert({
+    where: { name: 'feature_flag.demo-feedback-widget' },
+    create: { name: 'feature_flag.demo-feedback-widget', value: 'false' },
+    update: { value: 'false' },
+  });
+});
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.removeItem('yawp-dev-panel');
+  });
 });
 
 test.afterAll(async () => {
@@ -174,13 +195,13 @@ for (const width of [1440, 390]) {
     const base = process.env.APPROVAL_V2_BASE_URL!;
     const suffix = viewportSuffix(width);
 
-    const { app, mint, user } = await seedPendingApproval();
-    const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(mint.token)}`;
-    const denyUrl = `${base}/free/admin/approve/deny?t=${encodeURIComponent(mint.token)}`;
+    const approveSeed = await seedPendingApproval();
+    const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(approveSeed.mint.token)}`;
 
     await page.goto(approveUrl, { waitUntil: 'networkidle' });
     await expect(page.getByTestId('admin-approval-qa')).toBeVisible();
     await expect(page.getByRole('link', { name: /learn more first/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Forward this request' })).toBeVisible();
     await capture(page, `01_deny-request-button-states_${suffix}`);
     await capture(page, `02_approve-page-with-deny-qanda-placeholder_${suffix}`);
     await capture(page, `deny-v2_approve_qa_a_all_closed_${suffix}`);
@@ -195,50 +216,58 @@ for (const width of [1440, 390]) {
     await page.getByRole('button', { name: 'Questions about student privacy?' }).click();
     await capture(page, `deny-v2_approve_qa_c_privacy_group_open_${suffix}`);
 
-    await page.goto(denyUrl, { waitUntil: 'domcontentloaded' });
+    const denyUiSeed = await seedPendingApproval();
+    const denyUiUrl = `${base}/free/admin/approve/deny?t=${encodeURIComponent(denyUiSeed.mint.token)}`;
+    await page.goto(denyUiUrl, { waitUntil: 'domcontentloaded' });
     await expect(
       page.getByRole('heading', { name: 'Deny this request?' })
     ).toBeVisible();
     await capture(page, `04_deny-confirm_${suffix}`);
 
+    const denyErrorSeed = await seedPendingApproval();
+    const denyErrorUrl = `${base}/free/admin/approve/deny?t=${encodeURIComponent(denyErrorSeed.mint.token)}`;
+    await setYawpE2eStub(page, 'deny-unavailable');
+    await page.goto(denyErrorUrl, { waitUntil: 'domcontentloaded' });
     await page.locator('#denyReason').fill('Private note for Yawp! team only');
-    await page.evaluate(() => {
-      const form = document.querySelector('form');
-      if (!form || form.querySelector('[role="alert"]')) return;
-      const alert = document.createElement('p');
-      alert.setAttribute('role', 'alert');
-      alert.className = 'text-sm text-destructive';
-      alert.textContent =
-        "We couldn't save your answer. Try again, or email support@yawp.school.";
-      const submit = form.querySelector('button[type="submit"]');
-      if (submit) form.insertBefore(alert, submit);
-    });
+    await page.getByRole('button', { name: 'Deny request', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText("We couldn't save your answer");
     await capture(page, `08_deny-confirm_error_${suffix}`);
+    await setYawpE2eStub(page, null);
 
-    await page.goto(denyUrl, { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'Deny request', exact: true }).evaluate((btn) => {
-      const el = btn as HTMLButtonElement;
-      el.textContent = 'Denying…';
-      el.setAttribute('aria-busy', 'true');
-      el.disabled = true;
-    });
+    const denyLoadingSeed = await seedPendingApproval();
+    const denyLoadingUrl = `${base}/free/admin/approve/deny?t=${encodeURIComponent(denyLoadingSeed.mint.token)}`;
+    await setYawpE2eStub(page, 'deny-delay');
+    await page.goto(denyLoadingUrl, { waitUntil: 'domcontentloaded' });
+    const denySubmit = page.getByRole('button', { name: 'Deny request', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Denying…' })).toBeVisible();
     await capture(page, `06_deny-confirm_loading_${suffix}`);
-    await page.goto(denyUrl, { waitUntil: 'domcontentloaded' });
+    await denySubmit;
+    await expect(
+      page.getByRole('heading', { name: 'Thanks for letting us know' })
+    ).toBeVisible();
+    await setYawpE2eStub(page, null);
+
+    const denyDoneSeed = await seedPendingApproval();
+    const denyDoneApproveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(denyDoneSeed.mint.token)}`;
+    const denyDoneDenyUrl = `${base}/free/admin/approve/deny?t=${encodeURIComponent(denyDoneSeed.mint.token)}`;
+    await page.goto(denyDoneDenyUrl, { waitUntil: 'domcontentloaded' });
     await page.getByRole('button', { name: 'Deny request', exact: true }).click();
     await expect(
       page.getByRole('heading', { name: 'Thanks for letting us know' })
     ).toBeVisible();
     await capture(page, `10_after-deny-admin_${suffix}`);
 
-    await page.goto(approveUrl, { waitUntil: 'networkidle' });
+    await page.goto(denyDoneApproveUrl, { waitUntil: 'networkidle' });
     await expect(
       page.getByRole('heading', { name: "You've already answered this request." })
     ).toBeVisible();
     await capture(page, `12_link-opened-again-already-decided_${suffix}`);
 
-    await loginTeacher(page, user.id);
+    await loginTeacher(page, denyDoneSeed.user.id);
     await page.goto(`${base}/app/free-tier/pending`, { waitUntil: 'networkidle' });
-    await expect(page.getByRole('heading', { name: "Your request wasn't approved." })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: "Your request wasn't approved" })
+    ).toBeVisible();
     await capture(page, `14_teacher-denied-status-page_${suffix}`);
 
     await page.getByRole('button', { name: 'Ask another administrator' }).click();
@@ -247,33 +276,19 @@ for (const width of [1440, 390]) {
 
     await page.getByLabel('Administrator email').fill('not-an-email');
     await page.getByRole('button', { name: 'Forward request', exact: true }).click();
-    await page.evaluate(() => {
-      const form = document.querySelector('[data-testid="teacher-ask-another-form"] form');
-      if (!form || form.querySelector('[role="alert"]')) return;
-      const alert = document.createElement('p');
-      alert.setAttribute('role', 'alert');
-      alert.className = 'text-sm text-destructive';
-      alert.textContent = 'Enter their name and a valid email address.';
-      form.append(alert);
-    });
+    await expect(page.getByRole('alert')).toContainText('Enter their name');
     await capture(page, `18_teacher-form-errors_${suffix}`);
 
+    await setYawpE2eStub(page, 'forward-unavailable');
     await page.getByLabel('Administrator name').fill('Sam Chen');
     await page.getByLabel('Administrator email').fill('sam@lincolnusd.org');
-    await page.evaluate(() => {
-      const form = document.querySelector('[data-testid="teacher-ask-another-form"] form');
-      if (!form || form.querySelector('[role="alert"]')) return;
-      const alert = document.createElement('p');
-      alert.setAttribute('role', 'alert');
-      alert.className = 'text-sm text-destructive';
-      alert.textContent =
-        'We could not forward this request. Reload the page or contact support@yawp.school.';
-      form.append(alert);
-    });
+    await page.getByRole('button', { name: 'Forward request', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('could not forward');
     await capture(page, `20_teacher-send-failed_${suffix}`);
+    await setYawpE2eStub(page, null);
 
     await db.freeTierApplication.update({
-      where: { id: app.id },
+      where: { id: denyDoneSeed.app.id },
       data: { adminRedirectCount: 3 },
     });
     await page.goto(`${base}/app/free-tier/pending`, { waitUntil: 'networkidle' });

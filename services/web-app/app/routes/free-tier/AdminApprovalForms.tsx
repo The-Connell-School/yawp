@@ -177,10 +177,17 @@ export function AdminApproveForm({
           {submitting ? 'Approving…' : 'Approve Yawp!'}
         </FreeTierButton>
         {showDenyAndQa ? (
+          <FreeTierButton asChild variant="outline">
+            <a href={LEARN_MORE_URL} target="_blank" rel="noopener noreferrer">
+              I&apos;d like to learn more first
+            </a>
+          </FreeTierButton>
+        ) : null}
+        {showDenyAndQa ? (
           <FreeTierButton
             asChild
             variant="ghost"
-            className="free-tier-deny-button text-card-foreground shadow-none hover:bg-muted/60"
+            className="free-tier-deny-button h-auto py-2 text-card-foreground shadow-none hover:bg-muted/60"
           >
             <Link to={`/free/admin/approve/deny?t=${encodeURIComponent(token)}`}>
               Deny request
@@ -188,14 +195,7 @@ export function AdminApproveForm({
           </FreeTierButton>
         ) : null}
       </div>
-      {showDenyAndQa ? (
-        <FreeTierButton asChild variant="outline">
-          <a href={LEARN_MORE_URL} target="_blank" rel="noopener noreferrer">
-            I&apos;d like to learn more first
-          </a>
-        </FreeTierButton>
-      ) : null}
-      <AdminForwardLink token={token} className={showDenyAndQa ? 'mt-2' : undefined} />
+      {!showDenyAndQa ? <AdminForwardLink token={token} /> : null}
     </Form>
   );
 }

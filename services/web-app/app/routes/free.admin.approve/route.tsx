@@ -34,6 +34,7 @@ import {
 } from '../free-tier/AdminApprovalStates';
 import { AdminApproveForm } from '../free-tier/AdminApprovalForms';
 import { AdminApprovalQa } from '../free-tier/AdminApprovalQa';
+import { AdminForwardLink } from '../free-tier/AdminApprovalStates';
 
 type LoaderData =
   | {
@@ -357,7 +358,12 @@ export default function FreeAdminApproveRoute() {
   return (
     <FreeTierAuthCard
       title={adminApprovePageTitle(data.teacherName, data.schoolName)}
-      aside={
+      belowCard={
+        data.showDenyAndQa ? (
+          <AdminForwardLink token={data.token} />
+        ) : undefined
+      }
+      stackAfterCard={
         data.showDenyAndQa ? (
           <AdminApprovalQa teacherName={data.teacherName} />
         ) : undefined

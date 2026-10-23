@@ -119,7 +119,7 @@ export function AdminDenyThanksCard({
   schoolName: string;
 }) {
   return (
-    <FreeTierAuthCard title={adminDenyThanksTitle()} icon={<CircleCheck />} status>
+    <FreeTierAuthCard title={adminDenyThanksTitle()} status>
       <p className="text-sm text-muted-foreground">
         {adminDenyThanksBody(teacherName, schoolName)}
       </p>
@@ -138,11 +138,7 @@ export function AdminDenyAlreadyAnsweredCard({
   decidedAt: Date;
 }) {
   return (
-    <FreeTierAuthCard
-      title={adminDenyAlreadyAnsweredTitle()}
-      icon={<CircleAlert />}
-      status
-    >
+    <FreeTierAuthCard title={adminDenyAlreadyAnsweredTitle()} status>
       <p className="text-sm text-muted-foreground">
         {adminDenyAlreadyAnsweredBody(teacherName, schoolName, decidedAt)}
       </p>

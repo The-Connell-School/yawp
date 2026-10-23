@@ -48,7 +48,7 @@ export function adminDenyAlreadyAnsweredBody(
 }
 
 export function teacherDeniedStatusTitle() {
-  return "Your request wasn't approved.";
+  return "Your request wasn't approved";
 }
 
 export function teacherDeniedStatusBody(

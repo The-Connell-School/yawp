@@ -1640,7 +1640,35 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
   background-color: #d4c4a8;
 }
 
-/* Brian-call approval layout; all selectors require the onboarding rollout. */
+/* Approve page: card, forward link, and Q&A in one 320px column (deny-v2). */
+.free-tier-approval-stack .auth-page-content {
+  width: 100%;
+  max-width: 320px;
+  align-items: stretch;
+}
+.free-tier-approval-stack .free-tier-approval-column {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+}
+.free-tier-approval-stack .free-tier-form-card {
+  width: 100%;
+}
+.free-tier-approval-stack .free-tier-below-card {
+  width: 100%;
+  text-align: center;
+}
+.free-tier-approval-stack .free-tier-stack-after-card {
+  width: 100%;
+}
+.free-tier-approval-stack .free-tier-footer {
+  width: 100%;
+  max-width: 320px;
+}
+
+/* Legacy two-column approval layout (pre–deny-v2). */
 .free-tier-approval-v2 .auth-page-content {
   width: min(100%, 760px);
   display: grid;

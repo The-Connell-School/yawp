@@ -7,7 +7,6 @@ import {
   useLoaderData,
   useNavigation,
 } from 'react-router';
-import { CircleAlert } from 'lucide-react';
 import {
   applicationIdFromSignedToken,
   peekSignedLink,
@@ -37,11 +36,10 @@ import {
   adminDenyReasonHint,
   adminDenySaveError,
 } from '~/domain/free-tier/admin-deny-copy';
+import { Textarea } from '~/components/ui/textarea';
 import {
   FreeTierAuthCard,
   FreeTierButton,
-  FreeTierFieldLabel,
-  FreeTierTextInput,
 } from '../free-tier/FreeTierAuthCard';
 
 type LoaderData =
@@ -110,6 +108,9 @@ export async function action({ request }: ActionFunctionArgs) {
   const token = String(formData.get('token') ?? '');
   const reason = String(formData.get('reason') ?? '');
   const result = await denySchoolAdminApproval({ token, reason, request });
+  if (!result.ok && result.reason === 'unavailable') {
+    return { ...result, keptReason: reason };
+  }
   return result;
 }
 
@@ -202,8 +203,11 @@ export default function FreeAdminApproveDenyRoute() {
   }
 
   const keptReason =
-    actionData && !actionData.ok && actionData.reason === 'unavailable'
-      ? ''
+    actionData &&
+    !actionData.ok &&
+    actionData.reason === 'unavailable' &&
+    'keptReason' in actionData
+      ? String(actionData.keptReason ?? '')
       : undefined;
   const saveFailed =
     actionData &&
@@ -211,25 +215,33 @@ export default function FreeAdminApproveDenyRoute() {
     (actionData.reason === 'unavailable' || actionData.reason === 'email_failed');
 
   return (
-    <FreeTierAuthCard title={adminDenyConfirmTitle()} icon={<CircleAlert />}>
+    <FreeTierAuthCard title={adminDenyConfirmTitle()}>
       <p className="text-sm text-muted-foreground">
         {adminDenyConfirmBody(data.teacherName, data.schoolName)}
       </p>
       <Form method="post" className="flex flex-col gap-4">
         <input type="hidden" name="token" value={data.token} />
         <input type="hidden" name="intent" value="deny" />
-        <FreeTierFieldLabel
-          label="Reason (optional)"
+        <label
+          className="flex flex-col gap-1.5 text-left text-card-foreground"
           htmlFor="denyReason"
-          hint={adminDenyReasonHint(data.teacherName)}
         >
-          <FreeTierTextInput
+          <span>
+            Reason{' '}
+            <span className="font-normal text-muted-foreground">(optional)</span>
+          </span>
+          <Textarea
             id="denyReason"
             name="reason"
             defaultValue={keptReason}
             maxLength={2000}
+            rows={4}
+            className="min-h-[96px] resize-y text-base"
           />
-        </FreeTierFieldLabel>
+          <span className="text-xs text-muted-foreground">
+            {adminDenyReasonHint(data.teacherName)}
+          </span>
+        </label>
         {saveFailed ? (
           <p role="alert" className="text-sm text-destructive">
             {adminDenySaveError()}

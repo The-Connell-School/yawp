@@ -13,6 +13,7 @@ import { sendFreeTierTeacherDenyEmail } from './email.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import { ADMIN_REDIRECT_CHAIN_CAP } from './admin-email-rules.server';
 import { teacherAskAnotherHint } from './admin-deny-copy';
+import { applyYawpE2eDenyStub } from './e2e-stub.server';
 
 const fail = (reason: string) => ({ ok: false as const, reason });
 
@@ -86,6 +87,8 @@ export async function denySchoolAdminApproval(args: {
   reason?: string;
   request: Request;
 }): Promise<DenySchoolAdminApprovalResult> {
+  const stubbed = await applyYawpE2eDenyStub(args.request);
+  if (stubbed) return stubbed;
   const trimmedReason = args.reason?.trim().slice(0, 2000) || null;
   const earlyAppId = applicationIdFromSignedToken(args.token);
   if (earlyAppId) {
