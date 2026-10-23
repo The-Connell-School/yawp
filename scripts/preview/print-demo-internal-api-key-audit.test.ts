@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { DEMO_INTERNAL_API_SCOPE_SET } from './demo-internal-api-config.mjs';
 import {
   auditInternalApiKeys,
   formatDemoInternalApiKeyAudit,
@@ -52,8 +54,8 @@ describe('demo-internal-api-key-audit', () => {
       [
         'count=3',
         'entry\t<invalid>\t["<invalid>"]\t<invalid>',
-        'entry\t<invalid>\t["<invalid>"]\tid,scopes,secret,token',
-        'entry\t<invalid>\t["<invalid>","management:write"]\t<invalid>,id,scopes,secret',
+        'entry\t<invalid>\t["<invalid>"]\tid,scopes,secret,<other>',
+        'entry\t<invalid>\t["<invalid>","management:write"]\tid,scopes,secret,<other>',
       ].join('\n')
     );
     expect(formatted.includes(testSecret)).toBe(false);
@@ -65,6 +67,62 @@ describe('demo-internal-api-key-audit', () => {
     );
     expect(formatted).toBe('PARSE_ERROR TypeError');
     expect(formatted.includes(testSecret)).toBe(false);
+  });
+
+  test('DEMO_INTERNAL_API_SCOPE_SET matches INTERNAL_API_SCOPES in platform auth', () => {
+    const platformSource = readFileSync(
+      join(previewDir, '../../services/web-app/app/utils/internal-platform-auth.server.ts'),
+      'utf8'
+    );
+    const block = platformSource.match(
+      /export const INTERNAL_API_SCOPES = \[([\s\S]*?)\] as const/
+    )?.[1];
+    expect(block).toBeTruthy();
+    const platformScopes = [...block!.matchAll(/'([^']+)'/g)]
+      .map((match) => match[1])
+      .sort();
+    expect([...DEMO_INTERNAL_API_SCOPE_SET].sort()).toEqual(platformScopes);
+  });
+
+  test('runs a bundled CLI through bun run - from an empty directory', () => {
+    const raw = JSON.stringify([
+      {
+        id: 'demo-internal',
+        secret: testSecret,
+        scopes: ['management:write'],
+      },
+    ]);
+    const bundleDir = mkdtempSync(join(tmpdir(), 'yawp-audit-bundle-'));
+    const bundlePath = join(bundleDir, 'audit.bundle.mjs');
+    const build = spawnSync(
+      'bun',
+      [
+        'build',
+        join(previewDir, 'print-demo-internal-api-key-audit.cli.mjs'),
+        '--target=bun',
+        '--format=esm',
+        `--outfile=${bundlePath}`,
+      ],
+      { encoding: 'utf8' }
+    );
+    expect(build.status).toBe(0);
+    const emptyDir = mkdtempSync(join(tmpdir(), 'yawp-audit-empty-'));
+    const result = spawnSync('bun', ['run', '-'], {
+      cwd: emptyDir,
+      input: readFileSync(bundlePath, 'utf8'),
+      env: {
+        ...process.env,
+        YAWP_INTERNAL_API_KEYS: raw,
+      },
+      encoding: 'utf8',
+    });
+    rmSync(bundleDir, { recursive: true, force: true });
+    rmSync(emptyDir, { recursive: true, force: true });
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe(
+      'count=1\nentry\tdemo-internal\t["management:write"]\tid,scopes,secret'
+    );
+    expect(result.stdout.includes(testSecret)).toBe(false);
   });
 
   test('runs through bun run - stdin the same way the demo container does', () => {

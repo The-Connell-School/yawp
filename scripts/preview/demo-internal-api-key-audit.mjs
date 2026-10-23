@@ -3,7 +3,7 @@ import { DEMO_INTERNAL_API_SCOPE_SET } from './demo-internal-api-config.mjs';
 /** Read-only audit of YAWP_INTERNAL_API_KEYS. Never prints secret values. */
 
 const ID_PATTERN = /^[A-Za-z0-9._:-]{1,64}$/;
-const FIELD_NAME_PATTERN = /^[A-Za-z0-9_]{1,40}$/;
+const KNOWN_FIELD_NAMES = new Set(['id', 'secret', 'scopes']);
 
 export function sanitizeAuditId(value) {
   return typeof value === 'string' && ID_PATTERN.test(value) ? value : '<invalid>';
@@ -16,8 +16,27 @@ export function sanitizeAuditScope(value) {
     : '<invalid>';
 }
 
-export function sanitizeAuditFieldName(name) {
-  return FIELD_NAME_PATTERN.test(name) ? name : '<invalid>';
+export function formatAuditFields(key) {
+  if (!key || typeof key !== 'object' || Array.isArray(key)) {
+    return '<invalid>';
+  }
+  const names = Object.keys(key).sort();
+  if (!names.length) {
+    return '<invalid>';
+  }
+  const parts = [];
+  let hasOther = false;
+  for (const name of names) {
+    if (KNOWN_FIELD_NAMES.has(name)) {
+      parts.push(name);
+    } else {
+      hasOther = true;
+    }
+  }
+  if (hasOther) {
+    parts.push('<other>');
+  }
+  return parts.join(',');
 }
 
 export function sanitizeAuditEntry(key) {
@@ -31,13 +50,10 @@ export function sanitizeAuditEntry(key) {
   const scopes = Array.isArray(key.scopes)
     ? key.scopes.map((scope) => sanitizeAuditScope(scope))
     : ['<invalid>'];
-  const fieldNames = Object.keys(key)
-    .sort()
-    .map((name) => sanitizeAuditFieldName(name));
   return {
     id: sanitizeAuditId(key.id),
     scopes,
-    fields: fieldNames.length ? fieldNames.join(',') : '<invalid>',
+    fields: formatAuditFields(key),
   };
 }
 

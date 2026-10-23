@@ -40,6 +40,11 @@ jobs:
           DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
         run: bash scripts/preview/prepare-demo-ssh.sh
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
+        with:
+          bun-version: '1.4.3'
+
       - name: Audit live demo internal API keys
         id: audit
         run: |
@@ -49,24 +54,27 @@ jobs:
             local output="$1"
             local count_line count entry_count
             count_line="${output%%$'\n'*}"
-            [[ "$count_line" =~ ^count=[0-9]+$ ]] || {
-              echo "Audit output missing a valid count line" >&2
-              return 1
-            }
-            count="${count_line#count=}"
-            entry_count="$(printf '%s\n' "$output" | grep -c '^entry' || true)"
-            [[ "$entry_count" == "$count" ]] || {
-              echo "Audit entry count ($entry_count) does not match count=$count" >&2
-              return 1
-            }
+            if [[ "$count_line" =~ ^count=[0-9]+$ ]]; then
+              count="${count_line#count=}"
+              entry_count="$(printf '%s\n' "$output" | grep -c '^entry' || true)"
+              [[ "$entry_count" == "$count" ]] || {
+                echo "Audit entry count ($entry_count) does not match count=$count" >&2
+                return 1
+              }
+              return 0
+            fi
+            if [[ "$count_line" =~ ^PARSE_ERROR[[:space:]][A-Za-z]+$ ]]; then
+              echo "$count_line" >&2
+            fi
+            echo "Audit output missing a valid count line" >&2
+            return 1
           }
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           remote_root="$(shell_quote "$PREVIEW_ROOT")"
           host_script="scripts/preview/audit-demo-internal-api-keys-on-host.sh"
-          audit_config="scripts/preview/demo-internal-api-config.mjs"
-          audit_module="scripts/preview/demo-internal-api-key-audit.mjs"
           audit_cli="scripts/preview/print-demo-internal-api-key-audit.cli.mjs"
-          remote_audit_dir="/tmp/yawp-key-audit-${GITHUB_RUN_ID}"
+          audit_bundle="/tmp/demo-internal-api-key-audit.${GITHUB_RUN_ID}.mjs"
+          bun build "$audit_cli" --target=bun --format=esm --outfile="$audit_bundle"
           web_container="$(
             ssh -i ~/.ssh/demo_key -o BatchMode=yes -o ConnectTimeout=20 "$ssh_target" \
               "PREVIEW_ROOT=${remote_root} bash -s" < "$host_script"
@@ -75,25 +83,12 @@ jobs:
             echo "Unexpected demo web container id" >&2
             exit 1
           }
-          ssh -i ~/.ssh/demo_key -o BatchMode=yes -o ConnectTimeout=20 "$ssh_target" \
-            "mkdir -p $(shell_quote "$remote_audit_dir") && chmod 700 $(shell_quote "$remote_audit_dir")"
-          ssh -i ~/.ssh/demo_key -o BatchMode=yes -o ConnectTimeout=20 "$ssh_target" \
-            "docker exec -i $(shell_quote "$web_container") sh -ec 'mkdir -p /tmp/yawp-key-audit && chmod 700 /tmp/yawp-key-audit'" \
-            < /dev/null
-          ssh -i ~/.ssh/demo_key -o BatchMode=yes -o ConnectTimeout=20 "$ssh_target" \
-            "docker exec -i $(shell_quote "$web_container") sh -ec 'cat > /tmp/yawp-key-audit/demo-internal-api-config.mjs'" \
-            < "$audit_config"
-          ssh -i ~/.ssh/demo_key -o BatchMode=yes -o ConnectTimeout=20 "$ssh_target" \
-            "docker exec -i $(shell_quote "$web_container") sh -ec 'cat > /tmp/yawp-key-audit/demo-internal-api-key-audit.mjs'" \
-            < "$audit_module"
           audit_output="$(
             ssh -i ~/.ssh/demo_key -o BatchMode=yes -o ConnectTimeout=20 "$ssh_target" \
-              "docker exec -i $(shell_quote "$web_container") sh -ec 'cd /tmp/yawp-key-audit && bun run -'" \
-              < "$audit_cli"
+              "docker exec -i $(shell_quote "$web_container") bun run -" \
+              < "$audit_bundle"
           )"
-          ssh -i ~/.ssh/demo_key -o BatchMode=yes -o ConnectTimeout=20 "$ssh_target" \
-            "rm -rf $(shell_quote "$remote_audit_dir"); docker exec $(shell_quote "$web_container") rm -rf /tmp/yawp-key-audit" \
-            < /dev/null || true
+          rm -f "$audit_bundle"
           validate_audit_output "$audit_output"
           printf '%s\n' "$audit_output"
           audit_delim="audit_$(openssl rand -hex 16)"

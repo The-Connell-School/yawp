@@ -1836,12 +1836,23 @@ describe('demo environment deployment contract', () => {
     expect(workflow).toContain('bash scripts/preview/prepare-demo-ssh.sh');
     expect(workflow).toContain('timeout-minutes: 5');
     expect(workflow).toContain('ConnectTimeout=20');
+    const auditStep = workflow.slice(
+      workflow.indexOf('- name: Audit live demo internal API keys'),
+      workflow.indexOf('- name: Summary')
+    );
     expect(workflow).toContain('docker exec -i');
-    expect(workflow).toContain('bun run -');
-    expect(workflow).toContain('print-demo-internal-api-key-audit.cli.mjs');
-    expect(workflow).toContain('demo-internal-api-key-audit.mjs');
+    expect(auditStep).toContain('bun build');
+    expect(auditStep).toContain('print-demo-internal-api-key-audit.cli.mjs');
+    expect(auditStep).toContain('bun run -');
+    expect(auditStep).toContain('< "$audit_bundle"');
+    expect(auditStep).not.toMatch(/\bdocker cp\b/);
+    expect(auditStep).not.toMatch(/\bcat > /);
+    expect(auditStep).not.toMatch(/yawp-key-audit/);
+    expect(auditStep).not.toMatch(/ssh[^\n]*\bmkdir\b/);
+    expect(auditStep).not.toMatch(/docker exec[^\n]*\bmkdir\b/);
     expect(workflow).toContain('audit-demo-internal-api-keys-on-host.sh');
     expect(workflow).toContain('validate_audit_output');
+    expect(workflow).toContain('^PARSE_ERROR[[:space:]][A-Za-z]+$');
     expect(workflow).not.toContain('DEMO_INTERNAL_API_KEYS');
     expect(workflow).not.toContain('set -x');
     expect(workflow).not.toMatch(/PARSE_ERROR[\s\S]*exit 0/);
