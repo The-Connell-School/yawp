@@ -106,7 +106,7 @@ async function sendEmailWithResend(
 		// eslint-disable-next-line no-console
 		console.info(
 			'[preview-email-capture] accepted (not sent via Resend):',
-			JSON.stringify({ to: email.to, subject: email.subject }),
+			JSON.stringify(buildSafeEmailLogSummary(email, logMeta)),
 		)
 		return {
 			status: 'success',

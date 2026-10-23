@@ -264,6 +264,34 @@ describe('sendEmail', () => {
     }
   });
 
+  test('redacts preview capture logs', async () => {
+    const infoLog = mock((..._args: unknown[]) => {});
+    const originalInfo = console.info;
+    console.info = infoLog as typeof console.info;
+    try {
+      process.env.YAWP_ENVIRONMENT = 'preview';
+      process.env.DATABASE_URL = 'postgresql://app@db/yawp_pr_416';
+      process.env.RESEND_FROM_EMAIL = 'preview@yawp.local';
+      process.env.RESEND_API_KEY = '';
+
+      await sendEmail({
+        to: 'teacher@school.edu',
+        subject: 'Preview invite',
+        html: '<p>https://yawp.school/join?code=secret</p>',
+        text: 'secret-body',
+        logKind: 'teacher-invite',
+      });
+
+      const serialized = JSON.stringify(infoLog.mock.calls);
+      expect(serialized).toContain('[preview-email-capture]');
+      expect(serialized).not.toContain('teacher@school.edu');
+      expect(serialized).toContain('t***@s***');
+      expect(serialized).not.toContain('secret-body');
+    } finally {
+      console.info = originalInfo;
+    }
+  });
+
 	test('captures email on yawp_pr preview without calling Resend', async () => {
 		process.env.YAWP_ENVIRONMENT = 'preview';
 		process.env.DATABASE_URL = 'postgresql://app@db/yawp_pr_416';
