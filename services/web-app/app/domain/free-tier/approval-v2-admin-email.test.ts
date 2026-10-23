@@ -25,7 +25,7 @@ async function expectDesignedAdminEmail(
       `Reminder: ${atSchool} would like to use Yawp!`
     );
     expect(designed.text).toContain(
-      'This is a reminder about the approval request below.'
+      'A quick reminder: Jordan Rivera at Lincoln High School is still waiting on your approval.'
     );
   } else {
     expect(designed.subject).toBe(`${atSchool} would like to use Yawp!`);
