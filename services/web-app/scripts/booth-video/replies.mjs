@@ -14,6 +14,8 @@ import {
   LESSON_PLAN,
   PRACTICE_QUESTIONS,
   PROMPT_GENERATOR_REPLY,
+  SHARE,
+  SLIDE_DECK,
   TUTOR_FEEDBACK,
   TUTOR_REFUSAL,
   TUTOR_REPLY_1,
@@ -70,10 +72,23 @@ export const rules = [
     // card only if a tool returned its href during the same request.
     name: 'lesson-planner',
     when: (r) => r.system.includes('Lesson Planner, an instructional design partner'),
-    reply: (r) =>
-      r.lastMessageIsToolResult || !r.tools.includes('get_writing_lesson')
+    reply: (r) => {
+      if (/build the slide deck/i.test(r.lastUser)) return SLIDE_DECK;
+      return r.lastMessageIsToolResult || !r.tools.includes('get_writing_lesson')
         ? LESSON_PLAN
-        : { tool: 'get_writing_lesson', input: { slug: 'analysis' } },
+        : { tool: 'get_writing_lesson', input: { slug: 'analysis' } };
+    },
+  },
+  {
+    // "Send this lesson": one rewrite per audience (Lesson Planner branch).
+    name: 'lesson-share',
+    when: (r) => /^(Summarize|Rewrite) a teacher.s lesson/.test(r.system),
+    reply: (r) => {
+      if (/administrator/.test(r.system.slice(0, 120))) return SHARE.admin;
+      if (/missed class/.test(r.system.slice(0, 120))) return SHARE.student;
+      if (/substitute/.test(r.system.slice(0, 120))) return SHARE.sub;
+      return SHARE.family;
+    },
   },
   {
     name: 'act-practice',

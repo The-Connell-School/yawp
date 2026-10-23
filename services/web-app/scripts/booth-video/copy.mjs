@@ -228,103 +228,172 @@ export const CLASS_SUMMARY = {
 // Section 6: Lesson Planner
 // ---------------------------------------------------------------------------
 
-/** Added by the teacher to the seeded message before sending. */
+/**
+ * Added by the teacher to the seeded message before sending. The first
+ * sentence is the planner's own format for a class and its period length:
+ * it gives the stack its 50-minute time bar.
+ */
 export const PLANNER_ADDITION =
-  ' We have a 50-minute period tomorrow. They can find quotes; they just can\'t explain them.';
+  ' For English 10 · Period 3, 50 minutes. They can find quotes; they just can\'t explain them.';
 
-export const LESSON_PLAN = `# Making the Quote Do the Work · 50 min
+/**
+ * The plan, in the Lesson Planner's step format: one `##` heading per step
+ * with its minutes and type, each step either prose or a single block, so
+ * "Add everything" files six pieces that add up to the 50-minute period.
+ */
+export const LESSON_PLAN = `# Making the Quote Do the Work
 
-**English 10 · Period 3.** Objective: students explain *how* a quotation proves their claim, not just *that* it does. Built from your class summary on the Fahrenheit 451 essay.
+English 10 · Period 3 · *Fahrenheit 451*. By the end of the period, students choose a quote that proves their claim, set it inside their own sentence, and explain how its words do the work.
 
-## Run of show
-
-| Min | Step | Students |
-|---|---|---|
-| 5 | Class starter | Quick write on a line from the novel |
-| 8 | Mini-lesson: the "because" move | Spot the move in two samples |
-| 8 | Worked example | Rank Version A against Version B, then fix A together |
-| 15 | Practice in Yawp! | Analysis practice set |
-| 9 | Repair your own essay | Rewrite one "This shows…" sentence |
-| 5 | Exit ticket | One response in Yawp! |
-
-## 1. Class starter (5 min)
+## Class starter (5 min) {type: class_starter}
 
 \`\`\`yawp-daily-pages
 kind: class-starter
-Beatty says the burning "didn't come from the Government down." Who do you think is most responsible for Montag's world, and why?
+title: A line that stuck
+minutes: 5
+Think of one sentence from a book, a song or a show that has stayed with you. Why that sentence, and not the one before it?
 \`\`\`
 
-## 2. Mini-lesson: the "because" move (8 min)
-Teach from the [Analysis Quick Writing Lesson](/app/writing-lessons/analysis): a quotation proves nothing until you say which words do the work and why.
+## Mini-lesson: the quote sandwich (10 min) {type: context}
+
+Put the three layers on the board: **claim**, **quote**, **so what**. Then project the opening of the [Analysis Quick Writing Lesson](/app/writing-lessons/analysis) and read its first example aloud.
 
 \`\`\`yawp-resource
 title: Analysis
 href: /app/writing-lessons/analysis
 kind: lesson
-Project "The Rule" and the first worked example.
+Project the explanation and the first example only, about 4 minutes of it.
 \`\`\`
 
-## 3. Worked example (8 min)
-Project both versions. Students rank them, then rewrite Version A together.
+1. Ask pairs: which word in the quote carries the claim? Give them a minute.
+2. Take three answers. Receive each one warmly; a student who picks a weaker word is still looking closely, so ask what that word adds.
+3. Land on this: the analysis names the word and says what it does.
+
+## Worked example (8 min) {type: activity}
 
 \`\`\`yawp-material
 kind: sample
-title: Two Analysis Sentences
+title: Two ways to use the same quote
+minutes: 8
+type: activity
 ---
 ## Version A
-Mildred keeps the Seashell radios in her ears even while she sleeps. This shows that people are uncomfortable with silence.
+
+Montag likes his job. "It was a pleasure to burn." This shows he likes burning.
 
 ## Version B
-Bradbury keeps the Seashells playing even while Mildred sleeps because the noise is not entertainment; it is protection from her own thoughts.
+
+Bradbury opens with Montag at ease in his work: "It was a pleasure to burn." The word *pleasure* turns destruction into appetite, so the reader meets a fireman who has never once asked what he is burning.
+
+Circle the word each version leans on. Which one proves something?
 \`\`\`
 
-## 4. Practice in Yawp! (15 min)
+## Writing Practice: Analysis (10 min) {type: activity}
 
 \`\`\`yawp-practice
 lessons: analysis
-problems: 5
-title: Making the quote do the work
+problems: 6
+title: Make the quote do the work
 ---
-For each quotation, write one sentence that names the key word and explains what it proves.
+For each quote, write one sentence that names a word and explains what it proves.
 \`\`\`
 
-## 5. Repair your own essay (9 min)
-Students find one "This shows…" sentence in their Fahrenheit 451 essay and rewrite it with the "because" move.
+## Repair your essay (12 min) {type: thesis_essay}
 
 \`\`\`yawp-material
 kind: handout
-title: Analysis Repair
+title: Repair your essay: one quote, done right
+minutes: 12
+type: thesis_essay
 ---
-## Analysis Repair
+## Repair your essay
 
-1. Copy one sentence from your essay that comes right after a quotation.
+1. Find one body paragraph in your Fahrenheit 451 essay where a quote sits on its own.
+2. Underline the one word in that quote that does the most work.
+3. Write two sentences after the quote: what the word means here, and how it proves your claim.
+
+Your two new sentences:
 
 ______________________________________________
 
-2. Circle the single word in the quotation that does the most work.
-3. Rewrite your sentence so it explains what that word proves.
-
-______________________________________________
 ______________________________________________
 \`\`\`
 
-## 6. Exit ticket (5 min)
+## Exit ticket (5 min) {type: closing}
 
 \`\`\`yawp-exit-ticket
 kind: check
 focus: explain-concept
-topic: how a single word in a quotation can prove a claim
+topic: how a quote proves a claim
 answer: subjective
-mainPoints: Analysis names a specific word and explains what it reveals about the claim.
-mustMention: A specific word from the quotation.
-watchFor: Restating the quotation instead of analyzing it.
+mainPoints: A strong answer names one word in the quote and says what that word shows about the claim.
+watchFor: Restating the quote in other words instead of explaining it.
 \`\`\`
 
 \`\`\`suggestions
-Make a version for my Period 5 class
-Add a challenge task for students who finish early
+Make a version for students who need sentence starters
+Shorten the mini-lesson to 7 minutes
 \`\`\`
 `;
+
+/** The reply to "Build the slide deck from my stack": a Lesson Deck Kit deck. */
+export const SLIDE_DECK = `Here is the deck for the lesson in your stack.
+
+\`\`\`yawp-slides
+${JSON.stringify({
+  title: 'Making the Quote Do the Work',
+  subtitle: 'Claim, quote, so what',
+  unit: 'Fahrenheit 451',
+  colors: ['#B4441F', '#2F5873', '#7A4560'],
+  slides: [
+    { layout: 'title', title: "The Quote's Work", subtitle: 'Claim, quote, so what', course: 'English 10 · Period 3', speakerNotes: 'Let the title sit while they settle.', minutes: 0 },
+    { layout: 'agenda', title: "Today's program", agenda: [{ title: 'A line that stuck', minutes: 5 }, { title: 'The quote sandwich', minutes: 10 }, { title: 'Two versions, one quote', minutes: 8 }, { title: 'Writing Practice', minutes: 10 }, { title: 'Repair your essay', minutes: 12 }, { title: 'Exit ticket', minutes: 5 }], speakerNotes: 'Walk the six steps in one breath.', minutes: 0 },
+    { layout: 'write', title: 'A line that stuck', routine: 'Class starter', body: 'Think of one sentence from a book, a song or a show that stayed with you. Why that sentence?', minutes: 5, step: 1, speakerNotes: 'Start the timer as the bell rings.' },
+    { layout: 'big_idea', title: 'The quote sandwich', body: '~~1|Claim~~, then ~~2|quote~~, then ~~3|so what~~: name the word that does the work and say what it does.', accentWord: 'word', minutes: 10, step: 2, speakerNotes: 'Build the three layers on the board.' },
+    { layout: 'discuss', title: 'Which word works?', question: "Which word in 'It was a pleasure to burn' carries Montag's attitude?", choices: ['It', 'pleasure', 'burn'], answer: 2, grouping: 'Pairs', stem: 'The word ___ shows that…', minutes: 8, step: 3, speakerNotes: 'One minute in pairs, then reveal.' },
+    { layout: 'steps', title: 'Repair your essay', bullets: ['Find one quote that sits on its own', 'Underline the word that does the most work', 'Add two sentences: what it means, what it proves'], minutes: 12, step: 5, speakerNotes: 'Circulate.' },
+    { layout: 'exit', title: 'Before you go', body: 'Name one word in your quote and say what it proves.', button: 'Exit ticket', minutes: 5, step: 6, speakerNotes: 'Students open the exit ticket in Yawp!.' },
+  ],
+})}
+\`\`\`
+`;
+
+/** "Send this lesson" rewrites, one per audience. */
+export const SHARE = {
+  admin: `## Making the Quote Do the Work
+
+English 10 · Period 3 spent a 50-minute period on one skill their Fahrenheit 451 essays showed they needed: explaining how a quote proves a claim, instead of dropping it in.
+
+## How the period ran
+- **Class starter (5 min):** a quick write on a line that stayed with them.
+- **Mini-lesson (10 min):** the quote sandwich: claim, quote, so what.
+- **Worked example (8 min):** two uses of the same quote, compared.
+- **Writing Practice (10 min):** six analysis items in Yawp!.
+- **Repair your essay (12 min):** each student rewrote one paragraph of their own essay.
+- **Exit ticket (5 min):** one word, and what it proves.
+
+## Why this lesson
+The class summary for the essay showed strong theses but quotes left unexplained. This lesson targets that gap directly.`,
+  student: `We missed you in class.
+
+Today we worked on making a quote do the work in your Fahrenheit 451 essay: name the one word that matters, then explain what it proves.
+
+## What to do
+1. Read the quote sandwich: **claim**, **quote**, **so what**.
+2. Do the six Writing Practice items in Yawp!.
+3. Pick one paragraph of your essay where a quote sits on its own, and add two sentences after it.
+
+Bring your two new sentences to class tomorrow.`,
+  sub: `## Class starter (5 min)
+Students write about a line that stayed with them.
+
+## Mini-lesson (10 min)
+Put claim, quote, so what on the board and read the first Analysis example aloud.`,
+  family: `Today in class, students practiced explaining how a quote proves a point in their Fahrenheit 451 essays.
+
+## Talking about it at dinner
+- Ask which word in their favorite quote does the most work.`,
+};
 
 // ---------------------------------------------------------------------------
 // Section 7: writing practice (ACT-style questions for Fixing Comma Splices)
@@ -448,9 +517,13 @@ export const VO = {
     open: 'The suggestion opens in the Lesson Planner.',
     otherStarts: { title: 'Or start somewhere else', body: 'Plan from a skill, a standard, or a writing fundamental. Teachers start where they are.' },
     chat: 'A short conversation, and the plan comes back built from Yawp! materials.',
-    runOfShow: { title: 'The run of show', body: 'A minute-by-minute plan for tomorrow\'s 50-minute period.' },
-    stack: 'Add it all to the stack: handouts, practice, exit ticket.',
-    stackCallout: { title: 'The stack', body: 'Everything for the lesson in one place, ready to print or assign.' },
+    steps: { title: 'A plan, step by step', body: 'Every step is timed and built from Yawp! materials.' },
+    stack: 'Add it all to the stack: the run of show for tomorrow.',
+    runOfShow: { title: 'The run of show', body: 'Every step timed against your 50-minute period, with writing time marked in purple.' },
+    control: { title: 'You stay in control', body: 'Drag steps into a new order, retime them, or cut one. Undo is a click away.' },
+    create: { title: 'Writing steps become Yawp! assignments', body: 'One click creates the exit ticket for the class.' },
+    deck: { title: 'The slide deck, built from your stack', body: 'Present it, edit it, or download it for PowerPoint.' },
+    send: { title: 'Send the lesson', body: 'To an administrator, a sub, or a student who missed class.' },
   },
   practice: {
     library: 'Quick writing lessons for grammar and composition.',
