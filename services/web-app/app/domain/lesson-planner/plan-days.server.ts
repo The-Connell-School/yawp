@@ -9,20 +9,33 @@
  */
 import { prisma } from '~/utils/db.server';
 import { fileReplyPieces } from './file-reply-pieces.server';
-import { multiDayTitle, readPlanDays } from './plan-days';
+import { frameworkFromDays, multiDayTitle, readPlanDays } from './plan-days';
 
-export type DayLesson = { day: number; title: string; conversationId: string; created: boolean };
+export type DayLesson = {
+  day: number;
+  title: string;
+  conversationId: string;
+  created: boolean;
+  /** Replacing: the teacher had changed this day, so it was kept. */
+  kept?: boolean;
+};
 
 export async function makeDayLessons({
   membershipId,
   organizationId,
   conversationId,
   messageId,
+  replace = false,
 }: {
   membershipId: string;
   organizationId: string;
   conversationId: string;
   messageId: string;
+  /**
+   * A later version of the week (Brian's run 5, round 2): its days take the
+   * place of the ones made before, except a day the teacher has changed.
+   */
+  replace?: boolean;
 }): Promise<{ unitId: string; days: DayLesson[] } | null> {
   const source = await prisma.lessonPlanConversation.findFirst({
     where: { id: conversationId, membershipId, deletedAt: null },
@@ -54,9 +67,13 @@ export async function makeDayLessons({
       where: { unitId, unitDay: day.day, deletedAt: null, membershipId },
       select: { id: true, title: true },
     });
-    if (existing) {
-      made.push({ day: day.day, title: existing.title, conversationId: existing.id, created: false });
+    if (existing && (!replace || (await teacherChanged(existing.id)))) {
+      made.push({ day: day.day, title: existing.title, conversationId: existing.id, created: false, kept: replace });
       continue;
+    }
+    // Replaced: the old version is kept out of sight, never destroyed.
+    if (existing) {
+      await prisma.lessonPlanConversation.update({ where: { id: existing.id }, data: { deletedAt: new Date() } });
     }
     const title = `Day ${day.day} — ${day.title}`.slice(0, 120);
     const askedAt = new Date();
@@ -87,7 +104,27 @@ export async function makeDayLessons({
     if (reply) await fileReplyPieces({ conversationId: conversation.id, message: reply });
     made.push({ day: day.day, title, conversationId: conversation.id, created: true });
   }
+  // The unit remembers the week's shape and the reply its days came from,
+  // once days are made from it.
+  if (made.some((day) => day.created)) {
+    await prisma.lessonPlanUnit.update({ where: { id: unitId }, data: { framework: frameworkFromDays(days, messageId) } });
+  }
   return { unitId, days: made };
+}
+
+/**
+ * Whether the teacher has worked on a day since it was made: a turn of their
+ * own, a piece edited or created in Yawp!, or the lesson set or published.
+ */
+async function teacherChanged(conversationId: string): Promise<boolean> {
+  const [conversation, messages, edited] = await Promise.all([
+    prisma.lessonPlanConversation.findUnique({ where: { id: conversationId }, select: { setAt: true, publishedAt: true } }),
+    prisma.lessonPlanMessage.count({ where: { conversationId } }),
+    prisma.lessonPlanMaterial.count({
+      where: { conversationId, OR: [{ editedAt: { not: null } }, { yawpCreatedAt: { not: null } }] },
+    }),
+  ]);
+  return messages > 2 || edited > 0 || Boolean(conversation?.setAt || conversation?.publishedAt);
 }
 
 /** The day lessons already made from this conversation's unit, by day. */

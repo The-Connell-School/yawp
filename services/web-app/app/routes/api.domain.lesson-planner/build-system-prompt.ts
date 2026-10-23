@@ -799,10 +799,13 @@ export function buildLessonPlannerSystemPromptBlocks({
   deckGallery = false,
   sources = [],
   recentArt = [],
+  weekContext = [],
 }: {
   teacherName: string | null;
   organizationName: string;
   lessonInventory?: LessonInventoryEntry[];
+  /** A day lesson's place in its week's framework (Brian's run 5, round 2). */
+  weekContext?: string[];
   /** Stack v2: what is in the stack, in full, so outputs are built from it. */
   stackContents?: StackContentsEntry[];
   unitContext?: UnitContext | null;
@@ -828,6 +831,7 @@ export function buildLessonPlannerSystemPromptBlocks({
     ...buildInventorySection(lessonInventory),
     ...buildStackContentsSection(stackContents),
     ...buildUnitContextSection(unitContext),
+    ...weekContext,
     ...buildTemplateSection(template),
     ...buildDeckGallerySection(deckGallery, recentArt),
     ...buildSourcesSection(sources),

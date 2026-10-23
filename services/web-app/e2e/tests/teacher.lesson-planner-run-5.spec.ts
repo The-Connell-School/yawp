@@ -12,7 +12,7 @@ import { DAY_ONE_REPLY } from '../fixtures/lesson-planner/day-one-reply';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 
-const FLAGS: LessonPlannerReviewFlag[] = ['lesson_planner_stack_v2', 'lesson_planner_stack_v3'];
+const FLAGS: LessonPlannerReviewFlag[] = ['lesson_planner_stack_v2', 'lesson_planner_stack_v3', 'lesson_planner_templates'];
 
 type Ctx = { teacherMembershipId: string; organizationId: string };
 type Turn = { role: 'user' | 'assistant'; content: string };
@@ -122,7 +122,7 @@ test.describe("Lesson Planner — Brian's fifth run", () => {
     await expect(page.getByTestId('segment-toggle')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Add everything to the stack' })).toHaveCount(0);
 
-    await card.getByTestId('make-day-lessons').click();
+    // The newest week makes its own day lessons (Brian: automatically).
     await expect(card.getByTestId('day-lesson-open')).toHaveCount(2);
     await expect(card.getByTestId('make-day-lessons')).toHaveCount(0);
 
@@ -304,6 +304,52 @@ test.describe("Lesson Planner — Brian's fifth run", () => {
     } finally {
       await cleanup.$disconnect();
     }
+  });
+
+  test('a later version of the week replaces the day lessons, keeping a day the teacher changed; the week saves as a framework', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await stackOn();
+    await setLessonPlannerReviewFlag('lesson_planner_templates', true);
+    const { conversationId } = await seedConversation(e2eContext, [
+      { role: 'user', content: 'Plan a 4-day flow for Lord of the Flies.' },
+      { role: 'assistant', content: WEEK },
+    ]);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+    await expect(page.getByTestId('day-lessons').getByTestId('day-lesson-open')).toHaveCount(2);
+
+    // The teacher works on Day 2: it is theirs now.
+    const prisma = createE2EPrismaClient();
+    try {
+      const day2 = await prisma.lessonPlanConversation.findFirstOrThrow({ where: { unitDay: 2, membershipId: e2eContext.teacherMembershipId, deletedAt: null } });
+      await prisma.lessonPlanMaterial.updateMany({ where: { conversationId: day2.id }, data: { editedAt: new Date() } });
+      await prisma.lessonPlanMessage.createMany({
+        data: [
+          { conversationId, role: 'user', content: 'Make Day 1 a bit lighter.', createdAt: new Date(Date.UTC(2026, 9, 23, 12)) },
+          { conversationId, role: 'assistant', content: WEEK.replace('Mini-lecture: Golding and the war (25 min)', 'Mini-lecture: the island (20 min)').replace('Pair talk (10 min)', 'Pair talk (15 min)'), createdAt: new Date(Date.UTC(2026, 9, 23, 12, 0, 1)) },
+        ],
+      });
+    } finally {
+      await prisma.$disconnect();
+    }
+    await page.reload();
+    const latest = page.getByTestId('day-lessons').last();
+    page.once('dialog', (dialog) => void dialog.accept());
+    await latest.getByTestId('replace-day-lessons').click();
+    await expect(latest.getByTestId('day-lessons-kept')).toHaveText('Kept as you changed it: Day 2.');
+    await latest.getByTestId('day-lesson-open').first().click();
+    await expect(page.getByTestId('run-card').nth(1).getByTestId('run-card-title')).toHaveText('Mini-lecture: the island');
+
+    // Save the week as a framework; it is there to start from next week.
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+    await page.getByTestId('day-lessons').last().getByTestId('save-framework').click();
+    await expect(page.getByTestId('framework-saved')).toBeVisible();
+    await page.goto('/app/lesson-planner');
+    await page.getByTestId('template-tile').click();
+    await expect(page.getByTestId('template-framework').first()).toHaveText('2-day framework · Day 1 Lecture — the island · Day 2 Close reading');
   });
 });
 

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { buildTemplateSection, slotsFromSteps, templateShape, templateTiming } from './lesson-templates';
+import { buildTemplateSection, frameworkShape, slotsFromSteps, TEMPLATE_DAYS, templateDaysFromFramework, templateShape, templateTiming } from './lesson-templates';
+import { DEFAULT_STEP_MINUTES } from './step-types';
 
 const SLOTS = slotsFromSteps([
   { type: 'class_starter', minutes: 5, isWriting: true },
@@ -27,5 +28,33 @@ describe('lesson templates (stack page redesign)', () => {
     expect(section).toContain('1. Class Starter, 5 min');
     expect(section).toContain('Do not ask how long the period is');
     expect(buildTemplateSection(null)).toEqual([]);
+  });
+});
+
+describe("a week's framework (Brian's run 5, round 2)", () => {
+  const framework = {
+    sourceMessageId: 'm1',
+    days: [
+      { day: 1, title: 'The Brian Connell Show', minutes: 50, steps: [{ title: 'Hook', minutes: 5, type: 'activity' as const }, { title: 'Mini-lecture', minutes: 25, type: 'context' as const }] },
+      { day: 2, title: 'Close reading', minutes: 50, steps: [{ title: 'Close reading', minutes: null, type: null }] },
+    ],
+  };
+  test('days keep their steps’ types and minutes, never their words', () => {
+    const days = templateDaysFromFramework(framework);
+    expect(days[0]!.slots).toEqual([
+      { type: 'activity', minutes: 5, label: 'Hook' },
+      { type: 'context', minutes: 25, label: 'Mini-lecture' },
+    ]);
+    expect(days[1]!.slots[0]).toMatchObject({ type: 'activity', minutes: DEFAULT_STEP_MINUTES.activity });
+    expect(frameworkShape(days)).toBe('Day 1 The Brian Connell Show · Day 2 Close reading');
+    expect(TEMPLATE_DAYS.safeParse(days).success).toBe(true);
+  });
+  test('the planner is told to keep the week and write it one # Day heading per day', () => {
+    const days = templateDaysFromFramework(framework);
+    const section = buildTemplateSection({ id: 't', name: 'Weekly Flow', slots: days[0]!.slots, periodMinutes: 50, days }).join('\n');
+    expect(section).toContain('their 2-day framework "Weekly Flow"');
+    expect(section).toContain('Day 1: The Brian Connell Show');
+    expect(section).toContain('  - Mini-lecture (Context), 25 min');
+    expect(section).toContain('Do not ask how long the period is or what the structure is');
   });
 });

@@ -11,7 +11,7 @@ import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flag
 import { makeDayLessons } from '~/domain/lesson-planner/plan-days.server';
 
 const POST = z.object({
-  intent: z.literal('make-days'),
+  intent: z.enum(['make-days', 'replace-days']),
   conversationId: z.string().min(1),
   messageId: z.string().min(1),
 });
@@ -28,6 +28,7 @@ export async function action({ request }: ActionFunctionArgs) {
     organizationId: access.membership.organization.id,
     conversationId: data.conversationId,
     messageId: data.messageId,
+    replace: data.intent === 'replace-days',
   });
   if (!made) return dataResponse({ error: 'That reply is not a plan of several days.' }, { status: 404 });
   return dataResponse({ ok: true, ...made });

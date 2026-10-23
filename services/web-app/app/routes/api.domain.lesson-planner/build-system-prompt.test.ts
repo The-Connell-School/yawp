@@ -1936,3 +1936,12 @@ describe("planner prompt — the conversation is the first memory (Brian's run 5
     expect(prompt).toContain('Only for work from other conversations');
   });
 });
+
+test("a day lesson hears its place in the week's framework (Brian's run 5, round 2)", () => {
+  const blocks = buildLessonPlannerSystemPromptBlocks({
+    teacherName: null,
+    organizationName: 'X',
+    weekContext: ['', 'This lesson is Day 2 of "Weekly Flow", a 4-day framework the teacher set:'],
+  });
+  expect(blocks.map((block) => block.text).join('\n')).toContain('Day 2 of "Weekly Flow", a 4-day framework');
+});

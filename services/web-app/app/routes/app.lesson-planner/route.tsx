@@ -96,12 +96,12 @@ import { hidePromptIds } from '~/domain/lesson-planner/prompt-ids';
 import { overTime, planMinutes } from '~/domain/lesson-planner/plan-timing';
 import { readPlanSteps, readStepHeading, splitAtStepHeadings } from '~/domain/lesson-planner/plan-steps';
 import { SegmentToggle } from '~/components/lesson-planner/segment-toggle';
-import { TEMPLATE_SLOTS, type LessonTemplate } from '~/domain/lesson-planner/lesson-templates';
+import { TEMPLATE_DAYS, TEMPLATE_SLOTS, type LessonTemplate } from '~/domain/lesson-planner/lesson-templates';
 import { TemplateChip, TemplateList } from './template-picker';
 import { FULL_LESSON_FRAMING, stripPlanPreamble } from '~/domain/lesson-planner/plan-framing';
 import { announceStackChange, useStackChanges } from '~/components/lesson-planner/stack-channel';
 import { DayLessonsCard } from '~/components/lesson-planner/day-lessons-card';
-import { readPlanDays } from '~/domain/lesson-planner/plan-days';
+import { readPlanDays, readWeekFramework } from '~/domain/lesson-planner/plan-days';
 import { pieceKeysInReply, segmentInStack, stepBlockKeys, stepSegments, stepsOfferingChoice } from '~/domain/lesson-planner/reply-pieces';
 import {
   asksToSwapStarter,
@@ -237,7 +237,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // the map itself lives, so a day has a way home.
   const builtDays: Record<number, string> = {};
   let unitMapConversation: string | null = null;
+  // The reply a week's day lessons were made from (Brian's run 5, round 2).
+  let daysSourceMessageId: string | null = null;
   if (selected?.unitId) {
+    const unit = await prisma.lessonPlanUnit.findFirst({
+      where: { id: selected.unitId, deletedAt: null },
+      select: { framework: true },
+    });
+    daysSourceMessageId = readWeekFramework(unit?.framework)?.sourceMessageId ?? null;
     const siblings = await prisma.lessonPlanConversation.findMany({
       where: { unitId: selected.unitId, deletedAt: null },
       select: { id: true, unitDay: true },
@@ -309,12 +316,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
           where: { membershipId: access.membership.id, deletedAt: null },
           orderBy: { createdAt: 'desc' },
           take: 30,
-          select: { id: true, name: true, slots: true, periodMinutes: true },
+          select: { id: true, name: true, slots: true, periodMinutes: true, days: true },
         })
       ).flatMap((row) => {
         const slots = TEMPLATE_SLOTS.safeParse(row.slots);
+        const days = row.days ? TEMPLATE_DAYS.safeParse(row.days) : null;
         return slots.success
-          ? [{ id: row.id, name: row.name, slots: slots.data, periodMinutes: row.periodMinutes }]
+          ? [{ id: row.id, name: row.name, slots: slots.data, periodMinutes: row.periodMinutes, days: days?.success ? days.data : null }]
           : [];
       })
     : [];
@@ -335,6 +343,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         conversation._count.messages + conversation._count.materials,
     })),
     builtDays,
+    daysSourceMessageId,
     unitMapConversation,
     selectedConversation: selected
       ? {
@@ -425,6 +434,7 @@ export default function LessonPlannerRoute() {
     exitTicketTypeId,
     practice,
     builtDays,
+    daysSourceMessageId,
     unitMapConversation,
     reviewFlags,
     teacherClasses,
@@ -1162,6 +1172,8 @@ export default function LessonPlannerRoute() {
                   conversationId={conversationId}
                   builtDays={builtDays}
                   daysOn={reviewFlags.stackV3}
+                  daysSourceMessageId={daysSourceMessageId}
+                  frameworksOn={reviewFlags.templates}
                   onSuggestion={send}
                   onKeep={setKept}
                   stackV2={reviewFlags.stackV2}
@@ -1520,6 +1532,8 @@ function MessageBubble({
   onSegment = null,
   stackPieces = {},
   daysOn = false,
+  daysSourceMessageId = null,
+  frameworksOn = false,
   disabled,
 }: {
   message: ChatMessage;
@@ -1545,6 +1559,10 @@ function MessageBubble({
   builtDays: Record<number, string>;
   /** Brian's run 5: a multi-day reply makes each day its own lesson. */
   daysOn?: boolean;
+  /** The reply the unit's day lessons were made from, once they are. */
+  daysSourceMessageId?: string | null;
+  /** Templates on: a week can be saved as a framework. */
+  frameworksOn?: boolean;
   onSuggestion: (
     text: string,
     unitDay?: { day: number; title: string }
@@ -1898,6 +1916,9 @@ function MessageBubble({
               messageId={message.id!}
               days={planDays}
               builtDays={builtDays}
+              sourceMessageId={daysSourceMessageId}
+              isLast={isLast}
+              frameworksOn={frameworksOn}
               disabled={disabled}
             />
           ) : null}

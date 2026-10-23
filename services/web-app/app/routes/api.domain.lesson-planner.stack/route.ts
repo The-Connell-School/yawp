@@ -29,7 +29,8 @@ import {
   rewriteForAudience,
 } from '~/domain/lesson-planner/lesson-share.server';
 import { getDomainUrl } from '~/utils/misc';
-import { slotsFromSteps } from '~/domain/lesson-planner/lesson-templates';
+import { slotsFromSteps, templateDaysFromFramework } from '~/domain/lesson-planner/lesson-templates';
+import { frameworkFromDays, multiDayTitle, readPlanDays } from '~/domain/lesson-planner/plan-days';
 
 /** Sends a lesson can make in a day: enough for a sub, a family and an admin. */
 const MAX_SENDS_PER_DAY = 20;
@@ -56,6 +57,8 @@ const POST = z
       'revoke-share',
       // Save this shape as a template (stack page redesign).
       'save-template',
+      // Save a week's days as a framework (Brian's run 5, round 2).
+      'save-framework',
     ]),
     conversationId: z.string().min(1),
     materialId: z.string().min(1).optional(),
@@ -336,7 +339,33 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ ok: true, templateId: template.id });
     }
 
-    case 'command': {
+    case 'save-framework': {
+      if (!flags.templates) return bad('Not found.', 404);
+      const message = data.messageId
+        ? await prisma.lessonPlanMessage.findFirst({
+            where: { id: data.messageId, conversationId: conversation.id, role: 'assistant' },
+            select: { id: true, content: true },
+          })
+        : null;
+      const days = message ? readPlanDays(message.content) : [];
+      const templateDays = message ? templateDaysFromFramework(frameworkFromDays(days, message.id)) : [];
+      if (!message || templateDays.length < 2) return bad('That reply is not a plan of several days.');
+      // The week's shape, never its words: each day's steps by type and minutes.
+      const template = await prisma.lessonPlanTemplate.create({
+        data: {
+          name: (data.name || multiDayTitle(message.content, days)).slice(0, 120),
+          slots: templateDays[0]!.slots,
+          days: templateDays,
+          periodMinutes: conversation.periodMinutes,
+          membershipId: access.membership.id,
+          organizationId: access.membership.organization.id,
+        },
+        select: { id: true },
+      });
+      return dataResponse({ ok: true, templateId: template.id });
+    }
+
+        case 'command': {
       if (!data.line) return bad('Say what to change.');
       const loaded = await loadStackV3({ request, conversationId: conversation.id });
       if (!loaded) return bad('Not found.', 404);

@@ -5,6 +5,7 @@
  */
 import { X } from 'lucide-react';
 import {
+  frameworkShape,
   templateShape,
   templateTiming,
   type LessonTemplate,
@@ -49,7 +50,16 @@ export function TemplateList({
                 <span className="min-w-[12rem] flex-1">
                   <span className="block text-sm font-semibold">{template.name}</span>
                   <span className="block text-xs text-muted-foreground">
-                    {templateShape(template.slots)} · {timing.total} min
+                    {template.days?.length ? (
+                      // A week's framework reads as its days (Brian's run 5).
+                      <span data-testid="template-framework">
+                        {template.days.length}-day framework · {frameworkShape(template.days)}
+                      </span>
+                    ) : (
+                      <>
+                        {templateShape(template.slots)} · {timing.total} min
+                      </>
+                    )}
                   </span>
                 </span>
                 <span className="w-56 max-w-full" aria-hidden>

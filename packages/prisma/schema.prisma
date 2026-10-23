@@ -1525,6 +1525,10 @@ model LessonPlanUnit {
   /// Copied off the map when the unit is created, so the library can list a
   /// unit without parsing a message to find out what it is called.
   title          String                   @default("New unit")
+  /// The week's shape its day lessons were made from (Brian's run 5): each
+  /// day's title and steps, and the reply they came from. Null for a folder
+  /// the teacher made or a unit built from a map.
+  framework      Json?
   membershipId   String
   membership     OrgMembership            @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
   organizationId String
@@ -1700,6 +1704,9 @@ model LessonPlanTemplate {
   deletedAt      DateTime?     @db.Timestamptz(6)
   name           String
   slots          Json
+  /// A whole week's framework (Brian's run 5): one entry per day, each with
+  /// its title and slots. Null for a one-lesson template.
+  days           Json?
   periodMinutes  Int?
   membershipId   String
   membership     OrgMembership @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)

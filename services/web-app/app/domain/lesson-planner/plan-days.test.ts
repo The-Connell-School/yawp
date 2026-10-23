@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { multiDayTitle, readPlanDays } from './plan-days';
+import { frameworkContext, frameworkFromDays, multiDayTitle, readPlanDays, readWeekFramework } from './plan-days';
 import { readPlanSteps } from './plan-steps';
 
 const WEEK = [
@@ -81,5 +81,27 @@ describe("readPlanDays: each day a lesson of its own (Brian's run 5, items 1 and
     expect(multiDayTitle(WEEK, readPlanDays(WEEK))).toBe('Lord of the Flies: the first week');
     const plain = '## Day 1: A\n\n### X (5 min)\nx\n\n## Day 2: B\n\n### Y (5 min)\ny';
     expect(multiDayTitle(plain, readPlanDays(plain))).toBe('A 2-day plan');
+  });
+});
+
+describe("the week's framework (Brian's run 5, round 2)", () => {
+  const framework = frameworkFromDays(readPlanDays(WEEK), 'msg-1');
+  test('each day, its title and its steps by type and minutes, and the reply it came from', () => {
+    expect(framework.sourceMessageId).toBe('msg-1');
+    expect(framework.days[0]!.steps.map((step) => [step.minutes, step.type])).toEqual([
+      [5, 'class_starter'],
+      [25, 'context'],
+      [10, 'activity'],
+      [5, 'read_aloud'],
+      [5, 'closing'],
+    ]);
+    expect(readWeekFramework(JSON.parse(JSON.stringify(framework)))).toEqual(framework);
+    expect(readWeekFramework({ nope: true })).toBeNull();
+  });
+  test("a day lesson hears its place in the week", () => {
+    const lines = frameworkContext(framework, 'Lord of the Flies: the first week', 2).join('\n');
+    expect(lines).toContain('Day 2 of "Lord of the Flies: the first week", a 2-day framework');
+    expect(lines).toContain('- Day 1: Lecture — the island (50 min) — Class starter, Mini-lecture: Golding and the war');
+    expect(lines).toContain('Today is Day 2: Close reading.');
   });
 });

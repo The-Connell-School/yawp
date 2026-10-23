@@ -7,7 +7,8 @@
  * Each day is a lesson of its own: its title, its minutes, and its text with
  * its steps as `##` headings, so the day reads exactly as a single lesson.
  */
-import { withoutTrailingCommentary } from './plan-steps';
+import { readPlanSteps, withoutTrailingCommentary } from './plan-steps';
+import { parseStepType, type StepType } from './step-types';
 
 export type PlanDay = {
   day: number;
@@ -97,4 +98,59 @@ export function multiDayTitle(content: string, days: PlanDay[]): string {
   const before = firstDay > 0 ? content.slice(0, firstDay) : '';
   const heading = /^\s{0,3}#{1,2}\s+(.+)$/m.exec(before)?.[1]?.replace(/\*\*/g, '').trim();
   return (heading || `A ${days.length}-day plan`).slice(0, 120);
+}
+
+/**
+ * The week's shape, kept on its unit (Brian's run 5, round 2): each day's
+ * title, minutes and steps by type, and the reply they were made from, so a
+ * later revision of the week can be told apart and each day knows its job.
+ */
+export type WeekFramework = {
+  sourceMessageId: string;
+  days: Array<{
+    day: number;
+    title: string;
+    minutes: number | null;
+    steps: Array<{ title: string; minutes: number | null; type: StepType | null }>;
+  }>;
+};
+
+export function frameworkFromDays(days: PlanDay[], sourceMessageId: string): WeekFramework {
+  return {
+    sourceMessageId,
+    days: days.map((day) => ({
+      day: day.day,
+      title: day.title,
+      minutes: day.minutes,
+      steps: readPlanSteps(day.content).map((step) => ({
+        title: step.title,
+        minutes: step.minutes,
+        type: parseStepType(step.stepType) ?? null,
+      })),
+    })),
+  };
+}
+
+export function readWeekFramework(value: unknown): WeekFramework | null {
+  if (!value || typeof value !== 'object') return null;
+  const framework = value as Partial<WeekFramework>;
+  if (typeof framework.sourceMessageId !== 'string' || !Array.isArray(framework.days)) return null;
+  return framework as WeekFramework;
+}
+
+/** What a day lesson's planner hears about its place in the week. */
+export function frameworkContext(framework: WeekFramework, unitTitle: string, day: number): string[] {
+  const today = framework.days.find((entry) => entry.day === day);
+  if (!today) return [];
+  return [
+    '',
+    `This lesson is Day ${day} of "${unitTitle}", a ${framework.days.length}-day framework the teacher set:`,
+    ...framework.days.map(
+      (entry) =>
+        `- Day ${entry.day}: ${entry.title}${entry.minutes ? ` (${entry.minutes} min)` : ''}${
+          entry.steps.length ? ` — ${entry.steps.map((step) => step.title).join(', ')}` : ''
+        }`
+    ),
+    `Today is Day ${day}: ${today.title}. Keep to what this day is for in the week, and keep the week's thread (what it picks up from the day before, what it hands the next).`,
+  ];
 }

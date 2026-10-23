@@ -59,7 +59,8 @@ import {
   shouldRenameLesson,
 } from '~/domain/lesson-planner/lesson-name';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
-import { TEMPLATE_SLOTS } from '~/domain/lesson-planner/lesson-templates';
+import { TEMPLATE_DAYS, TEMPLATE_SLOTS } from '~/domain/lesson-planner/lesson-templates';
+import { frameworkContext, readWeekFramework } from '~/domain/lesson-planner/plan-days';
 import { buildLessonPlannerSystemPromptBlocks } from './build-system-prompt';
 import {
   buildLessonPlannerAdmissionPolicy,
@@ -442,9 +443,17 @@ export async function action({ request }: ActionFunctionArgs) {
     const activeDay = dayTarget
       ? turn.unitDay!
       : (activeConversation?.unitDay ?? null);
+    // A day made from a week's framework hears its place in that week.
+    let weekContext: string[] = [];
     if (unitId && activeDay != null) {
       const map = await loadUnitMap({ db: prisma, unitId });
       unitContext = map ? buildUnitContext(map, activeDay) : null;
+      const unit = await prisma.lessonPlanUnit.findFirst({
+        where: { id: unitId, deletedAt: null },
+        select: { title: true, framework: true },
+      });
+      const framework = readWeekFramework(unit?.framework);
+      if (framework && unit) weekContext = frameworkContext(framework, unit.title, activeDay);
     }
 
     // Whether this teacher can actually assign an exit ticket. Without the type
@@ -484,13 +493,20 @@ export async function action({ request }: ActionFunctionArgs) {
       templatesOn && turn.templateId
         ? await prisma.lessonPlanTemplate.findFirst({
             where: { id: turn.templateId, membershipId: access.membership.id, deletedAt: null },
-            select: { id: true, name: true, slots: true, periodMinutes: true },
+            select: { id: true, name: true, slots: true, periodMinutes: true, days: true },
           })
         : null;
     const parsedSlots = templateRow ? TEMPLATE_SLOTS.safeParse(templateRow.slots) : null;
+    const parsedDays = templateRow?.days ? TEMPLATE_DAYS.safeParse(templateRow.days) : null;
     const template =
       templateRow && parsedSlots?.success
-        ? { id: templateRow.id, name: templateRow.name, slots: parsedSlots.data, periodMinutes: templateRow.periodMinutes }
+        ? {
+            id: templateRow.id,
+            name: templateRow.name,
+            slots: parsedSlots.data,
+            periodMinutes: templateRow.periodMinutes,
+            days: parsedDays?.success ? parsedDays.data : null,
+          }
         : null;
     const stackContents =
       stackV2 && activeConversation
@@ -552,6 +568,7 @@ export async function action({ request }: ActionFunctionArgs) {
       deckGallery,
       sources,
       recentArt,
+      weekContext,
     });
 
     const messages: { role: AgentType; content: string; name?: string }[] = [
