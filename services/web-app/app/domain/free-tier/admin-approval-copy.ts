@@ -125,6 +125,13 @@ export function adminApprovalFooterWhy(args: {
       ? `You're getting this because ${forwarder} forwarded ${args.teacherName}'s request at ${args.schoolName} to you.`
       : `You're getting this because ${forwarder} forwarded ${args.teacherName}'s request to you.`;
   }
+  if (pass1) {
+    return adminApprovalTeacherRerouteFooterWhy(
+      args.teacherName,
+      args.schoolName,
+      true
+    );
+  }
   return `You're getting this because ${args.teacherName} named you as an administrator who can approve classroom software at ${args.schoolName}.`;
 }
 
@@ -183,7 +190,7 @@ export function renderAdminApprovalEmailPlainText(args: {
     : '';
   const classroomIntro = `${teacherSchool} would like to use Yawp! in their classroom.`;
   const administratorIntro =
-    forwarder || (args.routedByTeacher && pass1)
+    pass1 || forwarder || (args.routedByTeacher && pass1)
       ? ''
       : ' They named you as the administrator who can approve classroom software.';
   return `${reminderLead}${forwardLead}Approve Yawp! for ${teacherSchool}
