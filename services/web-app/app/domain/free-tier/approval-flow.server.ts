@@ -33,6 +33,7 @@ import {
   resolveAdminLinkTerminalGate,
 } from './admin-link-gate.server';
 import {
+  recordFreeTierAdminApprovalEmailLogged,
   sendFreeTierAdminApprovalEmail,
   sendFreeTierAdminReminderEmail,
   sendFreeTierCongratulationsEmail,
@@ -133,6 +134,8 @@ export async function submitAdminDetails(args: {
   adminEmail: string;
   adminRole: string;
   personalNote?: string;
+  /** Dev-panel jumps only: write approval state and logs without SES. */
+  suppressEmailDelivery?: boolean;
 }) {
   const adminEmail = normalizeEmail(args.adminEmail);
   const app = await prisma.freeTierApplication.findFirst({
@@ -249,16 +252,30 @@ export async function submitAdminDetails(args: {
     const base = freeTierPublicAppOrigin();
     const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(result.approveToken)}`;
     const declineUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(result.declineToken)}`;
-    const emailResult = await sendFreeTierAdminApprovalEmail({
-      applicationId: app.id,
-      to: result.adminEmail,
-      teacherEmail: app.email,
-      teacherName: app.name,
-      schoolName: app.schoolName,
-      approveUrl,
-      notRightPersonUrl: declineUrl,
-      pass1,
-    });
+    const emailResult = args.suppressEmailDelivery
+      ? await recordFreeTierAdminApprovalEmailLogged({
+          applicationId: app.id,
+          to: result.adminEmail,
+          approveUrl,
+          notRightPersonUrl: declineUrl,
+        })
+      : await sendFreeTierAdminApprovalEmail({
+          applicationId: app.id,
+          to: result.adminEmail,
+          teacherEmail: app.email,
+          teacherName: app.name,
+          schoolName: app.schoolName,
+          approveUrl,
+          notRightPersonUrl: declineUrl,
+          pass1,
+        });
+    if (emailResult.ok && args.suppressEmailDelivery) {
+      const sentAt = new Date();
+      await prisma.freeTierAdminApproval.update({
+        where: { id: result.approvalId },
+        data: { firstSentAt: sentAt },
+      });
+    }
     if (!emailResult.ok) {
       await abandonMintedSignedLinks([result.approveLinkId, result.declineLinkId]);
       await prisma.$transaction(async (tx) => {

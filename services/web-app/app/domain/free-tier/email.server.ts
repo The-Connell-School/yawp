@@ -148,6 +148,27 @@ export async function sendFreeTierReleaseEmail(
   }
 }
 
+/** Dev-panel and fixtures: persist the same email log row without calling SES. */
+export async function recordFreeTierAdminApprovalEmailLogged(args: {
+  applicationId: string;
+  to: string;
+  approveUrl: string;
+  notRightPersonUrl: string;
+  isReminder?: boolean;
+}): Promise<EmailSendResult> {
+  await logEmail({
+    applicationId: args.applicationId,
+    kind: args.isReminder ? 'admin_approval_reminder' : 'admin_approval',
+    toEmail: args.to,
+    success: true,
+    payload: {
+      approveUrl: args.approveUrl,
+      notRightPersonUrl: args.notRightPersonUrl,
+    },
+  });
+  return { ok: true };
+}
+
 export async function sendFreeTierAdminApprovalEmail(args: {
   applicationId: string;
   to: string;
