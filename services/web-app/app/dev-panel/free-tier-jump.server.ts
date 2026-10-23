@@ -29,6 +29,38 @@ const PENDING_THROWAWAY_EMAIL =
 export const PENDING_STATES_NEED_THROWAWAY =
   'Pending states need a throwaway test account.';
 
+export const FREE_TIER_JUMP_GENERIC_ERROR = "Couldn't jump to this state.";
+
+const FREE_TIER_JUMP_USER_ERRORS = new Set([
+  'Unknown state.',
+  PENDING_STATES_NEED_THROWAWAY,
+  'State is not implemented yet.',
+  'Sign in to jump without a throwaway test account.',
+  'Current user is not an active teacher in this org.',
+  'Pending fixture jumps require a dev-panel throwaway account.',
+  'Could not prepare pending class settings.',
+  'Could not prepare pending approval state.',
+  'Pending jump produced an unexpected application status.',
+  'Could not provision locked preview classroom.',
+  FREE_TIER_JUMP_GENERIC_ERROR,
+]);
+
+export function formatFreeTierJumpErrorForClient(error: unknown): string {
+  if (error instanceof Error) {
+    const message = error.message;
+    if (FREE_TIER_JUMP_USER_ERRORS.has(message)) return message;
+    if (message.startsWith('Could not prepare pending approval state (')) {
+      return message;
+    }
+  }
+  return FREE_TIER_JUMP_GENERIC_ERROR;
+}
+
+function logFreeTierJumpFailure(stateId: string, error: unknown) {
+  const name = error instanceof Error ? error.name : 'Error';
+  console.error('[dev-panel free-tier jump failed]', { stateId, errorName: name });
+}
+
 export type FreeTierJumpStep = { id: string; label: string; done: boolean };
 
 export type FreeTierJumpResult =
@@ -514,8 +546,7 @@ export async function executeFreeTierStateJump(
         const app = await upsertApplication(
           target.userId,
           target.email,
-          'APPROVED',
-          { approvedAt: new Date() }
+          'APPROVED'
         );
         await provisionFreeClassroom(app.id);
         const org = await prisma.freeTierApplication.findUniqueOrThrow({
@@ -573,10 +604,10 @@ export async function executeFreeTierStateJump(
       headers: sessionHeaders,
     };
   } catch (error) {
+    logFreeTierJumpFailure(input.stateId, error);
     return {
       ok: false,
-      error:
-        error instanceof Error ? error.message : 'Could not jump to this state.',
+      error: formatFreeTierJumpErrorForClient(error),
     };
   }
 }
