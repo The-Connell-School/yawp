@@ -210,9 +210,7 @@ export default function FreeAdminApproveDenyRoute() {
       ? String(actionData.keptReason ?? '')
       : undefined;
   const saveFailed =
-    actionData &&
-    !actionData.ok &&
-    (actionData.reason === 'unavailable' || actionData.reason === 'email_failed');
+    actionData && !actionData.ok && actionData.reason === 'unavailable';
 
   return (
     <FreeTierAuthCard title={adminDenyConfirmTitle()}>
