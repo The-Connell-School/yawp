@@ -36,6 +36,9 @@ mock.module('~/utils/totp.server.ts', () => ({ generateTOTP }));
 mock.module('~/utils/totp.server', () => ({ generateTOTP }));
 mock.module('~/utils/email.server.ts', () => ({ sendEmail }));
 mock.module('~/utils/email.server', () => ({ sendEmail }));
+mock.module('~/domain/free-tier/locked-preview.server', () => ({
+  assertOrganizationTeachingApproved: async () => {},
+}));
 
 const {
   lookupStudentEmailForClass,
