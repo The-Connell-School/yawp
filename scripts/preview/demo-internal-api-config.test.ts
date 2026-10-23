@@ -79,6 +79,8 @@ describe('demo signed management configuration', () => {
     expect(ci).toContain(
       'bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js'
     );
+    expect(ci).toContain('./scripts/preview/deploy-log-secrets.test.js');
+    expect(ci).toContain('./scripts/preview/redact-deploy-logs.test.js --max-concurrency=2');
   });
 
   test('workflow preflight refuses missing/malformed keys and never prints configuration', () => {
