@@ -66,7 +66,9 @@ function sanitizeStackFrame(line: string): string {
   return out.replace(/\?[^\s)'"]+/g, '');
 }
 
-/** Stack frames only — drops the message line and strips query strings from paths. */
+const REAL_STACK_FRAME = /^\s*at .*:\d+:\d+\)?$/;
+
+/** Stack frames only — real V8 frames with line:col, redacted like freeform text. */
 export function buildSafeStackForLog(error: unknown): string | undefined {
   if (!(error instanceof Error) || !error.stack) {
     return undefined;
@@ -74,8 +76,8 @@ export function buildSafeStackForLog(error: unknown): string | undefined {
   const frames = error.stack
     .split('\n')
     .slice(1)
-    .filter((line) => /^\s*at /.test(line))
-    .map(sanitizeStackFrame);
+    .filter((line) => REAL_STACK_FRAME.test(line))
+    .map((line) => redactFreeformMessage(sanitizeStackFrame(line)));
   if (frames.length === 0) {
     return undefined;
   }

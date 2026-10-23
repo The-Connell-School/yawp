@@ -196,6 +196,51 @@ describe('sendEmail', () => {
       expect(serialized).toContain('validation_error');
       expect(serialized).toContain('422');
       expect(serialized).not.toContain('teacher@school.edu');
+      expect(serialized).not.toContain('private@example.test');
+      expect(serialized).toContain('t***@s***');
+    } finally {
+      console.error = originalError;
+    }
+  });
+
+  test('logs email_delivery_failed when Resend returns an unparseable error body', async () => {
+    const errorLog = mock((..._args: unknown[]) => {});
+    const originalError = console.error;
+    console.error = errorLog as typeof console.error;
+    try {
+      process.env.EMAIL_PROVIDER = 'resend';
+      process.env.RESEND_API_KEY = 'resend-test-key';
+      process.env.RESEND_FROM_EMAIL = 'info@yawp.school';
+      fetchMock.mockResolvedValue(
+        new Response(JSON.stringify({ unexpected: true, leak: 'ignored@secret.test' }), {
+          status: 502,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+
+      const result = await sendEmail({
+        to: 'teacher@school.edu',
+        subject: 'Teacher invite',
+        html: '<p>invite</p>',
+        text: 'invite',
+        logKind: 'teacher-invite',
+      });
+
+      expect(result).toEqual({
+        status: 'error',
+        error: {
+          name: 'UnknownError',
+          message: 'Unknown Error',
+          statusCode: 500,
+          cause: { unexpected: true, leak: 'ignored@secret.test' },
+        },
+      });
+
+      const serialized = JSON.stringify(errorLog.mock.calls);
+      expect(serialized).toContain('email_delivery_failed');
+      expect(serialized).toContain('UnknownError');
+      expect(serialized).not.toContain('teacher@school.edu');
+      expect(serialized).not.toContain('ignored@secret.test');
       expect(serialized).toContain('t***@s***');
     } finally {
       console.error = originalError;

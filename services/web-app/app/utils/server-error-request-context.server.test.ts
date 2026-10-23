@@ -36,17 +36,30 @@ describe('buildServerErrorRequestContext', () => {
       'join failed for teacher@school.edu token=SECRET-TOKEN https://yawp.school/join?code=ABC123',
     );
     error.stack =
-      'Error: join failed\n    at handler (/app/join?code=SECRET)\n    at https://yawp.school/path?token=abc';
+      'Error: join failed\n    at handler (file:///app/join:10:5)\n    at Object.run (file:///yawp.school/path:20:1)';
     const safe = buildSafeErrorForLog(error);
     expect(safe.name).toBe('Error');
     expect('message' in safe && safe.message).toContain('join failed');
     expect(JSON.stringify(safe)).not.toContain('teacher@school.edu');
     expect(JSON.stringify(safe)).not.toContain('SECRET-TOKEN');
     expect(JSON.stringify(safe)).not.toContain('ABC123');
-    expect(JSON.stringify(safe)).not.toContain('?code=');
-    expect(JSON.stringify(safe)).not.toContain('?token=');
     expect(safe.stack).toContain('at handler');
     expect(safe.stack).not.toMatch(/^Error:/m);
+  });
+
+  test('buildSafeStackForLog drops message continuations that start with "at " but lack line:col', () => {
+    const error = new Error('failed');
+    error.stack = [
+      'Error: failed',
+      '    at attacker@evil.com token=xyz',
+      '    at realFn (/src/app.tsx:10:5)',
+    ].join('\n');
+    const safe = buildSafeErrorForLog(error);
+    const serialized = JSON.stringify(safe);
+    expect(serialized).not.toContain('attacker@evil.com');
+    expect(serialized).not.toContain('token=xyz');
+    expect(safe.stack).toContain('realFn');
+    expect(safe.stack).toContain(':10:5');
   });
 
   test('buildSafeStackForLog strips query strings from frame paths', () => {
