@@ -44,7 +44,10 @@ import {
 } from '~/components/ui/sheet';
 import { Label } from '~/components/ui/label';
 import { useEffect, useState } from 'react';
-import { normalizeEmail } from '~/utils/normalize-email';
+import {
+  escapeForPrismaCaseInsensitiveEquals,
+  normalizeEmail,
+} from '~/utils/normalize-email';
 import { InviteTeachersSheet } from './invite-teachers-sheet';
 import { TEACHER_INVITE_SERVER_ERROR_MESSAGE } from './teacher-invite-copy';
 
@@ -330,7 +333,10 @@ export async function action({ request }: ActionFunctionArgs) {
         emails
           .split(/[,\n]/)
           .map((email: string) => normalizeEmail(email))
-          .filter((email: string) => email && email.includes('@'))
+          .filter(
+            (email: string) =>
+              email && email.includes('@') && !email.includes('%')
+          )
       )
     );
 
@@ -358,23 +364,6 @@ export async function action({ request }: ActionFunctionArgs) {
       for (const email of emailList) {
         let designed: Awaited<ReturnType<typeof buildOrgTeacherInviteEmail>>;
         try {
-          // Check for existing invitation and delete if found
-          const existingInvitation = await prisma.invitation.findFirst({
-            where: {
-              target: { equals: email, mode: 'insensitive' },
-              type: 'onboard-teacher',
-              metadata: JSON.stringify({
-                organizationId: profile.organization.id,
-              }),
-            },
-          });
-
-          if (existingInvitation) {
-            await prisma.invitation.delete({
-              where: { id: existingInvitation.id },
-            });
-          }
-
           const { otp, ...verificationConfig } = await generateTOTP({
             algorithm: 'SHA-256',
             charSet: 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789',
@@ -396,9 +385,26 @@ export async function action({ request }: ActionFunctionArgs) {
             metadata: JSON.stringify({
               organizationId: profile.organization.id,
             }),
+            organization: {
+              connect: { id: profile.organization.id },
+            },
           };
 
-          await prisma.invitation.create({ data: verificationData });
+          const invitationDeleteTarget =
+            escapeForPrismaCaseInsensitiveEquals(email);
+
+          await prisma.$transaction(async (tx) => {
+            await tx.invitation.deleteMany({
+              where: {
+                target: {
+                  equals: invitationDeleteTarget,
+                  mode: 'insensitive',
+                },
+                type: 'onboard-teacher',
+              },
+            });
+            await tx.invitation.create({ data: verificationData });
+          });
 
           designed = await buildOrgTeacherInviteEmail({
             firstName: inviteeFirstName(email),
