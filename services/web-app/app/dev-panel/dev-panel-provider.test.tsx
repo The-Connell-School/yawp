@@ -11,6 +11,18 @@ try {
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
+async function flushAfterHydration() {
+  await act(async () => {
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setTimeout(resolve, 0);
+        });
+      });
+    });
+  });
+}
+
 import { DevPanelProvider, useDevPanel } from './dev-panel-provider';
 import { writeDevPanelState } from './dev-panel-storage';
 
@@ -50,7 +62,7 @@ describe('DevPanelProvider', () => {
     root.unmount();
   });
 
-  test('restores an open panel from localStorage after mount', () => {
+  test('restores an open panel from localStorage after mount', async () => {
     writeDevPanelState(window.localStorage, {
       open: true,
       openSections: ['sign-in'],
@@ -81,6 +93,7 @@ describe('DevPanelProvider', () => {
         )
       );
     });
+    await flushAfterHydration();
     expect(container.querySelector('[data-open]')?.getAttribute('data-open')).toBe('yes');
     expect(container.querySelector('[data-restored]')?.getAttribute('data-restored')).toBe(
       'yes'
