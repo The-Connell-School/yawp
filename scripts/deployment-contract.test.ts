@@ -341,6 +341,19 @@ describe('production deployment contract', () => {
     const viteConfig = readRepoFile('services/web-app/vite.config.ts');
 
     expect(dockerfile).toMatch(/ARG YAWP_ENVIRONMENT=production/);
+    expect(dockerfile).toMatch(/ARG YAWP_GIT_COMMIT=unknown/);
+    expect(dockerfile).toMatch(/ARG YAWP_BUILT_AT=unknown/);
+    expect(dockerfile).toMatch(
+      /FROM base AS production[\s\S]*ENV YAWP_GIT_COMMIT=\$YAWP_GIT_COMMIT/
+    );
+
+    const rootPackage = JSON.parse(readRepoFile('package.json'));
+    expect(rootPackage.scripts['web-app:docker:build']).toContain(
+      '--build-arg YAWP_GIT_COMMIT=$(git rev-parse HEAD)'
+    );
+    expect(rootPackage.scripts['web-app:docker:build']).toContain(
+      '--build-arg YAWP_BUILT_AT='
+    );
 
     const demoWebBuild = demoWorkflow.slice(
       demoWorkflow.indexOf('- name: Build and push demo web image'),
@@ -348,6 +361,8 @@ describe('production deployment contract', () => {
     );
     expect(demoWebBuild).toContain('build-args:');
     expect(demoWebBuild).toContain('YAWP_ENVIRONMENT=demo');
+    expect(demoWebBuild).toContain('YAWP_GIT_COMMIT=${{ steps.shipping.outputs.full_sha }}');
+    expect(demoWebBuild).toContain('YAWP_BUILT_AT=${{ github.run_started_at }}');
 
     const demoToolboxBuild = demoWorkflow.slice(
       demoWorkflow.indexOf('- name: Build and push demo toolbox image'),
@@ -1027,6 +1042,8 @@ describe('PR preview deployment contract', () => {
     expect(gate).toContain("process.env.PREVIEW_ACCESS_GATE === 'on'");
     expect(gate).toContain('isDemoEnvironment');
     expect(gate).toContain("'/api/healthcheck'");
+    expect(gate).toContain("'/api/readyz'");
+    expect(gate).toContain("'/api/version'");
     expect(compose).toContain('PREVIEW_ACCESS_GATE: "on"');
     expect(compose).toContain('requirePreviewAccessSeats(accessSeats)');
     expect(compose).toContain('requirePreviewAccessSecret(accessSecret)');

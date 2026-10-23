@@ -128,6 +128,8 @@ jobs:
           tags: ${{ steps.images-ecr.outputs.web_image }}
           build-args: |
             YAWP_ENVIRONMENT=demo
+            YAWP_GIT_COMMIT=${{ steps.shipping.outputs.full_sha }}
+            YAWP_BUILT_AT=${{ github.run_started_at }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
