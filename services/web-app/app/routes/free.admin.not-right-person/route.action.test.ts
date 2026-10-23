@@ -29,6 +29,8 @@ mock.module('~/domain/free-tier/admin-link-known-request.server', () => ({
 
 mock.module('~/domain/free-tier/admin-link-gate.server', () => ({
   fetchFreeTierApplicationTerminalGate: terminalGate,
+  resolveAdminLinkReplacedGate: async () => null,
+  resolveAdminLinkTerminalGate: async () => null,
 }));
 
 const { action } = await import('./route');

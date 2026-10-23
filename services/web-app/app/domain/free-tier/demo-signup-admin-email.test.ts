@@ -103,6 +103,7 @@ describe('demo free-tier signup admin email subjects (#659)', () => {
       approveUrl,
       notRightPersonUrl,
       forwardedByAdminName: 'Sam Chen',
+      pass1: true,
     });
     expect(designed.subject).toBe(`Can you approve Yawp! for ${atSchool}?`);
     expectDesignedDelivery(designed);
