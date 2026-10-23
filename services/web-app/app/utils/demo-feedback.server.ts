@@ -1,8 +1,11 @@
 import { z } from 'zod';
 import { readBoundedText } from './bounded-body.server';
 import { FEEDBACK_CAPTURE_EVENTS, feedbackPath } from './demo-feedback-context';
-import { severitySchema, type FeedbackInput } from './tester-feedback.server';
 import { isDevPanelRuntimeEnabled } from '~/dev-panel/dev-panel-runtime.server';
+import { DEMO_FEEDBACK_NOTE_LIMIT } from './demo-feedback-limits';
+import { severitySchema, type FeedbackInput } from './tester-feedback.server';
+
+export { DEMO_FEEDBACK_NOTE_LIMIT } from './demo-feedback-limits';
 
 export interface DemoFeedbackDependencies {
   environment(): string;
@@ -54,7 +57,7 @@ const actionSchema = z.discriminatedUnion('type', [
     .strict(),
 ]);
 const submissionSchema = z.object({
-  note: z.string().trim().min(1).max(2000),
+  note: z.string().trim().min(1).max(DEMO_FEEDBACK_NOTE_LIMIT),
   severity: severitySchema.nullable().optional(),
   url: pathSchema,
   actions: z.array(actionSchema).max(5),
@@ -98,8 +101,7 @@ export async function submitDemoFeedback(
   if (!parsed.success)
     return json(
       {
-        error:
-          'Add a note of up to 4,000 characters with a valid page location.',
+        error: `Add a note of up to ${DEMO_FEEDBACK_NOTE_LIMIT.toLocaleString('en-US')} characters with a valid page location.`,
       },
       400
     );

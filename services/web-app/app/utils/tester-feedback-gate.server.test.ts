@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import { createPreviewAccessMiddleware } from './preview-access.server';
 import { authorizeInternalApiRequest, resetInternalApiMemoryNonceStore, resetInternalApiRateLimitBuckets, signInternalApiRequest } from './internal-platform-auth.server';
-import { readTesterFeedback, type FeedbackDependencies } from './tester-feedback.server';
+import { readTesterFeedback, readTesterFeedbackScreenshot, type FeedbackDependencies } from './tester-feedback.server';
 
 const secret = 'synthetic-feedback-gate-signing-material';
 const names = ['PREVIEW_ACCESS_GATE', 'YAWP_INTERNAL_API_KEYS', 'INTERNAL_API_NONCE_STORE', 'LEGACY_INTERNAL_KEY_ALLOWED'] as const;
@@ -99,4 +99,31 @@ test('feedback gate exception does not expose neighboring, admin or submission p
     expect((await route(new Request(url, { headers: await signed(url) }))).status).toBe(401);
   }
   expect(reads).toHaveLength(0);
+});
+
+test('gate passes signed screenshot paths through to handler authorization', async () => {
+  const screenshotId = 'clh1234567890123456789012';
+  const loadScreenshot = mock(async () => null as string | null);
+  const deps: FeedbackDependencies = {
+    enabled: () => true,
+    environment: () => 'demo',
+    getUser: async () => null,
+    save: async () => false,
+    list: async () => [],
+    authenticateInternal: authorizeInternalApiRequest,
+    loadScreenshot,
+  };
+  const middleware = createPreviewAccessMiddleware();
+  const screenshotUrl = `https://demo.example/api/internal/v1/tester-feedback/${screenshotId}/screenshot`;
+  const screenshotRoute = (request: Request) =>
+    middleware(
+      { request, params: {}, context: {} as never, url: new URL(request.url), pattern: '*' },
+      () => readTesterFeedbackScreenshot(request, screenshotId, deps)
+    ) as Promise<Response>;
+  expect((await screenshotRoute(new Request(screenshotUrl))).status).toBe(401);
+  expect(
+    (await screenshotRoute(new Request(screenshotUrl, { headers: await signed(screenshotUrl) })))
+      .status
+  ).toBe(404);
+  expect(loadScreenshot).toHaveBeenCalledWith(screenshotId);
 });

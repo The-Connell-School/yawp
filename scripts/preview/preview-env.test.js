@@ -255,7 +255,7 @@ describe('buildPreviewEnv', () => {
     expect(workflow).toContain('read-smoke-access-code-from-seats-file.mjs');
     expect(workflow).toContain('PREVIEW_ACCESS_SEATS_FILE=');
     expect(deploy).toContain('access-code.mjs');
-    expect(deploy).toContain('oven/bun:1.4.3');
+    expect(deploy).toContain('oven/bun:1.4.4');
     expect(deploy).toContain('bun scripts/preview/access-code.mjs --seats');
     expect(deploy).toContain('PREVIEW_ACCESS_CODES');
     expect(deploy).toContain('PREVIEW_ACCESS_SEATS');

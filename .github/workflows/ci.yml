@@ -79,7 +79,7 @@ jobs:
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
@@ -96,7 +96,7 @@ jobs:
       # The root-owned-build-output test needs the image the preview host itself runs.
       - name: 🐳 Pull the preview runtime image
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
-        run: docker pull oven/bun:1.4.3
+        run: docker pull oven/bun:1.4.4
 
       # Fail rather than skip if the runner cannot produce root-owned files: a silent skip
       # here would leave the regression uncovered everywhere.
@@ -137,7 +137,7 @@ jobs:
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -804,13 +804,13 @@ jobs:
         if: ${{ needs.paths.outputs.code == 'true' }}
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: 📥 Download deps
         if: ${{ needs.paths.outputs.code == 'true' }}
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         if: ${{ needs.paths.outputs.code == 'true' }}
@@ -962,7 +962,9 @@ jobs:
             'app/utils/internal-management.server.test.ts' \
             'app/utils/internal-platform-auth.server.test.ts' \
             'app/utils/tester-feedback-gate.server.test.ts' \
+            'app/utils/tester-feedback-screenshot.server.test.ts' \
             'app/utils/tester-feedback-request.server.test.ts' \
+            'app/routes/api.internal.v1.tester-feedback.$id.screenshot/route.test.ts' \
             'app/utils/demo-feedback.server.test.ts' \
             'app/utils/demo-feedback-context.test.ts' \
             'app/utils/demo-feedback-analytics.test.ts' \
@@ -1052,12 +1054,12 @@ jobs:
       - name: ⎔ Setup node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -1172,12 +1174,12 @@ jobs:
       - name: ⎔ Setup node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -1283,12 +1285,12 @@ jobs:
       - name: ⎔ Setup node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -1476,12 +1478,12 @@ jobs:
       - name: ⎔ Setup node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -1614,7 +1616,7 @@ jobs:
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

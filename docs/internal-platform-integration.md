@@ -12,6 +12,7 @@ The supported signed platform API families are:
 | `/api/internal/v1/feature-flags*` | `GET` reads, mutating writes | `flags:read` or `flags:write` |
 | `/api/internal/v1/stats/grading` | `GET` | `stats:read` |
 | `/api/internal/v1/audit` | `GET` | `audit:read` |
+| `/api/internal/v1/tester-feedback` and `/api/internal/v1/tester-feedback/:id/screenshot` | `GET` | `management:read` |
 | Management routes such as users, organizations, free tier, QA, and impersonation audit | route-specific | `management:read` or `management:write` |
 
 Signed requests must include `X-Yawp-Key-Id`, `X-Yawp-Timestamp`, `X-Yawp-Nonce`, `X-Yawp-Actor`, and `X-Yawp-Signature`. Timestamps older than five minutes, replayed `(keyId, nonce)` pairs, invalid signatures, malformed actors, and missing scopes are rejected. Signed keys are rate limited at 120 requests per minute per key id; repeated failed HMAC attempts are rate limited per client IP.
