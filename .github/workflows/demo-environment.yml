@@ -41,8 +41,15 @@ on:
         default: '14'
 
 concurrency:
-  group: demo-environment
-  cancel-in-progress: true
+  group: >-
+    ${{ (github.event_name == 'workflow_dispatch' ||
+         (github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_branch == github.event.repository.default_branch &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_repository.full_name == github.repository)) &&
+        'demo-environment' ||
+        format('demo-environment-ignored-{0}', github.run_id) }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -53,7 +60,9 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == github.event.repository.default_branch)
+       github.event.workflow_run.head_branch == github.event.repository.default_branch &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-22.04
     environment: demo
     env:
@@ -210,7 +219,7 @@ jobs:
       DEMO_RESET_CONFIRMATION: >-
         ${{ github.event_name == 'workflow_dispatch' && inputs.reset_confirmation || '' }}
       DEMO_BACKUP_RETENTION: >-
-        ${{ github.event_name == 'workflow_dispatch' && inputs.backup_retention || '14' }}
+        ${{ github.event_name == 'workflow_run' && '14' || inputs.backup_retention }}
       DEMO_BACKUP_S3_URI: ${{ vars.DEMO_BACKUP_S3_URI || 's3://yawp-preview-videos/demo-backups' }}
       DEMO_REQUESTED_REF: >-
         ${{ github.event_name == 'workflow_dispatch' && inputs.ref ||
@@ -459,13 +468,24 @@ jobs:
           health="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' "$url/api/healthcheck")"
           test "$health" = "200" || { echo "Demo healthcheck returned HTTP $health"; exit 1; }
 
-          expected_commit='${{ needs.build-demo-images.outputs.demo_git_sha }}'
-          version_body="$(curl -sk -m 15 "$url/api/version")"
-          reported_commit="$(jq -er '.commit' <<<"$version_body")"
-          test "$reported_commit" = "$expected_commit" || {
-            echo "/api/version commit=$reported_commit expected=$expected_commit" >&2
-            exit 1
-          }
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            expected_commit='${{ needs.build-demo-images.outputs.demo_git_sha }}'
+            version_http="$(curl -sk -o /tmp/demo-version.json -m 15 -w '%{http_code}' "$url/api/version")"
+            case "$version_http" in
+              200)
+                reported_commit="$(jq -er '.commit' </tmp/demo-version.json)"
+                test "$reported_commit" = "$expected_commit" || {
+                  echo "/api/version commit=$reported_commit expected=$expected_commit" >&2
+                  exit 1
+                }
+                ;;
+              404) ;;
+              *)
+                echo "/api/version returned HTTP $version_http" >&2
+                exit 1
+                ;;
+            esac
+          fi
 
           public_home="$(curl -skL -m 15 "$url")"
           grep -q 'data-preview-access-screen' <<<"$public_home" && {
