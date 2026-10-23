@@ -1,4 +1,10 @@
-import { ChevronLeft, Loader2 } from 'lucide-react';
+import {
+  Check,
+  ChevronLeft,
+  CircleAlert,
+  Loader2,
+  UserRound,
+} from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useRouteLoaderData } from 'react-router';
 import { Button } from '~/components/ui/button';
@@ -26,6 +32,19 @@ function useMedia(query: string) {
   return matches;
 }
 
+function feedbackNoteValue(raw: unknown) {
+  return typeof raw === 'string' ? raw : '';
+}
+
+function TesterIdentityBadge() {
+  return (
+    <p className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+      <UserRound className="size-4 shrink-0" aria-hidden="true" />
+      Sent as a tester (not signed in)
+    </p>
+  );
+}
+
 export function DevPanelGiveFeedbackFlyout({
   onClose,
   pushed,
@@ -50,7 +69,7 @@ export function DevPanelGiveFeedbackFlyout({
   const [screenshotOmitted, setScreenshotOmitted] = useState(false);
   const [status, setStatus] = useState<'idle' | 'submitting' | 'sent' | 'error'>('idle');
   const [error, setError] = useState('');
-  const note = state.forms.feedbackNote ?? '';
+  const note = feedbackNoteValue(state.forms.feedbackNote);
   const signedOut = !rootData?.user?.email;
   const sentPathRef = useRef(path);
 
@@ -163,25 +182,41 @@ export function DevPanelGiveFeedbackFlyout({
       </div>
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {status === 'sent' ? (
-          <div className="space-y-3">
-            <h3
-              id={sentHeadingId}
-              tabIndex={-1}
-              className="text-base font-semibold outline-none"
-            >
-              Feedback sent
-            </h3>
-            <p role="status">
-              Thanks. The Yawp! team got your note, screenshot and {sentPathRef.current}.
-            </p>
-            {signedOut ? (
-              <p className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-                Sent as a tester (not signed in)
+          <div className="space-y-4">
+            <div className="flex flex-col items-center gap-3 pt-2 text-center">
+              <div
+                className="flex size-12 items-center justify-center rounded-full bg-primary/15"
+                aria-hidden="true"
+              >
+                <Check className="size-6 text-primary" strokeWidth={2.5} />
+              </div>
+              <h3
+                id={sentHeadingId}
+                tabIndex={-1}
+                className="text-base font-semibold outline-none"
+              >
+                Feedback sent
+              </h3>
+              <p role="status" className="text-sm text-muted-foreground">
+                Thanks. The Yawp! team has your note, screenshot and page URL.
               </p>
-            ) : null}
+            </div>
+            <dl className="space-y-2 rounded-md bg-muted/50 px-3 py-3 text-sm">
+              {signedOut ? (
+                <div>
+                  <dt className="text-muted-foreground">From</dt>
+                  <dd>Sent as a tester (not signed in)</dd>
+                </div>
+              ) : null}
+              <div>
+                <dt className="text-muted-foreground">Page</dt>
+                <dd className="font-mono text-xs">{sentPathRef.current}</dd>
+              </div>
+            </dl>
             <Button
               type="button"
               variant="outline"
+              className="w-full"
               onClick={() => {
                 setStatus('idle');
                 updateForms({ feedbackNote: '' });
@@ -198,11 +233,7 @@ export function DevPanelGiveFeedbackFlyout({
             <p className="text-sm text-muted-foreground">
               Goes straight to the Yawp! team, with a screenshot and this page&apos;s URL.
             </p>
-            {signedOut ? (
-              <p className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-                Sent as a tester (not signed in)
-              </p>
-            ) : null}
+            {signedOut ? <TesterIdentityBadge /> : null}
             {screenshotOmitted ? (
               <p className="text-xs text-muted-foreground">
                 Screenshot omitted — the capture was too large to send.
@@ -237,10 +268,17 @@ export function DevPanelGiveFeedbackFlyout({
               </p>
             ) : null}
             {status === 'error' ? (
-              <p id="dev-panel-feedback-error" role="alert" className="text-sm text-destructive">
-                Couldn&apos;t send feedback. Your note and screenshot are saved here. Check your
-                connection and try again.
-              </p>
+              <div
+                id="dev-panel-feedback-error"
+                role="alert"
+                className="flex gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              >
+                <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                <p>
+                  Couldn&apos;t send your feedback. Your note is still here. Check your connection
+                  and try again.
+                </p>
+              </div>
             ) : null}
             {screenshot ? (
               <div
@@ -284,7 +322,7 @@ export function DevPanelGiveFeedbackFlyout({
                 Sending…
               </>
             ) : status === 'error' ? (
-              'Retry'
+              'Try again'
             ) : (
               'Send feedback'
             )}

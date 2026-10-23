@@ -122,7 +122,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await sendButton.click();
     const submitted = (await submission).postDataJSON();
     await expect(panel.getByRole('status')).toContainText(
-      'Thanks. The Yawp! team got your note, screenshot and /app/assignments'
+      'Thanks. The Yawp! team has your note, screenshot and page URL.'
     );
     const entry = await prisma.testerFeedback.findFirstOrThrow({
       where: {
@@ -169,7 +169,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await retrySend.scrollIntoViewIfNeeded();
     await retrySend.click();
     await expect(retryPanel.getByRole('alert')).toContainText(
-      "Couldn't send feedback. Your note and screenshot are saved here."
+      "Couldn't send your feedback. Your note is still here."
     );
     await expect(retryPanel.getByLabel(retry.noteLabel)).toHaveValue(
       'Retry keeps my note'
@@ -180,11 +180,11 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await screenshot('error-mobile');
     await page.unroute('**/api/dev-panel/feedback');
     await page.unroute('**/api/demo-feedback');
-    const retryAgain = retryPanel.getByRole('button', { name: 'Retry' });
+    const retryAgain = retryPanel.getByRole('button', { name: 'Try again' });
     await retryAgain.scrollIntoViewIfNeeded();
     await retryAgain.click();
     await expect(retryPanel.getByRole('status')).toContainText(
-      'Thanks. The Yawp! team got your note, screenshot and'
+      'Thanks. The Yawp! team has your note, screenshot and page URL.'
     );
     expect(
       await page.evaluate(

@@ -1,4 +1,4 @@
-import { ChevronLeft, Loader2 } from 'lucide-react';
+import { ChevronLeft, CircleAlert, Loader2, Search } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -19,8 +19,6 @@ import {
   FREE_TIER_STATE_GROUPS,
   findFreeTierState,
 } from './free-tier-states.catalog';
-import type { FreeTierJumpStep } from './free-tier-jump.server';
-
 const JUMP_TOAST_KEY = 'yawp-dev-panel-jump-toast';
 const JUMP_TOAST_QUERY = 'devPanelJumpToast';
 
@@ -32,13 +30,13 @@ export function consumeDevPanelJumpToast() {
     params.delete(JUMP_TOAST_QUERY);
     const next = `${window.location.pathname}${params.size ? `?${params}` : ''}${window.location.hash}`;
     window.history.replaceState(null, '', next);
-    toast.success(`Jumped to: ${fromQuery}`);
+    toast.success(`Jumped to ${fromQuery}`);
     return;
   }
   const label = window.sessionStorage.getItem(JUMP_TOAST_KEY);
   if (!label) return;
   window.sessionStorage.removeItem(JUMP_TOAST_KEY);
-  toast.success(`Jumped to: ${label}`);
+  toast.success(`Jumped to ${label}`);
 }
 
 function appendJumpToastToRedirect(redirectTo: string, label: string) {
@@ -67,7 +65,6 @@ export function DevPanelFreeTierFlyout({
   const [filter, setFilter] = useState('');
   const [jumping, setJumping] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [switchSteps, setSwitchSteps] = useState<FreeTierJumpStep[] | null>(null);
   const [error, setError] = useState('');
   const throwawayRef = useRef<HTMLInputElement>(null);
   const filterId = useId();
@@ -117,24 +114,8 @@ export function DevPanelFreeTierFlyout({
   const runJump = async () => {
     if (!selected || !orgId || !selectedVisible) return;
     const found = findFreeTierState(selected);
-    const pendingSteps: FreeTierJumpStep[] = [
-      {
-        id: 'account',
-        label: throwaway ? 'Making test account…' : 'Using signed-in account…',
-        done: false,
-      },
-      {
-        id: 'state',
-        label: found
-          ? `Setting up ${found.state.label}…`
-          : 'Setting up state…',
-        done: false,
-      },
-      { id: 'reload', label: 'Reloading Yawp!…', done: false },
-    ];
     setConfirmOpen(false);
     setJumping(true);
-    setSwitchSteps(pendingSteps);
     setError('');
     try {
       const response = await fetch('/api/dev-panel/free-tier-jump', {
@@ -145,15 +126,13 @@ export function DevPanelFreeTierFlyout({
       });
       const result = await response.json().catch(() => null);
       if (!response.ok) {
+        const label = found?.state.label ?? 'this state';
         setError(
-          `Couldn't jump to ${found?.state.label ?? 'this state'}. The test account wasn't created. Try again.`
+          `Couldn't jump to '${label}' Your choice is still selected. Try again, or pick another state.`
         );
         setJumping(false);
-        setSwitchSteps(null);
         return;
       }
-      const steps = (result.steps ?? pendingSteps) as FreeTierJumpStep[];
-      setSwitchSteps(steps);
       const label = found?.state.label;
       if (label) {
         window.sessionStorage.setItem(JUMP_TOAST_KEY, label);
@@ -166,18 +145,15 @@ export function DevPanelFreeTierFlyout({
       }, 350);
     } catch {
       setError(
-        `Couldn't jump to ${jumpErrorStateLabel}. The test account wasn't created. Try again.`
+        `Couldn't jump to '${jumpErrorStateLabel}' Your choice is still selected. Try again, or pick another state.`
       );
       setJumping(false);
-      setSwitchSteps(null);
     }
   };
 
-  const primaryLabel = jumping
-    ? 'Jumping…'
-    : error
-      ? 'Retry jump'
-      : 'Jump to this state';
+  const primaryLabel = error ? 'Try again' : 'Jump to this state';
+  const jumpDisabled =
+    jumping || !orgId || (!error && (!selected || !selectedVisible));
 
   return (
     <div
@@ -207,22 +183,6 @@ export function DevPanelFreeTierFlyout({
         ) : null}
       </div>
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
-        {jumping && switchSteps ? (
-          <div className="space-y-3 rounded-md border bg-muted/30 p-3" role="status">
-            <p className="flex items-center gap-2 text-sm font-medium">
-              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              Switching…
-            </p>
-            <ol className="space-y-2 text-sm">
-              {switchSteps.map((step) => (
-                <li key={step.id} className="flex items-start gap-2">
-                  <span aria-hidden="true">{step.done ? '✓' : '…'}</span>
-                  <span>{step.label}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        ) : null}
         <div
           className={cn(
             'space-y-3',
@@ -247,18 +207,19 @@ export function DevPanelFreeTierFlyout({
             onChange={(event) => setFilter(event.target.value)}
           />
           {noMatches ? (
-            <p className="text-sm text-muted-foreground">
-              No states match &quot;{filter.trim()}&quot;{' '}
-              <button
-                type="button"
-                className="text-primary underline-offset-2 hover:underline"
-                onClick={() => setFilter('')}
-              >
+            <div className="flex flex-col items-center gap-2 py-6 text-center">
+              <Search className="size-8 text-muted-foreground" aria-hidden="true" />
+              <p className="text-base font-medium">
+                No states match &quot;{filter.trim()}&quot;
+              </p>
+              <p className="text-sm text-muted-foreground">Try another word</p>
+              <Button type="button" variant="outline" size="sm" onClick={() => setFilter('')}>
                 Clear filter
-              </button>
-            </p>
+              </Button>
+            </div>
           ) : null}
-          {groups.map((group) => (
+          {!noMatches
+            ? groups.map((group) => (
             <div key={group.id} className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {group.title}
@@ -284,20 +245,25 @@ export function DevPanelFreeTierFlyout({
                 </label>
               ))}
             </div>
-          ))}
+          ))
+            : null}
         </div>
         {error ? (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
+          <div
+            role="alert"
+            className="flex gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <p>{error}</p>
+          </div>
         ) : null}
       </div>
       <div className="border-t p-3">
         <Button
           type="button"
           className="w-full"
-          disabled={!selected || !selectedVisible || jumping || !orgId}
-          onClick={() => (error ? beginJump() : beginJump())}
+          disabled={jumpDisabled}
+          onClick={() => void beginJump()}
         >
           {jumping ? (
             <>

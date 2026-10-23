@@ -136,7 +136,9 @@ test.describe('Dev panel artboard evidence', () => {
         };
     });
     await stateSheet.getByRole('button', { name: 'Jump to this state' }).click();
-    await expect(stateSheet.getByRole('status').getByText('Switching…')).toBeVisible();
+    await expect(
+      stateSheet.getByRole('button', { name: 'Jumping…' })
+    ).toBeVisible();
     await shot(page, '21');
     await page
       .evaluate(() => {
@@ -161,7 +163,7 @@ test.describe('Dev panel artboard evidence', () => {
     await feedbackDialog.getByRole('button', { name: 'Send feedback' }).click();
     await expect(feedbackDialog.getByRole('heading', { name: 'Feedback sent' })).toBeVisible();
     await expect(feedbackDialog.getByRole('status')).toContainText(
-      'Thanks. The Yawp! team got your note, screenshot and'
+      'Thanks. The Yawp! team has your note, screenshot and page URL.'
     );
     await shot(page, '59');
 
@@ -177,7 +179,7 @@ test.describe('Dev panel artboard evidence', () => {
     });
     await feedbackDialog.getByRole('button', { name: 'Send feedback' }).click();
     await expect(feedbackDialog.getByRole('alert')).toContainText(
-      "Couldn't send feedback. Your note and screenshot are saved here."
+      "Couldn't send your feedback. Your note is still here."
     );
     await shot(page, '60');
 

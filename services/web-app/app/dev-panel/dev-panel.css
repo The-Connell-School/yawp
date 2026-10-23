@@ -2,9 +2,15 @@
   --yawp-dev-panel-width: 360px;
 }
 
-@media (min-width: 1024px) and (max-width: 1439px) {
+@media (min-width: 1024px) and (max-width: 1279px) {
   :root {
     --yawp-dev-panel-width: 320px;
+  }
+}
+
+@media (min-width: 1280px) {
+  :root {
+    --yawp-dev-panel-width: 400px;
   }
 }
 
@@ -12,9 +18,15 @@ html.yawp-dev-panel-open {
   --yawp-dev-panel-width: 360px;
 }
 
-@media (min-width: 1024px) and (max-width: 1439px) {
+@media (min-width: 1024px) and (max-width: 1279px) {
   html.yawp-dev-panel-open {
     --yawp-dev-panel-width: 320px;
+  }
+}
+
+@media (min-width: 1280px) {
+  html.yawp-dev-panel-open {
+    --yawp-dev-panel-width: 400px;
   }
 }
 

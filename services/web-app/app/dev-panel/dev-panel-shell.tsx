@@ -301,29 +301,20 @@ export function DevPanelShell() {
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
         {!unlocked ? (
-          <div className="space-y-4 px-2 py-2">
-            <div className="rounded-lg border bg-muted/40 p-4">
-              <div className="flex items-center gap-2 font-medium">
-                <Lock className="size-4" aria-hidden="true" />
-                Developer tools are locked
-              </div>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Enter the access code to use quick logins, state jumps and the Blackboard link on demo and dev.
-              </p>
-              <Button type="button" className="mt-3 w-full" onClick={() => setAccessOpen(true)}>
-                Enter access code
-              </Button>
+          <div className="flex flex-col items-center px-4 py-8 text-center">
+            <div
+              className="mb-4 flex size-12 items-center justify-center rounded-full border bg-muted/30"
+              aria-hidden="true"
+            >
+              <Lock className="size-5 text-muted-foreground" />
             </div>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              {['Sign in as', 'Free-tier states', 'Blackboard link', 'Tester tools'].map(
-                (item) => (
-                  <li key={item} className="flex items-center gap-2">
-                    <Lock className="size-3.5" aria-hidden="true" />
-                    {item}
-                  </li>
-                )
-              )}
-            </ul>
+            <p className="font-medium">Developer tools are locked</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Enter the access code to use them in this browser.
+            </p>
+            <Button type="button" className="mt-4 w-full max-w-xs" onClick={() => setAccessOpen(true)}>
+              Enter access code
+            </Button>
           </div>
         ) : (
           <>
