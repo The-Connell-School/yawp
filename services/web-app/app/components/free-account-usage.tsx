@@ -280,56 +280,77 @@ export function FreeAssignmentTiles({
       <div className="grid auto-rows-min grid-cols-2 items-start gap-3 lg:grid-cols-3">
         {usage.assignments.map((row) => {
           const type = types.find((t) => t.kind === row.kind);
+          const tileDisabled =
+            !teachingLocked &&
+            (!type ||
+              (!usage.unlimitedFreeAssignmentTiles && row.remaining === 0));
+          const tileClassName = cn(
+            dashboardAssignmentTileClassName('disabled:bg-muted/30'),
+            !teachingLocked &&
+              !tileDisabled &&
+              'outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          );
+          const tileLabel = `New ${row.label} assignment`;
+          const tileBody = (
+            <DashboardAssignmentTileFooter
+              label={row.label}
+              meta={
+                usage.monthly
+                  ? 'Unlimited'
+                  : row.remaining
+                    ? `${row.remaining} of ${row.total} left`
+                    : 'None left'
+              }
+              metaClassName={
+                !usage.monthly && row.remaining === 0
+                  ? 'text-amber-800'
+                  : undefined
+              }
+              trailing={
+                teachingLocked ? (
+                  <Lock
+                    size={16}
+                    className={assignmentTypeTileTrailingIconClassName(
+                      'text-muted-foreground'
+                    )}
+                    aria-hidden
+                  />
+                ) : (
+                  <Plus
+                    size={16}
+                    className={assignmentTypeTileTrailingIconClassName(
+                      'text-muted-foreground'
+                    )}
+                    aria-hidden
+                  />
+                )
+              }
+            />
+          );
+          if (!teachingLocked && type && !tileDisabled) {
+            return (
+              <Link
+                key={row.kind}
+                to={`/app/assignment-types/${type.id}`}
+                data-testid={dashboardAssignmentTileTestId}
+                aria-label={tileLabel}
+                className={tileClassName}
+              >
+                {tileBody}
+              </Link>
+            );
+          }
           return (
             <button
               key={row.kind}
               type="button"
               data-testid={dashboardAssignmentTileTestId}
-              disabled={
-                !teachingLocked &&
-                (!type ||
-                  (!usage.unlimitedFreeAssignmentTiles && row.remaining === 0))
-              }
+              disabled={tileDisabled}
               onClick={() => onCreate(teachingLocked ? undefined : type?.id)}
-              aria-label={`New ${row.label} assignment`}
-              className={cn(
-                dashboardAssignmentTileClassName('disabled:bg-muted/30')
-              )}
+              aria-label={tileLabel}
+              className={tileClassName}
             >
-              <DashboardAssignmentTileFooter
-                label={row.label}
-                meta={
-                  usage.monthly
-                    ? 'Unlimited'
-                    : row.remaining
-                      ? `${row.remaining} of ${row.total} left`
-                      : 'None left'
-                }
-                metaClassName={
-                  !usage.monthly && row.remaining === 0
-                    ? 'text-amber-800'
-                    : undefined
-                }
-                trailing={
-                  teachingLocked ? (
-                    <Lock
-                      size={16}
-                      className={assignmentTypeTileTrailingIconClassName(
-                        'text-muted-foreground'
-                      )}
-                      aria-hidden
-                    />
-                  ) : (
-                    <Plus
-                      size={16}
-                      className={assignmentTypeTileTrailingIconClassName(
-                        'text-muted-foreground'
-                      )}
-                      aria-hidden
-                    />
-                  )
-                }
-              />
+              {tileBody}
             </button>
           );
         })}

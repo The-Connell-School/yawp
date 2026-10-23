@@ -1,4 +1,17 @@
-import { expect, mock, test } from 'bun:test';
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+
+try {
+  GlobalRegistrator.register();
+} catch {
+  // Multiple Bun test files can share the same process.
+}
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
+  true;
+
+import { afterEach, expect, mock, test } from 'bun:test';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { StaticRouter } from 'react-router';
 import type { FreeAccountUsage } from '~/domain/free-tier/inapp-usage';
@@ -8,6 +21,14 @@ mock.module('~/components/student-invitation-dialog', () => ({
 }));
 
 const { FreeAssignmentTiles } = await import('./free-account-usage');
+
+let lockedTileRoot: Root | null = null;
+
+afterEach(() => {
+  act(() => lockedTileRoot?.unmount());
+  lockedTileRoot = null;
+  document.body.innerHTML = '';
+});
 
 const usage: FreeAccountUsage = {
   monthly: true,
@@ -83,4 +104,61 @@ test('FreeAssignmentTiles shows Unlimited meta for monthly free assignments', ()
   );
   expect(html).toContain('Unlimited');
   expect(html).not.toContain('site-license-lock-button');
+});
+
+test('FreeAssignmentTiles unlocked tiles link to assignment type home', () => {
+  const html = renderToStaticMarkup(
+    <StaticRouter location="/app">
+      <FreeAssignmentTiles
+        usage={usage}
+        types={[
+          { id: 'starter', kind: 'class_starter' },
+          { id: 'pre', kind: 'prewriting' },
+          { id: 'thesis', kind: 'thesis_statement' },
+        ]}
+        onCreate={() => {}}
+      />
+    </StaticRouter>
+  );
+  expect(html).toContain('href="/app/assignment-types/starter"');
+  expect(html).toContain('href="/app/assignment-types/pre"');
+  expect(html).toContain('href="/app/assignment-types/thesis"');
+  expect(html.match(/data-testid="dashboard-assignment-tile"/g)).toHaveLength(3);
+  expect(html).not.toMatch(
+    /<button[^>]*data-testid="dashboard-assignment-tile"/
+  );
+});
+
+test('FreeAssignmentTiles locked tiles stay buttons and open the locked picker', () => {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  lockedTileRoot = createRoot(container);
+  let createArg: string | undefined = 'unset';
+  act(() => {
+    lockedTileRoot!.render(
+      <StaticRouter location="/app">
+        <FreeAssignmentTiles
+          usage={usage}
+          teachingLocked
+          types={[{ id: 'starter', kind: 'class_starter' }]}
+          onCreate={(id) => {
+            createArg = id;
+          }}
+        />
+      </StaticRouter>
+    );
+  });
+
+  const html = container.innerHTML;
+  expect(html).toContain('data-testid="dashboard-assignment-tile"');
+  expect(html).not.toContain('href="/app/assignment-types/');
+
+  const tile = container.querySelector(
+    '[data-testid="dashboard-assignment-tile"]'
+  ) as HTMLButtonElement;
+  expect(tile.tagName).toBe('BUTTON');
+  act(() => {
+    tile.click();
+  });
+  expect(createArg).toBeUndefined();
 });
