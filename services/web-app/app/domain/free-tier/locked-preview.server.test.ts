@@ -166,12 +166,10 @@ test('redactClassTeachingSecrets blanks code and drops join token for locked pre
     title: 'Class',
   };
   expect(redactClassTeachingSecrets(row, false)).toEqual(row);
-  expect(redactClassTeachingSecrets(row, true)).toEqual({
-    id: 'class-1',
-    code: null,
-    title: 'Class',
-  });
-  expect(JSON.stringify(redactClassTeachingSecrets(row, true))).not.toContain(
-    'join-token'
-  );
+  const redacted = redactClassTeachingSecrets(row, true);
+  expect(redacted.id).toBe('class-1');
+  expect(redacted.title).toBe('Class');
+  expect(redacted.code).toBeNull();
+  expect('studentJoinToken' in redacted).toBe(false);
+  expect(JSON.stringify(redacted)).not.toContain('join-token');
 });

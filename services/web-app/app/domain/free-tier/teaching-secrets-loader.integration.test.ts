@@ -193,7 +193,8 @@ local(
           context: {} as never,
         } as never);
         expectTeachingSecretsAbsent(serializedLoaderData(result), {
-          requireClassId: entry.requireClassId,
+          requireClassId:
+            'requireClassId' in entry ? entry.requireClassId : undefined,
         });
       } finally {
         await prisma.session.delete({ where: { id: sessionId } });
