@@ -1,3 +1,5 @@
+import { redactEmailForLog } from './redact-email-for-log.server';
+
 // Provider errors can contain addresses, verification links, credentials, or
 // arbitrary response bodies. Log only allowlisted identifiers and fixed prose;
 // regex replacement alone cannot safely redact opaque tokens.
@@ -50,7 +52,11 @@ export function emailDeliveryDiagnostic(error: unknown, recipient: string) {
     && /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain[1]!)
     ? domain[1]!.toLowerCase() : null;
   return {
-    provider, recipientDomain, name, code,
+    provider,
+    recipient: redactEmailForLog(recipient),
+    recipientDomain,
+    name,
+    code,
     validationReason: provider === 'resend' ? resendValidationReason(message) : 'other',
     statusCode: typeof detail.statusCode === 'number' && Number.isInteger(detail.statusCode)
       && detail.statusCode >= 100 && detail.statusCode <= 599 ? detail.statusCode : null,

@@ -11,5 +11,8 @@ describe('redactEmailForLog', () => {
     expect(redactEmailForLog('not-an-email')).toBe('[redacted-email]');
     expect(redactEmailForLog('@missing-local.com')).toBe('[redacted-email]');
     expect(redactEmailForLog('missing-domain@')).toBe('[redacted-email]');
+    expect(redactEmailForLog('')).toBe('[redacted-email]');
+    expect(redactEmailForLog('   ')).toBe('[redacted-email]');
+    expect(redactEmailForLog('a@b@c.com')).toBe('[redacted-email]');
   });
 });

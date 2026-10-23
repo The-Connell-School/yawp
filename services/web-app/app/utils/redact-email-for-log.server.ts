@@ -1,6 +1,12 @@
 /** Redact an email address for server logs (e.g. `alice@domain.com` → `a***@d***`). */
 export function redactEmailForLog(email: string): string {
   const trimmed = email.trim();
+  if (!trimmed || /\s/.test(trimmed)) {
+    return '[redacted-email]';
+  }
+  if (trimmed.indexOf('@') !== trimmed.lastIndexOf('@')) {
+    return '[redacted-email]';
+  }
   const at = trimmed.indexOf('@');
   if (at <= 0 || at >= trimmed.length - 1) {
     return '[redacted-email]';
