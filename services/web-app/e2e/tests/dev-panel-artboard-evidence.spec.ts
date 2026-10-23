@@ -211,5 +211,69 @@ test.describe('Dev panel artboard evidence', () => {
       { timeout: 15_000 }
     );
     await shot(page, '56');
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.route('**/api/dev-panel/teacher-classes', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          classes: [
+            {
+              id: 'class-sim-artboard',
+              title: 'Evidence Class',
+              code: 'EVID01',
+              schoolYear: '2025-2026',
+            },
+          ],
+        }),
+      });
+    });
+    await page.goto('/app/assignments');
+    await openDevToolsPanel(page);
+    await page.getByRole('button', { name: 'Populate class' }).click();
+    const simSheet = page.getByRole('dialog', { name: 'Class simulation' });
+    await expect(simSheet).toBeVisible();
+    await shot(page, 'class-sim-selected');
+
+    await page.route('**/api/dev-panel/class-simulation', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          message: 'Added 20 students across 6 assignments.',
+        }),
+      });
+    });
+    await simSheet.getByRole('button', { name: 'Populate class', exact: true }).click();
+    await expect(page.getByText('Added 20 students across 6 assignments.')).toBeVisible();
+    await shot(page, 'class-sim-success-toast');
+
+    await page.unroute('**/api/dev-panel/class-simulation');
+    await page.route('**/api/dev-panel/class-simulation', async (route) => {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Could not update this class.' }),
+      });
+    });
+    await simSheet.getByRole('button', { name: 'Try populate again' }).click();
+    await expect(simSheet.getByRole('alert')).toBeVisible();
+    await shot(page, 'class-sim-error');
+
+    await page.unroute('**/api/dev-panel/teacher-classes');
+    await page.route('**/api/dev-panel/teacher-classes', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ classes: [] }),
+      });
+    });
+    await page.reload();
+    await openDevToolsPanel(page);
+    await page.getByRole('button', { name: 'Populate class' }).click();
+    await expect(page.getByText("You don't own any classes yet")).toBeVisible();
+    await shot(page, 'class-sim-empty');
   });
 });
