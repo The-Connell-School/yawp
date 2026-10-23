@@ -3,14 +3,16 @@ import bcrypt from 'bcryptjs';
 import { LOCAL_DEV_PASSWORD } from '../../../../packages/prisma/scripts/local-dev/dev-personas';
 import { submitAdminDetails } from '~/domain/free-tier/approval-flow.server';
 import { ensureLockedPreviewClassroomForUser } from '~/domain/free-tier/locked-preview.server';
-import { provisionFreeClassroom } from '~/domain/free-tier/provision-free-classroom.server';
+import {
+  provisionFreeClassroom,
+  type ProvisionFreeClassroomResult,
+} from '~/domain/free-tier/provision-free-classroom.server';
 import { saveClassPreparation } from '~/domain/free-tier/class-preparation.server';
 import { assertTransition, type FreeTierStatus } from '~/domain/free-tier/state';
 import {
   FREE_TIER_LINK_TTL_MS,
   mintSignedLink,
 } from '~/domain/free-tier/signed-link.server';
-import { freeTierPublicAppOrigin } from '~/domain/free-tier/free-tier-public-url.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { setMembershipId } from '~/cookies/membership-id.server';
 import { prisma } from '~/utils/db.server';
@@ -26,35 +28,16 @@ const DEV_PENDING_CLASS = { className: 'English 10', grade: '10' as const };
 const PENDING_THROWAWAY_EMAIL =
   /^dev-panel\+[0-9a-f-]{36}@pending-[0-9a-f-]{12}\.example\.test$/;
 
-export const PENDING_STATES_NEED_THROWAWAY =
-  'Pending states need a throwaway test account.';
-
-export const FREE_TIER_JUMP_GENERIC_ERROR = "Couldn't jump to this state.";
-
-const FREE_TIER_JUMP_USER_ERRORS = new Set([
-  'Unknown state.',
+export {
   PENDING_STATES_NEED_THROWAWAY,
-  'State is not implemented yet.',
-  'Sign in to jump without a throwaway test account.',
-  'Current user is not an active teacher in this org.',
-  'Pending fixture jumps require a dev-panel throwaway account.',
-  'Could not prepare pending class settings.',
-  'Could not prepare pending approval state.',
-  'Pending jump produced an unexpected application status.',
-  'Could not provision locked preview classroom.',
   FREE_TIER_JUMP_GENERIC_ERROR,
-]);
-
-export function formatFreeTierJumpErrorForClient(error: unknown): string {
-  if (error instanceof Error) {
-    const message = error.message;
-    if (FREE_TIER_JUMP_USER_ERRORS.has(message)) return message;
-    if (message.startsWith('Could not prepare pending approval state (')) {
-      return message;
-    }
-  }
-  return FREE_TIER_JUMP_GENERIC_ERROR;
-}
+  formatFreeTierJumpErrorForClient,
+} from './free-tier-jump-messages';
+import {
+  PENDING_STATES_NEED_THROWAWAY,
+  FREE_TIER_JUMP_GENERIC_ERROR,
+  formatFreeTierJumpErrorForClient,
+} from './free-tier-jump-messages';
 
 function logFreeTierJumpFailure(stateId: string, error: unknown) {
   const name = error instanceof Error ? error.name : 'Error';
@@ -94,7 +77,8 @@ export function isDevPanelPendingThrowawayEmail(email: string) {
 }
 
 async function ensureThrowawayTeacher(organizationId: string): Promise<JumpTarget> {
-  const email = `test+${randomUUID().slice(0, 8)}@yawp.local`;
+  const tag = randomUUID().slice(0, 12);
+  const email = `dev-panel+${randomUUID()}@jump-${tag}.example.test`;
   const passwordHash = bcrypt.hashSync(LOCAL_DEV_PASSWORD, 10);
   const user = await prisma.user.create({
     data: {
@@ -329,6 +313,34 @@ async function jumpToPendingTeacherState(args: {
   return { membershipId: membership.id };
 }
 
+async function requireDevPanelFreeClassroomOrg(
+  applicationId: string
+): Promise<string> {
+  const result: ProvisionFreeClassroomResult =
+    await provisionFreeClassroom(applicationId);
+  if (
+    result.status === 'provisioned' ||
+    result.status === 'already_provisioned'
+  ) {
+    return result.organizationId;
+  }
+  throw new Error(FREE_TIER_JUMP_GENERIC_ERROR);
+}
+
+async function resolveFreeClassroomMembershipId(
+  userId: string,
+  organizationId: string
+) {
+  const membership = await prisma.orgMembership.findFirst({
+    where: { userId, organizationId, role: 'TEACHER' },
+    select: { id: true },
+  });
+  if (!membership) {
+    throw new Error(FREE_TIER_JUMP_GENERIC_ERROR);
+  }
+  return membership.id;
+}
+
 async function upsertApplication(
   userId: string,
   email: string,
@@ -443,11 +455,7 @@ export async function executeFreeTierStateJump(
     const { state } = found;
 
     if (state.adminSide) {
-      const app = await upsertApplication(
-        target.userId,
-        target.email,
-        state.id.includes('not-right') ? 'SENT' : 'SENT'
-      );
+      const app = await upsertApplication(target.userId, target.email, 'SENT');
       if (state.id === 'admin.approve-from-email') {
         await prisma.freeTierAdminApproval.deleteMany({
           where: { applicationId: app.id },
@@ -466,14 +474,14 @@ export async function executeFreeTierStateJump(
           purpose: 'ADMIN_APPROVE',
           ttlMs: FREE_TIER_LINK_TTL_MS,
         });
-        redirectTo = `${freeTierPublicAppOrigin()}/free/admin/approve?t=${encodeURIComponent(link.token)}`;
+        redirectTo = `/free/admin/approve?t=${encodeURIComponent(link.token)}`;
       } else {
         const link = await mintSignedLink({
           applicationId: app.id,
           purpose: 'ADMIN_NOT_RIGHT_PERSON',
           ttlMs: FREE_TIER_LINK_TTL_MS,
         });
-        redirectTo = `${freeTierPublicAppOrigin()}/free/admin/not-right-person?t=${encodeURIComponent(link.token)}`;
+        redirectTo = `/free/admin/not-right-person?t=${encodeURIComponent(link.token)}`;
       }
       steps[1].done = true;
       const headers = await clearSignedInSession(input.request);
@@ -511,7 +519,7 @@ export async function executeFreeTierStateJump(
           purpose: 'RELEASE',
           ttlMs: FREE_TIER_LINK_TTL_MS,
         });
-        redirectTo = `${freeTierPublicAppOrigin()}/free/join?t=${encodeURIComponent(link.token)}`;
+        redirectTo = `/free/join?t=${encodeURIComponent(link.token)}`;
         break;
       }
       case 'pending.waiting-on-admin': {
@@ -548,35 +556,33 @@ export async function executeFreeTierStateJump(
           target.email,
           'APPROVED'
         );
-        await provisionFreeClassroom(app.id);
-        const org = await prisma.freeTierApplication.findUniqueOrThrow({
+        const freeClassroomOrgId = await requireDevPanelFreeClassroomOrg(app.id);
+        sessionMembershipId = await resolveFreeClassroomMembershipId(
+          target.userId,
+          freeClassroomOrgId
+        );
+        await prisma.freeTierApplication.update({
           where: { id: app.id },
-          select: { organizationId: true },
+          data: {
+            lockedPreviewApprovalToastSeenAt:
+              state.id === 'approved.first-time-toast' ? null : new Date(),
+          },
         });
-        if (org.organizationId) {
-          await prisma.freeTierApplication.update({
-            where: { id: app.id },
-            data: {
-              lockedPreviewApprovalToastSeenAt:
-                state.id === 'approved.first-time-toast' ? null : new Date(),
-            },
-          });
-          const usage =
-            state.id === 'approved.usage-plenty-left'
-              ? { lp: 1, rep: 0 }
-              : state.id === 'approved.usage-about-half-left'
-                ? { lp: 3, rep: 1 }
-                : state.id === 'approved.usage-a-few-left'
-                  ? { lp: 4, rep: 2 }
-                  : state.id === 'approved.usage-all-used'
-                    ? { lp: 5, rep: 2 }
-                    : state.id === 'approved.lesson-planner-limit'
-                      ? { lp: 5, rep: 0 }
-                      : state.id === 'approved.reporter-limit'
-                        ? { lp: 0, rep: 2 }
-                        : { lp: 0, rep: 0 };
-          await seedMonthlyUsage(org.organizationId, usage.lp, usage.rep);
-        }
+        const usage =
+          state.id === 'approved.usage-plenty-left'
+            ? { lp: 1, rep: 0 }
+            : state.id === 'approved.usage-about-half-left'
+              ? { lp: 3, rep: 1 }
+              : state.id === 'approved.usage-a-few-left'
+                ? { lp: 4, rep: 2 }
+                : state.id === 'approved.usage-all-used'
+                  ? { lp: 5, rep: 2 }
+                  : state.id === 'approved.lesson-planner-limit'
+                    ? { lp: 5, rep: 0 }
+                    : state.id === 'approved.reporter-limit'
+                      ? { lp: 0, rep: 2 }
+                      : { lp: 0, rep: 0 };
+        await seedMonthlyUsage(freeClassroomOrgId, usage.lp, usage.rep);
         redirectTo =
           state.id === 'approved.lesson-planner-limit'
             ? '/app/lesson-planner'
