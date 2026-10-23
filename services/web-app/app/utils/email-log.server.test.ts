@@ -21,7 +21,7 @@ afterEach(() => {
     if (value === undefined) {
       delete process.env[key];
     } else {
-      process.env[key] = value;
+      (process.env as Record<string, string | undefined>)[key] = value;
     }
   }
 });
@@ -49,7 +49,7 @@ describe('buildSafeEmailLogSummary', () => {
 
 describe('canLogFullEmailBody', () => {
   test('requires development and explicit EMAIL_LOG_BODY opt-in', () => {
-    process.env.NODE_ENV = 'development';
+    (process.env as Record<string, string | undefined>).NODE_ENV = 'development';
     process.env.EMAIL_LOG_BODY = '1';
     expect(canLogFullEmailBody()).toBe(true);
   });
@@ -71,7 +71,9 @@ describe('canLogFullEmailBody', () => {
     for (const key of envKeys) {
       delete process.env[key];
     }
-    Object.assign(process.env, env);
+    for (const [key, value] of Object.entries(env)) {
+      process.env[key] = value;
+    }
     expect(canLogFullEmailBody()).toBe(false);
   });
 });

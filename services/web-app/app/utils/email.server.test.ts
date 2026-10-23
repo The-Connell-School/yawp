@@ -73,7 +73,7 @@ describe('sendEmail', () => {
 			if (value === undefined) {
 				delete process.env[key];
 			} else {
-				process.env[key] = value;
+				(process.env as Record<string, string | undefined>)[key] = value;
 			}
 		}
 	});
@@ -198,11 +198,11 @@ describe('sendEmail', () => {
   });
 
   test('redacts unsent Resend payloads unless local dev explicitly opts into body logs', async () => {
-    const errorLog = mock(() => {});
+    const errorLog = mock((..._args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorLog as typeof console.error;
     try {
-      process.env.NODE_ENV = 'development';
+      (process.env as Record<string, string | undefined>).NODE_ENV = 'development';
       delete process.env.EMAIL_LOG_BODY;
       delete process.env.RESEND_API_KEY;
       delete process.env.RESEND_FROM_EMAIL;
@@ -216,7 +216,8 @@ describe('sendEmail', () => {
         logKind: 'teacher-invite',
       });
 
-      const wouldHaveSent = errorLog.mock.calls.find((call) =>
+      const logCalls = errorLog.mock.calls as unknown[][];
+      const wouldHaveSent = logCalls.find((call) =>
         String(call[0]).includes('Would have sent the following email:'),
       );
       expect(wouldHaveSent).toBeDefined();
@@ -227,7 +228,7 @@ describe('sendEmail', () => {
         kind: 'teacher-invite',
         bodyLength: 43,
       });
-      expect(errorLog.mock.calls.some((call) =>
+      expect(logCalls.some((call) =>
         String(call[0]).includes('Full email payload'),
       )).toBe(false);
     } finally {
@@ -236,11 +237,11 @@ describe('sendEmail', () => {
   });
 
   test('never logs full email bodies on preview even with EMAIL_LOG_BODY=1', async () => {
-    const errorLog = mock(() => {});
+    const errorLog = mock((..._args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorLog as typeof console.error;
     try {
-      process.env.NODE_ENV = 'development';
+      (process.env as Record<string, string | undefined>).NODE_ENV = 'development';
       process.env.EMAIL_LOG_BODY = '1';
       process.env.YAWP_ENVIRONMENT = 'preview';
       delete process.env.RESEND_API_KEY;
@@ -254,7 +255,8 @@ describe('sendEmail', () => {
         text: 'secret-body',
       });
 
-      expect(errorLog.mock.calls.some((call) =>
+      const logCalls = errorLog.mock.calls as unknown[][];
+      expect(logCalls.some((call) =>
         String(call[0]).includes('Full email payload'),
       )).toBe(false);
     } finally {
