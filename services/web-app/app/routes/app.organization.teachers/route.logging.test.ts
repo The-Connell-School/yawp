@@ -44,10 +44,10 @@ const prisma = {
     findUnique: mock(async () => ({ name: 'Admin User' })),
   },
   invitation: {
-    findFirst: mock(async () => null),
-    delete: mock(async () => ({})),
+    deleteMany: mock(async () => ({ count: 0 })),
     create: mock(async () => ({})),
   },
+  $transaction: mock(async (fn: (tx: typeof prisma) => unknown) => fn(prisma)),
 };
 
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -68,8 +68,12 @@ function inviteRequest(email: string) {
 beforeEach(() => {
   sendEmail.mockReset();
   sendEmail.mockResolvedValue({ status: 'success', data: { id: 'mock' } });
-  prisma.invitation.findFirst.mockReset().mockResolvedValue(null);
+  prisma.invitation.deleteMany.mockReset().mockResolvedValue({ count: 0 });
   prisma.invitation.create.mockReset().mockResolvedValue({});
+  prisma.$transaction.mockReset();
+  prisma.$transaction.mockImplementation(async (fn: (tx: typeof prisma) => unknown) =>
+    fn(prisma)
+  );
   generateTOTP.mockReset().mockResolvedValue({
     otp: 'SECRET-OTP',
     secret: 'secret',
