@@ -753,6 +753,8 @@ jobs:
     needs: [paths]
     name: ʦ TypeScript
     runs-on: ubuntu-22.04
+    env:
+      YAWP_CI_TYPECHECK_NO_DATABASE: '1'
     steps:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
