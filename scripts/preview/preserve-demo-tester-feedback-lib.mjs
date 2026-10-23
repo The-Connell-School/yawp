@@ -12,7 +12,7 @@ SELECT EXISTS (
   WHERE table_schema = 'public'
     AND table_name = 'TesterFeedback'
     AND column_name = 'screenshot'
-)::text;
+);
 `.trim();
 
 export function buildTesterFeedbackExportSql(includeScreenshot) {
