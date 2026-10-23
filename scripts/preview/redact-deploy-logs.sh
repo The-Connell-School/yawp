@@ -7,7 +7,6 @@ EXCLUDE_PATH=""
 ONLY_PATH=""
 RECENT_MINUTES=0
 REQUIRE_EXIT=true
-OUTPUT_FORMAT="summary"
 
 # Matches packages/prisma/preview-access-code.ts PREVIEW_ACCESS_CODE_PATTERN
 PREVIEW_SEAT_CODE_RE='[a-z]+-[a-z]+-[1-9][0-9]{3}'
@@ -15,17 +14,18 @@ PREVIEW_SEAT_CODE_RE='[a-z]+-[a-z]+-[1-9][0-9]{3}'
 PREVIEW_MASTER_CODE_RE='[a-z][a-z0-9]*(-[a-z0-9]+)+'
 ACCESS_CODE_VALUE_RE="${PREVIEW_SEAT_CODE_RE}|${PREVIEW_MASTER_CODE_RE}"
 
-TEMP_FILES=()
+SUMMARY_FILE=""
+TEMP_FILE=""
+
 cleanup_temps() {
-  local f
-  for f in "${TEMP_FILES[@]}"; do
-    rm -f -- "$f"
-  done
+  if [[ -n "$TEMP_FILE" ]]; then
+    rm -f -- "$TEMP_FILE"
+  fi
 }
-trap cleanup_temps EXIT
+trap cleanup_temps EXIT TERM INT
 
 usage() {
-  echo "usage: redact-deploy-logs.sh LOG_DIR [--exclude PATH] [--only PATH] [--recent-minutes N] [--no-require-exit] [--output deploy|summary]" >&2
+  echo "usage: redact-deploy-logs.sh LOG_DIR [--exclude PATH] [--only PATH] [--recent-minutes N] [--no-require-exit]" >&2
 }
 
 shift || true
@@ -47,10 +47,6 @@ while [[ $# -gt 0 ]]; do
       REQUIRE_EXIT=false
       shift
       ;;
-    --output)
-      OUTPUT_FORMAT="${2:-summary}"
-      shift 2
-      ;;
     -h | --help)
       usage
       exit 0
@@ -69,6 +65,7 @@ if [[ -z "$LOG_DIR" || ! -d "$LOG_DIR" ]]; then
 fi
 
 LOG_DIR_REAL="$(readlink -f "$LOG_DIR")"
+SUMMARY_FILE="${LOG_DIR_REAL}/redact-deploy-logs.last"
 
 resolve_path() {
   local target="$1"
@@ -85,17 +82,19 @@ if [[ -n "$ONLY_PATH" ]]; then
   [[ -f "$ONLY_PATH" ]] || ONLY_PATH=""
 fi
 
+cleanup_stale_temps() {
+  find "$LOG_DIR" -maxdepth 1 -type f -name '.redact-deploy-logs.*' -mmin +10 -delete 2>/dev/null || true
+}
+
 apply_redaction_sed() {
   sed -E \
-    -e "s/(PREVIEW_ACCESS_CODE=)(${ACCESS_CODE_VALUE_RE})/\\1[REDACTED]/g" \
+    -e "s/(PREVIEW_ACCESS_CODE=)(${ACCESS_CODE_VALUE_RE})(\\r)?/\\1[REDACTED]\\3/g" \
     -e "s/(PREVIEW_SEAT_CODE_[0-9]+=)(${PREVIEW_SEAT_CODE_RE})/\\1[REDACTED]/g" \
     -e "s/(Preview seat [0-9]+ \\([^)]+\\): )(${PREVIEW_SEAT_CODE_RE})/\\1[REDACTED]/g" \
     -e "s/(PREVIEW_MASTER_ACCESS_CODE=)(${PREVIEW_MASTER_CODE_RE})/\\1[REDACTED]/g" \
     -e 's/(PREVIEW_ACCESS_SECRET=)[^[:space:]]*/\1[REDACTED]/g' \
-    -e "s/(PREVIEW_ACCESS_SEATS=.*\"code\"[[:space:]]*:[[:space:]]*\")(${PREVIEW_SEAT_CODE_RE})(\")/\\1[REDACTED]\\3/g" \
-    -e "s/(YAWP_TEST_PREVIEW_ACCESS_SEATS=.*\"code\"[[:space:]]*:[[:space:]]*\")(${PREVIEW_SEAT_CODE_RE})(\")/\\1[REDACTED]\\3/g" \
-    -e "s/(PREVIEW_ACCESS_SEATS=.*\"code\"[[:space:]]*:[[:space:]]*\")(${PREVIEW_MASTER_CODE_RE})(\")/\\1[REDACTED]\\3/g" \
-    -e "s/(YAWP_TEST_PREVIEW_ACCESS_SEATS=.*\"code\"[[:space:]]*:[[:space:]]*\")(${PREVIEW_MASTER_CODE_RE})(\")/\\1[REDACTED]\\3/g" \
+    -e "s/\"code\"[[:space:]]*:[[:space:]]*\"(${PREVIEW_SEAT_CODE_RE})\"/\"code\":\"[REDACTED]\"/g" \
+    -e "s/\"code\"[[:space:]]*:[[:space:]]*\"(${PREVIEW_MASTER_CODE_RE})\"/\"code\":\"[REDACTED]\"/g" \
     -e 's/(PREVIEW_LOGIN_PASSWORD=)[^[:space:]]*/\1[REDACTED]/g' \
     -e 's/(PREVIEW_POSTGRES_ADMIN_PASSWORD=)[^[:space:]]*/\1[REDACTED]/g' \
     -e 's/(PREVIEW_MANAGEMENT_SERVICE_KEY=)[^[:space:]]*/\1[REDACTED]/g' \
@@ -104,25 +103,6 @@ apply_redaction_sed() {
     -e 's/((PREVIEW_)?GOOGLE_OAUTH_CLIENT_(ID|SECRET)[=:][[:space:]]*).*/\1[REDACTED]/g' \
     -e 's/(PREVIEW_STRIPE_SECRET_KEY=)[^[:space:]]*/\1[REDACTED]/g' \
     -e 's/(PREVIEW_STRIPE_WEBHOOK_SECRET=)[^[:space:]]*/\1[REDACTED]/g'
-}
-
-transform_line() {
-  local line="$1"
-  local body="$line"
-  local suffix=""
-
-  if [[ "$body" == *$'\r' ]]; then
-    body="${body%$'\r'}"
-    suffix=$'\r'
-  fi
-
-  body="$(printf '%s\n' "$body" | apply_redaction_sed)"
-  body="${body%$'\n'}"
-  if [[ -n "$suffix" ]]; then
-    printf '%s%s\n' "$body" "$suffix"
-  else
-    printf '%s\n' "$body"
-  fi
 }
 
 count_sensitive_values() {
@@ -140,19 +120,7 @@ count_sensitive_values() {
   total=$((total + n))
   n="$(grep -oE 'PREVIEW_ACCESS_SECRET=[^[:space:]]+' "$file" 2>/dev/null | grep -Ev 'PREVIEW_ACCESS_SECRET=\[REDACTED\]' | wc -l | tr -d ' ')"
   total=$((total + n))
-  n="$(
-    grep -E 'PREVIEW_ACCESS_SEATS=' "$file" 2>/dev/null \
-      | grep -oE "\"code\"[[:space:]]*:[[:space:]]*\"(${ACCESS_CODE_VALUE_RE})\"" \
-      | wc -l \
-      | tr -d ' '
-  )"
-  total=$((total + n))
-  n="$(
-    grep -E 'YAWP_TEST_PREVIEW_ACCESS_SEATS=' "$file" 2>/dev/null \
-      | grep -oE "\"code\"[[:space:]]*:[[:space:]]*\"(${ACCESS_CODE_VALUE_RE})\"" \
-      | wc -l \
-      | tr -d ' '
-  )"
+  n="$(grep -oE "\"code\"[[:space:]]*:[[:space:]]*\"(${ACCESS_CODE_VALUE_RE})\"" "$file" 2>/dev/null | wc -l | tr -d ' ')"
   total=$((total + n))
 
   printf '%s' "$total"
@@ -202,69 +170,82 @@ should_skip_file() {
 }
 
 count_file_lines() {
-  local file="$1"
-  local count=0
-  local line
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    count=$((count + 1))
-  done < "$file"
-  printf '%s' "$count"
-}
-
-write_redacted_copy() {
-  local src="$1"
-  local dst="$2"
-  local line
-  : > "$dst"
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    transform_line "$line" >> "$dst"
-  done < "$src"
+  wc -l < "$1" | tr -d ' '
 }
 
 redact_file() {
   local file="$1"
-  local dir tmp owner mode before_lines after_lines before_count mtime_epoch masked
+  local dir tmp owner mode before_lines after_lines before_count mtime_epoch
 
   before_count="$(count_sensitive_values "$file")"
   (( before_count > 0 )) || return 1
 
   dir="$(dirname "$file")"
   tmp="$(mktemp "$dir/.redact-deploy-logs.XXXXXX")"
-  TEMP_FILES+=("$tmp")
+  TEMP_FILE="$tmp"
   owner="$(stat -c '%u:%g' "$file")"
   mode="$(stat -c '%a' "$file")"
   mtime_epoch="$(stat -c '%Y' "$file")"
   before_lines="$(count_file_lines "$file")"
 
-  if ! write_redacted_copy "$file" "$tmp"; then
+  if ! apply_redaction_sed < "$file" > "$tmp"; then
+    rm -f -- "$tmp"
+    TEMP_FILE=""
     return 1
   fi
 
   after_lines="$(count_file_lines "$tmp")"
   if [[ "$before_lines" != "$after_lines" ]]; then
+    rm -f -- "$tmp"
+    TEMP_FILE=""
     return 1
   fi
   if file_still_sensitive "$tmp"; then
+    rm -f -- "$tmp"
+    TEMP_FILE=""
     return 1
   fi
 
   if ! chown "$owner" "$tmp" 2>/dev/null; then
+    rm -f -- "$tmp"
+    TEMP_FILE=""
     return 1
   fi
   if ! mv -- "$tmp" "$file"; then
+    rm -f -- "$tmp"
+    TEMP_FILE=""
     return 1
   fi
-  TEMP_FILES=()
+  TEMP_FILE=""
   chmod "$mode" "$file"
   touch -d "@${mtime_epoch}" "$file"
-  masked="$before_count"
-  printf '%s' "$masked"
+  REDACT_LAST_MASKED="$before_count"
   return 0
 }
+
+write_summary() {
+  local warning="${1:-0}"
+  local tmp_summary
+  tmp_summary="$(mktemp "${LOG_DIR_REAL}/.redact-summary.XXXXXX")"
+  {
+    printf 'REDACT_TIMESTAMP=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'REDACT_FILES_SCANNED=%s\n' "$files_scanned"
+    printf 'REDACT_FILES_CHANGED=%s\n' "$files_changed"
+    printf 'REDACT_VALUES_MASKED=%s\n' "$values_masked"
+    if [[ "$warning" != "0" ]]; then
+      printf 'REDACT_WARNING=1\n'
+    fi
+  } > "$tmp_summary"
+  mv -- "$tmp_summary" "$SUMMARY_FILE"
+}
+
+cleanup_stale_temps
 
 files_scanned=0
 files_changed=0
 values_masked=0
+REDACT_LAST_MASKED=0
+warning=0
 
 collect_files() {
   if [[ -n "$ONLY_PATH" ]]; then
@@ -279,20 +260,16 @@ while IFS= read -r -d '' file; do
   if should_skip_file "$file"; then
     continue
   fi
-  if masked="$(redact_file "$file" 2>/dev/null)"; then
+  if redact_file "$file"; then
     files_changed=$((files_changed + 1))
-    values_masked=$((values_masked + masked))
+    values_masked=$((values_masked + REDACT_LAST_MASKED))
   fi
 done < <(collect_files)
 
-if [[ "$OUTPUT_FORMAT" == "deploy" ]]; then
-  printf 'REDACT_FILES_SCANNED=%s\n' "$files_scanned"
-  printf 'REDACT_FILES_CHANGED=%s\n' "$files_changed"
-  printf 'REDACT_VALUES_MASKED=%s\n' "$values_masked"
-else
-  printf 'files_scanned=%s\n' "$files_scanned"
-  printf 'files_changed=%s\n' "$files_changed"
-  printf 'values_masked=%s\n' "$values_masked"
-fi
+write_summary "$warning" || warning=1
+
+printf 'files_scanned=%s\n' "$files_scanned"
+printf 'files_changed=%s\n' "$files_changed"
+printf 'values_masked=%s\n' "$values_masked"
 
 exit 0

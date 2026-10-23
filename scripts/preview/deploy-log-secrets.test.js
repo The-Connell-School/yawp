@@ -29,6 +29,9 @@ describe('preview deploy logs must not emit access secrets', () => {
     expect(detachedSh).toContain('PREVIEW_SEAT_CODE_');
     expect(detachedSh).toContain('YAWP_TEST_PREVIEW_ACCESS_SEATS');
     expect(detachedSh).toContain('PREVIEW_MASTER_ACCESS_CODE=');
+    expect(detachedSh).toContain('redact-deploy-logs.last');
+    expect(detachedSh).toContain('timeout 600');
+    expect(detachedSh).toMatch(/flock -w 1800 "\$1" bash -lc "\$2"/);
   });
 
   test('mask_deploy_log redacts sample deploy log lines', () => {
