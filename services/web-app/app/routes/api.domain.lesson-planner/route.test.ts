@@ -67,6 +67,7 @@ const prisma = {
     findFirst: mock(),
   },
   lessonPlanUnit: {
+    findFirst: mock(async () => null),
     create: mock(),
   },
   classAssignment: {
