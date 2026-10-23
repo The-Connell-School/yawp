@@ -5,16 +5,21 @@ import { loader as appShellLoader } from '~/routes/app/route';
 import { loader as dashboardLoader } from '~/routes/app._index/route';
 import { loader as myClassesLoader } from '~/routes/app.my-classes._index/route';
 import { loader as classDetailLoader } from '~/routes/app.my-classes.$classId/route';
+import { loader as orgClassesLoader } from '~/routes/app.organization.classes/route';
+import { loader as orgStudentsLoader } from '~/routes/app.organization.students/route';
+import { loader as schoolDetailLoader } from '~/routes/app.organizations.schools.$schoolId/route';
 
 const enabled = process.env.LOCKED_PREVIEW_DB_TESTS === '1';
 const local = enabled ? test : test.skip;
 const prefix = `teaching-secrets-${Date.now()}`;
 const flag = 'feature_flag.free_tier';
 let orgId: string;
+let schoolId: string;
 let classId: string;
 let userId: string;
 let appId: string;
 let classCode: string;
+let joinToken: string;
 let originalFlag: string | null = null;
 
 async function setFlag(value: string) {
@@ -31,6 +36,18 @@ function serializedLoaderData(result: unknown) {
       ? (result as { data: unknown }).data
       : result;
   return JSON.stringify(payload);
+}
+
+function expectTeachingSecretsAbsent(serialized: string) {
+  expect(serialized).not.toContain(classCode);
+  expect(serialized).not.toContain(joinToken);
+  expect(serialized).not.toMatch(/"studentJoinToken"\s*:\s*"[^"]+"/);
+  expect(serialized).toContain(classId);
+}
+
+function expectTeachingSecretsPresent(serialized: string) {
+  expect(serialized).toContain(classCode);
+  expect(serialized).toContain(joinToken);
 }
 
 async function authedRequest(path: string) {
@@ -58,6 +75,7 @@ beforeAll(async () => {
     (await prisma.setting.findUnique({ where: { name: flag } }))?.value ??
     null;
   classCode = `${prefix}-code`.toUpperCase();
+  joinToken = `${prefix}-join-token`;
   const org = await prisma.organization.create({
     data: { name: prefix, plan: 'FREE_CLASSROOM' },
   });
@@ -65,8 +83,13 @@ beforeAll(async () => {
   const school = await prisma.school.create({
     data: { organizationId: orgId, name: prefix, code: prefix },
   });
+  schoolId = school.id;
   const klass = await prisma.class.create({
-    data: { schoolId: school.id, code: classCode },
+    data: {
+      schoolId: school.id,
+      code: classCode,
+      studentJoinToken: joinToken,
+    },
   });
   classId = klass.id;
   const user = await prisma.user.create({
@@ -78,6 +101,7 @@ beforeAll(async () => {
       userId,
       organizationId: orgId,
       role: 'TEACHER',
+      isOrgOwner: true,
       classesAsTeacher: { connect: { id: classId } },
     },
   });
@@ -133,6 +157,13 @@ local(
         classDetailLoader,
         { classId },
       ] as const,
+      ['/app/organization/classes', orgClassesLoader, {}] as const,
+      ['/app/organization/students', orgStudentsLoader, {}] as const,
+      [
+        `/app/organizations/schools/${schoolId}`,
+        schoolDetailLoader,
+        { schoolId },
+      ] as const,
     ];
 
     for (const [path, load, params] of paths) {
@@ -143,8 +174,7 @@ local(
           params,
           context: {} as never,
         } as never);
-        const serialized = serializedLoaderData(result);
-        expect(serialized).not.toContain(classCode);
+        expectTeachingSecretsAbsent(serializedLoaderData(result));
       } finally {
         await prisma.session.delete({ where: { id: sessionId } });
       }
@@ -153,13 +183,37 @@ local(
 );
 
 local(
-  'approved teacher app loaders still include the real class code where expected',
+  'approved org owner loaders still include class code and join token where expected',
   async () => {
     await prisma.freeTierApplication.update({
       where: { id: appId },
       data: { status: 'APPROVED' },
     });
     try {
+      const orgPaths = [
+        ['/app/organization/classes', orgClassesLoader, {}] as const,
+        ['/app/organization/students', orgStudentsLoader, {}] as const,
+        [
+          `/app/organizations/schools/${schoolId}`,
+          schoolDetailLoader,
+          { schoolId },
+        ] as const,
+      ];
+
+      for (const [path, load, params] of orgPaths) {
+        const { request, sessionId } = await authedRequest(path);
+        try {
+          const result = await load({
+            request,
+            params,
+            context: {} as never,
+          } as never);
+          expectTeachingSecretsPresent(serializedLoaderData(result));
+        } finally {
+          await prisma.session.delete({ where: { id: sessionId } });
+        }
+      }
+
       const { request, sessionId } = await authedRequest('/app');
       try {
         const dashboard = await dashboardLoader({
@@ -170,6 +224,15 @@ local(
         const dashboardSerialized = serializedLoaderData(dashboard);
         expect(dashboardSerialized).toContain(classCode);
         expect(dashboardSerialized).toMatch(/"teacherClasses":\[[^\]]*"code"/);
+
+        // App shell only surfaces classCode inside freeAccountUsage when in-app
+        // metering is active for the org; this fixture does not enable that path.
+        const shell = await appShellLoader({
+          request,
+          params: {},
+          context: {} as never,
+        } as never);
+        expect(serializedLoaderData(shell)).not.toContain(classCode);
       } finally {
         await prisma.session.delete({ where: { id: sessionId } });
       }
