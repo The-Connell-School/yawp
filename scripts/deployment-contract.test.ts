@@ -250,6 +250,27 @@ describe('production deployment contract', () => {
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 
+  test('CI smoke shards assign each smoke spec file exactly once', async () => {
+    const { E2E_SMOKE_SHARDS, E2E_SMOKE_SPECS } = await import(
+      '../services/web-app/e2e/smoke-specs.ts'
+    );
+    const assigned: string[] = [];
+    for (let shard = 1; shard <= 6; shard += 1) {
+      assigned.push(...E2E_SMOKE_SHARDS[shard as 1 | 2 | 3 | 4 | 5 | 6]);
+    }
+    expect(assigned.length).toBe(E2E_SMOKE_SPECS.length);
+    expect(new Set(assigned).size).toBe(E2E_SMOKE_SPECS.length);
+    expect([...assigned].sort()).toEqual([...E2E_SMOKE_SPECS].sort());
+    for (const spec of E2E_SMOKE_SPECS) {
+      expect(existsSync(join(repoRoot, 'services/web-app', spec))).toBe(true);
+    }
+    const webAppPackage = JSON.parse(readRepoFile('services/web-app/package.json'));
+    expect(webAppPackage.scripts['test:e2e:smoke']).toBe('bun ./scripts/run-smoke-e2e.ts');
+    const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
+    expect(ciWorkflow).toContain('bun run test:e2e:smoke -- --shard=');
+    expect(ciWorkflow).not.toContain('--shard=${{ matrix.shard }}/${{ strategy.job-total }}');
+  });
+
   test('root build context excludes local credentials and host dependencies', () => {
     const patterns = readRepoFile('.dockerignore').split(/\r?\n/).map(line => line.trim());
     for (const required of ['.git', '**/.env', '**/.env.*', '**/node_modules', '**/build']) {
