@@ -2019,8 +2019,12 @@ describe('demo environment deployment contract', () => {
     expect(detached).toContain('FAILURE_LOG_LINES="${FAILURE_LOG_LINES:-120}"');
     expect(detached).toContain('emit_failure_log_tail');
     expect(detached).toContain('mask_deploy_log');
+    expect(detached).toContain('REDACT_DEPLOY_LOGS_SCRIPT');
+    expect(detached).toContain('deploy log redaction failed');
     expect(detached).toContain('PREVIEW_ACCESS_CODE=');
     expect(detached).toContain('[REDACTED]');
+    expect(workflow).toContain('REDACT_DEPLOY_LOGS_SCRIPT');
+    expect(workflow).toContain('redact-deploy-logs.sh');
     expect(workflow).not.toContain(
       'flock -w 1800 $(shell_quote "$lock_file") bash -lc $(shell_quote "$deploy_command")'
     );
@@ -2158,6 +2162,8 @@ describe('isolated preview unified sign-on label deployment contract', () => {
     expect(workflow).toContain("PREVIEW_UNIFIED_SIGN_ON: ${{ needs.preview-policy.outputs.unified_sign_on }}");
     expect(workflow).toContain('"PREVIEW_UNIFIED_SIGN_ON=$(shell_quote "$PREVIEW_UNIFIED_SIGN_ON")"');
     expect(workflow).toContain('REMOTE_COMMAND=');
+    expect(workflow).toContain('REDACT_DEPLOY_LOGS_SCRIPT');
+    expect(workflow).toContain('redact-deploy-logs.sh');
     expect(workflow).toContain('run-host-deploy-detached.sh');
     expect(workflow).toContain("needs.preview-policy.outputs.should_deploy == 'true'");
     expect(workflow).toContain(
