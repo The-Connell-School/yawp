@@ -446,7 +446,7 @@ export function DevPanelShell() {
                   <span>
                     <span className="font-medium">Clear simulated data</span>
                     <span className="mt-0.5 block text-xs text-muted-foreground">
-                      Remove only dev-panel simulated rows
+                      Removes only the fake students and their work.
                     </span>
                   </span>
                   <ChevronRight className="size-4 shrink-0" aria-hidden="true" />

@@ -1,7 +1,11 @@
 import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import { getUserId } from '~/utils/auth.server';
-import { enrollStudentInClassWithSeatCap } from '~/domain/free-tier/class-seat-cap.server';
+import {
+  lockClassCollaborationDeployments,
+  lockStudentRosters,
+} from '~/domain/collaboration/class-assignment-lock.server';
+import { FreeClassSeatError } from '~/domain/free-tier/free-class-seat-error';
 import {
   buildAssignmentModuleSessionCreateData,
 } from '~/domain/documents.server';
@@ -30,6 +34,27 @@ export type ClassSimulationCounts = {
   tutorSessionsUpdated: number;
 };
 
+async function ensureSimulatedStudentEnrolledInClass(
+  tx: Prisma.TransactionClient,
+  params: { membershipId: string; classId: string }
+) {
+  const already = await tx.orgMembership.findFirst({
+    where: {
+      id: params.membershipId,
+      classesAsStudent: { some: { id: params.classId } },
+    },
+    select: { id: true },
+  });
+  if (already) return { ok: true as const };
+  await lockStudentRosters(tx, [params.membershipId]);
+  await lockClassCollaborationDeployments(tx, params.classId);
+  await tx.orgMembership.update({
+    where: { id: params.membershipId },
+    data: { classesAsStudent: { connect: { id: params.classId } } },
+  });
+  return { ok: true as const };
+}
+
 export async function listDevPanelTeacherClasses(request: Request) {
   const userId = await getUserId(request);
   if (!userId) {
@@ -51,7 +76,23 @@ export async function listDevPanelTeacherClasses(request: Request) {
     orderBy: [{ schoolYear: 'desc' }, { title: 'asc' }],
     select: { id: true, title: true, code: true, schoolYear: true },
   });
-  return { ok: true as const, classes };
+  const counts = await prisma.user.groupBy({
+    by: ['simulatedForClassId'],
+    where: {
+      simulatedForClassId: { in: classes.map((entry) => entry.id) },
+    },
+    _count: { _all: true },
+  });
+  const countByClass = new Map(
+    counts.map((row) => [row.simulatedForClassId!, row._count._all])
+  );
+  return {
+    ok: true as const,
+    classes: classes.map((entry) => ({
+      ...entry,
+      simulatedStudentCount: countByClass.get(entry.id) ?? 0,
+    })),
+  };
 }
 
 export async function assertTeacherOwnsClass(params: {
@@ -436,6 +477,7 @@ export async function populateDevPanelClassSimulation(params: {
     tutorSessionsUpdated: 0,
   };
 
+  try {
   const summary = await prisma.$transaction(
     async (tx) => {
       const classAssignments = await loadClassAssignments(tx, params.classId);
@@ -447,7 +489,7 @@ export async function populateDevPanelClassSimulation(params: {
       });
 
       for (const user of existingSimUsers) {
-        const index = parseSimulatedStudentIndex(user.email);
+        const index = parseSimulatedStudentIndex(user.email, params.classId);
         if (index == null || index > params.studentCount) {
           await deleteSimulatedUser(tx, {
             userId: user.id,
@@ -463,7 +505,7 @@ export async function populateDevPanelClassSimulation(params: {
       });
       const refreshedByIndex = new Map<number, (typeof refreshed)[number]>();
       for (const user of refreshed) {
-        const index = parseSimulatedStudentIndex(user.email);
+        const index = parseSimulatedStudentIndex(user.email, params.classId);
         if (index != null) refreshedByIndex.set(index, user);
       }
 
@@ -506,15 +548,10 @@ export async function populateDevPanelClassSimulation(params: {
           throw new Error('Simulated student missing membership.');
         }
 
-        const enrolled = await enrollStudentInClassWithSeatCap({
+        await ensureSimulatedStudentEnrolledInClass(tx, {
           membershipId,
           classId: params.classId,
-          organizationId,
-          client: tx,
         });
-        if (!enrolled.ok) {
-          throw new Error(enrolled.error);
-        }
 
         const modulesByType = new Map<
           string,
@@ -546,6 +583,22 @@ export async function populateDevPanelClassSimulation(params: {
   );
 
   return { ok: true as const, counts: summary };
+  } catch (error) {
+    if (error instanceof FreeClassSeatError) {
+      return {
+        ok: false as const,
+        status: 409 as const,
+        error: error.message,
+      };
+    }
+    const message =
+      error instanceof Error ? error.message : 'Could not populate this class.';
+    return {
+      ok: false as const,
+      status: 400 as const,
+      error: message,
+    };
+  }
 }
 
 export async function clearDevPanelClassSimulation(params: {

@@ -40,7 +40,7 @@ describe('DevPanelClassSimulationFlyout', () => {
   test('shows empty copy when teacher has no classes', async () => {
     globalThis.fetch = mock(async () =>
       Response.json({ classes: [] })
-    ) as typeof fetch;
+    ) as unknown as typeof fetch;
     writeDevPanelState(window.localStorage, {
       open: true,
       openSections: ['data'],

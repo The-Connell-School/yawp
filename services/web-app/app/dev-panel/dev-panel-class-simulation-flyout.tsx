@@ -1,6 +1,16 @@
 import { ChevronLeft, CircleAlert, Loader2 } from 'lucide-react';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '~/components/ui/alert-dialog';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
@@ -25,6 +35,7 @@ type TeacherClass = {
   title: string;
   code: string;
   schoolYear: string;
+  simulatedStudentCount?: number;
 };
 
 export function DevPanelClassSimulationFlyout({
@@ -41,6 +52,7 @@ export function DevPanelClassSimulationFlyout({
   >('loading');
   const [busy, setBusy] = useState<'populate' | 'clear' | null>(null);
   const [error, setError] = useState('');
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const classId = state.forms.simulationClassId ?? '';
   const studentCount = state.forms.simulationStudentCount ?? 20;
   const countId = useId();
@@ -59,14 +71,20 @@ export function DevPanelClassSimulationFlyout({
         const list = (data.classes ?? []) as TeacherClass[];
         setClasses(list);
         setClassesState(list.length ? 'idle' : 'empty');
-        if (!state.forms.simulationClassId && list[0]) {
+        const storedId = state.forms.simulationClassId;
+        const storedValid = storedId && list.some((entry) => entry.id === storedId);
+        if (storedValid) return;
+        if (list[0]) {
           updateForms({ simulationClassId: list[0].id });
+        } else if (storedId) {
+          updateForms({ simulationClassId: null });
         }
       })
       .catch(() => setClassesState('error'));
-  }, [state.subSheet, updateForms]);
+  }, [state.subSheet, state.forms.simulationClassId, updateForms]);
 
   const selectedClass = classes.find((entry) => entry.id === classId) ?? null;
+  const simulatedCount = selectedClass?.simulatedStudentCount ?? 0;
 
   const run = async (intent: 'populate' | 'clear') => {
     if (!classId) return;
@@ -92,6 +110,13 @@ export function DevPanelClassSimulationFlyout({
       toast.success(result?.message ?? 'Done.', {
         className: 'yawp-dev-panel-jump-toast',
       });
+      if (intent === 'clear') {
+        setClasses((prev) =>
+          prev.map((entry) =>
+            entry.id === classId ? { ...entry, simulatedStudentCount: 0 } : entry
+          )
+        );
+      }
       setBusy(null);
     } catch {
       setError('Could not reach the server.');
@@ -101,7 +126,15 @@ export function DevPanelClassSimulationFlyout({
 
   const loading = busy !== null;
   const populateDisabled = loading || !classId || classesState === 'empty';
-  const clearDisabled = loading || !classId || classesState === 'empty';
+  const clearDisabled =
+    loading || !classId || classesState === 'empty' || simulatedCount === 0;
+
+  const clearConfirmLabel = useMemo(() => {
+    const n = simulatedCount;
+    return n === 1
+      ? 'Clear 1 fake student and their work?'
+      : `Clear ${n} fake students and their work?`;
+  }, [simulatedCount]);
 
   return (
     <div
@@ -243,7 +276,7 @@ export function DevPanelClassSimulationFlyout({
           variant="outline"
           className="w-full"
           disabled={clearDisabled}
-          onClick={() => void run('clear')}
+          onClick={() => setClearConfirmOpen(true)}
         >
           {busy === 'clear' ? (
             <>
@@ -255,6 +288,27 @@ export function DevPanelClassSimulationFlyout({
           )}
         </Button>
       </div>
+      <AlertDialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{clearConfirmLabel}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Real students and your teacher account are not affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setClearConfirmOpen(false);
+                void run('clear');
+              }}
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

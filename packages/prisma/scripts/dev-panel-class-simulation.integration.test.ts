@@ -9,6 +9,7 @@ import {
 import { simulatedStudentEmail } from '../../../services/web-app/app/dev-panel/class-simulation-mix';
 import { resolveClassCode } from '../../../services/web-app/app/utils/class-code-write.server';
 import { currentSchoolYear } from '../../../services/web-app/app/utils/school-year';
+import { enrollStudentInClassWithSeatCap } from '../../../services/web-app/app/domain/free-tier/class-seat-cap.server';
 
 const sendEmail = mock(async () => ({ status: 'success' as const }));
 
@@ -186,6 +187,113 @@ describe('dev panel class simulation (real Postgres)', () => {
     });
     expect(realStill?.name).toBe('Real Student');
     expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  test('free classroom: idempotent populate, 40 simulated, real student can enroll', async () => {
+    const org = await prisma.organization.create({
+      data: {
+        name: `Free sim org ${randomUUID()}`,
+        plan: 'FREE_CLASSROOM',
+        numOfStudentSeats: 200,
+        numOfTeacherSeats: 5,
+      },
+    });
+    orgIds.push(org.id);
+    const school = await prisma.school.create({
+      data: {
+        organizationId: org.id,
+        name: 'Free sim school',
+        code: `free-sim-${randomUUID()}`,
+      },
+    });
+    const teacherUser = await prisma.user.create({
+      data: {
+        email: `free-teacher-${randomUUID()}@example.test`,
+        name: 'Free Teacher',
+      },
+    });
+    userIds.push(teacherUser.id);
+    const teacherMembership = await prisma.orgMembership.create({
+      data: {
+        userId: teacherUser.id,
+        organizationId: org.id,
+        role: 'TEACHER',
+        schools: { connect: { id: school.id } },
+      },
+    });
+    const klass = await prisma.class.create({
+      data: {
+        schoolId: school.id,
+        title: 'Free Sim Class',
+        code: await resolveClassCode(prisma, 'free-sim', { generated: true }),
+        schoolYear: currentSchoolYear(),
+        teachers: { connect: { id: teacherMembership.id } },
+      },
+    });
+    classIds.push(klass.id);
+    const assignmentType = await prisma.assignmentType.findFirst({
+      where: { archivedAt: null },
+      orderBy: { position: 'asc' },
+    });
+    if (!assignmentType) throw new Error('No assignment type');
+    const assignment = await prisma.assignment.create({
+      data: {
+        assignmentTypeId: assignmentType.id,
+        title: 'Free Sim Assignment',
+        prompt: 'Write.',
+      },
+    });
+    await prisma.classAssignment.create({
+      data: { classId: klass.id, assignmentId: assignment.id },
+    });
+
+    const first = await populateDevPanelClassSimulation({
+      userId: teacherUser.id,
+      classId: klass.id,
+      studentCount: 20,
+    });
+    expect(first.ok).toBe(true);
+    const second = await populateDevPanelClassSimulation({
+      userId: teacherUser.id,
+      classId: klass.id,
+      studentCount: 20,
+    });
+    expect(second.ok).toBe(true);
+    const forty = await populateDevPanelClassSimulation({
+      userId: teacherUser.id,
+      classId: klass.id,
+      studentCount: 40,
+    });
+    expect(forty.ok).toBe(true);
+    expect(
+      await prisma.user.count({ where: { simulatedForClassId: klass.id } })
+    ).toBe(40);
+
+    const realStudent = await prisma.user.create({
+      data: {
+        email: `real-free-${randomUUID()}@example.test`,
+        name: 'Real Free Student',
+      },
+    });
+    userIds.push(realStudent.id);
+    const realMembership = await prisma.orgMembership.create({
+      data: {
+        userId: realStudent.id,
+        organizationId: org.id,
+        role: 'STUDENT',
+      },
+    });
+    const enrolled = await enrollStudentInClassWithSeatCap({
+      membershipId: realMembership.id,
+      classId: klass.id,
+      organizationId: org.id,
+    });
+    expect(enrolled.ok).toBe(true);
+
+    await clearDevPanelClassSimulation({
+      userId: teacherUser.id,
+      classId: klass.id,
+    });
   });
 
   test('rejects class the teacher does not own', async () => {

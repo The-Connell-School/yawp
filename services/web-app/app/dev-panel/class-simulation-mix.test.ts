@@ -39,7 +39,16 @@ describe('classSimulationShouldIncludeTutorChat', () => {
 
 describe('simulated student email idempotency', () => {
   test('round-trips index from email', () => {
-    const email = simulatedStudentEmail('clxyz123abc', 7);
-    expect(parseSimulatedStudentIndex(email)).toBe(7);
+    const classId = 'clxyz123abc456def';
+    const email = simulatedStudentEmail(classId, 7);
+    expect(parseSimulatedStudentIndex(email, classId)).toBe(7);
+    expect(parseSimulatedStudentIndex(email, 'other-class-id')).toBeNull();
+  });
+
+  test('uses the full normalized class id in the address', () => {
+    const classId = 'AbC-12_x';
+    expect(simulatedStudentEmail(classId, 1)).toBe(
+      'sim-abc12x-1@example.test'
+    );
   });
 });

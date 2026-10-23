@@ -99,6 +99,7 @@ export function createDevLoginAction({
             },
             select: {
               id: true,
+              simulatedForClassId: true,
               memberships: {
                 where: { isActive: true, organizationId: previewSeat.organizationId },
                 select: { id: true, role: true },
@@ -111,6 +112,7 @@ export function createDevLoginAction({
             where: { email },
             select: {
               id: true,
+              simulatedForClassId: true,
               memberships: {
                 where: { isActive: true },
                 select: { id: true, role: true },
@@ -119,6 +121,13 @@ export function createDevLoginAction({
               },
             },
           });
+
+    if (user?.simulatedForClassId) {
+      return Response.json(
+        { error: 'Simulated demo students cannot sign in.' },
+        { status: 403 }
+      );
+    }
 
     if (!user || !user.memberships[0]) {
       return Response.json(
@@ -258,6 +267,7 @@ export async function getLocalDevLoginOptionsPage(
   const users = await prismaClient.user.findMany({
     where: {
       email: { not: DEV_PANEL_SIGNED_OUT_TESTER_EMAIL },
+      simulatedForClassId: null,
       memberships: {
         some: { isActive: true, organizationId },
       },
