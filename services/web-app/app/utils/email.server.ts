@@ -3,6 +3,7 @@ import { renderAsync } from '@react-email/components'
 import { type ReactElement } from 'react'
 import { z } from 'zod'
 import { shouldUsePreviewEmailCapture } from './preview-email-capture.server'
+import { emailDeliveryDiagnostic } from './email-delivery-error.server'
 import {
 	buildSafeEmailLogSummary,
 	canLogFullEmailBody,
@@ -106,7 +107,7 @@ async function sendEmailWithResend(
 		// eslint-disable-next-line no-console
 		console.info(
 			'[preview-email-capture] accepted (not sent via Resend):',
-			JSON.stringify({ to: email.to, subject: email.subject }),
+			JSON.stringify(buildSafeEmailLogSummary(email, logMeta)),
 		)
 		return {
 			status: 'success',
@@ -161,19 +162,30 @@ async function sendEmailWithResend(
 	} else {
 		const parseResult = resendErrorSchema.safeParse(data)
 		if (parseResult.success) {
+			// eslint-disable-next-line no-console
+			console.error('email_delivery_failed', {
+				...emailDeliveryDiagnostic(parseResult.data, email.to),
+				...(logMeta?.kind ? { kind: logMeta.kind } : {}),
+			})
 			return {
 				status: 'error',
 				error: parseResult.data,
 			} as const
 		} else {
+			const error = {
+				name: 'UnknownError',
+				message: 'Unknown Error',
+				statusCode: 500,
+				cause: data,
+			} satisfies ResendError
+			// eslint-disable-next-line no-console
+			console.error('email_delivery_failed', {
+				...emailDeliveryDiagnostic(error, email.to),
+				...(logMeta?.kind ? { kind: logMeta.kind } : {}),
+			})
 			return {
 				status: 'error',
-				error: {
-					name: 'UnknownError',
-					message: 'Unknown Error',
-					statusCode: 500,
-					cause: data,
-				} satisfies ResendError,
+				error,
 			} as const
 		}
 	}

@@ -30,10 +30,15 @@ import { Input } from '~/components/ui/input';
 import React from 'react';
 import { prisma } from '~/utils/db.server';
 import { requireOwner, requireMembership } from '~/utils/auth.server';
+import {
+  redactClassTeachingSecrets,
+  shouldHideFreeTierTeachingSecrets,
+} from '~/domain/free-tier/locked-preview.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const user = await requireOwner(request);
   const profile = await requireMembership(request, user.id);
+  const hideTeachingSecrets = await shouldHideFreeTierTeachingSecrets(user.id);
 
   const school = await prisma.school.findFirst({
     where: { id: params.schoolId, organizationId: profile.organization.id },
@@ -61,7 +66,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  return dataResponse({ school });
+  const schoolForClient = hideTeachingSecrets
+    ? {
+        ...school,
+        classes: school.classes.map((klass) =>
+          redactClassTeachingSecrets(klass, true)
+        ),
+      }
+    : school;
+
+  return dataResponse({ school: schoolForClient });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {

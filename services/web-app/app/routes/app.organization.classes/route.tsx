@@ -73,6 +73,11 @@ import {
 } from '~/utils/school-year';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
+import {
+  organizationClassListQueryParts,
+  redactClassTeachingSecrets,
+  shouldHideFreeTierTeachingSecrets,
+} from '~/domain/free-tier/locked-preview.server';
 
 const COLUMNS: CookieColumns = {
   school: {
@@ -179,32 +184,24 @@ async function connectTeachersToSchool(
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireOwner(request);
   const profile = await requireMembership(request, user.id);
+  const hideTeachingSecrets = await shouldHideFreeTierTeachingSecrets(user.id);
   const url = new URL(request.url);
   const q = url.searchParams.get('q');
-  const { sort, direction, skip, take } =
-    await getOrganizationClassesTableCookie(request);
+  const tableFilters = await getOrganizationClassesTableCookie(request);
+  const { sort, direction, skip, take } = tableFilters;
+
+  const { orClause, orderByField } = organizationClassListQueryParts({
+    q,
+    sort,
+    hideTeachingSecrets,
+  });
 
   const where = {
     school: {
       organizationId: profile.organization.id,
     },
     isArchived: false, // Only show non-archived classes
-    ...(q
-      ? {
-          OR: [
-            { code: { contains: q, mode: 'insensitive' as const } },
-            { schoolYear: { contains: q, mode: 'insensitive' as const } },
-            { grade: { contains: q, mode: 'insensitive' as const } },
-            { period: { contains: q, mode: 'insensitive' as const } },
-            { title: { contains: q, mode: 'insensitive' as const } },
-            {
-              school: {
-                name: { contains: q, mode: 'insensitive' as const },
-              },
-            },
-          ],
-        }
-      : {}),
+    ...(orClause ? { OR: orClause } : {}),
   } as const;
 
   const [classes, totalCount, schools, teachers] = await Promise.all([
@@ -224,7 +221,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         },
       },
-      orderBy: { [sort]: direction },
+      orderBy: { [orderByField]: direction },
       skip,
       take,
     }),
@@ -250,9 +247,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
   ]);
 
+  const classesForClient = hideTeachingSecrets
+    ? classes.map((klass) => redactClassTeachingSecrets(klass, true))
+    : classes;
+
   return {
     classCodeUniqueEnabled: await classCodeUniquenessEnabled(prisma),
-    classes,
+    classes: classesForClient,
     totalCount,
     schools,
     teachers,
@@ -983,10 +984,12 @@ export default function OrganizationClassesRoute() {
                           <div className="flex items-center">
                             <TooltipIdCopy id={cls.id}>
                               <span className="font-mono font-semibold">
-                                {cls.code}
+                                {cls.code ?? ''}
                               </span>
                             </TooltipIdCopy>
-                            <CopyCodeButton code={cls.code} />
+                            {cls.code ? (
+                              <CopyCodeButton code={cls.code} />
+                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell>{cls.schoolYear}</TableCell>

@@ -101,6 +101,7 @@ const emails = [
         schoolName: 'Lincoln High School',
         approveUrl: urls.approve,
         notRightPersonUrl: urls.forward,
+        pass1: false,
       }),
     subject: 'Dana Whitaker at Lincoln High School would like to use Yawp!',
     preheader: "You don't need a Yawp! account",
@@ -115,6 +116,7 @@ const emails = [
         approveUrl: urls.approve,
         notRightPersonUrl: urls.forward,
         forwardedByAdminName: 'Ms. Patel',
+        pass1: false,
       }),
     subject: 'Can you approve Yawp! for Dana Whitaker at Lincoln High School?',
     preheader: 'Ms. Patel forwarded this to you',
@@ -129,6 +131,7 @@ const emails = [
         approveUrl: urls.approve,
         notRightPersonUrl: urls.forward,
         reminder: true,
+        pass1: false,
       }),
     subject:
       'Reminder: Dana Whitaker at Lincoln High School would like to use Yawp!',
@@ -226,6 +229,7 @@ test('05L long-name admin headline wraps in html', async () => {
     schoolName: longSchool,
     approveUrl: urls.approve,
     notRightPersonUrl: urls.forward,
+    pass1: false,
   });
   expect(rendered.html).toContain(longSchool);
   expect(rendered.html).toContain('overflow-wrap:anywhere');

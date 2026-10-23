@@ -167,7 +167,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           period: true,
           title: true,
           classArtIndex: true,
-          code: true,
+          ...(hideTeachingSecrets ? {} : { code: true }),
           classArtKey: true,
           school: { select: { id: true, name: true, organizationId: true } },
           _count: {
@@ -365,11 +365,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
       )
     : [];
 
+  const teacherClassesForClient = hideTeachingSecrets
+    ? teacherClassesOrdered.map(({ code: _code, ...klass }) => klass)
+    : teacherClassesOrdered;
+
   return dataResponse({
     requiresClassCode: isStudentOnlyWithNoClasses,
     enrolledClasses,
     writingPracticeAssignments,
-    teacherClasses: teacherClassesOrdered,
+    teacherClasses: teacherClassesForClient,
     assignmentsEnabled,
     teacherClassCards,
     totalTeacherClassCount: teacherClasses.length,

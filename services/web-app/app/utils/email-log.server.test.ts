@@ -38,7 +38,6 @@ describe('buildSafeEmailLogSummary', () => {
 
     expect(summary).toEqual({
       to: 't***@s***',
-      subject: 'Approve access',
       kind: 'approval',
       bodyLength: 42,
     });

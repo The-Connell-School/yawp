@@ -216,6 +216,10 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
     const message = send.mock.calls.find(
       ([args]) => args.to === 'rivera@example.org'
     )?.[0];
+    expect(message.text).toContain(
+      'Ms. Okafor asked you to approve classroom software for their class at Lincoln High.'
+    );
+    expect(message.text).not.toContain('Dr. Patel forwarded this to you');
     const token = new URL(
       message.text.match(/http[^\s]+\/free\/admin\/approve\?t=[^\s]+/)[0]
     ).searchParams.get('t')!;
@@ -537,6 +541,159 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
     expect(row.firstSentAt).toEqual(now);
     expect(row.autoRemindersStopped).toBe(true);
     expect(send).toHaveBeenCalledTimes(1); // Teacher only.
+  });
+  test('forwarded admin reminder uses pass1 E2f copy when flag is on', async () => {
+    await flag('targeted', [organizationId]);
+    const { app, approval } = await fixture();
+    const { mintSignedLink } = await import('./signed-link.server');
+    const forward = await mintSignedLink({
+      applicationId: app.id,
+      purpose: 'ADMIN_NOT_RIGHT_PERSON',
+    });
+    const request = new Request('http://localhost/test');
+    expect(
+      (
+        await api.forwardApprovalByToken({
+          token: forward.token,
+          newAdminName: 'Rivera',
+          newAdminEmail: 'rivera@example.org',
+          request,
+        })
+      ).ok
+    ).toBe(true);
+    await api.runApprovalJobs(new Date());
+    const next = await db.freeTierAdminApproval.findFirstOrThrow({
+      where: { applicationId: app.id, status: 'PENDING' },
+    });
+    await api.queueManualApprovalReminder({
+      applicationId: app.id,
+      idempotencyKey: 'forward-reminder-pass1',
+      now: new Date(+now + 601000),
+    });
+    await api.runApprovalJobs(new Date(+now + 602000));
+    const reminder = send.mock.calls
+      .map(([args]) => args)
+      .find(
+        (args) =>
+          args.to === 'rivera@example.org' && args.subject.startsWith('Reminder:')
+      );
+    expect(reminder?.text).toContain(
+      "A quick reminder: Dr. Patel forwarded Ms. Okafor's request at Lincoln High to you, and it's still waiting on your approval."
+    );
+    expect(reminder?.text).not.toContain(
+      'This is a reminder about the approval request below.'
+    );
+    expect(next.id).not.toBe(approval.id);
+  });
+
+  test('teacher reroute refresh uses pass1 E3b copy when flag is on', async () => {
+    await flag('targeted', [organizationId]);
+    const { app, approval } = await fixture();
+    expect(
+      (
+        await api.forwardApprovalRequest({
+          applicationId: app.id,
+          userId: 'approval-test-user',
+          currentApprovalId: approval.id,
+          newAdminName: 'Rivera',
+          newAdminEmail: 'rivera@example.org',
+          request: new Request('http://localhost/test'),
+        })
+      ).ok
+    ).toBe(true);
+    await db.freeTierSignedLink.updateMany({
+      where: { applicationId: app.id },
+      data: { expiresAt: new Date(0) },
+    });
+    await api.runApprovalJobs(new Date());
+    const message = send.mock.calls.find(
+      ([args]) => args.to === 'rivera@example.org'
+    )?.[0];
+    expect(message?.text).toContain(
+      'Ms. Okafor asked you to approve classroom software for their class at Lincoln High.'
+    );
+    expect(message?.text).not.toContain('forwarded this to you');
+  });
+
+  test('teacher reroute refresh ignores legacy payload with admin-forward lead text', async () => {
+    const { app, approval } = await fixture();
+    const {
+      openApprovalDeliveryPayloadForTests,
+      sealApprovalDeliveryPayloadForTests,
+    } = api;
+    expect(
+      (
+        await api.forwardApprovalRequest({
+          applicationId: app.id,
+          userId: 'approval-test-user',
+          currentApprovalId: approval.id,
+          newAdminName: 'Rivera',
+          newAdminEmail: 'rivera@example.org',
+          request: new Request('http://localhost/test'),
+        })
+      ).ok
+    ).toBe(true);
+    const pending = await db.freeTierAdminApproval.findFirstOrThrow({
+      where: { applicationId: app.id, status: 'PENDING' },
+    });
+    const delivery = await db.freeTierApprovalDelivery.findFirstOrThrow({
+      where: { approvalId: pending.id, kind: 'admin_approval', state: 'QUEUED' },
+    });
+    const opened = openApprovalDeliveryPayloadForTests(delivery.payload);
+    const legacy = {
+      ...opened,
+      routedByTeacher: undefined,
+      forwardedByAdminName: undefined,
+      text: `Dr. Patel forwarded this to you as the right person to approve classroom software for Ms. Okafor at Lincoln High.\n\n${opened.text}`,
+    };
+    await db.freeTierApprovalDelivery.update({
+      where: { id: delivery.id },
+      data: {
+        payload: sealApprovalDeliveryPayloadForTests(legacy),
+      },
+    });
+    await db.freeTierSignedLink.updateMany({
+      where: { applicationId: app.id },
+      data: { expiresAt: new Date(0) },
+    });
+    await api.runApprovalJobs(new Date());
+    const message = send.mock.calls.find(
+      ([args]) => args.to === 'rivera@example.org'
+    )?.[0];
+    expect(message?.text).toContain(
+      'Ms. Okafor asked you to approve classroom software for their class at Lincoln High.'
+    );
+    expect(message?.text).not.toContain('forwarded this to you');
+  });
+  test('outbox refresh preserves pass1 admin forward context when links expire', async () => {
+    const { app } = await fixture();
+    const { mintSignedLink } = await import('./signed-link.server');
+    const forward = await mintSignedLink({
+      applicationId: app.id,
+      purpose: 'ADMIN_NOT_RIGHT_PERSON',
+    });
+    expect(
+      (
+        await api.forwardApprovalByToken({
+          token: forward.token,
+          newAdminName: 'Rivera',
+          newAdminEmail: 'rivera@example.org',
+          request: new Request('http://localhost/test'),
+        })
+      ).ok
+    ).toBe(true);
+    await db.freeTierSignedLink.updateMany({
+      where: { applicationId: app.id },
+      data: { expiresAt: new Date(0) },
+    });
+    await api.runApprovalJobs(new Date());
+    const message = send.mock.calls.find(
+      ([args]) => args.to === 'rivera@example.org'
+    )?.[0];
+    expect(message?.text).toContain(
+      "Dr. Patel forwarded Ms. Okafor's request at Lincoln High to you."
+    );
+    expect(message?.subject).toBe('Can you approve Yawp! for Ms. Okafor at Lincoln High?');
   });
   test('replacement link approves; old approval and forward links cannot mutate after forwarding', async () => {
     const { app, approval } = await fixture();

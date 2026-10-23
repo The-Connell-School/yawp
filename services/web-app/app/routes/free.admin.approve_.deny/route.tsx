@@ -7,10 +7,8 @@ import {
   useLoaderData,
   useNavigation,
 } from 'react-router';
-import {
-  applicationIdFromSignedToken,
-  peekSignedLink,
-} from '~/domain/free-tier/signed-link.server';
+import { peekSignedLink } from '~/domain/free-tier/signed-link.server';
+import { applicationIdForAdminLinkNaming } from '~/domain/free-tier/admin-link-known-request.server';
 import {
   fetchFreeTierApplicationTerminalGate,
   resolveAdminLinkReplacedGate,
@@ -64,9 +62,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     token,
     expectedPurpose: 'ADMIN_APPROVE',
   });
-  const appId = peek.ok
-    ? peek.applicationId
-    : applicationIdFromSignedToken(token);
+  const appId = await applicationIdForAdminLinkNaming(
+    token,
+    peek,
+    'ADMIN_APPROVE'
+  );
   if (appId) {
     const gate = await fetchFreeTierApplicationTerminalGate(appId);
     if (gate) return { ok: false as const, ...gate };
@@ -94,7 +94,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       showDenyFeatures,
     };
   }
-  const replaced = await resolveAdminLinkReplacedGate({ token, peek });
+  const replaced = await resolveAdminLinkReplacedGate({
+    token,
+    peek,
+    expectedPurpose: 'ADMIN_APPROVE',
+  });
   if (replaced) return { ok: false as const, ...replaced };
   return { ok: false as const, reason: peek.reason ?? 'invalid' };
 }

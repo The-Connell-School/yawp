@@ -27,7 +27,8 @@ import { useTable } from '~/hooks/useTable';
 import { cn, getDomainUrl } from '~/utils/misc';
 import { Tooltip } from '~/components/ui/tooltip';
 import { sendEmail } from '~/utils/email.server';
-import { redactEmailForLog } from '~/utils/redact-email-for-log.server';
+import { emailDeliveryDiagnostic } from '~/utils/email-delivery-error.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import {
   buildOrgTeacherInviteEmail,
   inviteeFirstName,
@@ -351,6 +352,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     let successCount = 0;
     for (const email of emailList) {
+      let designed: Awaited<ReturnType<typeof buildOrgTeacherInviteEmail>>;
       try {
         // Check for existing invitation and delete if found
         const existingInvitation = await prisma.invitation.findFirst({
@@ -394,24 +396,29 @@ export async function action({ request }: ActionFunctionArgs) {
 
         await prisma.invitation.create({ data: verificationData });
 
-        const designed = await buildOrgTeacherInviteEmail({
+        designed = await buildOrgTeacherInviteEmail({
           firstName: inviteeFirstName(email),
           inviterName,
           schoolName: organization?.name ?? 'your organization',
           acceptUrl: verifyUrl.toString(),
         });
+      } catch (error) {
+        console.error('org_teacher_invite_failed', buildSafeErrorForLog(error));
+        continue;
+      }
+
+      try {
         await sendEmail({
           to: email,
           subject: designed.subject,
           text: designed.text,
           html: designed.html,
         });
-
         successCount++;
       } catch (error) {
         console.error(
-          `Failed to send invitation to ${redactEmailForLog(email)}:`,
-          error
+          'org_teacher_invite_delivery_failed',
+          emailDeliveryDiagnostic(error, email),
         );
       }
     }

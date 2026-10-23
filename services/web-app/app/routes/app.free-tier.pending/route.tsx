@@ -26,6 +26,7 @@ import {
   approvalMailto,
   approvalSentDate,
 } from '~/domain/free-tier/approval-waiting';
+import { teacherPendingForwardError } from '~/domain/free-tier/admin-approval-copy';
 import {
   ApprovalForwardForm,
   approvalForwardError,
@@ -51,14 +52,39 @@ import { yawpE2eForwardShouldFail } from '~/domain/free-tier/e2e-stub.server';
 
 const FORWARD_ERROR_REASONS = new Set([
   'validation',
+  'same_as_teacher',
   'same_administrator',
   'chain_cap',
+  'email_failed',
   'superseded',
   'rate_limited',
   'unavailable',
 ]);
 
 type PendingActionData = Awaited<ReturnType<typeof action>>;
+
+function pendingForwardAlertMessage(
+  reason: string,
+  ctx: { schoolName: string; adminName?: string }
+) {
+  switch (reason) {
+    case 'same_as_teacher':
+    case 'same_administrator':
+    case 'chain_cap':
+    case 'email_failed':
+      return teacherPendingForwardError({
+        reason,
+        schoolName: ctx.schoolName,
+        adminName: ctx.adminName,
+      });
+    default:
+      return approvalForwardError(reason, {
+        pass1: false,
+        schoolName: ctx.schoolName,
+        adminName: ctx.adminName,
+      });
+  }
+}
 
 function isForwardActionError(
   data: PendingActionData | undefined
@@ -399,7 +425,10 @@ export default function FreeTierPendingRoute() {
         ) : null}
         {isForwardActionError(actionData) ? (
           <p role="alert" className="text-sm text-destructive">
-            {approvalForwardError(actionData.reason)}
+            {pendingForwardAlertMessage(actionData.reason, {
+              schoolName: app?.schoolName ?? 'your school',
+              adminName: denied?.adminName,
+            })}
           </p>
         ) : null}
       </FreeTierAuthCard>
@@ -506,7 +535,10 @@ export default function FreeTierPendingRoute() {
             ) : null}
             {isForwardActionError(actionData) ? (
               <p role="alert" className="text-sm text-destructive">
-                {approvalForwardError(actionData.reason)}
+                {pendingForwardAlertMessage(actionData.reason, {
+                  schoolName: app?.schoolName ?? 'your school',
+                  adminName: current?.adminName,
+                })}
               </p>
             ) : null}
           </>

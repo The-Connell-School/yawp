@@ -1,6 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Form } from 'react-router';
 import {
+  forwardInlineAlert,
+  forwardRateLimitedBody,
+  unableToForwardBody,
+} from '~/domain/free-tier/admin-approval-copy';
+import {
   FreeTierButton,
   FreeTierFieldLabel,
   FreeTierTextInput,
@@ -147,19 +152,55 @@ export function ApprovalForwardForm({
   );
 }
 
-export function approvalForwardError(reason: string) {
+export function approvalForwardError(
+  reason: string,
+  options: {
+    pass1?: boolean;
+    teacherName?: string;
+    schoolName?: string;
+    adminName?: string;
+  } = {}
+) {
+  const pass1 = options.pass1 ?? false;
+  const teacherName = options.teacherName ?? 'A teacher';
+  const schoolName = options.schoolName ?? 'your school';
   switch (reason) {
     case 'validation':
       return 'Enter their name and a valid email address.';
     case 'same_administrator':
-      return 'Choose a different administrator to forward this request.';
+      return forwardInlineAlert({
+        reason: 'same_administrator',
+        teacherName,
+        schoolName,
+        adminName: options.adminName,
+        pass1,
+      });
+    case 'same_as_teacher':
+      return forwardInlineAlert({
+        reason: 'same_as_teacher',
+        teacherName,
+        schoolName,
+        pass1,
+      });
     case 'chain_cap':
-      return 'This request was forwarded too many times. Email support@yawp.school and we will sort it out.';
+      return forwardInlineAlert({
+        reason: 'chain_cap',
+        teacherName,
+        schoolName,
+        pass1,
+      });
+    case 'email_failed':
+      return forwardInlineAlert({
+        reason: 'email_failed',
+        teacherName,
+        schoolName,
+        pass1,
+      });
     case 'superseded':
       return 'This request has changed. Reload the page to see the current administrator.';
     case 'rate_limited':
-      return 'Please wait a few minutes before trying again.';
+      return forwardRateLimitedBody();
     default:
-      return 'We could not forward this request. Reload the page or contact support@yawp.school.';
+      return unableToForwardBody(teacherName, schoolName, pass1);
   }
 }
