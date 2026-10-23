@@ -56,6 +56,52 @@ pgid_is_unsafe_to_kill() {
   [[ -z "$pgid" || "$pgid" == "0" || "$pgid" == "1" || "$pgid" == "$SCRIPT_PGID" ]]
 }
 
+child_setsid_pgid_poll_seconds="${PLAYWRIGHT_PGID_POLL_SECONDS:-5}"
+
+read_child_setsid_pgid() {
+  local pid="$1"
+  local poll_seconds="${2:-$child_setsid_pgid_poll_seconds}"
+  local deadline=$((SECONDS + poll_seconds))
+  local pgid=""
+
+  while (( SECONDS < deadline )); do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      echo ""
+      return 1
+    fi
+    pgid="$(read_pgid_for_pid "$pid")"
+    if [[ -n "$pgid" && "$pgid" == "$pid" ]]; then
+      echo "$pgid"
+      return 0
+    fi
+    sleep 0.1
+  done
+
+  pgid="$(read_pgid_for_pid "$pid")"
+  if [[ -n "$pgid" && "$pgid" == "$pid" ]]; then
+    echo "$pgid"
+    return 0
+  fi
+  echo ""
+  return 1
+}
+
+read_sid_for_pid() {
+  local pid="$1"
+  ps -o sid= -p "$pid" 2>/dev/null | tr -d ' ' || true
+}
+
+wait_bounded_for_pid() {
+  local pid="$1"
+  local max_sec="$2"
+  local elapsed=0
+  while kill -0 "$pid" 2>/dev/null && (( elapsed < max_sec )); do
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  wait "$pid" 2>/dev/null || true
+}
+
 configure_apt_dpkg_lock_timeout() {
   local conf_path="/etc/apt/apt.conf.d/99-yawp-playwright-ci-dpkg-lock-timeout.conf"
   local line='DPkg::Lock::Timeout "120";'
@@ -149,7 +195,7 @@ stop_process_group() {
 
   local sid=""
   if [[ -n "$leader_pid" ]] && kill -0 "$leader_pid" 2>/dev/null; then
-    sid="$(ps -o sid= -p "$leader_pid" 2>/dev/null | tr -d ' ' || true)"
+    sid="$(read_sid_for_pid "$leader_pid")"
   fi
 
   if have_passwordless_sudo; then
@@ -168,11 +214,73 @@ stop_process_group() {
   kill -TERM -- "-${pgid}" 2>/dev/null || true
   sleep 5
   kill -KILL -- "-${pgid}" 2>/dev/null || true
+  return 0
+}
+
+stop_leader_pid_tree() {
+  local pid="$1"
+  local sid=""
+
+  if kill -0 "$pid" 2>/dev/null; then
+    sid="$(read_sid_for_pid "$pid")"
+  fi
+
+  if have_passwordless_sudo; then
+    sudo -n kill -TERM -- "$pid" 2>/dev/null || true
+    sudo -n pkill -TERM -P "$pid" 2>/dev/null || true
+    if [[ -n "$sid" ]]; then
+      sudo -n pkill -TERM -s "$sid" 2>/dev/null || true
+    fi
+    sleep 5
+    sudo -n kill -KILL -- "$pid" 2>/dev/null || true
+    sudo -n pkill -KILL -P "$pid" 2>/dev/null || true
+    if [[ -n "$sid" ]]; then
+      sudo -n pkill -KILL -s "$sid" 2>/dev/null || true
+    fi
+    return 0
+  fi
+
+  kill -TERM -- "$pid" 2>/dev/null || true
+  pkill -TERM -P "$pid" 2>/dev/null || true
+  sleep 5
+  kill -KILL -- "$pid" 2>/dev/null || true
+  pkill -KILL -P "$pid" 2>/dev/null || true
+}
+
+terminate_timed_out_leader() {
+  local label="$1"
+  local pid="$2"
+  local killed=0
+
+  echo "${label}: timed out after ${attempt_timeout}; re-reading pgid for pid=${pid}"
+  local pgid=""
+  pgid="$(read_child_setsid_pgid "$pid")" || true
+  echo "${label}: timeout pgid=${pgid:-unknown} (expected pgid==pid=${pid}, script_pgid=${SCRIPT_PGID})"
+
+  if [[ -n "$pgid" && "$pgid" == "$pid" ]] && ! pgid_is_unsafe_to_kill "$pgid"; then
+    if stop_process_group "$pgid" "$pid"; then
+      killed=1
+      echo "${label}: sent TERM/KILL to process group ${pgid}"
+    fi
+  fi
+
+  if [[ "$killed" -eq 0 ]] && kill -0 "$pid" 2>/dev/null; then
+    echo "${label}: falling back to leader pid and descendant kill (pid=${pid})"
+    stop_leader_pid_tree "$pid"
+    killed=1
+  fi
+
+  wait_bounded_for_pid "$pid" 10
+  PLAYWRIGHT_LAST_KILL_APPLIED=$killed
+  export PLAYWRIGHT_LAST_KILL_APPLIED
 }
 
 run_timed_in_process_group() {
   local label="$1"
   shift
+
+  PLAYWRIGHT_LAST_KILL_APPLIED=0
+  export PLAYWRIGHT_LAST_KILL_APPLIED
 
   local deadline_sec
   deadline_sec="$(timeout_to_seconds "$attempt_timeout")"
@@ -180,15 +288,8 @@ run_timed_in_process_group() {
   setsid "$@" > >(tee >&2) 2>&1 &
   local pid=$!
   local pgid=""
-  local _try
-  for _try in 1 2 3 4 5; do
-    pgid="$(read_pgid_for_pid "$pid")"
-    if [[ -n "$pgid" ]]; then
-      break
-    fi
-    sleep 0.2
-  done
-  echo "${label}: started pid=${pid} pgid=${pgid:-unknown} (attempt_timeout=${attempt_timeout})"
+  pgid="$(read_child_setsid_pgid "$pid")" || true
+  echo "${label}: started pid=${pid} pgid=${pgid:-unknown} (attempt_timeout=${attempt_timeout}, script_pgid=${SCRIPT_PGID})"
 
   local rc=0
   local timed_out=0
@@ -204,12 +305,7 @@ run_timed_in_process_group() {
   done
 
   if [[ "$timed_out" -eq 1 ]]; then
-    if [[ -z "$pgid" ]]; then
-      pgid="$(read_pgid_for_pid "$pid")"
-    fi
-    echo "${label}: timed out after ${attempt_timeout}; stopping process group ${pgid:-unknown}"
-    stop_process_group "$pgid" "$pid"
-    wait "$pid" 2>/dev/null || true
+    terminate_timed_out_leader "$label" "$pid"
     return 124
   fi
 
@@ -320,7 +416,11 @@ for attempt in $(seq 1 "$max_attempts"); do
   fi
 
   if [[ "$exit_code" -eq 124 ]]; then
-    echo "::warning::Playwright install attempt ${attempt} timed out after ${attempt_timeout} (process group terminated)"
+    if [[ "${PLAYWRIGHT_LAST_KILL_APPLIED:-0}" -eq 1 ]]; then
+      echo "::warning::Playwright install attempt ${attempt} timed out after ${attempt_timeout} (install process terminated)"
+    else
+      echo "::warning::Playwright install attempt ${attempt} timed out after ${attempt_timeout} (could not confirm install process termination)"
+    fi
   else
     echo "::warning::Playwright install attempt ${attempt} failed (exit ${exit_code})"
   fi
