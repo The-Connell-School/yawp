@@ -113,6 +113,12 @@ Secret-name metadata only:
 gh secret list --repo The-Connell-School/yawp --env demo --json name,updatedAt
 ```
 
+Before rebinding `DEMO_INTERNAL_API_KEYS`, dispatch the **Demo internal API keys
+audit** workflow (`.github/workflows/demo-internal-keys-audit.yml`). It SSHes to
+the demo host, reads `YAWP_INTERNAL_API_KEYS` from the running demo **web**
+container, and logs only each key's `id`, `scopes`, and field names — never
+`secret` values.
+
 Independent QA, from its prepared Internal worktree, sources credentials silently
 and uses the existing browser suite (no preview, no production writes):
 

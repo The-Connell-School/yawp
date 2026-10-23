@@ -1818,6 +1818,34 @@ describe('demo environment deployment contract', () => {
     }
   });
 
+  test('demo internal API keys audit is manual, read-only, and uses demo SSH only', () => {
+    const workflow = readRepoFile(
+      '.github/workflows/demo-internal-keys-audit.yml'
+    );
+    const parsed = Bun.YAML.parse(workflow) as {
+      on: Record<string, unknown>;
+      permissions: Record<string, string>;
+      jobs: { audit: { environment: string; steps: { run?: string; env?: Record<string, string> }[] } };
+    };
+
+    expect(parsed.on).toEqual({ workflow_dispatch: null });
+    expect(parsed.permissions).toEqual({ contents: 'read' });
+    expect(parsed.jobs.audit.environment).toBe('demo');
+    expect(workflow).toContain('group: demo-environment');
+    expect(workflow).toContain('cancel-in-progress: false');
+    expect(workflow).toContain('bash scripts/preview/prepare-demo-ssh.sh');
+    expect(workflow).toContain('docker exec -i');
+    expect(workflow).toContain('print-demo-internal-api-key-audit.mjs');
+    expect(workflow).toContain('audit-demo-internal-api-keys-on-host.sh');
+    expect(workflow).not.toContain('DEMO_INTERNAL_API_KEYS');
+    expect(workflow).not.toContain('set -x');
+    for (const step of parsed.jobs.audit.steps) {
+      for (const value of Object.values(step.env ?? {})) {
+        expect(String(value)).not.toContain('secrets.DEMO_INTERNAL_API_KEYS');
+      }
+    }
+  });
+
   test('demo host diagnostics expose only non-secret container and mount metadata', () => {
     const diagnostics = readRepoFile(
       '.github/workflows/demo-host-diagnostics.yml'
