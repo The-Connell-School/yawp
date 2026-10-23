@@ -13,6 +13,14 @@ test('Q&A rows start collapsed with aria-expanded false on triggers', () => {
   expect(triggers.every((value) => value === 'aria-expanded="false"')).toBe(true);
 });
 
+test('Q&A chevron uses a wrapper for open rotation', () => {
+  const html = renderToStaticMarkup(
+    <AdminApprovalQa teacherName="Jordan Rivera" />
+  );
+  expect(html).toContain('free-tier-qa-chevron-wrap');
+  expect(html).toContain('free-tier-qa-chevron');
+});
+
 test('Q&A copy omits AI and uses Yawp! verbatim phrasing', () => {
   const html = renderToStaticMarkup(
     <AdminApprovalQa teacherName="Jordan Rivera" />
