@@ -89,9 +89,6 @@ test.describe('Dev panel artboard evidence', () => {
 
     const tools = await openDevToolsPanel(page);
     await tools.getByRole('button', { name: /^Free-tier states/ }).click();
-    await tools
-      .getByRole('button', { name: 'Choose a state to jump to', exact: true })
-      .click();
     const stateSheet = page.getByRole('dialog', { name: 'Free-tier states' });
     await expect(stateSheet).toBeVisible({ timeout: 15_000 });
     await shot(page, '19');

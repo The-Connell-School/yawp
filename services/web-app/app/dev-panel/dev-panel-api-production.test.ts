@@ -65,6 +65,23 @@ describe('dev panel HTTP routes in production', () => {
     }
   });
 
+  test('feedback route uses assertDevPanelRoute and returns 404 in production', async () => {
+    const previous = snapshotProcessEnv();
+    const env = process.env as Record<string, string | undefined>;
+    for (const [key, value] of Object.entries(productionRuntimeEnv)) {
+      if (value === undefined) delete env[key];
+      else env[key] = value;
+    }
+    try {
+      const response = await assertDevPanelRoute(
+        new Request('http://localhost/api/dev-panel/feedback', { method: 'POST' })
+      );
+      expect(response?.status).toBe(404);
+    } finally {
+      restoreProcessEnv(previous);
+    }
+  });
+
   test('assertDevPanelRoute returns 404', async () => {
     const previous = snapshotProcessEnv();
     const env = process.env as Record<string, string | undefined>;

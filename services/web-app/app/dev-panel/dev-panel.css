@@ -84,6 +84,22 @@ html.yawp-dev-panel-closing:not(.yawp-dev-panel-reduced-motion)
   display: none;
 }
 
+html.yawp-dev-panel-open:not(.yawp-dev-panel-reduced-motion)
+  [data-yawp-dev-panel-flyout] {
+  animation: yawp-dev-panel-flyout-slide-in 150ms ease-out;
+}
+
+@keyframes yawp-dev-panel-flyout-slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0.95;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
 html.yawp-dev-panel-capturing [data-yawp-dev-panel] {
   visibility: hidden !important;
 }
