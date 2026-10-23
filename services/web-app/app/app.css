@@ -1627,6 +1627,12 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
   min-height: 800px;
   padding: 32px 16px 24px;
 }
+@media (max-width: 639px) {
+  /* Back link is fixed (top 12px + 44px min-height); keep 16px below it before the logo. */
+  .free-tier-page .auth-page-shell--chrome:has(> .card-page-back-link) {
+    padding-top: 72px;
+  }
+}
 .free-tier-page .auth-page-frame {
   min-height: 744px;
 }
@@ -1795,7 +1801,6 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: theme('colors.slate.500');
 }
 .free-tier-qa-group-label:first-child {
