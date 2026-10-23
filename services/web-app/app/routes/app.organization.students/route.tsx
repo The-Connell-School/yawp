@@ -25,6 +25,10 @@ import { Pagination } from '~/components/table/pagination';
 import { cn } from '~/utils/misc';
 import { TooltipIdCopy } from '~/components/ui/tooltip-id-copy';
 import {
+  redactClassTeachingSecrets,
+  shouldHideFreeTierTeachingSecrets,
+} from '~/domain/free-tier/locked-preview.server';
+import {
   getPasswordHash,
   requireMembership,
   requireOwner,
@@ -229,6 +233,7 @@ const createOrEnrollStudent = async (
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireOwner(request);
   const profile = await requireMembership(request, user.id);
+  const hideTeachingSecrets = await shouldHideFreeTierTeachingSecrets(user.id);
   const url = new URL(request.url);
   const q = url.searchParams.get('q');
   const { sort, direction, skip, take } =
@@ -298,10 +303,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
   ]);
 
+  const redactClass = (klass: (typeof classes)[number]) =>
+    redactClassTeachingSecrets(klass, hideTeachingSecrets);
+
   return {
-    students,
+    students: hideTeachingSecrets
+      ? students.map((student) => ({
+          ...student,
+          classesAsStudent: student.classesAsStudent.map(redactClass),
+        }))
+      : students,
     totalCount,
-    classes,
+    classes: hideTeachingSecrets ? classes.map(redactClass) : classes,
     table: { sort, direction, skip, take },
     q,
   };

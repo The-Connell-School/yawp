@@ -709,6 +709,32 @@ async function exploreLockedApp(page: import('@playwright/test').Page, userEmail
   await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
 }
 
+async function expectRouteOmitsTeachingSecrets(
+  page: import('@playwright/test').Page,
+  path: string,
+  routeId: string,
+  classId: string,
+  secrets: { code: string; joinToken: string | null }
+) {
+  const ssr = await page.request.get(path);
+  expect(ssr.status()).toBe(200);
+  const ssrText = await ssr.text();
+  expect(ssrText).not.toContain(secrets.code);
+  if (secrets.joinToken) {
+    expect(ssrText).not.toContain(secrets.joinToken);
+  }
+  expect(ssrText).toContain(classId);
+
+  const data = await page.request.get(`${path}.data?_routes=${routeId}`);
+  expect(data.status()).toBe(200);
+  const dataText = await data.text();
+  expect(dataText).not.toContain(secrets.code);
+  if (secrets.joinToken) {
+    expect(dataText).not.toContain(secrets.joinToken);
+  }
+  expect(dataText).toContain(classId);
+}
+
 test('pending teacher /app HTML and loader data omit the real class code', async ({
   page,
 }) => {
@@ -722,6 +748,14 @@ test('pending teacher /app HTML and loader data omit the real class code', async
     select: { id: true, code: true },
   });
   await exploreLockedApp(page, user.email!);
+  const appSsr = await page.request.get('/app');
+  expect(appSsr.status()).toBe(200);
+  expect(await appSsr.text()).not.toContain(klass.code);
+  const appData = await page.request.get(
+    '/app.data?_routes=routes/app._index'
+  );
+  expect(appData.status()).toBe(200);
+  expect(await appData.text()).not.toContain(klass.code);
   let html = await page.content();
   expect(html).not.toContain(klass.code);
   await page.goto('/app/my-classes');
@@ -730,6 +764,48 @@ test('pending teacher /app HTML and loader data omit the real class code', async
   await page.goto(`/app/my-classes/${klass.id}?tab=students`);
   html = await page.content();
   expect(html).not.toContain(klass.code);
+});
+
+test('pending org owner organization pages omit class code and join token', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { user, app } = await fixture('11', 'SENT');
+  await provisionPendingClassroom(app.id, user.id!);
+  const joinToken = `e2e-locked-preview-join-${crypto.randomUUID()}`;
+  const klass = await prisma.class.findFirstOrThrow({
+    where: {
+      teachers: { some: { user: { id: user.id } } },
+    },
+    select: { id: true, code: true, schoolId: true, studentJoinToken: true },
+  });
+  await prisma.class.update({
+    where: { id: klass.id },
+    data: { studentJoinToken: joinToken },
+  });
+  const secrets = { code: klass.code, joinToken };
+  await exploreLockedApp(page, user.email!);
+  await expectRouteOmitsTeachingSecrets(
+    page,
+    '/app/organization/classes',
+    'routes/app.organization.classes',
+    klass.id,
+    secrets
+  );
+  await expectRouteOmitsTeachingSecrets(
+    page,
+    '/app/organization/students',
+    'routes/app.organization.students',
+    klass.id,
+    secrets
+  );
+  await expectRouteOmitsTeachingSecrets(
+    page,
+    `/app/organizations/schools/${klass.schoolId}`,
+    'routes/app.organizations.schools.$schoolId',
+    klass.id,
+    secrets
+  );
 });
 
 test('approved teacher sees the real class code on the dashboard card', async ({

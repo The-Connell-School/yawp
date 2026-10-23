@@ -18,6 +18,7 @@ const {
   assertOrganizationTeachingApproved,
   getLockedPreviewApplication,
   userHasPendingFreeTierTeachingLock,
+  redactClassTeachingSecrets,
 } = await import('./locked-preview.server');
 afterEach(() => {
   enabled = true;
@@ -155,4 +156,20 @@ test('pending lesson planner scope allows SENT and MANUAL_REVIEW only', async ()
       allowPendingLessonPlanner: true,
     })
   ).rejects.toMatchObject({ status: 403 });
+});
+
+test('redactClassTeachingSecrets blanks code and drops join token for locked preview', () => {
+  const row = {
+    id: 'class-1',
+    code: 'SECRET',
+    studentJoinToken: 'join-token',
+    title: 'Class',
+  };
+  expect(redactClassTeachingSecrets(row, false)).toEqual(row);
+  const redacted = redactClassTeachingSecrets(row, true);
+  expect(redacted.id).toBe('class-1');
+  expect(redacted.title).toBe('Class');
+  expect(redacted.code).toBeNull();
+  expect('studentJoinToken' in redacted).toBe(false);
+  expect(JSON.stringify(redacted)).not.toContain('join-token');
 });
