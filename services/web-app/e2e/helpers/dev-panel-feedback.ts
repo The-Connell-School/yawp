@@ -12,8 +12,11 @@ export async function waitForDevPanelReady(page: Page) {
     timeout: 60_000,
   });
   const locked = page.getByText('Developer tools are locked');
+  const loadError = page.getByText("Developer tools couldn't load");
   const giveFeedback = panel.getByRole('button', { name: 'Give feedback' });
-  await expect(locked.or(giveFeedback)).toBeVisible({ timeout: 60_000 });
+  await expect(locked.or(loadError).or(giveFeedback)).toBeVisible({
+    timeout: 60_000,
+  });
   return panel;
 }
 

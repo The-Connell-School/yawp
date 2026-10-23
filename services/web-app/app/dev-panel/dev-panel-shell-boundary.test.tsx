@@ -9,14 +9,14 @@ try {
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { act, createElement } from 'react';
+import { act, createElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { DevPanelProvider } from './dev-panel-provider';
 import { DevPanelShellBoundary } from './dev-panel-shell-boundary';
 
 let root: Root | null = null;
 
-function ThrowWhenOpen() {
+function ThrowWhenOpen(): ReactNode {
   throw new Error('panel render failed');
 }
 
@@ -39,17 +39,16 @@ describe('DevPanelShellBoundary', () => {
             envBadge: 'Dev',
             previewAccessGateEnabled: true,
             previewAccessSeatLabel: 'QA',
-            children: createElement(
-              DevPanelShellBoundary,
-              { open: true },
-              createElement(ThrowWhenOpen)
-            ),
+            children: createElement(DevPanelShellBoundary, {
+              open: true,
+              children: createElement(ThrowWhenOpen),
+            }),
           }
         )
       );
     });
     expect(document.getElementById('devtools')).toBeTruthy();
-    expect(document.body.textContent).toContain('Developer tools are locked');
+    expect(document.body.textContent).toContain("Developer tools couldn't load");
     expect(document.querySelector('[data-yawp-dev-panel-ready="true"]')).toBeTruthy();
   });
 });

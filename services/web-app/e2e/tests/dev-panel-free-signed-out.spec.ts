@@ -54,9 +54,11 @@ test.describe('Developer tools on /free while signed out', () => {
 
   test('Alt+Shift+D toggles panel while signed out on /free', async ({ page }) => {
     test.skip(!previewGateOn, 'PREVIEW_ACCESS_GATE=on required for locked state');
-    await page.keyboard.press('Alt+Shift+D');
+    await openDevToolsPanel(page);
     await waitForDevPanelReady(page);
     await page.keyboard.press('Alt+Shift+D');
     await expect(page.locator('#devtools')).toHaveCount(0);
+    await page.keyboard.press('Alt+Shift+D');
+    await waitForDevPanelReady(page);
   });
 });

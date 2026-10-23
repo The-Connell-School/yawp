@@ -36,10 +36,9 @@ export function DevPanelFallbackShell() {
         >
           <Lock className="size-5 text-muted-foreground" />
         </div>
-        <p className="font-medium">Developer tools are locked</p>
+        <p className="font-medium">Developer tools couldn&apos;t load</p>
         <p className="mt-2 text-sm text-muted-foreground" role="alert">
-          Something went wrong loading the panel. Close and open developer tools again, or
-          re-enter your access code.
+          Close developer tools and try again, or re-enter your access code.
         </p>
       </div>
     </aside>

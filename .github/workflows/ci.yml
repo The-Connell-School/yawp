@@ -1550,10 +1550,6 @@ jobs:
           RECORD_PORT_LTI_MOCK: '9789'
           YAWP_ENVIRONMENT: demo
           PREVIEW_SLUG: demo
-          PREVIEW_ACCESS_GATE: 'on'
-          PREVIEW_ACCESS_SECRET: 'ci-demo-feedback-preview-access-secret-32c'
-          PREVIEW_MASTER_ACCESS_CODE: 'ci-demo-master-access'
-          PREVIEW_ACCESS_SEATS: '[{"code":"ci-fixture-4193","organizationId":"local-dev-org","label":"Master"}]'
           TESTER_FEEDBACK_ENABLED: 'true'
           DEV_PANEL_EVIDENCE_DIR: dev-panel-evidence
           DEV_PANEL_ARTIFACT_COPY_DIR: /opt/cursor/artifacts/screenshots
@@ -1575,6 +1571,42 @@ jobs:
           ./bin/project dev start --json
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5489/ > /dev/null
           ./bin/project test --profile demo-feedback-browser --json
+
+      - name: Dev panel signed-out /free browser regression
+        env:
+          CI: '1'
+          NODE_OPTIONS: --dns-result-order=ipv4first
+          TMPDIR: ${{ runner.temp }}/dev-panel-free-signed-out
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/dev-panel-free-signed-out/bun-cache
+          XDG_CACHE_HOME: ${{ runner.temp }}/dev-panel-free-signed-out/cache
+          RECORD_PORT_APP: '5490'
+          RECORD_PORT_DATABASE: '54490'
+          RECORD_PORT_LTI_MOCK: '9790'
+          YAWP_ENVIRONMENT: demo
+          PREVIEW_SLUG: demo
+          PREVIEW_ACCESS_GATE: 'on'
+          PREVIEW_ACCESS_SECRET: 'ci-demo-feedback-preview-access-secret-32c'
+          PREVIEW_MASTER_ACCESS_CODE: 'ci-demo-master-access'
+          PREVIEW_ACCESS_SEATS: '[{"code":"ci-fixture-4193","organizationId":"local-dev-org","label":"Master"}]'
+          TESTER_FEEDBACK_ENABLED: 'true'
+          DEMO_FEEDBACK_BASE_URL: http://127.0.0.1:5490
+        run: |
+          mkdir -p "$TMPDIR"
+          cleanup() {
+            ./bin/project dev stop --json || true
+            if [ -f .worktree-local/config.env ]; then
+              source .worktree-local/config.env
+              docker rm -f "$CONTAINER_NAME" || true
+              docker volume rm "$VOLUME_NAME" || true
+            fi
+          }
+          trap cleanup EXIT
+          ./bin/project bootstrap --fresh --json
+          ./bin/project fixture verify local-dev --json
+          ./bin/project dev start --json
+          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5490/ > /dev/null
+          cd services/web-app
+          bun x playwright test --config=playwright.dev-panel-free-signed-out.config.ts --workers=1
 
       - name: Upload dev panel artboard evidence
         if: ${{ always() }}
