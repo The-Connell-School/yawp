@@ -33,6 +33,7 @@ function QaAccordionRow({
   const panelId = useId();
   const buttonId = useId();
   const durationMs = open ? 200 : 160;
+  const closedInert = !open && !reducedMotion;
 
   return (
     <div className="free-tier-qa-row">
@@ -63,7 +64,7 @@ function QaAccordionRow({
         id={panelId}
         role="region"
         aria-labelledby={buttonId}
-        inert={!open && !reducedMotion ? true : undefined}
+        {...(closedInert ? ({ inert: '' } as Record<string, string>) : {})}
         className={`free-tier-qa-panel${
           open ? ' free-tier-qa-panel-open' : ''
         }${reducedMotion ? ' free-tier-qa-panel-reduced' : ''}`}

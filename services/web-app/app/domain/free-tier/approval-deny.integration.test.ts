@@ -1,6 +1,11 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
-const sendEmailMock = mock(async () => ({ status: 'success' as const }));
+type SendEmailMockResult =
+  | { status: 'success' }
+  | { status: 'error'; error: { statusCode: number } };
+const sendEmailMock = mock(async (): Promise<SendEmailMockResult> => ({
+  status: 'success',
+}));
 mock.module('~/utils/email.server', () => ({
   sendEmail: sendEmailMock,
   getTransactionalEmailFrom: () => 'Yawp! <noreply@yawp.school>',
