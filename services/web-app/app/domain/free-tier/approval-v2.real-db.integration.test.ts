@@ -217,12 +217,9 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
       ([args]) => args.to === 'rivera@example.org'
     )?.[0];
     expect(message.text).toContain(
-      'They named you as the administrator who can approve classroom software'
+      'Ms. Okafor asked you to approve classroom software for their class at Lincoln High.'
     );
     expect(message.text).not.toContain('Dr. Patel forwarded this to you');
-    expect(message.text).not.toContain(
-      'asked you to approve classroom software for their class at'
-    );
     const token = new URL(
       message.text.match(/http[^\s]+\/free\/admin\/approve\?t=[^\s]+/)[0]
     ).searchParams.get('t')!;

@@ -13,6 +13,7 @@ mock.module('~/domain/feature-flags/feature-flags.server', () => ({
 
 mock.module('~/domain/free-tier/approval-deny.server', () => ({
   denySchoolAdminApproval,
+  resolveAdminDenyAnsweredGate: async () => null,
 }));
 
 const { action } = await import('./route');
