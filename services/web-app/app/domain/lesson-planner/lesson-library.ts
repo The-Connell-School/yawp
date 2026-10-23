@@ -21,6 +21,13 @@ export type LibraryLessonInput = {
   updatedAt: Date | string;
   publishedAt: Date | string | null;
   messages: Array<{ keptAudience: string | null }>;
+  /** The stack's pieces, filed one by one from the chat. */
+  materials?: Array<{ kind: string; audience: string | null }>;
+  /** The class the teacher named for the lesson. */
+  lessonClassLabel?: string | null;
+  /** The unit it belongs to, and which day (null: the unit's planning chat). */
+  unit?: { id: string; title: string } | null;
+  unitDay?: number | null;
   originClassAssignment?: {
     class: {
       title: string | null;
@@ -40,6 +47,8 @@ export type LibraryLesson = {
   handoutCount: number;
   published: boolean;
   updatedAt: string;
+  unit: { id: string; title: string } | null;
+  unitDay: number | null;
 };
 
 export function classDisplayName(klass: {
@@ -70,20 +79,62 @@ export function buildLessonLibrary(
 ): LibraryLesson[] {
   return lessons.map((lesson) => {
     const kept = lesson.messages.filter((message) => message.keptAudience);
+    // The deck belongs to the lesson, not its count of pieces (as the run of show).
+    const pieces = (lesson.materials ?? []).filter((material) => material.kind !== 'slides');
     return {
       id: lesson.id,
       title: (lesson.packetTitle ?? lesson.title).trim() || 'Lesson plan',
       className: lesson.originClassAssignment
         ? classDisplayName(lesson.originClassAssignment.class)
-        : null,
+        : lesson.lessonClassLabel?.trim() || null,
       assignmentTitle: lesson.originClassAssignment?.assignment.title ?? null,
-      sectionCount: kept.length,
-      handoutCount: kept.filter((message) => message.keptAudience === 'student')
-        .length,
+      sectionCount: kept.length + pieces.length,
+      handoutCount:
+        kept.filter((message) => message.keptAudience === 'student').length +
+        pieces.filter((material) => material.audience === 'student').length,
       published: Boolean(lesson.publishedAt),
       updatedAt: asIsoString(lesson.updatedAt),
+      unit: lesson.unit ?? null,
+      unitDay: lesson.unitDay ?? null,
     };
   });
+}
+
+export type UnitFolder = {
+  id: string;
+  title: string;
+  /** The chat that planned the unit, when it has one. */
+  planning: LibraryLesson | null;
+  days: LibraryLesson[];
+};
+
+/**
+ * The library as folders and lessons (Brian's run 5, item 1): a unit's days
+ * sit together in its folder, in day order, with the chat that planned them;
+ * every other lesson stands on its own. Folders keep the order the newest
+ * of their lessons has in the list.
+ */
+export function groupUnits(
+  lessons: LibraryLesson[],
+  /** Every folder the teacher has, so a new, empty one shows too. */
+  allFolders: Array<{ id: string; title: string }> = []
+): { units: UnitFolder[]; lessons: LibraryLesson[] } {
+  const folders = new Map<string, UnitFolder>(
+    allFolders.map((folder) => [folder.id, { id: folder.id, title: folder.title, planning: null, days: [] }])
+  );
+  const standalone: LibraryLesson[] = [];
+  for (const lesson of lessons) {
+    if (!lesson.unit) {
+      standalone.push(lesson);
+      continue;
+    }
+    const folder = folders.get(lesson.unit.id) ?? { id: lesson.unit.id, title: lesson.unit.title, planning: null, days: [] };
+    if (lesson.unitDay == null) folder.planning = folder.planning ?? lesson;
+    else folder.days.push(lesson);
+    folders.set(lesson.unit.id, folder);
+  }
+  for (const folder of folders.values()) folder.days.sort((a, b) => (a.unitDay ?? 0) - (b.unitDay ?? 0));
+  return { units: [...folders.values()], lessons: standalone };
 }
 
 /**

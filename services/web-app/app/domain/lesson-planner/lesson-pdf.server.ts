@@ -16,9 +16,15 @@ import type { Block, TextRun } from './markdown-blocks';
 import { markdownBlocks } from './markdown-blocks';
 import type { LessonPacket } from './lesson-packet';
 import { buildStudentHandout } from './student-handout';
-import { deckDurationMinutes, type Slide, type SlideDeck } from './slide-deck';
+import { classicSlide, deckDurationMinutes, type Slide, type SlideDeck } from './slide-deck';
+import { deckColors } from './deck-colors';
+import { galleryAccent } from './deck-gallery';
+import { registerKitFonts } from './kit-fonts.server';
 
-/** Yawp's print colour, matched to the packet page's header rule. */
+/** The kit's ink and stone (lesson plan spec v1, "Type and color"). */
+const KIT_PLAN_COLORS_HEX = { ink: '#1B1B1B', stone: '#6F6A63' } as const;
+
+/** Yawp!'s print colour, matched to the packet page's header rule. */
 const BRAND = '#c05a3e';
 const INK = '#1a1a1a';
 const MUTED = '#6b7280';
@@ -42,15 +48,46 @@ const FONTS: Record<Font, string> = {
   monoBold: 'Courier-Bold',
 };
 
-function fontFor(run: TextRun): string {
-  if (run.mono) return FONTS[run.bold ? 'monoBold' : 'mono'];
-  if (run.bold && run.italic) return FONTS.boldItalic;
-  if (run.bold) return FONTS.bold;
-  if (run.italic) return FONTS.italic;
-  return FONTS.body;
+type Doc = InstanceType<typeof PDFDocument>;
+
+/**
+ * How a document is dressed: Yawp!'s print colour in Helvetica, or, with the
+ * Lesson Deck Kit on, the lesson's own color in Georgia and Arial (Gelasio
+ * and Arimo in a PDF), so a handout belongs to the same set as its deck and
+ * plan.
+ */
+type PdfStyle = {
+  fonts: Record<Font, string>;
+  /** Headings and titles, when they are set in a serif. */
+  serif: { regular: string; bold: string; italic: string } | null;
+  brand: string;
+  ink: string;
+  muted: string;
+};
+
+const CLASSIC_STYLE: PdfStyle = { fonts: FONTS, serif: null, brand: BRAND, ink: INK, muted: MUTED };
+const STYLES = new WeakMap<Doc, PdfStyle>();
+const styleOf = (doc: Doc): PdfStyle => STYLES.get(doc) ?? CLASSIC_STYLE;
+
+/** The Lesson Deck Kit's handouts: the lesson's color, its fonts. */
+export type HandoutKit = { color: string };
+
+/** The handout style for a lesson, from its deck's primary color; null with the kit off. */
+export function handoutKit(packet: LessonPacket, flags: { deckGallery: boolean }): HandoutKit | null {
+  if (!flags.deckGallery) return null;
+  const deck = packet.sections.find((section) => section.deck)?.deck ?? null;
+  return { color: deck ? galleryAccent(deck) : deckColors({}, null)[0]! };
 }
 
-type Doc = InstanceType<typeof PDFDocument>;
+function fontFor(doc: Doc, run: TextRun, serif = false): string {
+  const { fonts, serif: serifFonts } = styleOf(doc);
+  if (run.mono) return fonts[run.bold ? 'monoBold' : 'mono'];
+  if (serif && serifFonts) return run.bold ? serifFonts.bold : run.italic ? serifFonts.italic : serifFonts.regular;
+  if (run.bold && run.italic) return fonts.boldItalic;
+  if (run.bold) return fonts.bold;
+  if (run.italic) return fonts.italic;
+  return fonts.body;
+}
 
 /**
  * Draw one block's runs as a single flowing paragraph.
@@ -64,10 +101,11 @@ function writeRuns(
   runs: TextRun[],
   {
     size,
-    color = INK,
+    color = styleOf(doc).ink,
     x,
     width,
-  }: { size: number; color?: string; x?: number; width?: number }
+    serif = false,
+  }: { size: number; color?: string; x?: number; width?: number; serif?: boolean }
 ): void {
   if (!runs.length) {
     doc.moveDown(0.4);
@@ -85,9 +123,9 @@ function writeRuns(
     // Only the first write positions the block; the rest continue the line.
     if (index === 0) doc.x = left;
     doc
-      .font(fontFor(run))
+      .font(fontFor(doc, run, serif))
       .fontSize(size)
-      .fillColor(run.href ? BRAND : color)
+      .fillColor(run.href ? styleOf(doc).brand : color)
       .text(run.text, {
         continued: !last,
         width: usable,
@@ -97,7 +135,7 @@ function writeRuns(
       });
   });
 
-  doc.fillColor(INK);
+  doc.fillColor(styleOf(doc).ink);
   doc.x = doc.page.margins.left;
 }
 
@@ -145,7 +183,8 @@ function drawBlock(doc: Doc, block: Block, previous?: Block): void {
       const runs = block.runs.map((run) => ({ ...run, bold: true }));
       writeRuns(doc, runs, {
         size: HEADING_SIZE[block.level],
-        color: block.level === 3 ? MUTED : INK,
+        color: block.level === 3 ? styleOf(doc).muted : styleOf(doc).ink,
+        serif: true,
       });
       doc.moveDown(0.25);
       break;
@@ -171,7 +210,7 @@ function drawBlock(doc: Doc, block: Block, previous?: Block): void {
         doc
           .save()
           .lineWidth(2)
-          .strokeColor(`${BRAND}66`)
+          .strokeColor(styleOf(doc).serif ? '#D8D0C1' : `${styleOf(doc).brand}66`)
           .moveTo(left + 2, top)
           .lineTo(left + 2, doc.y)
           .stroke()
@@ -188,9 +227,9 @@ function drawBlock(doc: Doc, block: Block, previous?: Block): void {
       doc.moveDown(previous?.kind === 'listItem' ? 0.2 : 0.45);
       const top = doc.y;
       doc
-        .font(FONTS.body)
+        .font(styleOf(doc).fonts.body)
         .fontSize(BODY_SIZE)
-        .fillColor(MUTED)
+        .fillColor(styleOf(doc).muted)
         .text(block.marker, left + indent, top, {
           width: INDENT_STEP - 4,
           lineBreak: false,
@@ -235,7 +274,7 @@ function drawBlock(doc: Doc, block: Block, previous?: Block): void {
           : cell;
         writeRuns(doc, runs.length ? runs : [{ text: ' ' }], {
           size: BODY_SIZE - 0.5,
-          color: block.header ? MUTED : INK,
+          color: block.header ? styleOf(doc).muted : styleOf(doc).ink,
           x: left + cellWidth * index,
           width: cellWidth - 8,
         });
@@ -354,7 +393,7 @@ function drawSlideDeck(doc: Doc, deck: SlideDeck): void {
           { text: `${index + 1}. ${slide.title}${slideTiming(slide)}` },
         ],
       },
-      ...slideFaceBlocks(slide),
+      ...slideFaceBlocks(classicSlide(slide)),
       {
         kind: 'quote',
         runs: [
@@ -378,23 +417,23 @@ function drawTitle(
     doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
   doc
-    .font(FONTS.bold)
-    .fontSize(19)
-    .fillColor(INK)
+    .font(styleOf(doc).serif?.regular ?? styleOf(doc).fonts.bold)
+    .fontSize(styleOf(doc).serif ? 22 : 19)
+    .fillColor(styleOf(doc).ink)
     .text(title, { width: contentWidth, lineGap: 1 });
 
   if (subtitle) {
     doc
-      .font(FONTS.body)
+      .font(styleOf(doc).fonts.body)
       .fontSize(10)
-      .fillColor(MUTED)
+      .fillColor(styleOf(doc).muted)
       .text(subtitle, { width: contentWidth });
   }
 
   doc
     .save()
     .lineWidth(2)
-    .strokeColor(BRAND)
+    .strokeColor(styleOf(doc).brand)
     .moveTo(left, doc.y + 7)
     .lineTo(left + contentWidth, doc.y + 7)
     .stroke()
@@ -414,7 +453,7 @@ async function finish(doc: Doc): Promise<Uint8Array> {
   return new Uint8Array(await done);
 }
 
-function newDocument(title: string): Doc {
+function newDocument(title: string, kit?: HandoutKit | null): Doc {
   const doc = new PDFDocument({
     size: 'LETTER',
     margin: PAGE_MARGIN,
@@ -422,7 +461,17 @@ function newDocument(title: string): Doc {
     info: { Title: title, Creator: 'Yawp! Lesson Planner' },
     autoFirstPage: true,
   });
-  doc.fillColor(INK).font(FONTS.body).fontSize(BODY_SIZE);
+  if (kit) {
+    const fonts = registerKitFonts(doc);
+    STYLES.set(doc, {
+      fonts: { body: fonts.sans, bold: fonts.sansBold, italic: fonts.sansItalic, boldItalic: fonts.sansBold, mono: FONTS.mono, monoBold: FONTS.monoBold },
+      serif: { regular: fonts.serif, bold: fonts.serifBold, italic: fonts.serifItalic },
+      brand: kit.color,
+      ink: KIT_PLAN_COLORS_HEX.ink,
+      muted: KIT_PLAN_COLORS_HEX.stone,
+    });
+  }
+  doc.fillColor(styleOf(doc).ink).font(styleOf(doc).fonts.body).fontSize(BODY_SIZE);
   return doc;
 }
 
@@ -494,9 +543,12 @@ export async function renderHandoutPdf({
   packet,
   excluded = [],
   only,
+  kit = null,
 }: {
   packet: LessonPacket;
   excluded?: string[];
+  /** The Lesson Deck Kit's handout style (handoutKit), or null. */
+  kit?: HandoutKit | null;
   /**
    * Render exactly one handout piece by its id, ignoring `excluded` — a
    * teacher who asked for one piece by name gets that piece, not an empty
@@ -513,7 +565,8 @@ export async function renderHandoutPdf({
     ? handout.parts.filter((part) => part.id === only)
     : handout.parts;
   const doc = newDocument(
-    only ? (parts[0]?.title ?? handout.title) : handout.title
+    only ? (parts[0]?.title ?? handout.title) : handout.title,
+    kit
   );
   drawTitle(doc, {
     title: only ? (parts[0]?.title ?? handout.title) : handout.title,
@@ -528,9 +581,9 @@ export async function renderHandoutPdf({
   // cramped paragraph rather than a line meant to be written on.
   doc.moveDown(0.6);
   doc
-    .font(FONTS.body)
+    .font(styleOf(doc).fonts.body)
     .fontSize(10.5)
-    .fillColor(MUTED)
+    .fillColor(styleOf(doc).muted)
     .text(
       'Name: _______________________     Section: ____________     Date: ____________'
     );
@@ -556,9 +609,9 @@ export async function renderHandoutPdf({
 
   if (!parts.length) {
     doc
-      .font(FONTS.italic)
+      .font(styleOf(doc).fonts.italic)
       .fontSize(BODY_SIZE)
-      .fillColor(MUTED)
+      .fillColor(styleOf(doc).muted)
       .text('Nothing in this lesson is marked for students yet.');
   }
 
@@ -581,4 +634,67 @@ export function pdfFilename(title: string, suffix?: string): string {
     .trim()
     .slice(0, 80);
   return `${base || 'Lesson'}${suffix ? ` - ${suffix}` : ''}.pdf`;
+}
+
+/**
+ * Handouts for any step (Brian's run 3, item 8): the steps the teacher picked,
+ * each as students should read it, numbered, with answer lines sized to the
+ * writing it asks for.
+ */
+export async function renderStepHandoutPdf({
+  title,
+  className,
+  parts,
+  kit = null,
+}: {
+  title: string;
+  className: string | null;
+  parts: Array<{ id: string; title: string; content: string; lines: number }>;
+  /** The Lesson Deck Kit's handout style (handoutKit), or null. */
+  kit?: HandoutKit | null;
+}): Promise<Uint8Array> {
+  const single = parts.length === 1;
+  const heading = single ? parts[0]!.title : title;
+  const doc = newDocument(heading, kit);
+  drawTitle(doc, { title: heading, subtitle: className });
+  doc.moveDown(0.6);
+  doc
+    .font(styleOf(doc).fonts.body)
+    .fontSize(10.5)
+    .fillColor(styleOf(doc).muted)
+    .text('Name: _______________________     Section: ____________     Date: ____________');
+  doc.moveDown(1.1);
+
+  parts.forEach((part, index) => {
+    if (index > 0) doc.addPage();
+    if (!single) {
+      drawBlock(doc, {
+        kind: 'heading',
+        level: 1,
+        runs: [{ text: `${index + 1}. ${part.title}`, bold: true }],
+      });
+    }
+    drawMarkdown(doc, part.content);
+    if (part.lines > 0) {
+      doc.moveDown(0.8);
+      const left = doc.page.margins.left;
+      const right = doc.page.width - doc.page.margins.right;
+      for (let line = 0; line < part.lines; line += 1) {
+        if (doc.y + 26 > doc.page.height - doc.page.margins.bottom) doc.addPage();
+        doc.y += 24;
+        doc.moveTo(left, doc.y).lineTo(right, doc.y).lineWidth(0.5).strokeColor('#C9C2B8').stroke();
+      }
+      doc.moveDown(0.5);
+    }
+  });
+
+  if (!parts.length) {
+    doc
+      .font(styleOf(doc).fonts.italic)
+      .fontSize(BODY_SIZE)
+      .fillColor(styleOf(doc).muted)
+      .text('Pick the steps that go in this handout.');
+  }
+
+  return finish(doc);
 }

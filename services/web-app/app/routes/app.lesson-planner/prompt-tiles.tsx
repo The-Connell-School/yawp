@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 /**
  * The way into a lesson, as things to pick up rather than a list to read.
  *
@@ -10,7 +11,7 @@
  * The icons and hints live here rather than beside the prompts themselves. The
  * prompt text is written for the model; this is written for the room.
  */
-import {
+import { LayoutTemplate,
   BarChart3,
   CalendarDays,
   ClipboardCheck,
@@ -91,20 +92,24 @@ export function PromptTiles({
   prompts,
   onPick,
   disabled,
+  templateTile = null,
 }: {
   prompts: Array<{ id: string; label: string; prompt: string }>;
   onPick: (prompt: string) => void;
   disabled: boolean;
+  /** "Build from my templates", second after "Plan a lesson" (run 3). */
+  templateTile?: { active: boolean; onClick: () => void } | null;
 }) {
   return (
     <ul
       data-testid="prompt-tiles"
       className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
     >
-      {prompts.map((prompt) => {
+      {prompts.map((prompt, index) => {
         const { icon: Icon, hint } = TILE_FACES[prompt.id] ?? FALLBACK;
         return (
-          <li key={prompt.id}>
+          <Fragment key={prompt.id}>
+          <li>
             <button
               type="button"
               disabled={disabled}
@@ -130,6 +135,32 @@ export function PromptTiles({
               </span>
             </button>
           </li>
+          {index === 0 && templateTile ? (
+            <li>
+              <button
+                type="button"
+                data-testid="template-tile"
+                disabled={disabled}
+                aria-pressed={templateTile.active}
+                onClick={templateTile.onClick}
+                className={cn(
+                  'group flex h-full w-full flex-col items-start gap-2 rounded-2xl border bg-background p-4 text-left',
+                  'shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition hover:-translate-y-0.5 hover:border-primary/40',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50 motion-reduce:hover:translate-y-0',
+                  templateTile.active && 'border-primary'
+                )}
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+                  <LayoutTemplate size={18} />
+                </span>
+                <span className="text-[15px] font-semibold leading-snug">Build from my templates</span>
+                <span className="text-xs leading-relaxed text-muted-foreground">
+                  Start with a lesson shape you’ve already saved.
+                </span>
+              </button>
+            </li>
+          ) : null}
+          </Fragment>
         );
       })}
     </ul>

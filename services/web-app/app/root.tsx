@@ -106,6 +106,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     url.pathname === '/' ||
     url.pathname === '/info' ||
     /^\/(privacy|terms)(?:\/|\.data)?$/.test(url.pathname) ||
+    // A shared lesson (Lesson Planner run 3) opens without a login.
+    /^\/l\/[\w-]+(?:\.data)?$/.test(url.pathname) ||
     url.pathname === '/auth/preview-access' ||
     url.pathname === '/auth/preview-access.data';
   const cookieHeader = request.headers.get('Cookie');
@@ -312,11 +314,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return data(
     {
-      user: {
-        ...user,
-        isAdmin: Boolean(user?.isAdmin),
-        selectedMembership: membership,
-      },
+      user: user
+        ? {
+            ...user,
+            isAdmin: Boolean(user.isAdmin),
+            selectedMembership: membership,
+          }
+        : null,
       testerFeedbackAvailable: process.env.TESTER_FEEDBACK_ENABLED === 'true' && Boolean(user?.isTester),
       demoFeedbackAvailable: Boolean(userId) && !internal && await isDemoFeedbackAvailable(),
       lessonPlannerEnabled,
@@ -493,8 +497,9 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         data.requestInfo.path === '/privacy' ||
         data.requestInfo.path === '/terms';
       const shouldIdentifyUser =
-        data.user && !(publicLandingPath && !data.devPanelEnabled);
-      if (shouldIdentifyUser && data.user) {
+        Boolean(data.user?.id) &&
+        !(publicLandingPath && !data.devPanelEnabled);
+      if (shouldIdentifyUser && data.user?.id) {
         const identifiedUser = data.user;
         posthog.identify(identifiedUser.id, {
           ...(identifiedUser.email ? { email: identifiedUser.email } : {}),

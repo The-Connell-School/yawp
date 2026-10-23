@@ -16,6 +16,11 @@ export const E2E_SMOKE_SPECS = [
   'e2e/tests/teacher.assignment-insights.spec.ts',
   'e2e/tests/teacher.reporter.spec.ts',
   'e2e/tests/teacher.lesson-planner.spec.ts',
+  'e2e/tests/teacher.lesson-planner-review.spec.ts',
+  'e2e/tests/teacher.lesson-planner-run-2.spec.ts',
+  'e2e/tests/teacher.lesson-planner-run-3.spec.ts',
+  'e2e/tests/teacher.lesson-planner-run-4.spec.ts',
+  'e2e/tests/teacher.lesson-planner-run-5.spec.ts',
   'e2e/tests/teacher.exit-ticket.spec.ts',
   'e2e/tests/teacher.thesis-essay-guide.spec.ts',
   'e2e/tests/teacher.holistic-grading.spec.ts',
@@ -60,6 +65,7 @@ export const E2E_SMOKE_SHARDS: Record<SmokeShard, readonly string[]> = {
     'e2e/tests/teacher.tutor-off-badge.spec.ts',
     'e2e/tests/teacher.daily-pages-sjp-swap-persistence.spec.ts',
     'e2e/tests/teacher.class-starter-grading.spec.ts',
+    'e2e/tests/teacher.lesson-planner-run-2.spec.ts',
   ],
   2: [
     'e2e/tests/document-editor.spec.ts',
@@ -82,6 +88,7 @@ export const E2E_SMOKE_SHARDS: Record<SmokeShard, readonly string[]> = {
     'e2e/tests/teacher.sidebar-settings-short-viewport.spec.ts',
     'e2e/tests/teacher.daily-pages-writing-conditions-removed.spec.ts',
     'e2e/tests/free-tier.onboarding-style.spec.ts',
+    'e2e/tests/teacher.lesson-planner-review.spec.ts',
   ],
   4: [
     'e2e/tests/free-tier.onboarding.spec.ts',
@@ -93,6 +100,7 @@ export const E2E_SMOKE_SHARDS: Record<SmokeShard, readonly string[]> = {
     'e2e/tests/auth.free-tier-handle-join.spec.ts',
     'e2e/tests/student.act-writing-ready.spec.ts',
     'e2e/tests/teacher.daily-pages-pinned-legacy-tiers.spec.ts',
+    'e2e/tests/teacher.lesson-planner-run-3.spec.ts',
   ],
   5: [
     'e2e/tests/document-regression.spec.ts',
@@ -105,10 +113,12 @@ export const E2E_SMOKE_SHARDS: Record<SmokeShard, readonly string[]> = {
     'e2e/tests/auth.signup.student.spec.ts',
     'e2e/tests/document-editor-invariants.spec.ts',
     'e2e/tests/teacher.daily-pages-engagement-12pt.spec.ts',
+    'e2e/tests/teacher.lesson-planner-run-4.spec.ts',
   ],
   6: [
     'e2e/tests/admin.organization-assignment-types.spec.ts',
     'e2e/tests/teacher.lesson-planner.spec.ts',
+    'e2e/tests/teacher.lesson-planner-run-5.spec.ts',
   ],
 };
 

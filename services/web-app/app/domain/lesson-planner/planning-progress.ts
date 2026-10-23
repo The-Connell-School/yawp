@@ -61,6 +61,9 @@ export const PLANNING_PROGRESS_LABELS: Record<string, string> = {
   get_writing_lesson: 'Reading a Quick Writing Lesson',
   list_lounge_materials: "Looking through the Teacher's Lounge",
   read_lounge_material: 'Reading a Lounge deck',
+  search_my_lessons: 'Looking through your saved lessons',
+  read_my_lesson: 'Opening one of your lessons',
+  read_uploaded_document: 'Reading your document',
   list_assignment_types: 'Checking what you can assign',
 };
 

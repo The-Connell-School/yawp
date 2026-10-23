@@ -6,14 +6,27 @@
  * it must not consume the planner's AI admission budget or its request
  * deadline. Marking a section should feel instant.
  */
-import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
+import {
+  data as dataResponse,
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+} from 'react-router';
+import { loadLessonPacket } from '~/domain/lesson-planner/load-lesson-packet.server';
+import { stackItemsFor } from '~/domain/lesson-planner/stack-items';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { requireMutableRequest } from '~/utils/auth.server';
 import { requireLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { PACKET_AUDIENCES } from '~/domain/lesson-planner/lesson-packet';
-import { artifactFromAssistantReply } from '~/domain/lesson-planner/artifact-from-reply';
+import { fileableMaterial, stepColumns, writtenAt } from '~/domain/lesson-planner/fileable-material';
+import { fileReplyPieces } from '~/domain/lesson-planner/file-reply-pieces.server';
+import {
+  loadStackOrder,
+  moveStackEntry,
+  nextPositionFor,
+  writeStackOrder,
+} from '~/domain/lesson-planner/stack-order.server';
 
 const MAX_PACKET_TITLE_CHARS = 120;
 const MAX_SECTION_TITLE_CHARS = 120;
@@ -26,7 +39,13 @@ const MESSAGE_INTENTS = [
   'rename-section',
   'add-material',
   'remove-material',
+  'replace-material',
+  'keep-all',
+  'split-kept',
 ] as const;
+
+/** What "use this one instead" can replace (Brian's run 2, E1). */
+const REPLACEABLE_KINDS = new Set(['class-starter', 'daily-pages']);
 
 const POST = z
   .object({
@@ -37,11 +56,24 @@ const POST = z
       'rename-section',
       'add-material',
       'remove-material',
+      // Brian's review (B2): remove a filed piece from the stack screen, by
+      // its own id, where there is no reply and block key to hand.
+      'delete-material',
       'rename-material',
       'edit-material',
       'publish',
       'unpublish',
       'delete',
+      // Brian's run 2 (A1): the teacher sequences the lesson.
+      'reorder',
+      'move',
+      // Brian's run 2 (E1): "Use this one instead" for a class starter.
+      'replace-material',
+      // Brian's run 2 (A4, E3): everything in a reply, as separate pieces.
+      'keep-all',
+      'split-kept',
+      // Brian's run 3 (item 4): "Created in Yawp! · Open".
+      'mark-created',
     ]),
     conversationId: z.string().min(1),
     messageId: z.string().min(1).optional(),
@@ -49,6 +81,15 @@ const POST = z
     materialId: z.string().min(1).optional(),
     /** Which material block within the reply, for the material intents. */
     materialKey: z.string().min(1).max(8).optional(),
+    /**
+     * Several block keys, comma-separated: one segment of a plan that files
+     * as more than one piece (Brian's run 3, items 1, 2).
+     */
+    materialKeys: z
+      .string()
+      .max(400)
+      .regex(/^[\w:-]{1,8}(,[\w:-]{1,8})*$/)
+      .optional(),
     audience: z.enum(PACKET_AUDIENCES).optional(),
     packetTitle: z.string().max(MAX_PACKET_TITLE_CHARS).optional(),
     sectionTitle: z.string().max(MAX_SECTION_TITLE_CHARS).optional(),
@@ -60,12 +101,26 @@ const POST = z
      * rather than assumed.
      */
     confirmReplace: z.enum(['1']).optional(),
+    /** `reorder`: every piece's key ("m:<id>" / "r:<id>"), comma-separated. */
+    order: z.string().min(1).max(10_000).optional(),
+    /** `mark-created`: where the created assignment opens, inside Yawp!. */
+    yawpHref: z
+      .string()
+      .max(300)
+      .regex(/^\/app\/assignment-types\/[\w-]+(?:\?[\w=&%.-]*)?$/)
+      .optional(),
+    /** `move`: the piece to move, and which way. */
+    entry: z.string().min(3).max(200).optional(),
+    direction: z.enum(['up', 'down']).optional(),
   })
   .strict()
   .superRefine((value, context) => {
     if (
-      (value.intent === 'add-material' || value.intent === 'remove-material') &&
-      !value.materialKey
+      (value.intent === 'add-material' ||
+        value.intent === 'remove-material' ||
+        value.intent === 'replace-material') &&
+      !value.materialKey &&
+      !(value.intent === 'remove-material' && value.materialKeys)
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
@@ -83,11 +138,32 @@ const POST = z
         message: 'A message is required.',
       });
     }
+    if (value.intent === 'delete-material' && !value.materialId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['materialId'],
+        message: 'A material is required.',
+      });
+    }
     if (value.intent === 'edit-material' && !value.materialId) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['materialId'],
         message: 'A material is required.',
+      });
+    }
+    if (value.intent === 'reorder' && !value.order) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['order'],
+        message: 'An order is required.',
+      });
+    }
+    if (value.intent === 'move' && (!value.entry || !value.direction)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['entry'],
+        message: 'A piece and a direction are required.',
       });
     }
     if (value.intent === 'edit-material' && value.content === undefined) {
@@ -98,6 +174,32 @@ const POST = z
       });
     }
   });
+
+/**
+ * The stack, in order, for the panel beside the chat (Brian's run 2, A7). The
+ * same loader as the stack page, so the two never disagree.
+ */
+export async function loader({ request }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+  const conversationId = url.searchParams.get('conversationId') ?? undefined;
+  // What is in the stack, as the chat cards' tokens, so every "In the stack"
+  // in the chat matches the stack however it changed (Brian's run 3, item 2).
+  if (url.searchParams.get('view') === 'tokens') {
+    const loaded = await loadLessonPacket({ request, conversationId, withStackDetails: false });
+    if (!loaded.reviewFlags.stackV2) throw new Response('Not Found', { status: 404 });
+    return { conversationId: loaded.conversationId, tokens: Object.values(loaded.materialTokens) };
+  }
+  const loaded = await loadLessonPacket({ request, conversationId });
+  if (!loaded.reviewFlags.stackPanel) throw new Response('Not Found', { status: 404 });
+  return {
+    conversationId: loaded.conversationId,
+    items: stackItemsFor({
+      packet: loaded.packet,
+      stackDetails: loaded.stackDetails,
+      materialTokens: loaded.materialTokens,
+    }),
+  };
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   await requireMutableRequest(request);
@@ -141,6 +243,23 @@ export async function action({ request }: ActionFunctionArgs) {
       data: { deletedAt: new Date() },
     });
     return dataResponse({ deleted: true });
+  }
+
+  if (data.intent === 'reorder' || data.intent === 'move') {
+    const result =
+      data.intent === 'reorder'
+        ? await writeStackOrder(
+            conversation.id,
+            data.order!.split(',').map((key) => key.trim()).filter(Boolean)
+          )
+        : await moveStackEntry(conversation.id, data.entry!, data.direction!);
+    if (!result.ok) {
+      return dataResponse(
+        { error: 'That piece is not part of this lesson.' },
+        { status: 404 }
+      );
+    }
+    return dataResponse({ order: result.order });
   }
 
   if (data.intent === 'rename') {
@@ -200,12 +319,38 @@ export async function action({ request }: ActionFunctionArgs) {
   // forks this material out of the model's control: a revision the planner
   // writes for the same slot after this can no longer replace it without
   // asking, because the content here is no longer something the model wrote.
+  //
+  // Never a slide deck: its content is the deck itself (slides as JSON), and
+  // the stack's text box only ever saw the prose around it. Saving that box
+  // once wrote a teacher's typing over every slide (Brian's run 2, items 23,
+  // 24, 27). A deck is edited in the deck editor, which validates it.
   if (data.intent === 'edit-material') {
     const { count } = await prisma.lessonPlanMaterial.updateMany({
-      where: { id: data.materialId!, conversationId: conversation.id },
+      where: {
+        id: data.materialId!,
+        conversationId: conversation.id,
+        NOT: { kind: 'slides' },
+      },
       data: { content: data.content!, editedAt: new Date() },
     });
     if (count === 0) {
+      const deck = await prisma.lessonPlanMaterial.findFirst({
+        where: {
+          id: data.materialId!,
+          conversationId: conversation.id,
+          kind: 'slides',
+        },
+        select: { id: true },
+      });
+      if (deck) {
+        return dataResponse(
+          {
+            error: 'deck-not-editable-as-text',
+            message: 'Edit a slide deck in the deck editor.',
+          },
+          { status: 400 }
+        );
+      }
       return dataResponse(
         { error: 'That material is not part of this lesson.' },
         { status: 404 }
@@ -220,13 +365,146 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // A material is kept on its own: a teacher who wants the handout should not
   // have to take the whole lesson plan wrapped around it.
+  if (data.intent === 'delete-material') {
+    const { count } = await prisma.lessonPlanMaterial.deleteMany({
+      where: { id: data.materialId!, conversationId: conversation.id },
+    });
+    if (count === 0) {
+      return dataResponse(
+        { error: 'That piece is not part of this lesson.' },
+        { status: 404 }
+      );
+    }
+    return dataResponse({ removed: true, materialId: data.materialId });
+  }
+
+  if (data.intent === 'mark-created') {
+    if (!data.materialId || !data.yawpHref) {
+      return dataResponse({ error: 'A piece and a link are required.' }, { status: 400 });
+    }
+    await prisma.lessonPlanMaterial.updateMany({
+      where: { id: data.materialId, conversationId: conversation.id },
+      data: { yawpHref: data.yawpHref, yawpCreatedAt: new Date() },
+    });
+    return dataResponse({ created: true, materialId: data.materialId });
+  }
+
+  if (data.intent === 'keep-all' || data.intent === 'split-kept') {
+    const message = await prisma.lessonPlanMessage.findFirst({
+      where: { id: data.messageId, conversationId: conversation.id, role: 'assistant' },
+      select: { id: true, createdAt: true, content: true },
+    });
+    if (!message) {
+      return dataResponse(
+        { error: 'That reply is not part of this lesson.' },
+        { status: 404 }
+      );
+    }
+    const result = await fileReplyPieces({
+      conversationId: conversation.id,
+      message,
+      replaceKeptReply: data.intent === 'split-kept',
+      confirmReplace: Boolean(data.confirmReplace),
+      ...(data.materialKeys ? { onlyKeys: data.materialKeys.split(',') } : {}),
+    });
+    return dataResponse({ ...result, messageId: message.id });
+  }
+
+  // "Use this one instead" (Brian's run 2, E1): the class starter the
+  // teacher swapped to takes the place of the one in the stack — the same
+  // place in the lesson — and the old one leaves.
+  if (data.intent === 'replace-material') {
+    const message = await prisma.lessonPlanMessage.findFirst({
+      where: { id: data.messageId, conversationId: conversation.id, role: 'assistant' },
+      select: { id: true, createdAt: true, content: true },
+    });
+    const material = message
+      ? fileableMaterial(message.content, data.materialKey!, { alone: true })
+      : null;
+    if (!message || !material) {
+      return dataResponse(
+        { error: 'That material is not part of this lesson.' },
+        { status: 404 }
+      );
+    }
+    if (!REPLACEABLE_KINDS.has(material.kind)) {
+      return dataResponse(
+        { error: 'Only a class starter or Daily Pages prompt can be swapped in.' },
+        { status: 400 }
+      );
+    }
+    const current = await prisma.lessonPlanMaterial.findMany({
+      where: { conversationId: conversation.id, kind: material.kind },
+      select: { id: true, sourceMessageId: true, blockKey: true, editedAt: true },
+    });
+    const others = current.filter(
+      (item) =>
+        !(item.sourceMessageId === message.id && item.blockKey === material.key)
+    );
+    if (others.some((item) => item.editedAt) && !data.confirmReplace) {
+      return dataResponse(
+        {
+          error: 'edited',
+          conflict: true,
+          message:
+            'This has been edited by hand. Filing the new version will replace those edits.',
+        },
+        { status: 409 }
+      );
+    }
+    const order = await loadStackOrder(conversation.id);
+    const oldKeys = new Set(others.map((item) => `m:${item.id}`));
+    const at = order.findIndex((key) => oldKeys.has(key));
+    const saved = await prisma.$transaction(async (tx) => {
+      if (others.length) {
+        await tx.lessonPlanMaterial.deleteMany({
+          where: { conversationId: conversation.id, id: { in: others.map((item) => item.id) } },
+        });
+      }
+      const fields = {
+        kind: material.kind,
+        title: material.title,
+        audience: data.audience ?? material.audience,
+        content: material.content,
+        sourceCreatedAt: writtenAt(message.createdAt, material),
+        sourceMessageId: message.id,
+        blockKey: material.key,
+        promptId: material.promptId ?? null,
+        ...stepColumns(material),
+      };
+      return tx.lessonPlanMaterial.upsert({
+        where: {
+          conversationId_slot: { conversationId: conversation.id, slot: material.slot },
+        },
+        create: { conversationId: conversation.id, slot: material.slot, ...fields },
+        update: { ...fields, editedAt: null },
+        select: { id: true },
+      });
+    });
+    if (at >= 0) {
+      const newKey = `m:${saved.id}`;
+      const kept = order.filter((key) => !oldKeys.has(key) && key !== newKey);
+      const before = order.slice(0, at).filter((key) => !oldKeys.has(key) && key !== newKey).length;
+      kept.splice(before, 0, newKey);
+      await writeStackOrder(conversation.id, kept);
+    }
+    return dataResponse({
+      added: true,
+      messageId: message.id,
+      materialKey: material.key,
+      title: material.title,
+      replacedTokens: others.map((item) => `${item.sourceMessageId}:${item.blockKey}`),
+    });
+  }
+
   if (data.intent === 'add-material' || data.intent === 'remove-material') {
     if (data.intent === 'remove-material') {
+      const keys = data.materialKeys?.split(',');
       await prisma.lessonPlanMaterial.deleteMany({
         where: {
           conversationId: conversation.id,
           sourceMessageId: data.messageId!,
-          blockKey: data.materialKey!,
+          blockKey: keys ? { in: keys } : data.materialKey!,
         },
       });
       return dataResponse({
@@ -253,10 +531,11 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // Re-read the material from the reply rather than trusting the client with
     // its content: the body is what gets printed and handed to students.
-    const material = artifactFromAssistantReply(
-      message.content,
-      data.materialKey!
-    );
+    // Added on its own from its card (Kevin's notes): the only card under a
+    // step brings the step's minutes with it.
+    const material = fileableMaterial(message.content, data.materialKey!, {
+      alone: true,
+    });
     if (!material) {
       return dataResponse(
         { error: 'That material is not part of this lesson.' },
@@ -269,9 +548,11 @@ export async function action({ request }: ActionFunctionArgs) {
       title: material.title,
       audience: data.audience ?? material.audience,
       content: material.content,
-      sourceCreatedAt: message.createdAt,
+      sourceCreatedAt: writtenAt(message.createdAt, material),
       sourceMessageId: message.id,
       blockKey: material.key,
+      promptId: material.promptId ?? null,
+        ...stepColumns(material),
     };
     // Keyed by what the artifact IS, so filing a revision takes the original's
     // place. A teacher who asks for a shorter handout wants one handout.
@@ -317,6 +598,9 @@ export async function action({ request }: ActionFunctionArgs) {
         conversationId: conversation.id,
         slot: material.slot,
         ...saved,
+        // A revision keeps the place of what it replaces (the update below
+        // leaves position alone); a new piece in a reordered stack goes last.
+        position: await nextPositionFor(conversation.id),
       },
       // Confirmed or not previously edited: the content now on file came from
       // the model again, so any earlier fork is over.
@@ -345,8 +629,12 @@ export async function action({ request }: ActionFunctionArgs) {
       role: 'assistant',
     },
     data: keeping
-      ? { keptAt: new Date(), keptAudience: data.audience ?? 'teacher' }
-      : { keptAt: null, keptAudience: null },
+      ? {
+          keptAt: new Date(),
+          keptAudience: data.audience ?? 'teacher',
+          position: await nextPositionFor(conversation.id),
+        }
+      : { keptAt: null, keptAudience: null, position: null },
   });
 
   if (count === 0) {

@@ -9,7 +9,9 @@
  * to watch for.
  */
 import { Link } from 'react-router';
-import { Check, ClipboardCheck, Plus, Sparkles } from 'lucide-react';
+import { CreatedInYawp } from '~/components/lesson-planner/created-in-yawp';
+import { withPiece } from '~/domain/lesson-planner/stack-create-link';
+import { Check, ClipboardCheck, Plus } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import {
   exitTicketCreateHref,
@@ -30,6 +32,8 @@ export function ExitTicketCard({
   added = false,
   onToggle,
   disabled,
+  created = null,
+  materialId = null,
 }: {
   ticket: PlannedExitTicket;
   /**
@@ -42,6 +46,10 @@ export function ExitTicketCard({
   added?: boolean;
   onToggle?: ((added: boolean) => void) | null;
   disabled?: boolean;
+  /** Created in Yawp! from this piece of the stack (Brian's run 3, item 4). */
+  created?: { href: string } | null;
+  /** The stack piece this card is, so creating it can be remembered. */
+  materialId?: string | null;
 }) {
   const { config } = ticket;
   const focus =
@@ -118,6 +126,8 @@ export function ExitTicketCard({
             type="button"
             disabled={disabled}
             onClick={() => onToggle(!added)}
+            // Brian's review (B3): the toggle removes, and says so before the click.
+            title={added ? 'Click to remove from stack' : undefined}
             data-testid="exit-ticket-stack-toggle"
             className={cn(
               'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50',
@@ -130,13 +140,17 @@ export function ExitTicketCard({
             {added ? 'In the stack' : 'Add to stack'}
           </button>
         ) : null}
-        {assignmentTypeId ? (
+        {created ? (
+          <CreatedInYawp href={created.href} />
+        ) : assignmentTypeId ? (
           <Link
-            to={exitTicketCreateHref(assignmentTypeId, ticket, conversationId)}
+            to={withPiece(
+              exitTicketCreateHref(assignmentTypeId, ticket, conversationId),
+              materialId
+            )}
             data-testid="exit-ticket-create"
             className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-background px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/5"
           >
-            <Sparkles size={13} />
             Create this exit ticket for your class
           </Link>
         ) : null}

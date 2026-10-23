@@ -3,11 +3,14 @@
  * `request.text()` reads an unbounded body into memory before any size check.
  * Returns null when the body is larger than the limit.
  */
-export async function readBoundedText(request: Request, maxBytes: number): Promise<string | null> {
+async function readBoundedChunks(
+  request: Request,
+  maxBytes: number
+): Promise<Uint8Array[] | null> {
   const declared = Number(request.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > maxBytes) return null;
   const reader = request.body?.getReader();
-  if (!reader) return '';
+  if (!reader) return [];
   const chunks: Uint8Array[] = [];
   let size = 0;
   try {
@@ -24,5 +27,21 @@ export async function readBoundedText(request: Request, maxBytes: number): Promi
   } finally {
     reader.releaseLock();
   }
-  return Buffer.concat(chunks).toString('utf8');
+  return chunks;
+}
+
+/** Raw body bytes up to `maxBytes`, or null when the stream exceeds the limit. */
+export async function readBoundedBytes(
+  request: Request,
+  maxBytes: number
+): Promise<Uint8Array | null> {
+  const chunks = await readBoundedChunks(request, maxBytes);
+  if (chunks === null) return null;
+  return new Uint8Array(Buffer.concat(chunks));
+}
+
+export async function readBoundedText(request: Request, maxBytes: number): Promise<string | null> {
+  const bytes = await readBoundedBytes(request, maxBytes);
+  if (bytes === null) return null;
+  return Buffer.from(bytes).toString('utf8');
 }
