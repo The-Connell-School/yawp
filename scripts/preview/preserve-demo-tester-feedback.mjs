@@ -106,16 +106,33 @@ async function streamRestoreFromBase64Copy(databaseName, backupFile, includeScre
   const psqlChild = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
   const stderrChunks = [];
   psqlChild.stderr.on('data', (chunk) => stderrChunks.push(chunk));
+  const psqlClosePromise = once(psqlChild, 'close').then(([code]) => code ?? 1);
+  let psqlStdinBroken = false;
+  /** @type {import('node:child_process').ChildProcessWithoutNullStreams | null} */
+  let base64Child = null;
+
+  const failPsqlRestore = () =>
+    new Error(
+      sanitizeCliFailure('psql restore', Buffer.concat(stderrChunks).toString('utf8'))
+    );
 
   const copyPrefix = buildTesterFeedbackRestoreCopyPrefix();
   const copySuffix = buildTesterFeedbackRestoreCopySuffix(includeScreenshot);
   psqlChild.stdin.write(`${copyPrefix}\n`);
 
-  const base64Child = spawn('base64', ['-w', '0', backupFile], {
+  base64Child = spawn('base64', ['-w', '0', backupFile], {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const base64Errors = [];
   base64Child.stderr.on('data', (chunk) => base64Errors.push(chunk));
+
+  psqlChild.stdin.on('error', (err) => {
+    if (err?.code === 'EPIPE') {
+      psqlStdinBroken = true;
+      base64Child.stdout.unpipe(psqlChild.stdin);
+      base64Child.kill();
+    }
+  });
 
   base64Child.stdout.pipe(psqlChild.stdin, { end: false });
 
@@ -131,14 +148,16 @@ async function streamRestoreFromBase64Copy(databaseName, backupFile, includeScre
     );
   }
 
-  psqlChild.stdin.write(`\n${copySuffix}\n`);
-  psqlChild.stdin.end();
+  if (!psqlStdinBroken) {
+    psqlChild.stdin.write(`\n${copySuffix}\n`);
+    psqlChild.stdin.end();
+  } else {
+    base64Child.stdout.unpipe(psqlChild.stdin);
+  }
 
-  const psqlExitCode = await once(psqlChild, 'close').then(([code]) => code ?? 1);
-  if (psqlExitCode !== 0) {
-    throw new Error(
-      sanitizeCliFailure('psql restore', Buffer.concat(stderrChunks).toString('utf8'))
-    );
+  const psqlExitCode = await psqlClosePromise;
+  if (psqlStdinBroken || psqlExitCode !== 0) {
+    throw failPsqlRestore();
   }
 }
 
@@ -241,8 +260,14 @@ async function restoreBackup() {
       'SELECT count(*) FROM "TesterFeedback";',
     ])
   ).trim();
+  if (!/^\d+$/.test(countOutput)) {
+    throw new Error(
+      'Tester feedback restore verification failed: invalid row count from database'
+    );
+  }
+  const restoredCount = Number(countOutput);
   process.stdout.write(`TESTER_FEEDBACK_RESTORED=${countOutput}\n`);
-  if (Number(countOutput) < rowCount) {
+  if (restoredCount < rowCount) {
     throw new Error(
       `Tester feedback restore verification failed: expected at least ${rowCount} rows, found ${countOutput}`
     );

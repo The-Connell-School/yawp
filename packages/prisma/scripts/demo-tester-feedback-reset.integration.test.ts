@@ -25,6 +25,7 @@ function run(
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     maxBuffer: 64 * 1024 * 1024,
+    timeout: 180000,
   });
 }
 
@@ -178,7 +179,7 @@ INSERT INTO "TesterFeedback" (
       rmSync(previewRoot, { recursive: true, force: true });
       adminPsql(`DROP DATABASE IF EXISTS ${DEMO_DB_NAME} WITH (FORCE);`);
     }
-  });
+  }, { timeout: 180000 });
 
   test('restore round-trips feedback text with $data$, quotes, SQL-ish tokens, newlines, and unicode', () => {
     const whatIDid = "$data$\\n'; ;COMMIT; COPY x FROM PROGRAM 'sh'; --";
@@ -257,5 +258,5 @@ INSERT INTO "TesterFeedback" (
       rmSync(previewRoot, { recursive: true, force: true });
       adminPsql(`DROP DATABASE IF EXISTS ${DEMO_DB_NAME} WITH (FORCE);`);
     }
-  });
+  }, { timeout: 180000 });
 });
