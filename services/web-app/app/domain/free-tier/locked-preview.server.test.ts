@@ -18,6 +18,7 @@ const {
   assertOrganizationTeachingApproved,
   getLockedPreviewApplication,
   userHasPendingFreeTierTeachingLock,
+  redactClassTeachingSecrets,
 } = await import('./locked-preview.server');
 afterEach(() => {
   enabled = true;

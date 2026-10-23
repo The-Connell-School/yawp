@@ -73,6 +73,10 @@ import {
 } from '~/utils/school-year';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
+import {
+  redactClassTeachingSecrets,
+  shouldHideFreeTierTeachingSecrets,
+} from '~/domain/free-tier/locked-preview.server';
 
 const COLUMNS: CookieColumns = {
   school: {
@@ -179,6 +183,7 @@ async function connectTeachersToSchool(
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireOwner(request);
   const profile = await requireMembership(request, user.id);
+  const hideTeachingSecrets = await shouldHideFreeTierTeachingSecrets(user.id);
   const url = new URL(request.url);
   const q = url.searchParams.get('q');
   const { sort, direction, skip, take } =
@@ -250,9 +255,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
   ]);
 
+  const classesForClient = hideTeachingSecrets
+    ? classes.map((klass) => redactClassTeachingSecrets(klass, true))
+    : classes;
+
   return {
     classCodeUniqueEnabled: await classCodeUniquenessEnabled(prisma),
-    classes,
+    classes: classesForClient,
     totalCount,
     schools,
     teachers,
@@ -983,10 +992,12 @@ export default function OrganizationClassesRoute() {
                           <div className="flex items-center">
                             <TooltipIdCopy id={cls.id}>
                               <span className="font-mono font-semibold">
-                                {cls.code}
+                                {cls.code ?? ''}
                               </span>
                             </TooltipIdCopy>
-                            <CopyCodeButton code={cls.code} />
+                            {cls.code ? (
+                              <CopyCodeButton code={cls.code} />
+                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell>{cls.schoolYear}</TableCell>
