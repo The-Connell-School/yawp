@@ -1642,19 +1642,24 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
 
 /* Approve page: card, forward link, and Q&A in one 320px column (deny-v2). */
 .free-tier-approval-stack .auth-page-content {
-  width: 100%;
-  max-width: 320px;
+  width: 320px;
+  max-width: calc(100vw - 2rem);
   align-items: stretch;
+  box-sizing: border-box;
 }
 .free-tier-approval-stack .free-tier-approval-column {
   display: flex;
-  width: 100%;
+  width: 320px;
+  max-width: 100%;
   flex-direction: column;
   align-items: stretch;
   gap: 16px;
+  box-sizing: border-box;
 }
 .free-tier-approval-stack .free-tier-form-card {
-  width: 100%;
+  width: 320px;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .free-tier-approval-stack .free-tier-below-card {
   width: 100%;
