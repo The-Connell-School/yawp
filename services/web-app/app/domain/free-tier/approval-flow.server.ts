@@ -257,6 +257,7 @@ export async function submitAdminDetails(args: {
       schoolName: app.schoolName,
       approveUrl,
       notRightPersonUrl: declineUrl,
+      pass1,
     });
     if (!emailResult.ok) {
       await abandonMintedSignedLinks([result.approveLinkId, result.declineLinkId]);
@@ -522,6 +523,7 @@ export async function resendFreeTierAdminApprovalReminder(args: {
     schoolName: app.schoolName,
     approveUrl,
     notRightPersonUrl,
+    pass1,
     ...(pass1
       ? {
           forwardedByAdminName: emailContext.forwardedByAdminName,
@@ -745,6 +747,7 @@ export async function redirectSchoolAdmin(args: {
       notRightPersonUrl,
       adminRecipientName: newAdminNameTrim,
       forwardedByAdminName: prePending.adminName,
+      pass1,
     });
     if (!emailResult.ok) {
       await abandonMintedSignedLinks([minted.approveMint.linkId, minted.declineMint.linkId]);

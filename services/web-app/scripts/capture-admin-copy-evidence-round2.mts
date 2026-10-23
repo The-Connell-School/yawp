@@ -6,22 +6,19 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
-import { renderToStaticMarkup } from 'react-dom/server';
-import React from 'react';
-import { adminApprovalPass1ForwardBanner } from '../app/domain/free-tier/admin-approval-copy';
 import { spawnSync } from 'node:child_process';
+import { adminApprovalPass1ForwardBanner } from '../app/domain/free-tier/admin-approval-copy';
 import { buildDesignedAdminApprovalEmail } from '../app/domain/free-tier/admin-approval-email.server';
-import { AdminApprovalEmail } from '../app/emails/transactional-emails';
 
 const OUT = '/opt/cursor/artifacts/admin-copy-evidence/round2';
 const TEACHER = 'Jordan Rivera';
 const SCHOOL = 'Lincoln High School';
-const TEACHER_EMAIL = 'teacher@example.org';
+const TEACHER_EMAIL = 'teacher@example.test';
 const FORWARDER = 'Dr. Patel';
 const APPROVE = 'https://yawp.test/free/admin/approve?t=REDACTED';
 const FORWARD = 'https://yawp.test/free/admin/not-right-person?t=REDACTED';
 
-async function emailHtml(args: {
+async function emailBodyHtml(args: {
   pass1: boolean;
   reminder?: boolean;
   forwardedByAdminName?: string;
@@ -91,58 +88,49 @@ async function screenshotHtml(
   }
 }
 
-async function bannerCropHtml(
-  pass1: boolean,
-  reminder: boolean,
-  forwardedByAdminName: string
-) {
-  const markup = renderToStaticMarkup(
-    React.createElement(AdminApprovalEmail, {
-      teacherName: TEACHER,
-      teacherEmail: TEACHER_EMAIL,
-      schoolName: SCHOOL,
-      approveUrl: APPROVE,
-      notRightPersonUrl: FORWARD,
-      forwardedByAdminName,
-      reminder,
-      pass1,
-      origin: 'https://yawp.test',
-    })
-  );
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>
-    body { margin: 0; background: #f4f4f5; }
-    .wrap { max-width: 600px; margin: 0 auto; background: #fff; }
-  </style></head><body><div class="wrap">${markup}</div></body></html>`;
-}
-
 async function main() {
   await mkdir(OUT, { recursive: true });
   const baseUrl =
     process.env.ADMIN_COPY_EVIDENCE_BASE_URL?.replace(/\/$/, '') ??
     'http://localhost:5194';
+  process.env.PRIMARY_APP_URL = baseUrl;
   const cssHref = `${baseUrl}/app/app.css`;
   const pendingHtmlDir = renderPendingFixtures(OUT);
   const browser = await chromium.launch();
   const widths = [320, 1280] as const;
 
-  const e3After = await emailHtml({
-    pass1: true,
-    forwardedByAdminName: FORWARDER,
-  });
-  const e3Before = await emailHtml({
-    pass1: false,
-    forwardedByAdminName: FORWARDER,
-  });
-  await screenshotHtml(browser, e3Before, 'e3-banner-before-main', [...widths]);
-  await screenshotHtml(browser, e3After, 'e3-banner-after-head', [...widths]);
+  const wrapEmail = async (args: Parameters<typeof emailBodyHtml>[0]) =>
+    pageDocument(await emailBodyHtml(args), cssHref, baseUrl);
 
-  const e2fBeforeHtml = await emailHtml({
-    pass1: false,
-    reminder: true,
-  });
-  const e2fAfter = await bannerCropHtml(true, true, FORWARDER);
-  await screenshotHtml(browser, e2fBeforeHtml, 'e2f-banner-before-main', [...widths]);
-  await screenshotHtml(browser, e2fAfter, 'e2f-banner-after-head', [...widths]);
+  await screenshotHtml(
+    browser,
+    await wrapEmail({ pass1: false, forwardedByAdminName: FORWARDER }),
+    'e3-banner-before-main',
+    [...widths]
+  );
+  await screenshotHtml(
+    browser,
+    await wrapEmail({ pass1: true, forwardedByAdminName: FORWARDER }),
+    'e3-banner-after-head',
+    [...widths]
+  );
+
+  await screenshotHtml(
+    browser,
+    await wrapEmail({ pass1: false, reminder: true }),
+    'e2f-banner-before-main',
+    [...widths]
+  );
+  await screenshotHtml(
+    browser,
+    await wrapEmail({
+      pass1: true,
+      reminder: true,
+      forwardedByAdminName: FORWARDER,
+    }),
+    'e2f-banner-after-head',
+    [...widths]
+  );
 
   const pendingSlugs = [
     'pending-same-as-teacher',

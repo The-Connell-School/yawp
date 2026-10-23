@@ -84,6 +84,7 @@ describe('demo free-tier signup admin email subjects (#659)', () => {
       schoolName,
       approveUrl,
       notRightPersonUrl,
+      pass1: false,
     });
     expect(result.ok).toBe(true);
     const delivery = sendEmail.mock.calls[0]![0] as {
@@ -115,6 +116,7 @@ describe('demo free-tier signup admin email subjects (#659)', () => {
       teacherName,
       teacherEmail,
       schoolName,
+      pass1: true,
     });
     expect(html).toContain('Review and approve</a>');
     expect(designed.text).toContain(

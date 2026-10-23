@@ -18,7 +18,7 @@ export async function buildDesignedAdminApprovalEmail(args: {
   forwardedByAdminName?: string | null;
   routedByTeacher?: boolean;
   reminder?: boolean;
-  pass1?: boolean;
+  pass1: boolean;
 }) {
   return buildAdminApprovalDesignedEmail({
     ...args,
@@ -34,7 +34,7 @@ export async function htmlForStoredAdminApprovalEmail(args: {
   teacherEmail: string;
   schoolName: string;
   html?: string;
-  pass1?: boolean;
+  pass1: boolean;
 }) {
   if (args.html) return args.html;
   const urls = adminApprovalUrlsFromEmailBody(args.text);
@@ -51,12 +51,7 @@ export async function htmlForStoredAdminApprovalEmail(args: {
   const pass1ForwardFooter = new RegExp(
     `forwarded ${args.teacherName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'s request at ${escapedSchool} to you`
   ).test(args.text);
-  const pass1 =
-    args.pass1 ??
-    (routedByTeacher &&
-    args.text.includes(adminApprovalTeacherRerouteLeadMarker(true))
-      ? true
-      : pass1ForwardFooter);
+  const pass1 = args.pass1;
   const origin = transactionalEmailPublicOrigin();
   const react = (
     <AdminApprovalEmail

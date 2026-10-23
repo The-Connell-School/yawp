@@ -178,10 +178,10 @@ export async function buildAdminApprovalDesignedEmail(args: {
   routedByTeacher?: boolean;
   reminder?: boolean;
   origin?: string;
-  pass1?: boolean;
+  pass1: boolean;
 }) {
   const origin = args.origin ?? transactionalEmailPublicOrigin();
-  const pass1 = args.pass1 ?? false;
+  const pass1 = args.pass1;
   const react = (
     <AdminApprovalEmail
       teacherName={args.teacherName}

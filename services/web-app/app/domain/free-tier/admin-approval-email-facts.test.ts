@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from 'bun:test';
 
 const teacherName = 'Jordan Rivera';
 const schoolName = 'Lincoln High School';
-const teacherEmail = 'jrivera@lincolnhs.org';
+const teacherEmail = 'jrivera@example.test';
 const approveUrl = 'https://yawp.test/free/admin/approve?t=fake-approve';
 const notRightPersonUrl =
   'https://yawp.test/free/admin/not-right-person?t=fake-forward';

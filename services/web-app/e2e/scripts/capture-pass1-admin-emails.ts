@@ -16,7 +16,7 @@ const OUT = evidenceDir;
 
 const TEACHER = 'Jordan Rivera';
 const SCHOOL = 'Lincoln High School';
-const TEACHER_EMAIL = 'jrivera@lincolnhs.org';
+const TEACHER_EMAIL = 'jrivera@example.test';
 const approveUrl = 'https://example.test/free/admin/approve?t=evidence-placeholder';
 const notRightPersonUrl =
   'https://example.test/free/admin/not-right-person?t=evidence-placeholder';

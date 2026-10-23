@@ -12,10 +12,7 @@ import type { FreeTierAdminLinkReplacedVariant } from '~/domain/free-tier/admin-
 import { useFreeTierEnabled } from '../free-tier/useFreeTierLayoutContext';
 import { CircleAlert, CircleCheck } from 'lucide-react';
 import { applicationIdForAdminLinkNaming } from '~/domain/free-tier/admin-link-known-request.server';
-import {
-  applicationIdFromSignedToken,
-  peekSignedLink,
-} from '~/domain/free-tier/signed-link.server';
+import { peekSignedLink } from '~/domain/free-tier/signed-link.server';
 import {
   fetchFreeTierApplicationTerminalGate,
   resolveAdminLinkReplacedGate,

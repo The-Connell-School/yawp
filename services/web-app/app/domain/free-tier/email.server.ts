@@ -161,6 +161,7 @@ export async function sendFreeTierAdminApprovalEmail(args: {
   forwardedByAdminName?: string | null;
   routedByTeacher?: boolean;
   isReminder?: boolean;
+  pass1: boolean;
 }): Promise<EmailSendResult> {
   const { subject, text, html } = await buildDesignedAdminApprovalEmail({
     teacherName: args.teacherName,
@@ -171,6 +172,7 @@ export async function sendFreeTierAdminApprovalEmail(args: {
     forwardedByAdminName: args.forwardedByAdminName,
     routedByTeacher: args.routedByTeacher,
     reminder: args.isReminder,
+    pass1: args.pass1,
   });
   try {
     assertFreeTierRuntimeConfigured();
@@ -296,6 +298,7 @@ export async function sendFreeTierAdminReminderEmail(args: {
   notRightPersonUrl: string;
   forwardedByAdminName?: string | null;
   routedByTeacher?: boolean;
+  pass1: boolean;
 }) {
   return sendFreeTierAdminApprovalEmail({
     ...args,
