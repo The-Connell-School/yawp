@@ -361,9 +361,16 @@ for (const width of [390, 1440]) {
       page,
       page.getByTestId('free-assignment-tiles')
     );
-    await expect(
-      page.getByTestId('free-assignment-tiles').locator('img')
-    ).toHaveCount(0);
+    const dashboardImages = page
+      .getByTestId('free-assignment-tiles')
+      .locator('img');
+    await expect(dashboardImages).toHaveCount(3);
+    for (let i = 0; i < 3; i++) {
+      const loaded = await dashboardImages.nth(i).evaluate(
+        (img) => (img as HTMLImageElement).naturalWidth > 0
+      );
+      expect(loaded).toBe(true);
+    }
     if (width === 390) {
       await capture(page, 'dashboard-pending-390');
     }
@@ -371,111 +378,71 @@ for (const width of [390, 1440]) {
       await capture(page, 'dashboard-pending-1440');
     }
     await page
-      .getByRole('button', { name: /New Class Starter assignment/i })
+      .getByRole('link', { name: /New Class Starter assignment/i })
       .click();
-    await expect(page.getByRole('heading', { name: 'New assignment' })).toBeVisible();
-    await expect(page.getByText('Choose a type.')).toBeVisible();
-    const listbox = page.getByRole('listbox');
-    const lockedTiles = listbox.getByTestId('site-license-locked-assignment-tile');
-    await expect(lockedTiles).toHaveCount(6, { timeout: 15_000 });
-    const pickerTiles = listbox.locator(
-      'button[role="option"], [data-testid="site-license-locked-assignment-tile"]'
+    await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+$/);
+    const typeHomeNew = page.getByTestId('preview-assignment-creation-disabled').getByRole(
+      'button',
+      { name: /^New\b/i }
     );
-    const tileCount = await pickerTiles.count();
-    expect(tileCount).toBeGreaterThanOrEqual(6);
-    for (let i = 0; i < tileCount; i++) {
-      const box = await pickerTiles.nth(i).boundingBox();
-      expect(box?.height ?? 999).toBeLessThan(140);
-    }
-    await expect(listbox.getByText('Class Starter', { exact: true })).toBeVisible();
-    await expect(listbox.getByText('Prewriting', { exact: true })).toBeVisible();
-    await expect(listbox.getByText('Thesis Statement', { exact: true })).toBeVisible();
-    await expect(listbox.getByText('Class ...')).toHaveCount(0);
-    await expect(listbox.getByText('Prewrit...')).toHaveCount(0);
-    await expect(listbox.getByText(/^Prewritin$/)).toHaveCount(0);
-    await expectTileNamesWrapOnWordBoundaries(page, listbox);
-    await expectPickerTileNameMetaNoOverlap(page, listbox);
+    await typeHomeNew.focus();
+    await page.waitForTimeout(350);
     await expect(
-      page
-        .getByRole('dialog')
-        .filter({ has: page.getByRole('heading', { name: 'New assignment' }) })
-        .getByRole('button', { name: 'Close' })
-    ).toHaveCount(1);
-    const lockedTileImg = page
-      .locator('[data-testid="site-license-locked-assignment-tile"] img')
+      page.getByRole('tooltip', {
+        name: /Creating assignments is turned off in this preview/,
+      })
+    ).toBeVisible();
+    const previewCreationTooltip =
+      /Creating assignments is turned off in this preview/;
+    await page.getByRole('button', { name: 'Prompt Library' }).click();
+    const lockedPromptCard = page
+      .locator('[data-tour="type-library"]')
+      .getByTestId('locked-prompt-card')
       .first();
-    await expect(lockedTiles.locator('img')).toHaveCount(6);
-    for (let i = 0; i < 6; i++) {
-      await expect(lockedTiles.nth(i).locator('img')).toHaveAttribute(
-        'src',
-        /\/api\/image\/course\//
-      );
-    }
-    if (width === 1440) {
-      if (await lockedTileImg.count()) {
-        const imgBox = await lockedTileImg.boundingBox();
-        expect(imgBox?.height ?? 0).toBeLessThanOrEqual(64);
-      }
-      const siteLock = lockedTiles
-        .first()
-        .getByTestId('site-license-lock-button');
-      await siteLock.scrollIntoViewIfNeeded();
-      await siteLock.focus();
-      await page.waitForTimeout(350);
-      await expect(
-        page.getByRole('tooltip', { name: /Available with a site license/i })
-      ).toBeVisible();
-      await capture(page, 'site-license-lock-tooltip-1440');
-      await capture(page, 'picker-1440');
-      await siteLock.blur();
-      await page.waitForTimeout(150);
-    }
-    if (width === 390 && (await lockedTileImg.count())) {
-      const imgBox = await lockedTileImg.boundingBox();
-      expect(imgBox?.height ?? 0).toBeLessThanOrEqual(56);
-    }
-    await capture(page, `locked-picker-${width}`);
+    await expect(lockedPromptCard).toBeVisible();
+    const lockedPromptButton = lockedPromptCard.getByRole('button').first();
+    await expect(lockedPromptButton).toHaveAttribute('aria-disabled', 'true');
+    await lockedPromptButton.click({ force: true, timeout: 15_000 });
+    await expect(
+      page.getByRole('heading', { name: 'New assignment', exact: true })
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('heading', { name: 'New Assignment', exact: true })
+    ).toHaveCount(0);
+    await lockedPromptButton.focus();
+    await page.waitForTimeout(350);
+    await expect(
+      page.getByRole('tooltip', { name: previewCreationTooltip })
+    ).toBeVisible();
+    await page.goto('/app');
+    await expectFreeDashboardAssignmentTiles(page);
     await page
-      .getByRole('dialog')
-      .filter({ has: page.getByRole('heading', { name: 'New assignment' }) })
-      .getByRole('button', { name: 'Close' })
-      .first()
+      .getByRole('link', { name: /New Thesis Statement assignment/i })
       .click();
-    await expect(page.getByRole('heading', { name: 'New assignment' })).toHaveCount(
-      0
-    );
+    const seeHowItWorks = page.getByRole('link', { name: /See how it works/i });
+    await expect(seeHowItWorks).toBeVisible();
+    await seeHowItWorks.click();
+    await expect(page).toHaveURL(/\/how-it-works/);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+$/);
+    await page.getByRole('link', { name: /Back to dashboard/i }).click();
+    await expectLockedAppHome(page);
+    const dashboardCreate = page
+      .getByTestId('preview-assignment-creation-disabled')
+      .getByRole('button', { name: 'Create assignment' });
+    await dashboardCreate.scrollIntoViewIfNeeded();
     if (width === 1440) {
-      const create = page.getByRole('button', { name: 'Create assignment' }).first();
-      await create.hover();
+      await dashboardCreate.focus();
       await page.waitForTimeout(350);
       await expect(
-        page.getByRole('tooltip', {
-          name: /Unlocks once your administrator approves/,
-        })
-      ).toBeVisible();
-      await create.focus();
-      await expect(
-        page.getByRole('tooltip', {
-          name: /Unlocks once your administrator approves/,
-        })
+        page.getByRole('tooltip', { name: previewCreationTooltip })
       ).toBeVisible();
     } else {
-      const mobileCreate = page
-        .getByTestId('free-assignment-tiles')
-        .getByRole('button', { name: 'Create assignment' });
-      await mobileCreate.scrollIntoViewIfNeeded();
-      await mobileCreate.click({ force: true, timeout: 15_000 });
+      await dashboardCreate.click({ force: true, timeout: 15_000 });
+      await page.waitForTimeout(350);
       await expect(
-        page.getByRole('heading', { name: 'Unlocks after approval' })
+        page.getByRole('tooltip', { name: previewCreationTooltip })
       ).toBeVisible();
-      const sheet = page.getByRole('dialog');
-      const box = await sheet.boundingBox();
-      expect(box?.height ?? 0).toBeLessThan(900 * 0.75);
-      await expect(page.getByRole('dialog').getByRole('button', { name: 'Close' })).toHaveCount(
-        0
-      );
-      await capture(page, 'mobile-unlock-sheet-390');
-      await page.getByRole('button', { name: 'Got it' }).click();
     }
     if (width === 390) {
       await expect(
@@ -528,7 +495,7 @@ for (const width of [390, 1440]) {
     );
     await expect(
       page.getByTestId('free-assignment-tiles').locator('img')
-    ).toHaveCount(0);
+    ).toHaveCount(3);
     if (width === 390) {
       await capture(page, 'dashboard-approved-390');
     }

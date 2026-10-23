@@ -1,6 +1,9 @@
 export const TEACHING_ACCESS_LOCKED_TOOLTIP =
   'Unlocks once your administrator approves.' as const;
 
+export const PREVIEW_ASSIGNMENT_CREATION_DISABLED_TOOLTIP =
+  'Creating assignments is turned off in this preview.' as const;
+
 export const TEACHING_ACCESS_MOBILE_SHEET_TITLE = 'Unlocks after approval' as const;
 
 function teachingAccessAdminLabel(adminName: string) {
