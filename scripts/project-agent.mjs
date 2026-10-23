@@ -524,7 +524,7 @@ function runTestProfile(profile, { json }) {
   }
   else if (chosen === "free-tier-locked-preview-db") {
     const local = requireConfig();
-    results.push({ id: chosen, ...execute(selected.bun, ["test", "--max-concurrency=2", "app/domain/free-tier/locked-preview.real-db.integration.test.ts", "app/domain/free-tier/teaching-secrets-loader.integration.test.ts"], {
+    results.push({ id: chosen, ...execute(selected.bun, ["test", "--max-concurrency=2", "app/utils/cookies.organization-classes-table.test.ts", "app/domain/free-tier/locked-preview.real-db.integration.test.ts", "app/domain/free-tier/teaching-secrets-loader.integration.test.ts"], {
       json, cwd: webAppRoot, timeout: 120000,
       env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, LOCKED_PREVIEW_DB_TESTS: '1' },
     }) });

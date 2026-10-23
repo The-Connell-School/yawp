@@ -2,11 +2,9 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { createRequire } from 'node:module';
+import { encode } from 'turbo-stream';
 import { loadE2eEnvFromFile } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-const require = createRequire(import.meta.url);
-const { encode } = require(require.resolve('turbo-stream', { paths: [require.resolve('react-router')] }));
 
 const before = process.env.LEGAL_EVIDENCE_PHASE === 'before';
 const evidence = process.env.LEGAL_EVIDENCE_DIR;
