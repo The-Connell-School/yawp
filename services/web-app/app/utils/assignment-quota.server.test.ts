@@ -11,6 +11,9 @@ import {
 mock.module('~/domain/free-tier/monthly-policy.server', () => ({
   monthlyFreeTierPolicy: async () => ({ enabled: false }),
 }));
+mock.module('~/domain/free-tier/locked-preview.server', () => ({
+  assertOrganizationTeachingApproved: async () => {},
+}));
 
 describe('assignment-quota helpers', () => {
   test('marks out-of-bundle free choices unavailable while preserving paid behavior', () => {
