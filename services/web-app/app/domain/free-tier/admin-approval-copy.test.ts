@@ -1,14 +1,27 @@
 import { expect, test } from 'bun:test';
 import {
+  adminApprovalEmailPreheader,
+  adminApprovalFooterWhy,
   adminApprovalUrlsFromDesignedEmailBody,
   alreadyApprovedBody,
   approveCheckboxError,
+  forwardInlineAlert,
   forwardPageIntro,
   forwardPageTitle,
+  linkInvalidBodyForRequest,
   linkReplacedBody,
   renderAdminApprovalEmailPlainText,
   renderAdminApprovalEmailSubject,
+  adminApprovalTeacherRerouteLead,
+  adminApprovalPass1ForwardBanner,
+  adminApprovalReminderMutedLead,
+  adminApprovalTeacherRerouteLeadMarker,
+  teacherPendingForwardError,
 } from './admin-approval-copy';
+import {
+  ADMIN_APPROVAL_EMAIL_COPY_VERSION_PASS1,
+  renderAdminApprovalEmailBody,
+} from './email-copy';
 
 test('initial admin approval subject names teacher and school', () => {
   expect(
@@ -34,7 +47,7 @@ test('forward recipient subject asks for approval', () => {
 test('admin approval plain text includes link lines and footer', () => {
   const text = renderAdminApprovalEmailPlainText({
     teacherName: 'Jordan Rivera',
-    teacherEmail: 'jrivera@lincolnhs.org',
+    teacherEmail: 'jrivera@example.test',
     schoolName: 'Lincoln High School',
     approveUrl: 'https://yawp.school/free/admin/approve?t=a',
     notRightPersonUrl: 'https://yawp.school/free/admin/not-right-person?t=n',
@@ -55,16 +68,155 @@ test('admin approval plain text includes link lines and footer', () => {
   });
 });
 
-test('forward recipient email names the forwarder', () => {
+test('pass1 E2 reminder muted lead names teacher at school', () => {
+  expect(
+    adminApprovalReminderMutedLead({
+      teacherName: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+      pass1: true,
+    })
+  ).toBe(
+    'A quick reminder: Jordan Rivera at Lincoln High School is still waiting on your approval.'
+  );
+});
+
+test('pass1 E2f forwarded reminder banner string is pinned', () => {
+  expect(
+    adminApprovalPass1ForwardBanner(
+      'Sam Chen',
+      'Jordan Rivera',
+      'Lincoln High School'
+    )
+  ).toBe(
+    "Sam Chen forwarded Jordan Rivera's request at Lincoln High School to you."
+  );
+});
+
+test('pass1 E2f forwarded reminder muted lead names forwarder', () => {
+  expect(
+    adminApprovalReminderMutedLead({
+      teacherName: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+      forwardedByAdminName: 'Sam Chen',
+      pass1: true,
+    })
+  ).toBe(
+    "A quick reminder: Sam Chen forwarded Jordan Rivera's request at Lincoln High School to you, and it's still waiting on your approval."
+  );
+});
+
+test('pass1 E1 preheader names teacher at school', () => {
+  expect(
+    adminApprovalEmailPreheader({
+      teacherName: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+      pass1: true,
+    })
+  ).toBe(
+    'Jordan Rivera at Lincoln High School needs your OK. It takes a couple of minutes, and no Yawp! account is needed.'
+  );
+});
+
+test('pass1 E1/E2 footer uses frame 35/37 administrator copy', () => {
+  const footer =
+    "You're getting this because Jordan Rivera named you as the administrator who can approve classroom software at Lincoln High School.";
+  expect(
+    adminApprovalFooterWhy({
+      teacherName: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+      pass1: true,
+    })
+  ).toBe(footer);
+  const initial = renderAdminApprovalEmailPlainText({
+    teacherName: 'Jordan Rivera',
+    teacherEmail: 'jrivera@example.test',
+    schoolName: 'Lincoln High School',
+    approveUrl: 'https://yawp.school/a',
+    notRightPersonUrl: 'https://yawp.school/n',
+    pass1: true,
+  });
+  expect(initial).toContain(footer);
+  expect(initial).not.toContain(
+    'They named you as the administrator who can approve classroom software.'
+  );
+  const reminder = renderAdminApprovalEmailPlainText({
+    teacherName: 'Jordan Rivera',
+    teacherEmail: 'jrivera@example.test',
+    schoolName: 'Lincoln High School',
+    approveUrl: 'https://yawp.school/a',
+    notRightPersonUrl: 'https://yawp.school/n',
+    pass1: true,
+    reminder: true,
+  });
+  expect(reminder).toContain(footer);
+  expect(reminder).not.toContain(
+    'They named you as the administrator who can approve classroom software.'
+  );
+});
+
+test('pass1 stored plain text includes reroute marker', () => {
+  const text = renderAdminApprovalEmailBody({
+    teacherName: 'Jordan Rivera',
+    teacherEmail: 'jrivera@example.test',
+    schoolName: 'Lincoln High School',
+    approveUrl: 'https://yawp.school/a',
+    notRightPersonUrl: 'https://yawp.school/n',
+    routedByTeacher: true,
+    pass1: true,
+    copyVersion: ADMIN_APPROVAL_EMAIL_COPY_VERSION_PASS1,
+  });
+  expect(text).toContain(adminApprovalTeacherRerouteLeadMarker(true));
+});
+
+test('pass1 E3b teacher reroute lead and plain text', () => {
+  expect(
+    adminApprovalTeacherRerouteLead('Jordan Rivera', 'Lincoln High School', true)
+  ).toBe(
+    'Jordan Rivera asked you to approve classroom software for their class at Lincoln High School.'
+  );
   const text = renderAdminApprovalEmailPlainText({
     teacherName: 'Jordan Rivera',
-    teacherEmail: 'jrivera@lincolnhs.org',
+    teacherEmail: 'jrivera@example.test',
+    schoolName: 'Lincoln High School',
+    approveUrl: 'https://yawp.school/a',
+    notRightPersonUrl: 'https://yawp.school/n',
+    routedByTeacher: true,
+    pass1: true,
+  });
+  expect(text).toContain(
+    'Jordan Rivera asked you to approve classroom software for their class at Lincoln High School.'
+  );
+  expect(text).toContain(
+    "You're getting this because Jordan Rivera named you as an administrator at Lincoln High School."
+  );
+});
+
+test('pass1 E3 forward recipient banner is pinned', () => {
+  expect(
+    adminApprovalPass1ForwardBanner(
+      'Sam Chen',
+      'Jordan Rivera',
+      'Lincoln High School'
+    )
+  ).toBe(
+    "Sam Chen forwarded Jordan Rivera's request at Lincoln High School to you."
+  );
+  const text = renderAdminApprovalEmailPlainText({
+    teacherName: 'Jordan Rivera',
+    teacherEmail: 'jrivera@example.test',
     schoolName: 'Lincoln High School',
     approveUrl: 'https://yawp.school/a',
     notRightPersonUrl: 'https://yawp.school/n',
     forwardedByAdminName: 'Sam Chen',
+    pass1: true,
   });
-  expect(text).toContain('Sam Chen forwarded this to you');
+  expect(text).toContain(
+    "Sam Chen forwarded Jordan Rivera's request at Lincoln High School to you."
+  );
+  expect(text).not.toContain('forwarded this to you as the right person');
+  expect(text).toContain(
+    "You're getting this because Sam Chen forwarded Jordan Rivera's request at Lincoln High School to you."
+  );
 });
 
 test('checkbox validation copy names teacher and school', () => {
@@ -75,9 +227,31 @@ test('checkbox validation copy names teacher and school', () => {
   );
 });
 
-test('link replaced body names teacher and school', () => {
-  expect(linkReplacedBody('Jordan Rivera', 'Lincoln High School')).toBe(
+test('link replaced forwarded body names teacher and school', () => {
+  expect(
+    linkReplacedBody('Jordan Rivera', 'Lincoln High School', 'forwarded', true)
+  ).toBe(
     'The request for Jordan Rivera at Lincoln High School was forwarded to someone else, so this link no longer works. Questions? Email support@yawp.school.'
+  );
+});
+
+test('link replaced resent body for pass1 resend supersession', () => {
+  expect(
+    linkReplacedBody('Jordan Rivera', 'Lincoln High School', 'resent', true)
+  ).toBe(
+    'A newer link was sent for Jordan Rivera at Lincoln High School. Use the most recent email, or email support@yawp.school.'
+  );
+});
+
+test('invalid link with known request adds pass1 context line', () => {
+  expect(
+    linkInvalidBodyForRequest({
+      teacherName: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+      pass1: true,
+    })
+  ).toBe(
+    'This link was for Jordan Rivera at Lincoln High School. It may be incomplete. Copy it again from the email, or email support@yawp.school.'
   );
 });
 
@@ -87,10 +261,73 @@ test('already approved body ends with nothing else to do', () => {
   );
 });
 
-test('forward page intro matches approved frame', () => {
-  expect(forwardPageTitle()).toBe('Send this to the right person');
-  expect(forwardPageIntro('Jordan Rivera', 'Lincoln High School')).toBe(
+test('forward page intro matches pass1 frame', () => {
+  expect(forwardPageTitle('Jordan Rivera', true)).toBe(
+    'Who should approve Yawp! for Jordan Rivera?'
+  );
+  expect(forwardPageIntro('Jordan Rivera', 'Lincoln High School', true)).toBe(
+    'Who approves classroom software at Lincoln High School? Usually a site or district administrator.'
+  );
+});
+
+test('forward page title and intro match legacy flag-off copy', () => {
+  expect(forwardPageTitle('Jordan Rivera', false)).toBe(
+    'Send this to the right person'
+  );
+  expect(forwardPageIntro('Jordan Rivera', 'Lincoln High School', false)).toBe(
     'Who approves classroom software for Jordan Rivera at Lincoln High School? A site or district administrator.'
   );
 });
 
+test('link replaced forwarded body default matches flag-off copy', () => {
+  expect(linkReplacedBody('Jordan Rivera', 'Lincoln High School', 'forwarded')).toBe(
+    'The request for Jordan Rivera at Lincoln High School was forwarded to someone else, so this link no longer works. Questions? Email support@yawp.school.'
+  );
+});
+
+test('pass1 forward inline alerts name teacher and school', () => {
+  expect(
+    forwardInlineAlert({
+      reason: 'same_as_teacher',
+      teacherName: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+      pass1: true,
+    })
+  ).toBe(
+    "That's Jordan's own email. Enter the administrator who approves classroom software at Lincoln High School."
+  );
+});
+
+test('teacher pending forward errors are pinned', () => {
+  const school = 'Lincoln High School';
+  expect(
+    teacherPendingForwardError({ reason: 'same_as_teacher', schoolName: school })
+  ).toBe(
+    "That's your own email. Enter the administrator who approves classroom software at Lincoln High School."
+  );
+  expect(
+    teacherPendingForwardError({
+      reason: 'same_administrator',
+      schoolName: school,
+      adminName: 'Dr. Patel',
+    })
+  ).toBe(
+    'Dr. Patel already has your request. Choose a different administrator at Lincoln High School.'
+  );
+  expect(
+    teacherPendingForwardError({ reason: 'chain_cap', schoolName: school })
+  ).toBe(
+    "Your request has been forwarded too many times. Email support@yawp.school and we'll sort it out."
+  );
+  expect(
+    teacherPendingForwardError({ reason: 'email_failed', schoolName: school })
+  ).toBe("We couldn't send your request. Try again.");
+  expect(
+    teacherPendingForwardError({
+      reason: 'same_administrator',
+      schoolName: school,
+    })
+  ).toBe(
+    'They already have your request. Choose a different administrator at Lincoln High School.'
+  );
+});

@@ -84,6 +84,7 @@ async function captures(): Promise<Capture[]> {
         schoolName: 'Lincoln High School',
         approveUrl: urls.approve,
         notRightPersonUrl: urls.forward,
+        pass1: false,
       }),
     ],
     [
@@ -95,6 +96,7 @@ async function captures(): Promise<Capture[]> {
         approveUrl: urls.approve,
         notRightPersonUrl: urls.forward,
         forwardedByAdminName: 'Ms. Patel',
+        pass1: false,
       }),
     ],
     [
@@ -106,6 +108,7 @@ async function captures(): Promise<Capture[]> {
         approveUrl: urls.approve,
         notRightPersonUrl: urls.forward,
         reminder: true,
+        pass1: false,
       }),
     ],
     ['08-sign-in-code', await buildSignInCodeEmail('482913')],

@@ -259,7 +259,18 @@ describe('free-tier approval flow', () => {
             ? `Can you approve Yawp! for ${teacherAtSchoolLabel}?`
             : undefined,
         });
-        expect(replacement.text).toContain('Principal Pat forwarded this to you');
+        if (approvalV2) {
+          expect(replacement.text).toContain(
+            "Principal Pat forwarded Local Teacher's request at Example High to you."
+          );
+        } else {
+          expect(replacement.text).toContain(
+            'Principal Pat forwarded this to you as the right person to approve classroom software for Local Teacher at Example High.'
+          );
+        }
+        expect(replacement.text).not.toContain(
+          'They named you as the administrator who can approve classroom software'
+        );
         const approveUrl = replacement.text
           .split('\n')
           .find((line: string) => line.includes('/free/admin/approve?t='))!;
