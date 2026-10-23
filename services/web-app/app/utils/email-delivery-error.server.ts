@@ -47,14 +47,19 @@ export function emailDeliveryDiagnostic(error: unknown, recipient: string) {
     ? detail.code : null;
   const message = typeof detail.message === 'string' ? detail.message : '';
   const domain = recipient.split('@');
-  const recipientDomain = domain.length === 2
-    && domain[1]!.length <= 253
-    && /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain[1]!)
-    ? domain[1]!.toLowerCase() : null;
+  const domainHost =
+    domain.length === 2 &&
+    domain[1]!.length <= 253 &&
+    /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain[1]!)
+      ? domain[1]!.toLowerCase()
+      : null;
+  const domainLabel = domainHost?.split('.')[0] ?? '';
+  const recipientDomain =
+    domainHost && domainLabel.length > 0 ? `${domainLabel[0]}***` : null;
   return {
     provider,
     recipient: redactEmailForLog(recipient),
-    recipientDomain,
+    ...(recipientDomain ? { recipientDomain } : {}),
     name,
     code,
     validationReason: provider === 'resend' ? resendValidationReason(message) : 'other',

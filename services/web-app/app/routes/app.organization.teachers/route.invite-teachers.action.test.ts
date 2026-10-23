@@ -203,7 +203,7 @@ describe('invite-teachers action', () => {
     expect(response.data.error).toBe(TEACHER_INVITE_SERVER_ERROR_MESSAGE);
   });
 
-  test('logs delivery failures without raw recipient addresses', async () => {
+  test('tracks status errors without route delivery logs', async () => {
     const secretEmail = 'leaky-recipient@example.test';
     const logged: unknown[][] = [];
     const originalError = console.error;
@@ -221,6 +221,38 @@ describe('invite-teachers action', () => {
           statusCode: 400,
         },
       });
+
+      const response = (await action({
+        request: inviteRequest(secretEmail),
+      } as never)) as { data: { sentCount: number; failedEmails: string[] } };
+
+      expect(response.data.sentCount).toBe(0);
+      expect(response.data.failedEmails).toEqual([secretEmail]);
+
+      const serialized = JSON.stringify(logged);
+      expect(serialized).not.toContain(secretEmail);
+      expect(serialized).not.toContain('org_teacher_invite_delivery_failed');
+    } finally {
+      console.error = originalError;
+    }
+  });
+
+  test('logs thrown delivery failures without raw recipient addresses', async () => {
+    const secretEmail = 'leaky-recipient@example.test';
+    const logged: unknown[][] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => {
+      logged.push(args);
+      originalError(...args);
+    };
+
+    try {
+      sendEmail.mockRejectedValue(
+        Object.assign(new Error(`Provider rejected ${secretEmail}`), {
+          name: 'MessageRejected',
+          statusCode: 400,
+        })
+      );
 
       await action({
         request: inviteRequest(secretEmail),
@@ -251,9 +283,15 @@ describe('invite-teachers action', () => {
         })
       );
 
-      await action({
+      const response = (await action({
         request: inviteRequest('any@example.test'),
-      } as never);
+      } as never)) as {
+        data: { error: string };
+        init: { status: number };
+      };
+
+      expect(response.init?.status).toBe(500);
+      expect(response.data.error).toBe(TEACHER_INVITE_SERVER_ERROR_MESSAGE);
 
       const serialized = JSON.stringify(logged);
       expect(serialized).toContain('org_teacher_invite_failed');

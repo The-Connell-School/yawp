@@ -28,6 +28,7 @@ import { cn, getDomainUrl } from '~/utils/misc';
 import { Tooltip } from '~/components/ui/tooltip';
 import { sendEmail } from '~/utils/email.server';
 import { emailDeliveryDiagnostic } from '~/utils/email-delivery-error.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import {
   buildOrgTeacherInviteEmail,
   inviteeFirstName,
@@ -97,17 +98,6 @@ function getTeacherInheritedAssignmentTypeIds({
     return orgAssignmentTypeIds;
   }
   return Array.from(inheritedIds);
-}
-
-function orgTeacherInviteFailedSummary(error: unknown) {
-  const detail =
-    error && typeof error === 'object'
-      ? (error as { name?: unknown; code?: unknown })
-      : {};
-  return {
-    name: typeof detail.name === 'string' ? detail.name : 'UnknownError',
-    code: typeof detail.code === 'string' ? detail.code : null,
-  };
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -366,6 +356,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const failedEmails: string[] = [];
 
       for (const email of emailList) {
+        let designed: Awaited<ReturnType<typeof buildOrgTeacherInviteEmail>>;
         try {
           // Check for existing invitation and delete if found
           const existingInvitation = await prisma.invitation.findFirst({
@@ -409,12 +400,19 @@ export async function action({ request }: ActionFunctionArgs) {
 
           await prisma.invitation.create({ data: verificationData });
 
-          const designed = await buildOrgTeacherInviteEmail({
+          designed = await buildOrgTeacherInviteEmail({
             firstName: inviteeFirstName(email),
             inviterName,
             schoolName: organization?.name ?? 'your organization',
             acceptUrl: verifyUrl.toString(),
           });
+        } catch (error) {
+          console.error('org_teacher_invite_failed', buildSafeErrorForLog(error));
+          failedEmails.push(email);
+          continue;
+        }
+
+        try {
           const emailResult = await sendEmail({
             to: email,
             subject: designed.subject,
@@ -423,10 +421,6 @@ export async function action({ request }: ActionFunctionArgs) {
           });
 
           if (emailResult.status === 'error') {
-            console.error(
-              'org_teacher_invite_delivery_failed',
-              emailDeliveryDiagnostic(emailResult.error, email)
-            );
             failedEmails.push(email);
             continue;
           }
@@ -446,7 +440,7 @@ export async function action({ request }: ActionFunctionArgs) {
         failedEmails,
       });
     } catch (error) {
-      console.error('org_teacher_invite_failed', orgTeacherInviteFailedSummary(error));
+      console.error('org_teacher_invite_failed', buildSafeErrorForLog(error));
       return dataResponse(
         { error: TEACHER_INVITE_SERVER_ERROR_MESSAGE },
         { status: 500 }

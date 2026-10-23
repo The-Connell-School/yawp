@@ -163,6 +163,22 @@ describe('feature flags (server)', () => {
     }
   });
 
+  test('feature_flag_read_failed logs event metadata with a message string only', async () => {
+    const errorLog = mock((..._args: unknown[]) => {});
+    const originalError = console.error;
+    console.error = errorLog as typeof console.error;
+    try {
+      prisma.setting.findUnique.mockRejectedValue(new Error('flag read timeout'));
+      expect(await isLessonPlannerEnabled('org-1')).toBe(false);
+      const serialized = JSON.stringify(errorLog.mock.calls);
+      expect(serialized).toContain('feature_flag_read_failed');
+      expect(serialized).toContain('flag read timeout');
+      expect(serialized).not.toMatch(/"stack"/);
+    } finally {
+      console.error = originalError;
+    }
+  });
+
   test('lists every registered flag, off when it has no row', async () => {
     prisma.setting.findMany.mockResolvedValue([]);
     const flags = await listFeatureFlags();
