@@ -844,7 +844,7 @@ jobs:
       - name: 🧪 E2E smoke shard assignment guard
         if: ${{ needs.paths.outputs.code == 'true' }}
         working-directory: services/web-app
-        run: bun test e2e/smoke-specs.test.ts
+        run: bun test e2e/smoke-specs.test.ts e2e/test-helpers.manifest-console.test.ts
 
       - name: Teacher training API contracts
         if: ${{ needs.paths.outputs.code == 'true' }}

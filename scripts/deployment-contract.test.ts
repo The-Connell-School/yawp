@@ -261,6 +261,11 @@ describe('production deployment contract', () => {
     expect(assigned.length).toBe(E2E_SMOKE_SPECS.length);
     expect(new Set(assigned).size).toBe(E2E_SMOKE_SPECS.length);
     expect([...assigned].sort()).toEqual([...E2E_SMOKE_SPECS].sort());
+    for (const spec of E2E_SMOKE_SPECS) {
+      expect(existsSync(join(repoRoot, 'services/web-app', spec))).toBe(true);
+    }
+    const webAppPackage = JSON.parse(readRepoFile('services/web-app/package.json'));
+    expect(webAppPackage.scripts['test:e2e:smoke']).toBe('bun ./scripts/run-smoke-e2e.ts');
     const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
     expect(ciWorkflow).toContain('bun run test:e2e:smoke -- --shard=');
     expect(ciWorkflow).not.toContain('--shard=${{ matrix.shard }}/${{ strategy.job-total }}');
