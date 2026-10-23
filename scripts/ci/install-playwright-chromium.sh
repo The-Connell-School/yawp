@@ -3,10 +3,12 @@ set -euo pipefail
 
 cache_hit="${1:-false}"
 max_attempts=3
-attempt_timeout="${PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT:-6m}"
-apt_lock_wait_seconds="${PLAYWRIGHT_APT_LOCK_WAIT_SECONDS:-180}"
+attempt_timeout="${PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT:-4m}"
+apt_lock_wait_seconds="${PLAYWRIGHT_APT_LOCK_WAIT_SECONDS:-60}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 version="$("$repo_root/scripts/ci/resolve-playwright-version.sh")"
+
+SCRIPT_PGID="$(ps -o pgid= -p $$ | tr -d ' ')"
 
 if [[ -z "$version" ]]; then
   echo "::error::Could not resolve @playwright/test version from bun.lock" >&2
@@ -18,8 +20,31 @@ pw() {
 }
 
 launch_log="$(mktemp)"
-playwright_deps_flag="$(mktemp)"
-trap 'rm -f "$launch_log" "$playwright_deps_flag"' EXIT
+playwright_state_dir="$(mktemp -d)"
+playwright_deps_flag="${playwright_state_dir}/os-deps-installed"
+trap 'rm -f "$launch_log"; rm -rf "$playwright_state_dir"' EXIT
+
+timeout_to_seconds() {
+  local spec="$1"
+  if [[ "$spec" =~ ^([0-9]+)m$ ]]; then
+    echo $((BASH_REMATCH[1] * 60))
+    return 0
+  fi
+  if [[ "$spec" =~ ^([0-9]+)s$ ]]; then
+    echo "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  if [[ "$spec" =~ ^[0-9]+$ ]]; then
+    echo "$spec"
+    return 0
+  fi
+  echo "::error::Unsupported timeout spec: ${spec}" >&2
+  return 1
+}
+
+have_passwordless_sudo() {
+  command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null
+}
 
 configure_apt_dpkg_lock_timeout() {
   local conf_path="/etc/apt/apt.conf.d/99-yawp-playwright-ci-dpkg-lock-timeout.conf"
@@ -29,12 +54,30 @@ configure_apt_dpkg_lock_timeout() {
     echo "Configured apt dpkg lock timeout at ${conf_path}"
     return 0
   fi
-  if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
-    printf '%s\n' "$line" | sudo tee "$conf_path" >/dev/null
+  if have_passwordless_sudo; then
+    printf '%s\n' "$line" | sudo -n tee "$conf_path" >/dev/null
     echo "Configured apt dpkg lock timeout at ${conf_path} (via sudo)"
     return 0
   fi
   echo "::warning::Could not configure apt DPkg::Lock::Timeout (no write access to /etc/apt/apt.conf.d)"
+}
+
+lock_file_in_use() {
+  local lock="$1"
+  if have_passwordless_sudo; then
+    sudo -n fuser -s "$lock" 2>/dev/null
+    return $?
+  fi
+  fuser -s "$lock" 2>/dev/null
+}
+
+describe_lock_holders() {
+  local lock="$1"
+  if have_passwordless_sudo; then
+    sudo -n fuser -v "$lock" 2>&1 || true
+  else
+    fuser -v "$lock" 2>&1 || true
+  fi
 }
 
 wait_for_apt_locks() {
@@ -55,7 +98,7 @@ wait_for_apt_locks() {
       if [[ ! -e "$lock" ]]; then
         continue
       fi
-      if fuser -s "$lock" 2>/dev/null; then
+      if lock_file_in_use "$lock"; then
         busy=1
         held_lock="$lock"
         break
@@ -70,7 +113,7 @@ wait_for_apt_locks() {
     fi
 
     echo "Waiting for apt/dpkg lock on ${held_lock} (${elapsed}s / ${max_wait}s)"
-    fuser -v "$held_lock" 2>&1 || true
+    describe_lock_holders "$held_lock"
     sleep "$interval"
     elapsed=$((elapsed + interval))
   done
@@ -79,8 +122,39 @@ wait_for_apt_locks() {
   return 1
 }
 
+repair_apt_after_kill() {
+  if have_passwordless_sudo; then
+    sudo -n dpkg --configure -a || true
+  fi
+}
+
 stop_process_group() {
   local pgid="$1"
+  local leader_pid="$2"
+
+  if [[ -z "$pgid" || "$pgid" == "$SCRIPT_PGID" ]]; then
+    echo "::warning::Refusing to kill process group pgid=${pgid} (matches script pgid=${SCRIPT_PGID})"
+    return 1
+  fi
+
+  local sid=""
+  if [[ -n "$leader_pid" ]] && kill -0 "$leader_pid" 2>/dev/null; then
+    sid="$(ps -o sid= -p "$leader_pid" 2>/dev/null | tr -d ' ' || true)"
+  fi
+
+  if have_passwordless_sudo; then
+    sudo -n kill -TERM "-${pgid}" 2>/dev/null || true
+    if [[ -n "$sid" ]]; then
+      sudo -n pkill -TERM -s "$sid" 2>/dev/null || true
+    fi
+    sleep 5
+    sudo -n kill -KILL "-${pgid}" 2>/dev/null || true
+    if [[ -n "$sid" ]]; then
+      sudo -n pkill -KILL -s "$sid" 2>/dev/null || true
+    fi
+    return 0
+  fi
+
   kill -TERM "-${pgid}" 2>/dev/null || true
   sleep 5
   kill -KILL "-${pgid}" 2>/dev/null || true
@@ -90,38 +164,35 @@ run_timed_in_process_group() {
   local label="$1"
   shift
 
-  local attempt_log
-  attempt_log="$(mktemp)"
+  local deadline_sec
+  deadline_sec="$(timeout_to_seconds "$attempt_timeout")"
 
-  setsid "$@" >"$attempt_log" 2>&1 &
+  setsid "$@" > >(tee >&2) 2>&1 &
   local pid=$!
-  local pgid
-  pgid="$(ps -o pgid= -p "$pid" | tr -d ' ')"
-  echo "${label}: started pid=${pid} pgid=${pgid}"
+  local pgid=$pid
+  echo "${label}: started pid=${pid} pgid=${pgid} (attempt_timeout=${attempt_timeout})"
 
   local rc=0
   local timed_out=0
-  if ! timeout --kill-after=30s "$attempt_timeout" bash -c "wait ${pid}"; then
-    rc=$?
-    if [[ "$rc" -eq 124 ]]; then
+  local started_at=$SECONDS
+
+  while kill -0 "$pid" 2>/dev/null; do
+    if (( SECONDS - started_at >= deadline_sec )); then
       timed_out=1
-      echo "${label}: timed out after ${attempt_timeout}; stopping process group ${pgid}"
-      stop_process_group "$pgid"
-      wait "$pid" 2>/dev/null || true
-      wait_for_apt_locks "$apt_lock_wait_seconds" || true
+      rc=124
+      break
     fi
-  fi
-
-  if [[ "$timed_out" -eq 0 ]]; then
-    wait "$pid" || rc=$?
-  fi
-
-  cat "$attempt_log" >&2
-  rm -f "$attempt_log"
+    sleep 1
+  done
 
   if [[ "$timed_out" -eq 1 ]]; then
+    echo "${label}: timed out after ${attempt_timeout}; stopping process group ${pgid}"
+    stop_process_group "$pgid" "$pid"
+    wait "$pid" 2>/dev/null || true
     return 124
   fi
+
+  wait "$pid" || rc=$?
   return "$rc"
 }
 
@@ -185,6 +256,12 @@ install_once() {
   install_chromium_with_os_deps
 }
 
+if [[ "${PLAYWRIGHT_INSTALL_SELF_CHECK:-}" == "1" ]]; then
+  # shellcheck source=/dev/null
+  source "$(dirname "${BASH_SOURCE[0]}")/install-playwright-chromium-self-check.sh"
+  exit $?
+fi
+
 configure_apt_dpkg_lock_timeout
 
 cd "$repo_root/services/web-app"
@@ -192,13 +269,21 @@ cd "$repo_root/services/web-app"
 export version cache_hit launch_log repo_root playwright_deps_flag
 export -f pw verify_chromium_launch install_once install_chromium_with_os_deps playwright_os_deps_installed
 
+last_exit_code=0
 for attempt in $(seq 1 "$max_attempts"); do
   deps_state="pending"
   if playwright_os_deps_installed; then
     deps_state="installed"
   fi
   echo "Playwright chromium install attempt ${attempt}/${max_attempts} (cache_hit=${cache_hit}, version=${version}, attempt_timeout=${attempt_timeout}, os_deps=${deps_state})"
-  wait_for_apt_locks "$apt_lock_wait_seconds" || true
+
+  if [[ "$attempt" -gt 1 ]]; then
+    wait_for_apt_locks "$apt_lock_wait_seconds" || true
+    if [[ "$last_exit_code" -eq 124 ]]; then
+      repair_apt_after_kill
+    fi
+    sleep $(((attempt - 1) * 20))
+  fi
 
   exit_code=0
   if [[ "$cache_hit" == "true" ]]; then
@@ -206,6 +291,7 @@ for attempt in $(seq 1 "$max_attempts"); do
   else
     run_timed_in_process_group "attempt ${attempt} (install-deps + chromium)" bash -euo pipefail -c 'install_chromium_with_os_deps' || exit_code=$?
   fi
+  last_exit_code=$exit_code
 
   if [[ "$exit_code" -eq 0 ]]; then
     echo "Playwright chromium install succeeded on attempt ${attempt}"
@@ -216,11 +302,6 @@ for attempt in $(seq 1 "$max_attempts"); do
     echo "::warning::Playwright install attempt ${attempt} timed out after ${attempt_timeout} (process group terminated)"
   else
     echo "::warning::Playwright install attempt ${attempt} failed (exit ${exit_code})"
-  fi
-
-  if [[ "$attempt" -lt "$max_attempts" ]]; then
-    wait_for_apt_locks "$apt_lock_wait_seconds" || true
-    sleep $((attempt * 20))
   fi
 done
 
