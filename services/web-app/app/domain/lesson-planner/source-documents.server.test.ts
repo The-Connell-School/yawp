@@ -2,7 +2,13 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readFixture } from '~/domain/office/fixtures';
-import { MAX_SOURCE_BYTES, MAX_SOURCE_CHARS, readSourceDocument, SourceDocumentError } from './source-documents.server';
+import {
+  MAX_SOURCE_BYTES,
+  MAX_SOURCE_CHARS,
+  readFileBytesCapped,
+  readSourceDocument,
+  SourceDocumentError,
+} from './source-documents.server';
 
 const fixture = (name: string) => new Uint8Array(readFileSync(join(import.meta.dir, 'fixtures', name)));
 const file = (name: string, bytes: Uint8Array | string, type = '') =>
@@ -40,6 +46,12 @@ describe('readSourceDocument: the text of a teacher’s own document', () => {
     const read = await readSourceDocument(file('novel.txt', 'word '.repeat(MAX_SOURCE_CHARS / 2)));
     expect(read.text.length).toBe(MAX_SOURCE_CHARS);
     expect(read.truncated).toBe(true);
+  });
+
+  test('streams unknown-size files and stops before 10 MB is buffered', async () => {
+    const big = file('streamed.txt', new Uint8Array(MAX_SOURCE_BYTES + 1));
+    Object.defineProperty(big, 'size', { value: 0 });
+    await expect(readFileBytesCapped(big, MAX_SOURCE_BYTES)).rejects.toThrow('10 MB');
   });
 
   test('refused: other formats, empty files, too large, and a file whose bytes are not what its name says', async () => {

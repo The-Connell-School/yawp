@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 export const ORGANIZATIONS_READ_MOVED_MESSAGE =
-  'Organization list, stats, seat counts, and detail visibility have moved to Yawp! Internal. This platform page is kept temporarily for old links and no longer lists organizations.';
+  'Organization list, stats, seat counts, and detail visibility have moved to Yawp Internal. This platform page is kept temporarily for old links and no longer lists organizations.';
 
 export function OrganizationsLegacyNotice({
   previewSeatMode,
@@ -25,7 +25,7 @@ export function OrganizationsLegacyNotice({
           {ORGANIZATIONS_READ_MOVED_MESSAGE}
         </div>
         <p className="text-sm text-muted-foreground">
-          Use Yawp! Internal for read-only organization visibility in demo and
+          Use Yawp Internal for read-only organization visibility in demo and
           production.
         </p>
       </div>
@@ -35,7 +35,7 @@ export function OrganizationsLegacyNotice({
           <div className="space-y-1">
             <h3 className="text-base font-semibold">Remaining platform-only writes</h3>
             <p className="max-w-2xl text-sm text-muted-foreground">
-              Organization create and update writes now live in Yawp! Internal.
+              Organization create and update writes now live in Yawp Internal.
               Preview-seat creation remains unavailable from Internal.
             </p>
           </div>

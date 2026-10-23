@@ -18,7 +18,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return new Response(
     JSON.stringify({
       error:
-        'Tester feedback review has moved to Yawp! Internal. This platform API no longer lists or exports feedback.',
+        'Tester feedback review has moved to Yawp Internal. This platform API no longer lists or exports feedback.',
     }),
     {
       status: 410,

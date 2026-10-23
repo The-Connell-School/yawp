@@ -119,27 +119,15 @@ describe('internal feature-flag endpoints', () => {
       FLAG,
       'internal_rubrics',
       'free-tier',
-      'lesson_planner_intake_v2',
-      'lesson_planner_stack_v2',
-      'lesson_planner_deck_v2',
-      'lesson_planner_stack_panel',
-      'lesson_planner_plan_export_v2',
-      'lesson_planner_stack_v3',
-      'lesson_planner_share',
-      'lesson_planner_run_show',
-      'lesson_planner_templates',
-      'lesson_planner_deck_gallery',
-      'lesson_planner_uploads',
       'unified-sign-on',
       'classcode-unique',
       'demo-feedback-widget',
       'guided-tours',
     ]);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
-    expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp! Internal', mode: 'off', orgIds: [], enabled: false });
+    expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[2]).toMatchObject({ key: 'free-tier', label: 'Free tier', mode: 'off', orgIds: [], enabled: false });
-    // The planner's flags follow free tier (3 to 13).
-    expect(body.flags[14]).toMatchObject({
+    expect(body.flags[3]).toMatchObject({
       key: 'unified-sign-on', mode: 'off', orgIds: [], enabled: false,
       persisted: { mode: 'off', orgIds: [] },
       effective: { mode: 'off', orgIds: [] }, runtimeOverride: null,
@@ -215,17 +203,6 @@ describe('internal feature-flag endpoints', () => {
       FLAG,
       'internal_rubrics',
       'free-tier',
-      'lesson_planner_intake_v2',
-      'lesson_planner_stack_v2',
-      'lesson_planner_deck_v2',
-      'lesson_planner_stack_panel',
-      'lesson_planner_plan_export_v2',
-      'lesson_planner_stack_v3',
-      'lesson_planner_share',
-      'lesson_planner_run_show',
-      'lesson_planner_templates',
-      'lesson_planner_deck_gallery',
-      'lesson_planner_uploads',
       'unified-sign-on',
       'classcode-unique',
       'demo-feedback-widget',

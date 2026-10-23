@@ -251,9 +251,9 @@ export async function action({ request }: ActionFunctionArgs) {
       if (!data.audience || !data.recipient) return bad('Who should it go to?');
       const sentToday = await prisma.lessonShareLink.count({
         where: {
-          conversationId: conversation.id,
           audience: { not: 'student' },
           createdAt: { gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          conversation: { membershipId: access.membership.id },
         },
       });
       if (sentToday >= MAX_SENDS_PER_DAY) return bad('That is enough sends for this lesson today.', 429);

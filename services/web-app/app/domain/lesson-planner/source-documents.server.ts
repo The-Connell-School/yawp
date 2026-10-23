@@ -48,6 +48,38 @@ function tidy(text: string): string {
     .trim();
 }
 
+/** Read a file up to maxBytes; reject before buffering more when size is unknown. */
+export async function readFileBytesCapped(
+  file: File,
+  maxBytes: number
+): Promise<Uint8Array> {
+  if (file.size > maxBytes) {
+    throw new SourceDocumentError(`"${file.name}" is over 10 MB.`);
+  }
+  if (file.size > 0) {
+    return new Uint8Array(await file.arrayBuffer());
+  }
+  const reader = file.stream().getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      throw new SourceDocumentError(`"${file.name}" is over 10 MB.`);
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
+}
+
 async function pdfText(bytes: Uint8Array): Promise<string> {
   // A PDF starts with its signature; anything else is not one, whatever its name.
   if (new TextDecoder().decode(bytes.subarray(0, 5)) !== '%PDF-') throw new Error('not a PDF');
@@ -59,10 +91,8 @@ async function pdfText(bytes: Uint8Array): Promise<string> {
 export async function readSourceDocument(file: File): Promise<SourceDocument> {
   const kind = kindOf(file.name);
   if (!kind) throw new SourceDocumentError('Yawp! can read PDF, Word, PowerPoint, text and Markdown files.');
-  if (file.size <= 0) throw new SourceDocumentError(`"${file.name}" is empty.`);
-  if (file.size > MAX_SOURCE_BYTES) throw new SourceDocumentError(`"${file.name}" is over 10 MB.`);
-
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  const bytes = await readFileBytesCapped(file, MAX_SOURCE_BYTES);
+  if (bytes.byteLength <= 0) throw new SourceDocumentError(`"${file.name}" is empty.`);
   let raw: string;
   try {
     raw =

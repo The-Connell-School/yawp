@@ -64,9 +64,9 @@ export async function action({ request }: ActionFunctionArgs) {
         'https://purl.imsglobal.org/spec/lti-dl/claim/content_items': [
           {
             type: 'ltiResourceLink',
-            title: 'Yawp! essay',
+            title: 'Yawp essay',
             url: new URL('/lti/launch', getDomainUrl(request)).toString(),
-            lineItem: { scoreMaximum: 100, label: 'Yawp! essay' },
+            lineItem: { scoreMaximum: 100, label: 'Yawp essay' },
           },
         ],
       });
@@ -231,9 +231,9 @@ export async function action({ request }: ActionFunctionArgs) {
             'https://purl.imsglobal.org/spec/lti-dl/claim/content_items': [
               {
                 type: 'ltiResourceLink',
-                title: 'Yawp! essay',
+                title: 'Yawp essay',
                 url: new URL('/lti/launch', currentOrigin).toString(),
-                lineItem: { scoreMaximum: 100, label: 'Yawp! essay' },
+                lineItem: { scoreMaximum: 100, label: 'Yawp essay' },
               },
             ],
           });

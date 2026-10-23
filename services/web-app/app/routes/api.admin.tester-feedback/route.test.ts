@@ -49,7 +49,7 @@ describe('legacy tester feedback admin API', () => {
     expect(response.headers.get('content-type')).toContain('application/json');
     await expect(response.json()).resolves.toEqual({
       error:
-        'Tester feedback review has moved to Yawp! Internal. This platform API no longer lists or exports feedback.',
+        'Tester feedback review has moved to Yawp Internal. This platform API no longer lists or exports feedback.',
     });
   });
 

@@ -116,7 +116,7 @@ describe('admin organizations index route', () => {
         request: createRequest(new URLSearchParams({ intent, name: 'New Org', numOfStudentSeats: '30', numOfTeacherSeats: '10' })),
       } as any);
       expect((result as any).init.status).toBe(410);
-      expect((result as any).data.error).toContain('moved to Yawp! Internal');
+      expect((result as any).data.error).toContain('moved to Yawp Internal');
     }
     expect(prisma.organization.create).not.toHaveBeenCalled();
   });
@@ -239,7 +239,7 @@ describe('legacy admin organizations route', () => {
     );
 
     expect(content).toContain(ORGANIZATIONS_READ_MOVED_MESSAGE);
-    expect(content).toContain('Use Yawp! Internal');
+    expect(content).toContain('Use Yawp Internal');
     expect(content).toContain('Remaining platform-only writes');
     expect(content).toContain('Create Preview Seat');
     expect(content).toContain('Create Organization');

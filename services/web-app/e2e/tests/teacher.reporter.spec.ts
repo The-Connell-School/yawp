@@ -17,7 +17,7 @@ async function setReporterEnabled(organizationId: string, enabled: boolean) {
   }
 }
 
-test.describe('Yawp! Reporter', () => {
+test.describe('Yawp Reporter', () => {
   test.afterEach(async ({ e2eContext }) => {
     // Leave the org in its default (disabled) state for other specs.
     await setReporterEnabled(e2eContext.organizationId, false);

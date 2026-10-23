@@ -164,7 +164,7 @@ export default function OrganizationsRoute() {
         ) : null
       }
       createOrganizationControl={
-        <Button disabled title="Create organizations in Yawp! Internal">
+        <Button disabled title="Create organizations in Yawp Internal">
           <Plus className="mr-2 h-4 w-4" />
           Create Organization
         </Button>

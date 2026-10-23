@@ -41,7 +41,7 @@ describe('admin free tier moved route', () => {
     expect(response.init?.status).toBe(410);
     expect(response.data).toMatchObject({
       ok: false,
-      error: expect.stringContaining('moved to Yawp! Internal'),
+      error: expect.stringContaining('moved to Yawp Internal'),
     });
   });
 });

@@ -11,7 +11,7 @@ test.describe.serial('Admin organization assignment types', () => {
 
     await expect(
       page.getByText(
-        'Organization create/update writes have moved to Yawp! Internal.'
+        'Organization create/update writes have moved to Yawp Internal.'
       )
     ).toBeVisible();
     const editButton = page.getByRole('button', {
@@ -20,7 +20,7 @@ test.describe.serial('Admin organization assignment types', () => {
     await expect(editButton).toBeDisabled();
     await expect(editButton).toHaveAttribute(
       'title',
-      'Edit organizations in Yawp! Internal'
+      'Edit organizations in Yawp Internal'
     );
   });
 });

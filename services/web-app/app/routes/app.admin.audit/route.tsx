@@ -679,7 +679,7 @@ export default function AuditRoute() {
   if ('moved' in loaded)
     return (
       <div className="p-6 space-y-3" data-testid="audit-moved">
-        <h2 className="text-xl font-semibold">Audit moved to Yawp! Internal</h2>
+        <h2 className="text-xl font-semibold">Audit moved to Yawp Internal</h2>
         <p>
           Document writes and model context logs are read-only per environment in
           Internal.
