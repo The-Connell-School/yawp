@@ -35,7 +35,7 @@ timeout_to_seconds() {
   elif [[ "$spec" =~ ^([0-9]+)s$ ]]; then
     sec=$((10#${BASH_REMATCH[1]}))
   elif [[ "$spec" =~ ^[0-9]+$ ]]; then
-    sec=$((10#spec))
+    sec=$((10#${spec}))
   else
     echo "::error::Unsupported timeout spec: ${spec}" >&2
     return 1
