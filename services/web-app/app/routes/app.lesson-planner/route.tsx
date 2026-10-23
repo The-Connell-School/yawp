@@ -3,6 +3,16 @@ import {
   lessonPlannerPausedPlaceholder,
   useFreeAccountUsage,
 } from '~/components/free-account-usage';
+import { replyTopScroll, transcriptScrollTarget } from '~/domain/lesson-planner/transcript-scroll';
+import {
+  SourceAttachButton,
+  SourceChips,
+  useSourceDocuments,
+  type SourceDocumentsState,
+} from '~/components/lesson-planner/source-documents';
+import { groupOptionParts } from '~/domain/lesson-planner/option-groups';
+import type { ReplyPart } from '~/domain/lesson-planner/reply-parts';
+import { OptionRow } from '~/components/ai-chat/option-row';
 import { isLessonPlannerMonthlyExhausted } from '~/domain/free-tier/inapp-usage';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -30,13 +40,26 @@ import {
   Printer,
   Send,
 } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  readStackPanelClosed,
+  StackPanel,
+  writeStackPanelClosed,
+} from '~/components/lesson-planner/stack-panel';
+import type { StackItem } from '~/domain/lesson-planner/stack-items';
 import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
 import { cn } from '~/utils/misc';
 import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
+import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
+import { formatClassCardTitle } from '~/utils/class-display';
 import { RECOMMENDED_LESSON_PLANNER_PROMPTS } from '~/routes/api.domain.lesson-planner/build-system-prompt';
 import { parseAssistantMessage } from '~/components/ai-chat/parse-assistant-message';
+import {
+  LessonIntakeCard,
+  type IntakeClass,
+} from '~/components/ai-chat/lesson-intake-card';
 import {
   MarkdownContent,
   printAssistantMessage,
@@ -69,7 +92,23 @@ import {
 import { UnitPlanCard } from '~/components/ai-chat/unit-plan-card';
 import { readUnitPlan } from '~/domain/lesson-planner/unit-plan';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
+import { hidePromptIds } from '~/domain/lesson-planner/prompt-ids';
+import { overTime, planMinutes } from '~/domain/lesson-planner/plan-timing';
+import { readPlanSteps, readStepHeading, splitAtStepHeadings } from '~/domain/lesson-planner/plan-steps';
+import { SegmentToggle } from '~/components/lesson-planner/segment-toggle';
+import { TEMPLATE_DAYS, TEMPLATE_SLOTS, type LessonTemplate } from '~/domain/lesson-planner/lesson-templates';
+import { TemplateChip, TemplateList } from './template-picker';
+import { FULL_LESSON_FRAMING, stripPlanPreamble } from '~/domain/lesson-planner/plan-framing';
+import { announceStackChange, useStackChanges } from '~/components/lesson-planner/stack-channel';
+import { DayLessonsCard } from '~/components/lesson-planner/day-lessons-card';
+import { readPlanDays, readWeekFramework } from '~/domain/lesson-planner/plan-days';
+import { pieceKeysInReply, segmentInStack, stepBlockKeys, stepSegments, stepsOfferingChoice } from '~/domain/lesson-planner/reply-pieces';
 import {
+  asksToSwapStarter,
+  BUILD_FROM_STACK_REQUESTS,
+  lectureSlidesRequest,
+  isBuildFromStackRequest,
+  isFileActionSuggestion,
   looksLikeLessonPlan,
   mentionsRoomPersonality,
   withStandardSuggestions,
@@ -91,6 +130,8 @@ const PLANNER_UNREACHABLE =
   'That lesson did not come back. Please check your connection and try again.';
 
 type ChatMessage = {
+  /** 'stack': asked on the stack page, shown here as one compact line (run 3). */
+  surface?: string | null;
   /** Absent only for an optimistic user turn that has not been written yet. */
   id?: string;
   role: 'user' | 'assistant';
@@ -98,6 +139,8 @@ type ChatMessage = {
   /** Set when this reply is kept in the printable packet. */
   keptAudience?: PacketAudience | null;
 };
+
+type StackPieceRef = { materialId: string; created: { href: string } | null };
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const access = await getLessonPlannerAccess(request);
@@ -146,6 +189,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             title: true,
             unitId: true,
             unitDay: true,
+            periodMinutes: true,
             messages: {
               orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
               select: {
@@ -153,10 +197,25 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 role: true,
                 content: true,
                 keptAudience: true,
+                surface: true,
               },
             },
             materials: {
-              select: { sourceMessageId: true, blockKey: true, kind: true },
+              select: {
+                id: true,
+                sourceMessageId: true,
+                blockKey: true,
+                kind: true,
+                slot: true,
+                editedAt: true,
+                content: true,
+                yawpHref: true,
+                yawpCreatedAt: true,
+              },
+            },
+            uploads: {
+              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+              select: { id: true, name: true, truncated: true },
             },
           },
         })
@@ -178,7 +237,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // the map itself lives, so a day has a way home.
   const builtDays: Record<number, string> = {};
   let unitMapConversation: string | null = null;
+  // The reply a week's day lessons were made from (Brian's run 5, round 2).
+  let daysSourceMessageId: string | null = null;
   if (selected?.unitId) {
+    const unit = await prisma.lessonPlanUnit.findFirst({
+      where: { id: selected.unitId, deletedAt: null },
+      select: { framework: true },
+    });
+    daysSourceMessageId = readWeekFramework(unit?.framework)?.sourceMessageId ?? null;
     const siblings = await prisma.lessonPlanConversation.findMany({
       where: { unitId: selected.unitId, deletedAt: null },
       select: { id: true, unitDay: true },
@@ -210,7 +276,61 @@ export async function loader({ request }: LoaderFunctionArgs) {
     writingPracticeEnabled: true,
   });
 
+  // Brian's review: each change ships behind its own flag (see
+  // docs/plans/2026-10-11-lesson-planner-brian-review.md).
+  const reviewFlags = await getLessonPlannerReviewFlags(
+    access.membership.organization.id
+  );
+
+  // Intake v2 (A1): the classes come from the teacher's real class list, not
+  // from whatever the model guessed. Same scope as list_classes.
+  const teacherClasses = reviewFlags.intakeV2
+    ? (
+        await prisma.class.findMany({
+          where: {
+            isArchived: false,
+            teachers: { some: { id: access.membership.id } },
+            school: { organizationId: access.membership.organization.id },
+          },
+          select: {
+            id: true,
+            title: true,
+            grade: true,
+            period: true,
+            periodMinutes: true,
+          },
+          orderBy: [{ schoolYear: 'desc' }, { period: 'asc' }],
+          take: 100,
+        })
+      ).map((klass) => ({
+        id: klass.id,
+        title: formatClassCardTitle(klass),
+        periodMinutes: klass.periodMinutes,
+      }))
+    : [];
+
+  // The teacher's lesson shapes, for "Build from my templates" (run 3).
+  const templates: LessonTemplate[] = reviewFlags.templates
+    ? (
+        await prisma.lessonPlanTemplate.findMany({
+          where: { membershipId: access.membership.id, deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 30,
+          select: { id: true, name: true, slots: true, periodMinutes: true, days: true },
+        })
+      ).flatMap((row) => {
+        const slots = TEMPLATE_SLOTS.safeParse(row.slots);
+        const days = row.days ? TEMPLATE_DAYS.safeParse(row.days) : null;
+        return slots.success
+          ? [{ id: row.id, name: row.name, slots: slots.data, periodMinutes: row.periodMinutes, days: days?.success ? days.data : null }]
+          : [];
+      })
+    : [];
+
   return {
+    reviewFlags,
+    templates,
+    teacherClasses,
     practice,
     dailyPagesTypeId,
     classStarterTypeId,
@@ -223,6 +343,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         conversation._count.messages + conversation._count.materials,
     })),
     builtDays,
+    daysSourceMessageId,
     unitMapConversation,
     selectedConversation: selected
       ? {
@@ -230,12 +351,45 @@ export async function loader({ request }: LoaderFunctionArgs) {
           title: selected.title,
           unitId: selected.unitId,
           unitDay: selected.unitDay,
+          // How long the lesson is, once the teacher said (Brian's run 2, B1).
+          periodMinutes: selected.periodMinutes,
           messages: selected.messages as ChatMessage[],
           // "<messageId>:<blockKey>" for every material already in the packet,
           // so each card knows whether it has been added.
           addedMaterials: selected.materials.map(
             (material) => `${material.sourceMessageId}:${material.blockKey}`
           ),
+          // Each filed piece by its card's token: its id, so creating it in
+          // Yawp! can be remembered, and where to open it once it has been
+          // (Brian's run 3, item 4).
+          // The teacher's own documents for this lesson (Oct 21).
+          uploads: reviewFlags.uploads ? selected.uploads : [],
+          stackPieces: Object.fromEntries(
+            selected.materials.map((material) => [
+              `${material.sourceMessageId}:${material.blockKey}`,
+              {
+                materialId: material.id,
+                created:
+                  material.yawpCreatedAt && material.yawpHref
+                    ? { href: material.yawpHref }
+                    : null,
+              },
+            ])
+          ) as Record<string, StackPieceRef>,
+          // A deck the teacher edited by hand (Brian's review, E2), which the
+          // chat shows in place of the planner's.
+          editedDeck: (() => {
+            const deck = selected.materials.find(
+              (material) => material.slot === DECK_SLOT && material.editedAt
+            );
+            return deck
+              ? {
+                  materialId: deck.id,
+                  sourceMessageId: deck.sourceMessageId,
+                  content: deck.content,
+                }
+              : null;
+          })(),
           // What the lesson already holds, so the planner is not offered to
           // build something it has.
           lessonHas: {
@@ -280,7 +434,11 @@ export default function LessonPlannerRoute() {
     exitTicketTypeId,
     practice,
     builtDays,
+    daysSourceMessageId,
     unitMapConversation,
+    reviewFlags,
+    teacherClasses,
+    templates,
   } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const fetcher = useFetcher<LessonPlannerActionData>();
@@ -310,11 +468,19 @@ export default function LessonPlannerRoute() {
     message: string;
     conversationKey: string;
   } | null>(null);
+  // The template a new lesson is being built from (run 3).
+  const [activeTemplate, setActiveTemplate] = useState<LessonTemplate | null>(null);
   const [addedMaterials, setAddedMaterials] = useState<Set<string>>(
     () => new Set(selectedConversation?.addedMaterials ?? [])
   );
   const conversationId = selectedConversation?.id ?? pendingConversationId;
   const conversationKey = conversationId ?? 'new';
+  // The teacher's own documents (Oct 21).
+  const sources = useSourceDocuments({
+    conversationId,
+    saved: selectedConversation?.uploads ?? [],
+    enabled: reviewFlags.uploads,
+  });
   const transcriptRef = useRef<HTMLDivElement>(null);
   // Track the last fetcher result we merged so switching conversations (which
   // re-runs this effect with the same stale data) can't re-append a reply.
@@ -403,13 +569,26 @@ export default function LessonPlannerRoute() {
   }, [result]);
 
   useEffect(() => {
-    // Only a transcript follows its own bottom. The opening page is a page:
-    // scrolling it down puts its own heading and box above the fold.
-    if (messages.length === 0) return;
-    transcriptRef.current?.scrollTo({
-      top: transcriptRef.current.scrollHeight,
+    // The opening page is a page: scrolling it down puts its own heading and
+    // box above the fold. While waiting, the bottom (the question and the
+    // progress); once a reply is in, its top, to read down from (Kevin, Oct 22).
+    const container = transcriptRef.current;
+    const target = transcriptScrollTarget(messages, isSending);
+    if (!container || !target) return;
+    const replies = container.querySelectorAll<HTMLElement>('[data-role="assistant"]');
+    const reply = target === 'reply-top' ? replies[replies.length - 1] : undefined;
+    container.scrollTo({
+      top: reply
+        ? replyTopScroll({
+            containerTop: container.getBoundingClientRect().top,
+            scrollTop: container.scrollTop,
+            replyTop: reply.getBoundingClientRect().top,
+          })
+        : container.scrollHeight,
       behavior: 'smooth',
     });
+    // The count and the sending state, not every re-render of the messages.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, isSending]);
 
   function startNewLesson() {
@@ -434,6 +613,7 @@ export default function LessonPlannerRoute() {
   const pendingMaterialRef = useRef<{
     messageId: string;
     materialKey: string;
+    intent?: 'add-material' | 'replace-material';
   } | null>(null);
 
   function setKept(messageId: string, audience: PacketAudience | null) {
@@ -480,13 +660,14 @@ export default function LessonPlannerRoute() {
         return next;
       });
       const replace = window.confirm(
-        'This has been edited by hand in the stack. Filing this version will replace those edits. Replace them?'
+        // Plainer words (Brian's run 2): the teacher's edits, and what happens.
+        'You edited this in the stack. Replace your edits with this version?'
       );
       if (!replace) return;
       setAddedMaterials((prev) => new Set(prev).add(token));
       packetFetcher.submit(
         {
-          intent: 'add-material',
+          intent: pending.intent ?? 'add-material',
           conversationId,
           messageId: pending.messageId,
           materialKey: pending.materialKey,
@@ -497,15 +678,133 @@ export default function LessonPlannerRoute() {
       return;
     }
 
-    const replaced = data.replaced;
-    if (!replaced) return;
+    // Whatever this filing took the place of stops claiming to be filed: one
+    // revision (`replaced`), or every class starter a swap replaced.
+    const gone = [
+      ...(data.replaced ? [data.replaced] : []),
+      ...((data as { replacedTokens?: string[] }).replacedTokens ?? []),
+    ];
+    if (!gone.length) return;
     setAddedMaterials((prev) => {
-      if (!prev.has(replaced)) return prev;
+      if (!gone.some((token) => prev.has(token))) return prev;
       const next = new Set(prev);
-      next.delete(replaced);
+      for (const token of gone) next.delete(token);
       return next;
     });
   }, [packetFetcher.data, conversationId]);
+
+  // Brian's run 2 (A7): the stack beside the chat reloads whenever something
+  // was filed or taken out from the chat.
+  const [stackVersion, setStackVersion] = useState(0);
+  useEffect(() => {
+    if (packetFetcher.state === 'idle' && packetFetcher.data) {
+      setStackVersion((version) => version + 1);
+    }
+  }, [packetFetcher.state, packetFetcher.data]);
+  // After every change made here: tell other tabs, and settle on what the
+  // server has (Brian's run 3, item 2).
+  useEffect(() => {
+    if (!stackVersion) return;
+    announceStackChange(selectedConversation?.id);
+    refreshStackTokens();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stackVersion]);
+
+  // "Add everything to the stack" (Brian's run 2, A4): one piece per step and
+  // block, so each can be refined in the stack. Shown as in at once; the
+  // answer says which, if any, were left alone because they were hand-edited.
+  const keepAllFetcher = useFetcher<{ added?: string[]; skipped?: string[] }>();
+  const pendingKeepAll = useRef<string[]>([]);
+  function keepAll(messageId: string, keys: string[], onlyThese = false) {
+    if (!conversationId) return;
+    const tokens = keys.map((key) => `${messageId}:${key}`);
+    pendingKeepAll.current = tokens;
+    setAddedMaterials((prev) => {
+      const next = new Set(prev);
+      for (const token of tokens) next.add(token);
+      return next;
+    });
+    keepAllFetcher.submit(
+      {
+        intent: 'keep-all',
+        conversationId,
+        messageId,
+        // One segment of the plan, not the whole reply (Brian's run 3).
+        ...(onlyThese ? { materialKeys: keys.join(',') } : {}),
+      },
+      { method: 'post', action: '/api/domain/lesson-planner/packet' }
+    );
+  }
+
+  // One segment that files as several pieces ("Framing" over three notes)
+  // goes in or out as one (Brian's run 3, items 1, 2).
+  function toggleSegmentPieces(messageId: string, keys: string[], add: boolean) {
+    if (!conversationId) return;
+    if (add) {
+      keepAll(messageId, keys, true);
+      return;
+    }
+    setAddedMaterials((prev) => {
+      const next = new Set(prev);
+      for (const key of keys) next.delete(`${messageId}:${key}`);
+      return next;
+    });
+    packetFetcher.submit(
+      { intent: 'remove-material', conversationId, messageId, materialKeys: keys.join(',') },
+      { method: 'post', action: '/api/domain/lesson-planner/packet' }
+    );
+  }
+
+  // Every "In the stack" matches the stack, however it changed: here, on the
+  // stack page, in the panel, or in another tab (Brian's run 3, item 2).
+  const tokensFetcher = useFetcher<{ conversationId: string; tokens: string[] }>();
+  const savedConversationId = selectedConversation?.id ?? null;
+  function refreshStackTokens() {
+    if (!reviewFlags.stackV2 || !savedConversationId) return;
+    if (packetFetcher.state !== 'idle' || keepAllFetcher.state !== 'idle') return;
+    tokensFetcher.load(
+      `/api/domain/lesson-planner/packet?conversationId=${encodeURIComponent(savedConversationId)}&view=tokens`
+    );
+  }
+  useStackChanges(reviewFlags.stackV2 ? savedConversationId : null, refreshStackTokens);
+  useEffect(() => {
+    const data = tokensFetcher.data;
+    if (!data || data.conversationId !== savedConversationId) return;
+    if (packetFetcher.state !== 'idle' || keepAllFetcher.state !== 'idle') return;
+    setAddedMaterials(new Set(data.tokens));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokensFetcher.data]);
+  useEffect(() => {
+    const data = keepAllFetcher.data;
+    if (!data?.added) return;
+    const filed = new Set(data.added);
+    const notFiled = pendingKeepAll.current.filter((token) => !filed.has(token));
+    pendingKeepAll.current = [];
+    if (notFiled.length) {
+      setAddedMaterials((prev) => {
+        const next = new Set(prev);
+        for (const token of notFiled) next.delete(token);
+        return next;
+      });
+    }
+    if (data.skipped?.length) {
+      toast(
+        `Left your edited ${data.skipped.length === 1 ? 'piece' : 'pieces'} alone: ${data.skipped.join(', ')}.`
+      );
+    }
+    setStackVersion((version) => version + 1);
+  }, [keepAllFetcher.data]);
+
+  // "Replace existing class starter with this one" (Brian's run 2, E1).
+  function replaceMaterial(messageId: string, materialKey: string) {
+    if (!conversationId) return;
+    setAddedMaterials((prev) => new Set(prev).add(`${messageId}:${materialKey}`));
+    pendingMaterialRef.current = { messageId, materialKey, intent: 'replace-material' };
+    packetFetcher.submit(
+      { intent: 'replace-material', conversationId, messageId, materialKey },
+      { method: 'post', action: '/api/domain/lesson-planner/packet' }
+    );
+  }
 
   // A material goes into the packet on its own — the teacher wanted the
   // handout, not the whole lesson plan wrapped around it.
@@ -534,11 +833,72 @@ export default function LessonPlannerRoute() {
     );
   }
 
+  // The panel opens on its own once there is something in the stack, unless
+  // the teacher closed it (remembered on this device).
+  const [panelClosed, setPanelClosed] = useState(true);
+  useEffect(() => {
+    setPanelClosed(readStackPanelClosed());
+  }, []);
+  function removedFromPanel(piece: StackItem) {
+    if (piece.token) {
+      setAddedMaterials((prev) => {
+        if (!prev.has(piece.token!)) return prev;
+        const next = new Set(prev);
+        next.delete(piece.token!);
+        return next;
+      });
+    } else if (piece.origin === 'reply') {
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === piece.id ? { ...message, keptAudience: null } : message
+        )
+      );
+    }
+  }
+
   // Everything in the packet, however it got there. Counting only kept replies
   // left a teacher who filed a handout with no way to reach their own packet.
   const keptCount =
     messages.filter((message) => message.keptAudience).length +
     addedMaterials.size;
+
+  // Brian's review (B6): "Slide deck from this stack" on the stack screen
+  // lands here with ?build=deck and asks once. The parameter is dropped as it
+  // is used, so a reload does not ask a second time.
+  // "Rework it in the planner" from the stack page (run 3): the step is named
+  // in the box, ready for the teacher to say what to change.
+  const reworkStep = searchParams.get('rework');
+  useEffect(() => {
+    if (!reworkStep) return;
+    setInput(`Rework “${reworkStep.slice(0, 120)}”: `);
+    const next = new URLSearchParams(searchParams);
+    next.delete('rework');
+    setSearchParams(next, { replace: true });
+    // Once per arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reworkStep]);
+
+  const buildRequest = searchParams.get('build');
+  const buildAsked = useRef(false);
+  useEffect(() => {
+    if (buildAsked.current || !reviewFlags.stackV2 || !conversationId) return;
+    // "Build slides for this lecture" on the stack page names its step.
+    const lecture = buildRequest === 'lecture' ? searchParams.get('step')?.trim() : null;
+    if (!lecture && !isBuildFromStackRequest(buildRequest)) return;
+    buildAsked.current = true;
+    const next = new URLSearchParams(searchParams);
+    next.delete('build');
+    next.delete('step');
+    next.delete('deck');
+    setSearchParams(next, { replace: true });
+    send(
+      lecture
+        ? lectureSlidesRequest(lecture, { hasDeck: searchParams.get('deck') === '1' })
+        : BUILD_FROM_STACK_REQUESTS[buildRequest as keyof typeof BUILD_FROM_STACK_REQUESTS]
+    );
+    // Runs once per arrival; send is stable enough for a one-shot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buildRequest, conversationId, reviewFlags.stackV2]);
 
   function send(
     message: string,
@@ -581,6 +941,10 @@ export default function LessonPlannerRoute() {
       ...(unitDay
         ? { unitDay: String(unitDay.day), unitDayTitle: unitDay.title }
         : {}),
+      // A lesson started from a template keeps its shape (run 3).
+      ...(activeTemplate ? { templateId: activeTemplate.id } : {}),
+      // Documents added before the first message go with it (Oct 21).
+      ...(sources.pendingIds.length ? { uploadIds: sources.pendingIds.join(',') } : {}),
     });
 
     setProgress(PLANNING_PROGRESS_START);
@@ -785,6 +1149,10 @@ export default function LessonPlannerRoute() {
                 input={input}
                 onInput={setInput}
                 onSend={() => send(input)}
+                templates={reviewFlags.templates ? templates : null}
+                template={activeTemplate}
+                onTemplate={setActiveTemplate}
+                sources={sources}
               />
             ) : (
               messages.map((message, index) => (
@@ -803,8 +1171,27 @@ export default function LessonPlannerRoute() {
                   practice={practice}
                   conversationId={conversationId}
                   builtDays={builtDays}
+                  daysOn={reviewFlags.stackV3}
+                  daysSourceMessageId={daysSourceMessageId}
+                  frameworksOn={reviewFlags.templates}
                   onSuggestion={send}
                   onKeep={setKept}
+                  stackV2={reviewFlags.stackV2}
+                  intakeV2={reviewFlags.intakeV2}
+                  deckV2={reviewFlags.deckV2}
+                  editedDeck={selectedConversation?.editedDeck ?? null}
+                  periodMinutes={selectedConversation?.periodMinutes ?? null}
+                  previousUserText={
+                    messages[index - 1]?.role === 'user'
+                      ? messages[index - 1]!.content
+                      : null
+                  }
+                  onReplaceMaterial={replaceMaterial}
+                  onKeepAll={keepAll}
+                  onSegment={toggleSegmentPieces}
+                  stackPieces={selectedConversation?.stackPieces ?? {}}
+                  teacherClasses={teacherClasses}
+                  stackHasPieces={keptCount > 0}
                   disabled={isSending}
                 />
               ))
@@ -840,9 +1227,24 @@ export default function LessonPlannerRoute() {
                 </strong>{' '}
                 in this lesson's stack
               </p>
+              {reviewFlags.stackPanel && panelClosed ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    writeStackPanelClosed(false);
+                    setPanelClosed(false);
+                  }}
+                  className="ml-auto hidden text-sm font-medium text-primary hover:underline lg:inline"
+                >
+                  Show the stack here
+                </button>
+              ) : null}
               <Link
                 to={`/app/lesson-planner/${conversationId}/packet`}
-                className="ml-auto text-sm font-medium text-primary hover:underline"
+                className={cn(
+                  'text-sm font-medium text-primary hover:underline',
+                  !(reviewFlags.stackPanel && panelClosed) && 'ml-auto'
+                )}
               >
                 Open the stack
               </Link>
@@ -860,11 +1262,24 @@ export default function LessonPlannerRoute() {
                 onChange={setInput}
                 onSend={() => send(input)}
                 disabled={isSending}
+                sources={sources}
               />
             </div>
           </div>
         ) : null}
       </div>
+
+      {reviewFlags.stackPanel && conversationId && keptCount > 0 && !panelClosed ? (
+        <StackPanel
+          conversationId={conversationId}
+          version={stackVersion}
+          onRemoved={removedFromPanel}
+          onClose={() => {
+            writeStackPanelClosed(true);
+            setPanelClosed(true);
+          }}
+        />
+      ) : null}
     </section>
   );
 }
@@ -880,14 +1295,22 @@ function LessonComposer({
   onSend,
   disabled,
   hero,
+  chip = null,
+  placeholder = null,
+  sources = null,
   placeholderOverride,
 }: {
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
   disabled: boolean;
+  /** The teacher's own documents (Oct 21); null with uploads off. */
+  sources?: SourceDocumentsState | null;
   /** Centred on an empty page: taller, and the examples cycle inside it. */
   hero?: boolean;
+  /** Shown inside the box, above the text: the template in use (run 3). */
+  chip?: React.ReactNode;
+  placeholder?: string | null;
   placeholderOverride?: string;
 }) {
   const rotating = useRotatingPlaceholder(value.length > 0);
@@ -905,6 +1328,10 @@ function LessonComposer({
         onSend();
       }}
     >
+      {sources ? <SourceAttachButton state={sources} disabled={disabled} /> : null}
+      <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
+      {chip ? <div className="px-3 pt-2">{chip}</div> : null}
+      {sources ? <SourceChips state={sources} /> : null}
       <Textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -917,17 +1344,19 @@ function LessonComposer({
         rows={hero ? 2 : 1}
         placeholder={
           placeholderOverride ??
+          placeholder ??
           (hero ? rotating : 'Describe the lesson and your class…')
         }
         aria-label="Message the Lesson Planner"
         className={cn(
-          'flex-1 resize-none max-sm:text-base',
+          'w-full flex-1 resize-none max-sm:text-base',
           hero
             ? 'max-h-56 min-h-[76px] border-0 bg-transparent text-base shadow-none focus-visible:ring-0'
             : 'max-h-40 min-h-[44px]'
         )}
         disabled={disabled}
       />
+      </div>
       <Button
         type="submit"
         size="icon"
@@ -949,6 +1378,10 @@ function LessonPlannerEmptyState({
   input,
   onInput,
   onSend,
+  templates = null,
+  template = null,
+  onTemplate,
+  sources = null,
 }: {
   prompts: Array<{ id: string; label: string; prompt: string }>;
   seedContext: string | null;
@@ -957,7 +1390,13 @@ function LessonPlannerEmptyState({
   input: string;
   onInput: (value: string) => void;
   onSend: () => void;
+  /** The teacher's templates, with templates on (run 3); null when off. */
+  templates?: LessonTemplate[] | null;
+  template?: LessonTemplate | null;
+  onTemplate?: (template: LessonTemplate | null) => void;
+  sources?: SourceDocumentsState | null;
 }) {
+  const [showTemplates, setShowTemplates] = useState(false);
   const freeUsage = useFreeAccountUsage();
   const exhausted =
     freeUsage && isLessonPlannerMonthlyExhausted(freeUsage);
@@ -984,7 +1423,23 @@ function LessonPlannerEmptyState({
           onSend={onSend}
           disabled={disabled || Boolean(exhausted)}
           placeholderOverride={pausedPlaceholder}
+          sources={sources}
+          chip={
+            template && onTemplate ? (
+              <TemplateChip name={template.name} onClear={() => onTemplate(null)} />
+            ) : null
+          }
+          placeholder={
+            template ? 'What are we reading? e.g. Ninth grade, Chapter 2 of The Things They Carried' : null
+          }
         />
+        {templates && showTemplates && onTemplate ? (
+          <TemplateList
+            templates={templates}
+            selectedId={template?.id ?? null}
+            onPick={(picked) => onTemplate(picked)}
+          />
+        ) : null}
         {freeUsage ? (
           <LessonPlannerMonthlyLimitNotice usage={freeUsage} />
         ) : null}
@@ -1037,6 +1492,11 @@ function LessonPlannerEmptyState({
           prompts={prompts}
           onPick={onPick}
           disabled={disabled || Boolean(exhausted)}
+          templateTile={
+            templates
+              ? { active: showTemplates, onClick: () => setShowTemplates((open) => !open) }
+              : null
+          }
         />
       </div>
     </div>
@@ -1059,6 +1519,21 @@ function MessageBubble({
   builtDays,
   onSuggestion,
   onKeep,
+  stackV2 = false,
+  stackHasPieces = false,
+  intakeV2 = false,
+  teacherClasses = [],
+  deckV2 = false,
+  editedDeck = null,
+  periodMinutes = null,
+  previousUserText = null,
+  onReplaceMaterial = null,
+  onKeepAll = null,
+  onSegment = null,
+  stackPieces = {},
+  daysOn = false,
+  daysSourceMessageId = null,
+  frameworksOn = false,
   disabled,
 }: {
   message: ChatMessage;
@@ -1082,13 +1557,69 @@ function MessageBubble({
   conversationId: string | null;
   /** Day number → the conversation each already-built day lives in. */
   builtDays: Record<number, string>;
+  /** Brian's run 5: a multi-day reply makes each day its own lesson. */
+  daysOn?: boolean;
+  /** The reply the unit's day lessons were made from, once they are. */
+  daysSourceMessageId?: string | null;
+  /** Templates on: a week can be saved as a framework. */
+  frameworksOn?: boolean;
   onSuggestion: (
     text: string,
     unitDay?: { day: number; title: string }
   ) => void;
   onKeep: (messageId: string, audience: PacketAudience | null) => void;
+  /**
+   * Stack v2 (Brian's review, B4 + C6): the whole-reply button only appears
+   * under a delivered plan, there is no "Add all as a handout" in the chat,
+   * and a plan says plainly that the teacher can take just the pieces.
+   */
+  stackV2?: boolean;
+  /** Something is filed in this lesson's stack. */
+  stackHasPieces?: boolean;
+  /**
+   * Intake v2 (Brian's review, A1–A3): one decision per step, classes from the
+   * teacher's real list, no pre-filled length.
+   */
+  intakeV2?: boolean;
+  teacherClasses?: IntakeClass[];
+  /** Deck v2 (E2): Edit on the deck card, and an edited deck shown in place. */
+  deckV2?: boolean;
+  editedDeck?: {
+    materialId: string;
+    sourceMessageId: string;
+    content: string;
+  } | null;
+  /** The lesson's length, for the over-time flags (Brian's run 2, B2). */
+  periodMinutes?: number | null;
+  /** What the teacher said just before this reply. */
+  previousUserText?: string | null;
+  /** "Replace existing class starter with this one" (Brian's run 2, E1). */
+  onReplaceMaterial?: ((messageId: string, materialKey: string) => void) | null;
+  /** "Add everything to the stack", as separate pieces (Brian's run 2, A4). */
+  onKeepAll?: ((messageId: string, keys: string[]) => void) | null;
+  /** One segment of the plan in or out, however many pieces it files as (run 3). */
+  onSegment?: ((messageId: string, keys: string[], add: boolean) => void) | null;
+  /** Filed pieces by card token, for "Created in Yawp!" (run 3, item 4). */
+  stackPieces?: Record<string, StackPieceRef>;
   disabled: boolean;
 }) {
+  if (message.surface === 'stack') {
+    // A change asked for on the stack page (Brian's run 3, item 7): one
+    // compact line here, never a full reply.
+    return (
+      <div
+        data-testid="stack-turn"
+        data-role={message.role}
+        className="flex items-center gap-2 text-xs text-muted-foreground"
+      >
+        <span className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">
+          {message.role === 'user' ? 'On the stack' : 'Stack change'}
+        </span>
+        <span className="truncate">{message.content.split('\n')[0]}</span>
+      </div>
+    );
+  }
+
   if (message.role === 'user') {
     return (
       <div className="flex justify-end" data-role="user">
@@ -1128,7 +1659,49 @@ function MessageBubble({
   // The opening turn always offers the data-driven route, and a delivered plan
   // always offers the two artifacts that come next — in the app's own words,
   // rather than whatever the model happened to think of this run.
-  const deliveredPlan = looksLikeLessonPlan(body);
+  const deliveredPlan = looksLikeLessonPlan(body, { boldSteps: stackV2 });
+  // Brian's run 2 (E1): the reply to "Swap out the class starter prompt"
+  // offers each prompt with three choices, one of them "Replace existing".
+  const isSwapReply = stackV2 && asksToSwapStarter(previousUserText);
+  const offersStarter = parts.some(
+    (part) => part.kind === 'daily-pages' && part.exercise.kind === 'class-starter'
+  );
+  const planOverBy =
+    stackV2 && deliveredPlan ? overTime(planMinutes(body), periodMinutes) : null;
+  // Brian's run 2 (A3, A4): the plan's steps, each a piece of its own, and
+  // everything the reply hands over, for "Add everything to the stack".
+  // Brian's run 3 (items 1, 2): every step, including one that is only its
+  // blocks, with the pieces it files as, so its button and its status are
+  // the same wherever it appears.
+  // Several days in one reply are lessons of their own, never steps of one
+  // (Brian's run 5, items 1 and 3): no per-step Add, no Add everything.
+  const planDays = daysOn && message.id ? readPlanDays(message.content) : [];
+  const multiDay = planDays.length >= 2;
+  const planSteps =
+    stackV2 && deliveredPlan && message.id && !multiDay ? readPlanSteps(message.content) : [];
+  const segments = planSteps.length ? stepSegments(message.content) : {};
+  const stepBlocks = planSteps.length ? stepBlockKeys(message.content) : {};
+  // A step offering options (three class starters) has no button of its own:
+  // each option has its Add, and the step cannot know which is meant.
+  const choiceSteps = planSteps.length ? stepsOfferingChoice(message.content) : new Set<string>();
+  const segmentKeys = (stepKey: string) => segments[stepKey] ?? [stepKey];
+  // The options under a choice step, for whether one of them is in.
+  const optionKeysUnder = (stepKey: string) => stepBlocks[stepKey] ?? [];
+  const toggleSegment = (keys: string[], add: boolean) => {
+    if (!message.id || !keys.length) return;
+    if (keys.length === 1 || !onSegment) {
+      for (const key of keys) onMaterial(message.id, key, add);
+    } else onSegment(message.id, keys, add);
+  };
+  // Inline buttons go on the plan's own headings, matched in reply order.
+  let stepCursor = 0;
+  const framePlan = stackV2 && deliveredPlan && Boolean(message.id);
+  const replyPieceKeys =
+    stackV2 && deliveredPlan && !multiDay ? pieceKeysInReply(message.content) : [];
+  const everythingIn =
+    Boolean(message.id) &&
+    replyPieceKeys.length > 0 &&
+    replyPieceKeys.every((key) => addedMaterials.has(`${message.id}:${key}`));
   // The slider belongs in the intake batch and nowhere else: not on the
   // opening reply, where the subject is still open, and not under a finished
   // plan, where every step has already been timed.
@@ -1136,7 +1709,8 @@ function MessageBubble({
     topicSettled: !isOpeningReply,
     planAlreadyWritten: deliveredPlan,
   });
-  const suggestions = withStandardSuggestions(modelSuggestions, {
+  // Library prompt ids never reach a teacher (Brian's run 2, item 21).
+  const suggestions = withStandardSuggestions(modelSuggestions.map(hidePromptIds), {
     isOpeningReply,
     teacherRaisedRoomPersonality,
     deliveredPlan,
@@ -1146,7 +1720,165 @@ function MessageBubble({
     },
     inPacket: lessonHas,
     asksForMinutes: asks.some((ask) => ask.kind === 'minutes'),
+    offerDone: stackV2,
+    stackHasPieces: stackV2 && stackHasPieces,
+    offerStarterSwap: stackV2 && offersStarter && !isSwapReply,
   });
+
+  const renderPart = (part: ReplyPart, index: number) => {
+    const key = `${message.id ?? 'pending'}:${index}`;
+    if (part.kind === 'markdown') {
+      const raw = hidePromptIds(linkMaterialTitles(part.text, materials));
+      // No "I have everything I need" above a plan (Brian's run 3).
+      const text = framePlan && index === 0 ? stripPlanPreamble(raw) : raw;
+      if (!planSteps.length) {
+        return (
+          <div key={key} className={index > 0 ? 'mt-3' : undefined}>
+            <MarkdownContent content={text} />
+          </div>
+        );
+      }
+      // Brian's run 3 (item 1): Add to stack on the hook, the
+      // discussion, the exit ticket… right on each step's heading.
+      const { chunks, next } = splitAtStepHeadings(text, planSteps, stepCursor);
+      stepCursor = next;
+      return (
+        <div key={key} className={index > 0 ? 'mt-3' : undefined}>
+          {chunks.map((chunk, chunkIndex) => {
+            if (chunk.kind === 'markdown') {
+              return <MarkdownContent key={chunkIndex} content={chunk.text} />;
+            }
+            const step = planSteps[chunk.index]!;
+            const keys = segmentKeys(step.key);
+            return (
+              <div
+                key={chunkIndex}
+                data-testid="plan-segment"
+                // Each step its own section, easy to find at a glance (Kevin's
+                // notes): a number, a title that reads as a heading, the time.
+                className="mt-5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border/70 pt-4"
+              >
+                <StepHeading line={chunk.heading} number={chunk.index + 1} />
+                {keys.length && !choiceSteps.has(step.key) ? (
+                  <SegmentToggle
+                    isIn={segmentInStack(message.id!, keys, addedMaterials)}
+                    disabled={disabled}
+                    onToggle={(add) => toggleSegment(keys, add)}
+                  />
+                ) : choiceSteps.has(step.key) ? (
+                  // Every numbered step says where it stands (Brian's run 4):
+                  // a choice is added by picking one of its options below.
+                  <span data-testid="segment-choice" className="text-xs font-semibold text-muted-foreground">
+                    {[...addedMaterials].some((token) =>
+                      optionKeysUnder(step.key).some((key) => token === `${message.id}:${key}`)
+                    )
+                      ? 'In the stack'
+                      : 'Pick one below to add it'}
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+    if (part.kind === 'daily-pages') {
+      return (
+        <DailyPagesCard
+          key={key}
+          exercise={part.exercise}
+          assignmentTypeId={dailyPagesTypeId}
+          classStarterTypeId={classStarterTypeId}
+          conversationId={conversationId}
+          created={stackPieces[`${message.id}:${part.blockKey}`]?.created ?? null}
+          materialId={stackPieces[`${message.id}:${part.blockKey}`]?.materialId ?? null}
+          added={
+            message.id
+              ? addedMaterials.has(`${message.id}:${part.blockKey}`)
+              : false
+          }
+          onToggle={
+            stackV2 && message.id
+              ? (next) => onMaterial(message.id!, part.blockKey, next)
+              : undefined
+          }
+          onReplace={
+            isSwapReply && message.id && onReplaceMaterial
+              ? () => onReplaceMaterial(message.id!, part.blockKey)
+              : null
+          }
+          disabled={disabled}
+        />
+      );
+    }
+    if (part.kind === 'exit-ticket') {
+      return (
+        <ExitTicketCard
+          key={key}
+          ticket={part.ticket}
+          assignmentTypeId={exitTicketTypeId}
+          conversationId={conversationId}
+          created={stackPieces[`${message.id}:${part.blockKey}`]?.created ?? null}
+          materialId={stackPieces[`${message.id}:${part.blockKey}`]?.materialId ?? null}
+          added={
+            !!message.id &&
+            addedMaterials.has(`${message.id}:${part.blockKey}`)
+          }
+          onToggle={
+            message.id
+              ? (added) => onMaterial(message.id!, part.blockKey, added)
+              : null
+          }
+          disabled={disabled}
+        />
+      );
+    }
+    if (part.kind === 'resource') {
+      return <LessonResourceCard key={key} resource={part.resource} />;
+    }
+    if (part.kind === 'practice') {
+      return (
+        <PracticeCard
+          key={key}
+          practice={part.practice}
+          lessons={practice.lessons}
+          classes={practice.classes}
+          added={
+            message.id
+              ? addedMaterials.has(`${message.id}:${part.blockKey}`)
+              : false
+          }
+          onToggle={
+            stackV2 && message.id
+              ? (next) => onMaterial(message.id!, part.blockKey, next)
+              : null
+          }
+          disabled={disabled}
+        />
+      );
+    }
+    return (
+      <div key={key} className="mt-3">
+        <MaterialCard
+          material={{
+            ...part.material,
+            content: hidePromptIds(part.material.content),
+          }}
+          added={
+            !!message.id &&
+            addedMaterials.has(`${message.id}:${part.material.key}`)
+          }
+          onToggle={
+            message.id
+              ? (added) =>
+                  onMaterial(message.id!, part.material.key, added)
+              : null
+          }
+          disabled={disabled}
+        />
+      </div>
+    );
+  };
 
   return (
     <div className="flex gap-3" data-role="assistant">
@@ -1155,84 +1887,41 @@ function MessageBubble({
       </div>
       <div className="min-w-0 flex-1">
         <div className="rounded-2xl rounded-tl-sm border border-border/60 bg-card px-4 py-3 text-foreground shadow-sm">
+          {framePlan ? (
+            // Brian's run 3 (item 3): a full lesson says what to do with it.
+            <p
+              data-testid="plan-framing"
+              className="mb-3 rounded-lg bg-primary/5 px-3 py-2 text-sm text-foreground"
+            >
+              {FULL_LESSON_FRAMING}
+            </p>
+          ) : null}
           {/* The reply in its own order: a step, then the thing that step
               hands over, then the next step. Everything used to be lifted out
               and stacked below the plan, so the button to assign a warm-up sat
               inches away from the warm-up. */}
-          {parts.map((part, index) => {
-            const key = `${message.id ?? 'pending'}:${index}`;
-            if (part.kind === 'markdown') {
-              return (
-                <div key={key} className={index > 0 ? 'mt-3' : undefined}>
-                  <MarkdownContent
-                    content={linkMaterialTitles(part.text, materials)}
-                  />
-                </div>
-              );
-            }
-            if (part.kind === 'daily-pages') {
-              return (
-                <DailyPagesCard
-                  key={key}
-                  exercise={part.exercise}
-                  assignmentTypeId={dailyPagesTypeId}
-                  classStarterTypeId={classStarterTypeId}
-                  conversationId={conversationId}
-                />
-              );
-            }
-            if (part.kind === 'exit-ticket') {
-              return (
-                <ExitTicketCard
-                  key={key}
-                  ticket={part.ticket}
-                  assignmentTypeId={exitTicketTypeId}
-                  conversationId={conversationId}
-                  added={
-                    !!message.id &&
-                    addedMaterials.has(`${message.id}:${part.blockKey}`)
-                  }
-                  onToggle={
-                    message.id
-                      ? (added) => onMaterial(message.id!, part.blockKey, added)
-                      : null
-                  }
-                  disabled={disabled}
-                />
-              );
-            }
-            if (part.kind === 'resource') {
-              return <LessonResourceCard key={key} resource={part.resource} />;
-            }
-            if (part.kind === 'practice') {
-              return (
-                <PracticeCard
-                  key={key}
-                  practice={part.practice}
-                  lessons={practice.lessons}
-                  classes={practice.classes}
-                />
-              );
-            }
-            return (
-              <div key={key} className="mt-3">
-                <MaterialCard
-                  material={part.material}
-                  added={
-                    !!message.id &&
-                    addedMaterials.has(`${message.id}:${part.material.key}`)
-                  }
-                  onToggle={
-                    message.id
-                      ? (added) =>
-                          onMaterial(message.id!, part.material.key, added)
-                      : null
-                  }
-                  disabled={disabled}
-                />
-              </div>
-            );
-          })}
+          {groupOptionParts(parts).map((group) =>
+            group.kind === 'single' ? (
+              renderPart(parts[group.index]!, group.index)
+            ) : (
+              // Options side by side, paged with arrows (Kevin's notes).
+              <OptionRow key={`${message.id ?? 'pending'}:options:${group.indexes[0]}`} label={group.label}>
+                {group.indexes.map((index) => renderPart(parts[index]!, index))}
+              </OptionRow>
+            )
+          )}
+          {multiDay && conversationId ? (
+            <DayLessonsCard
+              conversationId={conversationId}
+              messageId={message.id!}
+              days={planDays}
+              builtDays={builtDays}
+              sourceMessageId={daysSourceMessageId}
+              isLast={isLast}
+              frameworksOn={frameworksOn}
+              disabled={disabled}
+            />
+          ) : null}
           {unitOutcome.kind === 'unit' ? (
             <div className="mt-3">
               <UnitPlanCard
@@ -1254,29 +1943,70 @@ function MessageBubble({
           ) : null}
           {deckOutcome.kind === 'deck' ? (
             <div className="mt-3">
-              <SlideDeckCard
-                deck={deckOutcome.deck}
-                added={
-                  !!message.id &&
-                  addedMaterials.has(`${message.id}:${DECK_SLOT}`)
-                }
-                onToggle={
-                  message.id
-                    ? (added) => onMaterial(message.id!, DECK_SLOT, added)
-                    : null
-                }
-                disabled={disabled}
-                presentHref={
-                  message.id && conversationId
-                    ? `/present/${conversationId}/${message.id}`
-                    : null
-                }
-                downloadHref={
-                  message.id && conversationId
-                    ? `/present/${conversationId}/${message.id}.pptx`
-                    : null
-                }
-              />
+              {(() => {
+                // Deck v2 (Brian's review, E2): a deck the teacher edited
+                // replaces the planner's in the chat, rather than sitting
+                // beside it. Present and PowerPoint follow the edit.
+                const edited =
+                  deckV2 && editedDeck && editedDeck.sourceMessageId === message.id
+                    ? editedDeck
+                    : null;
+                const editedParse = edited ? readSlideDeck(edited.content) : null;
+                const shown =
+                  editedParse?.kind === 'deck' ? editedParse.deck : deckOutcome.deck;
+                const deckId = edited ? edited.materialId : message.id;
+                return (
+                  <SlideDeckCard
+                    deck={shown}
+                    edited={Boolean(edited)}
+                    added={
+                      !!message.id &&
+                      addedMaterials.has(`${message.id}:${DECK_SLOT}`)
+                    }
+                    onToggle={
+                      message.id
+                        ? (added) => {
+                            if (
+                              !added &&
+                              edited &&
+                              !window.confirm(
+                                'Taking this deck out of the stack also discards your edits to it.'
+                              )
+                            ) {
+                              return;
+                            }
+                            onMaterial(message.id!, DECK_SLOT, added);
+                          }
+                        : null
+                    }
+                    disabled={disabled}
+                    presentHref={
+                      deckId && conversationId
+                        ? `/present/${conversationId}/${deckId}`
+                        : null
+                    }
+                    downloadHref={
+                      deckId && conversationId
+                        ? `/present/${conversationId}/${deckId}.pptx`
+                        : null
+                    }
+                    editHref={
+                      deckV2 && deckId && conversationId
+                        ? `/app/lesson-planner/${conversationId}/deck/${deckId}`
+                        : null
+                    }
+                    periodMinutes={deckV2 ? periodMinutes : null}
+                    onFit={
+                      deckV2 && periodMinutes
+                        ? () =>
+                            onSuggestion(
+                              `Fit the slide deck to ${periodMinutes} minutes, and tell me what you cut.`
+                            )
+                        : null
+                    }
+                  />
+                );
+              })()}
             </div>
           ) : null}
           {deckOutcome.kind === 'unreadable' ? (
@@ -1289,8 +2019,97 @@ function MessageBubble({
             </p>
           ) : null}
         </div>
+        {stackV2 && deliveredPlan && message.id ? (
+          <p
+            className="mt-2 text-sm text-muted-foreground"
+            data-testid="plan-stack-invite"
+          >
+            You don't have to use all of these. Add the pieces you want to the
+            stack, or add the whole lesson.
+          </p>
+        ) : null}
+        {planSteps.length > 0 ? (
+          // Brian's run 2 (A3): every step — a reading, a pair talk, a quick
+          // write — can go in the stack, not only the writing assignments.
+          <div
+            data-testid="plan-steps"
+            className="mt-2 rounded-xl border border-border/60 bg-card px-3 py-2"
+          >
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Steps in this plan
+            </p>
+            <ul className="flex flex-col">
+              {planSteps.map((step) => {
+                const keys = segmentKeys(step.key);
+                if (!keys.length) return null;
+                const isIn = segmentInStack(message.id!, keys, addedMaterials);
+                const choice = choiceSteps.has(step.key);
+                return (
+                  <li
+                    key={step.key}
+                    data-testid="plan-step"
+                    className="flex items-center gap-2 py-1 text-sm"
+                  >
+                    <span className="min-w-0 flex-1 truncate">{step.title}</span>
+                    {step.minutes !== null ? (
+                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                        {step.minutes} min
+                      </span>
+                    ) : null}
+                    {choice ? (
+                      <span data-testid="plan-step-choice" className="shrink-0 text-xs text-muted-foreground">
+                        Pick an option below
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={disabled}
+                        data-testid="plan-step-toggle"
+                        title={isIn ? 'Click to remove from stack' : undefined}
+                        onClick={() => toggleSegment(keys, !isIn)}
+                        className={cn(
+                          'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition disabled:opacity-50',
+                          isIn
+                            ? 'bg-primary/10 text-primary hover:bg-primary/15'
+                            : 'border border-primary/40 text-primary hover:bg-primary/5'
+                        )}
+                      >
+                        {isIn ? <BookmarkCheck size={12} /> : <BookmarkPlus size={12} />}
+                        {isIn ? 'In the stack' : 'Add to stack'}
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
+        {planOverBy !== null && periodMinutes ? (
+          // Brian's run 2 (B2): "too much stuff for a 50-minute class".
+          <p
+            data-testid="plan-over-time"
+            className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+          >
+            <span>
+              This plan runs {periodMinutes + planOverBy} minutes; the period is{' '}
+              {periodMinutes}.
+            </span>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() =>
+                onSuggestion(
+                  `Trim this plan to fit ${periodMinutes} minutes, and tell me what you cut.`
+                )
+              }
+              className="rounded-md border border-amber-300 bg-background px-2 py-0.5 text-xs font-medium text-amber-900 transition hover:bg-amber-100 disabled:opacity-50 dark:text-amber-200"
+            >
+              Trim it to {periodMinutes} minutes
+            </button>
+          </p>
+        ) : null}
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
-          {message.id ? (
+          {message.id && !multiDay && (!stackV2 || deliveredPlan || message.keptAudience) ? (
             message.keptAudience ? (
               <>
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
@@ -1309,21 +2128,35 @@ function MessageBubble({
               </>
             ) : (
               <>
-                <button
-                  type="button"
-                  onClick={() => onKeep(message.id!, 'teacher')}
-                  className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
-                >
-                  <BookmarkPlus size={13} />
-                  Add all of this
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onKeep(message.id!, 'student')}
-                  className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
-                >
-                  Add all as a handout
-                </button>
+                {stackV2 && everythingIn ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                    <BookmarkCheck size={13} />
+                    Everything is in the stack
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() =>
+                      stackV2 && onKeepAll
+                        ? onKeepAll(message.id!, replyPieceKeys)
+                        : onKeep(message.id!, 'teacher')
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground disabled:opacity-50"
+                  >
+                    <BookmarkPlus size={13} />
+                    {stackV2 ? 'Add everything to the stack' : 'Add all of this'}
+                  </button>
+                )}
+                {stackV2 ? null : (
+                  <button
+                    type="button"
+                    onClick={() => onKeep(message.id!, 'student')}
+                    className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
+                  >
+                    Add all as a handout
+                  </button>
+                )}
               </>
             )
           ) : null}
@@ -1340,13 +2173,35 @@ function MessageBubble({
             </button>
           ) : null}
         </div>
-        {asks.length > 0 && isLast ? (
+        {asks.length > 0 && isLast && intakeV2 ? (
+          // The card's own steps are the choices. The model's free-text chips
+          // paired a grade with a scope; they are not shown beside it.
+          <LessonIntakeCard
+            asks={asks}
+            teacherClasses={teacherClasses}
+            onSend={onSuggestion}
+            disabled={disabled}
+          />
+        ) : asks.length > 0 && isLast ? (
           <LessonAskCard
             asks={asks}
             suggestions={suggestions}
             onSend={onSuggestion}
             disabled={disabled}
           />
+        ) : null}
+        {/* The planner offered a file ("Save Lesson Plan as PDF"). Its chip is
+            gone — sending those words does nothing — and the stack, where the
+            real downloads are, is offered instead (Brian's run 2, S2). */}
+        {isLast && conversationId && modelSuggestions.some(isFileActionSuggestion) ? (
+          <Link
+            to={`/app/lesson-planner/${conversationId}/packet`}
+            data-testid="open-stack-for-files"
+            className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-background px-3 py-1.5 text-sm font-medium text-primary transition hover:border-primary hover:bg-primary/10"
+          >
+            <FileText size={13} className="opacity-70" />
+            Open the stack to download the lesson plan
+          </Link>
         ) : null}
         {/* The chips move inside the card when there is one, so a turn never
             has two send buttons racing to consume it. */}
@@ -1367,6 +2222,33 @@ function MessageBubble({
           </div>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/** A plan step's heading in the chat: its number, its title and its time. */
+function StepHeading({ line, number }: { line: string; number: number }) {
+  const { level, title, minutes } = readStepHeading(line);
+  const Tag = level === 3 ? 'h3' : 'h2';
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      <span
+        aria-hidden
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
+      >
+        {number}
+      </span>
+      <Tag data-testid="plan-step-title" className="min-w-0 text-base font-semibold leading-snug text-foreground">
+        {title}
+      </Tag>
+      {minutes ? (
+        <span
+          data-testid="plan-step-minutes"
+          className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground"
+        >
+          {minutes} min
+        </span>
+      ) : null}
     </div>
   );
 }

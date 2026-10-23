@@ -1,5 +1,6 @@
 import {
   createContext,
+  startTransition,
   useCallback,
   useContext,
   useEffect,
@@ -38,6 +39,16 @@ type DevPanelContextValue = {
 
 const DevPanelContext = createContext<DevPanelContextValue | null>(null);
 
+/** Defer client-only state so lazy/Suspense trees finish hydrating first. */
+function scheduleAfterHydration(callback: () => void) {
+  if (typeof window === 'undefined') return;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      startTransition(callback);
+    });
+  });
+}
+
 export function useDevPanel() {
   const value = useContext(DevPanelContext);
   if (!value) throw new Error('Dev panel context missing');
@@ -55,15 +66,15 @@ export function DevPanelProvider({
   previewAccessSeatLabel: string | null;
   previewAccessGateEnabled: boolean;
 }) {
-  const [state, setState] = useState<DevPanelPersistedState>(() => {
-    if (typeof window === 'undefined') return { ...DEV_PANEL_DEFAULT_STATE };
-    const restored = readDevPanelState(window.localStorage);
-    return { ...restored, restored: restored.open };
-  });
+  const [state, setState] = useState<DevPanelPersistedState>(() => ({
+    ...DEV_PANEL_DEFAULT_STATE,
+  }));
   const [seatLabel, setSeatLabel] = useState(initialSeatLabel);
   const [flyoutSwitchInstant, setFlyoutSwitchInstant] = useState(false);
   const unlocked = !previewAccessGateEnabled || Boolean(seatLabel);
   const persistTimer = useRef<number | null>(null);
+  /** Avoid writing default closed state over localStorage before post-hydration restore. */
+  const persistReady = useRef(false);
 
   const persist = useCallback((next: DevPanelPersistedState) => {
     setState(next);
@@ -74,6 +85,24 @@ export function DevPanelProvider({
   }, []);
 
   useEffect(() => {
+    scheduleAfterHydration(() => {
+      setSeatLabel((current) =>
+        current === initialSeatLabel ? current : initialSeatLabel
+      );
+    });
+  }, [initialSeatLabel]);
+
+  useEffect(() => {
+    scheduleAfterHydration(() => {
+      const restored = readDevPanelState(window.localStorage);
+      if (restored.open) {
+        setState({ ...restored, restored: true });
+      }
+      persistReady.current = true;
+    });
+  }, []);
+
+  useEffect(() => {
     const root = document.documentElement;
     root.classList.toggle('yawp-dev-panel-open', state.open);
     root.classList.toggle('yawp-dev-panel-restored', Boolean(state.restored));
@@ -81,6 +110,7 @@ export function DevPanelProvider({
   }, [state.open, state.restored]);
 
   useEffect(() => {
+    if (!persistReady.current) return;
     writeDevPanelState(window.localStorage, state);
   }, [state]);
 

@@ -80,7 +80,7 @@ jobs:
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
@@ -97,7 +97,7 @@ jobs:
       # The root-owned-build-output test needs the image the preview host itself runs.
       - name: 🐳 Pull the preview runtime image
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
-        run: docker pull oven/bun:1.4.3
+        run: docker pull oven/bun:1.4.4
 
       # Fail rather than skip if the runner cannot produce root-owned files: a silent skip
       # here would leave the regression uncovered everywhere.
@@ -138,7 +138,7 @@ jobs:
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -805,13 +805,13 @@ jobs:
         if: ${{ needs.paths.outputs.code == 'true' }}
         uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: 📥 Download deps
         if: ${{ needs.paths.outputs.code == 'true' }}
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         if: ${{ needs.paths.outputs.code == 'true' }}
@@ -958,7 +958,9 @@ jobs:
             'app/utils/internal-management.server.test.ts' \
             'app/utils/internal-platform-auth.server.test.ts' \
             'app/utils/tester-feedback-gate.server.test.ts' \
+            'app/utils/tester-feedback-screenshot.server.test.ts' \
             'app/utils/tester-feedback-request.server.test.ts' \
+            'app/routes/api.internal.v1.tester-feedback.$id.screenshot/route.test.ts' \
             'app/utils/demo-feedback.server.test.ts' \
             'app/utils/demo-feedback-context.test.ts' \
             'app/utils/demo-feedback-analytics.test.ts' \
@@ -972,6 +974,8 @@ jobs:
             'app/dev-panel/dev-panel-orgs.server.test.ts' \
             'app/dev-panel/dev-panel-storage.test.ts' \
             'app/dev-panel/dev-panel-provider.test.tsx' \
+            'app/dev-panel/dev-panel-shell-boundary.test.tsx' \
+            'app/root.dev-panel-user.test.ts' \
             'app/dev-panel/dev-panel-free-tier-flyout.test.tsx' \
             'app/dev-panel/dev-panel-flyout-instant.test.tsx' \
             'app/dev-panel/dev-panel-feedback-path.test.ts' \
@@ -1010,7 +1014,63 @@ jobs:
             ../../packages/prisma/scripts/seed-preview-planner-qa.test.ts \
             ../../packages/prisma/scripts/exit-ticket-migration-image.test.ts \
             ../../packages/prisma/scripts/preview-seats.test.ts \
-            app/domain/lesson-planner/lesson-seed.test.ts
+            app/domain/lesson-planner/lesson-seed.test.ts \
+            app/routes/api.domain.lesson-planner/build-system-prompt.test.ts \
+            app/domain/lesson-planner/suggestions.test.ts \
+            app/domain/lesson-planner/daily-pages-block.test.ts \
+            app/domain/lesson-planner/reply-parts.test.ts \
+            app/domain/lesson-planner/stack-contents.server.test.ts \
+            app/domain/lesson-planner/deck-edit.server.test.ts \
+            app/domain/lesson-planner/lesson-pptx-tile.server.test.ts \
+            app/domain/lesson-planner/stack-order.test.ts \
+            app/domain/lesson-planner/stack-order.server.test.ts \
+            app/domain/lesson-planner/stack-items.test.ts \
+            app/domain/lesson-planner/stack-create-link.test.ts \
+            app/domain/lesson-planner/prompt-ids.test.ts \
+            app/domain/lesson-planner/lesson-length.test.ts \
+            app/domain/lesson-planner/plan-timing.test.ts \
+            app/domain/lesson-planner/plan-steps.test.ts \
+            app/domain/lesson-planner/reply-pieces.test.ts \
+            app/domain/lesson-planner/file-reply-pieces.server.test.ts \
+            app/domain/lesson-planner/lesson-plan-doc.test.ts \
+            app/domain/lesson-planner/plan-summary.server.test.ts \
+            app/domain/lesson-planner/lesson-plan-render.server.test.ts \
+            app/domain/lesson-planner/branding.test.ts \
+            app/components/lesson-planner/stack-list.test.ts \
+            app/domain/lesson-planner/step-types.test.ts \
+            app/domain/lesson-planner/stack-timing.test.ts \
+            app/domain/lesson-planner/short-title.test.ts \
+            app/domain/lesson-planner/fileable-material.test.ts \
+            app/domain/lesson-planner/plan-framing.test.ts \
+            app/domain/lesson-planner/stack-suggestions.test.ts \
+            app/domain/lesson-planner/stack-command.test.ts \
+            app/domain/lesson-planner/stack-steps.test.ts \
+            app/domain/lesson-planner/stack-actions.server.test.ts \
+            app/domain/lesson-planner/step-handout.test.ts \
+            app/domain/lesson-planner/lesson-share.test.ts \
+            app/domain/lesson-planner/lesson-share.server.test.ts \
+            app/domain/brand.test.ts \
+            app/domain/lesson-planner/plan-days.test.ts \
+            app/domain/lesson-planner/planner-history.test.ts \
+            app/domain/lesson-planner/lesson-library.test.ts \
+            app/domain/lesson-planner/run-show.test.ts \
+            app/domain/lesson-planner/slide-deck-gallery.test.ts \
+            app/domain/lesson-planner/deck-gallery.test.ts \
+            app/domain/lesson-planner/deck-colors.test.ts \
+            app/domain/lesson-planner/kit-plan.test.ts \
+            app/domain/lesson-planner/teacher-standards.test.ts \
+            app/domain/lesson-planner/lesson-uploads.test.ts \
+            app/domain/lesson-planner/transcript-scroll.test.ts \
+            app/domain/lesson-planner/recent-art.test.ts \
+            app/domain/lesson-planner/source-documents.server.test.ts \
+            app/utils/bounded-body.server.test.ts \
+            app/routes/api.domain.lesson-planner.uploads/route.test.ts \
+            app/domain/lesson-planner/kit-plan-render.server.test.ts \
+            app/domain/lesson-planner/lesson-pptx-gallery.server.test.ts \
+            app/domain/lesson-planner/option-groups.test.ts \
+            app/domain/lesson-planner/lesson-templates.test.ts \
+            app/domain/lesson-planner/yawp-catalog.server.test.ts \
+            app/routes/api.domain.lesson-planner.stack/route.test.ts
           do
             bun test "$f"
           done
@@ -1047,12 +1107,12 @@ jobs:
       - name: ⎔ Setup node
         uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -1167,12 +1227,12 @@ jobs:
       - name: ⎔ Setup node
         uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -1278,12 +1338,12 @@ jobs:
       - name: ⎔ Setup node
         uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -1471,12 +1531,12 @@ jobs:
       - name: ⎔ Setup node
         uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -1570,6 +1630,43 @@ jobs:
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5489/ > /dev/null
           ./bin/project test --profile demo-feedback-browser --json
 
+      - name: Dev panel signed-out /free browser regression
+        if: ${{ !cancelled() && always() }}
+        env:
+          CI: '1'
+          NODE_OPTIONS: --dns-result-order=ipv4first
+          TMPDIR: ${{ runner.temp }}/dev-panel-free-signed-out
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/dev-panel-free-signed-out/bun-cache
+          XDG_CACHE_HOME: ${{ runner.temp }}/dev-panel-free-signed-out/cache
+          RECORD_PORT_APP: '5490'
+          RECORD_PORT_DATABASE: '54490'
+          RECORD_PORT_LTI_MOCK: '9790'
+          YAWP_ENVIRONMENT: demo
+          PREVIEW_SLUG: demo
+          PREVIEW_ACCESS_GATE: 'on'
+          PREVIEW_ACCESS_SECRET: 'ci-demo-feedback-preview-access-secret-32c'
+          PREVIEW_MASTER_ACCESS_CODE: 'ci-demo-master-access'
+          PREVIEW_ACCESS_SEATS: '[{"code":"ci-fixture-4193","organizationId":"local-dev-org","label":"Master"}]'
+          TESTER_FEEDBACK_ENABLED: 'true'
+          DEMO_FEEDBACK_BASE_URL: http://127.0.0.1:5490
+        run: |
+          mkdir -p "$TMPDIR"
+          cleanup() {
+            ./bin/project dev stop --json || true
+            if [ -f .worktree-local/config.env ]; then
+              source .worktree-local/config.env
+              docker rm -f "$CONTAINER_NAME" || true
+              docker volume rm "$VOLUME_NAME" || true
+            fi
+          }
+          trap cleanup EXIT
+          ./bin/project bootstrap --fresh --json
+          ./bin/project fixture verify local-dev --json
+          ./bin/project dev start --json
+          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5490/ > /dev/null
+          cd services/web-app
+          bun x playwright test --config=playwright.dev-panel-free-signed-out.config.ts --workers=1
+
       - name: Upload dev panel artboard evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1609,7 +1706,7 @@ jobs:
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0

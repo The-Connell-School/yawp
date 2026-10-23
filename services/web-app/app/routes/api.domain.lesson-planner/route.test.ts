@@ -67,6 +67,7 @@ const prisma = {
     findFirst: mock(),
   },
   lessonPlanUnit: {
+    findFirst: mock(async () => null),
     create: mock(),
   },
   classAssignment: {
@@ -373,11 +374,11 @@ describe('api.domain.lesson-planner action', () => {
     });
     expect(findArg.include.messages).toMatchObject({
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: 20,
+      take: 80,
     });
   });
 
-  test('bounds long histories by character count before calling the model', async () => {
+  test('bounds long histories: every teacher message, older replies as their outline', async () => {
     prisma.lessonPlanConversation.findFirst.mockResolvedValue({
       id: 'plan-9',
       messages: Array.from({ length: 20 }, (_, index) => ({
@@ -393,14 +394,18 @@ describe('api.domain.lesson-planner action', () => {
     } as any);
 
     const llmMessages = getLLMCompletion.mock.calls[0][0].messages;
-    expect(llmMessages.length).toBeLessThan(21);
+    // Brian's run 5 (item 2): nothing is dropped; older replies are shortened
+    // to their outline, and every teacher message is there in full.
+    expect(llmMessages).toHaveLength(21);
     expect(
       llmMessages.reduce(
         (total: number, message: { content: string }) =>
           total + message.content.length,
         0
       )
-    ).toBeLessThanOrEqual(24_003);
+    ).toBeLessThanOrEqual(36_000 + 10 * 400);
+    expect(llmMessages.filter((message: { role: string; content: string }) => message.role === 'user' && message.content.length > 2_000)).toHaveLength(10);
+    expect(llmMessages.some((message: { role: string; content: string }) => message.role === 'assistant' && message.content.includes('shortened to its outline'))).toBe(true);
     expect(llmMessages.at(-1)).toMatchObject({ role: 'user', content: 'new' });
   });
 
@@ -1050,6 +1055,56 @@ describe('api.domain.lesson-planner action — the progress stream', () => {
     // Still one JSON body, not a stream.
     expect(response instanceof Response).toBe(false);
     expect(jsonResult(response).data.reply).toContain('Do the thing.');
+  });
+});
+
+describe("api.domain.lesson-planner action — the lesson's length (Brian's run 2, B1)", () => {
+  test('keeps the length the teacher gave and tells the planner this turn', async () => {
+    prisma.lessonPlanConversation.findFirst.mockResolvedValue({
+      id: 'plan-9',
+      messages: [{ role: 'assistant', content: 'Which class, and how long?' }],
+      periodMinutes: null,
+      lessonClassLabel: null,
+    });
+    getLLMCompletion.mockResolvedValue('Here is the plan.');
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    await action({
+      request: formRequest({
+        message: 'For English 11 · Period 5, 50 minutes. Plan the whole period.',
+        conversationId: 'plan-9',
+      }),
+    } as any);
+
+    expect(systemText(getLLMCompletion.mock.calls[0][0].system)).toContain(
+      'This lesson is 50 minutes (English 11 · Period 5).'
+    );
+    const update = prisma.lessonPlanConversation.update.mock.calls[0][0];
+    expect(update.data).toMatchObject({
+      periodMinutes: 50,
+      lessonClassLabel: 'English 11 · Period 5',
+    });
+  });
+
+  test('remembers it on later turns, after the answer has scrolled away', async () => {
+    prisma.lessonPlanConversation.findFirst.mockResolvedValue({
+      id: 'plan-9',
+      messages: [{ role: 'assistant', content: 'Here is the plan.' }],
+      periodMinutes: 50,
+      lessonClassLabel: 'English 11 · Period 5',
+    });
+    getLLMCompletion.mockResolvedValue('Here is the deck.');
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    await action({
+      request: formRequest({ message: 'Build the slide deck from my stack', conversationId: 'plan-9' }),
+    } as any);
+
+    expect(systemText(getLLMCompletion.mock.calls[0][0].system)).toContain(
+      'This lesson is 50 minutes (English 11 · Period 5).'
+    );
+    const update = prisma.lessonPlanConversation.update.mock.calls[0][0];
+    expect(update.data.periodMinutes).toBeUndefined();
   });
 });
 

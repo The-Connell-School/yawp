@@ -352,7 +352,7 @@ export default function Route() {
       <nav
         data-tour="app-nav"
         className={cn(
-          'z-20 flex h-full w-[212px] min-w-[212px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out sm:translate-x-0',
+          'z-20 flex h-full min-h-0 w-[212px] min-w-[212px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out sm:translate-x-0',
           {
             'translate-x-0': isMobileNavOpen,
             'w-[56px] min-w-0 items-center': !navExpanded,
@@ -404,7 +404,7 @@ export default function Route() {
             <XIcon />
           </Button>
         </div>
-        <div className="p-3">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
           {mockAdminAvailable && (
             <Link
               to="/app/tester/waitlist"
@@ -477,7 +477,7 @@ export default function Route() {
             }
           />
         </div>
-        <div className="flex flex-grow flex-col justify-end">
+        <div className="flex shrink-0 flex-col justify-end">
           {guidedTours && !isReadOnlyImpersonation ? (
             <TourThisPageButton
               navExpanded={navExpanded}
@@ -491,7 +491,10 @@ export default function Route() {
                 {navExpanded ? <p className="">Settings</p> : null}
               </div>
             </PopoverTrigger>
-            <PopoverContent className="m-1 p-0">
+            <PopoverContent
+              collisionPadding={8}
+              className="m-1 max-h-[var(--radix-popover-content-available-height)] overflow-y-auto p-0"
+            >
               <div className="flex justify-between p-3 border-b">
                 <div className="flex flex-col">
                   <p className="text-sm font-bold">{user.name}</p>
