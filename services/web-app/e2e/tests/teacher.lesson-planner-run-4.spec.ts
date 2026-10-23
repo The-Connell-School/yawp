@@ -148,14 +148,20 @@ test.describe("Lesson Planner — Brian's fourth run", () => {
     const titles = page.getByTestId('run-card').getByTestId('run-card-title');
     const first = (await titles.nth(0).textContent())!;
     const second = (await titles.nth(1).textContent())!;
+    // A drag before hydration is a plain browser drag: nothing moves.
+    await page.waitForLoadState('networkidle');
 
     const cards = page.getByTestId('run-card');
     const box = (await cards.nth(1).boundingBox())!;
+    const saved = page.waitForResponse(
+      (response) => response.url().includes('/api/domain/lesson-planner/packet') && response.request().method() === 'POST'
+    );
     await cards.nth(0).dragTo(cards.nth(1), { targetPosition: { x: box.width / 2, y: box.height * 0.75 } });
     await expect(titles.nth(0)).toHaveText(second);
     await expect(titles.nth(1)).toHaveText(first);
 
-    // It stays where it was put.
+    // It stays where it was put, once the new order is saved.
+    expect((await saved).ok()).toBe(true);
     await page.reload();
     await expect(titles.nth(0)).toHaveText(second);
   });
