@@ -29,3 +29,12 @@ test('Q&A copy omits AI and uses Yawp! verbatim phrasing', () => {
   expect(html).not.toMatch(/\bartificial intelligence\b/i);
   expect(html).toContain('Jordan Rivera has a free Yawp! license');
 });
+
+test('Q&A group labels use authored title case', () => {
+  const html = renderToStaticMarkup(
+    <AdminApprovalQa teacherName="Jordan Rivera" />
+  );
+  expect(html).toContain('>About Yawp!</p>');
+  expect(html).toContain('>Student privacy</p>');
+  expect(html).not.toContain('ABOUT YAWP');
+});
