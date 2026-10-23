@@ -1058,7 +1058,9 @@ jobs:
 
       - name: Install Playwright chromium
         working-directory: services/web-app
-        timeout-minutes: 15
+        timeout-minutes: 28
+        env:
+          PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
         run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
 
       - name: 💾 Save Playwright browsers cache
@@ -1181,7 +1183,9 @@ jobs:
 
       - name: Install Playwright chromium
         working-directory: services/web-app
-        timeout-minutes: 15
+        timeout-minutes: 28
+        env:
+          PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
         run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
 
       - name: 🧪 Locked preview Playwright + evidence
@@ -1282,7 +1286,9 @@ jobs:
 
       - name: Install Playwright chromium
         working-directory: services/web-app
-        timeout-minutes: 15
+        timeout-minutes: 28
+        env:
+          PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
         run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
 
       # The sign-on flows used to run after the smoke suite, which migrated and
@@ -1473,7 +1479,9 @@ jobs:
 
       - name: Install Playwright chromium
         working-directory: services/web-app
-        timeout-minutes: 15
+        timeout-minutes: 28
+        env:
+          PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
         run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
 
       - name: Verify demo feedback headless browser executable

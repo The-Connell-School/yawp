@@ -3,7 +3,8 @@ set -euo pipefail
 
 cache_hit="${1:-false}"
 max_attempts=2
-attempt_timeout="${PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT:-5m}"
+attempt_timeout_default="${PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT:-12m}"
+attempt_timeout_max="${PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT_MAX:-20m}"
 apt_lock_wait_seconds="${PLAYWRIGHT_APT_LOCK_WAIT_SECONDS:-60}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 version="$("$repo_root/scripts/ci/resolve-playwright-version.sh")"
@@ -43,6 +44,31 @@ timeout_to_seconds() {
   echo "::error::Unsupported timeout spec: ${spec}" >&2
   return 1
 }
+
+seconds_to_timeout_spec() {
+  local sec="$1"
+  if (( sec >= 60 && sec % 60 == 0 )); then
+    echo "$((sec / 60))m"
+    return 0
+  fi
+  echo "${sec}s"
+}
+
+clamp_attempt_timeout() {
+  local requested="$1"
+  local max_spec="$2"
+  local req_sec max_sec
+  req_sec="$(timeout_to_seconds "$requested")" || return 1
+  max_sec="$(timeout_to_seconds "$max_spec")" || return 1
+  if (( req_sec > max_sec )); then
+    echo "::warning::PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT=${requested} exceeds max ${max_spec}; using ${max_spec}" >&2
+    seconds_to_timeout_spec "$max_sec"
+    return 0
+  fi
+  echo "$requested"
+}
+
+attempt_timeout="$(clamp_attempt_timeout "$attempt_timeout_default" "$attempt_timeout_max")"
 
 have_passwordless_sudo() {
   command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null
