@@ -79,9 +79,12 @@ const OPEN_PATH_PREFIXES = [
   '/api/internal/v1/admin/teacher-trainings/',
 ];
 const OPEN_SEGMENT = /^[A-Za-z0-9_-]{1,128}$/;
+const TESTER_FEEDBACK_SCREENSHOT_PATH =
+  /^\/api\/internal\/v1\/tester-feedback\/[A-Za-z0-9_-]{1,128}\/screenshot$/;
 
 function isOpenPath(pathname: string) {
   if (OPEN_PATHS.has(pathname)) return true;
+  if (TESTER_FEEDBACK_SCREENSHOT_PATH.test(pathname)) return true;
   if (OPEN_PATH_PREFIXES.some((prefix) =>
     pathname === prefix || pathname.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`)
   )) return true;

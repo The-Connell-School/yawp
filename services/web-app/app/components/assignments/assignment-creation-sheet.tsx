@@ -268,6 +268,11 @@ type AssignmentCreationFetcher<Data> = {
 export type AssignmentCreationSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Told once an assignment is created, so a lesson that sent the teacher
+   * here can say "Created in Yawp!" (Brian's run 3, item 4). Optional.
+   */
+  onCreated?: () => void;
   entryPoint: AssignmentCreationEntryPoint;
   assignmentTypes: AssignmentCreationAssignmentType[];
   siteLicenseLockedAssignmentTiles?: SiteLicenseLockedTile[];
@@ -621,6 +626,7 @@ export function AssignmentCreationSheet({
 export function AssignmentCreationSheetContent({
   open,
   onOpenChange,
+  onCreated,
   entryPoint,
   assignmentTypes,
   teacherClasses,
@@ -1050,9 +1056,14 @@ export function AssignmentCreationSheetContent({
     teacherClasses,
   ]);
 
+  const toldCreated = useRef<unknown>(null);
   useEffect(() => {
     if (createFetcher.state !== 'idle' || !createFetcher.data?.success) return;
     onOpenChange(false);
+    if (!editingAssignment && toldCreated.current !== createFetcher.data) {
+      toldCreated.current = createFetcher.data;
+      onCreated?.();
+    }
     // Closing the sheet used to be the whole ending, which left a collaborative
     // assignment looking done while its groups did not exist yet. `navigate` is
     // injectable so this is testable without a router.

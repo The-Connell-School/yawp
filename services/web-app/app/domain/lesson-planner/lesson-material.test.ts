@@ -5,6 +5,7 @@ import {
   readLessonMaterials,
   hasLessonMaterials,
   linkMaterialTitles,
+  packetKindForMaterial,
 } from './lesson-material';
 
 function fenced(body: string): string {
@@ -233,5 +234,12 @@ describe('linkMaterialTitles', () => {
   test('leaves a plan that never names its materials untouched', () => {
     const body = 'Warm up, then model one together.';
     expect(linkMaterialTitles(body, materials)).toBe(body);
+  });
+});
+
+describe("packetKindForMaterial — writing exercises (Brian's review, B1)", () => {
+  test('a class starter or Daily Pages prompt is something students hold', () => {
+    expect(packetKindForMaterial('class-starter')).toBe('handout');
+    expect(packetKindForMaterial('daily-pages')).toBe('handout');
   });
 });

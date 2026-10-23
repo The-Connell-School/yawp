@@ -1,10 +1,19 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import * as emailCopyServer from './email-copy.server';
 
-const sendFreeTierAdminApprovalEmail = mock(async () => ({ ok: true as const }));
-const recordFreeTierAdminApprovalEmailLogged = mock(async () => ({
-  ok: true as const,
-}));
+type AdminApprovalUrlArgs = {
+  approveUrl: string;
+  notRightPersonUrl: string;
+};
+
+const sendFreeTierAdminApprovalEmail = mock(
+  async (_args: AdminApprovalUrlArgs) => ({ ok: true as const })
+);
+const recordFreeTierAdminApprovalEmailLogged = mock(
+  async (_args: AdminApprovalUrlArgs) => ({
+    ok: true as const,
+  })
+);
 const approvalUpdate = mock(async () => ({}));
 const mintSignedLink = mock(async () => ({
   token: 'prod-approve-token',
@@ -106,10 +115,7 @@ describe('submitAdminDetails suppressEmailDelivery', () => {
     expect(mintSignedLink).not.toHaveBeenCalled();
     expect(sendFreeTierAdminApprovalEmail).not.toHaveBeenCalled();
     expect(recordFreeTierAdminApprovalEmailLogged).toHaveBeenCalledTimes(1);
-    const logged = recordFreeTierAdminApprovalEmailLogged.mock.calls[0]?.[0] as {
-      approveUrl: string;
-      notRightPersonUrl: string;
-    };
+    const logged = recordFreeTierAdminApprovalEmailLogged.mock.calls[0]![0]!;
     expect(logged.approveUrl).toMatch(/^\/free\/admin\//);
     expect(logged.notRightPersonUrl).toMatch(/^\/free\/admin\//);
     expect(logged.approveUrl).not.toMatch(/^https:/);
@@ -131,10 +137,7 @@ describe('submitAdminDetails suppressEmailDelivery', () => {
     expect(mintSignedLinkForDevPanel).not.toHaveBeenCalled();
     expect(recordFreeTierAdminApprovalEmailLogged).not.toHaveBeenCalled();
     expect(sendFreeTierAdminApprovalEmail).toHaveBeenCalledTimes(1);
-    const emailed = sendFreeTierAdminApprovalEmail.mock.calls[0]?.[0] as {
-      approveUrl: string;
-      notRightPersonUrl: string;
-    };
+    const emailed = sendFreeTierAdminApprovalEmail.mock.calls[0]![0]!;
     expect(emailed.approveUrl).toMatch(/^https:\/\/yawp\.test\/free\/admin\//);
     expect(emailed.notRightPersonUrl).toMatch(
       /^https:\/\/yawp\.test\/free\/admin\//

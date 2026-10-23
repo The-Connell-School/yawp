@@ -16,7 +16,8 @@ import { z } from 'zod';
 
 export const SLIDE_DECK_FENCE = 'yawp-slides';
 
-export const SLIDE_LAYOUTS = [
+/** The layouts every renderer has always drawn. */
+export const CLASSIC_SLIDE_LAYOUTS = [
   'title',
   'statement',
   'bullets',
@@ -27,7 +28,33 @@ export const SLIDE_LAYOUTS = [
   'closing',
 ] as const;
 
+/**
+ * The gallery deck's templates (Yawp! Lesson Deck Kit, "The gallery and the
+ * page"), added beside the classic ones. A classic renderer draws each as its
+ * nearest classic layout (`classicSlide`), so a gallery deck still shows
+ * wherever the gallery look is off.
+ */
+export const GALLERY_SLIDE_LAYOUTS = [
+  'agenda',
+  'discuss',
+  'big_idea',
+  'write',
+  'notes',
+  'divider',
+  'read',
+  'look',
+  'excerpt',
+  'exit',
+] as const;
+
+export const SLIDE_LAYOUTS = [...CLASSIC_SLIDE_LAYOUTS, ...GALLERY_SLIDE_LAYOUTS] as const;
+
 export type SlideLayout = (typeof SLIDE_LAYOUTS)[number];
+export type ClassicSlideLayout = (typeof CLASSIC_SLIDE_LAYOUTS)[number];
+
+/** A unit's one accent color (Deck Kit: "one accent per unit"). */
+export const DECK_ACCENTS = ['ember', 'indigo', 'olive', 'plum'] as const;
+export type DeckAccent = (typeof DECK_ACCENTS)[number];
 
 /** Room-legibility limits. Anything longer belongs in the notes. */
 const MAX_TITLE_CHARS = 90;
@@ -61,6 +88,64 @@ const slideSchema = z
     speakerNotes: z.string().trim().min(1).max(2_000),
     // Coerced: the model sometimes writes "5" rather than 5.
     minutes: z.coerce.number().int().min(0).max(60).optional(),
+    // The gallery templates' own slots (Deck Kit, "the twelve templates").
+    // All optional, so a classic slide never needs them.
+    mode: z.string().trim().min(1).max(24).optional(),
+    agenda: z
+      .array(
+        z.object({
+          title: z.string().trim().min(1).max(70),
+          minutes: z.coerce.number().int().min(0).max(120).optional(),
+        })
+      )
+      .min(1)
+      .max(6)
+      .optional(),
+    question: z.string().trim().min(1).max(MAX_BODY_CHARS).optional(),
+    stem: z.string().trim().min(1).max(160).optional(),
+    grouping: z.string().trim().min(1).max(40).optional(),
+    accentWord: z.string().trim().min(1).max(40).optional(),
+    followUp: z.string().trim().min(1).max(MAX_LINE_CHARS).optional(),
+    routine: z.string().trim().min(1).max(60).optional(),
+    timeline: z
+      .array(
+        z.object({
+          year: z.string().trim().min(1).max(14),
+          caption: z.string().trim().min(1).max(70),
+          mark: z.enum(['accent', 'ink', 'open']).optional(),
+        })
+      )
+      .min(1)
+      .max(5)
+      .optional(),
+    facts: z.array(line).min(1).max(3).optional(),
+    tasks: z
+      .array(z.object({ verb: z.string().trim().min(1).max(24), text: z.string().trim().min(1).max(160) }))
+      .min(1)
+      .max(4)
+      .optional(),
+    seconds: z.coerce.number().int().min(5).max(600).optional(),
+    author: z.string().trim().min(1).max(80).optional(),
+    work: z.string().trim().min(1).max(120).optional(),
+    page: z.string().trim().min(1).max(20).optional(),
+    part: z.string().trim().min(1).max(12).optional(),
+    nextLesson: z.string().trim().min(1).max(MAX_TITLE_CHARS).optional(),
+    // Deck spec v3: the divider that starts a stage names its writing-process
+    // step (Step 1. pre-writing … Step 6. title and format).
+    processStep: z.coerce.number().int().min(1).max(6).optional(),
+    // A quiz question's choices; the correct one (1-based) gets a soft band.
+    choices: z.array(line).min(2).max(5).optional(),
+    answer: z.coerce.number().int().min(1).max(5).optional(),
+    // The exit slide's Yawp! button ("Open Yawp! → Exit ticket").
+    button: z.string().trim().min(1).max(40).optional(),
+    // The title slide's course line ("English 9").
+    course: z.string().trim().min(1).max(80).optional(),
+    // Which of the deck's colors (1-based) this slide uses, for a section
+    // that keeps its own color.
+    color: z.coerce.number().int().min(1).max(3).optional(),
+    // Which stack step this slide belongs to, by its number in the stack
+    // (Brian's run 3): Run the show moves the projector with the teacher.
+    step: z.coerce.number().int().min(1).max(MAX_SLIDES).optional(),
   })
   // Deliberately not .strict(): one stray key should not cost the teacher the
   // whole deck. Unknown fields are dropped, required ones still enforced.
@@ -72,6 +157,24 @@ const slideSchema = z
         path: ['bullets'],
         message: `A ${slide.layout} slide needs bullets.`,
       });
+    }
+    const needs = (field: keyof typeof slide, what: string, ok: boolean) => {
+      if (!ok) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: [field as string], message: `A ${slide.layout} slide needs ${what}.` });
+      }
+    };
+    if (slide.layout === 'agenda') needs('agenda', 'agenda items', Boolean(slide.agenda?.length));
+    if (slide.layout === 'discuss' || slide.layout === 'look') {
+      needs('question', 'a question', Boolean(slide.question || slide.body));
+    }
+    if (['big_idea', 'write', 'excerpt', 'exit'].includes(slide.layout)) {
+      needs('body', 'a body', Boolean(slide.body));
+    }
+    if (slide.layout === 'notes') {
+      needs('timeline', 'a timeline or facts', Boolean(slide.timeline?.length || slide.facts?.length));
+    }
+    if (slide.layout === 'read') {
+      needs('tasks', 'tasks', Boolean(slide.tasks?.length || slide.bullets?.length));
     }
     if (slide.layout === 'compare' && (!slide.left || !slide.right)) {
       context.addIssue({
@@ -96,6 +199,14 @@ const slideSchema = z
 const deckSchema = z.object({
   title: z.string().trim().min(1).max(MAX_TITLE_CHARS),
   subtitle: z.string().trim().min(1).max(MAX_LINE_CHARS).optional(),
+  // The gallery deck (Deck Kit): the unit it belongs to (for the running
+  // head), its accent, and the painting from the art library it hangs.
+  unit: z.string().trim().min(1).max(80).optional(),
+  accent: z.enum(DECK_ACCENTS).optional(),
+  // Deck spec v3: two or three colors from the painting; the first is the
+  // primary. Without them, the painting's own colors are used.
+  colors: z.array(z.string().trim().regex(/^#?[0-9a-fA-F]{6}$/)).min(1).max(3).optional(),
+  art: z.string().trim().min(1).max(60).optional(),
   slides: z.array(slideSchema).min(1).max(MAX_SLIDES),
 });
 
@@ -159,14 +270,16 @@ const LAYOUT_ALIASES: Record<string, SlideLayout> = {
   directions: 'steps',
   process: 'steps',
   claim: 'statement',
-  big_idea: 'statement',
   'big-idea': 'statement',
   objective: 'statement',
   passage: 'quote',
-  excerpt: 'quote',
   cover: 'title',
   opening: 'title',
   section: 'title',
+  bigidea: 'big_idea',
+  'read-along': 'read',
+  read_along: 'read',
+  timeline: 'notes',
   closing_slide: 'closing',
   'exit-ticket': 'closing',
   exit_ticket: 'closing',
@@ -487,7 +600,7 @@ export function parseSlideDeck(content: string): ParsedSlideDeck | null {
  * on the page.
  */
 export const FAILED_DECK_NOTE =
-  '[The slide deck you wrote here failed validation. Yawp never rendered it and the teacher never saw it. If they ask about the deck, believe them, apologise briefly, and build it again from scratch — shorter and simpler. Do not refer back to this one as if it exists.]';
+  '[The slide deck you wrote here failed validation. Yawp! never rendered it and the teacher never saw it. If they ask about the deck, believe them, apologise briefly, and build it again from scratch — shorter and simpler. Do not refer back to this one as if it exists.]';
 
 export function markFailedDecks(content: string): string {
   const outcome = readSlideDeck(content);
@@ -518,4 +631,55 @@ export function slideSearchText(slide: Slide): string {
   ]
     .filter(Boolean)
     .join(' ');
+}
+
+export type ClassicSlide = Slide & { layout: ClassicSlideLayout };
+
+const CLASSIC_SET = new Set<string>(CLASSIC_SLIDE_LAYOUTS);
+
+/**
+ * A gallery slide as the nearest classic one, for every renderer that only
+ * knows the classic layouts (the tile and plain decks, PowerPoint, the PDF).
+ * A classic slide comes back as itself.
+ */
+export function classicSlide(slide: Slide): ClassicSlide {
+  if (CLASSIC_SET.has(slide.layout)) return slide as ClassicSlide;
+  const as = (layout: ClassicSlideLayout, extra: Partial<Slide> = {}): ClassicSlide => ({
+    ...slide,
+    ...extra,
+    layout,
+  });
+  switch (slide.layout) {
+    case 'agenda':
+      return as('bullets', {
+        bullets: (slide.agenda ?? []).map((item) =>
+          item.minutes ? `${item.title} (${item.minutes} min)` : item.title
+        ),
+      });
+    case 'discuss':
+    case 'look':
+    case 'write':
+      return as('prompt', { body: slide.question ?? slide.body ?? slide.title });
+    case 'big_idea':
+      return as('statement');
+    case 'notes':
+      return as('bullets', {
+        bullets: [
+          ...(slide.timeline ?? []).map((entry) => `${entry.year}: ${entry.caption}`),
+          ...(slide.facts ?? []),
+        ].slice(0, 7),
+      });
+    case 'divider':
+      return as('title');
+    case 'read':
+      return as('bullets', {
+        bullets: slide.tasks?.length ? slide.tasks.map((task) => `${task.verb} ${task.text}`) : slide.bullets,
+      });
+    case 'excerpt':
+      return as('quote', { attribution: slide.attribution ?? slide.author });
+    case 'exit':
+      return as('closing');
+    default:
+      return as('statement');
+  }
 }

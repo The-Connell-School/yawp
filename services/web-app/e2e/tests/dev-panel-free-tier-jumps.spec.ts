@@ -42,6 +42,15 @@ test.describe('Dev panel free-tier state jumps', () => {
       update: { value: 'true' },
     });
     await prisma.setting.upsert({
+      where: { name: 'feature_flag.lesson_planner' },
+      create: {
+        name: 'feature_flag.lesson_planner',
+        value: 'true',
+        valueType: 'boolean',
+      },
+      update: { value: 'true' },
+    });
+    await prisma.setting.upsert({
       where: { name: 'feature_flag.demo-feedback-widget' },
       create: {
         name: 'feature_flag.demo-feedback-widget',
@@ -90,39 +99,52 @@ test.describe('Dev panel free-tier state jumps', () => {
         const response = await jumpResponse;
         const body = await response.json().catch(() => null);
         const jumpOk = response.ok() && body?.ok === true;
-        if (jumpOk) {
-          recordJumpLine(`${entry.stateId}: ok`);
-        } else {
+
+        expect.soft(response.ok(), `${entry.stateId} API HTTP status`).toBe(true);
+        expect.soft(body?.ok, `${entry.stateId} API ok flag`).toBe(true);
+
+        if (!jumpOk) {
           const err =
             typeof body?.error === 'string'
               ? body.error
               : `HTTP ${response.status()}`;
           recordJumpLine(`${entry.stateId}: ${err}`);
-        }
-        expect.soft(response.ok(), `${entry.stateId} API HTTP status`).toBe(true);
-        expect.soft(body?.ok, `${entry.stateId} API ok flag`).toBe(true);
-        if (!jumpOk) {
           return;
         }
 
         const redirectTo = String(body.redirectTo);
+        const expectedPathPrefix = entry.redirectPath.split('?')[0]!;
+
         if (entry.adminSide) {
-          expect
-            .soft(new URL(redirectTo, page.url()).pathname, entry.stateId)
-            .toContain(entry.redirectPath);
           await page.goto(redirectTo);
+          const pathname = new URL(page.url()).pathname;
+          expect
+            .soft(pathname, `${entry.stateId} admin pathname`)
+            .toContain(entry.redirectPath);
           if (entry.adminHeading) {
             await expect
               .soft(page.getByRole('heading', { name: entry.adminHeading }))
               .toBeVisible({ timeout: 30_000 });
           }
+          const adminOk = pathname.includes(entry.redirectPath);
+          recordJumpLine(
+            adminOk ? `${entry.stateId}: ok` : `${entry.stateId}: landed on ${pathname}`
+          );
           return;
         }
 
-        await page.waitForURL(
-          (url) => url.pathname.startsWith(entry.redirectPath.split('?')[0]!),
-          { timeout: 120_000 }
-        );
+        await page
+          .waitForURL(
+            (url) => url.pathname.startsWith(expectedPathPrefix),
+            { timeout: 120_000 }
+          )
+          .catch(() => undefined);
+
+        const pathname = new URL(page.url()).pathname;
+        expect
+          .soft(pathname.startsWith(expectedPathPrefix), `${entry.stateId} pathname`)
+          .toBe(true);
+
         if (entry.toastLabel) {
           await expect
             .soft(
@@ -132,6 +154,17 @@ test.describe('Dev panel free-tier state jumps', () => {
             )
             .toBeVisible({ timeout: 30_000 });
         }
+
+        if (entry.stateId === 'approved.reporter-limit') {
+          await expect
+            .soft(page.getByTestId('free-reporter-locked'))
+            .toBeVisible({ timeout: 30_000 });
+        }
+
+        const landedOk = pathname.startsWith(expectedPathPrefix);
+        recordJumpLine(
+          landedOk ? `${entry.stateId}: ok` : `${entry.stateId}: landed on ${pathname}`
+        );
       });
     }
   });

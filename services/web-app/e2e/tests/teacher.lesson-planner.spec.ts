@@ -1189,6 +1189,35 @@ test.describe('Yawp! Lesson Planner', () => {
     await expect(page.getByTestId('planning-progress')).toHaveCount(0);
   });
 
+  // Kevin (Oct 22): a long reply lands at its top, to read down from, not at
+  // its bottom with the teacher scrolling back up to find where it starts.
+  test('a long reply opens at its top, not its bottom', async ({ page, signIn, e2eContext }) => {
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    const long = ['## Conclusions that land', '', ...Array.from({ length: 60 }, (_, i) => `Step ${i + 1}: four minutes of writing, then a share.\n`)].join('\n');
+    await page.route('**/api/domain/lesson-planner', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'application/x-ndjson; charset=utf-8' },
+        body:
+          JSON.stringify({
+            type: 'done',
+            status: 200,
+            payload: { conversationId: 'streamed-2', messageId: 'streamed-msg-2', reply: long, isNewConversation: true },
+          }) + '\n',
+      });
+    });
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('/app/lesson-planner');
+    await page.waitForLoadState('networkidle');
+    await page.getByLabel('Message the Lesson Planner').fill('Plan a lesson on conclusions');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    const heading = page.getByRole('heading', { name: 'Conclusions that land' });
+    await expect(heading).toBeVisible();
+    await expect(heading).toBeInViewport();
+    await expect(page.getByText('Step 60: four minutes of writing')).not.toBeInViewport();
+  });
+
   /**
    * Brian's note: the planner read as a chat client, and the loudest reason was
    * a permanent list of every conversation sitting beside the workspace. It
@@ -2527,6 +2556,8 @@ test.describe('Yawp! Lesson Planner', () => {
     const slider = page.getByRole('slider', {
       name: /lesson length in minutes/i,
     });
+    // Filled before hydration, the change never reaches React.
+    await page.waitForLoadState('networkidle');
     await slider.fill('90');
     await expect(page.getByTestId('lesson-minutes-value')).toHaveText(
       '1 hr 30 min'

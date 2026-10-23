@@ -8,6 +8,8 @@ import {
   tableRowBottom,
   renderHandoutPdf,
   renderPacketPdf,
+  renderStepHandoutPdf,
+  handoutKit,
 } from './lesson-pdf.server';
 
 function packetWith(
@@ -265,6 +267,36 @@ describe('renderHandoutPdf', () => {
     const text = pdfText(await renderHandoutPdf({ packet, only: 's1' }));
     expect(text).toContain('Name:');
     expect(text).toContain('Section:');
+  });
+});
+
+describe('handouts with the Lesson Deck Kit on', () => {
+  const packet = packetWith([
+    { id: 's2', content: '## Practice\n\nUnderline the sentence that proves it.', keptAudience: 'student' },
+  ]);
+
+  test('off: Helvetica and Yawp!’s print colour, as before', async () => {
+    expect(handoutKit(packet, { deckGallery: false })).toBeNull();
+    const raw = pdfMetadata(await renderHandoutPdf({ packet }));
+    expect(raw).toContain('Helvetica');
+    expect(raw).not.toContain('Gelasio');
+  });
+
+  test('on: the lesson plan’s fonts and the lesson’s color', async () => {
+    const kit = handoutKit(packet, { deckGallery: true })!;
+    expect(kit.color).toMatch(/^#[0-9A-F]{6}$/);
+    const raw = pdfMetadata(await renderHandoutPdf({ packet, kit }));
+    expect(raw).toContain('Gelasio');
+    expect(raw).toContain('Arimo');
+    const steps = pdfMetadata(
+      await renderStepHandoutPdf({ title: 'T', className: null, parts: [{ id: 'a', title: 'A', content: 'Write.', lines: 2 }], kit })
+    );
+    expect(steps).toContain('Arimo');
+  });
+
+  test('on: the deck’s primary color', () => {
+    const withDeck = { ...packet, sections: [{ ...packet.sections[0]!, deck: { title: 'D', colors: ['#3F5A73'], slides: [{ layout: 'title', title: 'D', speakerNotes: 'n' }] } }] };
+    expect(handoutKit(withDeck as never, { deckGallery: true })!.color).toBe('#3F5A73');
   });
 });
 
@@ -589,5 +621,23 @@ mustMention: Whether the material moves.
     expect(text).not.toContain('yawp-slides');
     expect(text).not.toContain('yawp-exit-ticket');
     expect(text).not.toContain('mustMention');
+  });
+});
+
+describe("renderStepHandoutPdf (Brian's run 3, item 8)", () => {
+  test('the steps picked, numbered, with lines to write on for writing steps', async () => {
+    const bytes = await renderStepHandoutPdf({
+      title: 'Day One',
+      className: 'English 10 · Period 3',
+      parts: [
+        { id: 'hook', title: 'What’s in your bag?', content: 'Pick one object that tells a stranger something true about you.', lines: 0 },
+        { id: 'dp', title: 'What one item reveals', content: 'What would your list say about you?', lines: 8 },
+      ],
+    });
+    const text = pdfText(bytes);
+    expect(text).toContain('Pick one object');
+    expect(text).toContain('What would your list say');
+    expect(text).toContain('2. What one item reveals');
+    expect(Buffer.from(bytes).toString('latin1').startsWith('%PDF-')).toBe(true);
   });
 });

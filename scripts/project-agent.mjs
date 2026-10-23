@@ -9,7 +9,7 @@ const CONFIG_FILE = path.join(ROOT, ".worktree-local", "config.env");
 const DEV_PID_FILE = path.join(ROOT, ".worktree-local", "dev.pid");
 const DEV_LOG_FILE = path.join(ROOT, ".worktree-local", "dev.log");
 const MIN_NODE_MAJOR = 22;
-const MIN_BUN_VERSION = [1, 4, 3];
+const MIN_BUN_VERSION = [1, 4, 4];
 const MAX_CAPTURE_BYTES = 64 * 1024;
 
 function cleanVersion(value) {

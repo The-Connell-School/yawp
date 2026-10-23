@@ -11,7 +11,20 @@ try {
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
+async function flushAfterHydration() {
+  await act(async () => {
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setTimeout(resolve, 0);
+        });
+      });
+    });
+  });
+}
+
 import { DevPanelProvider, useDevPanel } from './dev-panel-provider';
+import { writeDevPanelState } from './dev-panel-storage';
 
 function Probe() {
   const { unlocked, flyoutSwitchInstant, openSubSheet, state } = useDevPanel();
@@ -44,6 +57,45 @@ describe('DevPanelProvider', () => {
       );
     });
     expect(container.querySelector('[data-unlocked]')?.getAttribute('data-unlocked')).toBe(
+      'yes'
+    );
+    root.unmount();
+  });
+
+  test('restores an open panel from localStorage after mount', async () => {
+    writeDevPanelState(window.localStorage, {
+      open: true,
+      openSections: ['sign-in'],
+      org: null,
+      subSheet: null,
+      scroll: {},
+      forms: { throwawaySwitch: true, blackboardRole: 'teacher' },
+    });
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    function OpenFlag() {
+      const { state } = useDevPanel();
+      return createElement('span', {
+        'data-open': state.open ? 'yes' : 'no',
+        'data-restored': state.restored ? 'yes' : 'no',
+      });
+    }
+    act(() => {
+      root.render(
+        createElement(
+          DevPanelProvider,
+          {
+            envBadge: 'Dev',
+            previewAccessGateEnabled: false,
+            previewAccessSeatLabel: null,
+            children: createElement(OpenFlag),
+          }
+        )
+      );
+    });
+    await flushAfterHydration();
+    expect(container.querySelector('[data-open]')?.getAttribute('data-open')).toBe('yes');
+    expect(container.querySelector('[data-restored]')?.getAttribute('data-restored')).toBe(
       'yes'
     );
     root.unmount();

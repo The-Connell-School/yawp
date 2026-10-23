@@ -13,6 +13,7 @@ import {
   printsForStudents,
   renderHandoutPdf,
   renderPacketPdf,
+  handoutKit,
 } from '~/domain/lesson-planner/lesson-pdf.server';
 import { buildStudentHandout } from '~/domain/lesson-planner/student-handout';
 
@@ -20,9 +21,10 @@ import { buildStudentHandout } from '~/domain/lesson-planner/student-handout';
 const MAX_EXCLUSIONS = 200;
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  const { packet } = await loadLessonPacket({
+  const { packet, reviewFlags } = await loadLessonPacket({
     request,
     conversationId: params.conversationId,
+    withStackDetails: false,
   });
 
   const url = new URL(request.url);
@@ -48,7 +50,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     );
     if (!piece) throw new Response('Not Found', { status: 404 });
 
-    const pdf = await renderHandoutPdf({ packet, only: onlyPiece });
+    const pdf = await renderHandoutPdf({ packet, only: onlyPiece, kit: handoutKit(packet, reviewFlags) });
     return pdfResponse(pdf, pdfFilename(packet.title, piece.title));
   }
 
@@ -71,6 +73,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? await renderHandoutPdf({
         packet: chosen,
         excluded: single ? [] : excluded,
+        kit: handoutKit(packet, reviewFlags),
       })
     : await renderPacketPdf(chosen);
 

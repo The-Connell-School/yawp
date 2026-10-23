@@ -182,9 +182,9 @@ describe("Yawp project agent CLI", () => {
   test("rejects Bun older than the package-manager contract", () => {
     const selected = selectCompatibleBun(["old", "pinned"], (candidate) => ({
       old: "1.3.1",
-      pinned: "1.4.3",
+      pinned: "1.4.4",
     })[candidate]);
-    expect(selected).toEqual({ executable: "pinned", version: "1.4.3" });
+    expect(selected).toEqual({ executable: "pinned", version: "1.4.4" });
   });
 
   test("parses the generated worktree configuration without evaluating shell", () => {
@@ -238,7 +238,7 @@ describe("Yawp project agent CLI", () => {
     expect(setup).not.toContain("copy_optional_env_value ANTHROPIC_API_KEY");
     const ci = fs.readFileSync(path.join(root, ".github", "workflows", "ci.yml"), "utf8");
     expect(ci).not.toMatch(/node-version:\s*20\b/);
-    expect(ci).toMatch(/node-version:\s*22\b/);
+    expect(ci).toMatch(/node-version:\s*22\.23\.4\b/);
   });
 
   test("worktree setup preserves Record-reserved ports from existing config", () => {
