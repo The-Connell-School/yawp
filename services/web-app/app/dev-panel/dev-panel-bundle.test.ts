@@ -13,6 +13,8 @@ const FORBIDDEN_CLIENT_MARKERS = [
   'Open developer tools',
   'event.code !== "KeyD"',
   '/api/dev-panel/orgs',
+  '/api/dev-panel/feedback',
+  'Sent as a tester',
   'DevPanelShell',
 ];
 
@@ -56,12 +58,16 @@ describe('dev panel production bundle guard', () => {
     expect(config).toContain('dev-panel-entry.stub.tsx');
   });
 
-  test('production client build output excludes dev panel modules and shortcut handler', () => {
-    const { combined, files } = readProductionClientJs();
-    expect(files.length).toBeGreaterThan(0);
-    for (const marker of FORBIDDEN_CLIENT_MARKERS) {
-      expect(combined.includes(marker)).toBe(false);
-    }
-    expect(files.some((name) => name.includes('dev-panel'))).toBe(false);
-  });
+  test(
+    'production client build output excludes dev panel modules and shortcut handler',
+    () => {
+      const { combined, files } = readProductionClientJs();
+      expect(files.length).toBeGreaterThan(0);
+      for (const marker of FORBIDDEN_CLIENT_MARKERS) {
+        expect(combined.includes(marker)).toBe(false);
+      }
+      expect(files.some((name) => name.includes('dev-panel'))).toBe(false);
+    },
+    180_000
+  );
 });

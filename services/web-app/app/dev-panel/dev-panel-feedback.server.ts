@@ -6,13 +6,20 @@ import {
 } from '~/utils/demo-feedback-context';
 import { getUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { saveTesterFeedback } from '~/utils/tester-feedback-runtime.server';
+import type { FeedbackInput } from '~/utils/tester-feedback.server';
 import { assertDevPanelRoute } from './dev-panel-route-guard.server';
 import { devPanelFeedbackPath } from './dev-panel-feedback-path';
 import {
   getPreviewAccessSeat,
   isPreviewDevLoginAccessCodeRequired,
 } from '~/utils/preview-access.server';
+import {
+  devPanelSeatRateLimitKey,
+  ensureDevPanelSignedOutTesterUser,
+  resolveSignedOutFeedbackOrganizationId,
+} from './dev-panel-signed-out-feedback.server';
+
+export const DEV_PANEL_FEEDBACK_BODY_LIMIT = 600_000;
 
 const pathSchema = z
   .string()
@@ -49,6 +56,7 @@ const submissionSchema = z.object({
   url: pathSchema,
   actions: z.array(actionSchema).max(5),
   screenshot: z.string().max(500_000).nullable().optional(),
+  screenshotOmitted: z.boolean().optional(),
 });
 
 const json = (body: unknown, status: number) =>
@@ -59,15 +67,33 @@ const json = (body: unknown, status: number) =>
 
 const SIGNED_OUT_ATTRIBUTION = '[Signed-out preview tester]';
 
-async function resolveFeedbackUserId(request: Request) {
-  const signedIn = await getUserId(request);
-  if (signedIn) return { userId: signedIn, signedOut: false };
-  const fallback = await prisma.user.findFirst({
-    where: { email: 'dev.admin@yawp.local' },
-    select: { id: true },
+async function saveDevPanelFeedback(
+  input: FeedbackInput,
+  rateLimitKey: string
+) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('tester_feedback:' || ${rateLimitKey}))`;
+    const count = await tx.testerFeedback.count({
+      where: {
+        userId: input.userId,
+        createdAt: { gte: new Date(Date.now() - 600_000) },
+      },
+    });
+    if (count >= 5) return false;
+    await tx.testerFeedback.create({ data: input });
+    return true;
   });
-  if (!fallback) return null;
-  return { userId: fallback.id, signedOut: true };
+}
+
+async function resolveFeedbackAuthor(request: Request) {
+  const signedIn = await getUserId(request);
+  if (signedIn) return { userId: signedIn, signedOut: false as const };
+  const seat = await getPreviewAccessSeat(request);
+  const organizationId = await resolveSignedOutFeedbackOrganizationId(
+    seat?.organizationId
+  );
+  const userId = await ensureDevPanelSignedOutTesterUser(organizationId);
+  return { userId, signedOut: true as const, seat };
 }
 
 function actionSummary(actions: FeedbackAction[]) {
@@ -86,6 +112,12 @@ function actionSummary(actions: FeedbackAction[]) {
     .slice(0, 4000);
 }
 
+function screenshotWish(screenshot: string | null | undefined, omitted?: boolean) {
+  if (screenshot) return '[screenshot attached in dev panel feedback]';
+  if (omitted) return '[screenshot omitted — capture exceeded size limit]';
+  return '';
+}
+
 export async function submitDevPanelFeedback(request: Request) {
   const blocked = await assertDevPanelRoute(request);
   if (blocked) return blocked;
@@ -102,7 +134,7 @@ export async function submitDevPanelFeedback(request: Request) {
   if (request.headers.get('content-type')?.split(';')[0] !== 'application/json') {
     return json({ error: 'Unsupported content type' }, 415);
   }
-  const body = await readBoundedText(request, 30_000);
+  const body = await readBoundedText(request, DEV_PANEL_FEEDBACK_BODY_LIMIT);
   if (body === null) return json({ error: 'Feedback is too large' }, 413);
   let value: unknown;
   try {
@@ -119,18 +151,13 @@ export async function submitDevPanelFeedback(request: Request) {
       400
     );
   }
-  const author = await resolveFeedbackUserId(request);
-  if (!author) {
-    return json({ error: 'Could not save feedback. Please try again.' }, 503);
-  }
+  const author = await resolveFeedbackAuthor(request);
   if (author.signedOut && isPreviewDevLoginAccessCodeRequired()) {
-    const seat = await getPreviewAccessSeat(request);
-    if (!seat) {
+    if (!author.seat) {
       return json({ error: 'Preview access code required.' }, 401);
     }
   }
-  const seat = await getPreviewAccessSeat(request);
-  const seatLabel = seat?.label?.trim();
+  const seatLabel = author.seat?.label?.trim();
   const signedOutPrefix =
     author.signedOut && seatLabel
       ? `${SIGNED_OUT_ATTRIBUTION} (${seatLabel.slice(0, 80)})`
@@ -147,20 +174,28 @@ export async function submitDevPanelFeedback(request: Request) {
     process.env.NODE_ENV ||
     'development'
   ).slice(0, 100);
+  const rateLimitKey =
+    author.signedOut && author.seat
+      ? devPanelSeatRateLimitKey(author.seat)
+      : author.userId;
   try {
-    const saved = await saveTesterFeedback({
-      userId: author.userId,
-      environment,
-      userAgent: (request.headers.get('user-agent') || '').slice(0, 1000),
-      url: parsed.data.url,
-      whatHappened: parsed.data.note,
-      whatIDid,
-      whatIWish: parsed.data.screenshot
-        ? '[screenshot attached in dev panel feedback]'
-        : '',
-      severity: null,
-      actions: parsed.data.actions,
-    });
+    const saved = await saveDevPanelFeedback(
+      {
+        userId: author.userId,
+        environment,
+        userAgent: (request.headers.get('user-agent') || '').slice(0, 1000),
+        url: parsed.data.url,
+        whatHappened: parsed.data.note,
+        whatIDid,
+        whatIWish: screenshotWish(
+          parsed.data.screenshot,
+          parsed.data.screenshotOmitted
+        ),
+        severity: null,
+        actions: parsed.data.actions,
+      },
+      rateLimitKey
+    );
     if (!saved) {
       return json({ error: 'Please wait before sending more feedback.' }, 429);
     }

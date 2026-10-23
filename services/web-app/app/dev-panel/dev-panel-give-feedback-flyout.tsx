@@ -1,5 +1,5 @@
 import { ChevronLeft, Loader2 } from 'lucide-react';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useRouteLoaderData } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
@@ -8,6 +8,7 @@ import { Textarea } from '~/components/ui/textarea';
 import { cn } from '~/utils/misc';
 import type { loader as rootLoader } from '~/root';
 import { captureFeedbackScreenshot } from './capture-feedback-screenshot';
+import { compressFeedbackScreenshot } from './compress-feedback-screenshot';
 import { useDevPanel } from './dev-panel-provider';
 import { createDevPanelFeedbackContext } from './dev-panel-feedback-context';
 import { devPanelFeedbackPath } from './dev-panel-feedback-path';
@@ -36,19 +37,22 @@ export function DevPanelGiveFeedbackFlyout({
     ReturnType<typeof createDevPanelFeedbackContext>['snapshot']
   >;
 }) {
-  const { state, updateForms, clearFeedbackForm } = useDevPanel();
+  const { state, updateForms, flyoutSwitchInstant } = useDevPanel();
   const rootData = useRouteLoaderData<typeof rootLoader>('root');
   const location = useLocation();
   const path = devPanelFeedbackPath(location.pathname + location.search);
   const noteId = useId();
   const pageUrlId = useId();
+  const sentHeadingId = useId();
   const isPhone = useMedia('(max-width: 639px)');
   const footerStyle = useVisualViewportFooterStyle(isPhone);
   const [screenshot, setScreenshot] = useState<string | null>(null);
+  const [screenshotOmitted, setScreenshotOmitted] = useState(false);
   const [status, setStatus] = useState<'idle' | 'submitting' | 'sent' | 'error'>('idle');
   const [error, setError] = useState('');
   const note = state.forms.feedbackNote ?? '';
   const signedOut = !rootData?.user?.email;
+  const sentPathRef = useRef(path);
 
   useEffect(() => {
     if (state.subSheet !== 'give-feedback') return;
@@ -68,14 +72,32 @@ export function DevPanelGiveFeedbackFlyout({
       return;
     }
     void captureFeedbackScreenshot()
-      .then(setScreenshot)
-      .catch(() => setScreenshot(null))
+      .then(async (raw) => {
+        const { dataUrl, dropped } = await compressFeedbackScreenshot(raw);
+        setScreenshot(dataUrl);
+        setScreenshotOmitted(dropped);
+      })
+      .catch(() => {
+        setScreenshot(null);
+        setScreenshotOmitted(false);
+      })
       .finally(focusNote);
   }, [noteId, state.subSheet]);
 
-  if (state.subSheet !== 'give-feedback' || !path) return null;
+  useEffect(() => {
+    if (status !== 'sent') return;
+    const heading = document.getElementById(sentHeadingId);
+    heading?.focus({ preventScroll: true });
+  }, [sentHeadingId, status]);
+
+  if (state.subSheet !== 'give-feedback') return null;
 
   const submit = async () => {
+    if (!path) {
+      setError('This page location cannot be sent.');
+      setStatus('error');
+      return;
+    }
     if (!note.trim()) {
       setError('Add a note before sending.');
       document.getElementById(noteId)?.focus();
@@ -93,6 +115,7 @@ export function DevPanelGiveFeedbackFlyout({
           url: path,
           actions: feedbackActions(),
           screenshot,
+          screenshotOmitted,
         }),
       });
       const result = await response.json().catch(() => null);
@@ -101,17 +124,20 @@ export function DevPanelGiveFeedbackFlyout({
         setStatus('error');
         return;
       }
+      sentPathRef.current = path;
       setStatus('sent');
-      clearFeedbackForm();
     } catch {
-      setError('Could not send feedback.');
       setStatus('error');
+      setError('');
     }
   };
+
+  const displayPath = path ?? location.pathname;
 
   return (
     <div
       data-yawp-dev-panel-flyout
+      data-instant={flyoutSwitchInstant ? 'true' : undefined}
       className={cn(
         'flex flex-col bg-background',
         pushed
@@ -138,16 +164,33 @@ export function DevPanelGiveFeedbackFlyout({
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {status === 'sent' ? (
           <div className="space-y-3">
-            <p role="status">Feedback saved. Thank you.</p>
+            <h3
+              id={sentHeadingId}
+              tabIndex={-1}
+              className="text-base font-semibold outline-none"
+            >
+              Feedback sent
+            </h3>
+            <p role="status">
+              Thanks. The Yawp! team got your note, screenshot and {sentPathRef.current}.
+            </p>
+            {signedOut ? (
+              <p className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                Sent as a tester (not signed in)
+              </p>
+            ) : null}
             <Button
               type="button"
               variant="outline"
               onClick={() => {
                 setStatus('idle');
                 updateForms({ feedbackNote: '' });
+                setScreenshot(null);
+                setScreenshotOmitted(false);
+                window.setTimeout(() => document.getElementById(noteId)?.focus(), 0);
               }}
             >
-              Send more feedback
+              Send another
             </Button>
           </div>
         ) : (
@@ -160,7 +203,17 @@ export function DevPanelGiveFeedbackFlyout({
                 Sent as a tester (not signed in)
               </p>
             ) : null}
-            <div className="space-y-1">
+            {screenshotOmitted ? (
+              <p className="text-xs text-muted-foreground">
+                Screenshot omitted — the capture was too large to send.
+              </p>
+            ) : null}
+            <div
+              className={cn(
+                'space-y-1',
+                status === 'submitting' && 'pointer-events-none opacity-60'
+              )}
+            >
               <Label htmlFor={noteId}>Note</Label>
               <Textarea
                 id={noteId}
@@ -172,28 +225,36 @@ export function DevPanelGiveFeedbackFlyout({
                   updateForms({ feedbackNote: event.target.value });
                   if (error) setError('');
                 }}
-                aria-describedby={error ? 'dev-panel-feedback-error' : undefined}
+                aria-describedby={
+                  status === 'error' ? 'dev-panel-feedback-error' : undefined
+                }
               />
               <p className="text-xs text-muted-foreground">{note.length} / 2000</p>
-              {error ? (
-                <p id="dev-panel-feedback-error" role="alert" className="text-sm text-destructive">
-                  {error}
-                </p>
-              ) : null}
             </div>
+            {status === 'error' ? (
+              <p id="dev-panel-feedback-error" role="alert" className="text-sm text-destructive">
+                Couldn&apos;t send feedback. Your note and screenshot are saved here. Check your
+                connection and try again.
+              </p>
+            ) : null}
             {screenshot ? (
-              <div className="space-y-1">
+              <div
+                className={cn(
+                  'space-y-1',
+                  status === 'submitting' && 'pointer-events-none opacity-60'
+                )}
+              >
                 <p className="text-sm font-medium">Screenshot</p>
                 <img
                   src={screenshot}
-                  alt={`Screenshot of ${path}`}
+                  alt={`Screenshot of ${displayPath}`}
                   className="max-h-32 rounded border"
                 />
               </div>
             ) : null}
             <div className="space-y-1">
               <Label htmlFor={pageUrlId}>Page URL</Label>
-              <Input id={pageUrlId} readOnly value={path} />
+              <Input id={pageUrlId} readOnly value={displayPath} />
             </div>
           </>
         )}

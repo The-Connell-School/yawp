@@ -22,13 +22,36 @@ import {
 import type { FreeTierJumpStep } from './free-tier-jump.server';
 
 const JUMP_TOAST_KEY = 'yawp-dev-panel-jump-toast';
+const JUMP_TOAST_QUERY = 'devPanelJumpToast';
 
 export function consumeDevPanelJumpToast() {
   if (typeof window === 'undefined') return;
+  const params = new URLSearchParams(window.location.search);
+  const fromQuery = params.get(JUMP_TOAST_QUERY);
+  if (fromQuery) {
+    params.delete(JUMP_TOAST_QUERY);
+    const next = `${window.location.pathname}${params.size ? `?${params}` : ''}${window.location.hash}`;
+    window.history.replaceState(null, '', next);
+    toast.success(`Jumped to: ${fromQuery}`);
+    return;
+  }
   const label = window.sessionStorage.getItem(JUMP_TOAST_KEY);
   if (!label) return;
   window.sessionStorage.removeItem(JUMP_TOAST_KEY);
-  toast.message(`Jumped to: ${label}`);
+  toast.success(`Jumped to: ${label}`);
+}
+
+function appendJumpToastToRedirect(redirectTo: string, label: string) {
+  try {
+    const target = new URL(redirectTo, window.location.origin);
+    if (target.origin !== window.location.origin) {
+      target.searchParams.set(JUMP_TOAST_QUERY, label);
+      return target.toString();
+    }
+  } catch {
+    return redirectTo;
+  }
+  return redirectTo;
 }
 
 export function DevPanelFreeTierFlyout({
@@ -40,7 +63,7 @@ export function DevPanelFreeTierFlyout({
   orgId: string | null;
   pushed?: boolean;
 }) {
-  const { state, updateForms } = useDevPanel();
+  const { state, updateForms, flyoutSwitchInstant } = useDevPanel();
   const [filter, setFilter] = useState('');
   const [jumping, setJumping] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -50,6 +73,7 @@ export function DevPanelFreeTierFlyout({
   const filterId = useId();
   const selected = state.forms.selectedStateId ?? null;
   const throwaway = state.forms.throwawaySwitch !== false;
+  const selectedState = selected ? findFreeTierState(selected) : null;
 
   useEffect(() => {
     if (state.subSheet !== 'free-tier-states') return;
@@ -72,10 +96,17 @@ export function DevPanelFreeTierFlyout({
     })).filter((group) => group.states.length > 0);
   }, [filter]);
 
+  const visibleStateIds = useMemo(
+    () => new Set(groups.flatMap((group) => group.states.map((entry) => entry.id))),
+    [groups]
+  );
+
   const noMatches = filter.trim().length > 0 && groups.length === 0;
+  const selectedVisible = selected ? visibleStateIds.has(selected) : false;
+  const jumpErrorStateLabel = selectedState?.state.label ?? 'this state';
 
   const beginJump = () => {
-    if (!selected || !orgId) return;
+    if (!selected || !orgId || !selectedVisible) return;
     if (!throwaway) {
       setConfirmOpen(true);
       return;
@@ -84,7 +115,7 @@ export function DevPanelFreeTierFlyout({
   };
 
   const runJump = async () => {
-    if (!selected || !orgId) return;
+    if (!selected || !orgId || !selectedVisible) return;
     const found = findFreeTierState(selected);
     const pendingSteps: FreeTierJumpStep[] = [
       {
@@ -114,29 +145,44 @@ export function DevPanelFreeTierFlyout({
       });
       const result = await response.json().catch(() => null);
       if (!response.ok) {
-        setError(result?.error ?? 'Jump failed.');
+        setError(
+          `Couldn't jump to ${found?.state.label ?? 'this state'}. The test account wasn't created. Try again.`
+        );
         setJumping(false);
         setSwitchSteps(null);
         return;
       }
       const steps = (result.steps ?? pendingSteps) as FreeTierJumpStep[];
       setSwitchSteps(steps);
-      if (found?.state.label) {
-        window.sessionStorage.setItem(JUMP_TOAST_KEY, found.state.label);
+      const label = found?.state.label;
+      if (label) {
+        window.sessionStorage.setItem(JUMP_TOAST_KEY, label);
       }
+      const redirectTo = label
+        ? appendJumpToastToRedirect(String(result.redirectTo), label)
+        : String(result.redirectTo);
       window.setTimeout(() => {
-        window.location.assign(result.redirectTo);
+        window.location.assign(redirectTo);
       }, 350);
     } catch {
-      setError('Jump failed.');
+      setError(
+        `Couldn't jump to ${jumpErrorStateLabel}. The test account wasn't created. Try again.`
+      );
       setJumping(false);
       setSwitchSteps(null);
     }
   };
 
+  const primaryLabel = jumping
+    ? 'Jumping…'
+    : error
+      ? 'Retry jump'
+      : 'Jump to this state';
+
   return (
     <div
       data-yawp-dev-panel-flyout
+      data-instant={flyoutSwitchInstant ? 'true' : undefined}
       className={cn(
         'flex flex-col bg-background',
         pushed
@@ -177,75 +223,90 @@ export function DevPanelFreeTierFlyout({
             </ol>
           </div>
         ) : null}
-        {!jumping ? (
-          <>
-            <label className="flex items-center justify-between gap-2 text-sm">
-              <span>Use a throwaway test account</span>
-              <input
-                ref={throwawayRef}
-                type="checkbox"
-                checked={throwaway}
-                disabled={jumping}
-                onChange={(event) => updateForms({ throwawaySwitch: event.target.checked })}
-              />
-            </label>
-            <Input
-              id={filterId}
-              placeholder="Filter states"
-              value={filter}
-              onChange={(event) => setFilter(event.target.value)}
+        <div
+          className={cn(
+            'space-y-3',
+            jumping && 'pointer-events-none opacity-50'
+          )}
+        >
+          <label className="flex items-center justify-between gap-2 text-sm">
+            <span>Use a throwaway test account</span>
+            <input
+              ref={throwawayRef}
+              type="checkbox"
+              checked={throwaway}
+              disabled={jumping}
+              onChange={(event) => updateForms({ throwawaySwitch: event.target.checked })}
             />
-            {noMatches ? (
-              <p className="text-sm text-muted-foreground">No states match</p>
-            ) : null}
-            {groups.map((group) => (
-              <div key={group.id} className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {group.title}
-                </p>
-                {group.states.map((entry) => (
-                  <label
-                    key={entry.id}
-                    className="flex cursor-pointer gap-2 rounded-md border px-2 py-2 text-sm"
-                  >
-                    <input
-                      type="radio"
-                      name="free-tier-state"
-                      checked={selected === entry.id}
-                      disabled={jumping}
-                      onChange={() => updateForms({ selectedStateId: entry.id })}
-                    />
-                    <span>
-                      <span className="font-medium">{entry.label}</span>
-                      <span className="block text-xs text-muted-foreground">
-                        {entry.description}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            ))}
-          </>
-        ) : null}
-        {error ? (
-          <div className="space-y-2">
-            <p role="alert" className="text-sm text-destructive">
-              {error}
+          </label>
+          <Input
+            id={filterId}
+            placeholder="Filter states"
+            value={filter}
+            disabled={jumping}
+            onChange={(event) => setFilter(event.target.value)}
+          />
+          {noMatches ? (
+            <p className="text-sm text-muted-foreground">
+              No states match &quot;{filter.trim()}&quot;{' '}
+              <button
+                type="button"
+                className="text-primary underline-offset-2 hover:underline"
+                onClick={() => setFilter('')}
+              >
+                Clear filter
+              </button>
             </p>
-            <Button type="button" variant="outline" className="w-full" onClick={() => void runJump()}>
-              Retry
-            </Button>
-          </div>
+          ) : null}
+          {groups.map((group) => (
+            <div key={group.id} className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {group.title}
+              </p>
+              {group.states.map((entry) => (
+                <label
+                  key={entry.id}
+                  className="flex cursor-pointer gap-2 rounded-md border px-2 py-2 text-sm"
+                >
+                  <input
+                    type="radio"
+                    name="free-tier-state"
+                    checked={selected === entry.id}
+                    disabled={jumping}
+                    onChange={() => updateForms({ selectedStateId: entry.id })}
+                  />
+                  <span>
+                    <span className="font-medium">{entry.label}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {entry.description}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          ))}
+        </div>
+        {error ? (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
         ) : null}
       </div>
       <div className="border-t p-3">
         <Button
           type="button"
           className="w-full"
-          disabled={!selected || jumping || !orgId}
-          onClick={() => beginJump()}
+          disabled={!selected || !selectedVisible || jumping || !orgId}
+          onClick={() => (error ? beginJump() : beginJump())}
         >
-          {jumping ? 'Switching…' : 'Jump to this state'}
+          {jumping ? (
+            <>
+              <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
+              Jumping…
+            </>
+          ) : (
+            primaryLabel
+          )}
         </Button>
       </div>
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>

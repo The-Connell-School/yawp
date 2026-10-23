@@ -85,7 +85,7 @@ html.yawp-dev-panel-closing:not(.yawp-dev-panel-reduced-motion)
 }
 
 html.yawp-dev-panel-open:not(.yawp-dev-panel-reduced-motion)
-  [data-yawp-dev-panel-flyout] {
+  [data-yawp-dev-panel-flyout]:not([data-instant='true']) {
   animation: yawp-dev-panel-flyout-slide-in 150ms ease-out;
 }
 

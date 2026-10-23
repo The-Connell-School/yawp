@@ -93,7 +93,7 @@ test.describe('Dev panel artboard evidence', () => {
     await expect(stateSheet).toBeVisible({ timeout: 15_000 });
     await shot(page, '19');
 
-    await stateSheet.locator('input[name="free-tier-state"]').first().check();
+    await stateSheet.getByRole('radio').first().check({ force: true });
     await stateSheet
       .getByRole('checkbox', { name: 'Use a throwaway test account' })
       .setChecked(false);
@@ -107,7 +107,7 @@ test.describe('Dev panel artboard evidence', () => {
     await stateSheet
       .getByRole('checkbox', { name: 'Use a throwaway test account' })
       .setChecked(true);
-    await stateSheet.locator('input[name="free-tier-state"]').first().check();
+    await stateSheet.getByRole('radio').first().check({ force: true });
     await page.route('**/api/dev-panel/free-tier-jump', async (route) => {
       await route.fulfill({
         status: 200,

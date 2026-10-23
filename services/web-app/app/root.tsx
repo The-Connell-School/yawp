@@ -115,6 +115,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     contrastCookie.contrast === 'high' ? 'high' : 'standard';
 
   if (publicLandingPage && !internal) {
+    const previewAccessSeat = isPreviewDevLoginAccessCodeRequired()
+      ? await getPreviewAccessSeat(request)
+      : null;
+    const devPanelEnabled = isDevPanelRuntimeEnabled();
     return data(
       {
         testerFeedbackAvailable: false,
@@ -131,13 +135,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         },
         ENV: getEnv(),
-        bannerWarning: null,
-        localDevQuickLogin: { enabled: false },
+        bannerWarning: getEnvironmentBannerWarning(request.url),
+        localDevQuickLogin: {
+          enabled: shouldEnableLocalDevQuickLogin({
+            bannerWarning: getEnvironmentBannerWarning(request.url),
+            localDevAuthEnabled: isLocalDevAuthEnabled(),
+          }),
+        },
         previewAccessGateEnabled: isPreviewDevLoginAccessCodeRequired(),
-        previewAccessSeat: null,
-        blackboardLtiMockEnabled: false,
-        devPanelEnabled: false,
-        devPanelEnvBadge: 'Dev' as const,
+        previewAccessSeat,
+        blackboardLtiMockEnabled: isBlackboardLtiMockUiEnabled(),
+        devPanelEnabled,
+        devPanelEnvBadge: devPanelEnvBadge(),
         lessonPlannerEnabled: false,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
         toast: null,

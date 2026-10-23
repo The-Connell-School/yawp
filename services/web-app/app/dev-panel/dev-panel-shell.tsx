@@ -189,6 +189,13 @@ export function DevPanelShell() {
     if (!state.subSheet) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      if (
+        document.querySelector(
+          '[role=alertdialog],[data-state=open][aria-modal=true]'
+        )
+      ) {
+        return;
+      }
       event.preventDefault();
       const returningTo =
         state.subSheet === 'give-feedback' ? feedbackRowRef : freeTierRowRef;
@@ -560,7 +567,7 @@ export function DevPanelShell() {
       data-yawp-dev-panel
       aria-label="Developer tools"
       className={cn(
-        'yawp-dev-panel-docked fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-background shadow-xl relative',
+        'yawp-dev-panel-docked fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-background shadow-xl',
         'w-[var(--yawp-dev-panel-width)]'
       )}
     >
