@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
+import { organizationClassesTableCookie } from '~/utils/cookies.server';
 import { loader as appShellLoader } from '~/routes/app/route';
 import { loader as dashboardLoader } from '~/routes/app._index/route';
 import { loader as myClassesLoader } from '~/routes/app.my-classes._index/route';
@@ -16,10 +17,14 @@ const flag = 'feature_flag.free_tier';
 let orgId: string;
 let schoolId: string;
 let classId: string;
+let sortOlderClassId: string;
+let sortNewerClassId: string;
 let userId: string;
+let studentUserId: string;
 let appId: string;
 let classCode: string;
 let joinToken: string;
+let codeSearchProbe: string;
 let originalFlag: string | null = null;
 
 async function setFlag(value: string) {
@@ -30,12 +35,14 @@ async function setFlag(value: string) {
   });
 }
 
+function loaderPayload(result: unknown) {
+  return result && typeof result === 'object' && 'data' in result
+    ? (result as { data: unknown }).data
+    : result;
+}
+
 function serializedLoaderData(result: unknown) {
-  const payload =
-    result && typeof result === 'object' && 'data' in result
-      ? (result as { data: unknown }).data
-      : result;
-  return JSON.stringify(payload);
+  return JSON.stringify(loaderPayload(result));
 }
 
 function expectTeachingSecretsAbsent(
@@ -55,15 +62,19 @@ function expectTeachingSecretsPresent(serialized: string) {
   expect(serialized).toContain(joinToken);
 }
 
-async function authedRequest(path: string) {
+async function authedRequest(path: string, extraCookie?: string) {
   const session = await prisma.session.create({
     data: { userId, expirationDate: new Date(Date.now() + 3600000) },
   });
   const cookie = await authSessionStorage.getSession();
   cookie.set('sessionId', session.id);
-  const headers = {
-    cookie: (await authSessionStorage.commitSession(cookie)).split(';')[0]!,
-  };
+  let cookieHeader = (await authSessionStorage.commitSession(cookie)).split(
+    ';'
+  )[0]!;
+  if (extraCookie) {
+    cookieHeader = `${cookieHeader}; ${extraCookie}`;
+  }
+  const headers = { cookie: cookieHeader };
   return {
     request: new Request(`http://localhost${path}`, { headers }),
     sessionId: session.id,
@@ -80,6 +91,7 @@ beforeAll(async () => {
     (await prisma.setting.findUnique({ where: { name: flag } }))?.value ??
     null;
   classCode = `${prefix}-code`.toUpperCase();
+  codeSearchProbe = classCode.slice(4, 14);
   joinToken = `${prefix}-join-token`;
   const org = await prisma.organization.create({
     data: { name: prefix, plan: 'FREE_CLASSROOM' },
@@ -89,6 +101,14 @@ beforeAll(async () => {
     data: { organizationId: orgId, name: prefix, code: prefix },
   });
   schoolId = school.id;
+  const sortOlder = await prisma.class.create({
+    data: {
+      schoolId: school.id,
+      code: `${prefix}-sort-older-zzz`,
+      studentJoinToken: `${prefix}-sort-older-token`,
+    },
+  });
+  sortOlderClassId = sortOlder.id;
   const klass = await prisma.class.create({
     data: {
       schoolId: school.id,
@@ -97,10 +117,25 @@ beforeAll(async () => {
     },
   });
   classId = klass.id;
+  const sortNewer = await prisma.class.create({
+    data: {
+      schoolId: school.id,
+      code: `${prefix}-sort-newer-aaa`,
+      studentJoinToken: `${prefix}-sort-newer-token`,
+    },
+  });
+  sortNewerClassId = sortNewer.id;
   const user = await prisma.user.create({
     data: { name: 'Pending teacher', email: `${prefix}@example.test` },
   });
   userId = user.id;
+  const studentUser = await prisma.user.create({
+    data: {
+      name: 'Enrolled student',
+      email: `${prefix}-student@example.test`,
+    },
+  });
+  studentUserId = studentUser.id;
   const member = await prisma.orgMembership.create({
     data: {
       userId,
@@ -111,6 +146,14 @@ beforeAll(async () => {
     },
   });
   void member.id;
+  await prisma.orgMembership.create({
+    data: {
+      userId: studentUserId,
+      organizationId: orgId,
+      role: 'STUDENT',
+      classesAsStudent: { connect: { id: classId } },
+    },
+  });
   const app = await prisma.freeTierApplication.create({
     data: {
       userId,
@@ -142,10 +185,16 @@ afterAll(async () => {
     await prisma.freeTierApplication.deleteMany({ where: { id: appId } });
   }
   await prisma.orgMembership.deleteMany({ where: { organizationId: orgId } });
-  if (classId) await prisma.class.deleteMany({ where: { id: classId } });
+  const classIds = [classId, sortOlderClassId, sortNewerClassId].filter(Boolean);
+  if (classIds.length) {
+    await prisma.class.deleteMany({ where: { id: { in: classIds } } });
+  }
   await prisma.school.deleteMany({ where: { organizationId: orgId } });
   await prisma.freeTierApplication.deleteMany({ where: { organizationId: orgId } });
   await prisma.organization.deleteMany({ where: { id: orgId } });
+  if (studentUserId) {
+    await prisma.user.deleteMany({ where: { id: studentUserId } });
+  }
   if (userId) await prisma.user.deleteMany({ where: { id: userId } });
   await prisma.$disconnect();
 });
@@ -192,13 +241,83 @@ local(
           params: entry.params,
           context: {} as never,
         } as never);
-        expectTeachingSecretsAbsent(serializedLoaderData(result), {
+        const serialized = serializedLoaderData(result);
+        expectTeachingSecretsAbsent(serialized, {
           requireClassId:
             'requireClassId' in entry ? entry.requireClassId : undefined,
         });
+        if (entry.load === orgStudentsLoader) {
+          const data = loaderPayload(result) as {
+            students: Array<{
+              classesAsStudent: Array<{ id: string; code: string | null }>;
+            }>;
+          };
+          const enrolled = data.students.find((student) =>
+            student.classesAsStudent.some((klass) => klass.id === classId)
+          );
+          expect(enrolled).toBeTruthy();
+          const nested = JSON.stringify(enrolled!.classesAsStudent);
+          expect(nested).toContain(classId);
+          expect(nested).not.toContain(joinToken);
+          expect(nested).not.toMatch(/"studentJoinToken"\s*:\s*"[^"]+"/);
+        }
       } finally {
         await prisma.session.delete({ where: { id: sessionId } });
       }
+    }
+  }
+);
+
+local(
+  'pending org owner cannot search or sort organization classes by code',
+  async () => {
+    const searchCookie = await organizationClassesTableCookie.serialize({
+      sort: 'createdAt',
+      direction: 'asc',
+      skip: 0,
+      take: 10,
+    });
+    const { request: searchRequest, sessionId: searchSessionId } =
+      await authedRequest(
+        `/app/organization/classes?q=${encodeURIComponent(codeSearchProbe)}`,
+        searchCookie
+      );
+    try {
+      const searchResult = await orgClassesLoader({
+        request: searchRequest,
+        params: {},
+        context: {} as never,
+      } as never);
+      const searchData = loaderPayload(searchResult) as {
+        totalCount: number;
+        classes: unknown[];
+      };
+      expect(searchData.totalCount).toBe(0);
+      expect(searchData.classes).toHaveLength(0);
+    } finally {
+      await prisma.session.delete({ where: { id: searchSessionId } });
+    }
+
+    const sortCookie = await organizationClassesTableCookie.serialize({
+      sort: 'code',
+      direction: 'asc',
+      skip: 0,
+      take: 10,
+    });
+    const { request: sortRequest, sessionId: sortSessionId } =
+      await authedRequest('/app/organization/classes', sortCookie);
+    try {
+      const sortResult = await orgClassesLoader({
+        request: sortRequest,
+        params: {},
+        context: {} as never,
+      } as never);
+      const sortData = loaderPayload(sortResult) as {
+        classes: Array<{ id: string }>;
+      };
+      expect(sortData.classes[0]?.id).toBe(sortOlderClassId);
+    } finally {
+      await prisma.session.delete({ where: { id: sortSessionId } });
     }
   }
 );
@@ -235,6 +354,51 @@ local(
         }
       }
 
+      const searchCookie = await organizationClassesTableCookie.serialize({
+        sort: 'createdAt',
+        direction: 'asc',
+        skip: 0,
+        take: 10,
+      });
+      const { request: searchRequest, sessionId: searchSessionId } =
+        await authedRequest(
+          `/app/organization/classes?q=${encodeURIComponent(codeSearchProbe)}`,
+          searchCookie
+        );
+      try {
+        const searchResult = await orgClassesLoader({
+          request: searchRequest,
+          params: {},
+          context: {} as never,
+        } as never);
+        const searchData = loaderPayload(searchResult) as { totalCount: number };
+        expect(searchData.totalCount).toBeGreaterThan(0);
+      } finally {
+        await prisma.session.delete({ where: { id: searchSessionId } });
+      }
+
+      const sortCookie = await organizationClassesTableCookie.serialize({
+        sort: 'code',
+        direction: 'asc',
+        skip: 0,
+        take: 10,
+      });
+      const { request: sortRequest, sessionId: sortSessionId } =
+        await authedRequest('/app/organization/classes', sortCookie);
+      try {
+        const sortResult = await orgClassesLoader({
+          request: sortRequest,
+          params: {},
+          context: {} as never,
+        } as never);
+        const sortData = loaderPayload(sortResult) as {
+          classes: Array<{ id: string }>;
+        };
+        expect(sortData.classes[0]?.id).toBe(sortNewerClassId);
+      } finally {
+        await prisma.session.delete({ where: { id: sortSessionId } });
+      }
+
       const { request, sessionId } = await authedRequest('/app');
       try {
         const dashboard = await dashboardLoader({
@@ -246,8 +410,6 @@ local(
         expect(dashboardSerialized).toContain(classCode);
         expect(dashboardSerialized).toMatch(/"teacherClasses":\[[^\]]*"code"/);
 
-        // App shell only surfaces classCode inside freeAccountUsage when in-app
-        // metering is active for the org; this fixture does not enable that path.
         const shell = await appShellLoader({
           request,
           params: {},

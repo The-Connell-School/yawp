@@ -74,6 +74,7 @@ import {
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
 import {
+  organizationClassListQueryParts,
   redactClassTeachingSecrets,
   shouldHideFreeTierTeachingSecrets,
 } from '~/domain/free-tier/locked-preview.server';
@@ -189,27 +190,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const { sort, direction, skip, take } =
     await getOrganizationClassesTableCookie(request);
 
+  const { orClause, orderByField } = organizationClassListQueryParts({
+    q,
+    sort,
+    hideTeachingSecrets,
+  });
+
   const where = {
     school: {
       organizationId: profile.organization.id,
     },
     isArchived: false, // Only show non-archived classes
-    ...(q
-      ? {
-          OR: [
-            { code: { contains: q, mode: 'insensitive' as const } },
-            { schoolYear: { contains: q, mode: 'insensitive' as const } },
-            { grade: { contains: q, mode: 'insensitive' as const } },
-            { period: { contains: q, mode: 'insensitive' as const } },
-            { title: { contains: q, mode: 'insensitive' as const } },
-            {
-              school: {
-                name: { contains: q, mode: 'insensitive' as const },
-              },
-            },
-          ],
-        }
-      : {}),
+    ...(orClause ? { OR: orClause } : {}),
   } as const;
 
   const [classes, totalCount, schools, teachers] = await Promise.all([
@@ -229,7 +221,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         },
       },
-      orderBy: { [sort]: direction },
+      orderBy: { [orderByField]: direction },
       skip,
       take,
     }),
