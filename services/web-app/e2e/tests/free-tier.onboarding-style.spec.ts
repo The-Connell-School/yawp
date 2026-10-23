@@ -62,9 +62,9 @@ for (const viewport of [
         return document.fonts.ready;
       });
       if (!before && state !== 'sign-in') {
-        await expect(target.locator('.auth-page-content > .free-tier-form-card')).toBeVisible();
+        await expect(target.locator('.auth-page-content .free-tier-form-card')).toBeVisible();
         const geometry = await target
-          .locator('.auth-page-content > .free-tier-form-card')
+          .locator('.auth-page-content .free-tier-form-card')
           .evaluate((el) => {
             const s = getComputedStyle(el);
             return {
