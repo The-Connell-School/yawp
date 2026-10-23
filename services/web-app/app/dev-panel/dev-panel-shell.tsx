@@ -102,7 +102,7 @@ function AccessCodeModal({
           </div>
         ) : (
           <div className="space-y-3">
-            <Label htmlFor="dev-panel-access-code">Access code</Label>
+            <Label htmlFor="dev-panel-access-code">Developer tools access code</Label>
             <Input
               id="dev-panel-access-code"
               autoComplete="off"

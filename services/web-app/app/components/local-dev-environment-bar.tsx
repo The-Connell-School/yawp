@@ -270,7 +270,7 @@ function LocalDevQuickLoginPanel({
           </p>
           <div className="signon-field">
             <label htmlFor="beaker-preview-access-code" className="text-xs font-medium">
-              Access code
+              Dev login access code
             </label>
             <Input
               id="beaker-preview-access-code"
