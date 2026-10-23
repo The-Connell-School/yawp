@@ -1,7 +1,8 @@
 import { describe, expect, mock, test } from 'bun:test';
+import * as previewAccessRateLimit from '~/utils/preview-access-rate-limit.server';
 
 mock.module('~/dev-panel/dev-panel-route-guard.server', () => ({
-  assertDevPanelRoute: async () => null,
+  assertDevPanelUnlockRoute: async () => null,
 }));
 mock.module('~/utils/preview-access.server', () => ({
   isPreviewAccessConfigured: () => true,
@@ -18,6 +19,7 @@ mock.module('~/utils/preview-access.server', () => ({
   grantPreviewAccessCookie: async () => 'preview-access=test',
 }));
 mock.module('~/utils/preview-access-rate-limit.server', () => ({
+  ...previewAccessRateLimit,
   checkPreviewAccessAttempt: () => ({ allowed: true }),
   clearFailedPreviewAccessAttempts: () => {},
   recordFailedPreviewAccessAttempt: () => {},

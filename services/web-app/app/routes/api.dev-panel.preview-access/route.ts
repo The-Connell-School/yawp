@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from 'react-router';
-import { assertDevPanelRoute } from '~/dev-panel/dev-panel-route-guard.server';
+import { assertDevPanelUnlockRoute } from '~/dev-panel/dev-panel-route-guard.server';
 import {
   findPreviewAccessCredentialByCode,
   grantPreviewAccessCookie,
@@ -12,7 +12,7 @@ import {
 } from '~/utils/preview-access-rate-limit.server';
 
 export async function action({ request }: ActionFunctionArgs) {
-  const blocked = await assertDevPanelRoute(request);
+  const blocked = await assertDevPanelUnlockRoute(request);
   if (blocked) return blocked;
   if (request.method !== 'POST') {
     return new Response(null, { status: 405, headers: { Allow: 'POST' } });
