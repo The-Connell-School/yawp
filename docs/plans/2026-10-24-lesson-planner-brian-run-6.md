@@ -103,3 +103,30 @@ goes to the stack.
 - E2e: `teacher.lesson-planner-run-6.spec.ts` (6 tests, added to smoke).
   - The chat-close test fails on the old Present page.
   - The run 3 lecture test now expects the build in the stack.
+
+## Round 2: the detailed notes, line by line
+
+Checking what's built against each line of the notes, two gaps remain in item 2.
+
+### R1. "A deck card I can preview": Preview / Hide, like the activity card
+
+**Gap:** the activity card Brian likes has Preview / Hide, which opens the whole piece in place. The deck card only has Present, full screen, and four thumbnails.
+
+**Plan:**
+1. The stack's deck card gets the same Preview / Hide toggle (`stack-deck-preview-toggle`). Preview lists every slide in order: its title, its body or bullets, and its minutes.
+2. Present stays, for the full-screen look, and Close comes back to the stack.
+3. E2e: Preview shows every slide, and Hide closes it.
+
+### R2. "Or haven't added one to the stack": a deck from the chat is offered in the stack
+
+**Gap:** when the planner made a deck in the chat that was never added, the stack doesn't offer it. "From your conversation" leaves decks out, so the only way is to build a new one.
+
+**Plan:**
+1. The stack loader finds the newest deck reply in the conversation that is not the one in the lesson (`conversationDeck`).
+2. "From your conversation" shows it as the same deck card, above the pieces, with Preview and Add.
+3. With no deck in the lesson, Take it to class says the planner already made one and offers **Add it** (opens the panel on it) beside Build the deck.
+4. E2e: a deck made in the chat shows in the stack and can be added without a rebuild.
+
+### Item 3: nothing missing
+
+Every viewer opened from the chat or the stack now returns to where it was opened: Present, the deck editor, handouts, Run the show and Yawp! assignments. Lesson pieces open in place on the stack, so they have no Close to fix.
