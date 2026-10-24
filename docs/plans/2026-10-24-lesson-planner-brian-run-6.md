@@ -130,3 +130,9 @@ Checking what's built against each line of the notes, two gaps remain in item 2.
 ### Item 3: nothing missing
 
 Every viewer opened from the chat or the stack now returns to where it was opened: Present, the deck editor, handouts, Run the show and Yawp! assignments. Lesson pieces open in place on the stack, so they have no Close to fix.
+
+### Round 2 status
+
+- [x] R1. The stack's deck card has Preview / Hide, showing every slide's title, words and minutes in place (`stack-deck-preview`).
+- [x] R2. A deck from the chat that was never added shows in From your conversation (`conversationDeck`). Take it to class offers **Add it** beside **Build a new one**. Once added, the deck leaves the list, as an added activity does.
+- E2e: run 6 spec, 8 tests. Run 2, run 3 and run 6 together: 77 passed.
