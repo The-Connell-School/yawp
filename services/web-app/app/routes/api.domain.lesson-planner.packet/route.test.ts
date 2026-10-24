@@ -14,6 +14,7 @@ const prisma = {
     findFirst: mock(),
     findMany: mock(),
   },
+  lessonPlanAssignmentLink: { upsert: mock() },
   $transaction: mock(),
 };
 
@@ -1006,8 +1007,12 @@ describe("lesson packet — one segment, one status (Brian's run 3, items 1, 2)"
 });
 
 describe("lesson packet — created in Yawp! (Brian's run 3, item 4)", () => {
-  test('mark-created remembers the assignment on its piece', async () => {
+  test('mark-created from the stack: one record for the piece, and the piece marked', async () => {
     prisma.lessonPlanMaterial.updateMany.mockReset().mockResolvedValue({ count: 1 });
+    prisma.lessonPlanMaterial.findFirst
+      .mockReset()
+      .mockResolvedValue({ id: 'mat-9', sourceMessageId: 'msg-1', blockKey: 'ticket' });
+    prisma.lessonPlanAssignmentLink.upsert.mockReset().mockResolvedValue({});
     const response = await action({
       request: formRequest({
         intent: 'mark-created',
@@ -1016,11 +1021,51 @@ describe("lesson packet — created in Yawp! (Brian's run 3, item 4)", () => {
         yawpHref: '/app/assignment-types/cs-type',
       }),
     } as any);
+    const link = prisma.lessonPlanAssignmentLink.upsert.mock.calls[0][0];
+    expect(link.where).toEqual({
+      conversationId_sourceMessageId_blockKey: { conversationId: 'plan-1', sourceMessageId: 'msg-1', blockKey: 'ticket' },
+    });
+    expect(link.create).toMatchObject({ yawpHref: '/app/assignment-types/cs-type', createdFrom: 'stack' });
     const call = prisma.lessonPlanMaterial.updateMany.mock.calls[0][0];
-    expect(call.where).toEqual({ id: 'mat-9', conversationId: 'plan-1' });
+    expect(call.where).toEqual({ conversationId: 'plan-1', sourceMessageId: 'msg-1', blockKey: 'ticket' });
     expect(call.data.yawpHref).toBe('/app/assignment-types/cs-type');
     expect(call.data.yawpCreatedAt).toBeInstanceOf(Date);
     expect((response as any).data).toEqual({ created: true, materialId: 'mat-9' });
+  });
+
+  test("mark-created from the chat, before the piece is filed (Oct 24 handoff, task 1)", async () => {
+    prisma.lessonPlanMessage.findFirst.mockReset().mockResolvedValue({ id: 'msg-1' });
+    prisma.lessonPlanMaterial.updateMany.mockReset().mockResolvedValue({ count: 0 });
+    prisma.lessonPlanAssignmentLink.upsert.mockReset().mockResolvedValue({});
+    const response = await action({
+      request: formRequest({
+        intent: 'mark-created',
+        conversationId: 'plan-1',
+        piece: 'b:msg-1:ticket',
+        yawpHref: '/app/assignment-types/et-type',
+      }),
+    } as any);
+    expect(prisma.lessonPlanAssignmentLink.upsert.mock.calls[0][0].create).toMatchObject({
+      sourceMessageId: 'msg-1',
+      blockKey: 'ticket',
+      createdFrom: 'chat',
+    });
+    expect((response as any).data).toEqual({ created: true, materialId: null });
+  });
+
+  test('a piece from another lesson is refused', async () => {
+    prisma.lessonPlanMessage.findFirst.mockReset().mockResolvedValue(null);
+    prisma.lessonPlanAssignmentLink.upsert.mockReset();
+    const response = await action({
+      request: formRequest({
+        intent: 'mark-created',
+        conversationId: 'plan-1',
+        piece: 'b:not-mine:ticket',
+        yawpHref: '/app/assignment-types/et-type',
+      }),
+    } as any);
+    expect((response as any).init?.status).toBe(404);
+    expect(prisma.lessonPlanAssignmentLink.upsert).not.toHaveBeenCalled();
   });
 
   test('only a link into Yawp! assignment types is kept', async () => {
