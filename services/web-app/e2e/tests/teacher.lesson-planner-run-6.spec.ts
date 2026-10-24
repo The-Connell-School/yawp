@@ -16,6 +16,7 @@ const FLAGS: LessonPlannerReviewFlag[] = [
   'lesson_planner_stack_v2',
   'lesson_planner_stack_v3',
   'lesson_planner_deck_v2',
+  'lesson_planner_stack_panel',
 ];
 
 type Ctx = { teacherMembershipId: string; organizationId: string };
@@ -285,6 +286,68 @@ test.describe("Lesson Planner — Brian's sixth run", () => {
       await expect(deck).toHaveCount(0);
       // Added as it was: nothing was rebuilt.
       expect(asked).toEqual([]);
+    });
+  });
+
+  test.describe("Kevin's notes (Oct 24)", () => {
+    test("a piece in the chat's stack panel opens on the stack page", async ({ page, signIn, e2eContext }) => {
+      for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedStackWithDeckReply(page, e2eContext);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      await page.waitForLoadState('networkidle');
+      const panel = page.getByTestId('stack-panel');
+      await expect(panel).toBeVisible();
+      // The second piece, so it is not the one that happens to be first.
+      await panel.getByRole('button', { name: /Hook activity/i }).first().click();
+      await expect(page).toHaveURL(new RegExp(`/app/lesson-planner/${conversationId}/packet\\?open=`));
+      const open = page.locator('[data-testid="run-card"][data-open="true"]');
+      await expect(open).toHaveCount(1);
+      await expect(open.getByTestId('run-card-title')).toContainText('Hook activity');
+    });
+
+    test('a deck built on the stack is one click away from the chat and the stack, added or not', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Day one of The Things They Carried, English 11, 50 minutes.' },
+        { role: 'assistant', content: DAY_ONE_REPLY },
+      ]);
+      const kept = await page.request.post('/api/domain/lesson-planner/packet', {
+        form: { intent: 'keep-all', conversationId, messageId: (await seedIds(conversationId))[0]! },
+      });
+      expect(kept.ok()).toBe(true);
+      const asked: string[] = [];
+      await stubStackDeckTurn(page, conversationId, asked);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await page.waitForLoadState('networkidle');
+      await page.getByTestId('build-deck').click();
+      await expect(page.getByTestId('stack-deck')).toBeVisible();
+
+      // Back to the planner without adding it: the deck is right there.
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      const card = page.getByTestId('slide-deck-card').last();
+      await expect(card).toContainText('The Things They Carried — Day 1');
+      await card.getByRole('link', { name: /present/i }).click();
+      await expect(page.getByTestId('slide-counter')).toHaveText('1 / 4');
+      await page.getByTestId('present-close').click();
+      await expect(page).toHaveURL(new RegExp(`/app/lesson-planner\\?c=${conversationId}$`));
+
+      // And on the stack, Take it to class offers it rather than another build.
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      const takeToClass = page.getByTestId('take-to-class');
+      await expect(takeToClass).toContainText('You built a deck here');
+      await expect(takeToClass.getByTestId('built-deck-present')).toHaveAttribute(
+        'href',
+        new RegExp(`/present/${conversationId}/[^?]+\\?from=stack$`)
+      );
+      await takeToClass.getByTestId('add-conversation-deck').click();
+      await expect(page.getByRole('tab', { name: 'Ask the planner' })).toHaveAttribute('aria-selected', 'true');
+      expect(asked).toHaveLength(1);
     });
   });
 

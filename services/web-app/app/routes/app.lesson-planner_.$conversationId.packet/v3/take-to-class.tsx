@@ -46,7 +46,7 @@ export function TakeToClass({
   deck,
   deckV2,
   onBuildDeck = null,
-  onAddConversationDeck = null,
+  builtDeck = null,
   children,
 }: {
   conversationId: string;
@@ -60,8 +60,11 @@ export function TakeToClass({
    * (Brian's run 6, item 2). Absent: the chat builds it.
    */
   onBuildDeck?: (() => void) | null;
-  /** The planner already made a deck in the chat: add that one (run 6, round 2). */
-  onAddConversationDeck?: (() => void) | null;
+  /**
+   * A deck already built but not in the lesson (run 6, round 2; Kevin's note,
+   * Oct 24): present it, or add it, rather than build it again.
+   */
+  builtDeck?: { presentHref: string; onStack: boolean; onAdd: () => void } | null;
   /** Post to your class sits inside, when sharing is on. */
   children?: React.ReactNode;
 }) {
@@ -123,8 +126,10 @@ export function TakeToClass({
         line={
           deck
             ? `${deck.slides} slides from your stack`
-            : onAddConversationDeck
-              ? 'The planner already made a deck in your conversation'
+            : builtDeck
+              ? builtDeck.onStack
+                ? 'You built a deck here. It isn’t in the lesson yet'
+                : 'The planner already made a deck in your conversation'
               : `About one slide per step (${stepCount} steps)`
         }
       >
@@ -150,13 +155,18 @@ export function TakeToClass({
           </>
         ) : onBuildDeck ? (
           <>
-            {onAddConversationDeck ? (
-              <button type="button" onClick={onAddConversationDeck} data-testid="add-conversation-deck" className={BUTTON}>
-                Add it
-              </button>
+            {builtDeck ? (
+              <>
+                <Link to={builtDeck.presentHref} data-testid="built-deck-present" className={BUTTON}>
+                  Present
+                </Link>
+                <button type="button" onClick={builtDeck.onAdd} data-testid="add-conversation-deck" className={BUTTON}>
+                  Add it
+                </button>
+              </>
             ) : null}
             <button type="button" onClick={onBuildDeck} data-testid="build-deck" className={BUTTON}>
-              {onAddConversationDeck ? 'Build a new one' : 'Build the deck'}
+              {builtDeck ? 'Build a new one' : 'Build the deck'}
             </button>
           </>
         ) : (

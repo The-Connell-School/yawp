@@ -36,7 +36,7 @@ export type StackV3 = {
    * lesson (Brian's run 6, round 2): offered in the stack, so it can be added
    * as it is rather than built again.
    */
-  conversationDeck: { messageId: string; content: string } | null;
+  conversationDeck: { messageId: string; content: string; onStack: boolean } | null;
   /** The stack chat's earlier answers, newest last, for the panel. */
   askHistory: Array<{ id: string; role: 'user' | 'assistant'; content: string }>;
   /** Shown once, until the teacher closes it (Brian's run 3, item 13). */
@@ -120,11 +120,10 @@ export async function loadStackV3({
             }
           : null,
       conversationDeck: (() => {
-        const newest = [...assistant]
-          .reverse()
-          .find((message) => message.surface !== STACK_SURFACE && hasSlideDeck(message.content));
+        // Built in the chat or on the stack: either way it is one click away.
+        const newest = [...assistant].reverse().find((message) => hasSlideDeck(message.content));
         return newest && newest.id !== deckRow?.sourceMessageId
-          ? { messageId: newest.id, content: newest.content }
+          ? { messageId: newest.id, content: newest.content, onStack: newest.surface === STACK_SURFACE }
           : null;
       })(),
       askHistory: conversation.messages

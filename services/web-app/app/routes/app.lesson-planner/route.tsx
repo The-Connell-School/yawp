@@ -1606,7 +1606,7 @@ function MessageBubble({
   if (message.surface === 'stack') {
     // A change asked for on the stack page (Brian's run 3, item 7): one
     // compact line here, never a full reply.
-    return (
+    const line = (
       <div
         data-testid="stack-turn"
         data-role={message.role}
@@ -1622,6 +1622,25 @@ function MessageBubble({
         <span className="truncate">
           {message.content.split('\n').find((line) => line.trim() && !line.startsWith('```')) ?? ''}
         </span>
+      </div>
+    );
+    // A deck built on the stack is one click away here too (Kevin's note,
+    // Oct 24): present it, or add it, without building it again.
+    const stackDeck = message.role === 'assistant' ? readSlideDeck(message.content) : null;
+    if (stackDeck?.kind !== 'deck' || !message.id || !conversationId) return line;
+    const added = addedMaterials.has(`${message.id}:${DECK_SLOT}`);
+    return (
+      <div className="space-y-2">
+        {line}
+        <SlideDeckCard
+          deck={stackDeck.deck}
+          presentHref={`/present/${conversationId}/${message.id}?from=chat`}
+          downloadHref={`/present/${conversationId}/${message.id}.pptx`}
+          editHref={deckV2 ? `/app/lesson-planner/${conversationId}/deck/${message.id}?from=chat` : null}
+          added={added}
+          onToggle={(next) => onMaterial(message.id!, DECK_SLOT, next)}
+          disabled={disabled}
+        />
       </div>
     );
   }

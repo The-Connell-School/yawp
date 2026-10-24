@@ -6,7 +6,7 @@
  * its own place on purpose, and keeps the choices few.
  */
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { Link, useFetcher, useRevalidator } from 'react-router';
+import { Link, useFetcher, useRevalidator, useSearchParams } from 'react-router';
 import { Check, ChevronLeft, BookMarked, Lightbulb, X } from 'lucide-react';
 import type { LoadedLessonPacket } from '~/domain/lesson-planner/load-lesson-packet.server';
 import type { StackV3 } from '~/domain/lesson-planner/load-stack-v3.server';
@@ -95,6 +95,14 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
   const missing = useMemo(() => notYetInYawp(steps, onPaper), [steps, onPaper]);
 
   const [openId, setOpenId] = useState<string | null>(null);
+  // A piece clicked in the chat's stack panel arrives open, in view.
+  const [searchParams] = useSearchParams();
+  const openParam = searchParams.get('open');
+  useEffect(() => {
+    if (!openParam) return;
+    setOpenId(openParam);
+    document.querySelector(`[data-step-id="${CSS.escape(openParam)}"]`)?.scrollIntoView({ block: 'center' });
+  }, [openParam]);
   const [editing, setEditing] = useState<StackStep | null>(null);
   const [panel, setPanel] = useState<{ open: boolean; tab: 'conversation' | 'ask' }>({ open: false, tab: 'conversation' });
   const [insertAt, setInsertAt] = useState<number | null>(null);
@@ -439,7 +447,15 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
               stepCount={steps.length}
               handoutCount={steps.filter((step) => step.hasHandout).length}
               deck={v3.deck}
-              onAddConversationDeck={v3.conversationDeck && !v3.deck ? () => openPanel(null, 'conversation') : null}
+              builtDeck={
+                v3.conversationDeck && !v3.deck
+                  ? {
+                      presentHref: `/present/${conversationId}/${v3.conversationDeck.messageId}?from=stack`,
+                      onStack: v3.conversationDeck.onStack,
+                      onAdd: () => openPanel(null, v3.conversationDeck!.onStack ? 'ask' : 'conversation'),
+                    }
+                  : null
+              }
               onBuildDeck={() =>
                 buildDeck(
                   BUILD_FROM_STACK_REQUESTS[v3.deck ? 'rebuild-deck' : 'deck'],
@@ -490,7 +506,8 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
           building: deckBuild.progress,
           error: deckBuild.error,
           periodMinutes: data.periodMinutes,
-          fromConversation: v3.conversationDeck,
+          // One built on the stack is already in Ask the planner's history.
+          fromConversation: v3.conversationDeck?.onStack ? null : v3.conversationDeck,
         }}
         lastAnswer={change ? { text: change.text, canUndo: Boolean(change.undo) } : null}
         onUndo={undoChange}
