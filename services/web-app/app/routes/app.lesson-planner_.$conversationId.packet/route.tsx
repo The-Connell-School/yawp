@@ -822,7 +822,7 @@ function SectionContent({
               item 25): Edit opens the deck editor and comes back here. */}
           <SlideDeckCard
             deck={section.deck}
-            presentHref={`/present/${conversationId}/${section.id}`}
+            presentHref={`/present/${conversationId}/${section.id}?from=stack`}
             downloadHref={`/present/${conversationId}/${section.id}.pptx`}
             editHref={
               deckV2

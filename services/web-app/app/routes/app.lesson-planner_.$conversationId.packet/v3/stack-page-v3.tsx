@@ -6,7 +6,7 @@
  * its own place on purpose, and keeps the choices few.
  */
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { Link, useFetcher, useRevalidator } from 'react-router';
+import { Link, useFetcher, useRevalidator, useSearchParams } from 'react-router';
 import { Check, ChevronLeft, BookMarked, Lightbulb, X } from 'lucide-react';
 import type { LoadedLessonPacket } from '~/domain/lesson-planner/load-lesson-packet.server';
 import type { StackV3 } from '~/domain/lesson-planner/load-stack-v3.server';
@@ -14,10 +14,13 @@ import { notYetInYawp, type StackStep } from '~/domain/lesson-planner/stack-step
 import type { SuggestedPiece } from '~/domain/lesson-planner/stack-suggestions';
 import { clampMinutes, stackTiming, timeFixes, type TimeFix } from '~/domain/lesson-planner/stack-timing';
 import { STEP_TYPE_LABELS } from '~/domain/lesson-planner/step-types';
+import { deckRequest } from '~/domain/lesson-planner/stack-command';
+import { BUILD_FROM_STACK_REQUESTS, lectureSlidesRequest } from '~/domain/lesson-planner/suggestions';
 import { announceStackChange } from '~/components/lesson-planner/stack-channel';
 import { StackUndoToast, useStackRemoval } from '~/components/lesson-planner/use-stack-removal';
 import { MaterialRichEditor } from '../material-rich-editor';
 import { AddPanel } from './add-panel';
+import { useStackDeckBuild } from './stack-deck';
 import { FinishLine } from './finish-line';
 import { usePaperSteps } from './yawp-checklist';
 import { PIECE_DRAG_TYPE, RunOfShow } from './run-of-show';
@@ -92,6 +95,14 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
   const missing = useMemo(() => notYetInYawp(steps, onPaper), [steps, onPaper]);
 
   const [openId, setOpenId] = useState<string | null>(null);
+  // A piece clicked in the chat's stack panel arrives open, in view.
+  const [searchParams] = useSearchParams();
+  const openParam = searchParams.get('open');
+  useEffect(() => {
+    if (!openParam) return;
+    setOpenId(openParam);
+    document.querySelector(`[data-step-id="${CSS.escape(openParam)}"]`)?.scrollIntoView({ block: 'center' });
+  }, [openParam]);
   const [editing, setEditing] = useState<StackStep | null>(null);
   const [panel, setPanel] = useState<{ open: boolean; tab: 'conversation' | 'ask' }>({ open: false, tab: 'conversation' });
   const [insertAt, setInsertAt] = useState<number | null>(null);
@@ -194,6 +205,38 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
     setInsertAt(at);
     setPanel({ open: true, tab });
   }
+
+  // The deck is built right here, in Ask the planner (Brian's run 6, item 2).
+  const deckBuild = useStackDeckBuild({ conversationId, onLanded: () => revalidator.revalidate() });
+  const deckFetcher = useFetcher<Record<string, any>>();
+  function buildDeck(request: string, line: string) {
+    openPanel(null, 'ask');
+    void deckBuild.build(request, line);
+  }
+  const deckToggled = useRef<string | null>(null);
+  function toggleDeck(messageId: string, add: boolean, confirmReplace = false) {
+    deckToggled.current = messageId;
+    deckFetcher.submit(
+      {
+        conversationId,
+        intent: add ? 'add-material' : 'remove-material',
+        messageId,
+        materialKey: 'deck',
+        ...(confirmReplace ? { confirmReplace: '1' } : {}),
+      },
+      { method: 'post', action: PACKET_API }
+    );
+  }
+  // A deck edited by hand is replaced only once the teacher says so.
+  const deckAsked = useRef<unknown>(null);
+  useEffect(() => {
+    const result = deckFetcher.data;
+    if (!result?.conflict || deckFetcher.state !== 'idle' || deckAsked.current === result) return;
+    deckAsked.current = result;
+    const messageId = deckToggled.current;
+    if (messageId && window.confirm(String(result.message))) toggleDeck(messageId, true, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deckFetcher.data, deckFetcher.state]);
 
   const where = (() => {
     if (insertAt === null) return null;
@@ -349,6 +392,9 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                 <RunOfShow
                   conversationId={conversationId}
                   hasDeck={Boolean(v3.deck)}
+                  onLectureSlides={(step) =>
+                    buildDeck(lectureSlidesRequest(step.title, { hasDeck: Boolean(v3.deck) }), `Slides for “${step.title}”`)
+                  }
                   missingIds={new Set(missing.map((step) => step.id))}
                   steps={steps}
                   blocks={timing.blocks}
@@ -401,6 +447,21 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
               stepCount={steps.length}
               handoutCount={steps.filter((step) => step.hasHandout).length}
               deck={v3.deck}
+              builtDeck={
+                v3.conversationDeck && !v3.deck
+                  ? {
+                      presentHref: `/present/${conversationId}/${v3.conversationDeck.messageId}?from=stack`,
+                      onStack: v3.conversationDeck.onStack,
+                      onAdd: () => openPanel(null, v3.conversationDeck!.onStack ? 'ask' : 'conversation'),
+                    }
+                  : null
+              }
+              onBuildDeck={() =>
+                buildDeck(
+                  BUILD_FROM_STACK_REQUESTS[v3.deck ? 'rebuild-deck' : 'deck'],
+                  v3.deck ? 'Rebuild the slide deck' : 'Build the slide deck'
+                )
+              }
             >
               {reviewFlags.share ? <PostToClass conversationId={conversationId} title={packet.title} /> : null}
             </TakeToClass>
@@ -424,7 +485,9 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
         suggestions={v3.suggestions}
         askHistory={v3.askHistory}
         onAdd={(piece: SuggestedPiece) => addPiece(piece, insertAt)}
-        onAsk={(line) =>
+        onAsk={(line) => {
+          const request = deckRequest(line, { hasDeck: Boolean(v3.deck) });
+          if (request) return buildDeck(request, line);
           askFetcher.submit(
             {
               conversationId,
@@ -433,9 +496,19 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
               ...(insertAt !== null && steps[insertAt - 1] ? { insertAfter: steps[insertAt - 1]!.title } : {}),
             },
             { method: 'post', action: STACK_API }
-          )
-        }
-        askBusy={askFetcher.state !== 'idle'}
+          );
+        }}
+        askBusy={askFetcher.state !== 'idle' || deckBuild.progress !== null}
+        deck={{
+          sourceMessageId: v3.deck?.sourceMessageId ?? null,
+          hasDeck: Boolean(v3.deck),
+          onToggle: (messageId, add) => toggleDeck(messageId, add),
+          building: deckBuild.progress,
+          error: deckBuild.error,
+          periodMinutes: data.periodMinutes,
+          // One built on the stack is already in Ask the planner's history.
+          fromConversation: v3.conversationDeck?.onStack ? null : v3.conversationDeck,
+        }}
         lastAnswer={change ? { text: change.text, canUndo: Boolean(change.undo) } : null}
         onUndo={undoChange}
         onDragPiece={setDraggingPiece}

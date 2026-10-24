@@ -65,7 +65,7 @@ import {
   printAssistantMessage,
 } from '~/components/ai-chat/assistant-markdown';
 import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
-import { readSlideDeck } from '~/domain/lesson-planner/slide-deck';
+import { hasSlideDeck, readSlideDeck } from '~/domain/lesson-planner/slide-deck';
 import {
   DECK_SLOT,
   readLessonMaterials,
@@ -1606,16 +1606,41 @@ function MessageBubble({
   if (message.surface === 'stack') {
     // A change asked for on the stack page (Brian's run 3, item 7): one
     // compact line here, never a full reply.
-    return (
+    const line = (
       <div
         data-testid="stack-turn"
         data-role={message.role}
         className="flex items-center gap-2 text-xs text-muted-foreground"
       >
         <span className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">
-          {message.role === 'user' ? 'On the stack' : 'Stack change'}
+          {message.role === 'user'
+            ? 'On the stack'
+            : hasSlideDeck(message.content)
+              ? 'Deck built on the stack'
+              : 'Stack change'}
         </span>
-        <span className="truncate">{message.content.split('\n')[0]}</span>
+        <span className="truncate">
+          {message.content.split('\n').find((line) => line.trim() && !line.startsWith('```')) ?? ''}
+        </span>
+      </div>
+    );
+    // A deck built on the stack is one click away here too (Kevin's note,
+    // Oct 24): present it, or add it, without building it again.
+    const stackDeck = message.role === 'assistant' ? readSlideDeck(message.content) : null;
+    if (stackDeck?.kind !== 'deck' || !message.id || !conversationId) return line;
+    const added = addedMaterials.has(`${message.id}:${DECK_SLOT}`);
+    return (
+      <div className="space-y-2">
+        {line}
+        <SlideDeckCard
+          deck={stackDeck.deck}
+          presentHref={`/present/${conversationId}/${message.id}?from=chat`}
+          downloadHref={`/present/${conversationId}/${message.id}.pptx`}
+          editHref={deckV2 ? `/app/lesson-planner/${conversationId}/deck/${message.id}?from=chat` : null}
+          added={added}
+          onToggle={(next) => onMaterial(message.id!, DECK_SLOT, next)}
+          disabled={disabled}
+        />
       </div>
     );
   }
@@ -1982,7 +2007,7 @@ function MessageBubble({
                     disabled={disabled}
                     presentHref={
                       deckId && conversationId
-                        ? `/present/${conversationId}/${deckId}`
+                        ? `/present/${conversationId}/${deckId}?from=chat`
                         : null
                     }
                     downloadHref={
@@ -1992,7 +2017,7 @@ function MessageBubble({
                     }
                     editHref={
                       deckV2 && deckId && conversationId
-                        ? `/app/lesson-planner/${conversationId}/deck/${deckId}`
+                        ? `/app/lesson-planner/${conversationId}/deck/${deckId}?from=chat`
                         : null
                     }
                     periodMinutes={deckV2 ? periodMinutes : null}

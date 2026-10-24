@@ -334,6 +334,44 @@ describe('api.domain.lesson-planner action', () => {
     );
   });
 
+  test("a deck asked for on the stack is kept as the stack's turn (Brian's run 6, item 2)", async () => {
+    prisma.lessonPlanConversation.findFirst.mockResolvedValue({
+      id: 'plan-9',
+      messages: [{ role: 'assistant', content: 'earlier plan' }],
+    });
+    getLLMCompletion.mockResolvedValue('Here is your deck.');
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    const response = await action({
+      request: formRequest({
+        message: 'Build the slide deck from my stack',
+        conversationId: 'plan-9',
+        surface: 'stack',
+      }),
+    } as any);
+
+    expect(jsonResult(response).data.messageId).toBe('msg-assistant');
+    const created = prisma.lessonPlanMessage.create.mock.calls.map((call: any) => call[0].data);
+    expect(created.map((data: any) => data.surface)).toEqual(['stack', 'stack']);
+  });
+
+  test('a stack turn needs a lesson to belong to', async () => {
+    const response = await action({
+      request: formRequest({ message: 'Build the slide deck from my stack', surface: 'stack' }),
+    } as any);
+    expect(jsonResult(response).init?.status).toBe(400);
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+
+  test('a chat turn has no surface', async () => {
+    getLLMCompletion.mockResolvedValue('Here is your lesson.');
+    prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-1', messages: [] });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+    await action({ request: formRequest({ message: 'hi' }) } as any);
+    const created = prisma.lessonPlanMessage.create.mock.calls.map((call: any) => call[0].data);
+    expect(created.map((data: any) => data.surface ?? null)).toEqual([null, null]);
+  });
+
   test('continues an existing conversation with prior messages', async () => {
     prisma.lessonPlanConversation.findFirst.mockResolvedValue({
       id: 'plan-9',

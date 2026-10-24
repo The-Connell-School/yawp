@@ -546,6 +546,13 @@ export default function LessonPlannerHowItWorksRoute() {
               makes a real deck, timed to the same period. Present it from Yawp!
               or download it as PowerPoint.
             </Copy>
+            {stackV3 ? (
+              <Copy>
+                Already working in your stack? Ask the planner there for slides, or tap{' '}
+                <strong className="text-foreground">Build the deck</strong> in Take it to
+                class. The deck comes back right in the stack, ready to preview and add.
+              </Copy>
+            ) : null}
             {deckGallery ? (
               <Copy>
                 Decks are hung like a gallery: Georgia and Arial on warm paper,

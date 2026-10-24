@@ -7,7 +7,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import { GripVertical, Lightbulb, Plus, Send, X } from 'lucide-react';
+import { GripVertical, Lightbulb, Loader2, Plus, Send, X } from 'lucide-react';
 import type { SuggestedPiece } from '~/domain/lesson-planner/stack-suggestions';
 import { stackTiming, type StackTiming, type TimedStep } from '~/domain/lesson-planner/stack-timing';
 import { DEFAULT_STEP_MINUTES } from '~/domain/lesson-planner/step-types';
@@ -15,6 +15,21 @@ import { cn } from '~/utils/misc';
 import { MarkdownContent } from '~/components/ai-chat/assistant-markdown';
 import { HEADING_FONT } from './theme';
 import { PIECE_DRAG_TYPE, TypeChip, WritingBadge } from './run-of-show';
+import { hasSlideDeck } from '~/domain/lesson-planner/slide-deck';
+import { StackDeckCard, type DeckBuild } from './stack-deck';
+
+/** A deck built on the stack (Brian's run 6, item 2). */
+export type PanelDeck = {
+  /** The reply the lesson's deck was filed from, if it has one. */
+  sourceMessageId: string | null;
+  hasDeck: boolean;
+  onToggle: (messageId: string, add: boolean) => void;
+  building: DeckBuild | null;
+  error: string | null;
+  periodMinutes: number | null;
+  /** A deck from the chat not yet in the lesson (run 6, round 2). */
+  fromConversation: { messageId: string; content: string } | null;
+};
 
 export type AskTurn = { id: string; role: 'user' | 'assistant'; content: string };
 
@@ -133,6 +148,7 @@ export function AddPanel({
   onUndo,
   onDragPiece,
   busy,
+  deck = null,
 }: {
   conversationId: string;
   open: boolean;
@@ -153,6 +169,7 @@ export function AddPanel({
   onUndo: () => void;
   onDragPiece: (dragging: boolean) => void;
   busy: boolean;
+  deck?: PanelDeck | null;
 }) {
   const [line, setLine] = useState('');
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -238,6 +255,20 @@ export function AddPanel({
             The planner suggested these in your conversation. They aren't in the lesson yet. Drag one
             into your lesson, or click Add.
           </p>
+          {deck?.fromConversation ? (
+            <div className="mb-3">
+              <StackDeckCard
+                conversationId={conversationId}
+                messageId={deck.fromConversation.messageId}
+                content={deck.fromConversation.content}
+                added={deck.sourceMessageId === deck.fromConversation.messageId}
+                replaces={deck.hasDeck}
+                onToggle={(add) => deck.onToggle(deck.fromConversation!.messageId, add)}
+                disabled={busy}
+                periodMinutes={deck.periodMinutes}
+              />
+            </div>
+          ) : null}
           {fromConversation.length ? (
             <div className="flex flex-col gap-3">{fromConversation.map(card)}</div>
           ) : (
@@ -267,13 +298,40 @@ export function AddPanel({
                   </span>
                   <div className="min-w-0 flex-1 space-y-2">
                     <p data-testid="ask-reply" className="text-sm">
-                      {turn.content.split('\n')[0]}
+                      {turn.content.split('\n').find((text) => text.trim() && !text.startsWith('```')) ?? ''}
                     </p>
                     {(piecesByMessage.get(turn.id) ?? []).map(card)}
+                    {deck && hasSlideDeck(turn.content) ? (
+                      <StackDeckCard
+                        conversationId={conversationId}
+                        messageId={turn.id}
+                        content={turn.content}
+                        added={deck.sourceMessageId === turn.id}
+                        replaces={deck.hasDeck}
+                        onToggle={(add) => deck.onToggle(turn.id, add)}
+                        disabled={busy}
+                        periodMinutes={deck.periodMinutes}
+                      />
+                    ) : null}
                   </div>
                 </div>
               )
             )}
+            {deck?.building ? (
+              <>
+                <p className="ml-10 rounded-2xl rounded-br-sm bg-[var(--sv-primary)] px-3 py-2 text-sm text-white">
+                  {deck.building.line}
+                </p>
+                <p data-testid="stack-deck-building" className="flex items-center gap-2 text-sm text-[var(--sv-muted)]">
+                  <Loader2 size={14} className="animate-spin" /> Building your deck · {deck.building.label}
+                </p>
+              </>
+            ) : null}
+            {deck?.error ? (
+              <p data-testid="stack-deck-error" className="text-sm text-red-700">
+                {deck.error}
+              </p>
+            ) : null}
             {lastAnswer?.canUndo ? (
               <button
                 type="button"

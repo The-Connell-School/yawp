@@ -243,6 +243,16 @@ export function LessonIntakeCard({
               value={typedClass}
               disabled={disabled}
               onChange={(event) => setTypedClass(event.target.value)}
+              // Enter answers it, as it sends in the chat box (Kevin, Oct 24).
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+                event.preventDefault();
+                if (onLastStep) {
+                  if (!disabled && ready && message) send();
+                } else if (!disabled && current && answered[current]) {
+                  setReached((at) => Math.min(at + 1, steps.length - 1));
+                }
+              }}
               className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
             />
           )}

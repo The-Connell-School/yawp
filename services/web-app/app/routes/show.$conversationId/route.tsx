@@ -5,7 +5,8 @@
  * running long is calm: amber, "past the plan. No rush."
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Link, redirect, useLoaderData, type LoaderFunctionArgs, type MetaFunction } from 'react-router';
+import { Link, redirect, useLoaderData, useLocation, type LoaderFunctionArgs, type MetaFunction } from 'react-router';
+import { closeHref } from '~/domain/lesson-planner/lesson-return';
 import { ArrowRight, Check, ChevronLeft, MonitorPlay } from 'lucide-react';
 import { prisma } from '~/utils/db.server';
 import { loadStackV3 } from '~/domain/lesson-planner/load-stack-v3.server';
@@ -59,6 +60,8 @@ function readClock(): ClockMode {
 export default function RunTheShowRoute() {
   const { conversationId, title, className, periodMinutes, blocks, notes, labels, deck, gallery } =
     useLoaderData<typeof loader>();
+  const location = useLocation();
+  const backTo = closeHref(conversationId, location.search, 'stack');
   const [current, setCurrent] = useState(0);
   const [done, setDone] = useState(false);
   const [clock, setClock] = useState<ClockMode>('off');
@@ -149,7 +152,7 @@ export default function RunTheShowRoute() {
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-8">
         <div className="flex items-center gap-4">
           <Link
-            to={`/app/lesson-planner/${conversationId}/packet`}
+            to={backTo}
             className="inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1.5 text-sm font-semibold"
           >
             <ChevronLeft size={15} /> Exit show
@@ -198,7 +201,7 @@ export default function RunTheShowRoute() {
               </span>
             ) : (
               <a
-                href={`/present/${conversationId}/${deck.id}`}
+                href={`/present/${conversationId}/${deck.id}?from=show`}
                 target="yawp-projector"
                 className="inline-flex items-center gap-2 rounded-full border border-white/20 px-3 py-1.5 text-xs font-semibold"
               >
@@ -261,7 +264,7 @@ export default function RunTheShowRoute() {
               </h1>
               <div className="mt-6 flex flex-wrap justify-center gap-3">
                 <Link
-                  to={`/app/lesson-planner/${conversationId}/packet`}
+                  to={backTo}
                   className="rounded-xl border border-[#1C1A17]/20 px-5 py-3 font-semibold"
                 >
                   Back to your lesson

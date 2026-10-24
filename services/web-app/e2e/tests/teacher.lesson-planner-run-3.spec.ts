@@ -625,13 +625,15 @@ test.describe("Lesson Planner — Brian's third run", () => {
       const asked: string[] = [];
       await page.route('**/api/domain/lesson-planner', (route) => {
         asked.push(route.request().postData() ?? '');
+        return route.abort();
       });
       await lecture.getByTestId('lecture-slides').click();
-      await expect(page).toHaveURL(new RegExp(`c=${conversationId}`));
+      // Built right in the stack, not in the chat (Brian's run 6, item 2).
       await expect
         .poll(() => decodeURIComponent(asked.join('\n').replace(/\+/g, ' ')))
         .toContain('give the lecture “Mini-lesson: Girard’s three ideas” a slide for each part it teaches');
-      await expect(page).not.toHaveURL(/build=|step=/);
+      expect(decodeURIComponent(asked.join('\n'))).toContain('surface=stack');
+      await expect(page).toHaveURL(new RegExp(`/app/lesson-planner/${conversationId}/packet$`));
     });
 
     test('the deck is built from the stack, not a step in it', async ({ page, signIn, e2eContext }) => {
