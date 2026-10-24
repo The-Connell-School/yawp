@@ -223,6 +223,68 @@ test.describe("Lesson Planner — Brian's sixth run", () => {
       ]);
       await expect(page).toHaveURL(new RegExp(`/app/lesson-planner/${conversationId}/packet$`));
     });
+
+    test('round 2: the deck card previews every slide in place, and Hide closes it', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Day one of The Things They Carried, English 11, 50 minutes.' },
+        { role: 'assistant', content: DAY_ONE_REPLY },
+      ]);
+      const asked: string[] = [];
+      await stubStackDeckTurn(page, conversationId, asked);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await page.waitForLoadState('networkidle');
+      await page.getByRole('button', { name: 'Ask the planner' }).first().click();
+      await page.getByTestId('stack-ask-input').fill('make slides for this lesson');
+      await page.getByRole('button', { name: 'Send' }).click();
+
+      const deck = page.getByTestId('stack-deck');
+      const toggle = deck.getByTestId('stack-deck-preview-toggle');
+      await expect(toggle).toHaveText('Preview');
+      await toggle.click();
+      const preview = deck.getByTestId('stack-deck-preview');
+      await expect(preview.getByTestId('stack-deck-preview-slide')).toHaveCount(4);
+      await expect(preview).toContainText('Hold this question');
+      await expect(preview).toContainText('Why does a list feel like the right form?');
+      await expect(toggle).toHaveText('Hide');
+      await toggle.click();
+      await expect(preview).toHaveCount(0);
+    });
+
+    test('round 2: a deck made in the chat but never added is offered in the stack', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedStackWithDeckReply(page, e2eContext);
+      const asked: string[] = [];
+      await page.route('**/api/domain/lesson-planner', (route) => {
+        asked.push(route.request().postData() ?? '');
+        return route.abort();
+      });
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await page.waitForLoadState('networkidle');
+      const takeToClass = page.getByTestId('take-to-class');
+      await expect(takeToClass).toContainText('The planner already made a deck in your conversation');
+      await takeToClass.getByTestId('add-conversation-deck').click();
+
+      const panel = page.getByTestId('add-panel');
+      await expect(panel.getByRole('tab', { name: 'From your conversation' })).toHaveAttribute('aria-selected', 'true');
+      const deck = panel.getByTestId('stack-deck');
+      await expect(deck).toContainText('The Things They Carried — Day 1');
+      await deck.getByTestId('deck-toggle').click();
+      await expect(deck.getByTestId('deck-toggle')).toContainText('In the stack');
+      await expect(takeToClass).toContainText('4 slides from your stack');
+      // Added as it was: nothing was rebuilt.
+      expect(asked).toEqual([]);
+    });
   });
 
   test.describe('item 3: Close goes back to where it was opened', () => {
