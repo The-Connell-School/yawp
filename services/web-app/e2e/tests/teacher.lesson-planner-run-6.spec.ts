@@ -71,11 +71,60 @@ async function seedStackWithDeckReply(page: import('@playwright/test').Page, e2e
   return seeded;
 }
 
+async function seedIds(conversationId: string) {
+  const prisma = createE2EPrismaClient();
+  try {
+    const rows = await prisma.lessonPlanMessage.findMany({
+      where: { conversationId, role: 'assistant' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 async function fileDeck(page: import('@playwright/test').Page, conversationId: string, messageId: string) {
   const filed = await page.request.post('/api/domain/lesson-planner/packet', {
     form: { intent: 'add-material', conversationId, messageId, materialKey: 'deck' },
   });
   expect(filed.ok()).toBe(true);
+}
+
+/**
+ * The planner's turn, stubbed: it saves the stack's two messages as the
+ * server would, and answers with the stream's last line.
+ */
+async function stubStackDeckTurn(page: import('@playwright/test').Page, conversationId: string, asked: string[]) {
+  await page.route('**/api/domain/lesson-planner', async (route) => {
+    const form = new URLSearchParams(route.request().postData() ?? '');
+    asked.push(`${form.get('surface')}|${form.get('message')}`);
+    const prisma = createE2EPrismaClient();
+    let messageId = '';
+    try {
+      const now = Date.now();
+      await prisma.lessonPlanMessage.create({
+        data: { conversationId, role: 'user', content: form.get('message') ?? '', surface: 'stack', createdAt: new Date(now) },
+      });
+      const reply = await prisma.lessonPlanMessage.create({
+        data: { conversationId, role: 'assistant', content: DECK_REPLY, surface: 'stack', createdAt: new Date(now + 1) },
+        select: { id: true },
+      });
+      messageId = reply.id;
+    } finally {
+      await prisma.$disconnect();
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/x-ndjson',
+      body: [
+        JSON.stringify({ type: 'progress', label: 'Writing the slides', fraction: 0.6 }),
+        JSON.stringify({ type: 'done', status: 200, payload: { conversationId, messageId, reply: DECK_REPLY } }),
+        '',
+      ].join('\n'),
+    });
+  });
 }
 
 test.describe("Lesson Planner — Brian's sixth run", () => {
@@ -87,6 +136,93 @@ test.describe("Lesson Planner — Brian's sixth run", () => {
       await prisma.$disconnect();
     }
     for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, false);
+  });
+
+  test.describe('item 2: the deck is built right in the stack', () => {
+    test('asked for in Ask the planner, it comes back as a card to preview and add', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Day one of The Things They Carried, English 11, 50 minutes.' },
+        { role: 'assistant', content: DAY_ONE_REPLY },
+      ]);
+      const kept = await page.request.post('/api/domain/lesson-planner/packet', {
+        form: { intent: 'keep-all', conversationId, messageId: (await seedIds(conversationId))[0]! },
+      });
+      expect(kept.ok()).toBe(true);
+      const asked: string[] = [];
+      await stubStackDeckTurn(page, conversationId, asked);
+
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await page.waitForLoadState('networkidle');
+      await page.getByRole('button', { name: 'Ask the planner' }).first().click();
+      await page.getByTestId('stack-ask-input').fill('Build the slide deck');
+      await page.getByRole('button', { name: 'Send' }).click();
+
+      const deck = page.getByTestId('stack-deck');
+      await expect(deck).toContainText('The Things They Carried — Day 1');
+      expect(asked).toEqual(['stack|Build the slide deck from my stack']);
+      // Never sent to the chat.
+      await expect(page).toHaveURL(new RegExp(`/app/lesson-planner/${conversationId}/packet$`));
+      await expect(deck.getByRole('link', { name: /present/i })).toHaveAttribute(
+        'href',
+        new RegExp(`/present/${conversationId}/[^?]+\\?from=stack$`)
+      );
+
+      await deck.getByTestId('deck-toggle').click();
+      await expect(deck.getByTestId('deck-toggle')).toContainText('In the stack');
+      await expect(page.getByTestId('take-to-class')).toContainText('4 slides from your stack');
+
+      // The chat shows it as one compact line.
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      await expect(page.getByTestId('stack-turn').last()).toContainText('Deck built on the stack');
+    });
+
+    test('"Build the deck" and "Rebuild" build it in the stack, and a new deck replaces the old', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Day one of The Things They Carried, English 11, 50 minutes.' },
+        { role: 'assistant', content: DAY_ONE_REPLY },
+      ]);
+      const kept = await page.request.post('/api/domain/lesson-planner/packet', {
+        form: { intent: 'keep-all', conversationId, messageId: (await seedIds(conversationId))[0]! },
+      });
+      expect(kept.ok()).toBe(true);
+      const asked: string[] = [];
+      await stubStackDeckTurn(page, conversationId, asked);
+
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await page.waitForLoadState('networkidle');
+      await page.getByTestId('build-deck').click();
+      await expect(page.getByTestId('add-panel')).toBeVisible();
+      const first = page.getByTestId('stack-deck').first();
+      await expect(first).toBeVisible();
+      await first.getByTestId('deck-toggle').click();
+      await expect(page.getByTestId('take-to-class')).toContainText('4 slides from your stack');
+
+      await page.getByRole('button', { name: 'Close' }).click();
+      await page.getByTestId('rebuild-deck').click();
+      const second = page.getByTestId('stack-deck').nth(1);
+      await expect(second).toBeVisible();
+      await expect(second.getByTestId('stack-deck-replaces')).toHaveText('Adding it replaces the deck in your lesson.');
+      await second.getByTestId('deck-toggle').click();
+      await expect(second.getByTestId('deck-toggle')).toContainText('In the stack');
+      await expect(page.getByTestId('stack-deck').first().getByTestId('deck-toggle')).toContainText('Add to stack');
+      expect(asked).toEqual([
+        'stack|Build the slide deck from my stack',
+        'stack|Rebuild the slide deck from my stack, replacing the one in it',
+      ]);
+      await expect(page).toHaveURL(new RegExp(`/app/lesson-planner/${conversationId}/packet$`));
+    });
   });
 
   test.describe('item 3: Close goes back to where it was opened', () => {

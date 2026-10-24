@@ -45,6 +45,7 @@ export function TakeToClass({
   handoutCount,
   deck,
   deckV2,
+  onBuildDeck = null,
   children,
 }: {
   conversationId: string;
@@ -53,6 +54,11 @@ export function TakeToClass({
   handoutCount: number;
   deck: { id: string; slides: number; title: string } | null;
   deckV2: boolean;
+  /**
+   * Build or rebuild the deck right here, in the stack's Ask the planner
+   * (Brian's run 6, item 2). Absent: the chat builds it.
+   */
+  onBuildDeck?: (() => void) | null;
   /** Post to your class sits inside, when sharing is on. */
   children?: React.ReactNode;
 }) {
@@ -123,10 +129,20 @@ export function TakeToClass({
                 Edit
               </Link>
             ) : null}
-            <Link to={`/app/lesson-planner?c=${conversationId}&build=rebuild-deck`} className={BUTTON}>
-              Rebuild
-            </Link>
+            {onBuildDeck ? (
+              <button type="button" onClick={onBuildDeck} data-testid="rebuild-deck" className={BUTTON}>
+                Rebuild
+              </button>
+            ) : (
+              <Link to={`/app/lesson-planner?c=${conversationId}&build=rebuild-deck`} className={BUTTON}>
+                Rebuild
+              </Link>
+            )}
           </>
+        ) : onBuildDeck ? (
+          <button type="button" onClick={onBuildDeck} data-testid="build-deck" className={BUTTON}>
+            Build the deck
+          </button>
         ) : (
           <Link to={`/app/lesson-planner?c=${conversationId}&build=deck`} data-testid="build-deck" className={BUTTON}>
             Build the deck

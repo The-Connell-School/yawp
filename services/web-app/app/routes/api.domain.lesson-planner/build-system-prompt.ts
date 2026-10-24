@@ -705,7 +705,7 @@ export function buildLessonPlannerSystemPrompt({
 }
 
 /** Bump when the cacheable instruction body changes materially. */
-export const LESSON_PLANNER_PROMPT_VERSION = '2026-10-23-review-v1';
+export const LESSON_PLANNER_PROMPT_VERSION = '2026-10-24-review-v1';
 
 /**
  * The fixed instruction body — identical for every turn except inventory and
@@ -800,12 +800,15 @@ export function buildLessonPlannerSystemPromptBlocks({
   sources = [],
   recentArt = [],
   weekContext = [],
+  onStack = false,
 }: {
   teacherName: string | null;
   organizationName: string;
   lessonInventory?: LessonInventoryEntry[];
   /** A day lesson's place in its week's framework (Brian's run 5, round 2). */
   weekContext?: string[];
+  /** Asked on the stack page, where the answer shows as a card (Brian's run 6, item 2). */
+  onStack?: boolean;
   /** Stack v2: what is in the stack, in full, so outputs are built from it. */
   stackContents?: StackContentsEntry[];
   unitContext?: UnitContext | null;
@@ -832,6 +835,12 @@ export function buildLessonPlannerSystemPromptBlocks({
     ...buildStackContentsSection(stackContents),
     ...buildUnitContextSection(unitContext),
     ...weekContext,
+    ...(onStack
+      ? [
+          '',
+          'This request was asked on the stack page, where the teacher is refining the lesson. Your answer shows there as a card, not in the chat: one short line, then the deck. No other pieces, no options to choose from, no questions back.',
+        ]
+      : []),
     ...buildTemplateSection(template),
     ...buildDeckGallerySection(deckGallery, recentArt),
     ...buildSourcesSection(sources),

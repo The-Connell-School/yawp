@@ -65,7 +65,7 @@ import {
   printAssistantMessage,
 } from '~/components/ai-chat/assistant-markdown';
 import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
-import { readSlideDeck } from '~/domain/lesson-planner/slide-deck';
+import { hasSlideDeck, readSlideDeck } from '~/domain/lesson-planner/slide-deck';
 import {
   DECK_SLOT,
   readLessonMaterials,
@@ -1613,9 +1613,15 @@ function MessageBubble({
         className="flex items-center gap-2 text-xs text-muted-foreground"
       >
         <span className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">
-          {message.role === 'user' ? 'On the stack' : 'Stack change'}
+          {message.role === 'user'
+            ? 'On the stack'
+            : hasSlideDeck(message.content)
+              ? 'Deck built on the stack'
+              : 'Stack change'}
         </span>
-        <span className="truncate">{message.content.split('\n')[0]}</span>
+        <span className="truncate">
+          {message.content.split('\n').find((line) => line.trim() && !line.startsWith('```')) ?? ''}
+        </span>
       </div>
     );
   }

@@ -1722,7 +1722,7 @@ describe("planner prompt — Brian's run 3", () => {
   });
 
   test('the prompt version moved', () => {
-    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-23-review-v1');
+    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-24-review-v1');
   });
 });
 
@@ -1944,4 +1944,15 @@ test("a day lesson hears its place in the week's framework (Brian's run 5, round
     weekContext: ['', 'This lesson is Day 2 of "Weekly Flow", a 4-day framework the teacher set:'],
   });
   expect(blocks.map((block) => block.text).join('\n')).toContain('Day 2 of "Weekly Flow", a 4-day framework');
+});
+
+test("a deck asked for on the stack answers in one line and the deck (Brian's run 6, item 2)", () => {
+  const onStack = buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'X', onStack: true });
+  const tail = onStack[1]!.text;
+  expect(tail).toContain('asked on the stack page');
+  expect(tail).toContain('one short line, then the deck');
+  // The cached core is the same either way.
+  const inChat = buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'X' });
+  expect(onStack[0]!.text).toBe(inChat[0]!.text);
+  expect(inChat.map((block) => block.text).join('\n')).not.toContain('asked on the stack page');
 });

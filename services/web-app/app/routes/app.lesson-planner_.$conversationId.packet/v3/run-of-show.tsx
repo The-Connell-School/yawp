@@ -210,6 +210,7 @@ export function RunOfShow({
   onAddAtEnd,
   busy,
   hasDeck = false,
+  onLectureSlides = null,
   missingIds = new Set(),
 }: {
   conversationId: string;
@@ -231,6 +232,8 @@ export function RunOfShow({
   busy: boolean;
   /** The lesson has a deck already: a lecture's slides rebuild it. */
   hasDeck?: boolean;
+  /** Build this lecture's slides in the stack (Brian's run 6, item 2). Absent: in the chat. */
+  onLectureSlides?: ((step: StackStep) => void) | null;
   /** Writing steps whose Yawp! assignment is not made yet. */
   missingIds?: ReadonlySet<string>;
 }) {
@@ -448,7 +451,16 @@ export function RunOfShow({
                     >
                       Rework it in the planner
                     </Link>
-                    {isLectureStep(step.title) ? (
+                    {isLectureStep(step.title) && onLectureSlides ? (
+                      <button
+                        type="button"
+                        onClick={() => onLectureSlides(step)}
+                        data-testid="lecture-slides"
+                        className="inline-flex items-center gap-1 font-semibold text-[var(--sv-primary)] underline underline-offset-2"
+                      >
+                        <MonitorPlay size={12} /> Build slides for this lecture
+                      </button>
+                    ) : isLectureStep(step.title) ? (
                       <Link
                         to={`/app/lesson-planner?c=${conversationId}&build=lecture&step=${encodeURIComponent(step.title)}${hasDeck ? '&deck=1' : ''}`}
                         data-testid="lecture-slides"

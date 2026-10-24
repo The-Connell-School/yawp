@@ -24,7 +24,13 @@ export type StackV3 = {
   setAt: string | null;
   lessonDate: string | null;
   className: string | null;
-  deck: { id: string; slides: number; title: string } | null;
+  deck: {
+    id: string;
+    slides: number;
+    title: string;
+    /** The reply it was filed from: its card on the stack says "In the stack". */
+    sourceMessageId: string | null;
+  } | null;
   /** The stack chat's earlier answers, newest last, for the panel. */
   askHistory: Array<{ id: string; role: 'user' | 'assistant'; content: string }>;
   /** Shown once, until the teacher closes it (Brian's run 3, item 13). */
@@ -61,7 +67,7 @@ export async function loadStackV3({
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         select: { id: true, role: true, content: true, surface: true },
       },
-      materials: { where: { kind: 'slides' }, select: { id: true, content: true } },
+      materials: { where: { kind: 'slides' }, select: { id: true, content: true, sourceMessageId: true } },
     },
   });
 
@@ -100,7 +106,12 @@ export async function loadStackV3({
       className: loaded.packet.className,
       deck:
         deckRow && deckOutcome?.kind === 'deck'
-          ? { id: deckRow.id, slides: deckOutcome.deck.slides.length, title: deckOutcome.deck.title }
+          ? {
+              id: deckRow.id,
+              slides: deckOutcome.deck.slides.length,
+              title: deckOutcome.deck.title,
+              sourceMessageId: deckRow.sourceMessageId,
+            }
           : null,
       askHistory: conversation.messages
         .filter((message) => message.surface === STACK_SURFACE)

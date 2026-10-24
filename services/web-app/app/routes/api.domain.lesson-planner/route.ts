@@ -147,6 +147,12 @@ const POST = z
      * at the client without touching the server.
      */
     stream: z.enum(['1']).optional(),
+    /**
+     * Asked for on the stack page, not in the chat (Brian's run 6, item 2):
+     * the deck is built where the teacher is working, and both turns are kept
+     * as the stack's, one compact line in the chat.
+     */
+    surface: z.enum(['stack']).optional(),
   })
   .strict();
 
@@ -223,6 +229,9 @@ export async function action({ request }: ActionFunctionArgs) {
   // Bound once here, where the guard above is still in view: the turn itself
   // runs inside a closure, and TypeScript cannot carry the narrowing into it.
   const turn = data;
+  if (turn.surface && !turn.conversationId) {
+    return dataResponse({ error: 'A stack turn belongs to a lesson.' }, { status: 400 });
+  }
 
   const ctx = {
     membershipId: access.membership.id,
@@ -569,6 +578,7 @@ export async function action({ request }: ActionFunctionArgs) {
       sources,
       recentArt,
       weekContext,
+      onStack: turn.surface === 'stack',
     });
 
     const messages: { role: AgentType; content: string; name?: string }[] = [
@@ -764,6 +774,7 @@ export async function action({ request }: ActionFunctionArgs) {
               role: AgentType.User,
               content: turn.message,
               createdAt: askedAt,
+              ...(turn.surface ? { surface: turn.surface } : {}),
             },
           });
           // Created on its own rather than as a nested write so its id can go back
@@ -775,6 +786,7 @@ export async function action({ request }: ActionFunctionArgs) {
               role: AgentType.Assistant,
               content: reply,
               createdAt: answeredAt,
+              ...(turn.surface ? { surface: turn.surface } : {}),
             },
             select: { id: true },
           });
