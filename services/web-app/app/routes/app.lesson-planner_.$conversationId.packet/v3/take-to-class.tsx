@@ -115,7 +115,7 @@ export function TakeToClass({
       >
         {deck ? (
           <>
-            <Link to={`/present/${conversationId}/${deck.id}`} data-testid="deck-present" className={BUTTON}>
+            <Link to={`/present/${conversationId}/${deck.id}?from=stack`} data-testid="deck-present" className={BUTTON}>
               Present
             </Link>
             {deckV2 ? (
@@ -143,7 +143,7 @@ export function TakeToClass({
             : 'Choose which steps go in'
         }
       >
-        <Link to={`${base}/handouts`} data-testid="handouts-print" className={BUTTON}>
+        <Link to={`${base}/handouts?from=stack`} data-testid="handouts-print" className={BUTTON}>
           Print
         </Link>
         <a href={`${base}/handouts.pdf`} download data-testid="handouts-pdf" className={BUTTON}>

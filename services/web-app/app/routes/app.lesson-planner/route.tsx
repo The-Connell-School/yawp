@@ -1982,7 +1982,7 @@ function MessageBubble({
                     disabled={disabled}
                     presentHref={
                       deckId && conversationId
-                        ? `/present/${conversationId}/${deckId}`
+                        ? `/present/${conversationId}/${deckId}?from=chat`
                         : null
                     }
                     downloadHref={
@@ -1992,7 +1992,7 @@ function MessageBubble({
                     }
                     editHref={
                       deckV2 && deckId && conversationId
-                        ? `/app/lesson-planner/${conversationId}/deck/${deckId}`
+                        ? `/app/lesson-planner/${conversationId}/deck/${deckId}?from=chat`
                         : null
                     }
                     periodMinutes={deckV2 ? periodMinutes : null}

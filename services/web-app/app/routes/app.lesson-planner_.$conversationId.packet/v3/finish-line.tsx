@@ -126,7 +126,7 @@ export function FinishLine({
       <YawpChecklist missing={missing} onPaper={onPaper} />
       {runShow ? (
         <Link
-          to={`/show/${conversationId}`}
+          to={`/show/${conversationId}?from=stack`}
           data-testid="run-the-show"
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--sv-primary)] py-3 text-sm font-semibold text-white transition hover:opacity-90"
         >

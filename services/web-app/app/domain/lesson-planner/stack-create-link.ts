@@ -7,6 +7,7 @@
 import { dailyPagesCreateHref } from './daily-pages-block';
 import { exitTicketCreateHref, readPlannedExitTickets } from './exit-ticket-block';
 import { EXIT_TICKET_BLOCK_KEY } from './lesson-material';
+import { lessonPlaceHref, readLessonPlace } from './lesson-return';
 import { hidePromptIds } from './prompt-ids';
 
 export type WritingTypeIds = {
@@ -29,9 +30,7 @@ export const FROM_PIECE_PARAM = 'fromPiece';
 export const BACK_PARAM = 'back';
 
 export function lessonBackHref(conversationId: string, back: string | null): string {
-  return back === 'stack'
-    ? `/app/lesson-planner/${encodeURIComponent(conversationId)}/packet`
-    : `/app/lesson-planner?c=${encodeURIComponent(conversationId)}`;
+  return lessonPlaceHref(conversationId, readLessonPlace(back, 'chat'));
 }
 
 export function withPiece(href: string, materialId?: string | null): string {

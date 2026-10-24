@@ -3,8 +3,10 @@ import {
   Link,
   redirect,
   useLoaderData,
+  useLocation,
   type LoaderFunctionArgs,
 } from 'react-router';
+import { closeHref } from '~/domain/lesson-planner/lesson-return';
 import {
   ChevronLeft,
   ChevronRight,
@@ -53,6 +55,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export default function PresentRoute() {
   const { conversationId, lessonTitle, deck, durationMinutes, tileTemplate, galleryTemplate } =
     useLoaderData<typeof loader>();
+  const location = useLocation();
+  // Close goes back to where the deck was opened (Brian's run 6, item 3).
+  const closeTo = closeHref(conversationId, `${location.pathname}${location.search}`, 'stack');
   const [index, setIndex] = useState(0);
   const [showNotes, setShowNotes] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -138,7 +143,8 @@ export default function PresentRoute() {
       {/* Presenter chrome — never projected onto a wall, never printed. */}
       <header className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 py-2 print:hidden">
         <Link
-          to={`/app/lesson-planner/${conversationId}/packet`}
+          to={closeTo}
+          data-testid="present-close"
           className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
         >
           <X size={16} />
