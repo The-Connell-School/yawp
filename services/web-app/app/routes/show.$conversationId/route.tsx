@@ -18,12 +18,56 @@ import { TileSlideCanvas } from '../present.$conversationId.$messageId/tile-slid
 import { GALLERY_FONTS_HREF, GallerySlideCanvas } from '../present.$conversationId.$messageId/gallery-slide-canvas';
 import { HEADING_FONT, STACK_FONTS_HREF, typeChipStyle } from '../app.lesson-planner_.$conversationId.packet/v3/theme';
 import { cn } from '~/utils/misc';
+import { lessonDeck } from '~/domain/lesson-planner/lesson-deck.server';
+import { notesFallback } from '~/domain/lesson-planner/teacher-notes';
+import { teacherNotesFor } from '~/domain/lesson-planner/teacher-notes.server';
+import { TeacherNotesShow, type NotesShowStep } from './teacher-notes-show';
 
-export const meta: MetaFunction = () => [{ title: 'Run the show · Yawp!' }];
+export const meta: MetaFunction = ({ data }) => [
+  { title: (data as { mode?: string } | undefined)?.mode === 'notes' ? 'Run of show · Yawp!' : 'Run the show · Yawp!' },
+];
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const loaded = await loadStackV3({ request, conversationId: params.conversationId });
   if (!loaded) throw redirect(`/app/lesson-planner/${params.conversationId}/packet`);
+  if (loaded.reviewFlags.teachNotes) {
+    // Run of show with teacher notes (Oct 24 handoff, task 7).
+    const found = await lessonDeck(loaded.conversationId);
+    const blocks = loaded.v3.timing.blocks;
+    const byId = new Map(loaded.v3.steps.map((step) => [step.id, step]));
+    const stored = await teacherNotesFor({
+      request,
+      conversationId: loaded.conversationId,
+      title: loaded.packet.title,
+      className: loaded.packet.className,
+      steps: blocks.map((block) => ({
+        id: block.id,
+        title: block.title,
+        minutes: block.minutes,
+        content: byId.get(block.id)?.content ?? '',
+      })),
+    });
+    return {
+      mode: 'notes' as const,
+      conversationId: loaded.conversationId,
+      title: loaded.packet.title,
+      totalMinutes: loaded.periodMinutes ?? loaded.v3.timing.total,
+      steps: blocks.map((block, index): NotesShowStep => ({
+        id: block.id,
+        title: block.title,
+        type: block.type,
+        minutes: block.minutes,
+        isWriting: block.isWriting,
+        label: byId.get(block.id)?.label ?? null,
+        slide: slideForStep(found?.deck ?? null, index, blocks),
+      })),
+      notes: Object.fromEntries(
+        blocks.map((block) => [block.id, stored[block.id] ?? notesFallback(byId.get(block.id)?.content ?? '')])
+      ),
+      deck: found ? { id: found.id, ...found.deck } : null,
+      gallery: loaded.reviewFlags.deckGallery,
+    };
+  }
   if (!loaded.reviewFlags.runShow) throw new Response('Not Found', { status: 404 });
   const deckRow = loaded.v3.deck
     ? await prisma.lessonPlanMaterial.findFirst({
@@ -33,6 +77,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     : null;
   const deck = deckRow ? readSlideDeck(deckRow.content) : null;
   return {
+    mode: 'show' as const,
     conversationId: loaded.conversationId,
     title: loaded.packet.title,
     className: loaded.packet.className,
@@ -57,9 +102,37 @@ function readClock(): ClockMode {
   }
 }
 
-export default function RunTheShowRoute() {
-  const { conversationId, title, className, periodMinutes, blocks, notes, labels, deck, gallery } =
-    useLoaderData<typeof loader>();
+export default function ShowRoute() {
+  const data = useLoaderData<typeof loader>();
+  const location = useLocation();
+  if (data.mode === 'notes') {
+    return (
+      <TeacherNotesShow
+        conversationId={data.conversationId}
+        title={data.title}
+        totalMinutes={data.totalMinutes}
+        steps={data.steps}
+        notes={data.notes}
+        deck={data.deck}
+        gallery={data.gallery}
+        backTo={closeHref(data.conversationId, location.search, 'stack')}
+      />
+    );
+  }
+  return <RunTheShow {...data} />;
+}
+
+function RunTheShow({
+  conversationId,
+  title,
+  className,
+  periodMinutes,
+  blocks,
+  notes,
+  labels,
+  deck,
+  gallery,
+}: Extract<ReturnType<typeof useLoaderData<typeof loader>>, { mode: 'show' }>) {
   const location = useLocation();
   const backTo = closeHref(conversationId, location.search, 'stack');
   const [current, setCurrent] = useState(0);

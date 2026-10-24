@@ -27,6 +27,7 @@ const actions = {
   setStepMinutes: mock(),
 };
 const runStackCommand = mock();
+const saveStepNotes = mock(async (_input: any) => undefined);
 
 mock.module('~/utils/auth.server', () => ({ requireMutableRequest, requireUserId: mock(), requireMembership: mock() }));
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -37,6 +38,7 @@ mock.module('~/domain/lesson-planner/stack-actions.server', () => actions);
 mock.module('~/domain/lesson-planner/stack-command.server', () => ({ runStackCommand }));
 mock.module('~/domain/lesson-planner/step-handout.server', () => ({ ensureStudentVersion }));
 mock.module('~/domain/lesson-planner/lesson-share.server', () => share);
+mock.module('~/domain/lesson-planner/teacher-notes.server', () => ({ saveStepNotes }));
 
 const { action } = await import('./route');
 
@@ -259,5 +261,19 @@ describe('Save this shape as a template (stack page redesign)', () => {
     ]);
     expect(JSON.stringify(data)).not.toContain('Hook');
     expect(response.data.templateId).toBe('tpl-1');
+  });
+});
+
+describe('teacher notes (Oct 24 handoff, task 7)', () => {
+  test('an edit saves that step’s notes, only with the flag', async () => {
+    saveStepNotes.mockClear();
+    let response = await post({ intent: 'set-notes', conversationId: 'plan-1', stepId: 'm:a', notes: 'Say: hello' });
+    expect(response.init?.status).toBe(404);
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, teachNotes: true });
+    response = await post({ intent: 'set-notes', conversationId: 'plan-1', stepId: 'mat-1', notes: 'Say: hello' });
+    expect(response.data).toEqual({ ok: true });
+    expect(saveStepNotes).toHaveBeenCalledWith({ conversationId: 'plan-1', stepId: 'mat-1', notes: 'Say: hello' });
+    response = await post({ intent: 'set-notes', conversationId: 'plan-1', notes: 'x' });
+    expect(response.init?.status).toBe(400);
   });
 });

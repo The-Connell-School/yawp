@@ -17,6 +17,7 @@ import {
 } from 'docx';
 import PDFDocument from 'pdfkit';
 import type { LessonPlanDoc } from './lesson-plan-doc';
+import { noteSections } from './teacher-notes';
 
 function subtitle(doc: LessonPlanDoc): string {
   return [doc.className, doc.periodMinutes ? `${doc.periodMinutes} minutes` : null]
@@ -54,6 +55,21 @@ function stepParagraphs(step: LessonPlanDoc['instructions'][number], numbered: b
         indent: { left: 720 },
         children: [new TextRun({ text: `Why: ${step.purpose}`, italics: true })],
       })
+    );
+  }
+  if (step.teacherNotes) {
+    paragraphs.push(
+      new Paragraph({ indent: { left: 720 }, spacing: { before: 80 }, children: [new TextRun({ text: 'Teacher notes', bold: true })] }),
+      ...noteSections(step.teacherNotes).map(
+        (note) =>
+          new Paragraph({
+            indent: { left: 720 },
+            children: [
+              ...(note.heading ? [new TextRun({ text: `${note.heading}: `, bold: true })] : []),
+              new TextRun({ text: note.body.replace(/\n/g, ' ') }),
+            ],
+          })
+      )
     );
   }
   return paragraphs;
@@ -194,6 +210,13 @@ export async function renderLessonPlanPdf(doc: LessonPlanDoc): Promise<Uint8Arra
         .fillColor(MUTED)
         .text(`Why: ${step.purpose}`, 72, pdf.y, { width: width - 18 });
       pdf.font('Helvetica').fillColor(INK);
+    }
+    if (step.teacherNotes) {
+      pdf.moveDown(0.2).font('Helvetica-Bold').text('Teacher notes', 72, pdf.y, { width: width - 18 });
+      for (const note of noteSections(step.teacherNotes)) {
+        if (note.heading) pdf.font('Helvetica-Bold').text(`${note.heading}: `, 72, pdf.y, { width: width - 18, continued: true });
+        pdf.font('Helvetica').text(note.body.replace(/\n/g, ' '), note.heading ? undefined : 72, note.heading ? undefined : pdf.y, { width: width - 18 });
+      }
     }
     pdf.x = 54;
   };

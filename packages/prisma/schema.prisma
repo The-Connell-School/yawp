@@ -1657,6 +1657,9 @@ model LessonPlanConversation {
   /// The lesson's first name, kept once the teacher renames it, for "Started
   /// as …" (Oct 24 handoff, task 8). Null: never renamed.
   originalTitle           String?
+  /// The teacher's notes per step, { [stepId]: "Open with: …\nSay: …" },
+  /// shown and edited in the run of show (Oct 24 handoff, task 7).
+  teacherNotes            Json?
   messages                LessonPlanMessage[]
   materials               LessonPlanMaterial[]
   shareLinks              LessonShareLink[]
@@ -1757,9 +1760,6 @@ model LessonPlanMaterial {
   /// the hash of the content it was written from.
   studentVersion    String?
   studentVersionKey String?
-  /// The teacher's notes for this step, in labeled sections ("Open with: …"),
-  /// shown and edited in the run of show (Oct 24 handoff, task 7).
-  teacherNotes      String?
 
   @@unique([conversationId, slot])
   @@index([conversationId, sourceMessageId, blockKey])

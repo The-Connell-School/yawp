@@ -23,6 +23,8 @@ export type LessonPlanEntry = {
   content: string;
   /** Its number in the stack, the one a deck's slides carry as `step`. */
   piece?: number;
+  /** The stack step it is (its section id), for its teacher notes. */
+  id?: string;
 };
 
 export type LessonPlanStep = {
@@ -39,6 +41,10 @@ export type LessonPlanStep = {
   /** The stack piece this step comes from, and its kind. */
   piece?: number;
   kind?: string;
+  /** The stack step it comes from (Oct 24 handoff, task 7). */
+  stepId?: string;
+  /** The teacher's notes for it, printed under it, as "Open with: …" lines. */
+  teacherNotes?: string;
 };
 
 export type LessonPlanDoc = {
@@ -261,7 +267,16 @@ function expandAll(entries: LessonPlanEntry[]): Expanded[] {
   return entries.flatMap((entry) =>
     expand(entry).map((item) => ({
       ...(item.step && !item.source ? { ...item, source: plain(entry.content) } : item),
-      ...(item.step ? { step: { ...item.step, kind: entry.kind, ...(entry.piece ? { piece: entry.piece } : {}) } } : {}),
+      ...(item.step
+        ? {
+            step: {
+              ...item.step,
+              kind: entry.kind,
+              ...(entry.piece ? { piece: entry.piece } : {}),
+              ...(entry.id ? { stepId: entry.id } : {}),
+            },
+          }
+        : {}),
       kind: entry.kind,
     }))
   );
@@ -396,7 +411,7 @@ export function entriesFromPacket(
     if (section.origin === 'material') {
       return [
         {
-          ...(isDeck ? {} : { piece }),
+          ...(isDeck ? {} : { piece, id: section.id }),
           kind:
             materialKinds[section.id] ??
             (section.kind === 'slides'
@@ -412,7 +427,7 @@ export function entriesFromPacket(
       ];
     }
     return [
-      { kind: 'lesson', title: section.title, content: section.content, piece },
+      { kind: 'lesson', title: section.title, content: section.content, piece, id: section.id },
       ...(section.deck
         ? [
             {
@@ -429,4 +444,23 @@ export function entriesFromPacket(
       })),
     ];
   });
+}
+
+/**
+ * The teacher's notes under each step of the plan (Oct 24 handoff, task 7),
+ * once per stack step: a reply read as several steps has them under its first.
+ */
+export function withTeacherNotes(doc: LessonPlanDoc, notes: Record<string, string>): LessonPlanDoc {
+  const seen = new Set<string>();
+  const attach = (step: LessonPlanStep): LessonPlanStep => {
+    if (!step.stepId || seen.has(step.stepId)) return step;
+    seen.add(step.stepId);
+    const text = notes[step.stepId]?.trim();
+    return text ? { ...step, teacherNotes: text } : step;
+  };
+  return {
+    ...doc,
+    instructions: doc.instructions.map(attach),
+    closingStep: doc.closingStep ? attach(doc.closingStep) : null,
+  };
 }

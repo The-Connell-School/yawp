@@ -253,4 +253,65 @@ test.describe("Stack page v2 (Brian's Oct 24 handoff)", () => {
     await page.getByTestId('present-close').click();
     await expect(page).toHaveURL(new RegExp(`/app/lesson-planner/${conversationId}/packet$`));
   });
+  test('task 7: run of show with teacher notes: every step, its slide, full notes to edit, clock off, no syncing', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, true);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    const { conversationId } = await seedDayOneWithDeck(page, e2eContext);
+    await page.goto(`/show/${conversationId}?from=stack`);
+    const show = page.getByTestId('run-show');
+    await expect(show).toHaveAttribute('data-mode', 'teacher-notes');
+    await expect(page.getByTestId('show-subtitle')).toHaveText('Run of show with teacher notes · 50 min');
+    await expect(page.getByTestId('clock-off')).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('show-clock')).toHaveCount(0);
+    // Nothing here drives the slides.
+    await expect(page.getByText(/following you|on the projector/i)).toHaveCount(0);
+    await expect(page.getByTestId('room-view')).toHaveCount(0);
+
+    const steps = page.getByTestId('show-rail-step');
+    const count = await steps.count();
+    expect(count).toBeGreaterThan(2);
+    await expect(page.getByTestId('show-step-of')).toContainText(`Now · Step 1 of ${count}`);
+    await expect(page.getByTestId('show-slide')).toContainText('Slide for this step');
+    // No notes written yet (no model here): the step's own text, in full.
+    await expect(page.getByTestId('show-notes')).not.toBeEmpty();
+
+    // Jump to a step from the rail.
+    await steps.nth(2).click();
+    await expect(page.getByTestId('show-step-of')).toContainText(`Step 3 of ${count}`);
+    await expect(steps.nth(2)).toHaveAttribute('data-state', 'now');
+
+    // Edit the notes: saved as they type, in sections.
+    await page.getByTestId('notes-edit').click();
+    const saved = page.waitForResponse(
+      (response) => response.url().includes('/api/domain/lesson-planner/stack') && response.request().method() === 'POST'
+    );
+    await page.getByTestId('notes-input').fill('Open with: Ask who has lost something.\nListen for: the weight of it.\nMove on when: every pen is down.');
+    expect((await saved).ok()).toBe(true);
+    await page.getByTestId('notes-done').click();
+    const sections = page.getByTestId('notes-section');
+    await expect(sections).toHaveCount(3);
+    await expect(sections.nth(0)).toContainText('Open with');
+    await expect(sections.nth(0)).toContainText('Ask who has lost something.');
+    await expect(sections.nth(2)).toContainText('Move on when');
+
+    // Kept: after a reload, and on the lesson plan.
+    await page.reload();
+    await page.getByTestId('show-rail-step').nth(2).click();
+    await expect(page.getByTestId('show-notes')).toContainText('Ask who has lost something.');
+    const plan = await pdfText(page, `/app/lesson-planner/${conversationId}/plan.pdf`);
+    expect(plan).toContain('Teacher notes');
+    expect(plan).toContain('Ask who has lost something.');
+
+    // The clock, when asked for; Next and Up next; Back to the stack.
+    await page.getByTestId('clock-countdown').click();
+    await expect(page.getByTestId('show-clock')).toContainText('left');
+    await page.getByTestId('show-next').click();
+    await expect(page.getByTestId('show-step-of')).toContainText(`Step 4 of ${count}`);
+    await page.getByTestId('show-back').click();
+    await expect(page).toHaveURL(new RegExp(`/app/lesson-planner/${conversationId}/packet$`));
+  });
 });

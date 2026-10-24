@@ -100,3 +100,27 @@ describe('renderLessonPlanPdf', () => {
     expect(pages).toBeLessThanOrEqual(3);
   });
 });
+
+describe('teacher notes on the plan (Oct 24 handoff, task 7)', () => {
+  const noted: LessonPlanDoc = {
+    ...DOC,
+    instructions: [
+      { ...DOC.instructions[0]!, teacherNotes: 'Open with: Ask what is in their bag.\nMove on when: pens are down.' },
+      DOC.instructions[1]!,
+    ],
+  };
+
+  test('under their step in the Word file, by section', async () => {
+    const xml = zipParts(await renderLessonPlanDocx(noted)).get('word/document.xml')!;
+    expect(xml).toContain('Teacher notes');
+    expect(xml).toContain('Open with: ');
+    expect(xml).toContain('Ask what is in their bag.');
+    expect(xml).toContain('Move on when: ');
+    expect(zipParts(await renderLessonPlanDocx(DOC)).get('word/document.xml')!).not.toContain('Teacher notes');
+  });
+
+  test('and in the PDF', async () => {
+    const bytes = await renderLessonPlanPdf(noted);
+    expect(bytes.length).toBeGreaterThan((await renderLessonPlanPdf(DOC)).length);
+  });
+});

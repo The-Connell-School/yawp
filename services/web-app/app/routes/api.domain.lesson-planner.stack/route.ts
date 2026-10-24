@@ -37,6 +37,8 @@ const MAX_SENDS_PER_DAY = 20;
 import { clampMinutes } from '~/domain/lesson-planner/stack-timing';
 import { MAX_LESSON_NAME } from '~/domain/lesson-planner/lesson-rename';
 import { renameLesson } from '~/domain/lesson-planner/lesson-rename.server';
+import { MAX_NOTES } from '~/domain/lesson-planner/teacher-notes';
+import { saveStepNotes } from '~/domain/lesson-planner/teacher-notes.server';
 
 const POST = z
   .object({
@@ -63,6 +65,8 @@ const POST = z
       'save-framework',
       // Rename the lesson (Oct 24 handoff, task 8).
       'rename-lesson',
+      // The teacher's notes for one step, saved as they type (task 7).
+      'set-notes',
     ]),
     conversationId: z.string().min(1),
     materialId: z.string().min(1).optional(),
@@ -92,6 +96,9 @@ const POST = z
     name: z.string().trim().min(1).max(80).optional(),
     /** `rename-lesson`: the lesson's new name. */
     title: z.string().trim().min(1).max(MAX_LESSON_NAME).optional(),
+    /** `set-notes`: the step, and its notes as the teacher left them. */
+    stepId: z.string().min(1).max(200).optional(),
+    notes: z.string().max(MAX_NOTES).optional(),
   })
   .strict();
 
@@ -134,6 +141,13 @@ export async function action({ request }: ActionFunctionArgs) {
       if (!data.title) return bad('A name is required.');
       const renamed = await renameLesson({ conversationId: conversation.id, membershipId: access.membership.id, name: data.title });
       return renamed ? dataResponse({ ok: true, ...renamed }) : bad('A name is required.');
+    }
+
+    case 'set-notes': {
+      if (!flags.teachNotes) return bad('Not found.', 404);
+      if (!data.stepId) return bad('A step is required.');
+      await saveStepNotes({ conversationId: conversation.id, stepId: data.stepId, notes: data.notes ?? '' });
+      return dataResponse({ ok: true });
     }
 
     case 'set-minutes': {
