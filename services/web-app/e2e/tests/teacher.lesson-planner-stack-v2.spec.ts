@@ -314,4 +314,14 @@ test.describe("Stack page v2 (Brian's Oct 24 handoff)", () => {
     await page.getByTestId('show-back').click();
     await expect(page).toHaveURL(new RegExp(`/app/lesson-planner/${conversationId}/packet$`));
   });
+  test('task 3: Google Docs, where Google is not set up, says so and offers the Word file', async ({ page, signIn, e2eContext }) => {
+    for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, true);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    const { conversationId } = await seedDayOneWithDeck(page, e2eContext);
+    await page.goto(`/app/lesson-planner/${conversationId}/google-doc?doc=handouts`);
+    await expect(page.getByTestId('google-doc-message')).toContainText('Google Docs isn’t connected on this site yet');
+    await expect(page.getByTestId('google-doc-word')).toHaveAttribute('href', `/app/lesson-planner/${conversationId}/handouts.docx`);
+    await page.goto(`/app/lesson-planner/${conversationId}/google-doc?doc=plan`);
+    await expect(page.getByTestId('google-doc-word')).toHaveAttribute('href', `/app/lesson-planner/${conversationId}/plan.docx`);
+  });
 });
