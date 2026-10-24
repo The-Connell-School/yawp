@@ -35,6 +35,8 @@ import { frameworkFromDays, multiDayTitle, readPlanDays } from '~/domain/lesson-
 /** Sends a lesson can make in a day: enough for a sub, a family and an admin. */
 const MAX_SENDS_PER_DAY = 20;
 import { clampMinutes } from '~/domain/lesson-planner/stack-timing';
+import { MAX_LESSON_NAME } from '~/domain/lesson-planner/lesson-rename';
+import { renameLesson } from '~/domain/lesson-planner/lesson-rename.server';
 
 const POST = z
   .object({
@@ -59,6 +61,8 @@ const POST = z
       'save-template',
       // Save a week's days as a framework (Brian's run 5, round 2).
       'save-framework',
+      // Rename the lesson (Oct 24 handoff, task 8).
+      'rename-lesson',
     ]),
     conversationId: z.string().min(1),
     materialId: z.string().min(1).optional(),
@@ -86,6 +90,8 @@ const POST = z
     recipient: z.string().trim().email().max(200).optional(),
     note: z.string().trim().max(2_000).optional(),
     name: z.string().trim().min(1).max(80).optional(),
+    /** `rename-lesson`: the lesson's new name. */
+    title: z.string().trim().min(1).max(MAX_LESSON_NAME).optional(),
   })
   .strict();
 
@@ -123,6 +129,13 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!conversation) return bad('Lesson not found.', 404);
 
   switch (data.intent) {
+    case 'rename-lesson': {
+      if (!flags.teachNotes) return bad('Not found.', 404);
+      if (!data.title) return bad('A name is required.');
+      const renamed = await renameLesson({ conversationId: conversation.id, membershipId: access.membership.id, name: data.title });
+      return renamed ? dataResponse({ ok: true, ...renamed }) : bad('A name is required.');
+    }
+
     case 'set-minutes': {
       if (!data.materialId || !data.minutes) return bad('A step and its minutes are required.');
       const undo = await setStepMinutes(conversation.id, data.materialId, data.minutes);

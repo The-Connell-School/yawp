@@ -20,11 +20,13 @@ import { announceStackChange } from '~/components/lesson-planner/stack-channel';
 import { StackUndoToast, useStackRemoval } from '~/components/lesson-planner/use-stack-removal';
 import { MaterialRichEditor } from '../material-rich-editor';
 import { AddPanel } from './add-panel';
+import { LessonRename } from '~/components/lesson-planner/lesson-rename';
 import { useStackDeckBuild } from './stack-deck';
 import { FinishLine } from './finish-line';
 import { usePaperSteps } from './yawp-checklist';
 import { PIECE_DRAG_TYPE, RunOfShow } from './run-of-show';
 import { TakeToClass } from './take-to-class';
+import { PrintForClass } from './print-for-class';
 import { PostToClass, SendLesson } from './share-cards';
 import { TimeBar } from './time-bar';
 import { HEADING_FONT, STACK_FONTS_HREF, STACK_THEME } from './theme';
@@ -53,6 +55,11 @@ function chipDate(iso: string | null): string {
 }
 
 type Change = { text: string; undo: unknown | null };
+
+/** Open slideshow: the deck full screen, for the smartboard (Oct 24 handoff, task 6). */
+export function slideshowHref(conversationId: string, deckId: string | null): string | null {
+  return deckId ? `/present/${conversationId}/${deckId}?from=stack&slideshow=1` : null;
+}
 
 export function StackPageV3({ data }: { data: StackPageV3Data }) {
   const { conversationId, v3, reviewFlags, packet, published } = data;
@@ -294,9 +301,18 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
           <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--sv-primary)]">
             Your lesson, start to finish
           </p>
-          <h1 data-testid="stack-title" className="text-3xl font-extrabold leading-tight sm:text-4xl" style={HEADING_FONT}>
-            {data.nameIsProvisional ? 'Untitled lesson' : packet.title}
-          </h1>
+          {reviewFlags.teachNotes ? (
+            // Renamed right here, and in the library (Oct 24 handoff, task 8).
+            <LessonRename conversationId={conversationId} title={packet.title} originalTitle={data.originalTitle}>
+              <h1 data-testid="stack-title" className="text-3xl font-extrabold leading-tight sm:text-4xl" style={HEADING_FONT}>
+                {data.nameIsProvisional ? 'Untitled lesson' : packet.title}
+              </h1>
+            </LessonRename>
+          ) : (
+            <h1 data-testid="stack-title" className="text-3xl font-extrabold leading-tight sm:text-4xl" style={HEADING_FONT}>
+              {data.nameIsProvisional ? 'Untitled lesson' : packet.title}
+            </h1>
+          )}
           <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
             {v3.className ? (
               <span data-testid="stack-chip-class" className="rounded-full bg-[#EFE8DD] px-3 py-1">
@@ -439,7 +455,41 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
               templates={reviewFlags.templates}
               suggestedTemplateName={templateName}
               onSaveTemplate={(name) => post(setFetcher, STACK_API, { intent: 'save-template', name })}
+              teach={
+                reviewFlags.teachNotes
+                  ? {
+                      slideshowHref: slideshowHref(conversationId, v3.deck?.id ?? v3.conversationDeck?.messageId ?? null),
+                      notesHref: `/show/${conversationId}?from=stack`,
+                      onBuildDeck: () => buildDeck(BUILD_FROM_STACK_REQUESTS.deck, 'Build the slide deck'),
+                    }
+                  : null
+              }
             />
+            {reviewFlags.teachNotes ? (
+              <>
+                <PrintForClass
+                  conversationId={conversationId}
+                  handoutCount={steps.filter((step) => step.hasHandout).length}
+                  deck={v3.deck}
+                  builtDeck={
+                    v3.conversationDeck && !v3.deck
+                      ? {
+                          presentHref: `/present/${conversationId}/${v3.conversationDeck.messageId}?from=stack`,
+                          onStack: v3.conversationDeck.onStack,
+                          onAdd: () => openPanel(null, v3.conversationDeck!.onStack ? 'ask' : 'conversation'),
+                        }
+                      : null
+                  }
+                  onBuildDeck={() =>
+                    buildDeck(
+                      BUILD_FROM_STACK_REQUESTS[v3.deck ? 'rebuild-deck' : 'deck'],
+                      v3.deck ? 'Rebuild the slide deck' : 'Build the slide deck'
+                    )
+                  }
+                />
+                {reviewFlags.share ? <PostToClass conversationId={conversationId} title={packet.title} v2 /> : null}
+              </>
+            ) : (
             <TakeToClass
               conversationId={conversationId}
               planExportV2={reviewFlags.planExportV2}
@@ -465,6 +515,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
             >
               {reviewFlags.share ? <PostToClass conversationId={conversationId} title={packet.title} /> : null}
             </TakeToClass>
+            )}
             {reviewFlags.share ? <SendLesson conversationId={conversationId} standards={v3.standards} /> : null}
           </div>
         </div>

@@ -169,4 +169,88 @@ test.describe("Stack page v2 (Brian's Oct 24 handoff)", () => {
     expect(text.indexOf('Hook activity')).toBeGreaterThan(-1);
     expect(text.indexOf('Hook activity')).toBeLessThan(text.indexOf('Hold this question'));
   });
+
+  test('task 8: rename the lesson on the stack page, and it started as its first name', async ({ page, signIn, e2eContext }) => {
+    for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, true);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    const { conversationId } = await seedDayOneWithDeck(page, e2eContext);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    await page.waitForLoadState('networkidle');
+    await page.getByTestId('lesson-rename').click();
+    await expect(page.getByTestId('lesson-rename-hint')).toHaveText(
+      'Started as “Day One.” Renaming here renames it on the stack page too.'
+    );
+    await page.getByTestId('lesson-rename-input').fill('Carrying: the first day');
+    await page.getByTestId('lesson-rename-save').click();
+    await expect(page.getByTestId('stack-title')).toHaveText('Carrying: the first day');
+    await page.reload();
+    await expect(page.getByTestId('stack-title')).toHaveText('Carrying: the first day');
+    // The name it started as is kept.
+    await page.getByTestId('lesson-rename').click();
+    await expect(page.getByTestId('lesson-rename-hint')).toContainText('Started as “Day One.”');
+    await page.getByTestId('lesson-rename-cancel').click();
+    await expect(page.getByTestId('lesson-rename-input')).toHaveCount(0);
+  });
+
+  test('tasks 4 and 5: Print it for class, and Post to your class without Teams', async ({ page, signIn, e2eContext }) => {
+    for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, true);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    const { conversationId, assistantIds } = await seedDayOneWithDeck(page, e2eContext);
+    const filed = await page.request.post('/api/domain/lesson-planner/packet', {
+      form: { intent: 'add-material', conversationId, messageId: assistantIds[1]!, materialKey: 'deck' },
+    });
+    expect(filed.ok()).toBe(true);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    const box = page.getByTestId('print-for-class');
+    await expect(box.getByRole('heading', { name: 'Print it for class' })).toBeVisible();
+    await expect(page.getByTestId('take-to-class')).toHaveCount(0);
+    await expect(box).toContainText('Timed, one page, ready to file');
+    await expect(box).toContainText('3 slides from your stack');
+    for (const id of ['plan-word', 'plan-google', 'plan-pdf-v3', 'deck-present', 'deck-edit', 'rebuild-deck', 'deck-pdf', 'handouts-word', 'handouts-google', 'handouts-pdf', 'one-packet']) {
+      await expect(box.getByTestId(id)).toBeVisible();
+    }
+    await expect(box.getByTestId('plan-google')).toHaveAttribute('href', `/app/lesson-planner/${conversationId}/google-doc?doc=plan`);
+    await expect(box).toContainText('Lesson plan, slides and handouts, in that order.');
+    await expect(box.getByTestId('google-docs-caption')).toHaveText(
+      'Google Docs opens a new Doc in your Google Drive. The first time, Google asks you to allow it.'
+    );
+
+    // The new downloads.
+    const slides = await pdfText(page, `/app/lesson-planner/${conversationId}/slides.pdf`);
+    for (const slide of DECK.slides) expect(slides).toContain(slide.title);
+    const word = await page.request.get(`/app/lesson-planner/${conversationId}/handouts.docx`);
+    expect(word.ok()).toBe(true);
+    expect(word.headers()['content-type']).toContain('wordprocessingml');
+
+    // Post to your class: Copy link and Google Classroom, no Teams.
+    const post = page.getByTestId('post-to-class');
+    await expect(post.getByRole('button', { name: 'Copy link' })).toBeVisible();
+    await expect(post.getByRole('button', { name: 'Share to Google Classroom' })).toBeVisible();
+    await expect(post.getByRole('button', { name: 'Teams' })).toHaveCount(0);
+    await expect(post).toContainText('Using Canvas, Schoology or Teams? Paste the link there.');
+  });
+
+  test('task 6: Teach it: Open slideshow for the smartboard, and the run of show with notes', async ({ page, signIn, e2eContext }) => {
+    for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, true);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    const { conversationId } = await seedDayOneWithDeck(page, e2eContext);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    await page.waitForLoadState('networkidle');
+    await page.getByTestId('set-lesson').click();
+    const teach = page.getByTestId('teach-it');
+    await expect(teach).toContainText('For the smartboard or projector');
+    await expect(teach).toContainText('For your laptop at the podium');
+    await expect(page.getByTestId('run-the-show')).toHaveCount(0);
+    await expect(teach.getByTestId('run-of-show-notes')).toHaveAttribute('href', `/show/${conversationId}?from=stack`);
+
+    // The deck built for the lesson, full screen, and Close comes back here.
+    await teach.getByTestId('open-slideshow').click();
+    await expect(page.getByTestId('slideshow')).toBeVisible();
+    await expect(page.getByTestId('slide-stage')).toContainText('The Things They Carried');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByTestId('slide-counter')).toHaveText('2 / 3');
+    await page.getByTestId('slideshow').hover();
+    await page.getByTestId('present-close').click();
+    await expect(page).toHaveURL(new RegExp(`/app/lesson-planner/${conversationId}/packet$`));
+  });
 });

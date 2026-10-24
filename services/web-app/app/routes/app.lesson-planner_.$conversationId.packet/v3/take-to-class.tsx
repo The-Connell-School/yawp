@@ -8,7 +8,7 @@ import { Link } from 'react-router';
 import { FileText, MonitorPlay, Printer } from 'lucide-react';
 import { HEADING_FONT } from './theme';
 
-function Row({
+export function Row({
   icon,
   title,
   line,
@@ -35,7 +35,7 @@ function Row({
   );
 }
 
-const BUTTON =
+export const BUTTON =
   'flex-1 rounded-lg border border-white/20 px-3 py-2 text-center text-sm font-semibold transition hover:bg-white/10';
 
 export function TakeToClass({

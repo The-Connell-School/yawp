@@ -1055,6 +1055,8 @@ jobs:
             app/domain/lesson-planner/lesson-return.test.ts \
             app/domain/lesson-planner/assignment-links.test.ts \
             app/domain/lesson-planner/one-packet.test.ts \
+            app/domain/lesson-planner/lesson-rename.test.ts \
+            app/domain/lesson-planner/handout-docx.server.test.ts \
             app/domain/lesson-planner/lesson-library.test.ts \
             app/domain/lesson-planner/run-show.test.ts \
             app/domain/lesson-planner/slide-deck-gallery.test.ts \

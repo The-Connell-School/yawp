@@ -723,7 +723,8 @@ export async function action({ request }: ActionFunctionArgs) {
         priorReplies: priorMessages
           .filter((message) => message.role === AgentType.Assistant)
           .map((message) => message.content),
-        teacherNamedIt: Boolean(activeConversation?.packetTitle?.trim()),
+        // A packet name, or a rename on the stack or in the library (Oct 24 handoff).
+        teacherNamedIt: Boolean(activeConversation?.packetTitle?.trim() || activeConversation?.originalTitle),
         stillPlaceholder: (() => {
           const first = priorMessages.find((message) => message.role === AgentType.User);
           return Boolean(activeConversation && first && activeConversation.title === firstMessageTitle(first.content));

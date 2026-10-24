@@ -518,6 +518,23 @@ export async function renderPacketPdf(
 }
 
 /**
+ * The slide deck on its own (Oct 24 handoff, task 4: the slide deck's PDF):
+ * each slide, what is on it, and its notes, as the packet prints it.
+ */
+export async function renderSlidesPdf({
+  lessonTitle,
+  deck,
+}: {
+  lessonTitle: string;
+  deck: SlideDeck;
+}): Promise<Uint8Array> {
+  const doc = newDocument(deck.title);
+  drawTitle(doc, { title: deck.title, subtitle: lessonTitle });
+  drawSlideDeck(doc, deck);
+  return finish(doc);
+}
+
+/**
  * Whether a download should be rendered as a page students write on.
  *
  * The handout view obviously is. Less obviously, so is a single student-facing

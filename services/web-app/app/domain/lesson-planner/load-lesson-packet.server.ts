@@ -34,6 +34,8 @@ export type LoadedLessonPacket = {
   packetTitleValue: string;
   /** Whether the teacher has published this lesson to their library. */
   published: boolean;
+  /** The name it started as, once renamed (Oct 24 handoff, task 8). */
+  originalTitle: string | null;
   /**
    * Still named after the teacher's first message (Brian's review, B5), so
    * the page asks for a name rather than presenting that message as one.
@@ -93,6 +95,7 @@ export async function loadLessonPacket({
       id: true,
       title: true,
       packetTitle: true,
+      originalTitle: true,
       publishedAt: true,
       unitDay: true,
       periodMinutes: true,
@@ -275,6 +278,7 @@ export async function loadLessonPacket({
     }),
     packetTitleValue: conversation.packetTitle ?? '',
     published: Boolean(conversation.publishedAt),
+    originalTitle: conversation.originalTitle,
     nameIsProvisional: nameIsProvisional({
       title: conversation.title,
       packetTitle: conversation.packetTitle,

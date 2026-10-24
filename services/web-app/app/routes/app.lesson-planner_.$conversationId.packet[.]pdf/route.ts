@@ -17,23 +17,7 @@ import {
 } from '~/domain/lesson-planner/lesson-pdf.server';
 import { buildStudentHandout } from '~/domain/lesson-planner/student-handout';
 import { onePacketOrder } from '~/domain/lesson-planner/one-packet';
-import { readSlideDeck, type SlideDeck } from '~/domain/lesson-planner/slide-deck';
-import { prisma } from '~/utils/db.server';
-
-/** The newest deck the planner built for this lesson, from the chat or the stack. */
-async function newestBuiltDeck(conversationId: string): Promise<SlideDeck | null> {
-  const replies = await prisma.lessonPlanMessage.findMany({
-    where: { conversationId, role: 'assistant', content: { contains: '```yawp-slides' } },
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    take: 3,
-    select: { content: true },
-  });
-  for (const reply of replies) {
-    const outcome = readSlideDeck(reply.content);
-    if (outcome.kind === 'deck') return outcome.deck;
-  }
-  return null;
-}
+import { newestBuiltDeck } from '~/domain/lesson-planner/lesson-deck.server';
 
 /** Guards against a hand-edited URL asking us to allocate for nothing. */
 const MAX_EXCLUSIONS = 200;
@@ -90,7 +74,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? { ...packet, sections: [single] }
     : wantsHandout
       ? packet
-      : onePacketOrder(packet, await newestBuiltDeck(params.conversationId!));
+      : onePacketOrder(packet, (await newestBuiltDeck(params.conversationId!))?.deck ?? null);
   const pdf = printsForStudents({
     wantsHandout,
     singleSectionAudience: single?.audience,

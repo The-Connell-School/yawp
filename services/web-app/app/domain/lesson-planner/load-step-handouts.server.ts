@@ -62,3 +62,26 @@ export async function loadStepHandouts({
     kit: handoutKit(loaded.packet, loaded.reviewFlags),
   };
 }
+
+/**
+ * The handout's parts for a download: the steps the teacher picked (`ids`),
+ * or every step marked with a handout, in stack order. The PDF, the Word file
+ * and the Google Doc all print these (Oct 24 handoff, task 4).
+ */
+export async function loadHandoutParts({
+  request,
+  conversationId,
+}: {
+  request: Request;
+  conversationId: string | undefined;
+}) {
+  const handouts = await loadStepHandouts({ request, conversationId });
+  const asked = new URL(request.url).searchParams.get('ids');
+  const wanted = asked
+    ? new Set(asked.split(',').map((id) => id.trim()).filter(Boolean).slice(0, 200))
+    : null;
+  const parts = handouts.steps
+    .filter((step) => (wanted ? wanted.has(step.id) : step.included) && step.content)
+    .map((step) => ({ id: step.id, title: step.title, content: step.content!, lines: step.lines }));
+  return { handouts, parts, wantedOne: Boolean(wanted && wanted.size === 1) };
+}

@@ -5,7 +5,7 @@
  */
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { Check, Play } from 'lucide-react';
+import { Check, MonitorPlay, NotebookText, Play } from 'lucide-react';
 import type { StackStep } from '~/domain/lesson-planner/stack-steps';
 import type { StackTiming } from '~/domain/lesson-planner/stack-timing';
 import { YawpChecklist } from './yawp-checklist';
@@ -49,6 +49,7 @@ export function FinishLine({
   busy,
   missing = [],
   onPaper = () => {},
+  teach = null,
 }: {
   conversationId: string;
   timing: StackTiming;
@@ -65,6 +66,11 @@ export function FinishLine({
   /** Writing steps not made in Yawp! yet (and not on paper). */
   missing?: StackStep[];
   onPaper?: (id: string) => void;
+  /**
+   * Stack page v2 (Oct 24 handoff, task 6): two Teach it buttons in place of
+   * Run the show. With no deck yet, Open slideshow builds one first.
+   */
+  teach?: { slideshowHref: string | null; notesHref: string; onBuildDeck: () => void } | null;
 }) {
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState(suggestedTemplateName);
@@ -124,7 +130,48 @@ export function FinishLine({
         </div>
       </dl>
       <YawpChecklist missing={missing} onPaper={onPaper} />
-      {runShow ? (
+      {teach ? (
+        <div data-testid="teach-it" className="mt-4">
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--sv-primary)]">Teach it</p>
+          {teach.slideshowHref ? (
+            <Link
+              to={teach.slideshowHref}
+              data-testid="open-slideshow"
+              className="flex w-full items-center gap-3 rounded-xl bg-[var(--sv-primary)] px-4 py-3 text-left text-white transition hover:opacity-90"
+            >
+              <MonitorPlay size={18} className="shrink-0" />
+              <span>
+                <span className="block text-sm font-bold">Open slideshow</span>
+                <span className="block text-xs text-white/80">For the smartboard or projector</span>
+              </span>
+            </Link>
+          ) : (
+            <button
+              type="button"
+              data-testid="open-slideshow"
+              onClick={teach.onBuildDeck}
+              className="flex w-full items-center gap-3 rounded-xl bg-[var(--sv-primary)] px-4 py-3 text-left text-white transition hover:opacity-90"
+            >
+              <MonitorPlay size={18} className="shrink-0" />
+              <span>
+                <span className="block text-sm font-bold">Open slideshow</span>
+                <span className="block text-xs text-white/80">No deck yet: build it first, right here</span>
+              </span>
+            </button>
+          )}
+          <Link
+            to={teach.notesHref}
+            data-testid="run-of-show-notes"
+            className="mt-2 flex w-full items-center gap-3 rounded-xl border-2 border-[var(--sv-ink)] px-4 py-3 text-left transition hover:bg-[#F1EBE2]"
+          >
+            <NotebookText size={18} className="shrink-0" />
+            <span>
+              <span className="block text-sm font-bold">Run of show with teacher notes</span>
+              <span className="block text-xs text-[var(--sv-muted)]">For your laptop at the podium</span>
+            </span>
+          </Link>
+        </div>
+      ) : runShow ? (
         <Link
           to={`/show/${conversationId}?from=stack`}
           data-testid="run-the-show"

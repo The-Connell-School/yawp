@@ -58,6 +58,7 @@ export default function PresentRoute() {
   const location = useLocation();
   // Close goes back to where the deck was opened (Brian's run 6, item 3).
   const closeTo = closeHref(conversationId, `${location.pathname}${location.search}`, 'stack');
+  const slideshow = new URLSearchParams(location.search).get('slideshow') === '1';
   const [index, setIndex] = useState(0);
   const [showNotes, setShowNotes] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -136,6 +137,62 @@ export default function PresentRoute() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [go, total, toggleFullscreen]);
+
+  const canvas = (shown: number) =>
+    galleryTemplate ? (
+      <GallerySlideCanvas deck={deck} index={shown} />
+    ) : tileTemplate ? (
+      <TileSlideCanvas slide={deck.slides[shown]!} />
+    ) : (
+      <SlideCanvas slide={deck.slides[shown]!} />
+    );
+
+  // Open slideshow (Oct 24 handoff, task 6): the slides and nothing else, for
+  // the smartboard. The first tap goes full screen (browsers ask for a tap);
+  // arrows, space and a presenter remote move the slides.
+  if (slideshow) {
+    return (
+      <main
+        data-testid="slideshow"
+        className="group fixed inset-0 flex items-center justify-center bg-[#1C1A17]"
+        onClick={() => {
+          if (!document.fullscreenElement) void document.documentElement.requestFullscreen?.().catch(() => {});
+        }}
+      >
+        {galleryTemplate ? <link rel="stylesheet" href={GALLERY_FONTS_HREF} /> : null}
+        <div
+          data-testid="slide-stage"
+          className="aspect-[16/9] w-full max-w-[calc(100vh*16/9)] overflow-hidden bg-white"
+        >
+          {canvas(index)}
+        </div>
+        <div className="absolute right-3 top-3 flex items-center gap-2 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+          <span data-testid="slide-counter" className="rounded-md bg-black/60 px-2 py-1 text-xs font-semibold text-white">
+            {index + 1} / {total}
+          </span>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              if (document.fullscreenElement) void document.exitFullscreen();
+              else void document.documentElement.requestFullscreen?.().catch(() => {});
+            }}
+            className="inline-flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-xs font-semibold text-white"
+          >
+            {isFullscreen ? <Minimize size={13} /> : <Maximize size={13} />} {isFullscreen ? 'Exit full screen' : 'Full screen'}
+          </button>
+          <Link
+            to={closeTo}
+            data-testid="present-close"
+            onClick={(event) => event.stopPropagation()}
+            className="inline-flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-xs font-semibold text-white"
+          >
+            <X size={13} /> Close
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="flex h-screen w-full flex-col bg-slate-100 print:h-auto print:bg-white">

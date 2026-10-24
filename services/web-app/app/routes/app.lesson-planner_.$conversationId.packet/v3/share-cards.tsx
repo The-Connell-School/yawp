@@ -33,7 +33,19 @@ async function copy(text: string) {
   }
 }
 
-export function PostToClass({ conversationId, title }: { conversationId: string; title: string }) {
+export function PostToClass({
+  conversationId,
+  title,
+  v2 = false,
+}: {
+  conversationId: string;
+  title: string;
+  /**
+   * Stack page v2 (Oct 24 handoff, task 5): its own card, Copy link and Share
+   * to Google Classroom only (no Teams), one plain link with everything.
+   */
+  v2?: boolean;
+}) {
   const fetcher = useFetcher<{ url?: string; error?: string }>();
   const [items, setItems] = useState<Set<ShareItem>>(() => new Set(POST_ITEMS.map((entry) => entry.item)));
   const [madeFor, setMadeFor] = useState<string | null>(null);
@@ -79,6 +91,46 @@ export function PostToClass({ conversationId, title }: { conversationId: string;
     // Once per new link.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher.state, fetcher.data]);
+
+  if (v2) {
+    return (
+      <section data-testid="post-to-class" className="rounded-2xl border border-[var(--sv-line)] bg-[var(--sv-card)] p-5">
+        <h2 className="text-lg font-bold" style={HEADING_FONT}>
+          Post to your class
+        </h2>
+        <p className="mt-1 text-xs text-[var(--sv-muted)]">
+          One link to a student page with the slides, handouts and Daily Pages prompt.
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            data-testid="share-copy"
+            disabled={fetcher.state !== 'idle'}
+            onClick={() => share('copy')}
+            className="flex items-center justify-center gap-2 rounded-lg bg-[var(--sv-ink)] px-3 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+          >
+            <Copy size={14} /> {copied ? 'Link copied' : 'Copy link'}
+          </button>
+          <button
+            type="button"
+            data-testid="share-classroom"
+            onClick={() => share('classroom')}
+            className="rounded-lg border border-[var(--sv-line)] px-3 py-2.5 text-sm font-semibold transition hover:bg-[#F1EBE2]"
+          >
+            Share to Google Classroom
+          </button>
+        </div>
+        <p data-testid="share-paste-hint" className="mt-2 text-xs text-[var(--sv-muted)]">
+          Using Canvas, Schoology or Teams? Paste the link there.
+        </p>
+        {url ? (
+          <p className="mt-2 break-all text-[11px] text-[var(--sv-muted)]" data-testid="share-link-text">
+            {url}
+          </p>
+        ) : null}
+      </section>
+    );
+  }
 
   return (
     <section data-testid="post-to-class" className="mt-5 rounded-xl bg-[var(--sv-dark-panel)] p-4">
