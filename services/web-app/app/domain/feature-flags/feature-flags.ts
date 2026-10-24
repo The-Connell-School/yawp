@@ -94,6 +94,12 @@ export const LESSON_PLANNER_DECK_GALLERY_FLAG = 'lesson_planner_deck_gallery' as
 /** Teachers upload their own documents as source material for the planner (Oct 21). */
 export const LESSON_PLANNER_UPLOADS_FLAG = 'lesson_planner_uploads' as const;
 
+/** Stack page v2 (Oct 24 handoff, Part 1): Print it for class, Teach it, teacher notes, rename. Needs stack v3. */
+export const LESSON_PLANNER_TEACH_NOTES_FLAG = 'lesson_planner_teach_notes' as const;
+
+/** The library redesign (Oct 24 handoff, Part 2): courses, units, groups. Needs stack v3. */
+export const LESSON_PLANNER_LIBRARY_V2_FLAG = 'lesson_planner_library_v2' as const;
+
 /** @deprecated Registry key `free_tier` — use {@link FREE_TIER_FLAG}. */
 export const FREE_TIER_FLAG_LEGACY_KEY = 'free_tier' as const;
 
@@ -195,6 +201,16 @@ export const FEATURE_FLAGS = {
     label: 'Lesson Planner: your own documents',
     description:
       'Teachers attach their own PDF, Word, PowerPoint or text files to a lesson, and the planner builds from them: their texts, terms and sequence. Only the text is kept, never the file. Off: no attach button.',
+  },
+  [LESSON_PLANNER_TEACH_NOTES_FLAG]: {
+    label: 'Lesson Planner: stack page v2',
+    description:
+      'Brian’s stack page v2: Print it for class (Word, Google Docs and PDF for the plan and handouts; Present, Edit, Rebuild and PDF for the slides), Open slideshow and Run of show with teacher notes, full editable notes for every step, renaming a lesson, and no Teams button. Needs the stack page redesign. Off: Take it to class and Run the show, as before.',
+  },
+  [LESSON_PLANNER_LIBRARY_V2_FLAG]: {
+    label: 'Lesson Planner: library redesign',
+    description:
+      'Brian’s library redesign: course tabs, units as tiles in groups with a writing meter, a page for each unit with day tabs and a lesson preview, Lessons on their own, and Plan a lesson. Needs the stack page redesign. Off: the folder list.',
   },
   [UNIFIED_SIGN_ON_FLAG]: {
     label: 'Unified sign-on',
