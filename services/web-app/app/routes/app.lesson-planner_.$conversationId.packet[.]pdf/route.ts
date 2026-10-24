@@ -16,6 +16,24 @@ import {
   handoutKit,
 } from '~/domain/lesson-planner/lesson-pdf.server';
 import { buildStudentHandout } from '~/domain/lesson-planner/student-handout';
+import { onePacketOrder } from '~/domain/lesson-planner/one-packet';
+import { readSlideDeck, type SlideDeck } from '~/domain/lesson-planner/slide-deck';
+import { prisma } from '~/utils/db.server';
+
+/** The newest deck the planner built for this lesson, from the chat or the stack. */
+async function newestBuiltDeck(conversationId: string): Promise<SlideDeck | null> {
+  const replies = await prisma.lessonPlanMessage.findMany({
+    where: { conversationId, role: 'assistant', content: { contains: '```yawp-slides' } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: 3,
+    select: { content: true },
+  });
+  for (const reply of replies) {
+    const outcome = readSlideDeck(reply.content);
+    if (outcome.kind === 'deck') return outcome.deck;
+  }
+  return null;
+}
 
 /** Guards against a hand-edited URL asking us to allocate for nothing. */
 const MAX_EXCLUSIONS = 200;
@@ -65,7 +83,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   // Exclusions are dropped when one piece was asked for by name: the teacher
   // pointed at that piece, so leaving it out would answer with nothing.
-  const chosen = single ? { ...packet, sections: [single] } : packet;
+  // The whole packet is the lesson plan, the slides, then the handouts, with
+  // the deck built for the lesson even if it was never added (Oct 24 handoff,
+  // task 2).
+  const chosen = single
+    ? { ...packet, sections: [single] }
+    : wantsHandout
+      ? packet
+      : onePacketOrder(packet, await newestBuiltDeck(params.conversationId!));
   const pdf = printsForStudents({
     wantsHandout,
     singleSectionAudience: single?.audience,
