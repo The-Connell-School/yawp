@@ -193,7 +193,7 @@ export function LibraryHome({ data }: { data: LibraryHomeData }) {
       </header>
 
       <Tabs value={course.id} onValueChange={chooseCourse} className="mt-6">
-        <TabsList data-testid="course-tabs">
+        <TabsList data-testid="course-tabs" className="max-w-full justify-start overflow-x-auto">
           {data.courses.map((candidate) => (
             <TabsTrigger key={candidate.id} value={candidate.id} data-testid="course-tab">
               {candidate.name}
