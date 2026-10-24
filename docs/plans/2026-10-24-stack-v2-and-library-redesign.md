@@ -49,7 +49,9 @@ Brian asked to be asked before anything not listed is changed, so this plan buil
 3. The refresh token is stored encrypted in a new table, `GoogleDriveGrant` (one per user). The next click needs no consent.
 4. The server builds the same Word file the Word button gives. It uploads it to Drive with conversion to a Google Doc, then sends the tab to the Doc.
 5. Caption: "Google Docs opens a new Doc in your Google Drive. The first time, Google asks you to allow it."
-6. **Outside the code (Kevin or Bryant):** in the Google Cloud project,
+6. **Kevin's answer to Brian's smartboard question (Oct 24):** teachers usually mirror their laptop to the board; there is one screen, not two. Keep it simple: no second-screen features and no slide syncing. Open slideshow is what the class sees; the notes view is for when the teacher wants their notes, knowing the class sees that screen too.
+
+**Outside the code (Kevin or Bryant):** in the Google Cloud project,
    - enable the Drive API
    - add the `drive.file` scope to the consent screen
    - add the callback URL for each origin (production and previews)
