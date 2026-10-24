@@ -46,6 +46,7 @@ export function TakeToClass({
   deck,
   deckV2,
   onBuildDeck = null,
+  onAddConversationDeck = null,
   children,
 }: {
   conversationId: string;
@@ -59,6 +60,8 @@ export function TakeToClass({
    * (Brian's run 6, item 2). Absent: the chat builds it.
    */
   onBuildDeck?: (() => void) | null;
+  /** The planner already made a deck in the chat: add that one (run 6, round 2). */
+  onAddConversationDeck?: (() => void) | null;
   /** Post to your class sits inside, when sharing is on. */
   children?: React.ReactNode;
 }) {
@@ -117,7 +120,13 @@ export function TakeToClass({
       <Row
         icon={<MonitorPlay size={16} />}
         title="Slide deck"
-        line={deck ? `${deck.slides} slides from your stack` : `About one slide per step (${stepCount} steps)`}
+        line={
+          deck
+            ? `${deck.slides} slides from your stack`
+            : onAddConversationDeck
+              ? 'The planner already made a deck in your conversation'
+              : `About one slide per step (${stepCount} steps)`
+        }
       >
         {deck ? (
           <>
@@ -140,9 +149,16 @@ export function TakeToClass({
             )}
           </>
         ) : onBuildDeck ? (
-          <button type="button" onClick={onBuildDeck} data-testid="build-deck" className={BUTTON}>
-            Build the deck
-          </button>
+          <>
+            {onAddConversationDeck ? (
+              <button type="button" onClick={onAddConversationDeck} data-testid="add-conversation-deck" className={BUTTON}>
+                Add it
+              </button>
+            ) : null}
+            <button type="button" onClick={onBuildDeck} data-testid="build-deck" className={BUTTON}>
+              {onAddConversationDeck ? 'Build a new one' : 'Build the deck'}
+            </button>
+          </>
         ) : (
           <Link to={`/app/lesson-planner?c=${conversationId}&build=deck`} data-testid="build-deck" className={BUTTON}>
             Build the deck

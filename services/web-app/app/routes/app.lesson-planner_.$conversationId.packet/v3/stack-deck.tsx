@@ -8,7 +8,7 @@
  */
 import { useState } from 'react';
 import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
-import { readSlideDeck } from '~/domain/lesson-planner/slide-deck';
+import { readSlideDeck, type Slide } from '~/domain/lesson-planner/slide-deck';
 
 const PLANNER_API = '/api/domain/lesson-planner';
 const UNREACHABLE = 'The planner could not be reached. Try again in a moment.';
@@ -94,6 +94,7 @@ export function StackDeckCard({
   disabled: boolean;
   periodMinutes: number | null;
 }) {
+  const [previewing, setPreviewing] = useState(false);
   const outcome = readSlideDeck(content);
   if (outcome?.kind !== 'deck') return null;
   return (
@@ -108,6 +109,35 @@ export function StackDeckCard({
         disabled={disabled}
         periodMinutes={periodMinutes}
       />
+      {/* Preview / Hide, as on a new activity's card (run 6, round 2). */}
+      <button
+        type="button"
+        data-testid="stack-deck-preview-toggle"
+        aria-expanded={previewing}
+        onClick={() => setPreviewing((open) => !open)}
+        className="text-xs font-semibold text-[var(--sv-primary)] underline underline-offset-2"
+      >
+        {previewing ? 'Hide' : 'Preview'}
+      </button>
+      {previewing ? (
+        <ol data-testid="stack-deck-preview" className="space-y-2 rounded-xl border border-[var(--sv-line)] bg-[var(--sv-card)] p-3">
+          {outcome.deck.slides.map((slide, index) => (
+            <li key={index} data-testid="stack-deck-preview-slide" className="text-sm">
+              <p className="flex items-baseline justify-between gap-2 font-semibold">
+                <span>
+                  {index + 1}. {slide.title}
+                </span>
+                {slide.minutes ? <span className="shrink-0 text-xs text-[var(--sv-muted)]">{slide.minutes} min</span> : null}
+              </p>
+              {slideLines(slide).map((text, line) => (
+                <p key={line} className="text-xs text-[var(--sv-muted)]">
+                  {text}
+                </p>
+              ))}
+            </li>
+          ))}
+        </ol>
+      ) : null}
       {replaces && !added ? (
         <p data-testid="stack-deck-replaces" className="text-xs text-[var(--sv-muted)]">
           Adding it replaces the deck in your lesson.
@@ -115,4 +145,15 @@ export function StackDeckCard({
       ) : null}
     </div>
   );
+}
+
+/** What a slide says, line by line, for the preview. */
+function slideLines(slide: Slide): string[] {
+  return [
+    slide.subtitle,
+    slide.body,
+    ...(slide.bullets ?? []).map((bullet) => `• ${bullet}`),
+    slide.left ? `${slide.left.label}: ${slide.left.text}` : null,
+    slide.right ? `${slide.right.label}: ${slide.right.text}` : null,
+  ].filter((line): line is string => Boolean(line));
 }

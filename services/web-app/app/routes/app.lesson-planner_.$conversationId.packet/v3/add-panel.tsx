@@ -27,6 +27,8 @@ export type PanelDeck = {
   building: DeckBuild | null;
   error: string | null;
   periodMinutes: number | null;
+  /** A deck from the chat not yet in the lesson (run 6, round 2). */
+  fromConversation: { messageId: string; content: string } | null;
 };
 
 export type AskTurn = { id: string; role: 'user' | 'assistant'; content: string };
@@ -253,6 +255,20 @@ export function AddPanel({
             The planner suggested these in your conversation. They aren't in the lesson yet. Drag one
             into your lesson, or click Add.
           </p>
+          {deck?.fromConversation ? (
+            <div className="mb-3">
+              <StackDeckCard
+                conversationId={conversationId}
+                messageId={deck.fromConversation.messageId}
+                content={deck.fromConversation.content}
+                added={deck.sourceMessageId === deck.fromConversation.messageId}
+                replaces={deck.hasDeck}
+                onToggle={(add) => deck.onToggle(deck.fromConversation!.messageId, add)}
+                disabled={busy}
+                periodMinutes={deck.periodMinutes}
+              />
+            </div>
+          ) : null}
           {fromConversation.length ? (
             <div className="flex flex-col gap-3">{fromConversation.map(card)}</div>
           ) : (

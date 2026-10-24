@@ -280,8 +280,9 @@ test.describe("Lesson Planner — Brian's sixth run", () => {
       const deck = panel.getByTestId('stack-deck');
       await expect(deck).toContainText('The Things They Carried — Day 1');
       await deck.getByTestId('deck-toggle').click();
-      await expect(deck.getByTestId('deck-toggle')).toContainText('In the stack');
       await expect(takeToClass).toContainText('4 slides from your stack');
+      // Like an added activity, it leaves the list once it is in the lesson.
+      await expect(deck).toHaveCount(0);
       // Added as it was: nothing was rebuilt.
       expect(asked).toEqual([]);
     });

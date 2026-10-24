@@ -439,6 +439,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
               stepCount={steps.length}
               handoutCount={steps.filter((step) => step.hasHandout).length}
               deck={v3.deck}
+              onAddConversationDeck={v3.conversationDeck && !v3.deck ? () => openPanel(null, 'conversation') : null}
               onBuildDeck={() =>
                 buildDeck(
                   BUILD_FROM_STACK_REQUESTS[v3.deck ? 'rebuild-deck' : 'deck'],
@@ -489,6 +490,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
           building: deckBuild.progress,
           error: deckBuild.error,
           periodMinutes: data.periodMinutes,
+          fromConversation: v3.conversationDeck,
         }}
         lastAnswer={change ? { text: change.text, canUndo: Boolean(change.undo) } : null}
         onUndo={undoChange}

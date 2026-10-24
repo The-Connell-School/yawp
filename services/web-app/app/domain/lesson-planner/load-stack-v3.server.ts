@@ -8,7 +8,7 @@
 import { teacherStandards } from './teacher-standards';
 import { prisma } from '~/utils/db.server';
 import { loadLessonPacket, type LoadedLessonPacket } from './load-lesson-packet.server';
-import { readSlideDeck } from './slide-deck';
+import { hasSlideDeck, readSlideDeck } from './slide-deck';
 import { claimCarryOvers, classKeyFor } from './stack-actions.server';
 import { stackSteps, type StackStep } from './stack-steps';
 import { suggestedPieces, type SuggestedPiece } from './stack-suggestions';
@@ -31,6 +31,12 @@ export type StackV3 = {
     /** The reply it was filed from: its card on the stack says "In the stack". */
     sourceMessageId: string | null;
   } | null;
+  /**
+   * The newest deck the planner made in the chat that is not the one in the
+   * lesson (Brian's run 6, round 2): offered in the stack, so it can be added
+   * as it is rather than built again.
+   */
+  conversationDeck: { messageId: string; content: string } | null;
   /** The stack chat's earlier answers, newest last, for the panel. */
   askHistory: Array<{ id: string; role: 'user' | 'assistant'; content: string }>;
   /** Shown once, until the teacher closes it (Brian's run 3, item 13). */
@@ -113,6 +119,14 @@ export async function loadStackV3({
               sourceMessageId: deckRow.sourceMessageId,
             }
           : null,
+      conversationDeck: (() => {
+        const newest = [...assistant]
+          .reverse()
+          .find((message) => message.surface !== STACK_SURFACE && hasSlideDeck(message.content));
+        return newest && newest.id !== deckRow?.sourceMessageId
+          ? { messageId: newest.id, content: newest.content }
+          : null;
+      })(),
       askHistory: conversation.messages
         .filter((message) => message.surface === STACK_SURFACE)
         .slice(-12)
