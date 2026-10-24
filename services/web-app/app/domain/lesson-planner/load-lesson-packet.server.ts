@@ -8,6 +8,7 @@
  */
 import { redirect } from 'react-router';
 import { prisma } from '~/utils/db.server';
+import { createdFor, linksByToken } from './assignment-links';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { buildLessonPacket, type LessonPacket } from './lesson-packet';
 import { DECK_KIND, MATERIAL_KIND_LABELS, packetKindForMaterial, type ArtifactKind } from './lesson-material';
@@ -114,6 +115,10 @@ export async function loadLessonPacket({
           position: true,
         },
       },
+      // One record per assignment, the chat's and the stack's (Oct 24 handoff, task 1).
+      assignmentLinks: {
+        select: { sourceMessageId: true, blockKey: true, yawpHref: true, createdFrom: true },
+      },
       materials: {
         orderBy: [{ sourceCreatedAt: 'asc' }, { blockKey: 'asc' }],
         select: {
@@ -140,6 +145,7 @@ export async function loadLessonPacket({
     },
   });
   if (!conversation) throw new Response('Not Found', { status: 404 });
+  const assignmentLinks = linksByToken(conversation.assignmentLinks);
 
   const klass = conversation.originClassAssignment?.class;
   const className = klass
@@ -244,10 +250,7 @@ export async function loadLessonPacket({
               typeIds,
               conversationId: conversation.id,
               materialId: material.id,
-              created:
-                material.yawpCreatedAt && material.yawpHref
-                  ? { href: material.yawpHref }
-                  : null,
+              created: createdFor(assignmentLinks, material),
             })
           : null,
       };
@@ -299,7 +302,7 @@ export async function loadLessonPacket({
           minutes: material.minutes,
           hasHandout: material.hasHandout,
           yawpAssignmentId: material.yawpAssignmentId,
-          yawpCreated: Boolean(material.yawpCreatedAt),
+          yawpCreated: Boolean(createdFor(assignmentLinks, material)),
           slot: material.slot,
         },
       ])

@@ -130,14 +130,21 @@ describe("stackCreateLink — every writing step (Brian's run 3, item 4)", () =>
     expect(link?.href).toContain('fromPiece=m%3Amat-9');
   });
 
-  test('once created: "Created in Yawp! · Open"', () => {
+  test('once created: "✓ Assignment created", and where (Oct 24 handoff, task 1)', () => {
     const link = stackCreateLink({
       ...base,
       kind: 'class-starter',
       content: 'Write.',
-      created: { href: '/app/assignment-types/cs-type' },
+      created: { href: '/app/assignment-types/cs-type', from: 'chat' },
     });
-    expect(link).toEqual({ label: 'Created in Yawp! · Open', href: '/app/assignment-types/cs-type', created: true });
+    expect(link).toEqual({
+      label: 'Assignment created',
+      href: '/app/assignment-types/cs-type',
+      created: true,
+      where: 'in the planner chat',
+    });
+    // Marked before the record existed: no "where".
+    expect(stackCreateLink({ ...base, kind: 'class-starter', content: 'Write.', created: { href: '/x' } })?.where).toBeNull();
   });
 });
 

@@ -774,12 +774,13 @@ export default function AppAssignmentTypesIdRoute() {
   const fromPiece = searchParams.get(FROM_PIECE_PARAM);
   const lessonFetcher = useFetcher();
   const tellLessonCreated = useCallback(() => {
-    if (!fromLesson || !fromPiece?.startsWith('m:')) return;
+    // From the chat ("b:") or the stack ("m:"): one record either way (Oct 24 handoff, task 1).
+    if (!fromLesson || !(fromPiece?.startsWith('m:') || fromPiece?.startsWith('b:'))) return;
     lessonFetcher.submit(
       {
         intent: 'mark-created',
         conversationId: fromLesson,
-        materialId: fromPiece.slice(2),
+        piece: fromPiece,
         yawpHref: `/app/assignment-types/${data.assignmentType.id}`,
       },
       { method: 'post', action: '/api/domain/lesson-planner/packet' }

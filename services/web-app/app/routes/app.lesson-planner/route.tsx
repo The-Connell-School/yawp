@@ -66,6 +66,7 @@ import {
 } from '~/components/ai-chat/assistant-markdown';
 import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
 import { hasSlideDeck, readSlideDeck } from '~/domain/lesson-planner/slide-deck';
+import { blockRef, createdFor, linksByToken, type PieceCreated } from '~/domain/lesson-planner/assignment-links';
 import {
   DECK_SLOT,
   readLessonMaterials,
@@ -140,7 +141,7 @@ type ChatMessage = {
   keptAudience?: PacketAudience | null;
 };
 
-type StackPieceRef = { materialId: string; created: { href: string } | null };
+type StackPieceRef = { materialId: string | null; created: PieceCreated | null };
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const access = await getLessonPlannerAccess(request);
@@ -212,6 +213,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 yawpHref: true,
                 yawpCreatedAt: true,
               },
+            },
+            assignmentLinks: {
+              select: { sourceMessageId: true, blockKey: true, yawpHref: true, createdFrom: true },
             },
             uploads: {
               orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -364,18 +368,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
           // (Brian's run 3, item 4).
           // The teacher's own documents for this lesson (Oct 21).
           uploads: reviewFlags.uploads ? selected.uploads : [],
-          stackPieces: Object.fromEntries(
-            selected.materials.map((material) => [
-              `${material.sourceMessageId}:${material.blockKey}`,
-              {
+          // Every piece with an assignment, filed or not, from the one record
+          // the stack reads too (Oct 24 handoff, task 1).
+          stackPieces: (() => {
+            const links = linksByToken(selected.assignmentLinks);
+            const pieces: Record<string, StackPieceRef> = {};
+            for (const [token, created] of links) pieces[token] = { materialId: null, created };
+            for (const material of selected.materials) {
+              pieces[`${material.sourceMessageId}:${material.blockKey}`] = {
                 materialId: material.id,
-                created:
-                  material.yawpCreatedAt && material.yawpHref
-                    ? { href: material.yawpHref }
-                    : null,
-              },
-            ])
-          ) as Record<string, StackPieceRef>,
+                created: createdFor(links, material),
+              };
+            }
+            return pieces;
+          })(),
           // A deck the teacher edited by hand (Brian's review, E2), which the
           // chat shows in place of the planner's.
           editedDeck: (() => {
@@ -1816,7 +1822,7 @@ function MessageBubble({
           classStarterTypeId={classStarterTypeId}
           conversationId={conversationId}
           created={stackPieces[`${message.id}:${part.blockKey}`]?.created ?? null}
-          materialId={stackPieces[`${message.id}:${part.blockKey}`]?.materialId ?? null}
+          pieceRef={message.id ? blockRef(message.id, part.blockKey) : null}
           added={
             message.id
               ? addedMaterials.has(`${message.id}:${part.blockKey}`)
@@ -1844,7 +1850,7 @@ function MessageBubble({
           assignmentTypeId={exitTicketTypeId}
           conversationId={conversationId}
           created={stackPieces[`${message.id}:${part.blockKey}`]?.created ?? null}
-          materialId={stackPieces[`${message.id}:${part.blockKey}`]?.materialId ?? null}
+          pieceRef={message.id ? blockRef(message.id, part.blockKey) : null}
           added={
             !!message.id &&
             addedMaterials.has(`${message.id}:${part.blockKey}`)

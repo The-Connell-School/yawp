@@ -6,6 +6,8 @@
  * it must not consume the planner's AI admission budget or its request
  * deadline. Marking a section should feel instant.
  */
+import { materialRef, readPieceRef } from '~/domain/lesson-planner/assignment-links';
+import { recordAssignmentLink } from '~/domain/lesson-planner/assignment-links.server';
 import {
   data as dataResponse,
   type ActionFunctionArgs,
@@ -109,6 +111,11 @@ const POST = z
       .max(300)
       .regex(/^\/app\/assignment-types\/[\w-]+(?:\?[\w=&%.-]*)?$/)
       .optional(),
+    /**
+     * `mark-created`: the piece it was made from, "b:<messageId>:<blockKey>"
+     * from the chat or "m:<materialId>" from the stack (Oct 24 handoff, task 1).
+     */
+    piece: z.string().min(3).max(300).optional(),
     /** `move`: the piece to move, and which way. */
     entry: z.string().min(3).max(200).optional(),
     direction: z.enum(['up', 'down']).optional(),
@@ -379,14 +386,15 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (data.intent === 'mark-created') {
-    if (!data.materialId || !data.yawpHref) {
+    const piece = readPieceRef(data.piece ?? (data.materialId ? materialRef(data.materialId) : null));
+    if (!piece || !data.yawpHref) {
       return dataResponse({ error: 'A piece and a link are required.' }, { status: 400 });
     }
-    await prisma.lessonPlanMaterial.updateMany({
-      where: { id: data.materialId, conversationId: conversation.id },
-      data: { yawpHref: data.yawpHref, yawpCreatedAt: new Date() },
-    });
-    return dataResponse({ created: true, materialId: data.materialId });
+    const recorded = await recordAssignmentLink({ conversationId: conversation.id, piece, yawpHref: data.yawpHref });
+    if (!recorded) {
+      return dataResponse({ error: 'That piece is not part of this lesson.' }, { status: 404 });
+    }
+    return dataResponse({ created: true, materialId: recorded.materialId });
   }
 
   if (data.intent === 'keep-all' || data.intent === 'split-kept') {

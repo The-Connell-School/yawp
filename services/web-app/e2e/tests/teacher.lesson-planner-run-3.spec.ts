@@ -357,7 +357,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await page.reload();
       await expect(
         page.getByTestId('packet-section').filter({ hasText: 'one object, one sentence' }).getByTestId('stack-create-assignment')
-      ).toHaveText('Created in Yawp! · Open');
+      ).toHaveText('Assignment created');
     });
   });
 
