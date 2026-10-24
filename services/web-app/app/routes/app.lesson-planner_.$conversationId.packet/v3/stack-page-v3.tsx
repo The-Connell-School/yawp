@@ -455,6 +455,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
               templates={reviewFlags.templates}
               suggestedTemplateName={templateName}
               onSaveTemplate={(name) => post(setFetcher, STACK_API, { intent: 'save-template', name })}
+              saveToUnit={v3.saveToUnit}
               teach={
                 reviewFlags.teachNotes
                   ? {

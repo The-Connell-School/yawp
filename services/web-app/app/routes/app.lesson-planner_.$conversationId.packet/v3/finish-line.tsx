@@ -4,7 +4,7 @@
  * finishing — and offers Run the show, saving the shape, or keeping at it.
  */
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useFetcher } from 'react-router';
 import { Check, MonitorPlay, NotebookText, Play } from 'lucide-react';
 import type { StackStep } from '~/domain/lesson-planner/stack-steps';
 import type { StackTiming } from '~/domain/lesson-planner/stack-timing';
@@ -50,6 +50,7 @@ export function FinishLine({
   missing = [],
   onPaper = () => {},
   teach = null,
+  saveToUnit = null,
 }: {
   conversationId: string;
   timing: StackTiming;
@@ -71,10 +72,15 @@ export function FinishLine({
    * Run the show. With no deck yet, Open slideshow builds one first.
    */
   teach?: { slideshowHref: string | null; notesHref: string; onBuildDeck: () => void } | null;
+  /** The library redesign (Part 2, L3): a set lesson in no unit can be saved to one. */
+  saveToUnit?: Array<{ id: string; title: string; course: string | null }> | null;
 }) {
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState(suggestedTemplateName);
   const [saved, setSaved] = useState(false);
+  // Kept for the visit: once saved, the lesson is in a unit and the page no
+  // longer offers it, but the teacher should still see where it went.
+  const [unitChoices] = useState(saveToUnit);
 
   if (!setAt) {
     const line =
@@ -130,6 +136,7 @@ export function FinishLine({
         </div>
       </dl>
       <YawpChecklist missing={missing} onPaper={onPaper} />
+      {unitChoices ? <SaveToUnit conversationId={conversationId} units={unitChoices} /> : null}
       {teach ? (
         <div data-testid="teach-it" className="mt-4">
           <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--sv-primary)]">Teach it</p>
@@ -230,5 +237,60 @@ export function FinishLine({
         Keep editing
       </button>
     </section>
+  );
+}
+
+/**
+ * Save to unit (Oct 24 handoff, Part 2, L3): a lesson planned first, or one
+ * whose place was "decide when I set it", is filed in a unit here.
+ */
+function SaveToUnit({ conversationId, units }: { conversationId: string; units: Array<{ id: string; title: string; course: string | null }> }) {
+  const fetcher = useFetcher<{ ok?: boolean; message?: string; error?: string }>();
+  const [unitId, setUnitId] = useState(units[0]?.id ?? '');
+  if (fetcher.data?.ok) {
+    return (
+      <p data-testid="saved-to-unit" className="mt-4 rounded-xl bg-[#F1EBE2] px-3 py-2 text-sm">
+        {fetcher.data.message}
+      </p>
+    );
+  }
+  return (
+    <div data-testid="save-to-unit" className="mt-4 rounded-xl border border-[var(--sv-line)] p-3">
+      <p className="text-sm font-semibold">Save to unit</p>
+      {units.length ? (
+        <div className="mt-2 flex flex-wrap gap-2">
+          <select
+            aria-label="Unit"
+            data-testid="save-to-unit-select"
+            value={unitId}
+            onChange={(event) => setUnitId(event.target.value)}
+            className="min-w-0 flex-1 rounded-lg border border-[var(--sv-line)] bg-white px-2 py-2 text-sm"
+          >
+            {units.map((unit) => (
+              <option key={unit.id} value={unit.id}>
+                {unit.course ? `${unit.course} · ` : ''}
+                {unit.title}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            data-testid="save-to-unit-save"
+            disabled={!unitId || fetcher.state !== 'idle'}
+            onClick={() =>
+              fetcher.submit({ intent: 'move-lesson', conversationId, unitId }, { method: 'post', action: '/api/domain/lesson-planner/library' })
+            }
+            className="rounded-lg bg-[var(--sv-ink)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            Save
+          </button>
+        </div>
+      ) : (
+        <p className="mt-1 text-xs text-[var(--sv-muted)]">
+          It stays under Lessons on their own. Make a unit in your <a className="underline" href="/app/lesson-planner/library">library</a> to file it.
+        </p>
+      )}
+      {fetcher.data?.error ? <p className="mt-1 text-xs text-red-700">{fetcher.data.error}</p> : null}
+    </div>
   );
 }

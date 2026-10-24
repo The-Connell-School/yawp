@@ -45,10 +45,19 @@ import {
   type LibraryLesson,
 } from '~/domain/lesson-planner/lesson-library';
 import { timeAgo } from '~/utils/timeAgo';
+import { loadLibraryHome } from '~/domain/lesson-planner/load-library-v2.server';
+import { LibraryHome } from './library-home';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const access = await getLessonPlannerAccess(request);
   if (!access.allowed) throw redirect('/app');
+
+  // The library redesign (Oct 24 handoff, Part 2).
+  const reviewFlags = await getLessonPlannerReviewFlags(access.membership.organization.id);
+  if (reviewFlags.libraryV2) {
+    const scope = { membershipId: access.membership.id, organizationId: access.membership.organization.id };
+    return { v2: await loadLibraryHome(scope, reviewFlags.stackV2), lessons: [], folders: false, allFolders: [] };
+  }
 
   const lessons = await prisma.lessonPlanConversation.findMany({
     where: { membershipId: access.membership.id, deletedAt: null },
@@ -80,7 +89,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
   });
 
-  const { stackV3 } = await getLessonPlannerReviewFlags(access.membership.organization.id);
+  const { stackV3 } = reviewFlags;
   // Every folder, an empty one included, newest first (Kevin, Oct 23).
   const allFolders = stackV3
     ? await prisma.lessonPlanUnit.findMany({
@@ -91,6 +100,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       })
     : [];
   return {
+    v2: null,
     lessons: buildLessonLibrary(
       lessons.map((lesson) => ({
         ...lesson,
@@ -463,7 +473,20 @@ function NewFolder() {
   );
 }
 
-export default function LessonHistoryRoute() {
+export default function LibraryRoute() {
+  const { v2 } = useLoaderData<typeof loader>();
+  if (v2) {
+    return (
+      // Own the scroll: the app shell is a fixed-height, overflow-hidden frame.
+      <section className="h-full w-full overflow-y-auto">
+        <LibraryHome data={v2} />
+      </section>
+    );
+  }
+  return <LessonHistory />;
+}
+
+function LessonHistory() {
   const { lessons: all, folders, allFolders } = useLoaderData<typeof loader>();
   const { units, lessons } = folders ? groupUnits(all, allFolders) : { units: [], lessons: all };
   const { drafts, library } = splitDraftsAndLibrary(lessons);

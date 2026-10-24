@@ -178,4 +178,26 @@ The same rule the stack already uses (YAWP! writing assignments, plus plainly-wr
 11. Push, preview, and screenshots next to the canvas.
 
 ## Status
-(updated as work lands)
+All of Part 1 and Part 2 is built, behind the two flags (both on in previews). The two bugs are fixed for everyone.
+
+| Task | Where | Tests |
+|---|---|---|
+| 1. Assignment status, one record | `assignment-links*.ts`, `LessonPlanAssignmentLink` | unit + e2e `stack-v2` task 1 |
+| 2. One packet with every slide | `one-packet.ts`, `lesson-deck.server.ts` | unit + e2e task 2 |
+| 3. Google Docs (drive.file) | `google-drive.server.ts`, `google-doc.server.ts`, routes `…/google-doc`, `/app/lesson-planner/google/callback` | unit (Google faked) + e2e task 3 (not set up → Word) |
+| 4. Print it for class | `v3/print-for-class.tsx`, slides PDF, handouts Word | e2e tasks 4 and 5 |
+| 5. No Teams | `v3/share-cards.tsx` (`v2`) | e2e tasks 4 and 5 |
+| 6. Teach it | `v3/finish-line.tsx`, slideshow mode on `/present` | e2e task 6 |
+| 7. Run of show with teacher notes | `show.$conversationId/teacher-notes-show.tsx`, `teacher-notes*.ts`, `LessonPlanConversation.teacherNotes` | unit + e2e task 7 |
+| 8. Rename | `lesson-rename*.ts(x)`; stack title, library cards, unit preview | unit + e2e task 8 |
+| L1 Library home | `app.lesson-planner_.library/library-home.tsx`, `library-v2*.ts`, `load-library-v2.server.ts` | unit + e2e `library-v2` |
+| L2 Unit view | `app.lesson-planner_.library_.unit.$unitId` | e2e L2 |
+| L3 Plan a lesson, Save to unit | `plan-lesson-dialog.tsx`, `v3/finish-line.tsx` | e2e L3 |
+
+**Changes from the plan while building:**
+- Teacher notes live on the lesson (`LessonPlanConversation.teacherNotes`, keyed by step), not on the material: a step that comes from a kept chat reply has no material row. A second small migration moves the column; the material column had never been written.
+- Undo sends back the library as it was (units, groups, lessons' places) and what the move made; Undo removes what was made and writes back only what changed.
+- Duplicate copies a lesson's chat, stack and notes as a draft, without its assignments, share links or date.
+- A unit's planning chat stays in the unit with no day number and is linked from the unit page, not counted as a lesson.
+
+**Outside the code (Kevin or Bryant):** Google Docs needs the Drive API turned on in the Google Cloud project, the `drive.file` scope added to the OAuth consent screen, and `https://<host>/app/lesson-planner/google/callback` added as a redirect URI for each host (production, demo, and any preview origin in `GOOGLE_OAUTH_ORIGIN_ALLOWLIST`). Until then the button says Google Docs isn't connected yet and offers the Word file.

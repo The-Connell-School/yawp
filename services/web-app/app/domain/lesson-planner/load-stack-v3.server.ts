@@ -43,6 +43,11 @@ export type StackV3 = {
   firstOpen: boolean;
   /** The standards the teacher named in this lesson's chat, never inferred. */
   standards: string[];
+  /**
+   * With the library redesign on and the lesson in no unit: the units it can
+   * be saved to once set (Oct 24 handoff, Part 2, L3 "Save to unit").
+   */
+  saveToUnit: Array<{ id: string; title: string; course: string | null }> | null;
 };
 
 export async function loadStackV3({
@@ -66,6 +71,7 @@ export async function loadStackV3({
       setAt: true,
       lessonDate: true,
       membershipId: true,
+      unitId: true,
       lessonClassLabel: true,
       originClassAssignment: { select: { classId: true } },
       messages: {
@@ -138,6 +144,17 @@ export async function loadStackV3({
         conversation.messages.filter((message) => message.role === 'user').map((message) => message.content)
       ),
       firstOpen: !conversation.setAt && !conversation.messages.some((message) => message.surface === STACK_SURFACE),
+      saveToUnit:
+        loaded.reviewFlags.libraryV2 && !conversation.unitId
+          ? (
+              await prisma.lessonPlanUnit.findMany({
+                where: { membershipId: conversation.membershipId, deletedAt: null },
+                orderBy: [{ course: { position: 'asc' } }, { position: 'asc' }, { createdAt: 'asc' }],
+                take: 200,
+                select: { id: true, title: true, course: { select: { name: true } } },
+              })
+            ).map((unit) => ({ id: unit.id, title: unit.title, course: unit.course?.name ?? null }))
+          : null,
     },
   };
 }

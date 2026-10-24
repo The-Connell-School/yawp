@@ -1059,6 +1059,7 @@ jobs:
             app/domain/lesson-planner/write-teacher-notes.server.test.ts \
             app/domain/lesson-planner/google-drive.server.test.ts \
             app/domain/lesson-planner/google-doc.server.test.ts \
+            app/domain/lesson-planner/library-v2.test.ts \
             app/domain/lesson-planner/lesson-rename.test.ts \
             app/domain/lesson-planner/handout-docx.server.test.ts \
             app/domain/lesson-planner/lesson-library.test.ts \
@@ -1079,7 +1080,8 @@ jobs:
             app/domain/lesson-planner/option-groups.test.ts \
             app/domain/lesson-planner/lesson-templates.test.ts \
             app/domain/lesson-planner/yawp-catalog.server.test.ts \
-            app/routes/api.domain.lesson-planner.stack/route.test.ts
+            app/routes/api.domain.lesson-planner.stack/route.test.ts \
+            app/routes/api.domain.lesson-planner.library/route.test.ts
           do
             bun test "$f"
           done

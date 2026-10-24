@@ -167,49 +167,11 @@ export async function loadLessonPacket({
   // the reply each came from so the packet reads in lesson order rather than in
   // the order the teacher happened to click — until the teacher puts the stack
   // in their own order (Brian's run 2, A1), which then wins.
-  const sections = orderStackEntries([
-    ...conversation.messages.map((message) => ({
-      at: message.createdAt.getTime(),
-      order: 0,
-      position: message.position,
-      item: {
-        id: message.id,
-        content: message.content,
-        keptAudience: message.keptAudience,
-        keptTitle: message.keptTitle,
-      },
-    })),
-    ...conversation.materials.map((material) => ({
-      at: material.sourceCreatedAt.getTime(),
-      // A material sits after the reply that produced it.
-      order: 1,
-      position: material.position,
-      item: {
-        id: material.id,
-        // A closing step filed before run 3 may still carry the planner's
-        // total and closing question (Brian's run 3, item 5). Shown without
-        // them; a teacher's own edit is left as written.
-        content:
-          material.kind === 'step' && !material.editedAt
-            ? withoutTrailingCommentary(material.content)
-            : material.content,
-        keptAudience: material.audience,
-        keptTitle: material.title,
-        kind: packetKindForMaterial(material.kind),
-        origin: 'material' as const,
-        editedAt: material.editedAt,
-        minutes: material.minutes,
-        // Every step shows a time (Brian's run 3, item 9). The deck is built
-        // from the stack, not a step of it.
-        suggestedMinutes:
-          !reviewFlags.stackV2 || material.kind === DECK_KIND
-            ? null
-            : DEFAULT_STEP_MINUTES[
-                stepTypeFor({ kind: material.kind, title: material.title, stored: material.stepType })
-              ],
-      },
-    })),
-  ]);
+  const sections = stackSections({
+    messages: conversation.messages,
+    materials: conversation.materials,
+    stackV2: reviewFlags.stackV2,
+  });
 
   const stackDetails: LoadedLessonPacket['stackDetails'] = {};
   if (reviewFlags.stackV2 && withStackDetails) {
@@ -312,4 +274,74 @@ export async function loadLessonPacket({
       ])
     ),
   };
+}
+
+/**
+ * The stack's sections, in order, from a lesson's kept replies and filed
+ * materials: the one place the packet, the stack and the library (Oct 24
+ * handoff, Part 2) read a lesson the same way.
+ */
+export function stackSections({
+  messages,
+  materials,
+  stackV2,
+}: {
+  messages: Array<{ id: string; createdAt: Date; content: string; keptAudience: string | null; keptTitle: string | null; position: number | null }>;
+  materials: Array<{
+    id: string;
+    sourceCreatedAt: Date;
+    kind: string;
+    title: string;
+    audience: string;
+    content: string;
+    editedAt: Date | null;
+    position: number | null;
+    minutes: number | null;
+    stepType: string | null;
+  }>;
+  stackV2: boolean;
+}) {
+  return orderStackEntries([
+    ...messages.map((message) => ({
+      at: message.createdAt.getTime(),
+      order: 0,
+      position: message.position,
+      item: {
+        id: message.id,
+        content: message.content,
+        keptAudience: message.keptAudience,
+        keptTitle: message.keptTitle,
+      },
+    })),
+    ...materials.map((material) => ({
+      at: material.sourceCreatedAt.getTime(),
+      // A material sits after the reply that produced it.
+      order: 1,
+      position: material.position,
+      item: {
+        id: material.id,
+        // A closing step filed before run 3 may still carry the planner's
+        // total and closing question (Brian's run 3, item 5). Shown without
+        // them; a teacher's own edit is left as written.
+        content:
+          material.kind === 'step' && !material.editedAt
+            ? withoutTrailingCommentary(material.content)
+            : material.content,
+        keptAudience: material.audience,
+        keptTitle: material.title,
+        kind: packetKindForMaterial(material.kind),
+        origin: 'material' as const,
+        editedAt: material.editedAt,
+        minutes: material.minutes,
+        // Every step shows a time (Brian's run 3, item 9). The deck is built
+        // from the stack, not a step of it.
+        suggestedMinutes:
+          !stackV2 || material.kind === DECK_KIND
+            ? null
+            : DEFAULT_STEP_MINUTES[
+                stepTypeFor({ kind: material.kind, title: material.title, stored: material.stepType })
+              ],
+      },
+    })),
+  ]);
 }
