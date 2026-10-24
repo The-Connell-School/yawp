@@ -83,6 +83,23 @@ goes to the stack.
 
 ## Status
 
-- [ ] 1. Library design: waiting on the design package
-- [ ] 2. Deck in the stack
-- [ ] 3. Close returns to where you opened it
+- [ ] 1. Library design: waiting on the design package.
+- [x] 2. Deck in the stack.
+  - The planner API takes `surface=stack`, and its prompt tail asks for one line and the deck.
+  - Prompt version `2026-10-24-review-v1`.
+  - A deck line in Ask the planner (`deckRequest`), Build the deck, Rebuild and Build slides for this lecture all build there.
+  - The deck card shows in the panel (`stack-deck.tsx`). A new deck replaces the old one, asking first if it was hand-edited.
+  - In the chat, the turn is one line: "Deck built on the stack".
+  - The v2 stack page still sends deck requests to the chat.
+- [x] 3. Close returns to where you opened it.
+  - `lesson-return.ts`. Openers carry `?from=`. Present, the deck editor, handouts, Run the show and the assignment page read it.
+  - Old links keep today's place: Present, handouts and Run the show go to the stack; the deck editor and the assignment page go to the chat.
+
+**Tests**
+- Unit:
+  - `lesson-return.test.ts` (new, added to CI)
+  - `deckRequest` in `stack-command.test.ts`
+  - the stack-surface route and prompt tests
+- E2e: `teacher.lesson-planner-run-6.spec.ts` (6 tests, added to smoke).
+  - The chat-close test fails on the old Present page.
+  - The run 3 lecture test now expects the build in the stack.
