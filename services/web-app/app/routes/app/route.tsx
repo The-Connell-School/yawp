@@ -31,10 +31,9 @@ import {
   ExitIcon,
   HamburgerIcon,
   ReloadIcon,
-  SlashIcon,
   XIcon,
 } from '~/components/icons';
-import { Button, button } from '~/components/ui/button';
+import { Button } from '~/components/ui/button';
 import {
   Popover,
   PopoverContent,
@@ -44,10 +43,7 @@ import { Tooltip } from '~/components/ui/tooltip';
 import useBreakpoint from '~/hooks/useBreakpoint';
 import { useOnSwipe } from '~/hooks/useHorizontalSwipe';
 import { useUser } from '~/hooks/useUser';
-import {
-  BreadcrumbHandleMatch,
-  type BreadcrumbHandle,
-} from '~/utils/breadcrumb';
+import { type BreadcrumbHandle } from '~/utils/breadcrumb';
 import { cn } from '~/utils/misc';
 import { NavStateSwitch, useNavState } from '../api.preferences.nav/route';
 import { ContrastPreferenceSwitch } from '../api.preferences.contrast/route';
@@ -90,6 +86,10 @@ import { loadGuidedTours } from '~/domain/guided-tours/guided-tours.server';
 import { TeachingAccessProvider } from '~/components/free-tier/teaching-access-context';
 import type { TeachingAccessShellState } from '~/domain/free-tier/teaching-access-shell.server';
 import { getMembershipId } from '~/cookies/membership-id.server';
+import {
+  appRouteDocumentTitle,
+  resolveAppMobileTopBarTitle,
+} from '~/utils/app-mobile-top-bar-title';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -279,23 +279,15 @@ export default function Route() {
   const isNavExpanded = navState === 'expanded' || isMobile;
   const navExpanded = (isMobile && isMobileNavOpen) || isNavExpanded;
 
-  const breadcrumbs = matches
-    .map((m) => {
-      const result = BreadcrumbHandleMatch.safeParse(m);
-      if (!result.success || !result.data.handle.breadcrumb) return null;
-      if (typeof result.data.handle.breadcrumb !== 'string')
-        return result.data.handle.breadcrumb;
-      return (
-        <Link
-          key={m.id}
-          to={m.pathname}
-          className={button({ variant: 'ghost', size: 'sm' })}
-        >
-          {result.data.handle.breadcrumb}
-        </Link>
-      );
-    })
-    .filter(Boolean);
+  const mobileTopBarTitle = resolveAppMobileTopBarTitle(
+    matches,
+    location.pathname
+  );
+
+  useEffect(() => {
+    if (!isMobile) return;
+    document.title = appRouteDocumentTitle(mobileTopBarTitle);
+  }, [isMobile, mobileTopBarTitle]);
 
   const onSwipe = useCallback(
     (direction: 'left' | 'right') => {
@@ -636,23 +628,7 @@ export default function Route() {
             ) : null}
           </Button>
           <div className="flex items-center">
-            {freeAccountUsage &&
-            normalizePathname(location.pathname) === '/app' ? (
-              <span className="px-3 text-sm">Dashboard</span>
-            ) : (
-              breadcrumbs.map((bc, i) => (
-                <slot key={bc.key}>
-                  {i === 0 ? (
-                    bc
-                  ) : (
-                    <>
-                      <SlashIcon />
-                      {bc}
-                    </>
-                  )}
-                </slot>
-              ))
-            )}
+            <span className="px-3 text-sm font-medium">{mobileTopBarTitle}</span>
           </div>
           <Button
             variant="outline"
