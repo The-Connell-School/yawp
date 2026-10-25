@@ -1660,6 +1660,10 @@ model LessonPlanConversation {
   /// The teacher's notes per step, { [stepId]: "Open with: …\nSay: …" },
   /// shown and edited in the run of show (Oct 24 handoff, task 7).
   teacherNotes            Json?
+  /// The stack as it was when the slides were filed or rebuilt (Kevin, Oct 25, note 9).
+  deckStackKey            String?
+  /// Steps moved to "If you have extra time", out of the timed lesson (note 8c).
+  extensionStepIds        Json?
   messages                LessonPlanMessage[]
   materials               LessonPlanMaterial[]
   shareLinks              LessonShareLink[]
@@ -1696,6 +1700,8 @@ model LessonPlanMessage {
   /// Where the turn was asked: null is the planner chat, 'stack' a change
   /// asked for on the stack page (shown in the chat as one compact line).
   surface        String?
+  /// What the chat shows for a message a button sent as the teacher (Kevin, Oct 25, note 5).
+  displayText    String?
   conversationId String
   conversation   LessonPlanConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 

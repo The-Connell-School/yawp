@@ -133,6 +133,8 @@ const POST = z
     unitDay: z.coerce.number().int().min(1).max(60).optional(),
     /** The day's title from the map, so the new lesson is named before it exists. */
     unitDayTitle: z.string().trim().max(120).optional(),
+    /** What the chat shows for a turn a button sent (Kevin, Oct 25, note 5). */
+    displayText: z.string().trim().min(1).max(200).optional(),
     /** A lesson started from one of the teacher's templates (run 3). */
     templateId: z.string().min(1).max(64).optional(),
     /** Documents added before the lesson's first message, to attach to it (Oct 21). */
@@ -792,6 +794,7 @@ export async function action({ request }: ActionFunctionArgs) {
               content: turn.message,
               createdAt: askedAt,
               ...(turn.surface ? { surface: turn.surface } : {}),
+              ...(turn.displayText ? { displayText: turn.displayText } : {}),
             },
           });
           // Created on its own rather than as a nested write so its id can go back

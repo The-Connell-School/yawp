@@ -80,6 +80,51 @@ const LONG_DAY: Piece[] = [
   { kind: 'exit-ticket', title: 'Exit ticket', minutes: 15, content: 'Name one person Cassius imitates.', audience: 'student' },
 ];
 
+
+const UNIT = {
+  title: 'Julius Caesar',
+  subtitle: 'English 10 · 3 periods',
+  endsWith: 'A thesis-driven essay on a Girardian reading of the play',
+  days: [
+    { day: 1, title: 'What is memetic desire?', objective: 'Name what Girard means by imitated desire', students: 'Write about wanting something because someone else did', minutes: 60 },
+    { day: 2, title: 'Cassius wants what Caesar has', objective: 'Trace imitation in Act 1', students: 'Map who imitates whom', minutes: 60 },
+  ],
+};
+
+/** A unit planned in the chat (the map), saved in the library. */
+async function seedUnitMap(ctx: Ctx, extraReply = '') {
+  const prisma = createE2EPrismaClient();
+  try {
+    const unit = await prisma.lessonPlanUnit.create({
+      data: { membershipId: ctx.teacherMembershipId, organizationId: ctx.organizationId, title: UNIT.title },
+    });
+    const conversation = await prisma.lessonPlanConversation.create({
+      data: {
+        membershipId: ctx.teacherMembershipId,
+        organizationId: ctx.organizationId,
+        title: 'Julius Caesar unit',
+        periodMinutes: 60,
+        unitId: unit.id,
+        unitDay: null,
+        messages: {
+          create: [
+            { role: 'user', content: 'Create a unit on Julius Caesar for English 10.', createdAt: new Date(AT.getTime()) },
+            {
+              role: 'assistant',
+              content: ['Here is the arc.', '', '```yawp-unit', JSON.stringify(UNIT), '```', extraReply].join('\n'),
+              createdAt: new Date(AT.getTime() + 1000),
+            },
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    return { unitId: unit.id, conversationId: conversation.id };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 test.describe("Kevin's unit-build feedback (Oct 25)", () => {
   async function clear(ctx: Ctx) {
     const prisma = createE2EPrismaClient();
@@ -161,5 +206,86 @@ test.describe("Kevin's unit-build feedback (Oct 25)", () => {
     await expect(page.getByTestId('notes-writing')).toHaveCount(0, { timeout: 30_000 });
     await page.getByTestId('show-next').click();
     await expect(page.getByTestId('show-notes')).toContainText('Introduce Girard');
+  });
+
+  test('notes 4 and 5: the unit is saved, its plan shows with the unit, and Build this day shows one line', async ({ page, signIn, e2eContext }) => {
+    const { unitId, conversationId } = await seedUnitMap(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+    const saved = page.getByTestId('unit-saved');
+    await expect(saved).toContainText('Saved to your library as Julius Caesar. Build the days whenever you');
+    await expect(saved.getByRole('link', { name: 'Open the unit' })).toHaveAttribute('href', `/app/lesson-planner/library/unit/${unitId}`);
+
+    // The library's unit page keeps the arc, with a way to build each day.
+    await saved.getByRole('link', { name: 'Open the unit' }).click();
+    const plan = page.getByTestId('unit-plan');
+    await expect(plan).toContainText('Ends with: A thesis-driven essay on a Girardian reading of the play');
+    await expect(plan.getByTestId('unit-plan-day')).toHaveCount(2);
+    await expect(plan.getByTestId('unit-plan-build').first()).toHaveAttribute('href', `/app/lesson-planner?c=${conversationId}&buildDay=1`);
+
+    // Build this day, from there: one short line in the chat, the request under Details.
+    // The turn is held, so the line is read before any answer (there is no model here).
+    const posted: string[] = [];
+    await page.route('**/api/domain/lesson-planner', async (route) => {
+      posted.push(route.request().postData() ?? '');
+      await new Promise((resolve) => setTimeout(resolve, 15_000));
+      await route.abort().catch(() => {});
+    });
+    await plan.getByTestId('unit-plan-build').first().click();
+    const sent = page.locator('[data-role="user"]').last();
+    await expect(sent.getByTestId('user-display')).toHaveText('Building Day 1 of Julius Caesar: What is memetic desire?');
+    await expect(sent.getByText('Objective: Name what Girard means by imitated desire')).toBeHidden();
+    await sent.getByTestId('user-details').click();
+    await expect(sent.getByText('Objective: Name what Girard means by imitated desire')).toBeVisible();
+    await expect(page).not.toHaveURL(/buildDay=/);
+    expect(new URLSearchParams(posted[0]).get('displayText')).toBe('Building Day 1 of Julius Caesar: What is memetic desire?');
+    expect(new URLSearchParams(posted[0]).get('message')).toContain('Objective: Name what Girard means by imitated desire');
+  });
+
+  test('note 2: no code boxes or internal names in a reply', async ({ page, signIn, e2eContext }) => {
+    const { conversationId } = await seedUnitMap(
+      e2eContext,
+      "\nThe class starters on day 1 through 4 are written into each day's `students` field."
+    );
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+    const reply = page.locator('main');
+    await expect(reply).toContainText("written into each day's students field");
+    await expect(reply.locator('code')).toHaveCount(0);
+  });
+
+  test('note 1: planning a unit asks how long each class period is', async ({ page, signIn, e2eContext }) => {
+    await setLessonPlannerReviewFlag('lesson_planner_intake_v2', true);
+    const prisma = createE2EPrismaClient();
+    let conversationId = '';
+    try {
+      const conversation = await prisma.lessonPlanConversation.create({
+        data: {
+          membershipId: e2eContext.teacherMembershipId,
+          organizationId: e2eContext.organizationId,
+          title: 'Julius Caesar unit',
+          messages: {
+            create: [
+              { role: 'user', content: 'Create a unit on Julius Caesar.', createdAt: new Date(AT.getTime()) },
+              { role: 'assistant', content: 'A great play for this. What should the unit build toward?', createdAt: new Date(AT.getTime() + 1000) },
+              { role: 'user', content: 'A unit that ends in a short essay on ambition.', createdAt: new Date(AT.getTime() + 2000) },
+              { role: 'assistant', content: 'One quick thing first.\n\n```yawp-ask\nminutes\n```', createdAt: new Date(AT.getTime() + 3000) },
+            ],
+          },
+        },
+        select: { id: true },
+      });
+      conversationId = conversation.id;
+    } finally {
+      await prisma.$disconnect();
+    }
+    try {
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      await expect(page.getByTestId('lesson-intake-card')).toContainText('How long is each class period?');
+      await expect(page.locator('main')).not.toContainText('How long is the lesson?');
+    } finally {
+      await setLessonPlannerReviewFlag('lesson_planner_intake_v2', false);
+    }
   });
 });

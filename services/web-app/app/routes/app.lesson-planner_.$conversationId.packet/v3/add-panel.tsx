@@ -94,7 +94,7 @@ function PieceCard({
           <p className="mt-1 text-sm font-semibold">{piece.title}</p>
           {previewing ? (
             <div data-testid="suggestion-preview" className="mt-1 max-h-72 overflow-y-auto rounded-lg bg-[#FBF8F3] p-2 text-xs">
-              <MarkdownContent content={piece.content || piece.line} />
+              <MarkdownContent content={piece.content || piece.line} codeAsText />
             </div>
           ) : piece.line ? (
             <p className="mt-0.5 text-xs text-[var(--sv-muted)]">{piece.line}</p>

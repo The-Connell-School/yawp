@@ -1722,7 +1722,7 @@ describe("planner prompt — Brian's run 3", () => {
   });
 
   test('the prompt version moved', () => {
-    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-24-review-v1');
+    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-25-unit-build-v1');
   });
 });
 
@@ -1955,4 +1955,20 @@ test("a deck asked for on the stack answers in one line and the deck (Brian's ru
   const inChat = buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'X' });
   expect(onStack[0]!.text).toBe(inChat[0]!.text);
   expect(inChat.map((block) => block.text).join('\n')).not.toContain('asked on the stack page');
+});
+
+describe("Kevin's unit-build notes (Oct 25)", () => {
+  test('note 2: plain words to teachers, never code or internal names', async () => {
+    const { buildLessonPlannerSystemPromptBlocks } = await import('./build-system-prompt');
+    const text = JSON.stringify(buildLessonPlannerSystemPromptBlocks({} as any));
+    expect(text).toContain('Never put a word in backticks or code formatting');
+    expect(text).toContain('no block or fence names (anything starting yawp-)');
+  });
+
+  test('note 3: a unit map ends with two or three questions, and says when it builds on other lessons', async () => {
+    const { buildLessonPlannerSystemPromptBlocks } = await import('./build-system-prompt');
+    const text = JSON.stringify(buildLessonPlannerSystemPromptBlocks({} as any));
+    expect(text).toContain('two or three short questions, never more');
+    expect(text).toContain('Building on your Girard lesson');
+  });
 });

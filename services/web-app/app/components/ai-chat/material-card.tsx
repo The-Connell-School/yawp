@@ -113,7 +113,7 @@ export function MaterialCard({
       </div>
       {open ? (
         <div className="border-t bg-foreground/[0.02] px-4 py-3">
-          <MarkdownContent content={material.content} />
+          <MarkdownContent content={material.content} codeAsText />
         </div>
       ) : null}
     </div>

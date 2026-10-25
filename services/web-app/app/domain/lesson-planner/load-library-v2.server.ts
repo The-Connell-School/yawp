@@ -6,6 +6,7 @@ import { classDisplayName, lessonHref } from './lesson-library';
 import { lessonRuns, type LessonRun } from './lesson-timing.server';
 import { courseBlocks, lessonCountLine, unitKind, UNIT_KIND_LABELS, writingShare, type UnitKind } from './library-v2';
 import { ensureCourses, type LibraryScope } from './library-v2.server';
+import { loadUnitMap } from './lesson-unit.server';
 
 export type UnitTile = {
   id: string;
@@ -185,6 +186,8 @@ export async function loadUnitView(scope: LibraryScope, unitId: string, stackV2:
   if (!unit) return null;
   const days = unit.conversations.filter((lesson) => lesson.unitDay !== null);
   const planning = unit.conversations.find((lesson) => lesson.unitDay === null) ?? null;
+  // The arc the planner wrote, kept with the unit (Kevin, Oct 25, note 4).
+  const map = planning ? await loadUnitMap({ db: prisma, unitId: unit.id }) : null;
   const runs = await lessonRuns(days.map((lesson) => lesson.id), stackV2);
   const [loose, units] = await Promise.all([
     prisma.lessonPlanConversation.findMany({
@@ -244,6 +247,24 @@ export async function loadUnitView(scope: LibraryScope, unitId: string, stackV2:
       drafts: lessons.filter((lesson) => !lesson.set).length,
       writing: share,
       planningHref: planning ? `/app/lesson-planner?c=${planning.id}` : null,
+      plan:
+        map && planning
+          ? {
+              subtitle: map.subtitle ?? null,
+              endsWith: map.endsWith ?? null,
+              days: map.days.map((day) => {
+                const built = days.find((lesson) => lesson.unitDay === day.day);
+                return {
+                  day: day.day,
+                  title: day.title,
+                  objective: day.objective,
+                  reading: day.reading ?? null,
+                  builtHref: built ? opens(built) : null,
+                  buildHref: built ? null : `/app/lesson-planner?c=${planning.id}&buildDay=${day.day}`,
+                };
+              }),
+            }
+          : null,
     },
     lessons,
     loose: loose.map((lesson) => ({ id: lesson.id, title: lessonTitle(lesson) })),

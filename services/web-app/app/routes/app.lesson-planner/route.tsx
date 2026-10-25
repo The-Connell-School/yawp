@@ -3,6 +3,7 @@ import {
   lessonPlannerPausedPlaceholder,
   useFreeAccountUsage,
 } from '~/components/free-account-usage';
+import { previewLine } from '~/domain/lesson-planner/plain-preview';
 import { replyTopScroll, transcriptScrollTarget } from '~/domain/lesson-planner/transcript-scroll';
 import {
   SourceAttachButton,
@@ -76,6 +77,7 @@ import { LessonAskCard } from '~/components/ai-chat/lesson-ask-card';
 import {
   asksWorthShowing,
   readLessonAsks,
+  plansSeveralDays,
 } from '~/domain/lesson-planner/lesson-ask';
 import {
   partsSummary,
@@ -91,7 +93,7 @@ import {
   type PracticeContext,
 } from '~/domain/lesson-planner/practice-context.server';
 import { UnitPlanCard } from '~/components/ai-chat/unit-plan-card';
-import { readUnitPlan } from '~/domain/lesson-planner/unit-plan';
+import { buildDayDisplay, buildDayRequest, readUnitPlan } from '~/domain/lesson-planner/unit-plan';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
 import { hidePromptIds } from '~/domain/lesson-planner/prompt-ids';
 import { overTime, planMinutes } from '~/domain/lesson-planner/plan-timing';
@@ -137,6 +139,8 @@ type ChatMessage = {
   id?: string;
   role: 'user' | 'assistant';
   content: string;
+  /** A button's turn shows this one line, with the request under Details (Kevin, Oct 25, note 5). */
+  displayText?: string | null;
   /** Set when this reply is kept in the printable packet. */
   keptAudience?: PacketAudience | null;
 };
@@ -199,6 +203,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 content: true,
                 keptAudience: true,
                 surface: true,
+                displayText: true,
               },
             },
             materials: {
@@ -258,6 +263,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
       else builtDays[sibling.unitDay] = sibling.id;
     }
   }
+  // The unit this chat planned, saved in the library (Kevin, Oct 25, note 4).
+  const savedUnit =
+    selected?.unitId && selected.unitDay === null
+      ? await prisma.lessonPlanUnit.findFirst({
+          where: { id: selected.unitId, deletedAt: null },
+          select: { id: true, title: true },
+        })
+      : null;
 
   // Needed to turn what the planner wrote into real assignments: the warm-up at
   // one end of the lesson and the check for understanding at the other. A class
@@ -349,6 +362,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     builtDays,
     daysSourceMessageId,
     unitMapConversation,
+    savedUnit,
     selectedConversation: selected
       ? {
           id: selected.id,
@@ -442,6 +456,7 @@ export default function LessonPlannerRoute() {
     builtDays,
     daysSourceMessageId,
     unitMapConversation,
+    savedUnit,
     reviewFlags,
     teacherClasses,
     templates,
@@ -473,6 +488,7 @@ export default function LessonPlannerRoute() {
   const [pendingSubmission, setPendingSubmission] = useState<{
     message: string;
     conversationKey: string;
+    displayText?: string | null;
   } | null>(null);
   // The template a new lesson is being built from (run 3).
   const [activeTemplate, setActiveTemplate] = useState<LessonTemplate | null>(null);
@@ -507,7 +523,7 @@ export default function LessonPlannerRoute() {
       pendingSubmission &&
         pendingSubmission.conversationKey ===
           (selectedConversation?.id ?? 'new')
-        ? [...persisted, { role: 'user', content: pendingSubmission.message }]
+        ? [...persisted, { role: 'user', content: pendingSubmission.message, displayText: pendingSubmission.displayText ?? null }]
         : persisted
     );
     setAddedMaterials(new Set(selectedConversation?.addedMaterials ?? []));
@@ -884,6 +900,34 @@ export default function LessonPlannerRoute() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reworkStep]);
 
+  // "Build this day" on the library's unit page lands here as ?buildDay=N
+  // and builds that day from this chat's map, once (Kevin, Oct 25, note 4).
+  const buildDayParam = searchParams.get('buildDay');
+  const buildDayAsked = useRef(false);
+  useEffect(() => {
+    if (buildDayAsked.current || !buildDayParam || !conversationId || isSending) return;
+    const dayNumber = Number(buildDayParam);
+    const map = [...messages]
+      .reverse()
+      .map((message) => (message.role === 'assistant' ? readUnitPlan(message.content) : null))
+      .find((outcome) => outcome?.kind === 'unit');
+    const next = new URLSearchParams(searchParams);
+    next.delete('buildDay');
+    if (!map || map.kind !== 'unit') {
+      setSearchParams(next, { replace: true });
+      return;
+    }
+    const day = map.unit.days.find((candidate) => candidate.day === dayNumber);
+    buildDayAsked.current = true;
+    setSearchParams(next, { replace: true });
+    if (!day || builtDays[day.day]) return;
+    // After mount settles: the conversation's own reset runs on mount too, and
+    // would otherwise clear the turn this just sent.
+    setTimeout(() => send(buildDayRequest(map.unit, day), { day: day.day, title: day.title, display: buildDayDisplay(map.unit, day) }), 0);
+    // Once per arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buildDayParam, conversationId, messages.length]);
+
   const buildRequest = searchParams.get('build');
   const buildAsked = useRef(false);
   useEffect(() => {
@@ -912,12 +956,12 @@ export default function LessonPlannerRoute() {
      * Set by "Build this day". The lesson is written into that day's own
      * conversation, so the reply comes back from somewhere other than here.
      */
-    unitDay?: { day: number; title: string }
+    unitDay?: { day: number; title: string; display?: string }
   ) {
     const trimmed = message.trim();
     if (!trimmed || isSending) return;
-    setMessages((prev) => [...prev, { role: 'user', content: trimmed }]);
-    setPendingSubmission({ message: trimmed, conversationKey });
+    setMessages((prev) => [...prev, { role: 'user', content: trimmed, displayText: unitDay?.display ?? null }]);
+    setPendingSubmission({ message: trimmed, conversationKey, displayText: unitDay?.display ?? null });
     setInput('');
     setStreamed(null);
     void sendStreaming(trimmed, unitDay);
@@ -933,7 +977,7 @@ export default function LessonPlannerRoute() {
    */
   async function sendStreaming(
     message: string,
-    unitDay?: { day: number; title: string }
+    unitDay?: { day: number; title: string; display?: string }
   ) {
     const body = new URLSearchParams({
       intent: 'chat',
@@ -947,6 +991,7 @@ export default function LessonPlannerRoute() {
       ...(unitDay
         ? { unitDay: String(unitDay.day), unitDayTitle: unitDay.title }
         : {}),
+      ...(unitDay?.display ? { displayText: unitDay.display } : {}),
       // A lesson started from a template keeps its shape (run 3).
       ...(activeTemplate ? { templateId: activeTemplate.id } : {}),
       // Documents added before the first message go with it (Oct 21).
@@ -1177,6 +1222,7 @@ export default function LessonPlannerRoute() {
                   practice={practice}
                   conversationId={conversationId}
                   builtDays={builtDays}
+                  savedUnit={reviewFlags.libraryV2 ? savedUnit : null}
                   daysOn={reviewFlags.stackV3}
                   daysSourceMessageId={daysSourceMessageId}
                   frameworksOn={reviewFlags.templates}
@@ -1523,6 +1569,7 @@ function MessageBubble({
   practice,
   conversationId,
   builtDays,
+  savedUnit = null,
   onSuggestion,
   onKeep,
   stackV2 = false,
@@ -1563,6 +1610,8 @@ function MessageBubble({
   conversationId: string | null;
   /** Day number → the conversation each already-built day lives in. */
   builtDays: Record<number, string>;
+  /** The unit this chat planned, in the library (note 4). */
+  savedUnit?: { id: string; title: string } | null;
   /** Brian's run 5: a multi-day reply makes each day its own lesson. */
   daysOn?: boolean;
   /** The reply the unit's day lessons were made from, once they are. */
@@ -1626,7 +1675,7 @@ function MessageBubble({
               : 'Stack change'}
         </span>
         <span className="truncate">
-          {message.content.split('\n').find((line) => line.trim() && !line.startsWith('```')) ?? ''}
+          {message.displayText ?? previewLine(message.content, 200)}
         </span>
       </div>
     );
@@ -1655,7 +1704,19 @@ function MessageBubble({
     return (
       <div className="flex justify-end" data-role="user">
         <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground shadow-sm">
-          {message.content}
+          {message.displayText ? (
+            <>
+              <span data-testid="user-display">{message.displayText}</span>
+              <details className="mt-1 text-xs text-primary-foreground/80">
+                <summary data-testid="user-details" className="cursor-pointer select-none">
+                  Details
+                </summary>
+                <span className="mt-1 block whitespace-pre-line">{message.content}</span>
+              </details>
+            </>
+          ) : (
+            message.content
+          )}
         </div>
       </div>
     );
@@ -1765,7 +1826,7 @@ function MessageBubble({
       if (!planSteps.length) {
         return (
           <div key={key} className={index > 0 ? 'mt-3' : undefined}>
-            <MarkdownContent content={text} />
+            <MarkdownContent content={text} codeAsText />
           </div>
         );
       }
@@ -1777,7 +1838,7 @@ function MessageBubble({
         <div key={key} className={index > 0 ? 'mt-3' : undefined}>
           {chunks.map((chunk, chunkIndex) => {
             if (chunk.kind === 'markdown') {
-              return <MarkdownContent key={chunkIndex} content={chunk.text} />;
+              return <MarkdownContent key={chunkIndex} content={chunk.text} codeAsText />;
             }
             const step = planSteps[chunk.index]!;
             const keys = segmentKeys(step.key);
@@ -1961,6 +2022,17 @@ function MessageBubble({
                 builtDays={builtDays}
                 disabled={disabled}
               />
+              {savedUnit ? (
+                <p data-testid="unit-saved" className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+                  <span>
+                    Saved to your library as <strong className="font-semibold text-foreground">{savedUnit.title}</strong>. Build the days
+                    whenever you're ready.
+                  </span>
+                  <Link to={`/app/lesson-planner/library/unit/${savedUnit.id}`} className="font-medium text-primary underline underline-offset-2">
+                    Open the unit
+                  </Link>
+                </p>
+              ) : null}
             </div>
           ) : null}
           {unitOutcome.kind === 'unreadable' ? (
@@ -2210,6 +2282,7 @@ function MessageBubble({
           <LessonIntakeCard
             asks={asks}
             teacherClasses={teacherClasses}
+            severalDays={plansSeveralDays(previousUserText)}
             onSend={onSuggestion}
             disabled={disabled}
           />

@@ -182,7 +182,7 @@ export default function SharedLessonRoute() {
 
         {lesson.body ? (
           <section data-testid="shared-body" className="mt-6 rounded-2xl border border-[var(--sv-line)] bg-[var(--sv-card)] p-5">
-            <MarkdownContent content={lesson.body} />
+            <MarkdownContent content={lesson.body} codeAsText />
           </section>
         ) : null}
 
@@ -284,7 +284,7 @@ export default function SharedLessonRoute() {
                 <h3 className="mb-2 font-semibold">
                   {index + 1}. {handout.title}
                 </h3>
-                <MarkdownContent content={handout.content} />
+                <MarkdownContent content={handout.content} codeAsText />
                 {Array.from({ length: handout.lines }, (_, line) => (
                   <div key={line} className="h-7 border-b border-[#C9C2B8]" aria-hidden />
                 ))}

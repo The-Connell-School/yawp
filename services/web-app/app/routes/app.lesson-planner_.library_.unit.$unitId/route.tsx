@@ -121,6 +121,7 @@ export default function UnitRoute() {
           </aside>
 
           <div className="min-w-0 space-y-4">
+            {unit.plan ? <UnitPlan plan={unit.plan} planningHref={unit.planningHref} /> : null}
             {adding ? (
               <AddPanel
                 view={view}
@@ -421,5 +422,54 @@ function AddPanel({
         </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * The arc the planner wrote, kept with the unit (Kevin, Oct 25, note 4): how
+ * it ends, and every planned day, built or not. A day not built yet has
+ * Build this day, which builds it from the unit's planning chat.
+ */
+function UnitPlan({ plan, planningHref }: { plan: NonNullable<UnitView['unit']['plan']>; planningHref: string | null }) {
+  const unbuilt = plan.days.filter((day) => day.buildHref).length;
+  return (
+    <details data-testid="unit-plan" open={unbuilt > 0} className="rounded-2xl border bg-card p-4">
+      <summary className="cursor-pointer select-none">
+        <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">The unit plan</span>
+        <span className="ml-2 text-xs text-muted-foreground">
+          {plan.days.length} days planned{unbuilt ? ` · ${unbuilt} not built yet` : ''}
+        </span>
+      </summary>
+      {plan.endsWith ? (
+        <p className="mt-3 text-sm">
+          <span className="font-semibold">Ends with:</span> {plan.endsWith}
+        </p>
+      ) : null}
+      <ol className="mt-3 divide-y">
+        {plan.days.map((day) => (
+          <li key={day.day} data-testid="unit-plan-day" className="flex flex-wrap items-start gap-x-3 gap-y-1 py-2 text-sm">
+            <span className="w-12 shrink-0 text-muted-foreground">Day {day.day}</span>
+            <span className="min-w-0 flex-1">
+              <span className="font-medium">{day.title}</span>
+              <span className="block text-xs text-muted-foreground">{day.objective}</span>
+            </span>
+            {day.builtHref ? (
+              <Link to={day.builtHref} className="text-xs font-semibold text-primary hover:underline">
+                Open
+              </Link>
+            ) : day.buildHref ? (
+              <Link to={day.buildHref} data-testid="unit-plan-build" className="text-xs font-semibold text-primary hover:underline">
+                Build this day
+              </Link>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+      {planningHref ? (
+        <Link to={planningHref} className="mt-2 block text-xs text-muted-foreground hover:underline">
+          Change the plan in the chat that planned it
+        </Link>
+      ) : null}
+    </details>
   );
 }

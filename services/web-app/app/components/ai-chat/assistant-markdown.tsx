@@ -58,8 +58,12 @@ export const MARKDOWN_CLASS = cn(
  * still cleaned and escaped exactly as marked would; an href marked rejects
  * comes back as plain text and never matches the opening tag.
  */
-function newTabRenderer(): InstanceType<typeof marked.Renderer> {
+function newTabRenderer({ codeAsText = false }: { codeAsText?: boolean } = {}): InstanceType<typeof marked.Renderer> {
   const renderer = new marked.Renderer();
+
+  // A teacher should never see "code" (Kevin, Oct 25, note 2): in the lesson
+  // planner a word set in backticks reads as the word itself, not a grey box.
+  if (codeAsText) renderer.codespan = (text) => text;
 
   // A wide table scrolls inside its own frame rather than pushing the reply
   // sideways, and the table itself stays a real table so its columns fill it.
@@ -82,12 +86,17 @@ function newTabRenderer(): InstanceType<typeof marked.Renderer> {
 }
 
 /** Markdown → sanitized HTML. Browser-only (DOMPurify needs a DOM). */
-export function markdownToSafeHtml(content: string): string {
-  const parsed = marked.parse(content, {
+/** Markdown → HTML, before sanitizing. */
+export function markdownToHtml(content: string, options: { codeAsText?: boolean } = {}): string {
+  return marked.parse(content, {
     async: false,
     gfm: true,
-    renderer: newTabRenderer(),
+    renderer: newTabRenderer(options),
   }) as string;
+}
+
+export function markdownToSafeHtml(content: string, options: { codeAsText?: boolean } = {}): string {
+  const parsed = markdownToHtml(content, options);
   return DOMPurify.sanitize(parsed, {
     ADD_TAGS: ['details', 'summary'],
     ADD_ATTR: ['open', 'target', 'rel'],
@@ -99,12 +108,19 @@ export function markdownToSafeHtml(content: string): string {
  * (DOMPurify only runs in the browser) we render plain text on the server and
  * the first client paint, then upgrade to formatted HTML after mount.
  */
-export function MarkdownContent({ content }: { content: string }) {
+export function MarkdownContent({
+  content,
+  codeAsText = false,
+}: {
+  content: string;
+  /** Inline code reads as plain words (the lesson planner's teacher-facing text). */
+  codeAsText?: boolean;
+}) {
   const [html, setHtml] = useState<string | null>(null);
 
   useEffect(() => {
-    setHtml(markdownToSafeHtml(content));
-  }, [content]);
+    setHtml(markdownToSafeHtml(content, { codeAsText }));
+  }, [content, codeAsText]);
 
   if (html === null) {
     return <div className="whitespace-pre-wrap">{content}</div>;
