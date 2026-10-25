@@ -27,6 +27,10 @@ Everything on screen is in **`copy.mjs`**: the title cards, captions and
 callouts (`SECTIONS`, `VO`), the demo class and its essays, what Maya types,
 and every scripted model reply. Edit it and run `run.sh` again.
 
+The last card has two QR codes (sign up free, book a demo). Until the real
+ones arrive they are placeholders: save each PNG next to `copy.mjs` and set
+its `image` in `CLOSING_QR`, then re-render.
+
 Brian's recorded talking points go into `VO` as caption and callout text. A
 caption is one short line (about 12 words). A callout has a title and a one-
 sentence body.

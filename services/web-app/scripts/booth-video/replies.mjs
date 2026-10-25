@@ -14,14 +14,30 @@ import {
   LESSON_PLAN,
   PRACTICE_QUESTIONS,
   PROMPT_GENERATOR_REPLY,
+  reporterReport,
   SHARE,
   SLIDE_DECK,
+  STUDENT,
   TUTOR_FEEDBACK,
   TUTOR_REFUSAL,
   TUTOR_REPLY_1,
 } from './copy.mjs';
 
 const json = (value) => JSON.stringify(value);
+
+/** Maya's latest released grade, from the Reporter's get_student_growth result. */
+function latestGrade(toolResult) {
+  try {
+    const points = JSON.parse(toolResult.trim()).points ?? [];
+    const last = [...points].reverse().find((p) => typeof p.numericPercentage === 'number');
+    if (last) {
+      const percentage = Math.round(last.numericPercentage);
+      const letter = last.letterGrade ?? (percentage >= 90 ? 'A' : percentage >= 80 ? 'B' : percentage >= 70 ? 'C' : 'D');
+      return { percentage, letter };
+    }
+  } catch {}
+  return undefined;
+}
 
 export const rules = [
   {
@@ -88,6 +104,15 @@ export const rules = [
       if (/missed class/.test(r.system.slice(0, 120))) return SHARE.student;
       if (/substitute/.test(r.system.slice(0, 120))) return SHARE.sub;
       return SHARE.family;
+    },
+  },
+  {
+    // Reporter: one real tool call, then Maya's growth report.
+    name: 'reporter',
+    when: (r) => r.system.includes('You are Yawp! Reporter'),
+    reply: (r) => {
+      if (!r.lastMessageIsToolResult) return { tool: 'get_student_growth', input: { student: STUDENT.name } };
+      return reporterReport(latestGrade(r.lastUser));
     },
   },
   {

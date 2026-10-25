@@ -13,7 +13,7 @@ import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { closingCard, openingCard, SECTION_COLORS, sectionCard } from './cards.mjs';
+import { closingPunchlineCard, closingQrCard, closingStackCard, openingCard, SECTION_COLORS, sectionCard } from './cards.mjs';
 import * as copy from './copy.mjs';
 import { go, launch, loginAs, Recorder, showCard, sleep, stage } from './harness.mjs';
 
@@ -252,6 +252,20 @@ segments.grading = async () => {
   await page.getByText('Reset Grading Assistant suggestions').first().waitFor({ timeout: 45000 });
   await sleep(1200);
   await s.caption(VO.grading.results, { hold: false });
+  await sleep(1500);
+
+  // Grammar and syntax: the purple marks in the essay, then the list.
+  const mark = page.locator('[data-testid="submission-essay-scroll"] .grammar-issue-mark').first();
+  await mark.waitFor({ timeout: 15000 });
+  await s.scrollTo(mark, { ms: 700 });
+  await s.callout(mark, { ...VO.grading.grammarCallout, side: 'bottom', dim: false, holdMs: 5200 });
+  await s.clearCallout();
+  await s.moveTo(mark, 900);
+  await sleep(2600);
+  const grammar = page.getByRole('button', { name: /Grammar/ }).first();
+  await s.click(grammar, { after: 900 });
+  await s.scrollTo(page.getByText('Grammar issues shown').first(), { block: 'start', ms: 800 });
+  await sleep(3200);
   const evidence = page.getByRole('button', { name: /Evidence\/Support/ }).first();
   await s.click(evidence, { after: 1200 });
   await sleep(3500);
@@ -542,14 +556,59 @@ segments.practice = async () => {
   await s.clearCaption();
 };
 
+segments.reporter = async () => {
+  await titleCard(SECTIONS.reporter);
+  await as(copy.TEACHER.email);
+  await go(page, '/app');
+  await s.dockCaption(null);
+  await s.chapter(SECTIONS.reporter, TOTAL_SECTIONS, SECTION_COLORS[SECTIONS.reporter.n - 1].accent);
+  await rec.start('reporter');
+  await s.click(page.locator('a[href="/app/reporter"]').first(), { after: 0 });
+  await page.waitForURL(/\/app\/reporter/);
+  await page.waitForLoadState('networkidle');
+  await s.caption(VO.reporter.anything, { hold: false });
+  await sleep(4200);
+  await s.type(page.getByPlaceholder('Ask Yawp! Reporter…'), copy.REPORTER_REQUEST, { delay: 30 });
+  await sleep(400);
+  await page.keyboard.press('Enter');
+  await s.caption(VO.reporter.conference, { hold: false });
+  const reply = page.locator('[data-role="assistant"]').last();
+  await reply.locator('table').first().waitFor({ timeout: 45000 });
+  await sleep(1500);
+  const table = reply.locator('table').first();
+  await s.scrollTo(table, { block: 'center', ms: 1000 });
+  await s.callout(table, { ...VO.reporter.tableCallout, side: 'right', dim: false, holdMs: 5200 });
+  await s.clearCallout();
+  await s.caption(VO.reporter.markingPeriod, { hold: false });
+  await s.scrollTo(reply.getByRole('heading', { name: 'The Writing' }), { block: 'start', ms: 1400 });
+  await sleep(4200);
+  const print = reply.locator('xpath=..').getByRole('button', { name: /Print/ }).first();
+  await s.scrollTo(print, { block: 'center', ms: 1200 });
+  await s.callout(print, { ...VO.reporter.shareCallout, side: 'left', dim: false, holdMs: 4800 });
+  await s.clearCallout();
+  await s.caption(VO.reporter.yearEnd, { hold: false });
+  await sleep(4500);
+  await rec.stop();
+  await s.clearCaption();
+};
+
 segments.close = async () => {
-  await showCard(page, closingCard({ ...copy.CLOSING_CARD, disclosure: copy.DISCLOSURE }));
-  await rec.start('closing');
-  await sleep(8000);
+  await showCard(page, closingStackCard({ lines: copy.CLOSING_STACK }));
+  await rec.start('closing-1');
+  await page.evaluate(() => document.body.classList.add('play'));
+  await sleep(1900 * (copy.CLOSING_STACK.length - 1) + 4800);
+  await rec.stop();
+  await showCard(page, closingPunchlineCard({ line: copy.CLOSING_PUNCHLINE }));
+  await rec.start('closing-2');
+  await sleep(5600);
+  await rec.stop();
+  await showCard(page, closingQrCard({ codes: copy.CLOSING_QR, url: copy.CLOSING_CARD.url, disclosure: copy.DISCLOSURE }));
+  await rec.start('closing-3');
+  await sleep(9000);
   await rec.stop();
 };
 
-const order = ['open', 'assign', 'student', 'grading', 'revision', 'summary', 'planner', 'practice', 'close'];
+const order = ['open', 'assign', 'student', 'grading', 'revision', 'summary', 'planner', 'practice', 'reporter', 'close'];
 try {
   for (const name of order) {
     if (only && !only.includes(name)) continue;

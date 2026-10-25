@@ -29,11 +29,13 @@ const base = `
 const BLUE = { accent: '#5E7DB8', tint: '#DCE4F2', text: '#2B4370' }; // context
 const TEAL = { accent: '#3E9A84', tint: '#D5EBE5', text: '#1F5C4E' }; // read-aloud
 const PINK = { accent: '#C2577F', tint: '#F6DCE6', text: '#7A2550' }; // Daily Pages
-const GREEN = { accent: '#6E8F3C', tint: '#E3E9D4', text: '#3D5220' }; // thesis essay
 const PURPLE = { accent: '#7B4FB0', tint: '#F4EEF9', text: '#7B4FB0' }; // writing
-// Gold's tint reads as tan and coral as orange, so neither is a ground here.
-export const SECTION_COLORS = [BLUE, TEAL, PINK, GREEN, BLUE, PURPLE, TEAL];
-const STRIPE = [BLUE, TEAL, PURPLE, PINK, GREEN].map((c, i) => `${c.accent} ${i * 20}% ${(i + 1) * 20}%`).join(', ');
+// The stack's own green reads olive on a full-bleed ground, so Revision takes
+// a clear emerald instead. Gold's tint reads as tan and coral as orange, so
+// neither is a ground here.
+const EMERALD = { accent: '#2E9E6B', tint: '#D7F0E3', text: '#17603F' };
+export const SECTION_COLORS = [BLUE, TEAL, PINK, EMERALD, BLUE, PURPLE, TEAL, PINK];
+const STRIPE = [BLUE, TEAL, PURPLE, PINK, EMERALD].map((c, i) => `${c.accent} ${i * 20}% ${(i + 1) * 20}%`).join(', ');
 const HEAD = `'Bricolage Grotesque', 'Instrument Sans', system-ui, sans-serif`;
 const BODY = `'Instrument Sans', Roboto, system-ui, sans-serif`;
 
@@ -84,20 +86,82 @@ export function openingCard({ kicker, title, sub }) {
   </div></body></html>`;
 }
 
-export function closingCard({ title, url, sub, disclosure }) {
-  return `<!doctype html><html><head><meta charset="utf-8"><style>${base}
-    body { background: #1F3532; color: #FFFEFA; }
+const pine = `
+    body { background: #1F3532; color: #FFFEFA; font-family: ${BODY}; }
     body::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 16px; background: linear-gradient(90deg, ${STRIPE}); }
-    .wrap { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-    img { width: 470px; }
-    h1 { margin-top: 36px; font-size: 64px; font-weight: 800; letter-spacing: -0.025em; }
-    .url { margin-top: 18px; font-size: 76px; font-weight: 800; color: #F3E3C8; letter-spacing: -0.02em; }
-    p { margin-top: 22px; font-size: 32px; color: #C9D3CF; }
+    .logo { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); width: 230px; }
     small { position: absolute; bottom: 34px; left: 0; right: 0; text-align: center; font-size: 18px; color: #93A39E; }
-  </style></head><body><div class="wrap">
-    <img class="fade" src="${logo('yawp_white_logo.png')}" alt="Yawp!">
-    <h1 class="rise" style="animation-delay:.3s">${escape(title)}</h1>
-    <div class="url rise" style="animation-delay:.6s">${escape(url)}</div>
-    <p class="rise" style="animation-delay:.9s">${escape(sub)}</p>
-  </div><small class="fade" style="animation-delay:1.2s">${escape(disclosure)}</small></body></html>`;
+`;
+
+/**
+ * Closing card 1: who Yawp! is for, one line at a time. The lines wait for
+ * `body.play` (set once recording starts) so the first one is never missed.
+ */
+export function closingStackCard({ lines, stepMs = 1900 }) {
+  const accents = [TEAL, BLUE, PINK];
+  const rows = lines.map(({ who, what }, i) => `
+    <div class="row" style="--c:${accents[i % accents.length].accent};--t:${accents[i % accents.length].tint};transition-delay:${i * stepMs}ms">
+      <span class="who">${escape(who)}</span><span class="what">${escape(what)}</span>
+    </div>`).join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${base}${pine}
+    .wrap { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 34px; padding: 120px 190px 60px; }
+    .row { display: flex; flex-direction: column; gap: 10px; padding: 30px 40px 32px; border-radius: 28px; background: rgba(255,255,255,.06);
+      border-left: 10px solid var(--c); opacity: 0; transform: translateY(26px); transition: opacity .8s ease, transform .8s cubic-bezier(.2,.7,.2,1); }
+    body.play .row { opacity: 1; transform: none; }
+    .who { font-family: ${HEAD}; font-size: 30px; font-weight: 800; letter-spacing: .02em; color: var(--t); }
+    .what { font-family: ${HEAD}; font-size: 50px; line-height: 1.12; font-weight: 700; letter-spacing: -0.02em; }
+  </style></head><body>
+    <img class="logo fade" src="${logo('yawp_white_logo.png')}" alt="Yawp!">
+    <div class="wrap">${rows}</div>
+  </body></html>`;
+}
+
+/** Closing card 2: the punchline. */
+export function closingPunchlineCard({ line }) {
+  const [before, after] = line.split(/,\s*(?=but )/);
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${base}${pine}
+    .wrap { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 180px; }
+    h1 { font-size: 92px; line-height: 1.08; font-weight: 800; letter-spacing: -0.03em; text-wrap: balance; }
+    h1 span { text-wrap: balance; }
+    h1 .b { display: block; color: #D5EBE5; }
+  </style></head><body>
+    <img class="logo fade" src="${logo('yawp_white_logo.png')}" alt="Yawp!">
+    <div class="wrap"><h1><span class="rise" style="display:block;animation-delay:.2s">${escape(before)}${after ? ',' : ''}</span>${after ? `<span class="b rise" style="animation-delay:1.3s">${escape(after)}</span>` : ''}</h1></div>
+  </body></html>`;
+}
+
+/** A QR image as a data URI, or null to draw the placeholder. */
+function qrSource(image) {
+  if (!image) return null;
+  const file = path.isAbsolute(image) ? image : path.join(here, image);
+  const type = file.endsWith('.svg') ? 'image/svg+xml' : file.endsWith('.jpg') || file.endsWith('.jpeg') ? 'image/jpeg' : 'image/png';
+  return `data:${type};base64,${fs.readFileSync(file).toString('base64')}`;
+}
+
+/** Closing card 3: two QR codes (placeholders until the real ones arrive), the URL, the disclosure. */
+export function closingQrCard({ codes, url, disclosure }) {
+  const tiles = codes.map(({ label, sub, image }, i) => {
+    const src = qrSource(image);
+    return `<div class="tile rise" style="animation-delay:${0.25 + i * 0.3}s">
+      <div class="qr">${src ? `<img src="${src}" alt="QR code: ${escape(label)}">` : '<span>QR code<br>coming soon</span>'}</div>
+      <div class="label">${escape(label)}</div><div class="sub">${escape(sub)}</div>
+    </div>`;
+  }).join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${base}${pine}
+    .wrap { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-top: 70px; }
+    .tiles { display: flex; gap: 120px; }
+    .tile { display: flex; flex-direction: column; align-items: center; text-align: center; }
+    .qr { width: 400px; height: 400px; border-radius: 28px; background: #FFFFFF; padding: 28px; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,.2), 0 30px 60px -20px rgba(0,0,0,.5); }
+    .qr img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+    .qr span { width: 100%; height: 100%; border: 4px dashed #B8C4C0; border-radius: 16px; display: flex; align-items: center; justify-content: center;
+      font-size: 30px; font-weight: 600; line-height: 1.3; color: #7A8A85; }
+    .label { margin-top: 30px; font-family: ${HEAD}; font-size: 50px; font-weight: 800; letter-spacing: -0.02em; }
+    .sub { margin-top: 8px; font-size: 28px; color: #C9D3CF; }
+    .url { margin-top: 46px; font-family: ${HEAD}; font-size: 58px; font-weight: 800; color: #D5EBE5; letter-spacing: -0.02em; }
+  </style></head><body>
+    <img class="logo fade" src="${logo('yawp_white_logo.png')}" alt="Yawp!">
+    <div class="wrap"><div class="tiles">${tiles}</div><div class="url rise" style="animation-delay:.9s">${escape(url)}</div></div>
+    <small class="fade" style="animation-delay:1.2s">${escape(disclosure)}</small>
+  </body></html>`;
 }

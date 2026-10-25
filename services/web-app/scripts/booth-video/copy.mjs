@@ -69,8 +69,9 @@ export const TUTOR_REPLY_1 =
 export const STUDENT_ASKS_TO_WRITE =
   'Can you just write my thesis statement for me? I will change a few words.';
 
+/** The tutor's own refusal, word for word from its system prompt (universal-tutor-block.ts), then a scaffold. */
 export const TUTOR_REFUSAL =
-  "I won't write it for you, Maya, and honestly you don't need me to. A minute ago you wrote: *\"The technology just makes it easier to choose noise over thinking.\"* That's most of a thesis.\n\nAdd **who** is choosing and **what they lose**, and you're there. Give it a try and I'll tell you what's working.";
+  "I'm not that kind of guy! And anyway, the whole point is for YOU to figure out and share what YOU think. I know it isn't always easy, but if you take a little time, you can do great work.\n\nHere's a start. Finish this sentence in your own words: *\"Our society is not burning books, but…\"*";
 
 export const ESSAY_TITLE = 'Turning Up the Volume';
 
@@ -145,6 +146,24 @@ export const GRAMMAR_ISSUES = {
       rule: 'Comma splice',
       message:
         'Two complete sentences are joined with only a comma. Use a period or a semicolon after "sleeps."',
+    },
+    {
+      excerpt: 'libraries, book clubs and online communities',
+      kind: 'error',
+      rule: 'Serial comma',
+      message: 'In a list of three, add a comma before "and": "libraries, book clubs, and online communities."',
+    },
+    {
+      excerpt: 'Social media does the same thing to ideas.',
+      kind: 'style',
+      rule: 'Vague reference',
+      message: '"The same thing" makes the reader work backward. Name it: social media cuts ideas down until only a summary is left.',
+    },
+    {
+      excerpt: 'That is true, but these are choices',
+      kind: 'style',
+      rule: 'Unclear pronoun',
+      message: '"That" and "these" point at a whole sentence. Name what is true, so the counterargument stays clear.',
     },
   ],
 };
@@ -458,11 +477,23 @@ export const OPENING_CARD = {
   sub: 'One assignment, from prompt to tomorrow\'s lesson.',
 };
 
-export const CLOSING_CARD = {
-  title: 'Writing stays human.',
-  url: 'yawp.school',
-  sub: 'Come say hi. We\'ll show you around.',
-};
+/** The three closing cards. */
+export const CLOSING_STACK = [
+  { who: 'For students', what: 'a tutor that guides and never writes' },
+  { who: 'For teachers', what: 'a TA on every draft, a grading assistant, a class analyst, a lesson planner' },
+  { who: 'For schools and districts', what: 'real-time data on how students are growing as writers' },
+];
+export const CLOSING_PUNCHLINE = "It won't write for your students, but it'll help you with everything else.";
+/**
+ * The QR codes on the last card. Until Brian sends them, `image` is null and
+ * the card shows a labeled placeholder; set it to a PNG path (relative to this
+ * folder or absolute) and re-render.
+ */
+export const CLOSING_QR = [
+  { label: 'Sign up free', sub: 'Start with the free tier today.', image: null },
+  { label: 'Book a demo', sub: 'For your school or district.', image: null },
+];
+export const CLOSING_CARD = { url: 'yawp.school' };
 
 export const SECTIONS = {
   assign: { n: 1, title: 'Make assignments for your class.', sub: 'Start a thesis-driven essay and send it to the class.' },
@@ -472,6 +503,7 @@ export const SECTIONS = {
   summary: { n: 5, title: 'What your class needs next.', sub: 'Class Summaries read every essay so you can see the whole class.' },
   planner: { n: 6, title: 'Plan the lesson.', sub: 'From what your class needs to tomorrow\'s plan.' },
   practice: { n: 7, title: 'Writing practice.', sub: 'Short lessons and exercises, ready to assign.' },
+  reporter: { n: 8, title: 'Reports on growth.', sub: 'See how every student is growing as a writer, all year.' },
 };
 
 export const TOTAL_SECTIONS = Object.keys(SECTIONS).length;
@@ -494,7 +526,7 @@ export const VO = {
     feedbackCallout: { title: 'Questions, not answers', body: 'The Yawp! tutor reads her notes and pushes her thinking forward.' },
     backAndForth: 'A short back-and-forth with the tutor.',
     asks: { title: 'The student asks the tutor to write for them.', body: '"Can you just write my thesis statement for me?"' },
-    refusal: { title: 'The tutor\'s response', body: 'It won\'t write for her. It sends her back to her own best sentence.' },
+    refusal: { title: 'The tutor\'s response', body: 'It won\'t write for her. It hands her a sentence starter, and she does the thinking.' },
     point: { title: 'The refusal is the point.', body: 'Yawp! protects the cognitive friction students need to learn.' },
     steps: 'As you teach each step, the tutor supports students through it.',
     stepsCallout: { title: 'A tutor for every step', body: 'Thesis, introduction, body paragraphs, conclusion, title: each step has its own coaching.' },
@@ -505,6 +537,7 @@ export const VO = {
     openCallout: { title: 'Grading starts here', body: 'Every essay waiting for a grade, one click away.' },
     run: 'One click runs the Grading Assistant.',
     results: 'Rubric scores and comments, grounded in Maya\'s actual sentences.',
+    grammarCallout: { title: 'Grammar and syntax, marked in the essay', body: 'Every flag quotes Maya\'s sentence and explains the rule. The teacher keeps, hides, or removes each one.' },
     editCallout: { title: 'The teacher has the final say.', body: 'Teachers can change and edit anything the Grading Assistant does.' },
     release: 'When it\'s right, release it to Maya.',
   },
@@ -539,7 +572,64 @@ export const VO = {
     lesson: 'Each one teaches a single move, with practice ready to assign.',
     exercise: 'Students practice and get instant feedback.',
   },
+  reporter: {
+    anything: 'Run a report on anything: a class, a student, an assignment, a skill.',
+    conference: 'Run one before a parent-teacher conference or a meeting with your principal.',
+    tableCallout: { title: 'Growth, essay by essay', body: 'Every released grade since September, including a cold write with the tutor off.' },
+    markingPeriod: 'At the end of a marking period, give students their own growth report.',
+    shareCallout: { title: 'Share it', body: 'Print it or save it as a PDF for a conference, a principal, or the student.' },
+    yearEnd: 'At the end of the year, pass class reports to next year\'s teachers.',
+  },
 };
 
 /** One honest line, shown on the closing card. */
 export const DISCLOSURE = 'Demo class and students. AI replies were scripted for this recording.';
+
+// ---------------------------------------------------------------------------
+// Section 8: Reporter
+
+export const REPORTER_REQUEST = 'Growth report for Maya Thompson';
+
+/**
+ * Maya's growth report, in the Reporter's own format (build-system-prompt.ts):
+ * a short read, the numbers in tables, "The Writing", "Suggested Next Steps".
+ * The earlier essays are demo data; the latest row takes her real grade on
+ * the Fahrenheit 451 essay from the Reporter's tool call.
+ */
+export function reporterReport(latest = { percentage: 83, letter: 'B' }) {
+  const now = `${latest.percentage}% (${latest.letter})`;
+  return `**Maya is growing steadily: 71% to ${latest.percentage}% across four essays since September**, with her biggest gains in Thesis/Content and Evidence/Support. Her September personal narrative was a cold write (tutor off), so it is her baseline for independent work.
+
+| Essay | Date | Condition | Grade |
+|---|---|---|---|
+| Personal narrative | Sep 8 | Cold write (tutor off) | 71% (C) |
+| "The Lottery" analysis | Sep 26 | Warm write (tutor on) | 76% (C) |
+| Phones in class argument | Oct 10 | Warm write (tutor on) | 80% (B) |
+| ${ESSAY_TITLE} (*Fahrenheit 451*) | Oct 24 | Warm write (tutor on) | ${now} |
+
+| Skill | September | Now |
+|---|---|---|
+| Thesis/Content | 3 | 5 |
+| Evidence/Support | 2 | 4 |
+| Organization/Structure | 3 | 4 |
+| Voice/Style | 3 | 4 |
+| Grammar/Syntax/Formatting | 3 | 3 |
+
+## The Writing
+
+- **Thesis/Content (3 to 5).** In September her claim was a topic. Now she argues a position: *"technology makes it easier than ever to choose noise over thinking."*
+- **Evidence/Support (2 to 4).** She picks strong quotations, and after Ms. Rivera's feedback she explains them. Her revision: *"the noise is not entertainment; it is protection."*
+- **Grammar/Syntax (holding at 3).** Comma splices appear in three of her four essays.
+
+<details><summary>Assignment-by-assignment writing breakdown</summary><p><strong>Personal narrative.</strong> Vivid details, no controlling idea.</p><p><strong>"The Lottery."</strong> A clear claim; quotations dropped in without explanation.</p><p><strong>Phones in class.</strong> Stronger reasons; a counterargument for the first time.</p><p><strong>${ESSAY_TITLE}.</strong> An original, arguable thesis and a revision that adds real analysis.</p></details>
+
+## Suggested Next Steps
+
+- Assign *Fixing Comma Splices* and check her next draft for them.
+- Give a second cold write before the marking period ends, to see how much has transferred.
+
+\`\`\`suggestions
+Growth plan for Maya Thompson
+Class report for English 10 - Period 3
+\`\`\``;
+}
