@@ -13,6 +13,7 @@ import { Button } from '~/components/ui/button';
 import { useUser } from '~/hooks/useUser';
 import { useDoubleCheck } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo';
+import { buildSafeErrorScalarsForLog } from '~/utils/error-log-scalars';
 
 export type Comment = DocumentComment & {
   membership: Omit<OrgMembership, 'createdAt' | 'updatedAt'>;
@@ -135,7 +136,10 @@ export const Comment = ({
           node.parentNode.removeChild(node);
         } catch (error) {
           // eslint-disable-next-line no-console
-          console.error(error);
+          console.error(
+            'document_comment_dom_cleanup_failed',
+            buildSafeErrorScalarsForLog(error),
+          );
         }
       }
     });

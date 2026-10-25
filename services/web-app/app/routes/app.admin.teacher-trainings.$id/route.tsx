@@ -54,6 +54,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { requireAdmin } from '~/utils/auth.server';
+import { buildSafeErrorScalarsForLog } from '~/utils/error-log-scalars';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
@@ -409,7 +410,10 @@ export default function TeacherTrainingRoute() {
         ) as HTMLInputElement | null;
         if (hidden) hidden.value = key;
       } catch (error) {
-        console.error('Could not get video duration:', error);
+        console.error(
+          'teacher_training_video_duration_failed',
+          buildSafeErrorScalarsForLog(error),
+        );
         setVideoDuration(null);
       } finally {
         setIsVideoLoading(false);
