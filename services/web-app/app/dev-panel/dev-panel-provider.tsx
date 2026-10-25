@@ -128,7 +128,11 @@ export function DevPanelProvider({
         'yawp-dev-panel-closing'
       );
       setState({ ...DEV_PANEL_DEFAULT_STATE });
-    }, 150);
+      const beaker = document.querySelector<HTMLButtonElement>(
+        '.yawp-dev-panel-beaker button'
+      );
+      beaker?.focus();
+    }, 180);
   }, []);
 
   const togglePanel = useCallback(() => {

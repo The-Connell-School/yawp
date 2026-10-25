@@ -14,7 +14,9 @@ import {
   useSearchParams,
   useRevalidator,
   type LoaderFunctionArgs,
+  type MetaFunction,
 } from 'react-router';
+import { appRouteDocumentTitle } from '~/utils/app-mobile-top-bar-title';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { TeachingAccessReporterSkeleton } from '~/components/free-tier/teaching-access-reporter-skeleton';
 import {
@@ -39,6 +41,12 @@ import {
 } from '~/components/ai-chat/assistant-markdown';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
+
+export const handle = { breadcrumb: 'Reporter' };
+
+export const meta: MetaFunction = () => [
+  { title: appRouteDocumentTitle('Reporter') },
+];
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const access = await getReporterAccess(request);

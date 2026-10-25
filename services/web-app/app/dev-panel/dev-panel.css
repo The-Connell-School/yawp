@@ -121,4 +121,65 @@ html.yawp-dev-panel-open [data-sonner-toast].yawp-dev-panel-jump-toast {
   body:has([data-yawp-dev-panel]) {
     --teaching-access-toast-bottom: calc(5rem + 1rem);
   }
+
+  [data-yawp-mobile-toast='true'] [data-sonner-toaster] {
+    z-index: 60;
+  }
+
+  .yawp-mobile-sonner-toast,
+  html.yawp-dev-panel-open [data-sonner-toast].yawp-dev-panel-jump-toast {
+    top: max(env(safe-area-inset-top, 0px), 1rem) !important;
+    right: auto !important;
+    left: 50% !important;
+    bottom: auto !important;
+    transform: translateX(-50%) !important;
+    width: min(calc(100vw - 32px), 360px) !important;
+    max-width: 360px;
+    white-space: normal;
+    font-weight: 600;
+  }
+
+  .yawp-dev-panel-mobile-sheet {
+    z-index: 50;
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 0.75rem);
+  }
+
+  html.yawp-dev-panel-open:not(.yawp-dev-panel-reduced-motion)
+    .yawp-dev-panel-mobile-sheet {
+    animation: yawp-dev-panel-mobile-sheet-in 180ms ease-out;
+  }
+
+  html.yawp-dev-panel-closing:not(.yawp-dev-panel-reduced-motion)
+    .yawp-dev-panel-mobile-sheet {
+    animation: yawp-dev-panel-mobile-sheet-out 180ms ease-in forwards;
+  }
+
+  html.yawp-dev-panel-open.yawp-dev-panel-reduced-motion
+    .yawp-dev-panel-mobile-sheet,
+  html.yawp-dev-panel-closing.yawp-dev-panel-reduced-motion
+    .yawp-dev-panel-mobile-sheet {
+    animation: yawp-dev-panel-fade-in 180ms ease-out;
+  }
+}
+
+@keyframes yawp-dev-panel-mobile-sheet-in {
+  from {
+    transform: translateY(100%);
+    opacity: 0.98;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes yawp-dev-panel-mobile-sheet-out {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0.98;
+  }
 }
