@@ -25,7 +25,8 @@ describe('preview deploy logs must not emit access secrets', () => {
 
   test('run-host-deploy-detached masks access codes on every log copy path', () => {
     expect(detachedSh).toContain('mask_deploy_log');
-    expect(detachedSh).toContain('mask_deploy_log < "$LOCAL_LOG_COPY"');
+    expect(detachedSh).toContain('copy_deploy_log_local');
+    expect(detachedSh).toMatch(/Deploy timed out[\s\S]*copy_deploy_log_local/);
     expect(detachedSh).toContain('PREVIEW_SEAT_CODE_');
     expect(detachedSh).toContain('YAWP_TEST_PREVIEW_ACCESS_SEATS');
     expect(detachedSh).toContain('PREVIEW_MASTER_ACCESS_CODE=');

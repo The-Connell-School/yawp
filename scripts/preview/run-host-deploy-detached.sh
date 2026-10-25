@@ -36,6 +36,18 @@ mask_deploy_log() {
     -e 's/(PREVIEW_STRIPE_WEBHOOK_SECRET=)[^[:space:]]*/\1[REDACTED]/g'
 }
 
+copy_deploy_log_local() {
+  if ! scp -i "$SSH_IDENTITY" -q "${SSH_TARGET}:${DEPLOY_LOG}" "$LOCAL_LOG_COPY" 2>/dev/null; then
+    return 1
+  fi
+  if [[ -f "$LOCAL_LOG_COPY" ]]; then
+    local masked_copy
+    masked_copy="$(mktemp)"
+    mask_deploy_log < "$LOCAL_LOG_COPY" > "$masked_copy"
+    mv "$masked_copy" "$LOCAL_LOG_COPY"
+  fi
+}
+
 emit_failure_log_tail() {
   local reason="$1"
   echo "${reason}; last ${FAILURE_LOG_LINES} log lines (secrets redacted):" >&2
@@ -76,16 +88,12 @@ done
 
 if ! ssh -i "$SSH_IDENTITY" -o BatchMode=yes "$SSH_TARGET" \
   "test -f $(shell_quote "$EXIT_FILE")"; then
+  copy_deploy_log_local || true
   emit_failure_log_tail "Deploy timed out after ${DEPLOY_TIMEOUT_SECONDS}s"
   exit 1
 fi
 
-scp -i "$SSH_IDENTITY" -q "${SSH_TARGET}:${DEPLOY_LOG}" "$LOCAL_LOG_COPY"
-if [[ -f "$LOCAL_LOG_COPY" ]]; then
-  masked_copy="$(mktemp)"
-  mask_deploy_log < "$LOCAL_LOG_COPY" > "$masked_copy"
-  mv "$masked_copy" "$LOCAL_LOG_COPY"
-fi
+copy_deploy_log_local
 exit_code="$(
   ssh -i "$SSH_IDENTITY" -o BatchMode=yes "$SSH_TARGET" \
     "tr -d '[:space:]' < $(shell_quote "$EXIT_FILE")"
