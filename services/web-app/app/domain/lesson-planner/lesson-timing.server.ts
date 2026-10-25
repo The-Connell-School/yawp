@@ -11,6 +11,7 @@ import { stackSteps } from './stack-steps';
 import { readExtensionIds, splitExtensions } from './extensions';
 import { stackTiming, type StackTiming } from './stack-timing';
 import { stepChipText } from './step-types';
+import { minutesInTitle } from './lesson-title';
 
 export type LessonRun = {
   total: number;
@@ -90,7 +91,7 @@ export async function lessonRuns(conversationIds: string[], stackV2: boolean): P
         materialTokens: {},
         stackDetails: {},
       }), readExtensionIds(lesson.extensionStepIds));
-      const timing = stackTiming(steps, lesson.periodMinutes);
+      const timing = stackTiming(steps, lesson.periodMinutes ?? minutesInTitle(lesson.packetTitle ?? lesson.title));
       const labels = new Map(steps.map((step) => [step.id, step.label]));
       const run: LessonRun = {
         total: timing.total,

@@ -59,6 +59,54 @@ function chipDate(iso: string | null): string {
 
 type Change = { text: string; undo: unknown | null };
 
+/**
+ * The lesson's day (Brian's round 3, 1.2). A label over a hidden date input
+ * opened nothing in Chrome, so the chip is a button that opens the picker
+ * itself; a set day can be cleared.
+ */
+function DateChip({ lessonDate, onChange }: { lessonDate: string | null; onChange: (value: string) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  function open() {
+    const element = input.current;
+    if (!element) return;
+    try {
+      element.showPicker();
+    } catch {
+      // No showPicker (older Safari): focusing the field opens its own picker.
+      element.focus();
+      element.click();
+    }
+  }
+  return (
+    <span className="relative inline-flex items-center gap-1 rounded-full bg-[#EFE8DD] px-3 py-1">
+      <button type="button" data-testid="stack-chip-date" onClick={open} className="font-semibold">
+        {chipDate(lessonDate)}
+      </button>
+      <input
+        ref={input}
+        type="date"
+        aria-label="Lesson date"
+        data-testid="stack-date-input"
+        tabIndex={-1}
+        value={dateInputValue(lessonDate)}
+        onChange={(event) => onChange(event.target.value)}
+        className="pointer-events-none absolute bottom-0 left-0 h-px w-px opacity-0"
+      />
+      {lessonDate ? (
+        <button
+          type="button"
+          data-testid="stack-date-clear"
+          aria-label="Clear the date"
+          onClick={() => onChange('')}
+          className="text-[var(--sv-muted)] hover:text-[var(--sv-ink)]"
+        >
+          <X size={12} />
+        </button>
+      ) : null}
+    </span>
+  );
+}
+
 /** Open slideshow: the deck full screen, for the smartboard (Oct 24 handoff, task 6). */
 export function slideshowHref(conversationId: string, deckId: string | null): string | null {
   return deckId ? `/present/${conversationId}/${deckId}?from=stack&slideshow=1` : null;
@@ -341,16 +389,10 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                 {v3.className}
               </span>
             ) : null}
-            <label className="relative cursor-pointer rounded-full bg-[#EFE8DD] px-3 py-1">
-              <span data-testid="stack-chip-date">{chipDate(v3.lessonDate)}</span>
-              <input
-                type="date"
-                aria-label="Lesson date"
-                value={dateInputValue(v3.lessonDate)}
-                onChange={(event) => post(setFetcher, STACK_API, { intent: 'set-details', lessonDate: event.target.value })}
-                className="absolute inset-0 cursor-pointer opacity-0"
-              />
-            </label>
+            <DateChip
+              lessonDate={v3.lessonDate}
+              onChange={(value) => post(setFetcher, STACK_API, { intent: 'set-details', lessonDate: value })}
+            />
             <label className="flex items-center rounded-full bg-[#EFE8DD] px-3 py-1">
               <input
                 type="number"
@@ -358,6 +400,9 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                 data-testid="stack-chip-period"
                 min={10}
                 max={240}
+                // A period found after the page first drew (a unit day's, or
+                // its title's) shows without a reload.
+                key={data.periodMinutes ?? 'none'}
                 defaultValue={data.periodMinutes ?? ''}
                 placeholder="—"
                 onBlur={(event) => {

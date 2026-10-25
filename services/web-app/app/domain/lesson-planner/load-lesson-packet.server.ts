@@ -23,6 +23,7 @@ import { nameIsProvisional } from './lesson-name';
 import { withoutTrailingCommentary } from './plan-steps';
 import { DEFAULT_STEP_MINUTES, stepTypeFor } from './step-types';
 import { orderStackEntries } from './stack-order';
+import { minutesInTitle } from './lesson-title';
 
 export type LoadedLessonPacket = {
   conversationId: string;
@@ -166,6 +167,18 @@ export async function loadLessonPacket({
       });
       conversation.periodMinutes = planning.periodMinutes;
       conversation.lessonClassLabel ??= planning.lessonClassLabel;
+    }
+  }
+  // Still none: the period the lesson's own heading gave, "(50 min)" (Brian's
+  // round 3, 1.2), kept once so every view of the lesson has it.
+  if (conversation.periodMinutes == null) {
+    const fromTitle = minutesInTitle(conversation.packetTitle ?? conversation.title);
+    if (fromTitle) {
+      await prisma.lessonPlanConversation.update({
+        where: { id: conversation.id },
+        data: { periodMinutes: fromTitle },
+      });
+      conversation.periodMinutes = fromTitle;
     }
   }
   const assignmentLinks = linksByToken(conversation.assignmentLinks);
