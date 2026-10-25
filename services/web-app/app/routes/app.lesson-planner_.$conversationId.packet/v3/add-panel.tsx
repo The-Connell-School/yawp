@@ -16,6 +16,7 @@ import { MarkdownContent } from '~/components/ai-chat/assistant-markdown';
 import { HEADING_FONT } from './theme';
 import { PIECE_DRAG_TYPE, TypeChip, WritingBadge } from './run-of-show';
 import { hasSlideDeck } from '~/domain/lesson-planner/slide-deck';
+import { stackReplyLine } from '~/domain/lesson-planner/stack-reply';
 import { StackDeckCard, type DeckBuild } from './stack-deck';
 
 /** A deck built on the stack (Brian's run 6, item 2). */
@@ -298,7 +299,7 @@ export function AddPanel({
                   </span>
                   <div className="min-w-0 flex-1 space-y-2">
                     <p data-testid="ask-reply" className="text-sm">
-                      {turn.content.split('\n').find((text) => text.trim() && !text.startsWith('```')) ?? ''}
+                      {stackReplyLine(turn.content)}
                     </p>
                     {(piecesByMessage.get(turn.id) ?? []).map(card)}
                     {deck && hasSlideDeck(turn.content) ? (

@@ -843,7 +843,7 @@ export function buildLessonPlannerSystemPromptBlocks({
     ...(onStack
       ? [
           '',
-          'This request was asked on the stack page, where the teacher is refining the lesson. Your answer shows there as a card, not in the chat: one short line, then the deck. No other pieces, no options to choose from, no questions back.',
+          'This request was asked on the stack page, where the teacher is refining the lesson. Your answer shows there as a card, not in the chat: one short line, then the deck. No other pieces, no options to choose from, no questions back. Never mention the Teacher\'s Lounge or where decks are kept.',
         ]
       : []),
     ...buildTemplateSection(template),
