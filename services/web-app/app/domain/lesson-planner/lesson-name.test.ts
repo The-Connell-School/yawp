@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  cleanLessonTitle,
   deriveLessonName,
+  minutesInTitle,
   firstMessageTitle,
   nameIsProvisional,
   shouldRenameLesson,
@@ -168,5 +170,41 @@ describe("a lesson still named after its first message takes the next plan's nam
   });
   test('already named from a plan: a revision does not rename it', () => {
     expect(shouldRenameLesson({ reply: plan, priorReplies: [plan], teacherNamedIt: false })).toBeNull();
+  });
+});
+
+describe("no backstage language in titles (Brian's round 3, 1.1)", () => {
+  test('drops the type tag and the duration the planner wrote', () => {
+    expect(cleanLessonTitle('Day 1: The Man Who Made Himself (50 min) {type: context}')).toBe(
+      'Day 1: The Man Who Made Himself'
+    );
+    expect(cleanLessonTitle('Read aloud (12 min) {type: read_aloud}')).toBe('Read aloud');
+    expect(cleanLessonTitle('Day 2 — The Virtues · 50 min')).toBe('Day 2 — The Virtues');
+    expect(cleanLessonTitle('Holden and the ducks (45–50 minutes)')).toBe('Holden and the ducks');
+    expect(cleanLessonTitle('The essay [type: thesis_essay]')).toBe('The essay');
+  });
+
+  test("leaves a teacher's own words alone", () => {
+    expect(cleanLessonTitle('Franklin: the self-made man')).toBe('Franklin: the self-made man');
+    expect(cleanLessonTitle('Act 2 (scenes 1–3)')).toBe('Act 2 (scenes 1–3)');
+    expect(cleanLessonTitle('[Draft] Gatsby')).toBe('[Draft] Gatsby');
+    expect(cleanLessonTitle('2 mini-lessons on commas')).toBe('2 mini-lessons on commas');
+  });
+
+  test('never empties a title', () => {
+    expect(cleanLessonTitle('{type: context}')).toBe('{type: context}');
+    expect(cleanLessonTitle('  ')).toBe('');
+  });
+
+  test('a plan names the lesson without its tags', () => {
+    const reply = ['# Day 1: The Man Who Made Himself (50 min) {type: context}', '', '## Class starter (5 min)', '', 'Write.', '', '## Read aloud (12 min)', '', 'Read.'].join('\n');
+    expect(deriveLessonName(reply)).toBe('Day 1: The Man Who Made Himself');
+  });
+
+  test('the minutes a title gave, for a lesson that has no period', () => {
+    expect(minutesInTitle('Day 1: The Man Who Made Himself (50 min) {type: context}')).toBe(50);
+    expect(minutesInTitle('Day 1 — Franklin (45–50 minutes)')).toBe(50);
+    expect(minutesInTitle('Franklin')).toBeNull();
+    expect(minutesInTitle('Day 1 (5 min)')).toBeNull();
   });
 });

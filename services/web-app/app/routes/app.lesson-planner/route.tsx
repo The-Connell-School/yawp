@@ -126,6 +126,7 @@ import {
   type PlanningProgressState,
 } from '~/components/ai-chat/planning-progress-bar';
 import { PLANNING_PROGRESS_START } from '~/domain/lesson-planner/planning-progress';
+import { cleanLessonTitle } from '~/domain/lesson-planner/lesson-title';
 
 type PacketAudience = 'teacher' | 'student';
 
@@ -355,7 +356,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     exitTicketTypeId,
     conversations: conversations.map((conversation) => ({
       id: conversation.id,
-      title: conversation.packetTitle?.trim() || conversation.title,
+      title: cleanLessonTitle(conversation.packetTitle?.trim() || conversation.title),
       published: Boolean(conversation.publishedAt),
       sectionCount:
         conversation._count.messages + conversation._count.materials,

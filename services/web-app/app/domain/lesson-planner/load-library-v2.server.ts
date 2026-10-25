@@ -7,6 +7,7 @@ import { lessonRuns, type LessonRun } from './lesson-timing.server';
 import { courseBlocks, lessonCountLine, unitKind, UNIT_KIND_LABELS, writingShare, type UnitKind } from './library-v2';
 import { ensureCourses, type LibraryScope } from './library-v2.server';
 import { loadUnitMap } from './lesson-unit.server';
+import { cleanLessonTitle } from './lesson-title';
 
 export type UnitTile = {
   id: string;
@@ -52,7 +53,7 @@ const LESSON_SELECT = {
 } as const;
 
 function lessonTitle(lesson: { title: string; packetTitle: string | null }) {
-  return (lesson.packetTitle ?? lesson.title).trim() || 'Lesson plan';
+  return cleanLessonTitle(lesson.packetTitle ?? lesson.title) || 'Lesson plan';
 }
 
 function opens(lesson: { id: string; publishedAt: Date | null; setAt: Date | null; messages: unknown[]; materials: unknown[] }) {

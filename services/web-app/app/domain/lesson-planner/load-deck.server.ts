@@ -15,6 +15,7 @@ import { redirect } from 'react-router';
 import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { parseSlideDeck, type SlideDeck } from './slide-deck';
+import { cleanLessonTitle } from './lesson-title';
 
 export type LoadedLessonDeck = {
   conversationId: string;
@@ -62,8 +63,9 @@ export async function loadLessonDeck({
 
   return {
     conversationId: source.conversation.id,
-    lessonTitle:
-      source.conversation.packetTitle?.trim() || source.conversation.title,
+    lessonTitle: cleanLessonTitle(
+      source.conversation.packetTitle?.trim() || source.conversation.title
+    ),
     deck: parsed.deck,
   };
 }
