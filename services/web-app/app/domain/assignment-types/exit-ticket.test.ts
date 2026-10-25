@@ -4,6 +4,7 @@ import {
   EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
   EXIT_TICKET_CONFIG_SCHEMA_VERSION,
   EXIT_TICKET_ELABORATION_NOTE,
+  EXIT_TICKET_POLISH_NOTE,
   EXIT_TICKET_FOCUS_OPTIONS,
   EXIT_TICKET_LESSON_NOTE_FIELDS,
   EXIT_TICKET_LESSON_NOTE_MAX_LENGTH,
@@ -137,8 +138,60 @@ describe('composeExitTicketPrompt', () => {
       });
 
       expect(prompt).toInclude('yesterday’s reading');
-      expect(prompt).toInclude(EXIT_TICKET_ELABORATION_NOTE);
+      expect(prompt).toInclude('polish');
     }
+  });
+
+  // Brian's round 4, item 1.
+  test('"explain it in your own words" ends with the conversational closing', () => {
+    const prompt = composeExitTicketPrompt({
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      mode: 'specific',
+      focus: 'explain-concept',
+      topic: 'how Edwards uses reason and emotion together to persuade',
+      answerType: 'subjective',
+    });
+
+    expect(prompt).toBe(
+      'In your own words, explain how Edwards uses reason and emotion together to persuade.\n\n' +
+        'Keep it conversational, in your words, and write as much as you can — the more you can explain your thinking, the better. Don’t worry too much about polish. This is about what you understand, not writing perfectly.'
+    );
+  });
+
+  test('no exit ticket mentions someone who missed class or the definition', () => {
+    for (const option of EXIT_TICKET_FOCUS_OPTIONS) {
+      const prompt = composeExitTicketPrompt({
+        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+        mode: 'specific',
+        focus: option.value,
+        topic: 'the sermon',
+        answerType: 'subjective',
+      });
+      expect(prompt).not.toInclude('missed class');
+      expect(prompt).not.toInclude('definition you were given');
+      expect(option.gradingCriteria).not.toInclude('missed');
+    }
+  });
+
+  test('a question or a specific answer gets no push to write more', () => {
+    const question = composeExitTicketPrompt({
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      mode: 'specific',
+      focus: 'ask-question',
+      topic: 'the sermon',
+      answerType: 'subjective',
+    });
+    expect(question).not.toInclude('write as much as you can');
+    expect(question).toEndWith(EXIT_TICKET_POLISH_NOTE);
+
+    const understand = composeExitTicketPrompt({
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      mode: 'specific',
+      focus: 'understand-text',
+      topic: 'the spider image',
+      answerType: 'subjective',
+    });
+    expect(understand).toEndWith(EXIT_TICKET_ELABORATION_NOTE);
   });
 });
 
