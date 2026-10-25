@@ -8,6 +8,9 @@ describe('dev-panel mobile styles', () => {
     expect(css).toMatch(
       /@media \(max-width: 639px\)[\s\S]*yawp-dev-panel-jump-toast[\s\S]*env\(safe-area-inset-top/
     );
-    expect(css).toMatch(/min\(calc\(100vw - 32px\), 360px\)/);
+    expect(css).toMatch(
+      /\[data-yawp-mobile-toast='true'\] \[data-sonner-toaster\][\s\S]*left: 1rem !important[\s\S]*right: 1rem !important/
+    );
+    expect(css).toMatch(/margin-inline: auto !important/);
   });
 });
