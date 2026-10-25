@@ -45,7 +45,7 @@ jobs:
       - name: Prepare SSH
         env:
           DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
-        run: bash scripts/preview/prepare-demo-ssh.sh
+        run: bash demo-source/scripts/preview/prepare-demo-ssh.sh
 
       - name: Sync source and ensure intern QA teachers on demo
         id: ensure-teachers
@@ -61,7 +61,7 @@ jobs:
             --exclude node_modules \
             --exclude .git \
             demo-source/ "$ssh_target:$remote_source/"
-          scp -i ~/.ssh/demo_key scripts/preview/ensure-intern-qa-teachers-on-demo-host.sh \
+          scp -i ~/.ssh/demo_key demo-source/scripts/preview/ensure-intern-qa-teachers-on-demo-host.sh \
             "$ssh_target:${remote_script}.next"
           ssh -i ~/.ssh/demo_key "$ssh_target" \
             "install -m 700 $(shell_quote "${remote_script}.next") $(shell_quote "$remote_script")"

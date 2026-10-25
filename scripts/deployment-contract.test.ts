@@ -1904,8 +1904,15 @@ describe('demo environment deployment contract', () => {
     });
     expect(parsed.jobs['ensure-teachers'].environment).toBe('demo');
     expect(workflow).toContain('group: demo-environment');
-    expect(workflow).toContain('prepare-demo-ssh.sh');
-    expect(workflow).toContain('ensure-intern-qa-teachers-on-demo-host.sh');
+    expect(workflow).toContain(
+      'demo-source/scripts/preview/prepare-demo-ssh.sh'
+    );
+    expect(workflow).toContain(
+      'demo-source/scripts/preview/ensure-intern-qa-teachers-on-demo-host.sh'
+    );
+    expect(workflow).not.toMatch(
+      /run: bash scripts\/preview\/prepare-demo-ssh\.sh/
+    );
     expect(workflow).toContain('teacher name=Thomas Patton');
     expect(workflow).toContain('org=local-dev-org');
     expect(workflow).not.toContain('reset_data');
