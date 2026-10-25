@@ -792,11 +792,16 @@ compute_tooling_fingerprint() {
   )
 }
 
+preview_toolbox_uses_control_mount() {
+  [[ "$SLUG" =~ ^pr-[1-9][0-9]*$ || "$RUNTIME" == "production" ]]
+}
+
 run_tooling_if_needed() {
   local prisma_cli
-  if [[ "$SLUG" =~ ^pr-[1-9][0-9]*$ ]]; then
-    # PR application refs can predate reviewed control-plane scripts. Fast previews mount
-    # those scripts at /preview-control; do not require prisma-cli.sh in the PR checkout.
+  if preview_toolbox_uses_control_mount; then
+    # Application refs can predate reviewed control-plane scripts. Production demo
+    # toolboxes use registry images without the full scripts/preview tree; fast PR
+    # previews mount reviewed scripts at /preview-control instead of the PR checkout.
     prisma_cli='PRISMA_CLI_REPO_ROOT=/app bash /preview-control/prisma-cli.sh'
   else
     prisma_cli='bash scripts/preview/prisma-cli.sh'
@@ -866,7 +871,7 @@ run_tooling_if_needed() {
   fi
 
   local tooling_command migrate_wrapper
-  if [[ "$SLUG" =~ ^pr-[1-9][0-9]*$ ]]; then
+  if preview_toolbox_uses_control_mount; then
     migrate_wrapper='PRISMA_MIGRATE_REPO_ROOT=/app PRISMA_MIGRATE_PRISMA_CLI_SCRIPT=/preview-control/prisma-cli.sh PRISMA_MIGRATE_SUMMARY_SCRIPT=/preview-control/emit-prisma-migrate-summary.mjs bash /preview-control/prisma-migrate-deploy-with-summary.sh'
   else
     migrate_wrapper='bash scripts/preview/prisma-migrate-deploy-with-summary.sh'

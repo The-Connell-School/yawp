@@ -15,6 +15,9 @@ for (const [skip, failSeed] of [[true, false], [false, false], [true, true]] as 
       writeFileSync(join(root, 'fingerprint'), skip ? 'current\n' : 'previous\n');
       const source = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
       const qaSeedGuard = source.match(/should_run_signon_qa_seed\(\) \{[\s\S]*?\n\}/)![0];
+      const controlMountGuard = source.match(
+        /preview_toolbox_uses_control_mount\(\) \{[\s\S]*?\n\}/
+      )![0];
       const fn = source.slice(source.indexOf('run_tooling_if_needed() {'), source.indexOf('\nprebuild_production_images()'));
       const script = `set -euo pipefail
 SOURCE_DIR="$TEST_ROOT"
@@ -31,6 +34,7 @@ preview_missing_tooling_artifacts() { :; }
 build_or_pull_production_images() { :; }
 record_compose() { printf '%s\\n' "$*"; if [[ ${failSeed} == true && "$*" == *seed-free-tier-bundle-assignment-types* ]]; then return 17; fi; }
 ${qaSeedGuard}
+${controlMountGuard}
 ${fn}
 run_tooling_if_needed
 printf 'SERVING\\n'

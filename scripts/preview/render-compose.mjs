@@ -259,9 +259,11 @@ ${env.slug === 'demo' ? '      EMAIL_PROVIDER: "resend"\n' : ''}      RESEND_FRO
       - ${q(`${env.sourceDir}:/app`)}
       - ${env.composeProject}-node-modules:/app/node_modules
       - ${env.composeProject}-web-node-modules:/app/services/web-app/node_modules`;
-  // Mount reviewed default-branch tooling even when the PR source predates it.
-  // This also avoids baking control-plane updates into PR-owned Dockerfiles.
-  const toolboxControlVolume = env.prNumber
+  // Mount reviewed control-plane tooling when the toolbox image does not carry the
+  // full scripts/preview tree (production registry images) or when the PR ref may
+  // predate reviewed host scripts (fast previews).
+  const mountPreviewControl = Boolean(env.prNumber) || env.runtime === 'production';
+  const toolboxControlVolume = mountPreviewControl
     ? `      - ${q(`${controlDir}:/preview-control:ro`)}` : '';
   const toolboxFlagEnvironment = env.prNumber
     ? `      PREVIEW_UNIFIED_SIGN_ON: ${q(unifiedSignOn)}` : '';

@@ -15,6 +15,9 @@ for (const skip of [true, false]) for (const fail of [true, false]) {
       writeFileSync(join(root, 'fingerprint'), skip ? 'current\n' : 'previous\n');
       const source = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
       const qaSeedGuard = source.match(/should_run_signon_qa_seed\(\) \{[\s\S]*?\n\}/)![0];
+      const controlMountGuard = source.match(
+        /preview_toolbox_uses_control_mount\(\) \{[\s\S]*?\n\}/
+      )![0];
       const tooling = source.slice(source.indexOf('run_tooling_if_needed() {'), source.indexOf('\nprebuild_production_images()'));
       const seats = source.slice(source.indexOf('ensure_preview_seats() {'), source.indexOf('\nremove_legacy_project_postgres()'));
       const updater = source.slice(source.indexOf('apply_preview_signon_flag() {'), source.indexOf('\nensure_shared_postgres\n'));
@@ -38,6 +41,7 @@ export_demo_tester_feedback_before_reset() { :; }
 restore_demo_tester_feedback_after_reset() { :; }
 record_compose() { printf '%s\\n' "$*"; if [[ ${fail} == true && "$*" == *unified-signon-flag.mjs* ]]; then return 17; fi; }
 ${qaSeedGuard}
+${controlMountGuard}
 ${tooling}
 ${seats}
 ${updater}
