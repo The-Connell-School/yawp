@@ -400,6 +400,7 @@ jobs:
           bun test app/components/site-license-lock-button.test.tsx
           bun test app/components/site-license-locked-assignment-tile.test.tsx
           bun test app/components/free-account-usage.locked-tiles.test.tsx
+          bun test app/components/free-tier/preview-assignment-creation-control.test.tsx
 
       - name: 🧪 Free-account in-app usage adapter (isolated; mocks prisma)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
