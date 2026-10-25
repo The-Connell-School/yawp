@@ -73,6 +73,30 @@ export async function openDevToolsPanel(page: Page) {
   return devToolsPanel(page);
 }
 
+/** Opens a dev panel collapsible section when persisted state left it closed. */
+export async function openDevPanelSection(page: Page, sectionName: string) {
+  const panel = await openDevToolsPanel(page);
+  const trigger = panel.getByRole('button', { name: sectionName, exact: true });
+  await expect(trigger).toBeVisible({ timeout: 15_000 });
+  const expanded = await trigger.getAttribute('aria-expanded');
+  if (expanded !== 'true') {
+    await trigger.click();
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  }
+  return panel;
+}
+
+/** Opens the class simulation flyout from the Data section row (not the flyout action). */
+export async function openDevPanelClassSimulationFlyout(page: Page) {
+  const panel = await openDevPanelSection(page, 'Data');
+  await panel
+    .getByRole('button', { name: /^Populate class Fake/ })
+    .click();
+  await expect(
+    page.getByRole('dialog', { name: 'Class simulation' })
+  ).toBeVisible({ timeout: 15_000 });
+}
+
 export async function expectGiveFeedbackAccessible(page: Page) {
   const beaker = page.getByRole('button', { name: 'Open developer tools' });
   const legacy = page.getByRole('button', { name: 'Give feedback', exact: true });

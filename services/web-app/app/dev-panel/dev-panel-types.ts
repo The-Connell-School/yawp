@@ -1,12 +1,18 @@
 export const DEV_PANEL_STORAGE_KEY = 'yawp-dev-panel';
 
-export type DevPanelSubSheet = 'free-tier-states' | 'give-feedback' | null;
+export type DevPanelSubSheet =
+  | 'free-tier-states'
+  | 'give-feedback'
+  | 'class-simulation'
+  | null;
 
 export type DevPanelPersistedForms = {
   feedbackNote?: string;
   throwawaySwitch?: boolean;
   selectedStateId?: string | null;
   blackboardRole?: 'teacher' | 'student';
+  simulationClassId?: string | null;
+  simulationStudentCount?: number;
 };
 
 export type DevPanelPersistedState = {
@@ -26,7 +32,11 @@ export const DEV_PANEL_DEFAULT_STATE: DevPanelPersistedState = {
   org: null,
   subSheet: null,
   scroll: {},
-  forms: { throwawaySwitch: true, blackboardRole: 'teacher' },
+  forms: {
+    throwawaySwitch: true,
+    blackboardRole: 'teacher',
+    simulationStudentCount: 20,
+  },
 };
 
 export type DevPanelEnvBadge = 'Demo' | 'Dev';
