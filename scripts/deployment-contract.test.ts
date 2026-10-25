@@ -1890,6 +1890,29 @@ describe('demo environment deployment contract', () => {
     }
   });
 
+  test('demo intern QA teachers workflow is dispatch-only and targets yawp_demo additively', () => {
+    const workflow = readRepoFile(
+      '.github/workflows/demo-ensure-intern-qa-teachers.yml'
+    );
+    const parsed = Bun.YAML.parse(workflow) as {
+      on: Record<string, unknown>;
+      jobs: { 'ensure-teachers': { environment: string } };
+    };
+
+    expect(parsed.on).toEqual({
+      workflow_dispatch: { inputs: { ref: expect.any(Object) } },
+    });
+    expect(parsed.jobs['ensure-teachers'].environment).toBe('demo');
+    expect(workflow).toContain('group: demo-environment');
+    expect(workflow).toContain('prepare-demo-ssh.sh');
+    expect(workflow).toContain('ensure-intern-qa-teachers-on-demo-host.sh');
+    expect(workflow).toContain('teacher name=Thomas Patton');
+    expect(workflow).toContain('org=local-dev-org');
+    expect(workflow).not.toContain('reset_data');
+    expect(workflow).not.toContain('RESET yawp_demo');
+    expect(workflow).not.toContain('seed-local-dev');
+  });
+
   test('demo host diagnostics expose only non-secret container and mount metadata', () => {
     const diagnostics = readRepoFile(
       '.github/workflows/demo-host-diagnostics.yml'
