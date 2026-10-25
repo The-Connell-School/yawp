@@ -107,6 +107,18 @@ function safeCauseForLog(error: Error): { name: string; code?: string } | undefi
   return code ? { name: cause.name, code } : { name: cause.name };
 }
 
+/** Single-line safe error text for DB rows or domain `{ ok: false, error }` payloads. */
+export function safeErrorTextForLog(error: unknown): string {
+  const safe = buildSafeErrorForLog(error);
+  if ('message' in safe && typeof safe.message === 'string' && safe.message) {
+    return safe.message;
+  }
+  if ('code' in safe && typeof safe.code === 'string') {
+    return `${safe.name}:${safe.code}`;
+  }
+  return safe.name;
+}
+
 export function buildSafeErrorForLog(error: unknown) {
   if (!(error instanceof Error)) {
     return {

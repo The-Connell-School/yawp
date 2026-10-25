@@ -4,6 +4,7 @@ import {
   buildSafeRouteParamsForLog,
   buildSafeStackForLog,
   buildServerErrorRequestContext,
+  safeErrorTextForLog,
 } from './server-error-request-context.server';
 
 describe('buildServerErrorRequestContext', () => {
@@ -116,6 +117,15 @@ describe('buildServerErrorRequestContext', () => {
     const serialized = JSON.stringify(buildSafeErrorForLog(error));
     expect(serialized).not.toContain('SECRET-PASS');
     expect(serialized).not.toContain('postgresql://');
+  });
+
+  test('safeErrorTextForLog returns redacted message text', () => {
+    const text = safeErrorTextForLog(
+      new Error('delivery failed for teacher@school.edu token=SECRET'),
+    );
+    expect(text).toContain('delivery failed');
+    expect(text).not.toContain('teacher@school.edu');
+    expect(text).not.toContain('SECRET');
   });
 
   test('buildSafeRouteParamsForLog lists keys without values', () => {
