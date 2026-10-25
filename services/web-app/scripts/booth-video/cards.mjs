@@ -97,7 +97,7 @@ const pine = `
  * Closing card 1: who Yawp! is for, one line at a time. The lines wait for
  * `body.play` (set once recording starts) so the first one is never missed.
  */
-export function closingStackCard({ lines, stepMs = 1900 }) {
+export function closingStackCard({ lines, stepMs = 1500 }) {
   const accents = [TEAL, BLUE, PINK];
   const rows = lines.map(({ who, what }, i) => `
     <div class="row" style="--c:${accents[i % accents.length].accent};--t:${accents[i % accents.length].tint};transition-delay:${i * stepMs}ms">

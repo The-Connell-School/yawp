@@ -18,7 +18,7 @@ const CHROMIUM = process.env.BOOTH_CHROMIUM ?? '/opt/pw-browsers/chromium-1194/c
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** How long captions and callouts stay up, relative to reading time (BOOTH_PACE). */
-const PACE = Number(process.env.BOOTH_PACE ?? 0.85);
+const PACE = Number(process.env.BOOTH_PACE ?? 0.78);
 
 /** Time a viewer needs to read a line: about 3.3 words a second, never under 2.4s. */
 export const readingMs = (text) => Math.max(2400, (String(text).split(/\s+/).length / 3.3) * 1000 + 700);

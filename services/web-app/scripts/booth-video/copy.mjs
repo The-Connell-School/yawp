@@ -69,9 +69,12 @@ export const TUTOR_REPLY_1 =
 export const STUDENT_ASKS_TO_WRITE =
   'Can you just write my thesis statement for me? I will change a few words.';
 
-/** The tutor's own refusal, word for word from its system prompt (universal-tutor-block.ts), then a scaffold. */
+/**
+ * The tutor's refusal: its own "not that kind of guy" line, then it sends Maya
+ * back to what she has already written (her chat reply and her notes).
+ */
 export const TUTOR_REFUSAL =
-  "I'm not that kind of guy! And anyway, the whole point is for YOU to figure out and share what YOU think. I know it isn't always easy, but if you take a little time, you can do great work.\n\nHere's a start. Finish this sentence in your own words: *\"Our society is not burning books, but…\"*";
+  "I'm not that kind of guy. Anyway, the point of this is for YOU to write a thesis statement based on what YOU think about this topic.\n\nThe good news is you're almost there. A minute ago you wrote, *\"The technology just makes it easier to choose noise over thinking.\"* And your notes say nobody is banning books: *\"We're choosing it.\"*\n\nStart there. What do you think that says about where we're headed?";
 
 export const ESSAY_TITLE = 'Turning Up the Volume';
 
@@ -526,7 +529,7 @@ export const VO = {
     feedbackCallout: { title: 'Questions, not answers', body: 'The Yawp! tutor reads her notes and pushes her thinking forward.' },
     backAndForth: 'A short back-and-forth with the tutor.',
     asks: { title: 'The student asks the tutor to write for them.', body: '"Can you just write my thesis statement for me?"' },
-    refusal: { title: 'The tutor\'s response', body: 'It won\'t write for her. It hands her a sentence starter, and she does the thinking.' },
+    refusal: { title: 'The tutor\'s response', body: 'It won\'t write for her. It sends her back to what she has already said.' },
     point: { title: 'The refusal is the point.', body: 'Yawp! protects the cognitive friction students need to learn.' },
     steps: 'As you teach each step, the tutor supports students through it.',
     stepsCallout: { title: 'A tutor for every step', body: 'Thesis, introduction, body paragraphs, conclusion, title: each step has its own coaching.' },
@@ -537,7 +540,7 @@ export const VO = {
     openCallout: { title: 'Grading starts here', body: 'Every essay waiting for a grade, one click away.' },
     run: 'One click runs the Grading Assistant.',
     results: 'Rubric scores and comments, grounded in Maya\'s actual sentences.',
-    grammarCallout: { title: 'Grammar and syntax, marked in the essay', body: 'Every flag quotes Maya\'s sentence and explains the rule. The teacher keeps, hides, or removes each one.' },
+    grammarCallout: { title: 'Grammar and syntax, flagged in the essay', body: 'The Grading Assistant identifies grammar and syntax errors and explains how to fix them.' },
     editCallout: { title: 'The teacher has the final say.', body: 'Teachers can change and edit anything the Grading Assistant does.' },
     release: 'When it\'s right, release it to Maya.',
   },
@@ -574,6 +577,7 @@ export const VO = {
   },
   reporter: {
     anything: 'Run a report on anything: a class, a student, an assignment, a skill.',
+    askCallout: { title: 'Ask in plain English', body: 'Type the report you want, the way you\'d ask a colleague.' },
     conference: 'Run one before a parent-teacher conference or a meeting with your principal.',
     tableCallout: { title: 'Growth, essay by essay', body: 'Every released grade since September, including a cold write with the tutor off.' },
     markingPeriod: 'At the end of a marking period, give students their own growth report.',
@@ -583,7 +587,7 @@ export const VO = {
 };
 
 /** One honest line, shown on the closing card. */
-export const DISCLOSURE = 'Demo class and students. AI replies were scripted for this recording.';
+export const DISCLOSURE = 'Demo does not contain real student data.';
 
 // ---------------------------------------------------------------------------
 // Section 8: Reporter

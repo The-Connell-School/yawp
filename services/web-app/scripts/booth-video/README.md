@@ -1,6 +1,6 @@
 # NCTE booth video
 
-A silent, looping, ~5-minute 1080p MP4 of the real app, for the Yawp! booth.
+A silent, looping, ~6-minute 1080p MP4 of the real app, for the Yawp! booth.
 Plan and storyboard: `docs/plans/2026-10-22-ncte-booth-video.md`.
 
 ```bash
@@ -50,8 +50,9 @@ sentence body.
 | `assemble.mjs` | Cross-fades, H.264 + silent AAC, `+faststart` |
 | `state.ts` | Prints the booth class's current ids for `record.mjs` |
 
-The AI replies are scripted, as in the "See how it works" guides, and the
-closing card says so. Every other screen, save and render is the real app.
+The AI replies are scripted, as in the "See how it works" guides. Every other
+screen, save and render is the real app. The last card notes that the demo
+contains no real student data.
 
 ## Requirements
 
@@ -64,7 +65,7 @@ its slide decks also use **Bricolage Grotesque**, **Instrument Sans**,
 **Gelasio** and **Arimo** (all in `github.com/google/fonts/tree/main/ofl`).
 Docker for the local database.
 
-`BOOTH_PACE` (default 0.85) scales how long captions and callouts stay up.
+`BOOTH_PACE` (default 0.78) scales how long captions and callouts stay up.
 
 ## Playing it at the booth
 

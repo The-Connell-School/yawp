@@ -30,7 +30,7 @@ const s = stage(page);
 const { booth } = s;
 
 /** A title card for a section, held for its read time. */
-async function titleCard(section, holdMs = 3300) {
+async function titleCard(section, holdMs = 2600) {
   await showCard(page, sectionCard({ ...section, total: TOTAL_SECTIONS }));
   await rec.start(`title-${section.n}`);
   await sleep(holdMs);
@@ -51,7 +51,7 @@ const segments = {
   async open() {
     await showCard(page, openingCard(copy.OPENING_CARD));
     await rec.start('opening');
-    await sleep(6500);
+    await sleep(5000);
     await rec.stop();
   },
 
@@ -62,8 +62,8 @@ const segments = {
     await s.chapter(SECTIONS.assign, TOTAL_SECTIONS, SECTION_COLORS[SECTIONS.assign.n - 1].accent);
     await rec.start('assign');
     await s.caption(VO.assign.dashboard, { hold: false });
-    await s.moveTo('a:has-text("The Thesis-Driven Essay")', 1200);
-    await sleep(1800);
+    await s.moveTo('a:has-text("The Thesis-Driven Essay")', 1000);
+    await sleep(1000);
     await s.click('a:has-text("The Thesis-Driven Essay")', { after: 1500 });
     await page.waitForLoadState('networkidle');
 
@@ -77,8 +77,8 @@ const segments = {
     await sleep(400);
     await page.keyboard.press('Enter');
     await page.getByRole('button', { name: 'Use this prompt' }).waitFor({ timeout: 30000 });
-    await sleep(1200);
-    await s.callout(page.getByText(copy.ASSIGNMENT.title).first(), { ...VO.assign.generateCallout, side: 'left', dim: false, holdMs: 5500 });
+    await sleep(700);
+    await s.callout(page.getByText(copy.ASSIGNMENT.title).first(), { ...VO.assign.generateCallout, side: 'left', dim: false, holdMs: 5000 });
     await s.clearCallout();
     await s.click(page.getByRole('button', { name: 'Use this prompt' }), { after: 1200 });
 
@@ -89,7 +89,7 @@ const segments = {
     // The tutor checkbox's row: the checkbox, its label and the cold-write note.
     const tutorRow = page.locator('div', { has: page.locator('#assignment-create-tutor-enabled') }).filter({ hasText: 'Tutor enabled' }).last();
     await s.scrollTo(tutorRow, { ms: 1200 });
-    await s.callout(tutorRow, { ...VO.assign.tutorCallout, side: 'left', holdMs: 5500 });
+    await s.callout(tutorRow, { ...VO.assign.tutorCallout, side: 'left', holdMs: 5000 });
     await s.clearCallout();
     await s.click(page.getByRole('button', { name: 'Create Assignment' }), { after: 900 });
     await s.dockCaption(null);
@@ -118,13 +118,13 @@ segments.student = async () => {
   await s.chapter(SECTIONS.student, TOTAL_SECTIONS, SECTION_COLORS[SECTIONS.student.n - 1].accent);
   await rec.start('student-open');
   await s.caption(VO.student.open, { hold: false });
-  await sleep(900);
+  await sleep(500);
   await s.click(page.locator('a:has-text("English 10 - Period 3")').first(), { after: 0 });
   await page.waitForURL(/\/app\/my-classes\//);
   await page.waitForLoadState('networkidle');
   const card = page.locator('button:has-text("Fahrenheit 451")').first();
-  await s.moveTo(card, 900);
-  await sleep(1200);
+  await s.moveTo(card, 800);
+  await sleep(700);
   await s.click(card, { after: 0 });
   await page.waitForURL(/\/app\/documents\//);
   await page.waitForLoadState('networkidle');
@@ -144,17 +144,17 @@ segments.student = async () => {
     const inList = i > 0 && copy.PREWRITING[i - 1].startsWith('- ');
     if (i > 0) await page.keyboard.press('Enter');
     if (inList && !bullet) await page.keyboard.press('Enter');
-    await page.keyboard.type(inList && bullet ? line.slice(2) : line, { delay: 7 });
+    await page.keyboard.type(inList && bullet ? line.slice(2) : line, { delay: 4 });
   }
   await s.badge('');
-  await sleep(1200);
+  await sleep(600);
 
   await s.caption(VO.student.feedback, { hold: false });
   let before = await tutorMessages().count();
   await s.click(page.getByRole('button', { name: 'Give me feedback!' }), { after: 0 });
   let reply = await nextTutorReply(before);
-  await sleep(2500);
-  await s.callout(reply, { ...VO.student.feedbackCallout, side: 'right', dim: false, holdMs: 6000 });
+  await sleep(1200);
+  await s.callout(reply, { ...VO.student.feedbackCallout, side: 'right', dim: false, holdMs: 5500 });
   await s.clearCallout();
 
   await s.caption(VO.student.backAndForth, { hold: false });
@@ -163,7 +163,7 @@ segments.student = async () => {
   before = await tutorMessages().count();
   await s.click('[data-testid="tutor-chat-send"]', { after: 0 });
   await nextTutorReply(before);
-  await sleep(6500);
+  await sleep(4500);
   await rec.stop();
 
   // The refusal: its own clip, so it can be held and re-cut on its own.
@@ -171,14 +171,15 @@ segments.student = async () => {
   await s.clearCaption();
   await s.type('[data-testid="tutor-chat-input"]', copy.STUDENT_ASKS_TO_WRITE, { delay: 30 });
   await sleep(300);
-  await s.callout('[data-testid="tutor-chat-input"]', { ...VO.student.asks, eyebrow: 'Watch this', side: 'right', step: 0, steps: 3, holdMs: 4500 });
+  await s.callout('[data-testid="tutor-chat-input"]', { ...VO.student.asks, eyebrow: 'Watch this', side: 'right', step: 0, steps: 3, holdMs: 3800 });
   await s.clearCallout();
   before = await tutorMessages().count();
   await s.click('[data-testid="tutor-chat-send"]', { after: 0 });
   reply = await nextTutorReply(before);
-  await sleep(1800);
-  await s.callout(reply, { ...VO.student.refusal, side: 'right', step: 1, steps: 3, holdMs: 8500 });
-  await s.callout(null, { ...VO.student.point, step: 2, steps: 3, holdMs: 6500 });
+  await sleep(1200);
+  // The refusal is the longest read in the video; it keeps its time.
+  await s.callout(reply, { ...VO.student.refusal, side: 'right', step: 1, steps: 3, holdMs: 10500 });
+  await s.callout(null, { ...VO.student.point, step: 2, steps: 3, holdMs: 5200 });
   await s.clearCallout();
   await rec.stop();
 
@@ -200,7 +201,7 @@ segments.student = async () => {
     },
   ];
   for (const [i, write] of steps.entries()) {
-    await s.click(nextStep, { ms: 450, after: 700 });
+    await s.click(nextStep, { ms: 400, after: 400 });
     if (i === 0) {
       await s.callout(page.locator('[data-tutor-message="true"]').last(), { ...VO.student.stepsCallout, side: 'right', dim: false, holdMs: 3800 });
       await s.clearCallout();
@@ -208,16 +209,16 @@ segments.student = async () => {
     await s.badge('Time-lapse');
     await write();
     await s.badge('');
-    await sleep(1300);
+    await sleep(600);
   }
   await s.caret(editor, 'end');
-  await page.keyboard.type(copy.ESSAY_LAST_SENTENCE, { delay: 32 });
-  await sleep(800);
+  await page.keyboard.type(copy.ESSAY_LAST_SENTENCE, { delay: 22 });
+  await sleep(500);
   await s.caption(VO.student.submit, { hold: false });
   await s.click('[data-testid="document-submit-button"]', { after: 900 });
   await s.click('[data-testid="document-finalize-submit"]', { after: 0 });
   await page.getByText('Submitted!').first().waitFor({ timeout: 15000 });
-  await sleep(2500);
+  await sleep(1500);
   await rec.stop();
   await s.clearCaption();
 };
@@ -233,42 +234,38 @@ segments.grading = async () => {
   await s.scrollTo(toGrade, { ms: 900 });
   await rec.start('grading');
   await s.caption(VO.grading.open, { hold: false });
-  await s.callout(toGrade, { ...VO.grading.openCallout, side: 'top', holdMs: 3800 });
+  await s.callout(toGrade, { ...VO.grading.openCallout, side: 'top', holdMs: 3400 });
   await s.clearCallout();
   await s.click(toGrade, { after: 0 });
   await page.waitForURL(/\/app\/documents/);
   await page.waitForLoadState('networkidle');
-  await sleep(1200);
+  await sleep(500);
   await s.click(page.getByRole('row').filter({ hasText: copy.ESSAY_TITLE }).getByText(copy.ESSAY_TITLE).first(), { after: 0 });
   await page.waitForURL(/\/app\/submissions\//);
   await page.waitForLoadState('networkidle');
   await s.dockCaption('[data-testid="submission-essay-scroll"]');
-  await sleep(1500);
+  await sleep(600);
 
   await s.caption(VO.grading.run, { hold: false });
   await s.click('[data-testid="grading-assistant-generate"]', { after: 400 });
   const replace = page.getByRole('alertdialog').getByRole('button', { name: 'Replace' });
   if (await replace.isVisible()) await s.click(replace, { after: 0 });
   await page.getByText('Reset Grading Assistant suggestions').first().waitFor({ timeout: 45000 });
-  await sleep(1200);
+  await sleep(500);
   await s.caption(VO.grading.results, { hold: false });
-  await sleep(1500);
-
-  // Grammar and syntax: the purple marks in the essay, then the list.
-  const mark = page.locator('[data-testid="submission-essay-scroll"] .grammar-issue-mark').first();
-  await mark.waitFor({ timeout: 15000 });
-  await s.scrollTo(mark, { ms: 700 });
-  await s.callout(mark, { ...VO.grading.grammarCallout, side: 'bottom', dim: false, holdMs: 5200 });
-  await s.clearCallout();
-  await s.moveTo(mark, 900);
-  await sleep(2600);
-  const grammar = page.getByRole('button', { name: /Grammar/ }).first();
-  await s.click(grammar, { after: 900 });
-  await s.scrollTo(page.getByText(/Grammar issues( shown)?:/).first(), { block: 'start', ms: 800 });
-  await sleep(3200);
   const evidence = page.getByRole('button', { name: /Evidence\/Support/ }).first();
-  await s.click(evidence, { after: 1200 });
-  await sleep(3500);
+  await s.click(evidence, { after: 2200 });
+
+  // Grammar and syntax: hover one purple mark so the app's own note opens.
+  const mark = page.locator('[data-testid="submission-essay-scroll"] .grammar-issue-mark').filter({ hasText: 'book clubs' }).first();
+  await mark.waitFor({ timeout: 15000 });
+  await s.moveTo(mark, 800);
+  await mark.hover();
+  const note = page.locator('div.fixed.border-purple-200').first();
+  await note.waitFor({ timeout: 5000 });
+  await sleep(300);
+  await s.callout(note, { ...VO.grading.grammarCallout, side: 'right', dim: false, holdMs: 5600 });
+  await s.clearCallout();
 
   // The teacher has the final say: change a score, add a line of their own.
   const scoreSelect = page.getByRole('combobox').filter({ hasText: 'Proficient' }).first();
@@ -278,15 +275,15 @@ segments.grading = async () => {
   await overall.scrollIntoViewIfNeeded();
   await s.click(overall, { after: 200 });
   await page.keyboard.press('Control+End');
-  await page.keyboard.type(copy.TEACHER_EDIT.addToOverall, { delay: 26 });
-  await sleep(500);
-  await s.callout(overall, { ...VO.grading.editCallout, side: 'right', holdMs: 6500 });
+  await page.keyboard.type(copy.TEACHER_EDIT.addToOverall, { delay: 18 });
+  await sleep(300);
+  await s.callout(overall, { ...VO.grading.editCallout, side: 'right', holdMs: 5500 });
   await s.clearCallout();
 
   await s.caption(VO.grading.release, { hold: false });
-  await s.click(page.getByRole('button', { name: 'Save', exact: true }), { after: 1500 });
-  await s.click(page.getByRole('button', { name: 'Release Grade' }).first(), { after: 800 });
-  await s.click(page.getByRole('alertdialog').getByRole('button', { name: 'Release' }), { after: 2500 });
+  await s.click(page.getByRole('button', { name: 'Save', exact: true }), { after: 1000 });
+  await s.click(page.getByRole('button', { name: 'Release Grade' }).first(), { after: 600 });
+  await s.click(page.getByRole('alertdialog').getByRole('button', { name: 'Release' }), { after: 1800 });
   await rec.stop();
   await s.clearCaption();
 };
@@ -303,7 +300,7 @@ segments.revision = async () => {
   await s.click('[data-testid="submission-revise-essay"]', { after: 0 });
   await page.waitForURL(/\/app\/revise\//);
   await page.waitForLoadState('networkidle');
-  await sleep(1500);
+  await sleep(800);
   await s.caption(VO.revision.revise, { hold: false });
 
   // Select the sentence the feedback pointed to, then retype it.
@@ -326,13 +323,13 @@ segments.revision = async () => {
     }
     throw new Error('sentence not found');
   }, copy.WEAK_ANALYSIS);
-  await sleep(1400);
-  await page.keyboard.type(copy.REVISED_ANALYSIS, { delay: 16 });
-  await sleep(600);
-  await s.callout(draft.getByText('protection', { exact: false }), { ...VO.revision.reviseCallout, dim: false, holdMs: 5000 });
+  await sleep(800);
+  await page.keyboard.type(copy.REVISED_ANALYSIS, { delay: 10 });
+  await sleep(400);
+  await s.callout(draft.getByText('protection', { exact: false }), { ...VO.revision.reviseCallout, dim: false, holdMs: 4400 });
   await s.clearCallout();
-  await s.click('[data-testid="revision-submit"]', { after: 900 });
-  await s.click('[data-testid="revision-submit-confirm"]', { after: 1200 });
+  await s.click('[data-testid="revision-submit"]', { after: 700 });
+  await s.click('[data-testid="revision-submit-confirm"]', { after: 900 });
   await s.caption(VO.revision.submit);
   await rec.stop();
   await s.clearCaption();
@@ -347,12 +344,12 @@ segments.summary = async () => {
   await s.chapter(SECTIONS.summary, TOTAL_SECTIONS, SECTION_COLORS[SECTIONS.summary.n - 1].accent);
   await rec.start('summary');
   await s.caption(VO.summary.open, { hold: false });
-  await sleep(1800);
+  await sleep(1200);
   await s.caption(VO.summary.run, { hold: false });
   await s.click('[data-testid="class-insight-generate-button"]', { after: 0 });
   await page.getByText('How the class did').first().waitFor({ timeout: 45000 });
-  await sleep(1200);
-  await s.callout(null, { ...VO.summary.neverBefore, holdMs: 7000 });
+  await sleep(700);
+  await s.callout(null, { ...VO.summary.neverBefore, holdMs: 6200 });
   await s.clearCallout();
 
   await s.caption(VO.summary.patterns, { hold: false });
@@ -362,20 +359,20 @@ segments.summary = async () => {
     title: 'The pattern behind the grades',
     body: 'Students quote the right moments, then stop explaining. Now you know what to teach.',
     side: 'top',
-    holdMs: 6500,
+    holdMs: 5600,
   });
   await s.clearCallout();
 
   const groups = page.getByText('Differentiation starting points').first();
   if (await groups.count()) {
     await s.caption(VO.summary.groups, { hold: false });
-    await s.scrollTo(groups, { block: 'start', ms: 1400 });
-    await sleep(3500);
+    await s.scrollTo(groups, { block: 'start', ms: 1200 });
+    await sleep(2600);
   }
   await s.clearCaption();
   const plan = page.getByRole('link', { name: 'Plan this lesson' }).first();
   await s.scrollTo(page.getByText('Suggested next steps').first(), { block: 'start', ms: 1400 });
-  await s.callout(plan, { ...VO.summary.next, side: 'top', holdMs: 6500 });
+  await s.callout(plan, { ...VO.summary.next, side: 'top', holdMs: 5400 });
   await s.clearCallout();
   await s.moveTo(plan);
   await sleep(600);
@@ -397,45 +394,45 @@ segments.planner = async () => {
     body: 'The planner starts from what this class needs, not a blank page.',
     side: 'bottom',
     dim: false,
-    holdMs: 5000,
+    holdMs: 4200,
   });
   await s.clearCallout();
   // Other ways in: the starter tiles under the composer.
   const tiles = page.getByText(/start from one of these/i).first();
   await s.scrollTo(tiles, { block: 'start', ms: 1300 });
-  await s.callout(tiles.locator('xpath=..'), { ...VO.planner.otherStarts, side: 'top', dim: false, holdMs: 5000 });
+  await s.callout(tiles.locator('xpath=..'), { ...VO.planner.otherStarts, side: 'top', dim: false, holdMs: 4400 });
   await s.clearCallout();
   await s.scrollTo(composer, { block: 'center', ms: 1100 });
   await s.click(composer, { after: 200 });
   await page.keyboard.press('Control+End');
-  await page.keyboard.type(copy.PLANNER_ADDITION, { delay: 24 });
-  await sleep(500);
+  await page.keyboard.type(copy.PLANNER_ADDITION, { delay: 16 });
+  await sleep(300);
   await s.caption(VO.planner.chat, { hold: false });
   await s.click(page.getByLabel('Send message'), { after: 0 });
   const stepsList = page.getByText('Steps in this plan').first();
   await stepsList.waitFor({ timeout: 90000 });
-  await sleep(1500);
-  await s.scrollTo(stepsList, { block: 'center', ms: 1400 });
-  await s.callout(stepsList.locator('xpath=..'), { ...VO.planner.steps, side: 'right', dim: false, holdMs: 4500 });
+  await sleep(800);
+  await s.scrollTo(stepsList, { block: 'center', ms: 1200 });
+  await s.callout(stepsList.locator('xpath=..'), { ...VO.planner.steps, side: 'right', dim: false, holdMs: 4000 });
   await s.clearCallout();
 
   await s.caption(VO.planner.stack, { hold: false });
   const addEverything = page.getByRole('button', { name: /Add everything to the stack/ }).first();
   await s.scrollTo(addEverything, { ms: 900 });
-  await s.click(addEverything, { after: 1200 });
+  await s.click(addEverything, { after: 800 });
   await s.click(page.locator('[data-testid="lesson-packet-bar"]').getByRole('link', { name: /Open the stack/ }), { after: 0 });
   await page.waitForURL(/\/packet/);
   await page.locator('[data-testid="stack-v3"]').waitFor({ timeout: 30000 });
   await page.waitForLoadState('networkidle');
   await page.evaluate(() => document.fonts.ready);
   const stackUrl = page.url();
-  await sleep(1200);
+  await sleep(600);
   await rec.stop();
 
   // The stack: the run of show.
   await rec.start('stack');
   await s.clearCaption();
-  await s.callout('[data-testid="time-bar-card"]', { ...VO.planner.runOfShow, side: 'bottom', holdMs: 5500 });
+  await s.callout('[data-testid="time-bar-card"]', { ...VO.planner.runOfShow, side: 'bottom', holdMs: 4800 });
   await s.clearCallout();
 
   // The teacher stays in control: drag a step to a new place, cut one, undo.
@@ -457,31 +454,31 @@ segments.planner = async () => {
     await sleep(45);
   }
   await page.mouse.up();
-  await sleep(1300);
-  await s.callout(cards.nth(3), { ...VO.planner.control, side: 'top', dim: false, holdMs: 4200 });
+  await sleep(800);
+  await s.callout(cards.nth(3), { ...VO.planner.control, side: 'top', dim: false, holdMs: 4000 });
   await s.clearCallout();
   // A removal commits after six seconds unless it's undone, so undo promptly.
-  await s.click(page.getByRole('button', { name: /^Remove / }).nth(3), { after: 1400 });
-  await s.click(page.locator('[data-testid="remove-undo"]').getByRole('button', { name: 'Undo' }), { after: 1200 });
+  await s.click(page.getByRole('button', { name: /^Remove / }).nth(3), { after: 1000 });
+  await s.click(page.locator('[data-testid="remove-undo"]').getByRole('button', { name: 'Undo' }), { after: 800 });
 
   // Writing steps become Yawp! assignments: say so first, then make one.
   const ticket = cards.filter({ hasText: 'how a quote proves a claim' }).first();
   await s.scrollTo(ticket, { ms: 900 });
-  await s.callout(ticket, { ...VO.planner.create, side: 'top', holdMs: 4800 });
+  await s.callout(ticket, { ...VO.planner.create, side: 'top', holdMs: 4200 });
   await s.clearCallout();
-  await s.click(ticket.locator('[data-testid="run-card-title"]'), { after: 900 });
+  await s.click(ticket.locator('[data-testid="run-card-title"]'), { after: 600 });
   await s.click(ticket.locator('[data-testid="stack-create-assignment"]').first(), { after: 0 });
   await page.getByRole('button', { name: 'Create Assignment' }).waitFor({ timeout: 30000 });
-  await sleep(900);
-  await s.click(page.locator('label[for^="assignment-create-class-"]', { hasText: copy.CLASS.title }), { after: 600 });
-  await s.click(page.getByRole('button', { name: 'Create Assignment' }), { after: 1500 });
+  await sleep(600);
+  await s.click(page.locator('label[for^="assignment-create-class-"]', { hasText: copy.CLASS.title }), { after: 400 });
+  await s.click(page.getByRole('button', { name: 'Create Assignment' }), { after: 1100 });
   await s.click('[data-testid="back-to-lesson"]', { after: 0 });
   await page.locator('[data-testid="stack-v3"]').waitFor({ timeout: 30000 });
   await page.waitForLoadState('networkidle');
   const created = page.locator('[data-testid="in-yawp"]').first();
   await s.scrollTo(created, { ms: 900 });
   await s.moveTo(created, 600);
-  await sleep(2200);
+  await sleep(1300);
   await rec.stop();
 
   // The slide deck, built from the stack.
@@ -491,21 +488,20 @@ segments.planner = async () => {
   await s.click(buildDeck, { after: 0 });
   const deckCard = page.locator('[data-testid="slide-deck-card"]').last();
   await deckCard.waitFor({ timeout: 90000 });
-  await sleep(1200);
+  await sleep(700);
   await s.scrollTo(deckCard, { ms: 900 });
-  await s.callout(deckCard, { ...VO.planner.deck, side: 'right', dim: false, holdMs: 4500 });
+  await s.callout(deckCard, { ...VO.planner.deck, side: 'right', dim: false, holdMs: 4000 });
   await s.clearCallout();
   await s.click(deckCard.getByRole('link', { name: /Present/ }).first(), { after: 0 });
   await page.waitForURL(/\/present\//);
   await page.waitForLoadState('networkidle');
   await page.evaluate(() => document.fonts.ready);
   await booth('hideCursor', true);
-  await sleep(2200);
-  // Title plate, class starter, agenda, the Look slide, the divider: the
-  // painting hangs on three of them.
-  for (let i = 0; i < 4; i += 1) {
+  await sleep(2000);
+  // Title plate, then on to the Look slide, where the painting hangs.
+  for (let i = 0; i < 3; i += 1) {
     await page.keyboard.press('ArrowRight');
-    await sleep(i === 2 || i === 3 ? 2600 : 1600);
+    await sleep(i < 2 ? 450 : 2600);
   }
   await rec.stop();
 
@@ -514,13 +510,13 @@ segments.planner = async () => {
   const send = page.locator('[data-testid="send-lesson"]');
   await s.scrollTo(send, { block: 'start', ms: 900 });
   await rec.start('send');
-  await s.click(send.getByRole('tab', { name: 'Student' }), { after: 900 });
-  await s.click(send.getByRole('tab', { name: 'Admin' }), { after: 700 });
+  await s.click(send.getByRole('tab', { name: 'Student' }), { after: 600 });
+  await s.click(send.getByRole('tab', { name: 'Admin' }), { after: 500 });
   await s.type(send.locator('[data-testid="send-recipient"]'), 'principal@northridge.example.org', { delay: 18 });
-  await s.callout(send, { ...VO.planner.send, side: 'left', dim: false, holdMs: 5000 });
+  await s.callout(send, { ...VO.planner.send, side: 'left', dim: false, holdMs: 4400 });
   await s.clearCallout();
   // End on "Writing it for them…": locally the email can only be previewed.
-  await s.click(send.locator('[data-testid="send-button"]'), { after: 1500 });
+  await s.click(send.locator('[data-testid="send-button"]'), { after: 1100 });
   await rec.stop();
   await send.locator('[data-testid="send-done"]').waitFor({ timeout: 60000 });
   await s.clearCaption();
@@ -534,24 +530,24 @@ segments.practice = async () => {
   await s.chapter(SECTIONS.practice, TOTAL_SECTIONS, SECTION_COLORS[SECTIONS.practice.n - 1].accent);
   await rec.start('practice');
   await s.caption(VO.practice.library, { hold: false });
-  await sleep(1500);
+  await sleep(900);
   await s.click(page.getByRole('button', { name: /Grammar & Mechanics/ }).first(), { after: 1200 });
   await s.click('[data-testid="writing-lesson-card-fixing-comma-splices"]', { after: 0 });
   await page.waitForURL(/writing-lessons\/fixing-comma-splices/);
   await page.waitForLoadState('networkidle');
   await s.caption(VO.practice.lesson, { hold: false });
-  await sleep(3500);
+  await sleep(2700);
   await s.caption(VO.practice.exercise, { hold: false });
   await s.click(page.getByRole('button', { name: /Try the practice/ }).or(page.getByRole('link', { name: /Try the practice/ })).first(), { after: 0 });
   await page.waitForURL(/writing-lessons\/practice/);
   await page.waitForLoadState('networkidle');
-  await sleep(1500);
+  await sleep(800);
   await s.click(page.locator('label, [role="radio"], button').filter({ hasText: copy.PRACTICE_QUESTIONS.questions[0].choices[1] }).first(), { after: 600 });
   await s.click(page.getByRole('button', { name: 'Check my answer' }), { after: 0 });
   const correct = page.getByText('Correct!').first();
   await correct.waitFor({ timeout: 15000 });
-  await s.scrollTo(correct, { ms: 900 });
-  await sleep(3000);
+  await s.scrollTo(correct, { ms: 800 });
+  await sleep(2200);
   await rec.stop();
   await s.clearCaption();
 };
@@ -566,45 +562,56 @@ segments.reporter = async () => {
   await s.click(page.locator('a[href="/app/reporter"]').first(), { after: 0 });
   await page.waitForURL(/\/app\/reporter/);
   await page.waitForLoadState('networkidle');
+  // Captions sit above the prompt box here, never over it.
+  const prompt = page.getByPlaceholder('Ask Yawp! Reporter…');
+  const composer = page.locator('form', { has: prompt }).first();
+  const top = (await composer.boundingBox()).y;
+  const viewHeight = await page.evaluate(() => innerHeight);
+  await s.dockCaption(composer, { bottom: Math.round(viewHeight - top + 18) });
   await s.caption(VO.reporter.anything, { hold: false });
-  await sleep(4200);
-  await s.type(page.getByPlaceholder('Ask Yawp! Reporter…'), copy.REPORTER_REQUEST, { delay: 30 });
-  await sleep(400);
+  await sleep(3400);
+  await s.clearCaption();
+  // The prompt box in the spotlight while she types; the callout sits beside it.
+  await s.callout(prompt, { ...VO.reporter.askCallout, side: 'top', dim: false, holdMs: 500 });
+  await s.type(prompt, copy.REPORTER_REQUEST, { delay: 30 });
+  await sleep(1300);
+  await s.clearCallout();
   await page.keyboard.press('Enter');
   await s.caption(VO.reporter.conference, { hold: false });
   const reply = page.locator('[data-role="assistant"]').last();
   await reply.locator('table').first().waitFor({ timeout: 45000 });
-  await sleep(1500);
+  await sleep(1000);
   const table = reply.locator('table').first();
-  await s.scrollTo(table, { block: 'center', ms: 1000 });
-  await s.callout(table, { ...VO.reporter.tableCallout, side: 'right', dim: false, holdMs: 5200 });
+  await s.scrollTo(table, { block: 'center', ms: 900 });
+  await s.callout(table, { ...VO.reporter.tableCallout, side: 'right', dim: false, holdMs: 4600 });
   await s.clearCallout();
   await s.caption(VO.reporter.markingPeriod, { hold: false });
-  await s.scrollTo(reply.getByRole('heading', { name: 'The Writing' }), { block: 'start', ms: 1400 });
-  await sleep(4200);
+  await s.scrollTo(reply.getByRole('heading', { name: 'The Writing' }), { block: 'start', ms: 1200 });
+  await sleep(3000);
   const print = reply.locator('xpath=..').getByRole('button', { name: /Print/ }).first();
-  await s.scrollTo(print, { block: 'center', ms: 1200 });
-  await s.callout(print, { ...VO.reporter.shareCallout, side: 'left', dim: false, holdMs: 4800 });
+  await s.scrollTo(print, { block: 'center', ms: 1000 });
+  await s.callout(print, { ...VO.reporter.shareCallout, side: 'left', dim: false, holdMs: 4000 });
   await s.clearCallout();
   await s.caption(VO.reporter.yearEnd, { hold: false });
-  await sleep(4500);
+  await sleep(3600);
   await rec.stop();
   await s.clearCaption();
+  await s.dockCaption(null);
 };
 
 segments.close = async () => {
   await showCard(page, closingStackCard({ lines: copy.CLOSING_STACK }));
   await rec.start('closing-1');
   await page.evaluate(() => document.body.classList.add('play'));
-  await sleep(1900 * (copy.CLOSING_STACK.length - 1) + 4800);
+  await sleep(1500 * (copy.CLOSING_STACK.length - 1) + 4000);
   await rec.stop();
   await showCard(page, closingPunchlineCard({ line: copy.CLOSING_PUNCHLINE }));
   await rec.start('closing-2');
-  await sleep(5600);
+  await sleep(4700);
   await rec.stop();
   await showCard(page, closingQrCard({ codes: copy.CLOSING_QR, url: copy.CLOSING_CARD.url, disclosure: copy.DISCLOSURE }));
   await rec.start('closing-3');
-  await sleep(9000);
+  await sleep(7800);
   await rec.stop();
 };
 
