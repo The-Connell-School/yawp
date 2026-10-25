@@ -53,8 +53,10 @@ export const KIND_ICONS: Record<UnitKind, LucideIcon> = {
 const UNIT_DRAG = 'application/x-yawp-units';
 const LESSON_DRAG = 'application/x-yawp-lesson';
 
+// Near-white on the cream page, so a tile stands out (Brian's round 4, item 8;
+// the library mockup's values). `bg-popover` is hsl(48 100% 99%), with a dark value.
 export const TILE =
-  'relative rounded-2xl border border-[#E4DCCF] bg-card shadow-[0_1px_2px_rgba(28,26,23,.06),0_4px_12px_-4px_rgba(28,26,23,.10)] transition duration-[160ms] ease-out hover:-translate-y-0.5 hover:border-[#D5CABA] hover:shadow-[0_2px_4px_rgba(28,26,23,.06),0_14px_28px_-8px_rgba(28,26,23,.20)] focus-within:-translate-y-0.5 focus-within:shadow-[0_2px_4px_rgba(28,26,23,.06),0_14px_28px_-8px_rgba(28,26,23,.20)] motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:focus-within:translate-y-0';
+  'relative rounded-[10px] border border-border bg-popover shadow-[0_1px_2px_rgba(28,26,23,.06),0_4px_12px_-4px_rgba(28,26,23,.10)] transition-[transform,box-shadow,border-color] duration-[160ms] ease-out hover:-translate-y-0.5 hover:border-[hsl(51_8%_68%)] hover:shadow-[0_2px_4px_rgba(28,26,23,.06),0_14px_28px_-8px_rgba(28,26,23,.20)] focus-within:-translate-y-0.5 focus-within:border-[hsl(51_8%_68%)] focus-within:shadow-[0_2px_4px_rgba(28,26,23,.06),0_14px_28px_-8px_rgba(28,26,23,.20)] motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:focus-within:translate-y-0';
 const GRID = 'grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(250px,1fr))]';
 
 export function unitHref(unitId: string) {

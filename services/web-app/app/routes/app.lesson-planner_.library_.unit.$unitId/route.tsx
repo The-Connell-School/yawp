@@ -79,7 +79,7 @@ export default function UnitRoute() {
 
         <div className="mt-6 grid gap-6 min-[900px]:[grid-template-columns:320px_minmax(0,1fr)]">
           <aside className="space-y-5">
-            <div className="rounded-2xl border bg-card p-4">
+            <div className="rounded-2xl border bg-popover p-4">
               <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">Unit at a glance</p>
               <p data-testid="unit-glance-lessons" className="mt-2 font-semibold">
                 {lessons.length} lesson{lessons.length === 1 ? '' : 's'}
@@ -91,7 +91,7 @@ export default function UnitRoute() {
               <DayBars lessons={lessons} selected={selected} onSelect={setSelected} />
             </div>
 
-            <div className="rounded-2xl border bg-card p-4">
+            <div className="rounded-2xl border bg-popover p-4">
               <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">Contents</p>
               <ol data-testid="unit-contents" className="mt-2">
                 <InsertLine onClick={() => setAdding({ mode: 'plan', index: 0 })} label="Add a lesson at the start" />
@@ -215,7 +215,7 @@ function DayTabs({ lessons, selected, onSelect }: { lessons: Lesson[]; selected:
             className={cn(
               'w-[68px] shrink-0 rounded-lg border px-1 py-1.5 text-center',
               !lesson.set && 'border-dashed',
-              index === selected ? 'border-foreground bg-foreground text-background' : 'bg-card hover:bg-foreground/5'
+              index === selected ? 'border-foreground bg-foreground text-background' : 'bg-popover hover:bg-foreground/5'
             )}
           >
             <span className="block text-sm font-semibold">Day {lesson.day}</span>
@@ -245,7 +245,7 @@ function Preview({
   const total = r?.total ?? 0;
   const span = Math.max(total, r?.period ?? 0, 1);
   return (
-    <article role="tabpanel" data-testid="lesson-preview" className="rounded-2xl border bg-card p-5">
+    <article role="tabpanel" data-testid="lesson-preview" className="rounded-2xl border bg-popover p-5">
       <p data-testid="preview-day" className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
         {/* A date only when the teacher set one (Brian's round 3, 1.10). */}
         Day {lesson.day} of {count}
@@ -373,7 +373,7 @@ function AddPanel({
   const [lessonId, setLessonId] = useState(view.loose[0]?.id ?? '');
   const options = insertOptions(view.lessons);
   return (
-    <div data-testid="add-panel" className="rounded-2xl border-2 border-[#D9714F] bg-card p-4">
+    <div data-testid="add-panel" className="rounded-2xl border-2 border-[#D9714F] bg-popover p-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="font-semibold">{adding.mode === 'plan' ? 'Plan another lesson' : 'Add an existing lesson'}</p>
         <span className="flex-1" />
@@ -448,7 +448,7 @@ function AddPanel({
 function UnitPlan({ plan, planningHref }: { plan: NonNullable<UnitView['unit']['plan']>; planningHref: string | null }) {
   const unbuilt = plan.days.filter((day) => day.buildHref).length;
   return (
-    <details data-testid="unit-plan" open={unbuilt > 0} className="rounded-2xl border bg-card p-4">
+    <details data-testid="unit-plan" open={unbuilt > 0} className="rounded-2xl border bg-popover p-4">
       <summary className="cursor-pointer select-none">
         <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">The unit plan</span>
         <span className="ml-2 text-xs text-muted-foreground">
