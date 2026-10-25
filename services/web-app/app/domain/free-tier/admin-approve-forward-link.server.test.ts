@@ -6,7 +6,6 @@ const savedPrimary = process.env.PRIMARY_APP_URL;
 beforeEach(() => {
   process.env.FREE_TIER_LINK_HMAC_SECRET =
     'test-secret-for-free-tier-links-32chars';
-  process.env.PRIMARY_APP_URL = 'https://yawp.test';
 });
 
 afterEach(() => {
@@ -17,6 +16,10 @@ afterEach(() => {
 });
 
 describe('buildAdminForwardPageSearch', () => {
+  beforeEach(() => {
+    process.env.PRIMARY_APP_URL = 'https://yawp.test';
+  });
+
   test('puts NRP token in t and approve token in approveT', async () => {
     const { buildAdminForwardPageSearch } = await import(
       './admin-approve-forward-link'

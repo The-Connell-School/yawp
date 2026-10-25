@@ -118,6 +118,31 @@ mock.module('~/domain/free-tier/approval-flow.server', () => ({
 const { loader } = await import('./route');
 
 describe('free.admin.approve loader', () => {
+  test('still returns approve form when forward token resolution throws', async () => {
+    resolveAdminForwardTokenForApproveLink.mockRejectedValueOnce(
+      new Error('forward resolver failed')
+    );
+    findUnique.mockResolvedValueOnce({
+      name: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+      email: 'j@example.test',
+    });
+    const data = await loader({
+      request: new Request('https://yawp.test/free/admin/approve?t=valid'),
+      params: {},
+      context: {},
+    } as LoaderFunctionArgs);
+    expect(data).toMatchObject({
+      ok: true,
+      teacherName: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+      token: 'valid',
+    });
+    expect(data.ok && 'forwardToken' in data ? data.forwardToken : 'missing').toBe(
+      undefined
+    );
+  });
+
   test('valid token on open request shows teacher and school', async () => {
     findUnique.mockResolvedValueOnce({
       name: 'Jordan Rivera',

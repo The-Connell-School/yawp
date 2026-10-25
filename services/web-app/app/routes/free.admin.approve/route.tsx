@@ -115,12 +115,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
         email: true,
       },
     });
-    const forwardToken =
-      (await resolveAdminForwardTokenForApproveLink({
-        approveToken: token,
-        applicationId: peek.applicationId,
-        approveLinkId: peek.linkId,
-      })) ?? undefined;
+    let forwardToken: string | undefined;
+    try {
+      forwardToken =
+        (await resolveAdminForwardTokenForApproveLink({
+          approveToken: token,
+          applicationId: peek.applicationId,
+          approveLinkId: peek.linkId,
+        })) ?? undefined;
+    } catch {
+      forwardToken = undefined;
+    }
     return {
       ok: true as const,
       token,

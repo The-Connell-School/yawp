@@ -1,6 +1,8 @@
 import { prisma } from '~/utils/db.server';
+import { FreeTierConfigError } from './free-tier-config.server';
 import {
   mintSignedLink,
+  mintSignedLinkForDevPanel,
   peekSignedLink,
   readSignedLinkPayloadFromAdminToken,
 } from './signed-link.server';
@@ -60,12 +62,23 @@ async function mintForwardTokenForApproveLink(
   if (!approveRow || approveRow.usedAt) return null;
   const ttlMs = approveRow.expiresAt.getTime() - Date.now();
   if (ttlMs <= 0) return null;
-  const { token } = await mintSignedLink({
+  const mintArgs = {
     applicationId,
-    purpose: 'ADMIN_NOT_RIGHT_PERSON',
+    purpose: 'ADMIN_NOT_RIGHT_PERSON' as const,
     ttlMs,
-  });
-  return token;
+  };
+  try {
+    return (await mintSignedLink(mintArgs)).token;
+  } catch (error) {
+    if (error instanceof FreeTierConfigError) {
+      try {
+        return (await mintSignedLinkForDevPanel(mintArgs)).token;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
 }
 
 /** Same NRP-purpose token the admin email uses for "Forward this request". */
@@ -74,10 +87,14 @@ export async function resolveAdminForwardTokenForApproveLink(args: {
   applicationId: string;
   approveLinkId: string;
 }): Promise<string | null> {
-  const fromLog = await forwardTokenFromEmailLogs(
-    args.applicationId,
-    args.approveLinkId
-  );
-  if (fromLog) return fromLog;
-  return mintForwardTokenForApproveLink(args.applicationId, args.approveLinkId);
+  try {
+    const fromLog = await forwardTokenFromEmailLogs(
+      args.applicationId,
+      args.approveLinkId
+    );
+    if (fromLog) return fromLog;
+    return mintForwardTokenForApproveLink(args.applicationId, args.approveLinkId);
+  } catch {
+    return null;
+  }
 }
