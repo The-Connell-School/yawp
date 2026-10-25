@@ -38,6 +38,7 @@ import {
 } from '../free-tier/AdminApprovalStates';
 import { AdminApproveForm } from '../free-tier/AdminApprovalForms';
 import { AdminApprovalQa } from '../free-tier/AdminApprovalQa';
+import { resolveAdminForwardTokenForApproveLink } from '~/domain/free-tier/admin-approve-forward-link.server';
 import { AdminForwardLink } from '../free-tier/AdminApprovalStates';
 
 type LoaderData =
@@ -52,6 +53,7 @@ type LoaderData =
   | {
       ok: true;
       token: string;
+      forwardToken?: string;
       schoolName: string;
       teacherName: string;
       teacherEmail?: string;
@@ -113,9 +115,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
         email: true,
       },
     });
+    const forwardToken =
+      (await resolveAdminForwardTokenForApproveLink({
+        approveToken: token,
+        applicationId: peek.applicationId,
+        approveLinkId: peek.linkId,
+      })) ?? undefined;
     return {
       ok: true as const,
       token,
+      forwardToken,
       schoolName: app?.schoolName ?? 'your school',
       teacherName: app?.name ?? 'A teacher',
       teacherEmail: app?.email,
@@ -422,8 +431,11 @@ export default function FreeAdminApproveRoute() {
     <FreeTierAuthCard
       title={adminApprovePageTitle(data.teacherName, data.schoolName)}
       belowCard={
-        data.showDenyAndQa ? (
-          <AdminForwardLink token={data.token} />
+        data.showDenyAndQa && data.forwardToken ? (
+          <AdminForwardLink
+            forwardToken={data.forwardToken}
+            approveToken={data.token}
+          />
         ) : undefined
       }
       stackAfterCard={
@@ -439,6 +451,7 @@ export default function FreeAdminApproveRoute() {
       />
       <AdminApproveForm
         token={data.token}
+        forwardToken={data.forwardToken}
         schoolName={data.schoolName}
         teacherName={data.teacherName}
         showDenyAndQa={data.showDenyAndQa}
