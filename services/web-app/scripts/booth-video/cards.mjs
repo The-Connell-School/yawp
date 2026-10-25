@@ -89,7 +89,7 @@ export function openingCard({ kicker, title, sub }) {
 const pine = `
     body { background: #1F3532; color: #FFFEFA; font-family: ${BODY}; }
     body::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 16px; background: linear-gradient(90deg, ${STRIPE}); }
-    .logo { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); width: 230px; }
+    .logo { display: block; width: 180px; margin: 0 auto; }
     small { position: absolute; bottom: 34px; left: 0; right: 0; text-align: center; font-size: 18px; color: #93A39E; }
 `;
 
@@ -104,15 +104,15 @@ export function closingStackCard({ lines, stepMs = 1900 }) {
       <span class="who">${escape(who)}</span><span class="what">${escape(what)}</span>
     </div>`).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><style>${base}${pine}
-    .wrap { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 34px; padding: 120px 190px 60px; }
-    .row { display: flex; flex-direction: column; gap: 10px; padding: 30px 40px 32px; border-radius: 28px; background: rgba(255,255,255,.06);
+    .wrap { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 20px; padding: 30px 150px 46px; }
+    .wrap .logo { margin-bottom: 14px; }
+    .row { display: flex; flex-direction: column; gap: 8px; padding: 22px 34px 24px; border-radius: 24px; background: rgba(255,255,255,.06);
       border-left: 10px solid var(--c); opacity: 0; transform: translateY(26px); transition: opacity .8s ease, transform .8s cubic-bezier(.2,.7,.2,1); }
     body.play .row { opacity: 1; transform: none; }
-    .who { font-family: ${HEAD}; font-size: 30px; font-weight: 800; letter-spacing: .02em; color: var(--t); }
-    .what { font-family: ${HEAD}; font-size: 50px; line-height: 1.12; font-weight: 700; letter-spacing: -0.02em; }
+    .who { font-family: ${HEAD}; font-size: 24px; font-weight: 800; letter-spacing: .02em; color: var(--t); }
+    .what { font-family: ${HEAD}; font-size: 40px; line-height: 1.12; font-weight: 700; letter-spacing: -0.02em; }
   </style></head><body>
-    <img class="logo fade" src="${logo('yawp_white_logo.png')}" alt="Yawp!">
-    <div class="wrap">${rows}</div>
+    <div class="wrap"><img class="logo fade" src="${logo('yawp_white_logo.png')}" alt="Yawp!">${rows}</div>
   </body></html>`;
 }
 
@@ -121,12 +121,12 @@ export function closingPunchlineCard({ line }) {
   const [before, after] = line.split(/,\s*(?=but )/);
   return `<!doctype html><html><head><meta charset="utf-8"><style>${base}${pine}
     .wrap { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 180px; }
-    h1 { font-size: 92px; line-height: 1.08; font-weight: 800; letter-spacing: -0.03em; text-wrap: balance; }
+    .wrap .logo { margin-bottom: 44px; }
+    h1 { font-size: 76px; line-height: 1.08; font-weight: 800; letter-spacing: -0.03em; text-wrap: balance; }
     h1 span { text-wrap: balance; }
     h1 .b { display: block; color: #D5EBE5; }
   </style></head><body>
-    <img class="logo fade" src="${logo('yawp_white_logo.png')}" alt="Yawp!">
-    <div class="wrap"><h1><span class="rise" style="display:block;animation-delay:.2s">${escape(before)}${after ? ',' : ''}</span>${after ? `<span class="b rise" style="animation-delay:1.3s">${escape(after)}</span>` : ''}</h1></div>
+    <div class="wrap"><img class="logo fade" src="${logo('yawp_white_logo.png')}" alt="Yawp!"><h1><span class="rise" style="display:block;animation-delay:.2s">${escape(before)}${after ? ',' : ''}</span>${after ? `<span class="b rise" style="animation-delay:1.3s">${escape(after)}</span>` : ''}</h1></div>
   </body></html>`;
 }
 
@@ -148,20 +148,20 @@ export function closingQrCard({ codes, url, disclosure }) {
     </div>`;
   }).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><style>${base}${pine}
-    .wrap { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-top: 70px; }
-    .tiles { display: flex; gap: 120px; }
+    .wrap { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 30px; }
+    .wrap .logo { margin-bottom: 30px; width: 160px; }
+    .tiles { display: flex; gap: 110px; }
     .tile { display: flex; flex-direction: column; align-items: center; text-align: center; }
-    .qr { width: 400px; height: 400px; border-radius: 28px; background: #FFFFFF; padding: 28px; display: flex; align-items: center; justify-content: center;
+    .qr { width: 300px; height: 300px; border-radius: 24px; background: #FFFFFF; padding: 22px; display: flex; align-items: center; justify-content: center;
       box-shadow: 0 2px 4px rgba(0,0,0,.2), 0 30px 60px -20px rgba(0,0,0,.5); }
     .qr img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
     .qr span { width: 100%; height: 100%; border: 4px dashed #B8C4C0; border-radius: 16px; display: flex; align-items: center; justify-content: center;
-      font-size: 30px; font-weight: 600; line-height: 1.3; color: #7A8A85; }
-    .label { margin-top: 30px; font-family: ${HEAD}; font-size: 50px; font-weight: 800; letter-spacing: -0.02em; }
-    .sub { margin-top: 8px; font-size: 28px; color: #C9D3CF; }
-    .url { margin-top: 46px; font-family: ${HEAD}; font-size: 58px; font-weight: 800; color: #D5EBE5; letter-spacing: -0.02em; }
+      font-size: 24px; font-weight: 600; line-height: 1.3; color: #7A8A85; }
+    .label { margin-top: 22px; font-family: ${HEAD}; font-size: 40px; font-weight: 800; letter-spacing: -0.02em; }
+    .sub { margin-top: 6px; font-size: 22px; color: #C9D3CF; }
+    .url { margin-top: 34px; font-family: ${HEAD}; font-size: 46px; font-weight: 800; color: #D5EBE5; letter-spacing: -0.02em; }
   </style></head><body>
-    <img class="logo fade" src="${logo('yawp_white_logo.png')}" alt="Yawp!">
-    <div class="wrap"><div class="tiles">${tiles}</div><div class="url rise" style="animation-delay:.9s">${escape(url)}</div></div>
+    <div class="wrap"><img class="logo fade" src="${logo('yawp_white_logo.png')}" alt="Yawp!"><div class="tiles">${tiles}</div><div class="url rise" style="animation-delay:.9s">${escape(url)}</div></div>
     <small class="fade" style="animation-delay:1.2s">${escape(disclosure)}</small>
   </body></html>`;
 }
