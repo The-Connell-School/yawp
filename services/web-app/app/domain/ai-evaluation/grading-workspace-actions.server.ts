@@ -28,6 +28,7 @@ import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
 import crypto from 'node:crypto';
 import { computeIpHash } from '~/utils/ai-usage-log.server';
+import { safeErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 
 export const MAX_EVALUATION_GROUP_CASES = 20;
 
@@ -234,9 +235,10 @@ export async function executeGradingWorkspaceAction(
     } catch (error) {
       await prepared.fail(db);
       return errorResponse(
-        error instanceof Error
-          ? error.message
-          : 'The evaluation suite could not run.',
+        safeErrorTextForClientResponse(
+          error,
+          'The evaluation suite could not run.',
+        ),
         500
       );
     }

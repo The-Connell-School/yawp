@@ -4,6 +4,7 @@ import {
   buildSafeRouteParamsForLog,
   buildSafeStackForLog,
   buildServerErrorRequestContext,
+  safeErrorTextForClientResponse,
   safeErrorTextForLog,
 } from './server-error-request-context.server';
 
@@ -117,6 +118,18 @@ describe('buildServerErrorRequestContext', () => {
     const serialized = JSON.stringify(buildSafeErrorForLog(error));
     expect(serialized).not.toContain('SECRET-PASS');
     expect(serialized).not.toContain('postgresql://');
+  });
+
+  test('safeErrorTextForClientResponse never forwards raw exception text', () => {
+    const sensitive =
+      'Invalid `prisma.user.findMany()` token=SECRET-TOKEN teacher@school.edu';
+    const message = safeErrorTextForClientResponse(
+      new Error(sensitive),
+      'Something went wrong.',
+    );
+    expect(message).toBe('Something went wrong.');
+    expect(message).not.toContain('prisma');
+    expect(message).not.toContain('SECRET-TOKEN');
   });
 
   test('safeErrorTextForLog returns redacted message text', () => {

@@ -148,7 +148,8 @@ describe('runLiveGradingAssistantBenchmarkCase', () => {
     });
 
     expect(result.status).toBe('fail');
-    expect(result.evaluations[0]?.message).toContain('Provider unavailable.');
+    expect(result.evaluations[0]?.message).toBe('Benchmark execution failed.');
+    expect(result.evaluations[0]?.message).not.toContain('Provider unavailable.');
   });
 });
 

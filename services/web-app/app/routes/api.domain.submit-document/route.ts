@@ -250,8 +250,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       where: { id: journal.id },
       data: {
         status: 'rejected',
-        failureReason:
-          error instanceof Error ? error.message : 'submit_transaction_failed',
+        failureReason: 'submit_transaction_failed',
       },
     });
     if (error instanceof SubmitDocumentConflictError) {

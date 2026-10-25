@@ -396,10 +396,7 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
           where: { id: journal.id },
           data: {
             status: 'rejected',
-            failureReason:
-              error instanceof Error
-                ? error.message
-                : 'snapshot_transaction_failed',
+            failureReason: 'snapshot_transaction_failed',
           },
         });
         throw error;
