@@ -21,6 +21,7 @@ import {
 import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { assertFreeTierRuntimeConfigured } from './free-tier-config.server';
 import { resolveFreeTierRuntimeEnvironment } from './usage-budget.server';
+import { safeErrorTextForLog } from '~/utils/server-error-request-context.server';
 
 export type EmailSendResult = { ok: true } | { ok: false; error: string };
 
@@ -30,7 +31,8 @@ function emailSendErrorMessage(result: {
 }) {
   if (result.status === 'success') return null;
   const message = result.error?.message?.trim();
-  return message || 'email_send_failed';
+  if (!message) return 'email_send_failed';
+  return safeErrorTextForLog(new Error(message));
 }
 
 async function deliverEmail(args: {
@@ -136,7 +138,7 @@ export async function sendFreeTierReleaseEmail(
     });
     return { ok: true };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = safeErrorTextForLog(error);
     await logEmail({
       applicationId: payload.applicationId,
       kind: 'release',
@@ -234,7 +236,7 @@ export async function sendFreeTierAdminApprovalEmail(args: {
     });
     return { ok: true };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = safeErrorTextForLog(error);
     await logEmail({
       applicationId: args.applicationId,
       kind: args.isReminder ? 'admin_approval_reminder' : 'admin_approval',
@@ -296,7 +298,7 @@ export async function sendFreeTierCongratulationsEmail(args: {
     });
     return { ok: true };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = safeErrorTextForLog(error);
     await logEmail({
       applicationId: args.applicationId,
       kind: 'congratulations',

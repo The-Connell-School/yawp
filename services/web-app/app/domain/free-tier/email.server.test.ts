@@ -4,12 +4,21 @@ const sendEmail = mock((_options: any): any => undefined);
 
 mock.module('~/utils/email.server', () => ({ sendEmail }));
 const logEmail = mock(async (_options: any) => ({}));
+const findUniqueOrThrow = mock(async () => ({
+  releaseEmailCopyVersion: null,
+}));
 mock.module('~/utils/db.server', () => ({
-  prisma: { freeTierEmailLog: { create: logEmail } },
+  prisma: {
+    freeTierEmailLog: { create: logEmail },
+    freeTierApplication: { findUniqueOrThrow, findUnique: findUniqueOrThrow },
+  },
 }));
 
-const { sendFreeTierAdminApprovalEmail, sendFreeTierAdminReminderEmail } =
-  await import('./email.server');
+const {
+  sendFreeTierAdminApprovalEmail,
+  sendFreeTierAdminReminderEmail,
+  sendFreeTierReleaseEmail,
+} = await import('./email.server');
 
 describe('free-tier email delivery', () => {
   const secret = process.env.FREE_TIER_LINK_HMAC_SECRET;
@@ -26,6 +35,51 @@ describe('free-tier email delivery', () => {
     else process.env.FREE_TIER_LINK_HMAC_SECRET = secret;
     if (primary === undefined) delete process.env.PRIMARY_APP_URL;
     else process.env.PRIMARY_APP_URL = primary;
+  });
+
+  test('redacts provider error messages returned to callers', async () => {
+    sendEmail.mockResolvedValue({
+      status: 'error',
+      error: {
+        message: 'Rejected recipient teacher@school.edu token=abc123',
+      },
+    });
+    const result = await sendFreeTierAdminApprovalEmail({
+      applicationId: 'app_test',
+      to: 'admin@school.edu',
+      teacherEmail: 'teacher@school.edu',
+      teacherName: 'Teacher',
+      schoolName: 'Test HS',
+      approveUrl: 'https://yawp.test/a',
+      notRightPersonUrl: 'https://yawp.test/n',
+      pass1: false,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected failure');
+    expect(result.error).not.toContain('teacher@school.edu');
+    expect(result.error).not.toContain('abc123');
+    const logged = logEmail.mock.calls.at(-1)?.[0].data.error as string;
+    expect(logged).not.toContain('teacher@school.edu');
+    expect(logged).not.toContain('abc123');
+  });
+
+  test('redacts unexpected catch-path errors for release email', async () => {
+    findUniqueOrThrow.mockRejectedValueOnce(
+      new Error('join failed for teacher@school.edu token=SECRET-TOKEN'),
+    );
+    const result = await sendFreeTierReleaseEmail({
+      applicationId: 'app_test',
+      email: 'teacher@school.edu',
+      name: 'Teacher',
+      schoolName: 'Test HS',
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected failure');
+    expect(result.error).not.toContain('teacher@school.edu');
+    expect(result.error).not.toContain('SECRET-TOKEN');
+    const logged = logEmail.mock.calls.at(-1)?.[0].data.error as string;
+    expect(logged).not.toContain('teacher@school.edu');
+    expect(logged).not.toContain('SECRET-TOKEN');
   });
 
   test('returns email_failed when sendEmail reports error status', async () => {
