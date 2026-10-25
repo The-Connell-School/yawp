@@ -86,13 +86,15 @@ Brian's note about the class starter missing from share links is not a bug. He h
 - **Fix:** a lesson with content gets **Open slide deck** and **Open the stack**.
   - Open slide deck opens the deck in Present and closes back to the stack.
   - With no deck yet, Open slide deck is shown disabled, with "No slides yet" as its hint **(default)**.
-  - An empty day keeps **Start planning**. A draft day gets **Open the stack** plus **Keep planning**.
+  - An empty day keeps **Start planning**. A draft day also gets the two buttons; **Rework in the planner** is already in the footer.
 
 ## Flags
-- 1.1 and 1.3 are bug fixes, for everyone the planner is on for.
-- 1.2, 1.4, 1.5, 1.6 and 1.7–1.11 change what Brian's preview shows. They sit behind `lesson_planner_teach_notes`, like the rest of this round (`lesson_planner_library_v2` for the unit view), except where the old behavior is the bug:
-  - the date chip that does nothing
-  - agenda minutes that don't match the stack
+As built, nothing needs a new flag:
+- 1.1, 1.2, 1.3 and 1.4 are bug fixes, for everyone the planner is on for.
+- 1.5 only shows with `lesson_planner_teach_notes`, which is where the Before class list lives.
+- 1.6 is the PDF's slide section, which every PDF with a deck shows. It replaces the text outline.
+- 1.7–1.9 are on the share pages (`lesson_planner_share`).
+- 1.10 and 1.11 are on the unit page (`lesson_planner_library_v2`).
 - No migration.
 
 ## Tests
@@ -127,3 +129,22 @@ Brian's note about the class starter missing from share links is not a bug. He h
 
 ## Later (noted, not in Part 1)
 - **Adjust class length:** a button on the time bar that opens Ask the planner with "This is a P-minute lesson. I also need it for N minutes. Should I stretch each step or add something?"
+
+## Status
+Part 1 is built: one commit per item, with tests.
+
+- **Unit tests:** new ones for:
+  - `cleanLessonTitle` and `minutesInTitle`
+  - the writing rule (Brian's Close Reading text)
+  - `syncAgendaToStack`
+  - Before class with no period
+  - the share-page helpers
+  - the slide pictures in the PDF
+
+  `deck-agenda.test.ts` and `lesson-name.test.ts` are added to CI. The writing tests from run 4 and run 5 are rewritten to Brian's new rule.
+- **E2E:** `teacher.lesson-planner-round-3.spec.ts` has 3 tests, covering the stack, the unit view and the family page. It passes locally and is in smoke and shard 6. `teacher.lesson-planner-library-v2.spec.ts` is updated for 1.10 and 1.11.
+- **Typecheck:** clean.
+
+### Open questions for Kevin and Brian
+- **Date picked** is still on the Before class list. Brian says dates are optional (1.10), so it may belong off the list, or should stop holding up "Ready". I left it, because only "Pick the period length" was asked for.
+- The slide pictures in the PDF are drawn from the deck, not screenshots. They use the same colors, fonts, painting and words, but some layouts are simplified; for example, Compare prints its columns stacked.
