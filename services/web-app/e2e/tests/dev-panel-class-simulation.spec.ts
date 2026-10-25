@@ -43,9 +43,12 @@ test.describe('Dev panel class simulation', () => {
     await expect(page.getByText('Alex Rivera')).toBeVisible({ timeout: 30_000 });
 
     await openDevPanelClassSimulationFlyout(page);
-    await simSheet
-      .getByRole('button', { name: 'Clear simulated data', exact: true })
-      .click();
+    const clearSimulated = simSheet.getByRole('button', {
+      name: 'Clear simulated data',
+      exact: true,
+    });
+    await expect(clearSimulated).toBeEnabled({ timeout: 60_000 });
+    await clearSimulated.click();
     await expect(page.getByRole('alertdialog')).toBeVisible();
     await page.getByRole('button', { name: 'Clear', exact: true }).click();
     await expect(page.getByText(/Cleared 3 simulated/i)).toBeVisible({ timeout: 60_000 });

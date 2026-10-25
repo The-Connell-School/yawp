@@ -2,13 +2,13 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e/tests',
   testMatch:
-    /demo-feedback\.spec\.ts|dev-panel-artboard-evidence\.spec\.ts|dev-panel-class-simulation\.spec\.ts/,
+    /demo-feedback\.spec\.ts|dev-panel-artboard-evidence\.spec\.ts|dev-panel-free-tier-jumps\.spec\.ts|dev-panel-class-simulation\.spec\.ts/,
   workers: 1,
   fullyParallel: false,
   retries: 0,
   timeout: 240_000,
   expect: { timeout: 15_000 },
-  reporter: 'list',
+  reporter: [['list', { printSteps: true }]],
   forbidOnly: !!process.env.CI,
   outputDir: `${process.env.TMPDIR}/demo-feedback-results`,
   use: {

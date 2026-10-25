@@ -279,6 +279,7 @@ jobs:
           bun test --max-concurrency=2 ./services/web-app/app/routes/app.free-tier.pending/route.v2.test.tsx
           bun test --max-concurrency=2 ./services/web-app/app/routes/free.admin.approve/route.v2.test.tsx
           bun test --max-concurrency=2 ./services/web-app/app/dev-panel/free-tier-jump.pending.real-db.integration.test.ts
+          bun test --max-concurrency=2 ./services/web-app/app/dev-panel/free-tier-jump.approved.real-db.integration.test.ts
 
       - name: Free-tier approval suppress-email (isolated prisma mocks)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -991,6 +992,7 @@ jobs:
             'app/dev-panel/feedback-route-contract.isolated.test.ts' \
             'app/dev-panel/free-tier-jump.server.test.ts' \
             'app/dev-panel/free-tier-states.catalog.test.ts' \
+            'app/dev-panel/free-tier-jump-expectations.test.ts' \
             'app/utils/preview-access.server.test.ts' \
             'app/utils/preview-free-tier-access.server.test.ts' \
             'app/utils/internal-grading-stats.server.test.ts' \
@@ -1615,6 +1617,7 @@ jobs:
           YAWP_ENVIRONMENT: demo
           PREVIEW_SLUG: demo
           TESTER_FEEDBACK_ENABLED: 'true'
+          FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
           DEV_PANEL_EVIDENCE_DIR: dev-panel-evidence
           DEV_PANEL_ARTIFACT_COPY_DIR: /opt/cursor/artifacts/screenshots
           RESEND_API_KEY: ''
@@ -1635,6 +1638,32 @@ jobs:
           ./bin/project dev start --json
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5489/ > /dev/null
           ./bin/project test --profile demo-feedback-browser --json
+
+      - name: Cat dev panel free-tier jump log
+        if: ${{ !cancelled() && always() }}
+        run: |
+          if [ -f services/web-app/test-results/dev-panel-free-tier-jump.log ]; then
+            cat services/web-app/test-results/dev-panel-free-tier-jump.log
+          else
+            echo "(no dev-panel free-tier jump log)"
+          fi
+          if [ -f .worktree-local/dev.log ]; then
+            grep '\[dev-panel free-tier jump failed\]' .worktree-local/dev.log || true
+          fi
+
+      - name: Assert dev panel free-tier jump catalog complete
+        if: ${{ !cancelled() && always() }}
+        run: |
+          log=services/web-app/test-results/dev-panel-free-tier-jump.log
+          if [ ! -f "$log" ]; then
+            echo "::error::Missing dev-panel free-tier jump log"
+            exit 1
+          fi
+          ok_count=$(grep -cE '^[^#[:space:]].*: ok$' "$log" || true)
+          if [ "$ok_count" -ne 16 ]; then
+            echo "::error::Expected 16 catalog jump ok lines, found $ok_count"
+            exit 1
+          fi
 
       - name: Dev panel signed-out /free browser regression
         if: ${{ !cancelled() && always() }}

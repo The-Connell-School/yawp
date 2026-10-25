@@ -315,6 +315,9 @@ async function devStart({ json }) {
       DATABASE_URL: local.DATABASE_URL,
       E2E_PORT: process.env.RECORD_PORT_E2E || process.env.E2E_PORT || "",
       TESTER_FEEDBACK_ENABLED: process.env.TESTER_FEEDBACK_ENABLED || "true",
+      ...(process.env.FREE_TIER_LINK_HMAC_SECRET
+        ? { FREE_TIER_LINK_HMAC_SECRET: process.env.FREE_TIER_LINK_HMAC_SECRET }
+        : {}),
     },
     detached: true,
     stdio: ["ignore", logFd, logFd],
@@ -803,6 +806,14 @@ function runTestProfile(profile, { json }) {
   else if (chosen === "demo-feedback-browser") {
     const local = requireConfig();
     if (!['localhost', '127.0.0.1'].includes(new URL(local.DATABASE_URL).hostname)) throw new Error('Demo feedback E2E requires the isolated local database');
+    results.push({
+      id: 'demo-feedback-bundle-fixture',
+      ...execute(
+        selected.bun,
+        ['run', '--cwd', 'packages/prisma', 'seed-free-tier-bundle-assignment-types'],
+        { json, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL }, timeout: 120000 }
+      ),
+    });
     results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.demo-feedback.config.ts", "--workers=1"], {
       json, cwd: webAppRoot, timeout: 900000,
       env: { ...selected.env, CI: '1', TESTER_FEEDBACK_ENABLED: 'true', E2E_DATABASE_URL: local.DATABASE_URL, DEMO_FEEDBACK_BASE_URL: `http://127.0.0.1:${local.DEV_PORT}`, DEV_PANEL_EVIDENCE_DIR: process.env.DEV_PANEL_EVIDENCE_DIR || 'dev-panel-evidence' },
