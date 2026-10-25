@@ -26,6 +26,13 @@ SELECT json_build_object(
   $json$assignments$json$, (SELECT count(*) FROM "Assignment"),
   $json$documents$json$, (SELECT count(*) FROM "Document"),
   $json$submissions$json$, (SELECT count(*) FROM "Submission"),
-  $json$moduleSessions$json$, (SELECT count(*) FROM "AssignmentModuleSession")
+  $json$moduleSessions$json$, (SELECT count(*) FROM "AssignmentModuleSession"),
+  $json$testerFeedback$json$, (
+    SELECT CASE
+      WHEN to_regclass('public."TesterFeedback"') IS NOT NULL
+        THEN (SELECT count(*)::bigint FROM "TesterFeedback")
+      ELSE 0::bigint
+    END
+  )
 )::text;
 '

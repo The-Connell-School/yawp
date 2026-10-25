@@ -34,6 +34,8 @@ preview_missing_tooling_artifacts() { :; }
 should_run_free_tier_ship_review_seed() { return 0; }
 assert_no_master_code_collision() { :; }
 install_demo_backup_tooling() { :; }
+export_demo_tester_feedback_before_reset() { :; }
+restore_demo_tester_feedback_after_reset() { :; }
 record_compose() { printf '%s\\n' "$*"; if [[ ${fail} == true && "$*" == *unified-signon-flag.mjs* ]]; then return 17; fi; }
 ${qaSeedGuard}
 ${tooling}

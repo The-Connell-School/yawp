@@ -1,5 +1,5 @@
 import { useFreeAccountUsage } from '~/components/free-account-usage';
-import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
+import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import {
   type ActionFunctionArgs,
@@ -670,9 +670,9 @@ export default function MyAssignmentsRoute() {
               </Button>
             );
             return teachingLocked ? (
-              <LockedTeachingControl locked adminName={teachingAccessAdminName}>
+              <PreviewAssignmentCreationControl>
                 {createButton}
-              </LockedTeachingControl>
+              </PreviewAssignmentCreationControl>
             ) : (
               createButton
             );

@@ -29,6 +29,7 @@ import {
   WillWont,
 } from '~/components/how-it-works/guide';
 import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
+import { userHasPendingFreeTierTeachingLock } from '~/domain/free-tier/locked-preview.server';
 import { isAssignmentTypeAvailableForAnyScope } from '~/utils/assignment-type-access.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -71,10 +72,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const assignmentType = await prisma.assignmentType.findFirst({
     where: { id: assignmentTypeId, archivedAt: null },
-    select: { id: true, title: true },
+    select: { id: true, title: true, kind: true },
   });
-  // Only The Thesis-Driven Essay has a guide so far.
-  if (!assignmentType || !isThesisDrivenEssayTitle(assignmentType.title)) {
+  const lockedPreviewThesisStatementGuide =
+    assignmentType?.kind === 'thesis_statement' &&
+    (await userHasPendingFreeTierTeachingLock(userId));
+  // Only The Thesis-Driven Essay has a guide so far, plus Thesis Statement in locked preview.
+  if (
+    !assignmentType ||
+    (!isThesisDrivenEssayTitle(assignmentType.title) &&
+      !lockedPreviewThesisStatementGuide)
+  ) {
     throw redirect(pagePath);
   }
 
