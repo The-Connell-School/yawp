@@ -28,7 +28,7 @@ PR previews do not use a repo-root `docker-compose.yml`. Compose files are gener
 
 This mock is a sibling Compose service named `blackboard-lti-mock`:
 
-- Image: `oven/bun:1.3.1` with the preview source bind-mounted (same pattern as the fast `web` service)
+- Image: `oven/bun:1.4.4` with the preview source bind-mounted (same pattern as the fast `web` service)
 - Command: `bun scripts/blackboard-lti-mock/server.mjs`
 - The web container receives `BLACKBOARD_LTI_MOCK_URL=http://blackboard-lti-mock:9473`
 - After `web` is recreated, deploy starts the mock only when the rendered compose file contains that service, so older application refs stay deployable
