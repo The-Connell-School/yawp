@@ -32,17 +32,18 @@ import {
 import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
 import { cn } from '~/utils/misc';
 import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
+import { SiteLicenseLockButton } from '~/components/site-license-lock-button';
 import {
   assignmentTypeTileCardClassName,
   assignmentTypeTileFooterClassName,
   assignmentTypeTileImageClassName,
   assignmentTypeTileImageWrapClassName,
   DashboardAssignmentTileFooter,
+  dashboardAssignmentTileClassName,
   dashboardAssignmentTileTestId,
   assignmentTypeTileTrailingIconClassName,
 } from '~/components/assignment-type-tile-layout';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
-import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import type { RefObject } from 'react';
 import {
@@ -234,6 +235,16 @@ function FreeAccountUsageDetails({ usage }: { usage: FreeAccountUsage }) {
     </>
   );
 }
+function lockedDashboardAssignmentMeta(
+  usage: FreeAccountUsage,
+  row: FreeAccountUsage['assignments'][number]
+) {
+  if (row.remaining) {
+    return `${row.remaining} of ${row.total} left`;
+  }
+  return 'None left';
+}
+
 export function FreeAssignmentTiles({
   usage,
   types,
@@ -252,38 +263,85 @@ export function FreeAssignmentTiles({
   onCreate: (id?: string) => void;
   createTriggerRef?: RefObject<HTMLButtonElement | null>;
 }) {
+  if (teachingLocked) {
+    return (
+      <div data-testid="free-assignment-tiles">
+        <h2 className="mb-4 text-lg font-bold">Assignments</h2>
+        <div className="grid auto-rows-min grid-cols-2 items-start gap-3 lg:grid-cols-3">
+          {usage.assignments.map((row) => {
+            const type = types.find((t) => t.kind === row.kind);
+            const tileLabel = `New ${row.label} assignment`;
+            const tileBody = (
+              <div
+                className={dashboardAssignmentTileClassName(
+                  'relative h-full w-full'
+                )}
+              >
+                <DashboardAssignmentTileFooter
+                  label={row.label}
+                  meta={lockedDashboardAssignmentMeta(usage, row)}
+                  metaClassName={
+                    !usage.monthly && row.remaining === 0
+                      ? 'text-amber-800'
+                      : undefined
+                  }
+                  trailing={<SiteLicenseLockButton />}
+                />
+              </div>
+            );
+            if (type) {
+              return (
+                <Link
+                  key={row.kind}
+                  to={`/app/assignment-types/${type.id}`}
+                  data-testid={dashboardAssignmentTileTestId}
+                  aria-label={tileLabel}
+                  className="block min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
+                >
+                  {tileBody}
+                </Link>
+              );
+            }
+            return (
+              <div
+                key={row.kind}
+                data-testid={dashboardAssignmentTileTestId}
+                className="min-w-0"
+              >
+                {tileBody}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   const createButton = (
     <button
       ref={createTriggerRef as RefObject<HTMLButtonElement> | undefined}
       type="button"
       disabled={
-        !teachingLocked &&
-        !usage.unlimitedFreeAssignmentTiles &&
-        usage.allAssignmentsUsed
+        !usage.unlimitedFreeAssignmentTiles && usage.allAssignmentsUsed
       }
       onClick={() => onCreate()}
       className="text-sm text-primary underline disabled:text-muted-foreground"
     >
-      {teachingLocked ? 'Create assignment' : 'New assignment'}
+      New assignment
     </button>
   );
   return (
     <div data-testid="free-assignment-tiles">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-bold">Assignments</h2>
-        {teachingLocked ? (
-          <PreviewAssignmentCreationControl>{createButton}</PreviewAssignmentCreationControl>
-        ) : (
-          createButton
-        )}
+        {createButton}
       </div>
       <div className="grid auto-rows-min grid-cols-2 items-start gap-3 lg:grid-cols-3">
         {usage.assignments.map((row) => {
           const type = types.find((t) => t.kind === row.kind);
           const tileDisabled =
-            !teachingLocked &&
-            (!type ||
-              (!usage.unlimitedFreeAssignmentTiles && row.remaining === 0));
+            !type ||
+            (!usage.unlimitedFreeAssignmentTiles && row.remaining === 0);
           const tileClassName = cn(
             assignmentTypeTileCardClassName(
               'bg-popover shadow-sm disabled:bg-muted/30'
@@ -317,23 +375,13 @@ export function FreeAssignmentTiles({
                       : undefined
                   }
                   trailing={
-                    teachingLocked ? (
-                      <Lock
-                        size={16}
-                        className={assignmentTypeTileTrailingIconClassName(
-                          'text-muted-foreground'
-                        )}
-                        aria-hidden
-                      />
-                    ) : (
-                      <Plus
-                        size={16}
-                        className={assignmentTypeTileTrailingIconClassName(
-                          'text-muted-foreground'
-                        )}
-                        aria-hidden
-                      />
-                    )
+                    <Plus
+                      size={16}
+                      className={assignmentTypeTileTrailingIconClassName(
+                        'text-muted-foreground'
+                      )}
+                      aria-hidden
+                    />
                   }
                 />
               </div>
@@ -747,6 +795,10 @@ export function AdvocatePackEntry() {
 }
 
 export function FreeAccountRail({ usage }: { usage: FreeAccountUsage }) {
+  const { locked: teachingLocked } = useTeachingAccess();
+  if (teachingLocked) {
+    return null;
+  }
   const complete =
     (usage.monthly ? usage.students.used > 0 : usage.checklist.classReady) &&
     usage.checklist.assignmentCreated &&

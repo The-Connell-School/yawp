@@ -181,19 +181,43 @@ test('FreeAssignmentTiles locked tiles link to assignment type home', () => {
   );
 });
 
-test('FreeAssignmentTiles locked header create control uses preview tooltip copy', () => {
+test('FreeAssignmentTiles locked pending hides create control and uses text-only tiles', () => {
   const html = renderToStaticMarkup(
     <StaticRouter location="/app">
       <FreeAssignmentTiles
         usage={usage}
         teachingLocked
-        types={[{ id: 'starter', kind: 'class_starter' }]}
+        types={[
+          { id: 'starter', kind: 'class_starter', imageId: 'img-1' },
+          { id: 'pre', kind: 'prewriting', imageId: 'img-2' },
+          { id: 'thesis', kind: 'thesis_statement', imageId: 'img-3' },
+        ]}
         onCreate={() => {}}
       />
     </StaticRouter>
   );
-  expect(html).toContain('preview-assignment-creation-disabled');
-  expect(html).toContain(
-    'Creating assignments is turned off in this preview.'
+  expect(html).not.toContain('preview-assignment-creation-disabled');
+  expect(html).not.toContain('Create assignment');
+  expect(html).not.toContain('/api/image/course/');
+  expect(html).toContain('site-license-lock-button');
+  expect(html).toContain('12 of 12 left');
+  expect(html).not.toContain('Unlimited');
+});
+
+test('FreeAccountRail is hidden while teaching is locked', async () => {
+  mock.module('~/components/free-tier/teaching-access-context', () => ({
+    useTeachingAccess: () => ({
+      locked: true,
+      loading: false,
+      state: { variant: 'locked', adminName: 'Dr. Patel' },
+    }),
+  }));
+  const { FreeAccountRail } = await import('./free-account-usage');
+  const html = renderToStaticMarkup(
+    <StaticRouter location="/app">
+      <FreeAccountRail usage={usage} />
+    </StaticRouter>
   );
+  expect(html).toBe('');
+  mock.restore();
 });
