@@ -39,6 +39,7 @@
     "seed-preview-teacher-notes-qa": "bun run scripts/seed-preview-teacher-notes-qa.ts",
     "seed-preview-planner-qa": "bun run scripts/seed-preview-planner-qa.ts",
     "ensure-class-insights-local": "bun run scripts/local-dev/ensure-class-insights-enabled.ts",
+    "ensure-intern-qa-teachers": "bun run scripts/local-dev/run-ensure-intern-qa-teachers.ts",
     "fixtures:export-prod-fidelity": "bun run scripts/export-prod-fidelity-fixtures.ts",
     "assignment-type-release-gate": "bun run scripts/assignment-type-release-gate.ts",
     "backfill-class-art-key": "bun run scripts/backfill-class-art-key.ts",
