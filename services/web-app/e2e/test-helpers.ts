@@ -298,3 +298,69 @@ export class TestHelpers {
     await expect(editor).toContainText(expectedText, { timeout: 10000 });
   }
 }
+
+export type FreeTierJoinFormValues = {
+  displayName: string;
+  handle: string;
+  password: string;
+};
+
+/**
+ * Fill the legacy `/join?t=` handle signup form. RVF/React can drop fills that
+ * run before client hydration, so each field is retried until its value sticks.
+ */
+export async function fillFreeTierJoinForm(
+  page: Page,
+  values: FreeTierJoinFormValues
+) {
+  await expect(
+    page.getByRole('heading', { name: 'Create your student account' })
+  ).toBeVisible({ timeout: 15_000 });
+
+  const fields: Array<{
+    locator: Locator;
+    value: string;
+  }> = [
+    { locator: page.getByLabel('Display name'), value: values.displayName },
+    { locator: page.getByLabel('Handle'), value: values.handle },
+    {
+      locator: page.getByLabel('Password', { exact: true }),
+      value: values.password,
+    },
+    {
+      locator: page.getByLabel('Confirm password'),
+      value: values.password,
+    },
+  ];
+
+  for (const { locator, value } of fields) {
+    await expect(async () => {
+      await expect(locator).toBeEditable();
+      await locator.click();
+      await locator.fill(value);
+      await expect(locator).toHaveValue(value);
+    }).toPass({ timeout: 15_000 });
+  }
+}
+
+/** Submit join form and wait until the student lands in the authenticated app shell. */
+export async function submitFreeTierJoinAndExpectApp(
+  page: Page,
+  options?: { timeoutMs?: number }
+) {
+  const timeoutMs = options?.timeoutMs ?? 60_000;
+  const joinButton = page.getByRole('button', { name: 'Join class' });
+
+  await expect(page.getByText('Name is too short')).not.toBeVisible();
+  await expect(joinButton).toBeEnabled();
+  await expect(joinButton).toHaveText('Join class');
+
+  await Promise.all([
+    page.waitForURL(
+      (url) => url.pathname === '/app' || url.pathname.startsWith('/app/'),
+      { timeout: timeoutMs }
+    ),
+    joinButton.click(),
+  ]);
+  await expect(page).toHaveURL(/\/app/, { timeout: 5_000 });
+}
