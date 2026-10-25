@@ -8,13 +8,15 @@ const terminalGate = mock(
     teacherName: string;
   } | null> => null
 );
+const resolveAdminForwardTokenForApproveLink = mock(async () => 'forward-token');
 const peekSignedLink = mock(
   async (): Promise<
-    | { ok: true; applicationId: string }
+    | { ok: true; applicationId: string; linkId: string }
     | { ok: false; reason: string }
   > => ({
     ok: true,
     applicationId: 'app-1',
+    linkId: 'approve-link',
   })
 );
 const applicationIdForAdminLinkNaming = mock(
@@ -64,6 +66,12 @@ mock.module('~/domain/free-tier/approval-deny.server', () => ({
   resolveAdminDenyAnsweredGate: async () => null,
 }));
 
+mock.module('~/domain/free-tier/admin-approve-forward-link.server', () => ({
+  resolveAdminForwardTokenForApproveLink,
+  buildAdminForwardPageSearch: (forwardToken: string, approveToken: string) =>
+    `?t=${encodeURIComponent(forwardToken)}&approveT=${encodeURIComponent(approveToken)}`,
+}));
+
 const realSignedLink =
   globalThis.__realModules['~/domain/free-tier/signed-link.server'];
 const realKnownRequest =
@@ -88,10 +96,13 @@ beforeEach(() => {
     if (peek.ok) return peek.applicationId;
     return null;
   });
+  resolveAdminForwardTokenForApproveLink.mockReset();
+  resolveAdminForwardTokenForApproveLink.mockResolvedValue('forward-token');
   peekSignedLink.mockReset();
   peekSignedLink.mockResolvedValue({
     ok: true,
     applicationId: 'app-1',
+    linkId: 'approve-link',
   });
   terminalGate.mockReset();
   terminalGate.mockResolvedValue(null);
@@ -124,6 +135,12 @@ describe('free.admin.approve loader', () => {
       ok: true,
       teacherName: 'Jordan Rivera',
       schoolName: 'Lincoln High School',
+      forwardToken: 'forward-token',
+    });
+    expect(resolveAdminForwardTokenForApproveLink).toHaveBeenCalledWith({
+      approveToken: 'valid',
+      applicationId: 'app-1',
+      approveLinkId: 'approve-link',
     });
   });
 
