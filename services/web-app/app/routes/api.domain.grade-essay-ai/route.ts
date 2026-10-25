@@ -95,6 +95,7 @@ import {
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 import { maybePostGradeToBlackboard } from '~/integrations/blackboard-ags.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import { enforceGradingLimits, rateLimitedJson } from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import type {
@@ -1225,7 +1226,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     try {
       await maybePostGradeToBlackboard({ numericPercentage });
     } catch (error) {
-      console.warn('Blackboard AGS passback (mock) failed', { error });
+      console.warn('Blackboard AGS passback (mock) failed', {
+        error: buildSafeErrorForLog(error),
+      });
     }
 
     return dataResponse({
@@ -2011,7 +2014,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   try {
     await maybePostGradeToBlackboard({ numericPercentage: ltiPassbackPercentage });
   } catch (error) {
-    console.warn('Blackboard AGS passback (mock) failed', { error });
+    console.warn('Blackboard AGS passback (mock) failed', {
+      error: buildSafeErrorForLog(error),
+    });
   }
 
   return dataResponse({
