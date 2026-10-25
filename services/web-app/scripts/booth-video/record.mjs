@@ -264,7 +264,7 @@ segments.grading = async () => {
   await sleep(2600);
   const grammar = page.getByRole('button', { name: /Grammar/ }).first();
   await s.click(grammar, { after: 900 });
-  await s.scrollTo(page.getByText('Grammar issues shown').first(), { block: 'start', ms: 800 });
+  await s.scrollTo(page.getByText(/Grammar issues( shown)?:/).first(), { block: 'start', ms: 800 });
   await sleep(3200);
   const evidence = page.getByRole('button', { name: /Evidence\/Support/ }).first();
   await s.click(evidence, { after: 1200 });
