@@ -38,6 +38,18 @@ describe('preview prisma-cli control mount contract', () => {
     }
   });
 
+  test('PR deploy tooling invokes reviewed migrate wrapper from /preview-control', () => {
+    const deploy = readFileSync(join(repoRoot, 'scripts/preview/deploy.sh'), 'utf8');
+    expect(deploy).toContain(
+      'bash /preview-control/prisma-migrate-deploy-with-summary.sh'
+    );
+    expect(deploy).toContain('PRISMA_MIGRATE_PRISMA_CLI_SCRIPT=/preview-control/prisma-cli.sh');
+    expect(deploy).toContain(
+      'PRISMA_MIGRATE_SUMMARY_SCRIPT=/preview-control/emit-prisma-migrate-summary.mjs'
+    );
+    expect(deploy).not.toContain('PRISMA_MIGRATE_PRISMA_CLI=');
+  });
+
   test('PR deploy tooling invokes reviewed prisma-cli from /preview-control', () => {
     const deploy = readFileSync(join(repoRoot, 'scripts/preview/deploy.sh'), 'utf8');
     const compose = readFileSync(
