@@ -633,13 +633,6 @@ export function DevPanelShell() {
         <DevPanelMobileBottomSheet
           open={state.open}
           onOpenChange={(open) => !open && closePanel()}
-          contentProps={{
-            'data-yawp-dev-panel': true,
-            'data-yawp-dev-panel-ready': 'true',
-            id: 'devtools',
-            role: 'dialog',
-            'aria-modal': true,
-          }}
         >
           {compactPanelContent}
         </DevPanelMobileBottomSheet>

@@ -9,7 +9,6 @@ type Props = {
   onClosed?: () => void;
   children: ReactNode;
   className?: string;
-  contentProps?: React.ComponentPropsWithoutRef<typeof SheetContent>;
 };
 
 export function DevPanelMobileBottomSheet({
@@ -18,7 +17,6 @@ export function DevPanelMobileBottomSheet({
   onClosed,
   children,
   className,
-  contentProps,
 }: Props) {
   const contentRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef<number | null>(null);
@@ -99,7 +97,11 @@ export function DevPanelMobileBottomSheet({
               : undefined,
           transition: dragging ? 'none' : undefined,
         }}
-        {...contentProps}
+        data-yawp-dev-panel
+        data-yawp-dev-panel-ready="true"
+        id="devtools"
+        role="dialog"
+        aria-modal
       >
         <div
           className="flex shrink-0 cursor-grab flex-col items-center px-4 pt-2 active:cursor-grabbing"
