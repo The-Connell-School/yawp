@@ -1,8 +1,14 @@
 import { Locator, Page, expect } from '@playwright/test';
 
 /** Console noise from react-router when a new navigation aborts an in-flight /__manifest fetch. */
-const ABORTED_MANIFEST_PATCH_CONSOLE =
-  /^Failed to fetch manifest patches TypeError: Failed to fetch$/;
+const ABORTED_MANIFEST_PATCH_FIRST_LINE =
+  'Failed to fetch manifest patches TypeError: Failed to fetch';
+
+/** Match only the first console line so Playwright stack suffixes do not bypass the filter. */
+export function isAbortedManifestPatchConsoleMessage(text: string): boolean {
+  const firstLine = text.split(/\r?\n/, 1)[0]?.trim() ?? '';
+  return firstLine === ABORTED_MANIFEST_PATCH_FIRST_LINE;
+}
 
 export type StrictPageObservability = {
   consoleErrors: string[];
@@ -23,7 +29,7 @@ export function attachStrictPageObservability(
   page.on('console', (message) => {
     if (message.type() !== 'error') return;
     const text = message.text();
-    if (inControlledNavigation && ABORTED_MANIFEST_PATCH_CONSOLE.test(text)) {
+    if (inControlledNavigation && isAbortedManifestPatchConsoleMessage(text)) {
       return;
     }
     consoleErrors.push(text);
