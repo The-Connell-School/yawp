@@ -46,6 +46,56 @@ export async function isDevPanelActive(page: Page) {
   );
 }
 
+/** App shell + dev-panel mount are present; beaker clicks are not dropped on hydration. */
+export async function waitForDeveloperToolsPageReady(page: Page) {
+  await page.waitForLoadState('domcontentloaded');
+  const beaker = page.getByRole('button', { name: 'Open developer tools' });
+  await expect(beaker).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('#devtools')).toBeAttached({ timeout: 15_000 });
+  await page
+    .waitForFunction(
+      () => {
+        const button = document.querySelector<HTMLButtonElement>(
+          'button[aria-label="Open developer tools"]'
+        );
+        return Boolean(button && button.offsetParent !== null);
+      },
+      undefined,
+      { timeout: 5_000 }
+    )
+    .catch(async () => {
+      await page.waitForTimeout(300);
+    });
+}
+
+const DEV_TOOLS_CLICK_RETRY_BUDGET_MS = 15_000;
+const DEV_TOOLS_CLICK_ATTEMPT_MS = 2_000;
+const DEV_TOOLS_PANEL_READY_SHORT_MS = 5_000;
+
+async function openDeveloperToolsViaBeakerClick(page: Page) {
+  await waitForDeveloperToolsPageReady(page);
+  const beaker = page.getByRole('button', { name: 'Open developer tools' });
+  const deadline = Date.now() + DEV_TOOLS_CLICK_RETRY_BUDGET_MS;
+  while (Date.now() < deadline) {
+    const panel = devToolsPanel(page);
+    if (await panel.isVisible().catch(() => false)) {
+      await expect(panel).toHaveAttribute('data-yawp-dev-panel-ready', 'true', {
+        timeout: DEV_TOOLS_PANEL_READY_SHORT_MS,
+      });
+      return;
+    }
+    await beaker.click({ timeout: DEV_TOOLS_CLICK_ATTEMPT_MS }).catch(() => {});
+    if (await panel.isVisible().catch(() => false)) {
+      await expect(panel).toHaveAttribute('data-yawp-dev-panel-ready', 'true', {
+        timeout: DEV_TOOLS_PANEL_READY_SHORT_MS,
+      });
+      return;
+    }
+    await page.waitForTimeout(200);
+  }
+  throw new Error('developer_tools_button_did_not_open_panel');
+}
+
 export async function openDevToolsPanel(page: Page) {
   const panel = devToolsPanel(page);
   if (await panel.isVisible().catch(() => false)) {
@@ -61,10 +111,8 @@ export async function openDevToolsPanel(page: Page) {
     return panel;
   }
 
-  const beaker = page.getByRole('button', { name: 'Open developer tools' });
-  await expect(beaker).toBeVisible({ timeout: 60_000 });
-  await beaker.click();
   try {
+    await openDeveloperToolsViaBeakerClick(page);
     await waitForDevPanelReady(page);
   } catch {
     await page.keyboard.press('Alt+Shift+D');
