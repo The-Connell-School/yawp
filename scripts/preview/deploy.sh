@@ -36,6 +36,7 @@ DEMO_BACKUP_RETENTION="${DEMO_BACKUP_RETENTION:-14}"
 DEMO_BACKUP_S3_URI="${DEMO_BACKUP_S3_URI:-s3://yawp-preview-videos/demo-backups}"
 DEMO_RESET_BACKUP_FILE=""
 DEMO_RESET_RECOVERY_ARMED=false
+DEMO_TESTER_FEEDBACK_BACKUP_FILE=""
 if [[ ! "$DEMO_BACKUP_RETENTION" =~ ^[0-9]+$ ]] \
   || (( DEMO_BACKUP_RETENTION < 1 || DEMO_BACKUP_RETENTION > 365 )); then
   echo "DEMO_BACKUP_RETENTION must be between 1 and 365" >&2
@@ -395,6 +396,68 @@ database_exists() {
   [[ "$exists" == "1" ]]
 }
 
+cleanup_demo_tester_feedback_backup() {
+  if [[ -n "${DEMO_TESTER_FEEDBACK_BACKUP_FILE:-}" ]]; then
+    DEMO_TESTER_FEEDBACK_BACKUP_FILE="$DEMO_TESTER_FEEDBACK_BACKUP_FILE" \
+      bash "$SCRIPT_DIR/preserve-demo-tester-feedback.sh" cleanup || true
+    DEMO_TESTER_FEEDBACK_BACKUP_FILE=""
+  fi
+}
+
+demo_tester_feedback_row_count() {
+  local count
+  if ! database_exists "$DATABASE_NAME"; then
+    echo 0
+    return 0
+  fi
+  count="$(docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 \
+    -U postgres -d "$DATABASE_NAME" -Atc \
+    "SELECT CASE WHEN to_regclass('public.\"TesterFeedback\"') IS NOT NULL
+      THEN (SELECT count(*)::bigint FROM \"TesterFeedback\")
+      ELSE 0::bigint END;" | tr -d '[:space:]')"
+  [[ "$count" =~ ^[0-9]+$ ]] || {
+    echo "Could not read TesterFeedback row count" >&2
+    return 1
+  }
+  echo "$count"
+}
+
+log_demo_tester_feedback_count() {
+  [[ "$SLUG" == "demo" ]] || return 0
+  local label="$1"
+  local count
+  count="$(demo_tester_feedback_row_count)"
+  echo "DEMO_TESTER_FEEDBACK_COUNT_${label}=${count}"
+}
+
+export_demo_tester_feedback_before_reset() {
+  [[ "$SLUG" == "demo" ]] || return 0
+  database_exists "$DATABASE_NAME" || return 0
+  log_demo_tester_feedback_count "BEFORE_RESET"
+  local backup_file=""
+  backup_file="$(PREVIEW_ROOT="$ROOT" DATABASE_NAME="$DATABASE_NAME" \
+    PREVIEW_POSTGRES_CONTAINER="$POSTGRES_CONTAINER" \
+    bash "$SCRIPT_DIR/preserve-demo-tester-feedback.sh" export)"
+  if [[ -n "$backup_file" ]]; then
+    DEMO_TESTER_FEEDBACK_BACKUP_FILE="$backup_file"
+    chmod 600 "$backup_file" 2>/dev/null || true
+    echo "Preserved demo tester feedback for reset restore."
+  fi
+}
+
+restore_demo_tester_feedback_after_reset() {
+  [[ "$SLUG" == "demo" ]] || return 0
+  [[ -n "${DEMO_TESTER_FEEDBACK_BACKUP_FILE:-}" ]] || return 0
+  PREVIEW_ROOT="$ROOT" DATABASE_NAME="$DATABASE_NAME" \
+    PREVIEW_POSTGRES_CONTAINER="$POSTGRES_CONTAINER" \
+    DEMO_TESTER_FEEDBACK_BACKUP_FILE="$DEMO_TESTER_FEEDBACK_BACKUP_FILE" \
+    BACKUP_FILE="$DEMO_TESTER_FEEDBACK_BACKUP_FILE" \
+    bash "$SCRIPT_DIR/preserve-demo-tester-feedback.sh" restore
+  DEMO_TESTER_FEEDBACK_BACKUP_FILE=""
+  log_demo_tester_feedback_count "AFTER_RESET"
+  echo "Restored demo tester feedback after reset seed."
+}
+
 backup_demo_database_before_reset() {
   local backup_file backup_output
   [[ "$SLUG" == "demo" ]] || return 0
@@ -439,9 +502,15 @@ recover_demo_database_on_failure() {
       bash "$SCRIPT_DIR/restore-demo-backup.sh" \
       && harden_preview_database; then
       echo "Demo pre-reset database restored; existing web container can reconnect." >&2
+      cleanup_demo_tester_feedback_backup
     else
       echo "CRITICAL: automatic demo database recovery failed; use $DEMO_RESET_BACKUP_FILE." >&2
+      if [[ -n "${DEMO_TESTER_FEEDBACK_BACKUP_FILE:-}" ]]; then
+        echo "Tester feedback backup retained at ${DEMO_TESTER_FEEDBACK_BACKUP_FILE} for manual restore." >&2
+      fi
     fi
+  else
+    cleanup_demo_tester_feedback_backup
   fi
   return "$status"
 }
@@ -527,6 +596,7 @@ reset_preview_database_for_data_source_change() {
 
   echo "Preview data source changed; replacing database $DATABASE_NAME..."
   backup_demo_database_before_reset
+  export_demo_tester_feedback_before_reset
   if [[ "$SLUG" == "demo" ]]; then
     arm_demo_reset_recovery
   else
@@ -540,6 +610,7 @@ reset_seed_preview_database() {
   validate_database_name "$DATABASE_NAME"
   echo "Resetting preview database $DATABASE_NAME for seeded local-dev data..."
   backup_demo_database_before_reset
+  export_demo_tester_feedback_before_reset
   if [[ "$SLUG" == "demo" ]]; then
     arm_demo_reset_recovery
   else
@@ -750,6 +821,7 @@ run_tooling_if_needed() {
 
   if [[ "$DATABASE_CREATED" == "0" && "$fingerprint" == "$previous_fingerprint" && -z "$missing_artifacts" ]]; then
     echo "Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate."
+    echo "DEMO_PRISMA_MIGRATE_SUMMARY=Skipped (tooling fingerprint unchanged; migrate deploy not run)"
     TOOLING_CHANGED=0
     # Even when skipping full tooling, always run idempotent seeds that must
     # keep preview data current with the codebase (e.g., AP History library).
@@ -793,8 +865,13 @@ run_tooling_if_needed() {
     "${compose[@]}" pull --quiet toolbox web || true
   fi
 
-  local tooling_command
-  tooling_command="bun install --ignore-scripts && ${prisma_cli} generate && (${prisma_cli} migrate deploy || ${prisma_cli} migrate deploy) && cd packages/prisma"
+  local tooling_command migrate_wrapper
+  if [[ "$SLUG" =~ ^pr-[1-9][0-9]*$ ]]; then
+    migrate_wrapper='PRISMA_MIGRATE_REPO_ROOT=/app PRISMA_MIGRATE_PRISMA_CLI_SCRIPT=/preview-control/prisma-cli.sh PRISMA_MIGRATE_SUMMARY_SCRIPT=/preview-control/emit-prisma-migrate-summary.mjs bash /preview-control/prisma-migrate-deploy-with-summary.sh'
+  else
+    migrate_wrapper='bash scripts/preview/prisma-migrate-deploy-with-summary.sh'
+  fi
+  tooling_command="bun install --ignore-scripts && ${prisma_cli} generate && ${migrate_wrapper} && cd packages/prisma"
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/backfill-class-art-key.ts" ]]; then
     tooling_command+=' && bun run scripts/backfill-class-art-key.ts'
   fi
@@ -956,6 +1033,7 @@ reset_preview_database_for_data_source_change
 ensure_preview_database
 harden_preview_database
 run_tooling_if_needed
+restore_demo_tester_feedback_after_reset
 ensure_preview_seats
 # Outside run_tooling_if_needed: also apply OFF after label removal on its early-return path.
 apply_preview_signon_flag
@@ -1023,6 +1101,7 @@ for attempt in $(seq 1 90); do
     '
     echo "PREVIEW_ELAPSED_MS=$elapsed_ms"
     printf '%s\n' "$DATA_SOURCE_FINGERPRINT" > "$DATA_SOURCE_FINGERPRINT_FILE"
+    cleanup_demo_tester_feedback_backup
     DEMO_RESET_RECOVERY_ARMED=false
     exit 0
   fi

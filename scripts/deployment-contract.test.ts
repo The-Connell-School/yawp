@@ -250,6 +250,27 @@ describe('production deployment contract', () => {
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 
+  test('CI smoke shards assign each smoke spec file exactly once', async () => {
+    const { E2E_SMOKE_SHARDS, E2E_SMOKE_SPECS } = await import(
+      '../services/web-app/e2e/smoke-specs.ts'
+    );
+    const assigned: string[] = [];
+    for (let shard = 1; shard <= 6; shard += 1) {
+      assigned.push(...E2E_SMOKE_SHARDS[shard as 1 | 2 | 3 | 4 | 5 | 6]);
+    }
+    expect(assigned.length).toBe(E2E_SMOKE_SPECS.length);
+    expect(new Set(assigned).size).toBe(E2E_SMOKE_SPECS.length);
+    expect([...assigned].sort()).toEqual([...E2E_SMOKE_SPECS].sort());
+    for (const spec of E2E_SMOKE_SPECS) {
+      expect(existsSync(join(repoRoot, 'services/web-app', spec))).toBe(true);
+    }
+    const webAppPackage = JSON.parse(readRepoFile('services/web-app/package.json'));
+    expect(webAppPackage.scripts['test:e2e:smoke']).toBe('bun ./scripts/run-smoke-e2e.ts');
+    const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
+    expect(ciWorkflow).toContain('bun run test:e2e:smoke -- --shard=');
+    expect(ciWorkflow).not.toContain('--shard=${{ matrix.shard }}/${{ strategy.job-total }}');
+  });
+
   test('root build context excludes local credentials and host dependencies', () => {
     const patterns = readRepoFile('.dockerignore').split(/\r?\n/).map(line => line.trim());
     for (const required of ['.git', '**/.env', '**/.env.*', '**/node_modules', '**/build']) {
@@ -778,7 +799,7 @@ describe('PR preview deployment contract', () => {
       resetIndex
     );
     const generateIndex = deployScript.indexOf('${prisma_cli} generate');
-    const migrateIndex = deployScript.indexOf('${prisma_cli} migrate deploy');
+    const migrateIndex = deployScript.indexOf('${migrate_wrapper}');
     expect(deployScript).toContain(
       "prisma_cli='PRISMA_CLI_REPO_ROOT=/app bash /preview-control/prisma-cli.sh'"
     );
@@ -843,7 +864,13 @@ describe('PR preview deployment contract', () => {
     expect(seedIndex).toBeGreaterThan(backfillIndex);
     expect(syncIndex).toBeGreaterThan(backfillIndex);
     expect(releaseGateIndex).toBeGreaterThan(seedIndex);
-    expect(webStartIndex).toBeGreaterThan(releaseGateIndex);
+    expect(deployScript).toMatch(
+      /run_tooling_if_needed\nrestore_demo_tester_feedback_after_reset/
+    );
+    const restoreCallIndex = deployScript.indexOf(
+      'run_tooling_if_needed\nrestore_demo_tester_feedback_after_reset'
+    );
+    expect(webStartIndex).toBeGreaterThan(restoreCallIndex);
   });
 
   test('the database deletion boundary independently rejects unconfirmed demo resets', () => {
@@ -2049,6 +2076,21 @@ describe('demo environment deployment contract', () => {
     expect(deployScript).toContain('recover_demo_database_on_failure');
     expect(deployScript).toContain('restore-demo-backup.sh');
     expect(deployScript).toContain('install_demo_backup_tooling');
+    expect(deployScript).toContain('export_demo_tester_feedback_before_reset');
+    expect(deployScript).toContain('restore_demo_tester_feedback_after_reset');
+    expect(deployScript).toContain('preserve-demo-tester-feedback.sh');
+    expect(deployScript).toContain('prisma-migrate-deploy-with-summary.sh');
+    expect(deployScript).toContain(
+      'bash /preview-control/prisma-migrate-deploy-with-summary.sh'
+    );
+    expect(deployScript).toContain('DEMO_PRISMA_MIGRATE_SUMMARY=Skipped');
+    expect(deployScript).toContain('log_demo_tester_feedback_count');
+    expect(existsSync(join(repoRoot, 'scripts/preview/preserve-demo-tester-feedback.sh'))).toBe(
+      true
+    );
+    expect(existsSync(join(repoRoot, 'scripts/preview/preserve-demo-tester-feedback.mjs'))).toBe(
+      true
+    );
   });
 
   test('demo deploy runs detached from the GitHub Actions SSH session', () => {
@@ -2061,6 +2103,10 @@ describe('demo environment deployment contract', () => {
     expect(workflow).toContain('ensure-host-swap.sh');
     expect(workflow).toContain('install-host-metrics.sh');
     expect(workflow).toContain('run-host-deploy-detached.sh');
+    expect(workflow).toContain('Surface demo deploy database signals');
+    expect(workflow).toContain("grep -E '^DEMO_PRISMA_MIGRATE_'");
+    expect(workflow).toContain('TesterFeedback rows before deploy');
+    expect(workflow).toContain('TesterFeedback row count decreased during deploy');
     expect(detached).toContain('FAILURE_LOG_LINES="${FAILURE_LOG_LINES:-120}"');
     expect(detached).toContain('emit_failure_log_tail');
     expect(detached).toContain('mask_deploy_log');
@@ -2110,6 +2156,8 @@ describe('demo environment deployment contract', () => {
     expect(workflow).toContain(
       'Demo aggregate data decreased during no-reset deploy'
     );
+    expect(workflow).toContain('TesterFeedback row count decreased during deploy');
+    expect(readRepoFile(signaturePath)).toContain('testerFeedback');
   });
   test('demo backups are scheduled daily with configurable count retention', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');

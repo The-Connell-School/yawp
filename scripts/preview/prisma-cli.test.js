@@ -12,14 +12,14 @@ describe('preview prisma-cli', () => {
     expect(deploy).toContain('scripts/preview/prisma-cli.sh');
     expect(deploy).not.toContain('bun prisma migrate deploy');
     expect(deploy).not.toMatch(/bun prisma generate/);
-    expect(deploy).toContain(
-      '(${prisma_cli} migrate deploy || ${prisma_cli} migrate deploy)'
-    );
-    const generateIndex = deploy.indexOf('${prisma_cli} generate');
-    const migrateIndex = deploy.indexOf('${prisma_cli} migrate deploy');
+    expect(deploy).toContain('prisma-migrate-deploy-with-summary.sh');
+    expect(deploy).toContain('PRISMA_MIGRATE_PRISMA_CLI_SCRIPT=/preview-control/prisma-cli.sh');
+    const toolingSection = deploy.slice(deploy.indexOf('run_tooling_if_needed()'));
+    const generateIndex = toolingSection.indexOf('${prisma_cli} generate');
+    const migrateIndex = toolingSection.indexOf('${migrate_wrapper}');
     expect(generateIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeGreaterThan(generateIndex);
-    expect(deploy).toContain('migrate deploy) && cd packages/prisma');
+    expect(toolingSection).toContain('&& ${migrate_wrapper} && cd packages/prisma');
   });
 
   test('wrapper executes Prisma via node build entry', () => {
