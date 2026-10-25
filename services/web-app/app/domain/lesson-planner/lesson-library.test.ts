@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildLessonLibrary,
   classDisplayName,
+  lessonClassName,
   groupUnits,
   lessonHref,
   splitDraftsAndLibrary,
@@ -26,6 +27,24 @@ function lesson(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+// Brian's round 4, item 4: "Class: Not specified" for a lesson made for a class.
+describe('lessonClassName', () => {
+  test('the class the lesson came from, then its own label', () => {
+    expect(lessonClassName({ klass: { title: 'English 10', grade: '10', period: '3' }, label: 'Other', planningLabel: null, courseName: null })).toBe('English 10');
+    expect(lessonClassName({ klass: null, label: 'English 10 · Period 3', planningLabel: 'x', courseName: 'y' })).toBe('English 10 · Period 3');
+  });
+
+  test("a unit day takes the unit's planning chat's class, then the unit's course", () => {
+    expect(lessonClassName({ klass: null, label: null, planningLabel: 'English 10 · Period 2', courseName: 'English 10' })).toBe('English 10 · Period 2');
+    expect(lessonClassName({ klass: null, label: '  ', planningLabel: null, courseName: 'English 10' })).toBe('English 10');
+  });
+
+  test('none when nothing names a class; "My lessons" is not a class', () => {
+    expect(lessonClassName({ klass: null, label: null, planningLabel: null, courseName: 'My lessons' })).toBeNull();
+    expect(lessonClassName({ klass: null, label: null, planningLabel: null, courseName: null })).toBeNull();
+  });
+});
 
 describe('classDisplayName', () => {
   test('prefers an explicit class title', () => {

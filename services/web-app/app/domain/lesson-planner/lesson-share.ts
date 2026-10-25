@@ -245,6 +245,9 @@ export const REWRITE_SYSTEM: Record<ShareAudience, string> = {
   admin: [
     'Summarize a teacher’s lesson for a school administrator.',
     'What the lesson does and for whom, then the steps with their minutes and one line of why each.',
+    // Brian's round 4, item 4.
+    'The class is given on the "Class:" line: name it exactly as written. Write "Not specified" only when that line says none was given.',
+    'Name each step by its type first, as given ("Class Starter: What actually moves people"), the way the teacher’s lesson labels it.',
     'Never name a standard, a standards code or an alignment claim: Yawp! adds the standards the teacher named itself, and says nothing about the ones they did not.',
     'Professional and concise. Markdown. At most 350 words. Return only the summary.',
     REWRITE_VOICE,
@@ -271,14 +274,42 @@ export function withoutWritingShare(text: string): string {
     .trim();
 }
 
+/** A step as a share page names it: its type, then its title (Brian's round 4, item 4). */
+export type RewriteStep = { title: string; type?: string | null; minutes: number; startsAt: number; excerpt: string; content: string };
+
+function typedTitle(step: { title: string; type?: string | null }): string {
+  return handoutHeading(step.title, step.type ?? null);
+}
+
+/** What the model is given to rewrite: the lesson, its class, and each step by type. */
+export function rewriteUserMessage({
+  title,
+  className,
+  steps,
+}: {
+  title: string;
+  className: string | null;
+  steps: RewriteStep[];
+}): string {
+  return [
+    `Lesson: ${title}`,
+    `Class: ${className ?? 'none given'}`,
+    '',
+    ...steps.map(
+      (step) =>
+        `- Minute ${step.startsAt}, ${step.minutes} min: ${typedTitle(step)}\n  ${step.content.replace(/\s+/g, ' ').slice(0, 700)}`
+    ),
+  ].join('\n');
+}
+
 /** What the page says when no rewrite came back: the steps, timed. */
 export function fallbackLessonText(
-  steps: Array<{ title: string; minutes: number; startsAt: number; excerpt: string }>
+  steps: Array<{ title: string; type?: string | null; minutes: number; startsAt: number; excerpt: string }>
 ): string {
   return steps
     .map(
       (step) =>
-        `## Minute ${step.startsAt} · ${step.title} (${step.minutes} min)\n\n${step.excerpt}`
+        `## Minute ${step.startsAt} · ${typedTitle(step)} (${step.minutes} min)\n\n${step.excerpt}`
     )
     .join('\n\n');
 }

@@ -24,6 +24,7 @@ import { withoutTrailingCommentary } from './plan-steps';
 import { DEFAULT_STEP_MINUTES, stepTypeFor } from './step-types';
 import { orderStackEntries } from './stack-order';
 import { minutesInTitle } from './lesson-title';
+import { lessonClassName } from './lesson-library';
 
 export type LoadedLessonPacket = {
   conversationId: string;
@@ -152,21 +153,34 @@ export async function loadLessonPacket({
   if (!conversation) throw new Response('Not Found', { status: 404 });
   // A day built before days took the unit's period (Kevin, Oct 25, note 8a)
   // takes it now, once, from the chat that planned the unit.
-  if (conversation.periodMinutes == null && conversation.unitId && conversation.unitDay != null) {
+  // The class comes along on its own too (Brian's round 4, item 4): a day
+  // that already had a period still had no class.
+  let courseName: string | null = null;
+  if (
+    conversation.unitId &&
+    conversation.unitDay != null &&
+    (conversation.periodMinutes == null || !conversation.lessonClassLabel)
+  ) {
     const planning = await prisma.lessonPlanConversation.findFirst({
       where: { unitId: conversation.unitId, unitDay: null, membershipId: access.membership.id, deletedAt: null },
       select: { periodMinutes: true, lessonClassLabel: true },
     });
-    if (planning?.periodMinutes) {
+    const period = conversation.periodMinutes == null ? (planning?.periodMinutes ?? null) : null;
+    const label = conversation.lessonClassLabel ? null : (planning?.lessonClassLabel?.trim() || null);
+    if (period || label) {
       await prisma.lessonPlanConversation.update({
         where: { id: conversation.id },
-        data: {
-          periodMinutes: planning.periodMinutes,
-          ...(conversation.lessonClassLabel ? {} : { lessonClassLabel: planning.lessonClassLabel }),
-        },
+        data: { ...(period ? { periodMinutes: period } : {}), ...(label ? { lessonClassLabel: label } : {}) },
       });
-      conversation.periodMinutes = planning.periodMinutes;
-      conversation.lessonClassLabel ??= planning.lessonClassLabel;
+      if (period) conversation.periodMinutes = period;
+      if (label) conversation.lessonClassLabel = label;
+    }
+    if (!conversation.lessonClassLabel && !conversation.originClassAssignment) {
+      const unit = await prisma.lessonPlanUnit.findFirst({
+        where: { id: conversation.unitId },
+        select: { course: { select: { name: true } } },
+      });
+      courseName = unit?.course?.name ?? null;
     }
   }
   // Still none: the period the lesson's own heading gave, "(50 min)" (Brian's
@@ -183,14 +197,14 @@ export async function loadLessonPacket({
   }
   const assignmentLinks = linksByToken(conversation.assignmentLinks);
 
-  const klass = conversation.originClassAssignment?.class;
-  const className = klass
-    ? (klass.title ??
-      (klass.grade && klass.period
-        ? `${klass.grade} · Period ${klass.period}`
-        : (klass.grade ?? null)))
-    : // The class the teacher named when they gave the length (run 2, B1).
-      (conversation.lessonClassLabel ?? null);
+  // The class it came from, the one the teacher named when they gave the
+  // length (run 2, B1), then its unit's (Brian's round 4, item 4).
+  const className = lessonClassName({
+    klass: conversation.originClassAssignment?.class,
+    label: conversation.lessonClassLabel,
+    planningLabel: null,
+    courseName,
+  });
 
   const reviewFlags = await getLessonPlannerReviewFlags(
     access.membership.organization.id

@@ -64,6 +64,32 @@ export function classDisplayName(klass: {
   return klass.grade ?? null;
 }
 
+/**
+ * The class a lesson is for, from the best source it has (Brian's round 4,
+ * item 4): the class it came from, the class the teacher named, then for a
+ * unit day the class its unit was planned for, then the unit's course (a
+ * library tab, named for the class). "My lessons" is not a class.
+ */
+export function lessonClassName({
+  klass,
+  label,
+  planningLabel,
+  courseName,
+}: {
+  klass: { title: string | null; grade: string | null; period: string | null } | null | undefined;
+  label: string | null | undefined;
+  planningLabel: string | null | undefined;
+  courseName: string | null | undefined;
+}): string | null {
+  const named = (value: string | null | undefined) => value?.trim() || null;
+  return (
+    (klass ? classDisplayName(klass) : null) ??
+    named(label) ??
+    named(planningLabel) ??
+    (named(courseName) && courseName!.trim() !== 'My lessons' ? courseName!.trim() : null)
+  );
+}
+
 function asIsoString(value: Date | string): string {
   return typeof value === 'string' ? value : value.toISOString();
 }

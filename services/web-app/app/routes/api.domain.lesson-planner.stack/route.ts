@@ -40,6 +40,7 @@ import { renameLesson } from '~/domain/lesson-planner/lesson-rename.server';
 import { MAX_NOTES } from '~/domain/lesson-planner/teacher-notes';
 import { MAX_EXTENSIONS, readExtensionIds } from '~/domain/lesson-planner/extensions';
 import { noteSteps, saveStepNotes, teacherNotesFor } from '~/domain/lesson-planner/teacher-notes.server';
+import { STEP_TYPE_LABELS } from '~/domain/lesson-planner/step-types';
 
 const POST = z
   .object({
@@ -359,6 +360,8 @@ export async function action({ request }: ActionFunctionArgs) {
               const step = loaded.v3.steps.find((entry) => entry.id === block.id)!;
               return {
                 title: block.title,
+                // Each step by its type, as the stack labels it (Brian's round 4, item 4).
+                type: step.writingName ?? STEP_TYPE_LABELS[step.type],
                 minutes: block.minutes,
                 startsAt: block.startsAt,
                 excerpt: step.excerpt,

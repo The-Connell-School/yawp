@@ -164,4 +164,21 @@ describe("share pages name the writing by type (Brian's round 3, 1.7–1.9)", ()
     expect(inYawpTypes(['Daily Pages', 'Class Starter', 'Daily Pages'])).toEqual(['Daily Pages (2)', 'Class Starter']);
     expect(inYawpTypes([])).toEqual([]);
   });
+
+  // Brian's round 4, item 4.
+  test('the admin summary names the class and labels each step by its type', async () => {
+    const { REWRITE_SYSTEM, rewriteUserMessage, fallbackLessonText } = await import('./lesson-share');
+    expect(REWRITE_SYSTEM.admin).toContain('Not specified');
+    expect(REWRITE_SYSTEM.admin).toContain('by its type');
+    const steps = [
+      { title: 'What actually moves people', type: 'Class Starter', minutes: 5, startsAt: 0, excerpt: 'Write.', content: 'Write about it.' },
+      { title: 'Closing', type: 'Closing', minutes: 3, startsAt: 5, excerpt: 'Wrap.', content: 'Wrap up.' },
+    ];
+    const message = rewriteUserMessage({ title: 'Day 2: Sinners', className: 'English 10 · Period 3', steps });
+    expect(message).toContain('Class: English 10 · Period 3');
+    expect(message).toContain('Class Starter: What actually moves people');
+    expect(message).not.toContain('Closing: Closing');
+    expect(rewriteUserMessage({ title: 'Day 2', className: null, steps })).toContain('Class: none given');
+    expect(fallbackLessonText(steps)).toContain('## Minute 0 · Class Starter: What actually moves people (5 min)');
+  });
 });
