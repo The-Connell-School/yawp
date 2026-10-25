@@ -206,5 +206,7 @@ describe("no backstage language in titles (Brian's round 3, 1.1)", () => {
     expect(minutesInTitle('Day 1 — Franklin (45–50 minutes)')).toBe(50);
     expect(minutesInTitle('Franklin')).toBeNull();
     expect(minutesInTitle('Day 1 (5 min)')).toBeNull();
+    // A step's length is not a period: a lesson named "Hook (15 min)" keeps none.
+    expect(minutesInTitle('Hook (15 min) {type: activity}')).toBeNull();
   });
 });

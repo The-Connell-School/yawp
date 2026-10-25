@@ -28,10 +28,10 @@ export function cleanLessonTitle(raw: string): string {
 
 /**
  * The period a title gave ("(50 min)"), for a lesson whose period was never
- * stored (Brian's round 3, 1.2). A step's few minutes are not a period.
+ * stored (Brian's round 3, 1.2). A step's minutes (under 30) are not a period.
  */
 export function minutesInTitle(raw: string): number | null {
   const match = DURATION.exec(raw.replace(TAG, ' ').trim());
   const minutes = match ? Number(match[1] ?? match[2]) : NaN;
-  return minutes >= 10 && minutes <= 240 ? minutes : null;
+  return minutes >= 30 && minutes <= 240 ? minutes : null;
 }
