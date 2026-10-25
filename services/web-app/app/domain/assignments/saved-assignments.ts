@@ -18,6 +18,18 @@ export const SAVED_ASSIGNMENTS_ENABLED = false;
  */
 export const DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE = 100;
 
+/**
+ * Short daily writing: five or ten minutes is not a hundred-point assignment
+ * (Brian's round 4, item 2). Teachers can still change it.
+ */
+export const SHORT_WRITING_POINT_VALUE = 20;
+const SHORT_WRITING_KINDS = new Set(['class_starter', 'exit_ticket']);
+
+/** What a new assignment of this type is worth until the teacher says otherwise. */
+export function defaultPointValueForKind(kind: string | null | undefined): number {
+  return kind && SHORT_WRITING_KINDS.has(kind) ? SHORT_WRITING_POINT_VALUE : DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE;
+}
+
 /** A saved assignment as the loaders hand it to the UI. */
 export type SavedAssignment = {
   id: string;

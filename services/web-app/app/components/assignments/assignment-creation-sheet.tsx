@@ -61,7 +61,7 @@ import {
 } from '~/components/ui/sheet';
 import { Textarea } from '~/components/ui/textarea';
 import {
-  DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE,
+  defaultPointValueForKind,
   SAVED_ASSIGNMENTS_ENABLED,
 } from '~/domain/assignments/saved-assignments';
 import {
@@ -424,6 +424,13 @@ const EMPTY_LESSON_NOTES: ExitTicketLessonNotes = {
   watchFor: '',
 };
 
+function kindOfTypeId(
+  assignmentTypes: AssignmentCreationAssignmentType[],
+  assignmentTypeId: string
+) {
+  return assignmentTypes.find((type) => type.id === assignmentTypeId)?.kind ?? null;
+}
+
 function isExitTicketTypeId(
   assignmentTypes: AssignmentCreationAssignmentType[],
   assignmentTypeId: string
@@ -460,13 +467,17 @@ export function initialTutorEnabledFor({
 export function initialGradingFor({
   isEditing,
   isExitTicket,
+  kind = null,
   initialSubmitForGrade,
   initialPointValue,
   plannedGradebook = null,
 }: {
   isEditing: boolean;
   isExitTicket: boolean;
+  /** The type's kind: Class Starter and Exit Ticket open at 20 (Brian's round 4, item 2). */
+  kind?: string | null;
   initialSubmitForGrade: boolean;
+  /** Undefined when nothing chose the points: the type's default applies. */
   initialPointValue: number | null | undefined;
   /** A planned ticket's own choice, which beats the exit ticket default. */
   plannedGradebook?: {
@@ -477,7 +488,11 @@ export function initialGradingFor({
   if (isEditing || !isExitTicket) {
     return {
       submitForGrade: initialSubmitForGrade,
-      pointValue: initialPointValue,
+      // An edit with no points given keeps the old fallback of 100.
+      pointValue:
+        initialPointValue === undefined
+          ? defaultPointValueForKind(isEditing ? null : kind)
+          : initialPointValue,
     };
   }
   if (plannedGradebook) {
@@ -625,7 +640,7 @@ export function AssignmentCreationSheetContent({
   emptyClassesMessage = "You don't have any assignment-enabled classes yet.",
   titleRequired = false,
   initialSubmitForGrade = true,
-  initialPointValue = DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE,
+  initialPointValue,
   initialTutorEnabled = true,
   initialCollaborationEnabled = false,
   initialCollaborationGroupMode = DEFAULT_COLLABORATION_GROUP_MODE,
@@ -667,6 +682,15 @@ export function AssignmentCreationSheetContent({
   const initialGrading = initialGradingFor({
     isEditing: Boolean(editingAssignment),
     isExitTicket: isExitTicketTypeId(
+      assignmentTypes,
+      initialAssignmentTypeSelection(
+        assignmentTypes,
+        fixedAssignmentTypeId,
+        initialAssignmentTypeId,
+        Boolean(editingAssignment)
+      )
+    ),
+    kind: kindOfTypeId(
       assignmentTypes,
       initialAssignmentTypeSelection(
         assignmentTypes,
@@ -948,6 +972,15 @@ export function AssignmentCreationSheetContent({
     const grading = initialGradingFor({
       isEditing: Boolean(editingAssignment),
       isExitTicket: isExitTicketTypeId(
+        assignmentTypes,
+        initialAssignmentTypeSelection(
+          assignmentTypes,
+          fixedAssignmentTypeId,
+          initialAssignmentTypeId,
+          Boolean(editingAssignment)
+        )
+      ),
+      kind: kindOfTypeId(
         assignmentTypes,
         initialAssignmentTypeSelection(
           assignmentTypes,
@@ -1268,6 +1301,7 @@ export function AssignmentCreationSheetContent({
               const grading = initialGradingFor({
                 isEditing,
                 isExitTicket: nextIsExitTicket,
+                kind: kindOfTypeId(assignmentTypes, nextTypeId),
                 initialSubmitForGrade,
                 initialPointValue,
               });

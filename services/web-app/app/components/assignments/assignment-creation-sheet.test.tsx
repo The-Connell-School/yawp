@@ -35,7 +35,7 @@ mock.module('~/components/ui/tooltip', () => ({
 }));
 
 
-const { AssignmentCreationSheetContent, assignmentCreationClassLabel } =
+const { AssignmentCreationSheetContent, assignmentCreationClassLabel, initialGradingFor } =
   await import('./assignment-creation-sheet');
 const { SAVED_ASSIGNMENTS_ENABLED } =
   await import('~/domain/assignments/saved-assignments');
@@ -45,6 +45,43 @@ const {
   EXIT_TICKET_ELABORATION_NOTE,
   EXIT_TICKET_FOCUS_OPTIONS,
 } = await import('~/domain/assignment-types/exit-ticket');
+
+// Brian's round 4, item 2.
+describe('initialGradingFor', () => {
+  it('opens a new Class Starter at 20 points', () => {
+    expect(
+      initialGradingFor({ isEditing: false, isExitTicket: false, kind: 'class_starter', initialSubmitForGrade: true, initialPointValue: undefined })
+    ).toEqual({ submitForGrade: true, pointValue: 20 });
+  });
+
+  it('opens a new Exit Ticket at 20 points when it is graded', () => {
+    expect(
+      initialGradingFor({
+        isEditing: false,
+        isExitTicket: true,
+        kind: 'exit_ticket',
+        initialSubmitForGrade: true,
+        initialPointValue: undefined,
+        plannedGradebook: { submitForGrade: true, pointValue: null },
+      })
+    ).toEqual({ submitForGrade: true, pointValue: 20 });
+    expect(
+      initialGradingFor({ isEditing: false, isExitTicket: true, kind: 'exit_ticket', initialSubmitForGrade: true, initialPointValue: undefined }).pointValue
+    ).toBe(20);
+  });
+
+  it('keeps 100 for other types, and keeps points it was given', () => {
+    expect(
+      initialGradingFor({ isEditing: false, isExitTicket: false, kind: 'daily_pages', initialSubmitForGrade: true, initialPointValue: undefined }).pointValue
+    ).toBe(100);
+    expect(
+      initialGradingFor({ isEditing: false, isExitTicket: false, kind: 'class_starter', initialSubmitForGrade: true, initialPointValue: 50 }).pointValue
+    ).toBe(50);
+    expect(
+      initialGradingFor({ isEditing: true, isExitTicket: false, kind: 'class_starter', initialSubmitForGrade: true, initialPointValue: 100 }).pointValue
+    ).toBe(100);
+  });
+});
 
 describe('assignmentCreationClassLabel', () => {
   it('shows grade and period when both are present', () => {
@@ -374,6 +411,8 @@ describe('AssignmentCreationSheetContent', () => {
       },
       expectedAction: '/api/assignments/create',
       expectedAssignmentTypeId: 'type-2',
+      // type-2 is a Class Starter: 20 points (Brian's round 4, item 2).
+      expectedPoints: 20,
     },
     {
       name: 'class page',
@@ -386,7 +425,7 @@ describe('AssignmentCreationSheetContent', () => {
     },
   ])(
     'renders the standardized create fields for the $name entry point',
-    ({ props, expectedAction, expectedAssignmentTypeId }) => {
+    ({ props, expectedAction, expectedAssignmentTypeId, expectedPoints = 100 }) => {
       root = renderSheet(props).root;
 
       expectText('New Assignment');
@@ -403,7 +442,7 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Extract from PDF');
       expectText('Submit for grade');
       expectText(
-        'Graded out of 100 points, read at the intermediate level.'
+        `Graded out of ${expectedPoints} points, read at the intermediate level.`
       );
       expectText('Tutor enabled');
       expectText(
@@ -424,7 +463,7 @@ describe('AssignmentCreationSheetContent', () => {
 
       const submitForGrade = controlById('assignment-create-submit-for-grade');
       expect(isChecked(submitForGrade)).toBe(true);
-      expect(inputByName('pointValue').value).toBe('100');
+      expect(inputByName('pointValue').value).toBe(String(expectedPoints));
       expect(inputByName('gradingAssistantStrictnessLevel').value).toBe(
         'intermediate'
       );
@@ -1104,7 +1143,7 @@ describe('AssignmentCreationSheetContent', () => {
             'assignment-create-exit-ticket-points'
           ) as HTMLInputElement
         ).value
-      ).toBe('10');
+      ).toBe('20');
       // Posted exactly once, from the builder, not also from the grading panel.
       expect(allInputsByName('pointValue')).toHaveLength(1);
       expect(
@@ -1181,7 +1220,7 @@ describe('AssignmentCreationSheetContent', () => {
       turnGradingOn();
 
       expect(inputByName('gradingMode').value).toBe('bands');
-      expectText('Graded out of 10 points, read at the');
+      expectText('Graded out of 20 points, read at the');
       act(() => {
         controlById('assignment-create-change-grading').click();
       });

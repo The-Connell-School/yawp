@@ -30,6 +30,7 @@ import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment
 import { FreeClassroomAssignmentQuotaError } from '~/utils/assignment-quota.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { defaultPointValueForKind } from '~/domain/assignments/saved-assignments';
 import {
   DEFAULT_ASSIGNMENT_POINT_VALUE,
   parseAssignmentGradingIntent,
@@ -239,6 +240,12 @@ export async function action({ request }: ActionFunctionArgs) {
       },
       { status: 400 }
     );
+  }
+
+  // A form that posts no points gets the type's: 20 for a Class Starter or
+  // an Exit Ticket (Brian's round 4, item 2), 100 otherwise.
+  if (gradingIntent.success && gradingIntent.data.submitForGrade && !formData.has('pointValue')) {
+    gradingIntent.data.pointValue = defaultPointValueForKind(assignmentType.kind);
   }
 
   // Read once the type is known: a quick-builder exit ticket is always graded

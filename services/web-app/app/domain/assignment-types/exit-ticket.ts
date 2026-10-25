@@ -108,9 +108,10 @@ export const EXIT_TICKET_SUBMIT_FOR_GRADE_DEFAULT = false;
 /**
  * What an exit ticket is worth when a teacher does grade it. Five minutes of
  * writing is not a hundred-point assignment, and the product default of 100
- * would quietly make one lesson check outweigh an essay.
+ * would quietly make one lesson check outweigh an essay. 20, the same as a
+ * Class Starter (Brian's round 4, item 2).
  */
-export const EXIT_TICKET_DEFAULT_POINT_VALUE = 10;
+export const EXIT_TICKET_DEFAULT_POINT_VALUE = 20;
 
 /** Notes, not lesson plans: long enough for a paragraph each. */
 export const EXIT_TICKET_LESSON_NOTE_MAX_LENGTH = 1000;

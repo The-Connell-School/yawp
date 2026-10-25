@@ -409,6 +409,24 @@ describe('api.assignments.create', () => {
       return (createAssignmentDeployedToClasses.mock.calls[0]?.[0] as any)?.data;
     }
 
+    // Brian's round 4, item 2.
+    test('a class starter with no points posted is worth 20', async () => {
+      mockAssignmentTypeAvailable({ kind: 'class_starter' });
+
+      const body = await readBody(await createWith({}));
+
+      expect(body).toMatchObject({ success: true });
+      expect(createdData()).toMatchObject({ submitForGrade: true, pointValue: 20 });
+    });
+
+    test('points the teacher posted are kept, whatever the type', async () => {
+      mockAssignmentTypeAvailable({ kind: 'class_starter' });
+
+      await readBody(await createWith({ pointValue: '100' }));
+
+      expect(createdData()).toMatchObject({ pointValue: 100 });
+    });
+
     test('writes neither a paragraph type nor a writing time', async () => {
       mockAssignmentTypeAvailable({ kind: 'daily_pages' });
 

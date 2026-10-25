@@ -213,7 +213,7 @@ function buildExitTicketSection(available: boolean): string[] {
     ...notes,
     '- Students never see the notes. They are the answer key and the misconception you are watching for, not part of the prompt — so never write the answer into `topic`.',
     '- Grading is off unless you add `graded: yes`, and most exit tickets should stay ungraded: students are honest when admitting what they missed costs nothing. Grade one only when the teacher asked for it, or when the lesson ends on a concrete check that should count. A graded ticket has to say what it is graded against, or it arrives ungraded:',
-    '  - `points` — what it is worth. Small: an exit ticket is never worth as much as real work. Omit it for the default of 10.',
+    '  - `points` — what it is worth. Small: an exit ticket is never worth as much as real work. Omit it for the default of 20.',
     '  - a reflection: `basis: completion` (full credit for any honest attempt — the usual choice) or `basis: quality`, which needs `mainPoints` or a minimum length.',
     '  - a check with `answer: objective`: `mustMention` is the correct answer or key points, and is required.',
     '  - a check with `answer: subjective`: `assessFor` names what to judge — "points to a specific line and says what it does" — since there is no single right answer.',
