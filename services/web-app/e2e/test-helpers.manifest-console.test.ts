@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { isAbortedManifestPatchConsoleMessage } from './test-helpers.ts';
+import {
+  isAbortedManifestPatchConsoleMessage,
+  isIgnorableControlledNavigationConsoleMessage,
+} from './test-helpers.ts';
 
 describe('isAbortedManifestPatchConsoleMessage', () => {
   test('matches the abort message when Playwright appends a stack trace', () => {
@@ -23,5 +26,26 @@ describe('isAbortedManifestPatchConsoleMessage', () => {
       false,
     );
     expect(isAbortedManifestPatchConsoleMessage('TypeError: Failed to fetch')).toBe(false);
+  });
+});
+
+describe('isIgnorableControlledNavigationConsoleMessage', () => {
+  test('includes manifest abort and Suspense hydration races', () => {
+    expect(
+      isIgnorableControlledNavigationConsoleMessage(
+        'Failed to fetch manifest patches TypeError: Failed to fetch',
+      ),
+    ).toBe(true);
+    expect(
+      isIgnorableControlledNavigationConsoleMessage(
+        'This Suspense boundary received an update before it finished hydrating. This caused the boundary to switch to client rendering.',
+      ),
+    ).toBe(true);
+  });
+
+  test('does not ignore unrelated console errors', () => {
+    expect(isIgnorableControlledNavigationConsoleMessage('Uncaught TypeError: boom')).toBe(
+      false,
+    );
   });
 });
