@@ -7,6 +7,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '~/components/ui/accordion';
+import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import {
@@ -37,6 +38,7 @@ type Props = {
   optionCounts: OptionCounts;
   totalCount: number;
   onSelectPrompt: (prompt: string) => void;
+  assignmentCreationLocked?: boolean;
 };
 
 type FacetSpec = {
@@ -91,6 +93,7 @@ export function PromptsLibrary({
   optionCounts,
   totalCount,
   onSelectPrompt,
+  assignmentCreationLocked = false,
 }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchInput, setSearchInput] = useState(
@@ -272,6 +275,7 @@ export function PromptsLibrary({
                     <PromptRow
                       key={p.id}
                       prompt={p}
+                      assignmentCreationLocked={assignmentCreationLocked}
                       onSelect={() => onSelectPrompt(p.prompt)}
                     />
                   ))}
@@ -288,20 +292,21 @@ export function PromptsLibrary({
 function PromptRow({
   prompt,
   onSelect,
+  assignmentCreationLocked = false,
 }: {
   prompt: LibraryEntry;
   onSelect: () => void;
+  assignmentCreationLocked?: boolean;
 }) {
   const textOrUnit = prompt.textsOrUnits[0];
   const move = prompt.cognitiveMoves[0];
 
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onSelect}
-        className="group/card block w-full cursor-pointer rounded-md py-5 text-left transition-colors hover:bg-foreground/[0.03] focus-visible:bg-foreground/[0.03] focus-visible:outline-none"
-      >
+  const rowButton = (
+    <button
+      type="button"
+      onClick={assignmentCreationLocked ? undefined : onSelect}
+      className="group/card block w-full cursor-pointer rounded-md py-5 text-left transition-colors hover:bg-foreground/[0.03] focus-visible:bg-foreground/[0.03] focus-visible:outline-none"
+    >
         <div className="flex items-start justify-between gap-3 px-2">
           <p className="text-[17px] leading-relaxed text-foreground">
             {prompt.prompt}
@@ -323,6 +328,17 @@ function PromptRow({
           <ExtraTags prompt={prompt} />
         </div>
       </button>
+  );
+
+  return (
+    <li>
+      {assignmentCreationLocked ? (
+        <PreviewAssignmentCreationControl fullWidth>
+          {rowButton}
+        </PreviewAssignmentCreationControl>
+      ) : (
+        rowButton
+      )}
     </li>
   );
 }

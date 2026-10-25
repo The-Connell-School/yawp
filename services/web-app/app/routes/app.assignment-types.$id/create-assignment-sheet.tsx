@@ -72,6 +72,7 @@ type Props = {
     essayType: string;
     sources?: ApHistorySourceCardData[];
   } | null;
+  teachingLocked?: boolean;
 };
 
 function classLabel(klass: TeacherClass) {
@@ -94,6 +95,7 @@ export function CreateAssignmentSheet({
   plannedExitTicket = null,
   titleRequired = false,
   apHistoryEntry = null,
+  teachingLocked = false,
   onCreated,
 }: Props) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
@@ -125,6 +127,10 @@ export function CreateAssignmentSheet({
       onOpenChange(false);
     }
   }, [fetcher.state, fetcher.data, onOpenChange]);
+
+  if (teachingLocked) {
+    return null;
+  }
 
   if (!apHistoryEntry || assignmentTypeAvailability.unavailableReason) {
     return (

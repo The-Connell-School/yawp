@@ -27,7 +27,7 @@ set -euo pipefail
 printf 'docker' >> "$COMMAND_LOG"
 printf ' %q' "$@" >> "$COMMAND_LOG"
 printf '\\n' >> "$COMMAND_LOG"
-printf '{"organizations":8,"users":18,"classes":15,"assignments":21,"documents":4,"submissions":3,"moduleSessions":2}\\n'
+printf '{"organizations":8,"users":18,"classes":15,"assignments":21,"documents":4,"submissions":3,"moduleSessions":2,"testerFeedback":5}\\n'
 `
   );
   await chmod(path.join(bin, 'docker'), 0o755);
@@ -60,7 +60,7 @@ describe('demo data signature', () => {
 
     expect(result.exitCode).toBe(0);
     expect(new TextDecoder().decode(result.stdout).trim()).toBe(
-      '{"organizations":8,"users":18,"classes":15,"assignments":21,"documents":4,"submissions":3,"moduleSessions":2}'
+      '{"organizations":8,"users":18,"classes":15,"assignments":21,"documents":4,"submissions":3,"moduleSessions":2,"testerFeedback":5}'
     );
     const commands = await readFile(harness.commandLog, 'utf8');
     for (const table of [
@@ -71,6 +71,7 @@ describe('demo data signature', () => {
       'Document',
       'Submission',
       'AssignmentModuleSession',
+      'TesterFeedback',
     ]) {
       expect(commands).toContain(table);
     }

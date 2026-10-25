@@ -50,11 +50,31 @@ ensure_node() {
     echo "preview prisma-cli: Node.js 22+ is required but apt-get is unavailable." >&2
     exit 1
   fi
+  local NODE_VERSION=22.23.4
+  local arch node_dist_arch node_sha256 tarball
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
-  apt-get install -y -qq ca-certificates curl gnupg
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-  apt-get install -y -qq nodejs
+  apt-get install -y -qq ca-certificates curl xz-utils
+  arch="$(dpkg --print-architecture)"
+  case "${arch}" in
+    amd64)
+      node_dist_arch=linux-x64
+      node_sha256=1805bcd35e6815559bd2eb97db438d3fdb0eb3a5e6a977b7c1badca76337e9ce
+      ;;
+    arm64)
+      node_dist_arch=linux-arm64
+      node_sha256=6287aa46b6c375d816e63ae66d024fbbfd70404825aabdfdf898a970871d2f4b
+      ;;
+    *)
+      echo "preview prisma-cli: unsupported architecture: ${arch}" >&2
+      exit 1
+      ;;
+  esac
+  tarball="/tmp/node-v${NODE_VERSION}-${node_dist_arch}.tar.xz"
+  curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${node_dist_arch}.tar.xz" -o "${tarball}"
+  echo "${node_sha256}  ${tarball}" | sha256sum -c -
+  tar -xJf "${tarball}" -C /usr/local --strip-components=1
+  rm -f "${tarball}"
   if [[ "$(node_major_version)" -lt 22 ]]; then
     echo "preview prisma-cli: Node.js 22+ is required for Prisma 7." >&2
     exit 1
