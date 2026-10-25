@@ -25,6 +25,7 @@ export const E2E_SMOKE_SPECS = [
   'e2e/tests/teacher.lesson-planner-stack-v2.spec.ts',
   'e2e/tests/teacher.lesson-planner-library-v2.spec.ts',
   'e2e/tests/teacher.lesson-planner-unit-build.spec.ts',
+  'e2e/tests/teacher.lesson-planner-round-3.spec.ts',
   'e2e/tests/teacher.exit-ticket.spec.ts',
   'e2e/tests/teacher.thesis-essay-guide.spec.ts',
   'e2e/tests/teacher.holistic-grading.spec.ts',
@@ -127,6 +128,7 @@ export const E2E_SMOKE_SHARDS: Record<SmokeShard, readonly string[]> = {
     'e2e/tests/teacher.lesson-planner-stack-v2.spec.ts',
     'e2e/tests/teacher.lesson-planner-library-v2.spec.ts',
     'e2e/tests/teacher.lesson-planner-unit-build.spec.ts',
+    'e2e/tests/teacher.lesson-planner-round-3.spec.ts',
   ],
 };
 
