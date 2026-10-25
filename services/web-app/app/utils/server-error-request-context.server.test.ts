@@ -106,6 +106,18 @@ describe('buildServerErrorRequestContext', () => {
     });
   });
 
+  test('buildSafeErrorForLog redacts prisma initialization connection strings', () => {
+    const error = Object.assign(
+      new Error(
+        "Can't reach database server at `postgresql://yawp:SECRET-PASS@127.0.0.1:5432/yawp`",
+      ),
+      { name: 'PrismaClientInitializationError' },
+    );
+    const serialized = JSON.stringify(buildSafeErrorForLog(error));
+    expect(serialized).not.toContain('SECRET-PASS');
+    expect(serialized).not.toContain('postgresql://');
+  });
+
   test('buildSafeRouteParamsForLog lists keys without values', () => {
     expect(
       buildSafeRouteParamsForLog({
