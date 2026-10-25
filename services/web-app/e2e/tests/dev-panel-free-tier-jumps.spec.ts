@@ -35,6 +35,7 @@ type CatalogJumpEntry = FreeTierJumpExpectation & {
 };
 
 async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
+  const softErrorsBefore = test.info().errors.length;
   await ensureDevTeacherSignedIn(page);
   await page.goto('/app/assignments');
   await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
@@ -91,7 +92,8 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
         .soft(page.getByRole('heading', { name: entry.adminHeading }))
         .toBeVisible({ timeout: 30_000 });
     }
-    const adminOk = pathname.includes(entry.redirectPath);
+    const checksPassed = test.info().errors.length === softErrorsBefore;
+    const adminOk = pathname.includes(entry.redirectPath) && checksPassed;
     recordJumpLine(
       adminOk ? `${entry.stateId}: ok` : `${entry.stateId}: landed on ${pathname}`
     );
@@ -119,21 +121,21 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
       .toBeVisible({ timeout: 30_000 });
   }
 
-  if (entry.stateId === 'approved.reporter-limit') {
+  if (entry.pageTestId) {
     await expect
-      .soft(page.getByTestId('free-reporter-locked'))
+      .soft(page.getByTestId(entry.pageTestId))
       .toBeVisible({ timeout: 30_000 });
   }
 
-  const landedOk = pathname.startsWith(expectedPathPrefix);
+  const checksPassed = test.info().errors.length === softErrorsBefore;
+  const landedOk =
+    pathname.startsWith(expectedPathPrefix) && checksPassed;
   recordJumpLine(
     landedOk ? `${entry.stateId}: ok` : `${entry.stateId}: landed on ${pathname}`
   );
 }
 
 test.describe('Dev panel free-tier state jumps', () => {
-  test.describe.configure({ mode: 'serial' });
-
   test.afterAll(async () => {
     await prisma.$disconnect();
   });

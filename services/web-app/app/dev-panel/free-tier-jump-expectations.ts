@@ -11,6 +11,8 @@ export type FreeTierJumpExpectation = {
   adminSide?: boolean;
   /** Unique heading on the admin page after jump (demo has free-tier flag on). */
   adminHeading?: RegExp;
+  /** Visible limit/lock screen after jump (approved monthly cap states). */
+  pageTestId?: string;
 };
 
 const EXPECTATIONS: Record<string, FreeTierJumpExpectation> = {
@@ -50,10 +52,12 @@ const EXPECTATIONS: Record<string, FreeTierJumpExpectation> = {
   'approved.lesson-planner-limit': {
     redirectPath: '/app/lesson-planner',
     toastLabel: 'Lesson Planner limit screen',
+    pageTestId: 'lesson-planner-monthly-limit',
   },
   'approved.reporter-limit': {
     redirectPath: '/app/reporter',
     toastLabel: 'Reporter limit screen',
+    pageTestId: 'free-reporter-monthly-limit',
   },
   'admin.approve-from-email': {
     redirectPath: '/free/admin/approve',
