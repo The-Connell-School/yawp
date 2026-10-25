@@ -51,8 +51,6 @@ mock.module('~/domain/free-tier/approval-flow.server', () => ({
 
 mock.module('~/domain/free-tier/admin-approve-forward-link.server', () => ({
   resolveAdminForwardTokenForApproveLink: resolveForward,
-  buildAdminForwardPageSearch: (forwardToken: string, approveToken: string) =>
-    `?t=${encodeURIComponent(forwardToken)}&approveT=${encodeURIComponent(approveToken)}`,
 }));
 
 const { loader } = await import('./route');

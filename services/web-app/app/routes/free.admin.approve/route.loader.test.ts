@@ -68,8 +68,6 @@ mock.module('~/domain/free-tier/approval-deny.server', () => ({
 
 mock.module('~/domain/free-tier/admin-approve-forward-link.server', () => ({
   resolveAdminForwardTokenForApproveLink,
-  buildAdminForwardPageSearch: (forwardToken: string, approveToken: string) =>
-    `?t=${encodeURIComponent(forwardToken)}&approveT=${encodeURIComponent(approveToken)}`,
 }));
 
 const realSignedLink =

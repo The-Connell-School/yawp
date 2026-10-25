@@ -39,8 +39,6 @@ mock.module('~/domain/free-tier/approval-deny.server', () => ({
 }));
 mock.module('~/domain/free-tier/admin-approve-forward-link.server', () => ({
   resolveAdminForwardTokenForApproveLink: async () => 'forward-token',
-  buildAdminForwardPageSearch: (forwardToken: string, approveToken: string) =>
-    `?t=${encodeURIComponent(forwardToken)}&approveT=${encodeURIComponent(approveToken)}`,
 }));
 const approve = mock(async () => ({ ok: true }));
 mock.module('~/domain/free-tier/approval-flow.server', () => ({

@@ -19,7 +19,7 @@ afterEach(() => {
 describe('buildAdminForwardPageSearch', () => {
   test('puts NRP token in t and approve token in approveT', async () => {
     const { buildAdminForwardPageSearch } = await import(
-      './admin-approve-forward-link.server'
+      './admin-approve-forward-link'
     );
     const approve = 'approve.token.opaque';
     const forward = 'forward.token.opaque';

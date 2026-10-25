@@ -8,7 +8,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { Link } from 'react-router';
-import { buildAdminForwardPageSearch } from '~/domain/free-tier/admin-approve-forward-link.server';
+import { buildAdminForwardPageSearch } from '~/domain/free-tier/admin-approve-forward-link';
 import {
   alreadyApprovedBody,
   approveCheckboxError,

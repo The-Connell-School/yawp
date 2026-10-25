@@ -5,16 +5,6 @@ import {
   readSignedLinkPayloadFromAdminToken,
 } from './signed-link.server';
 
-export function buildAdminForwardPageSearch(
-  forwardToken: string,
-  approveToken: string
-) {
-  const params = new URLSearchParams();
-  params.set('t', forwardToken);
-  params.set('approveT', approveToken);
-  return `?${params.toString()}`;
-}
-
 function tokenFromLoggedUrl(url: string | undefined): string | null {
   if (!url) return null;
   try {
