@@ -107,6 +107,14 @@ function safeCauseForLog(error: Error): { name: string; code?: string } | undefi
   return code ? { name: cause.name, code } : { name: cause.name };
 }
 
+/** Stable client JSON copy — never forwards raw exception text to browsers. */
+export function safeErrorTextForClientResponse(
+  _error: unknown,
+  fallback: string,
+): string {
+  return fallback;
+}
+
 /** Single-line safe error text for DB rows or domain `{ ok: false, error }` payloads. */
 export function safeErrorTextForLog(error: unknown): string {
   const safe = buildSafeErrorForLog(error);

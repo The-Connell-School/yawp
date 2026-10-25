@@ -1014,4 +1014,29 @@ describe('assignment-type evaluations action', () => {
       summary: { total: 1, passed: 1, failed: 0, needsReview: 0 },
     });
   });
+
+  test('runSuite failures return stable copy without raw exception text', async () => {
+    const sensitive =
+      'Invalid `prisma.user.findMany()` token=SECRET-TOKEN teacher@school.edu';
+    runAssignmentTypeEvaluationSuite.mockRejectedValueOnce(new Error(sensitive));
+
+    const response = await action({
+      request: requestWith({
+        intent: 'runSuite',
+        assignmentTypeId: 'at-1',
+        promptVersionId: 'prompt-draft-8',
+        evaluationSuiteVersionId: 'suite-1',
+      }),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    const serialized = JSON.stringify((response as { data: unknown }).data);
+    expect((response as { init: { status: number } }).init.status).toBe(500);
+    expect(serialized).not.toContain(sensitive);
+    expect(serialized).not.toContain('SECRET-TOKEN');
+    expect((response as { data: { message: string } }).data.message).toBe(
+      'The evaluation suite could not run.',
+    );
+  });
 });
