@@ -8,6 +8,7 @@ import { seedFreeTierBundleAssignmentTypes } from '../../../../../packages/prism
 import { LOCAL_DEV_ORG_ID } from '../../../../../packages/prisma/scripts/local-dev/dev-personas';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { FREE_CLASSROOM_ASSIGNMENT_KINDS } from '~/utils/entitlements.server';
+import type { Prisma } from '@app/prisma';
 
 const enabled = process.env.FREE_TIER_DB_TESTS === '1';
 
@@ -16,7 +17,7 @@ const userIds: string[] = [];
 const orgIds: string[] = [];
 
 async function ensurePlatformCatalogAssignmentType(
-  where: Parameters<typeof prisma.assignmentType.findFirst>[0]['where'],
+  where: Prisma.AssignmentTypeWhereInput,
   create: {
     title: string;
     description: string;
