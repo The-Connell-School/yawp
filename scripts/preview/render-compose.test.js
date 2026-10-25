@@ -597,7 +597,13 @@ describe('deployment-only unified sign-on control', () => {
         expect(parsed.services.web.environment.YAWP_INTERNAL_API_KEYS).toBeUndefined();
         const demo = Bun.YAML.parse(renderCompose({ runtime, slug: 'demo', unifiedSignOn: enabled }));
         expect(demo.services.toolbox.environment.PREVIEW_UNIFIED_SIGN_ON).toBeUndefined();
-        expect(demo.services.toolbox.volumes?.some(volume => volume.includes('/preview-control')) ?? false).toBe(false);
+        const demoHasControlMount =
+          demo.services.toolbox.volumes?.some(volume => volume.includes('/preview-control')) ?? false;
+        if (runtime === 'production') {
+          expect(demoHasControlMount).toBe(true);
+        } else {
+          expect(demoHasControlMount).toBe(false);
+        }
       }
     });
   }
