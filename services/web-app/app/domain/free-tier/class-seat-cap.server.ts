@@ -43,6 +43,7 @@ export async function countFreeClassSeatUsage(
       role: 'STUDENT',
       isActive: true,
       classesAsStudent: { some: { id: classId } },
+      user: { simulatedForClassId: null },
     },
   });
 

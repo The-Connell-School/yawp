@@ -142,6 +142,28 @@ export function organizationClassListQueryParts(options: {
   return { orClause, orderByField };
 }
 
+/** Table state returned to the client must match Prisma orderBy (code sort is disabled while locked). */
+export function organizationClassListTableState(options: {
+  sort: OrganizationClassListSort;
+  direction: 'asc' | 'desc';
+  skip: number;
+  take: number;
+  hideTeachingSecrets: boolean;
+}) {
+  const { orderByField } = organizationClassListQueryParts({
+    q: null,
+    sort: options.sort,
+    hideTeachingSecrets: options.hideTeachingSecrets,
+  });
+  return {
+    sort: orderByField,
+    direction: options.direction,
+    skip: options.skip,
+    take: options.take,
+    codeSortDisabled: options.hideTeachingSecrets,
+  };
+}
+
 export async function ensureLockedPreviewClassroomForUser(userId: string) {
   const application = await prisma.freeTierApplication.findFirst({
     where: {

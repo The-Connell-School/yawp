@@ -297,8 +297,11 @@ local(
         } as never);
         const sortData = loaderPayload(result) as {
           classes: Array<{ id: string }>;
+          table: { sort: string; codeSortDisabled?: boolean };
         };
         expect(sortData.classes[0]?.id).toBe(sortOlderClassId);
+        expect(sortData.table.sort).toBe('createdAt');
+        expect(sortData.table.codeSortDisabled).toBe(true);
       } finally {
         await prisma.session.delete({ where: { id: sessionId } });
       }
@@ -350,10 +353,13 @@ local(
         params: {},
         context: {} as never,
       } as never);
-      const sortData = loaderPayload(sortResult) as {
-        classes: Array<{ id: string }>;
-      };
-      expect(sortData.classes[0]?.id).toBe(sortOlderClassId);
+        const sortData = loaderPayload(sortResult) as {
+          classes: Array<{ id: string }>;
+          table: { sort: string; codeSortDisabled?: boolean };
+        };
+        expect(sortData.classes[0]?.id).toBe(sortOlderClassId);
+        expect(sortData.table.sort).toBe('createdAt');
+        expect(sortData.table.codeSortDisabled).toBe(true);
     } finally {
       await prisma.session.delete({ where: { id: sortSessionId } });
     }

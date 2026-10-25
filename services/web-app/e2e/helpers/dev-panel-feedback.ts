@@ -46,6 +46,16 @@ export async function isDevPanelActive(page: Page) {
   );
 }
 
+/** App shell + dev-panel mount are present; beaker is actionable (hydrated) before click. */
+export async function waitForDeveloperToolsPageReady(page: Page) {
+  await page.waitForLoadState('domcontentloaded');
+  const beaker = page.getByRole('button', { name: 'Open developer tools' });
+  await expect(beaker).toBeVisible({ timeout: 15_000 });
+  await expect(async () => {
+    await beaker.click({ trial: true });
+  }).toPass({ timeout: 15_000 });
+}
+
 export async function openDevToolsPanel(page: Page) {
   const panel = devToolsPanel(page);
   if (await panel.isVisible().catch(() => false)) {
@@ -61,16 +71,52 @@ export async function openDevToolsPanel(page: Page) {
     return panel;
   }
 
+  await waitForDeveloperToolsPageReady(page);
   const beaker = page.getByRole('button', { name: 'Open developer tools' });
-  await expect(beaker).toBeVisible({ timeout: 60_000 });
-  await beaker.click();
-  try {
-    await waitForDevPanelReady(page);
-  } catch {
-    await page.keyboard.press('Alt+Shift+D');
-    await waitForDevPanelReady(page);
-  }
+  const devPanel = devToolsPanel(page);
+
+  let openAttempts = 0;
+  await expect(async () => {
+    openAttempts += 1;
+    if (!(await devPanel.isVisible())) {
+      await beaker.click({ timeout: 2_000 }).catch(() => {});
+    }
+    if (await devPanel.isVisible()) {
+      await expect(devPanel).toBeVisible({ timeout: 3_000 });
+      return;
+    }
+    if (openAttempts >= 2) {
+      await page.keyboard.press('Alt+Shift+D');
+    }
+    await expect(devPanel).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 30_000 });
+
+  await waitForDevPanelReady(page);
   return devToolsPanel(page);
+}
+
+/** Opens a dev panel collapsible section when persisted state left it closed. */
+export async function openDevPanelSection(page: Page, sectionName: string) {
+  const panel = await openDevToolsPanel(page);
+  const trigger = panel.getByRole('button', { name: sectionName, exact: true });
+  await expect(trigger).toBeVisible({ timeout: 15_000 });
+  const expanded = await trigger.getAttribute('aria-expanded');
+  if (expanded !== 'true') {
+    await trigger.click();
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  }
+  return panel;
+}
+
+/** Opens the class simulation flyout from the Data section row (not the flyout action). */
+export async function openDevPanelClassSimulationFlyout(page: Page) {
+  const panel = await openDevPanelSection(page, 'Data');
+  await panel
+    .getByRole('button', { name: /^Populate class Fake/ })
+    .click();
+  await expect(
+    page.getByRole('dialog', { name: 'Class simulation' })
+  ).toBeVisible({ timeout: 15_000 });
 }
 
 export async function expectGiveFeedbackAccessible(page: Page) {

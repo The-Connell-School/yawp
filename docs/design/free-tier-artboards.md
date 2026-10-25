@@ -92,7 +92,7 @@ review/CI, takes the merge lock, and merges after approval.
 
 ## Local verification commands
 
-The project CLI selected Bun 1.3.1 and Node 22.23.3. Writable cache recovery:
+The project CLI selected Bun 1.4.4 and Node 22.23.3. Writable cache recovery:
 
 ```sh
 CI=1 XDG_CACHE_HOME=/tmp/di-cache BUN_TMPDIR=/tmp/di-bun \

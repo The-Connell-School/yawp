@@ -38,7 +38,20 @@ describe('preview prisma-cli control mount contract', () => {
     }
   });
 
-  test('PR deploy tooling invokes reviewed prisma-cli from /preview-control', () => {
+  test('production and PR deploy tooling invoke reviewed migrate wrapper from /preview-control', () => {
+    const deploy = readFileSync(join(repoRoot, 'scripts/preview/deploy.sh'), 'utf8');
+    expect(deploy).toContain('preview_toolbox_uses_control_mount()');
+    expect(deploy).toContain(
+      'bash /preview-control/prisma-migrate-deploy-with-summary.sh'
+    );
+    expect(deploy).toContain('PRISMA_MIGRATE_PRISMA_CLI_SCRIPT=/preview-control/prisma-cli.sh');
+    expect(deploy).toContain(
+      'PRISMA_MIGRATE_SUMMARY_SCRIPT=/preview-control/emit-prisma-migrate-summary.mjs'
+    );
+    expect(deploy).not.toContain('PRISMA_MIGRATE_PRISMA_CLI=');
+  });
+
+  test('production and PR deploy tooling invoke reviewed prisma-cli from /preview-control', () => {
     const deploy = readFileSync(join(repoRoot, 'scripts/preview/deploy.sh'), 'utf8');
     const compose = readFileSync(
       join(repoRoot, 'scripts/preview/render-compose.mjs'),
@@ -49,11 +62,12 @@ describe('preview prisma-cli control mount contract', () => {
       "prisma_cli='PRISMA_CLI_REPO_ROOT=/app bash /preview-control/prisma-cli.sh'"
     );
     expect(deploy).toContain("prisma_cli='bash scripts/preview/prisma-cli.sh'");
-    expect(deploy).toContain('[[ "$SLUG" =~ ^pr-[1-9][0-9]*$ ]]');
+    expect(deploy).toContain('preview_toolbox_uses_control_mount');
     expect(deploy).not.toMatch(
       /toolbox bash -lc "bash scripts\/preview\/prisma-cli\.sh/
     );
     expect(compose).toContain('/preview-control:ro');
-    expect(compose).toContain('toolboxControlVolume = env.prNumber');
+    expect(compose).toContain('mountPreviewControl');
+    expect(compose).toContain("env.runtime === 'production'");
   });
 });

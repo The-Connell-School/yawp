@@ -15,6 +15,7 @@ import {
 import { adminApprovalEmailCopyVersionHash } from './email-copy.server';
 import {
   mintSignedLink,
+  mintSignedLinkForDevPanel,
   claimSignedLinkInTransaction,
   applicationIdFromSignedToken,
   FREE_TIER_LINK_TTL_MS,
@@ -200,13 +201,16 @@ export async function submitAdminDetails(args: {
       data: { teacherPersonalNote: note },
     });
 
-    const approveMint = await mintSignedLink({
+    const mintLink = args.suppressEmailDelivery
+      ? mintSignedLinkForDevPanel
+      : mintSignedLink;
+    const approveMint = await mintLink({
       applicationId: app.id,
       purpose: 'ADMIN_APPROVE',
       ttlMs: FREE_TIER_LINK_TTL_MS,
       tx,
     });
-    const declineMint = await mintSignedLink({
+    const declineMint = await mintLink({
       applicationId: app.id,
       purpose: 'ADMIN_NOT_RIGHT_PERSON',
       ttlMs: FREE_TIER_LINK_TTL_MS,
@@ -249,9 +253,12 @@ export async function submitAdminDetails(args: {
 
   if (!result.ok) return result;
   if (!result.manualReview) {
-    const base = freeTierPublicAppOrigin();
-    const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(result.approveToken)}`;
-    const declineUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(result.declineToken)}`;
+    const approveUrl = args.suppressEmailDelivery
+      ? `/free/admin/approve?t=${encodeURIComponent(result.approveToken)}`
+      : `${freeTierPublicAppOrigin()}/free/admin/approve?t=${encodeURIComponent(result.approveToken)}`;
+    const declineUrl = args.suppressEmailDelivery
+      ? `/free/admin/not-right-person?t=${encodeURIComponent(result.declineToken)}`
+      : `${freeTierPublicAppOrigin()}/free/admin/not-right-person?t=${encodeURIComponent(result.declineToken)}`;
     const emailResult = args.suppressEmailDelivery
       ? await recordFreeTierAdminApprovalEmailLogged({
           applicationId: app.id,

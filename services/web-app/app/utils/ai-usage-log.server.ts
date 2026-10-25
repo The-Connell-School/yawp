@@ -2,6 +2,7 @@
 import crypto from 'crypto';
 import { prisma } from '~/utils/db.server';
 import { getClientIp } from '~/utils/ip.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 
 export type UsageDecision =
   | 'ALLOWED'
@@ -64,7 +65,10 @@ export async function logAllowedUsage(args: {
       },
     });
   } catch (err) {
-    console.warn('ai_usage_log_failed', { decision: 'ALLOWED', err });
+    console.warn('ai_usage_log_failed', {
+      decision: 'ALLOWED',
+      error: buildSafeErrorForLog(err),
+    });
   }
 }
 
@@ -102,6 +106,9 @@ export async function logDeniedUsage(args: {
       },
     });
   } catch (err) {
-    console.warn('ai_usage_log_failed', { decision: 'DENIED', err });
+    console.warn('ai_usage_log_failed', {
+      decision: 'DENIED',
+      error: buildSafeErrorForLog(err),
+    });
   }
 }

@@ -1,0 +1,94 @@
+name: Demo ensure intern QA teachers
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag, or SHA containing the ensure script'
+        required: false
+        default: 'main'
+
+concurrency:
+  group: demo-environment
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ensure-teachers:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    environment: demo
+    env:
+      PREVIEW_HOST: ${{ vars.DEMO_HOST }}
+      PREVIEW_ROOT: ${{ vars.DEMO_ROOT || '/srv/yawp-demo' }}
+      PREVIEW_SSH_USER: ${{ vars.DEMO_SSH_USER || 'ec2-user' }}
+      APP_REF: ${{ inputs.ref || github.event.repository.default_branch }}
+    steps:
+      - name: Check configuration
+        env:
+          DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$PREVIEW_HOST" || { echo "Missing DEMO_HOST"; exit 1; }
+          test -n "$DEMO_SSH_PRIVATE_KEY" || { echo "Missing DEMO_SSH_PRIVATE_KEY"; exit 1; }
+          [[ "$PREVIEW_ROOT" =~ ^/[A-Za-z0-9._/-]+$ ]] || { echo "Invalid DEMO_ROOT"; exit 1; }
+
+      - name: Checkout application ref
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ env.APP_REF }}
+          path: demo-source
+          persist-credentials: false
+
+      - name: Prepare SSH
+        env:
+          DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
+        run: bash demo-source/scripts/preview/prepare-demo-ssh.sh
+
+      - name: Sync source and ensure intern QA teachers on demo
+        id: ensure-teachers
+        run: |
+          set -euo pipefail
+          shell_quote() { printf '%q' "$1"; }
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_source="${PREVIEW_ROOT}/sources/demo-ensure-intern-qa-${GITHUB_RUN_ID}"
+          remote_script="${PREVIEW_ROOT}/ops/ensure-intern-qa-teachers-on-demo-host.sh"
+          ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "mkdir -p $(shell_quote "$remote_source") $(shell_quote "$(dirname "$remote_script")")"
+          rsync -az --delete \
+            --exclude node_modules \
+            --exclude .git \
+            -e "ssh -i ~/.ssh/demo_key" \
+            demo-source/ "$ssh_target:$remote_source/"
+          scp -i ~/.ssh/demo_key demo-source/scripts/preview/ensure-intern-qa-teachers-on-demo-host.sh \
+            "$ssh_target:${remote_script}.next"
+          ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "install -m 700 $(shell_quote "${remote_script}.next") $(shell_quote "$remote_script")"
+          output="$(
+            ssh -i ~/.ssh/demo_key "$ssh_target" \
+              "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT") PREVIEW_SLUG=demo APP_SOURCE_DIR=$(shell_quote "$remote_source") bash $(shell_quote "$remote_script")"
+          )"
+          printf '%s\n' "$output"
+          grep -q 'teacher name=Thomas Patton' <<<"$output"
+          grep -q 'teacher name=Ava Crossman' <<<"$output"
+          grep -q 'org=local-dev-org' <<<"$output"
+          {
+            echo 'summary<<EOF'
+            printf '%s\n' "$output"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        env:
+          SUMMARY: ${{ steps.ensure-teachers.outputs.summary }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Demo intern QA teachers"
+            echo
+            echo '```'
+            printf '%s\n' "$SUMMARY"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

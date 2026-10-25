@@ -8,6 +8,7 @@ import {
 } from '~/domain/free-tier/teaching-access-copy';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
+import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
 import type { AssignmentEditRecord } from '~/components/assignments/assignment-edit-sheet';
 import {
   AssignmentDocumentsPill,
@@ -253,15 +254,9 @@ export function ClassAssignmentsTab({
               </Button>
             );
             return teachingLocked ? (
-              <LockedTeachingControl
-                locked
-                adminName={teachingAccessAdminName}
-                mobileSheetBody={teachingAccessMobileSheetBodySend(
-                  teachingAccessAdminName
-                )}
-              >
+              <PreviewAssignmentCreationControl>
                 {createButton}
-              </LockedTeachingControl>
+              </PreviewAssignmentCreationControl>
             ) : (
               createButton
             );

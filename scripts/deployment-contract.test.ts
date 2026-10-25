@@ -799,7 +799,7 @@ describe('PR preview deployment contract', () => {
       resetIndex
     );
     const generateIndex = deployScript.indexOf('${prisma_cli} generate');
-    const migrateIndex = deployScript.indexOf('${prisma_cli} migrate deploy');
+    const migrateIndex = deployScript.indexOf('${migrate_wrapper}');
     expect(deployScript).toContain(
       "prisma_cli='PRISMA_CLI_REPO_ROOT=/app bash /preview-control/prisma-cli.sh'"
     );
@@ -864,7 +864,13 @@ describe('PR preview deployment contract', () => {
     expect(seedIndex).toBeGreaterThan(backfillIndex);
     expect(syncIndex).toBeGreaterThan(backfillIndex);
     expect(releaseGateIndex).toBeGreaterThan(seedIndex);
-    expect(webStartIndex).toBeGreaterThan(releaseGateIndex);
+    expect(deployScript).toMatch(
+      /run_tooling_if_needed\nrestore_demo_tester_feedback_after_reset/
+    );
+    const restoreCallIndex = deployScript.indexOf(
+      'run_tooling_if_needed\nrestore_demo_tester_feedback_after_reset'
+    );
+    expect(webStartIndex).toBeGreaterThan(restoreCallIndex);
   });
 
   test('the database deletion boundary independently rejects unconfirmed demo resets', () => {
@@ -1884,6 +1890,45 @@ describe('demo environment deployment contract', () => {
     }
   });
 
+  test('demo intern QA teachers workflow is dispatch-only and targets yawp_demo additively', () => {
+    const workflow = readRepoFile(
+      '.github/workflows/demo-ensure-intern-qa-teachers.yml'
+    );
+    const parsed = Bun.YAML.parse(workflow) as {
+      on: Record<string, unknown>;
+      jobs: { 'ensure-teachers': { environment: string } };
+    };
+
+    expect(parsed.on).toEqual({
+      workflow_dispatch: { inputs: { ref: expect.any(Object) } },
+    });
+    expect(parsed.jobs['ensure-teachers'].environment).toBe('demo');
+    expect(workflow).toContain('group: demo-environment');
+    expect(workflow).toContain(
+      'demo-source/scripts/preview/prepare-demo-ssh.sh'
+    );
+    expect(workflow).toContain(
+      'demo-source/scripts/preview/ensure-intern-qa-teachers-on-demo-host.sh'
+    );
+    expect(workflow).not.toMatch(
+      /run: bash scripts\/preview\/prepare-demo-ssh\.sh/
+    );
+    expect(workflow).toContain('teacher name=Thomas Patton');
+    expect(workflow).toContain('org=local-dev-org');
+    const syncStep = workflow.slice(
+      workflow.indexOf(
+        '- name: Sync source and ensure intern QA teachers on demo'
+      ),
+      workflow.indexOf('- name: Summary')
+    );
+    expect(syncStep).toMatch(/\brsync\b[\s\S]*-e "ssh -i ~\/\.ssh\/demo_key"/);
+    expect(syncStep).toMatch(/\bssh -i ~\/\.ssh\/demo_key\b/);
+    expect(syncStep).toMatch(/\bscp -i ~\/\.ssh\/demo_key\b/);
+    expect(workflow).not.toContain('reset_data');
+    expect(workflow).not.toContain('RESET yawp_demo');
+    expect(workflow).not.toContain('seed-local-dev');
+  });
+
   test('demo host diagnostics expose only non-secret container and mount metadata', () => {
     const diagnostics = readRepoFile(
       '.github/workflows/demo-host-diagnostics.yml'
@@ -2070,6 +2115,25 @@ describe('demo environment deployment contract', () => {
     expect(deployScript).toContain('recover_demo_database_on_failure');
     expect(deployScript).toContain('restore-demo-backup.sh');
     expect(deployScript).toContain('install_demo_backup_tooling');
+    expect(deployScript).toContain('export_demo_tester_feedback_before_reset');
+    expect(deployScript).toContain('restore_demo_tester_feedback_after_reset');
+    expect(deployScript).toContain('preserve-demo-tester-feedback.sh');
+    expect(deployScript).toContain('prisma-migrate-deploy-with-summary.sh');
+    expect(deployScript).toContain('preview_toolbox_uses_control_mount');
+    expect(deployScript).toContain(
+      'bash /preview-control/prisma-migrate-deploy-with-summary.sh'
+    );
+    const composeScript = readRepoFile('scripts/preview/render-compose.mjs');
+    expect(composeScript).toContain("env.runtime === 'production'");
+    expect(composeScript).toContain('/preview-control:ro');
+    expect(deployScript).toContain('DEMO_PRISMA_MIGRATE_SUMMARY=Skipped');
+    expect(deployScript).toContain('log_demo_tester_feedback_count');
+    expect(existsSync(join(repoRoot, 'scripts/preview/preserve-demo-tester-feedback.sh'))).toBe(
+      true
+    );
+    expect(existsSync(join(repoRoot, 'scripts/preview/preserve-demo-tester-feedback.mjs'))).toBe(
+      true
+    );
   });
 
   test('demo deploy runs detached from the GitHub Actions SSH session', () => {
@@ -2082,6 +2146,10 @@ describe('demo environment deployment contract', () => {
     expect(workflow).toContain('ensure-host-swap.sh');
     expect(workflow).toContain('install-host-metrics.sh');
     expect(workflow).toContain('run-host-deploy-detached.sh');
+    expect(workflow).toContain('Surface demo deploy database signals');
+    expect(workflow).toContain("grep -E '^DEMO_PRISMA_MIGRATE_'");
+    expect(workflow).toContain('TesterFeedback rows before deploy');
+    expect(workflow).toContain('TesterFeedback row count decreased during deploy');
     expect(detached).toContain('FAILURE_LOG_LINES="${FAILURE_LOG_LINES:-120}"');
     expect(detached).toContain('emit_failure_log_tail');
     expect(detached).toContain('mask_deploy_log');
@@ -2130,6 +2198,22 @@ describe('demo environment deployment contract', () => {
     expect(workflow).toContain('DEMO_RESET_DATA');
     expect(workflow).toContain(
       'Demo aggregate data decreased during no-reset deploy'
+    );
+    expect(workflow).toContain('TesterFeedback row count decreased during deploy');
+    expect(readRepoFile(signaturePath)).toContain('testerFeedback');
+    const signatureScript = readRepoFile(signaturePath);
+    expect(signatureScript).toContain(
+      'to_regclass($reg$public."TesterFeedback"$reg$)'
+    );
+    expect(signatureScript).not.toMatch(
+      /to_regclass\('public\."TesterFeedback"'\)/
+    );
+    expect(signatureScript).toContain('tester_feedback_count=0');
+    expect(signatureScript).toContain(
+      '$json$testerFeedback$json$, \'"${tester_feedback_count}"\'::bigint'
+    );
+    expect(signatureScript).not.toMatch(
+      /json_build_object\([\s\S]*FROM "TesterFeedback"/
     );
   });
   test('demo backups are scheduled daily with configurable count retention', () => {

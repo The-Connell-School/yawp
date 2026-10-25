@@ -5,19 +5,39 @@ import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-ac
 import { loadSiteLicenseLockedAssignmentTiles } from './site-license-locked-assignment-tiles.server';
 import { SITE_LICENSE_LOCKED_TILE_LABELS } from './site-license-locked-assignment-tiles';
 import { seedFreeTierBundleAssignmentTypes } from '../../../../../packages/prisma/scripts/seed-free-tier-bundle-assignment-types';
-import {
-  importProdFidelityFixtures,
-  loadProdFidelityBundle,
-} from '../../../../../packages/prisma/scripts/local-dev/import-prod-fidelity-fixtures';
 import { LOCAL_DEV_ORG_ID } from '../../../../../packages/prisma/scripts/local-dev/dev-personas';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { FREE_CLASSROOM_ASSIGNMENT_KINDS } from '~/utils/entitlements.server';
+import type { Prisma } from '@app/prisma';
 
 const enabled = process.env.FREE_TIER_DB_TESTS === '1';
 
 const applicationIds: string[] = [];
 const userIds: string[] = [];
 const orgIds: string[] = [];
+
+async function ensurePlatformCatalogAssignmentType(
+  where: Prisma.AssignmentTypeWhereInput,
+  create: {
+    title: string;
+    description: string;
+    position: number;
+    kind?: string;
+  }
+) {
+  const existing = await prisma.assignmentType.findFirst({
+    where,
+    select: { id: true },
+  });
+  if (existing) return;
+  await prisma.assignmentType.create({
+    data: {
+      ownerOrgId: null,
+      ownerMembershipId: null,
+      ...create,
+    },
+  });
+}
 
 async function ensureLockedTileCatalogFixtureData() {
   await seedFreeTierBundleAssignmentTypes(prisma);
@@ -30,16 +50,50 @@ async function ensureLockedTileCatalogFixtureData() {
     },
     update: {},
   });
-  const thesis = await prisma.assignmentType.findFirst({
-    where: {
+  await ensurePlatformCatalogAssignmentType(
+    {
       archivedAt: null,
+      ownerOrgId: null,
+      ownerMembershipId: null,
       title: { equals: 'The Thesis-Driven Essay', mode: 'insensitive' },
     },
-    select: { id: true },
-  });
-  if (!thesis) {
-    await importProdFidelityFixtures(prisma, await loadProdFidelityBundle());
-  }
+    {
+      title: 'The Thesis-Driven Essay',
+      description: 'Join-flow locked-tile catalog fixture',
+      position: 10,
+    }
+  );
+  await ensurePlatformCatalogAssignmentType(
+    {
+      archivedAt: null,
+      ownerOrgId: null,
+      ownerMembershipId: null,
+      kind: 'daily_pages',
+    },
+    {
+      kind: 'daily_pages',
+      title: 'Daily Pages',
+      description: 'Join-flow locked-tile catalog fixture',
+      position: 20,
+    }
+  );
+  await ensurePlatformCatalogAssignmentType(
+    {
+      archivedAt: null,
+      ownerOrgId: null,
+      ownerMembershipId: null,
+      OR: [
+        { kind: 'act_writing' },
+        { title: { equals: 'ACT Writing', mode: 'insensitive' } },
+      ],
+    },
+    {
+      kind: 'act_writing',
+      title: 'ACT Writing',
+      description: 'Join-flow locked-tile catalog fixture',
+      position: 30,
+    }
+  );
   await prisma.assignmentType.upsert({
     where: { systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY },
     create: {
@@ -154,5 +208,6 @@ test.skipIf(!enabled)(
       SITE_LICENSE_LOCKED_TILE_LABELS.daily_pages,
       SITE_LICENSE_LOCKED_TILE_LABELS.act_writing,
     ]);
-  }
+  },
+  15_000
 );

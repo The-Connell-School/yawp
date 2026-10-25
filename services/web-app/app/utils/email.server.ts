@@ -59,6 +59,32 @@ export function getTransactionalEmailFrom() {
 }
 
 export async function sendEmail(options: SendEmailOptions) {
+  const { isSimulatedDevPanelEmail } = await import(
+    '~/dev-panel/simulated-user.server'
+  )
+  if (isSimulatedDevPanelEmail(options.to)) {
+    try {
+      const { prisma } = await import('./db.server.ts')
+      const { normalizeEmail } = await import('./normalize-email')
+      const simulated = await prisma.user.findFirst({
+        where: { email: normalizeEmail(options.to) },
+        select: { simulatedForClassId: true },
+      })
+      if (simulated?.simulatedForClassId) {
+        return {
+          status: 'error' as const,
+          error: {
+            name: 'SimulatedUserEmailBlocked',
+            message: 'Simulated demo students do not receive email.',
+            statusCode: 403,
+          },
+        }
+      }
+    } catch {
+      // Fail open: a lookup error must not block mail to real recipients.
+    }
+  }
+
 	const from = getTransactionalEmailFrom()
 	const content =
 		'react' in options && options.react

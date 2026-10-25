@@ -230,6 +230,10 @@ export const ORGANIZATION_CLASSES_TABLE_SORT_FIELDS = [
   'createdAt',
 ] as const satisfies readonly OrganizationClassesTableCookie['sort'][];
 
+export const ORGANIZATION_CLASSES_TABLE_TAKE_OPTIONS = [
+  10, 20, 50, 100,
+] as const;
+
 const DEFAULT_ORGANIZATION_CLASSES_TABLE_COOKIE: OrganizationClassesTableCookie =
   {
     sort: 'code',
@@ -237,6 +241,18 @@ const DEFAULT_ORGANIZATION_CLASSES_TABLE_COOKIE: OrganizationClassesTableCookie 
     skip: 0,
     take: 10,
   };
+
+function normalizeOrganizationClassesTableTake(take: number) {
+  if (!Number.isFinite(take)) {
+    return DEFAULT_ORGANIZATION_CLASSES_TABLE_COOKIE.take;
+  }
+  const floored = Math.max(1, Math.floor(take));
+  return (ORGANIZATION_CLASSES_TABLE_TAKE_OPTIONS as readonly number[]).includes(
+    floored
+  )
+    ? floored
+    : DEFAULT_ORGANIZATION_CLASSES_TABLE_COOKIE.take;
+}
 
 /** Allow-list cookie table controls before they reach Prisma orderBy. */
 export function parseOrganizationClassesTableCookie(
@@ -260,8 +276,8 @@ export function parseOrganizationClassesTableCookie(
       ? Math.max(0, Math.floor(record.skip))
       : DEFAULT_ORGANIZATION_CLASSES_TABLE_COOKIE.skip;
   const take =
-    typeof record.take === 'number' && Number.isFinite(record.take)
-      ? Math.max(1, Math.floor(record.take))
+    typeof record.take === 'number'
+      ? normalizeOrganizationClassesTableTake(record.take)
       : DEFAULT_ORGANIZATION_CLASSES_TABLE_COOKIE.take;
   return { sort, direction, skip, take };
 }
@@ -301,7 +317,10 @@ export async function setOrganizationClassesTableCookie(
   filters: Partial<OrganizationClassesTableCookie>
 ): Promise<string> {
   const currentFilters = await getOrganizationClassesTableCookie(request);
-  const mergedFilters = { ...currentFilters, ...filters };
+  const mergedFilters = parseOrganizationClassesTableCookie({
+    ...currentFilters,
+    ...filters,
+  });
   return await organizationClassesTableCookie.serialize(mergedFilters);
 }
 

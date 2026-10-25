@@ -66,10 +66,12 @@ export function LockedTeachingControl({
     disabled?: boolean;
     tabIndex?: number;
     'aria-disabled'?: boolean | 'true' | 'false';
+    'aria-describedby'?: string;
   }>;
 
   const lockedChild = cloneElement(child, {
     'aria-disabled': true as const,
+    'aria-describedby': descriptionId,
     disabled: undefined,
     tabIndex: isMobile ? child.props.tabIndex : 0,
     className: cn(child.props.className, 'pointer-events-auto opacity-60'),

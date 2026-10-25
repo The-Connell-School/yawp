@@ -75,6 +75,7 @@ import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
 import {
   organizationClassListQueryParts,
+  organizationClassListTableState,
   redactClassTeachingSecrets,
   shouldHideFreeTierTeachingSecrets,
 } from '~/domain/free-tier/locked-preview.server';
@@ -216,7 +217,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         _count: {
           select: {
-            students: true,
+            students: {
+              where: {
+                isActive: true,
+                role: 'STUDENT',
+                user: { simulatedForClassId: null },
+              },
+            },
             teachers: true,
           },
         },
@@ -257,7 +264,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     totalCount,
     schools,
     teachers,
-    table: { sort, direction, skip, take },
+    table: organizationClassListTableState({
+      sort,
+      direction,
+      skip,
+      take,
+      hideTeachingSecrets,
+    }),
     q,
   };
 }
@@ -265,6 +278,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   const user = await requireOwner(request);
   const profile = await requireMembership(request, user.id);
+  const hideTeachingSecrets = await shouldHideFreeTierTeachingSecrets(user.id);
   const formData = await request.formData();
   const intent = formData.get('intent');
 
@@ -290,7 +304,8 @@ export async function action({ request }: ActionFunctionArgs) {
         'asc' | 'desc',
       ];
       const cookie = await setOrganizationClassesTableCookie(request, {
-        sort,
+        sort:
+          hideTeachingSecrets && sort === 'code' ? 'createdAt' : sort,
         direction,
       });
       return dataResponse(
@@ -717,8 +732,16 @@ function CopyCodeButton({ code }: { code: string }) {
 }
 
 export default function OrganizationClassesRoute() {
-  const { classes, totalCount, schools, teachers, table, q, classCodeUniqueEnabled } =
-    useLoaderData<typeof loader>();
+  const {
+    classes,
+    totalCount,
+    schools,
+    teachers,
+    table,
+    q,
+    classCodeUniqueEnabled,
+  } = useLoaderData<typeof loader>();
+  const codeSortDisabled = table.codeSortDisabled === true;
   const fetcher = useFetcher();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -914,7 +937,11 @@ export default function OrganizationClassesRoute() {
                         />
                       </TableHead>
                       {Object.entries(COLUMNS).map(
-                        ([key, { label, value }]) => (
+                        ([key, { label, value }]) => {
+                          const sortDisabled =
+                            !value ||
+                            (codeSortDisabled && value === 'code');
+                          return (
                           <TableHead
                             key={key}
                             className={key === 'actions' ? 'pr-4' : ''}
@@ -923,10 +950,10 @@ export default function OrganizationClassesRoute() {
                               variant="unstyled"
                               className={cn(
                                 'h-8 p-0',
-                                !value ? 'pointer-events-none' : ''
+                                sortDisabled ? 'pointer-events-none' : ''
                               )}
                               onClick={() =>
-                                value
+                                !sortDisabled
                                   ? handleSort(
                                       value,
                                       table.direction === 'asc' ? 'desc' : 'asc'
@@ -935,7 +962,7 @@ export default function OrganizationClassesRoute() {
                               }
                             >
                               {label}
-                              {!value ? null : table.sort === value ? (
+                              {sortDisabled ? null : table.sort === value ? (
                                 table.direction === 'desc' ? (
                                   <ArrowUp
                                     className="ml-2 h-4 w-4 text-primary"
@@ -952,7 +979,8 @@ export default function OrganizationClassesRoute() {
                               )}
                             </Button>
                           </TableHead>
-                        )
+                          );
+                        }
                       )}
                     </TableRow>
                   </TableHeader>

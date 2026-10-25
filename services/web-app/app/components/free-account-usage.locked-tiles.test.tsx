@@ -75,9 +75,17 @@ test('FreeAssignmentTiles renders only entitled free assignment rows on the dash
       <FreeAssignmentTiles
         usage={usage}
         types={[
-          { id: 'starter', kind: 'class_starter' },
-          { id: 'pre', kind: 'prewriting' },
-          { id: 'thesis', kind: 'thesis_statement' },
+          {
+            id: 'starter',
+            kind: 'class_starter',
+            imageId: 'img-starter',
+          },
+          { id: 'pre', kind: 'prewriting', imageId: 'img-pre' },
+          {
+            id: 'thesis',
+            kind: 'thesis_statement',
+            imageId: 'img-thesis',
+          },
         ]}
         onCreate={() => {}}
       />
@@ -90,6 +98,20 @@ test('FreeAssignmentTiles renders only entitled free assignment rows on the dash
   expect(html).toContain('Thesis Statement');
   expect(html).not.toContain('site-license-locked-assignment-tile');
   expect(html).not.toContain('Daily Pages');
+  expect(html).toContain('/api/image/course/img-starter');
+});
+
+test('FreeAssignmentTiles renders assignment artwork when imageId is present', () => {
+  const html = renderToStaticMarkup(
+    <StaticRouter location="/app">
+      <FreeAssignmentTiles
+        usage={usage}
+        types={[{ id: 'starter', kind: 'class_starter', imageId: 'img-1' }]}
+        onCreate={() => {}}
+      />
+    </StaticRouter>
+  );
+  expect(html).toContain('src="/api/image/course/img-1"');
 });
 
 test('FreeAssignmentTiles shows Unlimited meta for monthly free assignments', () => {
@@ -112,9 +134,17 @@ test('FreeAssignmentTiles unlocked tiles link to assignment type home', () => {
       <FreeAssignmentTiles
         usage={usage}
         types={[
-          { id: 'starter', kind: 'class_starter' },
-          { id: 'pre', kind: 'prewriting' },
-          { id: 'thesis', kind: 'thesis_statement' },
+          {
+            id: 'starter',
+            kind: 'class_starter',
+            imageId: 'img-starter',
+          },
+          { id: 'pre', kind: 'prewriting', imageId: 'img-pre' },
+          {
+            id: 'thesis',
+            kind: 'thesis_statement',
+            imageId: 'img-thesis',
+          },
         ]}
         onCreate={() => {}}
       />
@@ -129,36 +159,65 @@ test('FreeAssignmentTiles unlocked tiles link to assignment type home', () => {
   );
 });
 
-test('FreeAssignmentTiles locked tiles stay buttons and open the locked picker', () => {
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-  lockedTileRoot = createRoot(container);
-  let createArg: string | undefined = 'unset';
-  act(() => {
-    lockedTileRoot!.render(
-      <StaticRouter location="/app">
-        <FreeAssignmentTiles
-          usage={usage}
-          teachingLocked
-          types={[{ id: 'starter', kind: 'class_starter' }]}
-          onCreate={(id) => {
-            createArg = id;
-          }}
-        />
-      </StaticRouter>
-    );
-  });
+test('FreeAssignmentTiles locked tiles link to assignment type home', () => {
+  const html = renderToStaticMarkup(
+    <StaticRouter location="/app">
+      <FreeAssignmentTiles
+        usage={usage}
+        teachingLocked
+        types={[
+          { id: 'starter', kind: 'class_starter', imageId: 'img-1' },
+          { id: 'pre', kind: 'prewriting', imageId: 'img-2' },
+          { id: 'thesis', kind: 'thesis_statement', imageId: 'img-3' },
+        ]}
+        onCreate={() => {}}
+      />
+    </StaticRouter>
+  );
+  expect(html).toContain('href="/app/assignment-types/starter"');
+  expect(html).toContain('href="/app/assignment-types/thesis"');
+  expect(html).not.toMatch(
+    /<button[^>]*data-testid="dashboard-assignment-tile"/
+  );
+});
 
-  const html = container.innerHTML;
-  expect(html).toContain('data-testid="dashboard-assignment-tile"');
-  expect(html).not.toContain('href="/app/assignment-types/');
+test('FreeAssignmentTiles locked pending hides create control and uses text-only tiles', () => {
+  const html = renderToStaticMarkup(
+    <StaticRouter location="/app">
+      <FreeAssignmentTiles
+        usage={usage}
+        teachingLocked
+        types={[
+          { id: 'starter', kind: 'class_starter', imageId: 'img-1' },
+          { id: 'pre', kind: 'prewriting', imageId: 'img-2' },
+          { id: 'thesis', kind: 'thesis_statement', imageId: 'img-3' },
+        ]}
+        onCreate={() => {}}
+      />
+    </StaticRouter>
+  );
+  expect(html).not.toContain('preview-assignment-creation-disabled');
+  expect(html).not.toContain('Create assignment');
+  expect(html).not.toContain('/api/image/course/');
+  expect(html).toContain('site-license-lock-button');
+  expect(html).toContain('12 of 12 left');
+  expect(html).not.toContain('Unlimited');
+});
 
-  const tile = container.querySelector(
-    '[data-testid="dashboard-assignment-tile"]'
-  ) as HTMLButtonElement;
-  expect(tile.tagName).toBe('BUTTON');
-  act(() => {
-    tile.click();
-  });
-  expect(createArg).toBeUndefined();
+test('FreeAccountRail is hidden while teaching is locked', async () => {
+  mock.module('~/components/free-tier/teaching-access-context', () => ({
+    useTeachingAccess: () => ({
+      locked: true,
+      loading: false,
+      state: { variant: 'locked', adminName: 'Dr. Patel' },
+    }),
+  }));
+  const { FreeAccountRail } = await import('./free-account-usage');
+  const html = renderToStaticMarkup(
+    <StaticRouter location="/app">
+      <FreeAccountRail usage={usage} />
+    </StaticRouter>
+  );
+  expect(html).toBe('');
+  mock.restore();
 });

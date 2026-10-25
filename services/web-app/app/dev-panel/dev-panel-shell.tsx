@@ -6,6 +6,7 @@ import {
   Loader2,
   Lock,
   MessageSquare,
+  X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Form, useFetcher, useLocation, useRouteLoaderData } from 'react-router';
@@ -36,6 +37,8 @@ import {
   consumeDevPanelJumpToast,
   DevPanelFreeTierFlyout,
 } from './dev-panel-free-tier-flyout';
+import { DevPanelClassSimulationFlyout } from './dev-panel-class-simulation-flyout';
+import { DevPanelMobileBottomSheet } from './dev-panel-mobile-bottom-sheet';
 
 function useMedia(query: string) {
   const [matches, setMatches] = useState(false);
@@ -155,11 +158,15 @@ export function DevPanelShell() {
   } = useDevPanel();
   const rootData = useRouteLoaderData<typeof rootLoader>('root');
   const isPhone = useMedia('(max-width: 639px)');
+  const isPhonePortrait = useMedia(
+    '(max-width: 639px) and (orientation: portrait)'
+  );
   const isTablet = useMedia('(min-width: 640px) and (max-width: 1023px)');
   const [accessOpen, setAccessOpen] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const feedbackRowRef = useRef<HTMLButtonElement>(null);
   const freeTierRowRef = useRef<HTMLButtonElement>(null);
+  const classSimulationRowRef = useRef<HTMLButtonElement>(null);
   const [orgs, setOrgs] = useState<Array<{ id: string; name: string }>>([]);
   const [logins, setLogins] = useState<Array<{ email: string; label: string; role: string }>>([]);
   const [loginState, setLoginState] = useState<'idle' | 'loading' | 'error' | 'empty'>('idle');
@@ -198,7 +205,11 @@ export function DevPanelShell() {
       }
       event.preventDefault();
       const returningTo =
-        state.subSheet === 'give-feedback' ? feedbackRowRef : freeTierRowRef;
+        state.subSheet === 'give-feedback'
+          ? feedbackRowRef
+          : state.subSheet === 'class-simulation'
+            ? classSimulationRowRef
+            : freeTierRowRef;
       closeSubSheet();
       window.requestAnimationFrame(() => returningTo.current?.focus());
     };
@@ -270,6 +281,8 @@ export function DevPanelShell() {
       .catch(() => setLoginState('error'));
   }, [selectedOrg, unlocked]);
 
+  const showPhoneBottomSheet = isPhonePortrait;
+
   const panelBody = (
     <>
       <header className="flex items-start justify-between gap-2 border-b px-4 py-3">
@@ -295,7 +308,11 @@ export function DevPanelShell() {
           aria-label="Close developer tools"
           onClick={closePanel}
         >
-          <ChevronRight className="size-4" aria-hidden="true" />
+          {showPhoneBottomSheet ? (
+            <X className="size-4" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="size-4" aria-hidden="true" />
+          )}
         </Button>
       </header>
 
@@ -402,6 +419,51 @@ export function DevPanelShell() {
               </span>
               <ChevronRight className="size-4 shrink-0" aria-hidden="true" />
             </button>
+
+            <Collapsible
+              open={state.openSections.includes('data')}
+              onOpenChange={() => toggleSection('data')}
+            >
+              <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm font-medium hover:bg-accent">
+                Data
+                <ChevronDown className="size-4" aria-hidden="true" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-1 px-2 pb-2">
+                <button
+                  ref={classSimulationRowRef}
+                  type="button"
+                  className={cn(
+                    'flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm hover:bg-accent',
+                    state.subSheet === 'class-simulation' && 'bg-accent/60'
+                  )}
+                  onClick={() => openSubSheet('class-simulation')}
+                >
+                  <span>
+                    <span className="font-medium">Populate class</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Fake students and assignment progress
+                    </span>
+                  </span>
+                  <ChevronRight className="size-4 shrink-0" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    'flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm hover:bg-accent',
+                    state.subSheet === 'class-simulation' && 'bg-accent/60'
+                  )}
+                  onClick={() => openSubSheet('class-simulation')}
+                >
+                  <span>
+                    <span className="font-medium">Clear simulated data</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Removes only the fake students and their work.
+                    </span>
+                  </span>
+                  <ChevronRight className="size-4 shrink-0" aria-hidden="true" />
+                </button>
+              </CollapsibleContent>
+            </Collapsible>
 
             <Collapsible
               open={state.openSections.includes('blackboard')}
@@ -519,55 +581,77 @@ export function DevPanelShell() {
       {!isPhone && !isTablet && state.subSheet === 'free-tier-states' ? (
         <DevPanelFreeTierFlyout onClose={closeSubSheet} orgId={selectedOrg} />
       ) : null}
+      {!isPhone && !isTablet && state.subSheet === 'class-simulation' ? (
+        <DevPanelClassSimulationFlyout onClose={closeSubSheet} />
+      ) : null}
     </>
   );
 
   if (!state.open) return null;
 
   if (isPhone || isTablet) {
+    const compactPanelContent =
+      isPhone && state.subSheet === 'give-feedback' ? (
+        <DevPanelGiveFeedbackFlyout
+          onClose={closeSubSheet}
+          pushed
+          feedbackActions={() => feedbackContext.current.snapshot()}
+        />
+      ) : isPhone && state.subSheet === 'free-tier-states' ? (
+        <DevPanelFreeTierFlyout
+          onClose={closeSubSheet}
+          orgId={selectedOrg}
+          pushed
+        />
+      ) : isPhone && state.subSheet === 'class-simulation' ? (
+        <DevPanelClassSimulationFlyout onClose={closeSubSheet} pushed />
+      ) : (
+        <>
+          {panelBody}
+          {isTablet && state.subSheet === 'give-feedback' ? (
+            <DevPanelGiveFeedbackFlyout
+              onClose={closeSubSheet}
+              pushed
+              feedbackActions={() => feedbackContext.current.snapshot()}
+            />
+          ) : null}
+          {isTablet && state.subSheet === 'free-tier-states' ? (
+            <DevPanelFreeTierFlyout
+              onClose={closeSubSheet}
+              orgId={selectedOrg}
+              pushed
+            />
+          ) : null}
+          {isTablet && state.subSheet === 'class-simulation' ? (
+            <DevPanelClassSimulationFlyout onClose={closeSubSheet} pushed />
+          ) : null}
+        </>
+      );
+
+    if (showPhoneBottomSheet) {
+      return (
+        <DevPanelMobileBottomSheet
+          open={state.open}
+          onOpenChange={(open) => !open && closePanel()}
+        >
+          {compactPanelContent}
+        </DevPanelMobileBottomSheet>
+      );
+    }
+
     return (
       <Sheet open={state.open} onOpenChange={(open) => !open && closePanel()}>
         <SheetContent
           side="right"
           showCloseButton={false}
-          className="relative flex w-full max-w-none flex-col p-0 sm:max-w-[360px]"
+          className="relative flex h-full w-full max-w-none flex-col p-0 sm:max-w-[360px]"
           data-yawp-dev-panel
           data-yawp-dev-panel-ready="true"
           id="devtools"
           role={isPhone ? 'dialog' : undefined}
           aria-modal={isPhone ? true : undefined}
         >
-          {isPhone && state.subSheet === 'give-feedback' ? (
-            <DevPanelGiveFeedbackFlyout
-              onClose={closeSubSheet}
-              pushed
-              feedbackActions={() => feedbackContext.current.snapshot()}
-            />
-          ) : isPhone && state.subSheet === 'free-tier-states' ? (
-            <DevPanelFreeTierFlyout
-              onClose={closeSubSheet}
-              orgId={selectedOrg}
-              pushed
-            />
-          ) : (
-            <>
-              {panelBody}
-              {isTablet && state.subSheet === 'give-feedback' ? (
-                <DevPanelGiveFeedbackFlyout
-                  onClose={closeSubSheet}
-                  pushed
-                  feedbackActions={() => feedbackContext.current.snapshot()}
-                />
-              ) : null}
-              {isTablet && state.subSheet === 'free-tier-states' ? (
-                <DevPanelFreeTierFlyout
-                  onClose={closeSubSheet}
-                  orgId={selectedOrg}
-                  pushed
-                />
-              ) : null}
-            </>
-          )}
+          {compactPanelContent}
         </SheetContent>
       </Sheet>
     );

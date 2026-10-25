@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - 'packages/prisma/**'
+      - 'scripts/preview/preserve-demo-tester-feedback*'
+      - 'scripts/preview/preserve-demo-tester-feedback-lib.mjs'
+      - 'scripts/preview/prisma-migrate-deploy-with-summary.sh'
       - '.github/workflows/migration-integration.yml'
       - 'services/web-app/**'
 
@@ -46,6 +49,8 @@ jobs:
           ./packages/prisma/scripts/instruction-fields-migration.integration.test.ts
           ./packages/prisma/scripts/holistic-migration-label.integration.test.ts
           ./packages/prisma/scripts/daily-pages-engagement-migration.integration.test.ts
+          ./packages/prisma/scripts/demo-tester-feedback-reset.integration.test.ts
+          ./packages/prisma/scripts/dev-panel-class-simulation.integration.test.ts
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_integration
 

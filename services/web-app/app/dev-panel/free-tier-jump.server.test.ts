@@ -37,15 +37,27 @@ mock.module('~/utils/db.server', () => ({
       findUniqueOrThrow: async () => ({ organizationId: 'org-1' }),
       update: async () => ({}),
     },
-    orgMembership: { findFirst: async () => null },
+    orgMembership: {
+      findFirst: async ({
+        where,
+      }: {
+        where?: { organizationId?: string; userId?: string };
+      }) =>
+        where?.organizationId === 'org-fc-1'
+          ? { id: 'mem-fc-1' }
+          : null,
+    },
     session: { deleteMany: async () => ({ count: 0 }) },
   },
 }));
 mock.module('~/domain/free-tier/provision-free-classroom.server', () => ({
-  provisionFreeClassroom: async () => {},
+  provisionFreeClassroom: async () => ({
+    status: 'provisioned' as const,
+    organizationId: 'org-fc-1',
+  }),
 }));
 mock.module('~/domain/free-tier/signed-link.server', () => ({
-  mintSignedLink: async () => ({ token: 't' }),
+  mintSignedLinkForDevPanel: async () => ({ token: 't' }),
   FREE_TIER_LINK_TTL_MS: 60_000,
 }));
 mock.module('~/domain/free-tier/free-tier-public-url.server', () => ({
@@ -64,11 +76,14 @@ mock.module('./dev-panel-session.server', () => ({
   createDevPanelSessionHeaders: async () => new Headers(),
 }));
 
-const { executeFreeTierStateJump, PENDING_STATES_NEED_THROWAWAY } = await import(
-  './free-tier-jump.server'
-);
+const {
+  executeFreeTierStateJump,
+  PENDING_STATES_NEED_THROWAWAY,
+  APPROVED_ADMIN_STATES_NEED_THROWAWAY,
+  FREE_TIER_JUMP_GENERIC_ERROR,
+} = await import('./free-tier-jump.server');
 
-describe('executeFreeTierStateJump pending guard', () => {
+describe('executeFreeTierStateJump throwaway guards', () => {
   test('refuses pending states without throwaway before writes', async () => {
     const result = await executeFreeTierStateJump({
       request: new Request('http://localhost/'),
@@ -81,6 +96,34 @@ describe('executeFreeTierStateJump pending guard', () => {
       ok: false,
       error: PENDING_STATES_NEED_THROWAWAY,
     });
+  });
+
+  test('refuses approved states without throwaway before writes', async () => {
+    const result = await executeFreeTierStateJump({
+      request: new Request('http://localhost/'),
+      stateId: 'approved.first-time-toast',
+      throwaway: false,
+      currentUserId: 'user-1',
+      organizationId: 'org-1',
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: APPROVED_ADMIN_STATES_NEED_THROWAWAY,
+    });
+  });
+});
+
+describe('formatFreeTierJumpErrorForClient', () => {
+  test('hides raw prisma failures', async () => {
+    const { formatFreeTierJumpErrorForClient } = await import('./free-tier-jump-messages');
+    expect(
+      formatFreeTierJumpErrorForClient(
+        new Error('Invalid prisma.freeTierApplication.upsert() invocation')
+      )
+    ).toBe(FREE_TIER_JUMP_GENERIC_ERROR);
+    expect(formatFreeTierJumpErrorForClient(new Error(PENDING_STATES_NEED_THROWAWAY))).toBe(
+      PENDING_STATES_NEED_THROWAWAY
+    );
   });
 });
 

@@ -1,4 +1,5 @@
 import { prisma } from '~/utils/db.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import {
   LESSON_PLANNER_INTAKE_V2_FLAG,
   LESSON_PLANNER_STACK_V2_FLAG,
@@ -190,7 +191,7 @@ export async function isFreeTierCapabilityEnabled(
   } catch (error) {
     console.error('feature_flag_read_failed', {
       key: FREE_TIER_FLAG,
-      error: error instanceof Error ? error.message : String(error),
+      error: buildSafeErrorForLog(error),
     });
     return false;
   }
@@ -217,7 +218,7 @@ export async function isFeatureFlagEnabled(
     } catch (error) {
       console.error('feature_flag_read_failed', {
         key: UNIFIED_SIGN_ON_FLAG,
-        error: error instanceof Error ? error.message : String(error),
+        error: buildSafeErrorForLog(error),
       });
       return false;
     }
@@ -231,7 +232,7 @@ export async function isFeatureFlagEnabled(
   } catch (error) {
     console.error('feature_flag_read_failed', {
       key,
-      error: error instanceof Error ? error.message : String(error),
+      error: buildSafeErrorForLog(error),
     });
     return false;
   }
@@ -344,7 +345,7 @@ export async function isFreeTierEnabled(
     if (throwOnError) throw error;
     console.error('feature_flag_read_failed', {
       key: FREE_TIER_FLAG,
-      error: error instanceof Error ? error.message : String(error),
+      error: buildSafeErrorForLog(error),
     });
     return false;
   }

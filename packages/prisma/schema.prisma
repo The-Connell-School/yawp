@@ -2039,24 +2039,28 @@ model WritingPracticeClassAssignment {
 
 model User {
   classStudentHandles ClassStudentHandle[]
-  signonIdentities    SignonIdentity[]
-  id                  String               @id @default(cuid())
-  createdAt           DateTime             @default(now()) @db.Timestamptz(6)
-  updatedAt           DateTime             @default(now()) @db.Timestamptz(6)
-  email               String?              @unique
-  username            String?              @unique
-  emailVerifiedAt     DateTime?            @db.Timestamptz(6)
-  mustChangePassword  Boolean              @default(false)
-  name                String?
-  password            Password?
-  sessions            Session[]
-  memberships         OrgMembership[]
-  isTester            Boolean              @default(false)
-  testerFeedback      TesterFeedback[]
-  isAdmin             Boolean              @default(false)
-  isSuperAdmin        Boolean              @default(false)
-  mockAdminGranted    Boolean              @default(false)
-  tours               UserTour[]
+  signonIdentities SignonIdentity[]
+  id                 String          @id @default(cuid())
+  createdAt          DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime        @default(now()) @db.Timestamptz(6)
+  email              String?         @unique
+  username           String?         @unique
+  emailVerifiedAt    DateTime?       @db.Timestamptz(6)
+  mustChangePassword Boolean         @default(false)
+  name               String?
+  password           Password?
+  sessions           Session[]
+  memberships        OrgMembership[]
+  isTester           Boolean         @default(false)
+  testerFeedback     TesterFeedback[]
+  isAdmin            Boolean         @default(false)
+  isSuperAdmin       Boolean         @default(false)
+  mockAdminGranted   Boolean         @default(false)
+  /// Dev-panel-only simulated students scoped to one class for demo data.
+  simulatedForClassId String?
+  tours              UserTour[]
+
+  @@index([simulatedForClassId])
 }
 
 /// How a user left each in-app page tour (free classroom teachers). One row per

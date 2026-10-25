@@ -17,6 +17,7 @@ import {
   listFeatureFlags,
   setFeatureFlag,
 } from '~/domain/feature-flags/feature-flags.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 
 /**
  * Read and set the feature flags from the internal app: off, on for
@@ -60,7 +61,7 @@ export async function featureFlagsList(request: Request) {
     return response({ flags: await listFeatureFlags() });
   } catch (error) {
     console.error('feature_flags_list_failed', {
-      error: error instanceof Error ? error.message : String(error),
+      error: buildSafeErrorForLog(error),
     });
     return response({ error: 'Could not read feature flags' }, 500);
   }
@@ -125,7 +126,7 @@ export async function featureFlagUpdate(request: Request, key: string | undefine
   } catch (error) {
     console.error('feature_flag_set_failed', {
       key,
-      error: error instanceof Error ? error.message : String(error),
+      error: buildSafeErrorForLog(error),
     });
     return response({ error: 'Could not update feature flag' }, 500);
   }

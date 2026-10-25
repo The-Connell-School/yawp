@@ -51,7 +51,7 @@ mock.module('react-router', () => ({
 
 const { AssignmentCreationSheet } = await import('./assignment-creation-sheet');
 
-describe('AssignmentCreationSheet teaching locked picker', () => {
+describe('AssignmentCreationSheet teaching locked preview', () => {
   let root: Root | null = null;
 
   afterEach(() => {
@@ -60,7 +60,7 @@ describe('AssignmentCreationSheet teaching locked picker', () => {
     document.body.innerHTML = '';
   });
 
-  it('opens the tile grid picker even when an assignment type id was prefilled', () => {
+  it('does not render the creation sheet while teaching is locked', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -86,7 +86,7 @@ describe('AssignmentCreationSheet teaching locked picker', () => {
         />
       );
     });
-    expect(document.body.textContent).toContain('Choose a type.');
-    expect(document.body.textContent).not.toContain('Assignment type');
+    expect(document.body.textContent).not.toContain('Choose a type.');
+    expect(document.body.textContent).not.toContain('New Assignment');
   });
 });

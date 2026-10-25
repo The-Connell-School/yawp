@@ -4,6 +4,7 @@ import {
   buildSafeRouteParamsForLog,
   buildSafeStackForLog,
   buildServerErrorRequestContext,
+  safeErrorTextForLog,
 } from './server-error-request-context.server';
 
 describe('buildServerErrorRequestContext', () => {
@@ -104,6 +105,27 @@ describe('buildServerErrorRequestContext', () => {
       modelName: 'Invitation',
       target: ['target'],
     });
+  });
+
+  test('buildSafeErrorForLog redacts prisma initialization connection strings', () => {
+    const error = Object.assign(
+      new Error(
+        "Can't reach database server at `postgresql://yawp:SECRET-PASS@127.0.0.1:5432/yawp`",
+      ),
+      { name: 'PrismaClientInitializationError' },
+    );
+    const serialized = JSON.stringify(buildSafeErrorForLog(error));
+    expect(serialized).not.toContain('SECRET-PASS');
+    expect(serialized).not.toContain('postgresql://');
+  });
+
+  test('safeErrorTextForLog returns redacted message text', () => {
+    const text = safeErrorTextForLog(
+      new Error('delivery failed for teacher@school.edu token=SECRET'),
+    );
+    expect(text).toContain('delivery failed');
+    expect(text).not.toContain('teacher@school.edu');
+    expect(text).not.toContain('SECRET');
   });
 
   test('buildSafeRouteParamsForLog lists keys without values', () => {
