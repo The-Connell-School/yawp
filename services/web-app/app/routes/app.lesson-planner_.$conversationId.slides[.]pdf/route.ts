@@ -7,6 +7,7 @@ import type { LoaderFunctionArgs } from 'react-router';
 import { loadLessonPacket } from '~/domain/lesson-planner/load-lesson-packet.server';
 import { lessonDeck } from '~/domain/lesson-planner/lesson-deck.server';
 import { pdfFilename, renderSlidesPdf } from '~/domain/lesson-planner/lesson-pdf.server';
+import { slidesPerPage } from '~/domain/lesson-planner/one-packet';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   // Access first: the teacher's own lesson, or not found.
@@ -17,7 +18,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
   const found = await lessonDeck(conversationId);
   if (!found) throw new Response('Not Found', { status: 404 });
-  const pdf = await renderSlidesPdf({ lessonTitle: packet.title, deck: found.deck });
+  // 2 or 4 slides to a page (Brian's round 4, item 5); old links print 2.
+  const perPage = slidesPerPage(new URL(request.url).searchParams.get('perPage') ?? '2');
+  const pdf = await renderSlidesPdf({ lessonTitle: packet.title, deck: found.deck, perPage });
   const filename = pdfFilename(packet.title, 'Slides');
   return new Response(pdf as unknown as BodyInit, {
     headers: {

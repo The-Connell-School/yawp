@@ -16,7 +16,7 @@ import {
   handoutKit,
 } from '~/domain/lesson-planner/lesson-pdf.server';
 import { buildStudentHandout } from '~/domain/lesson-planner/student-handout';
-import { onePacketOrder } from '~/domain/lesson-planner/one-packet';
+import { onePacketOrder, packetParts, slidesPerPage } from '~/domain/lesson-planner/one-packet';
 import { newestBuiltDeck, stackAgendaSteps } from '~/domain/lesson-planner/lesson-deck.server';
 import { syncAgendaToStack } from '~/domain/lesson-planner/deck-agenda';
 
@@ -75,7 +75,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? { ...packet, sections: [single] }
     : wantsHandout
       ? packet
-      : onePacketOrder(packet, (await newestBuiltDeck(params.conversationId!))?.deck ?? null);
+      : onePacketOrder(
+          packet,
+          (await newestBuiltDeck(params.conversationId!))?.deck ?? null,
+          // Print a packet for class: the parts the teacher checked (Brian's round 4, item 5).
+          packetParts(url.searchParams.get('parts'))
+        );
   // A filed deck's agenda reads the stack's times too (Brian's round 3, 1.4).
   const agendaSteps = ordered.sections.some((section) => section.deck)
     ? await stackAgendaSteps(params.conversationId!)
@@ -95,7 +100,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         excluded: single ? [] : excluded,
         kit: handoutKit(packet, reviewFlags),
       })
-    : await renderPacketPdf(chosen);
+    : await renderPacketPdf(chosen, { slidesPerPage: slidesPerPage(url.searchParams.get('perPage') ?? '2') });
 
   const filename = pdfFilename(
     packet.title,

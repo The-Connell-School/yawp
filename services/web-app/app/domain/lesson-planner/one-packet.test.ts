@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { onePacketOrder, ONE_PACKET_CAPTION } from './one-packet';
+import { onePacketOrder, ONE_PACKET_CAPTION, packetParts, slidesPerPage } from './one-packet';
 import type { LessonPacket, PacketSection } from './lesson-packet';
 import type { SlideDeck } from './slide-deck';
 
@@ -55,6 +55,39 @@ describe("one packet: lesson plan, slides, handouts (Oct 24 handoff, task 2)", (
   });
 
   test('the caption says so', () => {
-    expect(ONE_PACKET_CAPTION).toBe('Lesson plan, slides and handouts, in that order.');
+    expect(ONE_PACKET_CAPTION).toBe('One PDF, in this order.');
+  });
+});
+
+// Brian's round 4, item 5: Print a packet for class.
+describe('the class packet: the parts the teacher checked', () => {
+  const lesson = () =>
+    packet([
+      section('handout', { audience: 'student', kind: 'handout' }),
+      section('hook'),
+      section('deck', { kind: 'slides', deck: deck('Slides') }),
+    ]);
+
+  test('no parts asked for is everything, as before', () => {
+    expect(packetParts(null)).toEqual(['plan', 'slides', 'handouts']);
+    expect(onePacketOrder(lesson(), null, packetParts(null)).sections.map((s) => s.id)).toEqual(['hook', 'deck', 'handout']);
+  });
+
+  test('skipping the slides prints the plan and the handouts in one go', () => {
+    const parts = packetParts('plan,handouts');
+    expect(parts).toEqual(['plan', 'handouts']);
+    expect(onePacketOrder(lesson(), deck('Built'), parts).sections.map((s) => s.id)).toEqual(['hook', 'handout']);
+  });
+
+  test('parts keep the packet order, and unknown ones are dropped', () => {
+    expect(packetParts('handouts,nonsense,plan')).toEqual(['plan', 'handouts']);
+    expect(packetParts('nonsense')).toEqual(['plan', 'slides', 'handouts']);
+  });
+
+  test('slides per page: 4 unless 2 was asked for', () => {
+    expect(slidesPerPage('2')).toBe(2);
+    expect(slidesPerPage('4')).toBe(4);
+    expect(slidesPerPage(null)).toBe(4);
+    expect(slidesPerPage('9')).toBe(4);
   });
 });

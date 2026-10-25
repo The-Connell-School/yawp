@@ -205,7 +205,7 @@ test.describe("Stack page v2 (Brian's Oct 24 handoff)", () => {
       await expect(box.getByTestId(id)).toBeVisible();
     }
     await expect(box.getByTestId('plan-google')).toHaveAttribute('href', `/app/lesson-planner/${conversationId}/google-doc?doc=plan`);
-    await expect(box).toContainText('Lesson plan, slides and handouts, in that order.');
+    await expect(box.getByTestId('one-packet')).toHaveText('Print a packet for class');
     await expect(box.getByTestId('google-docs-caption')).toHaveText(
       'Google Docs opens a new Doc in your Google Drive. The first time, Google asks you to allow it.'
     );

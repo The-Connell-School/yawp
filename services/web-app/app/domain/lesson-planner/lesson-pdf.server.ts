@@ -20,6 +20,7 @@ import { classicSlide, deckDurationMinutes, type Slide, type SlideDeck } from '.
 import { deckColors, withoutColorMarks } from './deck-colors';
 import { GALLERY_COLORS, galleryAccent, galleryRunningHead, planGalleryDeck, type GallerySlidePlan } from './deck-gallery';
 import { deckArt } from './deck-art';
+import type { SlidesPerPage } from './one-packet';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { registerKitFonts } from './kit-fonts.server';
@@ -452,7 +453,7 @@ function drawSlideFace(
  * page; a slide never splits from its notes. Notes are set as a quote so the
  * bar down the margin tells them apart from what students see.
  */
-function drawSlideDeck(doc: Doc, deck: SlideDeck): void {
+function drawSlideDeck(doc: Doc, deck: SlideDeck, perPage: SlidesPerPage = 2): void {
   const minutes = deckDurationMinutes(deck);
   const summary = [
     `${deck.slides.length} slide${deck.slides.length === 1 ? '' : 's'}`,
@@ -473,6 +474,11 @@ function drawSlideDeck(doc: Doc, deck: SlideDeck): void {
   const artFile = deckArt(deck.art);
   const art = artFile ? publicFile(artFile.src) : null;
   const left = doc.page.margins.left;
+
+  if (perPage === 4) {
+    drawSlideGrid(doc, deck, plans, art);
+    return;
+  }
 
   plans.forEach((plan, index) => {
     const slide = plan.slide;
@@ -501,6 +507,70 @@ function drawSlideDeck(doc: Doc, deck: SlideDeck): void {
     blocks.forEach((block, position) => drawBlock(doc, block, blocks[position - 1]));
     doc.y += 10;
   });
+}
+
+/** A slide in the 2×2 grid: half a column wide, 16:9, its caption and notes under it. */
+const GRID_GAP = 18;
+const GRID_CAPTION = 64;
+
+/**
+ * Four slides to a sheet (Brian's round 4, item 5): a 2×2 grid, each slide
+ * drawn as in the two-up layout and scaled down, with its number, minutes and
+ * title, and the start of its notes under it. A sheet holds two rows, so a
+ * new group of four starts a new sheet.
+ */
+function drawSlideGrid(
+  doc: Doc,
+  deck: SlideDeck,
+  plans: GallerySlidePlan[],
+  art: string | null
+): void {
+  const left = doc.page.margins.left;
+  const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const tileWidth = (width - GRID_GAP) / 2;
+  const tileHeight = (tileWidth * 9) / 16;
+  const rowHeight = tileHeight + GRID_CAPTION;
+  const scale = tileWidth / SLIDE_WIDTH;
+  const sans = styleOf(doc).fonts.body;
+  const sansBold = styleOf(doc).fonts.bold;
+  const bottom = () => doc.page.height - doc.page.margins.bottom;
+
+  let top = doc.y + 6;
+  for (let index = 0; index < plans.length; index += 1) {
+    const column = index % 2;
+    if (column === 0 && ((index > 0 && index % 4 === 0) || top + rowHeight > bottom())) {
+      doc.addPage();
+      top = doc.page.margins.top;
+    }
+    const plan = plans[index]!;
+    const x = left + column * (tileWidth + GRID_GAP);
+
+    // Drawn at full size and scaled, so the type keeps its proportions.
+    doc.save();
+    doc.translate(x, top);
+    doc.scale(scale);
+    drawSlideFace(doc, deck, plan, art ? { path: art } : null, { x: 0, y: 0, w: SLIDE_WIDTH, h: SLIDE_HEIGHT });
+    doc.restore();
+
+    const slide = plan.slide;
+    let y = top + tileHeight + 4;
+    doc.font(sansBold).fontSize(7.5).fillColor(styleOf(doc).ink);
+    const caption = `Slide ${index + 1} of ${deck.slides.length}${slideTiming(slide)} · ${withoutColorMarks(slide.title)}`;
+    doc.text(caption, x, y, { width: tileWidth, height: 10, ellipsis: true, lineBreak: false });
+    y += 11;
+    if (slide.speakerNotes) {
+      doc.font(sans).fontSize(7).fillColor(styleOf(doc).muted);
+      doc.text(withoutColorMarks(slide.speakerNotes), x, y, {
+        width: tileWidth,
+        height: GRID_CAPTION - 18,
+        ellipsis: true,
+        lineGap: 0.5,
+      });
+    }
+    if (column === 1 || index === plans.length - 1) top += rowHeight;
+  }
+  doc.x = left;
+  doc.y = top;
 }
 
 function drawTitle(
@@ -584,7 +654,8 @@ function packetSubtitle(packet: LessonPacket): string | null {
  * material kept inside a reply printed alongside it.
  */
 export async function renderPacketPdf(
-  packet: LessonPacket
+  packet: LessonPacket,
+  { slidesPerPage = 2 }: { slidesPerPage?: SlidesPerPage } = {}
 ): Promise<Uint8Array> {
   const doc = newDocument(packet.title);
   drawTitle(doc, { title: packet.title, subtitle: packetSubtitle(packet) });
@@ -597,7 +668,7 @@ export async function renderPacketPdf(
       runs: [{ text: section.title, bold: true }],
     });
     drawMarkdown(doc, section.content);
-    if (section.deck) drawSlideDeck(doc, section.deck);
+    if (section.deck) drawSlideDeck(doc, section.deck, slidesPerPage);
 
     for (const material of section.materials) {
       drawBlock(doc, {
@@ -619,13 +690,16 @@ export async function renderPacketPdf(
 export async function renderSlidesPdf({
   lessonTitle,
   deck,
+  perPage = 2,
 }: {
   lessonTitle: string;
   deck: SlideDeck;
+  /** 2 with full notes, or 4 as a 2×2 grid (Brian's round 4, item 5). */
+  perPage?: SlidesPerPage;
 }): Promise<Uint8Array> {
   const doc = newDocument(deck.title);
   drawTitle(doc, { title: deck.title, subtitle: lessonTitle });
-  drawSlideDeck(doc, deck);
+  drawSlideDeck(doc, deck, perPage);
   return finish(doc);
 }
 

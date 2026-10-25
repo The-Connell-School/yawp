@@ -540,6 +540,29 @@ ${JSON.stringify(
     expect(text.indexOf('Slide 2 of 4')).toBeLessThan(text.indexOf('Three silent minutes of writing'));
   });
 
+  // Brian's round 4, item 5: four slides to a sheet, as a 2×2 grid.
+  test('four to a page prints the deck on half the pages', async () => {
+    const deck = {
+      title: 'Sinners',
+      slides: Array.from({ length: 8 }, (_, index) => ({
+        layout: 'statement',
+        title: `Slide title ${index + 1}`,
+        body: 'Edwards holds the room over the fire.',
+        speakerNotes: `Notes for slide ${index + 1}.`,
+        minutes: 2,
+      })),
+    };
+    const pages = (bytes: Uint8Array) => (Buffer.from(bytes).toString('latin1').match(/\/Type \/Page\b(?!s)/g) ?? []).length;
+    const two = await renderSlidesPdf({ lessonTitle: 'Day 2: Sinners', deck: deck as never, perPage: 2 });
+    const four = await renderSlidesPdf({ lessonTitle: 'Day 2: Sinners', deck: deck as never, perPage: 4 });
+    expect(pages(two)).toBeGreaterThanOrEqual(4);
+    expect(pages(four)).toBeLessThanOrEqual(3);
+    expect(pages(four)).toBeLessThan(pages(two));
+    const text = pdfText(four);
+    expect(text).toContain('Slide 8 of 8');
+    expect(text).toContain('Notes for slide 8.');
+  });
+
   test('the agenda slide lists its items and minutes on the picture', async () => {
     const deck = {
       title: 'Franklin',
