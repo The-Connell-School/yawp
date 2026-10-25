@@ -1,5 +1,6 @@
 import { ChevronLeft, CircleAlert, Loader2 } from 'lucide-react';
 import { useEffect, useId, useMemo, useState } from 'react';
+import { useRevalidator } from 'react-router';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -46,6 +47,7 @@ export function DevPanelClassSimulationFlyout({
   pushed?: boolean;
 }) {
   const { state, updateForms, flyoutSwitchInstant } = useDevPanel();
+  const revalidator = useRevalidator();
   const [classes, setClasses] = useState<TeacherClass[]>([]);
   const [classesState, setClassesState] = useState<
     'idle' | 'loading' | 'empty' | 'error'
@@ -110,6 +112,7 @@ export function DevPanelClassSimulationFlyout({
       toast.success(result?.message ?? 'Done.', {
         className: 'yawp-dev-panel-jump-toast',
       });
+      revalidator.revalidate();
       if (intent === 'populate' && typeof result?.counts?.students === 'number') {
         setClasses((prev) =>
           prev.map((entry) =>
