@@ -37,6 +37,11 @@ mock.module('~/domain/feature-flags/feature-flags.server', () => ({
 mock.module('~/domain/free-tier/approval-deny.server', () => ({
   resolveAdminDenyAnsweredGate: async () => null,
 }));
+mock.module('~/domain/free-tier/admin-approve-forward-link.server', () => ({
+  resolveAdminForwardTokenForApproveLink: async () => 'forward-token',
+  buildAdminForwardPageSearch: (forwardToken: string, approveToken: string) =>
+    `?t=${encodeURIComponent(forwardToken)}&approveT=${encodeURIComponent(approveToken)}`,
+}));
 const approve = mock(async () => ({ ok: true }));
 mock.module('~/domain/free-tier/approval-flow.server', () => ({
   completeSchoolAdminApproval: approve,
@@ -45,7 +50,8 @@ mock.module('react-router', () => ({
   ...router,
   useLoaderData: () => ({
     ok: true,
-    token: 'token',
+    token: 'approve-token',
+    forwardToken: 'forward-token',
     teacherName: 'Jordan Rivera',
     schoolName: 'Lincoln High School',
     teacherEmail: 'jrivera@lincolnhs.org',
@@ -96,5 +102,8 @@ test('approve page uses the designed heading and forward link', () => {
   expect(html).toContain('I&#x27;d like to learn more first');
   expect(html).toContain('What Yawp! is');
   expect(html).toContain('Forward this request');
+  expect(html).toContain(
+    '/free/admin/not-right-person?t=forward-token&amp;approveT=approve-token'
+  );
 });
 
