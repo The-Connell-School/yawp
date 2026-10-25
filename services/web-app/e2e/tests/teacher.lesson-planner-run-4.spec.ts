@@ -280,7 +280,7 @@ test.describe("Lesson Planner — Brian's fourth run", () => {
         form: { intent: 'create-share', conversationId, includes: 'daily-pages' },
       });
       await visitor.goto(((await share.json()) as { url: string }).url);
-      await expect(visitor.getByTestId('shared-in-yawp')).toContainText('These writing exercises are available to students as assignments in Yawp!');
+      await expect(visitor.getByTestId('shared-in-yawp')).toContainText('These writing assignments from class are available to complete in Yawp!');
       await expect(visitor.getByTestId('shared-present')).toHaveCount(0);
       await expect(visitor.getByTestId('shared-prompt-link').first()).toHaveAttribute('target', '_blank');
       await stranger.close();

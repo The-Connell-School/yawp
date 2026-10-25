@@ -12,7 +12,7 @@ import {
 } from '~/domain/feature-flags/feature-flags.server';
 import { buildLessonPacket } from './lesson-packet';
 import { findShareLink } from './lesson-share.server';
-import { parseShareItems, type ShareAudience } from './lesson-share';
+import { inYawpTypes, parseShareItems, type ShareAudience } from './lesson-share';
 import { readSlideDeck, type SlideDeck } from './slide-deck';
 import { handoutContent, studentVersionKey, answerLinesFor } from './step-handout';
 import { stackSteps } from './stack-steps';
@@ -32,8 +32,8 @@ export type SharedLesson = {
   /** `type`: "Class Starter", "Daily Pages", its own heading (Brian's round 3, 1.7). */
   prompts: Array<{ id: string; title: string; type: string; content: string; inYawp: boolean }>;
   /**
-   * The writing steps the teacher made in Yawp!, by name (Brian's run 4):
-   * only these are said to be "available to students as assignments".
+   * The writing steps the teacher made in Yawp!, by type (Brian's run 4;
+   * round 4, item 3): only these are said to be available in Yawp!.
    */
   inYawp: string[];
   deck: SlideDeck | null;
@@ -178,6 +178,11 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
       ? { percent: timing.writingPercent, minutes: timing.writingMinutes, sources: timing.writingSources }
       : null,
     deckTemplate: deckGallery ? 'gallery' : deckV2 ? 'tile' : 'plain',
-    inYawp: steps.filter((step) => step.isWriting && madeInYawp(step.id)).map((step) => step.title),
+    // By type, as the prompts below are headed (Brian's round 4, item 3).
+    inYawp: inYawpTypes(
+      steps
+        .filter((step) => step.isWriting && madeInYawp(step.id))
+        .map((step) => step.writingName ?? STEP_TYPE_LABELS[step.type])
+    ),
   };
 }

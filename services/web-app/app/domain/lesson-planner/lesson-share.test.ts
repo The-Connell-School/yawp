@@ -154,6 +154,14 @@ describe("share pages name the writing by type (Brian's round 3, 1.7–1.9)", ()
     expect(inYawpLead('family')).toBe(
       'These assignments are available to your student in Yawp! and should be completed before the next class session (or by an agreed-upon time):'
     );
-    expect(inYawpLead('student')).toBe('These writing exercises are available to students as assignments in Yawp!');
+    expect(inYawpLead('student')).toBe('These writing assignments from class are available to complete in Yawp!');
+  });
+
+  // Brian's round 4, item 3.
+  test('the purple box lists assignments by type, in stack order, once each', async () => {
+    const { inYawpTypes } = await import('./lesson-share');
+    expect(inYawpTypes(['Class Starter', 'Exit Ticket'])).toEqual(['Class Starter', 'Exit Ticket']);
+    expect(inYawpTypes(['Daily Pages', 'Class Starter', 'Daily Pages'])).toEqual(['Daily Pages (2)', 'Class Starter']);
+    expect(inYawpTypes([])).toEqual([]);
   });
 });

@@ -301,5 +301,16 @@ export function handoutHeading(title: string, type: string | null): string {
 export function inYawpLead(audience: ShareAudience): string {
   return audience === 'family'
     ? 'These assignments are available to your student in Yawp! and should be completed before the next class session (or by an agreed-upon time):'
-    : 'These writing exercises are available to students as assignments in Yawp!';
+    : 'These writing assignments from class are available to complete in Yawp!';
+}
+
+/**
+ * The purple box's list (Brian's round 4, item 3): each assignment by its
+ * type, the names the prompt headings use, in stack order. A type that comes
+ * up twice is listed once, with its count.
+ */
+export function inYawpTypes(types: string[]): string[] {
+  const counts = new Map<string, number>();
+  for (const type of types) counts.set(type, (counts.get(type) ?? 0) + 1);
+  return [...counts].map(([type, count]) => (count > 1 ? `${type} (${count})` : type));
 }
