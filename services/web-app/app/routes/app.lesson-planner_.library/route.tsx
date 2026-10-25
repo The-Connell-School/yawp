@@ -47,6 +47,7 @@ import {
 import { timeAgo } from '~/utils/timeAgo';
 import { loadLibraryHome } from '~/domain/lesson-planner/load-library-v2.server';
 import { LibraryHome } from './library-home';
+import { recentLessons } from '~/domain/lesson-planner/recent-lessons.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const access = await getLessonPlannerAccess(request);
@@ -56,7 +57,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const reviewFlags = await getLessonPlannerReviewFlags(access.membership.organization.id);
   if (reviewFlags.libraryV2) {
     const scope = { membershipId: access.membership.id, organizationId: access.membership.organization.id };
-    return { v2: await loadLibraryHome(scope, reviewFlags.stackV2), lessons: [], folders: false, allFolders: [] };
+    const [v2, recent] = await Promise.all([loadLibraryHome(scope, reviewFlags.stackV2), recentLessons(access.membership.id)]);
+    return { v2, recent, lessons: [], folders: false, allFolders: [] };
   }
 
   const lessons = await prisma.lessonPlanConversation.findMany({
@@ -474,12 +476,12 @@ function NewFolder() {
 }
 
 export default function LibraryRoute() {
-  const { v2 } = useLoaderData<typeof loader>();
-  if (v2) {
+  const loaded = useLoaderData<typeof loader>();
+  if (loaded.v2) {
     return (
       // Own the scroll: the app shell is a fixed-height, overflow-hidden frame.
       <section className="h-full w-full overflow-y-auto">
-        <LibraryHome data={v2} />
+        <LibraryHome data={loaded.v2} recent={'recent' in loaded ? loaded.recent : []} />
       </section>
     );
   }

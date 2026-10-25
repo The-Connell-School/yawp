@@ -16,6 +16,7 @@ import { stackSteps, type StackStep } from './stack-steps';
 import { suggestedPieces, type SuggestedPiece } from './stack-suggestions';
 import { stackTiming, timeFixes, type StackTiming, type TimeFix } from './stack-timing';
 import { STACK_SURFACE } from './stack-command.server';
+import { lessonLocation, type LessonLocation } from './lesson-location';
 
 export type StackV3 = {
   steps: StackStep[];
@@ -54,6 +55,11 @@ export type StackV3 = {
    * be saved to once set (Oct 24 handoff, Part 2, L3 "Save to unit").
    */
   saveToUnit: Array<{ id: string; title: string; course: string | null }> | null;
+  /**
+   * Where the lesson is saved and when it last changed (Brian's round 4,
+   * item 7). In the library once it is in a unit or the teacher saved it.
+   */
+  saved: { location: LessonLocation; at: string; inLibrary: boolean };
 };
 
 export async function loadStackV3({
@@ -78,6 +84,9 @@ export async function loadStackV3({
       lessonDate: true,
       membershipId: true,
       unitId: true,
+      updatedAt: true,
+      publishedAt: true,
+      unit: { select: { id: true, title: true, deletedAt: true, course: { select: { name: true } } } },
       deckStackKey: true,
       extensionStepIds: true,
       lessonClassLabel: true,
@@ -126,9 +135,24 @@ export async function loadStackV3({
     }
   }
 
+  // The last change: the lesson's own row, or the newest piece filed in it.
+  const newest = await prisma.lessonPlanMaterial.aggregate({
+    where: { conversationId: conversation.id },
+    _max: { createdAt: true },
+  });
+  const savedAt = [conversation.updatedAt, newest._max.createdAt]
+    .filter((date): date is Date => Boolean(date))
+    .reduce((latest, date) => (date > latest ? date : latest));
+  const unit = conversation.unit && !conversation.unit.deletedAt ? conversation.unit : null;
+
   return {
     ...loaded,
     v3: {
+      saved: {
+        location: lessonLocation(unit ? { id: unit.id, title: unit.title, courseName: unit.course?.name ?? null } : null),
+        at: savedAt.toISOString(),
+        inLibrary: Boolean(unit || conversation.publishedAt),
+      },
       steps,
       timing,
       fixes: timeFixes(timing),

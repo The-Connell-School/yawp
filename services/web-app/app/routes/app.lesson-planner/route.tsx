@@ -1,4 +1,7 @@
 import { MadeNotice } from '~/components/lesson-planner/made-notice';
+import { KeepPlanning } from '~/components/lesson-planner/keep-planning';
+import type { RecentLesson } from '~/domain/lesson-planner/lesson-location';
+import { recentLessons } from '~/domain/lesson-planner/recent-lessons.server';
 import {
   LessonPlannerMonthlyLimitNotice,
   lessonPlannerPausedPlaceholder,
@@ -346,8 +349,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
       })
     : [];
 
+  // Keep planning, on the planner home (Brian's round 4, item 7).
+  const recent =
+    reviewFlags.libraryV2 && selectedId == null ? await recentLessons(access.membership.id) : [];
+
   return {
     reviewFlags,
+    recent,
     templates,
     teacherClasses,
     practice,
@@ -462,6 +470,7 @@ export default function LessonPlannerRoute() {
     reviewFlags,
     teacherClasses,
     templates,
+    recent,
   } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const fetcher = useFetcher<LessonPlannerActionData>();
@@ -1206,6 +1215,7 @@ export default function LessonPlannerRoute() {
                 template={activeTemplate}
                 onTemplate={setActiveTemplate}
                 sources={sources}
+                recent={recent}
               />
             ) : (
               messages.map((message, index) => (
@@ -1437,6 +1447,7 @@ function LessonPlannerEmptyState({
   template = null,
   onTemplate,
   sources = null,
+  recent = [],
 }: {
   prompts: Array<{ id: string; label: string; prompt: string }>;
   seedContext: string | null;
@@ -1450,6 +1461,8 @@ function LessonPlannerEmptyState({
   template?: LessonTemplate | null;
   onTemplate?: (template: LessonTemplate | null) => void;
   sources?: SourceDocumentsState | null;
+  /** Keep planning: the lessons they were just working on (Brian's round 4, item 7). */
+  recent?: RecentLesson[];
 }) {
   const [showTemplates, setShowTemplates] = useState(false);
   const freeUsage = useFreeAccountUsage();
@@ -1461,6 +1474,7 @@ function LessonPlannerEmptyState({
       : undefined;
   return (
     <div className="flex flex-col items-center gap-8">
+      <KeepPlanning lessons={recent} className="w-full" />
       <div className="flex w-full max-w-3xl flex-col items-center gap-5 text-center">
         <h3 className="text-3xl font-semibold tracking-tight sm:text-4xl">
           What are we teaching?

@@ -30,6 +30,7 @@ import { usePaperSteps } from './yawp-checklist';
 import { PIECE_DRAG_TYPE, RunOfShow } from './run-of-show';
 import { TakeToClass } from './take-to-class';
 import { PrintForClass } from './print-for-class';
+import { SaveStatus, useLeaveGuard } from './save-status';
 import { PostToClass, SendLesson } from './share-cards';
 import { TimeBar } from './time-bar';
 import { HEADING_FONT, STACK_FONTS_HREF, STACK_THEME } from './theme';
@@ -206,19 +207,44 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
     fetcher.submit({ conversationId, ...fields }, { method: 'post', action });
   }
 
+  // Minutes still waiting to be sent, so leaving the page sends them at once
+  // (Brian's round 4, item 7).
+  const waitingMinutes = useRef(new Map<string, number>());
   function setMinutes(step: StackStep, minutes: number) {
     const value = clampMinutes(minutes);
     setLocalMinutes((current) => ({ ...current, [step.id]: value }));
     const waiting = timers.current.get(step.id);
     if (waiting) clearTimeout(waiting);
+    waitingMinutes.current.set(step.id, value);
     timers.current.set(
       step.id,
       setTimeout(() => {
         timers.current.delete(step.id);
+        waitingMinutes.current.delete(step.id);
         post(stackFetcher, STACK_API, { intent: 'set-minutes', materialId: step.id, minutes: String(value) });
       }, 400)
     );
   }
+  function sendWaitingMinutes() {
+    for (const [materialId, value] of waitingMinutes.current) {
+      clearTimeout(timers.current.get(materialId));
+      timers.current.delete(materialId);
+      const body = new FormData();
+      body.set('conversationId', conversationId);
+      body.set('intent', 'set-minutes');
+      body.set('materialId', materialId);
+      body.set('minutes', String(value));
+      void fetch(STACK_API, { method: 'POST', body, keepalive: true });
+    }
+    waitingMinutes.current.clear();
+  }
+  useEffect(() => () => sendWaitingMinutes(), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const savingRef = useRef(false);
+  savingRef.current = busy;
+  useLeaveGuard(
+    () => reviewFlags.libraryV2 && (savingRef.current || waitingMinutes.current.size > 0),
+    sendWaitingMinutes
+  );
 
   function reorder(keys: string[]) {
     setLocalOrder(keys);
@@ -341,6 +367,21 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
             >
               <ChevronLeft size={15} /> Back to planning
             </Link>
+            {reviewFlags.libraryV2 ? (
+              // Where it's saved, and one library control (Brian's round 4, item 7).
+              <SaveStatus
+                conversationId={conversationId}
+                saved={v3.saved}
+                saving={busy}
+                failed={
+                  (stackFetcher.state === 'idle' && Boolean(stackFetcher.data?.error)) ||
+                  (packetFetcher.state === 'idle' && Boolean(packetFetcher.data?.error))
+                }
+                units={v3.saveToUnit}
+                onKeepOnItsOwn={() => post(packetFetcher, PACKET_API, { intent: 'publish' })}
+                onSaved={() => revalidator.revalidate()}
+              />
+            ) : (
             <div className="flex items-center gap-3">
               <span data-testid="stack-save-state" className="inline-flex items-center gap-1 text-xs text-[var(--sv-muted)]">
                 <Check size={13} /> {saveState}
@@ -361,6 +402,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                 My library
               </Link>
             </div>
+            )}
           </div>
           <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--sv-primary)]">
             Your lesson, start to finish

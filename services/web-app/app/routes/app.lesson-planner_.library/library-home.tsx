@@ -40,6 +40,8 @@ import { PlanLessonDialog, type PlanUnit } from '~/components/lesson-planner/pla
 import { UNIT_KIND_LABELS, UNIT_KINDS, type UnitKind } from '~/domain/lesson-planner/library-v2';
 import type { LibraryBlock, LibraryHome as LibraryHomeData, LooseLesson, UnitTile } from '~/domain/lesson-planner/load-library-v2.server';
 import { cn } from '~/utils/misc';
+import { KeepPlanning } from '~/components/lesson-planner/keep-planning';
+import type { RecentLesson } from '~/domain/lesson-planner/lesson-location';
 
 export const KIND_ICONS: Record<UnitKind, LucideIcon> = {
   book: BookOpen,
@@ -90,7 +92,7 @@ function hasDrag(event: DragEvent, type: string) {
   return event.dataTransfer.types.includes(type);
 }
 
-export function LibraryHome({ data }: { data: LibraryHomeData }) {
+export function LibraryHome({ data, recent = [] }: { data: LibraryHomeData; recent?: RecentLesson[] }) {
   const [courseId, setCourseId] = useState(data.courses[0]?.id ?? '');
   const course = data.courses.find((candidate) => candidate.id === courseId) ?? data.courses[0];
   const [kind, setKind] = useState<UnitKind | 'all'>('all');
@@ -193,6 +195,9 @@ export function LibraryHome({ data }: { data: LibraryHomeData }) {
           </Button>
         </div>
       </header>
+
+      {/* The way back to what they were just making (Brian's round 4, item 7). */}
+      <KeepPlanning lessons={recent} className="mt-6" />
 
       <Tabs value={course.id} onValueChange={chooseCourse} className="mt-6">
         <TabsList data-testid="course-tabs" className="max-w-full justify-start overflow-x-auto">
