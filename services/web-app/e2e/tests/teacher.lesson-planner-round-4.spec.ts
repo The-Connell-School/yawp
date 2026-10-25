@@ -262,14 +262,19 @@ test.describe("Brian's round 4 (Oct 25)", () => {
     await expect(page.getByTestId('open-library')).toHaveCount(0);
 
     // A change still on its way: leaving asks first, and staying stays.
-    await page.route('**/api/domain/lesson-planner/stack', async (route) => {
-      if (route.request().postData()?.includes('set-minutes')) await new Promise((resolve) => setTimeout(resolve, 3000));
+    // Held for a few seconds, so the change is still on its way.
+    const stackApi = (url: URL) => url.pathname.startsWith('/api/domain/lesson-planner/stack');
+    await page.route(stackApi, async (route) => {
+      if (route.request().postData()?.includes('set-minutes')) await new Promise((resolve) => setTimeout(resolve, 4000));
       await route.continue();
     });
-    await page.getByTestId('run-card').nth(1).getByTestId('step-minutes').click();
+    const minutes = page.getByTestId('run-card').nth(1).getByTestId('step-minutes');
+    await expect(minutes).toHaveText('20 min');
+    await minutes.click();
     await page.getByTestId('step-minutes-input').fill('18');
     await page.getByTestId('step-minutes-input').press('Enter');
-    await expect(page.getByTestId('stack-save-state')).toHaveText('Saving…');
+    await expect(minutes).toHaveText('18 min');
+    await expect(page.getByTestId('stack-save-state')).toHaveText('Saving…', { timeout: 3000 });
     let asked = '';
     page.once('dialog', async (dialog) => {
       asked = dialog.message();
@@ -279,7 +284,7 @@ test.describe("Brian's round 4 (Oct 25)", () => {
     await expect.poll(() => asked).toBe('A change is still saving. Leave anyway?');
     await expect(page).toHaveURL(new RegExp(`/app/lesson-planner/${conversationId}/packet`));
     await expect(where).toHaveText(/ · just now$/);
-    await page.unroute('**/api/domain/lesson-planner/stack');
+    await page.unroute(stackApi);
 
     // The way back: Keep planning on the library and the planner home.
     await page.goto('/app/lesson-planner/library');
