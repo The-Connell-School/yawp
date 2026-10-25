@@ -282,3 +282,24 @@ export function fallbackLessonText(
     )
     .join('\n\n');
 }
+
+/** "The writing prompt", or "The writing prompts" over more than one (Brian's round 3, 1.7). */
+export function writingPromptsHeading(count: number): string {
+  return count === 1 ? 'The writing prompt' : 'The writing prompts';
+}
+
+/** A handout from a writing prompt is headed by its type (Brian's round 3, 1.8). */
+export function handoutHeading(title: string, type: string | null): string {
+  if (!type || title.toLowerCase().startsWith(type.toLowerCase())) return title;
+  return `${type}: ${title}`;
+}
+
+/**
+ * The purple box's first line. A family's question is what their student
+ * should have finished or made up (Brian's round 3, 1.9).
+ */
+export function inYawpLead(audience: ShareAudience): string {
+  return audience === 'family'
+    ? 'These assignments are available to your student in Yawp! and should be completed before the next class session (or by an agreed-upon time):'
+    : 'These writing exercises are available to students as assignments in Yawp!';
+}

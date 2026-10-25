@@ -134,3 +134,26 @@ describe("share rewrites follow Brian's run 4 notes", () => {
     }
   });
 });
+
+describe("share pages name the writing by type (Brian's round 3, 1.7–1.9)", () => {
+  test('"The writing prompt" for one, "The writing prompts" for more', async () => {
+    const { writingPromptsHeading } = await import('./lesson-share');
+    expect(writingPromptsHeading(1)).toBe('The writing prompt');
+    expect(writingPromptsHeading(2)).toBe('The writing prompts');
+  });
+
+  test('a handout from a writing prompt says its type, once', async () => {
+    const { handoutHeading } = await import('./lesson-share');
+    expect(handoutHeading('Franklin’s self-made method', 'Daily Pages')).toBe('Daily Pages: Franklin’s self-made method');
+    expect(handoutHeading('Daily Pages: the method', 'Daily Pages')).toBe('Daily Pages: the method');
+    expect(handoutHeading('The excerpt', null)).toBe('The excerpt');
+  });
+
+  test('a family is told what is expected and by when', async () => {
+    const { inYawpLead } = await import('./lesson-share');
+    expect(inYawpLead('family')).toBe(
+      'These assignments are available to your student in Yawp! and should be completed before the next class session (or by an agreed-upon time):'
+    );
+    expect(inYawpLead('student')).toBe('These writing exercises are available to students as assignments in Yawp!');
+  });
+});
