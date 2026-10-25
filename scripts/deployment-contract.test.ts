@@ -2158,6 +2158,12 @@ describe('demo environment deployment contract', () => {
     );
     expect(workflow).toContain('TesterFeedback row count decreased during deploy');
     expect(readRepoFile(signaturePath)).toContain('testerFeedback');
+    expect(readRepoFile(signaturePath)).toContain(
+      'to_regclass($reg$public."TesterFeedback"$reg$)'
+    );
+    expect(readRepoFile(signaturePath)).not.toMatch(
+      /to_regclass\('public\."TesterFeedback"'\)/
+    );
   });
   test('demo backups are scheduled daily with configurable count retention', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');

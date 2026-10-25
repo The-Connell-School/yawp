@@ -29,7 +29,7 @@ SELECT json_build_object(
   $json$moduleSessions$json$, (SELECT count(*) FROM "AssignmentModuleSession"),
   $json$testerFeedback$json$, (
     SELECT CASE
-      WHEN to_regclass('public."TesterFeedback"') IS NOT NULL
+      WHEN to_regclass($reg$public."TesterFeedback"$reg$) IS NOT NULL
         THEN (SELECT count(*)::bigint FROM "TesterFeedback")
       ELSE 0::bigint
     END

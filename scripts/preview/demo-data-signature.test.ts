@@ -78,6 +78,20 @@ describe('demo data signature', () => {
     expect(commands).not.toContain('SELECT id');
   });
 
+  test('keeps to_regclass schema-qualified names inside the bash single-quoted psql -Atc argument', async () => {
+    const harness = await makeHarness();
+    const result = run(harness.env);
+
+    expect(result.exitCode).toBe(0);
+    const commands = await readFile(harness.commandLog, 'utf8');
+    const sqlMatch = commands.match(/-Atc ([^\n]+)/);
+    expect(sqlMatch).not.toBeNull();
+    const sql = sqlMatch![1]!.replace(/^'|'$/g, '').replace(/'\\''/g, "'");
+    expect(sql).toContain('to_regclass($reg$public."TesterFeedback"$reg$)');
+    expect(sql).not.toMatch(/to_regclass\(public\./);
+    expect(sql).not.toMatch(/to_regclass\('public\./);
+  });
+
   test('refuses any database except yawp_demo before Docker access', async () => {
     const harness = await makeHarness();
     const result = run({ ...harness.env, DATABASE_NAME: 'yawp_pr_241' });
