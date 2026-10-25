@@ -20,6 +20,7 @@ const {
   userHasPendingFreeTierTeachingLock,
   redactClassTeachingSecrets,
   organizationClassListQueryParts,
+  organizationClassListTableState,
 } = await import('./locked-preview.server');
 afterEach(() => {
   enabled = true;
@@ -157,6 +158,40 @@ test('pending lesson planner scope allows SENT and MANUAL_REVIEW only', async ()
       allowPendingLessonPlanner: true,
     })
   ).rejects.toMatchObject({ status: 403 });
+});
+
+test('organizationClassListTableState remaps code sort for locked preview clients', () => {
+  expect(
+    organizationClassListTableState({
+      sort: 'code',
+      direction: 'desc',
+      skip: 0,
+      take: 20,
+      hideTeachingSecrets: true,
+    })
+  ).toEqual({
+    sort: 'createdAt',
+    direction: 'desc',
+    skip: 0,
+    take: 20,
+    codeSortDisabled: true,
+  });
+
+  expect(
+    organizationClassListTableState({
+      sort: 'code',
+      direction: 'asc',
+      skip: 5,
+      take: 10,
+      hideTeachingSecrets: false,
+    })
+  ).toEqual({
+    sort: 'code',
+    direction: 'asc',
+    skip: 5,
+    take: 10,
+    codeSortDisabled: false,
+  });
 });
 
 test('organizationClassListQueryParts omits code search and sort for locked preview', () => {

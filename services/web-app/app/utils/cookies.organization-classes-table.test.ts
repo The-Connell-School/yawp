@@ -50,4 +50,23 @@ describe('parseOrganizationClassesTableCookie', () => {
       take: 10,
     });
   });
+
+  test('snaps forged take values to the default page size', () => {
+    expect(
+      parseOrganizationClassesTableCookie({
+        sort: 'code',
+        direction: 'asc',
+        skip: 0,
+        take: 999,
+      }).take
+    ).toBe(10);
+    expect(
+      parseOrganizationClassesTableCookie({
+        sort: 'code',
+        direction: 'asc',
+        skip: 0,
+        take: 50,
+      }).take
+    ).toBe(50);
+  });
 });
