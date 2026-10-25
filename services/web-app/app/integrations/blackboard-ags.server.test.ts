@@ -15,7 +15,7 @@ test('AGS token errors omit upstream response bodies', async () => {
       status: 401,
       headers: { 'content-type': 'application/json' },
     });
-  }) as typeof fetch;
+  }) as unknown as typeof fetch;
   try {
     let message = 'no error thrown';
     try {
