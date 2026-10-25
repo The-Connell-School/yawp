@@ -21,9 +21,11 @@ describe("Before class (Kevin's note 12a)", () => {
     ]);
   });
 
-  test('no deck, no period', () => {
+  test("no period: nothing to pick, and it doesn't hold up ready (Brian's round 3, 1.5)", () => {
     const list = beforeClass({ ...ready, period: null, deck: { built: false, stale: false } });
-    expect(list.items[0]).toEqual({ key: 'fits', label: 'Pick the period length', done: false });
-    expect(list.items[1]).toEqual({ key: 'slides', label: 'Slides built', done: false });
+    expect(list.items.map((item) => item.key)).toEqual(['slides', 'writing', 'date']);
+    expect(list.items.some((item) => /period length/i.test(item.label))).toBe(false);
+    expect(list.items[0]).toEqual({ key: 'slides', label: 'Slides built', done: false });
+    expect(beforeClass({ ...ready, period: null }).ready).toBe(true);
   });
 });

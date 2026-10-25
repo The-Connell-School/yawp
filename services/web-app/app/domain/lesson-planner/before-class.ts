@@ -20,11 +20,12 @@ export function beforeClass({
   lessonDate: string | null;
 }): { items: BeforeClassItem[]; ready: boolean } {
   const items: BeforeClassItem[] = [
-    {
-      key: 'fits',
-      label: !period ? 'Pick the period length' : over > 0 ? `Fits the period (${over} min over now)` : 'Fits the period',
-      done: Boolean(period) && over <= 0,
-    },
+    // The period is set in the planner, and nothing here could tick a
+    // "Pick the period length" off (Brian's round 3, 1.5): without a period
+    // the item is left out.
+    ...(period
+      ? [{ key: 'fits', label: over > 0 ? `Fits the period (${over} min over now)` : 'Fits the period', done: over <= 0 }]
+      : []),
     {
       key: 'slides',
       label: deck.stale ? 'Slides up to date (the lesson changed)' : 'Slides built',
