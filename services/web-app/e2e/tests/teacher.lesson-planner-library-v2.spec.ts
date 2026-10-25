@@ -227,14 +227,19 @@ test.describe("Library redesign (Brian's Oct 24 handoff, Part 2)", () => {
     await expect(page.getByTestId('day-tab')).toHaveCount(2);
 
     const preview = page.getByTestId('lesson-preview');
-    await expect(page.getByTestId('preview-day')).toHaveText('Day 1 of 2 · No date yet');
+    // No date set: none shown (Brian's round 3, 1.10).
+    await expect(page.getByTestId('preview-day')).toHaveText('Day 1 of 2');
     await expect(page.getByTestId('preview-title')).toHaveText('Meet Holden');
-    await expect(page.getByTestId('preview-open')).toHaveText('Open the run of show');
+    // The stack and the deck, each one click away (Brian's round 3, 1.11).
+    await expect(page.getByTestId('preview-open')).toHaveText('Open the stack');
+    await expect(page.getByTestId('preview-open')).toHaveAttribute('href', /\/packet$/);
+    await expect(page.getByTestId('preview-open-deck')).toHaveText('Open slide deck');
+    await expect(page.getByTestId('preview-open-deck')).toBeDisabled();
     await expect(preview).toContainText('50 of 50 min · right on time');
     await expect(preview).toContainText('20% writing · 10 min');
     await expect(page.getByTestId('preview-run')).toContainText('Exit ticket');
     await page.getByTestId('day-tab').nth(1).click();
-    await expect(page.getByTestId('preview-open')).toHaveText('Keep planning');
+    await expect(page.getByTestId('preview-open')).toHaveText('Open the stack');
 
     // Add an existing lesson between Day 1 and Day 2.
     await page.getByTestId('add-existing').click();

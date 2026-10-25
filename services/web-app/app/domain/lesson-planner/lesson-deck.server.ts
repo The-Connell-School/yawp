@@ -48,3 +48,30 @@ export async function newestBuiltDeck(conversationId: string): Promise<{ id: str
   }
   return null;
 }
+
+/**
+ * Each lesson's deck id, for many lessons at once (Brian's round 3, 1.11:
+ * Open slide deck in the unit view), found the way `lessonDeck` finds one.
+ */
+export async function lessonDeckIds(conversationIds: string[]): Promise<Record<string, string>> {
+  if (!conversationIds.length) return {};
+  const found: Record<string, string> = {};
+  const filed = await prisma.lessonPlanMaterial.findMany({
+    where: { conversationId: { in: conversationIds }, kind: 'slides' },
+    select: { id: true, conversationId: true, content: true },
+  });
+  for (const row of filed) {
+    if (!found[row.conversationId] && readSlideDeck(row.content).kind === 'deck') found[row.conversationId] = row.id;
+  }
+  const rest = conversationIds.filter((id) => !found[id]);
+  if (!rest.length) return found;
+  const replies = await prisma.lessonPlanMessage.findMany({
+    where: { conversationId: { in: rest }, role: 'assistant', content: { contains: '```' + SLIDE_DECK_FENCE } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { id: true, conversationId: true, content: true },
+  });
+  for (const reply of replies) {
+    if (!found[reply.conversationId] && readSlideDeck(reply.content).kind === 'deck') found[reply.conversationId] = reply.id;
+  }
+  return found;
+}

@@ -244,15 +244,12 @@ function Preview({
   const r = lesson.run;
   const total = r?.total ?? 0;
   const span = Math.max(total, r?.period ?? 0, 1);
-  const primary = lesson.empty
-    ? { label: 'Start planning', to: lesson.planHref }
-    : lesson.set
-      ? { label: 'Open the run of show', to: lesson.href }
-      : { label: 'Keep planning', to: lesson.planHref };
   return (
     <article role="tabpanel" data-testid="lesson-preview" className="rounded-2xl border bg-card p-5">
       <p data-testid="preview-day" className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
-        Day {lesson.day} of {count} · {lesson.date ?? 'No date yet'}
+        {/* A date only when the teacher set one (Brian's round 3, 1.10). */}
+        Day {lesson.day} of {count}
+        {lesson.date ? ` · ${lesson.date}` : ''}
       </p>
       <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
@@ -264,9 +261,27 @@ function Preview({
             {r?.hasHandouts ? <Badge variant="secondary">Has handouts</Badge> : null}
           </div>
         </div>
-        <Button asChild data-testid="preview-open">
-          <Link to={primary.to}>{primary.label}</Link>
-        </Button>
+        {lesson.empty ? (
+          <Button asChild data-testid="preview-open">
+            <Link to={lesson.planHref}>Start planning</Link>
+          </Button>
+        ) : (
+          // The deck and the stack, each one click away (Brian's round 3, 1.11).
+          <div className="flex flex-wrap gap-2">
+            {lesson.deckHref ? (
+              <Button asChild variant="outline" data-testid="preview-open-deck">
+                <Link to={lesson.deckHref}>Open slide deck</Link>
+              </Button>
+            ) : (
+              <Button variant="outline" disabled title="No slides yet" data-testid="preview-open-deck">
+                Open slide deck
+              </Button>
+            )}
+            <Button asChild data-testid="preview-open">
+              <Link to={lesson.stackHref}>Open the stack</Link>
+            </Button>
+          </div>
+        )}
       </div>
 
       {r && r.steps.length ? (

@@ -8,6 +8,7 @@ import { courseBlocks, lessonCountLine, unitKind, UNIT_KIND_LABELS, writingShare
 import { ensureCourses, type LibraryScope } from './library-v2.server';
 import { loadUnitMap } from './lesson-unit.server';
 import { cleanLessonTitle } from './lesson-title';
+import { lessonDeckIds } from './lesson-deck.server';
 
 export type UnitTile = {
   id: string;
@@ -189,7 +190,10 @@ export async function loadUnitView(scope: LibraryScope, unitId: string, stackV2:
   const planning = unit.conversations.find((lesson) => lesson.unitDay === null) ?? null;
   // The arc the planner wrote, kept with the unit (Kevin, Oct 25, note 4).
   const map = planning ? await loadUnitMap({ db: prisma, unitId: unit.id }) : null;
-  const runs = await lessonRuns(days.map((lesson) => lesson.id), stackV2);
+  const [runs, deckIds] = await Promise.all([
+    lessonRuns(days.map((lesson) => lesson.id), stackV2),
+    lessonDeckIds(days.map((lesson) => lesson.id)),
+  ]);
   const [loose, units] = await Promise.all([
     prisma.lessonPlanConversation.findMany({
       where: { membershipId: scope.membershipId, deletedAt: null, unitId: null },
@@ -216,6 +220,9 @@ export async function loadUnitView(scope: LibraryScope, unitId: string, stackV2:
       href: opens(lesson),
       planHref: `/app/lesson-planner?c=${lesson.id}`,
       showHref: `/show/${lesson.id}?from=library`,
+      // Open the stack and Open slide deck (Brian's round 3, 1.11).
+      stackHref: `/app/lesson-planner/${lesson.id}/packet`,
+      deckHref: deckIds[lesson.id] ? `/present/${lesson.id}/${deckIds[lesson.id]}?from=stack` : null,
       empty: !lesson.messages.length && !lesson.materials.length,
       run,
     };
