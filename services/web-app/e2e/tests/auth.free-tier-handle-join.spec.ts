@@ -1,4 +1,8 @@
 import { test, expect } from '../test-setup';
+import {
+  fillFreeTierJoinForm,
+  submitFreeTierJoinAndExpectApp,
+} from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 import {
   createDeployedAssignment,
@@ -104,15 +108,12 @@ test.describe('Free-tier handle student', () => {
 
     try {
       await page.goto(`/join?t=${joinToken}`, { waitUntil: 'domcontentloaded' });
-      await expect(page.getByLabel('Display name')).toBeVisible({
-        timeout: 15000,
+      await fillFreeTierJoinForm(page, {
+        displayName,
+        handle,
+        password,
       });
-      await page.getByLabel('Display name').fill(displayName);
-      await page.getByLabel('Handle').fill(handle);
-      await page.getByLabel('Password', { exact: true }).fill(password);
-      await page.getByLabel('Confirm password').fill(password);
-      await page.getByRole('button', { name: 'Join class' }).click();
-      await page.waitForURL(/\/app/, { timeout: 30000 });
+      await submitFreeTierJoinAndExpectApp(page);
 
       await page.goto(`/app/my-classes/${klass.id}`, {
         waitUntil: 'domcontentloaded',
