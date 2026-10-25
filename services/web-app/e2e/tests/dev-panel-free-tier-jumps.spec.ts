@@ -95,7 +95,9 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
     const checksPassed = test.info().errors.length === softErrorsBefore;
     const adminOk = pathname.includes(entry.redirectPath) && checksPassed;
     recordJumpLine(
-      adminOk ? `${entry.stateId}: ok` : `${entry.stateId}: landed on ${pathname}`
+      adminOk
+        ? `${entry.stateId}: ok`
+        : `${entry.stateId}: landed on ${pathname}`
     );
     return;
   }
@@ -131,7 +133,9 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
   const landedOk =
     pathname.startsWith(expectedPathPrefix) && checksPassed;
   recordJumpLine(
-    landedOk ? `${entry.stateId}: ok` : `${entry.stateId}: landed on ${pathname}`
+    landedOk
+      ? `${entry.stateId}: ok`
+      : `${entry.stateId}: landed on ${pathname}`
   );
 }
 
