@@ -66,6 +66,7 @@ import { parseAssistantSuggestion } from '~/domain/grading/assistant-suggestion'
 import { resolveGrammarHighlightingEnabled } from '~/domain/assignment-types/rubric-category-options';
 import { resolveRevisionEntryPath } from '~/domain/revisions/revision-flow';
 import { findExcerptRange } from '~/utils/excerpt-position';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import {
   readLastNonDocumentRoute,
   sanitizeExitTarget,
@@ -389,10 +390,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             assignmentTypeId,
             assignmentId: submission.document.assignment?.id ?? null,
           }).catch((error) => {
-            console.error(
-              'Failed to resolve assignment type grading config for submission view',
-              { assignmentTypeId, error }
-            );
+            console.error('submission_grading_config_resolve_failed', {
+              assignmentTypeId,
+              error: buildSafeErrorForLog(error),
+            });
             return null;
           })
         : Promise.resolve(null),
