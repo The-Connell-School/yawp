@@ -590,6 +590,8 @@ segments.reporter = async () => {
   await sleep(3000);
   const print = reply.locator('xpath=..').getByRole('button', { name: /Print/ }).first();
   await s.scrollTo(print, { block: 'center', ms: 1000 });
+  // The callout sits low on the page, so the caption steps aside for it.
+  await s.clearCaption();
   await s.callout(print, { ...VO.reporter.shareCallout, side: 'left', dim: false, holdMs: 4000 });
   await s.clearCallout();
   await s.caption(VO.reporter.yearEnd, { hold: false });
