@@ -19,6 +19,7 @@ export function parseDevPanelState(raw: unknown): DevPanelPersistedState | null 
   const subSheet =
     raw.subSheet === 'free-tier-states' ||
     raw.subSheet === 'give-feedback' ||
+    raw.subSheet === 'class-simulation' ||
     raw.subSheet === null
       ? raw.subSheet
       : null;
@@ -49,6 +50,15 @@ export function parseDevPanelState(raw: unknown): DevPanelPersistedState | null 
           raw.forms.blackboardRole === 'student'
             ? raw.forms.blackboardRole
             : 'teacher',
+        simulationClassId:
+          typeof raw.forms.simulationClassId === 'string' ||
+          raw.forms.simulationClassId === null
+            ? raw.forms.simulationClassId
+            : undefined,
+        simulationStudentCount:
+          typeof raw.forms.simulationStudentCount === 'number'
+            ? raw.forms.simulationStudentCount
+            : undefined,
       }
     : DEV_PANEL_DEFAULT_STATE.forms;
   return {
