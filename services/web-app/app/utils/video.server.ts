@@ -1,3 +1,5 @@
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
+
 /**
  * Video processing utilities for extracting metadata like duration
  */
@@ -53,7 +55,10 @@ export async function getVideoDurationFromBuffer(buffer: Buffer): Promise<number
     
     return null;
   } catch (error) {
-    console.error('Error extracting video duration:', error);
+    console.error(
+      'video_duration_extract_failed',
+      buildSafeErrorForLog(error),
+    );
     return null;
   }
 }

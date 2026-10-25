@@ -31,7 +31,7 @@ test.describe('Dev panel class simulation', () => {
 
     await page.goto('/app/my-classes');
     await openDevPanelClassSimulationFlyout(page);
-    const simSheet = page.getByRole('dialog', { name: 'Class simulation' });
+    let simSheet = page.getByRole('dialog', { name: 'Class simulation' });
     const classSelect = simSheet.locator('#dev-panel-simulation-class');
     await expect(classSelect).toBeVisible({ timeout: 30_000 });
     await classSelect.selectOption(klass!.id);
@@ -43,6 +43,11 @@ test.describe('Dev panel class simulation', () => {
     await expect(page.getByText('Alex Rivera')).toBeVisible({ timeout: 30_000 });
 
     await openDevPanelClassSimulationFlyout(page);
+    simSheet = page.getByRole('dialog', { name: 'Class simulation' });
+    await expect(simSheet.getByText('Loading your classes…')).toHaveCount(0, {
+      timeout: 30_000,
+    });
+    await simSheet.locator('#dev-panel-simulation-class').selectOption(klass!.id);
     const clearSimulated = simSheet.getByRole('button', {
       name: 'Clear simulated data',
       exact: true,

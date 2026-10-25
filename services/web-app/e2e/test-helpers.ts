@@ -10,15 +10,30 @@ export function isAbortedManifestPatchConsoleMessage(text: string): boolean {
   return firstLine === ABORTED_MANIFEST_PATCH_FIRST_LINE;
 }
 
+const SUSPENSE_HYDRATION_RACE_PREFIX =
+  'This Suspense boundary received an update before it finished hydrating';
+
+/** Benign React Router / React 18 noise during controlled layout navigations. */
+export function isIgnorableControlledNavigationErrorMessage(text: string): boolean {
+  if (isAbortedManifestPatchConsoleMessage(text)) return true;
+  const firstLine = text.split(/\r?\n/, 1)[0]?.trim() ?? '';
+  return firstLine.startsWith(SUSPENSE_HYDRATION_RACE_PREFIX);
+}
+
+/** @deprecated Use isIgnorableControlledNavigationErrorMessage */
+export const isIgnorableControlledNavigationConsoleMessage =
+  isIgnorableControlledNavigationErrorMessage;
+
 export type StrictPageObservability = {
   consoleErrors: string[];
   pageErrors: string[];
   gotoAndSettle: (url: string) => Promise<void>;
   waitForRouteSettled: () => Promise<void>;
+  runControlled: (fn: () => Promise<void>) => Promise<void>;
   assertNoErrors: () => void;
 };
 
-/** Collect console/page errors; ignore only the exact manifest-patch abort during controlled navigations. */
+/** Collect console/page errors; ignore known benign races only during controlled navigations. */
 export function attachStrictPageObservability(
   page: Page
 ): StrictPageObservability {
@@ -26,15 +41,25 @@ export function attachStrictPageObservability(
   const pageErrors: string[] = [];
   let inControlledNavigation = false;
 
+  function shouldIgnoreError(text: string) {
+    return (
+      inControlledNavigation &&
+      isIgnorableControlledNavigationErrorMessage(text)
+    );
+  }
+
   page.on('console', (message) => {
     if (message.type() !== 'error') return;
     const text = message.text();
-    if (inControlledNavigation && isAbortedManifestPatchConsoleMessage(text)) {
+    if (shouldIgnoreError(text)) {
       return;
     }
     consoleErrors.push(text);
   });
   page.on('pageerror', (error) => {
+    if (shouldIgnoreError(error.message)) {
+      return;
+    }
     pageErrors.push(error.message);
   });
 
@@ -43,14 +68,20 @@ export function attachStrictPageObservability(
     await page.waitForLoadState('networkidle');
   }
 
-  async function gotoAndSettle(url: string) {
+  async function runControlled(fn: () => Promise<void>) {
     inControlledNavigation = true;
     try {
-      await page.goto(url, { waitUntil: 'networkidle' });
-      await waitForRouteSettled();
+      await fn();
     } finally {
       inControlledNavigation = false;
     }
+  }
+
+  async function gotoAndSettle(url: string) {
+    await runControlled(async () => {
+      await page.goto(url, { waitUntil: 'networkidle' });
+      await waitForRouteSettled();
+    });
   }
 
   function assertNoErrors() {
@@ -63,6 +94,7 @@ export function attachStrictPageObservability(
     pageErrors,
     gotoAndSettle,
     waitForRouteSettled,
+    runControlled,
     assertNoErrors,
   };
 }
@@ -91,40 +123,43 @@ export async function assertChatControlsInBoundsAtBreakpoints(
   const viewports = options.viewports ?? DEFAULT_DESKTOP_MOBILE_VIEWPORTS;
 
   for (let index = 0; index < viewports.length; index++) {
-    if (index > 0) {
-      await observability.waitForRouteSettled();
-    }
-
     const viewport = viewports[index]!;
-    await page.setViewportSize(viewport);
-    await observability.gotoAndSettle(options.path);
+    await observability.runControlled(async () => {
+      if (index > 0) {
+        await observability.waitForRouteSettled();
+      }
 
-    const composer = page.getByLabel(options.composerLabel);
-    const send = page.getByRole('button', { name: options.sendButtonName });
-    await expect(composer).toBeVisible();
-    await expect(send).toBeVisible();
+      await page.setViewportSize(viewport);
+      await page.goto(options.path, { waitUntil: 'networkidle' });
+      await observability.waitForRouteSettled();
 
-    if (viewport.width === 390 && options.assertMobileControls) {
-      await options.assertMobileControls(page);
-    }
+      const composer = page.getByLabel(options.composerLabel);
+      const send = page.getByRole('button', { name: options.sendButtonName });
+      await expect(composer).toBeVisible();
+      await expect(send).toBeVisible();
 
-    for (const control of [composer, send] as Locator[]) {
-      const box = await control.boundingBox();
-      expect(box).not.toBeNull();
-      expect(box!.x).toBeGreaterThanOrEqual(0);
-      expect(box!.y).toBeGreaterThanOrEqual(0);
-      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
-      expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
-    }
+      if (viewport.width === 390 && options.assertMobileControls) {
+        await options.assertMobileControls(page);
+      }
 
-    const overflow = await page.evaluate(() => ({
-      body: document.body.scrollWidth - window.innerWidth,
-      document: document.documentElement.scrollWidth - window.innerWidth,
-    }));
-    expect(overflow.body).toBeLessThanOrEqual(0);
-    expect(overflow.document).toBeLessThanOrEqual(0);
+      for (const control of [composer, send] as Locator[]) {
+        const box = await control.boundingBox();
+        expect(box).not.toBeNull();
+        expect(box!.x).toBeGreaterThanOrEqual(0);
+        expect(box!.y).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+        expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+      }
 
-    await observability.waitForRouteSettled();
+      const overflow = await page.evaluate(() => ({
+        body: document.body.scrollWidth - window.innerWidth,
+        document: document.documentElement.scrollWidth - window.innerWidth,
+      }));
+      expect(overflow.body).toBeLessThanOrEqual(0);
+      expect(overflow.document).toBeLessThanOrEqual(0);
+
+      await observability.waitForRouteSettled();
+    });
   }
 
   observability.assertNoErrors();

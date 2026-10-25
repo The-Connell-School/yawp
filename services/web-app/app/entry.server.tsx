@@ -146,6 +146,6 @@ async function logToFile(errorContext: any) {
 
     console.log(`📁 Error logged to: ${logFile}`);
   } catch (error) {
-    console.error('File logging failed:', error);
+    console.error('File logging failed:', buildSafeErrorForLog(error));
   }
 }
