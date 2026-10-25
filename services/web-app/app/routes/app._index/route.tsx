@@ -446,7 +446,9 @@ export default function AppRoute() {
         <div
           className={
             freeUsage
-              ? 'free-dashboard grid w-full max-w-[1136px] items-start gap-7 px-5 py-6 pb-24 sm:px-12 lg:grid-cols-[minmax(0,1fr)_300px]'
+              ? locked
+                ? 'free-dashboard mx-auto flex w-full max-w-[1136px] flex-col gap-4 px-5 py-6 pb-24 sm:px-12'
+                : 'free-dashboard grid w-full max-w-[1136px] items-start gap-7 px-5 py-6 pb-24 sm:px-12 lg:grid-cols-[minmax(0,1fr)_300px]'
               : 'mx-auto flex w-full max-w-screen-lg flex-col gap-8 px-3 py-6 pb-24 sm:px-5'
           }
         >
@@ -515,46 +517,47 @@ export default function AppRoute() {
                 />
               </>
             ) : null}
-            {freeUsage?.gradingPause ? (
-              <div>
-                <h2 className="mb-4 text-lg font-bold">Grading</h2>
-                <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
-                  <p className="font-medium">
-                    Grading assistant paused for{' '}
-                    {Math.max(
-                      1,
-                      Math.ceil(
-                        (new Date(freeUsage.gradingPause.retryAt).getTime() -
-                          Date.now()) /
-                          60000
-                      )
-                    )}{' '}
-                    minutes
-                  </p>
-                  <p className="mt-1">
-                    You hit the {freeUsage.gradingPause.window} limit of{' '}
-                    {freeUsage.gradingPause.limit}. It picks back up at{' '}
-                    <time dateTime={freeUsage.gradingPause.retryAt}>
-                      {new Date(
-                        freeUsage.gradingPause.retryAt
-                      ).toLocaleTimeString([], {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                      })}
-                    </time>
-                    .
-                  </p>
+            {!locked &&
+              (freeUsage?.gradingPause ? (
+                <div>
+                  <h2 className="mb-4 text-lg font-bold">Grading</h2>
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
+                    <p className="font-medium">
+                      Grading assistant paused for{' '}
+                      {Math.max(
+                        1,
+                        Math.ceil(
+                          (new Date(freeUsage.gradingPause.retryAt).getTime() -
+                            Date.now()) /
+                            60000
+                        )
+                      )}{' '}
+                      minutes
+                    </p>
+                    <p className="mt-1">
+                      You hit the {freeUsage.gradingPause.window} limit of{' '}
+                      {freeUsage.gradingPause.limit}. It picks back up at{' '}
+                      <time dateTime={freeUsage.gradingPause.retryAt}>
+                        {new Date(
+                          freeUsage.gradingPause.retryAt
+                        ).toLocaleTimeString([], {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        })}
+                      </time>
+                      .
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <TeacherGradingAtAGlance
-                freeAccount={Boolean(freeUsage)}
-                needsGradingCount={needsGradingCount}
-                readyToReleaseCount={readyToReleaseCount}
-              />
-            )}
+              ) : (
+                <TeacherGradingAtAGlance
+                  freeAccount={Boolean(freeUsage)}
+                  needsGradingCount={needsGradingCount}
+                  readyToReleaseCount={readyToReleaseCount}
+                />
+              ))}
           </ContentColumn>
-          {freeUsage && <FreeAccountRail usage={freeUsage} />}
+          {freeUsage && !locked ? <FreeAccountRail usage={freeUsage} /> : null}
         </div>
       </section>
     );

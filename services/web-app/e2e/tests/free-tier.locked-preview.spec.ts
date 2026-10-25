@@ -361,16 +361,14 @@ for (const width of [390, 1440]) {
       page,
       page.getByTestId('free-assignment-tiles')
     );
-    const dashboardImages = page
-      .getByTestId('free-assignment-tiles')
-      .locator('img');
-    await expect(dashboardImages).toHaveCount(3);
-    for (let i = 0; i < 3; i++) {
-      const loaded = await dashboardImages.nth(i).evaluate(
-        (img) => (img as HTMLImageElement).naturalWidth > 0
-      );
-      expect(loaded).toBe(true);
-    }
+    await expect(
+      page.getByTestId('free-assignment-tiles').locator('img')
+    ).toHaveCount(0);
+    await expect(page.getByTestId('free-account-checklist')).toHaveCount(0);
+    await expect(page.getByTestId('teacher-grading-grid')).toHaveCount(0);
+    await expect(page.getByTestId('preview-assignment-creation-disabled')).toHaveCount(
+      0
+    );
     if (width === 390) {
       await capture(page, 'dashboard-pending-390');
     }
@@ -427,23 +425,9 @@ for (const width of [390, 1440]) {
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+$/);
     await page.getByRole('link', { name: /Back to dashboard/i }).click();
     await expectLockedAppHome(page);
-    const dashboardCreate = page
-      .getByTestId('preview-assignment-creation-disabled')
-      .getByRole('button', { name: 'Create assignment' });
-    await dashboardCreate.scrollIntoViewIfNeeded();
-    if (width === 1440) {
-      await dashboardCreate.focus();
-      await page.waitForTimeout(350);
-      await expect(
-        page.getByRole('tooltip', { name: previewCreationTooltip })
-      ).toBeVisible();
-    } else {
-      await dashboardCreate.click({ force: true, timeout: 15_000 });
-      await page.waitForTimeout(350);
-      await expect(
-        page.getByRole('tooltip', { name: previewCreationTooltip })
-      ).toBeVisible();
-    }
+    await expect(page.getByTestId('preview-assignment-creation-disabled')).toHaveCount(
+      0
+    );
     if (width === 390) {
       await expect(
         page.getByTestId('teaching-access-banner').getByText(/View status/)
