@@ -2,6 +2,10 @@ import type { ActionFunctionArgs } from 'react-router';
 import { z } from 'zod';
 import { assertDevPanelRoute } from '~/dev-panel/dev-panel-route-guard.server';
 import {
+  classSimulationClearSuccessMessage,
+  classSimulationPopulateSuccessMessage,
+} from '~/dev-panel/class-simulation-copy';
+import {
   CLASS_SIMULATION_MAX_STUDENTS,
   clearDevPanelClassSimulation,
   populateDevPanelClassSimulation,
@@ -49,7 +53,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return Response.json({
       ok: true,
       removedStudents: result.removedStudents,
-      message: `Cleared ${result.removedStudents} simulated student${result.removedStudents === 1 ? '' : 's'}.`,
+      message: classSimulationClearSuccessMessage(result.removedStudents),
     });
   }
   const result = await populateDevPanelClassSimulation({
@@ -64,6 +68,6 @@ export async function action({ request }: ActionFunctionArgs) {
   return Response.json({
     ok: true,
     counts,
-    message: `Added ${counts.students} students across ${counts.assignments} assignment${counts.assignments === 1 ? '' : 's'}.`,
+    message: classSimulationPopulateSuccessMessage(counts),
   });
 }
