@@ -217,7 +217,7 @@ describe('demo feedback endpoint', () => {
     for (const body of [
       null,
       { ...input, note: ' ' },
-      { ...input, note: 'x'.repeat(4001) },
+      { ...input, note: 'x'.repeat(2001) },
       { ...input, url: '/auth/login' },
       { ...input, actions: Array(6).fill(input.actions[0]) },
       { ...input, actions: [{ type: 'input', value: 'password' }] },

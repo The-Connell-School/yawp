@@ -349,13 +349,13 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
     await expect(
       page
         .getByTestId('free-assignment-tiles')
-        .getByRole('button', { name: /New .* assignment/ })
+        .getByRole('link', { name: /New .* assignment/ })
     ).toHaveCount(3);
-    for (const button of await page
+    for (const link of await page
       .getByTestId('free-assignment-tiles')
-      .getByRole('button', { name: /New .* assignment/ })
+      .getByRole('link', { name: /New .* assignment/ })
       .all())
-      await expect(button).toBeEnabled();
+      await expect(link).toBeVisible();
     await shot(page, 'dashboard-above-old-caps');
     // The displayed meter can be stale when a competing request consumes the
     // last use. The actual streamed browser request must show the server refusal.
@@ -629,4 +629,26 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
       });
     else await db.setting.deleteMany({ where: { name: limitsName } });
   }
+});
+
+test('unlocked free dashboard assignment tiles navigate to assignment type home', async ({
+  page,
+}) => {
+  await flag('free-tier', { mode: 'targeted', orgIds: [org] });
+  await login(page);
+  const classStarter = await db.assignmentType.findFirstOrThrow({
+    where: { kind: 'class_starter' },
+  });
+  await page.goto('/app');
+  const tile = page
+    .getByTestId('free-assignment-tiles')
+    .getByRole('link', { name: 'New Class Starter assignment' });
+  await expect(tile).toHaveAttribute(
+    'href',
+    `/app/assignment-types/${classStarter.id}`
+  );
+  await tile.click();
+  await expect(page).toHaveURL(
+    new RegExp(`/app/assignment-types/${classStarter.id}$`)
+  );
 });

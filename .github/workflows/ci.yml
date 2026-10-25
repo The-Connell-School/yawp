@@ -5,14 +5,13 @@ on:
     branches:
       - main
     types: [opened, synchronize, reopened, ready_for_review]
-  # Cloud-agent branches: run CI on push when PR synchronize is delayed or skipped.
   push:
     branches:
-      - 'cursor/**'
+      - main
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   actions: write
@@ -29,7 +28,7 @@ jobs:
       prisma: ${{ steps.filter.outputs.prisma }}
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: 🔍 Paths filter
         id: filter
         uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
@@ -71,7 +70,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: ⏭️ Skip (no preview tooling changes)
         if: ${{ needs.paths.outputs.preview_tooling != 'true' }}
         run: echo "No scripts/preview changes; skipping heavy steps."
@@ -80,11 +79,11 @@ jobs:
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
@@ -97,7 +96,7 @@ jobs:
       # The root-owned-build-output test needs the image the preview host itself runs.
       - name: 🐳 Pull the preview runtime image
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
-        run: docker pull oven/bun:1.4.3
+        run: docker pull oven/bun:1.4.4
 
       # Fail rather than skip if the runner cannot produce root-owned files: a silent skip
       # here would leave the regression uncovered everywhere.
@@ -129,7 +128,7 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: ⏭️ Skip (no Prisma or core/code changes)
         if: ${{ !(needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true') }}
         run: echo "No packages/prisma changes; skipping heavy steps."
@@ -138,11 +137,11 @@ jobs:
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
@@ -796,26 +795,26 @@ jobs:
       YAWP_CI_TYPECHECK_NO_DATABASE: '1'
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: ⏭️ Skip (no code changes)
         if: ${{ needs.paths.outputs.code != 'true' }}
         run: echo "No code changes; skipping heavy steps."
 
       - name: ⎔ Setup node
         if: ${{ needs.paths.outputs.code == 'true' }}
-        uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: 📥 Download deps
         if: ${{ needs.paths.outputs.code == 'true' }}
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
         if: ${{ needs.paths.outputs.code == 'true' }}
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
@@ -841,6 +840,11 @@ jobs:
         if: ${{ needs.paths.outputs.code == 'true' }}
         working-directory: services/web-app
         run: bun test app/utils/ai-usage-log.server.test.ts app/utils/getLLMCompletion/getLLMCompletion.test.ts
+
+      - name: 🧪 E2E smoke shard assignment guard
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        run: bun test e2e/smoke-specs.test.ts e2e/test-helpers.manifest-console.test.ts
 
       - name: Teacher training API contracts
         if: ${{ needs.paths.outputs.code == 'true' }}
@@ -958,7 +962,9 @@ jobs:
             'app/utils/internal-management.server.test.ts' \
             'app/utils/internal-platform-auth.server.test.ts' \
             'app/utils/tester-feedback-gate.server.test.ts' \
+            'app/utils/tester-feedback-screenshot.server.test.ts' \
             'app/utils/tester-feedback-request.server.test.ts' \
+            'app/routes/api.internal.v1.tester-feedback.$id.screenshot/route.test.ts' \
             'app/utils/demo-feedback.server.test.ts' \
             'app/utils/demo-feedback-context.test.ts' \
             'app/utils/demo-feedback-analytics.test.ts' \
@@ -972,6 +978,8 @@ jobs:
             'app/dev-panel/dev-panel-orgs.server.test.ts' \
             'app/dev-panel/dev-panel-storage.test.ts' \
             'app/dev-panel/dev-panel-provider.test.tsx' \
+            'app/dev-panel/dev-panel-shell-boundary.test.tsx' \
+            'app/root.dev-panel-user.test.ts' \
             'app/dev-panel/dev-panel-free-tier-flyout.test.tsx' \
             'app/dev-panel/dev-panel-flyout-instant.test.tsx' \
             'app/dev-panel/dev-panel-feedback-path.test.ts' \
@@ -1010,13 +1018,70 @@ jobs:
             ../../packages/prisma/scripts/seed-preview-planner-qa.test.ts \
             ../../packages/prisma/scripts/exit-ticket-migration-image.test.ts \
             ../../packages/prisma/scripts/preview-seats.test.ts \
-            app/domain/lesson-planner/lesson-seed.test.ts
+            app/domain/lesson-planner/lesson-seed.test.ts \
+            app/routes/api.domain.lesson-planner/build-system-prompt.test.ts \
+            app/domain/lesson-planner/suggestions.test.ts \
+            app/domain/lesson-planner/daily-pages-block.test.ts \
+            app/domain/lesson-planner/reply-parts.test.ts \
+            app/domain/lesson-planner/stack-contents.server.test.ts \
+            app/domain/lesson-planner/deck-edit.server.test.ts \
+            app/domain/lesson-planner/lesson-pptx-tile.server.test.ts \
+            app/domain/lesson-planner/stack-order.test.ts \
+            app/domain/lesson-planner/stack-order.server.test.ts \
+            app/domain/lesson-planner/stack-items.test.ts \
+            app/domain/lesson-planner/stack-create-link.test.ts \
+            app/domain/lesson-planner/prompt-ids.test.ts \
+            app/domain/lesson-planner/lesson-length.test.ts \
+            app/domain/lesson-planner/plan-timing.test.ts \
+            app/domain/lesson-planner/plan-steps.test.ts \
+            app/domain/lesson-planner/reply-pieces.test.ts \
+            app/domain/lesson-planner/file-reply-pieces.server.test.ts \
+            app/domain/lesson-planner/lesson-plan-doc.test.ts \
+            app/domain/lesson-planner/plan-summary.server.test.ts \
+            app/domain/lesson-planner/lesson-plan-render.server.test.ts \
+            app/domain/lesson-planner/branding.test.ts \
+            app/components/lesson-planner/stack-list.test.ts \
+            app/domain/lesson-planner/step-types.test.ts \
+            app/domain/lesson-planner/stack-timing.test.ts \
+            app/domain/lesson-planner/short-title.test.ts \
+            app/domain/lesson-planner/fileable-material.test.ts \
+            app/domain/lesson-planner/plan-framing.test.ts \
+            app/domain/lesson-planner/stack-suggestions.test.ts \
+            app/domain/lesson-planner/stack-command.test.ts \
+            app/domain/lesson-planner/stack-steps.test.ts \
+            app/domain/lesson-planner/stack-actions.server.test.ts \
+            app/domain/lesson-planner/step-handout.test.ts \
+            app/domain/lesson-planner/lesson-share.test.ts \
+            app/domain/lesson-planner/lesson-share.server.test.ts \
+            app/domain/brand.test.ts \
+            app/domain/lesson-planner/plan-days.test.ts \
+            app/domain/lesson-planner/planner-history.test.ts \
+            app/domain/lesson-planner/lesson-library.test.ts \
+            app/domain/lesson-planner/run-show.test.ts \
+            app/domain/lesson-planner/slide-deck-gallery.test.ts \
+            app/domain/lesson-planner/deck-gallery.test.ts \
+            app/domain/lesson-planner/deck-colors.test.ts \
+            app/domain/lesson-planner/kit-plan.test.ts \
+            app/domain/lesson-planner/teacher-standards.test.ts \
+            app/domain/lesson-planner/lesson-uploads.test.ts \
+            app/domain/lesson-planner/transcript-scroll.test.ts \
+            app/domain/lesson-planner/recent-art.test.ts \
+            app/domain/lesson-planner/source-documents.server.test.ts \
+            app/utils/bounded-body.server.test.ts \
+            app/routes/api.domain.lesson-planner.uploads/route.test.ts \
+            app/domain/lesson-planner/kit-plan-render.server.test.ts \
+            app/domain/lesson-planner/lesson-pptx-gallery.server.test.ts \
+            app/domain/lesson-planner/option-groups.test.ts \
+            app/domain/lesson-planner/lesson-templates.test.ts \
+            app/domain/lesson-planner/yawp-catalog.server.test.ts \
+            app/routes/api.domain.lesson-planner.stack/route.test.ts
           do
             bun test "$f"
           done
 
-  # The smoke specs run serially (workers: 1) and share one database, so they are
-  # split across runners instead: each shard gets its own Postgres service.
+  # Smoke specs run serially (workers: 1) and share one database per runner.
+  # CI assigns whole spec files to shards (see e2e/smoke-specs.ts) so heavy files
+  # like teacher.lesson-planner.spec.ts do not skew Playwright test-level sharding.
   e2e-smoke:
     needs: [paths]
     if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
@@ -1042,20 +1107,20 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: ⎔ Setup node
-        uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
@@ -1078,7 +1143,7 @@ jobs:
 
       - name: 💾 Restore Playwright browsers cache
         id: playwright-cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
@@ -1095,7 +1160,7 @@ jobs:
 
       - name: 💾 Save Playwright browsers cache
         if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' && matrix.shard == 1 }}
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
@@ -1111,11 +1176,11 @@ jobs:
           RESEND_FROM_EMAIL: ''
           TRIAL_STATUS_SHOTS: test-results/trial-status
           PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report
-        run: bun run test:e2e:smoke --shard=${{ matrix.shard }}/${{ strategy.job-total }} --reporter=blob,list
+        run: bun run test:e2e:smoke -- --shard=${{ matrix.shard }} --reporter=blob,list
 
       - name: Upload blob report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: blob-report-${{ matrix.shard }}
           path: services/web-app/blob-report/
@@ -1124,7 +1189,7 @@ jobs:
 
       - name: Upload free classroom status evidence
         if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: free-classroom-status-evidence-${{ matrix.shard }}
           path: services/web-app/test-results/trial-status/
@@ -1135,7 +1200,7 @@ jobs:
 
       - name: Upload test results on failure
         if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-results-${{ github.run_id }}-${{ matrix.shard }}
           path: services/web-app/test-results/
@@ -1162,20 +1227,20 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: ⎔ Setup node
-        uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
@@ -1206,7 +1271,7 @@ jobs:
 
       - name: 💾 Restore Playwright browsers cache
         id: playwright-cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
@@ -1237,7 +1302,7 @@ jobs:
 
       - name: Upload locked preview evidence
         if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: locked-preview-evidence-${{ github.run_id }}
           path: services/web-app/locked-preview-evidence/
@@ -1246,7 +1311,7 @@ jobs:
 
       - name: Upload Playwright results on failure
         if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: locked-preview-playwright-results-${{ github.run_id }}
           path: services/web-app/test-results/
@@ -1273,20 +1338,20 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: ⎔ Setup node
-        uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
@@ -1309,7 +1374,7 @@ jobs:
 
       - name: 💾 Restore Playwright browsers cache
         id: playwright-cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
@@ -1433,7 +1498,7 @@ jobs:
 
       - name: Upload Playwright results on failure
         if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-signon-results-${{ github.run_id }}
           path: |
@@ -1462,24 +1527,24 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Fixture steps isolate XDG_CACHE_HOME; keep browser lookup on the shared CI cache path.
       - name: Configure Playwright browser path
         run: echo "PLAYWRIGHT_BROWSERS_PATH=${HOME}/.cache/ms-playwright" >> "$GITHUB_ENV"
 
       - name: ⎔ Setup node
-        uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
@@ -1502,7 +1567,7 @@ jobs:
 
       - name: 💾 Restore Playwright browsers cache
         id: playwright-cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
@@ -1570,9 +1635,46 @@ jobs:
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5489/ > /dev/null
           ./bin/project test --profile demo-feedback-browser --json
 
+      - name: Dev panel signed-out /free browser regression
+        if: ${{ !cancelled() && always() }}
+        env:
+          CI: '1'
+          NODE_OPTIONS: --dns-result-order=ipv4first
+          TMPDIR: ${{ runner.temp }}/dev-panel-free-signed-out
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/dev-panel-free-signed-out/bun-cache
+          XDG_CACHE_HOME: ${{ runner.temp }}/dev-panel-free-signed-out/cache
+          RECORD_PORT_APP: '5490'
+          RECORD_PORT_DATABASE: '54490'
+          RECORD_PORT_LTI_MOCK: '9790'
+          YAWP_ENVIRONMENT: demo
+          PREVIEW_SLUG: demo
+          PREVIEW_ACCESS_GATE: 'on'
+          PREVIEW_ACCESS_SECRET: 'ci-demo-feedback-preview-access-secret-32c'
+          PREVIEW_MASTER_ACCESS_CODE: 'ci-demo-master-access'
+          PREVIEW_ACCESS_SEATS: '[{"code":"ci-fixture-4193","organizationId":"local-dev-org","label":"Master"}]'
+          TESTER_FEEDBACK_ENABLED: 'true'
+          DEMO_FEEDBACK_BASE_URL: http://127.0.0.1:5490
+        run: |
+          mkdir -p "$TMPDIR"
+          cleanup() {
+            ./bin/project dev stop --json || true
+            if [ -f .worktree-local/config.env ]; then
+              source .worktree-local/config.env
+              docker rm -f "$CONTAINER_NAME" || true
+              docker volume rm "$VOLUME_NAME" || true
+            fi
+          }
+          trap cleanup EXIT
+          ./bin/project bootstrap --fresh --json
+          ./bin/project fixture verify local-dev --json
+          ./bin/project dev start --json
+          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5490/ > /dev/null
+          cd services/web-app
+          bun x playwright test --config=playwright.dev-panel-free-signed-out.config.ts --workers=1
+
       - name: Upload dev panel artboard evidence
         if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dev-panel-artboard-evidence-${{ github.run_id }}
           path: services/web-app/dev-panel-evidence/
@@ -1588,7 +1690,7 @@ jobs:
 
       - name: Upload Playwright results on failure
         if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-browser-checks-results-${{ github.run_id }}
           path: |
@@ -1604,15 +1706,15 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
-          bun-version: '1.4.3'
+          bun-version: '1.4.4'
 
       - name: 💾 Cache bun install
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
@@ -1622,7 +1724,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: 📥 Download blob reports
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: services/web-app/all-blob-reports
           pattern: blob-report-*
@@ -1638,7 +1740,7 @@ jobs:
           fi
 
       - name: Upload merged Playwright report
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-${{ github.run_id }}
           path: services/web-app/playwright-report/

@@ -16,8 +16,13 @@ import {
 } from 'lucide-react';
 import { deckDurationMinutes } from '~/domain/lesson-planner/slide-deck';
 import { loadLessonDeck } from '~/domain/lesson-planner/load-deck.server';
+import { useShowChannel } from '~/components/lesson-planner/show-channel';
 import { cn } from '~/utils/misc';
 import { SlideCanvas } from './slide-canvas';
+import { TileSlideCanvas } from './tile-slide-canvas';
+import { GALLERY_FONTS_HREF, GallerySlideCanvas } from './gallery-slide-canvas';
+import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
+import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   // The same lookup the PowerPoint download uses: a deck a teacher can project
@@ -28,16 +33,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     deckId: params.messageId,
   });
 
+  const access = await getLessonPlannerAccess(request);
+  const { deckV2, deckGallery } = access.allowed
+    ? await getLessonPlannerReviewFlags(access.membership.organization.id)
+    : { deckV2: false, deckGallery: false };
+
   return {
     conversationId,
     lessonTitle,
     deck,
     durationMinutes: deckDurationMinutes(deck),
+    // Brian's review (E1): the Yawp! tile template, behind its flag.
+    tileTemplate: deckV2,
+    // The Lesson Deck Kit, behind its own flag.
+    galleryTemplate: deckGallery,
   };
 }
 
 export default function PresentRoute() {
-  const { conversationId, lessonTitle, deck, durationMinutes } =
+  const { conversationId, lessonTitle, deck, durationMinutes, tileTemplate, galleryTemplate } =
     useLoaderData<typeof loader>();
   const [index, setIndex] = useState(0);
   const [showNotes, setShowNotes] = useState(false);
@@ -46,6 +60,17 @@ export default function PresentRoute() {
 
   const total = deck.slides.length;
   const slide = deck.slides[index]!;
+
+  // Run the show moves these slides with the teacher (Brian's run 3).
+  const tellShow = useShowChannel(conversationId, (message) => {
+    if (message.type === 'slide') setIndex(Math.min(total - 1, Math.max(0, message.index)));
+    if (message.type === 'ping') tellShow({ type: 'projector-here' });
+  });
+  useEffect(() => {
+    tellShow({ type: 'projector-here' });
+    // Once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const go = useCallback(
     (delta: number) =>
@@ -109,6 +134,7 @@ export default function PresentRoute() {
 
   return (
     <main className="flex h-screen w-full flex-col bg-slate-100 print:h-auto print:bg-white">
+      {galleryTemplate ? <link rel="stylesheet" href={GALLERY_FONTS_HREF} /> : null}
       {/* Presenter chrome — never projected onto a wall, never printed. */}
       <header className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 py-2 print:hidden">
         <Link
@@ -172,7 +198,13 @@ export default function PresentRoute() {
             data-testid="slide-stage"
             className="aspect-[16/9] w-full max-w-[min(100%,calc((100vh-8rem)*16/9))] overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200 print:hidden"
           >
-            <SlideCanvas slide={slide} />
+            {galleryTemplate ? (
+              <GallerySlideCanvas deck={deck} index={index} />
+            ) : tileTemplate ? (
+              <TileSlideCanvas slide={slide} />
+            ) : (
+              <SlideCanvas slide={slide} />
+            )}
           </div>
 
           {/* Printing gives every slide its own landscape page. */}
@@ -182,7 +214,13 @@ export default function PresentRoute() {
                 key={printIndex}
                 className="flex aspect-[16/9] w-full items-center justify-center break-after-page border border-slate-200"
               >
-                <SlideCanvas slide={printed} />
+                {galleryTemplate ? (
+                  <GallerySlideCanvas deck={deck} index={printIndex} />
+                ) : tileTemplate ? (
+                  <TileSlideCanvas slide={printed} />
+                ) : (
+                  <SlideCanvas slide={printed} />
+                )}
               </div>
             ))}
           </div>

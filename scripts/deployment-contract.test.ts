@@ -250,6 +250,27 @@ describe('production deployment contract', () => {
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 
+  test('CI smoke shards assign each smoke spec file exactly once', async () => {
+    const { E2E_SMOKE_SHARDS, E2E_SMOKE_SPECS } = await import(
+      '../services/web-app/e2e/smoke-specs.ts'
+    );
+    const assigned: string[] = [];
+    for (let shard = 1; shard <= 6; shard += 1) {
+      assigned.push(...E2E_SMOKE_SHARDS[shard as 1 | 2 | 3 | 4 | 5 | 6]);
+    }
+    expect(assigned.length).toBe(E2E_SMOKE_SPECS.length);
+    expect(new Set(assigned).size).toBe(E2E_SMOKE_SPECS.length);
+    expect([...assigned].sort()).toEqual([...E2E_SMOKE_SPECS].sort());
+    for (const spec of E2E_SMOKE_SPECS) {
+      expect(existsSync(join(repoRoot, 'services/web-app', spec))).toBe(true);
+    }
+    const webAppPackage = JSON.parse(readRepoFile('services/web-app/package.json'));
+    expect(webAppPackage.scripts['test:e2e:smoke']).toBe('bun ./scripts/run-smoke-e2e.ts');
+    const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
+    expect(ciWorkflow).toContain('bun run test:e2e:smoke -- --shard=');
+    expect(ciWorkflow).not.toContain('--shard=${{ matrix.shard }}/${{ strategy.job-total }}');
+  });
+
   test('root build context excludes local credentials and host dependencies', () => {
     const patterns = readRepoFile('.dockerignore').split(/\r?\n/).map(line => line.trim());
     for (const required of ['.git', '**/.env', '**/.env.*', '**/node_modules', '**/build']) {
@@ -331,7 +352,7 @@ describe('production deployment contract', () => {
   test('Docker build uses the Bun version that wrote the lockfile', () => {
     const dockerfile = readRepoFile('services/web-app/Dockerfile');
 
-    expect(dockerfile).toContain('FROM oven/bun:1.4.3 AS base');
+    expect(dockerfile).toContain('FROM oven/bun:1.4.4 AS base');
   });
 
   test('dev panel Docker build args default to production; demo web image passes demo', () => {
@@ -515,7 +536,7 @@ describe('production deployment contract', () => {
       'seed-free-tier-bundle-assignment-types'
     );
 
-    expect(deployWorkflow).toContain("bun-version: '1.4.3'");
+    expect(deployWorkflow).toContain("bun-version: '1.4.4'");
     expect(deployWorkflow).toContain('validate-prisma-migrations');
     expect(deployWorkflow).toContain('needs: [validate-prisma-migrations]');
     expect(deployWorkflow).toContain('bun prisma generate');
@@ -822,7 +843,7 @@ describe('PR preview deployment contract', () => {
     );
     expect(deployScript).toContain('packages/prisma/fixtures/prod-fidelity');
     expect(deployScript).toContain('bun run seed-preview-seats');
-    expect(deployScript).toContain('oven/bun:1.4.3');
+    expect(deployScript).toContain('oven/bun:1.4.4');
     expect(deployScript).toContain(
       'bun scripts/preview/access-code.mjs --seats'
     );
@@ -1815,6 +1836,51 @@ describe('demo environment deployment contract', () => {
     for (const source of [prepare, cleanup]) {
       expect(source).not.toMatch(/docker\s+(?:system\s+prune|container\s+(?:prune|rm)|volume\s+(?:prune|rm)|rm\b|compose\s+down)/);
       expect(source).not.toMatch(/docker\s+image\s+(?:prune|rm[^\n]*(?:--force|\s-[a-z]*f))/);
+    }
+  });
+
+  test('demo internal API keys audit is manual, read-only, and uses demo SSH only', () => {
+    const workflow = readRepoFile(
+      '.github/workflows/demo-internal-keys-audit.yml'
+    );
+    const parsed = Bun.YAML.parse(workflow) as {
+      on: Record<string, unknown>;
+      permissions: Record<string, string>;
+      jobs: { audit: { environment: string; steps: { run?: string; env?: Record<string, string> }[] } };
+    };
+
+    expect(parsed.on).toEqual({ workflow_dispatch: null });
+    expect(parsed.permissions).toEqual({ contents: 'read' });
+    expect(parsed.jobs.audit.environment).toBe('demo');
+    expect(workflow).toContain('group: demo-environment');
+    expect(workflow).toContain('cancel-in-progress: false');
+    expect(workflow).toContain('bash scripts/preview/prepare-demo-ssh.sh');
+    expect(workflow).toContain('timeout-minutes: 5');
+    expect(workflow).toContain('ConnectTimeout=20');
+    const auditStep = workflow.slice(
+      workflow.indexOf('- name: Audit live demo internal API keys'),
+      workflow.indexOf('- name: Summary')
+    );
+    expect(workflow).toContain('docker exec -i');
+    expect(auditStep).toContain('bun build');
+    expect(auditStep).toContain('print-demo-internal-api-key-audit.cli.mjs');
+    expect(auditStep).toContain('bun run -');
+    expect(auditStep).toContain('< "$audit_bundle"');
+    expect(auditStep).not.toMatch(/\bdocker cp\b/);
+    expect(auditStep).not.toMatch(/\bcat > /);
+    expect(auditStep).not.toMatch(/yawp-key-audit/);
+    expect(auditStep).not.toMatch(/ssh[^\n]*\bmkdir\b/);
+    expect(auditStep).not.toMatch(/docker exec[^\n]*\bmkdir\b/);
+    expect(workflow).toContain('audit-demo-internal-api-keys-on-host.sh');
+    expect(workflow).toContain('validate_audit_output');
+    expect(workflow).toContain('^PARSE_ERROR[[:space:]][A-Za-z]+$');
+    expect(workflow).not.toContain('DEMO_INTERNAL_API_KEYS');
+    expect(workflow).not.toContain('set -x');
+    expect(workflow).not.toMatch(/PARSE_ERROR[\s\S]*exit 0/);
+    for (const step of parsed.jobs.audit.steps) {
+      for (const value of Object.values(step.env ?? {})) {
+        expect(String(value)).not.toContain('secrets.DEMO_INTERNAL_API_KEYS');
+      }
     }
   });
 

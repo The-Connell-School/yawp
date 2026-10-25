@@ -586,6 +586,7 @@ export function DevPanelShell() {
           showCloseButton={false}
           className="relative flex w-full max-w-none flex-col p-0 sm:max-w-[360px]"
           data-yawp-dev-panel
+          data-yawp-dev-panel-ready="true"
           id="devtools"
           role={isPhone ? 'dialog' : undefined}
           aria-modal={isPhone ? true : undefined}
@@ -635,6 +636,7 @@ export function DevPanelShell() {
     <aside
       id="devtools"
       data-yawp-dev-panel
+      data-yawp-dev-panel-ready="true"
       aria-label="Developer tools"
       className={cn(
         'yawp-dev-panel-docked fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-background shadow-xl',

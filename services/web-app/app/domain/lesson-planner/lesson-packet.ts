@@ -7,6 +7,7 @@
  * they can prop next to a laptop and handouts that print on their own pages
  * with room to write.
  */
+import { hidePromptIds } from './prompt-ids';
 import { parseAssistantMessage } from '~/components/ai-chat/parse-assistant-message';
 import { hasSlideDeck, readSlideDeck, type SlideDeck } from './slide-deck';
 import { readLessonMaterials, type LessonMaterial } from './lesson-material';
@@ -72,7 +73,8 @@ export function deriveSectionTitle(content: string, index: number): string {
  * counts as its upper bound so a period estimate never runs short.
  */
 function readMinutes(title: string): number | null {
-  const match = title.match(/(\d+)\s*(?:[–—-]\s*(\d+)\s*)?(?:min|minute)/i);
+  // Word-bounded, so "2 mini-lessons" is not two minutes.
+  const match = title.match(/(\d+)\s*(?:[–—-]\s*(\d+)\s*)?(?:min|mins|minutes?)\b(?!-)/i);
   if (!match) return null;
   const upper = match[2] ?? match[1];
   const minutes = Number(upper);
@@ -144,6 +146,16 @@ export type PacketSectionInput = {
   origin?: PacketSectionOrigin;
   /** Set for a material the teacher hand-edited in the stack. */
   editedAt?: Date | string | null;
+  /**
+   * The piece's planned minutes, as stored (Brian's run 3, item 9). Wins over
+   * anything read out of a title; null falls back to the title.
+   */
+  minutes?: number | null;
+  /**
+   * The time to suggest when nothing names one: the step type's default, so
+   * every step shows a time (Brian's run 3, item 9).
+   */
+  suggestedMinutes?: number | null;
 };
 
 export type PacketSection = {
@@ -195,6 +207,8 @@ export type PacketSection = {
 export type PacketOutlineEntry = {
   title: string;
   minutes: number | null;
+  /** True when `minutes` is a suggestion, not a time anyone planned. */
+  suggested?: boolean;
   steps: string[];
   kind: PacketSectionKind;
   anchor: string;
@@ -270,30 +284,58 @@ export function buildLessonPacket({
       // Timing lives in the lesson's own heading, so a rename must not lose
       // it — the outline reads minutes from the derived title.
       derivedTitle,
-      content: stripDuplicateTitleHeading(prose.trim(), derivedTitle),
+      // Library prompt ids are the app's, never the teacher's (Brian's run 2,
+      // items 17, 26) — including the footer older filed starters carry.
+      content: hidePromptIds(
+        stripDuplicateTitleHeading(prose.trim(), derivedTitle)
+      ),
       audience,
       kind: section.kind ?? deriveSectionKind(body, audience),
       origin: section.origin ?? 'reply',
-      materials,
+      materials: materials.map((material) => ({
+        ...material,
+        content: hidePromptIds(material.content),
+      })),
       edited: Boolean(section.editedAt),
       deck,
       deckFailed: deckOutcome.kind === 'unreadable',
       anchor: `resource-${section.id}`,
+      storedMinutes: section.minutes ?? null,
+      suggestedMinutes: section.suggestedMinutes ?? null,
     };
   });
 
-  const outline = built.map((section) => ({
+  const outline = built.map((section) => {
+    const planned =
+      section.storedMinutes ??
+      (section.origin === 'material'
+        ? readMinutes(section.title) ?? readMinutes(section.derivedTitle)
+        : readMinutes(section.derivedTitle));
+    return {
     title: section.title,
-    minutes: readMinutes(section.derivedTitle),
+    // Stored minutes first. Then a filed piece is named for what it is,
+    // minutes and all ("Read aloud (25 min)"): its title wins over its text,
+    // whose first sentence ("Give students 2 minutes…") is not its length
+    // (Brian's run 3, item 9). A kept reply's timing lives in its own heading.
+    minutes: planned ?? section.suggestedMinutes,
+    ...(planned == null && section.suggestedMinutes != null ? { suggested: true } : {}),
     steps: readSteps(section.content, section.derivedTitle),
     kind: section.kind,
     anchor: section.anchor,
-  }));
+  };
+  });
 
   return {
     title: title.trim() || 'Lesson plan',
     className,
-    sections: built.map(({ derivedTitle: _derived, ...section }) => section),
+    sections: built.map(
+      ({
+        derivedTitle: _derived,
+        storedMinutes: _minutes,
+        suggestedMinutes: _suggested,
+        ...section
+      }) => section
+    ),
     outline,
     totalMinutes: outline.reduce(
       (total, entry) => total + (entry.minutes ?? 0),
