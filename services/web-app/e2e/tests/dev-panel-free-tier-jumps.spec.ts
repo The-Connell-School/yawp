@@ -174,7 +174,7 @@ test.describe('Dev panel free-tier state jumps', () => {
   });
 
   for (const entry of listCatalogFreeTierJumpExpectations()) {
-    test(`jump ${entry.stateId}`, async ({ page }) => {
+    test(entry.stateId, async ({ page }) => {
       test.setTimeout(120_000);
       await runCatalogStateJump(page, entry);
     });
