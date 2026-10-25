@@ -1,6 +1,7 @@
 import type { Prisma } from '@app/prisma';
 import { INTERNAL_RUBRICS_FLAG, type FeatureFlagKey } from '~/domain/feature-flags/feature-flags';
 import { perTypeKey } from './rubric-catalog.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 
 /**
  * Rollout of rubrics managed in Yawp Internal (feature flag `internal_rubrics`).
@@ -55,7 +56,7 @@ export async function shouldUseInternalRubricRelease(
     return await deps.isEnabled(INTERNAL_RUBRICS_FLAG, orgId);
   } catch (error) {
     console.warn('internal_rubric_release_flag_failed', {
-      error: error instanceof Error ? error.message : String(error),
+      error: buildSafeErrorForLog(error),
     });
     return false;
   }

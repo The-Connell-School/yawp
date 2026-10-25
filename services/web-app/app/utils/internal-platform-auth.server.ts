@@ -5,6 +5,7 @@ import {
 } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import {
   buildInternalApiSignatureBaseString,
   INTERNAL_API_HEADER_ACTOR,
@@ -227,7 +228,7 @@ export async function recordInternalPlatformWriteAudit(input: {
     });
   } catch (error) {
     console.error('internal_platform_api_audit_failed', {
-      error: error instanceof Error ? error.message : String(error),
+      error: buildSafeErrorForLog(error),
     });
   }
 }

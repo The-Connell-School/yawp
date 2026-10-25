@@ -10,6 +10,7 @@ import { recordFreeTierCapDenialAudit, recordTesterAudit, type TesterAuditActor 
 import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import type { FreeTierApplicationStatus } from '@app/prisma';
 import { assertTransition } from './state';
 import { BELOW_HS_TAG } from './grade-gate';
@@ -177,7 +178,7 @@ export async function recordAcquisitionTokenScan(input: {
     });
   } catch (error) {
     console.error('free_tier_scan_record_failed', {
-      error: error instanceof Error ? error.message : String(error),
+      error: buildSafeErrorForLog(error),
     });
   }
 }
