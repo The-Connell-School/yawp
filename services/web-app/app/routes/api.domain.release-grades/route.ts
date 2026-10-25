@@ -16,6 +16,7 @@ import {
 } from '~/domain/submissions/submission-activity.server';
 import { maybePostGradeToBlackboard } from '~/integrations/blackboard-ags.server';
 import { scoringModeFromAiMeta } from '~/domain/grading/scoring-mode';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 
 const POST = z.object({
   submissionIds: z.preprocess(
@@ -273,9 +274,11 @@ export async function action({ request }: ActionFunctionArgs) {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       maybePostGradeToBlackboard({ numericPercentage: pct });
     }
-  } catch (err) {
+  } catch (error) {
     // eslint-disable-next-line no-console
-    console.warn('Blackboard AGS passback (mock) on release failed', { err });
+    console.warn('blackboard_ags_passback_on_release_failed', {
+      error: buildSafeErrorForLog(error),
+    });
   }
 
   return dataResponse({
