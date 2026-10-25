@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   isAbortedManifestPatchConsoleMessage,
-  isIgnorableControlledNavigationConsoleMessage,
+  isIgnorableControlledNavigationErrorMessage,
 } from './test-helpers.ts';
 
 describe('isAbortedManifestPatchConsoleMessage', () => {
@@ -29,23 +29,31 @@ describe('isAbortedManifestPatchConsoleMessage', () => {
   });
 });
 
-describe('isIgnorableControlledNavigationConsoleMessage', () => {
+describe('isIgnorableControlledNavigationErrorMessage', () => {
   test('includes manifest abort and Suspense hydration races', () => {
     expect(
-      isIgnorableControlledNavigationConsoleMessage(
+      isIgnorableControlledNavigationErrorMessage(
         'Failed to fetch manifest patches TypeError: Failed to fetch',
       ),
     ).toBe(true);
     expect(
-      isIgnorableControlledNavigationConsoleMessage(
+      isIgnorableControlledNavigationErrorMessage(
         'This Suspense boundary received an update before it finished hydrating. This caused the boundary to switch to client rendering.',
       ),
     ).toBe(true);
   });
 
-  test('does not ignore unrelated console errors', () => {
-    expect(isIgnorableControlledNavigationConsoleMessage('Uncaught TypeError: boom')).toBe(
+  test('does not ignore unrelated errors', () => {
+    expect(isIgnorableControlledNavigationErrorMessage('Uncaught TypeError: boom')).toBe(
       false,
+    );
+  });
+
+  test('matches Suspense hydration text as thrown page errors (reporter/planner breakpoints)', () => {
+    const pageErrorMessage =
+      'This Suspense boundary received an update before it finished hydrating. This caused the boundary to switch to client rendering. The usual way to fix this is to wrap the original update in startTransition.';
+    expect(isIgnorableControlledNavigationErrorMessage(pageErrorMessage)).toBe(
+      true,
     );
   });
 });

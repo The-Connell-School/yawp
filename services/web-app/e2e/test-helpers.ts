@@ -13,12 +13,16 @@ export function isAbortedManifestPatchConsoleMessage(text: string): boolean {
 const SUSPENSE_HYDRATION_RACE_PREFIX =
   'This Suspense boundary received an update before it finished hydrating';
 
-/** Benign console noise while resizing or re-navigating during layout E2E checks. */
-export function isIgnorableControlledNavigationConsoleMessage(text: string): boolean {
+/** Benign React Router / React 18 noise during controlled layout navigations. */
+export function isIgnorableControlledNavigationErrorMessage(text: string): boolean {
   if (isAbortedManifestPatchConsoleMessage(text)) return true;
   const firstLine = text.split(/\r?\n/, 1)[0]?.trim() ?? '';
   return firstLine.startsWith(SUSPENSE_HYDRATION_RACE_PREFIX);
 }
+
+/** @deprecated Use isIgnorableControlledNavigationErrorMessage */
+export const isIgnorableControlledNavigationConsoleMessage =
+  isIgnorableControlledNavigationErrorMessage;
 
 export type StrictPageObservability = {
   consoleErrors: string[];
@@ -29,7 +33,7 @@ export type StrictPageObservability = {
   assertNoErrors: () => void;
 };
 
-/** Collect console/page errors; ignore only the exact manifest-patch abort during controlled navigations. */
+/** Collect console/page errors; ignore known benign races only during controlled navigations. */
 export function attachStrictPageObservability(
   page: Page
 ): StrictPageObservability {
@@ -37,18 +41,25 @@ export function attachStrictPageObservability(
   const pageErrors: string[] = [];
   let inControlledNavigation = false;
 
+  function shouldIgnoreError(text: string) {
+    return (
+      inControlledNavigation &&
+      isIgnorableControlledNavigationErrorMessage(text)
+    );
+  }
+
   page.on('console', (message) => {
     if (message.type() !== 'error') return;
     const text = message.text();
-    if (
-      inControlledNavigation &&
-      isIgnorableControlledNavigationConsoleMessage(text)
-    ) {
+    if (shouldIgnoreError(text)) {
       return;
     }
     consoleErrors.push(text);
   });
   page.on('pageerror', (error) => {
+    if (shouldIgnoreError(error.message)) {
+      return;
+    }
     pageErrors.push(error.message);
   });
 
