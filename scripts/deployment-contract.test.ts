@@ -2158,6 +2158,20 @@ describe('demo environment deployment contract', () => {
     );
     expect(workflow).toContain('TesterFeedback row count decreased during deploy');
     expect(readRepoFile(signaturePath)).toContain('testerFeedback');
+    const signatureScript = readRepoFile(signaturePath);
+    expect(signatureScript).toContain(
+      'to_regclass($reg$public."TesterFeedback"$reg$)'
+    );
+    expect(signatureScript).not.toMatch(
+      /to_regclass\('public\."TesterFeedback"'\)/
+    );
+    expect(signatureScript).toContain('tester_feedback_count=0');
+    expect(signatureScript).toContain(
+      '$json$testerFeedback$json$, \'"${tester_feedback_count}"\'::bigint'
+    );
+    expect(signatureScript).not.toMatch(
+      /json_build_object\([\s\S]*FROM "TesterFeedback"/
+    );
   });
   test('demo backups are scheduled daily with configurable count retention', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
