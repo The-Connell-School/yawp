@@ -19,6 +19,7 @@ import { GALLERY_FONTS_HREF, GallerySlideCanvas } from '../present.$conversation
 import { HEADING_FONT, STACK_FONTS_HREF, typeChipStyle } from '../app.lesson-planner_.$conversationId.packet/v3/theme';
 import { cn } from '~/utils/misc';
 import { lessonDeck } from '~/domain/lesson-planner/lesson-deck.server';
+import { syncAgendaToStack } from '~/domain/lesson-planner/deck-agenda';
 import { notesFallback } from '~/domain/lesson-planner/teacher-notes';
 import { storedTeacherNotes } from '~/domain/lesson-planner/teacher-notes.server';
 import { TeacherNotesShow, type NotesShowStep } from './teacher-notes-show';
@@ -84,7 +85,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     blocks: loaded.v3.timing.blocks,
     notes: Object.fromEntries(loaded.v3.steps.map((step) => [step.id, step.excerpt])),
     labels: Object.fromEntries(loaded.v3.steps.map((step) => [step.id, step.label])),
-    deck: deck?.kind === 'deck' ? { id: deckRow!.id, ...deck.deck } : null,
+    deck: deck?.kind === 'deck' ? { id: deckRow!.id, ...syncAgendaToStack(deck.deck, loaded.v3.timing.blocks) } : null,
     gallery: loaded.reviewFlags.deckGallery,
   };
 }

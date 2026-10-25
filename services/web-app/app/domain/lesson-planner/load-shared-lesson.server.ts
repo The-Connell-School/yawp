@@ -18,6 +18,7 @@ import { handoutContent, studentVersionKey, answerLinesFor } from './step-handou
 import { stackSteps } from './stack-steps';
 import { orderStackEntries } from './stack-order';
 import { stackTiming } from './stack-timing';
+import { syncAgendaToStack } from './deck-agenda';
 
 export type SharedLesson = {
   audience: ShareAudience;
@@ -159,7 +160,8 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
       includes.has('plan') || includes.has('summary') || includes.has('help') ? link.body : null,
     handouts,
     prompts,
-    deck: deckOutcome?.kind === 'deck' ? deckOutcome.deck : null,
+    // The agenda slide reads the stack's times (Brian's round 3, 1.4).
+    deck: deckOutcome?.kind === 'deck' ? syncAgendaToStack(deckOutcome.deck, timing.blocks) : null,
     withNotes: audience === 'sub',
     writing: includes.has('writing')
       ? { percent: timing.writingPercent, minutes: timing.writingMinutes, sources: timing.writingSources }
