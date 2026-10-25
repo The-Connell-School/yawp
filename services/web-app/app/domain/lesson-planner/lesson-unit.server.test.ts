@@ -173,6 +173,37 @@ describe('createUnitDayConversation', () => {
   });
 });
 
+describe("a day takes the unit's class and period (Kevin, Oct 25, note 8a)", () => {
+  test('from the planning chat, or the map day\'s own minutes', async () => {
+    db.lessonPlanConversation.create.mockClear();
+    db.lessonPlanConversation.create.mockResolvedValue({ id: 'day-1' });
+    await createUnitDayConversation({
+      db,
+      ctx,
+      unitId: 'unit-1',
+      day: 1,
+      title: 'Meet Caesar',
+      from: { periodMinutes: 60, lessonClassLabel: 'English 10', originClassAssignmentId: 'ca-1' },
+    });
+    expect(db.lessonPlanConversation.create.mock.calls[0][0].data).toMatchObject({
+      periodMinutes: 60,
+      lessonClassLabel: 'English 10',
+      originClassAssignmentId: 'ca-1',
+    });
+
+    await createUnitDayConversation({
+      db,
+      ctx,
+      unitId: 'unit-1',
+      day: 2,
+      title: 'The assassination',
+      dayMinutes: 45,
+      from: { periodMinutes: 60, lessonClassLabel: null, originClassAssignmentId: null },
+    });
+    expect(db.lessonPlanConversation.create.mock.calls[1][0].data).toMatchObject({ periodMinutes: 45 });
+  });
+});
+
 describe('loadUnitMap', () => {
   test('finds the map through the unit rather than one transcript', async () => {
     // A day lives in its own conversation now, so it cannot scan its own

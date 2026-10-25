@@ -17,6 +17,19 @@ const NOTES_MAX_TOKENS = 4_000;
 
 type NoteStep = { id: string; title: string; minutes: number | null; content: string };
 
+/** A lesson's steps as the notes are written from them, in run-of-show order. */
+export function noteSteps(loaded: {
+  v3: { timing: { blocks: Array<{ id: string; title: string; minutes: number }> }; steps: Array<{ id: string; content: string }> };
+}): NoteStep[] {
+  const content = new Map(loaded.v3.steps.map((step) => [step.id, step.content]));
+  return loaded.v3.timing.blocks.map((block) => ({
+    id: block.id,
+    title: block.title,
+    minutes: block.minutes,
+    content: content.get(block.id) ?? '',
+  }));
+}
+
 export async function storedTeacherNotes(conversationId: string): Promise<Record<string, string>> {
   const row = await prisma.lessonPlanConversation.findUnique({
     where: { id: conversationId },

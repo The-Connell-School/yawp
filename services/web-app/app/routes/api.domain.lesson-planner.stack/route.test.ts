@@ -28,6 +28,8 @@ const actions = {
 };
 const runStackCommand = mock();
 const saveStepNotes = mock(async (_input: any) => undefined);
+const teacherNotesFor = mock(async (_input: any) => ({ s1: 'Open with: Ask what they carry.' }));
+const noteSteps = mock((_loaded: any) => [{ id: 's1', title: 'Starter', minutes: 5, content: 'Write.' }]);
 
 mock.module('~/utils/auth.server', () => ({ requireMutableRequest, requireUserId: mock(), requireMembership: mock() }));
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -38,7 +40,7 @@ mock.module('~/domain/lesson-planner/stack-actions.server', () => actions);
 mock.module('~/domain/lesson-planner/stack-command.server', () => ({ runStackCommand }));
 mock.module('~/domain/lesson-planner/step-handout.server', () => ({ ensureStudentVersion }));
 mock.module('~/domain/lesson-planner/lesson-share.server', () => share);
-mock.module('~/domain/lesson-planner/teacher-notes.server', () => ({ saveStepNotes }));
+mock.module('~/domain/lesson-planner/teacher-notes.server', () => ({ saveStepNotes, teacherNotesFor, noteSteps }));
 
 const { action } = await import('./route');
 
@@ -275,5 +277,27 @@ describe('teacher notes (Oct 24 handoff, task 7)', () => {
     expect(saveStepNotes).toHaveBeenCalledWith({ conversationId: 'plan-1', stepId: 'mat-1', notes: 'Say: hello' });
     response = await post({ intent: 'set-notes', conversationId: 'plan-1', notes: 'x' });
     expect(response.init?.status).toBe(400);
+  });
+});
+
+describe('teacher notes written in the background (Kevin, Oct 25, note 12c)', () => {
+  test('write-notes answers with the lesson\'s notes, only with the flag', async () => {
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true });
+    expect((await post({ intent: 'write-notes', conversationId: 'plan-1' })).init?.status).toBe(404);
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, teachNotes: true });
+    loadStackV3.mockResolvedValue({ packet: { title: 'Day 1', className: null }, v3: {} });
+    const response = await post({ intent: 'write-notes', conversationId: 'plan-1' });
+    expect(response.data).toEqual({ ok: true, notes: { s1: 'Open with: Ask what they carry.' } });
+    expect(teacherNotesFor.mock.calls.at(-1)![0]).toMatchObject({ conversationId: 'plan-1', steps: [{ id: 's1' }] });
+  });
+
+  test('setting the lesson starts the notes, without waiting for them', async () => {
+    teacherNotesFor.mockClear();
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, teachNotes: true });
+    loadStackV3.mockResolvedValue({ packet: { title: 'Day 1', className: null }, v3: {} });
+    const response = await post({ intent: 'set-lesson', conversationId: 'plan-1' });
+    expect(response.data).toEqual({ ok: true });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(teacherNotesFor).toHaveBeenCalledTimes(1);
   });
 });

@@ -98,6 +98,7 @@ export async function loadLessonPacket({
       originalTitle: true,
       publishedAt: true,
       unitDay: true,
+      unitId: true,
       periodMinutes: true,
       lessonClassLabel: true,
       originClassAssignment: {
@@ -148,6 +149,25 @@ export async function loadLessonPacket({
     },
   });
   if (!conversation) throw new Response('Not Found', { status: 404 });
+  // A day built before days took the unit's period (Kevin, Oct 25, note 8a)
+  // takes it now, once, from the chat that planned the unit.
+  if (conversation.periodMinutes == null && conversation.unitId && conversation.unitDay != null) {
+    const planning = await prisma.lessonPlanConversation.findFirst({
+      where: { unitId: conversation.unitId, unitDay: null, membershipId: access.membership.id, deletedAt: null },
+      select: { periodMinutes: true, lessonClassLabel: true },
+    });
+    if (planning?.periodMinutes) {
+      await prisma.lessonPlanConversation.update({
+        where: { id: conversation.id },
+        data: {
+          periodMinutes: planning.periodMinutes,
+          ...(conversation.lessonClassLabel ? {} : { lessonClassLabel: planning.lessonClassLabel }),
+        },
+      });
+      conversation.periodMinutes = planning.periodMinutes;
+      conversation.lessonClassLabel ??= planning.lessonClassLabel;
+    }
+  }
   const assignmentLinks = linksByToken(conversation.assignmentLinks);
 
   const klass = conversation.originClassAssignment?.class;

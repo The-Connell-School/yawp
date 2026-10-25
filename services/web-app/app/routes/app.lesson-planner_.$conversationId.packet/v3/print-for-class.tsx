@@ -6,6 +6,7 @@
  */
 import { Link } from 'react-router';
 import { FileText, MonitorPlay, Printer } from 'lucide-react';
+import { DownloadLink } from '~/components/lesson-planner/download-link';
 import { ONE_PACKET_CAPTION } from '~/domain/lesson-planner/one-packet';
 import { BUTTON, Row } from './take-to-class';
 import { HEADING_FONT } from './theme';
@@ -39,15 +40,15 @@ export function PrintForClass({
       <p className="mb-4 text-xs text-white/60">Everything below follows the order on the left.</p>
 
       <Row icon={<FileText size={16} />} title="Lesson plan" line="Timed, one page, ready to file">
-        <a href={`${base}/plan.docx`} download data-testid="plan-word" className={PRIMARY}>
+        <DownloadLink href={`${base}/plan.docx`} testId="plan-word" className={PRIMARY}>
           Word
-        </a>
+        </DownloadLink>
         <a href={`${base}/google-doc?doc=plan`} target="_blank" rel="noopener" data-testid="plan-google" className={BUTTON}>
           Google Docs
         </a>
-        <a href={`${base}/plan.pdf`} download data-testid="plan-pdf-v3" className={BUTTON}>
+        <DownloadLink href={`${base}/plan.pdf`} testId="plan-pdf-v3" className={BUTTON}>
           PDF
-        </a>
+        </DownloadLink>
       </Row>
 
       <Row
@@ -74,9 +75,9 @@ export function PrintForClass({
             <button type="button" onClick={onBuildDeck} data-testid="rebuild-deck" className={BUTTON}>
               Rebuild
             </button>
-            <a href={`${base}/slides.pdf`} download data-testid="deck-pdf" className={BUTTON}>
-              PDF
-            </a>
+            <DownloadLink href={`${base}/slides.pdf`} testId="deck-pdf" className={BUTTON}>
+          PDF
+        </DownloadLink>
           </>
         ) : (
           <>
@@ -106,21 +107,21 @@ export function PrintForClass({
             : 'No steps with a handout yet'
         }
       >
-        <a href={`${base}/handouts.docx`} download data-testid="handouts-word" className={PRIMARY}>
+        <DownloadLink href={`${base}/handouts.docx`} testId="handouts-word" className={PRIMARY}>
           Word
-        </a>
+        </DownloadLink>
         <a href={`${base}/google-doc?doc=handouts`} target="_blank" rel="noopener" data-testid="handouts-google" className={BUTTON}>
           Google Docs
         </a>
-        <a href={`${base}/handouts.pdf`} download data-testid="handouts-pdf" className={BUTTON}>
+        <DownloadLink href={`${base}/handouts.pdf`} testId="handouts-pdf" className={BUTTON}>
           PDF
-        </a>
+        </DownloadLink>
       </Row>
 
       <div className="border-t border-white/10 pt-4">
-        <a href={`${base}/packet.pdf`} download data-testid="one-packet" className="text-sm font-semibold text-[var(--sv-coral)] underline underline-offset-2">
+        <DownloadLink href={`${base}/packet.pdf`} testId="one-packet" className="text-sm font-semibold text-[var(--sv-coral)] underline underline-offset-2">
           Get everything in one packet (PDF)
-        </a>
+        </DownloadLink>
         <p className="mt-0.5 text-xs text-white/60">{ONE_PACKET_CAPTION}</p>
         <p data-testid="google-docs-caption" className="mt-3 text-xs text-white/60">
           {GOOGLE_DOCS_CAPTION}

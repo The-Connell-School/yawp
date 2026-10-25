@@ -447,7 +447,7 @@ export async function action({ request }: ActionFunctionArgs) {
     // Where this day sits in the arc. Found through the unit rather than by
     // scanning one transcript: a day lives in its own conversation now and
     // cannot look at its own history to discover the map.
-    let unitContext = null;
+    let unitContext: ReturnType<typeof buildUnitContext> = null;
     const unitId = dayTarget?.unitId ?? activeConversation?.unitId ?? null;
     const activeDay = dayTarget
       ? turn.unitDay!
@@ -537,6 +537,13 @@ export async function action({ request }: ActionFunctionArgs) {
         ? {
             minutes: activeConversation.periodMinutes,
             classLabel: activeConversation.lessonClassLabel ?? null,
+          }
+        : null) ??
+      // A day being built for the first time plans to the unit's period (note 8a).
+      (dayTarget && !activeConversation && (unitContext?.day.minutes || conversation?.periodMinutes)
+        ? {
+            minutes: (unitContext?.day.minutes ?? conversation?.periodMinutes)!,
+            classLabel: conversation?.lessonClassLabel ?? null,
           }
         : null);
 
@@ -752,6 +759,15 @@ export async function action({ request }: ActionFunctionArgs) {
                   unitId: dayTarget.unitId,
                   day: turn.unitDay!,
                   title: turn.unitDayTitle || `Day ${turn.unitDay}`,
+                  // Same class and period as the chat that planned the unit (note 8a).
+                  dayMinutes: unitContext?.day.minutes ?? null,
+                  from: conversation
+                    ? {
+                        periodMinutes: conversation.periodMinutes,
+                        lessonClassLabel: conversation.lessonClassLabel,
+                        originClassAssignmentId: conversation.originClassAssignmentId,
+                      }
+                    : null,
                 })
               : await transaction.lessonPlanConversation.create({
                   data: {

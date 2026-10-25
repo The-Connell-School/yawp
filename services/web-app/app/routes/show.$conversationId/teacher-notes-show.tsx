@@ -37,6 +37,7 @@ export function TeacherNotesShow({
   totalMinutes,
   steps,
   notes: initialNotes,
+  pending = [],
   deck,
   gallery,
   backTo,
@@ -46,6 +47,8 @@ export function TeacherNotesShow({
   totalMinutes: number;
   steps: NotesShowStep[];
   notes: Record<string, string>;
+  /** Steps whose notes are still being written; they arrive in the background. */
+  pending?: string[];
   deck: (SlideDeck & { id: string }) | null;
   gallery: boolean;
   backTo: string;
@@ -58,8 +61,30 @@ export function TeacherNotesShow({
   const [notes, setNotes] = useState(initialNotes);
   const [editing, setEditing] = useState(false);
   const fetcher = useFetcher();
-  const pending = useRef<{ stepId: string; text: string } | null>(null);
+  const pendingSave = useRef<{ stepId: string; text: string } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Notes not written yet are asked for once, after the page is up (note 12c),
+  // and land on every step the teacher hasn't started editing.
+  const writer = useFetcher<{ ok?: boolean; notes?: Record<string, string> }>();
+  const touched = useRef(new Set<string>());
+  const [writing, setWriting] = useState(pending.length > 0);
+  useEffect(() => {
+    if (!pending.length) return;
+    writer.submit({ intent: 'write-notes', conversationId }, { method: 'post', action: STACK_API });
+    // Once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (writer.state !== 'idle' || !writing || writer.data === undefined) return;
+    setWriting(false);
+    const written = writer.data.notes;
+    if (!written) return;
+    setNotes((all) => {
+      const next = { ...all };
+      for (const id of pending) if (written[id] && !touched.current.has(id)) next[id] = written[id]!;
+      return next;
+    });
+  }, [writer.state, writer.data, writing, pending]);
 
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 1000);
@@ -69,8 +94,8 @@ export function TeacherNotesShow({
   function flush() {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
-    const save = pending.current;
-    pending.current = null;
+    const save = pendingSave.current;
+    pendingSave.current = null;
     if (!save) return;
     fetcher.submit(
       { intent: 'set-notes', conversationId, stepId: save.stepId, notes: save.text },
@@ -79,8 +104,9 @@ export function TeacherNotesShow({
   }
 
   function edit(stepId: string, text: string) {
+    touched.current.add(stepId);
     setNotes((all) => ({ ...all, [stepId]: text }));
-    pending.current = { stepId, text };
+    pendingSave.current = { stepId, text };
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(flush, SAVE_AFTER_MS);
   }
@@ -102,7 +128,7 @@ export function TeacherNotesShow({
   const inStep = (now - stepStart) / 1000;
   const left = step ? countdown(inStep, step.minutes) : null;
   const stepNotes = step ? (notes[step.id] ?? '') : '';
-  const saving = fetcher.state !== 'idle' || pending.current !== null;
+  const saving = fetcher.state !== 'idle' || pendingSave.current !== null;
 
   return (
     <div
@@ -260,7 +286,14 @@ export function TeacherNotesShow({
 
               <div className="mt-6 border-t border-[#1C1A17]/10 pt-5">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#6E665C]">Teacher notes</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#6E665C]">
+                    Teacher notes
+                    {writing && step && pending.includes(step.id) && !touched.current.has(step.id) ? (
+                      <span data-testid="notes-writing" className="ml-2 font-normal normal-case tracking-normal">
+                        · Writing your notes…
+                      </span>
+                    ) : null}
+                  </p>
                   <div className="flex items-center gap-3">
                     {editing ? (
                       <span data-testid="notes-saved" className="text-xs text-[#6E665C]">

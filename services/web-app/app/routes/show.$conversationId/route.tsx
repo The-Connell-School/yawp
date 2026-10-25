@@ -20,7 +20,7 @@ import { HEADING_FONT, STACK_FONTS_HREF, typeChipStyle } from '../app.lesson-pla
 import { cn } from '~/utils/misc';
 import { lessonDeck } from '~/domain/lesson-planner/lesson-deck.server';
 import { notesFallback } from '~/domain/lesson-planner/teacher-notes';
-import { teacherNotesFor } from '~/domain/lesson-planner/teacher-notes.server';
+import { storedTeacherNotes } from '~/domain/lesson-planner/teacher-notes.server';
 import { TeacherNotesShow, type NotesShowStep } from './teacher-notes-show';
 
 export const meta: MetaFunction = ({ data }) => [
@@ -35,18 +35,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     const found = await lessonDeck(loaded.conversationId);
     const blocks = loaded.v3.timing.blocks;
     const byId = new Map(loaded.v3.steps.map((step) => [step.id, step]));
-    const stored = await teacherNotesFor({
-      request,
-      conversationId: loaded.conversationId,
-      title: loaded.packet.title,
-      className: loaded.packet.className,
-      steps: blocks.map((block) => ({
-        id: block.id,
-        title: block.title,
-        minutes: block.minutes,
-        content: byId.get(block.id)?.content ?? '',
-      })),
-    });
+    // Open at once with what is stored; notes not written yet come in the
+    // background (Kevin, Oct 25, note 12c: the first open waited on the model).
+    const stored = await storedTeacherNotes(loaded.conversationId);
+    const pending = blocks.filter((block) => !stored[block.id]).map((block) => block.id);
     return {
       mode: 'notes' as const,
       conversationId: loaded.conversationId,
@@ -66,6 +58,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ),
       deck: found ? { id: found.id, ...found.deck } : null,
       gallery: loaded.reviewFlags.deckGallery,
+      pending,
     };
   }
   if (!loaded.reviewFlags.runShow) throw new Response('Not Found', { status: 404 });
@@ -113,6 +106,7 @@ export default function ShowRoute() {
         totalMinutes={data.totalMinutes}
         steps={data.steps}
         notes={data.notes}
+        pending={data.pending}
         deck={data.deck}
         gallery={data.gallery}
         backTo={closeHref(data.conversationId, location.search, 'stack')}

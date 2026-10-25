@@ -38,7 +38,7 @@ import { clampMinutes } from '~/domain/lesson-planner/stack-timing';
 import { MAX_LESSON_NAME } from '~/domain/lesson-planner/lesson-rename';
 import { renameLesson } from '~/domain/lesson-planner/lesson-rename.server';
 import { MAX_NOTES } from '~/domain/lesson-planner/teacher-notes';
-import { saveStepNotes } from '~/domain/lesson-planner/teacher-notes.server';
+import { noteSteps, saveStepNotes, teacherNotesFor } from '~/domain/lesson-planner/teacher-notes.server';
 
 const POST = z
   .object({
@@ -67,6 +67,8 @@ const POST = z
       'rename-lesson',
       // The teacher's notes for one step, saved as they type (task 7).
       'set-notes',
+      // Write the notes not written yet, in the background (Kevin, Oct 25, note 12c).
+      'write-notes',
     ]),
     conversationId: z.string().min(1),
     materialId: z.string().min(1).optional(),
@@ -150,6 +152,20 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ ok: true });
     }
 
+    case 'write-notes': {
+      if (!flags.teachNotes) return bad('Not found.', 404);
+      const loaded = await loadStackV3({ request, conversationId: conversation.id });
+      if (!loaded) return bad('Not found.', 404);
+      const notes = await teacherNotesFor({
+        request,
+        conversationId: conversation.id,
+        title: loaded.packet.title,
+        className: loaded.packet.className,
+        steps: noteSteps(loaded),
+      });
+      return dataResponse({ ok: true, notes });
+    }
+
     case 'set-minutes': {
       if (!data.materialId || !data.minutes) return bad('A step and its minutes are required.');
       const undo = await setStepMinutes(conversation.id, data.materialId, data.minutes);
@@ -199,6 +215,23 @@ export async function action({ request }: ActionFunctionArgs) {
         where: { id: conversation.id },
         data: { setAt: data.intent === 'set-lesson' ? new Date() : null },
       });
+      // Set: the notes start being written now, so they're ready when the
+      // teacher opens them (note 12c). Not waited on.
+      if (data.intent === 'set-lesson' && flags.teachNotes) {
+        void loadStackV3({ request, conversationId: conversation.id })
+          .then((loaded) =>
+            loaded
+              ? teacherNotesFor({
+                  request,
+                  conversationId: conversation.id,
+                  title: loaded.packet.title,
+                  className: loaded.packet.className,
+                  steps: noteSteps(loaded),
+                })
+              : null
+          )
+          .catch(() => null);
+      }
       return dataResponse({ ok: true });
     }
 

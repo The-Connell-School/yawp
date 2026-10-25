@@ -10,6 +10,12 @@ import { pdfFilename } from '~/domain/lesson-planner/lesson-pdf.server';
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const { handouts, parts, wantedOne } = await loadHandoutParts({ request, conversationId: params.conversationId });
   if (wantedOne && !parts.length) throw new Response('Not Found', { status: 404 });
+  if (!parts.length) {
+    return new Response('Pick the steps that go in the handout first.', {
+      status: 409,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+    });
+  }
   const docx = await renderHandoutDocx({ title: handouts.title, className: handouts.className, parts });
   const filename = pdfFilename(handouts.title, parts.length === 1 ? parts[0]!.title : 'Student handout').replace(/\.pdf$/, '.docx');
   return new Response(new Uint8Array(docx) as unknown as BodyInit, {
