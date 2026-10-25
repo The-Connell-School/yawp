@@ -82,3 +82,15 @@ This is the plan, item by item: what's wrong, why, and the fix. Each item is tes
 
 ## Later
 - Word and Google Docs for the class packet.
+
+## Status (Oct 25)
+
+All 8 items are built, each in its own commit. Two flags are involved, both already on in previews: item 5 is behind `lesson_planner_teach_notes` (with Print it for class), and item 7 is behind `lesson_planner_library_v2`. Items 1–4, 6 and 8 apply wherever their feature is on. No migration.
+
+- **Unit tests:** new `lesson-location`, `stack-reply` and `saved-assignments` tests; new cases in the exit ticket, creation sheet, create API, `lesson-share`, `lesson-library`, `one-packet` and `lesson-pdf` tests. The new tests and the exit ticket tests are added to the CI list.
+- **E2E:** `teacher.lesson-planner-round-4.spec.ts`, 6 tests, in smoke and shard 6. It passed 3 times in a row (18 of 18). The round 3, library v2, stack v2, unit build, run 4, run 6 and exit ticket specs also passed (54 tests), with `stack-v2` and `round-3` updated for the new packet button and the box listing types.
+- **Typecheck** is clean.
+
+**Open questions for Brian:**
+- The 4-up packet prints each slide's notes, cut to about four lines. Should 4-up drop the notes altogether?
+- "Keep it on its own" marks a lesson saved without a unit. Is that the right second choice, or should Save to library always ask for a unit?
