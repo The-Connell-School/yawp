@@ -28,7 +28,10 @@ describe('preview prisma-cli', () => {
     expect(script).toContain('REPO_ROOT');
     expect(script).toContain('resolve_repo_root');
     expect(script).toContain('ensure_node');
-    expect(script).toContain('setup_22.x');
+    expect(script).toContain('NODE_VERSION=22.23.4');
+    expect(script).toContain('nodejs.org/dist/v${NODE_VERSION}/');
+    expect(script).toContain('sha256sum -c -');
+    expect(script).not.toContain('nodesource');
     expect(script).toContain('exec node "$PRISMA_ENTRY"');
     expect(script).toContain('cd "$ROOT/packages/prisma"');
   });
