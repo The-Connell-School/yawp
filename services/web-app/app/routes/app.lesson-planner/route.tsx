@@ -1,3 +1,4 @@
+import { MadeNotice } from '~/components/lesson-planner/made-notice';
 import {
   LessonPlannerMonthlyLimitNotice,
   lessonPlannerPausedPlaceholder,
@@ -683,7 +684,7 @@ export default function LessonPlannerRoute() {
       });
       const replace = window.confirm(
         // Plainer words (Brian's run 2): the teacher's edits, and what happens.
-        'You edited this in the stack. Replace your edits with this version?'
+        'You edited this in your lesson. Replace your edits with this version?'
       );
       if (!replace) return;
       setAddedMaterials((prev) => new Set(prev).add(token));
@@ -732,7 +733,7 @@ export default function LessonPlannerRoute() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stackVersion]);
 
-  // "Add everything to the stack" (Brian's run 2, A4): one piece per step and
+  // "Add everything to the lesson" (Brian's run 2, A4): one piece per step and
   // block, so each can be refined in the stack. Shown as in at once; the
   // answer says which, if any, were left alone because they were hand-edited.
   const keepAllFetcher = useFetcher<{ added?: string[]; skipped?: string[] }>();
@@ -777,7 +778,7 @@ export default function LessonPlannerRoute() {
     );
   }
 
-  // Every "In the stack" matches the stack, however it changed: here, on the
+  // Every "In your lesson" matches the stack, however it changed: here, on the
   // stack page, in the panel, or in another tab (Brian's run 3, item 2).
   const tokensFetcher = useFetcher<{ conversationId: string; tokens: string[] }>();
   const savedConversationId = selectedConversation?.id ?? null;
@@ -1309,6 +1310,7 @@ export default function LessonPlannerRoute() {
         {hasMessages ? (
           <div className="border-t bg-background px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
             <div className="mx-auto w-full max-w-3xl pr-12">
+              <MadeNotice className="mb-2" />
               <LessonComposer
                 value={input}
                 onChange={setInput}
@@ -1650,7 +1652,7 @@ function MessageBubble({
   previousUserText?: string | null;
   /** "Replace existing class starter with this one" (Brian's run 2, E1). */
   onReplaceMaterial?: ((messageId: string, materialKey: string) => void) | null;
-  /** "Add everything to the stack", as separate pieces (Brian's run 2, A4). */
+  /** "Add everything to the lesson", as separate pieces (Brian's run 2, A4). */
   onKeepAll?: ((messageId: string, keys: string[]) => void) | null;
   /** One segment of the plan in or out, however many pieces it files as (run 3). */
   onSegment?: ((messageId: string, keys: string[], add: boolean) => void) | null;
@@ -1669,9 +1671,9 @@ function MessageBubble({
       >
         <span className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">
           {message.role === 'user'
-            ? 'On the stack'
+            ? 'In your lesson'
             : hasSlideDeck(message.content)
-              ? 'Deck built on the stack'
+              ? 'Deck built in your lesson'
               : 'Stack change'}
         </span>
         <span className="truncate">
@@ -1761,7 +1763,7 @@ function MessageBubble({
   const planOverBy =
     stackV2 && deliveredPlan ? overTime(planMinutes(body), periodMinutes) : null;
   // Brian's run 2 (A3, A4): the plan's steps, each a piece of its own, and
-  // everything the reply hands over, for "Add everything to the stack".
+  // everything the reply hands over, for "Add everything to the lesson".
   // Brian's run 3 (items 1, 2): every step, including one that is only its
   // blocks, with the pieces it files as, so its button and its status are
   // the same wherever it appears.
@@ -1830,7 +1832,7 @@ function MessageBubble({
           </div>
         );
       }
-      // Brian's run 3 (item 1): Add to stack on the hook, the
+      // Brian's run 3 (item 1): Add to lesson on the hook, the
       // discussion, the exit ticket… right on each step's heading.
       const { chunks, next } = splitAtStepHeadings(text, planSteps, stepCursor);
       stepCursor = next;
@@ -1864,7 +1866,7 @@ function MessageBubble({
                     {[...addedMaterials].some((token) =>
                       optionKeysUnder(step.key).some((key) => token === `${message.id}:${key}`)
                     )
-                      ? 'In the stack'
+                      ? 'In your lesson'
                       : 'Pick one below to add it'}
                   </span>
                 ) : null}
@@ -2073,7 +2075,7 @@ function MessageBubble({
                               !added &&
                               edited &&
                               !window.confirm(
-                                'Taking this deck out of the stack also discards your edits to it.'
+                                'Taking this deck out of your lesson also discards your edits to it.'
                               )
                             ) {
                               return;
@@ -2178,7 +2180,7 @@ function MessageBubble({
                         )}
                       >
                         {isIn ? <BookmarkCheck size={12} /> : <BookmarkPlus size={12} />}
-                        {isIn ? 'In the stack' : 'Add to stack'}
+                        {isIn ? 'In your lesson' : 'Add to lesson'}
                       </button>
                     )}
                   </li>
@@ -2218,8 +2220,8 @@ function MessageBubble({
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
                   <BookmarkCheck size={13} />
                   {message.keptAudience === 'student'
-                    ? 'In the stack · handout'
-                    : 'In the stack'}
+                    ? 'In your lesson · handout'
+                    : 'In your lesson'}
                 </span>
                 <button
                   type="button"
@@ -2234,7 +2236,7 @@ function MessageBubble({
                 {stackV2 && everythingIn ? (
                   <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
                     <BookmarkCheck size={13} />
-                    Everything is in the stack
+                    Everything is in your lesson
                   </span>
                 ) : (
                   <button
@@ -2248,7 +2250,7 @@ function MessageBubble({
                     className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground disabled:opacity-50"
                   >
                     <BookmarkPlus size={13} />
-                    {stackV2 ? 'Add everything to the stack' : 'Add all of this'}
+                    {stackV2 ? 'Add everything to the lesson' : 'Add all of this'}
                   </button>
                 )}
                 {stackV2 ? null : (

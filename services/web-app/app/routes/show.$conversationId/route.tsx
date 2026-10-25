@@ -59,6 +59,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       deck: found ? { id: found.id, ...found.deck } : null,
       gallery: loaded.reviewFlags.deckGallery,
       pending,
+      extensions: loaded.v3.extensions.map((step) => ({
+        id: step.id,
+        title: step.title,
+        minutes: step.minutes,
+        notes: stored[step.id] ?? step.excerpt,
+      })),
     };
   }
   if (!loaded.reviewFlags.runShow) throw new Response('Not Found', { status: 404 });
@@ -107,6 +113,7 @@ export default function ShowRoute() {
         steps={data.steps}
         notes={data.notes}
         pending={data.pending}
+        extensions={data.extensions}
         deck={data.deck}
         gallery={data.gallery}
         backTo={closeHref(data.conversationId, location.search, 'stack')}

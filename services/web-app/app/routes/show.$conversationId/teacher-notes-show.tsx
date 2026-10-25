@@ -41,6 +41,7 @@ export function TeacherNotesShow({
   deck,
   gallery,
   backTo,
+  extensions = [],
 }: {
   conversationId: string;
   title: string;
@@ -52,6 +53,8 @@ export function TeacherNotesShow({
   deck: (SlideDeck & { id: string }) | null;
   gallery: boolean;
   backTo: string;
+  /** Set aside for extra time (Kevin's note 8c): after the closing, not timed. */
+  extensions?: Array<{ id: string; title: string; minutes: number | null; notes: string }>;
 }) {
   const [current, setCurrent] = useState(0);
   const [done, setDone] = useState(false);
@@ -147,7 +150,7 @@ export function TeacherNotesShow({
             data-testid="show-back"
             className="inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1.5 text-sm font-semibold"
           >
-            <ChevronLeft size={15} /> Back to the stack
+            <ChevronLeft size={15} /> Back to your lesson
           </Link>
           <div>
             <p className="font-semibold" style={HEADING_FONT}>
@@ -221,6 +224,22 @@ export function TeacherNotesShow({
               );
             })}
           </ol>
+          {extensions.length ? (
+            <div data-testid="show-extensions" className="mt-4 rounded-xl border border-dashed border-white/20 p-3">
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-white/60">If you have extra time</p>
+              <ul className="mt-2 space-y-2">
+                {extensions.map((step) => (
+                  <li key={step.id} data-testid="show-extension" className="text-sm leading-snug">
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="font-semibold">{step.title}</span>
+                      {step.minutes ? <span className="text-xs text-white/60">{step.minutes}′</span> : null}
+                    </span>
+                    {step.notes ? <span className="mt-0.5 block text-xs text-white/70">{step.notes}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </nav>
 
         <main className="flex min-w-0 flex-1 flex-col gap-4">
@@ -231,7 +250,7 @@ export function TeacherNotesShow({
               </h1>
               <div className="mt-6 flex flex-wrap justify-center gap-3">
                 <Link to={backTo} className="rounded-xl border border-[#1C1A17]/20 px-5 py-3 font-semibold">
-                  Back to the stack
+                  Back to your lesson
                 </Link>
                 <button type="button" data-testid="run-again" onClick={() => go(0)} className="rounded-xl bg-[#D9714F] px-5 py-3 font-semibold text-white">
                   Run it again

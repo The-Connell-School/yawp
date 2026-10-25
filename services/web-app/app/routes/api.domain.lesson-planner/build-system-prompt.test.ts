@@ -1722,7 +1722,7 @@ describe("planner prompt — Brian's run 3", () => {
   });
 
   test('the prompt version moved', () => {
-    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-25-unit-build-v1');
+    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-25-unit-build-v2');
   });
 });
 

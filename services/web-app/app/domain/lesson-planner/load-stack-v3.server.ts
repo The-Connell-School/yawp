@@ -9,6 +9,8 @@ import { teacherStandards } from './teacher-standards';
 import { prisma } from '~/utils/db.server';
 import { loadLessonPacket, type LoadedLessonPacket } from './load-lesson-packet.server';
 import { hasSlideDeck, readSlideDeck } from './slide-deck';
+import { deckFreshness, deckKeyOf } from './deck-freshness';
+import { readExtensionIds, splitExtensions } from './extensions';
 import { claimCarryOvers, classKeyFor } from './stack-actions.server';
 import { stackSteps, type StackStep } from './stack-steps';
 import { suggestedPieces, type SuggestedPiece } from './stack-suggestions';
@@ -28,7 +30,7 @@ export type StackV3 = {
     id: string;
     slides: number;
     title: string;
-    /** The reply it was filed from: its card on the stack says "In the stack". */
+    /** The reply it was filed from: its card on the stack says "In your lesson". */
     sourceMessageId: string | null;
   } | null;
   /**
@@ -37,6 +39,10 @@ export type StackV3 = {
    * as it is rather than built again.
    */
   conversationDeck: { messageId: string; content: string; onStack: boolean } | null;
+  /** Set aside for a class that finishes early, out of the timing (Kevin's note 8c). */
+  extensions: StackStep[];
+  /** The lesson changed since the deck was made (Kevin's note 9). */
+  deckStale: boolean;
   /** The stack chat's earlier answers, newest last, for the panel. */
   askHistory: Array<{ id: string; role: 'user' | 'assistant'; content: string }>;
   /** Shown once, until the teacher closes it (Brian's run 3, item 13). */
@@ -72,6 +78,8 @@ export async function loadStackV3({
       lessonDate: true,
       membershipId: true,
       unitId: true,
+      deckStackKey: true,
+      extensionStepIds: true,
       lessonClassLabel: true,
       originClassAssignment: { select: { classId: true } },
       messages: {
@@ -95,11 +103,28 @@ export async function loadStackV3({
   });
   if (claimed) loaded = await loadLessonPacket({ request, conversationId });
 
-  const steps = stackSteps(loaded);
+  const { steps, extensions } = splitExtensions(
+    stackSteps(loaded),
+    loaded.reviewFlags.teachNotes ? readExtensionIds(conversation.extensionStepIds) : []
+  );
   const timing = stackTiming(steps, loaded.periodMinutes);
   const assistant = conversation.messages.filter((message) => message.role === 'assistant');
   const deckRow = conversation.materials[0];
   const deckOutcome = deckRow ? readSlideDeck(deckRow.content) : null;
+  let deckStale = false;
+  if (loaded.reviewFlags.teachNotes) {
+    const fresh = deckFreshness(
+      conversation.deckStackKey,
+      deckRow && deckOutcome?.kind === 'deck' ? deckKeyOf(deckRow, steps) : null
+    );
+    deckStale = fresh.stale;
+    if (fresh.store) {
+      await prisma.lessonPlanConversation.update({
+        where: { id: conversation.id },
+        data: { deckStackKey: fresh.store },
+      });
+    }
+  }
 
   return {
     ...loaded,
@@ -125,6 +150,8 @@ export async function loadStackV3({
               sourceMessageId: deckRow.sourceMessageId,
             }
           : null,
+      extensions,
+      deckStale,
       conversationDeck: (() => {
         // Built in the chat or on the stack: either way it is one click away.
         const newest = [...assistant].reverse().find((message) => hasSlideDeck(message.content));

@@ -38,6 +38,7 @@ import { clampMinutes } from '~/domain/lesson-planner/stack-timing';
 import { MAX_LESSON_NAME } from '~/domain/lesson-planner/lesson-rename';
 import { renameLesson } from '~/domain/lesson-planner/lesson-rename.server';
 import { MAX_NOTES } from '~/domain/lesson-planner/teacher-notes';
+import { MAX_EXTENSIONS, readExtensionIds } from '~/domain/lesson-planner/extensions';
 import { noteSteps, saveStepNotes, teacherNotesFor } from '~/domain/lesson-planner/teacher-notes.server';
 
 const POST = z
@@ -69,6 +70,10 @@ const POST = z
       'set-notes',
       // Write the notes not written yet, in the background (Kevin, Oct 25, note 12c).
       'write-notes',
+      // Set a step aside for extra time, or bring it back (note 8c).
+      'set-extension',
+      // The slides stay as they are though the lesson changed (note 9).
+      'keep-deck',
     ]),
     conversationId: z.string().min(1),
     materialId: z.string().min(1).optional(),
@@ -101,6 +106,8 @@ const POST = z
     /** `set-notes`: the step, and its notes as the teacher left them. */
     stepId: z.string().min(1).max(200).optional(),
     notes: z.string().max(MAX_NOTES).optional(),
+    /** `set-extension`: into the extensions, or back into the lesson. */
+    extension: z.enum(['true', 'false']).optional(),
   })
   .strict();
 
@@ -132,6 +139,7 @@ export async function action({ request }: ActionFunctionArgs) {
       lessonClassLabel: true,
       lessonDate: true,
       periodMinutes: true,
+      extensionStepIds: true,
       originClassAssignment: { select: { classId: true } },
     },
   });
@@ -164,6 +172,25 @@ export async function action({ request }: ActionFunctionArgs) {
         steps: noteSteps(loaded),
       });
       return dataResponse({ ok: true, notes });
+    }
+
+    case 'set-extension': {
+      if (!flags.teachNotes) return bad('Not found.', 404);
+      if (!data.stepId || !data.extension) return bad('A step is required.');
+      const current = readExtensionIds(conversation.extensionStepIds).filter((id) => id !== data.stepId);
+      const next = data.extension === 'true' ? [...current, data.stepId].slice(-MAX_EXTENSIONS) : current;
+      await prisma.lessonPlanConversation.update({
+        where: { id: conversation.id },
+        data: { extensionStepIds: next },
+      });
+      return dataResponse({ ok: true, extension: data.extension === 'true' ? data.stepId : null });
+    }
+
+    case 'keep-deck': {
+      if (!flags.teachNotes) return bad('Not found.', 404);
+      // Cleared, the next load stores the deck with the lesson as it is now.
+      await prisma.lessonPlanConversation.update({ where: { id: conversation.id }, data: { deckStackKey: null } });
+      return dataResponse({ ok: true });
     }
 
     case 'set-minutes': {

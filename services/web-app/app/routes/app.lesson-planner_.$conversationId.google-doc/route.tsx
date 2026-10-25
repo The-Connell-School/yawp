@@ -47,7 +47,7 @@ export default function GoogleDocRoute() {
           </a>
         )}
         <Link to={`/app/lesson-planner/${conversationId}/packet`} className="rounded-xl border border-[#1C1A17]/20 px-5 py-3 font-semibold">
-          Back to the stack
+          Back to your lesson
         </Link>
       </div>
     </main>

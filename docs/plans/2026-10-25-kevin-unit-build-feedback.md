@@ -55,4 +55,16 @@ One additive migration, with rollback:
 - Typecheck, then the full planner e2e suite before pushing.
 
 ## Status
-(updated as work lands)
+All three phases are built and tested, behind `lesson_planner_teach_notes` (and `lesson_planner_library_v2` for the saved-unit line and the unit page's plan). Both are on in previews.
+
+- **Phase 1 (bugs):** done. 8a, 11, 12c, 10b.
+- **Phase 2 (chat):** done. 2, 7, 1, 5 (Build this day; the deck and stack builds keep their own short turn lines), 3, 4.
+- **Phase 3 (stack):** done, with these calls:
+  - 6a: a chat piece made in Yawp! is filed in the lesson unless it is already there.
+  - 6b: after Create, the teacher goes back to the chat or the stack, whichever they came from. A collaborative assignment still goes to its group setup first.
+  - 6c/10a: "Add to lesson" / "In your lesson" everywhere teachers see it, and copy for the assignment and deck flows. This is a copy change, not behind a flag. The stack page keeps its kicker, "Your lesson, start to finish", and adds the "lands here" line.
+  - 9: the deck's key is stored the first time the deck is seen. A new deck, or **Keep these slides**, starts it again.
+  - 8b/8c: up to six extensions. Moving one is one click, and **Back into the lesson** undoes it. Library timings leave them out too.
+  - 12a: Before class covers the period, the slides, the writing and the date. "Handouts ready" is left out because the app can't tell whether a handout was printed.
+  - 12b: **Planned in** has a small "from first message to set" under it. The stat beside it, which was also called "Planned", is now **Class time**, so the two can't be confused.
+- Tests: one e2e per note in `teacher.lesson-planner-unit-build.spec.ts` (10 tests), plus unit tests for each new helper and intent.

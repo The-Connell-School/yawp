@@ -212,6 +212,7 @@ export function RunOfShow({
   hasDeck = false,
   onLectureSlides = null,
   missingIds = new Set(),
+  flaggedId = null,
 }: {
   conversationId: string;
   steps: StackStep[];
@@ -236,6 +237,8 @@ export function RunOfShow({
   onLectureSlides?: ((step: StackStep) => void) | null;
   /** Writing steps whose Yawp! assignment is not made yet. */
   missingIds?: ReadonlySet<string>;
+  /** The step suggested for extra time while the lesson runs over (Kevin's note 8b). */
+  flaggedId?: string | null;
 }) {
   const [dragKey, setDragKey] = useState<string | null>(null);
   const byId = new Map(blocks.map((block) => [block.id, block]));
@@ -282,6 +285,7 @@ export function RunOfShow({
               data-testid="run-card"
               data-step-id={step.id}
               data-open={open ? 'true' : undefined}
+              data-flagged={flaggedId === step.id ? 'true' : undefined}
               draggable={editable}
               onDragStart={(event) => {
                 event.dataTransfer.setData(STEP_DRAG_TYPE, step.key);
@@ -308,6 +312,8 @@ export function RunOfShow({
               className={cn(
                 'overflow-hidden rounded-xl border bg-[var(--sv-card)] transition',
                 open ? 'border-[var(--sv-ink)] shadow-sm' : 'border-[var(--sv-line)]',
+                // A soft red edge, not an alarm: the step that could wait.
+                flaggedId === step.id && 'border-l-4 border-l-[#E8A49A]',
                 dragKey === step.key && 'opacity-50'
               )}
             >

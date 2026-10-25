@@ -25,6 +25,7 @@ import { storedTeacherNotes } from './teacher-notes.server';
 import { PLAN_SUMMARY_SYSTEM, summarizeLessonPlan } from './plan-summary.server';
 import { buildKitPlan, type KitPlan } from './kit-plan';
 import { teacherStandards } from './teacher-standards';
+import { readExtensionIds } from './extensions';
 
 const SUMMARY_DEADLINE_MS = 25_000;
 const SUMMARY_MAX_TOKENS = 2_000;
@@ -52,7 +53,7 @@ export async function loadLessonPlan({
   const key = `${planSummaryKey(entries)}${deckGallery ? '-kit1' : ''}`;
   const stored = await prisma.lessonPlanConversation.findFirst({
     where: { id: loaded.conversationId },
-    select: { planSummary: true, planSummaryKey: true },
+    select: { planSummary: true, planSummaryKey: true, extensionStepIds: true },
   });
 
   let summaries: LessonPlanSummaries | null =
@@ -116,6 +117,7 @@ export async function loadLessonPlan({
     entries,
     summaries,
     standards: teacherStandards(asked.map((message) => message.content)),
+    extensionIds: teachNotes ? readExtensionIds(stored?.extensionStepIds) : [],
   });
   // The teacher's notes print under their steps (Oct 24 handoff, task 7).
   const doc = teachNotes ? withTeacherNotes(built, await storedTeacherNotes(loaded.conversationId)) : built;

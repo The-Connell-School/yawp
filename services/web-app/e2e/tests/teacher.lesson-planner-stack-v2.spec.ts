@@ -133,13 +133,8 @@ test.describe("Stack page v2 (Brian's Oct 24 handoff)", () => {
 
     await page.reload();
     await expect(page.getByTestId('exit-ticket-create')).toHaveCount(0);
-    const toggle = page.getByTestId('exit-ticket-stack-toggle');
-    const filed = page.waitForResponse(
-      (response) => response.url().includes('/api/domain/lesson-planner/packet') && response.request().method() === 'POST'
-    );
-    await toggle.click();
-    await expect(toggle).toHaveText(/in the stack/i);
-    expect((await filed).ok()).toBe(true);
+    // Made in Yawp!, it is in the lesson too (Kevin, Oct 25, note 6a).
+    await expect(page.getByTestId('exit-ticket-stack-toggle')).toHaveText(/in your lesson/i);
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
     const card = page.getByTestId('run-card').filter({ hasText: 'Closing' });
@@ -306,7 +301,7 @@ test.describe("Stack page v2 (Brian's Oct 24 handoff)", () => {
     expect(plan).toContain('Teacher notes');
     expect(plan).toContain('Ask who has lost something.');
 
-    // The clock, when asked for; Next and Up next; Back to the stack.
+    // The clock, when asked for; Next and Up next; Back to your lesson.
     await page.getByTestId('clock-countdown').click();
     await expect(page.getByTestId('show-clock')).toContainText('left');
     await page.getByTestId('show-next').click();

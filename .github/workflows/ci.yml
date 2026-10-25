@@ -1075,6 +1075,9 @@ jobs:
             app/domain/lesson-planner/library-v2.test.ts \
             app/components/lesson-planner/download-link.test.ts \
             app/domain/lesson-planner/plain-preview.test.ts \
+            app/domain/lesson-planner/deck-freshness.test.ts \
+            app/domain/lesson-planner/extensions.test.ts \
+            app/domain/lesson-planner/before-class.test.ts \
             app/domain/lesson-planner/lesson-rename.test.ts \
             app/domain/lesson-planner/handout-docx.server.test.ts \
             app/domain/lesson-planner/lesson-library.test.ts \

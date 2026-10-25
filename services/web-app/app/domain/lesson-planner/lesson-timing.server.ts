@@ -8,6 +8,7 @@ import { createdFor, linksByToken } from './assignment-links';
 import { buildLessonPacket } from './lesson-packet';
 import { stackSections } from './load-lesson-packet.server';
 import { stackSteps } from './stack-steps';
+import { readExtensionIds, splitExtensions } from './extensions';
 import { stackTiming, type StackTiming } from './stack-timing';
 import { stepChipText } from './step-types';
 
@@ -30,6 +31,7 @@ export async function lessonRuns(conversationIds: string[], stackV2: boolean): P
       title: true,
       packetTitle: true,
       periodMinutes: true,
+      extensionStepIds: true,
       messages: {
         where: { keptAt: { not: null }, role: 'assistant' },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -69,7 +71,7 @@ export async function lessonRuns(conversationIds: string[], stackV2: boolean): P
         className: null,
         sections: stackSections({ messages: lesson.messages, materials: lesson.materials, stackV2 }),
       });
-      const steps = stackSteps({
+      const { steps } = splitExtensions(stackSteps({
         packet,
         materialKinds: Object.fromEntries(lesson.materials.map((material) => [material.id, material.kind])),
         materialMeta: Object.fromEntries(
@@ -87,7 +89,7 @@ export async function lessonRuns(conversationIds: string[], stackV2: boolean): P
         ),
         materialTokens: {},
         stackDetails: {},
-      });
+      }), readExtensionIds(lesson.extensionStepIds));
       const timing = stackTiming(steps, lesson.periodMinutes);
       const labels = new Map(steps.map((step) => [step.id, step.label]));
       const run: LessonRun = {

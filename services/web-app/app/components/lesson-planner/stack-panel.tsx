@@ -42,7 +42,7 @@ export function StackPanel({
   conversationId: string;
   /** Bumped by the chat whenever something was filed, so the panel reloads. */
   version: number;
-  /** A piece left the stack here, so its chat card stops saying "In the stack". */
+  /** A piece left the stack here, so its chat card stops saying "In your lesson". */
   onRemoved: (piece: StackItem) => void;
   onClose: () => void;
 }) {

@@ -1888,7 +1888,7 @@ test.describe('Yawp! Lesson Planner', () => {
     await handout.getByTestId('material-toggle').click();
     await save;
     await expect(handout.getByTestId('material-toggle')).toContainText(
-      'In the stack'
+      'In your lesson'
     );
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
@@ -1924,11 +1924,11 @@ test.describe('Yawp! Lesson Planner', () => {
     await page.reload();
     await expect(
       page.getByTestId('material-card').first().getByTestId('material-toggle')
-    ).toContainText('In the stack');
+    ).toContainText('In your lesson');
     // The one beside it is untouched.
     await expect(
       page.getByTestId('material-card').nth(1).getByTestId('material-toggle')
-    ).toContainText('Add to stack');
+    ).toContainText('Add to lesson');
   });
 
   test('combines the student pieces into one handout to lead a class through', async ({
@@ -2367,10 +2367,10 @@ test.describe('Yawp! Lesson Planner', () => {
 
     // The original stops claiming to be filed — there is one handout, not two.
     await expect(cards.nth(0).getByTestId('material-toggle')).toContainText(
-      'Add to stack'
+      'Add to lesson'
     );
     await expect(cards.nth(1).getByTestId('material-toggle')).toContainText(
-      'In the stack'
+      'In your lesson'
     );
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
@@ -2525,7 +2525,7 @@ test.describe('Yawp! Lesson Planner', () => {
     );
     await page.getByTestId('deck-toggle').click();
     await save;
-    await expect(page.getByTestId('deck-toggle')).toContainText('In the stack');
+    await expect(page.getByTestId('deck-toggle')).toContainText('In your lesson');
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
     // The seeded reply is kept too, so the filed deck is the later card.
@@ -3019,7 +3019,7 @@ test.describe('Yawp! Lesson Planner', () => {
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
 
     const toggle = page.getByTestId('exit-ticket-stack-toggle');
-    await expect(toggle).toContainText('Add to stack');
+    await expect(toggle).toContainText('Add to lesson');
     const save = page.waitForResponse(
       (response) =>
         response.url().includes('/api/domain/lesson-planner/packet') &&
@@ -3027,7 +3027,7 @@ test.describe('Yawp! Lesson Planner', () => {
     );
     await toggle.click();
     await save;
-    await expect(toggle).toContainText('In the stack');
+    await expect(toggle).toContainText('In your lesson');
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
     await expect(page.getByText(/exit ticket/i).first()).toBeVisible();

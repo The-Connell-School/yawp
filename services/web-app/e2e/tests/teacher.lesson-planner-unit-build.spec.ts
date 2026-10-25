@@ -288,4 +288,178 @@ test.describe("Kevin's unit-build feedback (Oct 25)", () => {
       await setLessonPlannerReviewFlag('lesson_planner_intake_v2', false);
     }
   });
+
+  test('notes 8b and 8c: running over suggests a step for extra time, which leaves the timing and prints after the closing', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const { conversationId } = await seedUnitDay(e2eContext, [
+      LONG_DAY[0]!,
+      { kind: 'step', title: 'Mini-lecture: memetic desire', minutes: 25, content: 'Introduce Girard.' },
+      { kind: 'daily-pages', title: 'Daily Pages: Who do you imitate?', minutes: 15, content: 'Write about someone you copy.', audience: 'student' },
+      LONG_DAY[3]!,
+    ]);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+    await expect(page.getByTestId('time-over-lead')).toContainText(
+      "You've added some great pieces, but this runs 5 minutes over your 60."
+    );
+    const suggestion = page.getByTestId('time-fix-extend');
+    await expect(suggestion).toContainText('Who do you imitate?');
+    await expect(page.locator('[data-testid="run-card"][data-flagged="true"]')).toHaveCount(1);
+    await expect(page.getByTestId('before-class-item').filter({ hasText: 'Fits the period' })).toHaveAttribute('data-done', 'false');
+
+    await suggestion.getByRole('button', { name: 'Move to extensions' }).click();
+    const extensions = page.getByTestId('extensions');
+    await expect(extensions.getByTestId('extension-step')).toHaveCount(1);
+    await expect(extensions).toContainText('If you have extra time');
+    await expect(page.getByTestId('run-card')).toHaveCount(3);
+    await expect(page.getByTestId('time-fixes')).toHaveCount(0);
+    await expect(page.getByTestId('before-class-item').filter({ hasText: 'Fits the period' })).toHaveAttribute('data-done', 'true');
+
+    // In the run of show with teacher notes, after the timed steps.
+    await page.goto(`/show/${conversationId}?from=stack`);
+    await expect(page.getByTestId('show-extensions').getByTestId('show-extension')).toContainText('Who do you imitate?');
+    await expect(page.getByTestId('show-rail-step')).toHaveCount(3);
+
+    // And back into the lesson.
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    await page.getByTestId('extension-back').click();
+    await expect(page.getByTestId('run-card')).toHaveCount(4);
+    await expect(page.getByTestId('extensions')).toHaveCount(0);
+  });
+
+  test('note 9: the slides say when the lesson changed since they were made', async ({ page, signIn, e2eContext }) => {
+    const { conversationId } = await seedUnitDay(e2eContext, LONG_DAY);
+    const prisma = createE2EPrismaClient();
+    try {
+      await prisma.lessonPlanMaterial.create({
+        data: {
+          conversationId,
+          sourceMessageId: 'seed-deck',
+          sourceCreatedAt: new Date(AT.getTime() + 100),
+          blockKey: 'deck',
+          slot: 'deck',
+          kind: 'slides',
+          title: 'Day 1 deck',
+          audience: 'teacher',
+          content: '```yawp-slides\n' + JSON.stringify({ title: 'Day 1', slides: [{ layout: 'title', title: 'Day 1', speakerNotes: 'Go.' }] }) + '\n```',
+        },
+      });
+    } finally {
+      await prisma.$disconnect();
+    }
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    await expect(page.getByTestId('print-for-class')).toBeVisible();
+    await expect(page.getByTestId('deck-stale')).toHaveCount(0);
+
+    // The lesson changes after the deck: a step is retimed.
+    const db = createE2EPrismaClient();
+    try {
+      await db.lessonPlanMaterial.updateMany({ where: { conversationId, title: 'Read the excerpt' }, data: { minutes: 20 } });
+    } finally {
+      await db.$disconnect();
+    }
+    await page.reload();
+    const stale = page.getByTestId('deck-stale');
+    await expect(stale).toContainText('Your lesson changed since these slides were made.');
+    await expect(stale.getByTestId('deck-stale-rebuild')).toHaveText('Rebuild the slides');
+    await expect(page.getByTestId('before-class-item').filter({ hasText: 'Slides' })).toHaveAttribute('data-done', 'false');
+
+    await stale.getByTestId('deck-stale-keep').click();
+    await expect(page.getByTestId('deck-stale')).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByTestId('deck-stale')).toHaveCount(0);
+  });
+
+  test('notes 12a and 12b: Before class ticks itself off, and "Planned in" is the planning time', async ({ page, signIn, e2eContext }) => {
+    const { conversationId } = await seedUnitDay(e2eContext, LONG_DAY.filter((piece) => piece.title !== 'Read the excerpt'));
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    const list = page.getByTestId('before-class');
+    await expect(list).toContainText('Before class');
+    await expect(list.getByTestId('before-class-item')).toHaveCount(4);
+    await expect(list.getByTestId('before-class-item').filter({ hasText: 'Fits the period' })).toHaveAttribute('data-done', 'true');
+    await expect(list.getByTestId('before-class-item').filter({ hasText: 'Date picked' })).toHaveAttribute('data-done', 'false');
+
+    await page.getByTestId('set-lesson').click();
+    const set = page.getByTestId('lesson-set');
+    await expect(set).toContainText('Planned in');
+    await expect(set).not.toContainText('Built in');
+    await expect(set).toContainText('from first message to set');
+  });
+
+  test('notes 6a, 6b and 6c: made in Yawp! from the chat, the piece is in the lesson and the teacher is back in the chat', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    let conversationId: string;
+    try {
+      const conversation = await prisma.lessonPlanConversation.create({
+        data: {
+          membershipId: e2eContext.teacherMembershipId,
+          organizationId: e2eContext.organizationId,
+          title: 'Weathering and erosion',
+          periodMinutes: 50,
+          messages: {
+            create: [
+              { role: 'user', content: 'Plan a lesson on weathering and erosion.', createdAt: AT },
+              {
+                role: 'assistant',
+                createdAt: new Date(AT.getTime() + 1000),
+                content: [
+                  'End with a check.',
+                  '',
+                  '```yawp-exit-ticket',
+                  'id: ticket',
+                  'kind: check',
+                  'focus: explain-concept',
+                  'topic: the difference between weathering and erosion',
+                  'answer: objective',
+                  'mustMention: Whether the material moves.',
+                  '```',
+                ].join('\n'),
+              },
+            ],
+          },
+        },
+        select: { id: true },
+      });
+      conversationId = conversation.id;
+    } finally {
+      await prisma.$disconnect();
+    }
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+    // Teachers see the lesson, never "stack".
+    await expect(page.getByTestId('exit-ticket-stack-toggle')).toHaveText(/add to lesson/i);
+
+    const started = new Date();
+    await page.getByTestId('exit-ticket-create').click();
+    await expect(page).toHaveURL(new RegExp(`/app/assignment-types/${e2eContext.exitTicketAssignmentTypeId}`));
+    await page.getByLabel(/Grade 9th .* Period 1st/).check();
+    await page.getByRole('button', { name: 'Create Assignment' }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/app/lesson-planner\\?c=${conversationId}`));
+    await expect(page.getByTestId('made-notice')).toHaveText(/Created in Yawp! and added to your lesson\./);
+    await expect(page.getByTestId('exit-ticket-stack-toggle')).toHaveText(/in your lesson/i);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    await expect(page.getByTestId('stack-lands-here')).toHaveText('Everything you add from the planner lands here, in order.');
+    await expect(page.getByTestId('run-card')).toHaveCount(1);
+    await expect(page.getByTestId('run-card').getByTestId('in-yawp')).toHaveText('Assignment created');
+
+    const cleanup = createE2EPrismaClient();
+    try {
+      await cleanup.assignment.deleteMany({
+        where: { assignmentTypeId: e2eContext.exitTicketAssignmentTypeId, createdAt: { gte: started } },
+      });
+    } finally {
+      await cleanup.$disconnect();
+    }
+  });
 });

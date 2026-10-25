@@ -8,6 +8,7 @@ import { Link, useFetcher } from 'react-router';
 import { Check, MonitorPlay, NotebookText, Play } from 'lucide-react';
 import type { StackStep } from '~/domain/lesson-planner/stack-steps';
 import type { StackTiming } from '~/domain/lesson-planner/stack-timing';
+import { READY_LINE, type BeforeClassItem } from '~/domain/lesson-planner/before-class';
 import { YawpChecklist } from './yawp-checklist';
 import { HEADING_FONT } from './theme';
 
@@ -34,6 +35,39 @@ export function builtIn(createdAt: string, setAt: string): string {
   return hours < 48 ? `${hours} hr` : `${Math.round(hours / 24)} days`;
 }
 
+/** What's left before class, ticking itself off (Kevin's note 12a). */
+function BeforeClass({ list }: { list: { items: BeforeClassItem[]; ready: boolean } }) {
+  return (
+    <div data-testid="before-class" className="mt-4 rounded-xl border border-[var(--sv-line)] p-3">
+      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--sv-primary)]">
+        {list.ready ? 'Ready to teach' : 'Before class'}
+      </p>
+      {list.ready ? <p data-testid="before-class-ready" className="mt-1 text-sm">{READY_LINE}</p> : null}
+      <ul className="mt-2 space-y-1">
+        {list.items.map((item) => (
+          <li
+            key={item.key}
+            data-testid="before-class-item"
+            data-done={item.done ? 'true' : 'false'}
+            className={`flex items-center gap-2 text-sm ${item.done ? 'text-[var(--sv-muted)]' : ''}`}
+          >
+            <span
+              aria-hidden
+              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                item.done ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-[var(--sv-line)]'
+              }`}
+            >
+              {item.done ? <Check size={11} /> : null}
+            </span>
+            <span className={item.done ? 'line-through decoration-1' : ''}>{item.label}</span>
+            <span className="sr-only">{item.done ? '(done)' : '(to do)'}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function FinishLine({
   conversationId,
   timing,
@@ -51,6 +85,7 @@ export function FinishLine({
   onPaper = () => {},
   teach = null,
   saveToUnit = null,
+  beforeClass = null,
 }: {
   conversationId: string;
   timing: StackTiming;
@@ -74,6 +109,8 @@ export function FinishLine({
   teach?: { slideshowHref: string | null; notesHref: string; onBuildDeck: () => void } | null;
   /** The library redesign (Part 2, L3): a set lesson in no unit can be saved to one. */
   saveToUnit?: Array<{ id: string; title: string; course: string | null }> | null;
+  /** The Before class list; null with it off. */
+  beforeClass?: { items: BeforeClassItem[]; ready: boolean } | null;
 }) {
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState(suggestedTemplateName);
@@ -97,6 +134,7 @@ export function FinishLine({
           {timing.writingMinutes ? ` ${timing.writingPercent}% writing.` : ''}
         </p>
         <YawpChecklist missing={missing} onPaper={onPaper} />
+        {beforeClass ? <BeforeClass list={beforeClass} /> : null}
         <button
           type="button"
           data-testid="set-lesson"
@@ -116,14 +154,16 @@ export function FinishLine({
         <Check size={18} /> Lesson set for {shortDate(lessonDate)}
       </h2>
       <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-lg bg-[#F1EBE2] p-2">
-          <dt className="text-[10px] font-semibold uppercase tracking-wide text-[var(--sv-muted)]">Built in</dt>
+        {/* Not class time (Kevin's note 12b): how long the planning took. */}
+        <div className="rounded-lg bg-[#F1EBE2] p-2" title="From your first message to setting the lesson">
+          <dt className="text-[10px] font-semibold uppercase tracking-wide text-[var(--sv-muted)]">Planned in</dt>
           <dd data-testid="stat-built" className="text-lg font-bold" style={HEADING_FONT}>
             {builtIn(createdAt, setAt)}
           </dd>
+          <dd className="text-[10px] leading-tight text-[var(--sv-muted)]">from first message to set</dd>
         </div>
         <div className="rounded-lg bg-[#F1EBE2] p-2">
-          <dt className="text-[10px] font-semibold uppercase tracking-wide text-[var(--sv-muted)]">Planned</dt>
+          <dt className="text-[10px] font-semibold uppercase tracking-wide text-[var(--sv-muted)]">Class time</dt>
           <dd data-testid="stat-planned" className="text-lg font-bold" style={HEADING_FONT}>
             {timing.total} min
           </dd>
@@ -136,6 +176,7 @@ export function FinishLine({
         </div>
       </dl>
       <YawpChecklist missing={missing} onPaper={onPaper} />
+      {beforeClass ? <BeforeClass list={beforeClass} /> : null}
       {unitChoices ? <SaveToUnit conversationId={conversationId} units={unitChoices} /> : null}
       {teach ? (
         <div data-testid="teach-it" className="mt-4">

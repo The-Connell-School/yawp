@@ -174,6 +174,11 @@ export function buildKitPlan({ doc, entries }: { doc: LessonPlanDoc; entries: Le
     body.push(stepBlock(step, index + 1, deck));
   });
   if (!doc.closingStep) body.push({ type: 'callout', title: 'Suggested closing', paras: [doc.closing.replace(/^Suggested closing: not in your stack\.\s*/, '')] });
+  // After the closing, for a class that finishes early (Kevin's note 10c).
+  if (doc.extensions?.length) {
+    body.push({ type: 'h2', text: 'If you have more time' });
+    doc.extensions.forEach((step, index) => body.push(stepBlock(step, steps.length + index + 1, deck)));
+  }
 
   return {
     accent,

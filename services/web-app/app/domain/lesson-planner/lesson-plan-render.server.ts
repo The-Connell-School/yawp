@@ -111,6 +111,11 @@ export async function renderLessonPlanDocx(doc: LessonPlanDoc): Promise<Uint8Arr
   children.push(heading('Closing'));
   if (doc.closingStep) children.push(...stepParagraphs(doc.closingStep, false));
   else children.push(body(doc.closing));
+  // Set aside for a class that finishes early (Kevin's note 10c); no section when none.
+  if (doc.extensions.length) {
+    children.push(heading('If you have more time'));
+    for (const step of doc.extensions) children.push(...stepParagraphs(step, false));
+  }
   children.push(heading('Differentiation / accommodations'), hint(BLANK_HINTS.differentiation));
   children.push(heading('Assessment'), doc.assessment ? body(doc.assessment) : hint(BLANK_HINTS.assessment));
 
@@ -224,6 +229,10 @@ export async function renderLessonPlanPdf(doc: LessonPlanDoc): Promise<Uint8Arra
   section('Closing');
   if (doc.closingStep) pdfStep(doc.closingStep, stepHeading(doc.closingStep));
   else pdf.text(doc.closing, { width });
+  if (doc.extensions.length) {
+    section('If you have more time');
+    doc.extensions.forEach((step) => pdfStep(step, stepHeading(step)));
+  }
   section('Differentiation / accommodations');
   hint(BLANK_HINTS.differentiation);
   section('Assessment');

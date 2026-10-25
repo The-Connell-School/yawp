@@ -175,12 +175,12 @@ test.describe("Lesson Planner — Brian's sixth run", () => {
       );
 
       await deck.getByTestId('deck-toggle').click();
-      await expect(deck.getByTestId('deck-toggle')).toContainText('In the stack');
+      await expect(deck.getByTestId('deck-toggle')).toContainText('In your lesson');
       await expect(page.getByTestId('take-to-class')).toContainText('4 slides from your stack');
 
       // The chat shows it as one compact line.
       await page.goto(`/app/lesson-planner?c=${conversationId}`);
-      await expect(page.getByTestId('stack-turn').last()).toContainText('Deck built on the stack');
+      await expect(page.getByTestId('stack-turn').last()).toContainText('Deck built in your lesson');
     });
 
     test('"Build the deck" and "Rebuild" build it in the stack, and a new deck replaces the old', async ({
@@ -216,8 +216,8 @@ test.describe("Lesson Planner — Brian's sixth run", () => {
       await expect(second).toBeVisible();
       await expect(second.getByTestId('stack-deck-replaces')).toHaveText('Adding it replaces the deck in your lesson.');
       await second.getByTestId('deck-toggle').click();
-      await expect(second.getByTestId('deck-toggle')).toContainText('In the stack');
-      await expect(page.getByTestId('stack-deck').first().getByTestId('deck-toggle')).toContainText('Add to stack');
+      await expect(second.getByTestId('deck-toggle')).toContainText('In your lesson');
+      await expect(page.getByTestId('stack-deck').first().getByTestId('deck-toggle')).toContainText('Add to lesson');
       expect(asked).toEqual([
         'stack|Build the slide deck from my stack',
         'stack|Rebuild the slide deck from my stack, replacing the one in it',

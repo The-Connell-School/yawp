@@ -40,6 +40,16 @@ export function lessonBackHref(conversationId: string, back: string | null): str
   return lessonPlaceHref(conversationId, readLessonPlace(back, 'chat'));
 }
 
+/** Set on the way back once a piece is made, so the lesson can say so (Kevin's note 6b). */
+export const MADE_PARAM = 'made';
+export const MADE_NOTICE = 'Created in Yawp! and added to your lesson.';
+
+export function lessonMadeHref(conversationId: string, back: string | null): string {
+  const url = new URL(lessonBackHref(conversationId, back), 'http://local');
+  url.searchParams.set(MADE_PARAM, '1');
+  return `${url.pathname}?${url.searchParams}`;
+}
+
 /**
  * The Create link names the piece it came from, so the lesson can record the
  * assignment once it exists: "b:<messageId>:<blockKey>" from the chat (filed

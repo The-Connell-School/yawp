@@ -20,6 +20,7 @@ import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { requireMutableRequest } from '~/utils/auth.server';
 import { requireLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
+import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { PACKET_AUDIENCES } from '~/domain/lesson-planner/lesson-packet';
 import { fileableMaterial, stepColumns, writtenAt } from '~/domain/lesson-planner/fileable-material';
 import { fileReplyPieces } from '~/domain/lesson-planner/file-reply-pieces.server';
@@ -189,7 +190,7 @@ const POST = z
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const conversationId = url.searchParams.get('conversationId') ?? undefined;
-  // What is in the stack, as the chat cards' tokens, so every "In the stack"
+  // What is in the stack, as the chat cards' tokens, so every "In your lesson"
   // in the chat matches the stack however it changed (Brian's run 3, item 2).
   if (url.searchParams.get('view') === 'tokens') {
     const loaded = await loadLessonPacket({ request, conversationId, withStackDetails: false });
@@ -390,11 +391,17 @@ export async function action({ request }: ActionFunctionArgs) {
     if (!piece || !data.yawpHref) {
       return dataResponse({ error: 'A piece and a link are required.' }, { status: 400 });
     }
+    // Made from the chat, a piece joins the lesson as Add to lesson would file
+    // it (Kevin's note 6a), before it is marked so the filed piece is marked too.
+    const flags = await getLessonPlannerReviewFlags(access.membership.organization.id);
+    let addedToLesson = false;
+    if (piece.kind === 'block' && flags.teachNotes) addedToLesson = await fileMadePiece(conversation.id, piece);
     const recorded = await recordAssignmentLink({ conversationId: conversation.id, piece, yawpHref: data.yawpHref });
     if (!recorded) {
       return dataResponse({ error: 'That piece is not part of this lesson.' }, { status: 404 });
     }
-    return dataResponse({ created: true, materialId: recorded.materialId });
+    // The assignment page then takes the teacher back to the lesson (note 6b).
+    return dataResponse({ created: true, materialId: recorded.materialId, addedToLesson, backToLesson: flags.teachNotes });
   }
 
   if (data.intent === 'keep-all' || data.intent === 'split-kept') {
@@ -657,4 +664,23 @@ export async function action({ request }: ActionFunctionArgs) {
     messageId: data.messageId,
     audience: keeping ? (data.audience ?? 'teacher') : null,
   });
+}
+
+/** Files a chat piece in the lesson unless it is there already. */
+async function fileMadePiece(
+  conversationId: string,
+  piece: { messageId: string; blockKey: string }
+): Promise<boolean> {
+  const message = await prisma.lessonPlanMessage.findFirst({
+    where: { id: piece.messageId, conversationId, role: 'assistant' },
+    select: { id: true, createdAt: true, content: true },
+  });
+  if (!message) return false;
+  const filed = await prisma.lessonPlanMaterial.findFirst({
+    where: { conversationId, sourceMessageId: message.id, blockKey: piece.blockKey },
+    select: { id: true },
+  });
+  if (filed) return false;
+  const { added } = await fileReplyPieces({ conversationId, message, onlyKeys: [piece.blockKey] });
+  return added.length > 0;
 }

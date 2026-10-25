@@ -14,6 +14,8 @@ import { notYetInYawp, type StackStep } from '~/domain/lesson-planner/stack-step
 import type { SuggestedPiece } from '~/domain/lesson-planner/stack-suggestions';
 import { clampMinutes, stackTiming, timeFixes, type TimeFix } from '~/domain/lesson-planner/stack-timing';
 import { STEP_TYPE_LABELS } from '~/domain/lesson-planner/step-types';
+import { overLead, suggestedExtension } from '~/domain/lesson-planner/extensions';
+import { beforeClass } from '~/domain/lesson-planner/before-class';
 import { deckRequest } from '~/domain/lesson-planner/stack-command';
 import { BUILD_FROM_STACK_REQUESTS, lectureSlidesRequest } from '~/domain/lesson-planner/suggestions';
 import { announceStackChange } from '~/components/lesson-planner/stack-channel';
@@ -21,6 +23,7 @@ import { StackUndoToast, useStackRemoval } from '~/components/lesson-planner/use
 import { MaterialRichEditor } from '../material-rich-editor';
 import { AddPanel } from './add-panel';
 import { LessonRename } from '~/components/lesson-planner/lesson-rename';
+import { MadeNotice } from '~/components/lesson-planner/made-notice';
 import { useStackDeckBuild } from './stack-deck';
 import { FinishLine } from './finish-line';
 import { usePaperSteps } from './yawp-checklist';
@@ -98,6 +101,12 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
   }, [v3.steps, localOrder, localMinutes, hiddenIds]);
   const timing = useMemo(() => stackTiming(steps, data.periodMinutes), [steps, data.periodMinutes]);
   const fixes = useMemo(() => timeFixes(timing), [timing]);
+  // Kevin's Oct 25 notes (8b, 8c, 9, 12a), with the teach notes flag.
+  const kevinNotes = reviewFlags.teachNotes;
+  const extendStep = useMemo(
+    () => (kevinNotes ? suggestedExtension(timing.blocks, timing.over) : null),
+    [kevinNotes, timing]
+  );
   const [onPaper, markPaper] = usePaperSteps(conversationId);
   const missing = useMemo(() => notYetInYawp(steps, onPaper), [steps, onPaper]);
 
@@ -129,6 +138,9 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
         text: result.fix === 'trim' ? 'Trimmed to fit.' : 'Moved to tomorrow. It waits at the top of the next lesson.',
         undo: result.undo ?? null,
       });
+    }
+    if (result.extension) {
+      setChange({ text: 'Saved for extra time. It waits after the closing.', undo: null });
     }
     if (Array.isArray(result.keys) && result.keys.length && insertAt !== null) {
       // The piece opens and the next one lands after it.
@@ -172,6 +184,10 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
     if (from < 0 || to < 0 || to >= keys.length) return;
     [keys[from], keys[to]] = [keys[to]!, keys[from]!];
     reorder(keys);
+  }
+
+  function setExtension(stepId: string, extension: boolean) {
+    post(stackFetcher, STACK_API, { intent: 'set-extension', stepId, extension: String(extension) });
   }
 
   function applyFix(fix: TimeFix) {
@@ -313,6 +329,12 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
               {data.nameIsProvisional ? 'Untitled lesson' : packet.title}
             </h1>
           )}
+          {reviewFlags.teachNotes ? (
+            // The stack is the lesson, by that name (Kevin's notes 6c, 10a).
+            <p data-testid="stack-lands-here" className="mt-1 text-sm text-[var(--sv-muted)]">
+              Everything you add from the planner lands here, in order.
+            </p>
+          ) : null}
           <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
             {v3.className ? (
               <span data-testid="stack-chip-class" className="rounded-full bg-[#EFE8DD] px-3 py-1">
@@ -350,6 +372,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
             </label>
           </div>
         </header>
+        <MadeNotice className="mb-5" />
 
         {!introClosed && v3.firstOpen ? (
           <div data-testid="stack-intro" className="mb-5 flex items-start gap-3 rounded-xl border border-[var(--sv-line)] bg-[var(--sv-card)] px-4 py-3 text-sm">
@@ -382,6 +405,15 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
               fixes={fixes}
               busy={busy}
               onApplyFix={applyFix}
+              extend={
+                kevinNotes
+                  ? {
+                      lead: overLead(timing.over, timing.period),
+                      step: extendStep ? { id: extendStep.id, title: extendStep.title } : null,
+                      onMove: (id) => setExtension(id, true),
+                    }
+                  : undefined
+              }
               onOpenStep={(id) => {
                 setOpenId(id);
                 document.querySelector(`[data-step-id="${id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -412,6 +444,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                     buildDeck(lectureSlidesRequest(step.title, { hasDeck: Boolean(v3.deck) }), `Slides for “${step.title}”`)
                   }
                   missingIds={new Set(missing.map((step) => step.id))}
+                  flaggedId={extendStep?.id ?? null}
                   steps={steps}
                   blocks={timing.blocks}
                   openId={openId}
@@ -437,6 +470,38 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                 </div>
               )}
             </section>
+            {kevinNotes && v3.extensions.length ? (
+              <section data-testid="extensions">
+                <h2 className="text-xl font-bold" style={HEADING_FONT}>
+                  If you have extra time
+                </h2>
+                <p className="mb-2 text-xs text-[var(--sv-muted)]">After the closing. Not counted in the period.</p>
+                <ul className="space-y-2">
+                  {v3.extensions.map((step) => (
+                    <li
+                      key={step.id}
+                      data-testid="extension-step"
+                      className="flex items-center gap-3 rounded-xl border border-dashed border-[var(--sv-line)] bg-[var(--sv-card)] px-4 py-3 text-sm"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold">{step.title}</span>
+                        {step.excerpt ? <span className="block truncate text-xs text-[var(--sv-muted)]">{step.excerpt}</span> : null}
+                      </span>
+                      {step.minutes ? <span className="shrink-0 text-xs tabular-nums text-[var(--sv-muted)]">{step.minutes} min</span> : null}
+                      <button
+                        type="button"
+                        data-testid="extension-back"
+                        disabled={busy}
+                        onClick={() => setExtension(step.id, false)}
+                        className="shrink-0 rounded-full border border-[var(--sv-line)] px-3 py-1 text-xs font-semibold transition hover:bg-[#F1EBE2] disabled:opacity-50"
+                      >
+                        Back into the lesson
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
           </div>
 
           <div className="space-y-5">
@@ -456,6 +521,17 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
               suggestedTemplateName={templateName}
               onSaveTemplate={(name) => post(setFetcher, STACK_API, { intent: 'save-template', name })}
               saveToUnit={v3.saveToUnit}
+              beforeClass={
+                kevinNotes
+                  ? beforeClass({
+                      over: timing.over,
+                      period: timing.period,
+                      deck: { built: Boolean(v3.deck ?? v3.conversationDeck), stale: v3.deckStale },
+                      missingWriting: missing.length,
+                      lessonDate: v3.lessonDate,
+                    })
+                  : null
+              }
               teach={
                 reviewFlags.teachNotes
                   ? {
@@ -466,6 +542,34 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                   : null
               }
             />
+            {kevinNotes && v3.deckStale ? (
+              <div
+                data-testid="deck-stale"
+                className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+              >
+                <p>Your lesson changed since these slides were made.</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    data-testid="deck-stale-rebuild"
+                    disabled={busy}
+                    onClick={() => buildDeck(BUILD_FROM_STACK_REQUESTS['rebuild-deck'], 'Rebuild the slide deck')}
+                    className="rounded-full bg-[var(--sv-ink)] px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    Rebuild the slides
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="deck-stale-keep"
+                    disabled={busy}
+                    onClick={() => post(stackFetcher, STACK_API, { intent: 'keep-deck' })}
+                    className="rounded-full border border-amber-300 px-3 py-1 text-xs font-semibold disabled:opacity-50"
+                  >
+                    Keep these slides
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {reviewFlags.teachNotes ? (
               <>
                 <PrintForClass

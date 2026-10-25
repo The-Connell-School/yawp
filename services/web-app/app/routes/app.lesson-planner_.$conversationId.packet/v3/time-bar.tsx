@@ -17,12 +17,18 @@ export function TimeBar({
   onOpenStep,
   onApplyFix,
   busy,
+  extend,
 }: {
   timing: StackTiming;
   fixes: TimeFix[];
   onOpenStep: (id: string) => void;
   onApplyFix: (fix: TimeFix) => void;
   busy: boolean;
+  /**
+   * Over time, with extensions on (Kevin's note 8b): the step to set aside
+   * for extra time, and the calmer lead line. Undefined with them off.
+   */
+  extend?: { lead: string; step: { id: string; title: string } | null; onMove: (id: string) => void };
 }) {
   const span = Math.max(timing.period ?? 0, timing.total, 1);
   const status =
@@ -108,12 +114,31 @@ export function TimeBar({
         </div>
       </div>
 
-      {fixes.length ? (
+      {timing.over > 0 && (fixes.length || extend?.step) ? (
         <div data-testid="time-fixes" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-sm font-semibold text-amber-950">
-            You're {timing.over} min over. {fixes.length === 1 ? 'One way' : 'Two ways'} to get back on time:
-          </p>
+          {extend ? (
+            <p data-testid="time-over-lead" className="text-sm font-semibold text-amber-950">
+              {extend.lead} Ways to get back on time:
+            </p>
+          ) : (
+            <p className="text-sm font-semibold text-amber-950">
+              You're {timing.over} min over. {fixes.length === 1 ? 'One way' : 'Two ways'} to get back on time:
+            </p>
+          )}
           <ul className="mt-2 flex flex-col gap-2">
+            {extend?.step ? (
+              <li data-testid="time-fix-extend" className="flex items-center justify-between gap-3 text-sm">
+                <span>Save “{extend.step.title}” for extra time, after the closing</span>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => extend.onMove(extend.step!.id)}
+                  className="shrink-0 rounded-full bg-[var(--sv-ink)] px-3 py-1 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                >
+                  Move to extensions
+                </button>
+              </li>
+            ) : null}
             {fixes.map((fix) => (
               <li key={fix.id} data-testid="time-fix" className="flex items-center justify-between gap-3 text-sm">
                 <span>{fix.text}</span>
