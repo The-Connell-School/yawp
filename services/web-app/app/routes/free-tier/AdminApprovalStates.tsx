@@ -8,6 +8,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { Link } from 'react-router';
+import { buildAdminForwardPageSearch } from '~/domain/free-tier/admin-approve-forward-link';
 import {
   alreadyApprovedBody,
   approveCheckboxError,
@@ -311,17 +312,19 @@ export function AdminForwardBackLink({
 }
 
 export function AdminForwardLink({
-  token,
+  forwardToken,
+  approveToken,
   className,
 }: {
-  token: string;
+  forwardToken: string;
+  approveToken: string;
   className?: string;
 }) {
   return (
     <p className={`text-center text-sm text-muted-foreground ${className ?? ''}`}>
       Not the right person?{' '}
       <Link
-        to={`/free/admin/not-right-person?t=${encodeURIComponent(token)}&approveT=${encodeURIComponent(token)}`}
+        to={`/free/admin/not-right-person${buildAdminForwardPageSearch(forwardToken, approveToken)}`}
         className="font-medium text-primary underline underline-offset-4"
       >
         Forward this request

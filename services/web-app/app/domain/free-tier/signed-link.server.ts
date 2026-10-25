@@ -49,6 +49,16 @@ export function applicationIdFromSignedToken(token: string): string | null {
   return decoded?.payload.applicationId ?? null;
 }
 
+/** Read signed JWT payload from a full admin link token (signed segment + opaque). */
+export function readSignedLinkPayloadFromAdminToken(
+  token: string
+): SignedLinkPayload | null {
+  const segments = token.split('.');
+  if (segments.length !== 3) return null;
+  const decoded = decodeToken(`${segments[0]}.${segments[1]}`);
+  return decoded?.payload ?? null;
+}
+
 function decodeToken(token: string): { payload: SignedLinkPayload; secret: string } | null {
   const parts = token.split('.');
   if (parts.length !== 2) return null;
