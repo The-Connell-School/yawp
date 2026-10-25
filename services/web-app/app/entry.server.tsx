@@ -13,6 +13,7 @@ import type { RenderToPipeableStreamOptions } from 'react-dom/server';
 import { renderToPipeableStream } from 'react-dom/server';
 import { getUserId } from './utils/auth.server';
 import { posthog } from './services/posthog.server';
+import { capturePosthogServerException } from './services/posthog-server-exception.server';
 import {
   buildSafeErrorForLog,
   buildSafeRouteParamsForLog,
@@ -117,7 +118,11 @@ export const handleError: HandleErrorFunction = async (error, args) => {
 
     // Log to PostHog in production
     if (posthog) {
-      posthog.captureException(error, userId ?? 'anonymous');
+      capturePosthogServerException(
+        posthog,
+        error,
+        userId ?? 'anonymous',
+      );
     } else {
       throw error;
     }

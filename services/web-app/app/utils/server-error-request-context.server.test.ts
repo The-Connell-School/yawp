@@ -72,6 +72,19 @@ describe('buildServerErrorRequestContext', () => {
     );
   });
 
+  test('buildSafeStackForLog preserves scoped node_modules paths', () => {
+    const error = new Error('fail');
+    error.stack = [
+      'Error: fail',
+      '    at fn (/workspace/node_modules/@react-router/dev/dist/vite.js:123:4)',
+      '    at Object.<anonymous> (/workspace/node_modules/@prisma/client/runtime/library.js:112:32)',
+    ].join('\n');
+    const stack = buildSafeStackForLog(error);
+    expect(stack).toContain('node_modules/@react-router/dev/dist/vite.js:123:4');
+    expect(stack).toContain('node_modules/@prisma/client/runtime/library.js:112:32');
+    expect(stack).not.toContain('***@');
+  });
+
   test('buildSafeErrorForLog for Prisma validation errors omits message and sensitive meta text', () => {
     const error = Object.assign(
       new Error(
