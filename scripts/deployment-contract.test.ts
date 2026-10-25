@@ -1915,6 +1915,15 @@ describe('demo environment deployment contract', () => {
     );
     expect(workflow).toContain('teacher name=Thomas Patton');
     expect(workflow).toContain('org=local-dev-org');
+    const syncStep = workflow.slice(
+      workflow.indexOf(
+        '- name: Sync source and ensure intern QA teachers on demo'
+      ),
+      workflow.indexOf('- name: Summary')
+    );
+    expect(syncStep).toMatch(/\brsync\b[\s\S]*-e "ssh -i ~\/\.ssh\/demo_key"/);
+    expect(syncStep).toMatch(/\bssh -i ~\/\.ssh\/demo_key\b/);
+    expect(syncStep).toMatch(/\bscp -i ~\/\.ssh\/demo_key\b/);
     expect(workflow).not.toContain('reset_data');
     expect(workflow).not.toContain('RESET yawp_demo');
     expect(workflow).not.toContain('seed-local-dev');

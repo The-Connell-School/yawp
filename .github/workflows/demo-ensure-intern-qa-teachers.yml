@@ -60,6 +60,7 @@ jobs:
           rsync -az --delete \
             --exclude node_modules \
             --exclude .git \
+            -e "ssh -i ~/.ssh/demo_key" \
             demo-source/ "$ssh_target:$remote_source/"
           scp -i ~/.ssh/demo_key demo-source/scripts/preview/ensure-intern-qa-teachers-on-demo-host.sh \
             "$ssh_target:${remote_script}.next"
