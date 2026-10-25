@@ -8,4 +8,4 @@
 - `🧪 E2E Tests (Playwright)` is the aggregate check. It fails if any E2E job failed.
 - `📊 Merge E2E smoke reports` uploads one HTML report (`playwright-report-<run id>`).
 
-Reproduce one shard locally: `bun run test:e2e:smoke --shard=2/6` in `services/web-app`.
+Reproduce one shard locally: `bun run test:e2e:smoke -- --shard=2` in `services/web-app` (explicit file assignment in `e2e/smoke-specs.ts`, not Playwright test-level sharding).
