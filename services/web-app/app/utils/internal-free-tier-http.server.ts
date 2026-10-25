@@ -7,6 +7,7 @@ import {
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import {
   authenticateInternalManagementRequest,
   type InternalApiAuthContext,
@@ -661,7 +662,10 @@ async function runHookSafely(name: string, fn: () => Promise<void> | void) {
   try {
     await fn();
   } catch (error) {
-    console.error('free_tier_approval_hook_failed', { hook: name, error: error instanceof Error ? error.message : String(error) });
+    console.error('free_tier_approval_hook_failed', {
+      hook: name,
+      error: buildSafeErrorForLog(error),
+    });
   }
 }
 

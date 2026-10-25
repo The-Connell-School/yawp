@@ -1,4 +1,4 @@
-import { test, expect } from 'bun:test';
+import { test, expect, mock } from 'bun:test';
 import { createBlackboardLtiPlatform } from '../../../../scripts/blackboard-lti-mock/server.mjs';
 import { postScoreToAgs, getToolJwks } from './blackboard-ags.server';
 
@@ -7,6 +7,35 @@ async function getJson(origin: string, path: string) {
   const json = await res.json();
   return json;
 }
+
+test('AGS token errors omit upstream response bodies', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = mock(async () => {
+    return new Response('{"access_token":"leaked-secret-token","error":"bad"}', {
+      status: 401,
+      headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+  try {
+    let message = 'no error thrown';
+    try {
+      await postScoreToAgs({
+        lineItemUrl: 'https://blackboard.example/scores',
+        userId: 'bb-user',
+        scoreGiven: 1,
+        scoreMaximum: 100,
+        tokenEndpoint: 'https://blackboard.example/token',
+        clientId: 'client-id',
+      });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toMatch(/AGS token endpoint error HTTP 401/);
+    expect(message).not.toContain('leaked-secret-token');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test('posts a score to Blackboard mock AGS using client assertion', async () => {
   process.env.BLACKBOARD_LTI_MOCK_ENABLED = 'true';

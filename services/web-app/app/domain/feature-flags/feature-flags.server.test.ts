@@ -217,7 +217,31 @@ describe('feature flags (server)', () => {
       const serialized = JSON.stringify(errorLog.mock.calls);
       expect(serialized).toContain('feature_flag_read_failed');
       expect(serialized).toContain('flag read timeout');
-      expect(serialized).not.toMatch(/"stack"/);
+      expect(serialized).toContain('"error":');
+      expect(serialized).not.toContain('postgresql://');
+    } finally {
+      console.error = originalError;
+    }
+  });
+
+  test('feature_flag_read_failed omits prisma connection strings from logs', async () => {
+    const errorLog = mock((..._args: unknown[]) => {});
+    const originalError = console.error;
+    console.error = errorLog as typeof console.error;
+    try {
+      prisma.setting.findUnique.mockRejectedValue(
+        Object.assign(
+          new Error(
+            "Can't reach database server at `postgresql://yawp:SECRET@127.0.0.1:5432/yawp`",
+          ),
+          { name: 'PrismaClientInitializationError' },
+        ),
+      );
+      expect(await isFeatureFlagEnabled(LESSON_PLANNER_FLAG, 'org-1')).toBe(false);
+      const serialized = JSON.stringify(errorLog.mock.calls);
+      expect(serialized).toContain('feature_flag_read_failed');
+      expect(serialized).not.toContain('SECRET');
+      expect(serialized).not.toContain('postgresql://');
     } finally {
       console.error = originalError;
     }

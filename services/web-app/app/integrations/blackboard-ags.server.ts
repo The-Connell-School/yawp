@@ -21,6 +21,12 @@ export function getLatestLtiLaunchClaims() {
   return latestLaunchClaims;
 }
 
+function agsUpstreamHttpError(label: string, status: number, bodyText: string) {
+  const bodyNote =
+    bodyText.length > 0 ? ` (${bodyText.length} byte response body omitted)` : '';
+  return new Error(`${label} HTTP ${status}${bodyNote}`);
+}
+
 type PostScoreInput = {
   lineItemUrl: string;
   userId: string;
@@ -182,7 +188,7 @@ async function mintAgsBearerToken(input: {
   });
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`AGS token endpoint error ${response.status}: ${text}`);
+    throw agsUpstreamHttpError('AGS token endpoint error', response.status, text);
   }
   const json = (await response.json()) as { access_token: string; expires_in?: number; scope?: string };
   if (!json.access_token) throw new Error('AGS token endpoint did not return access_token');
@@ -227,7 +233,7 @@ export async function postScoreToAgs({
   });
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`AGS score post failed ${response.status}: ${text}`);
+    throw agsUpstreamHttpError('AGS score post failed', response.status, text);
   }
 }
 
