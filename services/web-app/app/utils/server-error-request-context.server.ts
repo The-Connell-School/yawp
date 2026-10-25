@@ -30,7 +30,8 @@ function prismaMetaForLog(meta: unknown) {
 
 function redactFreeformMessage(message: string): string {
   let text = message.replace(TOKEN_LIKE, '[redacted-token]');
-  text = text.replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g, (email) =>
+  // Scoped npm paths (`node_modules/@scope/pkg/file.js:line:col`) must not match as emails.
+  text = text.replace(/[^\s@/]+@[^\s@/]+\.[^\s@/]+/g, (email) =>
     redactEmailForLog(email),
   );
   text = text.replace(/https?:\/\/[^\s)]+/gi, (url) => {
