@@ -213,13 +213,16 @@ export function PrintForClass({
             </ul>
             <p className="mt-2 text-xs text-[var(--sv-muted)]">{ONE_PACKET_CAPTION}</p>
             {chosen.length ? (
-              <DownloadLink
-                href={packetHref(base, chosen, perPage)}
-                testId="packet-print"
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--sv-primary)] py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-              >
-                Print the packet (PDF)
-              </DownloadLink>
+              // Full width: the link sits in DownloadLink's own inline wrapper.
+              <div className="mt-3 [&>span]:flex">
+                <DownloadLink
+                  href={packetHref(base, chosen, perPage)}
+                  testId="packet-print"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--sv-primary)] py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+                >
+                  Print the packet (PDF)
+                </DownloadLink>
+              </div>
             ) : (
               <p data-testid="packet-empty" className="mt-3 text-xs text-[var(--sv-muted)]">
                 Check at least one part to print.

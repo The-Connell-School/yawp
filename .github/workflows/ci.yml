@@ -1078,6 +1078,7 @@ jobs:
             app/domain/lesson-planner/deck-freshness.test.ts \
             app/domain/lesson-planner/deck-agenda.test.ts \
             app/domain/lesson-planner/stack-reply.test.ts \
+            app/domain/lesson-planner/lesson-location.test.ts \
             app/domain/assignments/saved-assignments.test.ts \
             app/domain/assignment-types/exit-ticket.test.ts \
             app/domain/assignment-types/exit-ticket-reflection-prompts.test.ts \
