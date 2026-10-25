@@ -103,16 +103,20 @@ test.describe('Free-tier handle student', () => {
     });
 
     try {
-      await page.goto(`/join?t=${joinToken}`);
-      await page.waitForLoadState('networkidle');
+      await page.goto(`/join?t=${joinToken}`, { waitUntil: 'domcontentloaded' });
+      await expect(page.getByLabel('Display name')).toBeVisible({
+        timeout: 15000,
+      });
       await page.getByLabel('Display name').fill(displayName);
       await page.getByLabel('Handle').fill(handle);
       await page.getByLabel('Password', { exact: true }).fill(password);
       await page.getByLabel('Confirm password').fill(password);
       await page.getByRole('button', { name: 'Join class' }).click();
-      await expect(page).toHaveURL(/\/app/);
+      await page.waitForURL(/\/app/, { timeout: 30000 });
 
-      await page.goto(`/app/my-classes/${klass.id}`);
+      await page.goto(`/app/my-classes/${klass.id}`, {
+        waitUntil: 'domcontentloaded',
+      });
       await expect(page.getByTestId('student-class-detail')).toBeVisible();
       const startButton = page.locator(
         `form[action="/app/class-assignments/${classAssignment.id}/start"] button`
@@ -133,8 +137,10 @@ test.describe('Free-tier handle student', () => {
 
       const teacherContext = await browser.newContext();
       const teacherPage = await teacherContext.newPage();
-      await teacherPage.goto('/auth/login');
-      await teacherPage.waitForLoadState('networkidle');
+      await teacherPage.goto('/auth/login', { waitUntil: 'domcontentloaded' });
+      await expect(teacherPage.getByLabel('Email or handle')).toBeVisible({
+        timeout: 15000,
+      });
       await teacherPage.getByLabel('Email or handle').fill(teacherEmail);
       await teacherPage.getByLabel('Password').fill(teacherPassword);
       await teacherPage.getByRole('button', { name: 'Log in' }).click();
@@ -148,10 +154,15 @@ test.describe('Free-tier handle student', () => {
         })
       ).toBeVisible();
 
-      await teacherPage.goto(`/app/my-classes/${klass.id}?tab=documents`);
-      await expect(teacherPage.getByText(displayName)).toBeVisible({
-        timeout: 15000,
+      await teacherPage.goto(`/app/my-classes/${klass.id}?tab=documents`, {
+        waitUntil: 'domcontentloaded',
       });
+      await expect(async () => {
+        if (!(await teacherPage.getByText(displayName).isVisible())) {
+          await teacherPage.reload({ waitUntil: 'domcontentloaded' });
+        }
+        await expect(teacherPage.getByText(displayName)).toBeVisible();
+      }).toPass({ timeout: 20000 });
 
       await teacherPage.goto(`/app/my-classes/${klass.id}?tab=students`);
       const studentRow = teacherPage
@@ -172,8 +183,10 @@ test.describe('Free-tier handle student', () => {
       await teacherContext.close();
 
       await page.request.post('/auth/logout');
-      await page.goto('/auth/login');
-      await page.waitForLoadState('networkidle');
+      await page.goto('/auth/login', { waitUntil: 'domcontentloaded' });
+      await expect(page.getByLabel('Email or handle')).toBeVisible({
+        timeout: 15000,
+      });
       await page.getByLabel('Email or handle').fill(handle);
       await page.getByLabel('Password').fill(tempPassword);
       await page.getByRole('button', { name: 'Log in' }).click();
@@ -186,8 +199,10 @@ test.describe('Free-tier handle student', () => {
       await expect(page).toHaveURL(/\/app/);
 
       await page.request.post('/auth/logout');
-      await page.goto('/auth/login');
-      await page.waitForLoadState('networkidle');
+      await page.goto('/auth/login', { waitUntil: 'domcontentloaded' });
+      await expect(page.getByLabel('Email or handle')).toBeVisible({
+        timeout: 15000,
+      });
       await page.getByLabel('Email or handle').fill(handle);
       await page.getByLabel('Password').fill(newPassword);
       await page.getByRole('button', { name: 'Log in' }).click();

@@ -25,6 +25,7 @@ import {
   resolveApHistorySectionTutorInstructions,
   resolveApHistoryStepTutorInstructions,
 } from '../../../../../packages/prisma/scripts/ap-history-module-data';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import {
   readTutorInstructionVariant,
   resolveTutorInstructions,
@@ -461,7 +462,9 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ cms: updatedCms });
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.error(error);
+    console.error('tutor_response_action_failed', {
+      error: buildSafeErrorForLog(error),
+    });
     return dataResponse({ error: 'An error occurred.' }, { status: 500 });
   }
 }

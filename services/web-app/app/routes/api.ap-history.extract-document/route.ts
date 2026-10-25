@@ -9,6 +9,7 @@ import { createDeidentifiedLlmLog } from '~/utils/llm-log-deidentify.server';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
 import { enforcePdfExtractorLimits, rateLimitedJson, withSingleFlight } from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
+import { safeErrorTextForLog } from '~/utils/server-error-request-context.server';
 
 const MAX_PDF_BYTES = RATE_LIMITS.pdfExtract.maxBytes;
 
@@ -223,7 +224,7 @@ export async function action({ request }: ActionFunctionArgs) {
       provider: 'anthropic',
       systemPrompt: system,
       messages: metadata,
-      error: error instanceof Error ? error.message : String(error),
+      error: safeErrorTextForLog(error),
       durationMs: Date.now() - startedAt,
       metadata,
       deidentificationPhrases: [file.name],

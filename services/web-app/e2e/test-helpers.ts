@@ -202,7 +202,21 @@ export class TestHelpers {
 
   /** Wait for the editor to be loaded and ready */
   async waitForEditorReady() {
-    await this.page.waitForSelector(EDITOR_SELECTOR, { state: 'visible', timeout: 15000 });
+    await this.page.waitForSelector(EDITOR_SELECTOR, {
+      state: 'visible',
+      timeout: 15000,
+    });
+    await this.page.waitForFunction(
+      (sel) => {
+        const el = document.querySelector(sel) as HTMLElement & {
+          pmViewDesc?: unknown;
+          dataset?: DOMStringMap;
+        };
+        return el?.pmViewDesc && el?.dataset?.syncReady === 'true';
+      },
+      EDITOR_SELECTOR,
+      { timeout: 15000 },
+    );
   }
 
   /** Get the editor locator */
