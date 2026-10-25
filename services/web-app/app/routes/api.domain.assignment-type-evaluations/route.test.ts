@@ -1035,8 +1035,8 @@ describe('assignment-type evaluations action', () => {
     expect((response as { init: { status: number } }).init.status).toBe(500);
     expect(serialized).not.toContain(sensitive);
     expect(serialized).not.toContain('SECRET-TOKEN');
-    expect((response as { data: { message: string } }).data.message).toBe(
-      'The evaluation suite could not run.',
-    );
+    expect(
+      (response as unknown as { data: { message: string } }).data.message,
+    ).toBe('The evaluation suite could not run.');
   });
 });
