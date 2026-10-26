@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   buildSafeErrorForLog,
+  safeDomainErrorTextForClientResponse,
   buildSafeRouteParamsForLog,
   buildSafeStackForLog,
   buildServerErrorRequestContext,
@@ -131,6 +132,32 @@ describe('buildServerErrorRequestContext', () => {
     const serialized = JSON.stringify(buildSafeErrorForLog(error));
     expect(serialized).not.toContain('SECRET-PASS');
     expect(serialized).not.toContain('postgresql://');
+  });
+
+  test('safeDomainErrorTextForClientResponse redacts sensitive substrings but keeps validation copy', () => {
+    expect(
+      safeDomainErrorTextForClientResponse(
+        new Error('That prompt is too long to save.'),
+        'fallback',
+      ),
+    ).toBe('That prompt is too long to save.');
+    const redacted = safeDomainErrorTextForClientResponse(
+      new Error(
+        'Invalid `prisma.user.findMany()` token=SECRET-TOKEN teacher@school.edu',
+      ),
+      'Could not complete that request.',
+    );
+    expect(redacted).not.toContain('SECRET-TOKEN');
+    expect(redacted).not.toContain('teacher@school.edu');
+  });
+
+  test('safeDomainErrorTextForClientResponse uses fallback when message is empty', () => {
+    expect(
+      safeDomainErrorTextForClientResponse(
+        new Error('   '),
+        'Could not complete that request.',
+      ),
+    ).toBe('Could not complete that request.');
   });
 
   test('safeErrorTextForClientResponse never forwards raw exception text', () => {

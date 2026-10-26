@@ -47,6 +47,32 @@ describe('api.collab.$id.submit', () => {
     });
   });
 
+  test('domain submit failures redact sensitive substrings in messages', async () => {
+    const { GroupSubmitError } = await import(
+      '~/domain/collaboration/submit.server'
+    );
+    submitGroupDraft.mockRejectedValue(
+      new GroupSubmitError(
+        'Submit blocked token=SECRET-TOKEN teacher@school.edu',
+      ),
+    );
+
+    const response = (await action({
+      request: new Request('https://yawp.school/api/collab/doc-1/submit', {
+        method: 'POST',
+      }),
+      params: { id: 'doc-1' },
+    } as any)) as {
+      init?: { status: number };
+      data?: { message: string; success: boolean };
+    };
+
+    const serialized = JSON.stringify(response.data);
+    expect(response.init?.status).toBe(400);
+    expect(serialized).not.toContain('SECRET-TOKEN');
+    expect(response.data?.message).toContain('Submit blocked');
+  });
+
   test('unexpected failures return stable copy without raw exception text', async () => {
     const sensitive =
       'Invalid `prisma.user.findMany()` token=SECRET-TOKEN teacher@school.edu';

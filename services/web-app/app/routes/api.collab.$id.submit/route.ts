@@ -11,7 +11,10 @@ import {
   documentAuthorWhere,
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
-import { safeErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
+import {
+  safeDomainErrorTextForClientResponse,
+  safeErrorTextForClientResponse,
+} from '~/utils/server-error-request-context.server';
 
 /**
  * Submitting a shared draft. Any member of the group may press it.
@@ -89,7 +92,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
   } catch (error) {
     if (error instanceof GroupSubmitError) {
       return dataResponse(
-        { success: false, message: error.message },
+        {
+          success: false,
+          message: safeDomainErrorTextForClientResponse(
+            error,
+            'Could not submit this draft. Please try again.',
+          ),
+        },
         { status: 400 }
       );
     }

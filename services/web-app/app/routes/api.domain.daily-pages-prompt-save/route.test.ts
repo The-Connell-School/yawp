@@ -190,11 +190,31 @@ describe('api.domain.daily-pages-prompt-save', () => {
       'That prompt is too long to save.'
     );
 
-    saveDailyPagesPrompt.mockRejectedValueOnce(new Error('boom'));
+    const sensitive =
+      'Invalid `prisma.user.findMany()` token=SECRET-TOKEN teacher@school.edu';
+    saveDailyPagesPrompt.mockRejectedValueOnce(new Error(sensitive));
     const serverError = await action({
       request: request({ assignmentTypeId: 'at-1', prompt: PROMPT }),
     } as never);
+    const serverBody = await readBody(serverError);
     expect((serverError as any).init?.status).toBe(500);
-    expect((await readBody(serverError)).success).toBe(false);
+    expect(serverBody.success).toBe(false);
+    expect(JSON.stringify(serverBody)).not.toContain('SECRET-TOKEN');
+    expect(serverBody.message).toBe(
+      "That prompt couldn't be saved. Please try again.",
+    );
+
+    saveDailyPagesPrompt.mockRejectedValueOnce(
+      new SavedPromptError(
+        'That prompt is too long token=SECRET-TOKEN teacher@school.edu',
+      ),
+    );
+    const validationError = await action({
+      request: request({ assignmentTypeId: 'at-1', prompt: PROMPT }),
+    } as never);
+    const validationBody = await readBody(validationError);
+    expect((validationError as any).init?.status).toBe(400);
+    expect(JSON.stringify(validationBody)).not.toContain('SECRET-TOKEN');
+    expect(validationBody.message).toContain('That prompt is too long');
   });
 });
