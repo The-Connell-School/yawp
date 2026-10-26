@@ -682,6 +682,15 @@ describe('worktree local setup contract', () => {
     );
   });
 
+  test('demo feedback browser CI cleanup stays cwd-safe after cd into web-app', () => {
+    const workflow = readRepoFile('.github/workflows/ci.yml');
+
+    expect(workflow).toContain('REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"');
+    expect(workflow).toContain(
+      '"$REPO_ROOT/scripts/ci/demo-feedback-worktree-cleanup.sh"'
+    );
+  });
+
   test('worktree setup backfills class art keys before local seed verification', () => {
     const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
     const migrateIndex = setupScript.indexOf('prisma migrate deploy');
