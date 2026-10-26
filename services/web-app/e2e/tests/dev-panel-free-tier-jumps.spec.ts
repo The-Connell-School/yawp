@@ -2,7 +2,11 @@ import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
-import { openDevToolsPanel } from '../helpers/dev-panel-feedback';
+import {
+  devPanelFreeTierGroupTrigger,
+  devPanelFreeTierStateOption,
+  openDevToolsPanel,
+} from '../helpers/dev-panel-feedback';
 import {
   listCatalogFreeTierJumpExpectations,
   type FreeTierJumpExpectation,
@@ -53,15 +57,15 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
 
   const catalogEntry = findFreeTierState(entry.stateId);
   if (catalogEntry) {
-    const groupTrigger = stateSheet
-      .getByRole('button')
-      .filter({ hasText: catalogEntry.group.title })
-      .first();
+    const groupTrigger = devPanelFreeTierGroupTrigger(
+      stateSheet,
+      catalogEntry.group.title
+    );
     if ((await groupTrigger.getAttribute('aria-expanded')) !== 'true') {
       await groupTrigger.click();
     }
   }
-  await stateSheet.getByRole('button', { name: entry.label, exact: true }).click();
+  await devPanelFreeTierStateOption(stateSheet, entry.label).click();
 
   const jumpResponse = page.waitForResponse(
     (response) =>

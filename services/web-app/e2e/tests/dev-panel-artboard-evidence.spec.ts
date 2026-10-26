@@ -4,6 +4,8 @@ import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
 import {
   clearDevPanelStorageWhenStable,
+  devPanelFreeTierGroupTrigger,
+  devPanelFreeTierStateOption,
   openDevPanelClassSimulationFlyout,
   openDevToolsPanel,
   openGiveFeedback,
@@ -95,18 +97,14 @@ test.describe('Dev panel artboard evidence', () => {
     await expect(stateSheet).toBeVisible({ timeout: 15_000 });
     await shot(page, '19');
 
-    await stateSheet
-      .getByRole('button')
-      .filter({ hasText: 'Teacher signup' })
-      .first()
-      .click();
-    await stateSheet.getByRole('button', { name: /Waitlist submitted/i }).click();
+    await devPanelFreeTierGroupTrigger(stateSheet, 'Teacher signup').click();
+    await devPanelFreeTierStateOption(stateSheet, 'Waitlist submitted').click();
     await stateSheet
       .getByRole('switch', { name: 'Use a throwaway test account' })
       .setChecked(false);
     await stateSheet.getByRole('button', { name: 'Jump to this state' }).click();
     await expect(
-      page.getByRole('heading', { name: /Change .+'s test data\?/ })
+      page.getByRole('alertdialog', { name: /Change .+'s test data\?/ })
     ).toBeVisible();
     await shot(page, '20');
 
@@ -114,7 +112,7 @@ test.describe('Dev panel artboard evidence', () => {
     await stateSheet
       .getByRole('switch', { name: 'Use a throwaway test account' })
       .setChecked(true);
-    await stateSheet.getByRole('button', { name: /Waitlist submitted/i }).click();
+    await devPanelFreeTierStateOption(stateSheet, 'Waitlist submitted').click();
     await page.route('**/api/dev-panel/free-tier-jump', async (route) => {
       await route.fulfill({
         status: 200,
