@@ -27,8 +27,8 @@ import {
   PREWRITING_RUBRIC,
   PREWRITING_SCORING_SCALE,
 } from '../../../services/web-app/app/domain/assignment-types/prewriting-assignment-type';
-import {
 import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
+import {
   THESIS_STATEMENT_PROMPT_CONFIG,
   THESIS_STATEMENT_RUBRIC,
   THESIS_STATEMENT_SCORING_SCALE,

@@ -9,8 +9,8 @@ import {
   buildTeacherReleaseDesignedEmail,
   buildTeacherStillWaitingDesignedEmail,
 } from '../app/emails/build-free-tier-emails.server';
-import {
 import { logScriptError } from '../app/utils/log-script-error.server';
+import {
   buildClassInviteEmail,
   buildOrgTeacherInviteEmail,
   buildResetPasswordEmail,

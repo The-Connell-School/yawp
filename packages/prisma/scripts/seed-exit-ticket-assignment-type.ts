@@ -8,8 +8,8 @@
 import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { isLocalDatabaseUrl } from './seed-overlay-connection';
-import {
 import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
+import {
   bootstrapExitTicketAssignmentType,
   resolveBootstrapOrganizationIds,
 } from './bootstrap-exit-ticket-assignment-type';
