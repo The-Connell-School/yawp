@@ -187,6 +187,7 @@ source_wake_script="$ROOT/bootstrap/scripts/preview/wake-preview.sh"
   exit 1
 }
 source_policy="$ROOT/bootstrap/scripts/preview/wake-policy.mjs"
+source_log_script_error="$ROOT/bootstrap/scripts/preview/log-script-error.mjs"
 source_pr_state="$ROOT/bootstrap/scripts/preview/pr-state.mjs"
 source_idle_policy="$ROOT/bootstrap/scripts/preview/idle-policy.sh"
 source_idle_script="$ROOT/bootstrap/scripts/preview/idle-sleep.sh"
@@ -195,7 +196,7 @@ release_id="$(sha256sum \
   "$source_ingress_server" \
   "$source_certificate_manager" \
   "$source_wake_script" \
-  "$source_policy" "$source_pr_state" "$source_idle_policy" "$source_idle_script" \
+  "$source_policy" "$source_log_script_error" "$source_pr_state" "$source_idle_policy" "$source_idle_script" \
   | sha256sum \
   | awk '{print $1}')"
 release_dir="$ROOT/ingress/releases/$release_id"
@@ -204,7 +205,7 @@ install -m 0644 "$source_wake_server" "$release_dir/wake-server.mjs"
 install -m 0644 "$source_ingress_server" "$release_dir/ingress-server.mjs"
 install -m 0644 "$source_certificate_manager" "$release_dir/certificate-manager.mjs"
 install -m 0755 "$source_wake_script" "$release_dir/wake-preview.sh"
-install -m 0644 "$source_policy" "$source_pr_state" "$source_idle_policy" "$release_dir/"
+install -m 0644 "$source_policy" "$source_log_script_error" "$source_pr_state" "$source_idle_policy" "$release_dir/"
 install -m 0755 "$source_idle_script" "$release_dir/idle-sleep.sh"
 PREVIEW_ROOT="$ROOT" node "$release_dir/wake-server.mjs" --seed-metadata
 ingress_server="$release_dir/ingress-server.mjs"
