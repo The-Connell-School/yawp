@@ -4,7 +4,9 @@ import type { AppLoadContext } from 'react-router';
 
 type CreateRequestHandler = typeof baseCreateRequestHandler;
 
-export const createRequestHandler: CreateRequestHandler = ((...args) => {
+export const createRequestHandler: CreateRequestHandler = ((
+  ...args: Parameters<CreateRequestHandler>
+) => {
   const handler = baseCreateRequestHandler(...args);
   return async (request: Request, loadContext?: AppLoadContext) => {
     const { adaptPreviewIngressRequest } = await import(

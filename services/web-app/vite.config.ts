@@ -33,6 +33,19 @@ function omitDevPanelFromProductionBuild(): Plugin {
   };
 }
 
+function previewIngressReactRouterSsrAlias(): Plugin {
+  return {
+    name: 'yawp-preview-ingress-react-router-ssr-alias',
+    enforce: 'pre',
+    resolveId(source, _importer, options) {
+      if (!options?.ssr) return null;
+      if (source === 'react-router-original') return reactRouterOriginal;
+      if (source === 'react-router') return reactRouterWithPreviewIngress;
+      return null;
+    },
+  };
+}
+
 function redirectBareAppRoute(): Plugin {
   return {
     name: 'yawp-redirect-bare-app-route',
@@ -59,6 +72,7 @@ export default defineConfig({
   },
   plugins: [
     omitDevPanelFromProductionBuild(),
+    previewIngressReactRouterSsrAlias(),
     redirectBareAppRoute(),
     reactRouter(),
     tsconfigPaths(),
@@ -68,12 +82,6 @@ export default defineConfig({
   },
   ssr: {
     noExternal: ['posthog-js', 'posthog-js/react'],
-    resolve: {
-      alias: {
-        'react-router-original': reactRouterOriginal,
-        'react-router': reactRouterWithPreviewIngress,
-      },
-    },
   },
   server: {
     port: Number(process.env.PORT ?? 5176),

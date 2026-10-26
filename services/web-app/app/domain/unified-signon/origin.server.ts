@@ -38,12 +38,13 @@ export function adaptPreviewIngressRequest(request: Request): Request {
   if (url.origin === configured.origin) return request;
   url.protocol = configured.protocol;
   url.host = configured.host;
-  return new Request(url.toString(), {
+  const init = {
     method: request.method,
     headers: request.headers,
     body: request.body,
-    duplex: request.body ? 'half' : undefined,
     redirect: request.redirect,
     signal: request.signal,
-  });
+    ...(request.body ? { duplex: 'half' as const } : {}),
+  } satisfies RequestInit & { duplex?: 'half' };
+  return new Request(url.toString(), init as RequestInit);
 }
