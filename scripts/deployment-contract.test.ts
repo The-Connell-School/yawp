@@ -557,6 +557,22 @@ describe('production deployment contract', () => {
     expect(reactRouterConfig).toContain('unstable_optimizeDeps: true');
   });
 
+  test('React Router allows HTTPS browser action origins behind TLS-terminating proxies', () => {
+    const reactRouterConfig = readRepoFile(
+      'services/web-app/react-router.config.ts'
+    );
+
+    expect(reactRouterConfig).toContain('allowedActionOrigins');
+    for (const host of [
+      'yawp.school',
+      'demo.yawp.school',
+      'ua.yawp.school',
+      '*.preview.yawp.school',
+    ]) {
+      expect(reactRouterConfig).toContain(`"${host}"`);
+    }
+  });
+
   test('main deploy runs production Prisma migrations before publishing the image', () => {
     const deployWorkflow = readRepoFile('.github/workflows/deploy.yml');
     const migrateRemoteScript = readRepoFile(
