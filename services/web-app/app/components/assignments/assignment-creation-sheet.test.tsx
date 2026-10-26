@@ -253,6 +253,7 @@ describe('AssignmentCreationSheetContent', () => {
       fixedClassId: 'class-1',
       initialTitle: 'Existing essay',
       initialPrompt: 'Existing prompt',
+      initialPointValue: 100,
     }));
     expect(inputByName('assignmentTypeId').value).toBe('existing-type');
     expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
@@ -268,6 +269,7 @@ describe('AssignmentCreationSheetContent', () => {
       fixedClassId: 'class-1',
       initialTitle: 'Existing essay',
       initialPrompt: 'Existing prompt',
+      initialPointValue: 100,
     }));
     expect(inputByName('assignmentTypeId').value).toBe('existing-type');
     expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
@@ -280,6 +282,7 @@ describe('AssignmentCreationSheetContent', () => {
       initialAssignmentTypeId: 'type-1',
       fixedClassId: 'class-1',
       initialPrompt: 'Existing prompt',
+      initialPointValue: 100,
     }));
     expect(inputByName('assignmentTypeId').value).toBe('type-1');
     expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
@@ -402,9 +405,11 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Prompt');
       expectText('Extract from PDF');
       expectText('Submit for grade');
-      expectText(
-        'Graded out of 100 points, read at the intermediate level.'
-      );
+      if (expectedAssignmentTypeId === 'type-2') {
+        expectText('Graded out of 10 points, read at the beginner level.');
+      } else {
+        expectText('Graded out of 100 points, read at the beginner level.');
+      }
       expectText('Tutor enabled');
       expectText(
         "The tutor is on by default. Turning it off removes it from students' documents — the digital equivalent of an in-class essay. Assigning one now and then shows what a student can do unaided, and gives the Reporter a baseline to measure independent growth against."
@@ -424,9 +429,11 @@ describe('AssignmentCreationSheetContent', () => {
 
       const submitForGrade = controlById('assignment-create-submit-for-grade');
       expect(isChecked(submitForGrade)).toBe(true);
-      expect(inputByName('pointValue').value).toBe('100');
+      expect(inputByName('pointValue').value).toBe(
+        expectedAssignmentTypeId === 'type-2' ? '10' : '100'
+      );
       expect(inputByName('gradingAssistantStrictnessLevel').value).toBe(
-        'intermediate'
+        'beginner'
       );
 
       // Tutor defaults to enabled, preserving today's behavior.
@@ -487,16 +494,14 @@ describe('AssignmentCreationSheetContent', () => {
     expectNoText('point adjustment');
 
     expect(inputByName('gradingAssistantStrictnessLevel').value).toBe(
-      'intermediate'
+      'beginner'
     );
   });
 
   it('rests as a plain-language grading summary with nothing to expand past', () => {
     root = renderSheet().root;
 
-    expectText(
-      'Graded out of 100 points, read at the intermediate level.'
-    );
+    expectText('Graded out of 100 points, read at the beginner level.');
     // The old block stated the same facts four times over three nested boxes.
     expectNoText('Grade Configuration');
     expectNoText('Default point value');
@@ -867,6 +872,29 @@ describe('AssignmentCreationSheetContent', () => {
       ).toBe(true);
     });
 
+  });
+
+  it('prefills Daily Pages at 20 points for new assignments', () => {
+    root = renderSheet({
+      entryPoint: 'assignment-type',
+      fixedAssignmentTypeId: 'daily-pages',
+      assignmentTypes: [
+        ...assignmentTypes,
+        {
+          id: 'daily-pages',
+          title: 'Daily Pages',
+          kind: 'daily_pages',
+          rubricName: null,
+          collaborationSupported: false,
+          gradesGrammar: false,
+        },
+      ],
+    }).root;
+
+    expect(inputByName('pointValue').value).toBe('20');
+    expect(inputByName('gradingAssistantStrictnessLevel').value).toBe(
+      'beginner'
+    );
   });
 
   it('shows scaled engagement tiers when the grading panel is open', () => {

@@ -2,6 +2,10 @@ export const DEFAULT_ASSIGNMENT_POINT_VALUE = 100;
 export const MAX_ASSIGNMENT_POINT_VALUE = 1000;
 
 import {
+  defaultPointValueForNewAssignment,
+  type AssignmentTypeDefaultContext,
+} from '~/domain/assignments/new-assignment-defaults';
+import {
   DEFAULT_ASSIGNMENT_GRADING_MODE,
   parseAssignmentGradingMode,
   parseOptionalRubricTotalPoints,
@@ -71,7 +75,8 @@ export function parseSubmitForGrade(formData: FormData) {
 }
 
 export function parseAssignmentGradingIntent(
-  formData: FormData
+  formData: FormData,
+  assignmentType: AssignmentTypeDefaultContext = {}
 ): AssignmentGradingIntent {
   const submitForGrade = parseSubmitForGrade(formData);
   if (!submitForGrade.success) return submitForGrade;
@@ -91,7 +96,7 @@ export function parseAssignmentGradingIntent(
       success: true,
       data: {
         submitForGrade: true,
-        pointValue: DEFAULT_ASSIGNMENT_POINT_VALUE,
+        pointValue: defaultPointValueForNewAssignment(assignmentType),
       },
     };
   }
