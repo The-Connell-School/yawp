@@ -39,3 +39,8 @@ Source of truth: `design/devpanel-v3/html/*.dc.html` (Claude Design export). Cro
 ## Preview evidence
 
 Capture @ 1280×800 on demo/preview per frame 01–05 before Ship Review; fill PR §(d) table with MATCH/PARTIAL/MISS.
+
+## CI notes (PR #860)
+
+- **Free-tier locked preview @ 1440px:** failed when e2e used `getByRole('button', { name: 'Give feedback', exact: true })` — the `.dc` pin row’s accessible name includes the subtitle. Fixed via `/^Give feedback\b/` in `dev-panel-feedback.ts` (not a product regression).
+- **Preview `POST /auth/preview-access` with `Origin: https://…`:** known RR CSRF / adapter URL mismatch (400). Separate Origin-fix workstream; do not weaken CSRF. Unrelated to locked-preview failure above.

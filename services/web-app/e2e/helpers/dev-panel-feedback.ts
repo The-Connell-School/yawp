@@ -24,6 +24,11 @@ export function freeTierStatesDialog(page: Page) {
   return page.getByRole('dialog', { name: 'Free-tier states' });
 }
 
+/** Dev panel pin row — accessible name includes the subtitle (Note, screenshot, URL / Writing…). */
+export function devPanelGiveFeedbackRow(panel: ReturnType<typeof devToolsPanel>) {
+  return panel.getByRole('button', { name: /^Give feedback\b/ });
+}
+
 /** Panel chrome is mounted and shows locked, main menu, or a restored sub-sheet. */
 export async function waitForDevPanelReady(page: Page) {
   const panel = devToolsPanel(page);
