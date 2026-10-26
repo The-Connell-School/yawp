@@ -563,16 +563,20 @@ describe('My Assignments action', () => {
         ),
       );
 
-      const response = (await action({
+      const response = await action({
         request: deleteRequest(['assignment-1']),
         params: {},
         context: {},
-      } as any)) as { init?: { status: number }; data?: { message: string } };
+      } as any);
 
-      const serialized = JSON.stringify(response.data);
-      expect(response.init?.status).toBe(409);
+      const serialized = JSON.stringify((response as { data: unknown }).data);
+      expect((response as { init?: { status: number } }).init?.status).toBe(
+        409,
+      );
       expect(serialized).not.toContain('SECRET-TOKEN');
-      expect(response.data?.message).toContain('shared group work');
+      expect(
+        (response as unknown as { data: { message: string } }).data.message,
+      ).toContain('shared group work');
     });
 
     test('refuses a non-teacher', async () => {
