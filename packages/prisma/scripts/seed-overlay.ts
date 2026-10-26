@@ -3,6 +3,7 @@ import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { createPassword } from './utils';
 import { isLocalDatabaseUrl } from './seed-overlay-connection';
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 
 // --- Connection setup (same pattern as seed.ts) ---
 
@@ -391,7 +392,7 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
       console.log(JSON.stringify(ctx, null, 2));
     })
     .catch((e) => {
-      console.error(e);
+      logScriptError(e);
       process.exit(1);
     })
     .finally(() => prisma.$disconnect());

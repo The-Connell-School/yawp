@@ -352,16 +352,17 @@ run_timed_in_process_group() {
 
 verify_chromium_launch() {
   : >"$launch_log"
-  if node -e "
-const { chromium } = require('playwright');
+  if (cd "$repo_root" && bun -e "
+import { chromium } from 'playwright';
+import { logScriptError } from './services/web-app/app/utils/log-script-error.server.ts';
 (async () => {
   const browser = await chromium.launch({ headless: true });
   await browser.close();
 })().catch((err) => {
-  console.error(err);
+  logScriptError(err);
   process.exit(1);
 });
-" 2>"$launch_log"; then
+") 2>"$launch_log"; then
     return 0
   fi
 

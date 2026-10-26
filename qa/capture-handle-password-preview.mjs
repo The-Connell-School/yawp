@@ -14,6 +14,7 @@ import {
   enterPreviewAccess,
   runLoginSmoke,
 } from '../scripts/preview/smoke-login.mjs';
+import { logScriptError } from '../services/web-app/app/utils/log-script-error.server.ts';
 
 const BASE = process.env.PREVIEW_BASE_URL?.replace(/\/$/, '');
 const ACCESS_CODE = process.env.PREVIEW_ACCESS_CODE?.trim();
@@ -254,6 +255,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err);
+  logScriptError(err);
   process.exit(1);
 });
