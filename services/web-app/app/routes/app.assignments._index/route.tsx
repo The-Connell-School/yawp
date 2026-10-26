@@ -53,6 +53,7 @@ import {
 } from '~/utils/assignment-quota.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { prisma } from '~/utils/db.server';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import {
   resolveTeacherSchoolYearScope,
   schoolYearWhere,
@@ -327,7 +328,13 @@ export async function action({ request }: ActionFunctionArgs) {
     } catch (error) {
       if (error instanceof AssignmentHasCollaborativeWorkError) {
         return dataResponse(
-          { success: false, message: error.message },
+          {
+            success: false,
+            message: safeDomainErrorTextForClientResponse(
+              error,
+              'This assignment has shared group work and cannot be deleted.',
+            ),
+          },
           { status: 409 }
         );
       }

@@ -543,4 +543,29 @@ describe('sendStudentClassInvite', () => {
     expect(prisma.invitation.delete).not.toHaveBeenCalled();
     expect(prisma.invitation.create).not.toHaveBeenCalled();
   });
+
+  test('redacts sensitive substrings when the class seat cap blocks an invite', async () => {
+    const { FreeClassSeatError } = await import(
+      '~/domain/free-tier/free-class-seat-error'
+    );
+    prisma.$transaction.mockImplementationOnce(async () => {
+      throw new FreeClassSeatError(
+        'class_full',
+        'This class is full. token=SECRET-TOKEN teacher@school.edu',
+      );
+    });
+
+    const result = await sendStudentClassInvite({
+      email: 'new@example.com',
+      classId: 'class-1',
+      organizationId: 'org-1',
+      request: new Request('https://example.test/app/my-classes/class-1'),
+    });
+
+    expect(result.status).toBe('error');
+    if (result.status === 'error') {
+      expect(JSON.stringify(result)).not.toContain('SECRET-TOKEN');
+      expect(result.error).toMatch(/full/i);
+    }
+  });
 });

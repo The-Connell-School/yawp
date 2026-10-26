@@ -21,6 +21,7 @@ import { toCollaborationGroupMode } from '~/domain/assignments/collaboration';
 import { Copy, Pencil, UsersIcon } from 'lucide-react';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { CaretLeftIcon } from '~/components/icons';
@@ -540,7 +541,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
       } catch (error) {
         if (error instanceof AssignmentPromptAttachmentError) {
           return dataResponse(
-            { success: false, message: error.message },
+            {
+              success: false,
+              message: safeDomainErrorTextForClientResponse(
+                error,
+                'Could not upload that PDF. Please try another file.',
+              ),
+            },
             { status: 400 }
           );
         }
@@ -618,7 +625,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
         }
         if (error instanceof FreeClassroomAssignmentQuotaError) {
           return dataResponse(
-            { success: false, message: error.message },
+            {
+              success: false,
+              message: safeDomainErrorTextForClientResponse(
+                error,
+                'This assignment type is not available on your plan.',
+              ),
+            },
             { status: 403 }
           );
         }
@@ -743,7 +756,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
       }
       if (error instanceof FreeClassroomAssignmentQuotaError) {
         return dataResponse(
-          { success: false, message: error.message },
+          {
+            success: false,
+            message: safeDomainErrorTextForClientResponse(
+              error,
+              'This assignment type is not available on your plan.',
+            ),
+          },
           { status: 403 }
         );
       }

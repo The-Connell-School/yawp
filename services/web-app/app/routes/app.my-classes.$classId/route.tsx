@@ -43,6 +43,7 @@ import {
   type ClassDisplayFields,
 } from '~/utils/class-display';
 import { prisma } from '~/utils/db.server.js';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
   AssignmentHasCollaborativeWorkError,
@@ -342,7 +343,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
     } catch (error) {
       if (error instanceof AssignmentHasCollaborativeWorkError) {
         return dataResponse(
-          { success: false, message: error.message },
+          {
+            success: false,
+            message: safeDomainErrorTextForClientResponse(
+              error,
+              'This assignment has shared group work and cannot be deleted.',
+            ),
+          },
           { status: 409 }
         );
       }
@@ -384,7 +391,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
     } catch (error) {
       if (error instanceof AssignmentHasCollaborativeWorkError) {
         return dataResponse(
-          { success: false, message: error.message },
+          {
+            success: false,
+            message: safeDomainErrorTextForClientResponse(
+              error,
+              'This assignment has shared group work and cannot be deleted.',
+            ),
+          },
           { status: 409 }
         );
       }
@@ -575,7 +588,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
       } catch (error) {
         if (error instanceof AssignmentPromptAttachmentError) {
           return dataResponse(
-            { success: false, message: error.message },
+            {
+              success: false,
+              message: safeDomainErrorTextForClientResponse(
+                error,
+                'Could not upload that PDF. Please try another file.',
+              ),
+            },
             { status: 400 }
           );
         }
@@ -648,7 +667,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
         }
         if (error instanceof FreeClassroomAssignmentQuotaError) {
           return dataResponse(
-            { success: false, message: error.message },
+            {
+              success: false,
+              message: safeDomainErrorTextForClientResponse(
+                error,
+                'This assignment type is not available on your plan.',
+              ),
+            },
             { status: 403 }
           );
         }
@@ -721,7 +746,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
       }
       if (error instanceof FreeClassroomAssignmentQuotaError) {
         return dataResponse(
-          { success: false, message: error.message },
+          {
+            success: false,
+            message: safeDomainErrorTextForClientResponse(
+              error,
+              'This assignment type is not available on your plan.',
+            ),
+          },
           { status: 403 }
         );
       }
