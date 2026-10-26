@@ -1,32 +1,18 @@
 import { StudentInvitationDialog } from '~/components/student-invitation-dialog';
 import { useRef, useState } from 'react';
-import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-  SheetTrigger,
-} from '~/components/ui/sheet';
 import { Link, useRouteLoaderData } from 'react-router';
 import {
   AlertTriangle,
   ChartNoAxesColumn,
   Check,
-  ChevronRight,
   Lock,
   Plus,
   Users,
 } from 'lucide-react';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '~/components/ui/popover';
-import type {
-  FreeAccountUsage,
-  UsageCount,
-} from '~/domain/free-tier/inapp-usage';
+import type { FreeAccountUsage } from '~/domain/free-tier/inapp-usage';
 import {
   formatUsageRenewsLabel,
+  freeAssignmentKindUsageMeta,
   isLessonPlannerMonthlyExhausted,
 } from '~/domain/free-tier/inapp-usage';
 import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
@@ -58,191 +44,11 @@ export function useFreeAccountUsage() {
     )?.freeAccountUsage ?? null
   );
 }
-function Meter({ count }: { count: UsageCount }) {
-  return (
-    <div
-      className="h-1.5 overflow-hidden rounded-full bg-secondary"
-      aria-hidden="true"
-    >
-      <div
-        className={cn(
-          'h-full rounded-full bg-primary',
-          count.remaining === 0 && 'bg-amber-600'
-        )}
-        style={{
-          width: `${count.total === 0 ? 100 : Math.min(100, (count.used / count.total) * 100)}%`,
-        }}
-      />
-    </div>
-  );
-}
-export function FreeAccountUsagePopover({
-  usage,
-  expanded,
-  isMobile,
-  onMobileOpen,
-  onMobileClose,
-}: {
-  usage: FreeAccountUsage;
-  expanded: boolean;
-  isMobile: boolean;
-  onMobileOpen: () => void;
-  onMobileClose: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const trigger = (
-    <button
-      type="button"
-      aria-label="Usage"
-      className={cn(
-        'mx-4 mb-3 flex flex-col gap-2 rounded-lg border bg-popover p-3 text-left text-sm',
-        !expanded && 'mx-1 p-2'
-      )}
-    >
-      <span className="flex items-center justify-between font-semibold">
-        {expanded ? (
-          <>
-            {usage.monthly ? 'Monthly usage' : 'Usage'}{' '}
-            <ChevronRight size={14} />
-          </>
-        ) : (
-          <Users size={18} />
-        )}
-      </span>
-      {expanded && (
-        <>
-          <span className="flex justify-between text-xs">
-            <span>{usage.monthly ? 'Lesson Planner' : 'Students'}</span>
-            <span className="text-muted-foreground">
-              {usage.monthly
-                ? `${usage.lessonPlans.remaining} left`
-                : usage.students.remaining === 0
-                  ? 'Full'
-                  : `${usage.students.remaining} left`}
-            </span>
-          </span>
-          <Meter count={usage.monthly ? usage.lessonPlans : usage.students} />
-          {usage.monthly && usage.reporter && (
-            <>
-              <span className="flex justify-between text-xs">
-                <span>Reporter</span>
-                <span className="text-muted-foreground">
-                  {usage.reporter.remaining} left
-                </span>
-              </span>
-              <Meter count={usage.reporter} />
-            </>
-          )}
-          {!usage.monthly && usage.warning && (
-            <span className="text-xs text-amber-800">{usage.warning}</span>
-          )}
-        </>
-      )}
-    </button>
-  );
-  const details = <FreeAccountUsageDetails usage={usage} />;
-  if (isMobile) {
-    return (
-      <Sheet
-        open={open}
-        onOpenChange={(next) => {
-          setOpen(next);
-          if (next) onMobileOpen();
-        }}
-      >
-        <SheetTrigger asChild>{trigger}</SheetTrigger>
-        <SheetContent
-          side="bottom"
-          aria-describedby={undefined}
-          overlayClassName="free-usage-overlay bg-foreground/35"
-          className="h-auto max-h-[90dvh] rounded-t-2xl border-x-0 border-b-0 bg-background px-5 pb-7 pt-5"
-          onCloseAutoFocus={(event) => {
-            // The Usage trigger is now in the closed drawer. Restore focus to
-            // the visible navigation opener instead of the hidden trigger.
-            event.preventDefault();
-            onMobileClose();
-          }}
-        >
-          <SheetTitle className="mb-4 font-bold">Usage</SheetTitle>
-          {details}
-        </SheetContent>
-      </Sheet>
-    );
-  }
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent
-        side="right"
-        align="end"
-        aria-label="Usage"
-        className="w-[min(340px,calc(100vw-24px))] rounded-xl p-5"
-      >
-        <h2 className="mb-4 text-lg font-bold">Usage</h2>
-        {details}
-      </PopoverContent>
-    </Popover>
-  );
-}
-function FreeAccountUsageDetails({ usage }: { usage: FreeAccountUsage }) {
-  return (
-    <>
-      <div className="space-y-4">
-        {(usage.monthly
-          ? [
-              { label: 'Lesson Planner', ...usage.lessonPlans },
-              { label: 'Reporter', ...usage.reporter! },
-            ]
-          : [
-              { label: 'Students', ...usage.students },
-              ...usage.assignments,
-              { label: 'Lesson plans', ...usage.lessonPlans },
-            ]
-        ).map((row) => (
-          <div key={row.label}>
-            <div className="mb-1.5 flex justify-between gap-2 text-sm">
-              <span>{row.label}</span>
-              <span
-                className={cn(
-                  'text-xs text-muted-foreground',
-                  !usage.monthly && row.remaining === 0 && 'text-amber-800'
-                )}
-              >
-                {row.used} of {row.total} ·{' '}
-                {row.remaining === 0 ? 'none left' : `${row.remaining} left`}
-              </span>
-            </div>
-            <Meter count={row} />
-          </div>
-        ))}
-      </div>
-      <p className="mt-5 text-xs leading-relaxed text-muted-foreground">
-        {usage.monthly ? (
-          'Monthly uses reset on the first day of each month (UTC). Deleting a report or draft does not restore a use.'
-        ) : (
-          <>
-            Assignments count when you create them. Deleting one doesn't give it
-            back.
-          </>
-        )}
-      </p>
-      <Link
-        to={usage.monthly ? FULL_ACCESS_CONTACT : '/app/free-tier/status'}
-        className="mt-4 inline-block text-sm text-primary underline"
-      >
-        Need more? Talk to us
-      </Link>
-    </>
-  );
-}
 function lockedDashboardAssignmentMeta(
   usage: FreeAccountUsage,
   row: FreeAccountUsage['assignments'][number]
 ) {
-  if (row.remaining) {
-    return `${row.remaining} of ${row.total} left`;
-  }
-  return 'None left';
+  return freeAssignmentKindUsageMeta(usage, row);
 }
 
 export function FreeAssignmentTiles({
@@ -362,13 +168,7 @@ export function FreeAssignmentTiles({
               <div className={assignmentTypeTileFooterClassName('px-3 py-2')}>
                 <DashboardAssignmentTileFooter
                   label={row.label}
-                  meta={
-                    usage.monthly
-                      ? 'Unlimited'
-                      : row.remaining
-                        ? `${row.remaining} of ${row.total} left`
-                        : 'None left'
-                  }
+                  meta={freeAssignmentKindUsageMeta(usage, row)}
                   metaClassName={
                     !usage.monthly && row.remaining === 0
                       ? 'text-amber-800'
@@ -689,7 +489,6 @@ export function FreeReporterMonthlyLimit({
       </header>
       <div className="px-4 pb-12 pt-6 sm:px-12">
         <section className="flex max-w-[616px] flex-col items-start gap-3 rounded-xl border bg-popover p-7 text-left shadow-sm">
-          <UsageNavRingMiniStatic />
           <h2 className="text-xl font-bold leading-[1.35]">
             You&apos;ve reached this month&apos;s Reporter limit
           </h2>
@@ -705,27 +504,6 @@ export function FreeReporterMonthlyLimit({
         </section>
       </div>
     </section>
-  );
-}
-
-function UsageNavRingMiniStatic() {
-  return (
-    <svg
-      width={18}
-      height={18}
-      viewBox="0 0 18 18"
-      className="shrink-0 text-muted-foreground"
-      aria-hidden
-    >
-      <circle
-        cx={9}
-        cy={9}
-        r={7}
-        fill="none"
-        className="stroke-muted"
-        strokeWidth={2}
-      />
-    </svg>
   );
 }
 
