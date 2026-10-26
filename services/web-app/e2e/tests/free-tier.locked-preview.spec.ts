@@ -414,7 +414,9 @@ for (const width of [390, 1440]) {
       await capture(page, 'locked-reporter-unlocks-card-1440');
     }
     await page.goto('/app/lesson-planner');
-    await expect(page.getByPlaceholder(/Describe your lesson/i)).toBeVisible();
+    await expect(
+      page.getByRole('textbox', { name: 'Message the Lesson Planner' })
+    ).toBeVisible();
     if (width === 1440) {
       await capture(page, 'locked-lesson-planner-pending-1440');
     }
