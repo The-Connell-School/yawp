@@ -6,11 +6,14 @@ import {
 import {
   INTERN_QA_TEACHERS,
 } from '../../../../packages/prisma/scripts/local-dev/ensure-intern-qa-teachers';
-import {
-  parseSimulatedStudentEmail,
-  SIMULATION_PARTIAL_TEXT,
-  SIMULATION_SUBMITTED_TEXT,
-} from '../../app/dev-panel/class-simulation-mix';
+import { parseSimulatedStudentEmail } from '../../app/dev-panel/class-simulation-mix';
+
+/** Legacy class-simulation placeholders (pre–class-simulation-content); still in demo DB rows. */
+const SIMULATION_PARTIAL_TEXT =
+  'My claim is that the author builds tension through contrast. I still need to tie the second paragraph back to the thesis.';
+
+const SIMULATION_SUBMITTED_TEXT =
+  'The author uses vivid imagery and pacing to show how the protagonist changes. Specific lines from the middle section prove the theme about resilience.';
 
 export const PROTECTED_ORGANIZATION_IDS = new Set([
   LOCAL_DEV_ORG_ID,
