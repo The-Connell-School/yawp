@@ -3,7 +3,7 @@ import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
 import {
-  installDevPanelStorageReset,
+  clearDevPanelStorageWhenStable,
   openDevPanelClassSimulationFlyout,
   openDevToolsPanel,
   openGiveFeedback,
@@ -59,8 +59,9 @@ test.describe('Dev panel artboard evidence', () => {
   test('capture designed panel and feedback states', async ({ page }) => {
     test.setTimeout(240_000);
     await page.setViewportSize({ width: 1440, height: 900 });
-    await installDevPanelStorageReset(page);
     await page.goto('/app/assignments', { waitUntil: 'domcontentloaded' });
+    await clearDevPanelStorageWhenStable(page);
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await openDevToolsPanel(page);
     await shot(page, '01');
 
@@ -154,11 +155,11 @@ test.describe('Dev panel artboard evidence', () => {
     await postJumpNavigation;
     await page.waitForLoadState('domcontentloaded');
     await page.unroute('**/api/dev-panel/free-tier-jump');
-    await installDevPanelStorageReset(page);
     await page.request.post('/auth/dev-login', {
       form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
     });
     await page.goto('/app/assignments', { waitUntil: 'domcontentloaded' });
+    await clearDevPanelStorageWhenStable(page);
 
     let { panel: feedbackDialog } = await openGiveFeedback(page);
     await shot(page, '55');
