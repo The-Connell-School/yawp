@@ -6,7 +6,7 @@
  * the PowerPoint export, so all three hang the same deck.
  */
 import type { Slide, SlideDeck } from './slide-deck';
-import { deckArt } from './deck-art';
+import { resolveDeckArt } from './deck-art';
 import { deckColors, slideColor } from './deck-colors';
 
 /** The kit's twelve templates, plus compare for a classic two-column slide. */
@@ -177,7 +177,7 @@ function modeFor(template: GalleryTemplate, slide: Slide, previous: string | nul
  * drawn on paper; its words never change.
  */
 export function planGalleryDeck(deck: SlideDeck): GallerySlidePlan[] {
-  const art = deckArt(deck.art);
+  const art = resolveDeckArt(deck.art);
   const colors = galleryColors(deck);
   const templates = deck.slides.map(galleryTemplate);
   const lastExit = templates.lastIndexOf('exit');
@@ -219,7 +219,7 @@ export function planGalleryDeck(deck: SlideDeck): GallerySlidePlan[] {
 
 /** The deck's two or three colors; the first is the primary. */
 export function galleryColors(deck: SlideDeck): string[] {
-  return deckColors(deck, deckArt(deck.art));
+  return deckColors(deck, resolveDeckArt(deck.art));
 }
 
 /** The deck's primary color: the theme accent and the accent wall. */

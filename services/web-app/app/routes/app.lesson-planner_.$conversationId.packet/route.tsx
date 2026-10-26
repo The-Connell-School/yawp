@@ -767,6 +767,7 @@ function LessonPacketRouteV2() {
                         section={section}
                         conversationId={conversationId}
                         deckV2={reviewFlags.deckV2}
+                        deckGallery={reviewFlags.deckGallery}
                         periodMinutes={periodMinutes}
                       />
                     )}
@@ -790,6 +791,7 @@ function SectionContent({
   section,
   conversationId,
   deckV2 = false,
+  deckGallery = false,
   periodMinutes = null,
 }: {
   section: {
@@ -803,6 +805,7 @@ function SectionContent({
   };
   conversationId: string;
   deckV2?: boolean;
+  deckGallery?: boolean;
   periodMinutes?: number | null;
 }) {
   // The packet already took the deck out of the prose and parsed it, so there
@@ -831,6 +834,7 @@ function SectionContent({
             }
             edited={Boolean(section.edited)}
             periodMinutes={deckV2 ? periodMinutes : null}
+            deckGallery={deckGallery}
           />
         </div>
       ) : null}
