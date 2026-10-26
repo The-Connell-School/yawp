@@ -302,7 +302,7 @@ export function DevPanelGiveFeedbackFlyout({
                 status === 'submitting' && 'opacity-60'
               )}
             >
-              <Label htmlFor={pageUrlId}>Page</Label>
+              <Label htmlFor={pageUrlId}>Page URL</Label>
               <Input
                 id={pageUrlId}
                 readOnly

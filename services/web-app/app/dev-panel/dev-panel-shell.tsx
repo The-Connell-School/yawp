@@ -588,6 +588,7 @@ export function DevPanelShell() {
             <button
               ref={feedbackRowRef}
               type="button"
+              aria-label="Give feedback"
               className={cn(
                 'yawp-dev-panel-row border-b-0',
                 state.subSheet === 'give-feedback' && 'yawp-dev-panel-row-active'

@@ -33,7 +33,10 @@ export async function waitForDevPanelReady(page: Page) {
   });
   const locked = page.getByText('Developer tools are locked');
   const loadError = page.getByText("Developer tools couldn't load");
-  const giveFeedbackRow = panel.getByRole('button', { name: 'Give feedback' });
+  const giveFeedbackRow = panel.getByRole('button', {
+    name: 'Give feedback',
+    exact: true,
+  });
   const giveFeedbackSheet = giveFeedbackDialog(page);
   const freeTierSheet = freeTierStatesDialog(page);
   const signInSection = panel.getByText('Sign in as');
@@ -147,7 +150,7 @@ export async function expectGiveFeedbackAccessible(page: Page) {
   await expect(beaker.or(legacy).first()).toBeVisible({ timeout: 30_000 });
   if ((await beaker.count()) > 0) {
     const panel = await openDevToolsPanel(page);
-    const row = panel.getByRole('button', { name: 'Give feedback' });
+    const row = panel.getByRole('button', { name: 'Give feedback', exact: true });
     const sheet = giveFeedbackDialog(page);
     await expect(row.or(sheet).first()).toBeVisible();
     return;
@@ -177,7 +180,10 @@ export async function openGiveFeedback(page: Page) {
     };
   }
   const tools = await openDevToolsPanel(page);
-  const feedbackRow = tools.getByRole('button', { name: 'Give feedback' });
+  const feedbackRow = tools.getByRole('button', {
+    name: 'Give feedback',
+    exact: true,
+  });
   if (await feedbackRow.isVisible().catch(() => false)) {
     await feedbackRow.click();
   } else {
