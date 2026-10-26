@@ -1,18 +1,27 @@
 import type { ReactNode } from 'react';
 import { cn } from '~/utils/misc';
 
-/** Tiles v2: 56px mobile, 64px desktop (was 72 / 88). */
-export const assignmentTypeTileImageClassName = 'h-14 w-full sm:h-16';
+/** Portrait-friendly art area; height scales with tile width (PKG-09). */
+export const assignmentTypeTileImageClassName =
+  'aspect-[3/4] h-auto w-full object-cover object-center';
+
+/** Dashboard / picker grid: do not stretch 1–3 tiles to full row width (PKG-09). */
+export function assignmentTypeTileGridClassName(extra?: string) {
+  return cn(
+    'grid auto-rows-min grid-cols-2 items-start justify-items-start gap-3 lg:grid-cols-3',
+    extra
+  );
+}
 
 export function assignmentTypeTileCardClassName(extra?: string) {
   return cn(
-    'flex h-auto w-full flex-col self-start overflow-hidden rounded-xl border text-left',
+    'flex h-auto w-full max-w-[11rem] flex-col self-start overflow-hidden rounded-xl border text-left sm:max-w-[12rem]',
     extra
   );
 }
 
 export function assignmentTypeTileImageWrapClassName(extra?: string) {
-  return cn('shrink-0 overflow-hidden', extra);
+  return cn('w-full shrink-0 overflow-hidden', extra);
 }
 
 export function assignmentTypeTileFooterClassName(extra?: string) {

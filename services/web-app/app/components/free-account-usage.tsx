@@ -36,6 +36,7 @@ import { SiteLicenseLockButton } from '~/components/site-license-lock-button';
 import {
   assignmentTypeTileCardClassName,
   assignmentTypeTileFooterClassName,
+  assignmentTypeTileGridClassName,
   assignmentTypeTileImageClassName,
   assignmentTypeTileImageWrapClassName,
   DashboardAssignmentTileFooter,
@@ -267,7 +268,7 @@ export function FreeAssignmentTiles({
     return (
       <div data-testid="free-assignment-tiles">
         <h2 className="mb-4 text-lg font-bold">Assignments</h2>
-        <div className="grid auto-rows-min grid-cols-2 items-start gap-3 lg:grid-cols-3">
+        <div className={assignmentTypeTileGridClassName()}>
           {usage.assignments.map((row) => {
             const type = types.find((t) => t.kind === row.kind);
             const tileLabel = `New ${row.label} assignment`;
@@ -336,7 +337,7 @@ export function FreeAssignmentTiles({
         <h2 className="text-lg font-bold">Assignments</h2>
         {createButton}
       </div>
-      <div className="grid auto-rows-min grid-cols-2 items-start gap-3 lg:grid-cols-3">
+      <div className={assignmentTypeTileGridClassName()}>
         {usage.assignments.map((row) => {
           const type = types.find((t) => t.kind === row.kind);
           const tileDisabled =
