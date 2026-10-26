@@ -13,14 +13,26 @@ export function isDevPanelBuildEnabled(
   );
 }
 
+/** Deployed PR preview (Render compose sets PR_NUMBER + production NODE_ENV). */
+function isPrPreviewProductionHost(env: NodeJS.ProcessEnv) {
+  return (
+    String(env.YAWP_ENVIRONMENT ?? '').trim().toLowerCase() === 'preview' &&
+    String(env.NODE_ENV ?? '').trim().toLowerCase() === 'production' &&
+    Boolean(String(env.PR_NUMBER ?? '').trim())
+  );
+}
+
 /** Runtime gate for HTTP handlers and root loader data. */
 export function isDevPanelRuntimeEnabled(
   env: NodeJS.ProcessEnv = process.env
 ): boolean {
-  if (!isDevPanelBuildEnabled(env)) return false;
+  if (!isDevPanelBuildEnabled(env) && !isPrPreviewProductionHost(env)) {
+    return false;
+  }
   const yawp = String(env.YAWP_ENVIRONMENT ?? '').trim().toLowerCase();
   if (yawp === 'demo' || isDevPanelDemoHost(env)) return true;
-  // PR preview hosts keep the legacy environment beaker and dev-login menu.
+  if (isPrPreviewProductionHost(env)) return true;
+  // Local preview-gate E2E keeps the legacy environment beaker (see runtime tests).
   if (yawp === 'preview') return false;
   return isLocalDevPanelEnvironment(env);
 }

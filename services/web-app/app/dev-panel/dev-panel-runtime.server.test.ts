@@ -75,6 +75,16 @@ describe('dev panel runtime gate', () => {
     expect(isDevPanelRuntimeEnabled(env)).toBe(false);
   });
 
+  test('deployed PR preview enables panel for Ship Review captures', () => {
+    const env = {
+      YAWP_ENVIRONMENT: 'preview',
+      NODE_ENV: 'production',
+      PR_NUMBER: '860',
+      DATABASE_URL: 'postgresql://u:p@preview-postgres:5432/yawp_pr_860',
+    } as unknown as NodeJS.ProcessEnv;
+    expect(isDevPanelRuntimeEnabled(env)).toBe(true);
+  });
+
   test('preview yawp with demo slug and no PR enables panel', () => {
     const env = {
       YAWP_ENVIRONMENT: 'preview',
