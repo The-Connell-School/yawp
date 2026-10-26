@@ -58,7 +58,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { cn } from '~/utils/misc';
-import { requireAdmin } from '~/utils/auth.server';
+import { requirePlatformLegacyAssignmentAdmin } from '~/domain/assignment-types/platform-legacy-assignment-admin.server';
 import { parseAssignmentTypeRubricConfig } from '~/domain/assignment-types/assignment-type-rubric-config';
 import {
   MODULE_RUBRIC_RELATIONSHIPS,
@@ -154,7 +154,7 @@ const instructionSchema = z.object({
 });
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  await requireAdmin(request);
+  await requirePlatformLegacyAssignmentAdmin(request);
 
   const [courseRecord, module] = await Promise.all([
     prisma.assignmentType.findUnique({
@@ -200,7 +200,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
-  await requireAdmin(request);
+  await requirePlatformLegacyAssignmentAdmin(request);
   const formData = await request.formData();
   const intent = formData.get('intent');
 
@@ -794,11 +794,11 @@ export default function AssignmentModuleRoute() {
                     <div className="flex flex-col border border-border rounded-md">
                       <div className="p-4 flex items-center justify-between border-b">
                         <div>
-                          <label className="text-sm">Show chat button</label>
+                          <label className="text-sm">Give Me Feedback (chat button)</label>
                           <p className="text-xs pr-4 pt-1 text-muted-foreground">
-                            Enabling this shows the{' '}
+                            When on, students see Give Me Feedback (
                             <MessageCircleIcon className="inline-block h-4 w-4" />{' '}
-                            button in the tutor response bar
+                            ) in the tutor bar for this step.
                           </p>
                         </div>
                         <FormSwitch

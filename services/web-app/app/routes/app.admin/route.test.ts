@@ -27,12 +27,12 @@ describe('admin tabs', () => {
     expect(organizationsTab?.label).toBe('Organizations (read-only moved)');
   });
 
-  test('marks the assignment types surface as moved', () => {
+  test('links assignment types to the legacy admin list route', () => {
     const assignmentTypesTab = adminTabs.find(
       (tab) => tab.to === '/app/admin/assignments'
     );
 
-    expect(assignmentTypesTab?.label).toBe('Assignment Types (moved)');
+    expect(assignmentTypesTab?.label).toBe('Assignment Types');
     expect(adminTabs.map((tab) => tab.label)).not.toContain(
       'Assignments & Grading'
     );

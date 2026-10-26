@@ -357,7 +357,7 @@ export function AssignmentTypeEditorForm({
 
         <Section
           title="Rubric"
-          description="Keep the current production behavior, or choose a database-managed rubric. Rubrics stay view-only; grading assistant instructions can be customized per assignment type."
+          description="Choose a shared rubric from the library, or open Grading assistant → Prompt to edit per-type rubric categories and levels. Grading assistant instructions can be customized here."
         >
           <RubricLibrarySection
               rubrics={rubrics}

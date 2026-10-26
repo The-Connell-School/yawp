@@ -8,7 +8,14 @@ import { type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
 import { data as dataResponse, redirect, useLoaderData } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { AssignmentTypeEditorForm } from '~/components/admin/assignment-type-editor-form';
-import { requireAdmin, requireUserId } from '~/utils/auth.server';
+import { requireUserId } from '~/utils/auth.server';
+import { requirePlatformLegacyAssignmentAdmin } from '~/domain/assignment-types/platform-legacy-assignment-admin.server';
+import {
+  formatLastAdminEditLine,
+  readLastAdminEdit,
+} from '~/domain/assignment-types/assignment-type-admin-provenance.server';
+import { resolvePlatformAdminActorEmail } from '~/utils/platform-admin-actor.server';
+import { PlatformLegacyAssignmentAdminOnNotice } from '~/components/admin/platform-legacy-assignment-admin-notice';
 import { prisma } from '~/utils/db.server';
 import { archiveAssignmentType, restoreAssignmentType, updateAssignmentType, replaceAssignmentTypeImage, removeAssignmentTypeImage, parseAdminUpdateGradingConfig, withGradingInstructionsOverride } from '~/domain/assignment-types/assignment-type-admin-writes.server';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
@@ -24,7 +31,7 @@ const PROMPT_PREVIEW_INPUTS = {
 } as const;
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  await requireAdmin(request);
+  await requirePlatformLegacyAssignmentAdmin(request);
   const userId = await requireUserId(request);
   const superAdmin = await prisma.user.findFirst({
     where: { id: userId, isSuperAdmin: true },
@@ -57,9 +64,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   );
   const currentPromptLabel = await resolveCurrentPromptLabel(course.id);
   if (course.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
+    const lastEditLine = formatLastAdminEditLine(
+      course.updatedAt,
+      readLastAdminEdit(course.gradingPromptConfigJson)
+    );
+
     return dataResponse({
       course,
       rubrics,
+      lastEditLine,
       gradingAssistantPromptPreview: null,
       gradingAssistantPromptPreviewUnavailableReason:
         'The AP History prompt is built from the assignment snapshot. Open a graded submission to inspect the full prompt.',
@@ -77,9 +90,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ...PROMPT_PREVIEW_INPUTS,
   });
 
+  const lastEditLine = formatLastAdminEditLine(
+    course.updatedAt,
+    readLastAdminEdit(course.gradingPromptConfigJson)
+  );
+
   return dataResponse({
     course,
     rubrics,
+    lastEditLine,
     gradingAssistantPromptPreview: {
       ...compiledInvocation,
       version: resolvedGradingConfig.version,
@@ -113,8 +132,9 @@ async function resolveCurrentPromptLabel(assignmentTypeId: string) {
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
-  await requireAdmin(request);
+  await requirePlatformLegacyAssignmentAdmin(request);
   const userId = await requireUserId(request);
+  const actorEmail = await resolvePlatformAdminActorEmail(request);
   const superAdmin = await prisma.user.findFirst({
     where: { id: userId, isSuperAdmin: true },
     select: { id: true },
@@ -214,6 +234,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         ...(rubricSelection ? { rubricSelection } : {}),
         ...(hasTutorInstructions ? { tutorInstructions: tutorInstructions || null } : {}),
         gradingConfig,
+        adminEditProvenance: { source: 'platform', updatedBy: actorEmail },
       });
     });
 
@@ -252,16 +273,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function AssignmentTypeRoute() {
-  const { course, rubrics, currentPromptLabel } = useLoaderData<typeof loader>();
+  const { course, rubrics, currentPromptLabel, lastEditLine } =
+    useLoaderData<typeof loader>();
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-        <div className="font-semibold">Read-only Assignment Type inspection moved to Yawp Internal.</div>
-        <p className="mt-1">
-          This legacy editor remains available for write tools that have not moved yet. Use Internal first when you only need to inspect catalog content, modules, organization assignments, images, or rubric references.
-        </p>
-      </div>
+    <div className="space-y-4 px-3 sm:px-0">
+      <PlatformLegacyAssignmentAdminOnNotice lastEditLine={lastEditLine} />
       <AssignmentTypeEditorForm
         mode="edit"
         assignmentTypeId={course.id}

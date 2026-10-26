@@ -27,7 +27,7 @@ import {
   parseEvaluationSuiteSnapshot,
 } from '~/domain/ai-evaluation/prompt-version-control.server';
 import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
-import { requireAdmin } from '~/utils/auth.server';
+import { requirePlatformLegacyAssignmentAdmin } from '~/domain/assignment-types/platform-legacy-assignment-admin.server';
 import { prisma } from '~/utils/db.server';
 
 const PROMPT_PREVIEW_INPUTS = {
@@ -112,7 +112,7 @@ function buildPromptWorkspaceContext({
 }
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  await requireAdmin(request);
+  await requirePlatformLegacyAssignmentAdmin(request);
 
   const assignmentType = await prisma.assignmentType.findUnique({
     where: { id: params.id },

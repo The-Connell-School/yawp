@@ -109,6 +109,14 @@ export const DEMO_FEEDBACK_FLAG = 'demo-feedback-widget' as const;
 export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
 
 /**
+ * PKG-14: Legacy Platform admin for assignment types (tutor instructions,
+ * modules/steps, Give Me Feedback, rubrics). On for demo and PR previews;
+ * production stays off until explicitly enabled.
+ */
+export const PLATFORM_LEGACY_ASSIGNMENT_ADMIN_FLAG =
+  'platform_legacy_assignment_admin' as const;
+
+/**
  * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
  * reads only `feature_flag.free_tier`; these rows are not OR-merged.
  */
@@ -215,6 +223,11 @@ export const FEATURE_FLAGS = {
     label: 'Free classroom page tours',
     description:
       'Welcome cards, page replay and tour progress for free classroom teachers. Default off on demo and production; free tier must also be enabled.',
+  },
+  [PLATFORM_LEGACY_ASSIGNMENT_ADMIN_FLAG]: {
+    label: 'Platform legacy assignment admin',
+    description:
+      'Restores the Platform assignment-type admin (tutor instructions, module steps, Give Me Feedback, rubrics) against shared Internal data. Demo and PR previews are on without this row; production requires mode everyone.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

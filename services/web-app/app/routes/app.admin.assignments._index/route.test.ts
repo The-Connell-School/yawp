@@ -3,17 +3,21 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 const requireAdmin = mock();
-const requireMutableRequest = mock();
-let currentLoaderData: unknown = { assignmentTypes: [] };
-
-const prisma = {
-  assignmentType: { findMany: mock(), count: mock(), create: mock() },
+const isPlatformLegacyAssignmentAdminEnabled = mock(async () => true);
+let currentLoaderData: unknown = {
+  legacyAssignmentAdminEnabled: true,
+  assignmentTypes: [],
 };
 
-mock.module('~/utils/auth.server', () => ({
-  requireAdmin,
-  requireMutableRequest,
-}));
+const prisma = {
+  assignmentType: { findMany: mock() },
+};
+
+mock.module('~/utils/auth.server', () => ({ requireAdmin }));
+mock.module(
+  '~/domain/assignment-types/platform-legacy-assignment-admin.server',
+  () => ({ isPlatformLegacyAssignmentAdminEnabled })
+);
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('react-router', () => ({
   data: (value: unknown) => ({ data: value }),
@@ -27,53 +31,60 @@ const { default: AssignmentTypesRoute, loader } = await import('./route');
 
 const mockRequest = new Request('http://localhost/app/admin/assignments');
 
-const mockAssignmentType = {
-  id: 'at-1',
-  title: 'AP History Essay',
-  description: 'An essay type',
-  createdAt: new Date('2024-01-01'),
-  image: null,
-  assignmentModules: [{ id: 'm-1' }, { id: 'm-2' }],
-  organizationAssignments: [{ organizationId: 'org-1' }],
-  rubricJson: { categories: [] },
-};
-
-describe('AssignmentTypes loader', () => {
+describe('admin assignments index', () => {
   beforeEach(() => {
     requireAdmin.mockReset();
-    requireMutableRequest.mockReset();
+    isPlatformLegacyAssignmentAdminEnabled.mockReset();
     prisma.assignmentType.findMany.mockReset();
     requireAdmin.mockResolvedValue(undefined);
-    currentLoaderData = { assignmentTypes: [] };
+    isPlatformLegacyAssignmentAdminEnabled.mockResolvedValue(true);
+    currentLoaderData = { legacyAssignmentAdminEnabled: true, assignmentTypes: [] };
   });
 
-  test('returns assignment types with rubric info', async () => {
-    prisma.assignmentType.findMany.mockResolvedValue([mockAssignmentType]);
+  test('loader skips assignment types when the legacy admin flag is off', async () => {
+    isPlatformLegacyAssignmentAdminEnabled.mockResolvedValue(false);
 
-    const response = await loader({ request: mockRequest, params: {}, context: {} } as any);
+    const response = await loader({
+      request: mockRequest,
+      params: {},
+      context: {},
+    } as any);
     const data = (response as { data: any }).data;
 
-    expect(data.assignmentTypes).toHaveLength(1);
-    expect(data.assignmentTypes[0].title).toBe('AP History Essay');
-    expect(data.assignmentTypes[0].rubricJson).toEqual({ categories: [] });
+    expect(data.legacyAssignmentAdminEnabled).toBe(false);
+    expect(data.assignmentTypes).toEqual([]);
+    expect(prisma.assignmentType.findMany).not.toHaveBeenCalled();
   });
 
-  test('returns empty list when no assignment types exist', async () => {
-    prisma.assignmentType.findMany.mockResolvedValue([]);
-
-    const response = await loader({ request: mockRequest, params: {}, context: {} } as any);
-    const data = (response as { data: any }).data;
-
-    expect(data.assignmentTypes).toHaveLength(0);
-  });
-
-  test('renders moved notice while preserving the legacy create link', () => {
-    currentLoaderData = { assignmentTypes: [mockAssignmentType] };
+  test('renders the off notice when legacy admin is disabled', () => {
+    currentLoaderData = {
+      legacyAssignmentAdminEnabled: false,
+      assignmentTypes: [],
+    };
 
     const html = renderToStaticMarkup(React.createElement(AssignmentTypesRoute));
 
-    expect(html).toContain('Assignment Types read-only review moved to Yawp Internal.');
+    expect(html).toContain('Platform assignment-type admin is off');
+    expect(html).toContain('platform_legacy_assignment_admin');
+  });
+
+  test('renders the restored intro when legacy admin is enabled', () => {
+    currentLoaderData = {
+      legacyAssignmentAdminEnabled: true,
+      assignmentTypes: [
+        {
+          id: 'at-1',
+          title: 'Prewriting',
+          image: null,
+          assignmentModules: [],
+          organizationAssignments: [],
+        },
+      ],
+    };
+
+    const html = renderToStaticMarkup(React.createElement(AssignmentTypesRoute));
+
+    expect(html).toContain('Platform assignment-type admin (legacy UI)');
     expect(html).toContain('href="/app/admin/assignment-types/new"');
-    expect(html).toContain('Create assignment type');
   });
 });

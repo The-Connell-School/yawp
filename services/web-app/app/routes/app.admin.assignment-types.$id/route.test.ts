@@ -50,10 +50,30 @@ mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
   requireMembership,
 }));
+mock.module('~/domain/assignment-types/platform-legacy-assignment-admin.server', () => ({
+  requirePlatformLegacyAssignmentAdmin: requireAdmin,
+}));
+mock.module('~/utils/platform-admin-actor.server', () => ({
+  resolvePlatformAdminActorEmail: mock(async () => 'admin@example.test'),
+}));
 
 const { action: routeAction, loader: routeLoader } = await import('./route');
 const action = routeAction as any;
 const loader = routeLoader as any;
+
+function adminEditStamp() {
+  return {
+    _lastAdminEdit: {
+      source: 'platform',
+      updatedBy: 'admin@example.test',
+      updatedAt: expect.any(String),
+    },
+  };
+}
+
+function promptConfigWithStamp(config: Record<string, unknown>) {
+  return { ...config, ...adminEditStamp() };
+}
 
 describe('admin assignment type detail action', () => {
   beforeEach(() => {
@@ -89,6 +109,7 @@ describe('admin assignment type detail action', () => {
     );
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'at-1',
+      updatedAt: new Date('2026-10-26T12:00:00.000Z'),
       rubricJson: {
         categories: [
           {
@@ -133,7 +154,12 @@ describe('admin assignment type detail action', () => {
       const response = await action({ request: new Request('https://example.test/edit', { method: 'POST', body: form }), params: { id: 'at-1' }, context: {} });
       expect(response).toMatchObject({ data: { status: 'success' } });
       const data = prisma.assignmentType.update.mock.calls.at(-1)?.[0].data;
-      expect(data.gradingPromptConfigJson).toEqual({ systemInstructions: 'Source system', gradingInstructionsOverride: 'Source override' });
+      expect(data.gradingPromptConfigJson).toEqual(
+        promptConfigWithStamp({
+          systemInstructions: 'Source system',
+          gradingInstructionsOverride: 'Source override',
+        })
+      );
       expect(data.gradingAssistantVersion).toBeUndefined();
     }
   );
@@ -155,7 +181,15 @@ describe('admin assignment type detail action', () => {
     form.set('title', 'Existing type');
     form.set('rubricId', '__none__');
     await action({ request: new Request('https://example.test/edit', { method: 'POST', body: form }), params: { id: 'at-1' }, context: {} });
-    expect(prisma.assignmentType.update).toHaveBeenCalledWith({ where: { id: 'at-1' }, data: { title: 'Existing type', description: null, rubricId: null } });
+    expect(prisma.assignmentType.update).toHaveBeenCalledWith({
+      where: { id: 'at-1' },
+      data: expect.objectContaining({
+        title: 'Existing type',
+        description: null,
+        rubricId: null,
+        gradingPromptConfigJson: expect.objectContaining(adminEditStamp()),
+      }),
+    });
   });
 
   test('archives assignment types instead of hard deleting them', async () => {
@@ -280,10 +314,10 @@ describe('admin assignment type detail action', () => {
             },
           ],
         },
-        gradingPromptConfigJson: {
+        gradingPromptConfigJson: promptConfigWithStamp({
           systemInstructions: 'Act as an ACT Writing evaluator.',
           gradingInstructions: 'Grade this as ACT Writing.',
-        },
+        }),
         gradingAssistantVersion: { increment: 1 },
       }),
     });
@@ -444,10 +478,11 @@ describe('admin assignment type detail action', () => {
 
     expect(prisma.assignmentType.update).toHaveBeenCalledWith({
       where: { id: 'at-1' },
-      data: {
+      data: expect.objectContaining({
         title: 'Renamed assignment type',
         description: 'Only the basics changed.',
-      },
+        gradingPromptConfigJson: expect.objectContaining(adminEditStamp()),
+      }),
     });
   });
 
@@ -495,11 +530,12 @@ describe('admin assignment type detail action', () => {
     expect(prisma.rubric.findFirst).toHaveBeenCalled();
     expect(prisma.assignmentType.update).toHaveBeenCalledWith({
       where: { id: 'at-1' },
-      data: {
+      data: expect.objectContaining({
         title: 'Cristo Rey Essay',
         description: null,
         rubricId: 'rubric-1',
-      },
+        gradingPromptConfigJson: expect.objectContaining(adminEditStamp()),
+      }),
     });
   });
 
@@ -524,10 +560,14 @@ describe('admin assignment type detail action', () => {
 
     expect(prisma.assignmentType.update).toHaveBeenCalledWith({
       where: { id: 'at-1' },
-      data: {
+      data: expect.objectContaining({
         title: 'Renamed assignment type',
         description: 'Only the basics changed.',
-      },
+        gradingPromptConfigJson: expect.objectContaining({
+          instructionsPreset: 'legacy_thesis_driven_essay',
+          ...adminEditStamp(),
+        }),
+      }),
     });
   });
 
@@ -558,11 +598,11 @@ describe('admin assignment type detail action', () => {
       data: {
         title: 'ACT Writing',
         description: 'ACT writing assignment type',
-        gradingPromptConfigJson: {
+        gradingPromptConfigJson: promptConfigWithStamp({
           instructionsPreset: 'legacy_thesis_driven_essay',
           gradingInstructionsOverride:
             'Apply the rubric with extra emphasis on concrete supporting details.',
-        },
+        }),
         gradingAssistantVersion: { increment: 1 },
       },
     });
@@ -600,9 +640,9 @@ describe('admin assignment type detail action', () => {
       data: {
         title: 'Thesis-Driven Essay',
         description: null,
-        gradingPromptConfigJson: {
+        gradingPromptConfigJson: promptConfigWithStamp({
           instructionsPreset: 'legacy_thesis_driven_essay',
-        },
+        }),
         gradingAssistantVersion: { increment: 1 },
       },
     });

@@ -12,12 +12,13 @@ import {
 } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { AssignmentTypeEditorForm } from '~/components/admin/assignment-type-editor-form';
-import { requireAdmin } from '~/utils/auth.server';
+import { requirePlatformLegacyAssignmentAdmin } from '~/domain/assignment-types/platform-legacy-assignment-admin.server';
+import { resolvePlatformAdminActorEmail } from '~/utils/platform-admin-actor.server';
 import { prisma } from '~/utils/db.server';
 import { createAssignmentType, parseAdminCreateGradingConfig } from '~/domain/assignment-types/assignment-type-admin-writes.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  await requireAdmin(request);
+  await requirePlatformLegacyAssignmentAdmin(request);
   const rubrics = (await listLiveRubricsForAdminPicker()).map(
     ({ id, name, title, json }) => ({ id, name, title, json })
   );
@@ -25,7 +26,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  await requireAdmin(request);
+  await requirePlatformLegacyAssignmentAdmin(request);
+  const actorEmail = await resolvePlatformAdminActorEmail(request);
   const formData = await request.formData();
   const title = formData.get('title')?.toString().trim();
   const description = formData.get('description')?.toString().trim() || null;
@@ -76,6 +78,7 @@ export async function action({ request }: ActionFunctionArgs) {
     title, description, tutorInstructions,
     ...(rubricSelection ? { rubricSelection } : {}),
     gradingConfig: gradingConfigData,
+    adminEditProvenance: { source: 'platform', updatedBy: actorEmail },
   });
 
   return redirect(`/app/admin/assignment-types/${assignmentType.id}`);

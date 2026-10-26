@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { requireAdmin } from '~/utils/auth.server';
 import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { isPlatformLegacyAssignmentAdminEnabled } from '~/domain/assignment-types/platform-legacy-assignment-admin.server';
 
 export const adminTabs = [
   {
@@ -39,9 +40,10 @@ export const adminTabs = [
     icon: <User size={16} className="opacity-75 mr-1" />,
   },
   {
-    label: 'Assignment Types (moved)',
+    label: 'Assignment Types',
     to: '/app/admin/assignments',
     icon: <ClipboardList size={16} className="opacity-75 mr-1" />,
+    legacyAssignmentAdminTab: true,
   },
   {
     label: 'Teacher Courses',
@@ -72,11 +74,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return dataResponse({
     freeTierEnabled: await isFreeTierEnabled(),
     auditMoved: auditMovedToInternal(),
+    legacyAssignmentAdminEnabled: await isPlatformLegacyAssignmentAdminEnabled(),
   });
 }
 
 export default function Route() {
-  const { freeTierEnabled, auditMoved } = useLoaderData<typeof loader>();
+  const { freeTierEnabled, auditMoved, legacyAssignmentAdminEnabled } =
+    useLoaderData<typeof loader>();
   const location = useLocation();
   const pathname = location.pathname;
   const visibleTabs = adminTabs.filter(
@@ -104,7 +108,11 @@ export default function Route() {
                 {tab.icon}
                 {tab.to === '/app/admin/audit' && auditMoved
                   ? 'Audit (moved)'
-                  : tab.label}
+                  : 'legacyAssignmentAdminTab' in tab &&
+                      tab.legacyAssignmentAdminTab &&
+                      !legacyAssignmentAdminEnabled
+                    ? 'Assignment Types (Internal)'
+                    : tab.label}
               </Link>
             </Button>
           ))}

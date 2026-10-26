@@ -25,9 +25,13 @@ import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
 import { useEffect, useState } from 'react';
 import { requireAdmin } from '~/utils/auth.server';
+import { isPlatformLegacyAssignmentAdminEnabled } from '~/domain/assignment-types/platform-legacy-assignment-admin.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
+  if (!(await isPlatformLegacyAssignmentAdminEnabled())) {
+    throw new Response('Not Found', { status: 404 });
+  }
   return redirect('/app/admin/assignments');
 
   const courses = await prisma.assignmentType.findMany({
