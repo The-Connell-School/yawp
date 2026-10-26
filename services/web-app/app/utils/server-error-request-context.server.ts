@@ -89,6 +89,15 @@ export function safeErrorTextForClientResponse(
   return fallback;
 }
 
+/** Teacher-safe validation copy from a typed domain error, with freeform redaction. */
+export function safeDomainErrorTextForClientResponse(
+  error: Error,
+  fallback: string,
+): string {
+  const redacted = redactFreeformMessage(error.message).trim();
+  return redacted || fallback;
+}
+
 /** Single-line safe error text for DB rows or domain `{ ok: false, error }` payloads. */
 export function safeErrorTextForLog(error: unknown): string {
   const safe = buildSafeErrorForLog(error);

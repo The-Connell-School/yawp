@@ -112,6 +112,26 @@ describe('api.domain.lesson-planner.uploads action', () => {
     expect(prisma.lessonPlanUpload.create).toHaveBeenCalledTimes(1);
   });
 
+  test('domain read failures redact sensitive substrings in messages', async () => {
+    readSourceDocument.mockRejectedValue(
+      new SourceDocumentError(
+        'Only PDF files are supported. token=SECRET-TOKEN teacher@school.edu',
+      ),
+    );
+
+    const form = new FormData();
+    form.append('intent', 'upload');
+    form.append('file', new File(['hello'], 'notes.txt', { type: 'text/plain' }));
+    const response = (await action({
+      request: uploadRequest(form),
+    } as any)) as ActionResult;
+
+    const serialized = JSON.stringify(response.data);
+    expect(response.init?.status).toBe(422);
+    expect(serialized).not.toContain('SECRET-TOKEN');
+    expect(String(response.data?.error)).toContain('Only PDF files are supported');
+  });
+
   test('unexpected read failures return stable copy without raw exception text', async () => {
     const sensitive =
       'Invalid `prisma.user.findMany()` token=SECRET-TOKEN teacher@school.edu';

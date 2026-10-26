@@ -15,6 +15,9 @@ import {
 } from '~/utils/assignment-type-access.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import {
+  safeDomainErrorTextForClientResponse,
+} from '~/utils/server-error-request-context.server';
 
 const GENERIC_ERROR = "That prompt couldn't be saved. Please try again.";
 
@@ -78,7 +81,13 @@ export async function action({ request }: ActionFunctionArgs) {
   } catch (error) {
     if (error instanceof SavedPromptError) {
       return dataResponse(
-        { success: false, message: error.message },
+        {
+          success: false,
+          message: safeDomainErrorTextForClientResponse(
+            error,
+            'That prompt could not be saved.',
+          ),
+        },
         { status: 400 }
       );
     }

@@ -1331,6 +1331,36 @@ describe('api.assignments.create', () => {
       expect(body.message).toMatch(/used all 12 free Class Starters/i);
     });
 
+    test('redacts sensitive substrings in quota error messages', async () => {
+      const { FreeClassroomAssignmentQuotaError } = await import(
+        '~/utils/assignment-quota.server'
+      );
+      createAssignmentDeployedToClasses.mockRejectedValue(
+        new FreeClassroomAssignmentQuotaError(
+          "You've used all 12 free Class Starters. token=SECRET-TOKEN",
+          'quota_exhausted',
+          'class_starter',
+        ),
+      );
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1'],
+          prompt: 'Start class.',
+          title: 'Starter',
+        }),
+        params: {},
+      } as any);
+      const body = await readBody(response);
+      const serialized = JSON.stringify(body);
+
+      expect(responseStatus(response)).toBe(403);
+      expect(serialized).not.toContain('SECRET-TOKEN');
+      expect(body.message).toMatch(/used all 12 free Class Starters/i);
+    });
+
     test('returns stable copy when deployment fails unexpectedly', async () => {
       const sensitive =
         'Invalid `prisma.user.findMany()` token=SECRET-TOKEN teacher@school.edu';
