@@ -15,6 +15,7 @@ import {
   getMembershipId,
   setMembershipId,
 } from '~/cookies/membership-id.server';
+import { clearSchoolYearScope } from '~/cookies/school-year.server';
 import { normalizeEmail } from './normalize-email';
 
 const membershipSelect = {
@@ -480,6 +481,8 @@ export async function logout(
     ...responseInit,
     headers: combineHeaders(
       { 'set-cookie': await authSessionStorage.destroySession(authSession) },
+      { 'set-cookie': await setMembershipId('') },
+      { 'set-cookie': clearSchoolYearScope() },
       responseInit?.headers
     ),
   });

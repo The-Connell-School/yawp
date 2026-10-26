@@ -22,7 +22,9 @@ const prisma = {
 
 const getMembershipId = mock();
 const setMembershipId = mock();
+const clearSchoolYearScope = mock(() => 'school-year=; Max-Age=0; Path=/');
 const getSession = mock();
+const destroySession = mock(async () => 'en_session=; Max-Age=0; Path=/');
 const getUaStudentLicenseAccess = mock();
 
 mock.module('./db.server.ts', () => ({ prisma }));
@@ -30,10 +32,13 @@ mock.module('~/cookies/membership-id.server', () => ({
   getMembershipId,
   setMembershipId,
 }));
+mock.module('~/cookies/school-year.server', () => ({
+  clearSchoolYearScope,
+}));
 mock.module('../cookie-session-storages/authentication.server.ts', () => ({
   authSessionStorage: {
     getSession,
-    destroySession: mock(),
+    destroySession,
   },
 }));
 mock.module('~/domain/student-license/student-license.server', () => ({
@@ -547,6 +552,7 @@ describe('auth email normalization', () => {
 
 test('opt-in logout waits for session revocation before redirecting', async () => {
   getSession.mockResolvedValue({ get: () => 'session-to-revoke' });
+  setMembershipId.mockResolvedValue('membership-id=; Max-Age=0; Path=/');
   let revoked = false;
   prisma.session.deleteMany.mockImplementation(() => ({
     then(resolve: (value: { count: number }) => void) {
@@ -568,5 +574,25 @@ test('opt-in logout waits for session revocation before redirecting', async () =
     expect(prisma.session.deleteMany).toHaveBeenCalledWith({
       where: { id: 'session-to-revoke' },
     });
+  }
+});
+
+test('logout clears membership and school-year scope cookies', async () => {
+  getSession.mockResolvedValue({ get: () => null });
+  setMembershipId.mockResolvedValue('membership-id=; Max-Age=0; Path=/');
+
+  try {
+    await logout({
+      request: new Request('http://localhost/auth/logout'),
+      redirectTo: '/',
+    });
+    throw Error('Expected redirect');
+  } catch (response) {
+    expect(response).toBeInstanceOf(Response);
+    const headers = (response as Response).headers;
+    expect(headers.get('set-cookie')).toContain('en_session=');
+    expect(setMembershipId).toHaveBeenCalledWith('');
+    expect(clearSchoolYearScope).toHaveBeenCalled();
+    expect(headers.get('set-cookie')).toContain('school-year=');
   }
 });
