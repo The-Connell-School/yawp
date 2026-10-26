@@ -15,6 +15,7 @@ import {
   isRetryableAnthropicOutageError,
   LlmFallbackRetrySignal,
 } from './llm-provider-errors.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 
 export enum AgentType {
   User = 'user',
@@ -127,7 +128,9 @@ async function logLlmCall(data: {
       } as object,
     });
   } catch (err) {
-    console.error('Failed to log LLM call:', err);
+    console.error('llm_call_persist_failed', {
+      error: buildSafeErrorForLog(err),
+    });
   }
 }
 
