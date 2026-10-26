@@ -164,9 +164,12 @@ async function main() {
   {
     const page = await context.newPage();
     await context.addCookies(cookieHeaderToPlaywright(teacherCookies, BASE));
-    await page.goto(`${BASE}${TEACHER_DASHBOARD}`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${BASE}${TEACHER_DASHBOARD}`, {
+      waitUntil: 'networkidle',
+      timeout: 120_000,
+    });
     await clearDevPanelStorage(page);
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.reload({ waitUntil: 'networkidle', timeout: 120_000 });
     await page.locator('.yawp-dev-panel-beaker button').waitFor({
       state: 'visible',
       timeout: 120_000,
@@ -180,10 +183,13 @@ async function main() {
   {
     const page = await context.newPage();
     await context.addCookies(cookieHeaderToPlaywright(teacherCookies, BASE));
-    await page.goto(`${BASE}${TEACHER_DASHBOARD}`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${BASE}${TEACHER_DASHBOARD}`, {
+      waitUntil: 'networkidle',
+      timeout: 120_000,
+    });
     await unlockDevPanelViaApi(page, ACCESS_CODE);
     await clearDevPanelStorage(page);
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.reload({ waitUntil: 'networkidle', timeout: 120_000 });
 
     const panel = await openDevToolsPanel(page);
     await collapseDevPanelSections(page, panel);
@@ -220,10 +226,10 @@ async function main() {
     const page = await context.newPage();
     await context.clearCookies();
     await context.addCookies(cookieHeaderToPlaywright(accessCookie, BASE));
-    await page.goto(`${BASE}/free`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${BASE}/free`, { waitUntil: 'networkidle', timeout: 120_000 });
     await unlockDevPanelViaApi(page, ACCESS_CODE);
     await clearDevPanelStorage(page);
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.reload({ waitUntil: 'networkidle', timeout: 120_000 });
     const panel = await openDevToolsPanel(page);
     await collapseDevPanelSections(page, panel);
     await panel.getByRole('button', { name: /^Give feedback\b/ }).click();
