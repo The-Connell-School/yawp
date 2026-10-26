@@ -5,6 +5,7 @@
  */
 import { createPrismaClient } from './local-dev/connection';
 import {
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
   buildPostcheckReport,
   type PostcheckInput,
 } from './org-membership-postcheck';
@@ -225,7 +226,7 @@ async function main() {
 
 if (import.meta.main) {
   main().catch((error) => {
-    console.error(error);
+    logScriptError(error);
     process.exit(1);
   });
 }

@@ -24,4 +24,26 @@ describe('getErrorMessage', () => {
     );
     expect(JSON.stringify(errorSpy.mock.calls[0])).not.toContain('secret');
   });
+
+  test('redacts token and email substrings from Error messages', () => {
+    const message = getErrorMessage(
+      new Error('Invite failed for teacher@school.edu token=SECRET-ABC'),
+    );
+    expect(message).toContain('Invite failed');
+    expect(message).not.toContain('teacher@school.edu');
+    expect(message).not.toContain('SECRET-ABC');
+  });
+
+  test('redacts sensitive substrings from string errors', () => {
+    const message = getErrorMessage('password=abc123 dev.admin@yawp.local');
+    expect(message).not.toContain('abc123');
+    expect(message).not.toContain('dev.admin@yawp.local');
+    expect(message).toContain('[redacted-token]');
+  });
+
+  test('redacts a message that is only sensitive text', () => {
+    expect(getErrorMessage(new Error('token=only-secret'))).toBe(
+      '[redacted-token]',
+    );
+  });
 });

@@ -10,6 +10,7 @@
  * set ASSIGNMENT_TYPE_RELEASE_GATE_REQUIRE_DATA=true or pass --require-data.
  */
 import pg, { type PoolConfig } from 'pg';
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 
 export type ColumnRef = {
   tableName: string;
@@ -500,7 +501,7 @@ async function main() {
 
 if (import.meta.main) {
   main().catch((error) => {
-    console.error(error);
+    logScriptError(error);
     process.exit(1);
   });
 }
