@@ -372,7 +372,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (error instanceof GroupProvisioningError) {
       return redirectWithToast(backTo, {
         type: 'error',
-        description: error.message,
+        description: safeDomainErrorTextForClientResponse(
+          error,
+          'Could not update groups.',
+        ),
       });
     }
     throw error;

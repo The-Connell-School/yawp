@@ -330,6 +330,21 @@ describe('class assignment groups', () => {
       expect(result.options.description).toMatch(/already been opened/);
     });
 
+    test('redacts sensitive substrings in provisioning error toasts', async () => {
+      arrangeGroups.mockRejectedValue(
+        new GroupProvisioningError(
+          'Groups have already been opened. token=SECRET teacher@school.edu',
+        ),
+      );
+
+      const result: any = await post({ intent: 'arrange', groupSize: '3' });
+
+      expect(result.options.type).toBe('error');
+      expect(result.options.description).toMatch(/already been opened/);
+      expect(result.options.description).not.toContain('SECRET');
+      expect(result.options.description).not.toContain('teacher@school.edu');
+    });
+
     test('lets an unexpected error propagate', async () => {
       arrangeGroups.mockRejectedValue(new Error('database on fire'));
 
