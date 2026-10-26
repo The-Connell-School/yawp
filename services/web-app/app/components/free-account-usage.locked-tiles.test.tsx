@@ -159,7 +159,7 @@ test('FreeAssignmentTiles unlocked tiles link to assignment type home', () => {
   );
 });
 
-test('FreeAssignmentTiles locked tiles link to assignment type home', () => {
+test('FreeAssignmentTiles locked tiles link to How It Works guides', () => {
   const html = renderToStaticMarkup(
     <StaticRouter location="/app">
       <FreeAssignmentTiles
@@ -174,8 +174,8 @@ test('FreeAssignmentTiles locked tiles link to assignment type home', () => {
       />
     </StaticRouter>
   );
-  expect(html).toContain('href="/app/assignment-types/starter"');
-  expect(html).toContain('href="/app/assignment-types/thesis"');
+  expect(html).toContain('href="/app/assignment-types/starter/how-it-works"');
+  expect(html).toContain('href="/app/assignment-types/thesis/how-it-works"');
   expect(html).not.toMatch(
     /<button[^>]*data-testid="dashboard-assignment-tile"/
   );
