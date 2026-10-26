@@ -5,6 +5,11 @@ import { defineConfig, type Plugin } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 const viteDir = path.dirname(fileURLToPath(import.meta.url));
+const reactRouterWithPreviewIngress = path.resolve(
+  viteDir,
+  'vite/react-router-with-preview-ingress.ts'
+);
+const reactRouterOriginal = fileURLToPath(import.meta.resolve('react-router'));
 const devPanelEntryStub = path.resolve(
   viteDir,
   'app/dev-panel/dev-panel-entry.stub.tsx'
@@ -63,6 +68,12 @@ export default defineConfig({
   },
   ssr: {
     noExternal: ['posthog-js', 'posthog-js/react'],
+    resolve: {
+      alias: {
+        'react-router-original': reactRouterOriginal,
+        'react-router': reactRouterWithPreviewIngress,
+      },
+    },
   },
   server: {
     port: Number(process.env.PORT ?? 5176),
