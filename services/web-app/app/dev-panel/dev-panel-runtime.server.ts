@@ -13,16 +13,14 @@ export function isDevPanelBuildEnabled(
   );
 }
 
-/** Deployed PR preview (Render compose sets PREVIEW_SLUG / PR_NUMBER + production NODE_ENV). */
+/** Deployed PR preview (compose sets PREVIEW_SLUG=pr-N; excludes preview-gate E2E slug). */
 function isPrPreviewProductionHost(env: NodeJS.ProcessEnv) {
   if (String(env.YAWP_ENVIRONMENT ?? '').trim().toLowerCase() !== 'preview') {
     return false;
   }
-  if (String(env.NODE_ENV ?? '').trim().toLowerCase() !== 'production') {
-    return false;
-  }
-  if (Boolean(String(env.PR_NUMBER ?? '').trim())) return true;
   const slug = String(env.PREVIEW_SLUG ?? '').trim();
+  if (slug === 'pr-e2e-gate') return false;
+  if (Boolean(String(env.PR_NUMBER ?? '').trim())) return true;
   return /^pr-\d+$/i.test(slug);
 }
 

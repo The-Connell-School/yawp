@@ -49,7 +49,7 @@ describe('assertDevPanelUnlockRoute', () => {
     for (const key of keys) previous[key] = process.env[key];
     Object.assign(process.env, {
       YAWP_ENVIRONMENT: 'preview',
-      PREVIEW_SLUG: 'pr-e2e-gate',
+      PREVIEW_SLUG: 'pr-860',
       PR_NUMBER: '860',
       NODE_ENV: 'production',
       DATABASE_URL: 'postgresql://u:p@remote:5432/yawp_pr_860',
