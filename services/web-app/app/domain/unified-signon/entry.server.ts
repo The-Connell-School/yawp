@@ -6,6 +6,7 @@ import type { ActionFunctionArgs } from 'react-router';
 import { redirect } from 'react-router';
 import { loginAction } from '~/routes/auth.login/login.server';
 import type { SignonState } from './contracts';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 
 export async function unifiedEntry(request: Request) {
   let authenticated = false;
@@ -149,7 +150,12 @@ export async function dispatchUnifiedLogin(args: ActionFunctionArgs) {
     if (error instanceof FlowError)
       return Response.json(
         {
-          error: error.fieldErrors ? '' : error.message,
+          error: error.fieldErrors
+            ? ''
+            : safeDomainErrorTextForClientResponse(
+                error,
+                'This sign-in session expired. Please start again.',
+              ),
           ...(error.fieldErrors ? { fieldErrors: error.fieldErrors } : {}),
           ...(error.retryAfterSeconds
             ? { retryAfterSeconds: error.retryAfterSeconds }
