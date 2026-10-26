@@ -133,7 +133,8 @@ export async function openDevPanelClassSimulationFlyout(page: Page) {
     await expect(testerToolsTrigger).toHaveAttribute('aria-expanded', 'true');
   }
   await panel
-    .getByRole('button', { name: 'Populate class', exact: true })
+    .locator('.yawp-dev-panel-login-row')
+    .filter({ hasText: 'Populate class' })
     .click();
   await expect(
     page.getByRole('dialog', { name: 'Class simulation' })
