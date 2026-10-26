@@ -45,6 +45,7 @@ import {
   type LibraryLesson,
 } from '~/domain/lesson-planner/lesson-library';
 import { timeAgo } from '~/utils/timeAgo';
+import { DeckArtImage } from '~/components/lesson-planner/deck-art-image';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const access = await getLessonPlannerAccess(request);
@@ -70,7 +71,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         select: { keptAudience: true },
       },
       // The stack's pieces (Brian's run 4: every lesson read "Empty").
-      materials: { select: { kind: true, audience: true } },
+      materials: { select: { kind: true, audience: true, content: true } },
       originClassAssignment: {
         select: {
           class: { select: { title: true, grade: true, period: true } },
@@ -178,7 +179,16 @@ function LessonRow({
           {published ? <BookMarked size={16} /> : <PenLine size={16} />}
         </button>
 
-        <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          {lesson.deckArtSwatch ? (
+            <DeckArtImage
+              src={lesson.deckArtSwatch}
+              alt=""
+              aria-hidden
+              className="h-10 w-10 shrink-0 rounded-md border bg-muted"
+            />
+          ) : null}
+          <div className="min-w-0 flex-1">
           <Link
             to={lessonHref(lesson)}
             className="font-medium hover:text-primary hover:underline"
@@ -194,6 +204,7 @@ function LessonRow({
               .filter(Boolean)
               .join(' · ')}
           </p>
+          </div>
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">

@@ -16,7 +16,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import PptxGenJS from 'pptxgenjs';
-import { deckArt, type DeckArt } from './deck-art';
+import { resolveDeckArt, type DeckArt } from './deck-art';
 import { splitColorMarks } from './deck-colors';
 import {
   GALLERY_COLORS,
@@ -477,7 +477,7 @@ export async function renderDeckPptxGallery(deck: SlideDeck): Promise<Uint8Array
   pptx.company = 'Yawp!';
 
   const colors = galleryColors(deck);
-  const art = deckArt(deck.art);
+  const art = resolveDeckArt(deck.art);
   const cache = new Map<string, string | null>();
   const image = (src: string) => {
     if (!cache.has(src)) cache.set(src, imageData(src));

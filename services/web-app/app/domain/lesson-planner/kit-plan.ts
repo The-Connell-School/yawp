@@ -8,7 +8,7 @@
  * turns it into the Word file and the PDF. Built from the concise plan
  * (lesson-plan-doc.ts) and the lesson's deck, when it has one.
  */
-import { deckArt } from './deck-art';
+import { resolveDeckArt } from './deck-art';
 import { deckColors, normalizedHex, withoutColorMarks } from './deck-colors';
 import { WRITING_PROCESS_STEPS, withoutLessonNumber } from './deck-gallery';
 import type { LessonPlanDoc, LessonPlanEntry, LessonPlanStep } from './lesson-plan-doc';
@@ -115,7 +115,7 @@ function stepBlock(step: LessonPlanStep, num: number, deck: SlideDeck | null): K
 
 export function buildKitPlan({ doc, entries }: { doc: LessonPlanDoc; entries: LessonPlanEntry[] }): KitPlan {
   const deck = deckFrom(entries);
-  const colors = deckColors(deck ?? {}, deck ? deckArt(deck.art) : null);
+  const colors = deckColors(deck ?? {}, deck ? resolveDeckArt(deck.art) : null);
   const accent = colors[0]!.replace('#', '').toUpperCase();
   const title = withoutLessonNumber(deck?.title ?? doc.title);
   const titleSlide = deck?.slides.find((slide) => slide.layout === 'title');

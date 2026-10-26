@@ -38,6 +38,13 @@ export type DeckArt = {
 
 const base = '/lesson-planner/art';
 
+/** Held for rights review — never selectable in decks or the planner library. */
+export const RIGHTS_CHECK_DECK_ART_IDS = [
+  'klee-castle-sun',
+  'mondrian-composition-rby',
+  'sargent-gassed',
+] as const;
+
 export const DECK_ART: DeckArt[] = [
   {
     id: 'bierstadt-yosemite-valley',
@@ -181,6 +188,26 @@ export const DECK_ART: DeckArt[] = [
 export function deckArt(id: string | null | undefined): DeckArt | null {
   if (!id) return null;
   return DECK_ART.find((art) => art.id === id) ?? null;
+}
+
+/** Whether an id is held for rights review (not shipped in the library). */
+export function isRightsCheckDeckArt(id: string): boolean {
+  return (RIGHTS_CHECK_DECK_ART_IDS as readonly string[]).includes(id);
+}
+
+/** Works the planner and renderers may hang — shipped JPEGs, clear rights only. */
+export function selectableDeckArt(): DeckArt[] {
+  return DECK_ART.filter((work) => !work.rights.includes('rights:check'));
+}
+
+/**
+ * The painting a deck may use: registry lookup with held and unknown ids
+ * dropped so Present, export and thumbnails never point at a missing file.
+ */
+export function resolveDeckArt(id: string | null | undefined): DeckArt | null {
+  const art = deckArt(id);
+  if (!art || art.rights.includes('rights:check') || isRightsCheckDeckArt(art.id)) return null;
+  return art;
 }
 
 /** The wall label's one-line form: "J. M. W. Turner, The Fighting Temeraire, 1839". */

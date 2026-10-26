@@ -14,6 +14,9 @@
  * list rather than dividing it, so a half-finished lesson and one taught for
  * three years sat in the same place.
  */
+import { resolveDeckArt } from './deck-art';
+import { readSlideDeck } from './slide-deck';
+
 export type LibraryLessonInput = {
   id: string;
   title: string;
@@ -22,7 +25,7 @@ export type LibraryLessonInput = {
   publishedAt: Date | string | null;
   messages: Array<{ keptAudience: string | null }>;
   /** The stack's pieces, filed one by one from the chat. */
-  materials?: Array<{ kind: string; audience: string | null }>;
+  materials?: Array<{ kind: string; audience: string | null; content?: string }>;
   /** The class the teacher named for the lesson. */
   lessonClassLabel?: string | null;
   /** The unit it belongs to, and which day (null: the unit's planning chat). */
@@ -49,6 +52,8 @@ export type LibraryLesson = {
   updatedAt: string;
   unit: { id: string; title: string } | null;
   unitDay: number | null;
+  /** Swatch from the lesson deck's painting, when the stack has a gallery deck. */
+  deckArtSwatch: string | null;
 };
 
 export function classDisplayName(klass: {
@@ -65,6 +70,18 @@ export function classDisplayName(klass: {
 
 function asIsoString(value: Date | string): string {
   return typeof value === 'string' ? value : value.toISOString();
+}
+
+function deckArtSwatchFrom(
+  materials: LibraryLessonInput['materials']
+): string | null {
+  for (const material of materials ?? []) {
+    if (material.kind !== 'slides' || !material.content) continue;
+    const outcome = readSlideDeck(material.content);
+    if (outcome.kind !== 'deck') continue;
+    return resolveDeckArt(outcome.deck.art)?.crops.swatch ?? null;
+  }
+  return null;
 }
 
 /**
@@ -96,6 +113,7 @@ export function buildLessonLibrary(
       updatedAt: asIsoString(lesson.updatedAt),
       unit: lesson.unit ?? null,
       unitDay: lesson.unitDay ?? null,
+      deckArtSwatch: deckArtSwatchFrom(lesson.materials),
     };
   });
 }

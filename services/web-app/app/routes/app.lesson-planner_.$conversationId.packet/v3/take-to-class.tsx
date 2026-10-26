@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { FileText, MonitorPlay, Printer } from 'lucide-react';
 import { HEADING_FONT } from './theme';
+import { DeckArtImage } from '~/components/lesson-planner/deck-art-image';
 
 function Row({
   icon,
@@ -51,7 +52,7 @@ export function TakeToClass({
   planExportV2: boolean;
   stepCount: number;
   handoutCount: number;
-  deck: { id: string; slides: number; title: string } | null;
+  deck: { id: string; slides: number; title: string; artSwatch: string | null } | null;
   deckV2: boolean;
   /** Post to your class sits inside, when sharing is on. */
   children?: React.ReactNode;
@@ -113,6 +114,14 @@ export function TakeToClass({
         title="Slide deck"
         line={deck ? `${deck.slides} slides from your stack` : `About one slide per step (${stepCount} steps)`}
       >
+        {deck?.artSwatch ? (
+          <DeckArtImage
+            src={deck.artSwatch}
+            alt=""
+            aria-hidden
+            className="mb-2 h-14 w-full max-w-[8rem] rounded-lg border border-white/20 object-cover"
+          />
+        ) : null}
         {deck ? (
           <>
             <Link to={`/present/${conversationId}/${deck.id}`} data-testid="deck-present" className={BUTTON}>
