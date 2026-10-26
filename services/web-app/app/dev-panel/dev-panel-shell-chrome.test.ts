@@ -17,9 +17,9 @@ describe('dev panel v3 chrome', () => {
     expect(shell.includes('yawp-dev-panel-header-heading')).toBe(true);
   });
 
-  test('default panel sections match DevPanel.dc default (Sign in as open)', () => {
+  test('default panel sections match DevPanel.dc signed-out-feedback (collapsed Sign in as)', () => {
     const types = readFileSync(path.join(devPanelDir, 'dev-panel-types.ts'), 'utf8');
-    expect(types).toContain("openSections: ['sign-in']");
+    expect(types).toContain('openSections: []');
   });
 
   test('flyouts use border-only docked chrome', () => {

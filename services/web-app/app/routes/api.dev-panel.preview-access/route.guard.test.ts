@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { CLOUDFRONT_IPV4_RANGES } from '~/utils/cloudfront-ranges.server';
 import {
+  DEV_PANEL_UNLOCK_COOKIE_NAME,
   getPreviewAccessSeat,
   PREVIEW_ACCESS_COOKIE_NAME,
 } from '~/utils/preview-access.server';
@@ -134,8 +135,11 @@ describe('api.dev-panel.preview-access guard integration', () => {
       request: postPreviewAccess({ code: SECOND_SEAT_CODE }),
     } as never);
     expect(response.status).toBe(200);
-    const setCookie = response.headers.get('set-cookie') ?? '';
-    expect(setCookie).toContain(`${PREVIEW_ACCESS_COOKIE_NAME}=`);
+    const setCookies = response.headers.getSetCookie?.() ?? [
+      response.headers.get('set-cookie') ?? '',
+    ];
+    expect(setCookies.join(';')).toContain(`${PREVIEW_ACCESS_COOKIE_NAME}=`);
+    expect(setCookies.join(';')).toContain(`${DEV_PANEL_UNLOCK_COOKIE_NAME}=`);
     const body = await response.json();
     expect(body.ok).toBe(true);
     expect(body.seatLabel).toBe('Preview seat two');
