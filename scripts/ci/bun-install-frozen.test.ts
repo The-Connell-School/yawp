@@ -100,16 +100,55 @@ exit 99
   { timeout: 30_000 }
 );
 
-test('CI workflow routes frozen bun install through the bounded helper', () => {
-  const workflow = fs.readFileSync(
-    path.join(repoRoot, '.github/workflows/ci.yml'),
-    'utf8'
-  );
-  expect(workflow).toContain('bash scripts/ci/bun-install-frozen.sh');
-  expect(workflow).not.toMatch(
-    /name: 📦 Install dependencies[\s\S]*?run: bun install --frozen-lockfile/m
-  );
-  expect(workflow).toMatch(
-    /name: 📦 Install dependencies[\s\S]*?timeout-minutes: 22/m
-  );
-});
+const workflowsRequiringBoundedFrozenInstall = [
+  {
+    file: '.github/workflows/ci.yml',
+    installStepName: '📦 Install dependencies',
+    expectedCallCount: 8,
+  },
+  {
+    file: '.github/workflows/migration-integration.yml',
+    installStepName: 'Install deps',
+  },
+  {
+    file: '.github/workflows/deploy.yml',
+    installStepName: '📦 Install dependencies',
+    expectedCallCount: 2,
+  },
+  {
+    file: '.github/workflows/production-qa-profile.yml',
+    installStepName: 'Install dependencies',
+  },
+] as const;
+
+for (const {
+  file,
+  installStepName,
+  expectedCallCount = 1,
+} of workflowsRequiringBoundedFrozenInstall) {
+  test(`${file} routes frozen bun install through the bounded helper`, () => {
+    const workflow = fs.readFileSync(path.join(repoRoot, file), 'utf8');
+    const helperCalls = workflow.match(
+      /bash scripts\/ci\/bun-install-frozen\.sh/g
+    );
+    expect(helperCalls?.length ?? 0).toBe(expectedCallCount);
+    expect(workflow).not.toMatch(/run: bun install --frozen-lockfile/m);
+    expect(workflow).not.toMatch(
+      new RegExp(
+        `name: ${installStepName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?run: bun install\\s*$`,
+        'm'
+      )
+    );
+    const installBlocks = workflow.match(
+      new RegExp(
+        `name: ${installStepName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?(?=\\n      - name:|\\n      - uses:|\\n  [a-z]|$)`,
+        'g'
+      )
+    );
+    expect(installBlocks?.length ?? 0).toBe(expectedCallCount);
+    for (const block of installBlocks ?? []) {
+      expect(block).toContain('bash scripts/ci/bun-install-frozen.sh');
+      expect(block).toContain('timeout-minutes: 22');
+    }
+  });
+}

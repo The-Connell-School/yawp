@@ -24,7 +24,8 @@ jobs:
           bun-version: '1.4.4'
 
       - name: Install dependencies
-        run: bun install
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: Prepare production bastion SSH key
         run: |
