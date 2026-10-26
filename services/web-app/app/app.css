@@ -1901,3 +1901,83 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
 .free-tier-deny-button {
   margin-top: -4px;
 }
+
+.free-tier-pending-forward {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+}
+.free-tier-pending-forward-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  line-height: 21px;
+  color: hsl(var(--primary));
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.free-tier-pending-forward-trigger:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.free-tier-pending-forward-chevron-wrap {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
+}
+.free-tier-pending-forward-chevron-wrap-open {
+  transform: rotate(180deg);
+}
+.free-tier-pending-forward-chevron-wrap-reduced.free-tier-pending-forward-chevron-wrap-open {
+  transform: none;
+}
+.free-tier-pending-forward-chevron {
+  width: 16px;
+  height: 16px;
+}
+.free-tier-pending-forward-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  width: 100%;
+  overflow: hidden;
+  opacity: 0;
+  transition-property: grid-template-rows, opacity;
+  transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
+}
+.free-tier-pending-forward-panel-open {
+  grid-template-rows: auto;
+  overflow: visible;
+  opacity: 1;
+}
+.free-tier-pending-forward-panel-reduced {
+  display: block;
+  transition: none;
+  opacity: 1;
+}
+.free-tier-pending-forward-panel-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.free-tier-pending-forward-panel-open .free-tier-pending-forward-panel-inner {
+  min-height: auto;
+  overflow: visible;
+  padding-top: 12px;
+}
+.free-tier-pending-forward-panel-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 8px;
+  background: theme('colors.background');
+}
