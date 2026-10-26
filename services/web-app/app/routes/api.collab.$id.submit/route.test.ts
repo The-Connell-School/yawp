@@ -52,18 +52,21 @@ describe('api.collab.$id.submit', () => {
       'Invalid `prisma.user.findMany()` token=SECRET-TOKEN teacher@school.edu';
     submitGroupDraft.mockRejectedValue(new Error(sensitive));
 
-    const response = await action({
+    const response = (await action({
       request: new Request('https://yawp.school/api/collab/doc-1/submit', {
         method: 'POST',
       }),
       params: { id: 'doc-1' },
-    } as any);
+    } as any)) as {
+      init?: { status: number };
+      data?: { message: string; success: boolean };
+    };
 
-    const body =
-      typeof response.json === 'function' ? await response.json() : response.data;
-    const serialized = JSON.stringify(body);
-    expect(response.status ?? response.init?.status).toBe(500);
+    const serialized = JSON.stringify(response.data);
+    expect(response.init?.status).toBe(500);
     expect(serialized).not.toContain('SECRET-TOKEN');
-    expect(body.message).toBe('Could not submit this draft. Please try again.');
+    expect(response.data?.message).toBe(
+      'Could not submit this draft. Please try again.'
+    );
   });
 });

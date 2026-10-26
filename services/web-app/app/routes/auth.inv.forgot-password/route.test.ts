@@ -51,11 +51,11 @@ describe('auth.inv.forgot-password action', () => {
       error: { name: 'SESError', message: sensitive, statusCode: 500 },
     });
 
-    const result = await action({
+    const result = (await action({
       request: forgotPasswordRequest('teacher@school.edu'),
-    } as any);
+    } as any)) as { data?: { fieldErrors?: { email?: string } } };
 
-    const serialized = JSON.stringify(result);
+    const serialized = JSON.stringify(result.data ?? result);
     expect(serialized).not.toContain('SECRET-TOKEN');
     expect(serialized).not.toContain(sensitive);
     expect(serialized).toContain('Failed to send email. Please try again.');
