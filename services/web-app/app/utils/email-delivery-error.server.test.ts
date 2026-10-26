@@ -1,10 +1,31 @@
 import { afterEach, expect, test } from 'bun:test';
-import { emailDeliveryDiagnostic } from './email-delivery-error.server';
+import {
+  emailDeliveryDiagnostic,
+  safeEmailProviderErrorPayload,
+} from './email-delivery-error.server';
 
 const provider = process.env.EMAIL_PROVIDER;
 afterEach(() => {
   if (provider === undefined) delete process.env.EMAIL_PROVIDER;
   else process.env.EMAIL_PROVIDER = provider;
+});
+
+test('safeEmailProviderErrorPayload mirrors diagnostic message for callers', () => {
+  process.env.EMAIL_PROVIDER = 'ses';
+  const payload = safeEmailProviderErrorPayload(
+    {
+      name: 'MessageRejected',
+      message: 'Email address is not verified: teacher@school.edu',
+      statusCode: 400,
+    },
+    'teacher@school.edu',
+  );
+  expect(payload).toEqual({
+    name: 'MessageRejected',
+    message: 'Provider error details redacted',
+    statusCode: 400,
+  });
+  expect(JSON.stringify(payload)).not.toContain('teacher@school.edu');
 });
 
 test('retains useful Resend diagnostics without provider-controlled private text', () => {
