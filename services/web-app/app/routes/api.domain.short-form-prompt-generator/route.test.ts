@@ -108,7 +108,8 @@ describe('api.domain.short-form-prompt-generator', () => {
     const body = await readBody(response);
 
     expect(body.success).toBe(true);
-    expect(body.options[0].kind).toBe('close-read');
+    expect(body.options).toBeDefined();
+    expect(body.options![0].kind).toBe('close-read');
     const call = getLLMCompletion.mock.calls[0][0];
     expect(call.system.toLowerCase().replace(/\s+/g, ' ')).toContain(
       'depth of thought'
