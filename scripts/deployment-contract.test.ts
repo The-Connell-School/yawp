@@ -54,6 +54,66 @@ function listTrackedRepoFiles(): string[] {
     .filter(Boolean);
 }
 
+const thirdPartyWorkflowUse =
+  /^\s*-?\s*uses:\s*(?<reference>\S+)/;
+const pinnedActionSha = /^[0-9a-f]{40}$/i;
+const workflowActionVersionComment = /#\s*(?<label>v[\d.]+(?:\.[\d.]+)*|beta)\b/i;
+
+function listThirdPartyWorkflowUses(): Array<{
+  file: string;
+  line: number;
+  reference: string;
+  lineText: string;
+}> {
+  const workflowDir = join(repoRoot, '.github/workflows');
+  const uses: Array<{
+    file: string;
+    line: number;
+    reference: string;
+    lineText: string;
+  }> = [];
+  for (const name of readdirSync(workflowDir)) {
+    if (!name.endsWith('.yml') && !name.endsWith('.yaml')) continue;
+    const relativePath = join('.github/workflows', name);
+    const lines = readRepoFile(relativePath).split(/\r?\n/);
+    lines.forEach((lineText, index) => {
+      const match = lineText.match(thirdPartyWorkflowUse);
+      if (!match?.groups?.reference) return;
+      const reference = match.groups.reference;
+      if (reference.startsWith('./')) return;
+      if (!reference.includes('/')) return;
+      uses.push({
+        file: name,
+        line: index + 1,
+        reference,
+        lineText,
+      });
+    });
+  }
+  return uses;
+}
+
+describe('GitHub Actions supply-chain contract', () => {
+  test('third-party workflow uses are pinned to full commit SHAs with version comments', () => {
+    const violations: string[] = [];
+    for (const entry of listThirdPartyWorkflowUses()) {
+      const [, ref = ''] = entry.reference.split('@');
+      if (!pinnedActionSha.test(ref)) {
+        violations.push(
+          `${entry.file}:${entry.line} ${entry.reference} (expected owner/action@<40-char-sha>)`
+        );
+        continue;
+      }
+      if (!workflowActionVersionComment.test(entry.lineText)) {
+        violations.push(
+          `${entry.file}:${entry.line} ${entry.reference} (missing # vX.Y.Z or # beta comment)`
+        );
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+});
+
 describe('private preview sign-in code deployment contract', () => {
   test('rendered PR configurations permit private capture; demo and production return 404 with the same secret', async () => {
     const { renderPreviewCompose } = await import('./preview/render-compose.mjs');
