@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { buildSafeErrorScalarsForLog } from '~/utils/error-log-scalars';
 import { DevPanelFallbackShell } from './dev-panel-fallback-shell';
 
 type Props = { children: ReactNode; open: boolean };
@@ -20,7 +21,10 @@ export class DevPanelShellBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     if (process.env.NODE_ENV === 'development') {
-      console.error('[dev-panel]', error, info.componentStack);
+      console.error('[dev-panel]', {
+        error: buildSafeErrorScalarsForLog(error),
+        componentStack: info.componentStack,
+      });
     }
   }
 
