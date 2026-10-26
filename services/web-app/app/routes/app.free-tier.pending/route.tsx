@@ -49,6 +49,7 @@ import {
 } from '../free-tier/FreeTierAuthCard';
 import { freeTierConfigErrorMessage } from '~/domain/free-tier/free-tier-config.server';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
+import { Button } from '~/components/ui/button';
 import { yawpE2eForwardShouldFail } from '~/domain/free-tier/e2e-stub.server';
 
 const FORWARD_ERROR_REASONS = new Set([
