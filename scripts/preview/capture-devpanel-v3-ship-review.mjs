@@ -17,8 +17,10 @@ import {
 const BASE = process.env.PREVIEW_BASE_URL?.replace(/\/$/, '');
 const ACCESS_CODE = process.env.PREVIEW_ACCESS_CODE?.trim();
 const TEACHER_EMAIL =
-  process.env.PREVIEW_TEACHER_EMAIL?.trim() || 'dev.teacher@yawp.local';
+  process.env.PREVIEW_TEACHER_EMAIL?.trim() || 'dev.teacher.multi@yawp.local';
 const TEACHER_PASSWORD = process.env.PREVIEW_TEACHER_PASSWORD ?? 'yawp-dev';
+const TEACHER_DASHBOARD =
+  process.env.PREVIEW_TEACHER_DASHBOARD?.trim() || '/app';
 
 const OUT_DIR =
   process.env.DEVPANEL_IMPL_DIR ??
@@ -68,6 +70,17 @@ async function waitDevPanelReady(page) {
   );
 }
 
+async function unlockDevPanelViaApi(page, accessCode) {
+  const response = await page.request.post(`${BASE}/api/dev-panel/preview-access`, {
+    data: { code: accessCode },
+    headers: { 'content-type': 'application/json' },
+  });
+  if (!response.ok()) {
+    const body = await response.text();
+    throw new Error(`Dev panel unlock failed (${response.status()}): ${body}`);
+  }
+}
+
 async function openDevToolsPanel(page) {
   const panel = page.locator('#devtools');
   if (await panel.isVisible().catch(() => false)) {
@@ -99,6 +112,7 @@ async function clearDevPanelStorage(page) {
 async function collapseDevPanelSections(page, panel) {
   for (const name of [
     'Sign in as',
+    'Free-tier states',
     'Blackboard link',
     'Tester tools',
   ]) {
@@ -110,10 +124,12 @@ async function collapseDevPanelSections(page, panel) {
       await trigger.click();
     }
   }
-  const signIn = panel.getByRole('button', { name: /^Sign in as\b/ });
-  if ((await signIn.getAttribute('aria-expanded')) === 'true') {
-    await signIn.click();
-  }
+}
+
+async function hoverLockedBeakerTooltip(page) {
+  const beaker = page.locator('.yawp-dev-panel-beaker button').first();
+  await beaker.hover();
+  await page.waitForTimeout(200);
 }
 
 async function main() {
@@ -140,30 +156,32 @@ async function main() {
     email: TEACHER_EMAIL,
     password: TEACHER_PASSWORD,
     accessCode: ACCESS_CODE,
-    redirectTo: '/app/assignments',
+    redirectTo: TEACHER_DASHBOARD,
   });
 
-  // —— Frame 01: signed-in teacher, beaker visible, panel closed ——
-  // (Master preview seat unlocks dev tools; lock badge may be absent vs design frame 01.)
+  // —— Frame 01: signed-in teacher dashboard, panel closed, locked beaker ——
+  // Site gate cookie alone does not unlock the panel; lock badge + tooltip.
   {
     const page = await context.newPage();
     await context.addCookies(cookieHeaderToPlaywright(teacherCookies, BASE));
-    await page.goto(`${BASE}/app/assignments`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${BASE}${TEACHER_DASHBOARD}`, { waitUntil: 'domcontentloaded' });
     await clearDevPanelStorage(page);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('.yawp-dev-panel-beaker button').waitFor({
       state: 'visible',
       timeout: 120_000,
     });
+    await hoverLockedBeakerTooltip(page);
     await saveShot(page, FRAMES[0]);
     await page.close();
   }
 
-  // —— Frames 02–04: signed-in teacher, panel unlocked (master seat) ——
+  // —— Frames 02–04: unlock panel, teacher dashboard ——
   {
     const page = await context.newPage();
     await context.addCookies(cookieHeaderToPlaywright(teacherCookies, BASE));
-    await page.goto(`${BASE}/app/assignments`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${BASE}${TEACHER_DASHBOARD}`, { waitUntil: 'domcontentloaded' });
+    await unlockDevPanelViaApi(page, ACCESS_CODE);
     await clearDevPanelStorage(page);
     await page.reload({ waitUntil: 'domcontentloaded' });
 
@@ -197,14 +215,17 @@ async function main() {
     await page.close();
   }
 
-  // —— Frame 05: signed out on /free with Give feedback ——
+  // —— Frame 05: signed out on /free with Give feedback (Sign in as collapsed) ——
   {
     const page = await context.newPage();
     await context.clearCookies();
     await context.addCookies(cookieHeaderToPlaywright(accessCookie, BASE));
     await page.goto(`${BASE}/free`, { waitUntil: 'domcontentloaded' });
+    await unlockDevPanelViaApi(page, ACCESS_CODE);
     await clearDevPanelStorage(page);
+    await page.reload({ waitUntil: 'domcontentloaded' });
     const panel = await openDevToolsPanel(page);
+    await collapseDevPanelSections(page, panel);
     await panel.getByRole('button', { name: /^Give feedback\b/ }).click();
     await page.getByRole('dialog', { name: 'Give feedback' }).waitFor({
       state: 'visible',
