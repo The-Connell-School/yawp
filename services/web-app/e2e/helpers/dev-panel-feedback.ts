@@ -1,5 +1,24 @@
 import { expect, type Page } from '@playwright/test';
 
+export const DEV_PANEL_STORAGE_KEY = 'yawp-dev-panel';
+
+/** Clears persisted dev-panel state before the next navigation (avoids evaluate races). */
+export async function installDevPanelStorageReset(page: Page) {
+  await page.addInitScript((key: string) => {
+    localStorage.removeItem(key);
+  }, DEV_PANEL_STORAGE_KEY);
+}
+
+/** Clears persisted dev-panel state once the document is stable (retries through navigation). */
+export async function clearDevPanelStorageWhenStable(page: Page) {
+  await expect(async () => {
+    await page.waitForLoadState('domcontentloaded');
+    await page.evaluate((key: string) => {
+      localStorage.removeItem(key);
+    }, DEV_PANEL_STORAGE_KEY);
+  }).toPass({ timeout: 15_000 });
+}
+
 export function devToolsPanel(page: Page) {
   return page.locator('#devtools');
 }
