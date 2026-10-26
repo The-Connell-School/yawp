@@ -88,6 +88,18 @@ export function DevPanelClassSimulationFlyout({
   const selectedClass = classes.find((entry) => entry.id === classId) ?? null;
   const simulatedCount = selectedClass?.simulatedStudentCount ?? 0;
 
+  useEffect(() => {
+    if (state.forms.simulationOpenAction !== 'clear-confirm') return;
+    if (classesState !== 'idle' || simulatedCount === 0) return;
+    setClearConfirmOpen(true);
+    updateForms({ simulationOpenAction: null });
+  }, [
+    classesState,
+    simulatedCount,
+    state.forms.simulationOpenAction,
+    updateForms,
+  ]);
+
   const run = async (intent: 'populate' | 'clear') => {
     if (!classId) return;
     setBusy(intent);

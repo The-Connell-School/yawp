@@ -13,6 +13,8 @@ export type DevPanelPersistedForms = {
   blackboardRole?: 'teacher' | 'student';
   simulationClassId?: string | null;
   simulationStudentCount?: number;
+  /** Opens the class simulation flyout straight to clear confirmation. */
+  simulationOpenAction?: 'clear-confirm' | null;
 };
 
 export type DevPanelPersistedState = {
