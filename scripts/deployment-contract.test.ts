@@ -1611,6 +1611,14 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).not.toContain('sleep 2');
   });
 
+  test('deploy health probe /api/healthcheck fails closed when Postgres is unreachable', () => {
+    const healthcheck = readRepoFile(
+      'services/web-app/app/routes/api.healthcheck.ts'
+    );
+    expect(healthcheck).toContain('isDatabaseReady');
+    expect(healthcheck).toMatch(/503/);
+  });
+
   test('preview deploy tooling contains no transitional transport auth references', () => {
     for (const path of [
       'scripts/preview/deploy.sh',
