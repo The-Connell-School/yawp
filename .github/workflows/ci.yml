@@ -91,7 +91,8 @@ jobs:
 
       - name: 📦 Install dependencies
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       # The root-owned-build-output test needs the image the preview host itself runs.
       - name: 🐳 Pull the preview runtime image
@@ -149,7 +150,8 @@ jobs:
 
       - name: 📦 Install dependencies
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       # bunfig.toml preloads services/web-app/test-preload.ts for every `bun test` run in
       # this repo, and that preload imports ~/utils/auth.server, which imports @app/prisma.
@@ -164,7 +166,7 @@ jobs:
 
       - name: 🧪 Validate deployment contract
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts ./scripts/ci/release-docker-host-port.test.ts ./scripts/preview/deploy-log-secrets.test.js ./scripts/preview/redact-deploy-logs.test.js --max-concurrency=2
+        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts ./scripts/ci/release-docker-host-port.test.ts ./scripts/ci/bun-install-frozen.test.ts ./scripts/preview/deploy-log-secrets.test.js ./scripts/preview/redact-deploy-logs.test.js --max-concurrency=2
 
       - name: 🧪 Validate Blackboard LTI mock
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -830,7 +832,8 @@ jobs:
 
       - name: 📦 Install dependencies
         if: ${{ needs.paths.outputs.code == 'true' }}
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: ⚙️ Generate Prisma Client
         if: ${{ needs.paths.outputs.code == 'true' }}
@@ -1136,7 +1139,8 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
 
       - name: 📦 Install dependencies
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: ⚙️ Generate Prisma Client
         run: bun prisma generate
@@ -1256,7 +1260,8 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
 
       - name: 📦 Install dependencies
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: ⚙️ Generate Prisma Client
         run: bun prisma generate
@@ -1367,7 +1372,8 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
 
       - name: 📦 Install dependencies
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: ⚙️ Generate Prisma Client
         run: bun prisma generate
@@ -1560,7 +1566,8 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
 
       - name: 📦 Install dependencies
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: ⚙️ Generate Prisma Client
         run: bun prisma generate
@@ -1753,7 +1760,8 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
 
       - name: 📦 Install dependencies
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: 📥 Download blob reports
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2

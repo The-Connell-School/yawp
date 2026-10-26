@@ -32,7 +32,8 @@ jobs:
         with:
           bun-version: '1.4.4'
       - name: Install deps
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
       - name: Generate Prisma Client
         run: bun run --cwd packages/prisma prisma generate
         env:
