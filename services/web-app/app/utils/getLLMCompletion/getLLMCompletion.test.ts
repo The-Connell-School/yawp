@@ -861,4 +861,40 @@ describe('getLLMCompletion', () => {
     }
     expect(anthropicCreate).not.toHaveBeenCalled();
   });
+
+  test('logs safe metadata when LLM call persistence fails', async () => {
+    const errorSpy = mock(() => {});
+    const originalError = console.error;
+    console.error = errorSpy as typeof console.error;
+
+    anthropicCreate.mockResolvedValueOnce(anthropicTextResponse('Hi'));
+    llmLogCreate.mockRejectedValueOnce(
+      new Error('token=super-secret-value teacher@school.edu')
+    );
+
+    try {
+      await getLLMCompletion({
+        model: 'claude-sonnet-4-6',
+        messages: [{ role: 'user', content: 'Hello' }],
+        attribution: testAttribution,
+      });
+    } finally {
+      console.error = originalError;
+    }
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      'llm_call_persist_failed',
+      expect.objectContaining({
+        error: expect.objectContaining({
+          message: expect.stringContaining('[redacted-token]'),
+        }),
+      })
+    );
+    expect(JSON.stringify(errorSpy.mock.calls[0])).not.toContain(
+      'super-secret-value'
+    );
+    expect(JSON.stringify(errorSpy.mock.calls[0])).not.toContain(
+      'teacher@school.edu'
+    );
+  });
 });
