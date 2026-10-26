@@ -19,7 +19,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (prompt) return prompt;
 
   const membership = await prisma.orgMembership.findFirst({
-    where: { userId },
+    where: { userId, isActive: true },
     select: { id: true },
     orderBy: { createdAt: 'asc' },
   });
