@@ -164,7 +164,7 @@ jobs:
 
       - name: 🧪 Validate deployment contract
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts ./scripts/preview/deploy-log-secrets.test.js ./scripts/preview/redact-deploy-logs.test.js --max-concurrency=2
+        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts ./scripts/ci/release-docker-host-port.test.ts ./scripts/preview/deploy-log-secrets.test.js ./scripts/preview/redact-deploy-logs.test.js --max-concurrency=2
 
       - name: 🧪 Validate Blackboard LTI mock
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -1631,14 +1631,10 @@ jobs:
         run: |
           mkdir -p "$TMPDIR" services/web-app/dev-panel-evidence
           cleanup() {
-            ./bin/project dev stop --json || true
-            if [ -f .worktree-local/config.env ]; then
-              source .worktree-local/config.env
-              docker rm -f "$CONTAINER_NAME" || true
-              docker volume rm "$VOLUME_NAME" || true
-            fi
+            bash scripts/ci/demo-feedback-worktree-cleanup.sh 54489 54490 5489 5490
           }
           trap cleanup EXIT
+          bash scripts/ci/demo-feedback-worktree-cleanup.sh 54489 54490 5489 5490
           ./bin/project bootstrap --fresh --json
           ./bin/project fixture verify local-dev --json
           ./bin/project dev start --json
@@ -1693,14 +1689,10 @@ jobs:
         run: |
           mkdir -p "$TMPDIR"
           cleanup() {
-            ./bin/project dev stop --json || true
-            if [ -f .worktree-local/config.env ]; then
-              source .worktree-local/config.env
-              docker rm -f "$CONTAINER_NAME" || true
-              docker volume rm "$VOLUME_NAME" || true
-            fi
+            bash scripts/ci/demo-feedback-worktree-cleanup.sh 54489 54490 5489 5490
           }
           trap cleanup EXIT
+          bash scripts/ci/demo-feedback-worktree-cleanup.sh 54489 54490 5489 5490
           ./bin/project bootstrap --fresh --json
           ./bin/project fixture verify local-dev --json
           ./bin/project dev start --json

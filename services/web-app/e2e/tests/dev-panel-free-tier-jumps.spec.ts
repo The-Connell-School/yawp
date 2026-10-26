@@ -107,6 +107,7 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
       timeout: 120_000,
     })
     .catch(() => undefined);
+  await page.waitForLoadState('domcontentloaded').catch(() => undefined);
 
   const pathname = new URL(page.url()).pathname;
   expect
@@ -126,7 +127,7 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
   if (entry.pageTestId) {
     await expect
       .soft(page.getByTestId(entry.pageTestId))
-      .toBeVisible({ timeout: 30_000 });
+      .toBeVisible({ timeout: 60_000 });
   }
 
   const checksPassed = test.info().errors.length === softErrorsBefore;

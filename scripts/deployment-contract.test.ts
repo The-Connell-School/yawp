@@ -638,6 +638,8 @@ describe('worktree local setup contract', () => {
     expect(setupScript).not.toContain('WORKTREE_NAME="$(basename "$(dirname "$ROOT")")"');
     expect(setupScript).toContain('CONTAINER_NAME="yawp-${SLUG}-postgres"');
     expect(setupScript).toContain('VOLUME_NAME="yawp-${SLUG}-postgres-data"');
+    expect(setupScript).toContain('release_postgres_host_port');
+    expect(setupScript).toContain('scripts/ci/release-docker-host-port.sh');
   });
 
   test('worktree setup installs dependencies before any Prisma generation', () => {
