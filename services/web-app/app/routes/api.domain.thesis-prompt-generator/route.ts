@@ -15,6 +15,7 @@ import {
 } from '../app.assignment-types.$id/thesis-prompts-library/prompt-generator';
 import type { ThesisPrompt } from '../app.assignment-types.$id/thesis-prompts-library/data';
 import thesisPromptsRaw from '../app.assignment-types.$id/thesis-prompts-library/prompts.json';
+import { teacherPromptGeneratorDisabledResponse } from '~/domain/teacher-prompt-generator/gate.server';
 import { enforceTeacherGeneratorLimits, rateLimitedJson } from '~/utils/rate-limit.server';
 
 const ALL_THESIS_PROMPTS = thesisPromptsRaw as ThesisPrompt[];
@@ -66,6 +67,13 @@ export async function action({ request }: ActionFunctionArgs) {
       { success: false, message: 'Only teachers can generate prompts.' },
       { status: 403 }
     );
+  }
+
+  {
+    const disabled = await teacherPromptGeneratorDisabledResponse(
+      profile.organization.id
+    );
+    if (disabled) return disabled;
   }
 
   {
