@@ -12,7 +12,7 @@ import {
   normalizeExtractedRubric,
 } from '~/domain/assignment-types/rubric-extract.server';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
-import { safeErrorTextForLog } from '~/utils/server-error-request-context.server';
+import { describeProviderError } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 
@@ -180,7 +180,7 @@ export async function action({ request }: ActionFunctionArgs) {
       provider: 'anthropic',
       systemPrompt: system,
       messages: metadata,
-      error: safeErrorTextForLog(error),
+      error: describeProviderError(error),
       durationMs: Date.now() - startedAt,
       metadata,
       deidentificationPhrases: [file instanceof File ? file.name : null],
