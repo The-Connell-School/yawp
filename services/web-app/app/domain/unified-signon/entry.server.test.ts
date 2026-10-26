@@ -45,11 +45,11 @@ test('dispatchUnifiedLogin redacts sensitive FlowError.message in JSON error fie
     throw new FlowError(sensitive, 400);
   });
 
-  const response = await dispatchUnifiedLogin(
+  const response = (await dispatchUnifiedLogin(
     actionArgs(
       new URLSearchParams({ intent: 'resolve', identifier: 'test@example.com' })
     )
-  );
+  )) as unknown as Response;
 
   expect(response.status).toBe(400);
   const json = await response.json();
@@ -63,11 +63,11 @@ test('dispatchUnifiedLogin keeps intentional FlowError validation copy', async (
     throw new FlowError('Invalid request origin.', 403);
   });
 
-  const response = await dispatchUnifiedLogin(
+  const response = (await dispatchUnifiedLogin(
     actionArgs(
       new URLSearchParams({ intent: 'resolve', identifier: 'test@example.com' })
     )
-  );
+  )) as unknown as Response;
 
   expect(response.status).toBe(403);
   const json = await response.json();
@@ -81,11 +81,11 @@ test('dispatchUnifiedLogin leaves error empty when fieldErrors are present', asy
     });
   });
 
-  const response = await dispatchUnifiedLogin(
+  const response = (await dispatchUnifiedLogin(
     actionArgs(
       new URLSearchParams({ intent: 'resolve', identifier: 'bad' })
     )
-  );
+  )) as unknown as Response;
 
   const json = await response.json();
   expect(json.error).toBe('');
