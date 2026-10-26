@@ -171,7 +171,7 @@ export function DevPanelShell() {
   );
   const isTablet = useMedia('(min-width: 640px) and (max-width: 1023px)');
   const [accessOpen, setAccessOpen] = useState(false);
-  const headingRef = useRef<HTMLHeadingElement>(null);
+  const headingRef = useRef<HTMLParagraphElement>(null);
   const feedbackRowRef = useRef<HTMLButtonElement>(null);
   const freeTierRowRef = useRef<HTMLButtonElement>(null);
   const classSimulationRowRef = useRef<HTMLButtonElement>(null);
@@ -306,9 +306,15 @@ export function DevPanelShell() {
       <header className="yawp-dev-panel-header">
         <div className="yawp-dev-panel-header-title">
           <FlaskConical className="size-4 shrink-0" aria-hidden="true" />
-          <h1 ref={headingRef} tabIndex={-1} className="yawp-dev-panel-header-heading">
+          <p
+            ref={headingRef}
+            tabIndex={-1}
+            role="heading"
+            aria-level={1}
+            className="yawp-dev-panel-header-heading"
+          >
             Developer tools
-          </h1>
+          </p>
         </div>
         <Button
           type="button"

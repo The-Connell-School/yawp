@@ -13,7 +13,8 @@ describe('dev panel v3 chrome', () => {
     expect(shell.includes('ChevronsRight')).toBe(true);
     expect(shell.includes('yawp-dev-panel-header')).toBe(true);
     expect(shell.includes('yawp-dev-panel-header-heading')).toBe(true);
-    expect(shell.includes('className="truncate"')).toBe(false);
+    expect(shell.includes('<h1')).toBe(false);
+    expect(shell.includes('yawp-dev-panel-header-heading')).toBe(true);
   });
 
   test('default panel sections start collapsed', () => {
