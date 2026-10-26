@@ -1,7 +1,11 @@
 import type { Plugin } from 'vite';
 
+type PreviewIngressEnv = {
+  YAWP_ENVIRONMENT?: string;
+};
+
 export function shouldApplyPreviewIngressReactRouterSsrAlias(
-  env: Pick<NodeJS.ProcessEnv, 'YAWP_ENVIRONMENT'> = process.env
+  env: PreviewIngressEnv = process.env as PreviewIngressEnv
 ): boolean {
   return env.YAWP_ENVIRONMENT?.trim().toLowerCase() === 'preview';
 }
@@ -9,10 +13,10 @@ export function shouldApplyPreviewIngressReactRouterSsrAlias(
 export function createPreviewIngressReactRouterSsrAliasPlugin(options: {
   reactRouterOriginal: string;
   reactRouterWithPreviewIngress: string;
-  env?: Pick<NodeJS.ProcessEnv, 'YAWP_ENVIRONMENT'>;
+  env?: PreviewIngressEnv;
 }): Plugin {
   const previewBuild = shouldApplyPreviewIngressReactRouterSsrAlias(
-    options.env ?? process.env
+    options.env ?? (process.env as PreviewIngressEnv)
   );
   return {
     name: 'yawp-preview-ingress-react-router-ssr-alias',
