@@ -6,6 +6,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { buildDesignedAdminApprovalEmail } from '../app/domain/free-tier/admin-approval-email.server';
 import { htmlForStoredAdminApprovalEmail } from '../app/domain/free-tier/admin-approval-email.server';
+import { logScriptError } from '../app/utils/log-script-error.server';
 
 const OUT =
   process.argv[2] ??
@@ -82,6 +83,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error(e);
+  logScriptError(e);
   process.exit(1);
 });

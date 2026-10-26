@@ -6,6 +6,7 @@
  * Seeded users: packages/prisma/scripts/seed-overlay.ts.
  */
 import { chromium } from 'playwright';
+import { buildSafeErrorForLog } from '../app/utils/server-error-request-context.server.ts';
 
 const BASE =
   process.env.PREVIEW_BASE_URL?.replace(/\/$/, '') || 'http://127.0.0.1:5173';
@@ -23,8 +24,13 @@ function ok(name) {
 }
 
 function fail(name, err) {
-  steps.push({ name, ok: false, err: String(err?.message || err) });
-  console.error(`FAIL ${name}:`, err);
+  const safe = buildSafeErrorForLog(err);
+  const summary =
+    'message' in safe && typeof safe.message === 'string'
+      ? safe.message
+      : safe.name;
+  steps.push({ name, ok: false, err: summary });
+  console.error(`FAIL ${name}:`, safe);
 }
 
 async function main() {

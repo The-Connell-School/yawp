@@ -15,6 +15,7 @@
  */
 import pg from 'pg';
 import { writeFileSync } from 'node:fs';
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const STATE_PATH =
@@ -321,6 +322,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error(e);
+  logScriptError(e);
   process.exit(1);
 });
