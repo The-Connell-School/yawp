@@ -43,6 +43,10 @@ mock.module('~/utils/rate-limit.server', () => ({ withSingleFlight }));
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({
   isFreeTierEnabled,
 }));
+mock.module('~/domain/free-tier/locked-preview.server', () => ({
+  assertOrganizationTeachingApproved: async () => {},
+  organizationHasPendingFreeTierLessonPlannerMetering: async () => false,
+}));
 mock.module('~/domain/free-tier/is-ai-unlocked.server', () => ({
   isAiUnlocked,
 }));
