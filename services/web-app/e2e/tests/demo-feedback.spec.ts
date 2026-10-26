@@ -172,7 +172,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       "Couldn't send your feedback"
     );
     await expect(retryPanel.getByRole('alert')).toContainText(
-      'Your note is still here. Check your connection and try again.'
+      'Your note is still here; nothing was lost'
     );
     await expect(retryPanel.getByLabel(retry.noteLabel)).toHaveValue(
       'Retry keeps my note'

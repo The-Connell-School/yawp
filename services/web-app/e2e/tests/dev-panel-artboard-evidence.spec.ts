@@ -194,7 +194,7 @@ test.describe('Dev panel artboard evidence', () => {
       "Couldn't send your feedback"
     );
     await expect(feedbackDialog.getByRole('alert')).toContainText(
-      'Your note is still here. Check your connection and try again.'
+      'Your note is still here; nothing was lost'
     );
     await shot(page, '60');
 
