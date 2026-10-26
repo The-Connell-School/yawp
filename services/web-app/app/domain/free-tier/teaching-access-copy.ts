@@ -42,7 +42,7 @@ export const TEACHING_APPROVAL_REQUIRED_ALERT_BODY =
   "This needs your administrator's approval first. Nothing was saved, and your work is still here." as const;
 
 export const TEACHING_ACCESS_APPROVAL_TOAST_TITLE =
-  "You're approved. Start teaching." as const;
+  "You're approved!" as const;
 
 export const TEACHING_ACCESS_APPROVAL_TOAST_BODY =
   'Your classroom is open. Create an assignment or share your class code.' as const;

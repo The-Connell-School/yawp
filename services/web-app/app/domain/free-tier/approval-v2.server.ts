@@ -360,8 +360,11 @@ export async function forwardApprovalRequest(args: {
   token?: string;
   newAdminName: string;
   newAdminEmail: string;
+  newAdminRole?: string;
   request: Request;
   tokenPurpose?: 'ADMIN_APPROVE' | 'ADMIN_NOT_RIGHT_PERSON';
+  /** When true (teacher additional-administrator flow), prior pending rows stay open. */
+  keepPreviousPending?: boolean;
 }) {
   const parsed = forwardApprovalSchema.safeParse(args);
   if (!parsed.success)
@@ -422,7 +425,21 @@ export async function forwardApprovalRequest(args: {
     // Reject the teacher mailbox before demo's review bypass or any token claim.
     if (selfAdminEmailError(app.email, newAdminEmail))
       return fail('same_as_teacher');
-    if (newAdminEmail === pending.adminEmail) return fail('same_administrator');
+    const duplicatePending = args.keepPreviousPending
+      ? await tx.freeTierAdminApproval.findFirst({
+          where: {
+            applicationId: app.id,
+            status: 'PENDING',
+            adminEmail: newAdminEmail,
+          },
+          select: { id: true },
+        })
+      : null;
+    if (
+      duplicatePending ||
+      (!args.keepPreviousPending && newAdminEmail === pending.adminEmail)
+    )
+      return fail('same_administrator');
     const rules = evaluateAdminEmailForRuntime(
       {
         teacherEmail: app.email,
@@ -445,7 +462,8 @@ export async function forwardApprovalRequest(args: {
         throw new Error('Superseded approval link');
     }
     const now = new Date();
-    if (!afterAdminDeny) {
+    const replacePrevious = !args.keepPreviousPending && !afterAdminDeny;
+    if (replacePrevious) {
       await tx.freeTierAdminApproval.update({
         where: { id: pending.id },
         data: {
@@ -468,6 +486,7 @@ export async function forwardApprovalRequest(args: {
         applicationId: app.id,
         adminName: newAdminName,
         adminEmail: newAdminEmail,
+        adminRole: args.newAdminRole?.trim() || null,
         redirectedFromId: pending.id,
         forwardedByRole: args.userId ? 'teacher' : 'admin',
         emailCopyVersionHash: copyHash,

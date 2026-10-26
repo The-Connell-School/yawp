@@ -227,6 +227,51 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
       (await peekSignedLink({ token, expectedPurpose: 'ADMIN_APPROVE' })).ok
     ).toBe(true);
   });
+  test('additional administrator keeps the first pending approval open', async () => {
+    const { app, approval } = await fixture();
+    const { mintSignedLink, peekSignedLink } =
+      await import('./signed-link.server');
+    const old = await mintSignedLink({
+      applicationId: app.id,
+      purpose: 'ADMIN_APPROVE',
+    });
+    await db.freeTierAdminApproval.update({
+      where: { id: approval.id },
+      data: { signedLinkId: old.linkId },
+    });
+    const input = {
+      applicationId: app.id,
+      userId: 'approval-test-user',
+      currentApprovalId: approval.id,
+      newAdminName: 'Ms. Rivera',
+      newAdminEmail: 'rivera@example.org',
+      newAdminRole: 'Principal',
+      request: new Request('http://localhost/test'),
+      keepPreviousPending: true,
+    };
+    expect((await api.forwardApprovalRequest(input)).ok).toBe(true);
+    expect(
+      (
+        await db.freeTierAdminApproval.findUnique({
+          where: { id: approval.id },
+          select: { status: true },
+        })
+      )?.status
+    ).toBe('PENDING');
+    expect(
+      (
+        await peekSignedLink({
+          token: old.token,
+          expectedPurpose: 'ADMIN_APPROVE',
+        })
+      ).ok
+    ).toBe(true);
+    expect(
+      await db.freeTierAdminApproval.count({
+        where: { applicationId: app.id, status: 'PENDING' },
+      })
+    ).toBe(2);
+  });
   for (const environment of ['demo', 'production'] as const) {
     for (const actor of [
       'teacher',

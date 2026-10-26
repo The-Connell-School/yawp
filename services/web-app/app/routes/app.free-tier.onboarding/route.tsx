@@ -11,9 +11,15 @@ import {
 import { Form } from 'react-router';
 import { useState } from 'react';
 import { selfAdminEmailError } from '~/domain/free-tier/admin-email';
+import { teacherPendingForwardError } from '~/domain/free-tier/admin-approval-copy';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { submitAdminDetails } from '~/domain/free-tier/approval-flow.server';
+import {
+  forwardApprovalRequest,
+  isApprovalV2Enabled,
+} from '~/domain/free-tier/approval-v2.server';
+import { enforceUnauthByIpAndTarget } from '~/utils/rate-limit.server';
 import {
   FreeTierAuthCard,
   FreeTierButton,
@@ -64,14 +70,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
       status: true,
     },
   });
+  const url = new URL(request.url);
+  const step = url.searchParams.get('step');
+  const additionalAdministrator =
+    url.searchParams.get('additional') === '1' ||
+    url.searchParams.get('additional') === 'true';
+  const allowAdditionalAdministrator =
+    additionalAdministrator &&
+    !!app &&
+    (app.status === 'SENT' || app.status === 'MANUAL_REVIEW') &&
+    (await isApprovalV2Enabled({
+      id: app.id,
+      userId,
+      organizationId: app.organizationId,
+    }));
   const onboardingV2 =
     !!app && (await isClassPreparationEnabled(userId, app.organizationId));
   const destination =
     onboardingV2 && app
       ? await progressedDestination(app.status)
       : null;
-  if (destination) throw redirect(destination);
-  const step = new URL(request.url).searchParams.get('step');
+  if (destination && !allowAdditionalAdministrator) throw redirect(destination);
   if (needsClassPreparation(app, onboardingV2) && step === 'administrator')
     throw redirect('/app/free-tier/onboarding');
   const showClass =
@@ -93,10 +112,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ? await prisma.freeTierAdminApproval.findFirst({
         where: { applicationId: app.id, status: 'PENDING' },
         orderBy: { createdAt: 'desc' },
-        select: { adminName: true, adminEmail: true, adminRole: true },
+        select: {
+          id: true,
+          adminName: true,
+          adminEmail: true,
+          adminRole: true,
+        },
       })
     : null;
-  return { app, lastFailedEmail, pending, onboardingV2, showClass };
+  return {
+    app,
+    lastFailedEmail,
+    pending,
+    onboardingV2,
+    showClass,
+    additionalAdministrator: allowAdditionalAdministrator,
+  };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -118,10 +149,68 @@ export async function action({ request }: ActionFunctionArgs) {
     userId,
     app.organizationId
   );
+  const additionalAdministrator =
+    new URL(request.url).searchParams.get('additional') === '1' ||
+    new URL(request.url).searchParams.get('additional') === 'true';
+  const allowAdditionalAdministrator =
+    additionalAdministrator &&
+    (app.status === 'SENT' || app.status === 'MANUAL_REVIEW') &&
+    (await isApprovalV2Enabled({
+      id: app.id,
+      userId,
+      organizationId: app.organizationId,
+    }));
   const destination = onboardingV2
     ? await progressedDestination(app.status)
     : null;
-  if (destination) return redirect(destination);
+  if (destination && !allowAdditionalAdministrator) return redirect(destination);
+  if (
+    allowAdditionalAdministrator &&
+    formData.get('intent') === 'additional-administrator'
+  ) {
+    const currentApprovalId =
+      String(formData.get('approvalId') ?? '') ||
+      (
+        await prisma.freeTierAdminApproval.findFirst({
+          where: { applicationId: app.id, status: 'PENDING' },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true },
+        })
+      )?.id ||
+      '';
+    const gate = await enforceUnauthByIpAndTarget({
+      request,
+      route: '/app/free-tier/onboarding:additional-administrator',
+      targetKey: app.id,
+      perIpPerMinute: 3,
+      perIpPerHour: 10,
+      perTargetPerHour: 10,
+    });
+    if (!gate.allowed) {
+      return { ok: false as const, reason: 'rate_limited' as const };
+    }
+    const result = await forwardApprovalRequest({
+      applicationId: app.id,
+      userId,
+      currentApprovalId,
+      newAdminName: String(formData.get('adminName') ?? '')
+        .trim()
+        .slice(0, MAX_NAME),
+      newAdminEmail: String(formData.get('adminEmail') ?? '')
+        .trim()
+        .slice(0, 320),
+      newAdminRole: String(formData.get('adminRole') ?? '')
+        .trim()
+        .slice(0, 100),
+      request,
+      keepPreviousPending: true,
+    });
+    if (!result.ok) return result;
+    const adminName = 'adminName' in result ? result.adminName : '';
+    throw redirect(
+      `/app/free-tier/pending?sentAdmin=${encodeURIComponent(adminName)}`
+    );
+  }
   if (formData.get('intent') === 'prepare-class') {
     const values = {
       className: String(formData.get('className') ?? ''),
@@ -177,33 +266,72 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function FreeTierOnboardingRoute() {
-  const { app, lastFailedEmail, pending, onboardingV2, showClass } =
-    useLoaderData<typeof loader>();
+  const {
+    app,
+    lastFailedEmail,
+    pending,
+    onboardingV2,
+    showClass,
+    additionalAdministrator,
+  } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const [editedAdminEmail, setEditedAdminEmail] = useState<string>();
-  const adminEmail = editedAdminEmail ?? pending?.adminEmail ?? '';
+  const adminEmail =
+    editedAdminEmail ??
+    (additionalAdministrator ? '' : (pending?.adminEmail ?? ''));
   const adminEmailError =
     selfAdminEmailError(app?.email ?? '', adminEmail) ??
     (editedAdminEmail === undefined &&
     actionData &&
     !actionData.ok &&
     'reason' in actionData &&
-    actionData.reason === 'same_as_teacher'
+    actionData.reason === 'same_as_teacher' &&
+    'fieldErrors' in actionData &&
+    actionData.fieldErrors &&
+    typeof actionData.fieldErrors === 'object' &&
+    'adminEmail' in actionData.fieldErrors
       ? actionData.fieldErrors.adminEmail
       : null);
-  const errorMessage =
-    actionData && !actionData.ok && 'reason' in actionData
-      ? actionData.reason === 'same_as_teacher'
-        ? null
-        : actionData.reason === 'config'
-          ? actionData.message
-          : actionData.reason === 'email_failed'
-            ? "We couldn't send the email. Try again, or contact support@yawp.school."
-            : actionData.reason === 'illegal_state'
-              ? "This application isn't ready for administrator details yet. Contact support@yawp.school."
-              : 'Something went wrong. Try again.'
+  const additionalForwardReason =
+    actionData &&
+    !actionData.ok &&
+    'reason' in actionData &&
+    typeof actionData.reason === 'string'
+      ? actionData.reason
       : null;
+  const additionalForwardAlert =
+    additionalAdministrator &&
+    additionalForwardReason &&
+    ['same_as_teacher', 'same_administrator', 'chain_cap', 'email_failed'].includes(
+      additionalForwardReason
+    )
+      ? teacherPendingForwardError({
+          reason: additionalForwardReason as
+            | 'same_as_teacher'
+            | 'same_administrator'
+            | 'chain_cap'
+            | 'email_failed',
+          schoolName: app?.schoolName ?? 'your school',
+          adminName: pending?.adminName,
+        })
+      : null;
+  const errorMessage = (() => {
+    if (additionalForwardAlert) return additionalForwardAlert;
+    if (!actionData || actionData.ok || !('reason' in actionData)) return null;
+    const reason = actionData.reason;
+    if (reason === 'same_as_teacher') return null;
+    if (reason === 'config' && 'message' in actionData) return actionData.message;
+    if (reason === 'email_failed')
+      return "We couldn't send the email. Try again, or contact support@yawp.school.";
+    if (reason === 'illegal_state')
+      return "This application isn't ready for administrator details yet. Contact support@yawp.school.";
+    if (reason === 'validation' && 'fieldErrors' in actionData)
+      return 'One or more fields need your attention.';
+    if (reason === 'rate_limited')
+      return 'Too many attempts. Wait a moment and try again.';
+    return 'Something went wrong. Try again.';
+  })();
 
   if (showClass) {
     const values =
@@ -268,9 +396,22 @@ export default function FreeTierOnboardingRoute() {
           We couldn't send the email. Try again, or contact support@yawp.school.
         </p>
       ) : null}
+      {additionalAdministrator ? (
+        <Link
+          to="/app/free-tier/pending"
+          className="text-sm text-primary underline"
+        >
+          Back to waiting for approval
+        </Link>
+      ) : null}
       <Form
         method="post"
         className="flex flex-col gap-4"
+        action={
+          additionalAdministrator
+            ? '/app/free-tier/onboarding?additional=1'
+            : undefined
+        }
         onSubmit={(event) => {
           if (adminEmailError) {
             event.preventDefault();
@@ -280,13 +421,25 @@ export default function FreeTierOnboardingRoute() {
           }
         }}
       >
+        {additionalAdministrator ? (
+          <>
+            <input type="hidden" name="intent" value="additional-administrator" />
+            <input
+              type="hidden"
+              name="approvalId"
+              value={pending?.id ?? ''}
+            />
+          </>
+        ) : null}
         <FreeTierFieldLabel label={onboardingV2 ? 'Administrator’s name' : 'Administrator name'} htmlFor="adminName">
           <FreeTierTextInput
             id="adminName"
             name="adminName"
             required
             maxLength={MAX_NAME}
-            defaultValue={pending?.adminName ?? ''}
+            defaultValue={
+              additionalAdministrator ? '' : (pending?.adminName ?? '')
+            }
           />
         </FreeTierFieldLabel>
         <FreeTierFieldLabel label="Administrator email" htmlFor="adminEmail">
@@ -320,7 +473,9 @@ export default function FreeTierOnboardingRoute() {
             placeholder={onboardingV2 ? 'Principal, Assistant Principal, Director of Curriculum and Instruction' : 'Principal, Technology Director'}
             required
             maxLength={100}
-            defaultValue={pending?.adminRole ?? ''}
+            defaultValue={
+              additionalAdministrator ? '' : (pending?.adminRole ?? '')
+            }
           />
         </FreeTierFieldLabel>
         {onboardingV2 ? null : (
@@ -339,7 +494,9 @@ export default function FreeTierOnboardingRoute() {
         >
           {navigation.state === 'submitting'
             ? 'Sending…'
-            : 'Send approval request'}
+            : additionalAdministrator
+              ? 'Send to additional administrator'
+              : 'Send approval request'}
         </FreeTierButton>
       </Form>
     </FreeTierAuthCard>

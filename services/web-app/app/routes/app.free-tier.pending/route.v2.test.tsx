@@ -128,33 +128,26 @@ test('crafted forward is refused when rollout is off', async () => {
   expect(forward).not.toHaveBeenCalled();
 });
 
-test('pending page offers draft request mailto, explore, and forward without legacy resend', () => {
+test('pending page offers additional administrator link and explore without legacy resend', () => {
   stopped = false;
   const html = renderWithCardPageChrome(<Page />);
   expect(html).toContain('Explore my classroom');
-  expect(html).toContain('Not the right person?');
-  expect(html).toContain('Draft a Request');
-  expect(html).toContain('data-testid="pending-draft-request"');
   expect(html).toContain(
-    'href="mailto:very.long.administrator.email.address%2Btag%40subdomain.example-school.edu?'
+    'Not the right person? / Send to an additional administrator'
   );
-  expect(html).toContain('Lincoln%20High%20School');
-  expect(html).toContain('transactional-from%40example.org');
-  expect(html).toContain('start%20writing%20with%20Yawp!');
-  expect(html).not.toContain('with%20Yawp!.');
-  expect(html).toContain('free-tier-draft-request');
-  expect(html).not.toContain('lucide-mail');
-  expect(html).toContain('Explore my classroom');
+  expect(html).toContain('data-testid="pending-additional-administrator-link"');
+  expect(html).toContain('/app/free-tier/onboarding?additional=1');
+  expect(html).not.toContain('Draft a Request');
+  expect(html).not.toContain('pending-forward-disclosure');
+  expect(html).not.toContain('mailto:');
   const progressIdx = html.indexOf('aria-label="Approval progress"');
   const personIdx = html.indexOf('free-tier-person-email');
-  const forwardIdx = html.indexOf('pending-forward-disclosure');
-  const draftIdx = html.indexOf('pending-draft-request');
+  const linkIdx = html.indexOf('pending-additional-administrator-link');
   const exploreIdx = html.indexOf('locked-preview-explore');
   expect(progressIdx).toBeGreaterThan(-1);
   expect(personIdx).toBeGreaterThan(progressIdx);
-  expect(forwardIdx).toBeGreaterThan(personIdx);
-  expect(draftIdx).toBeGreaterThan(forwardIdx);
-  expect(exploreIdx).toBeGreaterThan(draftIdx);
+  expect(linkIdx).toBeGreaterThan(personIdx);
+  expect(exploreIdx).toBeGreaterThan(linkIdx);
   expect(html).not.toContain('Resend reminder');
   expect(html).not.toContain('Draft an email');
   expect(html).not.toContain('Take a look around');
