@@ -862,6 +862,41 @@ describe('getLLMCompletion', () => {
     expect(anthropicCreate).not.toHaveBeenCalled();
   });
 
+  test('persists provider-safe error text when the Anthropic call fails', async () => {
+    anthropicCreate.mockRejectedValueOnce(
+      Object.assign(
+        new Error('prompt echoed: token=super-secret teacher@school.edu'),
+        {
+          name: 'BadRequestError',
+          status: 400,
+          error: { type: 'invalid_request_error' },
+        }
+      )
+    );
+
+    await expect(
+      getLLMCompletion({
+        model: 'claude-sonnet-4-6',
+        messages: [{ role: 'user', content: 'Hello' }],
+        attribution: testAttribution,
+        allowFallbackProvider: false,
+      })
+    ).rejects.toThrow('prompt echoed');
+
+    expect(llmLogCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        provider: 'anthropic',
+        error: 'BadRequestError · invalid_request_error · HTTP 400',
+      }),
+    });
+    expect(JSON.stringify(llmLogCreate.mock.calls[0])).not.toContain(
+      'super-secret'
+    );
+    expect(JSON.stringify(llmLogCreate.mock.calls[0])).not.toContain(
+      'teacher@school.edu'
+    );
+  });
+
   test('logs safe metadata when LLM call persistence fails', async () => {
     const errorSpy = mock(() => {});
     const originalError = console.error;

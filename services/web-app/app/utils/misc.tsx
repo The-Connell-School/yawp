@@ -3,6 +3,7 @@ import { clsx, type ClassValue } from 'clsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSpinDelay } from 'spin-delay'
 import { twMerge } from 'tailwind-merge'
+import { buildSafeErrorScalarsForLog } from '~/utils/error-log-scalars'
 
 export const DEFAULT_ROUTE = '/app'
 
@@ -21,7 +22,10 @@ export function getErrorMessage(error: unknown) {
 		return error.message
 	}
 	// eslint-disable-next-line no-console
-	console.error('Unable to get error message for error', error)
+	console.error(
+		'unable_to_get_error_message',
+		buildSafeErrorScalarsForLog(error),
+	)
 	return 'Unknown Error'
 }
 

@@ -11,6 +11,7 @@ import {
   markAnthropicOutageOpen,
 } from './anthropic-outage-cache.server';
 import {
+  describeProviderError,
   getAnthropicRetryableStatus,
   isRetryableAnthropicOutageError,
   LlmFallbackRetrySignal,
@@ -366,7 +367,7 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
       provider: 'anthropic',
       systemPrompt: systemForLog,
       messages,
-      error: err instanceof Error ? err.message : String(err),
+      error: describeProviderError(err),
       durationMs,
       metadata: {
         ...buildLogMetadata({
@@ -545,7 +546,7 @@ async function runOpenAiCompletion({
       provider: 'openai',
       systemPrompt: stripTabs(systemToPlainString(params.system)),
       messages: formattedMessages,
-      error: err instanceof Error ? err.message : String(err),
+      error: describeProviderError(err),
       durationMs,
       metadata: buildLogMetadata({
         metadata: {
