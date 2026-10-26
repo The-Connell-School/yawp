@@ -2,19 +2,6 @@ import { expect, type Page } from '@playwright/test';
 
 export const DEV_PANEL_STORAGE_KEY = 'yawp-dev-panel';
 
-/** Clears persisted dev-panel state on the next navigation only (init scripts otherwise persist). */
-export async function installDevPanelStorageResetOnce(page: Page, resetId: string) {
-  await page.addInitScript(
-    ({ key, resetId: id }: { key: string; resetId: string }) => {
-      const appliedKey = `__yawpDevPanelResetApplied:${id}`;
-      if (sessionStorage.getItem(appliedKey)) return;
-      sessionStorage.setItem(appliedKey, '1');
-      localStorage.removeItem(key);
-    },
-    { key: DEV_PANEL_STORAGE_KEY, resetId }
-  );
-}
-
 /** Clears persisted dev-panel state once the document is stable (retries through navigation). */
 export async function clearDevPanelStorageWhenStable(page: Page) {
   await expect(async () => {
