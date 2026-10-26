@@ -2,18 +2,13 @@
  * Real admin copy pass1 evidence (frames 01–44 per INDEX.txt; skip E5 45–46).
  * Desktop 1280px, mobile 390px. Requires ADMIN_COPY_PASS1_EVIDENCE_DIR.
  */
-import { createRequire } from 'node:module';
 import { randomBytes } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
 import { mintFreeTierLinkForE2E } from '../helpers/mint-free-tier-link';
-
-const require = createRequire(import.meta.url);
-const { encode } = require(
-  require.resolve('turbo-stream', { paths: [require.resolve('react-router')] })
-);
+import { encodeTurboStreamBody } from '../encode-turbo-stream-body';
 
 const OUT = process.env.ADMIN_COPY_PASS1_EVIDENCE_DIR;
 const TEACHER = 'Jordan Rivera';
@@ -57,7 +52,7 @@ async function replyPost(
     await route.fulfill({
       status: 200,
       contentType: 'text/x-script',
-      body: await new Response(encode({ data: result })).text(),
+      body: await encodeTurboStreamBody({ data: result }),
     });
   });
   try {
