@@ -22,7 +22,7 @@ const prisma = {
 
 const getMembershipId = mock();
 const setMembershipId = mock();
-const clearSchoolYearScope = mock(() => 'school-year=; Max-Age=0; Path=/');
+const clearSchoolYearScope = mock(async () => 'school-year=; Max-Age=0; Path=/');
 const getSession = mock();
 const destroySession = mock(async () => 'en_session=; Max-Age=0; Path=/');
 const getUaStudentLicenseAccess = mock();

@@ -482,7 +482,7 @@ export async function logout(
     headers: combineHeaders(
       { 'set-cookie': await authSessionStorage.destroySession(authSession) },
       { 'set-cookie': await setMembershipId('') },
-      { 'set-cookie': clearSchoolYearScope() },
+      { 'set-cookie': await clearSchoolYearScope() },
       responseInit?.headers
     ),
   });
