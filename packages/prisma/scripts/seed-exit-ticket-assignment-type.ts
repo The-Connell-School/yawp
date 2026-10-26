@@ -8,6 +8,7 @@
 import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { isLocalDatabaseUrl } from './seed-overlay-connection';
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 import {
   bootstrapExitTicketAssignmentType,
   resolveBootstrapOrganizationIds,
@@ -77,7 +78,7 @@ async function seedExitTicketAssignmentType() {
 
 seedExitTicketAssignmentType()
   .catch((error) => {
-    console.error(error);
+    logScriptError(error);
     process.exitCode = 1;
   })
   .finally(async () => {

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSpinDelay } from 'spin-delay'
 import { twMerge } from 'tailwind-merge'
 import { buildSafeErrorScalarsForLog } from '~/utils/error-log-scalars'
+import { redactFreeformMessage } from '~/utils/redact-freeform-message'
 
 export const DEFAULT_ROUTE = '/app'
 
@@ -11,15 +12,24 @@ export function getUserImgSrc(imageId: string) {
 	return `/api/image/user/${imageId}`
 }
 
+function uiSafeErrorText(message: string, fallback: string) {
+	const redacted = redactFreeformMessage(message).trim()
+	return redacted || fallback
+}
+
 export function getErrorMessage(error: unknown) {
-	if (typeof error === 'string') return error
+	if (typeof error === 'string') {
+		return uiSafeErrorText(error, 'Unknown Error')
+	}
 	if (
 		error &&
 		typeof error === 'object' &&
 		'message' in error &&
 		typeof error.message === 'string'
 	) {
-		return error.message
+		const fallback =
+			error instanceof Error && error.name ? error.name : 'Unknown Error'
+		return uiSafeErrorText(error.message, fallback)
 	}
 	// eslint-disable-next-line no-console
 	console.error(

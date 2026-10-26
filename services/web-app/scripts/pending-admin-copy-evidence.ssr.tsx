@@ -11,6 +11,7 @@ import {
   renderWithCardPageChrome,
 } from '~/components/card-page-chrome.ssr-test-setup';
 import { approvalForwardError } from '../app/routes/free-tier/ApprovalForwardForm';
+import { logScriptError } from '../app/utils/log-script-error.server';
 
 const slugByReason: Record<string, string> = {
   same_as_teacher: 'pending-same-as-teacher',
@@ -93,6 +94,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error);
+  logScriptError(error);
   process.exit(1);
 });

@@ -16,6 +16,7 @@ import {
   seedClassStarterAssignmentType,
 } from './seed-class-starter-assignment-type';
 import { applyDailyPagesEngagementV2Seed } from './apply-daily-pages-engagement-v2-seed';
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 
 assertLocalSeedTarget();
 
@@ -67,7 +68,7 @@ try {
     );
   }
 } catch (error) {
-  console.error(error);
+  logScriptError(error);
   process.exitCode = 1;
 } finally {
   await prisma.$disconnect();

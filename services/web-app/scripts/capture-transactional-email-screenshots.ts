@@ -9,6 +9,7 @@ import {
   buildTeacherReleaseDesignedEmail,
   buildTeacherStillWaitingDesignedEmail,
 } from '../app/emails/build-free-tier-emails.server';
+import { logScriptError } from '../app/utils/log-script-error.server';
 import {
   buildClassInviteEmail,
   buildOrgTeacherInviteEmail,
@@ -217,6 +218,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error);
+  logScriptError(error);
   process.exit(1);
 });

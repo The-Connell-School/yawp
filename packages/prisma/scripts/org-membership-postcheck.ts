@@ -4,6 +4,7 @@
  * Profile / TeacherProfile / StudentProfile must be gone; use this after migrate deploy.
  */
 import { createPrismaClient } from './local-dev/connection';
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 
 const LEGACY_TABLES = ['Profile', 'TeacherProfile', 'StudentProfile'] as const;
 
@@ -148,7 +149,7 @@ async function main() {
 
 if (import.meta.main) {
   main().catch((error) => {
-    console.error(error);
+    logScriptError(error);
     process.exit(1);
   });
 }

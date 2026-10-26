@@ -2,6 +2,7 @@ import { copyFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { logScriptError } from '../app/utils/log-script-error.server';
 
 const execFileAsync = promisify(execFile);
 
@@ -78,6 +79,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error);
+  logScriptError(error);
   process.exit(1);
 });

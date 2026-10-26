@@ -28,6 +28,7 @@ import {
   UA_PREVIEW_ORG_NAME,
 } from './local-dev/dev-personas';
 import { seedFreeTierShipReview } from './local-dev/seed-free-tier-ship-review';
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 
 assertLocalSeedTarget();
 
@@ -170,7 +171,7 @@ try {
     }
   }
 } catch (error) {
-  console.error(error);
+  logScriptError(error);
   process.exitCode = 1;
 } finally {
   await prisma.$disconnect();
