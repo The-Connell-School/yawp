@@ -22,6 +22,7 @@ export function PendingForwardDisclosure({
   onOpenChange,
   forwarding,
   serverAlert,
+  forwardRetry = false,
   schoolName,
 }: {
   currentAdminName: string;
@@ -31,6 +32,7 @@ export function PendingForwardDisclosure({
   onOpenChange: (open: boolean) => void;
   forwarding: boolean;
   serverAlert?: string | null;
+  forwardRetry?: boolean;
   schoolName: string;
 }) {
   const panelId = useId();
@@ -110,6 +112,7 @@ export function PendingForwardDisclosure({
               currentAdminName={currentAdminName}
               schoolName={schoolName}
               serverAlert={serverAlert}
+              forwardRetry={forwardRetry}
               onCancel={() => {
                 onOpenChange(false);
                 triggerRef.current?.focus();

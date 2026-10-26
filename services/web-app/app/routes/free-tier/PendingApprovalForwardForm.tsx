@@ -55,6 +55,7 @@ export function PendingApprovalForwardForm({
   currentAdminName,
   schoolName,
   serverAlert,
+  forwardRetry = false,
   onCancel,
   focusNameOnMount,
 }: {
@@ -64,6 +65,7 @@ export function PendingApprovalForwardForm({
   currentAdminName: string;
   schoolName: string;
   serverAlert?: string | null;
+  forwardRetry?: boolean;
   onCancel: () => void;
   focusNameOnMount?: boolean;
 }) {
@@ -75,7 +77,7 @@ export function PendingApprovalForwardForm({
   const emailRef = useRef<HTMLInputElement>(null);
   const nameErrorId = useId();
   const emailErrorId = useId();
-  const showRetry = Boolean(serverAlert);
+  const showRetry = forwardRetry;
 
   const formComplete =
     adminName.trim().length > 0 &&

@@ -536,6 +536,11 @@ export default function FreeTierPendingRoute() {
                           })
                         : null
                     }
+                    forwardRetry={
+                      isForwardActionError(actionData) &&
+                      (actionData.reason === 'unavailable' ||
+                        actionData.reason === 'email_failed')
+                    }
                   />
                 ) : null}
                 <PendingDraftRequestLink
