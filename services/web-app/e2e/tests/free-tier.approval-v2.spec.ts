@@ -157,13 +157,13 @@ for (const width of [1280, 390])
     await page
       .getByRole('button', { name: 'Forward request', exact: true })
       .click();
-    await expect(page.getByLabel('Their name')).toHaveAttribute(
+    await expect(page.getByLabel('Administrator name')).toHaveAttribute(
       'aria-invalid',
       'true'
     );
     await capture(page, `${width}-forward-validation`);
-    await page.getByLabel('Their name').fill('Ms. Rivera');
-    await page.getByLabel('Their email').fill(fixtureData.app.email);
+    await page.getByLabel('Administrator name').fill('Ms. Rivera');
+    await page.getByLabel('Administrator email').fill(fixtureData.app.email);
     await page
       .getByRole('button', { name: 'Forward request', exact: true })
       .click();
@@ -183,15 +183,13 @@ for (const width of [1280, 390])
       })
     ).toBe(0);
     await capture(page, `${width}-teacher-self-forward-rejected`);
-    await page.getByLabel('Their email').fill('rivera@example.org');
+    await page.getByLabel('Administrator email').fill('rivera@example.org');
     await page
       .getByRole('button', { name: 'Forward request', exact: true })
       .click();
     await expect(
-      page.getByText(
-        'Request forwarded. We will notify your administrator and email you an update.'
-      )
-    ).toBeVisible();
+      page.getByTestId('pending-forward-success')
+    ).toContainText('Request forwarded to Ms. Rivera.');
     await expect(
       page.getByText('rivera@example.org', { exact: true })
     ).toBeVisible();

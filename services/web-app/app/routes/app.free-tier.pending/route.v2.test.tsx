@@ -147,11 +147,13 @@ test('pending page offers draft request mailto, explore, and forward without leg
   expect(html).toContain('Explore my classroom');
   const progressIdx = html.indexOf('aria-label="Approval progress"');
   const personIdx = html.indexOf('free-tier-person-email');
+  const forwardIdx = html.indexOf('pending-forward-disclosure');
   const draftIdx = html.indexOf('pending-draft-request');
   const exploreIdx = html.indexOf('locked-preview-explore');
   expect(progressIdx).toBeGreaterThan(-1);
   expect(personIdx).toBeGreaterThan(progressIdx);
-  expect(draftIdx).toBeGreaterThan(personIdx);
+  expect(forwardIdx).toBeGreaterThan(personIdx);
+  expect(draftIdx).toBeGreaterThan(forwardIdx);
   expect(exploreIdx).toBeGreaterThan(draftIdx);
   expect(html).not.toContain('Resend reminder');
   expect(html).not.toContain('Draft an email');
