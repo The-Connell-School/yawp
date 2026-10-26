@@ -7,17 +7,16 @@ import {
 } from './class-simulation-mix';
 
 describe('classSimulationAssignmentState', () => {
-  test('covers all four states across student and assignment indices', () => {
-    const seen = new Set<string>();
+  test('targets about eight in-progress and twelve submitted students per assignment', () => {
+    let inProgress = 0;
+    let submitted = 0;
     for (let studentIndex = 1; studentIndex <= 20; studentIndex++) {
-      for (let assignmentIndex = 0; assignmentIndex < 8; assignmentIndex++) {
-        seen.add(classSimulationAssignmentState(studentIndex, assignmentIndex));
-      }
+      const state = classSimulationAssignmentState(studentIndex, 0);
+      if (state === 'in_progress') inProgress += 1;
+      if (state === 'submitted') submitted += 1;
     }
-    expect(seen.has('not_joined')).toBe(true);
-    expect(seen.has('joined')).toBe(true);
-    expect(seen.has('in_progress')).toBe(true);
-    expect(seen.has('submitted')).toBe(true);
+    expect(inProgress).toBe(8);
+    expect(submitted).toBe(12);
   });
 
   test('is stable for the same inputs', () => {
