@@ -7,6 +7,7 @@ import {
   listCatalogFreeTierJumpExpectations,
   type FreeTierJumpExpectation,
 } from '../../app/dev-panel/free-tier-jump-expectations';
+import { findFreeTierState } from '../../app/dev-panel/free-tier-states.catalog';
 
 const prisma = createE2EPrismaClient();
 
@@ -47,13 +48,20 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
   await expect(stateSheet).toBeVisible({ timeout: 15_000 });
 
   await stateSheet
-    .getByRole('checkbox', { name: 'Use a throwaway test account' })
+    .getByRole('switch', { name: 'Use a throwaway test account' })
     .setChecked(true);
-  await stateSheet
-    .locator('label')
-    .filter({ hasText: entry.label })
-    .getByRole('radio')
-    .check({ force: true });
+
+  const catalogEntry = findFreeTierState(entry.stateId);
+  if (catalogEntry) {
+    const groupTrigger = stateSheet
+      .getByRole('button')
+      .filter({ hasText: catalogEntry.group.title })
+      .first();
+    if ((await groupTrigger.getAttribute('aria-expanded')) !== 'true') {
+      await groupTrigger.click();
+    }
+  }
+  await stateSheet.getByRole('button', { name: entry.label, exact: true }).click();
 
   const jumpResponse = page.waitForResponse(
     (response) =>
