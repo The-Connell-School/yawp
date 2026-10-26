@@ -8,6 +8,7 @@ import {
   recordInternalPlatformWriteAudit,
   type InternalApiAuthContext,
 } from '~/utils/internal-platform-auth.server';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 
 const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } });
 const LIMIT = 300 * 1024;
@@ -67,7 +68,14 @@ export function createRubricCatalogHttp(service: Pick<RubricCatalog, 'list' | 'g
   function failure(error: unknown) {
     if (error instanceof CatalogError) {
       if (error.statusCode === 500) return reply({ error: 'Rubric catalog unavailable' }, 503);
-      return reply({ error: error.message, ...(error.issues ? { issues: error.issues } : {}) }, error.statusCode);
+      const message = safeDomainErrorTextForClientResponse(
+        error,
+        'Rubric catalog request failed.',
+      );
+      return reply(
+        { error: message, ...(error.issues ? { issues: error.issues } : {}) },
+        error.statusCode,
+      );
     }
     return reply({ error: 'Rubric catalog unavailable' }, 503);
   }

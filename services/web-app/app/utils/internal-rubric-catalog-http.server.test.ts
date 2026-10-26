@@ -78,6 +78,14 @@ test('domain errors map to status codes with field issues; unexpected errors lea
     const h = createRubricCatalogHttp(fake({ save: async () => { throw new CatalogError('Stale', code); } }).service as any, () => key);
     expect((await h.save(post(valid))).status).toBe(code);
   }
+  const secret = 'token=SECRET-TOKEN admin@private.example.test';
+  const leaky = createRubricCatalogHttp(fake({
+    save: async () => { throw new CatalogError(`Conflict: ${secret}`, 409); },
+  }).service as any, () => key);
+  const leakyBody = await (await leaky.save(post(valid))).json();
+  expect(JSON.stringify(leakyBody)).not.toContain('SECRET-TOKEN');
+  expect(JSON.stringify(leakyBody)).not.toContain('admin@private.example.test');
+  expect(leakyBody.error).toBeTruthy();
 });
 
 const validStage = { key: 'daily-pages-engagement', requestId: crypto.randomUUID(), actorEmail: 'Staff@Yawp.Test', reason: 'Stage for demo orgs', document: { name: 'daily-pages-engagement', title: 'x', rubric: { categories: [] } }, source: { contentId: crypto.randomUUID(), version: 2, fingerprint: 'b'.repeat(64) } };
