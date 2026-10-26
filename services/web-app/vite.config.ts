@@ -5,11 +5,6 @@ import { defineConfig, type Plugin } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 const viteDir = path.dirname(fileURLToPath(import.meta.url));
-const reactRouterWithPreviewIngress = path.resolve(
-  viteDir,
-  'vite/react-router-with-preview-ingress.ts'
-);
-const reactRouterOriginal = fileURLToPath(import.meta.resolve('react-router'));
 const devPanelEntryStub = path.resolve(
   viteDir,
   'app/dev-panel/dev-panel-entry.stub.tsx'
@@ -28,19 +23,6 @@ function omitDevPanelFromProductionBuild(): Plugin {
       ) {
         return devPanelEntryStub;
       }
-      return null;
-    },
-  };
-}
-
-function previewIngressReactRouterSsrAlias(): Plugin {
-  return {
-    name: 'yawp-preview-ingress-react-router-ssr-alias',
-    enforce: 'pre',
-    resolveId(source, _importer, options) {
-      if (!options?.ssr) return null;
-      if (source === 'react-router-original') return reactRouterOriginal;
-      if (source === 'react-router') return reactRouterWithPreviewIngress;
       return null;
     },
   };
@@ -72,7 +54,6 @@ export default defineConfig({
   },
   plugins: [
     omitDevPanelFromProductionBuild(),
-    previewIngressReactRouterSsrAlias(),
     redirectBareAppRoute(),
     reactRouter(),
     tsconfigPaths(),
