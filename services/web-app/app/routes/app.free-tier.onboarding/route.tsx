@@ -70,13 +70,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       status: true,
     },
   });
-  const onboardingV2 =
-    !!app && (await isClassPreparationEnabled(userId, app.organizationId));
-  const destination =
-    onboardingV2 && app
-      ? await progressedDestination(app.status)
-      : null;
-  if (destination && !allowAdditionalAdministrator) throw redirect(destination);
   const url = new URL(request.url);
   const step = url.searchParams.get('step');
   const additionalAdministrator =
@@ -86,7 +79,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     additionalAdministrator &&
     !!app &&
     (app.status === 'SENT' || app.status === 'MANUAL_REVIEW') &&
-    (await isApprovalV2Enabled(app));
+    (await isApprovalV2Enabled({
+      id: app.id,
+      userId,
+      organizationId: app.organizationId,
+    }));
+  const onboardingV2 =
+    !!app && (await isClassPreparationEnabled(userId, app.organizationId));
+  const destination =
+    onboardingV2 && app
+      ? await progressedDestination(app.status)
+      : null;
+  if (destination && !allowAdditionalAdministrator) throw redirect(destination);
   if (needsClassPreparation(app, onboardingV2) && step === 'administrator')
     throw redirect('/app/free-tier/onboarding');
   const showClass =
@@ -151,7 +155,11 @@ export async function action({ request }: ActionFunctionArgs) {
   const allowAdditionalAdministrator =
     additionalAdministrator &&
     (app.status === 'SENT' || app.status === 'MANUAL_REVIEW') &&
-    (await isApprovalV2Enabled(app));
+    (await isApprovalV2Enabled({
+      id: app.id,
+      userId,
+      organizationId: app.organizationId,
+    }));
   const destination = onboardingV2
     ? await progressedDestination(app.status)
     : null;
@@ -278,7 +286,11 @@ export default function FreeTierOnboardingRoute() {
     actionData &&
     !actionData.ok &&
     'reason' in actionData &&
-    actionData.reason === 'same_as_teacher'
+    actionData.reason === 'same_as_teacher' &&
+    'fieldErrors' in actionData &&
+    actionData.fieldErrors &&
+    typeof actionData.fieldErrors === 'object' &&
+    'adminEmail' in actionData.fieldErrors
       ? actionData.fieldErrors.adminEmail
       : null);
   const additionalForwardReason =
@@ -304,25 +316,22 @@ export default function FreeTierOnboardingRoute() {
           adminName: pending?.adminName,
         })
       : null;
-  const errorMessage =
-    additionalForwardAlert ??
-    (actionData && !actionData.ok && 'reason' in actionData
-      ? actionData.reason === 'same_as_teacher'
-        ? null
-        : actionData.reason === 'config'
-          ? actionData.message
-          : actionData.reason === 'email_failed'
-            ? "We couldn't send the email. Try again, or contact support@yawp.school."
-            : actionData.reason === 'illegal_state'
-              ? "This application isn't ready for administrator details yet. Contact support@yawp.school."
-              : actionData.reason === 'validation' &&
-                  'fieldErrors' in actionData &&
-                  actionData.fieldErrors
-                ? 'One or more fields need your attention.'
-                : additionalForwardReason === 'rate_limited'
-                  ? 'Too many attempts. Wait a moment and try again.'
-                  : 'Something went wrong. Try again.'
-      : null);
+  const errorMessage = (() => {
+    if (additionalForwardAlert) return additionalForwardAlert;
+    if (!actionData || actionData.ok || !('reason' in actionData)) return null;
+    const reason = actionData.reason;
+    if (reason === 'same_as_teacher') return null;
+    if (reason === 'config' && 'message' in actionData) return actionData.message;
+    if (reason === 'email_failed')
+      return "We couldn't send the email. Try again, or contact support@yawp.school.";
+    if (reason === 'illegal_state')
+      return "This application isn't ready for administrator details yet. Contact support@yawp.school.";
+    if (reason === 'validation' && 'fieldErrors' in actionData)
+      return 'One or more fields need your attention.';
+    if (reason === 'rate_limited')
+      return 'Too many attempts. Wait a moment and try again.';
+    return 'Something went wrong. Try again.';
+  })();
 
   if (showClass) {
     const values =
