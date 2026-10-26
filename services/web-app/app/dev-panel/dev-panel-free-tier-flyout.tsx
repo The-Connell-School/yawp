@@ -222,9 +222,11 @@ export function DevPanelFreeTierFlyout({
     (!jumpFailed && (!selected || !selectedVisible)) ||
     (jumpFailed && !selectedVisible);
 
-  const throwawayHelp = orgName
-    ? `Each jump makes a fresh test teacher at ${orgName}. ${signedInName}'s data isn't touched.`
-    : `Each jump makes a fresh test teacher. ${signedInName}'s data isn't touched.`;
+  const throwawayHelp = throwaway
+    ? orgName
+      ? `Each jump makes a fresh test teacher at ${orgName}. ${signedInName}'s data isn't touched.`
+      : `Each jump makes a fresh test teacher. ${signedInName}'s data isn't touched.`
+    : `Off: jumps change the signed-in account, ${signedInName}.`;
 
   return (
     <div
@@ -413,15 +415,20 @@ export function DevPanelFreeTierFlyout({
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Change the signed-in account?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Change {signedInName}&apos;s test data?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Throwaway mode is off, so this jump will update data on the account you are
-              signed in with. Continue only if that is what you want.
+              Throwaway is off, so this jump sets {signedInName} to{' '}
+              {selectedSummary ?? 'the selected state'}. Their usage and approval status
+              change. To change it again, jump to another state.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void runJump()}>Continue</AlertDialogAction>
+            <AlertDialogAction onClick={() => void runJump()}>
+              Change data and jump
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

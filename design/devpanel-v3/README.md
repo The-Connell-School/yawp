@@ -2,11 +2,13 @@
 
 ## Source of truth (required)
 
-Implementation markup follows **rendered `#dc-root` HTML** under `html/` (Claude Design export):
+Implementation markup follows **`.dc.html` Claude Design sources** under `html/` (hard rule). Use `*.rendered.html` only to cross-check DOM:
 
-- `html/02-unlocked-default.rendered.html` — DevPanel shell (prefer over older trimmed exports)
-- `html/FeedbackSheet.rendered.html` — Give feedback flyout
-- `html/StatesSheet.rendered.html` — Free-tier states flyout
+- `html/DevPanel.dc.html` — Developer tools panel
+- `html/FeedbackSheet.dc.html` — Give feedback flyout
+- `html/StatesSheet.dc.html` — Free-tier states flyout
+- `html/AppScreen.dc.html` — App shell wrapper (frames)
+- `html/*.rendered.html` — Rendered dumps for re-diff
 
 Artifact: https://claude.ai/artifact/1pByUxigJ5SjW5AzqryTHj
 

@@ -106,7 +106,7 @@ test.describe('Dev panel artboard evidence', () => {
       .setChecked(false);
     await stateSheet.getByRole('button', { name: 'Jump to this state' }).click();
     await expect(
-      page.getByRole('heading', { name: 'Change the signed-in account?' })
+      page.getByRole('heading', { name: /Change .+'s test data\?/ })
     ).toBeVisible();
     await shot(page, '20');
 

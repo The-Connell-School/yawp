@@ -187,7 +187,7 @@ export function DevPanelGiveFeedbackFlyout({
             variant="ghost"
             size="icon"
             className="size-7 shrink-0"
-            aria-label="Close give feedback"
+            aria-label="Close feedback"
             disabled={status === 'submitting'}
             onClick={onClose}
           >

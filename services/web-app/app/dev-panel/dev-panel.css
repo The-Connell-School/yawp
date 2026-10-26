@@ -1,8 +1,11 @@
 :root {
   --yawp-dev-panel-width: 360px;
   --yawp-dev-panel-inset: 12px;
-  --yawp-dev-panel-row-height: 44px;
-  --yawp-dev-panel-header-height: 32px;
+  --yawp-dev-panel-row-height: 32px;
+  --yawp-dev-panel-header-height: 40px;
+  --yawp-dev-panel-btn-height: 24px;
+  --yawp-dev-panel-label-fs: 13px;
+  --yawp-dev-panel-ink-border: hsl(var(--foreground) / 0.24);
 }
 
 @media (min-width: 1024px) and (max-width: 1279px) {
@@ -136,7 +139,10 @@ html.yawp-dev-panel-reduced-motion [data-yawp-dev-panel-flyout] {
 
 @media (max-width: 639px) {
   :root {
+    --yawp-dev-panel-row-height: 44px;
     --yawp-dev-panel-header-height: 52px;
+    --yawp-dev-panel-btn-height: 36px;
+    --yawp-dev-panel-label-fs: 14px;
   }
 
   [data-yawp-dev-panel] .yawp-dev-panel-header {
@@ -159,6 +165,7 @@ html.yawp-dev-panel-reduced-motion [data-yawp-dev-panel-flyout] {
   min-width: var(--yawp-dev-panel-width, 360px);
   max-width: var(--yawp-dev-panel-width, 360px);
   box-shadow: none;
+  border-left: 1px solid var(--yawp-dev-panel-ink-border);
 }
 
 [data-yawp-dev-panel] .yawp-dev-panel-header {
@@ -168,8 +175,20 @@ html.yawp-dev-panel-reduced-motion [data-yawp-dev-panel-flyout] {
   gap: 8px;
   height: var(--yawp-dev-panel-header-height);
   min-height: var(--yawp-dev-panel-header-height);
-  padding: 0 var(--yawp-dev-panel-inset);
+  padding: 0 6px 0 12px;
   border-bottom: 1px solid hsl(var(--border));
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-header-beaker {
+  width: 14px;
+  height: 14px;
+}
+
+@media (max-width: 639px) {
+  [data-yawp-dev-panel] .yawp-dev-panel-header-beaker {
+    width: 16px;
+    height: 16px;
+  }
 }
 
 [data-yawp-dev-panel] .yawp-dev-panel-header-title {
@@ -202,7 +221,7 @@ html.yawp-dev-panel-reduced-motion [data-yawp-dev-panel-flyout] {
 
 [data-yawp-dev-panel] .yawp-dev-panel-row-label {
   flex: 0 0 auto;
-  font-size: 14px;
+  font-size: var(--yawp-dev-panel-label-fs);
   line-height: 16px;
   font-weight: 600;
   color: hsl(var(--foreground));
@@ -301,7 +320,7 @@ html.yawp-dev-panel-reduced-motion [data-yawp-dev-panel-flyout] {
 
 [data-yawp-dev-panel] .yawp-dev-panel-bb-role-pill {
   flex: 1 1 0%;
-  height: 30px;
+  height: calc(var(--yawp-dev-panel-btn-height) - 6px);
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -316,7 +335,7 @@ html.yawp-dev-panel-reduced-motion [data-yawp-dev-panel-flyout] {
 
 [data-yawp-dev-panel] .yawp-dev-panel-bb-launch {
   display: inline-flex;
-  height: 36px;
+  height: var(--yawp-dev-panel-btn-height);
   width: 100%;
   align-items: center;
   justify-content: center;
@@ -332,7 +351,7 @@ html.yawp-dev-panel-reduced-motion [data-yawp-dev-panel-flyout] {
 [data-yawp-dev-panel] .yawp-dev-panel-url-field {
   flex: 1 1 auto;
   min-width: 0;
-  height: 36px;
+  height: var(--yawp-dev-panel-btn-height);
   box-sizing: border-box;
   padding: 0 8px;
   border: 1px solid hsl(var(--input));
@@ -345,7 +364,7 @@ html.yawp-dev-panel-reduced-motion [data-yawp-dev-panel-flyout] {
 
 [data-yawp-dev-panel] .yawp-dev-panel-copy-btn {
   display: inline-flex;
-  height: 36px;
+  height: var(--yawp-dev-panel-btn-height);
   flex: 0 0 auto;
   align-items: center;
   gap: 6px;
@@ -411,18 +430,67 @@ html.yawp-dev-panel-reduced-motion [data-yawp-dev-panel-flyout] {
   min-width: 1.25rem;
   border-radius: 3px;
   border: 1px solid hsl(var(--border));
+  border-bottom-width: 2px;
   background: hsl(var(--background));
   padding: 0 4px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 10px;
-  line-height: 1.4;
+  font-size: 11px;
+  line-height: 14px;
+  color: hsl(var(--foreground));
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-login-section-title {
+  margin: 6px 0 2px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-login-list-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 4px 0 8px;
+  margin: 0 -8px;
+  border-radius: 4px;
+  font-size: var(--yawp-dev-panel-label-fs);
+}
+
+@media (max-width: 639px) {
+  [data-yawp-dev-panel] .yawp-dev-panel-login-list-row {
+    min-height: 44px;
+  }
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-login-list-row-current {
+  background: hsl(var(--secondary) / 0.7);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-login-signin-btn {
+  display: inline-flex;
+  height: var(--yawp-dev-panel-btn-height);
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid hsl(var(--input));
+  border-radius: 999px;
+  background: hsl(var(--background));
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
 }
 
 [data-yawp-dev-panel-flyout].yawp-dev-panel-flyout-docked {
   width: var(--yawp-dev-panel-width, 360px);
   min-width: var(--yawp-dev-panel-width, 360px);
   max-width: var(--yawp-dev-panel-width, 360px);
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--yawp-dev-panel-ink-border);
   border-right: 0;
   box-shadow: none;
 }

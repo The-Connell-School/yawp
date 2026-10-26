@@ -32,7 +32,7 @@ export type DevPanelPersistedState = {
 
 export const DEV_PANEL_DEFAULT_STATE: DevPanelPersistedState = {
   open: false,
-  openSections: ['blackboard', 'tester-tools'],
+  openSections: ['sign-in'],
   org: null,
   subSheet: null,
   scroll: {},

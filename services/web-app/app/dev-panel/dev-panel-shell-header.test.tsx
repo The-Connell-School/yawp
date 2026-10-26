@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe('dev panel header chrome (rendered)', () => {
-  test('panel title uses 13px on a non-h1 heading and header row is 32px', () => {
+  test('panel title uses 13px on a non-h1 heading and header row is 40px (desktop .dc)', () => {
     if (!styleEl) {
       styleEl = document.createElement('style');
       styleEl.textContent = `${appCss}\n${devPanelCss}`;
@@ -43,7 +43,7 @@ describe('dev panel header chrome (rendered)', () => {
     const title = container.querySelector('.yawp-dev-panel-header-heading') as HTMLElement;
     expect(title?.textContent).toBe('Developer tools');
     expect(getComputedStyle(title).fontSize).toBe('13px');
-    expect(getComputedStyle(header).height).toBe('32px');
-    expect(getComputedStyle(header).minHeight).toBe('32px');
+    expect(getComputedStyle(header).height).toBe('40px');
+    expect(getComputedStyle(header).minHeight).toBe('40px');
   });
 });

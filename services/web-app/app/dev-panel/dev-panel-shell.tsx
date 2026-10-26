@@ -62,6 +62,28 @@ function membershipRoleLabel(role: string | undefined) {
   return 'Teacher';
 }
 
+type LoginBucket = 'teachers' | 'admins' | 'students';
+
+function loginBucket(role: string) {
+  const normalized = role.toLowerCase();
+  if (normalized.includes('student')) return 'students' as LoginBucket;
+  if (
+    normalized.includes('admin') ||
+    normalized.includes('principal') ||
+    normalized.includes('director') ||
+    normalized.includes('owner')
+  ) {
+    return 'admins' as LoginBucket;
+  }
+  return 'teachers' as LoginBucket;
+}
+
+const LOGIN_SECTION_LABELS: Record<LoginBucket, string> = {
+  teachers: 'Teachers',
+  admins: 'Admins',
+  students: 'Students',
+};
+
 function AccessCodeModal({
   open,
   onOpenChange,
@@ -306,7 +328,7 @@ export function DevPanelShell() {
     <>
       <header className="yawp-dev-panel-header">
         <div className="yawp-dev-panel-header-title">
-          <FlaskConical className="size-4 shrink-0" aria-hidden="true" />
+          <FlaskConical className="yawp-dev-panel-header-beaker shrink-0" aria-hidden="true" />
           <p
             ref={headingRef}
             tabIndex={-1}
@@ -323,6 +345,8 @@ export function DevPanelShell() {
           size="icon"
           className="yawp-dev-panel-header-close size-7 shrink-0"
           aria-label="Close developer tools"
+          aria-keyshortcuts="Alt+Shift+D"
+          title="Close (Alt+Shift+D)"
           onClick={closePanel}
         >
           {showPhoneBottomSheet ? (
@@ -378,7 +402,12 @@ export function DevPanelShell() {
                     </Form>
                   </>
                 ) : (
-                  <p className="m-0 w-full">Signed out · Pick a login below</p>
+                  <>
+                    <span>Signed out</span>
+                    <span className="yawp-dev-panel-user-name min-w-0 flex-1">
+                      Pick a login below
+                    </span>
+                  </>
                 )}
               </div>
 
@@ -416,35 +445,64 @@ export function DevPanelShell() {
                       Could not load quick logins. Try again.
                     </p>
                   ) : null}
-                  <div className="space-y-0.5">
-                    {logins.map((login) => (
-                      <loginFetcher.Form
-                        key={login.email}
-                        method="post"
-                        action="/auth/dev-login"
-                        className="block"
-                      >
-                        <input type="hidden" name="email" value={login.email} />
-                        <input
-                          type="hidden"
-                          name="redirectTo"
-                          value={`${location.pathname}${location.search}`}
-                        />
-                        <button
-                          type="submit"
-                          className="yawp-dev-panel-login-row"
-                          aria-label={`Sign in as ${login.label}, ${login.role}`}
-                        >
-                          <span className="truncate">{login.label}</span>
-                          {currentEmail === login.email ? (
-                            <span className="text-muted-foreground">Signed in</span>
-                          ) : (
-                            <span className="text-primary">Sign in</span>
-                          )}
-                        </button>
-                      </loginFetcher.Form>
-                    ))}
-                  </div>
+                  {(['teachers', 'admins', 'students'] as LoginBucket[]).map((bucket) => {
+                    const bucketLogins = logins.filter(
+                      (login) => loginBucket(login.role) === bucket
+                    );
+                    if (bucketLogins.length === 0) return null;
+                    return (
+                      <div key={bucket} className="flex flex-col">
+                        <h4 className="yawp-dev-panel-login-section-title">
+                          {LOGIN_SECTION_LABELS[bucket]}
+                        </h4>
+                        <ul className="m-0 list-none p-0">
+                          {bucketLogins.map((login) => {
+                            const isCurrent = currentEmail === login.email;
+                            return (
+                              <li key={login.email}>
+                                <loginFetcher.Form
+                                  method="post"
+                                  action="/auth/dev-login"
+                                  className="block"
+                                >
+                                  <input type="hidden" name="email" value={login.email} />
+                                  <input
+                                    type="hidden"
+                                    name="redirectTo"
+                                    value={`${location.pathname}${location.search}`}
+                                  />
+                                  <div
+                                    className={cn(
+                                      'yawp-dev-panel-login-list-row',
+                                      isCurrent && 'yawp-dev-panel-login-list-row-current'
+                                    )}
+                                  >
+                                    <span className="shrink-0 font-medium">{login.label}</span>
+                                    <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                                      {login.role}
+                                    </span>
+                                    {isCurrent ? (
+                                      <span className="shrink-0 pr-1.5 text-xs text-muted-foreground">
+                                        Signed in
+                                      </span>
+                                    ) : (
+                                      <button
+                                        type="submit"
+                                        className="yawp-dev-panel-login-signin-btn"
+                                        aria-label={`Sign in as ${login.label}, ${login.role}`}
+                                      >
+                                        Sign in
+                                      </button>
+                                    )}
+                                  </div>
+                                </loginFetcher.Form>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    );
+                  })}
                 </CollapsibleContent>
               </Collapsible>
 
@@ -759,7 +817,7 @@ export function DevPanelShell() {
       data-yawp-dev-panel-ready="true"
       aria-label="Developer tools"
       className={cn(
-        'yawp-dev-panel-docked fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-popover',
+        'yawp-dev-panel-docked fixed inset-y-0 right-0 z-40 flex flex-col bg-popover',
         'w-[var(--yawp-dev-panel-width)]'
       )}
     >
