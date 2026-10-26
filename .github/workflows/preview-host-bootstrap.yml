@@ -82,6 +82,7 @@ jobs:
             scripts/preview/publish-host-metrics.sh \
             scripts/preview/install-host-metrics.sh \
             scripts/preview/wake-policy.mjs \
+            scripts/preview/log-script-error.mjs \
             scripts/preview/pr-state.mjs \
             scripts/preview/idle-policy.sh \
             scripts/preview/idle-sleep.sh \
