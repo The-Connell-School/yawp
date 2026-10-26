@@ -70,7 +70,18 @@ export async function createAssignmentDeployedToClasses(params: {
       });
     }
 
-    return assignment;
+    return { assignment, classIds: uniqueClassIds };
+  }).then(async (result) => {
+    if (result.classIds.length > 0) {
+      const { applyDevPanelSimulationForNewClassAssignments } = await import(
+        '~/dev-panel/class-simulation.server'
+      );
+      await applyDevPanelSimulationForNewClassAssignments({
+        classIds: result.classIds,
+        assignmentId: result.assignment.id,
+      });
+    }
+    return result.assignment;
   });
 }
 

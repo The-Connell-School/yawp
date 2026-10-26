@@ -552,7 +552,10 @@ export function DevPanelShell() {
                       'yawp-dev-panel-login-row w-full',
                       state.subSheet === 'class-simulation' && 'bg-accent/55'
                     )}
-                    onClick={() => openSubSheet('class-simulation')}
+                    onClick={() => {
+                      updateForms({ simulationOpenAction: null });
+                      openSubSheet('class-simulation');
+                    }}
                   >
                     <span className="truncate font-medium">Populate class</span>
                     <ChevronLeft className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
@@ -560,7 +563,10 @@ export function DevPanelShell() {
                   <button
                     type="button"
                     className="yawp-dev-panel-login-row w-full"
-                    onClick={() => openSubSheet('class-simulation')}
+                    onClick={() => {
+                      updateForms({ simulationOpenAction: 'clear-confirm' });
+                      openSubSheet('class-simulation');
+                    }}
                   >
                     <span className="truncate font-medium">Clear simulated data</span>
                     <ChevronLeft className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
