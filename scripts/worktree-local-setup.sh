@@ -82,11 +82,20 @@ docker_available() {
   command -v docker >/dev/null 2>&1 && docker ps >/dev/null 2>&1
 }
 
+release_postgres_host_port() {
+  if [[ -z "${PG_PORT:-}" ]]; then
+    return 0
+  fi
+  bash "$ROOT/scripts/ci/release-docker-host-port.sh" "$PG_PORT"
+}
+
 ensure_postgres() {
   if ! docker_available; then
     echo "Docker is required for isolated worktree Postgres." >&2
     exit 1
   fi
+
+  release_postgres_host_port
 
   if docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
     local mapped_port
@@ -101,15 +110,27 @@ ensure_postgres() {
       docker start "$CONTAINER_NAME" >/dev/null
     fi
   else
-    docker run -d \
-      --name "$CONTAINER_NAME" \
-      --restart unless-stopped \
-      -e POSTGRES_USER="$PG_USER" \
-      -e POSTGRES_PASSWORD="$PG_PASSWORD" \
-      -e POSTGRES_DB="$DB_NAME" \
-      -p "${PG_PORT}:5432" \
-      -v "${VOLUME_NAME}:/var/lib/postgresql/data" \
-      postgres:16 >/dev/null
+    local attempt
+    for attempt in 1 2; do
+      if docker run -d \
+        --name "$CONTAINER_NAME" \
+        --restart unless-stopped \
+        -e POSTGRES_USER="$PG_USER" \
+        -e POSTGRES_PASSWORD="$PG_PASSWORD" \
+        -e POSTGRES_DB="$DB_NAME" \
+        -p "${PG_PORT}:5432" \
+        -v "${VOLUME_NAME}:/var/lib/postgresql/data" \
+        postgres:16 >/dev/null 2>&1; then
+        break
+      fi
+      if [[ "$attempt" -eq 1 ]]; then
+        docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+        release_postgres_host_port
+      else
+        echo "Failed to start Postgres container on host port ${PG_PORT}." >&2
+        exit 1
+      fi
+    done
   fi
 
   for _ in $(seq 1 60); do

@@ -164,7 +164,7 @@ jobs:
 
       - name: 🧪 Validate deployment contract
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts ./scripts/preview/deploy-log-secrets.test.js ./scripts/preview/redact-deploy-logs.test.js --max-concurrency=2
+        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts ./scripts/ci/release-docker-host-port.test.ts ./scripts/preview/deploy-log-secrets.test.js ./scripts/preview/redact-deploy-logs.test.js --max-concurrency=2
 
       - name: 🧪 Validate Blackboard LTI mock
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -1629,21 +1629,19 @@ jobs:
           RESEND_API_KEY: ''
           RESEND_FROM_EMAIL: ''
         run: |
+          REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
+          cd "$REPO_ROOT"
           mkdir -p "$TMPDIR" services/web-app/dev-panel-evidence
           cleanup() {
-            ./bin/project dev stop --json || true
-            if [ -f .worktree-local/config.env ]; then
-              source .worktree-local/config.env
-              docker rm -f "$CONTAINER_NAME" || true
-              docker volume rm "$VOLUME_NAME" || true
-            fi
+            bash "$REPO_ROOT/scripts/ci/demo-feedback-worktree-cleanup.sh" 54489 54490 5489 5490
           }
           trap cleanup EXIT
-          ./bin/project bootstrap --fresh --json
-          ./bin/project fixture verify local-dev --json
-          ./bin/project dev start --json
+          bash "$REPO_ROOT/scripts/ci/demo-feedback-worktree-cleanup.sh" 54489 54490 5489 5490
+          "$REPO_ROOT/bin/project" bootstrap --fresh --json
+          "$REPO_ROOT/bin/project" fixture verify local-dev --json
+          "$REPO_ROOT/bin/project" dev start --json
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5489/ > /dev/null
-          ./bin/project test --profile demo-feedback-browser --json
+          "$REPO_ROOT/bin/project" test --profile demo-feedback-browser --json
 
       - name: Cat dev panel free-tier jump log
         if: ${{ !cancelled() && always() }}
@@ -1691,21 +1689,19 @@ jobs:
           TESTER_FEEDBACK_ENABLED: 'true'
           DEMO_FEEDBACK_BASE_URL: http://127.0.0.1:5490
         run: |
+          REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
+          cd "$REPO_ROOT"
           mkdir -p "$TMPDIR"
           cleanup() {
-            ./bin/project dev stop --json || true
-            if [ -f .worktree-local/config.env ]; then
-              source .worktree-local/config.env
-              docker rm -f "$CONTAINER_NAME" || true
-              docker volume rm "$VOLUME_NAME" || true
-            fi
+            bash "$REPO_ROOT/scripts/ci/demo-feedback-worktree-cleanup.sh" 54489 54490 5489 5490
           }
           trap cleanup EXIT
-          ./bin/project bootstrap --fresh --json
-          ./bin/project fixture verify local-dev --json
-          ./bin/project dev start --json
+          bash "$REPO_ROOT/scripts/ci/demo-feedback-worktree-cleanup.sh" 54489 54490 5489 5490
+          "$REPO_ROOT/bin/project" bootstrap --fresh --json
+          "$REPO_ROOT/bin/project" fixture verify local-dev --json
+          "$REPO_ROOT/bin/project" dev start --json
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5490/ > /dev/null
-          cd services/web-app
+          cd "$REPO_ROOT/services/web-app"
           bun x playwright test --config=playwright.dev-panel-free-signed-out.config.ts --workers=1
 
       - name: Upload dev panel artboard evidence

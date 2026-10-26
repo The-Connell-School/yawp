@@ -12,6 +12,11 @@ for (const fresh of [true, false]) {
         fs.mkdirSync(path.join(fixture, dir), { recursive: true });
       const setup = path.join(fixture, 'scripts/setup.sh');
       fs.copyFileSync(new URL('./worktree-local-setup.sh', import.meta.url), setup);
+      fs.mkdirSync(path.join(fixture, 'scripts/ci'), { recursive: true });
+      fs.copyFileSync(
+        new URL('./ci/release-docker-host-port.sh', import.meta.url),
+        path.join(fixture, 'scripts/ci/release-docker-host-port.sh')
+      );
       const executable = (name: string, body: string) =>
         fs.writeFileSync(path.join(fixture, 'bin', name), `#!/usr/bin/env bash\nset -eu\n${body}\n`, { mode: 0o755 });
 

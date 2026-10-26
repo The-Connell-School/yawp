@@ -638,6 +638,8 @@ describe('worktree local setup contract', () => {
     expect(setupScript).not.toContain('WORKTREE_NAME="$(basename "$(dirname "$ROOT")")"');
     expect(setupScript).toContain('CONTAINER_NAME="yawp-${SLUG}-postgres"');
     expect(setupScript).toContain('VOLUME_NAME="yawp-${SLUG}-postgres-data"');
+    expect(setupScript).toContain('release_postgres_host_port');
+    expect(setupScript).toContain('scripts/ci/release-docker-host-port.sh');
   });
 
   test('worktree setup installs dependencies before any Prisma generation', () => {
@@ -677,6 +679,15 @@ describe('worktree local setup contract', () => {
     expect(setupScript).toContain('LTI_MOCK_PORT');
     expect(rootPackage.scripts['blackboard-lti-mock']).toContain(
       'BLACKBOARD_LTI_MOCK_ENABLED=true'
+    );
+  });
+
+  test('demo feedback browser CI cleanup stays cwd-safe after cd into web-app', () => {
+    const workflow = readRepoFile('.github/workflows/ci.yml');
+
+    expect(workflow).toContain('REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"');
+    expect(workflow).toContain(
+      '"$REPO_ROOT/scripts/ci/demo-feedback-worktree-cleanup.sh"'
     );
   });
 
