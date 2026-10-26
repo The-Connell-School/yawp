@@ -3,15 +3,18 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const requireUserId = mock();
 const requireMembership = mock();
 const getLLMCompletion = mock();
-const teacherPromptGeneratorDisabledResponse = mock();
 
+const prisma = {
+  setting: {
+    findUnique: mock(),
+  },
+};
+
+mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
 mock.module('~/utils/getLLMCompletion', () => ({
   AgentType: { Assistant: 'assistant', User: 'user' },
   getLLMCompletion,
-}));
-mock.module('~/domain/teacher-prompt-generator/gate.server', () => ({
-  teacherPromptGeneratorDisabledResponse,
 }));
 
 const { action } = await import('./route');
@@ -20,11 +23,24 @@ afterAll(() => {
   mock.restore();
 });
 
-async function readBody(response: unknown) {
-  return typeof (response as { json?: () => Promise<unknown> }).json ===
-    'function'
-    ? (response as { json: () => Promise<unknown> }).json()
-    : (response as { data: unknown }).data;
+type ShortFormGeneratorActionBody = {
+  success: boolean;
+  reply?: string;
+  options?: Array<{ prompt: string; kind?: string }>;
+  message?: string;
+};
+
+function dataWithResponseInitStatus(response: unknown): number | undefined {
+  if (response == null || typeof response !== 'object') return undefined;
+  return (response as { init?: { status?: number } }).init?.status;
+}
+
+async function readBody(response: unknown): Promise<ShortFormGeneratorActionBody> {
+  const raw =
+    typeof (response as { json?: () => Promise<unknown> }).json === 'function'
+      ? await (response as { json: () => Promise<unknown> }).json()
+      : (response as { data: unknown }).data;
+  return raw as ShortFormGeneratorActionBody;
 }
 
 function request(messages: unknown) {
@@ -44,8 +60,8 @@ describe('api.domain.short-form-prompt-generator', () => {
     requireUserId.mockReset();
     requireMembership.mockReset();
     getLLMCompletion.mockReset();
-    teacherPromptGeneratorDisabledResponse.mockReset();
-    teacherPromptGeneratorDisabledResponse.mockResolvedValue(null);
+    prisma.setting.findUnique.mockReset();
+    process.env.YAWP_ENVIRONMENT = 'demo';
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -56,20 +72,19 @@ describe('api.domain.short-form-prompt-generator', () => {
   });
 
   test('returns 404 when the feature flag is off', async () => {
-    teacherPromptGeneratorDisabledResponse.mockResolvedValue({
-      data: { success: false, message: 'off' },
-      init: { status: 404 },
-    });
+    const previous = process.env.YAWP_ENVIRONMENT;
+    process.env.YAWP_ENVIRONMENT = 'production';
+    prisma.setting.findUnique.mockResolvedValue(null);
 
     const response = await action({
       request: request([{ role: 'user', content: 'A close read.' }]),
     } as never);
 
     expect(getLLMCompletion).not.toHaveBeenCalled();
-    const status =
-      (response as { init?: { status?: number } }).init?.status ??
-      (response as Response).status;
-    expect(status).toBe(404);
+    expect(dataWithResponseInitStatus(response)).toBe(404);
+
+    if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
+    else process.env.YAWP_ENVIRONMENT = previous;
   });
 
   test('returns drafted short-form options from the model', async () => {
@@ -95,7 +110,9 @@ describe('api.domain.short-form-prompt-generator', () => {
     expect(body.success).toBe(true);
     expect(body.options[0].kind).toBe('close-read');
     const call = getLLMCompletion.mock.calls[0][0];
-    expect(call.system.toLowerCase()).toContain('depth of thought');
+    expect(call.system.toLowerCase().replace(/\s+/g, ' ')).toContain(
+      'depth of thought'
+    );
     expect(call.maxTokens).toBeGreaterThanOrEqual(2000);
   });
 });

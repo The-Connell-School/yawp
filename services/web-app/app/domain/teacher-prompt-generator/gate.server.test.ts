@@ -12,6 +12,11 @@ const {
 
 const FLAG_NAME = 'feature_flag.teacher-prompt-generator';
 
+function disabledResponseStatus(response: unknown): number | undefined {
+  if (response == null || typeof response !== 'object') return undefined;
+  return (response as { init?: { status?: number } }).init?.status;
+}
+
 describe('teacher prompt generator gate', () => {
   beforeEach(() => {
     mock.module('~/utils/db.server', () => ({ prisma }));
@@ -41,10 +46,7 @@ describe('teacher prompt generator gate', () => {
     prisma.setting.findUnique.mockResolvedValue(null);
     const response = await teacherPromptGeneratorDisabledResponse('org-1');
     expect(response).not.toBeNull();
-    const status =
-      (response as { init?: { status?: number } }).init?.status ??
-      (response as Response).status;
-    expect(status).toBe(404);
+    expect(disabledResponseStatus(response)).toBe(404);
   });
 
   test('honors everyone mode on production when Bryant flips the flag', async () => {
