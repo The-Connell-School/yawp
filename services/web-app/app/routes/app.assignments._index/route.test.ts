@@ -547,6 +547,34 @@ describe('My Assignments action', () => {
       expect(response.init?.status ?? response.status).toBe(409);
     });
 
+    test('redacts sensitive substrings when delete hits collaborative work', async () => {
+      requireMembership.mockResolvedValue({
+        id: 'profile-1',
+        role: 'TEACHER',
+        organization: { id: 'org-1', plan: 'SCHOOL' },
+      });
+      prisma.classAssignment.findMany.mockResolvedValue([
+        { assignmentId: 'assignment-1', classId: 'class-1' },
+      ]);
+      prisma.documentGroup.findFirst.mockResolvedValue(null);
+      deleteClassAssignmentDeployment.mockRejectedValue(
+        new AssignmentHasCollaborativeWorkError(
+          'This assignment has shared group work token=SECRET-TOKEN and cannot be deleted.',
+        ),
+      );
+
+      const response = (await action({
+        request: deleteRequest(['assignment-1']),
+        params: {},
+        context: {},
+      } as any)) as { init?: { status: number }; data?: { message: string } };
+
+      const serialized = JSON.stringify(response.data);
+      expect(response.init?.status).toBe(409);
+      expect(serialized).not.toContain('SECRET-TOKEN');
+      expect(response.data?.message).toContain('shared group work');
+    });
+
     test('refuses a non-teacher', async () => {
       requireMembership.mockResolvedValue({ id: 'profile-1', role: 'STUDENT' });
 

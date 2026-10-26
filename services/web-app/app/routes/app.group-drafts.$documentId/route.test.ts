@@ -366,6 +366,20 @@ describe('app.group-drafts.$documentId loader', () => {
       expect((await readBody(response)).message).toMatch(/write something/i);
     });
 
+    test('redacts sensitive substrings in comment validation errors', async () => {
+      addDraftComment.mockRejectedValue(
+        new DraftCommentError(
+          'Write something first. token=SECRET-TOKEN teacher@school.edu',
+        ),
+      );
+
+      const response: any = await post({ intent: 'add-comment', content: ' ' });
+      const body = await readBody(response);
+
+      expect(JSON.stringify(body)).not.toContain('SECRET-TOKEN');
+      expect(body.message).toMatch(/write something/i);
+    });
+
     test('does not swallow an unexpected failure as a refusal', async () => {
       recordMemberGrade.mockRejectedValue(new Error('connection reset'));
 

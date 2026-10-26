@@ -221,4 +221,34 @@ describe('my classes route (teacher create/edit)', () => {
       })
     );
   });
+
+  test('create-class redacts sensitive substrings in free-tier quota errors', async () => {
+    prisma.$transaction.mockRejectedValueOnce(
+      new Error(
+        'Free classroom accounts include one class. token=SECRET-TOKEN teacher@school.edu',
+      ),
+    );
+
+    const body = new URLSearchParams();
+    body.set('intent', 'create-class');
+    body.set('schoolId', 'school-1');
+    body.set('schoolYear', '2025-2026');
+    body.set('code', 'ABC123');
+
+    const request = new Request('https://example.test/app/my-classes?index', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+
+    const response = (await action({ request } as any)) as {
+      init?: { status: number };
+      data?: { error: string };
+    };
+
+    const serialized = JSON.stringify(response.data);
+    expect(response.init?.status).toBe(403);
+    expect(serialized).not.toContain('SECRET-TOKEN');
+    expect(response.data?.error).toContain('Free classroom accounts include one class');
+  });
 });

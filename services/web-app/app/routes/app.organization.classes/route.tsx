@@ -45,6 +45,7 @@ import {
   getOrganizationClassesTableCookieValue,
 } from '~/utils/cookies.server';
 import { assertCanCreateClassForOrganizationPlan } from '~/utils/assignment-quota.server';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import { prisma } from '~/utils/db.server';
 import { SearchInput } from '~/components/search-input';
 import {
@@ -399,7 +400,16 @@ export async function action({ request }: ActionFunctionArgs) {
         return dataResponse({ success: true });
       } catch (error: unknown) {
         if (error instanceof ClassCodeCollisionError) {
-          return dataResponse({ error: error.message, field: 'code' }, { status: 400 });
+          return dataResponse(
+            {
+              error: safeDomainErrorTextForClientResponse(
+                error,
+                'Class code already in use. Choose a different code.',
+              ),
+              field: 'code',
+            },
+            { status: 400 },
+          );
         }
         const uniqueTargets = prismaUniqueConstraintTargets(error);
         const isCodeCollision =
@@ -426,7 +436,15 @@ export async function action({ request }: ActionFunctionArgs) {
           error instanceof Error &&
           error.message.includes('Free classroom accounts include one class')
         ) {
-          return dataResponse({ error: error.message }, { status: 403 });
+          return dataResponse(
+            {
+              error: safeDomainErrorTextForClientResponse(
+                error,
+                'Free classroom accounts include one class. Archive your existing class or upgrade to add another.',
+              ),
+            },
+            { status: 403 },
+          );
         }
         throw error;
       }
@@ -507,7 +525,16 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ success: true });
     } catch (error: unknown) {
       if (error instanceof ClassCodeCollisionError) {
-        return dataResponse({ error: error.message, field: 'code' }, { status: 400 });
+        return dataResponse(
+          {
+            error: safeDomainErrorTextForClientResponse(
+              error,
+              'Class code already in use. Choose a different code.',
+            ),
+            field: 'code',
+          },
+          { status: 400 },
+        );
       }
       const uniqueTargets = prismaUniqueConstraintTargets(error);
       if (uniqueTargets) {
