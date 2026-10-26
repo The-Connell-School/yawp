@@ -200,8 +200,8 @@ test('FreeAssignmentTiles locked pending hides create control and uses text-only
   expect(html).not.toContain('Create assignment');
   expect(html).not.toContain('/api/image/course/');
   expect(html).toContain('site-license-lock-button');
-  expect(html).toContain('12 of 12 left');
-  expect(html).not.toContain('Unlimited');
+  expect(html).toContain('Unlimited');
+  expect(html).not.toMatch(/\d+ of \d+ left/);
 });
 
 test('FreeAccountRail is hidden while teaching is locked', async () => {

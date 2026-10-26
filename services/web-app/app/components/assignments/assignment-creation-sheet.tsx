@@ -1,4 +1,5 @@
 import { useFreeAccountUsage } from '~/components/free-account-usage';
+import { freeAssignmentKindUsageMeta } from '~/domain/free-tier/inapp-usage';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type * as React from 'react';
 import { useFetcher, useNavigate } from 'react-router';
@@ -567,11 +568,7 @@ export function AssignmentCreationSheet({
                         row.remaining === 0 && 'text-amber-800'
                       )}
                     >
-                      {usage.unlimitedFreeAssignmentTiles
-                        ? 'Unlimited'
-                        : row.remaining
-                          ? `${row.remaining} of ${row.total} left`
-                          : 'None left'}
+                      {freeAssignmentKindUsageMeta(usage, row)}
                     </span>
                   </span>
                   {!usage.unlimitedFreeAssignmentTiles &&

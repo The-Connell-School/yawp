@@ -78,22 +78,23 @@ export const FREE_TIER_STATE_GROUPS: FreeTierStateGroup[] = [
       {
         id: 'approved.usage-plenty-left',
         label: 'Usage: plenty left',
-        description: 'Usage ring full for Lesson Planner and Reporter.',
+        description:
+          'Monthly LP and Reporter usage mostly remaining (sidebar rings removed).',
       },
       {
         id: 'approved.usage-about-half-left',
         label: 'Usage: about half left',
-        description: 'Ring half full.',
+        description: 'About half of monthly LP / Reporter quota used.',
       },
       {
         id: 'approved.usage-a-few-left',
         label: 'Usage: a few left',
-        description: 'Ring turns orange and the mobile menu shows a dot.',
+        description: 'Most monthly LP / Reporter uses consumed.',
       },
       {
         id: 'approved.usage-all-used',
         label: 'Usage: all used',
-        description: 'Ring empty until November 1.',
+        description: 'Monthly LP or Reporter at cap until renewal.',
       },
       {
         id: 'approved.lesson-planner-limit',
