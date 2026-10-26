@@ -21,6 +21,7 @@ import {
   LESSON_PLANNER_DECK_GALLERY_FLAG,
   LESSON_PLANNER_UPLOADS_FLAG,
   LESSON_PLANNER_STACK_PANEL_FLAG,
+  TEACHER_PROMPT_GENERATOR_FLAG,
   FOLDED_FREE_TIER_LEGACY_SETTINGS,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
@@ -61,6 +62,7 @@ describe('feature flag registry', () => {
       CLASS_CODE_UNIQUE_FLAG,
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
+      TEACHER_PROMPT_GENERATOR_FLAG,
     ]);
   });
 

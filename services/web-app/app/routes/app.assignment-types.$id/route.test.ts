@@ -41,6 +41,7 @@ const createDocumentForAssignmentType = mock();
 const redirectWithToast = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 const isAssignmentTypeAvailableForAnyScope = mock();
+const isTeacherPromptGeneratorEnabled = mock(async () => true);
 
 // bun's module mocks are global to the test run and mock.restore() does not
 // undo mock.module — restore from the pristine copy test-preload.ts captured
@@ -65,6 +66,9 @@ mock.module('~/utils/assignment-type-access.server', () => ({
   AssignmentTypeAccessScope: undefined,
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForAnyScope,
+}));
+mock.module('~/domain/teacher-prompt-generator/gate.server', () => ({
+  isTeacherPromptGeneratorEnabled,
 }));
 
 const { action, loader, showModulesAccordion } = await import('./route');

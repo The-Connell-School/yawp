@@ -13,6 +13,7 @@ import {
   isAssignmentTypeAvailableForAnyScope,
   type AssignmentTypeAccessScope,
 } from '~/utils/assignment-type-access.server';
+import { teacherPromptGeneratorDisabledResponse } from '~/domain/teacher-prompt-generator/gate.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -30,6 +31,13 @@ export async function action({ request }: ActionFunctionArgs) {
       { success: false, message: 'Only teachers can save prompts.' },
       { status: 403 }
     );
+  }
+
+  {
+    const disabled = await teacherPromptGeneratorDisabledResponse(
+      profile.organization.id
+    );
+    if (disabled) return disabled;
   }
 
   const formData = await request.formData();
