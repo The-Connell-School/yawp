@@ -74,10 +74,20 @@ async function openDevToolsPanel(page) {
     await waitDevPanelReady(page);
     return panel;
   }
-  const beaker = page.locator('.yawp-dev-panel-beaker button');
+  const beaker = page.locator('.yawp-dev-panel-beaker button').first();
   await beaker.waitFor({ state: 'visible', timeout: 120_000 });
-  await beaker.click();
-  await panel.waitFor({ state: 'visible', timeout: 30_000 });
+  const deadline = Date.now() + 45_000;
+  while (Date.now() < deadline) {
+    if (!(await panel.isVisible())) {
+      await beaker.click({ timeout: 2_000 }).catch(() => {});
+    }
+    if (!(await panel.isVisible())) {
+      await page.keyboard.press('Alt+Shift+D');
+    }
+    if (await panel.isVisible()) break;
+    await page.waitForTimeout(500);
+  }
+  await panel.waitFor({ state: 'visible', timeout: 5_000 });
   await waitDevPanelReady(page);
   return panel;
 }
