@@ -36,7 +36,7 @@ describe('class simulation dev panel routes in production', () => {
     const previous = snapshotProcessEnv();
     const env = process.env as Record<string, string | undefined>;
     env.NODE_ENV = 'production';
-    delete env.YAWP_ENVIRONMENT;
+    env.YAWP_ENVIRONMENT = 'production';
     delete env.PREVIEW_SLUG;
     try {
       const response = await assertDevPanelRoute(
@@ -54,7 +54,7 @@ describe('class simulation dev panel routes in production', () => {
     const previous = snapshotProcessEnv();
     const env = process.env as Record<string, string | undefined>;
     env.NODE_ENV = 'production';
-    delete env.YAWP_ENVIRONMENT;
+    env.YAWP_ENVIRONMENT = 'production';
     try {
       const response = await assertDevPanelRoute(
         new Request('http://localhost/api/dev-panel/teacher-classes')

@@ -31,12 +31,12 @@ function snapshotProcessEnv() {
   return previous;
 }
 
-/** Real production: NODE_ENV=production and no YAWP_ENVIRONMENT at runtime. */
+/** App Runner production: NODE_ENV=production and YAWP_ENVIRONMENT=production (#802). */
 const productionRuntimeEnv: Record<
   (typeof productionEnvKeys)[number],
   string | undefined
 > = {
-  YAWP_ENVIRONMENT: undefined,
+  YAWP_ENVIRONMENT: 'production',
   PREVIEW_SLUG: undefined,
   PR_NUMBER: undefined,
   PREVIEW_ACCESS_GATE: undefined,
