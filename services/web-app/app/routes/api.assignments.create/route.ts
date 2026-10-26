@@ -30,6 +30,7 @@ import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment
 import { FreeClassroomAssignmentQuotaError } from '~/utils/assignment-quota.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { safeErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import {
   DEFAULT_ASSIGNMENT_POINT_VALUE,
   parseAssignmentGradingIntent,
@@ -500,7 +501,16 @@ export async function action({ request }: ActionFunctionArgs) {
         { status: 403 }
       );
     }
-    throw error;
+    return dataResponse(
+      {
+        success: false,
+        message: safeErrorTextForClientResponse(
+          error,
+          'Could not create the assignment. Please try again.',
+        ),
+      },
+      { status: 500 }
+    );
   }
 
   // "My Saved Assignments": keep the configuration so the teacher can push the

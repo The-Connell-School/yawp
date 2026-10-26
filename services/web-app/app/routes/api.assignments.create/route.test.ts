@@ -1331,6 +1331,31 @@ describe('api.assignments.create', () => {
       expect(body.message).toMatch(/used all 12 free Class Starters/i);
     });
 
+    test('returns stable copy when deployment fails unexpectedly', async () => {
+      const sensitive =
+        'Invalid `prisma.user.findMany()` token=SECRET-TOKEN teacher@school.edu';
+      createAssignmentDeployedToClasses.mockRejectedValue(new Error(sensitive));
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1'],
+          prompt: 'Start class.',
+          title: 'Starter',
+        }),
+        params: {},
+      } as any);
+      const body = await readBody(response);
+      const serialized = JSON.stringify(body);
+
+      expect(responseStatus(response)).toBe(500);
+      expect(serialized).not.toContain('SECRET-TOKEN');
+      expect(body.message).toBe(
+        'Could not create the assignment. Please try again.'
+      );
+    });
+
     test('does not pass quota options for a school org', async () => {
       requireMembership.mockResolvedValue({
         id: 'teacher-1',
