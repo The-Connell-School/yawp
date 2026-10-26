@@ -557,6 +557,21 @@ describe('production deployment contract', () => {
     expect(reactRouterConfig).toContain('unstable_optimizeDeps: true');
   });
 
+  test('SSR React Router request handler aligns preview ingress URLs before CSRF', () => {
+    const viteConfig = readRepoFile('services/web-app/vite.config.ts');
+    const aliasModule = readRepoFile(
+      'services/web-app/vite/preview-ingress-ssr-alias.ts'
+    );
+    const wrapper = readRepoFile(
+      'services/web-app/vite/react-router-with-preview-ingress.ts'
+    );
+
+    expect(viteConfig).toContain('react-router-with-preview-ingress');
+    expect(viteConfig).toContain('preview-ingress-ssr-alias');
+    expect(aliasModule).toContain("=== 'preview'");
+    expect(wrapper).toContain('adaptPreviewIngressRequest');
+  });
+
   test('main deploy runs production Prisma migrations before publishing the image', () => {
     const deployWorkflow = readRepoFile('.github/workflows/deploy.yml');
     const migrateRemoteScript = readRepoFile(
