@@ -120,11 +120,11 @@ export async function openDevPanelSection(page: Page, sectionName: string) {
   return panel;
 }
 
-/** Opens the class simulation flyout from the Data section row (not the flyout action). */
+/** Opens the class simulation flyout from the Tester tools section row (not the flyout action). */
 export async function openDevPanelClassSimulationFlyout(page: Page) {
-  const panel = await openDevPanelSection(page, 'Data');
+  const panel = await openDevPanelSection(page, 'Tester tools');
   await panel
-    .getByRole('button', { name: /^Populate class Fake/ })
+    .getByRole('button', { name: 'Populate class', exact: true })
     .click();
   await expect(
     page.getByRole('dialog', { name: 'Class simulation' })
