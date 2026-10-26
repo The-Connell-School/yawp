@@ -141,4 +141,30 @@ describe('assignment start', () => {
     expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
     expect(result.options.type).toBe('error');
   });
+
+  test('does not surface internal DocumentCreationError text in the toast', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue(classAssignment());
+    createDocumentForAssignmentType.mockRejectedValue(
+      new DocumentCreationError(
+        'Assignment.assignmentTypeId (at-1) does not match input.assignmentTypeId (at-2)',
+      ),
+    );
+
+    const result: any = await call();
+
+    expect(result.options.type).toBe('error');
+    expect(result.options.description).toBe('Could not start this assignment.');
+    expect(result.options.description).not.toContain('assignmentTypeId');
+  });
+
+  test('keeps user-safe DocumentCreationError copy in the toast', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue(classAssignment());
+    createDocumentForAssignmentType.mockRejectedValue(
+      new DocumentCreationError('AssignmentType is not available.'),
+    );
+
+    const result: any = await call();
+
+    expect(result.options.description).toBe('AssignmentType is not available.');
+  });
 });

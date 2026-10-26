@@ -30,6 +30,7 @@ import type { Route as RootRoute } from '../../+types/root';
 import {
   createDocumentForAssignmentType,
   DocumentCreationError,
+  documentCreationErrorTextForClient,
 } from '~/domain/documents.server';
 import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server';
 import { listSavedThesisPrompts } from '~/domain/thesis-prompts/saved-prompts.server';
@@ -693,7 +694,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (creationError instanceof DocumentCreationError) {
       return redirectWithToast(`/app/assignment-types/${params.id}`, {
         type: 'error',
-        description: creationError.message,
+        description: documentCreationErrorTextForClient(
+          creationError,
+          'Could not create a document. Please try again.',
+        ),
       });
     }
     throw creationError;

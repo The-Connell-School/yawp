@@ -5,6 +5,7 @@ import { findStudentGroupDocument } from '~/domain/collaboration/groups.server';
 import {
   createDocumentForAssignmentType,
   DocumentCreationError,
+  documentCreationErrorTextForClient,
 } from '~/domain/documents.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -105,7 +106,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (creationError instanceof DocumentCreationError) {
       return redirectWithToast('/app?tab=assignments', {
         type: 'error',
-        description: creationError.message,
+        description: documentCreationErrorTextForClient(
+          creationError,
+          'Could not start this assignment.',
+        ),
       });
     }
     throw creationError;

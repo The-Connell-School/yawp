@@ -22,8 +22,34 @@ const prisma = {
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { createDocumentForAssignmentType, ensureAssignmentModuleSessionsForDocument } =
-  await import('./documents.server');
+const {
+  createDocumentForAssignmentType,
+  DocumentCreationError,
+  documentCreationErrorTextForClient,
+  ensureAssignmentModuleSessionsForDocument,
+} = await import('./documents.server');
+
+describe('documentCreationErrorTextForClient', () => {
+  test('returns whitelisted user-safe messages unchanged', () => {
+    expect(
+      documentCreationErrorTextForClient(
+        new DocumentCreationError('AssignmentType is not available.'),
+        'fallback',
+      ),
+    ).toBe('AssignmentType is not available.');
+  });
+
+  test('uses fallback for internal validation messages with ids', () => {
+    const text = documentCreationErrorTextForClient(
+      new DocumentCreationError(
+        'ClassAssignment ca-secret not found',
+      ),
+      'Could not start this assignment.',
+    );
+    expect(text).toBe('Could not start this assignment.');
+    expect(text).not.toContain('ca-secret');
+  });
+});
 
 describe('createDocumentForAssignmentType', () => {
   beforeEach(() => {
