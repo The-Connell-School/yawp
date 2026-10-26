@@ -110,6 +110,32 @@ html.yawp-dev-panel-reduced-motion [data-yawp-dev-panel-flyout] {
   font-size: 13px;
   line-height: 1.35;
   box-shadow: none;
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+}
+
+[data-yawp-dev-panel] h1,
+[data-yawp-dev-panel] h2,
+[data-yawp-dev-panel] h3,
+[data-yawp-dev-panel] h4 {
+  font-family: inherit;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  letter-spacing: normal;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-header-heading {
+  flex: 0 1 auto;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+[data-yawp-dev-panel].yawp-dev-panel-docked {
+  width: var(--yawp-dev-panel-width, 360px);
+  min-width: var(--yawp-dev-panel-width, 360px);
+  max-width: var(--yawp-dev-panel-width, 360px);
+  box-shadow: none;
 }
 
 [data-yawp-dev-panel] .yawp-dev-panel-header {
@@ -117,8 +143,9 @@ html.yawp-dev-panel-reduced-motion [data-yawp-dev-panel-flyout] {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  height: var(--yawp-dev-panel-row-height);
   min-height: var(--yawp-dev-panel-row-height);
-  padding: 8px var(--yawp-dev-panel-inset);
+  padding: 0 var(--yawp-dev-panel-inset);
   border-bottom: 1px solid hsl(var(--border));
 }
 
@@ -240,9 +267,36 @@ html.yawp-dev-panel-reduced-motion [data-yawp-dev-panel-flyout] {
 }
 
 [data-yawp-dev-panel-flyout].yawp-dev-panel-flyout-docked {
+  width: var(--yawp-dev-panel-width, 360px);
+  min-width: var(--yawp-dev-panel-width, 360px);
+  max-width: var(--yawp-dev-panel-width, 360px);
   border: 1px solid hsl(var(--border));
   border-right: 0;
   box-shadow: none;
+}
+
+[data-yawp-dev-panel-flyout] {
+  font-size: 13px;
+  line-height: 1.35;
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+  box-shadow: none;
+}
+
+[data-yawp-dev-panel-flyout] h2 {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-flyout-header {
+  display: flex;
+  height: var(--yawp-dev-panel-row-height);
+  min-height: var(--yawp-dev-panel-row-height);
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 var(--yawp-dev-panel-inset);
+  border-bottom: 1px solid hsl(var(--border));
 }
 
 [data-yawp-dev-panel] .yawp-dev-panel-org-popover {

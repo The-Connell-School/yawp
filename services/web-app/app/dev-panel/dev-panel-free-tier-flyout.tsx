@@ -1,4 +1,4 @@
-import { ChevronLeft, CircleAlert, Loader2, Search } from 'lucide-react';
+import { ChevronLeft, CircleAlert, Loader2, Search, X } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 function useMedia(query: string) {
@@ -203,22 +203,29 @@ export function DevPanelFreeTierFlyout({
               'z-20 flex flex-col bg-background',
               isPhone ? 'relative min-h-full' : 'absolute inset-0'
             )
-          : 'yawp-dev-panel-flyout-docked absolute inset-y-0 right-full z-10 w-[var(--yawp-dev-panel-width)]'
+          : 'yawp-dev-panel-flyout-docked absolute inset-y-0 right-full z-10'
       )}
       role="dialog"
       aria-label="Free-tier states"
     >
-      <div className="flex items-center gap-2 border-b px-3 py-2">
+      <div className="yawp-dev-panel-flyout-header">
         {pushed ? (
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             <ChevronLeft className="size-4" aria-hidden="true" />
             Back
           </Button>
         ) : null}
-        <h2 className="flex-1 text-sm font-semibold">Free-tier states</h2>
+        <h2 className="min-w-0 flex-1">Free-tier states</h2>
         {!pushed ? (
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Close
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7 shrink-0"
+            aria-label="Close free-tier states"
+            onClick={onClose}
+          >
+            <X className="size-4" aria-hidden="true" />
           </Button>
         ) : null}
       </div>

@@ -306,7 +306,7 @@ export function DevPanelShell() {
       <header className="yawp-dev-panel-header">
         <div className="yawp-dev-panel-header-title">
           <FlaskConical className="size-4 shrink-0" aria-hidden="true" />
-          <h1 ref={headingRef} tabIndex={-1} className="truncate">
+          <h1 ref={headingRef} tabIndex={-1} className="yawp-dev-panel-header-heading">
             Developer tools
           </h1>
         </div>
@@ -590,14 +590,14 @@ export function DevPanelShell() {
             >
               <span className="flex min-w-0 items-center gap-2">
                 <MessageSquare className="size-3.5 shrink-0" aria-hidden="true" />
-                <span className="min-w-0">
-                  <span className="block font-medium">Give feedback</span>
-                  <span className="yawp-dev-panel-row-value-mono block truncate text-[11px] font-normal text-muted-foreground">
-                    Note, screenshot, URL
-                  </span>
-                </span>
+                <span>Give feedback</span>
               </span>
-              <ChevronLeft className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
+              <span className="flex min-w-0 items-center gap-1">
+                <span className="yawp-dev-panel-row-value yawp-dev-panel-row-value-mono max-w-[9rem] truncate text-[11px]">
+                  Note, screenshot, URL
+                </span>
+                <ChevronLeft className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
+              </span>
             </button>
           </div>
         ) : null}

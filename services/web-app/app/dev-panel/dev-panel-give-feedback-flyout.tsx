@@ -4,6 +4,7 @@ import {
   CircleAlert,
   Loader2,
   UserRound,
+  X,
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useRouteLoaderData } from 'react-router';
@@ -174,28 +175,30 @@ export function DevPanelGiveFeedbackFlyout({
               'z-20 flex flex-col bg-background',
               isPhone ? 'relative min-h-full' : 'absolute inset-0'
             )
-          : 'yawp-dev-panel-flyout-docked absolute inset-y-0 right-full z-10 w-[var(--yawp-dev-panel-width)]'
+          : 'yawp-dev-panel-flyout-docked absolute inset-y-0 right-full z-10'
       )}
       role="dialog"
       aria-label="Give feedback"
     >
-      <div className="flex items-center justify-between border-b px-4 py-3">
+      <div className="yawp-dev-panel-flyout-header">
         {pushed ? (
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             <ChevronLeft className="size-4" aria-hidden="true" />
             Back
           </Button>
         ) : null}
-        <h2 className="flex-1 text-base font-semibold">Give feedback</h2>
+        <h2 className="min-w-0 flex-1">Give feedback</h2>
         {!pushed ? (
           <Button
             type="button"
             variant="ghost"
-            size="sm"
+            size="icon"
+            className="size-7 shrink-0"
+            aria-label="Close give feedback"
             disabled={status === 'submitting'}
             onClick={onClose}
           >
-            Close
+            <X className="size-4" aria-hidden="true" />
           </Button>
         ) : null}
       </div>
@@ -205,7 +208,7 @@ export function DevPanelGiveFeedbackFlyout({
           status === 'sent' && 'justify-center'
         )}
       >
-        <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        <div className="flex-1 space-y-3 overflow-y-auto p-3">
         {status === 'sent' ? (
           <div className="space-y-4">
             <div className="flex flex-col items-center gap-3 text-center">
@@ -299,11 +302,12 @@ export function DevPanelGiveFeedbackFlyout({
                 status === 'submitting' && 'opacity-60'
               )}
             >
-              <Label htmlFor={pageUrlId}>Page URL</Label>
+              <Label htmlFor={pageUrlId}>Page</Label>
               <Input
                 id={pageUrlId}
                 readOnly
                 disabled={status === 'submitting'}
+                className="font-mono text-xs"
                 value={displayPath}
               />
             </div>
