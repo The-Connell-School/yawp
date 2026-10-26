@@ -433,53 +433,59 @@ export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
     mobileSheetBody: teachingAccessMobileSheetBodyInvite(teachingAccessAdminName),
     tooltip: TEACHING_ACCESS_LOCKED_TOOLTIP,
   };
-  const steps = [
-    {
-      label: usage.monthly
-        ? 'Add your students to your class'
-        : 'Share your class code',
-      done: usage.monthly
-        ? usage.students.used > 0
-        : usage.checklist.classReady,
-      to: usage.classId
-        ? `/app/my-classes/${usage.classId}?tab=students`
-        : '/app/my-classes',
-    },
-    {
-      label: 'Create your first assignment',
-      done: usage.checklist.assignmentCreated,
-      to: '/app/assignments',
-      hint: usage.monthly
-        ? 'A five-minute Class Starter is the easiest way to begin.'
-        : 'Class Starter is a good first one.',
-    },
-    ...(usage.monthly
-      ? [
-          {
-            label: 'See what your class needs',
-            done: usage.checklist.writingSubmitted,
-            to: usage.classId
-              ? `/app/my-classes/${usage.classId}`
-              : '/app/my-classes',
-            hint: 'Your Class Summary, after students submit.',
-          },
-        ]
-      : [
-          {
-            label: 'A student turns in writing',
-            done: usage.checklist.writingSubmitted,
-            to: '/app/documents',
-          },
-          {
-            label: 'Grade it',
-            done: usage.checklist.graded,
-            to: '/app/documents?status=needs-grading&reset=1',
-            hint: 'Using the grading assistant.',
-          },
-        ]),
-  ];
+  const steps = usage.monthly
+    ? [
+        {
+          label: 'Create your first assignment',
+          done: usage.checklist.assignmentCreated,
+          to: '/app/assignments',
+          hint: 'A five-minute Class Starter is the easiest way to begin.',
+        },
+        {
+          label: 'Add your students to your class',
+          done: usage.students.used > 0,
+          to: usage.classId
+            ? `/app/my-classes/${usage.classId}?tab=students`
+            : '/app/my-classes',
+        },
+        {
+          label: 'See what your class needs',
+          done: usage.checklist.writingSubmitted,
+          to: usage.classId
+            ? `/app/my-classes/${usage.classId}`
+            : '/app/my-classes',
+          hint: 'Your Class Summary, after students submit.',
+        },
+      ]
+    : [
+        {
+          label: 'Share your class code',
+          done: usage.checklist.classReady,
+          to: usage.classId
+            ? `/app/my-classes/${usage.classId}?tab=students`
+            : '/app/my-classes',
+        },
+        {
+          label: 'Create your first assignment',
+          done: usage.checklist.assignmentCreated,
+          to: '/app/assignments',
+          hint: 'Class Starter is a good first one.',
+        },
+        {
+          label: 'A student turns in writing',
+          done: usage.checklist.writingSubmitted,
+          to: '/app/documents',
+        },
+        {
+          label: 'Grade it',
+          done: usage.checklist.graded,
+          to: '/app/documents?status=needs-grading&reset=1',
+          hint: 'Using the grading assistant.',
+        },
+      ];
+  const classStepDone = usage.monthly ? usage.checklist.classReady : false;
   const doneCount =
-    steps.filter((s) => s.done).length + (usage.monthly ? 1 : 0);
+    steps.filter((s) => s.done).length + (usage.monthly && classStepDone ? 1 : 0);
   return (
     <>
       <aside
@@ -499,9 +505,13 @@ export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
             <li className="flex gap-3 border-t py-3 text-sm">
               <span
                 aria-hidden="true"
-                className="flex size-[22px] shrink-0 items-center justify-center rounded-full border-2 border-emerald-800 bg-emerald-800 text-white"
+                className={cn(
+                  'flex size-[22px] shrink-0 items-center justify-center rounded-full border-2',
+                  classStepDone &&
+                    'border-emerald-800 bg-emerald-800 text-white'
+                )}
               >
-                <Check size={14} />
+                {classStepDone && <Check size={14} />}
               </span>
               <span>
                 <span className="text-muted-foreground">Your class is ready</span>
@@ -799,16 +809,13 @@ export function FreeAccountRail({ usage }: { usage: FreeAccountUsage }) {
   if (teachingLocked) {
     return null;
   }
-  const complete =
-    (usage.monthly ? usage.students.used > 0 : usage.checklist.classReady) &&
-    usage.checklist.assignmentCreated &&
-    usage.checklist.writingSubmitted &&
-    usage.checklist.graded;
+  const showAdvocatePack =
+    usage.monthly &&
+    usage.students.used > 0;
   return (
     <div className="space-y-5" data-testid="free-account-rail">
-      {usage.monthly && complete && <AdvocatePackEntry />}
       <FreeAccountChecklist usage={usage} />
-      {usage.monthly && !complete && <AdvocatePackEntry />}
+      {showAdvocatePack ? <AdvocatePackEntry /> : null}
     </div>
   );
 }
