@@ -167,9 +167,8 @@ export async function openGiveFeedback(page: Page) {
       hasSeverity: false,
     };
   }
-  const legacyTrigger = page.getByRole('button', {
-    name: 'Give feedback',
-    exact: true,
+  const legacyTrigger = page.locator('button[data-demo-feedback]', {
+    hasText: /^Give feedback$/,
   });
   if (await legacyTrigger.count()) {
     await legacyTrigger.click();
