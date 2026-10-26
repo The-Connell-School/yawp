@@ -6,7 +6,17 @@ import {
 } from './dev-panel-runtime.server';
 
 describe('dev panel runtime gate', () => {
-  test('production build and runtime are disabled', () => {
+  test('production build and runtime are disabled when YAWP_ENVIRONMENT=production', () => {
+    const env = {
+      YAWP_ENVIRONMENT: 'production',
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgresql://u:p@localhost:5432/yawp',
+    } as unknown as NodeJS.ProcessEnv;
+    expect(isDevPanelBuildEnabled(env)).toBe(false);
+    expect(isDevPanelRuntimeEnabled(env)).toBe(false);
+  });
+
+  test('production build and runtime stay disabled when YAWP_ENVIRONMENT is unset', () => {
     const env = {
       NODE_ENV: 'production',
       DATABASE_URL: 'postgresql://u:p@localhost:5432/yawp',

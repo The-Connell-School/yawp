@@ -26,10 +26,10 @@ describe('assertDevPanelRoute', () => {
     const previous = {} as Record<(typeof keys)[number], string | undefined>;
     for (const key of keys) previous[key] = process.env[key];
     Object.assign(process.env, {
+      YAWP_ENVIRONMENT: 'production',
       NODE_ENV: 'production',
       DATABASE_URL: 'postgresql://u:p@localhost:5432/yawp',
     });
-    delete process.env.YAWP_ENVIRONMENT;
     delete process.env.PREVIEW_SLUG;
     delete process.env.PR_NUMBER;
     try {
@@ -69,10 +69,10 @@ describe('assertDevPanelUnlockRoute', () => {
     const previous = {} as Record<(typeof keys)[number], string | undefined>;
     for (const key of keys) previous[key] = process.env[key];
     Object.assign(process.env, {
+      YAWP_ENVIRONMENT: 'production',
       NODE_ENV: 'production',
       DATABASE_URL: 'postgresql://u:p@localhost:5432/yawp',
     });
-    delete process.env.YAWP_ENVIRONMENT;
     delete process.env.PREVIEW_SLUG;
     delete process.env.PR_NUMBER;
     delete process.env.PREVIEW_ACCESS_GATE;
