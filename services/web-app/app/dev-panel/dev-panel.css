@@ -1,5 +1,7 @@
 :root {
   --yawp-dev-panel-width: 360px;
+  --yawp-dev-panel-inset: 12px;
+  --yawp-dev-panel-row-height: 32px;
 }
 
 @media (min-width: 1024px) and (max-width: 1279px) {
@@ -89,15 +91,163 @@ html.yawp-dev-panel-open:not(.yawp-dev-panel-reduced-motion)
   animation: yawp-dev-panel-flyout-slide-in 150ms ease-out;
 }
 
+html.yawp-dev-panel-reduced-motion [data-yawp-dev-panel-flyout] {
+  animation: none !important;
+}
+
 @keyframes yawp-dev-panel-flyout-slide-in {
   from {
-    transform: translateX(100%);
+    transform: translateX(12px);
     opacity: 0.95;
   }
   to {
     transform: translateX(0);
     opacity: 1;
   }
+}
+
+[data-yawp-dev-panel] {
+  font-size: 13px;
+  line-height: 1.35;
+  box-shadow: none;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: var(--yawp-dev-panel-row-height);
+  padding: 8px var(--yawp-dev-panel-inset);
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-header-title {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-row {
+  display: flex;
+  width: 100%;
+  min-height: var(--yawp-dev-panel-row-height);
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 var(--yawp-dev-panel-inset);
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-row:hover,
+[data-yawp-dev-panel] .yawp-dev-panel-row:focus-visible {
+  background: hsl(var(--accent) / 0.45);
+  outline: none;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-row-active {
+  background: hsl(var(--accent) / 0.55);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-row-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+  color: hsl(var(--muted-foreground));
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-row-value-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-user-row {
+  padding: 8px var(--yawp-dev-panel-inset);
+  font-size: 12px;
+  line-height: 1.4;
+  color: hsl(var(--muted-foreground));
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-section-body {
+  padding: 8px var(--yawp-dev-panel-inset) 10px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-login-row {
+  display: flex;
+  min-height: 30px;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-radius: 4px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-login-row:hover,
+[data-yawp-dev-panel] .yawp-dev-panel-login-row:focus-visible {
+  background: hsl(var(--accent) / 0.45);
+  outline: none;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-pill-action {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: 1px solid hsl(var(--border));
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px var(--yawp-dev-panel-inset);
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  border-top: 1px solid hsl(var(--border));
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  border-radius: 3px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  padding: 0 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+[data-yawp-dev-panel-flyout].yawp-dev-panel-flyout-docked {
+  border: 1px solid hsl(var(--border));
+  border-right: 0;
+  box-shadow: none;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-org-popover {
+  border: 1px solid hsl(var(--border));
+  box-shadow: none;
 }
 
 html.yawp-dev-panel-capturing [data-yawp-dev-panel] {
