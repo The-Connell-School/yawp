@@ -61,9 +61,10 @@ import {
 } from '~/components/ui/sheet';
 import { Textarea } from '~/components/ui/textarea';
 import {
-  DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE,
-  SAVED_ASSIGNMENTS_ENABLED,
-} from '~/domain/assignments/saved-assignments';
+  resolveNewAssignmentPointValue,
+  type AssignmentTypeDefaultContext,
+} from '~/domain/assignments/new-assignment-defaults';
+import { SAVED_ASSIGNMENTS_ENABLED } from '~/domain/assignments/saved-assignments';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   gradingAssistantStrictnessOptions,
@@ -432,6 +433,17 @@ function isExitTicketTypeId(
   );
 }
 
+function assignmentTypeContextFor(
+  assignmentTypes: AssignmentCreationAssignmentType[],
+  assignmentTypeId: string
+): AssignmentTypeDefaultContext {
+  const type = assignmentTypes.find((entry) => entry.id === assignmentTypeId);
+  return {
+    kind: type?.kind ?? null,
+    rubricName: type?.rubricName ?? null,
+  };
+}
+
 /**
  * What the tutor toggle starts at. Editing keeps whatever the assignment has —
  * the toggle is frozen after creation anyway. Otherwise an exit ticket starts
@@ -462,6 +474,7 @@ export function initialGradingFor({
   initialSubmitForGrade,
   initialPointValue,
   plannedGradebook = null,
+  assignmentTypeContext = {},
 }: {
   isEditing: boolean;
   isExitTicket: boolean;
@@ -472,11 +485,16 @@ export function initialGradingFor({
     submitForGrade: boolean;
     pointValue: number | null;
   } | null;
+  assignmentTypeContext?: AssignmentTypeDefaultContext;
 }) {
   if (isEditing || !isExitTicket) {
     return {
       submitForGrade: initialSubmitForGrade,
-      pointValue: initialPointValue,
+      pointValue: resolveNewAssignmentPointValue({
+        isEditing,
+        explicitPointValue: initialPointValue,
+        assignmentType: assignmentTypeContext,
+      }),
     };
   }
   if (plannedGradebook) {
@@ -624,7 +642,7 @@ export function AssignmentCreationSheetContent({
   emptyClassesMessage = "You don't have any assignment-enabled classes yet.",
   titleRequired = false,
   initialSubmitForGrade = true,
-  initialPointValue = DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE,
+  initialPointValue,
   initialTutorEnabled = true,
   initialCollaborationEnabled = false,
   initialCollaborationGroupMode = DEFAULT_COLLABORATION_GROUP_MODE,
@@ -663,20 +681,22 @@ export function AssignmentCreationSheetContent({
   );
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState(initialPrompt);
+  const initialSelectedTypeId = initialAssignmentTypeSelection(
+    assignmentTypes,
+    fixedAssignmentTypeId,
+    initialAssignmentTypeId,
+    Boolean(editingAssignment)
+  );
   const initialGrading = initialGradingFor({
     isEditing: Boolean(editingAssignment),
-    isExitTicket: isExitTicketTypeId(
-      assignmentTypes,
-      initialAssignmentTypeSelection(
-        assignmentTypes,
-        fixedAssignmentTypeId,
-        initialAssignmentTypeId,
-        Boolean(editingAssignment)
-      )
-    ),
+    isExitTicket: isExitTicketTypeId(assignmentTypes, initialSelectedTypeId),
     initialSubmitForGrade,
     initialPointValue,
     plannedGradebook: initialExitTicketGradebook,
+    assignmentTypeContext: assignmentTypeContextFor(
+      assignmentTypes,
+      initialSelectedTypeId
+    ),
   });
   const [submitForGrade, setSubmitForGrade] = useState(
     initialGrading.submitForGrade
@@ -944,20 +964,22 @@ export function AssignmentCreationSheetContent({
     setSelectedClassIds(initialClassIds(fixedClassId));
     setTitle(initialTitle);
     setPrompt(initialPrompt);
+    const resetTypeId = initialAssignmentTypeSelection(
+      assignmentTypes,
+      fixedAssignmentTypeId,
+      initialAssignmentTypeId,
+      Boolean(editingAssignment)
+    );
     const grading = initialGradingFor({
       isEditing: Boolean(editingAssignment),
-      isExitTicket: isExitTicketTypeId(
-        assignmentTypes,
-        initialAssignmentTypeSelection(
-          assignmentTypes,
-          fixedAssignmentTypeId,
-          initialAssignmentTypeId,
-          Boolean(editingAssignment)
-        )
-      ),
+      isExitTicket: isExitTicketTypeId(assignmentTypes, resetTypeId),
       initialSubmitForGrade,
       initialPointValue,
       plannedGradebook: initialExitTicketGradebook,
+      assignmentTypeContext: assignmentTypeContextFor(
+        assignmentTypes,
+        resetTypeId
+      ),
     });
     setSubmitForGrade(grading.submitForGrade);
     setPointValue(pointValueFieldValue(grading.pointValue));
@@ -1268,7 +1290,11 @@ export function AssignmentCreationSheetContent({
                 isEditing,
                 isExitTicket: nextIsExitTicket,
                 initialSubmitForGrade,
-                initialPointValue,
+                initialPointValue: undefined,
+                assignmentTypeContext: assignmentTypeContextFor(
+                  assignmentTypes,
+                  nextTypeId
+                ),
               });
               setSubmitForGrade(grading.submitForGrade);
               setPointValue(pointValueFieldValue(grading.pointValue));

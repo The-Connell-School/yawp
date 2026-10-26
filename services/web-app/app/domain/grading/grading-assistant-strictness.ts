@@ -8,7 +8,7 @@ export type GradingAssistantStrictnessLevel =
   (typeof gradingAssistantStrictnessLevels)[number];
 
 export const DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL: GradingAssistantStrictnessLevel =
-  'intermediate';
+  'beginner';
 
 const gradingAssistantStrictnessPercentageAdjustments: Record<
   GradingAssistantStrictnessLevel,
