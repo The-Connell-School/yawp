@@ -13,13 +13,17 @@ export function isDevPanelBuildEnabled(
   );
 }
 
-/** Deployed PR preview (Render compose sets PR_NUMBER + production NODE_ENV). */
+/** Deployed PR preview (Render compose sets PREVIEW_SLUG / PR_NUMBER + production NODE_ENV). */
 function isPrPreviewProductionHost(env: NodeJS.ProcessEnv) {
-  return (
-    String(env.YAWP_ENVIRONMENT ?? '').trim().toLowerCase() === 'preview' &&
-    String(env.NODE_ENV ?? '').trim().toLowerCase() === 'production' &&
-    Boolean(String(env.PR_NUMBER ?? '').trim())
-  );
+  if (String(env.YAWP_ENVIRONMENT ?? '').trim().toLowerCase() !== 'preview') {
+    return false;
+  }
+  if (String(env.NODE_ENV ?? '').trim().toLowerCase() !== 'production') {
+    return false;
+  }
+  if (Boolean(String(env.PR_NUMBER ?? '').trim())) return true;
+  const slug = String(env.PREVIEW_SLUG ?? '').trim();
+  return /^pr-\d+$/i.test(slug);
 }
 
 /** Runtime gate for HTTP handlers and root loader data. */

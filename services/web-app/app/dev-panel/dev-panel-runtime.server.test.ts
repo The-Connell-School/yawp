@@ -79,7 +79,7 @@ describe('dev panel runtime gate', () => {
     const env = {
       YAWP_ENVIRONMENT: 'preview',
       NODE_ENV: 'production',
-      PR_NUMBER: '860',
+      PREVIEW_SLUG: 'pr-860',
       DATABASE_URL: 'postgresql://u:p@preview-postgres:5432/yawp_pr_860',
     } as unknown as NodeJS.ProcessEnv;
     expect(isDevPanelRuntimeEnabled(env)).toBe(true);
