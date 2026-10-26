@@ -1,10 +1,10 @@
-import { ChevronRight, Lock } from 'lucide-react';
+import { ChevronsRight, FlaskConical, Lock } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { useDevPanel } from './dev-panel-provider';
 
 /** Shown when the unlocked panel tree throws — keeps the beaker path usable. */
 export function DevPanelFallbackShell() {
-  const { closePanel, envBadge } = useDevPanel();
+  const { closePanel } = useDevPanel();
 
   return (
     <aside
@@ -12,21 +12,22 @@ export function DevPanelFallbackShell() {
       data-yawp-dev-panel
       data-yawp-dev-panel-ready="true"
       aria-label="Developer tools"
-      className="yawp-dev-panel-docked fixed inset-y-0 right-0 z-40 flex w-[var(--yawp-dev-panel-width)] flex-col border-l bg-background shadow-xl"
+      className="yawp-dev-panel-docked fixed inset-y-0 right-0 z-40 flex w-[var(--yawp-dev-panel-width)] flex-col border-l bg-background"
     >
-      <header className="flex items-start justify-between gap-2 border-b px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-base font-semibold text-slate-900">Developer tools</p>
-          <p className="text-xs text-muted-foreground">{envBadge}</p>
+      <header className="yawp-dev-panel-header">
+        <div className="yawp-dev-panel-header-title">
+          <FlaskConical className="size-4 shrink-0" aria-hidden="true" />
+          <p className="truncate">Developer tools</p>
         </div>
         <Button
           type="button"
           variant="ghost"
           size="icon"
+          className="size-7 shrink-0"
           aria-label="Close developer tools"
           onClick={closePanel}
         >
-          <ChevronRight className="size-4" aria-hidden="true" />
+          <ChevronsRight className="size-4" aria-hidden="true" />
         </Button>
       </header>
       <div className="flex flex-1 flex-col items-center px-4 py-8 text-center">
