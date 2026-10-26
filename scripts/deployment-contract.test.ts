@@ -424,16 +424,17 @@ describe('production deployment contract', () => {
     expect(dockerfile).toMatch(/ARG YAWP_ENVIRONMENT=production/);
     expect(dockerfile).toMatch(/ARG YAWP_GIT_COMMIT=unknown/);
     expect(dockerfile).toMatch(/ARG YAWP_BUILT_AT=unknown/);
-    expect(dockerfile).not.toMatch(
-      /FROM base AS production[\s\S]*ENV YAWP_ENVIRONMENT/m
+    expect(dockerfile).toMatch(
+      /FROM base AS production[\s\S]*ARG YAWP_ENVIRONMENT=production[\s\S]*ENV YAWP_ENVIRONMENT=\$YAWP_ENVIRONMENT/m
     );
     expect(dockerfile).toMatch(
-      /EXPOSE 8080[\s\S]*ARG YAWP_GIT_COMMIT=unknown[\s\S]*ENV YAWP_GIT_COMMIT=\$YAWP_GIT_COMMIT[\s\S]*CMD \["bash", "services\/web-app\/start\.sh"\]/
+      /EXPOSE 8080[\s\S]*ARG YAWP_ENVIRONMENT=production[\s\S]*ARG YAWP_GIT_COMMIT=unknown[\s\S]*ENV YAWP_ENVIRONMENT=\$YAWP_ENVIRONMENT[\s\S]*ENV YAWP_GIT_COMMIT=\$YAWP_GIT_COMMIT[\s\S]*CMD \["bash", "services\/web-app\/start\.sh"\]/
     );
     const buildStage = dockerfile.slice(
       dockerfile.indexOf('FROM deps AS build'),
       dockerfile.indexOf('FROM base AS production')
     );
+    expect(buildStage).toMatch(/ARG YAWP_ENVIRONMENT=production/);
     expect(buildStage).not.toContain('YAWP_GIT_COMMIT');
     expect(buildStage).not.toContain('YAWP_BUILT_AT');
 
