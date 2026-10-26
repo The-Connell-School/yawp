@@ -378,51 +378,48 @@ for (const width of [390, 1440]) {
     await page
       .getByRole('link', { name: /New Class Starter assignment/i })
       .click();
-    await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+$/);
-    const typeHomeNew = page.getByTestId('preview-assignment-creation-disabled').getByRole(
-      'button',
-      { name: /^New\b/i }
+    await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
+    await expect(page.getByRole('button', { name: 'Prompt Library' })).toHaveCount(
+      0
     );
-    await typeHomeNew.focus();
-    await page.waitForTimeout(350);
-    await expect(
-      page.getByRole('tooltip', {
-        name: /Creating assignments is turned off in this preview/,
-      })
-    ).toBeVisible();
-    const previewCreationTooltip =
-      /Creating assignments is turned off in this preview/;
-    await page.getByRole('button', { name: 'Prompt Library' }).click();
-    const lockedPromptCard = page
-      .locator('[data-tour="type-library"]')
-      .getByTestId('locked-prompt-card')
-      .first();
-    await expect(lockedPromptCard).toBeVisible();
-    const lockedPromptButton = lockedPromptCard.getByRole('button').first();
-    await expect(lockedPromptButton).toHaveAttribute('aria-disabled', 'true');
-    await lockedPromptButton.click({ force: true, timeout: 15_000 });
-    await expect(
-      page.getByRole('heading', { name: 'New assignment', exact: true })
-    ).toHaveCount(0);
-    await expect(
-      page.getByRole('heading', { name: 'New Assignment', exact: true })
-    ).toHaveCount(0);
-    await lockedPromptButton.focus();
-    await page.waitForTimeout(350);
-    await expect(
-      page.getByRole('tooltip', { name: previewCreationTooltip })
-    ).toBeVisible();
+    await expect(page.getByTestId('preview-assignment-creation-disabled')).toHaveCount(
+      0
+    );
+    if (width === 1440) {
+      await capture(page, 'locked-class-starter-how-it-works-1440');
+    }
     await page.goto('/app');
     await expectFreeDashboardAssignmentTiles(page);
     await page
+      .getByRole('link', { name: /New Prewriting assignment/i })
+      .click();
+    await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
+    await page.goto('/app');
+    await page
       .getByRole('link', { name: /New Thesis Statement assignment/i })
       .click();
-    const seeHowItWorks = page.getByRole('link', { name: /See how it works/i });
-    await expect(seeHowItWorks).toBeVisible();
-    await seeHowItWorks.click();
-    await expect(page).toHaveURL(/\/how-it-works/);
-    await page.goBack();
-    await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+$/);
+    await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
+    const thesisTypeId = page.url().match(/assignment-types\/([^/]+)/)?.[1];
+    expect(thesisTypeId).toBeTruthy();
+    await page.goto(`/app/assignment-types/${thesisTypeId}`);
+    await expect(page).toHaveURL(/\/how-it-works$/);
+    await page.goto('/app/reporter');
+    await expect(
+      page.getByRole('heading', { name: 'Unlocks after approval' })
+    ).toBeVisible();
+    await expect(page.locator('[data-testid="usage-nav-collapsed-link-reporter-locked"]')).toHaveCount(
+      0
+    );
+    if (width === 1440) {
+      await capture(page, 'locked-reporter-unlocks-card-1440');
+    }
+    await page.goto('/app/lesson-planner');
+    await expect(
+      page.getByRole('textbox', { name: 'Message the Lesson Planner' })
+    ).toBeVisible();
+    if (width === 1440) {
+      await capture(page, 'locked-lesson-planner-pending-1440');
+    }
     await page.getByRole('link', { name: /Back to dashboard/i }).click();
     await expectLockedAppHome(page);
     await expect(page.getByTestId('preview-assignment-creation-disabled')).toHaveCount(
@@ -494,6 +491,18 @@ for (const width of [390, 1440]) {
     await expect(page.getByTestId('teaching-access-approval-toast')).toHaveCount(0);
     await page.reload();
     await expect(page.getByTestId('teaching-access-approval-toast')).toHaveCount(0);
+    await page
+      .getByRole('link', { name: /New Class Starter assignment/i })
+      .click();
+    await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+$/);
+    await expect(page).not.toHaveURL(/\/how-it-works$/);
+    const seeHowItWorks = page.getByRole('link', { name: /See how it works/i });
+    await expect(seeHowItWorks).toBeVisible();
+    await seeHowItWorks.click();
+    await expect(page).toHaveURL(/\/how-it-works$/);
+    if (width === 1440) {
+      await capture(page, 'approved-class-starter-see-how-it-works-1440');
+    }
     await page.goto('/app/assignments');
     await expect(page.getByRole('heading', { name: 'My Assignments', exact: true })).toBeVisible();
     await capture(page, `approved-assignments-${width}`);

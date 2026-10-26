@@ -9,8 +9,6 @@ import {
 import { UsageNavRing } from '~/components/free-tier/usage-nav-ring';
 import { UsageNavCollapsedLink } from '~/components/free-tier/usage-nav-collapsed-link';
 import type { SidebarNavLink } from '~/routes/app/sidebar-nav';
-import { Lock } from 'lucide-react';
-import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
 
 export function freeTierNavMobileWarningDot(
@@ -59,11 +57,7 @@ export function renderFreeTierNavTrailing(input: {
 
   if (link.to === '/app/reporter') {
     if (usage.reporterLocked || !usage.monthly) {
-      return (
-        <Tooltip text="Unlocks after approval" contentProps={{ side: 'right' }}>
-          <Lock size={14} className="shrink-0 text-muted-foreground" aria-hidden />
-        </Tooltip>
-      );
+      return null;
     }
     if (!usage.reporter) return null;
     return (
@@ -183,14 +177,9 @@ export function renderFreeTierNavRow(ctx: NavRowContext): React.ReactNode | null
                 linkClassName,
                 'relative flex size-11 shrink-0 items-center justify-center'
               )}
-              data-testid="usage-nav-collapsed-link-reporter-locked"
+              data-testid="usage-nav-collapsed-link-reporter"
             >
               {icon}
-              <Lock
-                size={12}
-                className="absolute bottom-0.5 right-0.5 text-muted-foreground"
-                aria-hidden
-              />
             </Link>
           </div>
         );
@@ -206,9 +195,6 @@ export function renderFreeTierNavRow(ctx: NavRowContext): React.ReactNode | null
             >
               {defaultLinkBody}
             </Link>
-            <Tooltip text="Unlocks after approval" contentProps={{ side: 'left' }}>
-              <Lock size={14} className="shrink-0 text-muted-foreground" aria-hidden />
-            </Tooltip>
           </div>
         );
       }

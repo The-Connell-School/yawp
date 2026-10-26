@@ -31,6 +31,7 @@ import {
 } from '~/domain/free-tier/inapp-usage';
 import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
 import { cn } from '~/utils/misc';
+import { assignmentTypeHowItWorksPath } from '~/domain/assignment-types/assignment-type-how-it-works';
 import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
 import { SiteLicenseLockButton } from '~/components/site-license-lock-button';
 import {
@@ -293,7 +294,7 @@ export function FreeAssignmentTiles({
               return (
                 <Link
                   key={row.kind}
-                  to={`/app/assignment-types/${type.id}`}
+                  to={assignmentTypeHowItWorksPath(type.id)}
                   data-testid={dashboardAssignmentTileTestId}
                   aria-label={tileLabel}
                   className="block min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
