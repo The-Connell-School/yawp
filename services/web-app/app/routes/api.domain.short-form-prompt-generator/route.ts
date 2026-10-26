@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { computeIpHash } from '~/utils/ai-usage-log.server';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
 import {
-  buildGeneratorSystemPrompt,
+  buildShortFormGeneratorSystemPrompt,
   type GeneratorMessage,
   GeneratorResponseSchema,
   MAX_GENERATOR_MESSAGE_LENGTH,
@@ -19,7 +19,7 @@ import { teacherPromptGeneratorDisabledResponse } from '~/domain/teacher-prompt-
 import { enforceTeacherGeneratorLimits, rateLimitedJson } from '~/utils/rate-limit.server';
 
 const ALL_PROMPTS = promptsRaw as ShortFormPrompt[];
-const SYSTEM_PROMPT = buildGeneratorSystemPrompt(ALL_PROMPTS);
+const SYSTEM_PROMPT = buildShortFormGeneratorSystemPrompt(ALL_PROMPTS);
 
 const GENERIC_ERROR =
   'The prompt generator is unavailable right now. Please try again.';
