@@ -111,13 +111,13 @@ export async function action({ request }: ActionFunctionArgs) {
   if (response.status === 'success') {
     verifyUrl.searchParams.delete('code');
     return redirect(verifyUrl.toString());
-  } else {
-    return validationError({
-      fieldErrors: {
-        email: response.error.message,
-      },
-    });
   }
+
+  return validationError({
+    fieldErrors: {
+      email: 'Failed to send email. Please try again.',
+    },
+  });
 }
 
 export const meta: MetaFunction = () => {
