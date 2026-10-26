@@ -52,6 +52,7 @@ mock.module('~/utils/auth.server.js', () => ({
 }));
 mock.module('~/domain/assignment-types/platform-legacy-assignment-admin.server', () => ({
   requirePlatformLegacyAssignmentAdmin: requireAdmin,
+  isPlatformLegacyAssignmentAdminEnabled: mock(async () => true),
 }));
 mock.module('~/utils/platform-admin-actor.server', () => ({
   resolvePlatformAdminActorEmail: mock(async () => 'admin@example.test'),

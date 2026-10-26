@@ -118,6 +118,7 @@ function baseData(input: AssignmentTypeWriteInput) {
     rubricSelection,
     gradingInstructionsOverride,
     gradingConfig,
+    adminEditProvenance: _adminEditProvenance,
     ...fields
   } = input;
   return { ...fields, ...selectionData(rubricSelection) };
