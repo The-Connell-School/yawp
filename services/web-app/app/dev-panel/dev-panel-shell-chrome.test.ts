@@ -17,9 +17,9 @@ describe('dev panel v3 chrome', () => {
     expect(shell.includes('yawp-dev-panel-header-heading')).toBe(true);
   });
 
-  test('default panel sections start collapsed', () => {
+  test('default panel sections match unlocked frame (Blackboard + Tester tools open)', () => {
     const types = readFileSync(path.join(devPanelDir, 'dev-panel-types.ts'), 'utf8');
-    expect(types).toContain('openSections: []');
+    expect(types).toContain("openSections: ['blackboard', 'tester-tools']");
   });
 
   test('flyouts use border-only docked chrome', () => {
@@ -42,6 +42,7 @@ describe('dev panel v3 chrome', () => {
   test('stylesheet defines compact rows and reduced-motion flyouts', () => {
     const css = readFileSync(path.join(devPanelDir, 'dev-panel.css'), 'utf8');
     expect(css).toContain('--yawp-dev-panel-inset: 12px');
+    expect(css).toContain('--yawp-dev-panel-row-height: 44px');
     expect(css).toContain('yawp-dev-panel-reduced-motion [data-yawp-dev-panel-flyout]');
     expect(css).toContain('box-shadow: none');
     expect(css).toContain('yawp-dev-panel-header-heading');

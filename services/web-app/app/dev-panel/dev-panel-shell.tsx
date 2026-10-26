@@ -3,6 +3,7 @@ import {
   ChevronLeft,
   ChevronsRight,
   Copy,
+  ExternalLink,
   FlaskConical,
   Loader2,
   Lock,
@@ -320,7 +321,7 @@ export function DevPanelShell() {
           type="button"
           variant="ghost"
           size="icon"
-          className="size-7 shrink-0"
+          className="yawp-dev-panel-header-close size-7 shrink-0"
           aria-label="Close developer tools"
           onClick={closePanel}
         >
@@ -359,31 +360,25 @@ export function DevPanelShell() {
             <>
               <div className="yawp-dev-panel-user-row">
                 {signedInUser ? (
-                  <div className="flex items-start justify-between gap-2">
-                    <p>
-                      Signed in{' '}
-                      <span className="font-semibold text-foreground">
-                        {signedInUser.name?.trim() || signedInUser.email}
-                      </span>
-                      {signedInRole ? (
-                        <span className="text-foreground"> {signedInRole}</span>
-                      ) : null}
-                    </p>
+                  <>
+                    <span>Signed in</span>
+                    <span className="yawp-dev-panel-user-name">
+                      {signedInUser.name?.trim() || signedInUser.email}
+                    </span>
+                    {signedInRole ? <span>{signedInRole}</span> : null}
+                    <span className="flex-1" aria-hidden="true" />
                     <Form
                       method="post"
                       action={`/auth/logout?redirectTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`}
                       className="shrink-0"
                     >
-                      <button
-                        type="submit"
-                        className="text-primary underline-offset-2 hover:underline"
-                      >
+                      <button type="submit" className="yawp-dev-panel-user-signout">
                         Sign out
                       </button>
                     </Form>
-                  </div>
+                  </>
                 ) : (
-                  <p>Signed out · Pick a login below</p>
+                  <p className="m-0 w-full">Signed out · Pick a login below</p>
                 )}
               </div>
 
@@ -392,7 +387,7 @@ export function DevPanelShell() {
                 onOpenChange={() => toggleSection('sign-in')}
               >
                 <CollapsibleTrigger className="yawp-dev-panel-row">
-                  <span>Sign in as</span>
+                  <span className="yawp-dev-panel-row-label">Sign in as</span>
                   <span className="flex min-w-0 items-center gap-1">
                     <span className="yawp-dev-panel-row-value max-w-[9rem] truncate">
                       {selectedOrgName}
@@ -462,7 +457,7 @@ export function DevPanelShell() {
                 )}
                 onClick={() => openSubSheet('free-tier-states')}
               >
-                <span>Free-tier states</span>
+                <span className="yawp-dev-panel-row-label">Free-tier states</span>
                 <span className="flex min-w-0 items-center gap-1">
                   <span
                     className={cn(
@@ -480,30 +475,48 @@ export function DevPanelShell() {
                 onOpenChange={() => toggleSection('blackboard')}
               >
                 <CollapsibleTrigger className="yawp-dev-panel-row">
-                  <span>Blackboard link</span>
+                  <span className="yawp-dev-panel-row-label">Blackboard link</span>
                   <span className="flex min-w-0 items-center gap-1">
-                    <span className="yawp-dev-panel-row-value yawp-dev-panel-row-value-mono max-w-[9rem] truncate">
+                    <span className="yawp-dev-panel-row-value max-w-[9rem] truncate">
                       LTI test launch
                     </span>
-                    <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
+                    <ChevronDown className="size-4 shrink-0 opacity-70" aria-hidden="true" />
                   </span>
                 </CollapsibleTrigger>
-                <CollapsibleContent className="yawp-dev-panel-section-body space-y-2">
-                  <select
-                    className="h-[30px] w-full rounded-md border bg-background px-2 text-[13px]"
-                    value={state.forms.blackboardRole ?? 'teacher'}
-                    onChange={(event) =>
-                      updateForms({
-                        blackboardRole: event.target.value as 'teacher' | 'student',
-                      })
-                    }
-                  >
-                    <option value="teacher">Teacher</option>
-                    <option value="student">Student</option>
-                  </select>
-                  <Button
+                <CollapsibleContent className="yawp-dev-panel-section-body flex flex-col gap-2">
+                  <p className="yawp-dev-panel-section-help">
+                    Opens a mock Blackboard course in a new tab and launches Yawp! through
+                    LTI.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <span
+                      id="dev-panel-bb-role-label"
+                      className="w-16 shrink-0 text-xs text-muted-foreground"
+                    >
+                      Launch as
+                    </span>
+                    <div
+                      role="radiogroup"
+                      aria-labelledby="dev-panel-bb-role-label"
+                      className="yawp-dev-panel-bb-role-group"
+                    >
+                      {(['teacher', 'student'] as const).map((role) => (
+                        <button
+                          key={role}
+                          type="button"
+                          role="radio"
+                          aria-checked={(state.forms.blackboardRole ?? 'teacher') === role}
+                          className="yawp-dev-panel-bb-role-pill capitalize"
+                          onClick={() => updateForms({ blackboardRole: role })}
+                        >
+                          {role === 'teacher' ? 'Teacher' : 'Student'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button
                     type="button"
-                    className="yawp-dev-panel-pill-action h-[24px] w-full"
+                    className="yawp-dev-panel-bb-launch"
                     onClick={async () => {
                       const response = await fetch('/api/dev-panel/blackboard-launch', {
                         method: 'POST',
@@ -521,8 +534,9 @@ export function DevPanelShell() {
                       window.open(result.launchUrl, '_blank', 'noopener,noreferrer');
                     }}
                   >
-                    Open Blackboard
-                  </Button>
+                    Open Blackboard launch
+                    <ExternalLink className="size-3" aria-hidden="true" />
+                  </button>
                 </CollapsibleContent>
               </Collapsible>
 
@@ -531,26 +545,35 @@ export function DevPanelShell() {
                 onOpenChange={() => toggleSection('tester-tools')}
               >
                 <CollapsibleTrigger className="yawp-dev-panel-row">
-                  <span>Tester tools</span>
+                  <span className="yawp-dev-panel-row-label">Tester tools</span>
                   <span className="flex min-w-0 items-center gap-1">
-                    <span className="yawp-dev-panel-row-value yawp-dev-panel-row-value-mono">
-                      Copy URL
-                    </span>
-                    <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
+                    <span className="yawp-dev-panel-row-value">Copy URL</span>
+                    <ChevronDown className="size-4 shrink-0 opacity-70" aria-hidden="true" />
                   </span>
                 </CollapsibleTrigger>
-                <CollapsibleContent className="yawp-dev-panel-section-body space-y-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="yawp-dev-panel-pill-action h-[24px] w-full justify-start gap-2"
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(window.location.href);
-                    }}
-                  >
-                    <Copy className="size-3.5" aria-hidden="true" />
-                    Copy current URL
-                  </Button>
+                <CollapsibleContent className="yawp-dev-panel-section-body flex flex-col gap-1.5">
+                  <Label htmlFor="dev-panel-current-url" className="text-xs font-normal text-muted-foreground">
+                    Current page
+                  </Label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      id="dev-panel-current-url"
+                      readOnly
+                      className="yawp-dev-panel-url-field"
+                      value={`${location.pathname}${location.search}`}
+                    />
+                    <button
+                      type="button"
+                      className="yawp-dev-panel-copy-btn"
+                      aria-label="Copy current page URL"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(window.location.href);
+                      }}
+                    >
+                      <Copy className="size-3" aria-hidden="true" />
+                      Copy
+                    </button>
+                  </div>
                   <button
                     ref={classSimulationRowRef}
                     type="button"
@@ -588,7 +611,6 @@ export function DevPanelShell() {
             <button
               ref={feedbackRowRef}
               type="button"
-              aria-label="Give feedback"
               className={cn(
                 'yawp-dev-panel-row border-b-0',
                 state.subSheet === 'give-feedback' && 'yawp-dev-panel-row-active'
@@ -597,13 +619,15 @@ export function DevPanelShell() {
             >
               <span className="flex min-w-0 items-center gap-2">
                 <MessageSquare className="size-3.5 shrink-0" aria-hidden="true" />
-                <span>Give feedback</span>
+                <span className="yawp-dev-panel-row-label">Give feedback</span>
               </span>
               <span className="flex min-w-0 items-center gap-1">
-                <span className="yawp-dev-panel-row-value yawp-dev-panel-row-value-mono max-w-[9rem] truncate text-[11px]">
-                  Note, screenshot, URL
+                <span className="yawp-dev-panel-row-value max-w-[9rem] truncate">
+                  {state.subSheet === 'give-feedback'
+                    ? 'Writing…'
+                    : 'Note, screenshot, URL'}
                 </span>
-                <ChevronLeft className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
+                <ChevronLeft className="size-4 shrink-0 opacity-70" aria-hidden="true" />
               </span>
             </button>
           </div>
@@ -614,7 +638,7 @@ export function DevPanelShell() {
         {unlocked && previewAccessGateEnabled ? (
           <Form method="post" action="/auth/preview-access">
             <input type="hidden" name="intent" value="sign-out" />
-            <button type="submit" className="text-destructive underline-offset-2 hover:underline">
+            <button type="submit" className="yawp-dev-panel-footer-access">
               Re-enter access code
             </button>
           </Form>
@@ -635,7 +659,14 @@ export function DevPanelShell() {
         />
       ) : null}
       {!isPhone && !isTablet && state.subSheet === 'free-tier-states' ? (
-        <DevPanelFreeTierFlyout onClose={closeSubSheet} orgId={selectedOrg} />
+        <DevPanelFreeTierFlyout
+          onClose={closeSubSheet}
+          orgId={selectedOrg}
+          orgName={selectedOrgName}
+          signedInDisplayName={
+            signedInUser?.name?.trim() || signedInUser?.email || null
+          }
+        />
       ) : null}
       {!isPhone && !isTablet && state.subSheet === 'class-simulation' ? (
         <DevPanelClassSimulationFlyout onClose={closeSubSheet} />
@@ -657,6 +688,10 @@ export function DevPanelShell() {
         <DevPanelFreeTierFlyout
           onClose={closeSubSheet}
           orgId={selectedOrg}
+          orgName={selectedOrgName}
+          signedInDisplayName={
+            signedInUser?.name?.trim() || signedInUser?.email || null
+          }
           pushed
         />
       ) : isPhone && state.subSheet === 'class-simulation' ? (
@@ -675,6 +710,10 @@ export function DevPanelShell() {
             <DevPanelFreeTierFlyout
               onClose={closeSubSheet}
               orgId={selectedOrg}
+              orgName={selectedOrgName}
+              signedInDisplayName={
+                signedInUser?.name?.trim() || signedInUser?.email || null
+              }
               pushed
             />
           ) : null}
@@ -720,7 +759,7 @@ export function DevPanelShell() {
       data-yawp-dev-panel-ready="true"
       aria-label="Developer tools"
       className={cn(
-        'yawp-dev-panel-docked fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-background',
+        'yawp-dev-panel-docked fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-popover',
         'w-[var(--yawp-dev-panel-width)]'
       )}
     >

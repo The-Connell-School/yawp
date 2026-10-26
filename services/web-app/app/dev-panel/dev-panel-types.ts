@@ -10,6 +10,8 @@ export type DevPanelPersistedForms = {
   feedbackNote?: string;
   throwawaySwitch?: boolean;
   selectedStateId?: string | null;
+  /** Last state the environment was jumped into (shows the Current pill). */
+  activeStateId?: string | null;
   blackboardRole?: 'teacher' | 'student';
   simulationClassId?: string | null;
   simulationStudentCount?: number;
@@ -30,7 +32,7 @@ export type DevPanelPersistedState = {
 
 export const DEV_PANEL_DEFAULT_STATE: DevPanelPersistedState = {
   open: false,
-  openSections: [],
+  openSections: ['blackboard', 'tester-tools'],
   org: null,
   subSheet: null,
   scroll: {},

@@ -95,10 +95,10 @@ test.describe('Dev panel artboard evidence', () => {
     await expect(stateSheet).toBeVisible({ timeout: 15_000 });
     await shot(page, '19');
 
-    await stateSheet.getByRole('radio').first().check({ force: true });
+    await stateSheet.getByRole('button', { name: /Waitlist submitted/i }).click();
     await stateSheet
-      .getByRole('checkbox', { name: 'Use a throwaway test account' })
-      .setChecked(false);
+      .getByRole('switch', { name: 'Use a throwaway test account' })
+      .click();
     await stateSheet.getByRole('button', { name: 'Jump to this state' }).click();
     await expect(
       page.getByRole('heading', { name: 'Change the signed-in account?' })
@@ -107,9 +107,9 @@ test.describe('Dev panel artboard evidence', () => {
 
     await page.getByRole('button', { name: 'Cancel' }).click();
     await stateSheet
-      .getByRole('checkbox', { name: 'Use a throwaway test account' })
-      .setChecked(true);
-    await stateSheet.getByRole('radio').first().check({ force: true });
+      .getByRole('switch', { name: 'Use a throwaway test account' })
+      .click();
+    await stateSheet.getByRole('button', { name: /Waitlist submitted/i }).click();
     await page.route('**/api/dev-panel/free-tier-jump', async (route) => {
       await route.fulfill({
         status: 200,

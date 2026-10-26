@@ -2,11 +2,15 @@
 
 ## Source of truth (required)
 
-Implementation markup must follow **`artifact-source.html`** exported from the Claude Design artifact:
+Implementation markup follows **rendered `#dc-root` HTML** under `html/` (Claude Design export):
 
-https://claude.ai/artifact/1pByUxigJ5SjW5AzqryTHj
+- `html/02-unlocked-default.rendered.html` — DevPanel shell (prefer over older trimmed exports)
+- `html/FeedbackSheet.rendered.html` — Give feedback flyout
+- `html/StatesSheet.rendered.html` — Free-tier states flyout
 
-Until `artifact-source.html` is present in this directory, **do not finalize flyout or panel layout** from PNG frames or NOTES bullets alone. PNGs (`01`–`05`) are QA-only for side-by-side MATCH/PARTIAL/MISS after HTML-driven implementation.
+Artifact: https://claude.ai/artifact/1pByUxigJ5SjW5AzqryTHj
+
+PNGs (`01`–`05`) are QA-only for side-by-side MATCH/PARTIAL/MISS after HTML-driven implementation.
 
 ## QA frames (1280×800)
 

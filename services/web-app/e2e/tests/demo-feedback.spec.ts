@@ -106,7 +106,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await screenshot('button');
     const { panel, noteLabel, hasSeverity } = await openGiveFeedback(page);
     await expect(panel.getByLabel(noteLabel)).toBeFocused({ timeout: 15_000 });
-    await expect(panel.getByLabel('Page URL')).toHaveValue(/\/app\/assignments/);
+    await expect(panel.getByLabel('Page')).toHaveValue(/\/app\/assignments/);
     await screenshot('panel');
     await panel.getByLabel(noteLabel).fill('Local demo feedback E2E note');
     if (hasSeverity) await panel.getByLabel('Severity').selectOption('high');
