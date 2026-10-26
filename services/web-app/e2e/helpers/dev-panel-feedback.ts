@@ -122,7 +122,16 @@ export async function openDevPanelSection(page: Page, sectionName: string) {
 
 /** Opens the class simulation flyout from the Tester tools section row (not the flyout action). */
 export async function openDevPanelClassSimulationFlyout(page: Page) {
-  const panel = await openDevPanelSection(page, 'Tester tools');
+  const panel = await openDevToolsPanel(page);
+  const testerToolsTrigger = panel.getByRole('button', {
+    name: /^Tester tools/,
+  });
+  await expect(testerToolsTrigger).toBeVisible({ timeout: 15_000 });
+  const expanded = await testerToolsTrigger.getAttribute('aria-expanded');
+  if (expanded !== 'true') {
+    await testerToolsTrigger.click();
+    await expect(testerToolsTrigger).toHaveAttribute('aria-expanded', 'true');
+  }
   await panel
     .getByRole('button', { name: 'Populate class', exact: true })
     .click();
