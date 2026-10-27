@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { Link, useFetcher, useRevalidator, useSearchParams } from 'react-router';
 import { Check, ChevronLeft, BookMarked, Lightbulb, X } from 'lucide-react';
+import { useActiveTime } from '~/components/lesson-planner/use-active-time';
 import type { LoadedLessonPacket } from '~/domain/lesson-planner/load-lesson-packet.server';
 import type { StackV3 } from '~/domain/lesson-planner/load-stack-v3.server';
 import { notYetInYawp, type StackStep } from '~/domain/lesson-planner/stack-steps';
@@ -115,6 +116,8 @@ export function slideshowHref(conversationId: string, deckId: string | null): st
 export function StackPageV3({ data }: { data: StackPageV3Data }) {
   const { conversationId, v3, reviewFlags, packet, published } = data;
   const revalidator = useRevalidator();
+  // "Planned in" counts the time spent here, in use, until it is set (Brian's round 5, item 12).
+  useActiveTime(conversationId, !v3.setAt);
   const stackFetcher = useFetcher<Record<string, any>>();
   const packetFetcher = useFetcher<Record<string, any>>();
   const askFetcher = useFetcher<Record<string, any>>();
@@ -553,7 +556,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
             <FinishLine
               conversationId={conversationId}
               timing={timing}
-              createdAt={v3.createdAt}
+              plannedMinutes={v3.plannedMinutes}
               setAt={v3.setAt}
               lessonDate={v3.lessonDate}
               missing={missing}

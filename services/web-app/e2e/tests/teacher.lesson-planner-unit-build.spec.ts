@@ -389,7 +389,8 @@ test.describe("Kevin's unit-build feedback (Oct 25)", () => {
     const set = page.getByTestId('lesson-set');
     await expect(set).toContainText('Planned in');
     await expect(set).not.toContainText('Built in');
-    await expect(set).toContainText('from first message to set');
+    // Working time since Brian's round 5, item 12.
+    await expect(set).toContainText('of time working on it');
   });
 
   test('notes 6a, 6b and 6c: made in Yawp! from the chat, the piece is in the lesson and the teacher is back in the chat', async ({

@@ -1650,7 +1650,7 @@ model LessonPlanConversation {
   planSummary             Json?
   planSummaryKey          String?
   /// When the teacher said "This lesson is set" (stack page redesign); null
-  /// while it is still being worked on. Built-in time is setAt − createdAt.
+  /// while it is still being worked on.
   setAt                   DateTime?                  @db.Timestamptz(6)
   /// The day this lesson will be taught. Null: not chosen yet.
   lessonDate              DateTime?                  @db.Timestamptz(6)
@@ -1664,6 +1664,9 @@ model LessonPlanConversation {
   deckStackKey            String?
   /// Steps moved to "If you have extra time", out of the timed lesson (note 8c).
   extensionStepIds        Json?
+  /// Seconds the teacher spent with the lesson open and in use before it was
+  /// set (Brian's round 5, item 12): "Planned in".
+  activeSeconds           Int                        @default(0)
   messages                LessonPlanMessage[]
   materials               LessonPlanMaterial[]
   shareLinks              LessonShareLink[]

@@ -5,6 +5,7 @@
  * is not in the stack yet. Built on the same packet loader as every other
  * view of the stack, so none of them can disagree.
  */
+import { plannedMinutes } from './planned-time';
 import { teacherStandards } from './teacher-standards';
 import { prisma } from '~/utils/db.server';
 import { loadLessonPacket, type LoadedLessonPacket } from './load-lesson-packet.server';
@@ -24,6 +25,8 @@ export type StackV3 = {
   suggestions: SuggestedPiece[];
   createdAt: string;
   setAt: string | null;
+  /** "Planned in": minutes actually spent on it, once set (Brian's round 5, item 12). */
+  plannedMinutes: number | null;
   lessonDate: string | null;
   className: string | null;
   deck: {
@@ -77,6 +80,7 @@ export async function loadStackV3({
       id: true,
       createdAt: true,
       setAt: true,
+      activeSeconds: true,
       lessonDate: true,
       membershipId: true,
       unitId: true,
@@ -141,6 +145,9 @@ export async function loadStackV3({
       }),
       createdAt: conversation.createdAt.toISOString(),
       setAt: conversation.setAt?.toISOString() ?? null,
+      plannedMinutes: conversation.setAt
+        ? await plannedMinutesFor(conversation.id, conversation.createdAt, conversation.setAt, conversation.activeSeconds)
+        : null,
       lessonDate: conversation.lessonDate?.toISOString() ?? null,
       className: loaded.packet.className,
       deck:
@@ -187,4 +194,29 @@ export async function loadStackV3({
           : null,
     },
   };
+}
+
+/**
+ * "Planned in" (Brian's round 5, item 12): the time the page saw the teacher
+ * at work, or, for lessons planned before it counted, the time read from what
+ * the lesson recorded up to the set. Whichever is more.
+ */
+async function plannedMinutesFor(conversationId: string, createdAt: Date, setAt: Date, activeSeconds: number): Promise<number> {
+  const upTo = { lte: setAt };
+  const [messages, materials, links] = await Promise.all([
+    prisma.lessonPlanMessage.findMany({ where: { conversationId, createdAt: upTo }, select: { createdAt: true } }),
+    prisma.lessonPlanMaterial.findMany({
+      where: { conversationId },
+      select: { createdAt: true, editedAt: true, yawpCreatedAt: true },
+    }),
+    prisma.lessonPlanAssignmentLink.findMany({ where: { conversationId, createdAt: upTo }, select: { createdAt: true } }),
+  ]);
+  const times = [
+    createdAt,
+    setAt,
+    ...messages.map((row) => row.createdAt),
+    ...materials.flatMap((row) => [row.createdAt, row.editedAt, row.yawpCreatedAt]),
+    ...links.map((row) => row.createdAt),
+  ].filter((time): time is Date => Boolean(time) && time!.getTime() <= setAt.getTime());
+  return Math.max(plannedMinutes(times), Math.round(activeSeconds / 60));
 }

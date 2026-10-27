@@ -66,6 +66,7 @@ import {
   MarkdownContent,
   printAssistantMessage,
 } from '~/components/ai-chat/assistant-markdown';
+import { useActiveTime } from '~/components/lesson-planner/use-active-time';
 import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
 import { hasSlideDeck, readSlideDeck } from '~/domain/lesson-planner/slide-deck';
 import { blockRef, createdFor, linksByToken, type PieceCreated } from '~/domain/lesson-planner/assignment-links';
@@ -499,6 +500,8 @@ export default function LessonPlannerRoute() {
   );
   const conversationId = selectedConversation?.id ?? pendingConversationId;
   const conversationKey = conversationId ?? 'new';
+  // "Planned in" counts the time spent here, in use (Brian's round 5, item 12).
+  useActiveTime(conversationId, reviewFlags.stackV3);
   // The teacher's own documents (Oct 21).
   const sources = useSourceDocuments({
     conversationId,

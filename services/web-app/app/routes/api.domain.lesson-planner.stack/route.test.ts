@@ -4,7 +4,7 @@ const requireMutableRequest = mock();
 const requireLessonPlannerAccess = mock();
 const getLessonPlannerReviewFlags = mock();
 const prisma = {
-  lessonPlanConversation: { findFirst: mock(), update: mock() },
+  lessonPlanConversation: { findFirst: mock(), update: mock(), updateMany: mock(async (_input: any) => ({ count: 1 })) },
   lessonPlanMessage: { findFirst: mock() },
   lessonPlanMaterial: { updateMany: mock() },
   lessonShareLink: { count: mock(async () => 0) },
@@ -328,5 +328,24 @@ describe("extensions and the deck (Kevin's notes 8c, 9)", () => {
     const response = await post({ intent: 'keep-deck', conversationId: 'plan-1' });
     expect(response.data).toEqual({ ok: true });
     expect(prisma.lessonPlanConversation.update.mock.calls[0][0]).toEqual({ where: { id: 'plan-1' }, data: { deckStackKey: null } });
+  });
+});
+
+describe("active time (Brian's round 5, item 12)", () => {
+  test('adds the seconds in use, only while the lesson is not set', async () => {
+    prisma.lessonPlanConversation.updateMany.mockClear();
+    const response = await post({ intent: 'active-time', conversationId: 'plan-1', seconds: '60' });
+    expect(response.data).toEqual({ ok: true });
+    expect(prisma.lessonPlanConversation.updateMany).toHaveBeenCalledWith({
+      where: { id: 'plan-1', setAt: null },
+      data: { activeSeconds: { increment: 60 } },
+    });
+  });
+
+  test('never more than two minutes at a time', async () => {
+    prisma.lessonPlanConversation.updateMany.mockClear();
+    const response = await post({ intent: 'active-time', conversationId: 'plan-1', seconds: '3600' });
+    expect(response.init.status).toBe(422);
+    expect(prisma.lessonPlanConversation.updateMany).not.toHaveBeenCalled();
   });
 });

@@ -9,6 +9,7 @@ import { Check, MonitorPlay, NotebookText, Play } from 'lucide-react';
 import type { StackStep } from '~/domain/lesson-planner/stack-steps';
 import type { StackTiming } from '~/domain/lesson-planner/stack-timing';
 import { READY_LINE, type BeforeClassItem } from '~/domain/lesson-planner/before-class';
+import { plannedLabel } from '~/domain/lesson-planner/planned-time';
 import { YawpChecklist } from './yawp-checklist';
 import { HEADING_FONT } from './theme';
 
@@ -25,14 +26,6 @@ function shortDate(iso: string | null): string {
     day: 'numeric',
     timeZone: 'UTC',
   });
-}
-
-/** How long the lesson took to build: creation to set. */
-export function builtIn(createdAt: string, setAt: string): string {
-  const minutes = Math.max(1, Math.round((Date.parse(setAt) - Date.parse(createdAt)) / 60_000));
-  if (minutes < 120) return `${minutes} min`;
-  const hours = Math.round(minutes / 60);
-  return hours < 48 ? `${hours} hr` : `${Math.round(hours / 24)} days`;
 }
 
 /** What's left before class, ticking itself off (Kevin's note 12a). */
@@ -71,7 +64,7 @@ function BeforeClass({ list }: { list: { items: BeforeClassItem[]; ready: boolea
 export function FinishLine({
   conversationId,
   timing,
-  createdAt,
+  plannedMinutes = null,
   setAt,
   lessonDate,
   onSet,
@@ -89,7 +82,8 @@ export function FinishLine({
 }: {
   conversationId: string;
   timing: StackTiming;
-  createdAt: string;
+  /** Minutes actually spent on it (Brian's round 5, item 12). */
+  plannedMinutes?: number | null;
   setAt: string | null;
   lessonDate: string | null;
   onSet: () => void;
@@ -155,12 +149,13 @@ export function FinishLine({
       </h2>
       <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
         {/* Not class time (Kevin's note 12b): how long the planning took. */}
-        <div className="rounded-lg bg-[#F1EBE2] p-2" title="From your first message to setting the lesson">
+        {/* Real working time, not the clock (Brian's round 5, item 12). */}
+        <div className="rounded-lg bg-[#F1EBE2] p-2" title="Time you spent working on this lesson, not counting time away">
           <dt className="text-[10px] font-semibold uppercase tracking-wide text-[var(--sv-muted)]">Planned in</dt>
           <dd data-testid="stat-built" className="text-lg font-bold" style={HEADING_FONT}>
-            {builtIn(createdAt, setAt)}
+            {plannedLabel(plannedMinutes ?? 1)}
           </dd>
-          <dd className="text-[10px] leading-tight text-[var(--sv-muted)]">from first message to set</dd>
+          <dd className="text-[10px] leading-tight text-[var(--sv-muted)]">of time working on it</dd>
         </div>
         <div className="rounded-lg bg-[#F1EBE2] p-2">
           <dt className="text-[10px] font-semibold uppercase tracking-wide text-[var(--sv-muted)]">Class time</dt>

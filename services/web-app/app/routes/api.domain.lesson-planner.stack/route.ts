@@ -75,6 +75,8 @@ const POST = z
       'set-extension',
       // The slides stay as they are though the lesson changed (note 9).
       'keep-deck',
+      // Time spent with the lesson open and in use (Brian's round 5, item 12).
+      'active-time',
     ]),
     conversationId: z.string().min(1),
     materialId: z.string().min(1).optional(),
@@ -109,6 +111,8 @@ const POST = z
     notes: z.string().max(MAX_NOTES).optional(),
     /** `set-extension`: into the extensions, or back into the lesson. */
     extension: z.enum(['true', 'false']).optional(),
+    /** `active-time`: seconds in use since the last report; never more than two minutes. */
+    seconds: z.coerce.number().int().min(1).max(120).optional(),
   })
   .strict();
 
@@ -147,6 +151,17 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!conversation) return bad('Lesson not found.', 404);
 
   switch (data.intent) {
+    case 'active-time': {
+      // Counted only while the lesson is being worked on: a set lesson that is
+      // just being looked at adds nothing to "Planned in".
+      if (!data.seconds) return bad('How long?');
+      await prisma.lessonPlanConversation.updateMany({
+        where: { id: conversation.id, setAt: null },
+        data: { activeSeconds: { increment: data.seconds } },
+      });
+      return dataResponse({ ok: true });
+    }
+
     case 'rename-lesson': {
       if (!flags.teachNotes) return bad('Not found.', 404);
       if (!data.title) return bad('A name is required.');
