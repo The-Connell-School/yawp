@@ -119,20 +119,17 @@ export function DevPanelProvider({
   }, [persist, state]);
 
   const closePanel = useCallback(() => {
-    document.documentElement.classList.add('yawp-dev-panel-closing');
-    window.setTimeout(() => {
-      clearDevPanelState(window.localStorage);
-      document.documentElement.classList.remove(
-        'yawp-dev-panel-open',
-        'yawp-dev-panel-restored',
-        'yawp-dev-panel-closing'
-      );
-      setState({ ...DEV_PANEL_DEFAULT_STATE });
-      const beaker = document.querySelector<HTMLButtonElement>(
-        '.yawp-dev-panel-beaker button'
-      );
-      beaker?.focus();
-    }, 180);
+    clearDevPanelState(window.localStorage);
+    document.documentElement.classList.remove(
+      'yawp-dev-panel-open',
+      'yawp-dev-panel-restored',
+      'yawp-dev-panel-closing'
+    );
+    setState({ ...DEV_PANEL_DEFAULT_STATE });
+    const beaker = document.querySelector<HTMLButtonElement>(
+      '.yawp-dev-panel-beaker button'
+    );
+    beaker?.focus();
   }, []);
 
   const togglePanel = useCallback(() => {

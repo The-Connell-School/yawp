@@ -9,7 +9,7 @@ import {
   MessageSquare,
   X,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Form, useFetcher, useLocation, useRouteLoaderData } from 'react-router';
 import { Button } from '~/components/ui/button';
 import {
@@ -30,6 +30,7 @@ import { cn } from '~/utils/misc';
 import type { loader as rootLoader } from '~/root';
 import { useDevPanel } from './dev-panel-provider';
 import { freeTierStateSummary } from './free-tier-states.catalog';
+import { groupDevPanelLogins } from './dev-panel-login-groups';
 import { DevPanelOrgPicker } from './dev-panel-org-picker';
 import { createDevPanelFeedbackContext } from './dev-panel-feedback-context';
 import { DevPanelGiveFeedbackFlyout } from './dev-panel-give-feedback-flyout';
@@ -177,6 +178,7 @@ export function DevPanelShell() {
   const classSimulationRowRef = useRef<HTMLButtonElement>(null);
   const [orgs, setOrgs] = useState<Array<{ id: string; name: string }>>([]);
   const [logins, setLogins] = useState<Array<{ email: string; label: string; role: string }>>([]);
+  const groupedLogins = useMemo(() => groupDevPanelLogins(logins), [logins]);
   const [loginState, setLoginState] = useState<'idle' | 'loading' | 'error' | 'empty'>('idle');
   const loginFetcher = useFetcher();
   const location = useLocation();
@@ -192,22 +194,12 @@ export function DevPanelShell() {
     'Choose org';
   const freeTierSummary =
     freeTierStateSummary(state.forms.selectedStateId) ?? 'None';
+  const feedbackSub =
+    state.subSheet === 'give-feedback' ? 'Writing…' : 'Note, screenshot, URL';
   const feedbackContext = useRef(createDevPanelFeedbackContext());
 
   useEffect(() => {
     consumeDevPanelJumpToast();
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const root = document.documentElement;
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const sync = () => {
-      root.classList.toggle('yawp-dev-panel-reduced-motion', media.matches);
-    };
-    sync();
-    media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
   }, []);
 
   useEffect(() => {
@@ -305,17 +297,22 @@ export function DevPanelShell() {
     <>
       <header className="yawp-dev-panel-header">
         <div className="yawp-dev-panel-header-title">
-          <FlaskConical className="size-4 shrink-0" aria-hidden="true" />
-          <h1 ref={headingRef} tabIndex={-1} className="truncate">
+          <FlaskConical className="size-3.5 shrink-0" aria-hidden="true" />
+          <h2
+            id="devtools-title"
+            ref={headingRef}
+            tabIndex={-1}
+            className="yawp-dev-panel-header-heading min-w-0 flex-1 truncate"
+          >
             Developer tools
-          </h1>
+          </h2>
         </div>
-        <Button
+        <button
           type="button"
-          variant="ghost"
-          size="icon"
-          className="size-7 shrink-0"
+          className="yawp-dev-panel-header-close"
           aria-label="Close developer tools"
+          aria-keyshortcuts="Alt+Shift+D"
+          title="Close (Alt+Shift+D)"
           onClick={closePanel}
         >
           {showPhoneBottomSheet ? (
@@ -323,7 +320,7 @@ export function DevPanelShell() {
           ) : (
             <ChevronsRight className="size-4" aria-hidden="true" />
           )}
-        </Button>
+        </button>
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col">
@@ -353,31 +350,27 @@ export function DevPanelShell() {
             <>
               <div className="yawp-dev-panel-user-row">
                 {signedInUser ? (
-                  <div className="flex items-start justify-between gap-2">
-                    <p>
-                      Signed in{' '}
-                      <span className="font-semibold text-foreground">
-                        {signedInUser.name?.trim() || signedInUser.email}
-                      </span>
-                      {signedInRole ? (
-                        <span className="text-foreground"> {signedInRole}</span>
-                      ) : null}
-                    </p>
+                  <>
+                    <span>Signed in</span>
+                    <span className="yawp-dev-panel-user-name">
+                      {signedInUser.name?.trim() || signedInUser.email}
+                    </span>
+                    {signedInRole ? <span>{signedInRole}</span> : null}
+                    <span className="yawp-dev-panel-user-spacer" aria-hidden="true" />
                     <Form
                       method="post"
                       action={`/auth/logout?redirectTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`}
-                      className="shrink-0"
                     >
-                      <button
-                        type="submit"
-                        className="text-primary underline-offset-2 hover:underline"
-                      >
+                      <button type="submit" className="yawp-dev-panel-sign-out">
                         Sign out
                       </button>
                     </Form>
-                  </div>
+                  </>
                 ) : (
-                  <p>Signed out · Pick a login below</p>
+                  <>
+                    <span>Signed out</span>
+                    <span className="yawp-dev-panel-user-name">Pick a login below</span>
+                  </>
                 )}
               </div>
 
@@ -387,14 +380,17 @@ export function DevPanelShell() {
               >
                 <CollapsibleTrigger className="yawp-dev-panel-row">
                   <span>Sign in as</span>
-                  <span className="flex min-w-0 items-center gap-1">
-                    <span className="yawp-dev-panel-row-value max-w-[9rem] truncate">
-                      {selectedOrgName}
-                    </span>
-                    <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
-                  </span>
+                  <span className="yawp-dev-panel-row-value">{selectedOrgName}</span>
+                  <ChevronDown
+                    className={cn(
+                      'yawp-dev-panel-row-chevron size-4 shrink-0',
+                      state.openSections.includes('sign-in') &&
+                        'yawp-dev-panel-row-chevron-open'
+                    )}
+                    aria-hidden="true"
+                  />
                 </CollapsibleTrigger>
-                <CollapsibleContent className="yawp-dev-panel-section-body space-y-2">
+                <CollapsibleContent className="yawp-dev-panel-section-body">
                   <DevPanelOrgPicker
                     orgs={orgs}
                     value={selectedOrg}
@@ -415,35 +411,48 @@ export function DevPanelShell() {
                       Could not load quick logins. Try again.
                     </p>
                   ) : null}
-                  <div className="space-y-0.5">
-                    {logins.map((login) => (
-                      <loginFetcher.Form
-                        key={login.email}
-                        method="post"
-                        action="/auth/dev-login"
-                        className="block"
-                      >
-                        <input type="hidden" name="email" value={login.email} />
-                        <input
-                          type="hidden"
-                          name="redirectTo"
-                          value={`${location.pathname}${location.search}`}
-                        />
-                        <button
-                          type="submit"
-                          className="yawp-dev-panel-login-row"
-                          aria-label={`Sign in as ${login.label}, ${login.role}`}
-                        >
-                          <span className="truncate">{login.label}</span>
-                          {currentEmail === login.email ? (
-                            <span className="text-muted-foreground">Signed in</span>
-                          ) : (
-                            <span className="text-primary">Sign in</span>
-                          )}
-                        </button>
-                      </loginFetcher.Form>
-                    ))}
-                  </div>
+                  {groupedLogins.map((group) => (
+                    <div key={group.key}>
+                      <p className="yawp-dev-panel-login-group-title">{group.title}</p>
+                      <ul className="m-0 list-none p-0">
+                        {group.logins.map((login) => (
+                          <li key={login.email}>
+                            <loginFetcher.Form
+                              method="post"
+                              action="/auth/dev-login"
+                              className="block"
+                            >
+                              <input type="hidden" name="email" value={login.email} />
+                              <input
+                                type="hidden"
+                                name="redirectTo"
+                                value={`${location.pathname}${location.search}`}
+                              />
+                              <button
+                                type="submit"
+                                className={cn(
+                                  'yawp-dev-panel-login-row',
+                                  currentEmail === login.email &&
+                                    'yawp-dev-panel-login-row-current'
+                                )}
+                                aria-label={`Sign in as ${login.label}, ${login.role}`}
+                              >
+                                <span className="yawp-dev-panel-login-label">{login.label}</span>
+                                <span className="yawp-dev-panel-login-role">{login.role}</span>
+                                {currentEmail === login.email ? (
+                                  <span className="shrink-0 pr-1.5 text-xs text-muted-foreground">
+                                    Signed in
+                                  </span>
+                                ) : (
+                                  <span className="yawp-dev-panel-sign-in-pill">Sign in</span>
+                                )}
+                              </button>
+                            </loginFetcher.Form>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
                 </CollapsibleContent>
               </Collapsible>
 
@@ -457,16 +466,11 @@ export function DevPanelShell() {
                 onClick={() => openSubSheet('free-tier-states')}
               >
                 <span>Free-tier states</span>
-                <span className="flex min-w-0 items-center gap-1">
-                  <span
-                    className={cn(
-                      'yawp-dev-panel-row-value yawp-dev-panel-row-value-mono max-w-[10rem] truncate'
-                    )}
-                  >
-                    {freeTierSummary}
-                  </span>
-                  <ChevronLeft className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
-                </span>
+                <span className="yawp-dev-panel-row-value">{freeTierSummary}</span>
+                <ChevronLeft
+                  className="yawp-dev-panel-row-chevron size-4 shrink-0"
+                  aria-hidden="true"
+                />
               </button>
 
               <Collapsible
@@ -475,29 +479,54 @@ export function DevPanelShell() {
               >
                 <CollapsibleTrigger className="yawp-dev-panel-row">
                   <span>Blackboard link</span>
-                  <span className="flex min-w-0 items-center gap-1">
-                    <span className="yawp-dev-panel-row-value yawp-dev-panel-row-value-mono max-w-[9rem] truncate">
-                      LTI test launch
-                    </span>
-                    <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
-                  </span>
+                  <span className="yawp-dev-panel-row-value">LTI test launch</span>
+                  <ChevronDown
+                    className={cn(
+                      'yawp-dev-panel-row-chevron size-4 shrink-0',
+                      state.openSections.includes('blackboard') &&
+                        'yawp-dev-panel-row-chevron-open'
+                    )}
+                    aria-hidden="true"
+                  />
                 </CollapsibleTrigger>
-                <CollapsibleContent className="yawp-dev-panel-section-body space-y-2">
-                  <select
-                    className="h-[30px] w-full rounded-md border bg-background px-2 text-[13px]"
-                    value={state.forms.blackboardRole ?? 'teacher'}
-                    onChange={(event) =>
-                      updateForms({
-                        blackboardRole: event.target.value as 'teacher' | 'student',
-                      })
-                    }
-                  >
-                    <option value="teacher">Teacher</option>
-                    <option value="student">Student</option>
-                  </select>
+                <CollapsibleContent className="yawp-dev-panel-section-body gap-2">
+                  <p className="m-0 text-xs leading-4 text-muted-foreground">
+                    Opens a mock Blackboard course in a new tab and launches Yawp! through LTI.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <span
+                      id="dev-panel-bb-role-label"
+                      className="w-16 shrink-0 text-xs text-muted-foreground"
+                    >
+                      Launch as
+                    </span>
+                    <div
+                      role="radiogroup"
+                      aria-labelledby="dev-panel-bb-role-label"
+                      className="flex flex-1 gap-0.5 rounded-full border border-input bg-background p-0.5"
+                    >
+                      {(['teacher', 'student'] as const).map((role) => (
+                        <button
+                          key={role}
+                          type="button"
+                          role="radio"
+                          aria-checked={(state.forms.blackboardRole ?? 'teacher') === role}
+                          className={cn(
+                            'h-[calc(var(--yawp-dev-panel-btn-height)-6px)] flex-1 rounded-full border-0 text-xs font-medium capitalize',
+                            (state.forms.blackboardRole ?? 'teacher') === role
+                              ? 'bg-secondary'
+                              : 'bg-transparent'
+                          )}
+                          onClick={() => updateForms({ blackboardRole: role })}
+                        >
+                          {role}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <Button
                     type="button"
-                    className="yawp-dev-panel-pill-action h-[24px] w-full"
+                    className="yawp-dev-panel-pill-action h-[var(--yawp-dev-panel-btn-height)] w-full"
                     onClick={async () => {
                       const response = await fetch('/api/dev-panel/blackboard-launch', {
                         method: 'POST',
@@ -515,7 +544,7 @@ export function DevPanelShell() {
                       window.open(result.launchUrl, '_blank', 'noopener,noreferrer');
                     }}
                   >
-                    Open Blackboard
+                    Open Blackboard launch
                   </Button>
                 </CollapsibleContent>
               </Collapsible>
@@ -526,25 +555,42 @@ export function DevPanelShell() {
               >
                 <CollapsibleTrigger className="yawp-dev-panel-row">
                   <span>Tester tools</span>
-                  <span className="flex min-w-0 items-center gap-1">
-                    <span className="yawp-dev-panel-row-value yawp-dev-panel-row-value-mono">
-                      Copy URL
-                    </span>
-                    <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
-                  </span>
+                  <span className="yawp-dev-panel-row-value">Copy URL</span>
+                  <ChevronDown
+                    className={cn(
+                      'yawp-dev-panel-row-chevron size-4 shrink-0',
+                      state.openSections.includes('tester-tools') &&
+                        'yawp-dev-panel-row-chevron-open'
+                    )}
+                    aria-hidden="true"
+                  />
                 </CollapsibleTrigger>
-                <CollapsibleContent className="yawp-dev-panel-section-body space-y-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="yawp-dev-panel-pill-action h-[24px] w-full justify-start gap-2"
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(window.location.href);
-                    }}
+                <CollapsibleContent className="yawp-dev-panel-section-body gap-1.5">
+                  <label
+                    htmlFor="dev-panel-current-url"
+                    className="text-xs text-muted-foreground"
                   >
-                    <Copy className="size-3.5" aria-hidden="true" />
-                    Copy current URL
-                  </Button>
+                    Current page
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      id="dev-panel-current-url"
+                      readOnly
+                      value={`${location.pathname}${location.search}`}
+                      className="h-[var(--yawp-dev-panel-btn-height)] min-w-0 flex-1 rounded-md border bg-background px-2 font-mono text-xs"
+                    />
+                    <button
+                      type="button"
+                      className="yawp-dev-panel-pill-action shrink-0 gap-1.5"
+                      aria-label="Copy current page URL"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(window.location.href);
+                      }}
+                    >
+                      <Copy className="size-3" aria-hidden="true" />
+                      Copy
+                    </button>
+                  </div>
                   <button
                     ref={classSimulationRowRef}
                     type="button"
@@ -583,21 +629,18 @@ export function DevPanelShell() {
               ref={feedbackRowRef}
               type="button"
               className={cn(
-                'yawp-dev-panel-row border-b-0',
+                'yawp-dev-panel-feedback-row',
                 state.subSheet === 'give-feedback' && 'yawp-dev-panel-row-active'
               )}
               onClick={() => openSubSheet('give-feedback')}
             >
-              <span className="flex min-w-0 items-center gap-2">
-                <MessageSquare className="size-3.5 shrink-0" aria-hidden="true" />
-                <span className="min-w-0">
-                  <span className="block font-medium">Give feedback</span>
-                  <span className="yawp-dev-panel-row-value-mono block truncate text-[11px] font-normal text-muted-foreground">
-                    Note, screenshot, URL
-                  </span>
-                </span>
-              </span>
-              <ChevronLeft className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
+              <MessageSquare className="size-3.5 shrink-0" aria-hidden="true" />
+              <span className="shrink-0 font-semibold">Give feedback</span>
+              <span className="yawp-dev-panel-row-value">{feedbackSub}</span>
+              <ChevronLeft
+                className="yawp-dev-panel-row-chevron size-4 shrink-0"
+                aria-hidden="true"
+              />
             </button>
           </div>
         ) : null}
@@ -607,14 +650,14 @@ export function DevPanelShell() {
         {unlocked && previewAccessGateEnabled ? (
           <Form method="post" action="/auth/preview-access">
             <input type="hidden" name="intent" value="sign-out" />
-            <button type="submit" className="text-destructive underline-offset-2 hover:underline">
+            <button type="submit" className="yawp-dev-panel-reenter">
               Re-enter access code
             </button>
           </Form>
         ) : (
           <span />
         )}
-        <span className="inline-flex items-center gap-1" aria-label="Toggle Alt Shift D">
+        <span className="yawp-dev-panel-kbd-row" aria-label="Toggle Alt Shift D">
           <kbd className="yawp-dev-panel-kbd">Alt</kbd>
           <kbd className="yawp-dev-panel-kbd">Shift</kbd>
           <kbd className="yawp-dev-panel-kbd">D</kbd>
@@ -628,7 +671,11 @@ export function DevPanelShell() {
         />
       ) : null}
       {!isPhone && !isTablet && state.subSheet === 'free-tier-states' ? (
-        <DevPanelFreeTierFlyout onClose={closeSubSheet} orgId={selectedOrg} />
+        <DevPanelFreeTierFlyout
+          onClose={closeSubSheet}
+          orgId={selectedOrg}
+          orgName={selectedOrgName}
+        />
       ) : null}
       {!isPhone && !isTablet && state.subSheet === 'class-simulation' ? (
         <DevPanelClassSimulationFlyout onClose={closeSubSheet} />
@@ -650,6 +697,7 @@ export function DevPanelShell() {
         <DevPanelFreeTierFlyout
           onClose={closeSubSheet}
           orgId={selectedOrg}
+          orgName={selectedOrgName}
           pushed
         />
       ) : isPhone && state.subSheet === 'class-simulation' ? (
@@ -668,6 +716,7 @@ export function DevPanelShell() {
             <DevPanelFreeTierFlyout
               onClose={closeSubSheet}
               orgId={selectedOrg}
+              orgName={selectedOrgName}
               pushed
             />
           ) : null}
@@ -693,7 +742,7 @@ export function DevPanelShell() {
         <SheetContent
           side="right"
           showCloseButton={false}
-          className="relative flex h-full w-full max-w-none flex-col p-0 sm:max-w-[360px]"
+          className="yawp-dev-panel-mobile-sheet relative flex h-full w-full max-w-none flex-col p-0 sm:max-w-[360px] data-[state=open]:animate-none data-[state=closed]:animate-none"
           data-yawp-dev-panel
           data-yawp-dev-panel-ready="true"
           id="devtools"
@@ -713,7 +762,7 @@ export function DevPanelShell() {
       data-yawp-dev-panel-ready="true"
       aria-label="Developer tools"
       className={cn(
-        'yawp-dev-panel-docked fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-background',
+        'yawp-dev-panel-docked fixed inset-y-0 right-0 z-40 flex flex-col bg-popover',
         'w-[var(--yawp-dev-panel-width)]'
       )}
     >

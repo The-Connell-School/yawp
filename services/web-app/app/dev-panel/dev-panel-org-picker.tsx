@@ -1,6 +1,5 @@
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import { useId, useState } from 'react';
-import { Button } from '~/components/ui/button';
 import {
   Command,
   CommandEmpty,
@@ -16,8 +15,6 @@ import {
 } from '~/components/ui/popover';
 import { cn } from '~/utils/misc';
 
-const SEARCHABLE_ORG_THRESHOLD = 8;
-
 export function DevPanelOrgPicker({
   orgs,
   value,
@@ -31,53 +28,34 @@ export function DevPanelOrgPicker({
   const [open, setOpen] = useState(false);
   const selected = orgs.find((org) => org.id === value) ?? orgs[0];
 
-  if (orgs.length <= SEARCHABLE_ORG_THRESHOLD) {
-    return (
-      <>
-        <label className="text-xs font-medium" htmlFor="dev-panel-org">
-          Org
-        </label>
-        <select
-          id="dev-panel-org"
-          className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm"
-          value={value ?? ''}
-          onChange={(event) => onChange(event.target.value)}
-        >
-          {orgs.map((org) => (
-            <option key={org.id} value={org.id}>
-              {org.name}
-            </option>
-          ))}
-        </select>
-      </>
-    );
-  }
-
   return (
-    <div className="space-y-1">
-      <span id={listId} className="text-xs font-medium">
+    <div className="yawp-dev-panel-org-row">
+      <label className="yawp-dev-panel-org-label" htmlFor="dev-panel-org-select">
         Org
-      </span>
+      </label>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button
+          <button
             type="button"
-            variant="outline"
+            id="dev-panel-org-select"
             role="combobox"
             aria-expanded={open}
             aria-labelledby={listId}
-            className="h-9 w-full justify-between font-normal"
+            className={cn(
+              'yawp-dev-panel-org-trigger',
+              open && 'yawp-dev-panel-org-trigger-open'
+            )}
           >
-            {selected?.name ?? 'Choose org'}
-            <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-          </Button>
+            <span className="truncate">{selected?.name ?? 'Choose org'}</span>
+            <ChevronDown className="size-3.5 shrink-0 opacity-70" aria-hidden="true" />
+          </button>
         </PopoverTrigger>
         <PopoverContent
-          className="yawp-dev-panel-org-popover w-[var(--radix-popover-trigger-width)] p-0"
+          className="yawp-dev-panel-org-popover w-[var(--radix-popover-trigger-width)] p-1"
           align="start"
         >
           <Command>
-            <CommandInput placeholder="Search orgs…" />
+            <CommandInput placeholder="Search orgs" aria-label="Search orgs" />
             <CommandList>
               <CommandEmpty>No org found.</CommandEmpty>
               <CommandGroup>
@@ -85,19 +63,18 @@ export function DevPanelOrgPicker({
                   <CommandItem
                     key={org.id}
                     value={org.name}
+                    className="gap-2"
                     onSelect={() => {
                       onChange(org.id);
                       setOpen(false);
                     }}
                   >
-                    <Check
-                      className={cn(
-                        'mr-2 size-4',
-                        value === org.id ? 'opacity-100' : 'opacity-0'
-                      )}
-                      aria-hidden="true"
-                    />
-                    {org.name}
+                    <span className="flex w-3.5 shrink-0 items-center justify-center">
+                      {value === org.id ? (
+                        <Check className="size-3.5" aria-hidden="true" />
+                      ) : null}
+                    </span>
+                    <span className="flex-1 truncate">{org.name}</span>
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -105,6 +82,9 @@ export function DevPanelOrgPicker({
           </Command>
         </PopoverContent>
       </Popover>
+      <span id={listId} className="sr-only">
+        Organization
+      </span>
     </div>
   );
 }
