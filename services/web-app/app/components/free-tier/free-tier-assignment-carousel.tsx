@@ -118,7 +118,7 @@ export function FreeTierAssignmentCarouselTrack({
 /** Frosted chip on assignment tiles and PE3 class-card menu overlay. */
 export function freeTierGlassyOverlayChipClassName(extra?: string) {
   return cn(
-    'rounded-full bg-white/92 shadow-[0_0_0_1px_hsl(var(--border))]',
+    'rounded-full bg-white/[0.97] backdrop-blur-sm shadow-[0_1px_4px_0_hsl(0_0%_0%/0.16),0_0_0_1px_hsl(0_0%_0%/0.12)]',
     extra
   );
 }
@@ -138,9 +138,9 @@ export function FreeTierAssignmentTileImageBadge({
       )}
     >
       {variant === 'create' ? (
-        <Plus size={14} aria-hidden className="text-foreground" />
+        <Plus size={14} aria-hidden className="text-slate-800" />
       ) : (
-        <Lock size={14} aria-hidden className="text-foreground" />
+        <Lock size={14} aria-hidden className="text-slate-800" />
       )}
     </span>
   );

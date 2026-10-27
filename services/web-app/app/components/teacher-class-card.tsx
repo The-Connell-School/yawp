@@ -220,11 +220,11 @@ export function TeacherClassCard({
                 data-testid="my-classes-class-options"
                 aria-label={`Class options for ${title}`}
                 className={cn(
-                  'flex size-8 items-center justify-center text-foreground hover:bg-white',
+                  'flex size-8 items-center justify-center text-slate-800 hover:bg-white',
                   freeTierGlassyOverlayChipClassName()
                 )}
               >
-                <MoreHorizontal size={18} aria-hidden />
+                <MoreHorizontal size={18} aria-hidden className="text-slate-800" />
               </button>
             </LockedTeachingControl>
           </div>
