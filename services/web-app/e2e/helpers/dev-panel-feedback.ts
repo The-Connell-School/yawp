@@ -21,7 +21,11 @@ export function giveFeedbackDialog(page: Page) {
 }
 
 export function freeTierStatesDialog(page: Page) {
-  return page.getByRole('dialog', { name: 'Free-tier states' });
+  return devToolsPanel(page).locator('[data-testid="free-tier-session-runner"]');
+}
+
+export function devPanelFreeTierSectionTrigger(panel: ReturnType<typeof devToolsPanel>) {
+  return panel.getByRole('button', { name: /^Free-tier\b/ });
 }
 
 /** Dev panel pin row — accessible name includes the subtitle (Note, screenshot, URL / Writing…). */

@@ -28,7 +28,10 @@ import { Sheet, SheetContent } from '~/components/ui/sheet';
 import { cn } from '~/utils/misc';
 import type { loader as rootLoader } from '~/root';
 import { useDevPanel } from './dev-panel-provider';
-import { pe3FreeTierRowValue } from './dev-panel-pe3-states';
+import {
+  freeTierSessionStageLabel,
+} from './dev-panel-free-tier-inline';
+import type { FreeTierSessionStage } from './free-tier-session.server';
 import { groupDevPanelLogins } from './dev-panel-login-groups';
 import { DevPanelOrgPicker } from './dev-panel-org-picker';
 import { createDevPanelFeedbackContext } from './dev-panel-feedback-context';
@@ -187,7 +190,15 @@ export function DevPanelShell() {
     signedInUser?.selectedMembership?.role ?? signedInUser?.memberships?.[0]?.role
   );
   const selectedOrg = state.org ?? orgs[0]?.id ?? null;
-  const freeTierSummary = pe3FreeTierRowValue(state.forms.selectedStateId);
+  const [freeTierStage, setFreeTierStage] = useState<FreeTierSessionStage>(
+    () =>
+      state.forms.freeTierFollowEmail
+        ? state.forms.freeTierFormFilled
+          ? 'form_filled'
+          : 'none'
+        : 'none'
+  );
+  const freeTierSummary = freeTierSessionStageLabel(freeTierStage);
   const signInRowValue = signedInUser
     ? `${signedInRole || 'User'} · ${truncatePanelLabel(
         signedInUser.name?.trim() || signedInUser.email || 'User'
@@ -410,7 +421,7 @@ export function DevPanelShell() {
                 onOpenChange={() => toggleSection('free-tier-states')}
               >
                 <CollapsibleTrigger className="yawp-dev-panel-row">
-                  <span>Free-tier states</span>
+                  <span>Free-tier</span>
                   <span className="yawp-dev-panel-row-value yawp-dev-panel-row-value-mono">
                     {freeTierSummary}
                   </span>
@@ -424,6 +435,7 @@ export function DevPanelShell() {
                   <DevPanelFreeTierInline
                     orgId={selectedOrg}
                     sectionOpen={state.openSections.includes('free-tier-states')}
+                    onStageChange={setFreeTierStage}
                   />
                 </CollapsibleContent>
               </Collapsible>

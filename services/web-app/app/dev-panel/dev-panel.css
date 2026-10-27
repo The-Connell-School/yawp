@@ -403,6 +403,181 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
   color: hsl(var(--destructive));
 }
 
+[data-yawp-dev-panel] .yawp-dev-panel-free-tier-session {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-follow-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-follow-email {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  color: var(--yawp-dev-panel-ink);
+  word-break: break-all;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--yawp-dev-panel-muted);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-muted {
+  font-size: 12px;
+  color: var(--yawp-dev-panel-muted);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-primary-btn {
+  width: 100%;
+  height: 32px;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--yawp-dev-panel-coral-deep);
+  color: var(--yawp-dev-panel-coral-on);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-secondary-btn {
+  width: 100%;
+  height: 32px;
+  border: 1px solid var(--yawp-dev-panel-border);
+  border-radius: 9999px;
+  background: #ffffff;
+  color: var(--yawp-dev-panel-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-clear-btn {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--yawp-dev-panel-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-status {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--yawp-dev-panel-border);
+  background: #ffffff;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--yawp-dev-panel-ink);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-link-label {
+  font-size: var(--yawp-dev-panel-fs);
+  color: var(--yawp-dev-panel-ink);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-link-actions {
+  display: inline-flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-text-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--yawp-dev-panel-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-email-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-email-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-email-subject {
+  font-size: var(--yawp-dev-panel-fs);
+  color: var(--yawp-dev-panel-ink);
+  line-height: 1.35;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-email-preview {
+  height: 340px;
+  overflow: auto;
+  border: 1px solid var(--yawp-dev-panel-border);
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-ft-email-preview-frame {
+  width: 100%;
+  min-height: 100%;
+  border: 0;
+  background: #ffffff;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-free-tier-advanced-trigger {
+  width: calc(100% + 12px);
+  margin: 0 -6px;
+  height: 28px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-size: var(--yawp-dev-panel-fs);
+  color: var(--yawp-dev-panel-ink);
+  cursor: pointer;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-free-tier-advanced-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+}
+
 [data-yawp-dev-panel] .yawp-dev-panel-row-spacer {
   flex: 1 1 auto;
   min-width: 0;

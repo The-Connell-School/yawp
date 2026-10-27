@@ -30,6 +30,7 @@ import {
 import { useState } from 'react';
 import { CircleCheck, CircleAlert, Mail } from 'lucide-react';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
+import { FreeTierDevPrefillApplier } from './free-tier-dev-prefill-applier';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
@@ -306,10 +307,18 @@ export default function FreeTierLandingRoute() {
     </>
   );
   if (data.onboardingV2 && !submitted && !(data.mode === 'token' && data.linkClosed)) {
-    return <FreeTierWelcomeCard onboardingV2 eventLink={data.mode === 'token'}>{contents}</FreeTierWelcomeCard>;
+    return (
+      <FreeTierWelcomeCard onboardingV2 eventLink={data.mode === 'token'}>
+        <FreeTierDevPrefillApplier />
+        {contents}
+      </FreeTierWelcomeCard>
+    );
   }
   return (
     <FreeTierAuthCard status={submitted || (data.mode === 'token' && data.linkClosed)} title={title} subtitle={subtitle} icon={data.mode === 'token' && data.linkClosed ? <CircleAlert /> : submitted ? (fetcher.data && 'bypassWaitlist' in fetcher.data && fetcher.data.bypassWaitlist ? <Mail /> : <CircleCheck />) : undefined}>
+      {!submitted && !(data.mode === 'token' && data.linkClosed) ? (
+        <FreeTierDevPrefillApplier />
+      ) : null}
       {contents}
     </FreeTierAuthCard>
   );

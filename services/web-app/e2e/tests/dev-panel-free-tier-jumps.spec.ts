@@ -2,16 +2,11 @@ import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
-import {
-  devPanelFreeTierGroupTrigger,
-  devPanelFreeTierStateOption,
-  openDevToolsPanel,
-} from '../helpers/dev-panel-feedback';
+import { openDevToolsPanel } from '../helpers/dev-panel-feedback';
 import {
   listCatalogFreeTierJumpExpectations,
   type FreeTierJumpExpectation,
 } from '../../app/dev-panel/free-tier-jump-expectations';
-import { findFreeTierState } from '../../app/dev-panel/free-tier-states.catalog';
 
 const prisma = createE2EPrismaClient();
 
@@ -47,25 +42,15 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
   await page.reload();
 
   const tools = await openDevToolsPanel(page);
-  await tools.getByRole('button', { name: /^Free-tier states/ }).click();
-  const stateSheet = page.getByRole('dialog', { name: 'Free-tier states' });
+  await tools.getByRole('button', { name: /^Free-tier\b/ }).click();
+  const stateSheet = page.getByTestId('free-tier-session-runner');
   await expect(stateSheet).toBeVisible({ timeout: 15_000 });
+  await tools.getByRole('button', { name: 'Jump to state (advanced)' }).click();
 
-  await stateSheet
-    .getByRole('switch', { name: 'Use a throwaway test account' })
-    .setChecked(true);
-
-  const catalogEntry = findFreeTierState(entry.stateId);
-  if (catalogEntry) {
-    const groupTrigger = devPanelFreeTierGroupTrigger(
-      stateSheet,
-      catalogEntry.group.title
-    );
-    if ((await groupTrigger.getAttribute('aria-expanded')) !== 'true') {
-      await groupTrigger.click();
-    }
-  }
-  await devPanelFreeTierStateOption(stateSheet, entry.label).click();
+  const jumpRow = stateSheet.getByRole('button', {
+    name: new RegExp(`^${entry.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`),
+  });
+  await jumpRow.click();
 
   const jumpResponse = page.waitForResponse(
     (response) =>
@@ -73,7 +58,7 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
       response.request().method() === 'POST',
     { timeout: 120_000 }
   );
-  await stateSheet.getByRole('button', { name: 'Jump to this state' }).click();
+  await stateSheet.getByRole('button', { name: 'Jump', exact: true }).click();
   const response = await jumpResponse;
   const body = await response.json().catch(() => null);
   const jumpOk = response.ok() && body?.ok === true;

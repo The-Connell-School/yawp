@@ -63,6 +63,15 @@ export function parseDevPanelState(raw: unknown): DevPanelPersistedState | null 
           raw.forms.selectedStateId === null
             ? raw.forms.selectedStateId
             : undefined,
+        freeTierFollowEmail:
+          typeof raw.forms.freeTierFollowEmail === 'string' ||
+          raw.forms.freeTierFollowEmail === null
+            ? raw.forms.freeTierFollowEmail
+            : undefined,
+        freeTierFormFilled:
+          typeof raw.forms.freeTierFormFilled === 'boolean'
+            ? raw.forms.freeTierFormFilled
+            : undefined,
         simulationClassId:
           typeof raw.forms.simulationClassId === 'string' ||
           raw.forms.simulationClassId === null

@@ -14,6 +14,9 @@ export type DevPanelPersistedForms = {
   feedbackAttachScreenshot?: boolean;
   throwawaySwitch?: boolean;
   selectedStateId?: string | null;
+  /** Session runner: disposable ft-test+…@yawp.test being exercised manually. */
+  freeTierFollowEmail?: string | null;
+  freeTierFormFilled?: boolean;
   simulationClassId?: string | null;
   simulationStudentCount?: number;
   /** Opens the class simulation flyout straight to clear confirmation. */
