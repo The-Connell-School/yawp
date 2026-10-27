@@ -80,7 +80,7 @@ export function Celebration({ onDone }: { onDone: () => void }) {
 
   const words = parts.line.split(' ');
   return (
-    <div className="pointer-events-none absolute inset-x-0 -top-16 bottom-0 z-20">
+    <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-2xl">
       <style>{`
         @keyframes yawp-pop { 0% { opacity: 0; transform: translateY(8px) scale(.6) } 60% { opacity: 1; transform: translateY(-2px) scale(1.08) } 100% { opacity: 1; transform: none } }
         @keyframes yawp-out { to { opacity: 0 } }
@@ -92,7 +92,7 @@ export function Celebration({ onDone }: { onDone: () => void }) {
       <p
         role="status"
         data-testid="yawp-line"
-        className="yawp-line absolute inset-x-2 top-0 text-center text-lg font-extrabold leading-tight text-[var(--sv-writing)]"
+        className="yawp-line absolute inset-x-3 top-3 rounded-xl border border-[#E7D9F3] bg-[var(--sv-writing-strip)] px-3 py-2 text-center text-lg font-extrabold leading-tight text-[var(--sv-writing)] shadow-md"
       >
         {words.map((word, index) => (
           <span key={index} className="yawp-word" style={{ animationDelay: `${index * 110}ms` }}>
