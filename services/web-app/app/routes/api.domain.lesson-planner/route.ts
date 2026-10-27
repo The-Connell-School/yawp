@@ -572,8 +572,11 @@ export async function action({ request }: ActionFunctionArgs) {
         )
       : [];
 
+    // The name on the teacher's profile, for "the Ms. Rivera Show" (Brian's
+    // personality doc, Oct 26, section 15).
+    const teacher = await prisma.user.findUnique({ where: { id: access.userId }, select: { name: true } });
     const system = buildLessonPlannerSystemPromptBlocks({
-      teacherName: null,
+      teacherName: teacher?.name?.trim() || null,
       lessonLength,
       organizationName: access.membership.organization.name,
       lessonInventory: conversation?.materials ?? [],

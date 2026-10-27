@@ -57,6 +57,7 @@ function systemText(system: unknown): string {
 }
 
 const prisma = {
+  user: { findUnique: mock(async (_input: any) => ({ name: 'Ms. Rivera' })) },
   lessonPlanConversation: {
     findFirst: mock(),
     create: mock(),

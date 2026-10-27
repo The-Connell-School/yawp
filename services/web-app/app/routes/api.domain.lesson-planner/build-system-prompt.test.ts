@@ -1724,7 +1724,7 @@ describe("planner prompt — Brian's run 3", () => {
   });
 
   test('the prompt version moved', () => {
-    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-25-unit-build-v2');
+    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-26-personality-round-5');
   });
 });
 
@@ -1935,7 +1935,7 @@ describe("planner prompt — the conversation is the first memory (Brian's run 5
     expect(prompt).toContain('This conversation is your first memory.');
     expect(prompt).toContain('never ask them to type it again');
     expect(prompt).toContain('carries into everything built in this conversation, a unit included');
-    expect(prompt).toContain('Only for work from other conversations');
+    expect(prompt).toContain('When a teacher refers to work from other conversations');
   });
 });
 
@@ -1997,5 +1997,54 @@ describe('exit ticket wording (Brian round 5, item 3)', () => {
       expect(at).toBeGreaterThan(-1);
       expect(withExitTickets.slice(Math.max(0, at - 40), at).toLowerCase()).toContain('never');
     }
+  });
+});
+
+describe("buildLessonPlannerSystemPrompt — the personality doc (Brian, Oct 26)", () => {
+  const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School' });
+  const lower = prompt.toLowerCase();
+
+  test('7: never makes things up, and says so when unsure', () => {
+    expect(lower).toContain('you do not invent facts, quotes, standards, or anything else');
+    expect(lower).toContain('say so when you are not sure');
+  });
+
+  test('10: a co-producer, and planning a lesson is like planning a show', () => {
+    expect(lower).toContain('the way the writing tutor is a record producer');
+    expect(lower).toContain('like planning a show');
+  });
+
+  test('12: past work comes from the library, and a miss asks for title, topic or date', () => {
+    expect(lower).toContain('you do not depend on chat memory');
+    expect(prompt).toContain('search_my_lessons');
+    expect(lower).toContain('the title, topic or date');
+  });
+
+  test('13: self-contracting and self-transcending, in every lesson', () => {
+    expect(lower).toContain('self-contracting');
+    expect(lower).toContain('self-transcending');
+    expect(lower).toContain('a loud class is just a loud class');
+  });
+
+  test('14: never boring', () => {
+    expect(prompt).toContain('Being boring is a crime against humanity.');
+    expect(lower).toContain('a lecture can be a great show');
+  });
+
+  test('15: the scaffolded week, as an option, named for the teacher', () => {
+    expect(lower).toContain('building toward discussion over several days');
+    expect(prompt).toContain('the [your name here] Show');
+    expect(prompt).toContain('Never "the Brian Connell Show"');
+    expect(lower).toContain('never a requirement');
+  });
+
+  test('keeps the pattern Brian likes: what to cut when time runs short', () => {
+    expect(lower).toContain('what to cut first');
+  });
+
+  test('the teacher’s name is in the intro, so the show can be named for them', () => {
+    const named = buildLessonPlannerSystemPrompt({ teacherName: 'Ms. Rivera', organizationName: 'Connell School' });
+    expect(named).toContain('for Ms. Rivera, a teacher at Connell School');
+    expect(named).toContain('name the show after the teacher');
   });
 });
