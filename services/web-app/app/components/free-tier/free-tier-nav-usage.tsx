@@ -45,6 +45,13 @@ export function renderFreeTierNavTrailing(input: {
 
   if (link.to === '/app/lesson-planner') {
     if (!usage.lessonPlannerMonthlyMetering && !usage.monthly) return null;
+    if (usage.reporterLocked) {
+      return (
+        <Tooltip text="Unlocks after approval" contentProps={{ side: 'right' }}>
+          <Lock size={14} className="shrink-0 text-muted-foreground" aria-hidden />
+        </Tooltip>
+      );
+    }
     return (
       <UsageNavRing
         feature="lesson-planner"
@@ -123,6 +130,51 @@ export function renderFreeTierNavRow(ctx: NavRowContext): React.ReactNode | null
 
   if (link.to === '/app/lesson-planner') {
     if (!usage.lessonPlannerMonthlyMetering && !usage.monthly) return null;
+
+    if (usage.reporterLocked) {
+      if (!navExpanded && !isMobile) {
+        return (
+          <div key={link.to} className={cn(rowClassName, 'justify-center px-0')}>
+            <Link
+              to={link.to}
+              reloadDocument={reloadDocument}
+              aria-current={isActive ? 'page' : undefined}
+              aria-label="Lesson Planner"
+              className={cn(
+                linkClassName,
+                'relative flex size-11 shrink-0 items-center justify-center'
+              )}
+              data-testid="usage-nav-collapsed-link-lesson-planner-locked"
+            >
+              {icon}
+              <Lock
+                size={12}
+                className="absolute bottom-0.5 right-0.5 text-muted-foreground"
+                aria-hidden
+              />
+            </Link>
+          </div>
+        );
+      }
+      if (isMobile && navExpanded) {
+        return (
+          <div key={link.to} className={rowClassName}>
+            <Link
+              to={link.to}
+              reloadDocument={reloadDocument}
+              aria-current={isActive ? 'page' : undefined}
+              className={linkClassName}
+            >
+              {defaultLinkBody}
+            </Link>
+            <Tooltip text="Unlocks after approval" contentProps={{ side: 'left' }}>
+              <Lock size={14} className="shrink-0 text-muted-foreground" aria-hidden />
+            </Tooltip>
+          </div>
+        );
+      }
+      return null;
+    }
 
     if (isMobile && navExpanded) {
       if (metersHidden && !loading) return null;

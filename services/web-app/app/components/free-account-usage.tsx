@@ -32,7 +32,6 @@ import {
 import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
 import { cn } from '~/utils/misc';
 import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
-import { SiteLicenseLockButton } from '~/components/site-license-lock-button';
 import {
   assignmentTypeTileCardClassName,
   assignmentTypeTileFooterClassName,
@@ -44,12 +43,20 @@ import {
   assignmentTypeTileTrailingIconClassName,
 } from '~/components/assignment-type-tile-layout';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
+import { LockedDashboardGettingStarted } from '~/components/free-tier/locked-dashboard-getting-started';
+import { LockedDashboardPendingCard } from '~/components/free-tier/locked-dashboard-pending-card';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import type { RefObject } from 'react';
 import {
   teachingAccessMobileSheetBodyInvite,
   TEACHING_ACCESS_LOCKED_TOOLTIP,
 } from '~/domain/free-tier/teaching-access-copy';
+import type { SiteLicenseLockedAssignmentTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
+import {
+  FREE_TIER_UNLIMITED_TILE_LABEL,
+  SITE_LICENSE_ONLY_TILE_LABEL,
+} from '~/domain/free-tier/locked-dashboard-copy';
+import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 
 export function useFreeAccountUsage() {
   return (
@@ -235,19 +242,129 @@ function FreeAccountUsageDetails({ usage }: { usage: FreeAccountUsage }) {
     </>
   );
 }
-function lockedDashboardAssignmentMeta(
-  usage: FreeAccountUsage,
-  row: FreeAccountUsage['assignments'][number]
-) {
-  if (row.remaining) {
-    return `${row.remaining} of ${row.total} left`;
-  }
-  return 'None left';
+const lockedDashboardAssignmentTileImageClassName = 'h-20 w-full';
+
+function assignmentTypeHowItWorksPath(assignmentTypeId: string) {
+  return `/app/assignment-types/${assignmentTypeId}/how-it-works`;
+}
+
+function LockedDashboardFreeAssignmentTile({
+  label,
+  meta,
+  imageId,
+  imageTitle,
+  assignmentTypeId,
+}: {
+  label: string;
+  meta: string;
+  imageId?: string | null;
+  imageTitle?: string | null;
+  assignmentTypeId: string;
+}) {
+  const ariaLabel = `${label}, ${meta}. See how it works`;
+  return (
+    <Link
+      to={assignmentTypeHowItWorksPath(assignmentTypeId)}
+      data-testid={dashboardAssignmentTileTestId}
+      aria-label={ariaLabel}
+      className={cn(
+        assignmentTypeTileCardClassName(
+          'bg-popover shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring'
+        )
+      )}
+    >
+      <div className={assignmentTypeTileImageWrapClassName()}>
+        <AssignmentTypeTileImage
+          imageId={imageId}
+          imageTitle={imageTitle}
+          className={lockedDashboardAssignmentTileImageClassName}
+        />
+      </div>
+      <div className={assignmentTypeTileFooterClassName('px-3 py-2.5')}>
+        <DashboardAssignmentTileFooter
+          label={label}
+          meta={meta}
+          metaClassName="font-semibold text-[#1f3532]"
+          trailing={
+            <Lock
+              size={13}
+              className={assignmentTypeTileTrailingIconClassName(
+                'text-muted-foreground'
+              )}
+              aria-hidden
+            />
+          }
+        />
+      </div>
+    </Link>
+  );
+}
+
+function LockedDashboardSiteLicenseTile({
+  label,
+  imageId,
+  imageTitle,
+  assignmentTypeId,
+}: {
+  label: string;
+  imageId?: string | null;
+  imageTitle?: string | null;
+  assignmentTypeId: string;
+}) {
+  const meta = SITE_LICENSE_ONLY_TILE_LABEL;
+  const ariaLabel = `${label}, ${meta}. See how it works`;
+  return (
+    <Link
+      to={assignmentTypeHowItWorksPath(assignmentTypeId)}
+      data-testid="site-license-locked-assignment-tile"
+      aria-label={ariaLabel}
+      className={cn(
+        assignmentTypeTileCardClassName(
+          'bg-secondary shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring'
+        )
+      )}
+    >
+      <div
+        className={cn(
+          assignmentTypeTileImageWrapClassName(),
+          'relative grayscale'
+        )}
+      >
+        <AssignmentTypeTileImage
+          imageId={imageId}
+          imageTitle={imageTitle}
+          className={lockedDashboardAssignmentTileImageClassName}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 bg-muted/35"
+          aria-hidden
+        />
+      </div>
+      <div className={assignmentTypeTileFooterClassName('px-3 py-2.5 text-sm')}>
+        <DashboardAssignmentTileFooter
+          label={label}
+          meta={meta}
+          metaClassName="font-normal text-muted-foreground"
+          trailing={
+            <Lock
+              size={13}
+              className={assignmentTypeTileTrailingIconClassName(
+                'text-muted-foreground'
+              )}
+              aria-hidden
+            />
+          }
+        />
+      </div>
+    </Link>
+  );
 }
 
 export function FreeAssignmentTiles({
   usage,
   types,
+  siteLicenseLockedAssignmentTiles = [],
+  assignmentsSeeHowItWorksTo,
   teachingLocked = false,
   onCreate,
   createTriggerRef,
@@ -259,6 +376,8 @@ export function FreeAssignmentTiles({
     imageId?: string | null;
     imageTitle?: string | null;
   }>;
+  siteLicenseLockedAssignmentTiles?: SiteLicenseLockedAssignmentTile[];
+  assignmentsSeeHowItWorksTo?: string;
   teachingLocked?: boolean;
   onCreate: (id?: string) => void;
   createTriggerRef?: RefObject<HTMLButtonElement | null>;
@@ -266,52 +385,52 @@ export function FreeAssignmentTiles({
   if (teachingLocked) {
     return (
       <div data-testid="free-assignment-tiles">
-        <h2 className="mb-4 text-lg font-bold">Assignments</h2>
-        <div className="grid auto-rows-min grid-cols-2 items-start gap-3 lg:grid-cols-3">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-bold">Assignments</h2>
+          {assignmentsSeeHowItWorksTo ? (
+            <SeeHowItWorksLink to={assignmentsSeeHowItWorksTo} />
+          ) : null}
+        </div>
+        <div className="grid auto-rows-min grid-cols-2 items-start gap-3 lg:grid-cols-4">
           {usage.assignments.map((row) => {
             const type = types.find((t) => t.kind === row.kind);
-            const tileLabel = `New ${row.label} assignment`;
-            const tileBody = (
-              <div
-                className={dashboardAssignmentTileClassName(
-                  'relative h-full w-full'
-                )}
-              >
-                <DashboardAssignmentTileFooter
-                  label={row.label}
-                  meta={lockedDashboardAssignmentMeta(usage, row)}
-                  metaClassName={
-                    !usage.monthly && row.remaining === 0
-                      ? 'text-amber-800'
-                      : undefined
-                  }
-                  trailing={<SiteLicenseLockButton />}
-                />
-              </div>
-            );
-            if (type) {
+            if (!type) {
               return (
-                <Link
+                <div
                   key={row.kind}
-                  to={`/app/assignment-types/${type.id}`}
                   data-testid={dashboardAssignmentTileTestId}
-                  aria-label={tileLabel}
-                  className="block min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
+                  className={dashboardAssignmentTileClassName('min-w-0 opacity-60')}
+                  aria-disabled
                 >
-                  {tileBody}
-                </Link>
+                  <DashboardAssignmentTileFooter
+                    label={row.label}
+                    meta={FREE_TIER_UNLIMITED_TILE_LABEL}
+                    trailing={
+                      <Lock size={13} className="text-muted-foreground" aria-hidden />
+                    }
+                  />
+                </div>
               );
             }
             return (
-              <div
+              <LockedDashboardFreeAssignmentTile
                 key={row.kind}
-                data-testid={dashboardAssignmentTileTestId}
-                className="min-w-0"
-              >
-                {tileBody}
-              </div>
+                label={row.label}
+                meta={FREE_TIER_UNLIMITED_TILE_LABEL}
+                imageId={type.imageId}
+                imageTitle={type.imageTitle}
+                assignmentTypeId={type.id}
+              />
             );
           })}
+          {siteLicenseLockedAssignmentTiles.map((tile) => (
+            <LockedDashboardSiteLicenseTile
+              key={tile.key}
+              label={tile.label}
+              imageId={tile.imageId}
+              assignmentTypeId={tile.assignmentTypeId}
+            />
+          ))}
         </div>
       </div>
     );
@@ -807,7 +926,12 @@ export function AdvocatePackEntry() {
 export function FreeAccountRail({ usage }: { usage: FreeAccountUsage }) {
   const { locked: teachingLocked } = useTeachingAccess();
   if (teachingLocked) {
-    return null;
+    return (
+      <div className="space-y-5" data-testid="free-account-rail">
+        <LockedDashboardPendingCard />
+        <LockedDashboardGettingStarted />
+      </div>
+    );
   }
   const showAdvocatePack =
     usage.monthly &&

@@ -60,6 +60,7 @@ import {
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
 import { shouldHideFreeTierTeachingSecrets } from '~/domain/free-tier/locked-preview.server';
+import { LOCKED_DASHBOARD_WELCOME_SUBTITLE } from '~/domain/free-tier/locked-dashboard-copy';
 
 const DASHBOARD_MAX_TEACHER_CLASSES = 6;
 
@@ -423,6 +424,19 @@ export default function AppRoute() {
       (total, klass) => total + (klass.gradedUnreleasedCount ?? 0),
       0
     );
+    const classStarterType = data.assignmentCreationTypes.find(
+      (type) => type.kind === 'class_starter'
+    );
+    const assignmentsSeeHowItWorksTo = classStarterType
+      ? `/app/assignment-types/${classStarterType.id}/how-it-works`
+      : undefined;
+    const thesisEssayLockedTile = data.siteLicenseLockedAssignmentTiles.find(
+      (tile) => tile.key === 'thesis_driven_essay'
+    );
+    const gradingSeeHowItWorksTo =
+      thesisEssayLockedTile != null
+        ? `/app/assignment-types/${thesisEssayLockedTile.assignmentTypeId}/how-it-works`
+        : assignmentsSeeHowItWorksTo;
 
     return (
       <section
@@ -435,7 +449,7 @@ export default function AppRoute() {
               <h2>Welcome, {teacherFirstName(user.name ?? 'Teacher')}!</h2>
               <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
                 {locked
-                  ? 'Your classroom is set up. Look around while you wait.'
+                  ? LOCKED_DASHBOARD_WELCOME_SUBTITLE
                   : freeUsage
                     ? 'Your class, assignments, and grading in one place.'
                     : 'Your classes, assignments, and grading in one place.'}
@@ -446,9 +460,7 @@ export default function AppRoute() {
         <div
           className={
             freeUsage
-              ? locked
-                ? 'free-dashboard mx-auto flex w-full max-w-[1136px] flex-col gap-4 px-5 py-6 pb-24 sm:px-12'
-                : 'free-dashboard grid w-full max-w-[1136px] items-start gap-7 px-5 py-6 pb-24 sm:px-12 lg:grid-cols-[minmax(0,1fr)_300px]'
+              ? 'free-dashboard grid w-full max-w-[1136px] items-start gap-7 px-5 py-6 pb-24 sm:px-12 lg:grid-cols-[minmax(0,1fr)_300px]'
               : 'mx-auto flex w-full max-w-screen-lg flex-col gap-8 px-3 py-6 pb-24 sm:px-5'
           }
         >
@@ -465,6 +477,10 @@ export default function AppRoute() {
                   <FreeAssignmentTiles
                     usage={freeUsage}
                     types={data.assignmentCreationTypes}
+                    siteLicenseLockedAssignmentTiles={
+                      data.siteLicenseLockedAssignmentTiles
+                    }
+                    assignmentsSeeHowItWorksTo={assignmentsSeeHowItWorksTo}
                     teachingLocked={locked}
                     createTriggerRef={createAssignmentTriggerRef}
                     onCreate={(id) => {
@@ -517,47 +533,49 @@ export default function AppRoute() {
                 />
               </>
             ) : null}
-            {!locked &&
-              (freeUsage?.gradingPause ? (
-                <div>
-                  <h2 className="mb-4 text-lg font-bold">Grading</h2>
-                  <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
-                    <p className="font-medium">
-                      Grading assistant paused for{' '}
-                      {Math.max(
-                        1,
-                        Math.ceil(
-                          (new Date(freeUsage.gradingPause.retryAt).getTime() -
-                            Date.now()) /
-                            60000
-                        )
-                      )}{' '}
-                      minutes
-                    </p>
-                    <p className="mt-1">
-                      You hit the {freeUsage.gradingPause.window} limit of{' '}
-                      {freeUsage.gradingPause.limit}. It picks back up at{' '}
-                      <time dateTime={freeUsage.gradingPause.retryAt}>
-                        {new Date(
-                          freeUsage.gradingPause.retryAt
-                        ).toLocaleTimeString([], {
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
-                      </time>
-                      .
-                    </p>
-                  </div>
+            {freeUsage?.gradingPause && !locked ? (
+              <div>
+                <h2 className="mb-4 text-lg font-bold">Grading</h2>
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
+                  <p className="font-medium">
+                    Grading assistant paused for{' '}
+                    {Math.max(
+                      1,
+                      Math.ceil(
+                        (new Date(freeUsage.gradingPause.retryAt).getTime() -
+                          Date.now()) /
+                          60000
+                      )
+                    )}{' '}
+                    minutes
+                  </p>
+                  <p className="mt-1">
+                    You hit the {freeUsage.gradingPause.window} limit of{' '}
+                    {freeUsage.gradingPause.limit}. It picks back up at{' '}
+                    <time dateTime={freeUsage.gradingPause.retryAt}>
+                      {new Date(
+                        freeUsage.gradingPause.retryAt
+                      ).toLocaleTimeString([], {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </time>
+                    .
+                  </p>
                 </div>
-              ) : (
-                <TeacherGradingAtAGlance
-                  freeAccount={Boolean(freeUsage)}
-                  needsGradingCount={needsGradingCount}
-                  readyToReleaseCount={readyToReleaseCount}
-                />
-              ))}
+              </div>
+            ) : (
+              <TeacherGradingAtAGlance
+                freeAccount={Boolean(freeUsage)}
+                seeHowItWorksTo={
+                  locked ? gradingSeeHowItWorksTo : undefined
+                }
+                needsGradingCount={needsGradingCount}
+                readyToReleaseCount={readyToReleaseCount}
+              />
+            )}
           </ContentColumn>
-          {freeUsage && !locked ? <FreeAccountRail usage={freeUsage} /> : null}
+          {freeUsage ? <FreeAccountRail usage={freeUsage} /> : null}
         </div>
       </section>
     );
