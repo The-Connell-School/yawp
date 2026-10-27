@@ -22,8 +22,8 @@ mock.module('react-router', () => ({
 }));
 
 const { DevPanelProvider } = await import('./dev-panel-provider');
-const { DevPanelClassSimulationFlyout } = await import(
-  './dev-panel-class-simulation-flyout'
+const { DevPanelClassSimulationInline } = await import(
+  './dev-panel-class-simulation-inline'
 );
 
 let root: Root | null = null;
@@ -50,57 +50,30 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-describe('DevPanelClassSimulationFlyout', () => {
-  test('shows empty copy when teacher has no classes', async () => {
-    globalThis.fetch = mock(async () =>
-      Response.json({ classes: [] })
-    ) as unknown as typeof fetch;
-    writeDevPanelState(window.localStorage, {
-      open: true,
-      openSections: ['data'],
-      org: null,
-      subSheet: 'class-simulation',
-      scroll: {},
-      forms: { simulationStudentCount: 20 },
-    });
-    const container = renderTree(
-      <MemoryRouter>
-        <DevPanelProvider
-          envBadge="Dev"
-          previewAccessGateEnabled={false}
-          previewAccessSeatLabel={null}
-        >
-          <DevPanelClassSimulationFlyout onClose={() => {}} />
-        </DevPanelProvider>
-      </MemoryRouter>
-    );
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 200));
-    });
-    expect(container.textContent).toContain("You don't own any classes yet");
-    const populate = [...container.querySelectorAll('button')].find((btn) =>
-      btn.textContent?.includes('Populate class')
-    );
-    expect(populate?.disabled).toBe(true);
-  });
-
-  test('revalidates route loaders after populate succeeds', async () => {
+describe('DevPanelClassSimulationInline', () => {
+  test('empty state enables Populate (creates sandbox then populates)', async () => {
     globalThis.fetch = mock(async (input, init) => {
+      if (
+        typeof input === 'string' &&
+        input.endsWith('/api/dev-panel/teacher-classes') &&
+        init?.method === 'POST'
+      ) {
+        return Response.json({
+          ok: true,
+          class: {
+            id: 'sandbox-1',
+            title: 'Simulation sandbox',
+            code: 'DEV1',
+            schoolYear: '2025-2026',
+            simulatedStudentCount: 0,
+          },
+        });
+      }
       if (
         typeof input === 'string' &&
         input.endsWith('/api/dev-panel/teacher-classes')
       ) {
-        return Response.json({
-          classes: [
-            {
-              id: 'class-1',
-              title: 'Period 1',
-              code: 'ABC123',
-              schoolYear: '2025-2026',
-              simulatedStudentCount: 0,
-            },
-          ],
-        });
+        return Response.json({ classes: [] });
       }
       if (
         typeof input === 'string' &&
@@ -118,11 +91,11 @@ describe('DevPanelClassSimulationFlyout', () => {
 
     writeDevPanelState(window.localStorage, {
       open: true,
-      openSections: ['data'],
+      openSections: ['tester-tools', 'class-simulation'],
       org: null,
-      subSheet: 'class-simulation',
+      subSheet: null,
       scroll: {},
-      forms: { simulationClassId: 'class-1', simulationStudentCount: 3 },
+      forms: { simulationStudentCount: 3 },
     });
 
     const container = renderTree(
@@ -132,7 +105,7 @@ describe('DevPanelClassSimulationFlyout', () => {
           previewAccessGateEnabled={false}
           previewAccessSeatLabel={null}
         >
-          <DevPanelClassSimulationFlyout onClose={() => {}} />
+          <DevPanelClassSimulationInline sectionOpen={true} />
         </DevPanelProvider>
       </MemoryRouter>
     );
@@ -140,6 +113,7 @@ describe('DevPanelClassSimulationFlyout', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 200));
     });
+    expect(container.textContent).toContain("You don't own any classes yet");
 
     const populate = [...container.querySelectorAll('button')].find((btn) =>
       btn.textContent?.includes('Populate class')
@@ -148,9 +122,9 @@ describe('DevPanelClassSimulationFlyout', () => {
 
     await act(async () => {
       populate?.click();
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 100));
     });
 
-    expect(revalidate).toHaveBeenCalledTimes(1);
+    expect(revalidate).toHaveBeenCalled();
   });
 });

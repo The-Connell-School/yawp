@@ -14,7 +14,6 @@ export type DevPanelPersistedForms = {
   feedbackAttachScreenshot?: boolean;
   throwawaySwitch?: boolean;
   selectedStateId?: string | null;
-  blackboardRole?: 'teacher' | 'student';
   simulationClassId?: string | null;
   simulationStudentCount?: number;
   /** Opens the class simulation flyout straight to clear confirmation. */
@@ -40,7 +39,6 @@ export const DEV_PANEL_DEFAULT_STATE: DevPanelPersistedState = {
   scroll: {},
   forms: {
     throwawaySwitch: true,
-    blackboardRole: 'teacher',
     simulationStudentCount: 20,
     feedbackType: 'bug',
     feedbackAttachScreenshot: true,

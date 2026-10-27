@@ -14,19 +14,15 @@ describe('dev panel v3 chrome', () => {
     expect(shell.includes('yawp-dev-panel-header')).toBe(true);
   });
 
-  test('flyouts use border-only docked chrome', () => {
+  test('inline PE3 sections avoid flyout chrome', () => {
     for (const file of [
       'dev-panel-give-feedback-inline.tsx',
       'dev-panel-free-tier-inline.tsx',
-      'dev-panel-class-simulation-flyout.tsx',
+      'dev-panel-class-simulation-inline.tsx',
     ]) {
       const src = readFileSync(path.join(devPanelDir, file), 'utf8');
       expect(src.includes('shadow-lg')).toBe(false);
-      if (file.includes('class-simulation')) {
-        expect(src.includes('yawp-dev-panel-flyout-docked')).toBe(true);
-      } else {
-        expect(src.includes('yawp-dev-panel-flyout-docked')).toBe(false);
-      }
+      expect(src.includes('yawp-dev-panel-flyout-docked')).toBe(false);
     }
     const fallback = readFileSync(
       path.join(devPanelDir, 'dev-panel-fallback-shell.tsx'),

@@ -496,13 +496,6 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
   background: hsl(var(--background));
 }
 
-[data-yawp-dev-panel] .yawp-dev-panel-blackboard-launch {
-  border: 0;
-  background: var(--yawp-dev-panel-coral-deep);
-  color: var(--yawp-dev-panel-ink);
-  font-weight: 600;
-}
-
 [data-yawp-dev-panel] .yawp-dev-panel-feedback-section {
   border-top: 1px solid var(--yawp-dev-panel-border);
   flex: none;
@@ -802,48 +795,404 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
   border-top: 1px solid hsl(var(--border));
 }
 
-[data-yawp-dev-panel] .yawp-dev-panel-org-popover {
-  border: 1px solid var(--yawp-dev-panel-ink-border);
-  box-shadow: none;
-}
-
-[data-yawp-dev-panel] .yawp-dev-panel-org-row {
+[data-yawp-dev-panel] .yawp-dev-panel-org-pe3 {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  position: relative;
+  flex-direction: column;
+  gap: 6px;
 }
 
-[data-yawp-dev-panel] .yawp-dev-panel-org-label {
-  flex: none;
-  width: 28px;
+[data-yawp-dev-panel] .yawp-dev-panel-org-pe3-section-label {
   font-size: 12px;
-  line-height: 16px;
-  color: hsl(var(--muted-foreground));
+  font-weight: 600;
+  color: var(--yawp-dev-panel-ink);
 }
 
-[data-yawp-dev-panel] .yawp-dev-panel-org-trigger {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: var(--yawp-dev-panel-btn-height);
-  box-sizing: border-box;
+[data-yawp-dev-panel] .yawp-dev-panel-org-pe3-loading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 6px 0 8px;
-  border: 1px solid hsl(var(--input));
-  border-radius: 6px;
-  background: hsl(var(--background));
-  font: inherit;
-  font-size: var(--yawp-dev-panel-fs);
-  line-height: 16px;
-  cursor: pointer;
-  text-align: left;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--yawp-dev-panel-muted);
 }
 
-[data-yawp-dev-panel] .yawp-dev-panel-org-trigger-open {
-  border-color: hsl(var(--ring));
+[data-yawp-dev-panel] .yawp-dev-panel-org-pe3-single {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--yawp-dev-panel-border);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+  color: var(--yawp-dev-panel-ink);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-org-pe3-trigger {
+  width: 100%;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border: 1px solid var(--yawp-dev-panel-border);
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  color: var(--yawp-dev-panel-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-org-pe3-trigger-open {
+  box-shadow: inset 0 0 0 2px hsl(210.1604 75.1004% 48.8235%);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-org-pe3-trigger > span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-org-pe3-panel {
+  margin-top: 4px;
+  padding: 6px;
+  border: 1px solid var(--yawp-dev-panel-border);
+  border-radius: 6px;
+  background: var(--yawp-dev-panel-expanded-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-org-pe3-search {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--yawp-dev-panel-border);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+  color: var(--yawp-dev-panel-ink);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-org-pe3-search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  background: transparent;
+  outline: none;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-org-pe3-divider {
+  height: 1px;
+  margin: 4px -6px;
+  background: var(--yawp-dev-panel-border);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-org-pe3-empty {
+  margin: 4px 8px;
+  font-size: 12px;
+  color: var(--yawp-dev-panel-muted);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-org-pe3-option {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--yawp-dev-panel-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-org-pe3-option-check {
+  width: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-org-pe3-option-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-org-pe3-option-kind {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  color: var(--yawp-dev-panel-muted);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-row {
+  width: calc(100% + 12px);
+  height: 28px;
+  margin: 0 -6px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--yawp-dev-panel-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-row-open {
+  background: var(--yawp-dev-panel-active);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-row > span:first-child {
+  flex: 1;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-inline-wrap {
+  padding-top: 8px;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-inline-busy {
+  opacity: 0.85;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--yawp-dev-panel-muted);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-empty {
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--yawp-dev-panel-muted);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-empty b {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--yawp-dev-panel-ink);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-class-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-class-row {
+  width: 100%;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--yawp-dev-panel-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-class-row-selected {
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--yawp-dev-panel-border);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-check {
+  width: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-class-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-class-meta {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--yawp-dev-panel-muted);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-class-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--yawp-dev-panel-muted);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-count-input {
+  height: 28px;
+  width: 96px;
+  box-sizing: border-box;
+  border: 1px solid var(--yawp-dev-panel-border);
+  border-radius: 6px;
+  background: #fff;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 13px;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-hint {
+  font-size: 12px;
+  color: var(--yawp-dev-panel-muted);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-footer {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-btn-primary,
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-btn-secondary {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 9999px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-btn-primary {
+  border: 0;
+  background: var(--yawp-dev-panel-coral-deep);
+  color: var(--yawp-dev-panel-ink);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-btn-primary:disabled,
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-btn-secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-btn-secondary {
+  border: 1px solid var(--yawp-dev-panel-border);
+  background: #fff;
+  color: var(--yawp-dev-panel-ink);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-inline-alert {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid hsl(0 72% 51% / 0.25);
+  background: hsl(0 72% 51% / 0.08);
+  font-size: 12px;
+  color: hsl(0 72% 40%);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-inline-alert-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-success {
+  margin: 0;
+  font-size: 12px;
+  color: var(--yawp-dev-panel-ink);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-confirm-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--yawp-dev-panel-ink);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-confirm-copy {
+  margin: 0;
+  font-size: 12px;
+  color: var(--yawp-dev-panel-muted);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-error-block {
+  text-align: center;
+  font-size: 12px;
+  color: var(--yawp-dev-panel-muted);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-error-title {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--yawp-dev-panel-ink);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-class-sim-retry {
+  margin-top: 8px;
+  border: 1px solid var(--yawp-dev-panel-border);
+  border-radius: 6px;
+  background: #fff;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
 }
 
 [data-yawp-dev-panel-flyout] .yawp-dev-panel-flyout-header {

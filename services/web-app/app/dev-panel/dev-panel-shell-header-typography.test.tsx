@@ -92,7 +92,7 @@ describe('dev panel shell header typography', () => {
       org: null,
       subSheet: null,
       scroll: {},
-      forms: { throwawaySwitch: true, blackboardRole: 'teacher' },
+      forms: { throwawaySwitch: true },
     });
 
     globalThis.fetch = (async (input: RequestInfo | URL) => {

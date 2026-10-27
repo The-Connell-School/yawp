@@ -153,10 +153,22 @@ export function DevPanelProvider({
         persist({ ...state, openSections });
       },
       openSubSheet: (sheet) => {
-        if (sheet === 'free-tier-states' || sheet === 'give-feedback') {
-          const openSections = state.openSections.includes(sheet)
-            ? state.openSections
-            : [...state.openSections, sheet];
+        if (
+          sheet === 'free-tier-states' ||
+          sheet === 'give-feedback' ||
+          sheet === 'class-simulation'
+        ) {
+          let openSections = state.openSections;
+          if (sheet === 'class-simulation') {
+            if (!openSections.includes('tester-tools')) {
+              openSections = [...openSections, 'tester-tools'];
+            }
+            if (!openSections.includes('class-simulation')) {
+              openSections = [...openSections, 'class-simulation'];
+            }
+          } else if (!openSections.includes(sheet)) {
+            openSections = [...openSections, sheet];
+          }
           persist({ ...state, openSections, subSheet: null, restored: false });
           return;
         }

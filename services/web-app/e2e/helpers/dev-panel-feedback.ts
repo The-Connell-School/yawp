@@ -120,7 +120,7 @@ export async function openDevPanelSection(page: Page, sectionName: string) {
   return panel;
 }
 
-/** Opens the class simulation flyout from the Tester tools section row (not the flyout action). */
+/** Opens class simulation inline under Tester tools (single 320px panel). */
 export async function openDevPanelClassSimulationFlyout(page: Page) {
   const panel = await openDevToolsPanel(page);
   const testerToolsTrigger = panel.getByRole('button', {
@@ -132,13 +132,15 @@ export async function openDevPanelClassSimulationFlyout(page: Page) {
     await testerToolsTrigger.click();
     await expect(testerToolsTrigger).toHaveAttribute('aria-expanded', 'true');
   }
-  await panel
-    .locator('.yawp-dev-panel-login-row')
-    .filter({ hasText: 'Populate class' })
-    .click();
-  await expect(
-    page.getByRole('dialog', { name: 'Class simulation' })
-  ).toBeVisible({ timeout: 15_000 });
+  const classSimTrigger = panel.getByRole('button', { name: /^Class simulation/ });
+  await expect(classSimTrigger).toBeVisible({ timeout: 15_000 });
+  if ((await classSimTrigger.getAttribute('aria-expanded')) !== 'true') {
+    await classSimTrigger.click();
+    await expect(classSimTrigger).toHaveAttribute('aria-expanded', 'true');
+  }
+  await expect(panel.getByRole('button', { name: 'Populate class' })).toBeVisible({
+    timeout: 15_000,
+  });
 }
 
 export async function expectGiveFeedbackAccessible(page: Page) {

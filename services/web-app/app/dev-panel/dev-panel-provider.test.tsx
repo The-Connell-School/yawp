@@ -69,7 +69,7 @@ describe('DevPanelProvider', () => {
       org: null,
       subSheet: null,
       scroll: {},
-      forms: { throwawaySwitch: true, blackboardRole: 'teacher' },
+      forms: { throwawaySwitch: true },
     });
     const container = document.createElement('div');
     const root = createRoot(container);
@@ -126,6 +126,13 @@ describe('DevPanelProvider', () => {
       api!.openSubSheet('give-feedback');
     });
     expect(api!.state.openSections).toContain('give-feedback');
+    expect(api!.state.subSheet).toBe(null);
+
+    act(() => {
+      api!.openSubSheet('class-simulation');
+    });
+    expect(api!.state.openSections).toContain('tester-tools');
+    expect(api!.state.openSections).toContain('class-simulation');
     expect(api!.state.subSheet).toBe(null);
     expect(container.querySelector('[data-instant]')?.getAttribute('data-instant')).toBe(
       'no'

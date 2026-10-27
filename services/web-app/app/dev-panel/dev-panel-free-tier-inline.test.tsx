@@ -61,7 +61,6 @@ describe('DevPanelFreeTierInline', () => {
       scroll: {},
       forms: {
         throwawaySwitch: true,
-        blackboardRole: 'teacher',
         selectedStateId: 'pending.waiting-on-admin',
       },
     });

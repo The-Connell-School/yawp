@@ -23,12 +23,24 @@ export function parseDevPanelState(raw: unknown): DevPanelPersistedState | null 
   let openSections = Array.isArray(raw.openSections)
     ? raw.openSections.filter((item): item is string => typeof item === 'string')
     : DEV_PANEL_DEFAULT_STATE.openSections;
-  if (subSheet === 'free-tier-states' || subSheet === 'give-feedback') {
-    if (!openSections.includes(subSheet)) {
+  if (
+    subSheet === 'free-tier-states' ||
+    subSheet === 'give-feedback' ||
+    subSheet === 'class-simulation'
+  ) {
+    if (subSheet === 'class-simulation') {
+      if (!openSections.includes('tester-tools')) {
+        openSections = [...openSections, 'tester-tools'];
+      }
+      if (!openSections.includes('class-simulation')) {
+        openSections = [...openSections, 'class-simulation'];
+      }
+    } else if (!openSections.includes(subSheet)) {
       openSections = [...openSections, subSheet];
     }
     subSheet = null;
   }
+  openSections = openSections.filter((id) => id !== 'blackboard');
   const scroll = isRecord(raw.scroll)
     ? {
         main:
@@ -51,11 +63,6 @@ export function parseDevPanelState(raw: unknown): DevPanelPersistedState | null 
           raw.forms.selectedStateId === null
             ? raw.forms.selectedStateId
             : undefined,
-        blackboardRole:
-          raw.forms.blackboardRole === 'teacher' ||
-          raw.forms.blackboardRole === 'student'
-            ? raw.forms.blackboardRole
-            : 'teacher',
         simulationClassId:
           typeof raw.forms.simulationClassId === 'string' ||
           raw.forms.simulationClassId === null

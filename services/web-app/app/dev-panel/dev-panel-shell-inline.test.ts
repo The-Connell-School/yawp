@@ -11,8 +11,12 @@ describe('dev panel inline accordions', () => {
     expect(shell).toContain('DevPanelGiveFeedbackInline');
     expect(shell.includes('DevPanelFreeTierFlyout')).toBe(false);
     expect(shell.includes('DevPanelGiveFeedbackFlyout')).toBe(false);
+    expect(shell).toContain('DevPanelClassSimulationInline');
+    expect(shell.includes('DevPanelClassSimulationFlyout')).toBe(false);
+    expect(shell.includes('Blackboard link')).toBe(false);
     expect(shell).toContain("toggleSection('free-tier-states')");
     expect(shell).toContain("toggleSection('give-feedback')");
+    expect(shell).toContain("toggleSection('class-simulation')");
   });
 
   test('stylesheet defines PE3 inline expanded padding', () => {

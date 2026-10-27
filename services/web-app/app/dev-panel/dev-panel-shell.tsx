@@ -1,6 +1,5 @@
 import {
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   ChevronsRight,
   Copy,
@@ -36,7 +35,7 @@ import { createDevPanelFeedbackContext } from './dev-panel-feedback-context';
 import { DevPanelGiveFeedbackInline } from './dev-panel-give-feedback-inline';
 import { DevPanelFreeTierInline } from './dev-panel-free-tier-inline';
 import { consumeDevPanelJumpToast } from './dev-panel-jump-toast';
-import { DevPanelClassSimulationFlyout } from './dev-panel-class-simulation-flyout';
+import { DevPanelClassSimulationInline } from './dev-panel-class-simulation-inline';
 import { DevPanelMobileBottomSheet } from './dev-panel-mobile-bottom-sheet';
 
 function useMedia(query: string) {
@@ -162,8 +161,6 @@ export function DevPanelShell() {
     unlocked,
     closePanel,
     toggleSection,
-    openSubSheet,
-    closeSubSheet,
     setOrg,
     updateForms,
   } = useDevPanel();
@@ -175,8 +172,10 @@ export function DevPanelShell() {
   const isTablet = useMedia('(min-width: 640px) and (max-width: 1023px)');
   const [accessOpen, setAccessOpen] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const classSimulationRowRef = useRef<HTMLButtonElement>(null);
-  const [orgs, setOrgs] = useState<Array<{ id: string; name: string }>>([]);
+  const [orgs, setOrgs] = useState<
+    Array<{ id: string; name: string; kind?: string }>
+  >([]);
+  const [orgsLoading, setOrgsLoading] = useState(false);
   const [logins, setLogins] = useState<Array<{ email: string; label: string; role: string }>>([]);
   const groupedLogins = useMemo(() => groupDevPanelLogins(logins), [logins]);
   const [loginState, setLoginState] = useState<'idle' | 'loading' | 'error' | 'empty'>('idle');
@@ -200,27 +199,6 @@ export function DevPanelShell() {
   useEffect(() => {
     consumeDevPanelJumpToast();
   }, []);
-
-  useEffect(() => {
-    if (!state.subSheet) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      if (
-        document.querySelector(
-          '[role=alertdialog],[data-state=open][aria-modal=true]'
-        )
-      ) {
-        return;
-      }
-      event.preventDefault();
-      if (state.subSheet === 'class-simulation') {
-        closeSubSheet();
-        window.requestAnimationFrame(() => classSimulationRowRef.current?.focus());
-      }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [closeSubSheet, state.subSheet]);
 
   useEffect(() => {
     if (!state.open) return;
@@ -259,6 +237,7 @@ export function DevPanelShell() {
 
   useEffect(() => {
     if (!state.open || !unlocked) return;
+    setOrgsLoading(true);
     void fetch('/api/dev-panel/orgs', { credentials: 'same-origin' })
       .then((response) => response.json())
       .then((data) => {
@@ -266,7 +245,8 @@ export function DevPanelShell() {
         setOrgs(list);
         if (!state.org && list[0]?.id) setOrg(list[0].id);
       })
-      .catch(() => setOrgs([]));
+      .catch(() => setOrgs([]))
+      .finally(() => setOrgsLoading(false));
   }, [setOrg, state.open, state.org, unlocked]);
 
   useEffect(() => {
@@ -361,6 +341,7 @@ export function DevPanelShell() {
                     orgs={orgs}
                     value={selectedOrg}
                     onChange={setOrg}
+                    loading={orgsLoading}
                   />
                   {loginState === 'loading' ? (
                     <p role="status" className="text-muted-foreground">
@@ -450,78 +431,6 @@ export function DevPanelShell() {
 
               <div className="yawp-dev-panel-section">
               <Collapsible
-                open={state.openSections.includes('blackboard')}
-                onOpenChange={() => toggleSection('blackboard')}
-              >
-                <CollapsibleTrigger className="yawp-dev-panel-row">
-                  <span>Blackboard link</span>
-                  <span className="yawp-dev-panel-row-spacer" aria-hidden="true" />
-                  {state.openSections.includes('blackboard') ? (
-                    <ChevronDown className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
-                  ) : (
-                    <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
-                  )}
-                </CollapsibleTrigger>
-                <CollapsibleContent className="yawp-dev-panel-collapsible-content yawp-dev-panel-inline-expanded-body">
-                  <div className="flex items-center gap-2 px-0 py-1">
-                    <span
-                      id="dev-panel-bb-role-label"
-                      className="w-16 shrink-0 text-xs text-muted-foreground"
-                    >
-                      Launch as
-                    </span>
-                    <div
-                      role="radiogroup"
-                      aria-labelledby="dev-panel-bb-role-label"
-                      className="yawp-dev-panel-segmented yawp-dev-panel-segmented-inline flex-1"
-                    >
-                      {(['teacher', 'student'] as const).map((role) => (
-                        <button
-                          key={role}
-                          type="button"
-                          role="radio"
-                          aria-checked={(state.forms.blackboardRole ?? 'teacher') === role}
-                          className={cn(
-                            'yawp-dev-panel-segment flex-1 capitalize',
-                            (state.forms.blackboardRole ?? 'teacher') === role &&
-                              'yawp-dev-panel-segment-active'
-                          )}
-                          onClick={() => updateForms({ blackboardRole: role })}
-                        >
-                          {role}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="yawp-dev-panel-blackboard-launch yawp-dev-panel-pill-action h-[var(--yawp-dev-panel-btn-height)] w-full"
-                    onClick={async () => {
-                      const response = await fetch('/api/dev-panel/blackboard-launch', {
-                        method: 'POST',
-                        credentials: 'same-origin',
-                        headers: { 'content-type': 'application/json' },
-                        body: JSON.stringify({
-                          role: state.forms.blackboardRole ?? 'teacher',
-                        }),
-                      });
-                      const result = await response.json().catch(() => null);
-                      if (!response.ok) {
-                        window.alert(result?.error ?? 'Launch refused.');
-                        return;
-                      }
-                      window.open(result.launchUrl, '_blank', 'noopener,noreferrer');
-                    }}
-                  >
-                    Open Blackboard launch
-                  </Button>
-                </CollapsibleContent>
-              </Collapsible>
-              </div>
-
-              <div className="yawp-dev-panel-section">
-              <Collapsible
                 open={state.openSections.includes('tester-tools')}
                 onOpenChange={() => toggleSection('tester-tools')}
               >
@@ -555,32 +464,31 @@ export function DevPanelShell() {
                       Copy
                     </button>
                   </div>
-                  <button
-                    ref={classSimulationRowRef}
-                    type="button"
-                    className={cn(
-                      'yawp-dev-panel-login-row w-full',
-                      state.subSheet === 'class-simulation' && 'bg-accent/55'
-                    )}
-                    onClick={() => {
-                      updateForms({ simulationOpenAction: null });
-                      openSubSheet('class-simulation');
-                    }}
+                  <Collapsible
+                    open={state.openSections.includes('class-simulation')}
+                    onOpenChange={() => toggleSection('class-simulation')}
                   >
-                    <span className="truncate font-medium">Populate class</span>
-                    <ChevronLeft className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    className="yawp-dev-panel-login-row w-full"
-                    onClick={() => {
-                      updateForms({ simulationOpenAction: 'clear-confirm' });
-                      openSubSheet('class-simulation');
-                    }}
-                  >
-                    <span className="truncate font-medium">Clear simulated data</span>
-                    <ChevronLeft className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
-                  </button>
+                    <CollapsibleTrigger
+                      type="button"
+                      className={cn(
+                        'yawp-dev-panel-class-sim-row',
+                        state.openSections.includes('class-simulation') &&
+                          'yawp-dev-panel-class-sim-row-open'
+                      )}
+                    >
+                      <span>Class simulation</span>
+                      {state.openSections.includes('class-simulation') ? (
+                        <ChevronDown className="size-3 shrink-0 opacity-60" aria-hidden="true" />
+                      ) : (
+                        <ChevronRight className="size-3 shrink-0 opacity-60" aria-hidden="true" />
+                      )}
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="yawp-dev-panel-class-sim-inline-wrap">
+                      <DevPanelClassSimulationInline
+                        sectionOpen={state.openSections.includes('class-simulation')}
+                      />
+                    </CollapsibleContent>
+                  </Collapsible>
                 </CollapsibleContent>
               </Collapsible>
               </div>
@@ -624,26 +532,13 @@ export function DevPanelShell() {
         </button>
       </footer>
       <AccessCodeModal open={accessOpen} onOpenChange={setAccessOpen} />
-      {!isPhone && !isTablet && state.subSheet === 'class-simulation' ? (
-        <DevPanelClassSimulationFlyout onClose={closeSubSheet} />
-      ) : null}
     </>
   );
 
   if (!state.open) return null;
 
   if (isPhone || isTablet) {
-    const compactPanelContent =
-      isPhone && state.subSheet === 'class-simulation' ? (
-        <DevPanelClassSimulationFlyout onClose={closeSubSheet} pushed />
-      ) : (
-        <>
-          {panelBody}
-          {isTablet && state.subSheet === 'class-simulation' ? (
-            <DevPanelClassSimulationFlyout onClose={closeSubSheet} pushed />
-          ) : null}
-        </>
-      );
+    const compactPanelContent = panelBody;
 
     if (showPhoneBottomSheet) {
       return (

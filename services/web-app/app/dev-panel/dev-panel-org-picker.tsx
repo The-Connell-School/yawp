@@ -1,90 +1,124 @@
-import { Check, ChevronDown } from 'lucide-react';
-import { useId, useState } from 'react';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '~/components/ui/command';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '~/components/ui/popover';
+import { Check, ChevronDown, Loader2, Search } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { cn } from '~/utils/misc';
+
+export type DevPanelOrgOption = {
+  id: string;
+  name: string;
+  kind?: string;
+};
 
 export function DevPanelOrgPicker({
   orgs,
   value,
   onChange,
+  loading = false,
 }: {
-  orgs: Array<{ id: string; name: string }>;
+  orgs: DevPanelOrgOption[];
   value: string | null;
   onChange: (orgId: string) => void;
+  loading?: boolean;
 }) {
-  const listId = useId();
   const [open, setOpen] = useState(false);
-  const selected = orgs.find((org) => org.id === value) ?? orgs[0];
+  const [query, setQuery] = useState('');
+
+  const selected = orgs.find((org) => org.id === value) ?? orgs[0] ?? null;
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return orgs;
+    return orgs.filter((org) => org.name.toLowerCase().includes(q));
+  }, [orgs, query]);
+
+  if (loading) {
+    return (
+      <div className="yawp-dev-panel-org-pe3">
+        <span className="yawp-dev-panel-org-pe3-section-label">Organization</span>
+        <p role="status" className="yawp-dev-panel-org-pe3-loading">
+          <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
+          Loading organizations…
+        </p>
+      </div>
+    );
+  }
+
+  if (orgs.length <= 1) {
+    const only = orgs[0];
+    return (
+      <div className="yawp-dev-panel-org-pe3">
+        <span className="yawp-dev-panel-org-pe3-section-label">Organization</span>
+        <div className="yawp-dev-panel-org-pe3-single" aria-live="polite">
+          {only?.name ?? 'No organization'}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="yawp-dev-panel-org-row">
-      <label className="yawp-dev-panel-org-label" htmlFor="dev-panel-org-select">
-        Org
-      </label>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            id="dev-panel-org-select"
-            role="combobox"
-            aria-expanded={open}
-            aria-labelledby={listId}
-            className={cn(
-              'yawp-dev-panel-org-trigger',
-              open && 'yawp-dev-panel-org-trigger-open'
-            )}
-          >
-            <span className="truncate">{selected?.name ?? 'Choose org'}</span>
-            <ChevronDown className="size-3.5 shrink-0 opacity-70" aria-hidden="true" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent
-          className="yawp-dev-panel-org-popover w-[var(--radix-popover-trigger-width)] p-1"
-          align="start"
+    <div className="yawp-dev-panel-org-pe3">
+      <span className="yawp-dev-panel-org-pe3-section-label">Organization</span>
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={cn(
+          'yawp-dev-panel-org-pe3-trigger',
+          open && 'yawp-dev-panel-org-pe3-trigger-open'
+        )}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <span className="truncate">{selected?.name ?? 'Choose organization'}</span>
+        <ChevronDown className="size-3 shrink-0 opacity-70" aria-hidden="true" />
+      </button>
+      {open ? (
+        <div
+          className="yawp-dev-panel-org-pe3-panel"
+          role="listbox"
+          aria-label="Organization"
         >
-          <Command>
-            <CommandInput placeholder="Search orgs" aria-label="Search orgs" />
-            <CommandList>
-              <CommandEmpty>No org found.</CommandEmpty>
-              <CommandGroup>
-                {orgs.map((org) => (
-                  <CommandItem
-                    key={org.id}
-                    value={org.name}
-                    className="gap-2"
-                    onSelect={() => {
-                      onChange(org.id);
-                      setOpen(false);
-                    }}
-                  >
-                    <span className="flex w-3.5 shrink-0 items-center justify-center">
-                      {value === org.id ? (
-                        <Check className="size-3.5" aria-hidden="true" />
-                      ) : null}
-                    </span>
-                    <span className="flex-1 truncate">{org.name}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-      <span id={listId} className="sr-only">
-        Organization
-      </span>
+          <div className="yawp-dev-panel-org-pe3-search">
+            <Search className="size-3 shrink-0" aria-hidden="true" />
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search orgs"
+              aria-label="Search orgs"
+              className="yawp-dev-panel-org-pe3-search-input"
+            />
+          </div>
+          <div className="yawp-dev-panel-org-pe3-divider" aria-hidden="true" />
+          {filtered.length === 0 ? (
+            <p className="yawp-dev-panel-org-pe3-empty">No org found.</p>
+          ) : (
+            filtered.map((org) => {
+              const isSelected = org.id === (value ?? selected?.id);
+              return (
+                <button
+                  key={org.id}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  className="yawp-dev-panel-org-pe3-option"
+                  onClick={() => {
+                    onChange(org.id);
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                >
+                  <span className="yawp-dev-panel-org-pe3-option-check" aria-hidden="true">
+                    {isSelected ? <Check className="size-3" /> : null}
+                  </span>
+                  <span className="yawp-dev-panel-org-pe3-option-name">{org.name}</span>
+                  {org.kind ? (
+                    <span className="yawp-dev-panel-org-pe3-option-kind">{org.kind}</span>
+                  ) : null}
+                </button>
+              );
+            })
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
