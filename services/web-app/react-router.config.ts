@@ -17,9 +17,13 @@ const baseYawpBrowserActionOrigins = [
   "*.yawp.school",
 ] as const;
 
+type YawpBrowserActionOriginsEnv = {
+  YAWP_ENVIRONMENT?: string;
+};
+
 /** Preview ingress serves HTTPS to browsers but the dev adapter often sees `http://` URLs. */
 export function yawpBrowserActionOrigins(
-  env: Pick<NodeJS.ProcessEnv, "YAWP_ENVIRONMENT"> = process.env
+  env: YawpBrowserActionOriginsEnv = process.env as YawpBrowserActionOriginsEnv
 ): string[] {
   const origins: string[] = [...baseYawpBrowserActionOrigins];
   if (env.YAWP_ENVIRONMENT?.trim().toLowerCase() === "preview") {
