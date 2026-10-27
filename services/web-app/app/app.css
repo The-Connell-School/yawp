@@ -1701,24 +1701,6 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
   text-decoration: underline;
 }
 
-.free-tier-page .free-tier-draft-request {
-  gap: 8px;
-}
-.free-tier-page .free-tier-draft-request:hover {
-  background-color: #e8dcc4;
-  color: theme('colors.slate.900');
-}
-.free-tier-page .free-tier-draft-request:focus-visible {
-  outline: none;
-  box-shadow:
-    0 0 0 2px hsl(var(--background)),
-    0 0 0 4px #2563eb;
-}
-.free-tier-page .free-tier-draft-request:active {
-  transform: translateY(1px);
-  background-color: #d4c4a8;
-}
-
 /* Approve page: card, forward link, and Q&A in one 320px column (deny-v2). */
 .free-tier-approval-stack .auth-page-content {
   width: 320px;
