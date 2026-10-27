@@ -13,8 +13,20 @@ const detachedSh = readFileSync(
   new URL('./run-host-deploy-detached.sh', import.meta.url),
   'utf8'
 );
+const smokeLoginMjs = readFileSync(
+  new URL('./smoke-login.mjs', import.meta.url),
+  'utf8'
+);
 
 describe('preview deploy logs must not emit access secrets', () => {
+  test('smoke-login CLI uses safe error logging instead of raw error.message', () => {
+    expect(smokeLoginMjs).toContain('logPreviewLoginSmokeFailure');
+    expect(smokeLoginMjs).toContain("from './log-script-error.mjs'");
+    expect(smokeLoginMjs).not.toMatch(
+      /Preview login smoke failed: \$\{error\.message/
+    );
+  });
+
   test('deploy.sh success output references seat file paths, not code values', () => {
     expect(deploySh).toContain('PREVIEW_ACCESS_SEATS_FILE=$ACCESS_SEATS_FILE');
     expect(deploySh).not.toMatch(/echo\s+"PREVIEW_ACCESS_CODE=\$/);
