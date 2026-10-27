@@ -27,6 +27,10 @@ export type PanelDeck = {
   building: DeckBuild | null;
   error: string | null;
   periodMinutes: number | null;
+  /** The deck editor is on: built decks offer Edit (Brian's round 5, item 5). */
+  editable: boolean;
+  /** The lesson's deck as the teacher edited it, by its filed id. */
+  edited: { id: string; content: string } | null;
   /** A deck from the chat not yet in the lesson (run 6, round 2). */
   fromConversation: { messageId: string; content: string } | null;
 };
@@ -266,6 +270,8 @@ export function AddPanel({
                 onToggle={(add) => deck.onToggle(deck.fromConversation!.messageId, add)}
                 disabled={busy}
                 periodMinutes={deck.periodMinutes}
+                editable={deck.editable}
+                edited={deck.sourceMessageId === deck.fromConversation.messageId ? deck.edited : null}
               />
             </div>
           ) : null}
@@ -311,6 +317,8 @@ export function AddPanel({
                         onToggle={(add) => deck.onToggle(turn.id, add)}
                         disabled={busy}
                         periodMinutes={deck.periodMinutes}
+                        editable={deck.editable}
+                        edited={deck.sourceMessageId === turn.id ? deck.edited : null}
                       />
                     ) : null}
                   </div>

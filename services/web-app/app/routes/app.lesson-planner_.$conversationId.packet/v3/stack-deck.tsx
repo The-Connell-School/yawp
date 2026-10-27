@@ -82,10 +82,19 @@ export function StackDeckCard({
   onToggle,
   disabled,
   periodMinutes,
+  editable = false,
+  edited = null,
 }: {
   conversationId: string;
   messageId: string;
   content: string;
+  /**
+   * Edit is offered on the card once the deck is built (Brian's round 5,
+   * item 5), wherever the deck editor is on.
+   */
+  editable?: boolean;
+  /** The teacher's edited version of this deck, filed in the lesson: shown in its place. */
+  edited?: { id: string; content: string } | null;
   /** This deck is the one in the lesson. */
   added: boolean;
   /** Another deck is in the lesson, and adding this one takes its place. */
@@ -95,15 +104,20 @@ export function StackDeckCard({
   periodMinutes: number | null;
 }) {
   const [previewing, setPreviewing] = useState(false);
-  const outcome = readSlideDeck(content);
+  const editedOutcome = edited ? readSlideDeck(edited.content) : null;
+  const outcome = editedOutcome?.kind === 'deck' ? editedOutcome : readSlideDeck(content);
   if (outcome?.kind !== 'deck') return null;
+  // Edits go on from the filed copy once there is one; Close comes back here.
+  const deckId = editedOutcome?.kind === 'deck' ? edited!.id : messageId;
   return (
     <div data-testid="stack-deck" className="space-y-1">
       <SlideDeckCard
         deck={outcome.deck}
         // Preview, and Close comes back here (run 6, item 3).
-        presentHref={`/present/${conversationId}/${messageId}?from=stack`}
-        downloadHref={`/present/${conversationId}/${messageId}.pptx`}
+        presentHref={`/present/${conversationId}/${deckId}?from=stack`}
+        downloadHref={`/present/${conversationId}/${deckId}.pptx`}
+        editHref={editable ? `/app/lesson-planner/${conversationId}/deck/${deckId}?from=stack` : null}
+        edited={editedOutcome?.kind === 'deck'}
         added={added}
         onToggle={onToggle}
         disabled={disabled}

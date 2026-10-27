@@ -707,6 +707,8 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
           building: deckBuild.progress,
           error: deckBuild.error,
           periodMinutes: data.periodMinutes,
+          editable: reviewFlags.deckV2,
+          edited: v3.deck?.editedContent ? { id: v3.deck.id, content: v3.deck.editedContent } : null,
           // One built on the stack is already in Ask the planner's history.
           fromConversation: v3.conversationDeck?.onStack ? null : v3.conversationDeck,
         }}

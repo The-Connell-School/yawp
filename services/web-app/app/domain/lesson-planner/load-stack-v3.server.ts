@@ -32,6 +32,8 @@ export type StackV3 = {
     title: string;
     /** The reply it was filed from: its card on the stack says "In your lesson". */
     sourceMessageId: string | null;
+    /** The teacher's edited deck, for that card to show (Brian's round 5, item 5). */
+    editedContent: string | null;
   } | null;
   /**
    * The newest deck the planner made in the chat that is not the one in the
@@ -87,7 +89,7 @@ export async function loadStackV3({
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         select: { id: true, role: true, content: true, surface: true },
       },
-      materials: { where: { kind: 'slides' }, select: { id: true, content: true, sourceMessageId: true } },
+      materials: { where: { kind: 'slides' }, select: { id: true, content: true, sourceMessageId: true, editedAt: true } },
     },
   });
 
@@ -148,6 +150,7 @@ export async function loadStackV3({
               slides: deckOutcome.deck.slides.length,
               title: deckOutcome.deck.title,
               sourceMessageId: deckRow.sourceMessageId,
+              editedContent: deckRow.editedAt ? deckRow.content : null,
             }
           : null,
       extensions,
