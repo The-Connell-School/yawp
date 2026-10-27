@@ -77,19 +77,20 @@ describe('writing lesson detail route', () => {
     expect(response.data.practicePrompts.length).toBeGreaterThan(0);
   });
 
-  test('links teachers on a composition lesson to the Lounge module', async () => {
+  // Brian, Oct 27: no Teacher's Lounge link until the videos are built and
+  // each one matches its lesson exactly.
+  test('offers teachers no Lounge link, even on a composition lesson', async () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-1',
       role: 'TEACHER',
       organization: { id: 'org-1', name: 'Org', writingPracticeEnabled: true },
     });
-    const link = {
+    getLoungeModuleLinkForLesson.mockResolvedValue({
       trainingId: 'training-1',
       trainingTitle: 'The Thesis-Driven Essay',
       moduleId: 'module-1',
       moduleTitle: 'Lesson 3: Developing a Thesis Statement',
-    };
-    getLoungeModuleLinkForLesson.mockResolvedValue(link);
+    });
 
     const response = await loader({
       request: new Request(
@@ -99,11 +100,8 @@ describe('writing lesson detail route', () => {
       context: {} as never,
     } as never);
 
-    expect(response.data.loungeModule).toEqual(link);
-    expect(getLoungeModuleLinkForLesson).toHaveBeenCalledWith(
-      'thesis-statements',
-      'teacher-1'
-    );
+    expect(response.data).not.toHaveProperty('loungeModule');
+    expect(getLoungeModuleLinkForLesson).not.toHaveBeenCalled();
   });
 
   test('does not resolve a Lounge link for students', async () => {
@@ -115,7 +113,7 @@ describe('writing lesson detail route', () => {
       context: {} as never,
     } as never);
 
-    expect(response.data.loungeModule).toBeNull();
+    expect(response.data).not.toHaveProperty('loungeModule');
     expect(getLoungeModuleLinkForLesson).not.toHaveBeenCalled();
   });
 
@@ -134,7 +132,7 @@ describe('writing lesson detail route', () => {
       context: {} as never,
     } as never);
 
-    expect(response.data.loungeModule).toBeNull();
+    expect(response.data).not.toHaveProperty('loungeModule');
     expect(getLoungeModuleLinkForLesson).not.toHaveBeenCalled();
   });
 });

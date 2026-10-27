@@ -3,7 +3,6 @@ import {
   ClipboardCheck,
   Lightbulb,
   Loader2,
-  MonitorPlay,
   PenLine,
   Play,
   Sparkles,
@@ -32,10 +31,6 @@ import { prisma } from '~/utils/db.server';
 import { COMPOSITION_TOPIC_SUGGESTIONS } from '~/utils/writing-lessons/composition-topic-prompts';
 import type { LessonEvidence } from '~/utils/writing-lessons/lesson-evidence';
 import { getLessonEvidenceForTeacher } from '~/utils/writing-lessons/lesson-evidence.server';
-import {
-  getLoungeModuleLinkForLesson,
-  type LoungeModuleLink,
-} from '~/utils/writing-lessons/lounge-links.server';
 import {
   getQuickWritingLessonBody,
   getQuickWritingLessonBySlug,
@@ -70,13 +65,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       })
     : [];
 
-  // Composition skills are taught on video in the Teacher's Lounge; link
-  // teachers straight to Brian's matching module. Null (student, grammar
-  // lesson, or module absent in this environment) simply omits the link.
-  const loungeModule: LoungeModuleLink | null =
-    isComposition && isTeacher
-      ? await getLoungeModuleLinkForLesson(lesson.slug, profile.id)
-      : null;
+  // No "Watch Brian teach this" link to the Teacher's Lounge for now (Brian,
+  // Oct 27): a module covers more than one skill, and the videos are moving.
+  // Build the videos first, then link (lounge-links.server.ts is kept for it).
 
   // The teacher's half of this page: what their own classes have done with
   // this skill. A student never gets this, and never gets anyone else's work.
@@ -94,7 +85,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     practicePrompts: getQuickWritingPracticePrompts(params.lessonSlug),
     isTeacher,
     teacherClasses,
-    loungeModule,
     evidence,
   });
 }
@@ -107,7 +97,6 @@ export default function WritingLessonDetailRoute() {
     practicePrompts,
     isTeacher,
     teacherClasses,
-    loungeModule,
     evidence,
   } = useLoaderData<typeof loader>();
 
@@ -192,9 +181,6 @@ export default function WritingLessonDetailRoute() {
             // students have, so they can test-drive a lesson before assigning
             // it — on the screen their students will actually see.
             <div className="space-y-6">
-              {loungeModule ? (
-                <LoungeModuleCard loungeModule={loungeModule} />
-              ) : null}
               {evidence ? (
                 <LessonEvidencePanel
                   evidence={evidence}
@@ -215,40 +201,6 @@ export default function WritingLessonDetailRoute() {
         </aside>
       </div>
     </section>
-  );
-}
-
-function LoungeModuleCard({
-  loungeModule,
-}: {
-  loungeModule: LoungeModuleLink;
-}) {
-  return (
-    <Card className="shadow-none" data-testid="lounge-module-card">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <MonitorPlay className="h-4 w-4 shrink-0 text-primary" />
-          Watch Brian teach this
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 text-base sm:text-sm">
-        <p className="text-muted-foreground">
-          This skill is covered in{' '}
-          <span className="font-medium text-foreground">
-            {loungeModule.moduleTitle}
-          </span>{' '}
-          from {loungeModule.trainingTitle} — with the lesson plan and slide
-          deck ready to download.
-        </p>
-        <Button asChild variant="outline" size="sm" className="w-full">
-          <Link
-            to={`/app/teacher-trainings/${loungeModule.trainingId}/modules/${loungeModule.moduleId}`}
-          >
-            Open in the Teacher&rsquo;s Lounge
-          </Link>
-        </Button>
-      </CardContent>
-    </Card>
   );
 }
 
