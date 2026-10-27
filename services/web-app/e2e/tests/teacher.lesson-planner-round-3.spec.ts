@@ -218,7 +218,8 @@ test.describe("Brian's round 3 (Oct 25)", () => {
     await expect(visitor.getByTestId('shared-in-yawp-lead')).toHaveText(
       'These assignments are available to your student in Yawp! and should be completed before the next class session (or by an agreed-upon time):'
     );
-    await expect(visitor.getByTestId('shared-in-yawp')).toContainText('Franklin’s self-made method');
+    // By type since Brian's round 5, item 10.
+    await expect(visitor.getByTestId('shared-in-yawp').locator('li')).toHaveText(['Daily Pages']);
     // 1.7: one heading per prompt, by type, under a plural heading.
     await expect(visitor.getByTestId('shared-prompts-heading')).toHaveText('The writing prompts');
     await expect(visitor.getByTestId('shared-prompt-type')).toHaveText(['Class Starter', 'Daily Pages']);

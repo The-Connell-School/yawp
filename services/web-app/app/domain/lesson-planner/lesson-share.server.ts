@@ -12,6 +12,8 @@ import {
   lessonEmail,
   withoutWritingShare,
   REWRITE_SYSTEM,
+  rewriteInput,
+  type RewriteStep,
   type ShareAudience,
   type ShareItem,
 } from './lesson-share';
@@ -87,7 +89,7 @@ export async function rewriteForAudience({
   audience: ShareAudience;
   title: string;
   className: string | null;
-  steps: Array<{ title: string; minutes: number; startsAt: number; excerpt: string; content: string }>;
+  steps: RewriteStep[];
 }): Promise<string> {
   const fallback = fallbackLessonText(steps);
   try {
@@ -95,13 +97,8 @@ export async function rewriteForAudience({
       request,
       access,
       system: REWRITE_SYSTEM[audience],
-      user: [
-        `Lesson: ${title}${className ? ` (${className})` : ''}`,
-        '',
-        ...steps.map(
-          (step) => `- Minute ${step.startsAt}, ${step.minutes} min: ${step.title}\n  ${step.content.replace(/\s+/g, ' ').slice(0, 700)}`
-        ),
-      ].join('\n'),
+      // The stack's steps, names and order (Brian's round 5, item 7).
+      user: rewriteInput({ title, className, steps }),
       feature: `lesson-planner-share-${audience}`,
       route: 'routes/api.domain.lesson-planner.stack',
       maxTokens: 1_200,

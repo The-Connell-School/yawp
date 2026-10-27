@@ -220,26 +220,41 @@ const REWRITE_VOICE = [
   'The product is written Yawp! (capital Y, lowercase "awp", the exclamation point), never YAWP or Yawp.',
 ].join('\n');
 
+/**
+ * The stack's structure, for every audience (Brian's round 5, item 7): the
+ * same steps, in the same order, under the same names as the stack.
+ */
+const REWRITE_STRUCTURE = [
+  'Follow the lesson exactly as it is given: one "## " heading per step, in the order given, each heading the step\'s "## " line from the lesson word for word (for example "## Class Starter: When rules stop making sense"). Add no headings of your own between them, never "Step 2" or "Minute 6" in a heading, never rename a step, and never call a step "Yawp!".',
+  'A step marked "A writing assignment in Yawp!" is done by students in Yawp!, never a discussion: give no discussion moves for it ("we\'ll hear a few responses"), and never paraphrase or add to its prompt.',
+].join('\n');
+
 export const REWRITE_SYSTEM: Record<ShareAudience, string> = {
   sub: [
     'Rewrite a teacher’s lesson as a plan a substitute can run cold.',
     'Step by step, in order, each with its exact start time from the start of class and its minutes, and the words to say in quotes.',
+    'For every step that is a writing assignment in Yawp! (a Class Starter, an Exit Ticket, Daily Pages and the rest), say it plainly, in these words with that step\'s name and minutes: "This is a writing assignment in Yawp!. Have students open Yawp! and find the Class Starter. They have 5 minutes to write." Then what the sub does while they write. It is never a discussion the sub leads.',
     'No teacher shorthand, no "as usual", nothing that assumes they know the class or the book. Say where the materials are only if the lesson says.',
-    'Markdown: one "## " heading per step. At most 450 words. Return only the plan.',
+    'Markdown. At most 450 words. Return only the plan.',
+    REWRITE_STRUCTURE,
     REWRITE_VOICE,
   ].join('\n'),
   student: [
     'Rewrite a teacher’s lesson for a student who missed class.',
     'Write to the student ("you"): what the class did, in order, in two or three sentences each, and what they need to do to catch up.',
-    'Open with "We missed you in class." Never "Hey!", "Hey there" or any other greeting that sounds like an ad.',
+    'Open with "We missed you in class."',
+    'For a writing assignment in Yawp!, say so by its name ("Class opened with a Class Starter in Yawp!", "Class ended with an Exit Ticket in Yawp!") and tell the student to write it there. Its prompt is printed under the page, so never restate it. Never write "To catch up on the Yawp!" or call a step "the Yawp!".',
+    'Never "Hey!", "Hey there" or any other greeting that sounds like an ad.',
     'Never include teacher moves or answers. Warm and short. Markdown. At most 300 words. Return only the page.',
+    REWRITE_STRUCTURE,
     REWRITE_VOICE,
   ].join('\n'),
   family: [
     'Rewrite a teacher’s lesson for a student’s family.',
     'Plain language, no education jargon. Write for any family, about the class: begin "Today in class, students…", never "Your student…" or "Your child…" (the same page goes to every family).',
-    'What the class did and why it matters, in four or five sentences, then a "## Talking about it at dinner" section with two or three open questions or conversation starters a family could use, tied to what the class actually did, none with a right answer to check.',
-    'Markdown. At most 260 words. Return only the page.',
+    'One opening sentence, then what the class did and why it matters under each step\'s heading, a sentence or two each; then a "## Talking about it at dinner" section with two or three open questions or conversation starters a family could use, tied to what the class actually did, none with a right answer to check.',
+    'Markdown. At most 320 words. Return only the page.',
+    REWRITE_STRUCTURE,
     REWRITE_VOICE,
   ].join('\n'),
   admin: [
@@ -247,9 +262,73 @@ export const REWRITE_SYSTEM: Record<ShareAudience, string> = {
     'What the lesson does and for whom, then the steps with their minutes and one line of why each.',
     'Never name a standard, a standards code or an alignment claim: Yawp! adds the standards the teacher named itself, and says nothing about the ones they did not.',
     'Professional and concise. Markdown. At most 350 words. Return only the summary.',
+    REWRITE_STRUCTURE,
     REWRITE_VOICE,
   ].join('\n'),
 };
+
+/**
+ * A step's heading on every share page (Brian's round 5, item 7): its stack
+ * name, then its title, without saying the name twice.
+ */
+export function stepHeading(name: string, title: string): string {
+  const cleanTitle = title.trim();
+  if (!cleanTitle || cleanTitle.toLowerCase().includes(name.toLowerCase())) {
+    return cleanTitle.toLowerCase().startsWith(name.toLowerCase()) ? cleanTitle : name;
+  }
+  return `${name}: ${cleanTitle}`;
+}
+
+export type RewriteStep = {
+  /** The stack's name for it: "Class Starter", "Class Discussion" (`stackStepName`). */
+  name?: string;
+  title: string;
+  minutes: number;
+  startsAt: number;
+  excerpt: string;
+  content: string;
+  /** A writing assignment students do in Yawp!. */
+  yawp?: boolean;
+};
+
+/** What every rewrite is given: the steps, in the stack's order and names. */
+export function rewriteInput({
+  title,
+  className,
+  steps,
+}: {
+  title: string;
+  className: string | null;
+  steps: RewriteStep[];
+}): string {
+  return [
+    `Lesson: ${title}${className ? ` (${className})` : ''}`,
+    '',
+    ...steps.map((step) => {
+      const heading = step.name ? stepHeading(step.name, step.title) : step.title;
+      return [
+        `## ${heading}`,
+        `Minute ${step.startsAt}, ${step.minutes} min.${
+          step.yawp
+            ? ` A writing assignment in Yawp!: students open Yawp! and find the ${step.name ?? step.title}. ${step.minutes} minutes to write.`
+            : ''
+        }`,
+        step.content.replace(/\s+/g, ' ').slice(0, 700),
+        '',
+      ].join('\n');
+    }),
+  ].join('\n');
+}
+
+/**
+ * The purple box's list (Brian's round 5, item 10): each assignment by its
+ * type, with its title only where two share a type.
+ */
+export function inYawpNames(steps: Array<{ name: string; title: string }>): string[] {
+  const counts = new Map<string, number>();
+  for (const step of steps) counts.set(step.name, (counts.get(step.name) ?? 0) + 1);
+  return steps.map((step) => ((counts.get(step.name) ?? 0) > 1 ? stepHeading(step.name, step.title) : step.name));
+}
 
 /**
  * Never a share of class time spent writing in the rewritten text (Brian's
@@ -271,14 +350,14 @@ export function withoutWritingShare(text: string): string {
     .trim();
 }
 
-/** What the page says when no rewrite came back: the steps, timed. */
+/** What the page says when no rewrite came back: the steps, timed, under the stack's names. */
 export function fallbackLessonText(
-  steps: Array<{ title: string; minutes: number; startsAt: number; excerpt: string }>
+  steps: Array<{ name?: string; title: string; minutes: number; startsAt: number; excerpt: string }>
 ): string {
   return steps
     .map(
       (step) =>
-        `## Minute ${step.startsAt} · ${step.title} (${step.minutes} min)\n\n${step.excerpt}`
+        `## Minute ${step.startsAt} · ${step.name ? stepHeading(step.name, step.title) : step.title} (${step.minutes} min)\n\n${step.excerpt}`
     )
     .join('\n\n');
 }

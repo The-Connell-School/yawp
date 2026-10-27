@@ -8,7 +8,7 @@ import type { LessonPacket } from './lesson-packet';
 import type { StackCreateLink } from './stack-create-link';
 import { stackEntryKey } from './stack-order';
 import { previewLine } from './plain-preview';
-import { isWritingStep, stepTypeFor, writingName, type StepType } from './step-types';
+import { isWritingStep, STEP_TYPE_LABELS, stepTypeFor, writingName, type StepType } from './step-types';
 import type { TimedStep } from './stack-timing';
 
 export type StackStep = TimedStep & {
@@ -109,4 +109,31 @@ export type { StepType };
  */
 export function notYetInYawp<T extends Pick<StackStep, 'id' | 'create'>>(steps: T[], onPaper: ReadonlySet<string> = new Set()): T[] {
   return steps.filter((step) => step.create && !step.create.created && !onPaper.has(step.id));
+}
+
+/**
+ * What a step is called wherever the lesson is shown to someone else (Brian's
+ * round 5, item 7): the name on the stack. Writing goes by its type ("Class
+ * Starter", "Exit Ticket"); anything else by its label ("Class Discussion"),
+ * then its type ("Read aloud").
+ */
+export function stackStepName(step: Pick<StackStep, 'type' | 'label' | 'isWriting' | 'writingName'>): string {
+  if (step.isWriting && step.writingName) return step.writingName;
+  return step.label?.trim() || STEP_TYPE_LABELS[step.type];
+}
+
+/** Kinds that are always a Yawp! assignment. */
+const ASSIGNMENT_KINDS = new Set(['class-starter', 'daily-pages', 'exit-ticket', 'thesis-module']);
+
+/**
+ * Whether a step is writing students do in Yawp! (Brian's round 5, items
+ * 7–10): a writing step that is an assignment kind, has a Yawp! create link,
+ * or was made in Yawp!. A handout to fill in on paper is writing, not this.
+ */
+export function isYawpAssignmentStep(
+  step: Pick<StackStep, 'kind' | 'isWriting' | 'create'>,
+  made = false
+): boolean {
+  if (!step.isWriting) return false;
+  return made || Boolean(step.create) || ASSIGNMENT_KINDS.has(step.kind);
 }

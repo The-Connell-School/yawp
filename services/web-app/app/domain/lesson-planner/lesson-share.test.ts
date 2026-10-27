@@ -94,7 +94,8 @@ describe("withoutWritingShare: one writing number, from the stack (Brian's run 4
     expect(out).toContain('- Discussion: 20 min');
   });
   test('the admin rewrite is not asked for a writing share', () => {
-    expect(REWRITE_SYSTEM.admin).not.toMatch(/writing/i);
+    // It may name a writing assignment in Yawp! (round 5), never a share of time.
+    expect(REWRITE_SYSTEM.admin.replace(/writing assignments? in Yawp!/gi, '')).not.toMatch(/writing/i);
   });
 });
 
@@ -155,5 +156,74 @@ describe("share pages name the writing by type (Brian's round 3, 1.7–1.9)", ()
       'These assignments are available to your student in Yawp! and should be completed before the next class session (or by an agreed-upon time):'
     );
     expect(inYawpLead('student')).toBe('These writing exercises are available to students as assignments in Yawp!');
+  });
+});
+
+describe("every audience follows the stack (Brian's round 5, items 7–10)", () => {
+  const steps = [
+    { name: 'Reading Annotation', title: 'Common Sense', minutes: 1, startsAt: 0, excerpt: 'Take out your copy.', content: 'Take out your copy.', yawp: false },
+    { name: 'Class Starter', title: 'When rules stop making sense', minutes: 5, startsAt: 1, excerpt: 'Think of a rule…', content: 'Think of a rule — at school, at home, anywhere.', yawp: true },
+    { name: 'Class Discussion', title: 'Whole-Class Discussion', minutes: 28, startsAt: 6, excerpt: 'Two rounds.', content: 'Two rounds.', yawp: false },
+    { name: 'Exit Ticket', title: 'the single most effective rhetorical move in Common Sense', minutes: 5, startsAt: 34, excerpt: 'In your own words…', content: 'In your own words…', yawp: true },
+  ];
+
+  test("a step's heading is its stack name, then its title, never the name twice", async () => {
+    const { stepHeading } = await import('./lesson-share');
+    expect(stepHeading('Class Starter', 'When rules stop making sense')).toBe('Class Starter: When rules stop making sense');
+    expect(stepHeading('Class Discussion', 'Whole-Class Discussion')).toBe('Class Discussion');
+    expect(stepHeading('Exit Ticket', 'Exit Ticket')).toBe('Exit Ticket');
+    expect(stepHeading('Daily Pages', 'Daily Pages: the method')).toBe('Daily Pages: the method');
+  });
+
+  test('the rewrite is given each step by its stack name, with its Yawp! writing marked', async () => {
+    const { rewriteInput } = await import('./lesson-share');
+    const input = rewriteInput({ title: 'Day 2: Common Sense', className: 'English 10 · Period 3', steps });
+    expect(input).toContain('Lesson: Day 2: Common Sense (English 10 · Period 3)');
+    expect(input).toContain('## Class Starter: When rules stop making sense');
+    expect(input).toContain('## Class Discussion');
+    expect(input).toContain('## Exit Ticket: the single most effective rhetorical move in Common Sense');
+    expect(input).toContain('A writing assignment in Yawp!: students open Yawp! and find the Class Starter. 5 minutes to write.');
+    expect(input).toContain('A writing assignment in Yawp!: students open Yawp! and find the Exit Ticket. 5 minutes to write.');
+    expect(input.indexOf('Class Starter')).toBeLessThan(input.indexOf('Class Discussion'));
+    expect(input.indexOf('Class Discussion')).toBeLessThan(input.indexOf('Exit Ticket'));
+  });
+
+  test('every audience is told to keep the stack’s headings, in order, and never "Step 2" or "Yawp!"', () => {
+    for (const system of Object.values(REWRITE_SYSTEM)) {
+      expect(system).toContain('one "## " heading per step, in the order given');
+      expect(system).toContain('never "Step 2"');
+      expect(system).toContain('never call a step "Yawp!"');
+      expect(system).toContain('never paraphrase');
+      expect(system).toContain('never a discussion');
+    }
+  });
+
+  test('the sub is told to send students to Yawp! for each writing assignment', () => {
+    expect(REWRITE_SYSTEM.sub).toContain('This is a writing assignment in Yawp!');
+    expect(REWRITE_SYSTEM.sub).toContain('Have students open Yawp! and find the');
+    expect(REWRITE_SYSTEM.sub).toContain('never a discussion');
+  });
+
+  test('the student page names the Class Starter and the Exit Ticket, never "To catch up on the Yawp!"', () => {
+    expect(REWRITE_SYSTEM.student).toContain('Never write "To catch up on the Yawp!"');
+    expect(REWRITE_SYSTEM.student).toContain('in Yawp!');
+  });
+
+  test('without a rewrite, the steps are headed the same way', () => {
+    const text = fallbackLessonText(steps);
+    expect(text).toContain('## Minute 1 · Class Starter: When rules stop making sense (5 min)');
+    expect(text).toContain('## Minute 6 · Class Discussion (28 min)');
+  });
+
+  test('the purple box lists assignments by type, with a title only to tell two apart', async () => {
+    const { inYawpNames } = await import('./lesson-share');
+    expect(inYawpNames([
+      { name: 'Class Starter', title: 'When rules stop making sense' },
+      { name: 'Exit Ticket', title: 'the single most effective rhetorical move' },
+    ])).toEqual(['Class Starter', 'Exit Ticket']);
+    expect(inYawpNames([
+      { name: 'Class Starter', title: 'One' },
+      { name: 'Class Starter', title: 'Two' },
+    ])).toEqual(['Class Starter: One', 'Class Starter: Two']);
   });
 });

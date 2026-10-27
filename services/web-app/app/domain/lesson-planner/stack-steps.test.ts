@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { buildLessonPacket } from './lesson-packet';
-import { notYetInYawp, stackSteps } from './stack-steps';
+import { notYetInYawp, stackStepName, stackSteps } from './stack-steps';
 import { stackTiming } from './stack-timing';
 
 describe('stackSteps: the run of show (stack page redesign)', () => {
@@ -53,5 +53,25 @@ describe('notYetInYawp: what still has to be made in Yawp! before class', () => 
 
   test('leaves out what the teacher is doing on paper', () => {
     expect(notYetInYawp([step('ticket', {}), step('daily', {})], new Set(['ticket'])).map((s) => s.id)).toEqual(['daily']);
+  });
+});
+
+describe("stackStepName: the name the stack shows (Brian's round 5, item 7)", () => {
+  test('writing goes by its type, everything else by its label, then its type', () => {
+    expect(stackStepName({ type: 'class_starter', label: null, isWriting: true, writingName: 'Class Starter' })).toBe('Class Starter');
+    expect(stackStepName({ type: 'closing', label: null, isWriting: true, writingName: 'Exit Ticket' })).toBe('Exit Ticket');
+    expect(stackStepName({ type: 'activity', label: 'Class Discussion', isWriting: false })).toBe('Class Discussion');
+    expect(stackStepName({ type: 'read_aloud', label: '  ', isWriting: false })).toBe('Read aloud');
+  });
+});
+
+describe("isYawpAssignmentStep (Brian's round 5, items 7–10)", () => {
+  test('an assignment kind, a create link or a made assignment; never a paper handout or a discussion', async () => {
+    const { isYawpAssignmentStep } = await import('./stack-steps');
+    expect(isYawpAssignmentStep({ kind: 'exit-ticket', isWriting: true, create: null })).toBe(true);
+    expect(isYawpAssignmentStep({ kind: 'lesson', isWriting: true, create: { label: 'Create', href: '/x' } })).toBe(true);
+    expect(isYawpAssignmentStep({ kind: 'handout', isWriting: true, create: null })).toBe(false);
+    expect(isYawpAssignmentStep({ kind: 'handout', isWriting: true, create: null }, true)).toBe(true);
+    expect(isYawpAssignmentStep({ kind: 'step', isWriting: false, create: null }, true)).toBe(false);
   });
 });

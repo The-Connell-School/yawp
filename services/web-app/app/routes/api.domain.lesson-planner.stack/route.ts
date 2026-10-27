@@ -3,6 +3,7 @@
  * items 6, 7, 10). Each answers with what Undo needs, and nothing here runs
  * without the stack page redesign flag.
  */
+import { isYawpAssignmentStep, stackStepName } from '~/domain/lesson-planner/stack-steps';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
@@ -358,11 +359,14 @@ export async function action({ request }: ActionFunctionArgs) {
             steps: loaded.v3.timing.blocks.map((block) => {
               const step = loaded.v3.steps.find((entry) => entry.id === block.id)!;
               return {
+                // The stack's name and whether it is writing in Yawp! (Brian's round 5, items 7–8).
+                name: stackStepName(step),
                 title: block.title,
                 minutes: block.minutes,
                 startsAt: block.startsAt,
                 excerpt: step.excerpt,
                 content: step.content,
+                yawp: isYawpAssignmentStep(step),
               };
             }),
           })

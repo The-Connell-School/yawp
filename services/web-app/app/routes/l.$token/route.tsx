@@ -219,7 +219,7 @@ export default function SharedLessonRoute() {
               const quote = (
                 <blockquote
                   data-testid="shared-prompt"
-                  className="mt-1 rounded-xl border-l-4 px-4 py-3 text-sm"
+                  className="mt-1 whitespace-pre-line rounded-xl border-l-4 px-4 py-3 text-sm"
                   style={{ borderColor: 'var(--sv-writing)', backgroundColor: 'var(--sv-writing-strip)' }}
                 >
                   {prompt.content}

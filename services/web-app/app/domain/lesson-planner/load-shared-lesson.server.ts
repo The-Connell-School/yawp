@@ -12,14 +12,13 @@ import {
 } from '~/domain/feature-flags/feature-flags.server';
 import { buildLessonPacket } from './lesson-packet';
 import { findShareLink } from './lesson-share.server';
-import { parseShareItems, type ShareAudience } from './lesson-share';
+import { inYawpNames, parseShareItems, type ShareAudience } from './lesson-share';
 import { readSlideDeck, type SlideDeck } from './slide-deck';
 import { handoutContent, studentVersionKey, answerLinesFor } from './step-handout';
-import { stackSteps } from './stack-steps';
+import { isYawpAssignmentStep, stackStepName, stackSteps } from './stack-steps';
 import { orderStackEntries } from './stack-order';
 import { stackTiming } from './stack-timing';
 import { syncAgendaToStack } from './deck-agenda';
-import { STEP_TYPE_LABELS } from './step-types';
 
 export type SharedLesson = {
   audience: ShareAudience;
@@ -141,17 +140,35 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
           : [];
       })
     : [];
-  const prompts = includes.has('daily-pages')
-    ? steps
-        .filter((step) => step.kind === 'daily-pages' || step.kind === 'class-starter')
-        .map((step) => ({
-          id: step.id,
-          title: step.title,
-          type: step.writingName ?? STEP_TYPE_LABELS[step.type],
-          content: step.content,
-          inYawp: madeInYawp(step.id),
-        }))
+  // Every writing assignment in Yawp!, each under its stack name (Brian's
+  // round 5, items 9–10): the Exit Ticket too, not only the Class Starter.
+  const promptSteps = includes.has('daily-pages')
+    ? steps.filter((step) => isYawpAssignmentStep(step, madeInYawp(step.id)))
     : [];
+  const assignmentIds = promptSteps
+    .map((step) => byId.get(step.id)?.yawpAssignmentId)
+    .filter((id): id is string => Boolean(id));
+  // What students actually read, edits included, once it is made in Yawp!.
+  const assigned = new Map(
+    assignmentIds.length
+      ? (
+          await prisma.assignment.findMany({
+            where: { id: { in: assignmentIds } },
+            select: { id: true, prompt: true },
+          })
+        ).map((row) => [row.id, row.prompt])
+      : []
+  );
+  const prompts = promptSteps.map((step) => {
+    const assignmentId = byId.get(step.id)?.yawpAssignmentId;
+    return {
+      id: step.id,
+      title: step.title,
+      type: stackStepName(step),
+      content: (assignmentId && assigned.get(assignmentId)) || promptText(step.content),
+      inYawp: madeInYawp(step.id),
+    };
+  });
   const deckRow = includes.has('deck')
     ? conversation.materials.find((material) => material.kind === 'slides')
     : undefined;
@@ -178,6 +195,16 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
       ? { percent: timing.writingPercent, minutes: timing.writingMinutes, sources: timing.writingSources }
       : null,
     deckTemplate: deckGallery ? 'gallery' : deckV2 ? 'tile' : 'plain',
-    inYawp: steps.filter((step) => step.isWriting && madeInYawp(step.id)).map((step) => step.title),
+    // By type, as the stack names them (Brian's round 5, item 10).
+    inYawp: inYawpNames(
+      steps
+        .filter((step) => step.isWriting && madeInYawp(step.id))
+        .map((step) => ({ name: stackStepName(step), title: step.title }))
+    ),
   };
+}
+
+/** A prompt as students read it: an inlined exit ticket loses its quote marks. */
+export function promptText(content: string): string {
+  return content.replace(/^>\s?/gm, '').trim();
 }
