@@ -22,10 +22,7 @@ import {
   teacherDeniedStatusBody,
   teacherDeniedStatusTitle,
 } from '~/domain/free-tier/admin-deny-copy';
-import {
-  approvalMailto,
-  approvalSentDate,
-} from '~/domain/free-tier/approval-waiting';
+import { approvalSentDate } from '~/domain/free-tier/approval-waiting';
 import { teacherPendingForwardError } from '~/domain/free-tier/admin-approval-copy';
 import {
   ApprovalForwardForm,
@@ -281,46 +278,6 @@ function LockedPreviewExploreButton({ disabled = false }: { disabled?: boolean }
   );
 }
 
-function PendingDraftRequestLink({
-  adminEmail,
-  adminName,
-  teacherName,
-  schoolName,
-  approvalEmailFrom,
-  disabled = false,
-}: {
-  adminEmail: string;
-  adminName: string;
-  teacherName: string;
-  schoolName: string;
-  approvalEmailFrom: string;
-  disabled?: boolean;
-}) {
-  if (!adminEmail.trim()) return null;
-  return (
-    <FreeTierButton
-      asChild
-      variant="outline"
-      className={`free-tier-draft-request${disabled ? ' pointer-events-none opacity-50' : ''}`}
-      data-testid="pending-draft-request"
-      aria-disabled={disabled ? true : undefined}
-    >
-      <a
-        href={approvalMailto({
-          adminEmail,
-          adminName,
-          teacherName,
-          schoolName,
-          approvalEmailFrom,
-        })}
-        rel="noopener noreferrer"
-      >
-        Draft a Request
-      </a>
-    </FreeTierButton>
-  );
-}
-
 function TeacherAskAnotherForm({
   approvalId,
   busy,
@@ -348,7 +305,6 @@ export default function FreeTierPendingRoute() {
     lastFailedEmail,
     showExploreClassroom,
     approvalV2,
-    approvalEmailFrom,
     teacherDenied,
     askOpen,
   } = useLoaderData<typeof loader>();
@@ -543,14 +499,6 @@ export default function FreeTierPendingRoute() {
                     }
                   />
                 ) : null}
-                <PendingDraftRequestLink
-                  adminEmail={current.adminEmail}
-                  adminName={current.adminName}
-                  teacherName={app.name}
-                  schoolName={app.schoolName ?? 'your school'}
-                  approvalEmailFrom={approvalEmailFrom}
-                  disabled={forwarding}
-                />
                 {showExploreClassroom ? (
                   <LockedPreviewExploreButton disabled={forwarding} />
                 ) : null}
@@ -619,13 +567,6 @@ export default function FreeTierPendingRoute() {
       {pending && app?.status === 'SENT' ? (
         <>
           <FreeTierPerson name={adminName} email={pending.adminEmail} />
-          <PendingDraftRequestLink
-            adminEmail={pending.adminEmail}
-            adminName={adminName}
-            teacherName={app.name}
-            schoolName={app.schoolName ?? 'your school'}
-            approvalEmailFrom={approvalEmailFrom}
-          />
           {showExploreClassroom ? <LockedPreviewExploreButton /> : null}
         </>
       ) : null}
