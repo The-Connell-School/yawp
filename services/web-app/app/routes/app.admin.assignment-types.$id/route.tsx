@@ -197,6 +197,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         scoringScaleJson: true,
         gradingPromptConfigJson: true,
         gradingOutputSchemaJson: true,
+        tutorInstructions: true,
         rubric: { select: { schemaJson: true } },
       },
     });
@@ -232,8 +233,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
         ),
         gradingAssistantVersion: { increment: 1 },
       } : {});
+    const tutorInstructionsChanged =
+      hasTutorInstructions &&
+      (tutorInstructions || null) !== (existing.tutorInstructions?.trim() || null);
     const stampCrossUiProvenance =
-      hasTutorInstructions ||
+      tutorInstructionsChanged ||
       overrideChanged ||
       Object.keys(gradingConfig).length > 0 ||
       rubricSelection?.kind === 'per-type';
