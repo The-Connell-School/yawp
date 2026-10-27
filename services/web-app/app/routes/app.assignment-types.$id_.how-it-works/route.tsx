@@ -29,7 +29,11 @@ import {
   WillWont,
 } from '~/components/how-it-works/guide';
 import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
+import { lockedPendingGuideLede } from '~/domain/free-tier/locked-dashboard-copy';
 import { userHasPendingFreeTierTeachingLock } from '~/domain/free-tier/locked-preview.server';
+import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
+import { FREE_CLASSROOM_ASSIGNMENT_KINDS } from '~/utils/entitlements.server';
+import type { FreeClassroomAssignmentQuotaKind } from '~/utils/entitlements.server';
 import { isAssignmentTypeAvailableForAnyScope } from '~/utils/assignment-type-access.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -74,16 +78,41 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     where: { id: assignmentTypeId, archivedAt: null },
     select: { id: true, title: true, kind: true },
   });
+  const lockedPendingTeaching = await userHasPendingFreeTierTeachingLock(userId);
   const lockedPreviewThesisStatementGuide =
-    assignmentType?.kind === 'thesis_statement' &&
-    (await userHasPendingFreeTierTeachingLock(userId));
-  // Only The Thesis-Driven Essay has a guide so far, plus Thesis Statement in locked preview.
+    assignmentType?.kind === 'thesis_statement' && lockedPendingTeaching;
+  const isThesisEssayGuide =
+    assignmentType != null &&
+    (isThesisDrivenEssayTitle(assignmentType.title) ||
+      lockedPreviewThesisStatementGuide);
+  const lockedPendingAssignmentGuide =
+    lockedPendingTeaching &&
+    assignmentType != null &&
+    !isThesisEssayGuide &&
+    assignmentType.kind != null &&
+    FREE_CLASSROOM_ASSIGNMENT_KINDS.includes(
+      assignmentType.kind as FreeClassroomAssignmentQuotaKind
+    );
+  const siteLicenseLockedTiles =
+    lockedPendingTeaching && profile.organization.plan === 'FREE_CLASSROOM'
+      ? await loadSiteLicenseLockedAssignmentTiles(profile.organization)
+      : [];
+  const lockedPendingSiteLicenseGuide =
+    lockedPendingTeaching &&
+    assignmentType != null &&
+    !isThesisEssayGuide &&
+    siteLicenseLockedTiles.some(
+      (tile) => tile.assignmentTypeId === assignmentType.id
+    );
+  // Thesis-Driven Essay (and Thesis Statement while pending) use the full guide.
+  // Other locked-dashboard tiles get a short pending preview page.
   if (
     !assignmentType ||
-    (!isThesisDrivenEssayTitle(assignmentType.title) &&
-      !lockedPreviewThesisStatementGuide)
+    (!isThesisEssayGuide &&
+      !lockedPendingAssignmentGuide &&
+      !lockedPendingSiteLicenseGuide)
   ) {
-    throw redirect(pagePath);
+    throw redirect(lockedPendingTeaching ? '/app' : pagePath);
   }
 
   // The course that teaches teachers the process. It is linked only when this
@@ -102,9 +131,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: { id: true },
   });
 
+  const backTo = lockedPendingTeaching ? '/app' : pagePath;
+  const backLabel = lockedPendingTeaching
+    ? 'Back to dashboard'
+    : 'Back to The Thesis-Driven Essay';
+
   return {
     pagePath,
+    backTo,
+    backLabel,
     coursePath: course ? `/app/teacher-trainings/${course.id}` : null,
+    guideVariant: isThesisEssayGuide
+      ? ('thesis-essay' as const)
+      : ('locked-pending' as const),
+    assignmentTypeTitle: assignmentType.title,
   };
 }
 
@@ -185,11 +225,28 @@ function clip(name: string, label: string) {
   );
 }
 
+function PendingLockedAssignmentGuide({ title }: { title: string }) {
+  return (
+    <GuidePage backTo="/app" backLabel="Back to dashboard">
+      <GuideHero
+        title={title}
+        highlight="See how it works."
+        lede={lockedPendingGuideLede(title)}
+      />
+    </GuidePage>
+  );
+}
+
 export default function ThesisEssayHowItWorksRoute() {
-  const { pagePath, coursePath } = useLoaderData<typeof loader>();
+  const data = useLoaderData<typeof loader>();
+  if (data.guideVariant === 'locked-pending') {
+    return <PendingLockedAssignmentGuide title={data.assignmentTypeTitle} />;
+  }
+
+  const { pagePath, backTo, backLabel, coursePath } = data;
 
   return (
-    <GuidePage backTo={pagePath} backLabel="Back to The Thesis-Driven Essay">
+    <GuidePage backTo={backTo} backLabel={backLabel}>
       <GuideHero
         title="Teach the thesis-driven essay"
         highlight="one step at a time."
