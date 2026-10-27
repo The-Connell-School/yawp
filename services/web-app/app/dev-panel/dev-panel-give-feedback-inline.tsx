@@ -231,9 +231,6 @@ export function DevPanelGiveFeedbackInline({
           'Send feedback'
         )}
       </button>
-      {!canSend && status !== 'submitting' ? (
-        <span className="yawp-dev-panel-give-feedback-hint">Describe the issue to send.</span>
-      ) : null}
     </div>
   );
 }

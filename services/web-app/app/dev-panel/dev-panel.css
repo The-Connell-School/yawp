@@ -268,11 +268,6 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
   gap: 10px;
 }
 
-[data-yawp-dev-panel] .yawp-dev-panel-give-feedback-hint {
-  font-size: 12px;
-  color: var(--yawp-dev-panel-muted);
-}
-
 [data-yawp-dev-panel] .yawp-dev-panel-pe3-send-disabled {
   opacity: 0.45;
   cursor: not-allowed;

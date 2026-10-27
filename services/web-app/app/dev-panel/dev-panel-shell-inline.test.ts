@@ -19,6 +19,15 @@ describe('dev panel inline accordions', () => {
     expect(shell).toContain("toggleSection('class-simulation')");
   });
 
+  test('give feedback inline omits send helper commentary', () => {
+    const inline = readFileSync(
+      path.join(devPanelDir, 'dev-panel-give-feedback-inline.tsx'),
+      'utf8'
+    );
+    expect(inline.includes('Describe the issue to send')).toBe(false);
+    expect(inline.includes('yawp-dev-panel-give-feedback-hint')).toBe(false);
+  });
+
   test('stylesheet defines PE3 inline expanded padding', () => {
     const css = readFileSync(path.join(devPanelDir, 'dev-panel.css'), 'utf8');
     expect(css).toContain('padding: 12px 12px 12px 24px');
