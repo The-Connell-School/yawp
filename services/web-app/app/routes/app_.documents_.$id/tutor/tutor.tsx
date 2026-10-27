@@ -16,7 +16,11 @@ import { timeAgo } from '~/utils/timeAgo/timeAgo';
 import { Loading } from './loading';
 import { ResponseBar } from './response-bar';
 import { compareTutorMessagesByTimeThenId } from './tutor-message-sort';
-import { getNextAssignmentModuleId } from './assignment-module-navigation';
+import {
+  getAssignmentModuleIdForCmsIdx,
+  getNextAssignmentModuleId,
+  getPreviousAssignmentModuleId,
+} from './assignment-module-navigation';
 import { postTutorResponseWithFallbackRetry } from './tutor-response-retry';
 
 type Props = {
@@ -98,7 +102,12 @@ export const Tutor = ({
   const instruction =
     cms.assignmentModule.instructions[cms.instructionsCompleted] ?? {};
 
-  const prevCmsIdx = hasPreviousCms ? cmsIdx - 1 : undefined;
+  const livePreviousModuleId = useMemo(
+    () => getPreviousAssignmentModuleId(cms),
+    [cms]
+  );
+  const prevCmsIdx =
+    hasPreviousCms && livePreviousModuleId ? cmsIdx - 1 : undefined;
   const liveNextModuleId = useMemo(
     () => getNextAssignmentModuleId(cms, nextCmId),
     [cms, nextCmId]
@@ -128,8 +137,7 @@ export const Tutor = ({
       }
 
       const targetIdx = Math.max(0, nextIdx);
-      const targetModuleId =
-        cms.assignmentModule.assignmentType?.assignmentModules[targetIdx]?.id;
+      const targetModuleId = getAssignmentModuleIdForCmsIdx(cms, targetIdx);
 
       if (targetModuleId) {
         const formData = new FormData();
@@ -154,12 +162,7 @@ export const Tutor = ({
 
       navigateToCmsIdx(targetIdx);
     },
-    [
-      cms.assignmentModule.assignmentType?.assignmentModules,
-      docId,
-      navigateToCmsIdx,
-      onCmsUpdate,
-    ]
+    [cms, docId, navigateToCmsIdx, onCmsUpdate]
   );
 
   const respond = useCallback(
