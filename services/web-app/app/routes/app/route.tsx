@@ -121,8 +121,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const mockAdminAvailable = await canUseMockAdmin(userId);
   const { isFreeTierEnabled } =
     await import('~/domain/feature-flags/feature-flags.server');
+  const { isDevPanelRuntimeEnabled } =
+    await import('~/dev-panel/dev-panel-runtime.server');
   const freeTierFeatureOn = await isFreeTierEnabled();
-  const freeTierRouteOpen = freeTierFeatureOn;
+  const freeTierRouteOpen =
+    freeTierFeatureOn || isDevPanelRuntimeEnabled();
   const { loadFreeTierGateApplication, enforceFreeTierTeacherGate } =
     await import('~/domain/free-tier/free-tier-gate.server');
   const freeTierApplication = freeTierRouteOpen
