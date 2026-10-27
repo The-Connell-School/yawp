@@ -217,12 +217,12 @@ export function YawpEmailLayout({
                         <br />
                         {footerWhy}
                         <br />
-                        Questions?{' '}
+                        Questions? Write to{' '}
                         <a
                           href="mailto:support@yawp.school"
                           style={{ color: EMAIL_LINK, textDecoration: 'underline' }}
                         >
-                          Write to support@yawp.school
+                          support@yawp.school
                         </a>
                       </td>
                     </tr>
@@ -431,6 +431,7 @@ export function IdentityCard({ rows }: { rows: IdentityRow[] }) {
           className="yawp-identity"
           style={{
             backgroundColor: EMAIL_IDENTITY_BG,
+            border: `1px solid ${EMAIL_CARD_BORDER}`,
             borderRadius: '10px',
             width: '100%',
           }}
@@ -581,6 +582,7 @@ export function CodeBlock({
           className="yawp-code"
           style={{
             backgroundColor: EMAIL_CODE_BG,
+            border: `1px solid ${EMAIL_CARD_BORDER}`,
             borderRadius: '10px',
             width: '100%',
           }}
@@ -654,6 +656,7 @@ export function PersonalNoteBlock({
           className="yawp-identity"
           style={{
             backgroundColor: EMAIL_IDENTITY_BG,
+            border: `1px solid ${EMAIL_CARD_BORDER}`,
             borderRadius: '10px',
             width: '100%',
           }}
