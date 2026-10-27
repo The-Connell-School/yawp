@@ -626,7 +626,8 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                       ? {
                           presentHref: `/present/${conversationId}/${v3.conversationDeck.messageId}?from=stack`,
                           onStack: v3.conversationDeck.onStack,
-                          onAdd: () => openPanel(null, v3.conversationDeck!.onStack ? 'ask' : 'conversation'),
+                          // Adds it right here; the panel stays as it is (Brian's round 5, item 6).
+                          onAdd: () => toggleDeck(v3.conversationDeck!.messageId, true),
                         }
                       : null
                   }
@@ -652,7 +653,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                   ? {
                       presentHref: `/present/${conversationId}/${v3.conversationDeck.messageId}?from=stack`,
                       onStack: v3.conversationDeck.onStack,
-                      onAdd: () => openPanel(null, v3.conversationDeck!.onStack ? 'ask' : 'conversation'),
+                      onAdd: () => toggleDeck(v3.conversationDeck!.messageId, true),
                     }
                   : null
               }
