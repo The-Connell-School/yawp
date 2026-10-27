@@ -150,7 +150,7 @@ export async function createAssignmentType(
     gradingPromptConfigJson = withLastAdminEdit(
       gradingPromptConfigJson ?? {},
       input.adminEditProvenance
-    );
+    ) as Prisma.InputJsonValue;
   }
   return client.assignmentType.create({
     data: {
