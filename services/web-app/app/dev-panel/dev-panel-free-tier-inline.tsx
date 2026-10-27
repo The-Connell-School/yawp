@@ -101,7 +101,7 @@ export function DevPanelFreeTierInline({
   return (
     <div
       className={cn(
-        'yawp-dev-panel-inline-expanded-body yawp-dev-panel-free-tier-inline',
+        'yawp-dev-panel-free-tier-inline',
         dimRows && 'yawp-dev-panel-free-tier-inline-dimmed'
       )}
     >

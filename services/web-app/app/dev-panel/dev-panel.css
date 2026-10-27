@@ -18,6 +18,8 @@
   --yawp-dev-panel-input-border: hsl(51.4286 8.2353% 66.6667%);
   --yawp-dev-panel-accent-radio: hsl(14.8837 58.9041% 57.0588%);
   --yawp-dev-panel-ink-border: var(--yawp-dev-panel-border);
+  --yawp-dev-panel-surface: #ffffff;
+  --yawp-dev-panel-expanded-bg: hsl(46.6667 36% 95.098%);
 }
 
 html.yawp-dev-panel-open {
@@ -66,6 +68,8 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
   font-size: var(--yawp-dev-panel-fs);
   line-height: 16px;
   box-shadow: none;
+  background: var(--yawp-dev-panel-surface);
+  color: var(--yawp-dev-panel-ink);
 }
 
 [data-yawp-dev-panel] h1,
@@ -87,7 +91,25 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
   box-sizing: border-box;
   padding: 0 6px 0 var(--yawp-dev-panel-inset);
   border-bottom: 1px solid var(--yawp-dev-panel-border);
+  background: var(--yawp-dev-panel-surface);
   flex: none;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-scroll {
+  background: var(--yawp-dev-panel-surface);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-section {
+  border-bottom: 1px solid var(--yawp-dev-panel-border);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-section > .yawp-dev-panel-row,
+[data-yawp-dev-panel] .yawp-dev-panel-section > .yawp-dev-panel-feedback-row {
+  border-bottom: 0;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-collapsible-content[data-state='closed'] {
+  display: none;
 }
 
 [data-yawp-dev-panel] .yawp-dev-panel-header-title {
@@ -135,7 +157,7 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
   height: var(--yawp-dev-panel-row-height);
   box-sizing: border-box;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 0 var(--yawp-dev-panel-inset);
   text-align: left;
   font-size: var(--yawp-dev-panel-fs);
@@ -143,7 +165,7 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
   color: var(--yawp-dev-panel-ink);
   border: 0;
   border-bottom: 1px solid var(--yawp-dev-panel-border);
-  background: transparent;
+  background: var(--yawp-dev-panel-surface);
   cursor: pointer;
 }
 
@@ -232,7 +254,14 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
   flex-direction: column;
   gap: 10px;
   border-top: 1px solid var(--yawp-dev-panel-border);
-  background: hsl(46.6667 36% 95.098%);
+  background: var(--yawp-dev-panel-expanded-bg);
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-free-tier-inline,
+[data-yawp-dev-panel] .yawp-dev-panel-give-feedback-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 [data-yawp-dev-panel] .yawp-dev-panel-give-feedback-inline {
@@ -481,7 +510,7 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
   gap: 8px;
   padding: 0 var(--yawp-dev-panel-inset);
   border: 0;
-  background: transparent;
+  background: var(--yawp-dev-panel-surface);
   font: inherit;
   font-size: var(--yawp-dev-panel-fs);
   font-weight: 500;
@@ -497,6 +526,7 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
 }
 
 [data-yawp-dev-panel] .yawp-dev-panel-footer {
+  background: var(--yawp-dev-panel-surface);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -508,7 +538,6 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
   line-height: 16px;
   color: var(--yawp-dev-panel-muted);
   border-top: 1px solid var(--yawp-dev-panel-border);
-  background: hsl(var(--background));
   flex: none;
 }
 

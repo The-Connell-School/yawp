@@ -316,7 +316,7 @@ export function DevPanelShell() {
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex-1 overflow-y-auto">
+        <div className="yawp-dev-panel-scroll flex-1 overflow-y-auto">
           {!unlocked ? (
             <div className="flex flex-col items-center px-4 py-8 text-center">
               <div
@@ -340,6 +340,7 @@ export function DevPanelShell() {
             </div>
           ) : (
             <>
+              <div className="yawp-dev-panel-section">
               <Collapsible
                 open={state.openSections.includes('sign-in')}
                 onOpenChange={() => toggleSection('sign-in')}
@@ -355,7 +356,7 @@ export function DevPanelShell() {
                     <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
                   )}
                 </CollapsibleTrigger>
-                <CollapsibleContent className="yawp-dev-panel-inline-expanded-body">
+                <CollapsibleContent className="yawp-dev-panel-collapsible-content yawp-dev-panel-inline-expanded-body">
                   <DevPanelOrgPicker
                     orgs={orgs}
                     value={selectedOrg}
@@ -420,7 +421,9 @@ export function DevPanelShell() {
                   ))}
                 </CollapsibleContent>
               </Collapsible>
+              </div>
 
+              <div className="yawp-dev-panel-section">
               <Collapsible
                 open={state.openSections.includes('free-tier-states')}
                 onOpenChange={() => toggleSection('free-tier-states')}
@@ -436,14 +439,16 @@ export function DevPanelShell() {
                     <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
                   )}
                 </CollapsibleTrigger>
-                <CollapsibleContent>
+                <CollapsibleContent className="yawp-dev-panel-collapsible-content yawp-dev-panel-inline-expanded-body">
                   <DevPanelFreeTierInline
                     orgId={selectedOrg}
                     sectionOpen={state.openSections.includes('free-tier-states')}
                   />
                 </CollapsibleContent>
               </Collapsible>
+              </div>
 
+              <div className="yawp-dev-panel-section">
               <Collapsible
                 open={state.openSections.includes('blackboard')}
                 onOpenChange={() => toggleSection('blackboard')}
@@ -457,7 +462,7 @@ export function DevPanelShell() {
                     <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
                   )}
                 </CollapsibleTrigger>
-                <CollapsibleContent className="yawp-dev-panel-inline-expanded-body gap-2">
+                <CollapsibleContent className="yawp-dev-panel-collapsible-content yawp-dev-panel-inline-expanded-body">
                   <div className="flex items-center gap-2 px-0 py-1">
                     <span
                       id="dev-panel-bb-role-label"
@@ -512,7 +517,9 @@ export function DevPanelShell() {
                   </Button>
                 </CollapsibleContent>
               </Collapsible>
+              </div>
 
+              <div className="yawp-dev-panel-section">
               <Collapsible
                 open={state.openSections.includes('tester-tools')}
                 onOpenChange={() => toggleSection('tester-tools')}
@@ -526,7 +533,7 @@ export function DevPanelShell() {
                     <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
                   )}
                 </CollapsibleTrigger>
-                <CollapsibleContent className="yawp-dev-panel-inline-expanded-body gap-1.5">
+                <CollapsibleContent className="yawp-dev-panel-collapsible-content yawp-dev-panel-inline-expanded-body">
                   <div className="flex items-center gap-1.5 py-1">
                     <input
                       id="dev-panel-current-url"
@@ -575,12 +582,14 @@ export function DevPanelShell() {
                   </button>
                 </CollapsibleContent>
               </Collapsible>
+              </div>
             </>
           )}
         </div>
 
         {unlocked ? (
           <div className="yawp-dev-panel-feedback-section mt-auto">
+            <div className="yawp-dev-panel-section">
             <Collapsible
               open={state.openSections.includes('give-feedback')}
               onOpenChange={() => toggleSection('give-feedback')}
@@ -595,13 +604,14 @@ export function DevPanelShell() {
                   <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
                 )}
               </CollapsibleTrigger>
-              <CollapsibleContent>
+              <CollapsibleContent className="yawp-dev-panel-collapsible-content yawp-dev-panel-inline-expanded-body">
                 <DevPanelGiveFeedbackInline
                   sectionOpen={state.openSections.includes('give-feedback')}
                   feedbackActions={() => feedbackContext.current.snapshot()}
                 />
               </CollapsibleContent>
             </Collapsible>
+            </div>
           </div>
         ) : null}
       </div>
@@ -670,7 +680,7 @@ export function DevPanelShell() {
       data-yawp-dev-panel-ready="true"
       aria-label="Developer tools"
       className={cn(
-        'yawp-dev-panel-docked fixed inset-y-0 right-0 z-40 flex flex-col bg-background',
+        'yawp-dev-panel-docked fixed inset-y-0 right-0 z-40 flex flex-col',
         'w-[var(--yawp-dev-panel-width)]'
       )}
     >

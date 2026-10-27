@@ -153,7 +153,7 @@ export function DevPanelGiveFeedbackInline({
   ]);
 
   return (
-    <div className="yawp-dev-panel-inline-expanded-body yawp-dev-panel-give-feedback-inline">
+    <div className="yawp-dev-panel-give-feedback-inline">
       <div className="yawp-dev-panel-segmented" role="radiogroup" aria-label="Feedback type">
         {FEEDBACK_TYPES.map((entry) => (
           <button
