@@ -25,6 +25,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { buildSafeErrorForLog } from './log-script-error.mjs';
 import { parsePreviewPr } from './wake-server.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -596,7 +597,10 @@ export function createRoute53Dns01Provider({
           });
         }
       } catch (error) {
-        console.error(`Warning: failed to remove ACME DNS challenge ${recordName}: ${error.message}`);
+        console.error(
+          `Warning: failed to remove ACME DNS challenge ${recordName}:`,
+          buildSafeErrorForLog(error),
+        );
       }
     },
   };
@@ -610,7 +614,7 @@ async function waitForStatus({ session, url, valid, pollIntervalMs, attempts = 6
     const { body } = await session.json(url, null);
     if (valid(body)) return body;
     if (body.status === 'invalid') {
-      throw new Error(`ACME resource became invalid: ${JSON.stringify(body.error || {})}`);
+      throw new Error('ACME resource became invalid');
     }
   }
   throw new Error('ACME validation timed out');
@@ -888,8 +892,10 @@ export async function ensureWildcardCertificate({
       email,
     });
     if (!externalAccountBinding) {
+      const safeMessage =
+        buildSafeErrorForLog(error).message ?? 'ACME issuance failed';
       throw new Error(
-        `${error.message}; ZeroSSL fallback is not configured (set PREVIEW_ACME_EMAIL, PREVIEW_ZEROSSL_ACCESS_KEY, or PREVIEW_ZEROSSL_EAB_KID/PREVIEW_ZEROSSL_EAB_HMAC_KEY)`,
+        `${safeMessage}; ZeroSSL fallback is not configured (set PREVIEW_ACME_EMAIL, PREVIEW_ZEROSSL_ACCESS_KEY, or PREVIEW_ZEROSSL_EAB_KID/PREVIEW_ZEROSSL_EAB_HMAC_KEY)`,
       );
     }
     return issueCertificate({
@@ -980,7 +986,7 @@ if (isDirectExecution(import.meta.url)) {
         console.log(`${result.hostname}: ${result.status}`);
       }
       for (const failure of report.failures) {
-        console.error(`${failure.hostname}: ${failure.error.message}`);
+        console.error(`${failure.hostname}:`, buildSafeErrorForLog(failure.error));
       }
       if (report.failures.length > 0) process.exitCode = 1;
     }
