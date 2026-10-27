@@ -496,6 +496,13 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
   background: hsl(var(--background));
 }
 
+[data-yawp-dev-panel] .yawp-dev-panel-blackboard-launch {
+  border: 0;
+  background: var(--yawp-dev-panel-coral-deep);
+  color: var(--yawp-dev-panel-ink);
+  font-weight: 600;
+}
+
 [data-yawp-dev-panel] .yawp-dev-panel-feedback-section {
   border-top: 1px solid var(--yawp-dev-panel-border);
   flex: none;

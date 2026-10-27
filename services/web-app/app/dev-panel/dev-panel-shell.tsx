@@ -495,7 +495,8 @@ export function DevPanelShell() {
                   </div>
                   <Button
                     type="button"
-                    className="yawp-dev-panel-pill-action h-[var(--yawp-dev-panel-btn-height)] w-full"
+                    variant="outline"
+                    className="yawp-dev-panel-blackboard-launch yawp-dev-panel-pill-action h-[var(--yawp-dev-panel-btn-height)] w-full"
                     onClick={async () => {
                       const response = await fetch('/api/dev-panel/blackboard-launch', {
                         method: 'POST',

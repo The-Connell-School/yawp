@@ -157,9 +157,7 @@ async function ensureThrowawayTeacher(organizationId: string): Promise<JumpTarge
   };
 }
 
-async function ensureThrowawayPendingTeacher(
-  organizationId: string
-): Promise<JumpTarget> {
+async function ensureThrowawayPendingTeacher(): Promise<JumpTarget> {
   const teacherDomain = `pending-${randomUUID().slice(0, 12)}.example.test`;
   const email = `dev-panel+${randomUUID()}@${teacherDomain}`;
   const passwordHash = bcrypt.hashSync(LOCAL_DEV_PASSWORD, 10);
@@ -168,24 +166,16 @@ async function ensureThrowawayPendingTeacher(
       email,
       name: 'Test Teacher',
       password: { create: { hash: passwordHash } },
-      memberships: {
-        create: {
-          organizationId,
-          role: 'TEACHER',
-          isActive: true,
-        },
-      },
     },
     select: {
       id: true,
       email: true,
-      memberships: { select: { id: true }, take: 1 },
     },
   });
   return {
     userId: user.id,
     email: user.email!,
-    membershipId: user.memberships[0]!.id,
+    membershipId: null,
     pendingThrowaway: true,
   };
 }
@@ -205,7 +195,7 @@ async function resolveTargetUser(
 ): Promise<JumpTarget> {
   if (input.throwaway) {
     if (state.id.startsWith('pending.')) {
-      return ensureThrowawayPendingTeacher(input.organizationId);
+      return ensureThrowawayPendingTeacher();
     }
     if (state.id.startsWith('approved.') || state.adminSide) {
       return ensureThrowawayTeacherWithoutOrgMembership();
@@ -294,6 +284,12 @@ async function jumpToPendingTeacherState(args: {
   devPanelOrganizationId: string;
 }) {
   assertPendingThrowawayTarget(args.target);
+  await prisma.orgMembership.deleteMany({
+    where: {
+      userId: args.target.userId,
+      organizationId: args.devPanelOrganizationId,
+    },
+  });
   const teacherDomain = args.target.email.split('@')[1] ?? '';
   const adminDomain = args.manualReview
     ? `review-${randomUUID().slice(0, 12)}.example.test`
@@ -346,12 +342,6 @@ async function jumpToPendingTeacherState(args: {
     throw new Error('Pending jump produced an unexpected application status.');
   }
 
-  await prisma.orgMembership.deleteMany({
-    where: {
-      userId: args.target.userId,
-      organizationId: args.devPanelOrganizationId,
-    },
-  });
   await ensureLockedPreviewClassroomForUser(args.target.userId);
   const membership = await prisma.orgMembership.findFirst({
     where: {
