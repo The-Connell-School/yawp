@@ -274,16 +274,10 @@ test.describe("Lesson Planner — Brian's sixth run", () => {
       await page.waitForLoadState('networkidle');
       const takeToClass = page.getByTestId('take-to-class');
       await expect(takeToClass).toContainText('The planner already made a deck in your conversation');
+      // Add it adds it, with no detour through the sidebar (Brian's round 5, item 6).
       await takeToClass.getByTestId('add-conversation-deck').click();
-
-      const panel = page.getByTestId('add-panel');
-      await expect(panel.getByRole('tab', { name: 'From your conversation' })).toHaveAttribute('aria-selected', 'true');
-      const deck = panel.getByTestId('stack-deck');
-      await expect(deck).toContainText('The Things They Carried — Day 1');
-      await deck.getByTestId('deck-toggle').click();
       await expect(takeToClass).toContainText('4 slides from your stack');
-      // Like an added activity, it leaves the list once it is in the lesson.
-      await expect(deck).toHaveCount(0);
+      await expect(page.getByTestId('add-panel')).toHaveCount(0);
       // Added as it was: nothing was rebuilt.
       expect(asked).toEqual([]);
     });
@@ -345,8 +339,10 @@ test.describe("Lesson Planner — Brian's sixth run", () => {
         'href',
         new RegExp(`/present/${conversationId}/[^?]+\\?from=stack$`)
       );
+      // Add it adds it right there (Brian's round 5, item 6).
       await takeToClass.getByTestId('add-conversation-deck').click();
-      await expect(page.getByRole('tab', { name: 'Ask the planner' })).toHaveAttribute('aria-selected', 'true');
+      await expect(takeToClass.getByTestId('add-conversation-deck')).toHaveCount(0);
+      await expect(page.getByTestId('add-panel')).toHaveCount(0);
       expect(asked).toHaveLength(1);
     });
   });
