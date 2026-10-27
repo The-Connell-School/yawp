@@ -2994,10 +2994,11 @@ test.describe('Yawp! Lesson Planner', () => {
     await expect(
       page.locator('#assignment-create-exit-ticket-lesson-mustMention')
     ).toHaveValue('Whether the material moves.');
-    // And the teacher reads the composed prompt before anything is created.
+    // And the teacher reads the composed prompt, and can change it, before
+    // anything is created (Brian's round 5, item 4).
     await expect(
       page.locator('#assignment-create-exit-ticket-preview')
-    ).toContainText('the difference between weathering and erosion');
+    ).toHaveValue(/the difference between weathering and erosion/);
 
     // The way back to the half-finished lesson is still there afterwards.
     await page.keyboard.press('Escape');

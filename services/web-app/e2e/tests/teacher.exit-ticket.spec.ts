@@ -1,10 +1,10 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 
-// An exit ticket is the one assignment type a teacher does not write a prompt
-// for: they answer the form and the product composes what students read. These
-// tests walk the two shapes end to end and check the composed prompt is what
-// actually lands on the assignment.
+// An exit ticket's prompt is composed from the teacher's answers to the form,
+// and the teacher can change its wording before creating it (Brian's round 5,
+// item 4). These tests walk the two shapes end to end and check the prompt is
+// what actually lands on the assignment.
 
 const BASIC_OPENING = 'Tell me, in your own words, what you learned today';
 const TOPIC = 'the difference between weathering and erosion';
@@ -37,7 +37,8 @@ test.describe.serial('Exit tickets', () => {
 
     await openNewAssignmentSheet(page);
 
-    // No prompt box at all: the teacher answers the form instead.
+    // No blank prompt box: the teacher answers the form, and the prompt it
+    // composes is there to change.
     await expect(page.getByRole('textbox', { name: 'Prompt' })).toHaveCount(0);
 
     // Reflection or check is the first choice, and reflection is where the
@@ -48,7 +49,7 @@ test.describe.serial('Exit tickets', () => {
     await expect(
       page.getByRole('radio', { name: /^Check for understanding/ })
     ).not.toBeChecked();
-    await expect(page.getByText(BASIC_OPENING)).toBeVisible();
+    await expect(page.getByTestId('exit-ticket-prompt')).toHaveValue(new RegExp(BASIC_OPENING));
 
     await page.getByLabel('Title (optional)').fill('Exit ticket: Tuesday');
     await page.getByRole('button', { name: /Create Assignment/i }).click();
@@ -79,8 +80,8 @@ test.describe.serial('Exit tickets', () => {
     await page.getByRole('radio', { name: /^Yes/ }).click();
 
     // The teacher approves the exact wording before a class ever sees it.
-    await expect(page.getByText(TOPIC).last()).toBeVisible();
-    await expect(page.getByText(BASIC_OPENING)).toHaveCount(0);
+    await expect(page.getByTestId('exit-ticket-prompt')).toHaveValue(new RegExp(TOPIC));
+    await expect(page.getByTestId('exit-ticket-prompt')).not.toHaveValue(new RegExp(BASIC_OPENING));
 
     await page.getByLabel('Title (optional)').fill('Exit ticket: erosion');
     await page.getByRole('button', { name: /Create Assignment/i }).click();
@@ -113,7 +114,7 @@ test.describe.serial('Exit tickets', () => {
       page.getByRole('radio', { name: /^Check for understanding/ })
     ).toBeChecked();
     await expect(page.getByLabel('What specifically?')).toHaveValue(TOPIC);
-    await expect(page.getByText(TOPIC).last()).toBeVisible();
+    await expect(page.getByTestId('exit-ticket-prompt')).toHaveValue(new RegExp(TOPIC));
   });
 
   test("a reflection can ask a suggested question or the teacher's own", async ({
@@ -128,14 +129,14 @@ test.describe.serial('Exit tickets', () => {
     await openNewAssignmentSheet(page);
 
     await page.getByRole('radio', { name: 'Still wondering' }).click();
-    await expect(
-      page.getByText('What is one question you still have')
-    ).toBeVisible();
-    await expect(page.getByText(BASIC_OPENING)).toHaveCount(0);
+    await expect(page.getByTestId('exit-ticket-prompt')).toHaveValue(
+      /What is one question you still have/
+    );
+    await expect(page.getByTestId('exit-ticket-prompt')).not.toHaveValue(new RegExp(BASIC_OPENING));
 
     await page.getByRole('radio', { name: 'Write your own' }).click();
     await page.getByLabel('Your question').fill(CUSTOM_QUESTION);
-    await expect(page.getByText(CUSTOM_QUESTION).last()).toBeVisible();
+    await expect(page.getByTestId('exit-ticket-prompt')).toHaveValue(new RegExp(CUSTOM_QUESTION));
 
     await page.getByLabel('Title (optional)').fill('Exit ticket: own question');
     await page.getByRole('button', { name: /Create Assignment/i }).click();

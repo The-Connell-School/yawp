@@ -927,6 +927,8 @@ export function AssignmentCreationSheetContent({
   const strictnessLabel = selectedStrictness?.label ?? '';
   const strictnessDescription = selectedStrictness?.description ?? '';
 
+  const seededPromptEdit = useRef<string | null>(null);
+  const editingAssignmentId = editingAssignment?.id ?? null;
   useEffect(() => {
     if (!open) {
       wasOpenRef.current = false;
@@ -948,6 +950,7 @@ export function AssignmentCreationSheetContent({
     setTitle(initialTitle);
     setPrompt(initialPrompt);
     setExitTicketPromptEdit(null);
+    seededPromptEdit.current = null;
     const grading = initialGradingFor({
       isEditing: Boolean(editingAssignment),
       isExitTicket: isExitTicketTypeId(
@@ -1044,6 +1047,16 @@ export function AssignmentCreationSheetContent({
     open,
     teacherClasses,
   ]);
+
+  // Reopened for editing, a prompt the teacher wrote stays theirs (Brian's
+  // round 5, item 4): their stored words, not the composed ones.
+  useEffect(() => {
+    if (!open || !isExitTicket || !editingAssignmentId || !initialPrompt.trim() || !exitTicketPrompt) return;
+    const key = `${editingAssignmentId}:${initialPrompt}`;
+    if (seededPromptEdit.current === key) return;
+    seededPromptEdit.current = key;
+    if (initialPrompt.trim() !== exitTicketPrompt.trim()) setExitTicketPromptEdit(initialPrompt);
+  }, [open, isExitTicket, editingAssignmentId, initialPrompt, exitTicketPrompt]);
 
   const toldCreated = useRef<unknown>(null);
   useEffect(() => {

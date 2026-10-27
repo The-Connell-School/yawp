@@ -982,6 +982,21 @@ describe('AssignmentCreationSheetContent', () => {
       expect(document.querySelector('input[name="exitTicketPromptEdited"]')).toBeNull();
     });
 
+    it('reopens an edited prompt in the teacher’s words, and a composed one as composed', () => {
+      root = renderQuickExitTicketSheet({
+        fixedClassId: 'class-1',
+        editingAssignment: { id: 'a-1' },
+        initialPrompt: 'What did Paine get right?',
+      }).root;
+      const box = document.querySelector<HTMLTextAreaElement>('[data-testid="exit-ticket-prompt"]')!;
+      expect(box.value).toBe('What did Paine get right?');
+      expect(inputByName('exitTicketPromptEdited').value).toBe('1');
+      cleanup();
+
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1', editingAssignment: { id: 'a-2' } }).root;
+      expect(document.querySelector('input[name="exitTicketPromptEdited"]')).toBeNull();
+    });
+
     it('asks what to check for once the teacher picks a check', () => {
       root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
       expectNoText('What are you checking for?');
