@@ -6,8 +6,12 @@ export type DevPanelSubSheet =
   | 'class-simulation'
   | null;
 
+export type DevPanelFeedbackType = 'bug' | 'idea' | 'copy';
+
 export type DevPanelPersistedForms = {
   feedbackNote?: string;
+  feedbackType?: DevPanelFeedbackType;
+  feedbackAttachScreenshot?: boolean;
   throwawaySwitch?: boolean;
   selectedStateId?: string | null;
   blackboardRole?: 'teacher' | 'student';
@@ -38,6 +42,8 @@ export const DEV_PANEL_DEFAULT_STATE: DevPanelPersistedState = {
     throwawaySwitch: true,
     blackboardRole: 'teacher',
     simulationStudentCount: 20,
+    feedbackType: 'bug',
+    feedbackAttachScreenshot: true,
   },
 };
 

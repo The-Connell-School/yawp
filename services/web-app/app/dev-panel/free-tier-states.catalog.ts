@@ -110,6 +110,23 @@ export const FREE_TIER_STATE_GROUPS: FreeTierStateGroup[] = [
     ],
   },
   {
+    id: 'lifecycle',
+    title: 'Lifecycle',
+    summary: 'Terminal application statuses',
+    states: [
+      {
+        id: 'lifecycle.rejected',
+        label: 'Not approved',
+        description: 'Admin declined; teacher sees the waitlist status screen.',
+      },
+      {
+        id: 'lifecycle.expired',
+        label: 'Invite expired',
+        description: 'Application or invite link is past expiry.',
+      },
+    ],
+  },
+  {
     id: 'admin-side',
     title: 'Admin-side',
     summary: 'Opens signed-out admin pages from email links',

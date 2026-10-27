@@ -1,8 +1,8 @@
 :root {
-  --yawp-dev-panel-width: 360px;
+  --yawp-dev-panel-width: 320px;
   --yawp-dev-panel-inset: 12px;
   --yawp-dev-panel-row-height: 32px;
-  --yawp-dev-panel-header-height: 40px;
+  --yawp-dev-panel-header-height: 44px;
   --yawp-dev-panel-btn-height: 24px;
   --yawp-dev-panel-login-row-height: 30px;
   --yawp-dev-panel-fs: 13px;
@@ -10,20 +10,8 @@
   --yawp-dev-panel-coral-deep: var(--yawp-coral, #e07856);
 }
 
-@media (min-width: 1024px) and (max-width: 1279px) {
-  :root {
-    --yawp-dev-panel-width: 320px;
-  }
-}
-
 html.yawp-dev-panel-open {
-  --yawp-dev-panel-width: 360px;
-}
-
-@media (min-width: 1024px) and (max-width: 1279px) {
-  html.yawp-dev-panel-open {
-    --yawp-dev-panel-width: 320px;
-  }
+  --yawp-dev-panel-width: 320px;
 }
 
 @media (min-width: 1024px) {
@@ -105,7 +93,7 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
 [data-yawp-dev-panel] .yawp-dev-panel-header-heading {
   font-size: var(--yawp-dev-panel-fs);
   line-height: 16px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 [data-yawp-dev-panel] .yawp-dev-panel-header-close {
@@ -139,7 +127,7 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
   padding: 0 var(--yawp-dev-panel-inset);
   text-align: left;
   font-size: var(--yawp-dev-panel-fs);
-  font-weight: 600;
+  font-weight: 500;
   color: hsl(var(--foreground));
   border: 0;
   border-bottom: 1px solid hsl(var(--border));
@@ -233,6 +221,16 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-section-body-inline {
+  border: 0;
+  box-shadow: none;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-row-spacer {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 [data-yawp-dev-panel] .yawp-dev-panel-login-group-title {
@@ -396,6 +394,202 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
   border: 1px solid var(--yawp-dev-panel-ink-border);
   border-right: 0;
   box-shadow: none;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-footer-build {
+  font-size: 12px;
+  line-height: 16px;
+  color: hsl(var(--muted-foreground));
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-hide-tools {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-text-action {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-inline-mono {
+  border: 0;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--input));
+  background: hsl(var(--background));
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-segmented-inline {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-segment,
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-segment {
+  flex: 1;
+  height: calc(var(--yawp-dev-panel-btn-height) - 4px);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+[data-yawp-dev-panel] .yawp-dev-panel-segment-active,
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-segment-active {
+  background: hsl(var(--secondary));
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-pe3-feedback-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-pe3-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-pe3-field-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-pe3-textarea {
+  min-height: 120px;
+  background: hsl(var(--muted) / 0.35);
+  border-color: hsl(var(--border));
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-pe3-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-pe3-page-meta {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: hsl(var(--muted-foreground));
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-pe3-feedback-footer {
+  flex: none;
+  padding: 12px 16px 16px;
+  border-top: 1px solid hsl(var(--border));
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-send-feedback {
+  background: var(--yawp-dev-panel-coral-deep);
+  color: hsl(var(--primary-foreground));
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-send-feedback:hover {
+  background: var(--yawp-dev-panel-coral-deep);
+  opacity: 0.92;
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-pe3-state-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-pe3-state-row-selected {
+  background: hsl(var(--accent));
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-pe3-radio {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: 999px;
+  border: 1.5px solid hsl(var(--input));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-pe3-radio-checked {
+  border-color: hsl(var(--primary));
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-pe3-radio-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: hsl(var(--primary));
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-pe3-state-label {
+  flex: 1 1 auto;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-pe3-state-code {
+  flex: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: hsl(var(--muted-foreground));
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-pe3-footnote {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: hsl(var(--muted-foreground));
+}
+
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-pe3-error,
+[data-yawp-dev-panel-flyout] .yawp-dev-panel-pe3-jumping {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  border-top: 1px solid hsl(var(--border));
 }
 
 [data-yawp-dev-panel] .yawp-dev-panel-org-popover {

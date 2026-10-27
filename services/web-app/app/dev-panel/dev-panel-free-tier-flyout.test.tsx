@@ -40,7 +40,7 @@ afterEach(() => {
 });
 
 describe('DevPanelFreeTierFlyout', () => {
-  test('disables jump until a state is selected', () => {
+  test('lists PE3 states and footnote without a jump button', () => {
     writeDevPanelState(window.localStorage, {
       open: true,
       openSections: ['sign-in'],
@@ -60,8 +60,12 @@ describe('DevPanelFreeTierFlyout', () => {
         </DevPanelProvider>
       </MemoryRouter>
     );
-    const buttons = [...container.querySelectorAll('button')];
-    const jumpButton = buttons.find((btn) => btn.textContent === 'Jump to this state');
-    expect(jumpButton?.disabled).toBe(true);
+    expect(container.textContent).toContain('Waitlisted');
+    expect(container.textContent).toContain('LEAD');
+    expect(container.textContent).toContain('Applies right away and reloads the page.');
+    const jumpButton = [...container.querySelectorAll('button')].find((btn) =>
+      btn.textContent?.includes('Jump to this state')
+    );
+    expect(jumpButton).toBeUndefined();
   });
 });

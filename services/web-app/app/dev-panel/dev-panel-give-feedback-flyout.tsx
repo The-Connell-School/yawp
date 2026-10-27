@@ -1,15 +1,8 @@
-import {
-  Check,
-  ChevronLeft,
-  CircleAlert,
-  Loader2,
-  UserRound,
-  X,
-} from 'lucide-react';
+import { ChevronLeft, CircleAlert, Loader2, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useRouteLoaderData } from 'react-router';
 import { Button } from '~/components/ui/button';
-import { Input } from '~/components/ui/input';
+import { Checkbox } from '~/components/ui/checkbox';
 import { Label } from '~/components/ui/label';
 import { Textarea } from '~/components/ui/textarea';
 import { cn } from '~/utils/misc';
@@ -19,6 +12,8 @@ import { compressFeedbackScreenshot } from './compress-feedback-screenshot';
 import { useDevPanel } from './dev-panel-provider';
 import { createDevPanelFeedbackContext } from './dev-panel-feedback-context';
 import { devPanelFeedbackPath } from './dev-panel-feedback-path';
+import { devPanelFeedbackPageMeta } from './dev-panel-feedback-page-meta';
+import type { DevPanelFeedbackType } from './dev-panel-types';
 import { useVisualViewportFooterStyle } from './use-visual-viewport-footer';
 
 function useMedia(query: string) {
@@ -37,14 +32,19 @@ function feedbackNoteValue(raw: unknown) {
   return typeof raw === 'string' ? raw : '';
 }
 
-function TesterIdentityBadge() {
-  return (
-    <p className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-      <UserRound className="size-4 shrink-0" aria-hidden="true" />
-      Sent as a tester (not signed in)
-    </p>
-  );
+function membershipRoleLabel(role: string | undefined) {
+  if (!role) return '';
+  const normalized = role.toLowerCase();
+  if (normalized.includes('student')) return 'Student';
+  if (normalized === 'admin' || normalized === 'owner') return 'Admin';
+  return 'Teacher';
 }
+
+const FEEDBACK_TYPES: { id: DevPanelFeedbackType; label: string }[] = [
+  { id: 'bug', label: 'Bug' },
+  { id: 'idea', label: 'Idea' },
+  { id: 'copy', label: 'Copy' },
+];
 
 export function DevPanelGiveFeedbackFlyout({
   onClose,
@@ -62,35 +62,36 @@ export function DevPanelGiveFeedbackFlyout({
   const location = useLocation();
   const path = devPanelFeedbackPath(location.pathname + location.search);
   const noteId = useId();
-  const pageUrlId = useId();
-  const sentHeadingId = useId();
   const isPhone = useMedia('(max-width: 639px)');
   const footerStyle = useVisualViewportFooterStyle(isPhone);
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [screenshotOmitted, setScreenshotOmitted] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'submitting' | 'sent' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle');
   const [error, setError] = useState('');
   const [serverError, setServerError] = useState('');
-  const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const note = feedbackNoteValue(state.forms.feedbackNote);
-  const signedOut = !rootData?.user?.email;
-  const sentPathRef = useRef(path);
+  const feedbackType = state.forms.feedbackType ?? 'bug';
+  const attachScreenshot = state.forms.feedbackAttachScreenshot !== false;
+  const signedInRole = membershipRoleLabel(
+    rootData?.user?.selectedMembership?.role ?? rootData?.user?.memberships?.[0]?.role
+  );
+  const pageMeta = devPanelFeedbackPageMeta({
+    path: path ?? location.pathname,
+    signedIn: Boolean(rootData?.user?.email),
+    roleLabel: signedInRole,
+    selectedStateId: state.forms.selectedStateId,
+  });
+  const captureStarted = useRef(false);
 
   useEffect(() => {
-    if (state.subSheet !== 'give-feedback') return;
-    const focusNote = () => {
-      const el = document.getElementById(noteId);
-      if (!el) return;
-      el.focus({ preventScroll: true });
-      if (document.activeElement !== el) {
-        window.requestAnimationFrame(() => {
-          el.focus({ preventScroll: true });
-        });
-      }
-    };
+    if (state.subSheet !== 'give-feedback' || !attachScreenshot) {
+      if (!attachScreenshot) setScreenshot(null);
+      return;
+    }
+    if (captureStarted.current) return;
+    captureStarted.current = true;
     if (typeof navigator !== 'undefined' && navigator.webdriver) {
       setScreenshot(null);
-      window.setTimeout(focusNote, 0);
       return;
     }
     void captureFeedbackScreenshot()
@@ -102,15 +103,14 @@ export function DevPanelGiveFeedbackFlyout({
       .catch(() => {
         setScreenshot(null);
         setScreenshotOmitted(false);
-      })
-      .finally(focusNote);
-  }, [noteId, state.subSheet]);
+      });
+  }, [attachScreenshot, state.subSheet]);
 
   useEffect(() => {
-    if (status !== 'sent') return;
-    const heading = document.getElementById(sentHeadingId);
-    heading?.focus({ preventScroll: true });
-  }, [sentHeadingId, status]);
+    if (state.subSheet !== 'give-feedback') {
+      captureStarted.current = false;
+    }
+  }, [state.subSheet]);
 
   const submit = useCallback(async () => {
     if (!path) {
@@ -126,18 +126,23 @@ export function DevPanelGiveFeedbackFlyout({
     setStatus('submitting');
     setError('');
     setServerError('');
-    setErrorStatus(null);
+    const typePrefix =
+      feedbackType === 'idea'
+        ? '[Idea] '
+        : feedbackType === 'copy'
+          ? '[Copy] '
+          : '[Bug] ';
     try {
       const response = await fetch('/api/dev-panel/feedback', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          note: note.trim(),
+          note: `${typePrefix}${note.trim()}`,
           url: path,
           actions: feedbackActions(),
-          screenshot,
-          screenshotOmitted,
+          screenshot: attachScreenshot ? screenshot : null,
+          screenshotOmitted: attachScreenshot ? screenshotOmitted : false,
         }),
       });
       const result = await response.json().catch(() => null);
@@ -146,42 +151,31 @@ export function DevPanelGiveFeedbackFlyout({
           typeof result?.error === 'string' ? result.error : 'Could not send feedback.';
         setServerError(message);
         setError(message);
-        setErrorStatus(response.status);
         setStatus('error');
         return;
       }
-      sentPathRef.current = path;
-      setStatus('sent');
+      updateForms({ feedbackNote: '' });
+      setStatus('idle');
+      onClose();
     } catch {
       setStatus('error');
       setError('');
-      setServerError('');
-      setErrorStatus(null);
+      setServerError('Could not send feedback.');
     }
   }, [
+    attachScreenshot,
     feedbackActions,
+    feedbackType,
     note,
     noteId,
+    onClose,
     path,
     screenshot,
     screenshotOmitted,
+    updateForms,
   ]);
 
-  useEffect(() => {
-    if (state.subSheet !== 'give-feedback' || status === 'sent') return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Enter' || (!event.ctrlKey && !event.metaKey)) return;
-      if (status === 'submitting') return;
-      event.preventDefault();
-      void submit();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [state.subSheet, status, submit]);
-
   if (state.subSheet !== 'give-feedback') return null;
-
-  const displayPath = path ?? location.pathname;
 
   return (
     <div
@@ -221,242 +215,90 @@ export function DevPanelGiveFeedbackFlyout({
           </button>
         ) : null}
       </header>
-      <div
-        className={cn(
-          'flex flex-1 flex-col overflow-hidden',
-          status === 'sent' && 'justify-center'
-        )}
-      >
-        <div className="yawp-dev-panel-flyout-body">
-        {status === 'sent' ? (
-          <div className="space-y-4">
-            <div className="flex flex-col items-center gap-3 text-center">
-              <div
-                className="flex size-12 items-center justify-center rounded-full bg-primary/15"
-                aria-hidden="true"
+      <div className="yawp-dev-panel-pe3-feedback-body">
+        <div className="yawp-dev-panel-pe3-field">
+          <span className="yawp-dev-panel-pe3-field-label">Type</span>
+          <div className="yawp-dev-panel-segmented" role="tablist" aria-label="Feedback type">
+            {FEEDBACK_TYPES.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                role="tab"
+                aria-selected={feedbackType === entry.id}
+                className={cn(
+                  'yawp-dev-panel-segment',
+                  feedbackType === entry.id && 'yawp-dev-panel-segment-active'
+                )}
+                onClick={() => updateForms({ feedbackType: entry.id })}
               >
-                <Check className="size-6 text-primary" strokeWidth={2.5} />
-              </div>
-              <h3
-                id={sentHeadingId}
-                tabIndex={-1}
-                className="text-base font-semibold outline-none"
-              >
-                Feedback sent
-              </h3>
-              <p role="status" className="text-sm text-muted-foreground">
-                Thanks. The Yawp! team has your note, screenshot and page URL.
-              </p>
-            </div>
-            <dl className="space-y-2 rounded-md bg-muted/50 px-3 py-3 text-sm">
-              {signedOut ? (
-                <div>
-                  <dt className="text-muted-foreground">From</dt>
-                  <dd>Sent as a tester (not signed in)</dd>
-                </div>
-              ) : null}
-              <div>
-                <dt className="text-muted-foreground">Page</dt>
-                <dd className="font-mono text-xs">{sentPathRef.current}</dd>
-              </div>
-            </dl>
+                {entry.label}
+              </button>
+            ))}
           </div>
-        ) : (
-          <>
-            <p className="m-0 text-sm leading-5">
-              Goes straight to the Yawp! team, with a screenshot and this page&apos;s URL.
-            </p>
-            {signedOut ? <TesterIdentityBadge /> : null}
-            <div
-              className={cn(
-                'flex flex-col gap-1.5',
-                status === 'submitting' && 'pointer-events-none opacity-60'
-              )}
-            >
-              <Label htmlFor={noteId}>Note</Label>
-              <Textarea
-                id={noteId}
-                rows={6}
-                maxLength={2000}
-                placeholder="What you did, what you expected, and what happened instead."
-                value={note}
-                disabled={status === 'submitting'}
-                onChange={(event) => {
-                  updateForms({ feedbackNote: event.target.value });
-                  if (error) setError('');
-                }}
-                aria-invalid={Boolean(error && status !== 'error')}
-                aria-describedby="dev-panel-feedback-note-help"
-              />
-              <div className="flex items-start gap-3">
-                {error && status !== 'error' ? (
-                  <p
-                    id="dev-panel-feedback-note-help"
-                    role="alert"
-                    className="flex flex-1 items-start gap-1.5 text-xs font-medium text-destructive"
-                  >
-                    <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-                    {error}
-                  </p>
-                ) : (
-                  <p
-                    id="dev-panel-feedback-note-help"
-                    className="flex-1 text-xs leading-4 text-muted-foreground"
-                  >
-                    Steps to repeat it help most.
-                  </p>
-                )}
-                <span aria-live="polite" className="shrink-0 text-xs text-muted-foreground">
-                  {note.length} / 2000
-                </span>
-              </div>
-            </div>
-            <div
-              className={cn(
-                'flex flex-col gap-1.5',
-                status === 'submitting' && 'pointer-events-none opacity-50'
-              )}
-            >
-              <span id="dev-panel-feedback-shot-label" className="text-sm font-medium">
-                Screenshot
-              </span>
-              <div className="yawp-dev-panel-screenshot-card">
-                {screenshot ? (
-                  <img
-                    src={screenshot}
-                    alt=""
-                    aria-labelledby="dev-panel-feedback-shot-label"
-                    aria-describedby="dev-panel-feedback-shot-help"
-                    className="yawp-dev-panel-screenshot-thumb"
-                  />
-                ) : (
-                  <div
-                    className="yawp-dev-panel-screenshot-thumb bg-muted"
-                    aria-hidden="true"
-                  />
-                )}
-                <div className="flex min-w-0 flex-col gap-1">
-                  <span className="text-[13px] font-medium leading-[18px]">
-                    Attached automatically
-                  </span>
-                  <p
-                    id="dev-panel-feedback-shot-help"
-                    className="m-0 text-xs leading-4 text-muted-foreground"
-                  >
-                    {screenshotOmitted
-                      ? 'Screenshot omitted — the capture was too large to send.'
-                      : 'Taken when you opened Give feedback. The developer panel is left out of it.'}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div
-              className={cn(
-                'flex flex-col gap-1.5',
-                status === 'submitting' && 'opacity-60'
-              )}
-            >
-              <Label htmlFor={pageUrlId}>Page</Label>
-              <Input
-                id={pageUrlId}
-                readOnly
-                disabled={status === 'submitting'}
-                value={displayPath}
-                className="font-mono"
-                aria-describedby="dev-panel-feedback-page-help"
-              />
-              <p
-                id="dev-panel-feedback-page-help"
-                className="m-0 text-xs leading-4 text-muted-foreground"
-              >
-                Filled in from the page you&apos;re on.
-              </p>
-            </div>
-          </>
-        )}
         </div>
-        {status === 'error' ? (
-          <div
-            id="dev-panel-feedback-error"
-            role="alert"
-            className="mx-4 mb-2 flex gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-          >
-            <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            <div>
-              <p className="font-semibold">Couldn&apos;t send your feedback</p>
-              <p>
-                {errorStatus === 400 || errorStatus === 413 || errorStatus === 429
-                  ? serverError
-                  : 'Your note is still here. Check your connection and try again.'}
-              </p>
-            </div>
+        <div className="yawp-dev-panel-pe3-field">
+          <Label htmlFor={noteId}>What happened?</Label>
+          <Textarea
+            id={noteId}
+            rows={5}
+            maxLength={2000}
+            className="yawp-dev-panel-pe3-textarea"
+            placeholder="Describe what you saw and what you expected."
+            value={note}
+            disabled={status === 'submitting'}
+            onChange={(event) => {
+              updateForms({ feedbackNote: event.target.value });
+              if (error) setError('');
+            }}
+            aria-invalid={Boolean(error)}
+          />
+          {error ? (
+            <p role="alert" className="text-xs font-medium text-destructive">
+              {error}
+            </p>
+          ) : null}
+        </div>
+        <label className="yawp-dev-panel-pe3-checkbox-row">
+          <Checkbox
+            checked={attachScreenshot}
+            disabled={status === 'submitting'}
+            onCheckedChange={(checked) =>
+              updateForms({ feedbackAttachScreenshot: checked === true })
+            }
+          />
+          <span>Attach a screenshot of this page</span>
+        </label>
+        <p className="yawp-dev-panel-pe3-page-meta">{pageMeta}</p>
+        {status === 'error' && serverError ? (
+          <div role="alert" className="yawp-dev-panel-pe3-error">
+            <CircleAlert className="size-4 shrink-0" aria-hidden="true" />
+            <span className="text-sm">{serverError}</span>
           </div>
         ) : null}
-        {status === 'sent' ? (
-          <div
-            className={cn(
-              'border-t bg-background p-4',
-              isPhone && 'fixed inset-x-0 bottom-0 z-20 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]'
-            )}
-            style={isPhone ? footerStyle : undefined}
-          >
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => {
-                setStatus('idle');
-                updateForms({ feedbackNote: '' });
-                setScreenshot(null);
-                setScreenshotOmitted(false);
-                window.setTimeout(() => document.getElementById(noteId)?.focus(), 0);
-              }}
-            >
-              Send another
-            </Button>
-          </div>
-        ) : (
-          <footer
-            className={cn(
-              'yawp-dev-panel-flyout-footer',
-              isPhone && 'fixed inset-x-0 bottom-0 z-20'
-            )}
-            style={isPhone ? footerStyle : undefined}
-          >
-            <div className="flex flex-col gap-2.5">
-              <Button
-                type="button"
-                className="w-full"
-                disabled={status === 'submitting'}
-                onClick={() => void submit()}
-              >
-                {status === 'submitting' ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
-                    Sending…
-                  </>
-                ) : status === 'error' ? (
-                  'Try again'
-                ) : (
-                  'Send feedback'
-                )}
-              </Button>
-              {!isPhone && status !== 'error' && status !== 'submitting' ? (
-                <span className="yawp-dev-panel-kbd-hint">
-                  <kbd className="yawp-dev-panel-kbd">Ctrl</kbd>
-                  <kbd className="yawp-dev-panel-kbd">Enter</kbd>
-                  sends (⌘ Enter on Mac)
-                </span>
-              ) : null}
-              {status === 'submitting' ? (
-                <span role="status" className="text-center text-xs text-muted-foreground">
-                  Sending to the Yawp! team…
-                </span>
-              ) : null}
-            </div>
-          </footer>
-        )}
       </div>
+      <footer
+        className={cn(
+          'yawp-dev-panel-pe3-feedback-footer',
+          isPhone && 'fixed inset-x-0 bottom-0 z-20'
+        )}
+        style={isPhone ? footerStyle : undefined}
+      >
+        <Button
+          type="button"
+          className="yawp-dev-panel-send-feedback w-full"
+          disabled={status === 'submitting'}
+          onClick={() => void submit()}
+        >
+          {status === 'submitting' ? (
+            <>
+              <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
+              Sending…
+            </>
+          ) : (
+            'Send feedback'
+          )}
+        </Button>
+      </footer>
     </div>
   );
 }

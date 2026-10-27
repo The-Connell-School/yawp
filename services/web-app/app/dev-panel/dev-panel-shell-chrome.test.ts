@@ -34,7 +34,8 @@ describe('dev panel v3 chrome', () => {
   test('stylesheet defines compact rows and zero-motion flyouts', () => {
     const css = readFileSync(path.join(devPanelDir, 'dev-panel.css'), 'utf8');
     expect(css).toContain('--yawp-dev-panel-inset: 12px');
-    expect(css).toContain('--yawp-dev-panel-header-height: 40px');
+    expect(css).toContain('--yawp-dev-panel-header-height: 44px');
+    expect(css).toContain('--yawp-dev-panel-width: 320px');
     expect(css).toContain('animation: none !important');
     expect(css).not.toContain('yawp-dev-panel-slide-in');
     expect(css).toContain('box-shadow: none');
@@ -44,6 +45,8 @@ describe('dev panel v3 chrome', () => {
     const shell = readFileSync(path.join(devPanelDir, 'dev-panel-shell.tsx'), 'utf8');
     expect(shell.includes('id="devtools-title"')).toBe(true);
     expect(shell.includes('<h1 ref={headingRef}')).toBe(false);
+    expect(shell.includes('Hide tools')).toBe(true);
+    expect(shell.includes('yawp-dev-panel-kbd')).toBe(false);
   });
 
   test('beaker shows locked affordance when preview gate applies', () => {
