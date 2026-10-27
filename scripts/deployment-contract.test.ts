@@ -565,11 +565,17 @@ describe('production deployment contract', () => {
     const wrapper = readRepoFile(
       'services/web-app/vite/react-router-with-preview-ingress.ts'
     );
+    const routerConfig = readRepoFile(
+      'services/web-app/react-router.config.ts'
+    );
 
     expect(viteConfig).toContain('react-router-with-preview-ingress');
     expect(viteConfig).toContain('preview-ingress-ssr-alias');
     expect(aliasModule).toContain("=== 'preview'");
     expect(wrapper).toContain('adaptPreviewIngressRequest');
+    expect(routerConfig).toContain('*.preview.yawp.school');
+    expect(routerConfig).toContain('YAWP_ENVIRONMENT');
+    expect(routerConfig).toContain('"preview"');
   });
 
   test('main deploy runs production Prisma migrations before publishing the image', () => {
