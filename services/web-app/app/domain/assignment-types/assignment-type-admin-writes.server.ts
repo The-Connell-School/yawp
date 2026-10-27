@@ -8,7 +8,10 @@ import type { ResolvedAdminRubricPickerSelection } from '~/domain/rubrics/admin-
 import {
   DEFAULT_OUTPUT_SCHEMA_JSON,
   parseRubric,
+  parseScoringScale,
+  prepareRubricForSave,
 } from './assignment-type-rubric.shared';
+import { normalizeScoreStep } from './score-scale-steps';
 import { isRubricFullyPopulated } from './assignment-type-rubric-config';
 
 type Client = Pick<
@@ -262,10 +265,32 @@ export async function replaceAssignmentTypeImage(
   });
 }
 
+function stableRubricJson(raw: unknown) {
+  return JSON.stringify(prepareRubricForSave(parseRubric(raw)));
+}
+
+function scoringScaleSemanticallyEqual(a: unknown, b: unknown) {
+  const left = parseScoringScale(a);
+  const right = parseScoringScale(b);
+  return (
+    left.type === right.type &&
+    left.minScore === right.minScore &&
+    left.maxScore === right.maxScore &&
+    normalizeScoreStep(left.step) === normalizeScoreStep(right.step) &&
+    left.compositeMin === right.compositeMin &&
+    left.compositeMax === right.compositeMax
+  );
+}
+
 /** Preserve the legacy form's raw config editing and grandfather incomplete rubrics. */
 export function parseAdminUpdateGradingConfig(
   formData: FormData,
-  existing: { rubricJson?: unknown }
+  existing: {
+    rubricJson?: unknown;
+    scoringScaleJson?: unknown;
+    gradingPromptConfigJson?: unknown;
+    gradingOutputSchemaJson?: unknown;
+  }
 ): GradingConfig | undefined {
   const hasConfig = [
     'scoringScale',
@@ -274,9 +299,13 @@ export function parseAdminUpdateGradingConfig(
     'outputSchemaJson',
   ].some((key) => formData.has(key));
   if (!hasConfig) return undefined;
-  const rubricJson = parseJsonFormField(formData, 'rubricJson');
+
+  const submittedRubricJson = formData.has('rubricJson')
+    ? parseJsonFormField(formData, 'rubricJson')
+    : null;
   if (
-    !isRubricFullyPopulated(parseRubric(rubricJson)) &&
+    submittedRubricJson != null &&
+    !isRubricFullyPopulated(parseRubric(submittedRubricJson)) &&
     isRubricFullyPopulated(parseRubric(existing.rubricJson))
   ) {
     throw new Response(
@@ -284,21 +313,73 @@ export function parseAdminUpdateGradingConfig(
       { status: 400 }
     );
   }
+
+  const submittedScoringScale = formData.has('scoringScale')
+    ? parseJsonFormField(formData, 'scoringScale')
+    : null;
+  const rubricChanged =
+    submittedRubricJson != null &&
+    stableRubricJson(submittedRubricJson) !==
+      stableRubricJson(existing.rubricJson);
+  const scoringChanged =
+    submittedScoringScale != null &&
+    !scoringScaleSemanticallyEqual(
+      submittedScoringScale,
+      existing.scoringScaleJson
+    );
+
+  let gradingPromptConfigJson: Prisma.InputJsonValue | undefined;
+  if (formData.has('gradingInstructionsOverride')) {
+    gradingPromptConfigJson = withGradingInstructionsOverride(
+      formData.has('promptConfigJson')
+        ? parseJsonFormField(formData, 'promptConfigJson')
+        : existing.gradingPromptConfigJson,
+      formData.get('gradingInstructionsOverride')
+    ) as Prisma.InputJsonValue;
+  } else if (formData.has('promptConfigJson')) {
+    gradingPromptConfigJson = parseJsonFormField(
+      formData,
+      'promptConfigJson'
+    ) as Prisma.InputJsonValue;
+  }
+  const promptChanged =
+    gradingPromptConfigJson !== undefined &&
+    JSON.stringify(gradingPromptConfigJson) !==
+      JSON.stringify(existing.gradingPromptConfigJson ?? null);
+
+  let gradingOutputSchemaJson: Prisma.InputJsonValue | undefined;
+  if (formData.has('outputSchemaJson')) {
+    gradingOutputSchemaJson = (parseJsonFormField(
+      formData,
+      'outputSchemaJson'
+    ) ?? DEFAULT_OUTPUT_SCHEMA_JSON) as Prisma.InputJsonValue;
+  }
+  const outputChanged =
+    gradingOutputSchemaJson !== undefined &&
+    JSON.stringify(gradingOutputSchemaJson) !==
+      JSON.stringify(existing.gradingOutputSchemaJson ?? null);
+
+  if (!rubricChanged && !scoringChanged && !promptChanged && !outputChanged) {
+    return undefined;
+  }
+
   return {
-    scoringScaleJson: parseJsonFormField(formData, 'scoringScale'),
-    rubricJson,
-    gradingPromptConfigJson: formData.has('gradingInstructionsOverride')
-      ? withGradingInstructionsOverride(
-          parseJsonFormField(formData, 'promptConfigJson'),
-          formData.get('gradingInstructionsOverride')
-        )
-      : parseJsonFormField(formData, 'promptConfigJson'),
-    ...(formData.has('outputSchemaJson')
+    ...(scoringChanged
       ? {
-          gradingOutputSchemaJson:
-            parseJsonFormField(formData, 'outputSchemaJson') ??
-            DEFAULT_OUTPUT_SCHEMA_JSON,
+          scoringScaleJson: scoringScaleSemanticallyEqual(
+            submittedScoringScale,
+            existing.scoringScaleJson
+          )
+            ? (existing.scoringScaleJson ?? submittedScoringScale)
+            : submittedScoringScale,
         }
+      : {}),
+    ...(rubricChanged ? { rubricJson: submittedRubricJson } : {}),
+    ...(promptChanged && gradingPromptConfigJson !== undefined
+      ? { gradingPromptConfigJson }
+      : {}),
+    ...(outputChanged && gradingOutputSchemaJson !== undefined
+      ? { gradingOutputSchemaJson }
       : {}),
     gradingAssistantVersion: { increment: 1 },
   };

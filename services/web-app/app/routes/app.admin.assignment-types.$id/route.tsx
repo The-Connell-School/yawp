@@ -194,6 +194,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       select: {
         id: true,
         rubricJson: true,
+        scoringScaleJson: true,
         gradingPromptConfigJson: true,
         gradingOutputSchemaJson: true,
         rubric: { select: { schemaJson: true } },
