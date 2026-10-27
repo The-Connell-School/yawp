@@ -991,7 +991,7 @@ describe('AssignmentCreationSheetContent', () => {
       const box = document.querySelector<HTMLTextAreaElement>('[data-testid="exit-ticket-prompt"]')!;
       expect(box.value).toBe('What did Paine get right?');
       expect(inputByName('exitTicketPromptEdited').value).toBe('1');
-      cleanup();
+      cleanup(root);
 
       root = renderQuickExitTicketSheet({ fixedClassId: 'class-1', editingAssignment: { id: 'a-2' } }).root;
       expect(document.querySelector('input[name="exitTicketPromptEdited"]')).toBeNull();
