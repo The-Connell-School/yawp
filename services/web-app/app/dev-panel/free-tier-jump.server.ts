@@ -45,6 +45,12 @@ import type { FreeTierStateDefinition } from './free-tier-states.catalog';
 
 function logFreeTierJumpFailure(stateId: string, error: unknown) {
   const name = error instanceof Error ? error.name : 'Error';
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : undefined;
   let code: string | undefined =
     error instanceof FreeTierConfigError ? error.code : undefined;
   if (
@@ -57,6 +63,7 @@ function logFreeTierJumpFailure(stateId: string, error: unknown) {
   console.error('[dev-panel free-tier jump failed]', {
     stateId,
     errorName: name,
+    ...(message ? { message } : {}),
     ...(code ? { code } : {}),
   });
 }
