@@ -1,5 +1,7 @@
 /**
- * "See how it works": a short, teacher-facing tour of The Thesis-Driven Essay.
+ * "See how it works": a short, teacher-facing tour of The Thesis-Driven Essay,
+ * and of Prewriting and Thesis Statement, its steps assigned on their own
+ * (see writing-step-guide.tsx).
  *
  * The cadence leads: the teacher teaches a step from the course, then students
  * write that step with the Tutor, which reinforces the lesson. It says what
@@ -28,16 +30,25 @@ import {
   GuideStep,
   WillWont,
 } from '~/components/how-it-works/guide';
-import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
+import { assignmentTypeHasHowItWorksGuide } from '~/domain/assignment-types/assignment-type-how-it-works';
+import { howItWorksGuideFor } from '~/domain/assignment-types/how-it-works-guide';
 import { lockedPendingGuideLede } from '~/domain/free-tier/locked-dashboard-copy';
 import { userHasPendingFreeTierTeachingLock } from '~/domain/free-tier/locked-preview.server';
 import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
-import { FREE_CLASSROOM_ASSIGNMENT_KINDS } from '~/utils/entitlements.server';
-import type { FreeClassroomAssignmentQuotaKind } from '~/utils/entitlements.server';
+import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
 import { isAssignmentTypeAvailableForAnyScope } from '~/utils/assignment-type-access.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { FREE_CLASSROOM_ASSIGNMENT_KINDS } from '~/utils/entitlements.server';
+import type { FreeClassroomAssignmentQuotaKind } from '~/utils/entitlements.server';
+import { getLessonMaterialsForAssignmentType } from '~/domain/assignment-types/lesson-materials.server';
+import {
+  isWritingStepKind,
+  WRITING_STEP_COPY,
+} from '../app.assignment-types.$id/about-writing-step/content';
+import { ClassStarterGuide } from './class-starter-guide';
 import { TransferChart } from './transfer-chart';
+import { WritingStepGuide } from './writing-step-guide';
 
 const MEDIA = '/img/thesis-essay-guide';
 
@@ -79,40 +90,64 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: { id: true, title: true, kind: true },
   });
   const lockedPendingTeaching = await userHasPendingFreeTierTeachingLock(userId);
-  const lockedPreviewThesisStatementGuide =
-    assignmentType?.kind === 'thesis_statement' && lockedPendingTeaching;
-  const isThesisEssayGuide =
-    assignmentType != null &&
-    (isThesisDrivenEssayTitle(assignmentType.title) ||
-      lockedPreviewThesisStatementGuide);
-  const lockedPendingAssignmentGuide =
-    lockedPendingTeaching &&
-    assignmentType != null &&
-    !isThesisEssayGuide &&
-    assignmentType.kind != null &&
-    FREE_CLASSROOM_ASSIGNMENT_KINDS.includes(
-      assignmentType.kind as FreeClassroomAssignmentQuotaKind
-    );
-  const siteLicenseLockedTiles =
-    lockedPendingTeaching && profile.organization.plan === 'FREE_CLASSROOM'
-      ? await loadSiteLicenseLockedAssignmentTiles(profile.organization)
-      : [];
-  const lockedPendingSiteLicenseGuide =
-    lockedPendingTeaching &&
-    assignmentType != null &&
-    !isThesisEssayGuide &&
-    siteLicenseLockedTiles.some(
+  const pendingBack = lockedPendingTeaching
+    ? ({ backTo: '/app' as const, backLabel: 'Back to dashboard' as const })
+    : null;
+
+  // Prewriting and Thesis Statement, single steps of the essay, have their own
+  // shorter guide.
+  if (assignmentType && isWritingStepKind(assignmentType.kind)) {
+    const copy = WRITING_STEP_COPY[assignmentType.kind];
+    return {
+      guide: 'writing-step' as const,
+      kind: assignmentType.kind,
+      pagePath,
+      backTo: pendingBack?.backTo ?? pagePath,
+      backLabel:
+        pendingBack?.backLabel ?? (`Back to ${copy.title}` as const),
+      lesson: await getLessonMaterialsForAssignmentType(
+        assignmentType.kind,
+        profile.id
+      ),
+    };
+  }
+  const titleGuide = assignmentType
+    ? howItWorksGuideFor(assignmentType.title)
+    : null;
+  if (titleGuide === 'class-starter') {
+    return {
+      guide: 'class-starter' as const,
+      pagePath,
+      backTo: pendingBack?.backTo ?? pagePath,
+      backLabel: pendingBack?.backLabel ?? 'Back to Class Starter',
+    };
+  }
+  // Otherwise only The Thesis-Driven Essay has a guide so far.
+  if (assignmentType && isThesisDrivenEssayTitle(assignmentType.title)) {
+    // fall through to thesis-essay loader below
+  } else if (lockedPendingTeaching && assignmentType) {
+    const siteLicenseLockedTiles =
+      profile.organization.plan === 'FREE_CLASSROOM'
+        ? await loadSiteLicenseLockedAssignmentTiles(profile.organization)
+        : [];
+    const lockedPendingSiteLicenseGuide = siteLicenseLockedTiles.some(
       (tile) => tile.assignmentTypeId === assignmentType.id
     );
-  // Thesis-Driven Essay (and Thesis Statement while pending) use the full guide.
-  // Other locked-dashboard tiles get a short pending preview page.
-  if (
-    !assignmentType ||
-    (!isThesisEssayGuide &&
-      !lockedPendingAssignmentGuide &&
-      !lockedPendingSiteLicenseGuide)
-  ) {
-    throw redirect(lockedPendingTeaching ? '/app' : pagePath);
+    const lockedPendingAssignmentGuide =
+      !assignmentTypeHasHowItWorksGuide(assignmentType) &&
+      assignmentType.kind != null &&
+      FREE_CLASSROOM_ASSIGNMENT_KINDS.includes(
+        assignmentType.kind as FreeClassroomAssignmentQuotaKind
+      );
+    if (lockedPendingSiteLicenseGuide || lockedPendingAssignmentGuide) {
+      return {
+        guide: 'locked-pending' as const,
+        assignmentTypeTitle: assignmentType.title,
+      };
+    }
+    throw redirect('/app');
+  } else {
+    throw redirect(pagePath);
   }
 
   // The course that teaches teachers the process. It is linked only when this
@@ -131,20 +166,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: { id: true },
   });
 
-  const backTo = lockedPendingTeaching ? '/app' : pagePath;
-  const backLabel = lockedPendingTeaching
-    ? 'Back to dashboard'
-    : 'Back to The Thesis-Driven Essay';
-
   return {
+    guide: 'thesis-essay' as const,
     pagePath,
-    backTo,
-    backLabel,
+    backTo: pendingBack?.backTo ?? pagePath,
+    backLabel:
+      pendingBack?.backLabel ?? 'Back to The Thesis-Driven Essay',
     coursePath: course ? `/app/teacher-trainings/${course.id}` : null,
-    guideVariant: isThesisEssayGuide
-      ? ('thesis-essay' as const)
-      : ('locked-pending' as const),
-    assignmentTypeTitle: assignmentType.title,
   };
 }
 
@@ -237,13 +265,54 @@ function PendingLockedAssignmentGuide({ title }: { title: string }) {
   );
 }
 
-export default function ThesisEssayHowItWorksRoute() {
+export default function HowItWorksRoute() {
   const data = useLoaderData<typeof loader>();
-  if (data.guideVariant === 'locked-pending') {
-    return <PendingLockedAssignmentGuide title={data.assignmentTypeTitle} />;
+  if (data.guide === 'locked-pending') {
+    return (
+      <PendingLockedAssignmentGuide title={data.assignmentTypeTitle} />
+    );
   }
+  if (data.guide === 'writing-step') {
+    return (
+      <WritingStepGuide
+        copy={WRITING_STEP_COPY[data.kind]}
+        pagePath={data.pagePath}
+        backTo={data.backTo}
+        backLabel={data.backLabel}
+        lesson={data.lesson}
+      />
+    );
+  }
+  if (data.guide === 'class-starter') {
+    return (
+      <ClassStarterGuide
+        pagePath={data.pagePath}
+        backTo={data.backTo}
+        backLabel={data.backLabel}
+      />
+    );
+  }
+  return (
+    <ThesisEssayGuide
+      pagePath={data.pagePath}
+      coursePath={data.coursePath}
+      backTo={data.backTo}
+      backLabel={data.backLabel}
+    />
+  );
+}
 
-  const { pagePath, backTo, backLabel, coursePath } = data;
+function ThesisEssayGuide({
+  pagePath,
+  coursePath,
+  backTo,
+  backLabel,
+}: {
+  pagePath: string;
+  coursePath: string | null;
+  backTo: string;
+  backLabel: string;
+}) {
 
   return (
     <GuidePage backTo={backTo} backLabel={backLabel}>

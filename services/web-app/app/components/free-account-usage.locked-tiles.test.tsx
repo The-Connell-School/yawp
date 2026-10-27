@@ -197,7 +197,9 @@ test('FreeAssignmentTiles locked tiles link to how-it-works with PE3 labels', ()
     </StaticRouter>
   );
   expect(html).toContain('href="/app/assignment-types/starter/how-it-works"');
-  expect(html).toContain('href="/app/assignment-types/daily/how-it-works"');
+  expect(html).toContain('href="/app/assignment-types/pre/how-it-works"');
+  expect(html).toContain('href="/app/assignment-types/thesis/how-it-works"');
+  expect(html).not.toContain('href="/app/assignment-types/daily/how-it-works"');
   expect(html).toContain(FREE_TIER_UNLIMITED_TILE_LABEL);
   expect(html).toContain(SITE_LICENSE_ONLY_TILE_LABEL);
   expect(html).toContain('/api/image/course/img-1');

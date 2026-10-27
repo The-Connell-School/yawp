@@ -33,6 +33,11 @@ import {
 } from '~/domain/free-tier/inapp-usage';
 import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
 import { cn } from '~/utils/misc';
+import {
+  assignmentTypeHasHowItWorksGuide,
+  assignmentTypeHowItWorksPath,
+  siteLicenseLockedTileHasHowItWorksGuide,
+} from '~/domain/assignment-types/assignment-type-how-it-works';
 import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
 import { dashboardAssignmentTileTestId } from '~/components/assignment-type-tile-layout';
 import {
@@ -245,10 +250,6 @@ function FreeAccountUsageDetails({ usage }: { usage: FreeAccountUsage }) {
 }
 const freeTierAssignmentTileImageClassName = 'size-[168px] object-cover';
 
-function assignmentTypeHowItWorksPath(assignmentTypeId: string) {
-  return `/app/assignment-types/${assignmentTypeId}/how-it-works`;
-}
-
 function FreeTierCarouselTileCaption({
   label,
   meta,
@@ -312,6 +313,9 @@ function FreeTierCarouselTile({
   siteLicense,
   teachingLocked,
   assignmentTypeId,
+  assignmentTypeTitle,
+  assignmentTypeKind,
+  siteLicenseTileKey,
   onCreate,
   tileDisabled,
 }: {
@@ -323,6 +327,9 @@ function FreeTierCarouselTile({
   siteLicense?: boolean;
   teachingLocked: boolean;
   assignmentTypeId: string;
+  assignmentTypeTitle?: string;
+  assignmentTypeKind?: string | null;
+  siteLicenseTileKey?: string;
   tileDisabled?: boolean;
 }) {
   const shellClass = freeTierAssignmentTileShellClassName(
@@ -351,8 +358,15 @@ function FreeTierCarouselTile({
     : dashboardAssignmentTileTestId;
 
   const guideOnly = teachingLocked || siteLicense;
+  const hasHowItWorksGuide =
+    siteLicenseTileKey != null
+      ? siteLicenseLockedTileHasHowItWorksGuide(siteLicenseTileKey)
+      : assignmentTypeHasHowItWorksGuide({
+          title: assignmentTypeTitle ?? label,
+          kind: assignmentTypeKind ?? null,
+        });
 
-  if (guideOnly) {
+  if (guideOnly && hasHowItWorksGuide) {
     const ariaLabel = `${label}, ${meta}. See how it works`;
     return (
       <Link
@@ -364,6 +378,15 @@ function FreeTierCarouselTile({
         {image}
         {caption}
       </Link>
+    );
+  }
+
+  if (guideOnly) {
+    return (
+      <div data-testid={testId} className={cn(shellClass, 'cursor-default')}>
+        {image}
+        {caption}
+      </div>
     );
   }
 
@@ -408,6 +431,7 @@ export function FreeAssignmentTiles({
   usage: FreeAccountUsage;
   types: Array<{
     id: string;
+    title?: string | null;
     kind?: string | null;
     imageId?: string | null;
     imageTitle?: string | null;
@@ -480,6 +504,8 @@ export function FreeAssignmentTiles({
               imageTitle={type.imageTitle}
               teachingLocked={teachingLocked}
               assignmentTypeId={type.id}
+              assignmentTypeTitle={type.title}
+              assignmentTypeKind={type.kind}
               tileDisabled={
                 !teachingLocked &&
                 !usage.unlimitedFreeAssignmentTiles &&
@@ -498,6 +524,7 @@ export function FreeAssignmentTiles({
             siteLicense
             teachingLocked={teachingLocked}
             assignmentTypeId={tile.assignmentTypeId}
+            siteLicenseTileKey={tile.key}
           />
         ))}
       </FreeTierAssignmentCarouselTrack>

@@ -122,6 +122,7 @@ import {
 import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
+import { assignmentTypeHasHowItWorksGuide } from '~/domain/assignment-types/assignment-type-how-it-works';
 import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { wrapPreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
@@ -460,6 +461,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
+  const { redirectLockedPreviewAssignmentTypeHomeToGuide } =
+    await import('~/domain/free-tier/locked-preview-assignment-type-routing.server');
+  await redirectLockedPreviewAssignmentTypeHomeToGuide({
+    userId,
+    assignmentType: {
+      id: assignmentType.id,
+      title: assignmentType.title,
+      kind: assignmentType.kind,
+    },
+  });
+
   // Class Starter and Daily Pages share the open-ended prompt library; which
   // of the two this is decides the directions shown above it.
   const promptLibraryVariant = resolvePromptLibraryVariant({
@@ -742,6 +754,7 @@ export function showModulesAccordion(
   moduleCount: number
 ): boolean {
   if (moduleCount === 0) return false;
+  if (assignmentType.kind === 'class_starter') return false;
   return !isExitTicketAssignmentType(assignmentType);
 }
 
@@ -931,9 +944,10 @@ export default function AppAssignmentTypesIdRoute() {
 
           {isTeacher ? (
             <div className="flex items-center gap-2">
-              {isThesisDrivenEssayTitle(data.assignmentType.title) ||
-              (teachingLockedPreview &&
-                data.assignmentType.kind === 'thesis_statement') ? (
+              {assignmentTypeHasHowItWorksGuide({
+                title: data.assignmentType.title,
+                kind: data.assignmentType.kind,
+              }) ? (
                 <SeeHowItWorksLink
                   to={`/app/assignment-types/${data.assignmentType.id}/how-it-works`}
                 />
