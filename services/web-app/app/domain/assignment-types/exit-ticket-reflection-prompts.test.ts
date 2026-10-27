@@ -5,6 +5,7 @@ import {
   EXIT_TICKET_CONFIG_SCHEMA_VERSION,
   EXIT_TICKET_CUSTOM_PROMPT_MAX_LENGTH,
   EXIT_TICKET_ELABORATION_NOTE,
+  EXIT_TICKET_SHORT_NOTE,
   EXIT_TICKET_REFLECTION_PROMPT_OPTIONS,
   composeExitTicketPrompt,
   exitTicketFocusOption,
@@ -138,7 +139,7 @@ describe('parseExitTicketConfigInput with a reflection prompt', () => {
 });
 
 describe('composeExitTicketPrompt for reflections', () => {
-  test('a suggested prompt, with the elaboration note after it', () => {
+  test('a question prompt, with the short note after it (round 5, item 3)', () => {
     const wondering = EXIT_TICKET_REFLECTION_PROMPT_OPTIONS.find(
       (option) => option.id === 'wondering'
     )!;
@@ -148,7 +149,7 @@ describe('composeExitTicketPrompt for reflections', () => {
         mode: 'basic',
         reflectionPrompt: { id: 'wondering' },
       })
-    ).toBe(`${wondering.prompt}\n\n${EXIT_TICKET_ELABORATION_NOTE}`);
+    ).toBe(`${wondering.prompt}\n\n${EXIT_TICKET_SHORT_NOTE}`);
   });
 
   test("the teacher's own words, with the elaboration note after them", () => {

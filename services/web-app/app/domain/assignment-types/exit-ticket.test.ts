@@ -4,6 +4,7 @@ import {
   EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
   EXIT_TICKET_CONFIG_SCHEMA_VERSION,
   EXIT_TICKET_ELABORATION_NOTE,
+  EXIT_TICKET_SHORT_NOTE,
   EXIT_TICKET_FOCUS_OPTIONS,
   EXIT_TICKET_LESSON_NOTE_FIELDS,
   EXIT_TICKET_LESSON_NOTE_MAX_LENGTH,
@@ -137,7 +138,10 @@ describe('composeExitTicketPrompt', () => {
       });
 
       expect(prompt).toInclude('yesterday’s reading');
-      expect(prompt).toInclude(EXIT_TICKET_ELABORATION_NOTE);
+      // A question gets the short ending (Brian's round 5, item 3).
+      expect(prompt).toInclude(
+        option.value === 'ask-question' ? EXIT_TICKET_SHORT_NOTE : EXIT_TICKET_ELABORATION_NOTE
+      );
     }
   });
 });

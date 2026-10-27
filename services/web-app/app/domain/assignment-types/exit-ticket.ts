@@ -286,9 +286,9 @@ export const EXIT_TICKET_FOCUS_OPTIONS: ExitTicketFocusOption[] = [
       'Can they put the idea in their own words instead of repeating yours?',
     topicPlaceholder: 'e.g., how to work a quotation into your own sentence',
     template:
-      'In your own words, explain {topic}. Write it the way you would explain it to someone who missed class today — not the definition you were given, but what you actually understand it to mean.',
+      'In your own words, explain {topic}.',
     gradingCriteria:
-      'Judge whether the student can restate the idea in their own words and whether their explanation would genuinely help someone who missed the lesson. Fluent phrasing borrowed from the teacher or the textbook, with nothing showing the student has made the idea theirs, is names it only however polished it sounds.',
+      'Judge whether the student can restate the idea in their own words and whether their explanation shows they understand it. Fluent phrasing borrowed from the teacher or the textbook, with nothing showing the student has made the idea theirs, is names it only however polished it sounds.',
   },
   {
     value: 'ask-question',
@@ -318,13 +318,21 @@ export const BASIC_EXIT_TICKET_PROMPT =
   'Tell me, in your own words, what you learned today. Don’t just name the topic — explain what you understand now that you didn’t understand at the start of class, and be honest about the parts you are still unsure of.';
 
 /**
- * Appended to both shapes. Exit tickets are short by nature, and without this
- * a lot of students answer in one line; the ask for elaboration is the whole
- * difference between a check that tells the teacher something and one that
- * does not.
+ * How an exit ticket that asks a student to explain something in their own
+ * words ends (Brian's round 5, item 3). Exit tickets are short by nature, and
+ * without this a lot of students answer in one line.
  */
-export const EXIT_TICKET_ELABORATION_NOTE =
-  'Write as much as you can, and go further than your first sentence — the more you explain your thinking, the more this is worth. Don’t worry about polish. This is about what you understand, not how neatly you say it.';
+export const EXIT_TICKET_EXPLAIN_NOTE =
+  'Keep it conversational, in your words, and write as much as you can — the more you can explain your thinking, the better. Don’t worry too much about polish. This is about what you understand, not writing perfectly.';
+
+/**
+ * How an exit ticket that asks for a question or a specific answer ends: no
+ * "write as much as you can", since a good question is often one sentence.
+ */
+export const EXIT_TICKET_SHORT_NOTE = 'Don’t worry about polish.';
+
+/** The explain ending, under its earlier name. */
+export const EXIT_TICKET_ELABORATION_NOTE = EXIT_TICKET_EXPLAIN_NOTE;
 
 /**
  * The reflection prompts a teacher can pick from, plus their own. A short list
@@ -746,10 +754,32 @@ function reflectionPromptText(config: ExitTicketConfig): string {
   );
 }
 
+/** Prompts and focuses that ask for a question, not an explanation. */
+const QUESTION_ASKS = new Set(['ask-question', 'wondering']);
+const QUESTION_ASK = /\bquestions?\b|\bwondering\b/i;
+
+/**
+ * Which ending a prompt gets (Brian's round 5, item 3): an explanation in the
+ * student's own words gets the explain note; a question or a quick specific
+ * answer gets the short one. A teacher's own prompt is a reflection unless it
+ * asks for a question.
+ */
+function endingFor(config: ExitTicketConfig): string {
+  if (config.mode === 'specific') {
+    return QUESTION_ASKS.has(config.focus) ? EXIT_TICKET_SHORT_NOTE : EXIT_TICKET_EXPLAIN_NOTE;
+  }
+  const id = config.reflectionPrompt?.id;
+  if (id && QUESTION_ASKS.has(id)) return EXIT_TICKET_SHORT_NOTE;
+  if (config.reflectionPrompt?.id === 'custom') {
+    return QUESTION_ASK.test(config.reflectionPrompt.text) ? EXIT_TICKET_SHORT_NOTE : EXIT_TICKET_EXPLAIN_NOTE;
+  }
+  return EXIT_TICKET_EXPLAIN_NOTE;
+}
+
 /** The prompt the student actually sees. */
 export function composeExitTicketPrompt(config: ExitTicketConfig): string {
   if (config.mode === 'basic') {
-    return `${reflectionPromptText(config)}\n\n${EXIT_TICKET_ELABORATION_NOTE}`;
+    return `${reflectionPromptText(config)}\n\n${endingFor(config)}`;
   }
 
   const option = exitTicketFocusOption(config.focus);
@@ -757,14 +787,14 @@ export function composeExitTicketPrompt(config: ExitTicketConfig): string {
   // option set. Falling back to the standard prompt keeps the assignment
   // readable rather than showing a student a template with a hole in it.
   if (!option) {
-    return `${BASIC_EXIT_TICKET_PROMPT}\n\n${EXIT_TICKET_ELABORATION_NOTE}`;
+    return `${BASIC_EXIT_TICKET_PROMPT}\n\n${EXIT_TICKET_EXPLAIN_NOTE}`;
   }
 
   const sentence = option.template.replace(
     '{topic}',
     normalizeTopic(config.topic)
   );
-  return `${sentence}\n\n${EXIT_TICKET_ELABORATION_NOTE}`;
+  return `${sentence}\n\n${endingFor(config)}`;
 }
 
 export type ExitTicketConfigParseResult =

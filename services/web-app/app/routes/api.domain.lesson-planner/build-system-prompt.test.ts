@@ -6,9 +6,11 @@ import { UNIT_PLAN_FENCE } from '~/domain/lesson-planner/unit-plan';
 import { EXIT_TICKET_FENCE } from '~/domain/lesson-planner/exit-ticket-block';
 import { PRACTICE_FENCE } from '~/domain/lesson-planner/practice-block';
 import {
+  EXIT_TICKET_EXPLAIN_NOTE,
   EXIT_TICKET_FOCUS_OPTIONS,
   EXIT_TICKET_LESSON_NOTE_FIELDS,
   EXIT_TICKET_REFLECTION_PROMPT_OPTIONS,
+  EXIT_TICKET_SHORT_NOTE,
 } from '~/domain/assignment-types/exit-ticket';
 import {
   buildLessonPlannerSystemPrompt,
@@ -1970,5 +1972,30 @@ describe("Kevin's unit-build notes (Oct 25)", () => {
     const text = JSON.stringify(buildLessonPlannerSystemPromptBlocks({} as any));
     expect(text).toContain('two or three short questions, never more');
     expect(text).toContain('Building on your Girard lesson');
+  });
+});
+
+describe('exit ticket wording (Brian round 5, item 3)', () => {
+  const withExitTickets = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School', exitTicketsAvailable: true });
+  const withoutExitTickets = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School' });
+
+  test('a printed ticket the planner writes itself ends the same way as one Yawp! composes', () => {
+    for (const prompt of [withExitTickets, withoutExitTickets]) {
+      expect(prompt).toContain(EXIT_TICKET_EXPLAIN_NOTE);
+      expect(prompt).toContain(EXIT_TICKET_SHORT_NOTE);
+      expect(prompt).toContain('not graded on grammar, syntax or polish');
+    }
+  });
+
+  test('a ticket Yawp! composes never carries an ending the planner wrote', () => {
+    expect(withExitTickets).toContain('a `promptText` is the question alone');
+  });
+
+  test('the old wording only appears as something never to write', () => {
+    for (const phrase of ['what you actually understand it to mean', 'push past your first sentence']) {
+      const at = withExitTickets.indexOf(phrase);
+      expect(at).toBeGreaterThan(-1);
+      expect(withExitTickets.slice(Math.max(0, at - 40), at).toLowerCase()).toContain('never');
+    }
   });
 });

@@ -91,7 +91,7 @@ export const EXIT_TICKET_PROMPT_CONFIG: PromptConfigData = {
     '',
     'Reward honesty. A student who explains what they do understand and then names precisely what still confuses them has given the most useful answer in the stack, and must never be scored below a student who hides confusion behind fluent restatement. Precise self-diagnosis is evidence of understanding. Where the prompt itself asks what is still confusing, the quality of that self-diagnosis is the whole thing you are judging — not whether the student has the right answer.',
     '',
-    'Do not grade grammar, spelling, punctuation, or length, and do not comment on them.',
+    'Do not grade grammar, syntax, spelling, punctuation, polish, or length, and do not comment on them.',
     '',
     'Score inside these bands, choosing the band from its description first and then a score within it:',
     ...EXIT_TICKET_SCORE_BANDS.slice()
