@@ -1,4 +1,8 @@
 import { readGradingInstructionsOverride } from './assignment-type-admin-writes.shared';
+import {
+  type LastAdminEditSource,
+  withLastAdminEdit,
+} from './assignment-type-admin-provenance.server';
 import type { Prisma } from '@app/prisma';
 import type { ResolvedAdminRubricPickerSelection } from '~/domain/rubrics/admin-rubric-picker.server';
 import {
@@ -28,6 +32,11 @@ export type AssignmentTypeWriteInput = {
   rubricSelection?: ResolvedAdminRubricPickerSelection;
   gradingInstructionsOverride?: string | null;
   gradingConfig?: GradingConfig;
+  /** When set, stamps `_lastAdminEdit` on gradingPromptConfigJson for cross-UI last-write visibility. */
+  adminEditProvenance?: {
+    source: LastAdminEditSource;
+    updatedBy?: string | null;
+  };
 };
 
 export function parseJsonFormField(formData: FormData, name: string) {
@@ -109,6 +118,7 @@ function baseData(input: AssignmentTypeWriteInput) {
     rubricSelection,
     gradingInstructionsOverride,
     gradingConfig,
+    adminEditProvenance: _adminEditProvenance,
     ...fields
   } = input;
   return { ...fields, ...selectionData(rubricSelection) };
@@ -127,6 +137,21 @@ export async function createAssignmentType(
     ...selected,
     ...gradingConfig,
   }.gradingPromptConfigJson;
+  let gradingPromptConfigJson = input.gradingInstructionsOverride !== undefined
+    ? withGradingInstructionsOverride(
+        promptConfig,
+        input.gradingInstructionsOverride
+      )
+    : promptConfig;
+  const writesPromptConfig =
+    input.gradingInstructionsOverride !== undefined ||
+    gradingConfig.gradingPromptConfigJson !== undefined;
+  if (input.adminEditProvenance != null && writesPromptConfig) {
+    gradingPromptConfigJson = withLastAdminEdit(
+      gradingPromptConfigJson ?? {},
+      input.adminEditProvenance
+    );
+  }
   return client.assignmentType.create({
     data: {
       ...selected,
@@ -134,12 +159,10 @@ export async function createAssignmentType(
       kind: null,
       position: count,
       ...gradingConfig,
-      ...(input.gradingInstructionsOverride !== undefined
+      ...(writesPromptConfig
         ? {
-            gradingPromptConfigJson: withGradingInstructionsOverride(
-              promptConfig,
-              input.gradingInstructionsOverride
-            ),
+            gradingPromptConfigJson:
+              gradingPromptConfigJson as Prisma.InputJsonValue,
           }
         : {}),
     } as Prisma.AssignmentTypeUncheckedCreateInput,
@@ -170,20 +193,41 @@ export async function updateAssignmentType(
   const changed =
     readGradingInstructionsOverride(finalPromptConfig) !==
     readGradingInstructionsOverride(before.gradingPromptConfigJson);
+  const promptConfigWithProvenance =
+    input.adminEditProvenance != null
+      ? withLastAdminEdit(finalPromptConfig, input.adminEditProvenance)
+      : finalPromptConfig;
+  const shouldWritePromptConfig =
+    input.gradingInstructionsOverride !== undefined ||
+    input.rubricSelection?.kind === 'per-type' ||
+    input.adminEditProvenance != null;
+  const gradingConfig = input.gradingConfig
+    ? {
+        ...input.gradingConfig,
+        ...(input.adminEditProvenance != null
+          ? {
+              gradingPromptConfigJson: withLastAdminEdit(
+                input.gradingConfig.gradingPromptConfigJson ??
+                  finalPromptConfig,
+                input.adminEditProvenance
+              ) as Prisma.InputJsonValue,
+            }
+          : {}),
+      }
+    : {
+        ...(shouldWritePromptConfig
+          ? {
+              gradingPromptConfigJson:
+                promptConfigWithProvenance as Prisma.InputJsonValue,
+            }
+          : {}),
+        ...(changed ? { gradingAssistantVersion: { increment: 1 } } : {}),
+      };
   return client.assignmentType.update({
     where: { id },
     data: {
       ...selected,
-      ...(input.gradingConfig ?? {
-        ...(input.gradingInstructionsOverride !== undefined &&
-        (changed || input.rubricSelection?.kind === 'per-type')
-          ? {
-              gradingPromptConfigJson:
-                finalPromptConfig as Prisma.InputJsonValue,
-            }
-          : {}),
-        ...(changed ? { gradingAssistantVersion: { increment: 1 } } : {}),
-      }),
+      ...gradingConfig,
     },
   });
 }

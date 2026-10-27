@@ -26,8 +26,19 @@ const requireUserId = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({ requireAdmin, requireUserId }));
+mock.module('~/utils/platform-admin-actor.server', () => ({
+  resolvePlatformAdminActorEmail: mock(async () => 'admin@test.local'),
+}));
 
 const { action } = await import('./route');
+
+const platformAdminEditStamp = {
+  _lastAdminEdit: {
+    source: 'platform',
+    updatedBy: 'admin@test.local',
+    updatedAt: expect.any(String),
+  },
+};
 
 describe('admin assignment type new action', () => {
   beforeEach(() => {
@@ -121,7 +132,10 @@ describe('admin assignment type new action', () => {
     expect(prisma.rubric.findFirst).toHaveBeenCalled();
     expect(prisma.assignmentType.create).toHaveBeenCalledWith({ data: {
       title: 'Daily journal', kind: null, description: null, tutorInstructions: null, position: 4,
-      rubricId: 'daily-pages', gradingPromptConfigJson: { gradingInstructionsOverride: 'Focus on reflection.' },
+      rubricId: 'daily-pages', gradingPromptConfigJson: {
+        gradingInstructionsOverride: 'Focus on reflection.',
+        ...platformAdminEditStamp,
+      },
     } });
   });
 
@@ -198,6 +212,7 @@ describe('admin assignment type new action', () => {
         },
         gradingPromptConfigJson: {
           gradingInstructions: 'Grade this as ACT Writing.',
+          ...platformAdminEditStamp,
         },
         gradingOutputSchemaJson: {
           schemaVersion: 1,

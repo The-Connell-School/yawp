@@ -50,10 +50,21 @@ mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
   requireMembership,
 }));
+mock.module('~/utils/platform-admin-actor.server', () => ({
+  resolvePlatformAdminActorEmail: mock(async () => 'admin@test.local'),
+}));
 
 const { action: routeAction, loader: routeLoader } = await import('./route');
 const action = routeAction as any;
 const loader = routeLoader as any;
+
+const platformAdminEditStamp = {
+  _lastAdminEdit: {
+    source: 'platform',
+    updatedBy: 'admin@test.local',
+    updatedAt: expect.any(String),
+  },
+};
 
 describe('admin assignment type detail action', () => {
   beforeEach(() => {
@@ -133,7 +144,11 @@ describe('admin assignment type detail action', () => {
       const response = await action({ request: new Request('https://example.test/edit', { method: 'POST', body: form }), params: { id: 'at-1' }, context: {} });
       expect(response).toMatchObject({ data: { status: 'success' } });
       const data = prisma.assignmentType.update.mock.calls.at(-1)?.[0].data;
-      expect(data.gradingPromptConfigJson).toEqual({ systemInstructions: 'Source system', gradingInstructionsOverride: 'Source override' });
+      expect(data.gradingPromptConfigJson).toEqual({
+        systemInstructions: 'Source system',
+        gradingInstructionsOverride: 'Source override',
+        ...platformAdminEditStamp,
+      });
       expect(data.gradingAssistantVersion).toBeUndefined();
     }
   );
@@ -283,6 +298,7 @@ describe('admin assignment type detail action', () => {
         gradingPromptConfigJson: {
           systemInstructions: 'Act as an ACT Writing evaluator.',
           gradingInstructions: 'Grade this as ACT Writing.',
+          ...platformAdminEditStamp,
         },
         gradingAssistantVersion: { increment: 1 },
       }),
@@ -562,6 +578,7 @@ describe('admin assignment type detail action', () => {
           instructionsPreset: 'legacy_thesis_driven_essay',
           gradingInstructionsOverride:
             'Apply the rubric with extra emphasis on concrete supporting details.',
+          ...platformAdminEditStamp,
         },
         gradingAssistantVersion: { increment: 1 },
       },
@@ -602,6 +619,7 @@ describe('admin assignment type detail action', () => {
         description: null,
         gradingPromptConfigJson: {
           instructionsPreset: 'legacy_thesis_driven_essay',
+          ...platformAdminEditStamp,
         },
         gradingAssistantVersion: { increment: 1 },
       },
