@@ -16,7 +16,9 @@ import {
 } from '~/components/ui/dropdown-menu';
 import { Link } from 'react-router';
 import { ClassArt } from '~/components/class-art';
+import { freeTierGlassyOverlayChipClassName } from '~/components/free-tier/free-tier-assignment-carousel';
 import { getClassCardHeading } from '~/utils/class-display';
+import { cn } from '~/utils/misc';
 
 export type TeacherClassCardData = {
   id: string;
@@ -68,12 +70,14 @@ export function TeacherClassCard({
     tooltip: TEACHING_ACCESS_LOCKED_TOOLTIP,
   };
 
+  const imageHeightClass = pe3Dashboard ? 'h-[112px]' : 'h-32';
+
   return (
     <div
       className={
         pe3Dashboard
-          ? 'flex w-full max-w-[300px] flex-col self-start overflow-hidden rounded-xl bg-popover shadow-[0_0_0_1px_rgba(0,0,0,0.05),0_1px_3px_0_hsl(0_0%_0%/0.1)]'
-          : 'flex min-h-full flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md'
+          ? 'relative flex w-full max-w-[300px] flex-col self-start overflow-hidden rounded-xl bg-popover shadow-[0_0_0_1px_rgba(0,0,0,0.05),0_1px_3px_0_hsl(0_0%_0%/0.1)]'
+          : 'relative flex min-h-full flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md'
       }
     >
       <Link
@@ -87,11 +91,11 @@ export function TeacherClassCard({
         }
       >
         <div
-          className={
-            pe3Dashboard
-              ? 'h-[112px] w-full shrink-0 overflow-hidden'
-              : 'h-32 w-full border-b border-black/5'
-          }
+          className={cn(
+            imageHeightClass,
+            'w-full shrink-0 overflow-hidden',
+            !pe3Dashboard && 'border-b border-black/5'
+          )}
         >
           <ClassArt
             seed={klass.id}
@@ -203,17 +207,27 @@ export function TeacherClassCard({
         </div>
       </Link>
       {showLockedInvite ? (
-        <div className="flex items-center justify-end border-t px-4 py-3">
-          <LockedTeachingControl {...inviteLockProps}>
-            <button
-              type="button"
-              data-testid="my-classes-class-options"
-              aria-label={`Class options for ${title}`}
-              className="rounded-md p-2 hover:bg-secondary"
-            >
-              <MoreHorizontal size={20} />
-            </button>
-          </LockedTeachingControl>
+        <div
+          className={cn(
+            'pointer-events-none absolute inset-x-0 top-0 z-10',
+            imageHeightClass
+          )}
+        >
+          <div className="pointer-events-auto absolute right-2 top-2">
+            <LockedTeachingControl {...inviteLockProps}>
+              <button
+                type="button"
+                data-testid="my-classes-class-options"
+                aria-label={`Class options for ${title}`}
+                className={cn(
+                  'flex size-8 items-center justify-center text-foreground hover:bg-white',
+                  freeTierGlassyOverlayChipClassName()
+                )}
+              >
+                <MoreHorizontal size={18} aria-hidden />
+              </button>
+            </LockedTeachingControl>
+          </div>
         </div>
       ) : null}
       {enabled && !showLockedInvite && (

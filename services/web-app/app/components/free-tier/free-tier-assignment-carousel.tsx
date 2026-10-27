@@ -115,6 +115,14 @@ export function FreeTierAssignmentCarouselTrack({
   );
 }
 
+/** Frosted chip on assignment tiles and PE3 class-card menu overlay. */
+export function freeTierGlassyOverlayChipClassName(extra?: string) {
+  return cn(
+    'rounded-full bg-white/92 shadow-[0_0_0_1px_hsl(var(--border))]',
+    extra
+  );
+}
+
 export function FreeTierAssignmentTileImageBadge({
   variant,
 }: {
@@ -124,7 +132,10 @@ export function FreeTierAssignmentTileImageBadge({
     <span
       role="img"
       aria-label={variant === 'create' ? 'Create' : 'Locked'}
-      className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-white/92 shadow-[0_0_0_1px_hsl(var(--border))]"
+      className={cn(
+        'absolute right-2 top-2 flex size-7 items-center justify-center',
+        freeTierGlassyOverlayChipClassName()
+      )}
     >
       {variant === 'create' ? (
         <Plus size={14} aria-hidden className="text-foreground" />
