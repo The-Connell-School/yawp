@@ -8,6 +8,7 @@ export type TeachingAccessShellState =
       variant: 'locked';
       applicationId: string;
       adminName: string;
+      approvalFirstSentAt: string | null;
     }
   | {
       variant: 'unlocked';
@@ -42,19 +43,20 @@ export async function loadTeachingAccessShellState(args: {
         where: { status: 'PENDING' },
         orderBy: { createdAt: 'desc' },
         take: 1,
-        select: { adminName: true },
+        select: { adminName: true, firstSentAt: true },
       },
     },
   });
   if (!application) return { variant: 'none' };
 
   if (application.status === 'SENT' || application.status === 'MANUAL_REVIEW') {
-    const adminName =
-      application.adminApprovals[0]?.adminName ?? 'your administrator';
+    const pendingApproval = application.adminApprovals[0];
+    const adminName = pendingApproval?.adminName ?? 'your administrator';
     return {
       variant: 'locked',
       applicationId: application.id,
       adminName,
+      approvalFirstSentAt: pendingApproval?.firstSentAt?.toISOString() ?? null,
     };
   }
 

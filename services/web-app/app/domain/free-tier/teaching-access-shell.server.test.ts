@@ -10,7 +10,9 @@ let application: any = {
   status: 'SENT',
   organizationId: 'org-a',
   lockedPreviewApprovalToastSeenAt: null,
-  adminApprovals: [{ adminName: 'Dr. Patel' }],
+  adminApprovals: [
+    { adminName: 'Dr. Patel', firstSentAt: new Date('2026-10-14T15:00:00Z') },
+  ],
 };
 
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({
@@ -39,7 +41,9 @@ afterEach(() => {
     status: 'SENT',
     organizationId: 'org-a',
     lockedPreviewApprovalToastSeenAt: null,
-    adminApprovals: [{ adminName: 'Dr. Patel' }],
+    adminApprovals: [
+      { adminName: 'Dr. Patel', firstSentAt: new Date('2026-10-14T15:00:00Z') },
+    ],
   };
 });
 
@@ -76,6 +80,7 @@ test('returns locked with admin name while preview is active', async () => {
     variant: 'locked',
     applicationId: 'app-1',
     adminName: 'Dr. Patel',
+    approvalFirstSentAt: '2026-10-14T15:00:00.000Z',
   });
 });
 
@@ -92,6 +97,7 @@ test('returns locked from application status even when preview membership is unr
     variant: 'locked',
     applicationId: 'app-1',
     adminName: 'Dr. Patel',
+    approvalFirstSentAt: '2026-10-14T15:00:00.000Z',
   });
 });
 
