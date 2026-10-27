@@ -169,17 +169,17 @@ Each item is tested and committed on its own. Choices the notes left open are ma
 
 ### 12. "Planned in" counts real working time
 - **Problem:** `builtIn(createdAt, setAt)` is the clock time from the first message to set: 21 hr.
-- **Fix (default: from what the lesson already records, no migration):**
-  - "Planned in" adds up the lesson's activity:
-    - every message, the teacher's and the planner's;
-    - every piece added to or edited in the stack;
-    - every assignment made;
-    - the set itself.
-  - Each gap between two activities counts only when it's under 10 minutes. A longer gap is idle, or a different day, and counts as 1 minute: the step that ends it.
-  - Brian's case: about 20 minutes on Oct 25, plus 1 or 2 on Oct 26. It works for lessons set before this change too, with no backfill.
-  - `plannedMinutes(times)` lives in a small module with unit tests. The loader passes it the times, and the label "from first message to set" becomes "active time on this lesson".
-- **Why not a live timer:** a client heartbeat would need a new column and a writer on every page. The gaps are already stored, and they handle "idle with the tab open" (a long gap is idle) and "came back the next day".
-- **Test:** unit tests for `plannedMinutes`: one sitting; two days apart; idle tab; a single event. An e2e checks the label.
+- **Fix (changed from the first draft of this plan, see below):**
+  - The chat page and the stack page report time in use to a new `active-time` intent on the stack API. A tick counts when the tab is visible and the teacher has clicked, typed or scrolled in the last two minutes. The page sends a report at most once a minute, and again when the tab is hidden or closed.
+  - Reports are added to `LessonPlanConversation.activeSeconds`, a new column, only while the lesson isn't set. A set lesson that's just being looked at adds nothing.
+  - Lessons from before this change read their time from what they recorded: messages, pieces added or edited, assignments made, and the set. Each gap between two of those counts only when it's under 10 minutes; a longer gap counts 1 minute (`planned-time.ts`).
+  - Planned in is the larger of the two numbers. The label under it reads "of time working on it".
+  - Brian's case: about 20 minutes on Oct 25, plus 1 or 2 on Oct 26.
+- **Why not events alone, as first planned:** reordering the stack and changing a step's minutes leave no timestamp, so a teacher who spent 15 minutes on the stack page would have read as 1 minute. Brian asked for "time with the lesson open and active", and only the page can see that.
+- **Migration** `20261026120000_lesson_active_time` (additive, with a rollback).
+- **Test:**
+  - Unit tests for `plannedMinutes` (one sitting, two days apart, idle tab, a single event), `inUse`, and the API intent.
+  - E2E: the 20 minutes plus 1 case reads 20 to 22 min.
 
 ## Order of work
 
@@ -196,3 +196,28 @@ Each item is tested and committed on its own. Choices the notes left open are ma
 11. E2E spec `teacher.lesson-planner-round-5.spec.ts`, then typecheck, unit tests and the affected e2e specs.
 
 Every item applies under the flags its feature already uses. Items 1, 3 and 4 apply to everyone, because they're fixes to existing behavior.
+
+## Status (Oct 27)
+
+Everything above is built, in this order of commits:
+
+| Item | Commit | How to check it in the preview |
+|---|---|---|
+| Plan and notes | `2435e8e7` | — |
+| 1. White tiles | `651547cd` | Library home: every unit tile and "Lessons on their own" row is near-white on the cream page. |
+| 3. Exit Ticket wording | `f9ef983b` | New exit tickets explain in your own words and end with "Keep it conversational…"; a question ticket ends "Don't worry about polish." None of the old phrases appear. |
+| 4. Editable prompt | `4459a011`, `f7516349` | Create an Exit Ticket and change a word in "What students will see"; the assignment keeps your words. Reopen it to edit: your words are still there. Class Starter's Prompt box was already editable. |
+| 5. Edit the deck | `617dd3fb` | On the stack, open Ask the planner (or From your conversation): the deck card has Edit, and Close comes back to the stack. |
+| 6. Add it | `2dd41d43` | Close the sidebar, click Add it in Print it for class: the deck is in the lesson and the sidebar stays closed. |
+| 7–10. Share pages | `46e89ae7` | Sub plan, missed-class page, family and admin pages, and the class link use the stack's names and order. The sub is told to send students to Yawp! for the Class Starter and Exit Ticket. The purple box lists assignments by type, and every Yawp! prompt shows with its type and link. |
+| 11. Set this lesson | `356e7dfc` | The button says Set this lesson. Clicking it plays confetti and the yawp line once; with Reduce Motion, the line only. |
+| 12. Planned in | `65550f36` | Set a lesson, come back the next day, edit for a minute, set it again: Planned in goes up by a minute or two. |
+| 2. Unit view | `d16d512e` | Open a unit next to `reference/05`. |
+| 0. Personality doc | `e2e3f6ac` | — (prompt only). The planner now also gets the teacher's profile name. |
+
+**E2E:** `teacher.lesson-planner-round-5.spec.ts`, with 8 tests, is in smoke and shard 6.
+
+**Not done, and why:**
+- The `design/` mockup folders didn't arrive with the notes, so the unit view follows the screenshot of the design (`reference/05`).
+- A prompt edited in Yawp! after the assignment was made from the planner isn't shown on share pages. Assignments made from the planner don't record their assignment id: `mark-created` stores only a link. Share pages show the prompt the lesson composed. A stored assignment prompt is used when the id exists.
+- The colleague view isn't built yet (round 3, Part 2). When it is, it takes the same structure rule as the other audiences.
