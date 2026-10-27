@@ -14,6 +14,17 @@ import { Textarea } from '~/components/ui/textarea';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { AssignmentTypeImageThumbnail } from './assignment-type-image-thumbnail';
 import {
+  DEFAULT_RUBRIC,
+  DEFAULT_SCORING_SCALE,
+  type RubricData,
+  type ScoringScaleData,
+} from '~/domain/assignment-types/assignment-type-rubric.shared';
+import {
+  RubricConfigurationEditor,
+  rubricSnapshot,
+  scoringScaleSnapshot,
+} from '~/components/admin/rubric-config-editors';
+import {
   RubricLibrarySection,
   type RubricOption,
 } from '~/components/admin/rubric-library-section';
@@ -30,6 +41,10 @@ type AssignmentTypeEditorFormProps = {
   mode: 'create' | 'edit';
   error?: string;
   currentPromptLabel?: string | null;
+  /** Cross-UI last-save hint (Platform vs Internal). */
+  lastEditLine?: string | null;
+  scoringScale?: ScoringScaleData;
+  rubric?: RubricData;
   assignmentTypeId?: string;
   titleDefaultValue?: string;
   descriptionDefaultValue?: string | null;
@@ -47,6 +62,8 @@ function formSnapshot(values: {
   gradingInstructions: string;
   rubricId: string | null;
   tutorInstructions: string;
+  scoringScale: ScoringScaleData;
+  rubric: RubricData;
 }) {
   return [
     values.title.trim(),
@@ -54,6 +71,8 @@ function formSnapshot(values: {
     values.gradingInstructions.trim(),
     values.rubricId ?? '',
     values.tutorInstructions.trim(),
+    scoringScaleSnapshot(values.scoringScale),
+    rubricSnapshot(values.rubric),
   ].join('\u0000');
 }
 
@@ -107,6 +126,9 @@ export function AssignmentTypeEditorForm({
   mode,
   error,
   currentPromptLabel = null,
+  lastEditLine = null,
+  scoringScale = DEFAULT_SCORING_SCALE,
+  rubric = DEFAULT_RUBRIC,
   assignmentTypeId,
   titleDefaultValue = '',
   descriptionDefaultValue = '',
@@ -139,6 +161,11 @@ export function AssignmentTypeEditorForm({
   const [tutorInstructions, setTutorInstructions] = useState(
     tutorInstructionsDefaultValue ?? ''
   );
+  const [scoringScaleState, setScoringScaleState] =
+    useState<ScoringScaleData>(scoringScale);
+  const [rubricState, setRubricState] = useState<RubricData>(rubric);
+  const [editorGeneration, setEditorGeneration] = useState(0);
+  const hasHydratedSavedValues = useRef(false);
   const savedSnapshot = useMemo(
     () =>
       formSnapshot({
@@ -147,6 +174,8 @@ export function AssignmentTypeEditorForm({
         gradingInstructions: gradingInstructionsDefaultValue,
         rubricId: selectedRubricId,
         tutorInstructions: tutorInstructionsDefaultValue ?? '',
+        scoringScale,
+        rubric,
       }),
     [
       titleDefaultValue,
@@ -154,6 +183,8 @@ export function AssignmentTypeEditorForm({
       gradingInstructionsDefaultValue,
       selectedRubricId,
       tutorInstructionsDefaultValue,
+      scoringScale,
+      rubric,
     ]
   );
 
@@ -163,6 +194,13 @@ export function AssignmentTypeEditorForm({
     setGradingInstructions(gradingInstructionsDefaultValue);
     setRubricId(selectedRubricId);
     setTutorInstructions(tutorInstructionsDefaultValue ?? '');
+    setScoringScaleState(scoringScale);
+    setRubricState(rubric);
+    if (hasHydratedSavedValues.current) {
+      setEditorGeneration((generation) => generation + 1);
+    } else {
+      hasHydratedSavedValues.current = true;
+    }
   }, [savedSnapshot]);
 
   useEffect(() => {
@@ -189,8 +227,18 @@ export function AssignmentTypeEditorForm({
         gradingInstructions,
         rubricId,
         tutorInstructions,
+        scoringScale: scoringScaleState,
+        rubric: rubricState,
       }),
-    [title, description, gradingInstructions, rubricId, tutorInstructions]
+    [
+      title,
+      description,
+      gradingInstructions,
+      rubricId,
+      tutorInstructions,
+      scoringScaleState,
+      rubricState,
+    ]
   );
 
   const isDirty = currentSnapshot !== savedSnapshot || imageDirty;
@@ -210,6 +258,9 @@ export function AssignmentTypeEditorForm({
     setGradingInstructions(gradingInstructionsDefaultValue);
     setRubricId(selectedRubricId);
     setTutorInstructions(tutorInstructionsDefaultValue ?? '');
+    setScoringScaleState(scoringScale);
+    setRubricState(rubric);
+    setEditorGeneration((generation) => generation + 1);
     setPreviewUrl(null);
     setHasRemovedImage(false);
     if (imageFileInputRef.current) {
@@ -357,27 +408,40 @@ export function AssignmentTypeEditorForm({
 
         <Section
           title="Rubric"
-          description="Keep the current production behavior, or choose a database-managed rubric. Rubrics stay view-only; grading assistant instructions can be customized per assignment type."
+          description="The source of truth shared by grading and tutor guidance. Import a rubric or edit categories here, or attach a shared library rubric below."
         >
-          <RubricLibrarySection
-              rubrics={rubrics}
-              selectedRubricId={rubricId}
-              onRubricChange={setRubricId}
-              gradingInstructions={gradingInstructions}
-              onGradingInstructionsChange={setGradingInstructions}
+          {isEdit ? (
+            <RubricConfigurationEditor
+              key={`rubric-editor-${editorGeneration}`}
+              initialScoringScale={scoringScaleState}
+              initialRubric={rubricState}
+              namePrefix="assignmentType"
+              excludeAssignmentTypeId={assignmentTypeId ?? null}
+              onScoringScaleChange={setScoringScaleState}
+              onRubricChange={setRubricState}
             />
-        </Section>
-
-        {assignmentTypeId ? (
-          <Section title="Grading assistant" description="Manage prompt configuration and evaluation tests.">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" size="sm" asChild>
-                <Link to={`/app/admin/assignment-types/${assignmentTypeId}/prompt`}>Prompt</Link>
-              </Button>
-              {currentPromptLabel ? <span className="text-sm text-muted-foreground">Production prompt: {currentPromptLabel}</span> : null}
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Save the assignment type, then import or manage its rubric on this
+              page.
+            </p>
+          )}
+          <RubricLibrarySection
+            rubrics={rubrics}
+            selectedRubricId={rubricId}
+            onRubricChange={setRubricId}
+            gradingInstructions={gradingInstructions}
+            onGradingInstructionsChange={setGradingInstructions}
+          />
+          {lastEditLine || currentPromptLabel ? (
+            <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+              {currentPromptLabel ? (
+                <span>Production prompt: {currentPromptLabel}</span>
+              ) : null}
+              {lastEditLine ? <span>{lastEditLine}</span> : null}
             </div>
-          </Section>
-        ) : null}
+          ) : null}
+        </Section>
 
         {!isEdit ? (
           <Section

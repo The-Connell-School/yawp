@@ -38,10 +38,15 @@ test.describe('Admin assignment type creator', () => {
       await expect(page.getByTestId('grading-assistant-instructions')).toHaveValue(instructions);
       await page.getByText(`View ${rubric.title}`, { exact: true }).click();
       await expect(page.getByTestId('rubric-library-json')).toContainText('daily-pages-engagement');
-      await page.getByRole('link', { name: 'Prompt', exact: true }).click();
-      await page.getByRole('button', { name: /Production/ }).click();
-      await expect(page.getByRole('button', { name: 'View compiled prompt', exact: true })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Test prompt', exact: true })).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: 'Prompt', exact: true })
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole('button', { name: 'View compiled prompt', exact: true })
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole('button', { name: 'Test prompt', exact: true })
+      ).toHaveCount(0);
       await page.goto(`/app/admin/assignment-types/${created.id}`);
       await expect(page.getByTestId('rubric-library-select')).toContainText(rubric.title);
       await page.getByTestId('rubric-library-select').click();
@@ -59,7 +64,7 @@ test.describe('Admin assignment type creator', () => {
       await expect(page.getByTestId('rubric-library-select')).toContainText('Built-in default for this assignment type');
       await expect(page.getByTestId('grading-assistant-instructions')).toHaveValue(instructions);
       expect((await prisma.assignmentType.findUniqueOrThrow({ where: { id: created.id } })).rubricId).toBeNull();
-      await expect(page.getByTestId('rubric-add-category')).toHaveCount(0);
+      await expect(page.getByTestId('rubric-add-category')).toBeVisible();
     } finally {
       const types = await prisma.assignmentType.findMany({ where: { title }, select: { id: true } });
       const ids = types.map((row) => row.id);
@@ -301,8 +306,8 @@ test.describe('Admin assignment type creator', () => {
       await page.goto(`/app/admin/assignment-types/${assignmentTypeId}`);
       await page.waitForLoadState('networkidle');
       await expect(page.getByTestId('rubric-library-select')).toBeVisible();
-      await expect(page.getByTestId('rubric-add-category')).toHaveCount(0);
-      await expect(page.getByTestId('rubric-paste-open')).toHaveCount(0);
+      await expect(page.getByTestId('rubric-add-category')).toBeVisible();
+      await expect(page.getByTestId('rubric-paste-open')).toBeVisible();
       await expect(page.getByText(OOPS)).toHaveCount(0);
 
       await page.locator('input[name="title"]').fill(`${title} Updated`);

@@ -9,6 +9,11 @@ import { data as dataResponse, redirect, useLoaderData } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { AssignmentTypeEditorForm } from '~/components/admin/assignment-type-editor-form';
 import { requireAdmin, requireUserId } from '~/utils/auth.server';
+import {
+  formatLastAdminEditLine,
+  readLastAdminEdit,
+} from '~/domain/assignment-types/assignment-type-admin-provenance.server';
+import { resolvePlatformAdminActorEmail } from '~/utils/platform-admin-actor.server';
 import { prisma } from '~/utils/db.server';
 import { archiveAssignmentType, restoreAssignmentType, updateAssignmentType, replaceAssignmentTypeImage, removeAssignmentTypeImage, parseAdminUpdateGradingConfig, withGradingInstructionsOverride } from '~/domain/assignment-types/assignment-type-admin-writes.server';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
@@ -16,6 +21,10 @@ import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assi
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { computePromptVersionLabels } from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
 import { isPromptVersionControlEnabled } from '~/domain/ai-evaluation/prompt-version-control.server';
+import {
+  parseRubric,
+  parseScoringScale,
+} from '~/domain/assignment-types/assignment-type-rubric.shared';
 
 const PROMPT_PREVIEW_INPUTS = {
   studentFirstName: 'Jordan',
@@ -57,9 +66,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   );
   const currentPromptLabel = await resolveCurrentPromptLabel(course.id);
   if (course.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
+    const lastEditLine = formatLastAdminEditLine(
+      course.updatedAt,
+      readLastAdminEdit(course.gradingPromptConfigJson)
+    );
+
     return dataResponse({
       course,
       rubrics,
+      lastEditLine,
+      scoringScale: parseScoringScale(course.scoringScaleJson),
+      rubric: parseRubric(course.rubricJson),
       gradingAssistantPromptPreview: null,
       gradingAssistantPromptPreviewUnavailableReason:
         'The AP History prompt is built from the assignment snapshot. Open a graded submission to inspect the full prompt.',
@@ -77,9 +94,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ...PROMPT_PREVIEW_INPUTS,
   });
 
+  const lastEditLine = formatLastAdminEditLine(
+    course.updatedAt,
+    readLastAdminEdit(course.gradingPromptConfigJson)
+  );
+  const scoringScale = parseScoringScale(course.scoringScaleJson);
+  const rubric = parseRubric(
+    resolvedGradingConfig.rubricSnapshot ?? course.rubricJson
+  );
+
   return dataResponse({
     course,
     rubrics,
+    lastEditLine,
+    scoringScale,
+    rubric,
     gradingAssistantPromptPreview: {
       ...compiledInvocation,
       version: resolvedGradingConfig.version,
@@ -114,6 +143,7 @@ async function resolveCurrentPromptLabel(assignmentTypeId: string) {
 
 export async function action({ request, params }: ActionFunctionArgs) {
   await requireAdmin(request);
+  const actorEmail = await resolvePlatformAdminActorEmail(request);
   const userId = await requireUserId(request);
   const superAdmin = await prisma.user.findFirst({
     where: { id: userId, isSuperAdmin: true },
@@ -164,8 +194,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
       select: {
         id: true,
         rubricJson: true,
+        scoringScaleJson: true,
         gradingPromptConfigJson: true,
         gradingOutputSchemaJson: true,
+        tutorInstructions: true,
         rubric: { select: { schemaJson: true } },
       },
     });
@@ -201,6 +233,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
         ),
         gradingAssistantVersion: { increment: 1 },
       } : {});
+    const tutorInstructionsChanged =
+      hasTutorInstructions &&
+      (tutorInstructions || null) !== (existing.tutorInstructions?.trim() || null);
+    const stampCrossUiProvenance =
+      tutorInstructionsChanged ||
+      overrideChanged ||
+      Object.keys(gradingConfig).length > 0 ||
+      rubricSelection?.kind === 'per-type';
     await prisma.$transaction(async (tx) => {
       if (deleteImage) {
         await removeAssignmentTypeImage(tx, assignmentTypeId);
@@ -214,6 +254,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
         ...(rubricSelection ? { rubricSelection } : {}),
         ...(hasTutorInstructions ? { tutorInstructions: tutorInstructions || null } : {}),
         gradingConfig,
+        ...(stampCrossUiProvenance
+          ? {
+              adminEditProvenance: {
+                source: 'platform',
+                updatedBy: actorEmail,
+              },
+            }
+          : {}),
       });
     });
 
@@ -252,31 +300,33 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function AssignmentTypeRoute() {
-  const { course, rubrics, currentPromptLabel } = useLoaderData<typeof loader>();
+  const {
+    course,
+    rubrics,
+    currentPromptLabel,
+    lastEditLine,
+    scoringScale,
+    rubric,
+  } = useLoaderData<typeof loader>();
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-        <div className="font-semibold">Read-only Assignment Type inspection moved to Yawp Internal.</div>
-        <p className="mt-1">
-          This legacy editor remains available for write tools that have not moved yet. Use Internal first when you only need to inspect catalog content, modules, organization assignments, images, or rubric references.
-        </p>
-      </div>
-      <AssignmentTypeEditorForm
-        mode="edit"
-        assignmentTypeId={course.id}
-        titleDefaultValue={course.title}
-        descriptionDefaultValue={course.description}
-        rubrics={rubrics}
-        selectedRubricId={course.rubricId ?? null}
-        gradingInstructionsDefaultValue={readGradingInstructionsOverride(course.gradingPromptConfigJson)}
-        tutorInstructionsDefaultValue={course.tutorInstructions}
-        archivedAt={course.archivedAt}
-        imageId={course.image?.id ?? null}
-        modules={course.assignmentModules}
-        currentPromptLabel={currentPromptLabel}
-      />
-    </div>
+    <AssignmentTypeEditorForm
+      mode="edit"
+      assignmentTypeId={course.id}
+      titleDefaultValue={course.title}
+      descriptionDefaultValue={course.description}
+      rubrics={rubrics}
+      selectedRubricId={course.rubricId ?? null}
+      gradingInstructionsDefaultValue={readGradingInstructionsOverride(course.gradingPromptConfigJson)}
+      tutorInstructionsDefaultValue={course.tutorInstructions}
+      archivedAt={course.archivedAt}
+      imageId={course.image?.id ?? null}
+      modules={course.assignmentModules}
+      currentPromptLabel={currentPromptLabel}
+      lastEditLine={lastEditLine}
+      scoringScale={scoringScale}
+      rubric={rubric}
+    />
   );
 }
 
