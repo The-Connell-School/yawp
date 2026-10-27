@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Free-tier states sheet</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/64e68502f8cdf404558fc140ae276fa2">
+<link rel="stylesheet" href="/_blob/baa0a6916790736b86ceb40857b31606">
+<script src="/_blob/16d3d1d03eed1727d0d2dbc3c8422312"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<section id="states-sheet" aria-labelledby="states-title" style="width:{{wpx}};height:{{hpx}};box-sizing:border-box;display:flex;flex-direction:column;background:var(--background);color:var(--foreground);border-left:{{edge}};font-family:Roboto, sans-serif;overflow:hidden"><sc-if value="{{desktop}}" hint-placeholder-val="{{true}}"><header style="flex:none;display:flex;align-items:center;gap:8px;height:40px;box-sizing:border-box;padding:0 6px 0 12px;border-bottom:1px solid var(--border)"><h2 id="states-title" tabindex="-1" style="margin:0;flex:1 1 auto;font-size:13px;line-height:16px;font-weight:600;color:var(--heading)">Free-tier states</h2><button type="button" aria-label="Close free-tier states" style="width:28px;height:28px;flex:none;display:flex;align-items:center;justify-content:center;padding:0;border:0;border-radius:6px;background:transparent;color:var(--foreground);cursor:pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;display:block"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button></header></sc-if><sc-if value="{{mobile}}" hint-placeholder-val="{{false}}"><header style="flex:none;display:flex;align-items:center;gap:4px;padding:8px 16px 8px 4px;border-bottom:1px solid var(--border)"><x-import component-from-global-scope="Yawp.Button" variant="ghost" aria-label="Back to developer tools"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>Back</x-import><h2 id="states-title" tabindex="-1" style="margin:0;flex:1 1 auto;text-align:right;font-size:17px;line-height:24px;font-weight:700;color:var(--heading)">Free-tier states</h2></header></sc-if><div style="flex:none;padding:12px 16px;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--border)"><p style="margin:0;font-size:14px;line-height:20px;">Pick a state, then jump. Yawp! reloads straight into it.</p><div style="display:flex;gap:12px;align-items:flex-start"><x-import component-from-global-scope="Yawp.Switch" id="throwaway" checked="{{throwaway}}" disabled="{{busy}}" aria-describedby="throwaway-help"></x-import><div style="display:flex;flex-direction:column;gap:2px"><x-import component-from-global-scope="Yawp.Label" html-for="throwaway">Use a throwaway test account</x-import><span id="throwaway-help" style="font-size:12px;line-height:16px;color:var(--secondary-foreground)">{{throwawayHelp}}</span></div></div><x-import component-from-global-scope="Yawp.Input" size="sm" placeholder="Filter states" aria-label="Filter states" disabled="{{busy}}"></x-import></div><div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:0 16px"><x-import component-from-global-scope="Yawp.Accordion" type="multiple" value="{{openGroups}}"><sc-for list="{{groups}}" as="g" hint-placeholder-count="5"><x-import component-from-global-scope="Yawp.AccordionItem" value="{{g.id}}"><x-import component-from-global-scope="Yawp.AccordionTrigger"><span style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left"><span style="font-size:15px;font-weight:700;color:var(--heading)">{{g.title}}</span><span style="font-size:12px;line-height:16px;font-weight:400;color:var(--secondary-foreground)">{{g.sub}}</span></span></x-import><x-import component-from-global-scope="Yawp.AccordionContent"><ul style="list-style:none;margin:0;padding:0 0 4px;display:flex;flex-direction:column;gap:2px"><sc-for list="{{g.rows}}" as="r" hint-placeholder-count="3"><li><button type="button" aria-pressed="{{r.selected}}" aria-current="{{r.ariaCurrent}}" disabled="{{busy}}" style="width:100%;display:flex;align-items:flex-start;gap:10px;padding:8px;border:0;border-radius:6px;background:{{r.bg}};box-shadow:{{r.edge}};color:var(--foreground);font:inherit;text-align:left;cursor:pointer;opacity:{{rowOpacity}}"><span aria-hidden="true" style="width:16px;height:16px;margin-top:2px;flex:none;border-radius:999px;border:1.5px solid {{r.dotEdge}};display:flex;align-items:center;justify-content:center;box-sizing:border-box"><sc-if value="{{r.selected}}" hint-placeholder-val="{{false}}"><span style="width:8px;height:8px;border-radius:999px;background:var(--primary)"></span></sc-if></span><span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;line-height:20px;font-weight:500">{{r.t}}</span><span style="font-size:12px;line-height:16px;color:var(--secondary-foreground)">{{r.d}}</span></span><sc-if value="{{r.current}}" hint-placeholder-val="{{false}}"><x-import component-from-global-scope="Yawp.Badge" variant="secondary" size="sm">Current</x-import></sc-if></button></li></sc-for></ul></x-import></x-import></sc-for></x-import></div><footer style="flex:none;border-top:1px solid var(--border);background:var(--popover);padding:14px 16px 16px"><sc-if value="{{isBrowse}}" hint-placeholder-val="{{true}}"><div style="display:flex;flex-direction:column;gap:10px"><span style="font-size:12px;line-height:16px;color:var(--secondary-foreground)">Selected</span><span style="font-size:14px;line-height:20px;font-weight:500;margin-top:-8px">Approved � A few left</span><x-import component-from-global-scope="Yawp.Button" class-name="w-full">Jump to this state</x-import></div></sc-if><sc-if value="{{isConfirm}}" hint-placeholder-val="{{false}}"><div role="alertdialog" aria-labelledby="jump-q" aria-describedby="jump-d" style="display:flex;flex-direction:column;gap:10px"><span id="jump-q" style="font-size:15px;line-height:22px;font-weight:700;color:var(--heading)">Change Jordan Rivera�s test data?</span><p id="jump-d" style="margin:0;font-size:12px;line-height:16px;color:var(--secondary-foreground)">Throwaway is off, so this jump sets Jordan Rivera to Approved � A few left. Their usage and approval status change. To change it again, jump to another state.</p><div style="display:flex;gap:8px"><x-import component-from-global-scope="Yawp.Button" variant="outline" class-name="w-full" style="flex:1 1 0">Cancel</x-import><x-import component-from-global-scope="Yawp.Button" class-name="w-full" style="flex:1.6 1 0">Change data and jump</x-import></div></div></sc-if><sc-if value="{{isSwitching}}" hint-placeholder-val="{{false}}"><div role="status" aria-live="polite" style="display:flex;flex-direction:column;gap:12px"><span style="font-size:14px;line-height:20px;font-weight:500">Switching to Approved � A few left</span><ol style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px"><sc-for list="{{steps}}" as="st" hint-placeholder-count="3"><li style="display:flex;align-items:center;gap:8px;font-size:14px;line-height:20px;"><sc-if value="{{st.done}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:var(--foreground)"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg></sc-if><sc-if value="{{st.now}}" hint-placeholder-val="{{false}}"><svg aria-hidden="true" class="yawp-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:var(--primary)"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg></sc-if><sc-if value="{{st.todo}}" hint-placeholder-val="{{false}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:var(--input)"><circle cx="12" cy="12" r="10"></circle></svg></sc-if><span style="color:{{st.color}}">{{st.t}}</span></li></sc-for></ol><x-import component-from-global-scope="Yawp.Button" class-name="w-full" is-loading="{{true}}">Switching�</x-import></div></sc-if><sc-if value="{{isSuccess}}" hint-placeholder-val="{{false}}"><div role="status" aria-live="polite" style="display:flex;flex-direction:column;gap:10px"><div style="display:flex;gap:10px;align-items:flex-start"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:var(--foreground);margin-top:1px"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;line-height:22px;font-weight:700;color:var(--heading)">You�re in Approved � A few left</span><span style="font-size:12px;line-height:16px;color:var(--secondary-foreground)">Signed in as test+t4821, a throwaway teacher at Lincoln High School.</span></div></div><div style="display:flex;gap:8px"><x-import component-from-global-scope="Yawp.Button" variant="outline" size="sm"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>Copy login email</x-import><x-import component-from-global-scope="Yawp.Button" variant="ghost" size="sm">Done</x-import></div></div></sc-if><sc-if value="{{isError}}" hint-placeholder-val="{{false}}"><div role="alert" style="display:flex;flex-direction:column;gap:10px"><div style="display:flex;gap:10px;align-items:flex-start"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:var(--destructive);margin-top:1px"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg><div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;line-height:22px;font-weight:700;color:var(--heading)">Couldn�t jump to Approved � A few left</span><span style="font-size:12px;line-height:16px;color:var(--secondary-foreground)">The test account was made, but setting usage failed (error 500). You�re still on Approved � About half left.</span></div></div><div style="display:flex;gap:8px"><x-import component-from-global-scope="Yawp.Button" size="sm"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg>Try again</x-import><x-import component-from-global-scope="Yawp.Button" variant="outline" size="sm"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>Copy error details</x-import></div></div></sc-if></footer></section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"state":{"editor":"enum","options":["browse","confirm","switching","success","error"],"default":"browse"},"mobile":{"editor":"boolean","default":false},"w":{"editor":null,"default":360},"h":{"editor":null,"default":900},"$preview":{"width":360,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const s = this.props.state ?? 'browse';
+    const mobile = this.props.mobile ?? false;
+    const w = this.props.w ?? 360;
+    const h = this.props.h ?? 900;
+    const busy = s === 'switching';
+    const throwaway = s !== 'confirm';
+    const selectedId = 'few';
+    const currentId = s === 'success' ? 'few' : 'half';
+    const G = [
+      { id: 'signup', title: 'Teacher signup', sub: 'Signs in as a new test teacher � 5 states', rows: [
+        ['event', 'Event link landing', 'The page a teacher sees after following an event invite link.'],
+        ['email', 'Check your email', 'Confirmation that a sign-in link was sent.'],
+        ['join', 'Join page', 'Teacher fills in their details and joins a school.'],
+        ['class', 'Create class', 'First class setup, right after joining.'],
+        ['nameadmin', 'Name administrator', 'Teacher names the admin who approves Yawp!.']] },
+      { id: 'pending', title: 'Pending approval', sub: 'Signs in as a teacher � 2 states', rows: [
+        ['pending', 'Pending page', '�Waiting for Dr. Alan Brooks to approve� screen.'],
+        ['preview', 'Locked app preview', 'Lesson Planner works and is metered; Reporter is locked.']] },
+      { id: 'approved', title: 'Approved', sub: 'Signs in as a teacher � 7 states', rows: [
+        ['toast', 'First-time approved toast', 'The one-time �approved� toast on the first visit after approval.'],
+        ['plenty', 'Usage: plenty left', 'Usage ring full for Lesson Planner and Reporter.'],
+        ['half', 'Usage: about half left', 'Ring half full.'],
+        ['few', 'Usage: a few left', 'Ring turns orange and the mobile menu shows a dot.'],
+        ['allused', 'Usage: all used', 'Ring empty until November 1.'],
+        ['lplimit', 'Lesson Planner limit screen', 'Shown when Lesson Planner is used up for the month.'],
+        ['rplimit', 'Reporter limit screen', 'Shown when Reporter is used up for the month.']] },
+      { id: 'declined', title: 'Declined', sub: 'Signs in as a teacher � 1 state', rows: [
+        ['waitlist', 'Waitlist', '�You�re on the list!� after the admin declines.']] },
+      { id: 'admin', title: 'Admin side', sub: 'Opens as the admin, signed out � 11 states', rows: [
+        ['aemail', 'Approval email', 'The email asking the admin to approve Yawp!.'],
+        ['approve', 'Approve page', 'The admin�s approve form.'],
+        ['thanks', 'Thank you', 'Shown right after the admin approves.'],
+        ['already', 'Already approved', 'Admin opens the link again after approving.'],
+        ['notme', 'Not the right person form', 'Admin forwards the request to someone else.'],
+        ['fwd', 'Request forwarded', 'Confirmation after forwarding.'],
+        ['fwdemail', 'Forward recipient email', 'The email the new admin receives.'],
+        ['expired', 'Link expired', 'Approval link past its expiry date.'],
+        ['invalid', 'Link invalid', 'Link that doesn�t match any request.'],
+        ['replaced', 'Link replaced', 'An older link after a newer one was sent.'],
+        ['declined', 'Already declined', 'Admin opens the link again after declining.']] }
+    ];
+    const groups = G.map((g) => ({ ...g, rows: g.rows.map(([id, t, d]) => {
+      const selected = id === selectedId && s !== 'success';
+      const current = id === currentId;
+      return { id, t, d, selected, current, ariaCurrent: current ? 'true' : 'false',
+        bg: selected ? 'var(--accent)' : 'transparent',
+        edge: selected ? 'inset 0 0 0 1px var(--input)' : 'none',
+        dotEdge: selected ? 'var(--primary)' : 'var(--input)' };
+    }) }));
+    const ink = 'var(--foreground)', dim = 'var(--secondary-foreground)';
+    return {
+      wpx: mobile ? '100%' : w + 'px', hpx: h + 'px',
+      desktop: !mobile, mobile,
+      edge: mobile ? '0' : '1px solid hsl(from var(--foreground) h s l / 0.24)',
+      busy, throwaway,
+      rowOpacity: busy ? '0.5' : '1',
+      throwawayHelp: throwaway
+        ? 'Each jump makes a fresh test teacher at Lincoln High School. Jordan Rivera�s data isn�t touched.'
+        : 'Off: jumps change the signed-in account, Jordan Rivera.',
+      openGroups: ['approved'],
+      groups,
+      isBrowse: s === 'browse', isConfirm: s === 'confirm', isSwitching: busy, isSuccess: s === 'success', isError: s === 'error',
+      steps: [
+        { t: 'Made throwaway account test+t4821', done: true, now: false, todo: false, color: ink },
+        { t: 'Setting usage to a few left', done: false, now: true, todo: false, color: ink },
+        { t: 'Reloading Yawp!', done: false, now: false, todo: true, color: dim }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

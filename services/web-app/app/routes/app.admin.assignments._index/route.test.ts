@@ -67,12 +67,12 @@ describe('AssignmentTypes loader', () => {
     expect(data.assignmentTypes).toHaveLength(0);
   });
 
-  test('renders moved notice while preserving the legacy create link', () => {
+  test('renders the legacy create link without internal migration chrome', () => {
     currentLoaderData = { assignmentTypes: [mockAssignmentType] };
 
     const html = renderToStaticMarkup(React.createElement(AssignmentTypesRoute));
 
-    expect(html).toContain('Assignment Types read-only review moved to Yawp Internal.');
+    expect(html).not.toContain('moved to Yawp Internal');
     expect(html).toContain('href="/app/admin/assignment-types/new"');
     expect(html).toContain('Create assignment type');
   });

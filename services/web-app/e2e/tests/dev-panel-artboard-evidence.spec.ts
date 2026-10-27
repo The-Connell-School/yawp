@@ -4,6 +4,8 @@ import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
 import {
   clearDevPanelStorageWhenStable,
+  devPanelFreeTierGroupTrigger,
+  devPanelFreeTierStateOption,
   openDevPanelClassSimulationFlyout,
   openDevToolsPanel,
   openGiveFeedback,
@@ -95,21 +97,22 @@ test.describe('Dev panel artboard evidence', () => {
     await expect(stateSheet).toBeVisible({ timeout: 15_000 });
     await shot(page, '19');
 
-    await stateSheet.getByRole('radio').first().check({ force: true });
+    await devPanelFreeTierGroupTrigger(stateSheet, 'Teacher signup').click();
+    await devPanelFreeTierStateOption(stateSheet, 'Waitlist submitted').click();
     await stateSheet
-      .getByRole('checkbox', { name: 'Use a throwaway test account' })
+      .getByRole('switch', { name: 'Use a throwaway test account' })
       .setChecked(false);
     await stateSheet.getByRole('button', { name: 'Jump to this state' }).click();
     await expect(
-      page.getByRole('heading', { name: 'Change the signed-in account?' })
+      page.getByRole('alertdialog', { name: /Change .+'s test data\?/ })
     ).toBeVisible();
     await shot(page, '20');
 
     await page.getByRole('button', { name: 'Cancel' }).click();
     await stateSheet
-      .getByRole('checkbox', { name: 'Use a throwaway test account' })
+      .getByRole('switch', { name: 'Use a throwaway test account' })
       .setChecked(true);
-    await stateSheet.getByRole('radio').first().check({ force: true });
+    await devPanelFreeTierStateOption(stateSheet, 'Waitlist submitted').click();
     await page.route('**/api/dev-panel/free-tier-jump', async (route) => {
       await route.fulfill({
         status: 200,
@@ -191,7 +194,7 @@ test.describe('Dev panel artboard evidence', () => {
       "Couldn't send your feedback"
     );
     await expect(feedbackDialog.getByRole('alert')).toContainText(
-      'Your note is still here. Check your connection and try again.'
+      'Your note is still here; nothing was lost'
     );
     await shot(page, '60');
 

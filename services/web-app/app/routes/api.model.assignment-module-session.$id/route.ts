@@ -173,6 +173,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           assignmentType: {
             select: {
               assignmentModules: {
+                where: { deletedAt: null },
                 select: { id: true, position: true },
                 orderBy: { position: 'asc' },
               },

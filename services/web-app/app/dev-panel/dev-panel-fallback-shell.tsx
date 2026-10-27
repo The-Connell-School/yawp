@@ -17,7 +17,7 @@ export function DevPanelFallbackShell() {
       <header className="yawp-dev-panel-header">
         <div className="yawp-dev-panel-header-title">
           <FlaskConical className="size-4 shrink-0" aria-hidden="true" />
-          <p className="truncate">Developer tools</p>
+          <p className="yawp-dev-panel-header-heading">Developer tools</p>
         </div>
         <Button
           type="button"

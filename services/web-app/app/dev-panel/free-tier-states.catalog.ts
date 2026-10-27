@@ -169,3 +169,8 @@ export function freeTierStateSummary(stateId: string | null | undefined) {
   if (!found) return null;
   return `${found.group.title.replace('Teacher signup', 'Signup')} · ${found.state.label.replace(/^Usage: /, '')}`;
 }
+
+export function freeTierGroupSubtitle(group: FreeTierStateGroup) {
+  const count = group.states.length;
+  return `${group.summary} · ${count} state${count === 1 ? '' : 's'}`;
+}
