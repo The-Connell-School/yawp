@@ -44,22 +44,22 @@ describe('assertDevPanelRoute', () => {
 });
 
 describe('assertDevPanelUnlockRoute', () => {
-  test('returns 404 on a numbered PR preview host', async () => {
+  test('allows unlock route on a deployed numbered PR preview host', async () => {
     const previous = {} as Record<(typeof keys)[number], string | undefined>;
     for (const key of keys) previous[key] = process.env[key];
     Object.assign(process.env, {
       YAWP_ENVIRONMENT: 'preview',
-      PREVIEW_SLUG: 'pr-e2e-gate',
-      PR_NUMBER: '1',
+      PREVIEW_SLUG: 'pr-860',
+      PR_NUMBER: '860',
       NODE_ENV: 'production',
-      DATABASE_URL: 'postgresql://u:p@remote:5432/yawp_pr_1',
+      DATABASE_URL: 'postgresql://u:p@remote:5432/yawp_pr_860',
       PREVIEW_ACCESS_GATE: 'on',
     });
     try {
       const response = await assertDevPanelUnlockRoute(
         new Request('http://localhost/api/dev-panel/preview-access')
       );
-      expect(response?.status).toBe(404);
+      expect(response).toBeNull();
     } finally {
       restoreEnv(previous);
     }
