@@ -962,6 +962,26 @@ describe('AssignmentCreationSheetContent', () => {
       expectNoText('Basic exit ticket');
     });
 
+    // Brian's round 5, item 4: the prompt is editable before Create.
+    it('lets the teacher edit the prompt, and posts their wording', () => {
+      root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
+      const box = document.querySelector<HTMLTextAreaElement>('[data-testid="exit-ticket-prompt"]')!;
+      expect(box).not.toBeNull();
+      expect(box.value).toInclude(BASIC_EXIT_TICKET_PROMPT);
+      expect(document.querySelector('input[name="exitTicketPromptEdited"]')).toBeNull();
+
+      act(() => setTextareaValue(box, 'What did Paine get right?'));
+
+      expect(inputByName('prompt').value).toBe('What did Paine get right?');
+      expect(inputByName('exitTicketPromptEdited').value).toBe('1');
+
+      act(() => {
+        document.querySelector<HTMLButtonElement>('[data-testid="exit-ticket-prompt-reset"]')!.click();
+      });
+      expect(inputByName('prompt').value).toInclude(BASIC_EXIT_TICKET_PROMPT);
+      expect(document.querySelector('input[name="exitTicketPromptEdited"]')).toBeNull();
+    });
+
     it('asks what to check for once the teacher picks a check', () => {
       root = renderQuickExitTicketSheet({ fixedClassId: 'class-1' }).root;
       expectNoText('What are you checking for?');

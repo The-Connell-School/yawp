@@ -25,8 +25,8 @@ export type ParseAssignmentExitTicketResult =
  *
  * The sheet also posts the composed prompt, so the form's existing
  * required-prompt validation still applies, but the prompt is recomposed here
- * from the answers rather than taken from the request: what students read on
- * an exit ticket is the product's wording, not whatever a client sent.
+ * from the answers. A prompt the teacher edited is kept by
+ * `resolveAssignmentPrompt`, which knows the form said so.
  */
 export function parseAssignmentExitTicket(
   formData: FormData
@@ -96,9 +96,8 @@ export type ResolveAssignmentPromptResult =
  * The prompt to store for an assignment, and the exit ticket config to store
  * beside it.
  *
- * Every create and edit path runs through this so an exit ticket cannot be
- * saved with a hand-written prompt on one route and a composed one on
- * another. For every other assignment type it hands back the posted prompt
+ * Every create and edit path runs through this so an exit ticket is saved
+ * the same way on every route: composed, or as the teacher edited it. For every other assignment type it hands back the posted prompt
  * unchanged.
  */
 export function resolveAssignmentPrompt({
@@ -121,9 +120,17 @@ export function resolveAssignmentPrompt({
   const exitTicket = parseAssignmentExitTicket(formData);
   if (!exitTicket.success) return exitTicket;
 
+  // The teacher can edit the composed prompt before creating it (Brian's
+  // round 5, item 4). The answers are still required and still stored, so
+  // the reading of responses knows what the ticket checks.
+  const edited =
+    formData.get('exitTicketPromptEdited')?.toString() === '1'
+      ? postedPrompt.trim()
+      : '';
+
   return {
     success: true,
-    prompt: exitTicket.value.prompt,
+    prompt: edited || exitTicket.value.prompt,
     exitTicketConfigJson: exitTicket.value.exitTicketConfigJson,
   };
 }

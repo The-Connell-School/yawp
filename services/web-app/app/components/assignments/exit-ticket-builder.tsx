@@ -88,6 +88,12 @@ export type ExitTicketBuilderProps = {
   onLessonNoteChange: (key: keyof ExitTicketLessonNotes, value: string) => void;
   /** The composed prompt, or empty while the form is incomplete. */
   preview: string;
+  /**
+   * The teacher's own wording of the prompt, once they have changed it
+   * (Brian's round 5, item 4); null while it is the composed one.
+   */
+  promptEdit?: string | null;
+  onPromptEditChange?: (value: string | null) => void;
   disabled: boolean;
 };
 
@@ -153,6 +159,8 @@ export function ExitTicketBuilder({
   lessonNotes,
   onLessonNoteChange,
   preview,
+  promptEdit = null,
+  onPromptEditChange,
   disabled,
 }: ExitTicketBuilderProps) {
   // null is the whole form at once; a number is the step being walked.
@@ -401,7 +409,31 @@ export function ExitTicketBuilder({
           <Label htmlFor="assignment-create-exit-ticket-preview">
             What students will see
           </Label>
-          {preview ? (
+          {preview && onPromptEditChange ? (
+            <>
+              <Textarea
+                id="assignment-create-exit-ticket-preview"
+                data-testid="exit-ticket-prompt"
+                value={promptEdit ?? preview}
+                onChange={(event) => onPromptEditChange(event.target.value)}
+                rows={6}
+                disabled={disabled}
+              />
+              <p className="text-xs text-muted-foreground">
+                Change any of the wording before you create it.{' '}
+                {promptEdit !== null ? (
+                  <button
+                    type="button"
+                    data-testid="exit-ticket-prompt-reset"
+                    onClick={() => onPromptEditChange(null)}
+                    className="font-medium text-foreground underline-offset-2 hover:underline"
+                  >
+                    Use the suggested wording
+                  </button>
+                ) : null}
+              </p>
+            </>
+          ) : preview ? (
             <p
               id="assignment-create-exit-ticket-preview"
               className="whitespace-pre-line rounded-md bg-muted p-3 text-sm"

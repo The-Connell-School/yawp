@@ -664,6 +664,8 @@ export function AssignmentCreationSheetContent({
   );
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState(initialPrompt);
+  // An exit ticket's prompt as the teacher edited it (Brian's round 5, item 4).
+  const [exitTicketPromptEdit, setExitTicketPromptEdit] = useState<string | null>(null);
   const initialGrading = initialGradingFor({
     isEditing: Boolean(editingAssignment),
     isExitTicket: isExitTicketTypeId(
@@ -945,6 +947,7 @@ export function AssignmentCreationSheetContent({
     setSelectedClassIds(initialClassIds(fixedClassId));
     setTitle(initialTitle);
     setPrompt(initialPrompt);
+    setExitTicketPromptEdit(null);
     const grading = initialGradingFor({
       isEditing: Boolean(editingAssignment),
       isExitTicket: isExitTicketTypeId(
@@ -1204,7 +1207,14 @@ export function AssignmentCreationSheetContent({
           />
         </>
       ) : null}
-      <input type="hidden" name="prompt" value={exitTicketPrompt} />
+      <input
+        type="hidden"
+        name="prompt"
+        value={exitTicketPrompt && exitTicketPromptEdit?.trim() ? exitTicketPromptEdit : exitTicketPrompt}
+      />
+      {exitTicketPromptEdit?.trim() ? (
+        <input type="hidden" name="exitTicketPromptEdited" value="1" />
+      ) : null}
     </>
   );
 
@@ -1495,6 +1505,8 @@ export function AssignmentCreationSheetContent({
                 setLessonNotes((current) => ({ ...current, [key]: value }))
               }
               preview={exitTicketPreview}
+              promptEdit={exitTicketPromptEdit}
+              onPromptEditChange={setExitTicketPromptEdit}
               disabled={isSaving}
             />
             {exitTicketHiddenFields}

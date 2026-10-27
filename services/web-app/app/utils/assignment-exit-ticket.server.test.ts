@@ -305,6 +305,45 @@ describe('resolveAssignmentPrompt', () => {
     });
   });
 
+  // Brian's round 5, item 4: the teacher can edit the prompt before Create.
+  test('keeps the prompt the teacher edited, and the config beside it', () => {
+    const result = resolveAssignmentPrompt({
+      assignmentTypeKind: 'exit_ticket',
+      postedPrompt: '  In your own words, explain what Paine means by a necessary evil.  ',
+      formData: formDataFor({ exitTicketMode: 'basic', exitTicketPromptEdited: '1' }),
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.prompt).toBe('In your own words, explain what Paine means by a necessary evil.');
+    expect(result.exitTicketConfigJson).toEqual({
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      mode: 'basic',
+    });
+  });
+
+  test('an emptied edit falls back to the composed prompt', () => {
+    const result = resolveAssignmentPrompt({
+      assignmentTypeKind: 'exit_ticket',
+      postedPrompt: '   ',
+      formData: formDataFor({ exitTicketMode: 'basic', exitTicketPromptEdited: '1' }),
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.prompt).toInclude(BASIC_EXIT_TICKET_PROMPT);
+  });
+
+  test('an edited prompt still needs the ticket answered', () => {
+    const result = resolveAssignmentPrompt({
+      assignmentTypeKind: 'exit_ticket',
+      postedPrompt: 'Anything.',
+      formData: formDataFor({ exitTicketMode: 'specific', exitTicketFocus: 'explain-concept', exitTicketPromptEdited: '1' }),
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   test('refuses an exit ticket the teacher has not finished answering', () => {
     const result = resolveAssignmentPrompt({
       assignmentTypeKind: 'exit_ticket',
