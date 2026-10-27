@@ -31,11 +31,19 @@ describe('dev panel v3 chrome', () => {
     expect(fallback.includes('shadow-xl')).toBe(false);
   });
 
-  test('stylesheet defines compact rows and reduced-motion flyouts', () => {
+  test('stylesheet defines compact rows and zero-motion flyouts', () => {
     const css = readFileSync(path.join(devPanelDir, 'dev-panel.css'), 'utf8');
     expect(css).toContain('--yawp-dev-panel-inset: 12px');
-    expect(css).toContain('yawp-dev-panel-reduced-motion [data-yawp-dev-panel-flyout]');
+    expect(css).toContain('--yawp-dev-panel-header-height: 40px');
+    expect(css).toContain('animation: none !important');
+    expect(css).not.toContain('yawp-dev-panel-slide-in');
     expect(css).toContain('box-shadow: none');
+  });
+
+  test('shell title uses h2 devtools-title not global h1', () => {
+    const shell = readFileSync(path.join(devPanelDir, 'dev-panel-shell.tsx'), 'utf8');
+    expect(shell.includes('id="devtools-title"')).toBe(true);
+    expect(shell.includes('<h1 ref={headingRef}')).toBe(false);
   });
 
   test('beaker shows locked affordance when preview gate applies', () => {

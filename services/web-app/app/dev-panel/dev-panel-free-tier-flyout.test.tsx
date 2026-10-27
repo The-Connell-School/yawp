@@ -8,7 +8,12 @@ try {
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, mock, test } from 'bun:test';
+
+mock.module('react-router', () => ({
+  useRouteLoaderData: () => ({ user: { email: 'dev.teacher@yawp.local', name: 'Jordan Rivera' } }),
+  useLocation: () => ({ pathname: '/free', search: '' }),
+}));
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router';
