@@ -2,7 +2,6 @@ import { createHash, randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { LOCAL_DEV_PASSWORD } from '../../../../packages/prisma/scripts/local-dev/dev-personas';
 import { submitAdminDetails } from '~/domain/free-tier/approval-flow.server';
-import { ensureLockedPreviewClassroomForUser } from '~/domain/free-tier/locked-preview.server';
 import {
   provisionFreeClassroom,
   type ProvisionFreeClassroomResult,
@@ -285,6 +284,54 @@ async function preparePendingApplicationRecord(
   });
 }
 
+/**
+ * Dev-panel pending jumps must provision the locked-preview classroom even when
+ * `feature_flag.free_tier` is off for a null org (localhost development).
+ * `ensureLockedPreviewClassroomForUser` fails closed on that flag before calling
+ * `provisionFreeClassroom`.
+ */
+async function provisionLockedPreviewForDevPanelPendingJump(
+  userId: string,
+  applicationId: string
+) {
+  const result: ProvisionFreeClassroomResult =
+    await provisionFreeClassroom(applicationId);
+  if (
+    result.status !== 'provisioned' &&
+    result.status !== 'already_provisioned'
+  ) {
+    throw new Error('Could not provision locked preview classroom.');
+  }
+  const organizationId = result.organizationId;
+  const { ensureLockedPreviewSampleAssignments } = await import(
+    '~/domain/free-tier/locked-preview-class-seed.server'
+  );
+  const klass = await prisma.class.findFirst({
+    where: {
+      isArchived: false,
+      school: { organizationId },
+      teachers: { some: { userId } },
+    },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  if (klass) {
+    await ensureLockedPreviewSampleAssignments(organizationId, klass.id);
+  }
+  const membership = await prisma.orgMembership.findFirst({
+    where: {
+      userId,
+      organization: { plan: 'FREE_CLASSROOM' },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+  if (!membership) {
+    throw new Error('Could not provision locked preview classroom.');
+  }
+  return { membershipId: membership.id };
+}
+
 async function jumpToPendingTeacherState(args: {
   target: JumpTarget;
   manualReview: boolean;
@@ -349,19 +396,10 @@ async function jumpToPendingTeacherState(args: {
     throw new Error('Pending jump produced an unexpected application status.');
   }
 
-  await ensureLockedPreviewClassroomForUser(args.target.userId);
-  const membership = await prisma.orgMembership.findFirst({
-    where: {
-      userId: args.target.userId,
-      organization: { plan: 'FREE_CLASSROOM' },
-    },
-    orderBy: { createdAt: 'desc' },
-    select: { id: true },
-  });
-  if (!membership) {
-    throw new Error('Could not provision locked preview classroom.');
-  }
-  return { membershipId: membership.id };
+  return provisionLockedPreviewForDevPanelPendingJump(
+    args.target.userId,
+    app.id
+  );
 }
 
 async function requireDevPanelFreeClassroomOrg(

@@ -27,8 +27,9 @@ const provisionFreeClassroom = mock(async () => ({
 
 let pendingThrowawayEmail = 'dev-panel+00000000-0000-4000-8000-000000000001@pending-000000000001.example.test';
 
+/** Local dev: pending app has organizationId null → ensure* would no-op when flag is off. */
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({
-  isFeatureFlagEnabled: async () => true,
+  isFeatureFlagEnabled: async () => false,
 }));
 
 mock.module('~/domain/free-tier/email.server', () => ({
@@ -46,13 +47,6 @@ mock.module('~/domain/free-tier/email-copy.server', () => ({
 
 mock.module('~/domain/free-tier/provision-free-classroom.server', () => ({
   provisionFreeClassroom,
-}));
-
-mock.module('~/domain/free-tier/locked-preview.server', () => ({
-  ensureLockedPreviewClassroomForUser: async () => {
-    await provisionFreeClassroom('app-pending-1');
-    return { status: 'provisioned', organizationId: 'org-fc-pending-1' };
-  },
 }));
 
 mock.module('~/cookie-session-storages/authentication.server', () => ({
@@ -159,6 +153,7 @@ mock.module('~/utils/db.server', () => ({
     },
     freeTierEmailLog: { create: async () => ({}) },
     freeTierSignedLink: submitTx.freeTierSignedLink,
+    class: { findFirst: async () => null },
     session: { deleteMany: async () => ({ count: 0 }) },
     setting: { findUnique: async () => null },
   },
@@ -199,7 +194,7 @@ describe('executeFreeTierStateJump pending (localhost worktree env)', () => {
     restoreEnv();
   });
 
-  test('pending.waiting-on-admin + local-dev-org uses real submitAdminDetails mint without FREE_TIER_LINK_HMAC_SECRET', async () => {
+  test('pending.waiting-on-admin + local-dev-org provisions locked preview when FREE_TIER_FLAG is off (ensure* would no-op)', async () => {
     const { executeFreeTierStateJump } = await import('./free-tier-jump.server');
     const result = await executeFreeTierStateJump({
       request: new Request('http://localhost/'),
@@ -213,12 +208,15 @@ describe('executeFreeTierStateJump pending (localhost worktree env)', () => {
       redirectTo: '/app/free-tier/pending',
     });
     expect(recordFreeTierAdminApprovalEmailLogged).toHaveBeenCalled();
+    expect(provisionFreeClassroom).toHaveBeenCalledWith('app-pending-1');
   });
 
   test('pending.waiting-on-admin returns generic 400 when no signing secret is available (live failure mode)', async () => {
     delete process.env.SESSION_SECRET;
     delete process.env.INTERNAL_COMMAND_TOKEN;
     delete process.env.FREE_TIER_LINK_HMAC_SECRET;
+    delete process.env.PREVIEW_ACCESS_SECRET;
+    process.env.NODE_ENV = 'production';
     const { isFreeTierLinkSigningConfigured } = await import(
       '~/domain/free-tier/signed-link.server'
     );
