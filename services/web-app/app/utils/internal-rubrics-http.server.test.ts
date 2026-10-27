@@ -80,6 +80,13 @@ test.each([
   expect(received).toEqual([publication]);
   const validated = await http.validate(request({ schema: document }, key, '/api/internal/v1/rubrics/validate'));
   expect(validated.status).toBe(200);
-  expect(await validated.json()).toMatchObject({ ok: true, schema: { scoringScale: scoringScale ? { ...scoringScale, type: 'type' in scoringScale ? scoringScale.type : 'weighted_1_5' } : { type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 } } });
+  const body = await validated.json();
+  const expectedScoringScale = scoringScale
+    ? { ...scoringScale, type: 'type' in scoringScale ? scoringScale.type : 'weighted_1_5' }
+    : { type: 'weighted_1_5', minScore: 1, maxScore: 5 };
+  expect(body).toMatchObject({ ok: true, schema: { scoringScale: expectedScoringScale } });
+  if (!scoringScale) {
+    expect('step' in body.schema.scoringScale).toBe(false);
+  }
   expect(received).toHaveLength(1);
 });
