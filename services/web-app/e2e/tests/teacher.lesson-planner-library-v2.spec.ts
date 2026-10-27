@@ -221,8 +221,9 @@ test.describe("Library redesign (Brian's Oct 24 handoff, Part 2)", () => {
     const seeded = await seedLibrary(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner/library/unit/${seeded.catcher}`);
-    await expect(page.getByTestId('unit-glance-lessons')).toHaveText('2 lessons · 1 draft');
-    await expect(page.getByTestId('unit-glance-writing')).toHaveText('Writing: 20 min · 20%');
+    // Labeled stats, as in the mockup (Brian's round 5, item 2).
+    await expect(page.getByTestId('unit-glance-lessons')).toHaveText('2 · 1 draft');
+    await expect(page.getByTestId('unit-glance-writing')).toHaveText('20 min · 20%');
     await expect(page.getByTestId('contents-row')).toHaveCount(2);
     await expect(page.getByTestId('day-tab')).toHaveCount(2);
 
