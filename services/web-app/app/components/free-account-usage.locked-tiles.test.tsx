@@ -44,6 +44,7 @@ afterEach(() => {
 
 const usage: FreeAccountUsage = {
   monthly: true,
+  unlimitedFreeAssignmentTiles: true,
   students: { used: 0, total: 35, remaining: 35 },
   lessonPlans: { used: 0, total: 5, remaining: 5 },
   assignments: [

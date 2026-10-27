@@ -60,7 +60,12 @@ import {
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
 import { shouldHideFreeTierTeachingSecrets } from '~/domain/free-tier/locked-preview.server';
-import { LOCKED_DASHBOARD_WELCOME_SUBTITLE } from '~/domain/free-tier/locked-dashboard-copy';
+import {
+  LOCKED_DASHBOARD_WELCOME_SUBTITLE,
+  UNLOCKED_FIRST_RUN_WELCOME_SUBTITLE,
+  UNLOCKED_IN_USE_WELCOME_SUBTITLE,
+} from '~/domain/free-tier/locked-dashboard-copy';
+import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 
 const DASHBOARD_MAX_TEACHER_CLASSES = 6;
 
@@ -444,17 +449,24 @@ export default function AppRoute() {
         className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
       >
         <div className="flex w-full justify-between border-b bg-secondary">
-          <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
+          <div className="mx-auto flex w-full max-w-screen-lg flex-wrap items-end justify-between gap-3 p-3 sm:p-5">
             <div className="flex flex-col">
               <h2>Welcome, {teacherFirstName(user.name ?? 'Teacher')}!</h2>
               <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
                 {locked
                   ? LOCKED_DASHBOARD_WELCOME_SUBTITLE
-                  : freeUsage
-                    ? 'Your class, assignments, and grading in one place.'
-                    : 'Your classes, assignments, and grading in one place.'}
+                  : freeUsage?.monthly
+                    ? freeUsage.students.used > 0
+                      ? UNLOCKED_IN_USE_WELCOME_SUBTITLE
+                      : UNLOCKED_FIRST_RUN_WELCOME_SUBTITLE
+                    : freeUsage
+                      ? 'Your class, assignments, and grading in one place.'
+                      : 'Your classes, assignments, and grading in one place.'}
               </p>
             </div>
+            {!locked && assignmentsSeeHowItWorksTo ? (
+              <SeeHowItWorksLink to={assignmentsSeeHowItWorksTo} />
+            ) : null}
           </div>
         </div>
         <div
@@ -565,14 +577,15 @@ export default function AppRoute() {
                 </div>
               </div>
             ) : (
-              <TeacherGradingAtAGlance
-                freeAccount={Boolean(freeUsage)}
-                seeHowItWorksTo={
-                  locked ? gradingSeeHowItWorksTo : undefined
-                }
-                needsGradingCount={needsGradingCount}
-                readyToReleaseCount={readyToReleaseCount}
-              />
+                <TeacherGradingAtAGlance
+                  freeAccount={Boolean(freeUsage)}
+                  licensedGradingBand={Boolean(freeUsage)}
+                  seeHowItWorksTo={
+                    locked ? gradingSeeHowItWorksTo : undefined
+                  }
+                  needsGradingCount={needsGradingCount}
+                  readyToReleaseCount={readyToReleaseCount}
+                />
             )}
           </ContentColumn>
           {freeUsage ? <FreeAccountRail usage={freeUsage} /> : null}

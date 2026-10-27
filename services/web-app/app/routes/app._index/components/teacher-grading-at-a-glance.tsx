@@ -94,16 +94,21 @@ function GradingQueueStatStrip({
 
 export function TeacherGradingAtAGlance({
   freeAccount = false,
+  licensedGradingBand = false,
   seeHowItWorksTo,
   needsGradingCount,
   readyToReleaseCount,
 }: {
   freeAccount?: boolean;
+  licensedGradingBand?: boolean;
   seeHowItWorksTo?: string;
   needsGradingCount: number;
   readyToReleaseCount: number;
 }) {
-  const allCaughtUp = needsGradingCount === 0 && readyToReleaseCount === 0;
+  const allCaughtUp =
+    !licensedGradingBand &&
+    needsGradingCount === 0 &&
+    readyToReleaseCount === 0;
 
   return (
     <div data-testid="teacher-grading-grid" data-tour="dashboard-grading">

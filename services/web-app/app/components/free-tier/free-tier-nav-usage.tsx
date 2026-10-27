@@ -30,6 +30,23 @@ export function freeTierNavMobileWarningDot(
   return usageNavMobileWarningDot(levels);
 }
 
+function freeTierNavLockedExpandedLinkBody(
+  link: SidebarNavLink,
+  icon: React.ReactNode
+) {
+  return (
+    <>
+      {icon}
+      <span className="flex min-w-0 flex-col gap-0.5 leading-tight">
+        <span className="truncate">{link.label}</span>
+        <span className="truncate text-xs font-normal text-muted-foreground">
+          Unlocks after approval
+        </span>
+      </span>
+    </>
+  );
+}
+
 export function renderFreeTierNavTrailing(input: {
   link: SidebarNavLink;
   usage: FreeAccountUsage;
@@ -46,11 +63,7 @@ export function renderFreeTierNavTrailing(input: {
   if (link.to === '/app/lesson-planner') {
     if (!usage.lessonPlannerMonthlyMetering && !usage.monthly) return null;
     if (usage.reporterLocked) {
-      return (
-        <Tooltip text="Unlocks after approval" contentProps={{ side: 'right' }}>
-          <Lock size={14} className="shrink-0 text-muted-foreground" aria-hidden />
-        </Tooltip>
-      );
+      return null;
     }
     return (
       <UsageNavRing
@@ -66,11 +79,7 @@ export function renderFreeTierNavTrailing(input: {
 
   if (link.to === '/app/reporter') {
     if (usage.reporterLocked || !usage.monthly) {
-      return (
-        <Tooltip text="Unlocks after approval" contentProps={{ side: 'right' }}>
-          <Lock size={14} className="shrink-0 text-muted-foreground" aria-hidden />
-        </Tooltip>
-      );
+      return null;
     }
     if (!usage.reporter) return null;
     return (
@@ -132,6 +141,21 @@ export function renderFreeTierNavRow(ctx: NavRowContext): React.ReactNode | null
     if (!usage.lessonPlannerMonthlyMetering && !usage.monthly) return null;
 
     if (usage.reporterLocked) {
+      if (navExpanded && !isMobile) {
+        return (
+          <div key={link.to} className={rowClassName}>
+            <Link
+              to={link.to}
+              reloadDocument={reloadDocument}
+              aria-current={isActive ? 'page' : undefined}
+              aria-description="Unlocks after approval"
+              className={linkClassName}
+            >
+              {freeTierNavLockedExpandedLinkBody(link, icon)}
+            </Link>
+          </div>
+        );
+      }
       if (!navExpanded && !isMobile) {
         return (
           <div key={link.to} className={cn(rowClassName, 'justify-center px-0')}>
@@ -223,6 +247,21 @@ export function renderFreeTierNavRow(ctx: NavRowContext): React.ReactNode | null
 
   if (link.to === '/app/reporter') {
     if (usage.reporterLocked || !usage.monthly) {
+      if (navExpanded && !isMobile) {
+        return (
+          <div key={link.to} className={rowClassName}>
+            <Link
+              to={link.to}
+              reloadDocument={reloadDocument}
+              aria-current={isActive ? 'page' : undefined}
+              aria-description="Unlocks after approval"
+              className={linkClassName}
+            >
+              {freeTierNavLockedExpandedLinkBody(link, icon)}
+            </Link>
+          </div>
+        );
+      }
       if (!navExpanded && !isMobile) {
         return (
           <div key={link.to} className={cn(rowClassName, 'justify-center px-0')}>

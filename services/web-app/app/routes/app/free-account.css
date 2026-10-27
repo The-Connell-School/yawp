@@ -83,5 +83,10 @@
 }
 
 [data-free-account] > nav a span { white-space: nowrap; }
+[data-free-account] > nav a span.flex-col span { white-space: normal; }
 [data-free-account] > nav a { gap: 10px; padding-top: 10px; padding-bottom: 10px; }
+[data-free-account] .free-tier-assignment-carousel-track > a,
+[data-free-account] .free-tier-assignment-carousel-track > button {
+  flex: 0 0 auto;
+}
 [data-free-account] > nav > div:first-child img { width: 64px; }
