@@ -5,13 +5,20 @@ let lockedApp: { status: string; organizationId: string | null } | null = {
   status: 'SENT',
   organizationId: 'org-a',
 };
+let approvalV2Enabled = true;
 let application: any = {
   id: 'app-1',
   status: 'SENT',
+  schoolName: 'Lincoln High',
   organizationId: 'org-a',
   lockedPreviewApprovalToastSeenAt: null,
   adminApprovals: [
-    { adminName: 'Dr. Patel', firstSentAt: new Date('2026-10-14T15:00:00Z') },
+    {
+      id: 'approval-1',
+      adminName: 'Dr. Patel',
+      adminEmail: 'principal@example.test',
+      firstSentAt: new Date('2026-10-14T15:00:00Z'),
+    },
   ],
 };
 
@@ -20,6 +27,9 @@ mock.module('~/domain/feature-flags/feature-flags.server', () => ({
 }));
 mock.module('./locked-preview.server', () => ({
   getLockedPreviewApplication: mock(async () => lockedApp),
+}));
+mock.module('~/domain/free-tier/approval-v2.server', () => ({
+  isApprovalV2Enabled: mock(async () => approvalV2Enabled),
 }));
 mock.module('~/utils/db.server', () => ({
   prisma: {
@@ -35,14 +45,21 @@ const { loadTeachingAccessShellState, markTeachingAccessApprovalToastSeen } =
 
 afterEach(() => {
   flagEnabled = true;
+  approvalV2Enabled = true;
   lockedApp = { status: 'SENT', organizationId: 'org-a' };
   application = {
     id: 'app-1',
     status: 'SENT',
+    schoolName: 'Lincoln High',
     organizationId: 'org-a',
     lockedPreviewApprovalToastSeenAt: null,
     adminApprovals: [
-      { adminName: 'Dr. Patel', firstSentAt: new Date('2026-10-14T15:00:00Z') },
+      {
+        id: 'approval-1',
+        adminName: 'Dr. Patel',
+        adminEmail: 'principal@example.test',
+        firstSentAt: new Date('2026-10-14T15:00:00Z'),
+      },
     ],
   };
 });
@@ -80,7 +97,11 @@ test('returns locked with admin name while preview is active', async () => {
     variant: 'locked',
     applicationId: 'app-1',
     adminName: 'Dr. Patel',
+    adminEmail: 'principal@example.test',
+    pendingApprovalId: 'approval-1',
+    schoolName: 'Lincoln High',
     approvalFirstSentAt: '2026-10-14T15:00:00.000Z',
+    forwardDisclosureAvailable: true,
   });
 });
 
@@ -97,7 +118,11 @@ test('returns locked from application status even when preview membership is unr
     variant: 'locked',
     applicationId: 'app-1',
     adminName: 'Dr. Patel',
+    adminEmail: 'principal@example.test',
+    pendingApprovalId: 'approval-1',
+    schoolName: 'Lincoln High',
     approvalFirstSentAt: '2026-10-14T15:00:00.000Z',
+    forwardDisclosureAvailable: true,
   });
 });
 

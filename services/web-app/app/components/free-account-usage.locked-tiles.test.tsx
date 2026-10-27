@@ -206,14 +206,28 @@ test('FreeAssignmentTiles locked tiles link to how-it-works with PE3 labels', ()
 });
 
 test('FreeAccountRail shows pending card and getting started while teaching is locked', async () => {
+  mock.module('react-router', () => ({
+    ...require('react-router'),
+    useFetcher: () => ({
+      state: 'idle',
+      data: undefined,
+      Form: ({ children, ...props }: any) => <form {...props}>{children}</form>,
+    }),
+    useRevalidator: () => ({ revalidate: () => {} }),
+  }));
   mock.module('~/components/free-tier/teaching-access-context', () => ({
     useTeachingAccess: () => ({
       locked: true,
       loading: false,
       state: {
         variant: 'locked',
+        applicationId: 'app-1',
         adminName: 'Dr. Patel',
+        adminEmail: 'principal@example.test',
+        pendingApprovalId: 'approval-1',
+        schoolName: 'Lincoln High',
         approvalFirstSentAt: '2026-10-14T15:00:00.000Z',
+        forwardDisclosureAvailable: true,
       },
     }),
   }));
@@ -227,5 +241,7 @@ test('FreeAccountRail shows pending card and getting started while teaching is l
   expect(html).toContain('data-testid="locked-dashboard-pending-card"');
   expect(html).toContain('data-testid="locked-dashboard-getting-started"');
   expect(html).not.toContain('data-testid="free-account-checklist"');
+  expect(html).toContain('Send to an additional administrator');
+  expect(html).not.toContain('/app/free-tier/pending?ask=1');
   mock.restore();
 });
