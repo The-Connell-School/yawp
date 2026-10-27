@@ -23,4 +23,15 @@ describe('dev panel inline accordions', () => {
     const css = readFileSync(path.join(devPanelDir, 'dev-panel.css'), 'utf8');
     expect(css).toContain('padding: 12px 12px 12px 24px');
   });
+
+  test('class simulation primary buttons use light text on terracotta fill', () => {
+    const css = readFileSync(path.join(devPanelDir, 'dev-panel.css'), 'utf8');
+    const block = css.match(
+      /\.yawp-dev-panel-class-sim-btn-primary\s*\{[^}]+\}/s
+    )?.[0];
+    expect(block).toBeTruthy();
+    expect(block).toContain('var(--yawp-dev-panel-coral-deep)');
+    expect(block).toContain('var(--yawp-dev-panel-coral-on)');
+    expect(block?.includes('var(--yawp-dev-panel-ink)')).toBe(false);
+  });
 });

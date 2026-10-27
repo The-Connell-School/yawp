@@ -1109,7 +1109,7 @@ html.yawp-dev-panel-open [data-radix-dialog-overlay] {
 [data-yawp-dev-panel] .yawp-dev-panel-class-sim-btn-primary {
   border: 0;
   background: var(--yawp-dev-panel-coral-deep);
-  color: var(--yawp-dev-panel-ink);
+  color: var(--yawp-dev-panel-coral-on);
 }
 
 [data-yawp-dev-panel] .yawp-dev-panel-class-sim-btn-primary:disabled,
