@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useFetchers, useFetcher } from 'react-router';
+import { useFetchers, useFetcher, useLocation } from 'react-router';
 import type { TeachingAccessShellState } from '~/domain/free-tier/teaching-access-shell.server';
 import { TeachingAccessBanner } from './teaching-access-banner';
 import {
@@ -60,6 +60,10 @@ export function TeachingAccessProvider({
   const approvalPausedRef = useRef(false);
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'base' || breakpoint === 'sm';
+  const location = useLocation();
+  const hideLockedBannerOnDashboard =
+    state.variant === 'locked' &&
+    location.pathname.replace(/\/$/, '') === '/app';
 
   const loading = state.variant === 'loading';
   const locked = state.variant === 'locked' || loading;
@@ -155,7 +159,7 @@ export function TeachingAccessProvider({
   return (
     <TeachingAccessContext.Provider value={value}>
       <div id="teaching-access-live" className="sr-only" aria-live="polite" />
-      {state.variant === 'locked' ? (
+      {state.variant === 'locked' && !hideLockedBannerOnDashboard ? (
         <TeachingAccessBanner adminName={state.adminName} />
       ) : null}
       {children}

@@ -1,18 +1,31 @@
 /* V2 presentation is scoped to the existing eligible free-account gate. */
 [data-free-account] > nav:not(.items-center) {
-  width: 204px;
-  min-width: 204px;
+  width: 220px;
+  min-width: 220px;
   background: hsl(var(--sidebar));
 }
 [data-free-account] > nav > div:first-child {
   min-height: 116px;
 }
+[data-free-account] > nav .grid.gap-1 {
+  gap: 4px;
+}
 [data-free-account] > nav a {
   border-radius: 8px;
+  gap: 10px;
+  padding: 9px 12px;
+  font-size: 15px;
+  font-weight: 400;
+  box-shadow: none;
 }
 [data-free-account] > nav a svg {
   width: 18px;
   height: 18px;
+}
+[data-free-account] > nav a.bg-primary\/10,
+[data-free-account] > nav a.text-primary {
+  background: hsl(15 55% 51% / 0.12) !important;
+  color: hsl(15.2174 55.6503% 45%) !important;
 }
 [data-free-account] .free-dashboard h2 {
   font-size: 18px;
@@ -29,8 +42,7 @@
   .free-dashboard
   [data-testid='teacher-classes-grid']
   > div:last-child {
-  display: grid;
-  grid-template-columns: minmax(0, 320px);
+  align-content: start;
 }
 [data-free-account]
   .free-dashboard
@@ -72,19 +84,8 @@
   margin-top: 8px;
   max-width: none;
 }
-[data-free-account]
-  .free-dashboard
-  [data-testid='teacher-classes-grid']
-  > div:last-child
-  > div
-  > a
-  > div:first-child {
-  height: 112px;
-}
-
 [data-free-account] > nav a span { white-space: nowrap; }
 [data-free-account] > nav a span.flex-col span { white-space: normal; }
-[data-free-account] > nav a { gap: 10px; padding-top: 10px; padding-bottom: 10px; }
 [data-free-account] .free-tier-assignment-carousel-track > a,
 [data-free-account] .free-tier-assignment-carousel-track > button {
   flex: 0 0 auto;
