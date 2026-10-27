@@ -4,8 +4,9 @@ import {
   CircleAlert,
   Loader2,
   UserRound,
+  X,
 } from 'lucide-react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useRouteLoaderData } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
@@ -111,9 +112,7 @@ export function DevPanelGiveFeedbackFlyout({
     heading?.focus({ preventScroll: true });
   }, [sentHeadingId, status]);
 
-  if (state.subSheet !== 'give-feedback') return null;
-
-  const submit = async () => {
+  const submit = useCallback(async () => {
     if (!path) {
       setError('This page location cannot be sent.');
       setStatus('error');
@@ -159,7 +158,28 @@ export function DevPanelGiveFeedbackFlyout({
       setServerError('');
       setErrorStatus(null);
     }
-  };
+  }, [
+    feedbackActions,
+    note,
+    noteId,
+    path,
+    screenshot,
+    screenshotOmitted,
+  ]);
+
+  useEffect(() => {
+    if (state.subSheet !== 'give-feedback' || status === 'sent') return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || (!event.ctrlKey && !event.metaKey)) return;
+      if (status === 'submitting') return;
+      event.preventDefault();
+      void submit();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [state.subSheet, status, submit]);
+
+  if (state.subSheet !== 'give-feedback') return null;
 
   const displayPath = path ?? location.pathname;
 
@@ -179,33 +199,35 @@ export function DevPanelGiveFeedbackFlyout({
       role="dialog"
       aria-label="Give feedback"
     >
-      <div className="flex items-center justify-between border-b px-4 py-3">
+      <header className="yawp-dev-panel-flyout-header">
         {pushed ? (
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             <ChevronLeft className="size-4" aria-hidden="true" />
             Back
           </Button>
         ) : null}
-        <h2 className="flex-1 text-base font-semibold">Give feedback</h2>
+        <h2 id="fb-title" className="min-w-0 flex-1 truncate">
+          Give feedback
+        </h2>
         {!pushed ? (
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
+            className="yawp-dev-panel-flyout-header-close"
+            aria-label="Close feedback"
             disabled={status === 'submitting'}
             onClick={onClose}
           >
-            Close
-          </Button>
+            <X className="size-4" aria-hidden="true" />
+          </button>
         ) : null}
-      </div>
+      </header>
       <div
         className={cn(
           'flex flex-1 flex-col overflow-hidden',
           status === 'sent' && 'justify-center'
         )}
       >
-        <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        <div className="yawp-dev-panel-flyout-body">
         {status === 'sent' ? (
           <div className="space-y-4">
             <div className="flex flex-col items-center gap-3 text-center">
@@ -241,18 +263,13 @@ export function DevPanelGiveFeedbackFlyout({
           </div>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground">
+            <p className="m-0 text-sm leading-5">
               Goes straight to the Yawp! team, with a screenshot and this page&apos;s URL.
             </p>
             {signedOut ? <TesterIdentityBadge /> : null}
-            {screenshotOmitted ? (
-              <p className="text-xs text-muted-foreground">
-                Screenshot omitted — the capture was too large to send.
-              </p>
-            ) : null}
             <div
               className={cn(
-                'space-y-1',
+                'flex flex-col gap-1.5',
                 status === 'submitting' && 'pointer-events-none opacity-60'
               )}
             >
@@ -261,51 +278,99 @@ export function DevPanelGiveFeedbackFlyout({
                 id={noteId}
                 rows={6}
                 maxLength={2000}
+                placeholder="What you did, what you expected, and what happened instead."
                 value={note}
                 disabled={status === 'submitting'}
                 onChange={(event) => {
                   updateForms({ feedbackNote: event.target.value });
                   if (error) setError('');
                 }}
-                aria-describedby={
-                  error || status === 'error' ? 'dev-panel-feedback-error' : undefined
-                }
+                aria-invalid={Boolean(error && status !== 'error')}
+                aria-describedby="dev-panel-feedback-note-help"
               />
-              <p className="text-xs text-muted-foreground">{note.length} / 2000</p>
-            </div>
-            {error && status !== 'error' ? (
-              <p id="dev-panel-feedback-error" role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            ) : null}
-            {screenshot ? (
-              <div
-                className={cn(
-                  'space-y-1',
-                  status === 'submitting' && 'pointer-events-none opacity-60'
+              <div className="flex items-start gap-3">
+                {error && status !== 'error' ? (
+                  <p
+                    id="dev-panel-feedback-note-help"
+                    role="alert"
+                    className="flex flex-1 items-start gap-1.5 text-xs font-medium text-destructive"
+                  >
+                    <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                    {error}
+                  </p>
+                ) : (
+                  <p
+                    id="dev-panel-feedback-note-help"
+                    className="flex-1 text-xs leading-4 text-muted-foreground"
+                  >
+                    Steps to repeat it help most.
+                  </p>
                 )}
-              >
-                <p className="text-sm font-medium">Screenshot</p>
-                <img
-                  src={screenshot}
-                  alt={`Screenshot of ${displayPath}`}
-                  className="max-h-32 rounded border"
-                />
+                <span aria-live="polite" className="shrink-0 text-xs text-muted-foreground">
+                  {note.length} / 2000
+                </span>
               </div>
-            ) : null}
+            </div>
             <div
               className={cn(
-                'space-y-1',
+                'flex flex-col gap-1.5',
+                status === 'submitting' && 'pointer-events-none opacity-50'
+              )}
+            >
+              <span id="dev-panel-feedback-shot-label" className="text-sm font-medium">
+                Screenshot
+              </span>
+              <div className="yawp-dev-panel-screenshot-card">
+                {screenshot ? (
+                  <img
+                    src={screenshot}
+                    alt=""
+                    aria-labelledby="dev-panel-feedback-shot-label"
+                    aria-describedby="dev-panel-feedback-shot-help"
+                    className="yawp-dev-panel-screenshot-thumb"
+                  />
+                ) : (
+                  <div
+                    className="yawp-dev-panel-screenshot-thumb bg-muted"
+                    aria-hidden="true"
+                  />
+                )}
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="text-[13px] font-medium leading-[18px]">
+                    Attached automatically
+                  </span>
+                  <p
+                    id="dev-panel-feedback-shot-help"
+                    className="m-0 text-xs leading-4 text-muted-foreground"
+                  >
+                    {screenshotOmitted
+                      ? 'Screenshot omitted — the capture was too large to send.'
+                      : 'Taken when you opened Give feedback. The developer panel is left out of it.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div
+              className={cn(
+                'flex flex-col gap-1.5',
                 status === 'submitting' && 'opacity-60'
               )}
             >
-              <Label htmlFor={pageUrlId}>Page URL</Label>
+              <Label htmlFor={pageUrlId}>Page</Label>
               <Input
                 id={pageUrlId}
                 readOnly
                 disabled={status === 'submitting'}
                 value={displayPath}
+                className="font-mono"
+                aria-describedby="dev-panel-feedback-page-help"
               />
+              <p
+                id="dev-panel-feedback-page-help"
+                className="m-0 text-xs leading-4 text-muted-foreground"
+              >
+                Filled in from the page you&apos;re on.
+              </p>
             </div>
           </>
         )}
@@ -351,31 +416,45 @@ export function DevPanelGiveFeedbackFlyout({
             </Button>
           </div>
         ) : (
-          <div
+          <footer
             className={cn(
-              'border-t bg-background p-4',
-              isPhone && 'fixed inset-x-0 bottom-0 z-20 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]'
+              'yawp-dev-panel-flyout-footer',
+              isPhone && 'fixed inset-x-0 bottom-0 z-20'
             )}
             style={isPhone ? footerStyle : undefined}
           >
-            <Button
-              type="button"
-              className="w-full"
-              disabled={status === 'submitting'}
-              onClick={() => void submit()}
-            >
+            <div className="flex flex-col gap-2.5">
+              <Button
+                type="button"
+                className="w-full"
+                disabled={status === 'submitting'}
+                onClick={() => void submit()}
+              >
+                {status === 'submitting' ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                    Sending…
+                  </>
+                ) : status === 'error' ? (
+                  'Try again'
+                ) : (
+                  'Send feedback'
+                )}
+              </Button>
+              {!isPhone && status !== 'error' && status !== 'submitting' ? (
+                <span className="yawp-dev-panel-kbd-hint">
+                  <kbd className="yawp-dev-panel-kbd">Ctrl</kbd>
+                  <kbd className="yawp-dev-panel-kbd">Enter</kbd>
+                  sends (⌘ Enter on Mac)
+                </span>
+              ) : null}
               {status === 'submitting' ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
-                  Sending…
-                </>
-              ) : status === 'error' ? (
-                'Try again'
-              ) : (
-                'Send feedback'
-              )}
-            </Button>
-          </div>
+                <span role="status" className="text-center text-xs text-muted-foreground">
+                  Sending to the Yawp! team…
+                </span>
+              ) : null}
+            </div>
+          </footer>
         )}
       </div>
     </div>
