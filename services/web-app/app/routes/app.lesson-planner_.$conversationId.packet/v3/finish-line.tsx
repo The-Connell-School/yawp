@@ -3,7 +3,7 @@
  * Set, it says when the lesson is for and what it took — the fun comes from
  * finishing — and offers Run the show, saving the shape, or keeping at it.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useFetcher } from 'react-router';
 import { Check, MonitorPlay, NotebookText, Play } from 'lucide-react';
 import type { StackStep } from '~/domain/lesson-planner/stack-steps';
@@ -12,6 +12,7 @@ import { READY_LINE, type BeforeClassItem } from '~/domain/lesson-planner/before
 import { plannedLabel } from '~/domain/lesson-planner/planned-time';
 import { YawpChecklist } from './yawp-checklist';
 import { HEADING_FONT } from './theme';
+import { Celebration } from './celebration';
 
 function weekday(iso: string | null): string {
   if (!iso) return 'class';
@@ -61,7 +62,34 @@ function BeforeClass({ list }: { list: { items: BeforeClassItem[]; ready: boolea
   );
 }
 
-export function FinishLine({
+/**
+ * The finish line, and the celebration when the teacher sets the lesson
+ * (Brian's round 5, item 11): only after their click, never when a lesson that
+ * is already set is opened.
+ */
+export function FinishLine(props: Parameters<typeof FinishLineCard>[0]) {
+  const clicked = useRef(false);
+  const [celebrating, setCelebrating] = useState(false);
+  useEffect(() => {
+    if (!props.setAt) return;
+    if (clicked.current) setCelebrating(true);
+    clicked.current = false;
+  }, [props.setAt]);
+  return (
+    <div className="relative">
+      {celebrating ? <Celebration onDone={() => setCelebrating(false)} /> : null}
+      <FinishLineCard
+        {...props}
+        onSet={() => {
+          clicked.current = true;
+          props.onSet();
+        }}
+      />
+    </div>
+  );
+}
+
+function FinishLineCard({
   conversationId,
   timing,
   plannedMinutes = null,
@@ -136,7 +164,8 @@ export function FinishLine({
           onClick={onSet}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--sv-ink)] py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
         >
-          <Check size={16} /> This lesson is set
+          {/* Said before the click as what it does (Brian's round 5, item 11). */}
+          <Check size={16} /> Set this lesson
         </button>
       </section>
     );

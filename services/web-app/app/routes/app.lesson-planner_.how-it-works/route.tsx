@@ -644,7 +644,7 @@ export default function LessonPlannerHowItWorksRoute() {
                 <H3>Set it, and take it to class</H3>
                 <Copy>
                   When it looks right, tap{' '}
-                  <strong className="text-foreground">This lesson is set</strong>.
+                  <strong className="text-foreground">Set this lesson</strong>.
                   Everything you need follows your order:
                 </Copy>
                 <Ticks

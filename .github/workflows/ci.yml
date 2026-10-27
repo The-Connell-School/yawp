@@ -1080,6 +1080,7 @@ jobs:
             app/domain/lesson-planner/lesson-name.test.ts \
             app/domain/lesson-planner/planned-time.test.ts \
             app/components/lesson-planner/use-active-time.test.ts \
+            'app/routes/app.lesson-planner_.$conversationId.packet/v3/celebration.test.ts' \
             app/domain/lesson-planner/extensions.test.ts \
             app/domain/lesson-planner/before-class.test.ts \
             app/domain/lesson-planner/lesson-rename.test.ts \
