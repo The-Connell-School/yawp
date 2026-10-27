@@ -12,17 +12,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function parseDevPanelState(raw: unknown): DevPanelPersistedState | null {
   if (!isRecord(raw)) return null;
   const open = raw.open === true;
-  const openSections = Array.isArray(raw.openSections)
-    ? raw.openSections.filter((item): item is string => typeof item === 'string')
-    : DEV_PANEL_DEFAULT_STATE.openSections;
   const org = typeof raw.org === 'string' || raw.org === null ? raw.org : null;
-  const subSheet =
+  let subSheet =
     raw.subSheet === 'free-tier-states' ||
     raw.subSheet === 'give-feedback' ||
     raw.subSheet === 'class-simulation' ||
     raw.subSheet === null
       ? raw.subSheet
       : null;
+  let openSections = Array.isArray(raw.openSections)
+    ? raw.openSections.filter((item): item is string => typeof item === 'string')
+    : DEV_PANEL_DEFAULT_STATE.openSections;
+  if (subSheet === 'free-tier-states' || subSheet === 'give-feedback') {
+    if (!openSections.includes(subSheet)) {
+      openSections = [...openSections, subSheet];
+    }
+    subSheet = null;
+  }
   const scroll = isRecord(raw.scroll)
     ? {
         main:

@@ -101,7 +101,7 @@ describe('DevPanelProvider', () => {
     root.unmount();
   });
 
-  test('marks flyout switches as instant when swapping sheets', () => {
+  test('openSubSheet for inline sections expands accordion without subSheet', () => {
     const container = document.createElement('div');
     const root = createRoot(container);
     let api: ReturnType<typeof useDevPanel> | null = null;
@@ -125,11 +125,10 @@ describe('DevPanelProvider', () => {
     act(() => {
       api!.openSubSheet('give-feedback');
     });
-    act(() => {
-      api!.openSubSheet('free-tier-states');
-    });
+    expect(api!.state.openSections).toContain('give-feedback');
+    expect(api!.state.subSheet).toBe(null);
     expect(container.querySelector('[data-instant]')?.getAttribute('data-instant')).toBe(
-      'yes'
+      'no'
     );
     root.unmount();
   });

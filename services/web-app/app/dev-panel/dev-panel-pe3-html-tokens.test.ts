@@ -4,13 +4,16 @@ import path from 'node:path';
 
 const repoRoot = path.resolve(import.meta.dir, '../../../..');
 const devPanelHtml = readFileSync(
-  path.join(repoRoot, 'design/devpanel-v3/html/pe3/DevPanel.pe3.html'),
+  path.join(
+    repoRoot,
+    'design/devpanel-v3/html/pe3-inline-2026-10-27/DevPanel.pe3.html'
+  ),
   'utf8'
 );
 const css = readFileSync(path.join(import.meta.dir, 'dev-panel.css'), 'utf8');
 
 describe('PE3 HTML export tokens', () => {
-  test('DevPanel.pe3.html defines 320px docked panel and PE3 border', () => {
+  test('inline DevPanel.pe3.html defines 320px docked panel and PE3 border', () => {
     expect(devPanelHtml).toContain('width: 320px');
     expect(devPanelHtml).toContain('border-left: 1px solid hsl(51.4286 7.8652% 82.549%)');
   });

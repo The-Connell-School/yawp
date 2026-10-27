@@ -33,11 +33,9 @@ import { pe3FreeTierRowValue } from './dev-panel-pe3-states';
 import { groupDevPanelLogins } from './dev-panel-login-groups';
 import { DevPanelOrgPicker } from './dev-panel-org-picker';
 import { createDevPanelFeedbackContext } from './dev-panel-feedback-context';
-import { DevPanelGiveFeedbackFlyout } from './dev-panel-give-feedback-flyout';
-import {
-  consumeDevPanelJumpToast,
-  DevPanelFreeTierFlyout,
-} from './dev-panel-free-tier-flyout';
+import { DevPanelGiveFeedbackInline } from './dev-panel-give-feedback-inline';
+import { DevPanelFreeTierInline } from './dev-panel-free-tier-inline';
+import { consumeDevPanelJumpToast } from './dev-panel-jump-toast';
 import { DevPanelClassSimulationFlyout } from './dev-panel-class-simulation-flyout';
 import { DevPanelMobileBottomSheet } from './dev-panel-mobile-bottom-sheet';
 
@@ -177,8 +175,6 @@ export function DevPanelShell() {
   const isTablet = useMedia('(min-width: 640px) and (max-width: 1023px)');
   const [accessOpen, setAccessOpen] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const feedbackRowRef = useRef<HTMLButtonElement>(null);
-  const freeTierRowRef = useRef<HTMLButtonElement>(null);
   const classSimulationRowRef = useRef<HTMLButtonElement>(null);
   const [orgs, setOrgs] = useState<Array<{ id: string; name: string }>>([]);
   const [logins, setLogins] = useState<Array<{ email: string; label: string; role: string }>>([]);
@@ -192,10 +188,6 @@ export function DevPanelShell() {
     signedInUser?.selectedMembership?.role ?? signedInUser?.memberships?.[0]?.role
   );
   const selectedOrg = state.org ?? orgs[0]?.id ?? null;
-  const selectedOrgName =
-    orgs.find((org) => org.id === selectedOrg)?.name ??
-    orgs[0]?.name ??
-    'Choose org';
   const freeTierSummary = pe3FreeTierRowValue(state.forms.selectedStateId);
   const signInRowValue = signedInUser
     ? `${signedInRole || 'User'} · ${truncatePanelLabel(
@@ -221,14 +213,10 @@ export function DevPanelShell() {
         return;
       }
       event.preventDefault();
-      const returningTo =
-        state.subSheet === 'give-feedback'
-          ? feedbackRowRef
-          : state.subSheet === 'class-simulation'
-            ? classSimulationRowRef
-            : freeTierRowRef;
-      closeSubSheet();
-      window.requestAnimationFrame(() => returningTo.current?.focus());
+      if (state.subSheet === 'class-simulation') {
+        closeSubSheet();
+        window.requestAnimationFrame(() => classSimulationRowRef.current?.focus());
+      }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
@@ -367,7 +355,7 @@ export function DevPanelShell() {
                     <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
                   )}
                 </CollapsibleTrigger>
-                <CollapsibleContent className="yawp-dev-panel-section-body yawp-dev-panel-section-body-inline">
+                <CollapsibleContent className="yawp-dev-panel-inline-expanded-body">
                   <DevPanelOrgPicker
                     orgs={orgs}
                     value={selectedOrg}
@@ -433,25 +421,28 @@ export function DevPanelShell() {
                 </CollapsibleContent>
               </Collapsible>
 
-              <button
-                ref={freeTierRowRef}
-                type="button"
-                className={cn(
-                  'yawp-dev-panel-row',
-                  state.subSheet === 'free-tier-states' && 'yawp-dev-panel-row-active'
-                )}
-                onClick={() => openSubSheet('free-tier-states')}
+              <Collapsible
+                open={state.openSections.includes('free-tier-states')}
+                onOpenChange={() => toggleSection('free-tier-states')}
               >
-                <span>Free-tier states</span>
-                <span className="yawp-dev-panel-row-value yawp-dev-panel-row-value-mono">
-                  {freeTierSummary}
-                </span>
-                {state.subSheet === 'free-tier-states' ? (
-                  <ChevronLeft className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
-                ) : (
-                  <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
-                )}
-              </button>
+                <CollapsibleTrigger className="yawp-dev-panel-row">
+                  <span>Free-tier states</span>
+                  <span className="yawp-dev-panel-row-value yawp-dev-panel-row-value-mono">
+                    {freeTierSummary}
+                  </span>
+                  {state.openSections.includes('free-tier-states') ? (
+                    <ChevronDown className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
+                  ) : (
+                    <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
+                  )}
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <DevPanelFreeTierInline
+                    orgId={selectedOrg}
+                    sectionOpen={state.openSections.includes('free-tier-states')}
+                  />
+                </CollapsibleContent>
+              </Collapsible>
 
               <Collapsible
                 open={state.openSections.includes('blackboard')}
@@ -466,7 +457,7 @@ export function DevPanelShell() {
                     <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
                   )}
                 </CollapsibleTrigger>
-                <CollapsibleContent className="yawp-dev-panel-section-body yawp-dev-panel-section-body-inline gap-2">
+                <CollapsibleContent className="yawp-dev-panel-inline-expanded-body gap-2">
                   <div className="flex items-center gap-2 px-0 py-1">
                     <span
                       id="dev-panel-bb-role-label"
@@ -535,7 +526,7 @@ export function DevPanelShell() {
                     <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
                   )}
                 </CollapsibleTrigger>
-                <CollapsibleContent className="yawp-dev-panel-section-body yawp-dev-panel-section-body-inline gap-1.5">
+                <CollapsibleContent className="yawp-dev-panel-inline-expanded-body gap-1.5">
                   <div className="flex items-center gap-1.5 py-1">
                     <input
                       id="dev-panel-current-url"
@@ -590,24 +581,27 @@ export function DevPanelShell() {
 
         {unlocked ? (
           <div className="yawp-dev-panel-feedback-section mt-auto">
-            <button
-              ref={feedbackRowRef}
-              type="button"
-              className={cn(
-                'yawp-dev-panel-feedback-row',
-                state.subSheet === 'give-feedback' && 'yawp-dev-panel-row-active'
-              )}
-              onClick={() => openSubSheet('give-feedback')}
+            <Collapsible
+              open={state.openSections.includes('give-feedback')}
+              onOpenChange={() => toggleSection('give-feedback')}
             >
-              <MessageSquare className="size-3.5 shrink-0" aria-hidden="true" />
-              <span className="shrink-0">Give feedback</span>
-              <span className="yawp-dev-panel-row-spacer" aria-hidden="true" />
-              {state.subSheet === 'give-feedback' ? (
-                <ChevronLeft className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
-              ) : (
-                <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
-              )}
-            </button>
+              <CollapsibleTrigger className="yawp-dev-panel-feedback-row">
+                <MessageSquare className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="shrink-0 font-semibold">Give feedback</span>
+                <span className="yawp-dev-panel-row-spacer" aria-hidden="true" />
+                {state.openSections.includes('give-feedback') ? (
+                  <ChevronDown className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
+                )}
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <DevPanelGiveFeedbackInline
+                  sectionOpen={state.openSections.includes('give-feedback')}
+                  feedbackActions={() => feedbackContext.current.snapshot()}
+                />
+              </CollapsibleContent>
+            </Collapsible>
           </div>
         ) : null}
       </div>
@@ -619,19 +613,6 @@ export function DevPanelShell() {
         </button>
       </footer>
       <AccessCodeModal open={accessOpen} onOpenChange={setAccessOpen} />
-      {!isPhone && !isTablet && state.subSheet === 'give-feedback' ? (
-        <DevPanelGiveFeedbackFlyout
-          onClose={closeSubSheet}
-          feedbackActions={() => feedbackContext.current.snapshot()}
-        />
-      ) : null}
-      {!isPhone && !isTablet && state.subSheet === 'free-tier-states' ? (
-        <DevPanelFreeTierFlyout
-          onClose={closeSubSheet}
-          orgId={selectedOrg}
-          orgName={selectedOrgName}
-        />
-      ) : null}
       {!isPhone && !isTablet && state.subSheet === 'class-simulation' ? (
         <DevPanelClassSimulationFlyout onClose={closeSubSheet} />
       ) : null}
@@ -642,39 +623,11 @@ export function DevPanelShell() {
 
   if (isPhone || isTablet) {
     const compactPanelContent =
-      isPhone && state.subSheet === 'give-feedback' ? (
-        <DevPanelGiveFeedbackFlyout
-          onClose={closeSubSheet}
-          pushed
-          feedbackActions={() => feedbackContext.current.snapshot()}
-        />
-      ) : isPhone && state.subSheet === 'free-tier-states' ? (
-        <DevPanelFreeTierFlyout
-          onClose={closeSubSheet}
-          orgId={selectedOrg}
-          orgName={selectedOrgName}
-          pushed
-        />
-      ) : isPhone && state.subSheet === 'class-simulation' ? (
+      isPhone && state.subSheet === 'class-simulation' ? (
         <DevPanelClassSimulationFlyout onClose={closeSubSheet} pushed />
       ) : (
         <>
           {panelBody}
-          {isTablet && state.subSheet === 'give-feedback' ? (
-            <DevPanelGiveFeedbackFlyout
-              onClose={closeSubSheet}
-              pushed
-              feedbackActions={() => feedbackContext.current.snapshot()}
-            />
-          ) : null}
-          {isTablet && state.subSheet === 'free-tier-states' ? (
-            <DevPanelFreeTierFlyout
-              onClose={closeSubSheet}
-              orgId={selectedOrg}
-              orgName={selectedOrgName}
-              pushed
-            />
-          ) : null}
           {isTablet && state.subSheet === 'class-simulation' ? (
             <DevPanelClassSimulationFlyout onClose={closeSubSheet} pushed />
           ) : null}

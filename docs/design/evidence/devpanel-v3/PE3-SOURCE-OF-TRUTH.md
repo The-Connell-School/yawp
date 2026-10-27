@@ -1,20 +1,16 @@
 # Dev panel v3 source of truth (2026-10-27)
 
-**PE3 HTML exports:** `design/devpanel-v3/html/pe3/*.pe3.html`
+**PE3 HTML exports (inline accordion):**
 
-Optional live artifact mirror: https://claude.ai/artifact/PE3HANE4DoaS7Zvxv6rhCv#page-875e83166b39
+- `design/devpanel-v3/html/pe3-inline-2026-10-27/*.pe3.html`
+- Mirror copies in `design/devpanel-v3/html/pe3/` (same frames)
 
-## Superseded exports
+Single 320px panel. Free-tier and Give feedback expand **inline** (padding `12px 12px 12px 24px`). Free-tier uses jump rows → inline confirm → applying, not radios or a side flyout.
 
-The following files under `design/devpanel-v3/html/` are **stale** (pre-PE3 / old 1pByUx fold). Do not use them for visual or markup parity:
+## Superseded
 
-- `DevPanel.dc.html`
-- `StatesSheet.dc.html`
-- `FeedbackSheet.dc.html`
-- Matching `*.rendered.html` snapshots tied to the accordion / FeedbackSheet layouts
+- `design/devpanel-v3/html/pe3/FreeTierStates.pe3.html` (removed)
+- `design/devpanel-v3/html/pe3/GiveFeedback.pe3.html` (removed)
+- Stale `*.dc.html` accordion exports under `design/devpanel-v3/html/`
 
-Implementation and QA should follow **PE3 desktop 1280** frames (main panel, free-tier flat list, give-feedback segmented form).
-
-## PE3-aligned reference
-
-See `design/devpanel-v3/html/pe3/README.md` for frame notes and `design/devpanel-v3/pe3/README.md` for product wiring.
+Optional artifact: https://claude.ai/artifact/PE3HANE4DoaS7Zvxv6rhCv

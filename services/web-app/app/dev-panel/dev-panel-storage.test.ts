@@ -42,7 +42,8 @@ describe('dev panel storage', () => {
     });
     const restored = readDevPanelState(storage);
     expect(restored.open).toBe(true);
-    expect(restored.subSheet).toBe('give-feedback');
+    expect(restored.subSheet).toBe(null);
+    expect(restored.openSections).toContain('give-feedback');
     expect(restored.forms.feedbackNote).toBe('Partly typed note');
     expect(restored.forms.selectedStateId).toBe('approved.usage-a-few-left');
     clearDevPanelState(storage);

@@ -16,13 +16,17 @@ describe('dev panel v3 chrome', () => {
 
   test('flyouts use border-only docked chrome', () => {
     for (const file of [
-      'dev-panel-give-feedback-flyout.tsx',
-      'dev-panel-free-tier-flyout.tsx',
+      'dev-panel-give-feedback-inline.tsx',
+      'dev-panel-free-tier-inline.tsx',
       'dev-panel-class-simulation-flyout.tsx',
     ]) {
       const src = readFileSync(path.join(devPanelDir, file), 'utf8');
       expect(src.includes('shadow-lg')).toBe(false);
-      expect(src.includes('yawp-dev-panel-flyout-docked')).toBe(true);
+      if (file.includes('class-simulation')) {
+        expect(src.includes('yawp-dev-panel-flyout-docked')).toBe(true);
+      } else {
+        expect(src.includes('yawp-dev-panel-flyout-docked')).toBe(false);
+      }
     }
     const fallback = readFileSync(
       path.join(devPanelDir, 'dev-panel-fallback-shell.tsx'),

@@ -153,6 +153,13 @@ export function DevPanelProvider({
         persist({ ...state, openSections });
       },
       openSubSheet: (sheet) => {
+        if (sheet === 'free-tier-states' || sheet === 'give-feedback') {
+          const openSections = state.openSections.includes(sheet)
+            ? state.openSections
+            : [...state.openSections, sheet];
+          persist({ ...state, openSections, subSheet: null, restored: false });
+          return;
+        }
         setFlyoutSwitchInstant(
           Boolean(state.subSheet && sheet && state.subSheet !== sheet)
         );
