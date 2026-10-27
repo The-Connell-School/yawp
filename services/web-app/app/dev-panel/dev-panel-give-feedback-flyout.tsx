@@ -2,8 +2,6 @@ import { ChevronLeft, CircleAlert, Loader2, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useRouteLoaderData } from 'react-router';
 import { Button } from '~/components/ui/button';
-import { Checkbox } from '~/components/ui/checkbox';
-import { Label } from '~/components/ui/label';
 import { Textarea } from '~/components/ui/textarea';
 import { cn } from '~/utils/misc';
 import type { loader as rootLoader } from '~/root';
@@ -218,13 +216,13 @@ export function DevPanelGiveFeedbackFlyout({
       <div className="yawp-dev-panel-pe3-feedback-body">
         <div className="yawp-dev-panel-pe3-field">
           <span className="yawp-dev-panel-pe3-field-label">Type</span>
-          <div className="yawp-dev-panel-segmented" role="tablist" aria-label="Feedback type">
+          <div className="yawp-dev-panel-segmented" role="radiogroup" aria-label="Feedback type">
             {FEEDBACK_TYPES.map((entry) => (
               <button
                 key={entry.id}
                 type="button"
-                role="tab"
-                aria-selected={feedbackType === entry.id}
+                role="radio"
+                aria-checked={feedbackType === entry.id}
                 className={cn(
                   'yawp-dev-panel-segment',
                   feedbackType === entry.id && 'yawp-dev-panel-segment-active'
@@ -237,7 +235,9 @@ export function DevPanelGiveFeedbackFlyout({
           </div>
         </div>
         <div className="yawp-dev-panel-pe3-field">
-          <Label htmlFor={noteId}>What happened?</Label>
+          <label htmlFor={noteId} className="yawp-dev-panel-pe3-field-label">
+            What happened?
+          </label>
           <Textarea
             id={noteId}
             rows={5}
@@ -259,11 +259,12 @@ export function DevPanelGiveFeedbackFlyout({
           ) : null}
         </div>
         <label className="yawp-dev-panel-pe3-checkbox-row">
-          <Checkbox
+          <input
+            type="checkbox"
             checked={attachScreenshot}
             disabled={status === 'submitting'}
-            onCheckedChange={(checked) =>
-              updateForms({ feedbackAttachScreenshot: checked === true })
+            onChange={(event) =>
+              updateForms({ feedbackAttachScreenshot: event.target.checked })
             }
           />
           <span>Attach a screenshot of this page</span>
@@ -275,30 +276,27 @@ export function DevPanelGiveFeedbackFlyout({
             <span className="text-sm">{serverError}</span>
           </div>
         ) : null}
-      </div>
-      <footer
-        className={cn(
-          'yawp-dev-panel-pe3-feedback-footer',
-          isPhone && 'fixed inset-x-0 bottom-0 z-20'
-        )}
-        style={isPhone ? footerStyle : undefined}
-      >
-        <Button
-          type="button"
-          className="yawp-dev-panel-send-feedback w-full"
-          disabled={status === 'submitting'}
-          onClick={() => void submit()}
+        <div
+          className={cn(isPhone && 'fixed inset-x-0 bottom-0 z-20 bg-background px-3 pb-3 pt-2')}
+          style={isPhone ? footerStyle : undefined}
         >
-          {status === 'submitting' ? (
-            <>
-              <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
-              Sending…
-            </>
-          ) : (
-            'Send feedback'
-          )}
-        </Button>
-      </footer>
+          <button
+            type="button"
+            className="yawp-dev-panel-pe3-send"
+            disabled={status === 'submitting'}
+            onClick={() => void submit()}
+          >
+            {status === 'submitting' ? (
+              <>
+                <Loader2 className="mr-2 inline size-4 animate-spin" aria-hidden="true" />
+                Sending…
+              </>
+            ) : (
+              'Send feedback'
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

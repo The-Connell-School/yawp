@@ -4,7 +4,6 @@ import {
   ChevronRight,
   ChevronsRight,
   Copy,
-  FlaskConical,
   Loader2,
   Lock,
   MessageSquare,
@@ -169,8 +168,6 @@ export function DevPanelShell() {
     closeSubSheet,
     setOrg,
     updateForms,
-    previewAccessSeatLabel,
-    previewAccessGateEnabled,
   } = useDevPanel();
   const rootData = useRouteLoaderData<typeof rootLoader>('root');
   const isPhone = useMedia('(max-width: 639px)');
@@ -306,21 +303,18 @@ export function DevPanelShell() {
   const panelBody = (
     <>
       <header className="yawp-dev-panel-header">
-        <div className="yawp-dev-panel-header-title">
-          <FlaskConical className="size-3.5 shrink-0" aria-hidden="true" />
-          <h2
-            id="devtools-title"
-            ref={headingRef}
-            tabIndex={-1}
-            className="yawp-dev-panel-header-heading min-w-0 flex-1 truncate"
-          >
-            Developer tools
-          </h2>
-        </div>
+        <h2
+          id="devtools-title"
+          ref={headingRef}
+          tabIndex={-1}
+          className="yawp-dev-panel-header-heading min-w-0 flex-1 truncate"
+        >
+          Developer tools
+        </h2>
         <button
           type="button"
           className="yawp-dev-panel-header-close"
-          aria-label="Close developer tools"
+          aria-label="Collapse developer tools"
           aria-keyshortcuts="Alt+Shift+D"
           title="Close (Alt+Shift+D)"
           onClick={closePanel}
@@ -367,14 +361,11 @@ export function DevPanelShell() {
                   <span className="yawp-dev-panel-row-value yawp-dev-panel-row-value-mono">
                     {signInRowValue}
                   </span>
-                  <ChevronDown
-                    className={cn(
-                      'yawp-dev-panel-row-chevron size-4 shrink-0',
-                      state.openSections.includes('sign-in') &&
-                        'yawp-dev-panel-row-chevron-open'
-                    )}
-                    aria-hidden="true"
-                  />
+                  {state.openSections.includes('sign-in') ? (
+                    <ChevronDown className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
+                  ) : (
+                    <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
+                  )}
                 </CollapsibleTrigger>
                 <CollapsibleContent className="yawp-dev-panel-section-body yawp-dev-panel-section-body-inline">
                   <DevPanelOrgPicker
@@ -456,9 +447,9 @@ export function DevPanelShell() {
                   {freeTierSummary}
                 </span>
                 {state.subSheet === 'free-tier-states' ? (
-                  <ChevronLeft className="yawp-dev-panel-row-chevron size-4 shrink-0" aria-hidden="true" />
+                  <ChevronLeft className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
                 ) : (
-                  <ChevronRight className="yawp-dev-panel-row-chevron size-4 shrink-0" aria-hidden="true" />
+                  <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
                 )}
               </button>
 
@@ -469,14 +460,11 @@ export function DevPanelShell() {
                 <CollapsibleTrigger className="yawp-dev-panel-row">
                   <span>Blackboard link</span>
                   <span className="yawp-dev-panel-row-spacer" aria-hidden="true" />
-                  <ChevronDown
-                    className={cn(
-                      'yawp-dev-panel-row-chevron size-4 shrink-0',
-                      state.openSections.includes('blackboard') &&
-                        'yawp-dev-panel-row-chevron-open'
-                    )}
-                    aria-hidden="true"
-                  />
+                  {state.openSections.includes('blackboard') ? (
+                    <ChevronDown className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
+                  ) : (
+                    <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
+                  )}
                 </CollapsibleTrigger>
                 <CollapsibleContent className="yawp-dev-panel-section-body yawp-dev-panel-section-body-inline gap-2">
                   <div className="flex items-center gap-2 px-0 py-1">
@@ -541,14 +529,11 @@ export function DevPanelShell() {
                 <CollapsibleTrigger className="yawp-dev-panel-row">
                   <span>Tester tools</span>
                   <span className="yawp-dev-panel-row-spacer" aria-hidden="true" />
-                  <ChevronDown
-                    className={cn(
-                      'yawp-dev-panel-row-chevron size-4 shrink-0',
-                      state.openSections.includes('tester-tools') &&
-                        'yawp-dev-panel-row-chevron-open'
-                    )}
-                    aria-hidden="true"
-                  />
+                  {state.openSections.includes('tester-tools') ? (
+                    <ChevronDown className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
+                  ) : (
+                    <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
+                  )}
                 </CollapsibleTrigger>
                 <CollapsibleContent className="yawp-dev-panel-section-body yawp-dev-panel-section-body-inline gap-1.5">
                   <div className="flex items-center gap-1.5 py-1">
@@ -604,7 +589,7 @@ export function DevPanelShell() {
         </div>
 
         {unlocked ? (
-          <div className="mt-auto">
+          <div className="yawp-dev-panel-feedback-section mt-auto">
             <button
               ref={feedbackRowRef}
               type="button"
@@ -615,12 +600,12 @@ export function DevPanelShell() {
               onClick={() => openSubSheet('give-feedback')}
             >
               <MessageSquare className="size-3.5 shrink-0" aria-hidden="true" />
-              <span className="shrink-0 font-semibold">Give feedback</span>
+              <span className="shrink-0">Give feedback</span>
               <span className="yawp-dev-panel-row-spacer" aria-hidden="true" />
               {state.subSheet === 'give-feedback' ? (
-                <ChevronLeft className="yawp-dev-panel-row-chevron size-4 shrink-0" aria-hidden="true" />
+                <ChevronLeft className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
               ) : (
-                <ChevronRight className="yawp-dev-panel-row-chevron size-4 shrink-0" aria-hidden="true" />
+                <ChevronRight className="yawp-dev-panel-row-chevron size-3.5 shrink-0" aria-hidden="true" />
               )}
             </button>
           </div>

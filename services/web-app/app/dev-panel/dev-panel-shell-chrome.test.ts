@@ -36,6 +36,7 @@ describe('dev panel v3 chrome', () => {
     expect(css).toContain('--yawp-dev-panel-inset: 12px');
     expect(css).toContain('--yawp-dev-panel-header-height: 44px');
     expect(css).toContain('--yawp-dev-panel-width: 320px');
+    expect(css).toContain('--yawp-dev-panel-border: hsl(51.4286 7.8652% 82.549%)');
     expect(css).toContain('animation: none !important');
     expect(css).not.toContain('yawp-dev-panel-slide-in');
     expect(css).toContain('box-shadow: none');

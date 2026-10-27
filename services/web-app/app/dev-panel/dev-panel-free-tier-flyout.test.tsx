@@ -67,5 +67,6 @@ describe('DevPanelFreeTierFlyout', () => {
       btn.textContent?.includes('Jump to this state')
     );
     expect(jumpButton).toBeUndefined();
+    expect(container.querySelectorAll('input[type="radio"]').length).toBe(8);
   });
 });

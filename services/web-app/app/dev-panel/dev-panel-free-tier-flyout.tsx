@@ -170,45 +170,37 @@ export function DevPanelFreeTierFlyout({
       </header>
       <div
         className={cn(
-          'min-h-0 flex-1 overflow-y-auto px-3 py-2',
+          'yawp-dev-panel-pe3-states-body',
           jumping && 'pointer-events-none opacity-50'
         )}
       >
-        <ul className="m-0 list-none p-0" role="radiogroup" aria-labelledby="states-title">
+        <div role="radiogroup" aria-labelledby="states-title" aria-label="Free-tier state">
           {PE3_FREE_TIER_STATES.map((entry) => {
             const isSelected = selected === entry.catalogId;
             return (
-              <li key={entry.catalogId}>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={isSelected}
+              <label
+                key={entry.catalogId}
+                className={cn(
+                  'yawp-dev-panel-pe3-state-label-row',
+                  isSelected && 'yawp-dev-panel-pe3-state-label-row-selected'
+                )}
+              >
+                <input
+                  type="radio"
+                  name="dev-panel-free-tier-state"
+                  checked={isSelected}
                   disabled={jumping}
-                  className={cn(
-                    'yawp-dev-panel-pe3-state-row',
-                    isSelected && 'yawp-dev-panel-pe3-state-row-selected'
-                  )}
-                  onClick={() => void applyState(entry.catalogId)}
-                >
-                  <span
-                    className={cn(
-                      'yawp-dev-panel-pe3-radio',
-                      isSelected && 'yawp-dev-panel-pe3-radio-checked'
-                    )}
-                    aria-hidden="true"
-                  >
-                    {isSelected ? <span className="yawp-dev-panel-pe3-radio-dot" /> : null}
-                  </span>
-                  <span className="yawp-dev-panel-pe3-state-label">{entry.label}</span>
-                  <span className="yawp-dev-panel-pe3-state-code">{entry.code}</span>
-                </button>
-              </li>
+                  onChange={() => void applyState(entry.catalogId)}
+                />
+                <span className="yawp-dev-panel-pe3-state-label-text">{entry.label}</span>
+                <span className="yawp-dev-panel-pe3-state-code">{entry.code}</span>
+              </label>
             );
           })}
-        </ul>
-        <p className="yawp-dev-panel-pe3-footnote">
+        </div>
+        <span className="yawp-dev-panel-pe3-footnote">
           Applies right away and reloads the page.
-        </p>
+        </span>
       </div>
       {jumpFailed ? (
         <div role="alert" className="yawp-dev-panel-pe3-error">
