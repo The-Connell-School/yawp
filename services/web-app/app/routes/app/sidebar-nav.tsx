@@ -171,6 +171,8 @@ type SidebarNavLinksProps = {
   pathname: string;
   isAppNavLinkActive: (linkTo: string, pathname: string) => boolean;
   forceFullNavigation?: boolean;
+  /** Free-tier sidebar always lists Lesson Planner per Design, even when the org flag is off. */
+  includeLessonPlannerWhenFeatureOff?: boolean;
   renderLinkTrailing?: (link: SidebarNavLink) => React.ReactNode;
   renderNavRow?: (input: {
     link: SidebarNavLink;
@@ -188,6 +190,7 @@ export function SidebarNavLinks({
   pathname,
   isAppNavLinkActive,
   forceFullNavigation = false,
+  includeLessonPlannerWhenFeatureOff = false,
   renderLinkTrailing,
   renderNavRow,
 }: SidebarNavLinksProps) {
@@ -198,7 +201,10 @@ export function SidebarNavLinks({
     .map((section) => ({
       ...section,
       links: section.links.filter(
-        (link) => link.to !== '/app/lesson-planner' || lessonPlannerFlagOn
+        (link) =>
+          link.to !== '/app/lesson-planner' ||
+          lessonPlannerFlagOn ||
+          includeLessonPlannerWhenFeatureOff
       ),
     }))
     .filter((section) => section.links.length > 0);

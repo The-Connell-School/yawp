@@ -36,10 +36,10 @@ function freeTierNavLockedExpandedLinkBody(
 ) {
   return (
     <>
-      {icon}
-      <span className="flex min-w-0 flex-col gap-0.5 leading-tight">
+      <span className="mt-0.5 inline-flex shrink-0">{icon}</span>
+      <span className="flex min-w-0 flex-col gap-0 leading-tight">
         <span className="truncate">{link.label}</span>
-        <span className="truncate text-xs font-normal text-muted-foreground">
+        <span className="truncate text-xs font-normal leading-[1.3] text-[hsl(50_2.4%_36%)]">
           Unlocks after approval
         </span>
       </span>
@@ -107,6 +107,7 @@ type NavRowContext = {
   rowClassName: string;
   linkClassName: string;
   forceFullNavigation: boolean;
+  teachingLocked?: boolean;
   icon: React.ReactNode;
 };
 
@@ -121,12 +122,18 @@ export function renderFreeTierNavRow(ctx: NavRowContext): React.ReactNode | null
     rowClassName,
     linkClassName,
     forceFullNavigation,
+    teachingLocked = false,
     icon,
   } = ctx;
 
   const metersHidden = usage.usageNavMetersAvailable === false;
   const renewsAt = usage.renewsAt;
   const reloadDocument = forceFullNavigation;
+  const lockedNavRowClass = cn(rowClassName, 'opacity-75');
+  const lockedNavLinkClass = cn(
+    linkClassName,
+    'items-start free-tier-nav-locked-link'
+  );
 
   const defaultLinkBody = (
     <>
@@ -138,18 +145,18 @@ export function renderFreeTierNavRow(ctx: NavRowContext): React.ReactNode | null
   );
 
   if (link.to === '/app/lesson-planner') {
-    if (!usage.lessonPlannerMonthlyMetering && !usage.monthly) return null;
+    const showLockedPreview = usage.reporterLocked || teachingLocked;
 
-    if (usage.reporterLocked) {
+    if (showLockedPreview) {
       if (navExpanded && !isMobile) {
         return (
-          <div key={link.to} className={rowClassName}>
+          <div key={link.to} className={lockedNavRowClass}>
             <Link
               to={link.to}
               reloadDocument={reloadDocument}
               aria-current={isActive ? 'page' : undefined}
               aria-description="Unlocks after approval"
-              className={linkClassName}
+              className={lockedNavLinkClass}
             >
               {freeTierNavLockedExpandedLinkBody(link, icon)}
             </Link>
@@ -158,47 +165,42 @@ export function renderFreeTierNavRow(ctx: NavRowContext): React.ReactNode | null
       }
       if (!navExpanded && !isMobile) {
         return (
-          <div key={link.to} className={cn(rowClassName, 'justify-center px-0')}>
+          <div key={link.to} className={cn(lockedNavRowClass, 'justify-center px-0')}>
             <Link
               to={link.to}
               reloadDocument={reloadDocument}
               aria-current={isActive ? 'page' : undefined}
-              aria-label="Lesson Planner"
+              aria-label="Lesson Planner. Unlocks after approval"
               className={cn(
                 linkClassName,
-                'relative flex size-11 shrink-0 items-center justify-center'
+                'flex size-11 shrink-0 items-center justify-center'
               )}
               data-testid="usage-nav-collapsed-link-lesson-planner-locked"
             >
               {icon}
-              <Lock
-                size={12}
-                className="absolute bottom-0.5 right-0.5 text-muted-foreground"
-                aria-hidden
-              />
             </Link>
           </div>
         );
       }
       if (isMobile && navExpanded) {
         return (
-          <div key={link.to} className={rowClassName}>
+          <div key={link.to} className={lockedNavRowClass}>
             <Link
               to={link.to}
               reloadDocument={reloadDocument}
               aria-current={isActive ? 'page' : undefined}
-              className={linkClassName}
+              aria-description="Unlocks after approval"
+              className={lockedNavLinkClass}
             >
-              {defaultLinkBody}
+              {freeTierNavLockedExpandedLinkBody(link, icon)}
             </Link>
-            <Tooltip text="Unlocks after approval" contentProps={{ side: 'left' }}>
-              <Lock size={14} className="shrink-0 text-muted-foreground" aria-hidden />
-            </Tooltip>
           </div>
         );
       }
       return null;
     }
+
+    if (!usage.lessonPlannerMonthlyMetering && !usage.monthly) return null;
 
     if (isMobile && navExpanded) {
       if (metersHidden && !loading) return null;

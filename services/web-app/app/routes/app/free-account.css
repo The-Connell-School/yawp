@@ -51,6 +51,9 @@
   width: 17px;
   height: 17px;
 }
+[data-free-account] > nav a.free-tier-nav-locked-link {
+  align-items: flex-start;
+}
 [data-free-account] > nav a span { white-space: nowrap; }
 [data-free-account] > nav a span.flex-col span {
   white-space: normal;

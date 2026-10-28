@@ -277,6 +277,9 @@ export default function Route() {
     shellData;
   const freeAccountUsage =
     'freeAccountUsage' in shellData ? shellData.freeAccountUsage : null;
+  const teachingLockedNav =
+    teachingAccess.variant === 'locked' ||
+    teachingAccess.variant === 'loading';
   const usageNavLoading =
     navigation.state === 'loading' && Boolean(freeAccountUsage);
   const rootData =
@@ -456,6 +459,7 @@ export default function Route() {
             pathname={location.pathname}
             isAppNavLinkActive={isAppNavLinkActive}
             forceFullNavigation={isClassDetailRoute}
+            includeLessonPlannerWhenFeatureOff={Boolean(freeAccountUsage)}
             renderLinkTrailing={
               freeAccountUsage
                 ? (link) =>
@@ -481,6 +485,7 @@ export default function Route() {
                       rowClassName,
                       linkClassName,
                       forceFullNavigation: isClassDetailRoute,
+                      teachingLocked: teachingLockedNav,
                       icon,
                     })
                 : undefined
