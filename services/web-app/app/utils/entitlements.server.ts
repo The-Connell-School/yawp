@@ -8,18 +8,17 @@ export { FREE_CLASSROOM_STUDENT_SEAT_CAP, FREE_CLASSROOM_LESSON_PLAN_QUOTA } fro
 export const FREE_CLASSROOM_TEACHER_SEAT_CAP = 1;
 export const FREE_CLASSROOM_ACTIVE_CLASS_CAP = 1;
 
-export const FREE_CLASSROOM_ASSIGNMENT_QUOTAS = {
-  class_starter: 12,
-  prewriting: 3,
-  thesis_statement: 3,
-} as const;
+import {
+  FREE_CLASSROOM_ASSIGNMENT_QUOTAS,
+  FREE_CLASSROOM_ASSIGNMENT_KINDS,
+  type FreeClassroomAssignmentQuotaKind,
+} from '~/domain/free-tier/free-classroom-assignment-kinds';
 
-export type FreeClassroomAssignmentQuotaKind =
-  keyof typeof FREE_CLASSROOM_ASSIGNMENT_QUOTAS;
-
-export const FREE_CLASSROOM_ASSIGNMENT_KINDS = Object.keys(
-  FREE_CLASSROOM_ASSIGNMENT_QUOTAS
-) as FreeClassroomAssignmentQuotaKind[];
+export {
+  FREE_CLASSROOM_ASSIGNMENT_QUOTAS,
+  FREE_CLASSROOM_ASSIGNMENT_KINDS,
+  type FreeClassroomAssignmentQuotaKind,
+};
 
 export type PlanEntitlements = {
   plan: OrganizationPlan;

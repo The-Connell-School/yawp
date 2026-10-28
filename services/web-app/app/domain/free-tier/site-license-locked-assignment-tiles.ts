@@ -3,7 +3,7 @@ import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-drive
 import {
   FREE_CLASSROOM_ASSIGNMENT_KINDS,
   type FreeClassroomAssignmentQuotaKind,
-} from '~/utils/entitlements.server';
+} from '~/domain/free-tier/free-classroom-assignment-kinds';
 import type { OrganizationPlan } from '@app/prisma';
 
 function isEntitledFreeAssignmentKind(kind: string | null | undefined) {
