@@ -2,6 +2,13 @@ import { describe, expect, test } from 'bun:test';
 import cristoRey from '~/domain/rubrics/library/cristo-rey-hornbuckle-five-paragraph-essay.json';
 import { expandGradingAssistantCategoriesInput } from './grading-assistant-categories-normalize';
 
+type ExpandedCategoryRow = {
+  key: string;
+  score: number;
+  comment?: string;
+  band?: string;
+};
+
 describe('expandGradingAssistantCategoriesInput', () => {
   const categories = cristoRey.rubric.categories;
 
@@ -14,7 +21,7 @@ describe('expandGradingAssistantCategoriesInput', () => {
         },
       },
       categories
-    ) as Array<{ key: string; score: number }>;
+    ) as ExpandedCategoryRow[];
 
     expect(expanded).toEqual([
       { key: 'thesis_and_purpose', score: 3, comment: 'Clear thesis.' },
@@ -29,7 +36,7 @@ describe('expandGradingAssistantCategoriesInput', () => {
         evidence: { score: 2, comment: 'Thin.' },
       },
       categories
-    ) as Array<{ key: string; score: number }>;
+    ) as ExpandedCategoryRow[];
 
     expect(expanded).toEqual([
       { key: 'thesis_and_purpose', score: 4, comment: 'Strong.' },
@@ -46,7 +53,7 @@ describe('expandGradingAssistantCategoriesInput', () => {
         ],
       },
       categories
-    ) as Array<{ key: string; score: number }>;
+    ) as ExpandedCategoryRow[];
 
     expect(expanded[0]?.score).toBe(4);
     expect(expanded[1]?.score).toBe(1);
