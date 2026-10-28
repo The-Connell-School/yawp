@@ -5,8 +5,6 @@ import {
   TeacherClassCard,
   type TeacherClassCardData,
 } from '~/components/teacher-class-card';
-import { cn } from '~/utils/misc';
-
 export function ClassesAtAGlance({
   classes,
   totalClassCount,
@@ -41,19 +39,9 @@ export function ClassesAtAGlance({
           </p>
         </div>
       ) : (
-        <div
-          className={cn(
-            freeUsage
-              ? 'grid grid-cols-1 content-start items-start gap-3'
-              : 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3'
-          )}
-        >
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {classes.map((klass) => (
-            <TeacherClassCard
-              key={klass.id}
-              klass={klass}
-              pe3Dashboard={Boolean(freeUsage)}
-            />
+            <TeacherClassCard key={klass.id} klass={klass} />
           ))}
         </div>
       )}
