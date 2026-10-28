@@ -88,6 +88,18 @@ export function DevPanelClassSimulationFlyout({
   const selectedClass = classes.find((entry) => entry.id === classId) ?? null;
   const simulatedCount = selectedClass?.simulatedStudentCount ?? 0;
 
+  useEffect(() => {
+    if (state.forms.simulationOpenAction !== 'clear-confirm') return;
+    if (classesState !== 'idle' || simulatedCount === 0) return;
+    setClearConfirmOpen(true);
+    updateForms({ simulationOpenAction: null });
+  }, [
+    classesState,
+    simulatedCount,
+    state.forms.simulationOpenAction,
+    updateForms,
+  ]);
+
   const run = async (intent: 'populate' | 'clear') => {
     if (!classId) return;
     setBusy(intent);
@@ -159,7 +171,7 @@ export function DevPanelClassSimulationFlyout({
               'z-20 flex flex-col bg-background',
               isPhone ? 'relative min-h-full' : 'absolute inset-0'
             )
-          : 'absolute inset-y-0 right-full z-10 w-[var(--yawp-dev-panel-width)] border-r shadow-lg'
+          : 'yawp-dev-panel-flyout-docked absolute inset-y-0 right-full z-10'
       )}
       role="dialog"
       aria-label="Class simulation"

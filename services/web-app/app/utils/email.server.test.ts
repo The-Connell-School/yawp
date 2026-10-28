@@ -182,10 +182,11 @@ describe('sendEmail', () => {
         status: 'error',
         error: {
           name: 'MessageRejected',
-          message: `Email address is not verified: ${secretEmail}`,
+          message: 'Provider error details redacted',
           statusCode: 400,
         },
       });
+      expect(JSON.stringify(result)).not.toContain(secretEmail);
 
       expect(errorLog).toHaveBeenCalledTimes(1);
       const serialized = JSON.stringify(errorLog.mock.calls);
@@ -230,11 +231,11 @@ describe('sendEmail', () => {
         status: 'error',
         error: {
           name: 'validation_error',
-          message:
-            'You can only send testing emails to your own email address (`private@example.test`).',
+          message: 'Provider restricts test recipients',
           statusCode: 422,
         },
       });
+      expect(JSON.stringify(result)).not.toContain('private@example.test');
 
       const serialized = JSON.stringify(errorLog.mock.calls);
       expect(serialized).toContain('email_delivery_failed');
@@ -276,11 +277,11 @@ describe('sendEmail', () => {
         status: 'error',
         error: {
           name: 'UnknownError',
-          message: 'Unknown Error',
+          message: 'Provider error details redacted',
           statusCode: 500,
-          cause: { unexpected: true, leak: 'ignored@secret.test' },
         },
       });
+      expect(JSON.stringify(result)).not.toContain('ignored@secret.test');
 
       const serialized = JSON.stringify(errorLog.mock.calls);
       expect(serialized).toContain('email_delivery_failed');

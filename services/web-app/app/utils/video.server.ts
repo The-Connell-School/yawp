@@ -92,7 +92,10 @@ export function formatDuration(seconds: number): string {
  *       console.log(`Video duration: ${duration} seconds`);
  *       // Store duration in form state or pass to server
  *     } catch (error) {
- *       console.error('Could not get video duration:', error);
+ *       console.error(
+ *         'teacher_training_video_duration_failed',
+ *         buildSafeErrorScalarsForLog(error),
+ *       );
  *     }
  *   }
  * };

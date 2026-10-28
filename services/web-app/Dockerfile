@@ -50,8 +50,10 @@ COPY --from=build /app/scripts/preview ./scripts/preview
 RUN chmod +x services/web-app/start.sh
 
 EXPOSE 8080
+ARG YAWP_ENVIRONMENT=production
 ARG YAWP_GIT_COMMIT=unknown
 ARG YAWP_BUILT_AT=unknown
+ENV YAWP_ENVIRONMENT=$YAWP_ENVIRONMENT
 ENV YAWP_GIT_COMMIT=$YAWP_GIT_COMMIT
 ENV YAWP_BUILT_AT=$YAWP_BUILT_AT
 CMD ["bash", "services/web-app/start.sh"]

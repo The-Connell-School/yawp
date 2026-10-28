@@ -1,10 +1,6 @@
-import { redactEmailForLog } from './redact-email-for-log.server';
+import { redactFreeformMessage } from './redact-freeform-message';
 
 const ALLOWED_REQUEST_HEADERS = ['user-agent', 'x-request-id'] as const;
-const MAX_SAFE_ERROR_MESSAGE_LENGTH = 300;
-
-const TOKEN_LIKE =
-  /\b(?:Bearer\s+[A-Za-z0-9._~+/=-]+|(?:token|code|secret|password|otp|api[_-]?key)\s*[:=]\s*[^\s,;'"]+)/gi;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
@@ -26,28 +22,6 @@ function prismaMetaForLog(meta: unknown) {
     out.target = meta.target;
   }
   return out;
-}
-
-function redactFreeformMessage(message: string): string {
-  let text = message.replace(TOKEN_LIKE, '[redacted-token]');
-  text = text.replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g, (email) =>
-    redactEmailForLog(email),
-  );
-  text = text.replace(/https?:\/\/[^\s)]+/gi, (url) => {
-    try {
-      const parsed = new URL(url);
-      parsed.search = '';
-      parsed.hash = '';
-      return parsed.toString();
-    } catch {
-      return '[redacted-url]';
-    }
-  });
-  text = text.replace(/\?[^\s)'"]+/g, '');
-  if (text.length > MAX_SAFE_ERROR_MESSAGE_LENGTH) {
-    return `${text.slice(0, MAX_SAFE_ERROR_MESSAGE_LENGTH)}…`;
-  }
-  return text;
 }
 
 function sanitizeStackFrame(line: string): string {
@@ -105,6 +79,23 @@ function safeCauseForLog(error: Error): { name: string; code?: string } | undefi
       ? String((cause as Error & { code?: unknown }).code)
       : undefined;
   return code ? { name: cause.name, code } : { name: cause.name };
+}
+
+/** Stable client JSON copy — never forwards raw exception text to browsers. */
+export function safeErrorTextForClientResponse(
+  _error: unknown,
+  fallback: string,
+): string {
+  return fallback;
+}
+
+/** Teacher-safe validation copy from a typed domain error, with freeform redaction. */
+export function safeDomainErrorTextForClientResponse(
+  error: Error,
+  fallback: string,
+): string {
+  const redacted = redactFreeformMessage(error.message).trim();
+  return redacted || fallback;
 }
 
 /** Single-line safe error text for DB rows or domain `{ ok: false, error }` payloads. */

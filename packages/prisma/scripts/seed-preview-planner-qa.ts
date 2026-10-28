@@ -10,6 +10,7 @@ import {
   type ExitTicketConfig,
 } from '../../../services/web-app/app/domain/assignment-types/exit-ticket';
 import { isLocalDatabaseUrl } from './local-dev/database-url';
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 import {
   PREVIEW_PLANNER_QA_IDS,
   PREVIEW_PLANNER_QA_STUDENT_EMAIL,
@@ -376,7 +377,7 @@ if (import.meta.main) {
       console.log('preview planner QA seed:', JSON.stringify(result));
     })
     .catch((error) => {
-      console.error(error);
+      logScriptError(error);
       process.exitCode = 1;
     })
     .finally(() => prisma.$disconnect());

@@ -13,6 +13,7 @@
  * wall: the talking belongs in the speaker notes.
  */
 import { z } from 'zod';
+import { resolveDeckArt } from './deck-art';
 
 export const SLIDE_DECK_FENCE = 'yawp-slides';
 
@@ -397,7 +398,11 @@ function normalizeDeck(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
   const deck = raw as Record<string, unknown>;
   if (!Array.isArray(deck.slides)) return raw;
-  return { ...deck, slides: deck.slides.map(normalizeSlide) };
+  const out: Record<string, unknown> = { ...deck, slides: deck.slides.map(normalizeSlide) };
+  if (typeof out.art === 'string' && !resolveDeckArt(out.art)) {
+    delete out.art;
+  }
+  return out;
 }
 
 /** A fenced block whose JSON is shaped like a deck, whatever its fence says. */

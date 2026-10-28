@@ -24,8 +24,12 @@ export const PREVIEW_ACCESS_PATH = '/auth/preview-access';
 export const PREVIEW_ACCESS_MAX_AGE = 60 * 60 * 24 * 30;
 export const PREVIEW_MASTER_SELECTION_MAX_AGE = 10 * 60;
 export const PREVIEW_AUTHORIZED_ACTIVITY_HEADER = 'X-Yawp-Preview-Authorized';
+/** Panel unlock is separate from site gate access so frame-01 locked beaker is reachable. */
+export const DEV_PANEL_UNLOCK_COOKIE_NAME = '__yawp_dev_panel_unlock';
+export const DEV_PANEL_UNLOCK_MAX_AGE = PREVIEW_ACCESS_MAX_AGE;
 
 const ACCESS_SEAT_VALUE_PREFIX = 'seat-v3:';
+const DEV_PANEL_UNLOCK_VALUE_PREFIX = 'unlock-v1:';
 const MASTER_ACCESS_SEAT_VALUE_PREFIX = 'seat-master-v1:';
 const LEGACY_ACCESS_SEAT_VALUE_PREFIX = 'seat-v2:';
 const MASTER_SELECTION_VALUE_PREFIX = 'master-v2:';
@@ -471,6 +475,56 @@ export async function clearPreviewAccessCookie() {
   return createPreviewAccessCookie().serialize('', { maxAge: 0 });
 }
 
+export function createDevPanelUnlockCookie() {
+  const secrets = accessSecrets();
+  return createCookie(DEV_PANEL_UNLOCK_COOKIE_NAME, {
+    httpOnly: true,
+    maxAge: DEV_PANEL_UNLOCK_MAX_AGE,
+    path: '/',
+    sameSite: 'lax',
+    secrets: secrets.length > 0 ? secrets : ['preview-access-unconfigured'],
+    secure: shouldUseSecureCookies(),
+  });
+}
+
+export async function grantDevPanelUnlockCookie(seat: Pick<PreviewAccessSeat, 'label'>) {
+  if (!isPreviewAccessConfigured()) {
+    throw new Error('Preview access gate is not configured.');
+  }
+  const label = seat.label.trim();
+  if (!label) {
+    throw new Error('Dev panel unlock requires a seat label.');
+  }
+  const issuedAt = Math.floor(Date.now() / 1000);
+  return createDevPanelUnlockCookie().serialize(
+    `${DEV_PANEL_UNLOCK_VALUE_PREFIX}${issuedAt}:${label}`
+  );
+}
+
+export async function getDevPanelUnlockSeatLabel(
+  request: Request
+): Promise<string | null> {
+  if (!isPreviewAccessConfigured()) return null;
+  const value = await createDevPanelUnlockCookie().parse(
+    request.headers.get('cookie')
+  );
+  if (typeof value !== 'string' || !value.startsWith(DEV_PANEL_UNLOCK_VALUE_PREFIX)) {
+    return null;
+  }
+  const payload = value.slice(DEV_PANEL_UNLOCK_VALUE_PREFIX.length);
+  const separator = payload.indexOf(':');
+  if (separator < 1) return null;
+  if (!timestampIsCurrent(payload.slice(0, separator), DEV_PANEL_UNLOCK_MAX_AGE)) {
+    return null;
+  }
+  const label = payload.slice(separator + 1).trim();
+  return label || null;
+}
+
+export async function clearDevPanelUnlockCookie() {
+  return createDevPanelUnlockCookie().serialize('', { maxAge: 0 });
+}
+
 export async function grantPreviewMasterSelectionCookie() {
   if (!configuredGlobalMasterCode() || !isPreviewAccessConfigured()) {
     throw new Error('Generic preview master access is not configured.');
@@ -657,14 +711,13 @@ async function consumeCodeQueryParam(
   if (!seat) return null;
 
   url.searchParams.delete('code');
-  return new Response(null, {
-    status: 303,
-    headers: {
-      'Cache-Control': 'no-store',
-      'set-cookie': await grantPreviewAccessCookie(seat),
-      Location: `${url.pathname}${url.search}`,
-    },
+  const headers = new Headers({
+    'Cache-Control': 'no-store',
+    Location: `${url.pathname}${url.search}`,
   });
+  headers.append('Set-Cookie', await clearDevPanelUnlockCookie());
+  headers.append('Set-Cookie', await grantPreviewAccessCookie(seat));
+  return new Response(null, { status: 303, headers });
 }
 
 /**

@@ -59,6 +59,7 @@ import {
   parseGradingAssistantStrictnessLevel,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
+import { gradingAssistantResponseHasVisibleContent } from '~/domain/grading/grading-assistant-fetcher-result';
 import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
 import { preprocessGradingAssistantCategoriesInput } from '~/domain/grading/grading-assistant-category-filter';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -95,6 +96,7 @@ import {
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 import { maybePostGradeToBlackboard } from '~/integrations/blackboard-ags.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import { enforceGradingLimits, rateLimitedJson } from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import type {
@@ -1225,7 +1227,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     try {
       await maybePostGradeToBlackboard({ numericPercentage });
     } catch (error) {
-      console.warn('Blackboard AGS passback (mock) failed', { error });
+      console.warn('Blackboard AGS passback (mock) failed', {
+        error: buildSafeErrorForLog(error),
+      });
     }
 
     return dataResponse({
@@ -1842,6 +1846,32 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     }
   }
 
+  const successPayload = {
+    success: true as const,
+    message: 'Grading Assistant suggestions generated.',
+    ...(teacherNotesEnabled ? { teacherNote: parsed.teacherNote } : {}),
+    rubricScores,
+    overallScore,
+    overallComment,
+    numericPercentage,
+    letterGrade,
+    score,
+    grammarIssues,
+    rubricConfig,
+    gradingAssistantStrictnessLevel,
+  };
+
+  if (!gradingAssistantResponseHasVisibleContent(successPayload, minScore)) {
+    return dataResponse(
+      {
+        success: false,
+        message:
+          'Grading Assistant returned no suggestions. Please try again.',
+      },
+      { status: 502 }
+    );
+  }
+
   // Write AI grading results directly to the Submission
   if (gradingDeadlineSignal.aborted) {
     return gradingDeadlineResponse();
@@ -2011,21 +2041,10 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   try {
     await maybePostGradeToBlackboard({ numericPercentage: ltiPassbackPercentage });
   } catch (error) {
-    console.warn('Blackboard AGS passback (mock) failed', { error });
+    console.warn('Blackboard AGS passback (mock) failed', {
+      error: buildSafeErrorForLog(error),
+    });
   }
 
-  return dataResponse({
-    success: true,
-    message: 'Grading Assistant suggestions generated.',
-    ...(teacherNotesEnabled ? { teacherNote: parsed.teacherNote } : {}),
-    rubricScores,
-    overallScore,
-    overallComment,
-    numericPercentage,
-    letterGrade,
-    score,
-    grammarIssues,
-    rubricConfig,
-    gradingAssistantStrictnessLevel,
-  });
+  return dataResponse(successPayload);
 }

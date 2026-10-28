@@ -91,7 +91,8 @@ jobs:
 
       - name: 📦 Install dependencies
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       # The root-owned-build-output test needs the image the preview host itself runs.
       - name: 🐳 Pull the preview runtime image
@@ -149,7 +150,8 @@ jobs:
 
       - name: 📦 Install dependencies
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       # bunfig.toml preloads services/web-app/test-preload.ts for every `bun test` run in
       # this repo, and that preload imports ~/utils/auth.server, which imports @app/prisma.
@@ -164,7 +166,7 @@ jobs:
 
       - name: 🧪 Validate deployment contract
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts ./scripts/preview/deploy-log-secrets.test.js ./scripts/preview/redact-deploy-logs.test.js --max-concurrency=2
+        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts ./scripts/ci/release-docker-host-port.test.ts ./scripts/ci/bun-install-frozen.test.ts ./scripts/ci/install-playwright-chromium.test.ts ./scripts/preview/deploy-log-secrets.test.js ./scripts/preview/redact-deploy-logs.test.js --max-concurrency=2
 
       - name: 🧪 Validate Blackboard LTI mock
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -830,7 +832,8 @@ jobs:
 
       - name: 📦 Install dependencies
         if: ${{ needs.paths.outputs.code == 'true' }}
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: ⚙️ Generate Prisma Client
         if: ${{ needs.paths.outputs.code == 'true' }}
@@ -1155,7 +1158,8 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
 
       - name: 📦 Install dependencies
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: ⚙️ Generate Prisma Client
         run: bun prisma generate
@@ -1186,12 +1190,22 @@ jobs:
           PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
         run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
 
+      - name: 🧹 Prune Playwright browsers cache
+        if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' && matrix.shard == 1 }}
+        run: bash ../../scripts/ci/prune-playwright-browser-cache.sh
+
       - name: 💾 Save Playwright browsers cache
         if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' && matrix.shard == 1 }}
+        continue-on-error: true
+        id: playwright-cache-save
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
+
+      - name: Playwright cache save warning
+        if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' && matrix.shard == 1 && steps.playwright-cache-save.outcome == 'failure' }}
+        run: echo "::warning::Playwright browsers cache save failed (often cache service HTTP 400); E2E continues with a fresh install on the next run"
 
       - name: 🧪 Run Playwright tests
         working-directory: services/web-app
@@ -1275,7 +1289,8 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
 
       - name: 📦 Install dependencies
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: ⚙️ Generate Prisma Client
         run: bun prisma generate
@@ -1386,7 +1401,8 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
 
       - name: 📦 Install dependencies
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: ⚙️ Generate Prisma Client
         run: bun prisma generate
@@ -1579,7 +1595,8 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
 
       - name: 📦 Install dependencies
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: ⚙️ Generate Prisma Client
         run: bun prisma generate
@@ -1648,21 +1665,19 @@ jobs:
           RESEND_API_KEY: ''
           RESEND_FROM_EMAIL: ''
         run: |
+          REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
+          cd "$REPO_ROOT"
           mkdir -p "$TMPDIR" services/web-app/dev-panel-evidence
           cleanup() {
-            ./bin/project dev stop --json || true
-            if [ -f .worktree-local/config.env ]; then
-              source .worktree-local/config.env
-              docker rm -f "$CONTAINER_NAME" || true
-              docker volume rm "$VOLUME_NAME" || true
-            fi
+            bash "$REPO_ROOT/scripts/ci/demo-feedback-worktree-cleanup.sh" 54489 54490 5489 5490
           }
           trap cleanup EXIT
-          ./bin/project bootstrap --fresh --json
-          ./bin/project fixture verify local-dev --json
-          ./bin/project dev start --json
+          bash "$REPO_ROOT/scripts/ci/demo-feedback-worktree-cleanup.sh" 54489 54490 5489 5490
+          "$REPO_ROOT/bin/project" bootstrap --fresh --json
+          "$REPO_ROOT/bin/project" fixture verify local-dev --json
+          "$REPO_ROOT/bin/project" dev start --json
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5489/ > /dev/null
-          ./bin/project test --profile demo-feedback-browser --json
+          "$REPO_ROOT/bin/project" test --profile demo-feedback-browser --json
 
       - name: Cat dev panel free-tier jump log
         if: ${{ !cancelled() && always() }}
@@ -1710,21 +1725,19 @@ jobs:
           TESTER_FEEDBACK_ENABLED: 'true'
           DEMO_FEEDBACK_BASE_URL: http://127.0.0.1:5490
         run: |
+          REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
+          cd "$REPO_ROOT"
           mkdir -p "$TMPDIR"
           cleanup() {
-            ./bin/project dev stop --json || true
-            if [ -f .worktree-local/config.env ]; then
-              source .worktree-local/config.env
-              docker rm -f "$CONTAINER_NAME" || true
-              docker volume rm "$VOLUME_NAME" || true
-            fi
+            bash "$REPO_ROOT/scripts/ci/demo-feedback-worktree-cleanup.sh" 54489 54490 5489 5490
           }
           trap cleanup EXIT
-          ./bin/project bootstrap --fresh --json
-          ./bin/project fixture verify local-dev --json
-          ./bin/project dev start --json
+          bash "$REPO_ROOT/scripts/ci/demo-feedback-worktree-cleanup.sh" 54489 54490 5489 5490
+          "$REPO_ROOT/bin/project" bootstrap --fresh --json
+          "$REPO_ROOT/bin/project" fixture verify local-dev --json
+          "$REPO_ROOT/bin/project" dev start --json
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5490/ > /dev/null
-          cd services/web-app
+          cd "$REPO_ROOT/services/web-app"
           bun x playwright test --config=playwright.dev-panel-free-signed-out.config.ts --workers=1
 
       - name: Upload dev panel artboard evidence
@@ -1776,7 +1789,8 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
 
       - name: 📦 Install dependencies
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: 📥 Download blob reports
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2

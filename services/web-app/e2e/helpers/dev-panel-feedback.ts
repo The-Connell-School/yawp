@@ -1,5 +1,17 @@
 import { expect, type Page } from '@playwright/test';
 
+export const DEV_PANEL_STORAGE_KEY = 'yawp-dev-panel';
+
+/** Clears persisted dev-panel state once the document is stable (retries through navigation). */
+export async function clearDevPanelStorageWhenStable(page: Page) {
+  await expect(async () => {
+    await page.waitForLoadState('domcontentloaded');
+    await page.evaluate((key: string) => {
+      localStorage.removeItem(key);
+    }, DEV_PANEL_STORAGE_KEY);
+  }).toPass({ timeout: 15_000 });
+}
+
 export function devToolsPanel(page: Page) {
   return page.locator('#devtools');
 }
@@ -12,6 +24,35 @@ export function freeTierStatesDialog(page: Page) {
   return page.getByRole('dialog', { name: 'Free-tier states' });
 }
 
+/** Dev panel pin row — accessible name includes the subtitle (Note, screenshot, URL / Writing…). */
+export function devPanelGiveFeedbackRow(panel: ReturnType<typeof devToolsPanel>) {
+  return panel.getByRole('button', { name: /^Give feedback\b/ });
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Free-tier sheet row — accessible name includes the state description (StatesSheet.dc.html). */
+export function devPanelFreeTierStateOption(
+  sheet: ReturnType<typeof freeTierStatesDialog>,
+  label: string
+) {
+  return sheet.getByRole('button', {
+    name: new RegExp(`^${escapeRegExp(label)}\\b`),
+  });
+}
+
+/** Free-tier accordion group trigger — title plus subtitle in the accessible name. */
+export function devPanelFreeTierGroupTrigger(
+  sheet: ReturnType<typeof freeTierStatesDialog>,
+  groupTitle: string
+) {
+  return sheet.getByRole('button', {
+    name: new RegExp(`^${escapeRegExp(groupTitle)}\\b`),
+  });
+}
+
 /** Panel chrome is mounted and shows locked, main menu, or a restored sub-sheet. */
 export async function waitForDevPanelReady(page: Page) {
   const panel = devToolsPanel(page);
@@ -21,7 +62,7 @@ export async function waitForDevPanelReady(page: Page) {
   });
   const locked = page.getByText('Developer tools are locked');
   const loadError = page.getByText("Developer tools couldn't load");
-  const giveFeedbackRow = panel.getByRole('button', { name: 'Give feedback' });
+  const giveFeedbackRow = devPanelGiveFeedbackRow(panel);
   const giveFeedbackSheet = giveFeedbackDialog(page);
   const freeTierSheet = freeTierStatesDialog(page);
   const signInSection = panel.getByText('Sign in as');
@@ -98,7 +139,9 @@ export async function openDevToolsPanel(page: Page) {
 /** Opens a dev panel collapsible section when persisted state left it closed. */
 export async function openDevPanelSection(page: Page, sectionName: string) {
   const panel = await openDevToolsPanel(page);
-  const trigger = panel.getByRole('button', { name: sectionName, exact: true });
+  const trigger = panel.getByRole('button', {
+    name: new RegExp(`^${sectionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`),
+  });
   await expect(trigger).toBeVisible({ timeout: 15_000 });
   const expanded = await trigger.getAttribute('aria-expanded');
   if (expanded !== 'true') {
@@ -108,11 +151,21 @@ export async function openDevPanelSection(page: Page, sectionName: string) {
   return panel;
 }
 
-/** Opens the class simulation flyout from the Data section row (not the flyout action). */
+/** Opens the class simulation flyout from the Tester tools section row (not the flyout action). */
 export async function openDevPanelClassSimulationFlyout(page: Page) {
-  const panel = await openDevPanelSection(page, 'Data');
+  const panel = await openDevToolsPanel(page);
+  const testerToolsTrigger = panel.getByRole('button', {
+    name: /^Tester tools/,
+  });
+  await expect(testerToolsTrigger).toBeVisible({ timeout: 15_000 });
+  const expanded = await testerToolsTrigger.getAttribute('aria-expanded');
+  if (expanded !== 'true') {
+    await testerToolsTrigger.click();
+    await expect(testerToolsTrigger).toHaveAttribute('aria-expanded', 'true');
+  }
   await panel
-    .getByRole('button', { name: /^Populate class Fake/ })
+    .locator('.yawp-dev-panel-login-row')
+    .filter({ hasText: 'Populate class' })
     .click();
   await expect(
     page.getByRole('dialog', { name: 'Class simulation' })
@@ -121,11 +174,13 @@ export async function openDevPanelClassSimulationFlyout(page: Page) {
 
 export async function expectGiveFeedbackAccessible(page: Page) {
   const beaker = page.getByRole('button', { name: 'Open developer tools' });
-  const legacy = page.getByRole('button', { name: 'Give feedback', exact: true });
+  const legacy = page.locator('button[data-demo-feedback]', {
+    hasText: /^Give feedback$/,
+  });
   await expect(beaker.or(legacy).first()).toBeVisible({ timeout: 30_000 });
   if ((await beaker.count()) > 0) {
     const panel = await openDevToolsPanel(page);
-    const row = panel.getByRole('button', { name: 'Give feedback' });
+    const row = devPanelGiveFeedbackRow(panel);
     const sheet = giveFeedbackDialog(page);
     await expect(row.or(sheet).first()).toBeVisible();
     return;
@@ -142,9 +197,8 @@ export async function openGiveFeedback(page: Page) {
       hasSeverity: false,
     };
   }
-  const legacyTrigger = page.getByRole('button', {
-    name: 'Give feedback',
-    exact: true,
+  const legacyTrigger = page.locator('button[data-demo-feedback]', {
+    hasText: /^Give feedback$/,
   });
   if (await legacyTrigger.count()) {
     await legacyTrigger.click();
@@ -155,7 +209,7 @@ export async function openGiveFeedback(page: Page) {
     };
   }
   const tools = await openDevToolsPanel(page);
-  const feedbackRow = tools.getByRole('button', { name: 'Give feedback' });
+  const feedbackRow = devPanelGiveFeedbackRow(tools);
   if (await feedbackRow.isVisible().catch(() => false)) {
     await feedbackRow.click();
   } else {

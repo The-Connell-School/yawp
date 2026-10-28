@@ -36,6 +36,8 @@ import {
   freeTierOrganizationDistinctId,
   FREE_TIER_ANALYTICS_EVENTS,
 } from './posthog-analytics.server';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
+import { FREE_CLASS_CLASS_FULL_MESSAGE } from './class-seat-cap';
 
 export type FreeTierClassSummary = {
   id: string;
@@ -276,7 +278,10 @@ export async function registerFreeTierStudent({
       return {
         status: 'error' as const,
         field: 'classId' as const,
-        error: error.message,
+        error: safeDomainErrorTextForClientResponse(
+          error,
+          FREE_CLASS_CLASS_FULL_MESSAGE,
+        ),
         formLevel: true as const,
       };
     }

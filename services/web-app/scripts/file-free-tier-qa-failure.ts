@@ -1,5 +1,6 @@
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { logScriptError } from '../app/utils/log-script-error.server';
 
 const defaultFailuresPath =
   '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/FAILURES.md';
@@ -143,7 +144,7 @@ async function main() {
       console.error(
         `Could not update fixes backlog automatically. Add this under P0b: ${backlogItem}`
       );
-      console.error(error);
+      logScriptError(error);
     }
   }
 
@@ -173,7 +174,7 @@ async function main() {
 
 if (import.meta.main) {
   main().catch((error) => {
-    console.error(error);
+    logScriptError(error);
     process.exit(1);
   });
 }

@@ -50,10 +50,21 @@ mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
   requireMembership,
 }));
+mock.module('~/utils/platform-admin-actor.server', () => ({
+  resolvePlatformAdminActorEmail: mock(async () => 'admin@test.local'),
+}));
 
 const { action: routeAction, loader: routeLoader } = await import('./route');
 const action = routeAction as any;
 const loader = routeLoader as any;
+
+const platformAdminEditStamp = {
+  _lastAdminEdit: {
+    source: 'platform',
+    updatedBy: 'admin@test.local',
+    updatedAt: expect.any(String),
+  },
+};
 
 describe('admin assignment type detail action', () => {
   beforeEach(() => {
@@ -133,7 +144,11 @@ describe('admin assignment type detail action', () => {
       const response = await action({ request: new Request('https://example.test/edit', { method: 'POST', body: form }), params: { id: 'at-1' }, context: {} });
       expect(response).toMatchObject({ data: { status: 'success' } });
       const data = prisma.assignmentType.update.mock.calls.at(-1)?.[0].data;
-      expect(data.gradingPromptConfigJson).toEqual({ systemInstructions: 'Source system', gradingInstructionsOverride: 'Source override' });
+      expect(data.gradingPromptConfigJson).toEqual({
+        systemInstructions: 'Source system',
+        gradingInstructionsOverride: 'Source override',
+        ...platformAdminEditStamp,
+      });
       expect(data.gradingAssistantVersion).toBeUndefined();
     }
   );
@@ -283,6 +298,7 @@ describe('admin assignment type detail action', () => {
         gradingPromptConfigJson: {
           systemInstructions: 'Act as an ACT Writing evaluator.',
           gradingInstructions: 'Grade this as ACT Writing.',
+          ...platformAdminEditStamp,
         },
         gradingAssistantVersion: { increment: 1 },
       }),
@@ -451,6 +467,73 @@ describe('admin assignment type detail action', () => {
     });
   });
 
+  test('a full editor resubmit with unchanged rubric and tutor fields does not stamp gradingPromptConfigJson', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      tutorInstructions: null,
+      rubricJson: {
+        categories: [
+          {
+            key: 'legacy_category',
+            label: 'Legacy category',
+            description: 'Existing assignment-type rubric data.',
+            weight: 1,
+          },
+        ],
+      },
+      gradingPromptConfigJson: {
+        gradingInstructions: 'Keep the legacy prompt exactly.',
+        legacyExtra: 'preserve',
+      },
+      gradingOutputSchemaJson: { schemaVersion: 1 },
+      scoringScaleJson: { type: 'weighted_1_5', minScore: 1, maxScore: 5 },
+      rubric: null,
+    });
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'Renamed assignment type');
+    form.set('tutorInstructions', '');
+    form.set('rubricId', '__none__');
+    form.set(
+      'scoringScale',
+      JSON.stringify({ type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 })
+    );
+    form.set(
+      'rubricJson',
+      JSON.stringify({
+        categories: [
+          {
+            key: 'legacy_category',
+            label: 'Legacy category',
+            description: 'Existing assignment-type rubric data.',
+            weight: 1,
+          },
+        ],
+      })
+    );
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    const updateData = prisma.assignmentType.update.mock.calls.at(-1)?.[0].data;
+    expect(updateData).toEqual({
+      title: 'Renamed assignment type',
+      description: null,
+      tutorInstructions: null,
+      rubricId: null,
+    });
+    expect(updateData.gradingPromptConfigJson).toBeUndefined();
+  });
+
   test('saves a selected shared rubric with the assignment type update', async () => {
     prisma.rubric.findFirst.mockResolvedValue({
       id: 'rubric-1',
@@ -562,6 +645,7 @@ describe('admin assignment type detail action', () => {
           instructionsPreset: 'legacy_thesis_driven_essay',
           gradingInstructionsOverride:
             'Apply the rubric with extra emphasis on concrete supporting details.',
+          ...platformAdminEditStamp,
         },
         gradingAssistantVersion: { increment: 1 },
       },
@@ -602,6 +686,7 @@ describe('admin assignment type detail action', () => {
         description: null,
         gradingPromptConfigJson: {
           instructionsPreset: 'legacy_thesis_driven_essay',
+          ...platformAdminEditStamp,
         },
         gradingAssistantVersion: { increment: 1 },
       },

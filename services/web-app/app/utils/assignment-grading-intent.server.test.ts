@@ -25,6 +25,24 @@ describe('parseAssignmentGradingIntent', () => {
     });
   });
 
+  test('defaults Class Starter forms without pointValue to 10 points', () => {
+    expect(
+      parseAssignmentGradingIntent(formFor({}), { kind: 'class_starter' })
+    ).toEqual({
+      success: true,
+      data: { submitForGrade: true, pointValue: 10 },
+    });
+  });
+
+  test('defaults Daily Pages forms without pointValue to 20 points', () => {
+    expect(
+      parseAssignmentGradingIntent(formFor({}), { kind: 'daily_pages' })
+    ).toEqual({
+      success: true,
+      data: { submitForGrade: true, pointValue: 20 },
+    });
+  });
+
   test('parses an explicit graded positive integer point value', () => {
     expect(
       parseAssignmentGradingIntent(

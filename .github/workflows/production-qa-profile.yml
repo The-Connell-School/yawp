@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
@@ -24,7 +24,8 @@ jobs:
           bun-version: '1.4.4'
 
       - name: Install dependencies
-        run: bun install
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: Prepare production bastion SSH key
         run: |
@@ -98,7 +99,7 @@ jobs:
 
       - name: Upload production QA evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: production-released-grade-activity
           path: services/web-app/test-results/production-*

@@ -31,6 +31,8 @@ import {
   ApprovalForwardForm,
   approvalForwardError,
 } from '../free-tier/ApprovalForwardForm';
+import { PendingForwardDisclosure } from '../free-tier/PendingForwardDisclosure';
+import { PendingForwardSuccessBanner } from '../free-tier/PendingForwardSuccessBanner';
 import { Clock, Info } from 'lucide-react';
 import { getTransactionalEmailFrom } from '~/utils/email.server';
 import { requireUserId } from '~/utils/auth.server';
@@ -98,32 +100,10 @@ function isForwardActionError(
   );
 }
 
-function PendingBelowCardActions({
-  showForwardToggle,
-  approvalId,
-  busy,
-  forwardOpen,
-  onToggleForward,
-}: {
-  showForwardToggle: boolean;
-  approvalId?: string;
-  busy: boolean;
-  forwardOpen: boolean;
-  onToggleForward: () => void;
-}) {
+function PendingCardFooter() {
   return (
     <div className="flex flex-col items-center gap-1">
-      {showForwardToggle ? (
-        <Button type="button" variant="link" onClick={onToggleForward}>
-          Not the right person?
-        </Button>
-      ) : null}
       <FreeTierSignOut />
-      {showForwardToggle && forwardOpen ? (
-        <div className="mt-4 w-full max-w-[240px] text-left">
-          <ApprovalForwardForm approvalId={approvalId} busy={busy} />
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -275,10 +255,28 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 }
 
-function LockedPreviewExploreButton() {
+function LockedPreviewExploreButton({ disabled = false }: { disabled?: boolean }) {
   return (
-    <FreeTierButton asChild data-testid="locked-preview-explore">
-      <Link to="/app">Explore my classroom</Link>
+    <FreeTierButton
+      asChild
+      data-testid="locked-preview-explore"
+      className={disabled ? 'pointer-events-none opacity-50' : undefined}
+      aria-disabled={disabled ? true : undefined}
+    >
+      <Link
+        to="/app"
+        tabIndex={disabled ? -1 : undefined}
+        aria-disabled={disabled ? true : undefined}
+        onClick={
+          disabled
+            ? (event) => {
+                event.preventDefault();
+              }
+            : undefined
+        }
+      >
+        Explore my classroom
+      </Link>
     </FreeTierButton>
   );
 }
@@ -289,20 +287,23 @@ function PendingDraftRequestLink({
   teacherName,
   schoolName,
   approvalEmailFrom,
+  disabled = false,
 }: {
   adminEmail: string;
   adminName: string;
   teacherName: string;
   schoolName: string;
   approvalEmailFrom: string;
+  disabled?: boolean;
 }) {
   if (!adminEmail.trim()) return null;
   return (
     <FreeTierButton
       asChild
       variant="outline"
-      className="free-tier-draft-request"
+      className={`free-tier-draft-request${disabled ? ' pointer-events-none opacity-50' : ''}`}
       data-testid="pending-draft-request"
+      aria-disabled={disabled ? true : undefined}
     >
       <a
         href={approvalMailto({
@@ -353,13 +354,22 @@ export default function FreeTierPendingRoute() {
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
-  const resending = navigation.state === 'submitting';
+  const forwarding =
+    navigation.state === 'submitting' &&
+    navigation.formData?.get('intent') === 'forward';
+  const resending =
+    navigation.state === 'submitting' &&
+    navigation.formData?.get('intent') !== 'forward';
   const adminName = pending?.adminName ?? 'your administrator';
   const [forwardOpen, setForwardOpen] = useState(false);
   const [askAnotherOpen, setAskAnotherOpen] = useState(askOpen);
 
   useEffect(() => {
     if (isForwardActionError(actionData)) setForwardOpen(true);
+  }, [actionData]);
+
+  useEffect(() => {
+    if (actionData?.ok && 'queued' in actionData) setForwardOpen(false);
   }, [actionData]);
 
   useEffect(() => {
@@ -458,15 +468,7 @@ export default function FreeTierPendingRoute() {
       <FreeTierAuthCard
         title={title}
         icon={<Clock />}
-        footer={
-          <PendingBelowCardActions
-            showForwardToggle={showForwardToggle}
-            approvalId={current?.id}
-            busy={resending}
-            forwardOpen={forwardOpen}
-            onToggleForward={() => setForwardOpen((open) => !open)}
-          />
-        }
+        footer={<PendingCardFooter />}
       >
         {terminal ? (
           <>
@@ -483,6 +485,9 @@ export default function FreeTierPendingRoute() {
           </>
         ) : (
           <>
+            {actionData?.ok && 'queued' in actionData && actionData.adminName ? (
+              <PendingForwardSuccessBanner adminName={actionData.adminName} />
+            ) : null}
             <p className="text-sm text-muted-foreground">
               {app?.status === 'SENT' && current
                 ? approvalV2.firstSentAt
@@ -514,32 +519,45 @@ export default function FreeTierPendingRoute() {
                   name={current.adminName}
                   email={current.adminEmail}
                 />
+                {showForwardToggle ? (
+                  <PendingForwardDisclosure
+                    currentAdminName={current.adminName}
+                    currentAdminEmail={current.adminEmail}
+                    approvalId={current.id}
+                    open={forwardOpen}
+                    onOpenChange={setForwardOpen}
+                    forwarding={forwarding}
+                    schoolName={app.schoolName ?? 'your school'}
+                    serverAlert={
+                      isForwardActionError(actionData)
+                        ? pendingForwardAlertMessage(actionData.reason, {
+                            schoolName: app.schoolName ?? 'your school',
+                            adminName: current.adminName,
+                          })
+                        : null
+                    }
+                    forwardRetry={
+                      isForwardActionError(actionData) &&
+                      (actionData.reason === 'unavailable' ||
+                        actionData.reason === 'email_failed')
+                    }
+                  />
+                ) : null}
                 <PendingDraftRequestLink
                   adminEmail={current.adminEmail}
                   adminName={current.adminName}
                   teacherName={app.name}
                   schoolName={app.schoolName ?? 'your school'}
                   approvalEmailFrom={approvalEmailFrom}
+                  disabled={forwarding}
                 />
-                {showExploreClassroom ? <LockedPreviewExploreButton /> : null}
+                {showExploreClassroom ? (
+                  <LockedPreviewExploreButton disabled={forwarding} />
+                ) : null}
               </>
             ) : null}
             {showExploreClassroom && app?.status === 'MANUAL_REVIEW' ? (
               <LockedPreviewExploreButton />
-            ) : null}
-            {actionData?.ok && 'queued' in actionData ? (
-              <p role="status" className="text-sm text-muted-foreground">
-                Request forwarded. We will notify your administrator and email
-                you an update.
-              </p>
-            ) : null}
-            {isForwardActionError(actionData) ? (
-              <p role="alert" className="text-sm text-destructive">
-                {pendingForwardAlertMessage(actionData.reason, {
-                  schoolName: app?.schoolName ?? 'your school',
-                  adminName: current?.adminName,
-                })}
-              </p>
             ) : null}
           </>
         )}

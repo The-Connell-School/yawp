@@ -76,34 +76,63 @@ test('monthly guidance is absent with the monthly flag off', () => {
     )
   ).toBe('');
 });
-test('Advocate Pack follows incomplete first steps, leads after completion, and stays hidden for legacy usage', () => {
-  const html = render(<FreeAccountRail usage={usage} />);
-  expect(html).toContain('Create your first assignment');
-  expect(html).not.toContain('Give your first assignment');
-  expect(html.indexOf('free-account-checklist')).toBeLessThan(
-    html.indexOf('Loving what Yawp!')
-  );
-  expect(html).toContain(
-    'Our Advocate Pack makes it easy to share what you&#x27;re seeing with your administrator.'
-  );
-  expect(html).toContain('Get the Advocate Pack');
-  const done = {
+test('Advocate Pack stays hidden until a student joins and stays off legacy usage', () => {
+  const noStudents = {
     ...usage,
-    students: { ...count, used: 1 },
     checklist: {
       classReady: true,
       assignmentCreated: true,
+      writingSubmitted: false,
+      graded: false,
+    },
+  };
+  const html = render(<FreeAccountRail usage={noStudents} />);
+  expect(html).toContain('Create your first assignment');
+  expect(html).not.toContain('Give your first assignment');
+  expect(html).not.toContain('Loving what Yawp!');
+  expect(html).not.toContain('Get the Advocate Pack');
+  const withStudent = {
+    ...noStudents,
+    students: { ...count, used: 1 },
+    checklist: {
+      ...noStudents.checklist,
       writingSubmitted: true,
       graded: true,
     },
   };
-  const complete = render(<FreeAccountRail usage={done} />);
-  expect(complete.indexOf('Loving what Yawp!')).toBeLessThan(
-    complete.indexOf('free-account-checklist')
+  const enrolled = render(<FreeAccountRail usage={withStudent} />);
+  expect(enrolled).toContain('Loving what Yawp!');
+  expect(enrolled.indexOf('free-account-checklist')).toBeLessThan(
+    enrolled.indexOf('Loving what Yawp!')
   );
+  expect(enrolled).toContain('Get the Advocate Pack');
   expect(
-    render(<FreeAccountRail usage={{ ...done, monthly: false }} />)
+    render(<FreeAccountRail usage={{ ...withStudent, monthly: false }} />)
   ).not.toContain('Get the Advocate Pack');
+});
+test('monthly first steps order and two-of-four progress after class and assignment', () => {
+  const html = render(
+    <FreeAccountRail
+      usage={{
+        ...usage,
+        students: { ...count, used: 0 },
+        checklist: {
+          classReady: true,
+          assignmentCreated: true,
+          writingSubmitted: false,
+          graded: false,
+        },
+      }}
+    />
+  );
+  expect(html).toContain('2 of 4');
+  expect(html).toContain('Your class is ready');
+  const assignmentIdx = html.indexOf('Create your first assignment');
+  const studentsIdx = html.indexOf('Add your students to your class');
+  const fourthIdx = html.indexOf('See what your class needs');
+  expect(assignmentIdx).toBeGreaterThan(-1);
+  expect(studentsIdx).toBeGreaterThan(assignmentIdx);
+  expect(fourthIdx).toBeGreaterThan(studentsIdx);
 });
 test('Reporter pending lock copy matches approval gate', () => {
   const html = render(<FreeReporterLocked variant="pending" />);

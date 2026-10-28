@@ -1,5 +1,40 @@
-import { ChevronLeft, CircleAlert, Loader2, Search } from 'lucide-react';
+import { ChevronLeft, CircleAlert, Loader2, Search, X } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '~/components/ui/alert-dialog';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '~/components/ui/accordion';
+import { Badge } from '~/components/ui/badge';
+import { Button } from '~/components/ui/button';
+import { Input } from '~/components/ui/input';
+import { Label } from '~/components/ui/label';
+import { Switch } from '~/components/ui/switch';
+import { cn } from '~/utils/misc';
+import { useDevPanel } from './dev-panel-provider';
+import {
+  FREE_TIER_STATE_GROUPS,
+  findFreeTierState,
+  freeTierGroupSubtitle,
+  freeTierStateSummary,
+  isCatalogFreeTierJumpLabel,
+} from './free-tier-states.catalog';
+import {
+  FREE_TIER_JUMP_GENERIC_ERROR,
+  formatFreeTierJumpErrorForClient,
+} from './free-tier-jump-messages';
 
 function useMedia(query: string) {
   const [matches, setMatches] = useState(false);
@@ -12,30 +47,7 @@ function useMedia(query: string) {
   }, [query]);
   return matches;
 }
-import { toast } from 'sonner';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '~/components/ui/alert-dialog';
-import { Button } from '~/components/ui/button';
-import { Input } from '~/components/ui/input';
-import { cn } from '~/utils/misc';
-import { useDevPanel } from './dev-panel-provider';
-import {
-  FREE_TIER_STATE_GROUPS,
-  findFreeTierState,
-  isCatalogFreeTierJumpLabel,
-} from './free-tier-states.catalog';
-import {
-  FREE_TIER_JUMP_GENERIC_ERROR,
-  formatFreeTierJumpErrorForClient,
-} from './free-tier-jump-messages';
+
 const JUMP_TOAST_KEY = 'yawp-dev-panel-jump-toast';
 const JUMP_TOAST_QUERY = 'devPanelJumpToast';
 
@@ -81,10 +93,14 @@ function appendJumpToastToRedirect(redirectTo: string, label: string) {
 export function DevPanelFreeTierFlyout({
   onClose,
   orgId,
+  orgName,
+  signedInDisplayName,
   pushed,
 }: {
   onClose: () => void;
   orgId: string | null;
+  orgName?: string | null;
+  signedInDisplayName?: string | null;
   pushed?: boolean;
 }) {
   const { state, updateForms, flyoutSwitchInstant } = useDevPanel();
@@ -95,20 +111,31 @@ export function DevPanelFreeTierFlyout({
   const [jumpErrorMessage, setJumpErrorMessage] = useState(
     FREE_TIER_JUMP_GENERIC_ERROR
   );
-  const throwawayRef = useRef<HTMLInputElement>(null);
+  const throwawayId = useId();
+  const throwawayHelpId = useId();
   const filterId = useId();
   const isPhone = useMedia('(max-width: 639px)');
   const selected = state.forms.selectedStateId ?? null;
+  const activeStateId = state.forms.activeStateId ?? null;
   const throwaway = state.forms.throwawaySwitch !== false;
-  const selectedState = selected ? findFreeTierState(selected) : null;
+  const signedInName = signedInDisplayName?.trim() || 'Your account';
+
+  const initialOpenGroups = useMemo(() => {
+    const focusId = selected ?? activeStateId;
+    if (focusId) {
+      const found = findFreeTierState(focusId);
+      if (found) return [found.group.id];
+    }
+    return ['approved'];
+  }, [activeStateId, selected]);
 
   useEffect(() => {
     if (state.subSheet !== 'free-tier-states') return;
     const focusFirst = () => {
-      throwawayRef.current?.focus({ preventScroll: true });
+      document.getElementById(throwawayId)?.focus({ preventScroll: true });
     };
     window.setTimeout(focusFirst, 0);
-  }, [state.subSheet]);
+  }, [state.subSheet, throwawayId]);
 
   const groups = useMemo(() => {
     const needle = filter.trim().toLowerCase();
@@ -130,6 +157,8 @@ export function DevPanelFreeTierFlyout({
 
   const noMatches = filter.trim().length > 0 && groups.length === 0;
   const selectedVisible = selected ? visibleStateIds.has(selected) : false;
+  const selectedSummary = selected ? freeTierStateSummary(selected) : null;
+
   const beginJump = () => {
     if (!selected || !orgId || !selectedVisible) return;
     if (!throwaway) {
@@ -169,6 +198,7 @@ export function DevPanelFreeTierFlyout({
         return;
       }
       const label = found?.state.label;
+      updateForms({ activeStateId: selected });
       if (label) {
         window.sessionStorage.setItem(JUMP_TOAST_KEY, label);
       }
@@ -192,6 +222,12 @@ export function DevPanelFreeTierFlyout({
     (!jumpFailed && (!selected || !selectedVisible)) ||
     (jumpFailed && !selectedVisible);
 
+  const throwawayHelp = throwaway
+    ? orgName
+      ? `Each jump makes a fresh test teacher at ${orgName}. ${signedInName}'s data isn't touched.`
+      : `Each jump makes a fresh test teacher. ${signedInName}'s data isn't touched.`
+    : `Off: jumps change the signed-in account, ${signedInName}.`;
+
   return (
     <div
       data-yawp-dev-panel-flyout
@@ -203,95 +239,140 @@ export function DevPanelFreeTierFlyout({
               'z-20 flex flex-col bg-background',
               isPhone ? 'relative min-h-full' : 'absolute inset-0'
             )
-          : 'absolute inset-y-0 right-full z-10 w-[var(--yawp-dev-panel-width)] border-r shadow-lg'
+          : 'yawp-dev-panel-flyout-docked absolute inset-y-0 right-full z-10'
       )}
       role="dialog"
       aria-label="Free-tier states"
     >
-      <div className="flex items-center gap-2 border-b px-3 py-2">
+      <div className="yawp-dev-panel-flyout-header">
         {pushed ? (
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             <ChevronLeft className="size-4" aria-hidden="true" />
             Back
           </Button>
         ) : null}
-        <h2 className="flex-1 text-sm font-semibold">Free-tier states</h2>
+        <h2 className="min-w-0 flex-1">Free-tier states</h2>
         {!pushed ? (
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Close
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7 shrink-0"
+            aria-label="Close free-tier states"
+            onClick={onClose}
+          >
+            <X className="size-4" aria-hidden="true" />
           </Button>
         ) : null}
       </div>
-      <div className="flex-1 space-y-3 overflow-y-auto p-3">
-        <div
-          className={cn(
-            'space-y-3',
-            jumping && 'pointer-events-none opacity-50'
-          )}
-        >
-          <label className="flex items-center justify-between gap-2 text-sm">
-            <span>Use a throwaway test account</span>
-            <input
-              ref={throwawayRef}
-              type="checkbox"
-              checked={throwaway}
-              disabled={jumping}
-              onChange={(event) => updateForms({ throwawaySwitch: event.target.checked })}
-            />
-          </label>
-          <Input
-            id={filterId}
-            placeholder="Filter states"
-            value={filter}
+
+      <div className="yawp-dev-panel-flyout-intro flex flex-col gap-3">
+        <p className="m-0 text-sm leading-5">
+          Pick a state, then jump. Yawp! reloads straight into it.
+        </p>
+        <div className="flex gap-3">
+          <Switch
+            id={throwawayId}
+            checked={throwaway}
             disabled={jumping}
-            onChange={(event) => setFilter(event.target.value)}
+            aria-describedby={throwawayHelpId}
+            onCheckedChange={(checked) => updateForms({ throwawaySwitch: checked })}
           />
-          {noMatches ? (
-            <div className="flex flex-col items-center gap-2 py-6 text-center">
-              <Search className="size-8 text-muted-foreground" aria-hidden="true" />
-              <p className="text-base font-medium">
-                No states match &quot;{filter.trim()}&quot;
-              </p>
-              <p className="text-sm text-muted-foreground">Try another word</p>
-              <Button type="button" variant="outline" size="sm" onClick={() => setFilter('')}>
-                Clear filter
-              </Button>
-            </div>
-          ) : null}
-          {!noMatches
-            ? groups.map((group) => (
-            <div key={group.id} className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {group.title}
-              </p>
-              {group.states.map((entry) => (
-                <label
-                  key={entry.id}
-                  className={cn(
-                    'flex cursor-pointer gap-2 rounded-md border px-2 py-2 text-sm',
-                    selected === entry.id && 'border-primary/30 bg-accent/60'
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="free-tier-state"
-                    checked={selected === entry.id}
-                    disabled={jumping}
-                    onChange={() => updateForms({ selectedStateId: entry.id })}
-                  />
-                  <span>
-                    <span className="font-medium">{entry.label}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {entry.description}
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <Label htmlFor={throwawayId}>Use a throwaway test account</Label>
+            <span id={throwawayHelpId} className="text-xs text-muted-foreground">
+              {throwawayHelp}
+            </span>
+          </div>
+        </div>
+        <Input
+          id={filterId}
+          placeholder="Filter states"
+          aria-label="Filter states"
+          value={filter}
+          disabled={jumping}
+          className="h-8 rounded-sm px-2 py-1"
+          onChange={(event) => setFilter(event.target.value)}
+        />
+      </div>
+
+      <div
+        className={cn(
+          'flex-1 overflow-y-auto px-4',
+          jumping && 'pointer-events-none opacity-50'
+        )}
+      >
+        {noMatches ? (
+          <div className="flex flex-col items-center gap-2 py-6 text-center">
+            <Search className="size-8 text-muted-foreground" aria-hidden="true" />
+            <p className="text-base font-medium">
+              No states match &quot;{filter.trim()}&quot;
+            </p>
+            <p className="text-sm text-muted-foreground">Try another word</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => setFilter('')}>
+              Clear filter
+            </Button>
+          </div>
+        ) : (
+          <Accordion type="multiple" defaultValue={initialOpenGroups} className="w-full">
+            {groups.map((group) => (
+              <AccordionItem key={group.id} value={group.id} className="border-b">
+                <AccordionTrigger className="py-4 hover:no-underline">
+                  <span className="flex flex-col items-start gap-0.5 text-left">
+                    <span className="text-[15px] font-bold text-foreground">
+                      {group.title}
+                    </span>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {freeTierGroupSubtitle(group)}
                     </span>
                   </span>
-                </label>
-              ))}
-            </div>
-          ))
-            : null}
-        </div>
+                </AccordionTrigger>
+                <AccordionContent className="pb-4 pt-0">
+                  <ul className="m-0 flex list-none flex-col gap-0.5 p-0 pb-1">
+                    {group.states.map((entry) => {
+                      const isSelected = selected === entry.id;
+                      const isCurrent = activeStateId === entry.id;
+                      return (
+                        <li key={entry.id}>
+                          <button
+                            type="button"
+                            aria-pressed={isSelected}
+                            aria-current={isCurrent ? 'true' : undefined}
+                            className={cn(
+                              'yawp-dev-panel-state-option',
+                              isSelected && 'yawp-dev-panel-state-option-selected'
+                            )}
+                            disabled={jumping}
+                            onClick={() => updateForms({ selectedStateId: entry.id })}
+                          >
+                            <span className="yawp-dev-panel-state-radio" aria-hidden="true">
+                              {isSelected ? (
+                                <span className="yawp-dev-panel-state-radio-dot" />
+                              ) : null}
+                            </span>
+                            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                              <span className="text-sm font-medium">{entry.label}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {entry.description}
+                              </span>
+                            </span>
+                            {isCurrent ? (
+                              <Badge variant="secondary" className="shrink-0 px-1.5 py-0.5 text-xs">
+                                Current
+                              </Badge>
+                            ) : null}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        )}
       </div>
+
       {jumpFailed ? (
         <div
           role="alert"
@@ -306,35 +387,48 @@ export function DevPanelFreeTierFlyout({
           </div>
         </div>
       ) : null}
-      <div className="border-t p-3">
-        <Button
-          type="button"
-          className="w-full"
-          disabled={jumpDisabled}
-          onClick={() => void beginJump()}
-        >
-          {jumping ? (
-            <>
-              <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
-              Jumping…
-            </>
-          ) : (
-            primaryLabel
-          )}
-        </Button>
-      </div>
+
+      <footer className="border-t bg-popover px-4 pb-4 pt-3.5">
+        <div className="flex flex-col gap-2.5">
+          <span className="text-xs text-muted-foreground">Selected</span>
+          <span className="-mt-2 text-sm font-medium">
+            {selectedSummary ?? 'None'}
+          </span>
+          <Button
+            type="button"
+            className="w-full"
+            disabled={jumpDisabled}
+            onClick={() => void beginJump()}
+          >
+            {jumping ? (
+              <>
+                <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                Jumping…
+              </>
+            ) : (
+              primaryLabel
+            )}
+          </Button>
+        </div>
+      </footer>
+
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Change the signed-in account?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Change {signedInName}&apos;s test data?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Throwaway mode is off, so this jump will update data on the account you are
-              signed in with. Continue only if that is what you want.
+              Throwaway is off, so this jump sets {signedInName} to{' '}
+              {selectedSummary ?? 'the selected state'}. Their usage and approval status
+              change. To change it again, jump to another state.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void runJump()}>Continue</AlertDialogAction>
+            <AlertDialogAction onClick={() => void runJump()}>
+              Change data and jump
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

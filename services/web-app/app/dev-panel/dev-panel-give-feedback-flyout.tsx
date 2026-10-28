@@ -3,7 +3,7 @@ import {
   ChevronLeft,
   CircleAlert,
   Loader2,
-  UserRound,
+  X,
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useRouteLoaderData } from 'react-router';
@@ -36,15 +36,6 @@ function feedbackNoteValue(raw: unknown) {
   return typeof raw === 'string' ? raw : '';
 }
 
-function TesterIdentityBadge() {
-  return (
-    <p className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-      <UserRound className="size-4 shrink-0" aria-hidden="true" />
-      Sent as a tester (not signed in)
-    </p>
-  );
-}
-
 export function DevPanelGiveFeedbackFlyout({
   onClose,
   pushed,
@@ -62,6 +53,9 @@ export function DevPanelGiveFeedbackFlyout({
   const path = devPanelFeedbackPath(location.pathname + location.search);
   const noteId = useId();
   const pageUrlId = useId();
+  const noteHelpId = useId();
+  const shotHelpId = useId();
+  const pageHelpId = useId();
   const sentHeadingId = useId();
   const isPhone = useMedia('(max-width: 639px)');
   const footerStyle = useVisualViewportFooterStyle(isPhone);
@@ -174,28 +168,30 @@ export function DevPanelGiveFeedbackFlyout({
               'z-20 flex flex-col bg-background',
               isPhone ? 'relative min-h-full' : 'absolute inset-0'
             )
-          : 'absolute inset-y-0 right-full z-10 w-[var(--yawp-dev-panel-width)] border-r shadow-lg'
+          : 'yawp-dev-panel-flyout-docked absolute inset-y-0 right-full z-10'
       )}
       role="dialog"
       aria-label="Give feedback"
     >
-      <div className="flex items-center justify-between border-b px-4 py-3">
+      <div className="yawp-dev-panel-flyout-header">
         {pushed ? (
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             <ChevronLeft className="size-4" aria-hidden="true" />
             Back
           </Button>
         ) : null}
-        <h2 className="flex-1 text-base font-semibold">Give feedback</h2>
+        <h2 className="min-w-0 flex-1">Give feedback</h2>
         {!pushed ? (
           <Button
             type="button"
             variant="ghost"
-            size="sm"
+            size="icon"
+            className="size-7 shrink-0"
+            aria-label="Close feedback"
             disabled={status === 'submitting'}
             onClick={onClose}
           >
-            Close
+            <X className="size-4" aria-hidden="true" />
           </Button>
         ) : null}
       </div>
@@ -241,10 +237,9 @@ export function DevPanelGiveFeedbackFlyout({
           </div>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm leading-5">
               Goes straight to the Yawp! team, with a screenshot and this page&apos;s URL.
             </p>
-            {signedOut ? <TesterIdentityBadge /> : null}
             {screenshotOmitted ? (
               <p className="text-xs text-muted-foreground">
                 Screenshot omitted — the capture was too large to send.
@@ -252,60 +247,95 @@ export function DevPanelGiveFeedbackFlyout({
             ) : null}
             <div
               className={cn(
-                'space-y-1',
+                'flex flex-col gap-1.5',
                 status === 'submitting' && 'pointer-events-none opacity-60'
               )}
             >
               <Label htmlFor={noteId}>Note</Label>
               <Textarea
                 id={noteId}
-                rows={6}
+                rows={5}
                 maxLength={2000}
+                placeholder="What you did, what you expected, and what happened instead."
                 value={note}
                 disabled={status === 'submitting'}
                 onChange={(event) => {
                   updateForms({ feedbackNote: event.target.value });
                   if (error) setError('');
                 }}
-                aria-describedby={
-                  error || status === 'error' ? 'dev-panel-feedback-error' : undefined
-                }
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey)) return;
+                  event.preventDefault();
+                  if (status !== 'submitting') void submit();
+                }}
+                aria-describedby={noteHelpId}
+                aria-invalid={error && status !== 'error' ? true : undefined}
               />
-              <p className="text-xs text-muted-foreground">{note.length} / 2000</p>
+              <div className="flex items-start gap-3">
+                <p id={noteHelpId} className="m-0 flex-1 text-xs text-muted-foreground">
+                  Steps to repeat it help most.
+                </p>
+                <span className="shrink-0 text-xs text-muted-foreground" aria-live="polite">
+                  {note.length} / 2000
+                </span>
+              </div>
             </div>
             {error && status !== 'error' ? (
               <p id="dev-panel-feedback-error" role="alert" className="text-sm text-destructive">
                 {error}
               </p>
             ) : null}
-            {screenshot ? (
-              <div
-                className={cn(
-                  'space-y-1',
-                  status === 'submitting' && 'pointer-events-none opacity-60'
-                )}
-              >
-                <p className="text-sm font-medium">Screenshot</p>
-                <img
-                  src={screenshot}
-                  alt={`Screenshot of ${displayPath}`}
-                  className="max-h-32 rounded border"
-                />
-              </div>
-            ) : null}
             <div
               className={cn(
-                'space-y-1',
+                'flex flex-col gap-1.5',
+                status === 'submitting' && 'pointer-events-none opacity-60'
+              )}
+            >
+              <span id="fb-shot-label" className="text-sm font-medium">
+                Screenshot
+              </span>
+              <div className="yawp-dev-panel-feedback-shot-card">
+                <div
+                  className="yawp-dev-panel-feedback-shot-thumb"
+                  role="img"
+                  aria-labelledby="fb-shot-label"
+                  aria-describedby={shotHelpId}
+                >
+                  {screenshot ? (
+                    <img src={screenshot} alt="" />
+                  ) : (
+                    <div className="h-28 bg-muted/40" aria-hidden="true" />
+                  )}
+                </div>
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="text-[13px] font-medium leading-[18px]">
+                    Attached automatically
+                  </span>
+                  <p id={shotHelpId} className="m-0 text-xs text-muted-foreground">
+                    Taken when you opened Give feedback. The developer panel is left out of
+                    it.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div
+              className={cn(
+                'flex flex-col gap-1.5',
                 status === 'submitting' && 'opacity-60'
               )}
             >
-              <Label htmlFor={pageUrlId}>Page URL</Label>
+              <Label htmlFor={pageUrlId}>Page</Label>
               <Input
                 id={pageUrlId}
                 readOnly
                 disabled={status === 'submitting'}
+                className="font-mono text-sm"
                 value={displayPath}
+                aria-describedby={pageHelpId}
               />
+              <p id={pageHelpId} className="m-0 text-xs text-muted-foreground">
+                Filled in from the page you&apos;re on.
+              </p>
             </div>
           </>
         )}
@@ -322,7 +352,9 @@ export function DevPanelGiveFeedbackFlyout({
               <p>
                 {errorStatus === 400 || errorStatus === 413 || errorStatus === 429
                   ? serverError
-                  : 'Your note is still here. Check your connection and try again.'}
+                  : errorStatus === 503
+                    ? `The server didn't answer (error 503). Your note is still here; nothing was lost.`
+                    : 'Your note is still here. Check your connection and try again.'}
               </p>
             </div>
           </div>
@@ -353,28 +385,33 @@ export function DevPanelGiveFeedbackFlyout({
         ) : (
           <div
             className={cn(
-              'border-t bg-background p-4',
+              'border-t bg-popover px-4 pb-4 pt-3.5',
               isPhone && 'fixed inset-x-0 bottom-0 z-20 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]'
             )}
             style={isPhone ? footerStyle : undefined}
           >
-            <Button
-              type="button"
-              className="w-full"
-              disabled={status === 'submitting'}
-              onClick={() => void submit()}
-            >
-              {status === 'submitting' ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
-                  Sending…
-                </>
-              ) : status === 'error' ? (
-                'Try again'
-              ) : (
-                'Send feedback'
-              )}
-            </Button>
+            <div className="flex flex-col gap-2.5">
+              <Button
+                type="button"
+                className="w-full"
+                disabled={status === 'submitting'}
+                onClick={() => void submit()}
+              >
+                {status === 'submitting' ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                    Sending…
+                  </>
+                ) : status === 'error' ? (
+                  'Try again'
+                ) : (
+                  'Send feedback'
+                )}
+              </Button>
+              <p className="m-0 text-center text-xs text-muted-foreground">
+                Ctrl Enter sends (⌘ Enter on Mac)
+              </p>
+            </div>
           </div>
         )}
       </div>

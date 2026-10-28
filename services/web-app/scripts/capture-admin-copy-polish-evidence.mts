@@ -6,6 +6,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import { buildDesignedAdminApprovalEmail } from '../app/domain/free-tier/admin-approval-email.server';
+import { logScriptError } from '../app/utils/log-script-error.server';
 
 const OUT = '/opt/cursor/artifacts/admin-copy-polish';
 const TEACHER = 'Jordan Rivera';
@@ -77,6 +78,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error);
+  logScriptError(error);
   process.exit(1);
 });

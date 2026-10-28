@@ -18,7 +18,7 @@ export default defineConfig({
   testMatch: /auth\.unified-teacher-prompts\.spec\.ts/,
   workers: 1,
   fullyParallel: false,
-  retries: 0,
+  retries: process.env.CI ? 2 : 0,
   timeout: 60000,
   forbidOnly: !!process.env.CI,
   reporter: 'list',

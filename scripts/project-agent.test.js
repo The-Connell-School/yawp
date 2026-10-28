@@ -256,6 +256,12 @@ describe("Yawp project agent CLI", () => {
       path.join(scriptsDir, "worktree-local-setup.sh")
     );
     fs.chmodSync(path.join(scriptsDir, "worktree-local-setup.sh"), 0o755);
+    fs.mkdirSync(path.join(scriptsDir, "ci"), { recursive: true });
+    fs.copyFileSync(
+      path.join(root, "scripts", "ci", "release-docker-host-port.sh"),
+      path.join(scriptsDir, "ci", "release-docker-host-port.sh")
+    );
+    fs.chmodSync(path.join(scriptsDir, "ci", "release-docker-host-port.sh"), 0o755);
     fs.writeFileSync(
       path.join(configDir, "config.env"),
       [
@@ -277,6 +283,7 @@ describe("Yawp project agent CLI", () => {
       `#!/usr/bin/env bash
 case "$1" in
   ps) exit 0 ;;
+  rm) exit 0 ;;
   inspect)
     if [[ "$2" == "-f" ]]; then echo true; fi
     exit 0

@@ -3,8 +3,14 @@ import { fileURLToPath } from 'node:url';
 import { reactRouter } from '@react-router/dev/vite';
 import { defineConfig, type Plugin } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
+import { createPreviewIngressReactRouterSsrAliasPlugin } from './vite/preview-ingress-ssr-alias';
 
 const viteDir = path.dirname(fileURLToPath(import.meta.url));
+const reactRouterWithPreviewIngress = path.resolve(
+  viteDir,
+  'vite/react-router-with-preview-ingress.ts'
+);
+const reactRouterOriginal = fileURLToPath(import.meta.resolve('react-router'));
 const devPanelEntryStub = path.resolve(
   viteDir,
   'app/dev-panel/dev-panel-entry.stub.tsx'
@@ -26,6 +32,13 @@ function omitDevPanelFromProductionBuild(): Plugin {
       return null;
     },
   };
+}
+
+function previewIngressReactRouterSsrAlias(): Plugin {
+  return createPreviewIngressReactRouterSsrAliasPlugin({
+    reactRouterOriginal,
+    reactRouterWithPreviewIngress,
+  });
 }
 
 function redirectBareAppRoute(): Plugin {
@@ -54,6 +67,7 @@ export default defineConfig({
   },
   plugins: [
     omitDevPanelFromProductionBuild(),
+    previewIngressReactRouterSsrAlias(),
     redirectBareAppRoute(),
     reactRouter(),
     tsconfigPaths(),

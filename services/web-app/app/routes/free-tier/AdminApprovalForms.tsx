@@ -56,12 +56,14 @@ const LEARN_MORE_URL = 'https://app.usemotion.com/meet/brian-connell/ryxkqvr';
 
 export function AdminApproveForm({
   token,
+  forwardToken,
   schoolName,
   teacherName,
   serverErrors,
   showDenyAndQa = false,
 }: {
   token: string;
+  forwardToken?: string;
   schoolName: string;
   teacherName: string;
   serverErrors?: FieldErrors;
@@ -195,7 +197,9 @@ export function AdminApproveForm({
           </FreeTierButton>
         ) : null}
       </div>
-      {!showDenyAndQa ? <AdminForwardLink token={token} /> : null}
+      {!showDenyAndQa && forwardToken ? (
+        <AdminForwardLink forwardToken={forwardToken} approveToken={token} />
+      ) : null}
     </Form>
   );
 }

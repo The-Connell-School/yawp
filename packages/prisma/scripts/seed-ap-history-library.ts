@@ -8,6 +8,7 @@ import {
 import { UNIVERSAL_TUTOR_BLOCK } from './universal-tutor-block';
 import { createPrismaClient } from './local-dev/connection';
 import type { PrismaClient } from '../generated/prisma';
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 
 const AP_HISTORY_ASSIGNMENT_TYPE_KEY = 'ap_history_essay';
 
@@ -259,7 +260,7 @@ if (import.meta.main) {
     }
     await seedApHistoryLibrary(prisma, org.id);
   } catch (error) {
-    console.error(error);
+    logScriptError(error);
     process.exitCode = 1;
   } finally {
     await prisma.$disconnect();

@@ -517,7 +517,7 @@ model Assignment {
   /// `step` preserves the original discrete label behavior; `bands` allows
   /// whole-number scores inside each rubric label's declared range.
   gradingMode                     String            @default("bands")
-  gradingAssistantStrictnessLevel String            @default("intermediate")
+  gradingAssistantStrictnessLevel String            @default("beginner")
   tutorEnabled                    Boolean           @default(true)
   /// The teacher's per-assignment toggle: is this one graded for grammar and
   /// syntax. Null means the rubric decides, which is every assignment that
@@ -867,7 +867,7 @@ model SavedAssignment {
   promptHash                      String
   submitForGrade                  Boolean        @default(true)
   pointValue                      Int?
-  gradingAssistantStrictnessLevel String         @default("intermediate")
+  gradingAssistantStrictnessLevel String         @default("beginner")
   tutorEnabled                    Boolean        @default(true)
   /// Mirrors the three collaboration fields on Assignment so reusing a saved
   /// assignment preserves the setting instead of silently dropping it.

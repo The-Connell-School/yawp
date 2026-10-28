@@ -210,6 +210,41 @@ export type SingleFlightResult<T> =
   | { ran: true; value: T }
   | { ran: false };
 
+async function acquireSingleFlightLease(key: string, ttlMs: number): Promise<string | null> {
+  const inserted = await withTimeout(
+    prisma.$queryRawUnsafe<{ lease: string }[]>(
+      `
+      INSERT INTO "RateLimitBucket" ("key", "tokens", "capacity", "refillPerMs", "lastRefillAt", "updatedAt")
+      VALUES ($1::text, 1, 1, 0, clock_timestamp() + ($2::int * interval '1 millisecond'), now())
+      ON CONFLICT ("key") DO NOTHING
+      RETURNING (EXTRACT(EPOCH FROM "lastRefillAt") * 1000000)::bigint::text AS lease
+      `,
+      key,
+      ttlMs
+    ),
+    LIMITER_TIMEOUT_MS
+  );
+  if (inserted.length > 0) return inserted[0]!.lease;
+
+  const updated = await withTimeout(
+    prisma.$queryRawUnsafe<{ lease: string }[]>(
+      `
+      UPDATE "RateLimitBucket"
+         SET "tokens" = 1,
+             "lastRefillAt" = clock_timestamp() + ($2::int * interval '1 millisecond'),
+             "updatedAt" = now()
+       WHERE "key" = $1::text
+         AND "lastRefillAt" <= clock_timestamp()
+      RETURNING (EXTRACT(EPOCH FROM "lastRefillAt") * 1000000)::bigint::text AS lease
+      `,
+      key,
+      ttlMs
+    ),
+    LIMITER_TIMEOUT_MS
+  );
+  return updated[0]?.lease ?? null;
+}
+
 export async function withSingleFlight<T>(
   name: string,
   fn: () => Promise<T>,
@@ -219,25 +254,8 @@ export async function withSingleFlight<T>(
   const ttlMs = Math.max(1_000, Math.floor(options.ttlMs ?? RATE_LIMITS.pdfExtract.leaseTtlMs));
   let lease: string | null = null;
   try {
-    const rows = await withTimeout(
-      prisma.$queryRawUnsafe<{ lease: string }[]>(
-        `
-        INSERT INTO "RateLimitBucket" ("key", "tokens", "capacity", "refillPerMs", "lastRefillAt", "updatedAt")
-        VALUES ($1::text, 1, 1, 0, clock_timestamp() + ($2::int * interval '1 millisecond'), now())
-        ON CONFLICT ("key") DO UPDATE SET
-          "tokens" = 1,
-          "lastRefillAt" = clock_timestamp() + ($2::int * interval '1 millisecond'),
-          "updatedAt" = now()
-        WHERE "RateLimitBucket"."lastRefillAt" <= clock_timestamp()
-        RETURNING (EXTRACT(EPOCH FROM "lastRefillAt") * 1000000)::bigint::text AS lease
-        `,
-        key,
-        ttlMs
-      ),
-      LIMITER_TIMEOUT_MS
-    );
-    if (rows.length === 0) return { ran: false };
-    lease = rows[0]!.lease;
+    lease = await acquireSingleFlightLease(key, ttlMs);
+    if (!lease) return { ran: false };
   } catch (error) {
     // Fail open: the lease is a cost guard, not a correctness requirement.
     console.warn('single_flight_failed_open', {

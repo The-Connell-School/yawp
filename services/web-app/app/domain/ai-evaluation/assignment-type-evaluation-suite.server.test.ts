@@ -128,8 +128,11 @@ describe('runAssignmentTypeEvaluationSuite', () => {
     expect(result.results[0]).toMatchObject({
       caseId: 'case-claim-clear',
       status: 'fail',
-      evidence: 'Model unavailable for this case.',
+      evidence: 'This evaluation case could not run.',
     });
+    expect(JSON.stringify(result.results[0])).not.toContain(
+      'Model unavailable for this case.',
+    );
     expect(result.results[1]).toMatchObject({
       caseId: 'case-claim-missing',
       status: 'pass',

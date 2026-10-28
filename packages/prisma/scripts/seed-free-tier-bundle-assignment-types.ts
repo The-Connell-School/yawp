@@ -27,6 +27,7 @@ import {
   PREWRITING_RUBRIC,
   PREWRITING_SCORING_SCALE,
 } from '../../../services/web-app/app/domain/assignment-types/prewriting-assignment-type';
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 import {
   THESIS_STATEMENT_PROMPT_CONFIG,
   THESIS_STATEMENT_RUBRIC,
@@ -364,7 +365,7 @@ if (import.meta.main) {
       console.log('Free tier bundle assignment types ready:', result);
     })
     .catch((error) => {
-      console.error(error);
+      logScriptError(error);
       process.exit(1);
     })
     .finally(() => prisma.$disconnect());

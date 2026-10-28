@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { encode } from 'turbo-stream';
+import { encodeTurboStreamBody } from '../encode-turbo-stream-body';
 import { loadE2eEnvFromFile } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 
@@ -96,7 +96,7 @@ for (const [name, result, message] of [
       if (route.request().method() !== 'POST') return route.continue();
       await route.fulfill({
         status: 200, contentType: 'text/x-script',
-        body: await new Response(encode({ data: result })).text(),
+        body: await encodeTurboStreamBody({ data: result }),
       });
     });
     const { fillFreeTierWaitlistForm } = await import('../helpers/free-tier-waitlist-form');

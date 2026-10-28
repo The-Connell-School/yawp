@@ -29,6 +29,7 @@ import {
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import { GroupBoard } from './group-board';
 
 /**
@@ -261,7 +262,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
     } catch (error) {
       if (error instanceof GroupEditingError) {
         return dataResponse(
-          { success: false, message: error.message },
+          {
+            success: false,
+            message: safeDomainErrorTextForClientResponse(
+              error,
+              'Could not update groups.',
+            ),
+          },
           { status: 400 }
         );
       }
@@ -365,7 +372,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (error instanceof GroupProvisioningError) {
       return redirectWithToast(backTo, {
         type: 'error',
-        description: error.message,
+        description: safeDomainErrorTextForClientResponse(
+          error,
+          'Could not update groups.',
+        ),
       });
     }
     throw error;

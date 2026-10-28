@@ -513,6 +513,7 @@ function RubricImportPanel({
                 type="button"
                 variant="outline"
                 size="sm"
+                data-testid="rubric-paste-open"
                 onClick={() => setPasteOpen(true)}
                 disabled={isExtracting}
               >

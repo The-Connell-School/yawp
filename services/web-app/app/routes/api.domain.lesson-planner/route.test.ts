@@ -32,6 +32,7 @@ const requireMutableRequest = mock();
 const requireLessonPlannerAccess = mock();
 const handleLessonPlannerToolCall = mock();
 const reserveAiRequest = mock();
+const getLessonPlannerReviewFlags = mock();
 class AiFreeTierBudgetExceededError extends Error {}
 class AiRateLimitError extends Error {
   constructor(
@@ -92,6 +93,9 @@ mock.module('~/utils/auth.server', () => ({
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/domain/free-tier/locked-preview.server', () => ({
   organizationHasPendingFreeTierLessonPlannerMetering: async () => false,
+}));
+mock.module('~/domain/feature-flags/feature-flags.server', () => ({
+  getLessonPlannerReviewFlags,
 }));
 mock.module('~/utils/lesson-planner/lesson-planner-access.server', () => ({
   requireLessonPlannerAccess,
@@ -175,6 +179,19 @@ beforeEach(() => {
   requireLessonPlannerAccess.mockReset().mockResolvedValue(access);
   handleLessonPlannerToolCall.mockReset();
   reserveAiRequest.mockReset().mockResolvedValue(undefined);
+  getLessonPlannerReviewFlags.mockReset().mockResolvedValue({
+    intakeV2: false,
+    stackV2: false,
+    deckV2: false,
+    stackPanel: false,
+    planExportV2: false,
+    stackV3: false,
+    share: false,
+    runShow: false,
+    templates: false,
+    deckGallery: false,
+    uploads: false,
+  });
   prisma.class.findMany.mockReset().mockResolvedValue([]);
   prisma.lessonPlanConversation.findFirst.mockReset();
   prisma.lessonPlanConversation.create.mockReset();

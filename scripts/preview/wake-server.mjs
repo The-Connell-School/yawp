@@ -7,6 +7,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 import { createPrStateLookup } from './pr-state.mjs';
+import { buildSafeErrorForLog } from './log-script-error.mjs';
 
 const execFileAsync = promisify(execFile);
 const ACCESS_SEAT_VALUE_PREFIX = 'seat-v2:';
@@ -589,7 +590,7 @@ export function createWakeHandler({
       try {
         await recordAccess(pr);
       } catch (error) {
-        console.error('Preview activity recording failed', error);
+        console.error('Preview activity recording failed', buildSafeErrorForLog(error));
       }
       const hostname = `pr-${pr}.${domain.toLowerCase()}`;
       response.statusCode = 307;
@@ -608,7 +609,7 @@ export function createWakeHandler({
       } else if (error?.code === 'not-resident') {
         send(response, 404, 'Preview is no longer resident.\n');
       } else {
-        console.error('Preview wake failed', error);
+        console.error('Preview wake failed', buildSafeErrorForLog(error));
         send(response, 500, 'Preview wake failed.\n');
       }
     }
@@ -682,7 +683,9 @@ export function startAccessLogFollower({
       }
       const results = await Promise.allSettled([...prs].map((pr) => recordAccess(pr)));
       for (const result of results) {
-        if (result.status === 'rejected') console.error('Preview activity recording failed', result.reason);
+        if (result.status === 'rejected') {
+          console.error('Preview activity recording failed', buildSafeErrorForLog(result.reason));
+        }
       }
       // This process is only a reader. It must never truncate a file while Traefik can
       // append to it; writer-coordinated host maintenance owns any future rotation.
@@ -692,7 +695,7 @@ export function startAccessLogFollower({
         inode = null;
         offset = 0;
       } else {
-        console.error('Preview access-log scan failed', error);
+        console.error('Preview access-log scan failed', buildSafeErrorForLog(error));
       }
     } finally {
       await handle?.close().catch(() => {});

@@ -78,6 +78,11 @@ import {
 import { AlertTriangle, Loader2, TrendingUp } from 'lucide-react';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
+import { toast } from 'sonner';
+import {
+  getGradingAssistantFetcherErrorMessage,
+  gradingAssistantResponseHasVisibleContent,
+} from '~/domain/grading/grading-assistant-fetcher-result';
 import { useUpdateSubmission } from './use-update-submission';
 import { hasGradingDraftToReplace } from './has-grading-draft-to-replace';
 import { buildGradingFormSnapshot } from './grading-form-snapshot';
@@ -347,10 +352,12 @@ export function TeacherGradingPanel({
         overallComment,
         numericPercentage,
         grammarIssues.length,
-        activeRubricConfig.minScore
+        activeRubricConfig.minScore,
+        hasManualPercentOverride
       ),
     [
       activeRubricConfig.minScore,
+      hasManualPercentOverride,
       rubricScores,
       overallComment,
       numericPercentage,
@@ -510,16 +517,35 @@ export function TeacherGradingPanel({
       return;
     }
 
+    const failureMessage = getGradingAssistantFetcherErrorMessage(aiFetcher.data);
+    if (failureMessage) {
+      toast.error(failureMessage);
+      pendingAiFormRef.current = null;
+      hasRetriedAiFormRef.current = false;
+      setIsAiRetrying(false);
+      return;
+    }
+
     if (!aiFetcher.data?.success) {
-      if (aiFetcher.data && !isLlmRetryResponse(aiFetcher.data)) {
-        pendingAiFormRef.current = null;
-        hasRetriedAiFormRef.current = false;
-        setIsAiRetrying(false);
-      }
       return;
     }
 
     const d = aiFetcher.data;
+    if (
+      !gradingAssistantResponseHasVisibleContent(
+        d,
+        activeRubricConfig.minScore
+      )
+    ) {
+      toast.error(
+        'Grading Assistant finished without any suggestions. Please try again.'
+      );
+      pendingAiFormRef.current = null;
+      hasRetriedAiFormRef.current = false;
+      setIsAiRetrying(false);
+      return;
+    }
+
     setSessionSuggestion({
       rubricScores: d.rubricScores ?? null,
       overallComment:
@@ -595,7 +621,13 @@ export function TeacherGradingPanel({
     pendingAiFormRef.current = null;
     hasRetriedAiFormRef.current = false;
     setIsAiRetrying(false);
-  }, [aiFetcher.data, aiFetcher.state, onGrammarIssuesChange, pointValue]);
+  }, [
+    activeRubricConfig.minScore,
+    aiFetcher.data,
+    aiFetcher.state,
+    onGrammarIssuesChange,
+    pointValue,
+  ]);
 
   /**
    * Build the full grading payload from current state and persist it.

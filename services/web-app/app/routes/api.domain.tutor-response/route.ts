@@ -25,6 +25,7 @@ import {
   resolveApHistorySectionTutorInstructions,
   resolveApHistoryStepTutorInstructions,
 } from '../../../../../packages/prisma/scripts/ap-history-module-data';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import {
   readTutorInstructionVariant,
   resolveTutorInstructions,
@@ -50,11 +51,8 @@ const POST = z.object({
   llmRetry: z.enum(['fallback']).optional(),
 });
 
-const errorResponse = (error: { message: string }) => {
-  return dataResponse(
-    { error: LLM_FAILED + 'Error: ' + error.message },
-    { status: 500 }
-  );
+const errorResponse = () => {
+  return dataResponse({ error: LLM_FAILED }, { status: 500 });
 };
 
 function buildDocumentContextMessage({
@@ -412,7 +410,7 @@ export async function action({ request }: ActionFunctionArgs) {
       if (isLlmFallbackRetrySignal(error)) {
         return dataResponse({ retrying: true }, { status: 202 });
       }
-      return errorResponse(error as any);
+      return errorResponse();
     }
 
     await prisma.assignmentModuleSession.update({
@@ -464,7 +462,9 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ cms: updatedCms });
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.error(error);
+    console.error('tutor_response_action_failed', {
+      error: buildSafeErrorForLog(error),
+    });
     return dataResponse({ error: 'An error occurred.' }, { status: 500 });
   }
 }

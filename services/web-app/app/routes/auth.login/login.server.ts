@@ -19,6 +19,7 @@ import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { posthog } from '~/services/posthog.server';
+import { capturePosthogServerException } from '~/services/posthog-server-exception.server';
 import {
   getPreviewAccessSeat,
   isIsolatedPreviewSeatMode,
@@ -131,7 +132,9 @@ export async function loginAction(
       ),
     });
   } catch (error) {
-    posthog?.captureException(error, 'anonymous');
+    if (posthog) {
+      capturePosthogServerException(posthog, error, 'anonymous');
+    }
     return validationError(
       { fieldErrors: { email: 'Invalid email or password' } },
       data

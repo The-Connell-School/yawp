@@ -221,7 +221,7 @@ describe('api.model.document.$id', () => {
       {
         data: {
           status: 'rejected',
-          failureReason: 'journal acceptance unavailable',
+          failureReason: 'snapshot_transaction_failed',
         },
       }
     );

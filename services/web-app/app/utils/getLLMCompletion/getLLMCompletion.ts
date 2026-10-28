@@ -11,10 +11,12 @@ import {
   markAnthropicOutageOpen,
 } from './anthropic-outage-cache.server';
 import {
+  describeProviderError,
   getAnthropicRetryableStatus,
   isRetryableAnthropicOutageError,
   LlmFallbackRetrySignal,
 } from './llm-provider-errors.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 
 export enum AgentType {
   User = 'user',
@@ -127,7 +129,9 @@ async function logLlmCall(data: {
       } as object,
     });
   } catch (err) {
-    console.error('Failed to log LLM call:', err);
+    console.error('llm_call_persist_failed', {
+      error: buildSafeErrorForLog(err),
+    });
   }
 }
 
@@ -363,7 +367,7 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
       provider: 'anthropic',
       systemPrompt: systemForLog,
       messages,
-      error: err instanceof Error ? err.message : String(err),
+      error: describeProviderError(err),
       durationMs,
       metadata: {
         ...buildLogMetadata({
@@ -542,7 +546,7 @@ async function runOpenAiCompletion({
       provider: 'openai',
       systemPrompt: stripTabs(systemToPlainString(params.system)),
       messages: formattedMessages,
-      error: err instanceof Error ? err.message : String(err),
+      error: describeProviderError(err),
       durationMs,
       metadata: buildLogMetadata({
         metadata: {

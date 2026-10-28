@@ -317,7 +317,7 @@ describe('api.domain.submit-document', () => {
       {
         data: {
           status: 'rejected',
-          failureReason: 'journal acceptance unavailable',
+          failureReason: 'submit_transaction_failed',
         },
       }
     );

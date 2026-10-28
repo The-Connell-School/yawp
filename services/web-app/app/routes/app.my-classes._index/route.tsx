@@ -29,6 +29,7 @@ import { StudentClassCard } from '~/components/student-class-card';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { assertCanCreateClassForOrganizationPlan } from '~/utils/assignment-quota.server';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import { getEntitlements } from '~/utils/entitlements.server';
 import { prisma } from '~/utils/db.server.js';
 import { generateClassCode } from '~/utils/class';
@@ -239,10 +240,27 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ success: true });
     } catch (error: any) {
       if (error instanceof ClassCodeCollisionError) {
-        return dataResponse({ error: error.message, field: 'code' }, { status: 400 });
+        return dataResponse(
+          {
+            error: safeDomainErrorTextForClientResponse(
+              error,
+              'Class code already in use. Choose a different code.',
+            ),
+            field: 'code',
+          },
+          { status: 400 },
+        );
       }
       if (error instanceof Error && error.message.includes('Free classroom accounts include one class')) {
-        return dataResponse({ error: error.message }, { status: 403 });
+        return dataResponse(
+          {
+            error: safeDomainErrorTextForClientResponse(
+              error,
+              'Free classroom accounts include one class. Archive your existing class or upgrade to add another.',
+            ),
+          },
+          { status: 403 },
+        );
       }
       if (error.code === 'P2002') {
         return dataResponse(
@@ -310,7 +328,16 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ success: true });
     } catch (error: any) {
       if (error instanceof ClassCodeCollisionError) {
-        return dataResponse({ error: error.message, field: 'code' }, { status: 400 });
+        return dataResponse(
+          {
+            error: safeDomainErrorTextForClientResponse(
+              error,
+              'Class code already in use. Choose a different code.',
+            ),
+            field: 'code',
+          },
+          { status: 400 },
+        );
       }
       if (error.code === 'P2002') {
         return dataResponse(

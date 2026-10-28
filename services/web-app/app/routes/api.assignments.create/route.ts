@@ -31,6 +31,10 @@ import { FreeClassroomAssignmentQuotaError } from '~/utils/assignment-quota.serv
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
+  safeDomainErrorTextForClientResponse,
+  safeErrorTextForClientResponse,
+} from '~/utils/server-error-request-context.server';
+import {
   DEFAULT_ASSIGNMENT_POINT_VALUE,
   parseAssignmentGradingIntent,
   parseAssignmentRubricOverrides,
@@ -193,13 +197,6 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const gradingIntent = parseAssignmentGradingIntent(formData);
-  if (gradingIntent && !gradingIntent.success) {
-    return dataResponse(
-      { success: false, message: gradingIntent.message },
-      { status: 400 }
-    );
-  }
   const rubricOverrides = parseAssignmentRubricOverrides(formData);
   if (!rubricOverrides.success) {
     return dataResponse(
@@ -237,6 +234,17 @@ export async function action({ request }: ActionFunctionArgs) {
         success: false,
         message: 'Selected assignment type is not available.',
       },
+      { status: 400 }
+    );
+  }
+
+  const gradingIntent = parseAssignmentGradingIntent(formData, {
+    kind: assignmentType.kind,
+    rubricName: assignmentType.rubric?.name ?? null,
+  });
+  if (!gradingIntent.success) {
+    return dataResponse(
+      { success: false, message: gradingIntent.message },
       { status: 400 }
     );
   }
@@ -426,7 +434,13 @@ export async function action({ request }: ActionFunctionArgs) {
     } catch (error) {
       if (error instanceof AssignmentPromptAttachmentError) {
         return dataResponse(
-          { success: false, message: error.message },
+          {
+            success: false,
+            message: safeDomainErrorTextForClientResponse(
+              error,
+              'Could not upload that PDF. Please try another file.',
+            ),
+          },
           { status: 400 }
         );
       }
@@ -496,11 +510,26 @@ export async function action({ request }: ActionFunctionArgs) {
     }
     if (error instanceof FreeClassroomAssignmentQuotaError) {
       return dataResponse(
-        { success: false, message: error.message },
+        {
+          success: false,
+          message: safeDomainErrorTextForClientResponse(
+            error,
+            'This assignment type is not available on your plan.',
+          ),
+        },
         { status: 403 }
       );
     }
-    throw error;
+    return dataResponse(
+      {
+        success: false,
+        message: safeErrorTextForClientResponse(
+          error,
+          'Could not create the assignment. Please try again.',
+        ),
+      },
+      { status: 500 }
+    );
   }
 
   // "My Saved Assignments": keep the configuration so the teacher can push the

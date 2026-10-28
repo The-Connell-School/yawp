@@ -54,6 +54,66 @@ function listTrackedRepoFiles(): string[] {
     .filter(Boolean);
 }
 
+const thirdPartyWorkflowUse =
+  /^\s*-?\s*uses:\s*(?<reference>\S+)/;
+const pinnedActionSha = /^[0-9a-f]{40}$/i;
+const workflowActionVersionComment = /#\s*(?<label>v[\d.]+(?:\.[\d.]+)*|beta)\b/i;
+
+function listThirdPartyWorkflowUses(): Array<{
+  file: string;
+  line: number;
+  reference: string;
+  lineText: string;
+}> {
+  const workflowDir = join(repoRoot, '.github/workflows');
+  const uses: Array<{
+    file: string;
+    line: number;
+    reference: string;
+    lineText: string;
+  }> = [];
+  for (const name of readdirSync(workflowDir)) {
+    if (!name.endsWith('.yml') && !name.endsWith('.yaml')) continue;
+    const relativePath = join('.github/workflows', name);
+    const lines = readRepoFile(relativePath).split(/\r?\n/);
+    lines.forEach((lineText, index) => {
+      const match = lineText.match(thirdPartyWorkflowUse);
+      if (!match?.groups?.reference) return;
+      const reference = match.groups.reference;
+      if (reference.startsWith('./')) return;
+      if (!reference.includes('/')) return;
+      uses.push({
+        file: name,
+        line: index + 1,
+        reference,
+        lineText,
+      });
+    });
+  }
+  return uses;
+}
+
+describe('GitHub Actions supply-chain contract', () => {
+  test('third-party workflow uses are pinned to full commit SHAs with version comments', () => {
+    const violations: string[] = [];
+    for (const entry of listThirdPartyWorkflowUses()) {
+      const [, ref = ''] = entry.reference.split('@');
+      if (!pinnedActionSha.test(ref)) {
+        violations.push(
+          `${entry.file}:${entry.line} ${entry.reference} (expected owner/action@<40-char-sha>)`
+        );
+        continue;
+      }
+      if (!workflowActionVersionComment.test(entry.lineText)) {
+        violations.push(
+          `${entry.file}:${entry.line} ${entry.reference} (missing # vX.Y.Z or # beta comment)`
+        );
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+});
+
 describe('private preview sign-in code deployment contract', () => {
   test('rendered PR configurations permit private capture; demo and production return 404 with the same secret', async () => {
     const { renderPreviewCompose } = await import('./preview/render-compose.mjs');
@@ -364,16 +424,17 @@ describe('production deployment contract', () => {
     expect(dockerfile).toMatch(/ARG YAWP_ENVIRONMENT=production/);
     expect(dockerfile).toMatch(/ARG YAWP_GIT_COMMIT=unknown/);
     expect(dockerfile).toMatch(/ARG YAWP_BUILT_AT=unknown/);
-    expect(dockerfile).not.toMatch(
-      /FROM base AS production[\s\S]*ENV YAWP_ENVIRONMENT/m
+    expect(dockerfile).toMatch(
+      /FROM base AS production[\s\S]*ARG YAWP_ENVIRONMENT=production[\s\S]*ENV YAWP_ENVIRONMENT=\$YAWP_ENVIRONMENT/m
     );
     expect(dockerfile).toMatch(
-      /EXPOSE 8080[\s\S]*ARG YAWP_GIT_COMMIT=unknown[\s\S]*ENV YAWP_GIT_COMMIT=\$YAWP_GIT_COMMIT[\s\S]*CMD \["bash", "services\/web-app\/start\.sh"\]/
+      /EXPOSE 8080[\s\S]*ARG YAWP_ENVIRONMENT=production[\s\S]*ARG YAWP_GIT_COMMIT=unknown[\s\S]*ENV YAWP_ENVIRONMENT=\$YAWP_ENVIRONMENT[\s\S]*ENV YAWP_GIT_COMMIT=\$YAWP_GIT_COMMIT[\s\S]*CMD \["bash", "services\/web-app\/start\.sh"\]/
     );
     const buildStage = dockerfile.slice(
       dockerfile.indexOf('FROM deps AS build'),
       dockerfile.indexOf('FROM base AS production')
     );
+    expect(buildStage).toMatch(/ARG YAWP_ENVIRONMENT=production/);
     expect(buildStage).not.toContain('YAWP_GIT_COMMIT');
     expect(buildStage).not.toContain('YAWP_BUILT_AT');
 
@@ -494,6 +555,27 @@ describe('production deployment contract', () => {
     );
 
     expect(reactRouterConfig).toContain('unstable_optimizeDeps: true');
+  });
+
+  test('SSR React Router request handler aligns preview ingress URLs before CSRF', () => {
+    const viteConfig = readRepoFile('services/web-app/vite.config.ts');
+    const aliasModule = readRepoFile(
+      'services/web-app/vite/preview-ingress-ssr-alias.ts'
+    );
+    const wrapper = readRepoFile(
+      'services/web-app/vite/react-router-with-preview-ingress.ts'
+    );
+    const routerConfig = readRepoFile(
+      'services/web-app/react-router.config.ts'
+    );
+
+    expect(viteConfig).toContain('react-router-with-preview-ingress');
+    expect(viteConfig).toContain('preview-ingress-ssr-alias');
+    expect(aliasModule).toContain("=== 'preview'");
+    expect(wrapper).toContain('adaptPreviewIngressRequest');
+    expect(routerConfig).toContain('*.preview.yawp.school');
+    expect(routerConfig).toContain('YAWP_ENVIRONMENT');
+    expect(routerConfig).toContain('"preview"');
   });
 
   test('main deploy runs production Prisma migrations before publishing the image', () => {
@@ -638,6 +720,8 @@ describe('worktree local setup contract', () => {
     expect(setupScript).not.toContain('WORKTREE_NAME="$(basename "$(dirname "$ROOT")")"');
     expect(setupScript).toContain('CONTAINER_NAME="yawp-${SLUG}-postgres"');
     expect(setupScript).toContain('VOLUME_NAME="yawp-${SLUG}-postgres-data"');
+    expect(setupScript).toContain('release_postgres_host_port');
+    expect(setupScript).toContain('scripts/ci/release-docker-host-port.sh');
   });
 
   test('worktree setup installs dependencies before any Prisma generation', () => {
@@ -677,6 +761,15 @@ describe('worktree local setup contract', () => {
     expect(setupScript).toContain('LTI_MOCK_PORT');
     expect(rootPackage.scripts['blackboard-lti-mock']).toContain(
       'BLACKBOARD_LTI_MOCK_ENABLED=true'
+    );
+  });
+
+  test('demo feedback browser CI cleanup stays cwd-safe after cd into web-app', () => {
+    const workflow = readRepoFile('.github/workflows/ci.yml');
+
+    expect(workflow).toContain('REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"');
+    expect(workflow).toContain(
+      '"$REPO_ROOT/scripts/ci/demo-feedback-worktree-cleanup.sh"'
     );
   });
 
@@ -1538,6 +1631,14 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).toContain('sleep 1');
     expect(deployScript).not.toContain('--max-time 5 "$health_url"');
     expect(deployScript).not.toContain('sleep 2');
+  });
+
+  test('deploy health probe /api/healthcheck fails closed when Postgres is unreachable', () => {
+    const healthcheck = readRepoFile(
+      'services/web-app/app/routes/api.healthcheck.ts'
+    );
+    expect(healthcheck).toContain('isDatabaseReady');
+    expect(healthcheck).toMatch(/503/);
   });
 
   test('preview deploy tooling contains no transitional transport auth references', () => {

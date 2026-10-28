@@ -1,7 +1,9 @@
 import {
   ChevronDown,
-  ChevronRight,
+  ChevronLeft,
+  ChevronsRight,
   Copy,
+  ExternalLink,
   FlaskConical,
   Loader2,
   Lock,
@@ -10,7 +12,6 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Form, useFetcher, useLocation, useRouteLoaderData } from 'react-router';
-import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import {
   Collapsible,
@@ -51,6 +52,37 @@ function useMedia(query: string) {
   }, [query]);
   return matches;
 }
+
+function membershipRoleLabel(role: string | undefined) {
+  if (!role) return '';
+  const normalized = role.toLowerCase();
+  if (normalized === 'admin') return 'Admin';
+  if (normalized === 'owner') return 'Owner';
+  if (normalized.includes('student')) return 'Student';
+  return 'Teacher';
+}
+
+type LoginBucket = 'teachers' | 'admins' | 'students';
+
+function loginBucket(role: string) {
+  const normalized = role.toLowerCase();
+  if (normalized.includes('student')) return 'students' as LoginBucket;
+  if (
+    normalized.includes('admin') ||
+    normalized.includes('principal') ||
+    normalized.includes('director') ||
+    normalized.includes('owner')
+  ) {
+    return 'admins' as LoginBucket;
+  }
+  return 'teachers' as LoginBucket;
+}
+
+const LOGIN_SECTION_LABELS: Record<LoginBucket, string> = {
+  teachers: 'Teachers',
+  admins: 'Admins',
+  students: 'Students',
+};
 
 function AccessCodeModal({
   open,
@@ -145,7 +177,6 @@ function AccessCodeModal({
 export function DevPanelShell() {
   const {
     state,
-    envBadge,
     unlocked,
     closePanel,
     toggleSection,
@@ -163,7 +194,7 @@ export function DevPanelShell() {
   );
   const isTablet = useMedia('(min-width: 640px) and (max-width: 1023px)');
   const [accessOpen, setAccessOpen] = useState(false);
-  const headingRef = useRef<HTMLHeadingElement>(null);
+  const headingRef = useRef<HTMLParagraphElement>(null);
   const feedbackRowRef = useRef<HTMLButtonElement>(null);
   const freeTierRowRef = useRef<HTMLButtonElement>(null);
   const classSimulationRowRef = useRef<HTMLButtonElement>(null);
@@ -173,7 +204,17 @@ export function DevPanelShell() {
   const loginFetcher = useFetcher();
   const location = useLocation();
   const currentEmail = rootData?.user?.email ?? null;
+  const signedInUser = rootData?.user ?? null;
+  const signedInRole = membershipRoleLabel(
+    signedInUser?.selectedMembership?.role ?? signedInUser?.memberships?.[0]?.role
+  );
   const selectedOrg = state.org ?? orgs[0]?.id ?? null;
+  const selectedOrgName =
+    orgs.find((org) => org.id === selectedOrg)?.name ??
+    orgs[0]?.name ??
+    'Choose org';
+  const freeTierSummary =
+    freeTierStateSummary(state.forms.selectedStateId) ?? 'None';
   const feedbackContext = useRef(createDevPanelFeedbackContext());
 
   useEffect(() => {
@@ -285,291 +326,388 @@ export function DevPanelShell() {
 
   const panelBody = (
     <>
-      <header className="flex items-start justify-between gap-2 border-b px-4 py-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <FlaskConical className="size-4 text-slate-900" aria-hidden="true" />
-            <h1
-              ref={headingRef}
-              tabIndex={-1}
-              className="text-base font-semibold text-slate-900"
-            >
-              Developer tools
-            </h1>
-            <Badge variant="secondary" aria-label={`Environment: ${envBadge}`}>
-              {envBadge}
-            </Badge>
-          </div>
+      <header className="yawp-dev-panel-header">
+        <div className="yawp-dev-panel-header-title">
+          <FlaskConical className="yawp-dev-panel-header-beaker shrink-0" aria-hidden="true" />
+          <p
+            ref={headingRef}
+            tabIndex={-1}
+            role="heading"
+            aria-level={1}
+            className="yawp-dev-panel-header-heading"
+          >
+            Developer tools
+          </p>
         </div>
         <Button
           type="button"
           variant="ghost"
           size="icon"
+          className="yawp-dev-panel-header-close size-7 shrink-0"
           aria-label="Close developer tools"
+          aria-keyshortcuts="Alt+Shift+D"
+          title="Close (Alt+Shift+D)"
           onClick={closePanel}
         >
           {showPhoneBottomSheet ? (
             <X className="size-4" aria-hidden="true" />
           ) : (
-            <ChevronRight className="size-4" aria-hidden="true" />
+            <ChevronsRight className="size-4" aria-hidden="true" />
           )}
         </Button>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-2 py-2">
-        {!unlocked ? (
-          <div className="flex flex-col items-center px-4 py-8 text-center">
-            <div
-              className="mb-4 flex size-12 items-center justify-center rounded-full border bg-muted/30"
-              aria-hidden="true"
-            >
-              <Lock className="size-5 text-muted-foreground" />
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex-1 overflow-y-auto">
+          {!unlocked ? (
+            <div className="flex flex-col items-center px-4 py-8 text-center">
+              <div
+                className="mb-4 flex size-12 items-center justify-center rounded-full border bg-muted/30"
+                aria-hidden="true"
+              >
+                <Lock className="size-5 text-muted-foreground" />
+              </div>
+              <p className="font-medium">Developer tools are locked</p>
+              <p className="mt-2 text-muted-foreground">
+                Enter the access code to use them in this browser.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-4 w-full max-w-xs"
+                onClick={() => setAccessOpen(true)}
+              >
+                Enter access code
+              </Button>
             </div>
-            <p className="font-medium">Developer tools are locked</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Enter the access code to use them in this browser.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-4 w-full max-w-xs"
-              onClick={() => setAccessOpen(true)}
-            >
-              Enter access code
-            </Button>
-          </div>
-        ) : (
-          <>
-            <Collapsible
-              open={state.openSections.includes('sign-in')}
-              onOpenChange={() => toggleSection('sign-in')}
-            >
-              <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm font-medium hover:bg-accent">
-                Sign in as
-                <ChevronDown className="size-4" aria-hidden="true" />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="px-2 pb-2">
-                <DevPanelOrgPicker
-                  orgs={orgs}
-                  value={selectedOrg}
-                  onChange={setOrg}
-                />
-                {loginState === 'loading' ? (
-                  <p role="status" className="mt-2 text-xs text-muted-foreground">
-                    Loading quick logins…
-                  </p>
-                ) : null}
-                {loginState === 'empty' ? (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    No quick logins for this org. Ask the team if you expected some.
-                  </p>
-                ) : null}
-                {loginState === 'error' ? (
-                  <p role="alert" className="mt-2 text-xs text-destructive">
-                    Could not load quick logins. Try again.
-                  </p>
-                ) : null}
-                <div className="mt-2 space-y-1">
-                  {logins.map((login) => (
-                    <loginFetcher.Form
-                      key={login.email}
+          ) : (
+            <>
+              <div className="yawp-dev-panel-user-row">
+                {signedInUser ? (
+                  <>
+                    <span>Signed in</span>
+                    <span className="yawp-dev-panel-user-name">
+                      {signedInUser.name?.trim() || signedInUser.email}
+                    </span>
+                    {signedInRole ? <span>{signedInRole}</span> : null}
+                    <span className="flex-1" aria-hidden="true" />
+                    <Form
                       method="post"
-                      action="/auth/dev-login"
-                      className="block"
+                      action={`/auth/logout?redirectTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`}
+                      className="shrink-0"
                     >
-                      <input type="hidden" name="email" value={login.email} />
-                      <input
-                        type="hidden"
-                        name="redirectTo"
-                        value={`${location.pathname}${location.search}`}
-                      />
-                      <button
-                        type="submit"
-                        className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
-                        aria-label={`Sign in as ${login.label}, ${login.role}`}
-                      >
-                        <span>{login.label}</span>
-                        {currentEmail === login.email ? (
-                          <span className="text-xs text-muted-foreground">Signed in</span>
-                        ) : (
-                          <span className="text-xs text-primary">Sign in</span>
-                        )}
+                      <button type="submit" className="yawp-dev-panel-user-signout">
+                        Sign out
                       </button>
-                    </loginFetcher.Form>
-                  ))}
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
+                    </Form>
+                  </>
+                ) : (
+                  <>
+                    <span>Signed out</span>
+                    <span className="yawp-dev-panel-user-name min-w-0 flex-1">
+                      Pick a login below
+                    </span>
+                  </>
+                )}
+              </div>
 
+              <Collapsible
+                open={state.openSections.includes('sign-in')}
+                onOpenChange={() => toggleSection('sign-in')}
+              >
+                <CollapsibleTrigger className="yawp-dev-panel-row">
+                  <span className="yawp-dev-panel-row-label">Sign in as</span>
+                  <span className="flex min-w-0 items-center gap-1">
+                    <span className="yawp-dev-panel-row-value max-w-[9rem] truncate">
+                      {selectedOrgName}
+                    </span>
+                    <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
+                  </span>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="yawp-dev-panel-section-body space-y-2">
+                  <DevPanelOrgPicker
+                    orgs={orgs}
+                    value={selectedOrg}
+                    onChange={setOrg}
+                  />
+                  {loginState === 'loading' ? (
+                    <p role="status" className="text-muted-foreground">
+                      Loading quick logins…
+                    </p>
+                  ) : null}
+                  {loginState === 'empty' ? (
+                    <p className="text-muted-foreground">
+                      No quick logins for this org. Ask the team if you expected some.
+                    </p>
+                  ) : null}
+                  {loginState === 'error' ? (
+                    <p role="alert" className="text-destructive">
+                      Could not load quick logins. Try again.
+                    </p>
+                  ) : null}
+                  {(['teachers', 'admins', 'students'] as LoginBucket[]).map((bucket) => {
+                    const bucketLogins = logins.filter(
+                      (login) => loginBucket(login.role) === bucket
+                    );
+                    if (bucketLogins.length === 0) return null;
+                    return (
+                      <div key={bucket} className="flex flex-col">
+                        <h4 className="yawp-dev-panel-login-section-title">
+                          {LOGIN_SECTION_LABELS[bucket]}
+                        </h4>
+                        <ul className="m-0 list-none p-0">
+                          {bucketLogins.map((login) => {
+                            const isCurrent = currentEmail === login.email;
+                            return (
+                              <li key={login.email}>
+                                <loginFetcher.Form
+                                  method="post"
+                                  action="/auth/dev-login"
+                                  className="block"
+                                >
+                                  <input type="hidden" name="email" value={login.email} />
+                                  <input
+                                    type="hidden"
+                                    name="redirectTo"
+                                    value={`${location.pathname}${location.search}`}
+                                  />
+                                  <div
+                                    className={cn(
+                                      'yawp-dev-panel-login-list-row',
+                                      isCurrent && 'yawp-dev-panel-login-list-row-current'
+                                    )}
+                                  >
+                                    <span className="shrink-0 font-medium">{login.label}</span>
+                                    <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                                      {login.role}
+                                    </span>
+                                    {isCurrent ? (
+                                      <span className="shrink-0 pr-1.5 text-xs text-muted-foreground">
+                                        Signed in
+                                      </span>
+                                    ) : (
+                                      <button
+                                        type="submit"
+                                        className="yawp-dev-panel-login-signin-btn"
+                                        aria-label={`Sign in as ${login.label}, ${login.role}`}
+                                      >
+                                        Sign in
+                                      </button>
+                                    )}
+                                  </div>
+                                </loginFetcher.Form>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </CollapsibleContent>
+              </Collapsible>
+
+              <button
+                ref={freeTierRowRef}
+                type="button"
+                className={cn(
+                  'yawp-dev-panel-row',
+                  state.subSheet === 'free-tier-states' && 'yawp-dev-panel-row-active'
+                )}
+                onClick={() => openSubSheet('free-tier-states')}
+              >
+                <span className="yawp-dev-panel-row-label">Free-tier states</span>
+                <span className="flex min-w-0 items-center gap-1">
+                  <span
+                    className={cn(
+                      'yawp-dev-panel-row-value yawp-dev-panel-row-value-mono max-w-[10rem] truncate'
+                    )}
+                  >
+                    {freeTierSummary}
+                  </span>
+                  <ChevronLeft className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
+                </span>
+              </button>
+
+              <Collapsible
+                open={state.openSections.includes('blackboard')}
+                onOpenChange={() => toggleSection('blackboard')}
+              >
+                <CollapsibleTrigger className="yawp-dev-panel-row">
+                  <span className="yawp-dev-panel-row-label">Blackboard link</span>
+                  <span className="flex min-w-0 items-center gap-1">
+                    <span className="yawp-dev-panel-row-value max-w-[9rem] truncate">
+                      LTI test launch
+                    </span>
+                    <ChevronDown className="size-4 shrink-0 opacity-70" aria-hidden="true" />
+                  </span>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="yawp-dev-panel-section-body flex flex-col gap-2">
+                  <p className="yawp-dev-panel-section-help">
+                    Opens a mock Blackboard course in a new tab and launches Yawp! through
+                    LTI.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <span
+                      id="dev-panel-bb-role-label"
+                      className="w-16 shrink-0 text-xs text-muted-foreground"
+                    >
+                      Launch as
+                    </span>
+                    <div
+                      role="radiogroup"
+                      aria-labelledby="dev-panel-bb-role-label"
+                      className="yawp-dev-panel-bb-role-group"
+                    >
+                      {(['teacher', 'student'] as const).map((role) => (
+                        <button
+                          key={role}
+                          type="button"
+                          role="radio"
+                          aria-checked={(state.forms.blackboardRole ?? 'teacher') === role}
+                          className="yawp-dev-panel-bb-role-pill capitalize"
+                          onClick={() => updateForms({ blackboardRole: role })}
+                        >
+                          {role === 'teacher' ? 'Teacher' : 'Student'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="yawp-dev-panel-bb-launch"
+                    onClick={async () => {
+                      const response = await fetch('/api/dev-panel/blackboard-launch', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'content-type': 'application/json' },
+                        body: JSON.stringify({
+                          role: state.forms.blackboardRole ?? 'teacher',
+                        }),
+                      });
+                      const result = await response.json().catch(() => null);
+                      if (!response.ok) {
+                        window.alert(result?.error ?? 'Launch refused.');
+                        return;
+                      }
+                      window.open(result.launchUrl, '_blank', 'noopener,noreferrer');
+                    }}
+                  >
+                    Open Blackboard launch
+                    <ExternalLink className="size-3" aria-hidden="true" />
+                  </button>
+                </CollapsibleContent>
+              </Collapsible>
+
+              <Collapsible
+                open={state.openSections.includes('tester-tools')}
+                onOpenChange={() => toggleSection('tester-tools')}
+              >
+                <CollapsibleTrigger className="yawp-dev-panel-row">
+                  <span className="yawp-dev-panel-row-label">Tester tools</span>
+                  <span className="flex min-w-0 items-center gap-1">
+                    <span className="yawp-dev-panel-row-value">Copy URL</span>
+                    <ChevronDown className="size-4 shrink-0 opacity-70" aria-hidden="true" />
+                  </span>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="yawp-dev-panel-section-body flex flex-col gap-1.5">
+                  <Label htmlFor="dev-panel-current-url" className="text-xs font-normal text-muted-foreground">
+                    Current page
+                  </Label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      id="dev-panel-current-url"
+                      readOnly
+                      className="yawp-dev-panel-url-field"
+                      value={`${location.pathname}${location.search}`}
+                    />
+                    <button
+                      type="button"
+                      className="yawp-dev-panel-copy-btn"
+                      aria-label="Copy current page URL"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(window.location.href);
+                      }}
+                    >
+                      <Copy className="size-3" aria-hidden="true" />
+                      Copy
+                    </button>
+                  </div>
+                  <button
+                    ref={classSimulationRowRef}
+                    type="button"
+                    className={cn(
+                      'yawp-dev-panel-login-row w-full',
+                      state.subSheet === 'class-simulation' && 'bg-accent/55'
+                    )}
+                    onClick={() => {
+                      updateForms({ simulationOpenAction: null });
+                      openSubSheet('class-simulation');
+                    }}
+                  >
+                    <span className="truncate font-medium">Populate class</span>
+                    <ChevronLeft className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="yawp-dev-panel-login-row w-full"
+                    onClick={() => {
+                      updateForms({ simulationOpenAction: 'clear-confirm' });
+                      openSubSheet('class-simulation');
+                    }}
+                  >
+                    <span className="truncate font-medium">Clear simulated data</span>
+                    <ChevronLeft className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
+                  </button>
+                </CollapsibleContent>
+              </Collapsible>
+            </>
+          )}
+        </div>
+
+        {unlocked ? (
+          <div className="mt-auto border-t">
             <button
-              ref={freeTierRowRef}
+              ref={feedbackRowRef}
               type="button"
               className={cn(
-                'flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm font-medium hover:bg-accent',
-                state.subSheet === 'free-tier-states' && 'bg-accent/60'
+                'yawp-dev-panel-row border-b-0',
+                state.subSheet === 'give-feedback' && 'yawp-dev-panel-row-active'
               )}
-              onClick={() => openSubSheet('free-tier-states')}
+              onClick={() => openSubSheet('give-feedback')}
             >
-              <span>
-                Free-tier states
-                <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-                  {freeTierStateSummary(state.forms.selectedStateId) ??
-                    'Choose a state to jump to'}
-                </span>
+              <span className="flex min-w-0 items-center gap-2">
+                <MessageSquare className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="yawp-dev-panel-row-label">Give feedback</span>
               </span>
-              <ChevronRight className="size-4 shrink-0" aria-hidden="true" />
+              <span className="flex min-w-0 items-center gap-1">
+                <span className="yawp-dev-panel-row-value max-w-[9rem] truncate">
+                  {state.subSheet === 'give-feedback'
+                    ? 'Writing…'
+                    : 'Note, screenshot, URL'}
+                </span>
+                <ChevronLeft className="size-4 shrink-0 opacity-70" aria-hidden="true" />
+              </span>
             </button>
-
-            <Collapsible
-              open={state.openSections.includes('data')}
-              onOpenChange={() => toggleSection('data')}
-            >
-              <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm font-medium hover:bg-accent">
-                Data
-                <ChevronDown className="size-4" aria-hidden="true" />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-1 px-2 pb-2">
-                <button
-                  ref={classSimulationRowRef}
-                  type="button"
-                  className={cn(
-                    'flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm hover:bg-accent',
-                    state.subSheet === 'class-simulation' && 'bg-accent/60'
-                  )}
-                  onClick={() => openSubSheet('class-simulation')}
-                >
-                  <span>
-                    <span className="font-medium">Populate class</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      Fake students and assignment progress
-                    </span>
-                  </span>
-                  <ChevronRight className="size-4 shrink-0" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    'flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm hover:bg-accent',
-                    state.subSheet === 'class-simulation' && 'bg-accent/60'
-                  )}
-                  onClick={() => openSubSheet('class-simulation')}
-                >
-                  <span>
-                    <span className="font-medium">Clear simulated data</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      Removes only the fake students and their work.
-                    </span>
-                  </span>
-                  <ChevronRight className="size-4 shrink-0" aria-hidden="true" />
-                </button>
-              </CollapsibleContent>
-            </Collapsible>
-
-            <Collapsible
-              open={state.openSections.includes('blackboard')}
-              onOpenChange={() => toggleSection('blackboard')}
-            >
-              <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm font-medium hover:bg-accent">
-                Blackboard link
-                <ChevronDown className="size-4" aria-hidden="true" />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="px-2 pb-2 space-y-2">
-                <select
-                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                  value={state.forms.blackboardRole ?? 'teacher'}
-                  onChange={(event) =>
-                    updateForms({
-                      blackboardRole: event.target.value as 'teacher' | 'student',
-                    })
-                  }
-                >
-                  <option value="teacher">Teacher</option>
-                  <option value="student">Student</option>
-                </select>
-                <Button
-                  type="button"
-                  className="w-full"
-                  onClick={async () => {
-                    const response = await fetch('/api/dev-panel/blackboard-launch', {
-                      method: 'POST',
-                      credentials: 'same-origin',
-                      headers: { 'content-type': 'application/json' },
-                      body: JSON.stringify({ role: state.forms.blackboardRole ?? 'teacher' }),
-                    });
-                    const result = await response.json().catch(() => null);
-                    if (!response.ok) {
-                      window.alert(result?.error ?? 'Launch refused.');
-                      return;
-                    }
-                    window.open(result.launchUrl, '_blank', 'noopener,noreferrer');
-                  }}
-                >
-                  Open Blackboard
-                </Button>
-              </CollapsibleContent>
-            </Collapsible>
-
-            <Collapsible
-              open={state.openSections.includes('tester-tools')}
-              onOpenChange={() => toggleSection('tester-tools')}
-            >
-              <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm font-medium hover:bg-accent">
-                Tester tools
-                <ChevronDown className="size-4" aria-hidden="true" />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-2 px-2 pb-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(window.location.href);
-                  }}
-                >
-                  <Copy className="mr-2 size-4" aria-hidden="true" />
-                  Copy current URL
-                </Button>
-              </CollapsibleContent>
-            </Collapsible>
-          </>
-        )}
+          </div>
+        ) : null}
       </div>
 
-      {unlocked ? (
-        <div className="border-t px-2 py-2">
-          <button
-            ref={feedbackRowRef}
-            type="button"
-            className={cn(
-              'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-accent',
-              state.subSheet === 'give-feedback' && 'bg-accent/60'
-            )}
-            onClick={() => openSubSheet('give-feedback')}
-          >
-            <MessageSquare className="size-4" aria-hidden="true" />
-            <span className="flex-1">
-              <span className="block text-sm font-medium">Give feedback</span>
-              <span className="block text-xs text-muted-foreground">
-                Note, screenshot and page URL
-              </span>
-            </span>
-            <ChevronRight className="size-4" aria-hidden="true" />
-          </button>
-        </div>
-      ) : null}
-
-      <footer className="flex items-center justify-between border-t px-4 py-2 text-xs text-muted-foreground">
+      <footer className="yawp-dev-panel-footer">
         {unlocked && previewAccessGateEnabled ? (
           <Form method="post" action="/auth/preview-access">
             <input type="hidden" name="intent" value="sign-out" />
-            <button type="submit" className="text-destructive underline-offset-2 hover:underline">
+            <button type="submit" className="yawp-dev-panel-footer-access">
               Re-enter access code
             </button>
           </Form>
         ) : (
           <span />
         )}
-        <span>Toggle Alt Shift D</span>
+        <span className="inline-flex items-center gap-1" aria-label="Toggle Alt Shift D">
+          <kbd className="yawp-dev-panel-kbd">Alt</kbd>
+          <kbd className="yawp-dev-panel-kbd">Shift</kbd>
+          <kbd className="yawp-dev-panel-kbd">D</kbd>
+        </span>
       </footer>
       <AccessCodeModal open={accessOpen} onOpenChange={setAccessOpen} />
       {!isPhone && !isTablet && state.subSheet === 'give-feedback' ? (
@@ -579,7 +717,14 @@ export function DevPanelShell() {
         />
       ) : null}
       {!isPhone && !isTablet && state.subSheet === 'free-tier-states' ? (
-        <DevPanelFreeTierFlyout onClose={closeSubSheet} orgId={selectedOrg} />
+        <DevPanelFreeTierFlyout
+          onClose={closeSubSheet}
+          orgId={selectedOrg}
+          orgName={selectedOrgName}
+          signedInDisplayName={
+            signedInUser?.name?.trim() || signedInUser?.email || null
+          }
+        />
       ) : null}
       {!isPhone && !isTablet && state.subSheet === 'class-simulation' ? (
         <DevPanelClassSimulationFlyout onClose={closeSubSheet} />
@@ -601,6 +746,10 @@ export function DevPanelShell() {
         <DevPanelFreeTierFlyout
           onClose={closeSubSheet}
           orgId={selectedOrg}
+          orgName={selectedOrgName}
+          signedInDisplayName={
+            signedInUser?.name?.trim() || signedInUser?.email || null
+          }
           pushed
         />
       ) : isPhone && state.subSheet === 'class-simulation' ? (
@@ -619,6 +768,10 @@ export function DevPanelShell() {
             <DevPanelFreeTierFlyout
               onClose={closeSubSheet}
               orgId={selectedOrg}
+              orgName={selectedOrgName}
+              signedInDisplayName={
+                signedInUser?.name?.trim() || signedInUser?.email || null
+              }
               pushed
             />
           ) : null}
@@ -664,7 +817,7 @@ export function DevPanelShell() {
       data-yawp-dev-panel-ready="true"
       aria-label="Developer tools"
       className={cn(
-        'yawp-dev-panel-docked fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-background shadow-xl',
+        'yawp-dev-panel-docked fixed inset-y-0 right-0 z-40 flex flex-col bg-popover',
         'w-[var(--yawp-dev-panel-width)]'
       )}
     >

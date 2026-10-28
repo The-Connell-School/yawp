@@ -11,6 +11,7 @@ import { loadLessonPacket, type LoadedLessonPacket } from './load-lesson-packet.
 import { hasSlideDeck, readSlideDeck } from './slide-deck';
 import { deckFreshness, deckKeyOf } from './deck-freshness';
 import { readExtensionIds, splitExtensions } from './extensions';
+import { resolveDeckArt } from './deck-art';
 import { claimCarryOvers, classKeyFor } from './stack-actions.server';
 import { stackSteps, type StackStep } from './stack-steps';
 import { suggestedPieces, type SuggestedPiece } from './stack-suggestions';
@@ -30,6 +31,7 @@ export type StackV3 = {
     id: string;
     slides: number;
     title: string;
+    artSwatch: string | null;
     /** The reply it was filed from: its card on the stack says "In your lesson". */
     sourceMessageId: string | null;
   } | null;
@@ -148,6 +150,7 @@ export async function loadStackV3({
               slides: deckOutcome.deck.slides.length,
               title: deckOutcome.deck.title,
               sourceMessageId: deckRow.sourceMessageId,
+              artSwatch: resolveDeckArt(deckOutcome.deck.art)?.crops.swatch ?? null,
             }
           : null,
       extensions,

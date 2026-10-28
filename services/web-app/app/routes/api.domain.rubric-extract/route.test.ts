@@ -87,6 +87,39 @@ describe('api.domain.rubric-extract', () => {
     expect(serialized).not.toContain('Holy Family');
   });
 
+  test('persists provider-safe error text when extraction fails', async () => {
+    anthropic.messages.create.mockRejectedValueOnce(
+      Object.assign(
+        new Error('prompt echoed: token=super-secret teacher@school.edu'),
+        {
+          name: 'BadRequestError',
+          status: 400,
+          error: { type: 'invalid_request_error' },
+        }
+      )
+    );
+
+    const form = new FormData();
+    form.append('text', 'Organization: 5 points');
+
+    const response = await action({
+      request: new Request('https://example.test/api/domain/rubric-extract', {
+        method: 'POST',
+        body: form,
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(false);
+    expect(prisma.llmLog.create).toHaveBeenCalled();
+    const log = prisma.llmLog.create.mock.calls[0][0].data;
+    expect(log.error).toBe('BadRequestError · invalid_request_error · HTTP 400');
+    const serialized = JSON.stringify(log);
+    expect(serialized).not.toContain('super-secret');
+    expect(serialized).not.toContain('teacher@school.edu');
+  });
+
   test('rejects requests without text or pdf', async () => {
     const response = await action({
       request: new Request('https://example.test/api/domain/rubric-extract', {

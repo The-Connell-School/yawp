@@ -4,6 +4,7 @@ import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { assertProductionQaPassword } from './production-qa-profile';
+import { buildSafeErrorForLog } from '../../../services/web-app/app/utils/server-error-request-context.server';
 
 const prismaRoot = join(import.meta.dir, '..');
 const ENV = process.argv[2];
@@ -84,7 +85,7 @@ sshProcess.stderr.on('data', (data) => {
 });
 
 sshProcess.on('error', (error) => {
-  console.error('SSH process failed:', error);
+  console.error('SSH process failed:', buildSafeErrorForLog(error));
   process.exit(1);
 });
 
@@ -126,7 +127,7 @@ setTimeout(async () => {
     sshProcess.kill();
     process.exit(exitCode);
   } catch (error) {
-    console.error('Production QA provisioning failed:', error);
+    console.error('Production QA provisioning failed:', buildSafeErrorForLog(error));
     sshProcess.kill();
     process.exit(1);
   }

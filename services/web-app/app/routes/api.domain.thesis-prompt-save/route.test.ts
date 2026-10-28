@@ -193,15 +193,39 @@ describe('api.domain.thesis-prompt-save', () => {
   });
 
   test('degrades gracefully when the write fails', async () => {
-    saveThesisPrompt.mockRejectedValue(new Error('db down'));
+    const sensitive =
+      'Invalid `prisma.user.findMany()` token=SECRET-TOKEN teacher@school.edu';
+    saveThesisPrompt.mockRejectedValue(new Error(sensitive));
 
     const response = await action({
       request: request(VALID),
       params: {},
       context: {},
     } as any);
+    const body = await readBody(response);
 
     expect(statusOf(response)).toBe(500);
-    expect((await readBody(response)).success).toBe(false);
+    expect(body.success).toBe(false);
+    expect(JSON.stringify(body)).not.toContain('SECRET-TOKEN');
+    expect(body.message).toBe("That prompt couldn't be saved. Please try again.");
+  });
+
+  test('redacts sensitive substrings in domain validation messages', async () => {
+    saveThesisPrompt.mockRejectedValue(
+      new SavedPromptError(
+        'That prompt is too long token=SECRET-TOKEN teacher@school.edu',
+      ),
+    );
+
+    const response = await action({
+      request: request(VALID),
+      params: {},
+      context: {},
+    } as any);
+    const body = await readBody(response);
+
+    expect(statusOf(response)).toBe(400);
+    expect(JSON.stringify(body)).not.toContain('SECRET-TOKEN');
+    expect(body.message).toContain('That prompt is too long');
   });
 });

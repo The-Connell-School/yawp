@@ -3,7 +3,10 @@ import { renderAsync } from '@react-email/components'
 import { type ReactElement } from 'react'
 import { z } from 'zod'
 import { shouldUsePreviewEmailCapture } from './preview-email-capture.server'
-import { emailDeliveryDiagnostic } from './email-delivery-error.server'
+import {
+	emailDeliveryDiagnostic,
+	safeEmailProviderErrorPayload,
+} from './email-delivery-error.server'
 import {
 	buildSafeEmailLogSummary,
 	canLogFullEmailBody,
@@ -188,6 +191,7 @@ async function sendEmailWithResend(
 	} else {
 		const parseResult = resendErrorSchema.safeParse(data)
 		if (parseResult.success) {
+			const safeError = safeEmailProviderErrorPayload(parseResult.data, email.to)
 			// eslint-disable-next-line no-console
 			console.error('email_delivery_failed', {
 				...emailDeliveryDiagnostic(parseResult.data, email.to),
@@ -195,23 +199,24 @@ async function sendEmailWithResend(
 			})
 			return {
 				status: 'error',
-				error: parseResult.data,
+				error: safeError,
 			} as const
 		} else {
-			const error = {
+			const raw = {
 				name: 'UnknownError',
 				message: 'Unknown Error',
 				statusCode: 500,
 				cause: data,
-			} satisfies ResendError
+			}
+			const safeError = safeEmailProviderErrorPayload(raw, email.to)
 			// eslint-disable-next-line no-console
 			console.error('email_delivery_failed', {
-				...emailDeliveryDiagnostic(error, email.to),
+				...emailDeliveryDiagnostic(raw, email.to),
 				...(logMeta?.kind ? { kind: logMeta.kind } : {}),
 			})
 			return {
 				status: 'error',
-				error,
+				error: safeError,
 			} as const
 		}
 	}
@@ -248,11 +253,11 @@ async function sendEmailWithSes(email: EmailPayload, singleAttempt = false) {
 			data: { id: response.MessageId ?? 'unknown' },
 		} as const
 	} catch (error) {
-		const normalized = normalizeSesError(error)
+		const normalized = normalizeSesError(error, email.to)
 		// eslint-disable-next-line no-console
 		console.error(
 			'email_delivery_failed',
-			emailDeliveryDiagnostic(normalized, email.to),
+			emailDeliveryDiagnostic(error, email.to),
 		)
 		return {
 			status: 'error',
@@ -261,21 +266,29 @@ async function sendEmailWithSes(email: EmailPayload, singleAttempt = false) {
 	}
 }
 
-function normalizeSesError(error: unknown): ResendError {
+function normalizeSesError(
+	error: unknown,
+	recipient: string,
+): { name: string; message: string; statusCode: number } {
 	if (error instanceof Error) {
-		return {
-			name: error.name || 'SESError',
-			message: error.message || 'Unknown SES Error',
-			statusCode: getAwsStatusCode(error),
-		}
+		return safeEmailProviderErrorPayload(
+			{
+				name: error.name || 'SESError',
+				message: error.message || 'Unknown SES Error',
+				statusCode: getAwsStatusCode(error),
+			},
+			recipient,
+		)
 	}
 
-	return {
-		name: 'UnknownError',
-		message: 'Unknown Error',
-		statusCode: 500,
-		cause: error,
-	}
+	return safeEmailProviderErrorPayload(
+		{
+			name: 'UnknownError',
+			message: 'Unknown Error',
+			statusCode: 500,
+		},
+		recipient,
+	)
 }
 
 function getAwsStatusCode(error: Error) {

@@ -32,7 +32,7 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
@@ -40,7 +40,8 @@ jobs:
           bun-version: '1.4.4'
 
       - name: 📦 Install dependencies
-        run: bun install
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: 🧪 Validate deployment contract
         run: bun test ./scripts/deployment-contract.test.ts
@@ -94,7 +95,7 @@ jobs:
 
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: 📥 Download deps
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
@@ -102,7 +103,8 @@ jobs:
           bun-version: '1.4.4'
 
       - name: 📦 Install dependencies
-        run: bun install
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: 🔑 Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1

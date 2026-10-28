@@ -231,6 +231,7 @@ for (const width of [1280, 390]) {
         await page
           .getByRole('button', { name: 'Enter a class code', exact: true })
           .click();
+        await expect(page.getByLabel('Class code', { exact: true })).toBeVisible();
       }
       const flowCookie = (await page.context().cookies()).find(
         (c) => c.name === 'yawp_signon'

@@ -392,7 +392,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
  * numbered lists, and **bold**) without pulling in a Markdown dependency or
  * ever setting raw HTML.
  */
-function FormattedReply({ text }: { text: string }) {
+export function FormattedReply({ text }: { text: string }) {
   return (
     <div className="space-y-2 leading-6">
       {parseReplyBlocks(text).map((block, blockIndex) => {

@@ -19,6 +19,10 @@ import {
 } from '~/domain/lesson-planner/source-documents.server';
 import { PENDING_UPLOAD_MS } from '~/domain/lesson-planner/lesson-uploads';
 import { readBoundedBytes } from '~/utils/bounded-body.server';
+import {
+  safeDomainErrorTextForClientResponse,
+  safeErrorTextForClientResponse,
+} from '~/utils/server-error-request-context.server';
 
 /** File plus multipart framing; matches other upload routes' headroom. */
 const MAX_UPLOAD_BODY_BYTES = MAX_SOURCE_BYTES + 1024 * 1024;
@@ -101,8 +105,22 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     read = await readSourceDocument(file);
   } catch (error) {
-    if (error instanceof SourceDocumentError) return bad(error.message, 422);
-    throw error;
+    if (error instanceof SourceDocumentError) {
+      return bad(
+        safeDomainErrorTextForClientResponse(
+          error,
+          'Could not read that document. Try another file.',
+        ),
+        422,
+      );
+    }
+    return bad(
+      safeErrorTextForClientResponse(
+        error,
+        'Could not read that document. Try another file.',
+      ),
+      422,
+    );
   }
 
   const upload = await prisma.lessonPlanUpload.create({

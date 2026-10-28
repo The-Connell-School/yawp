@@ -1,7 +1,7 @@
 import { buildTemplateSection, type LessonTemplate } from '~/domain/lesson-planner/lesson-templates';
 import type { RecentArt } from '~/domain/lesson-planner/recent-art';
 import { buildSourcesSection, type LessonUpload } from '~/domain/lesson-planner/lesson-uploads';
-import { DECK_ART } from '~/domain/lesson-planner/deck-art';
+import { selectableDeckArt } from '~/domain/lesson-planner/deck-art';
 import { rubricCategories } from '~/domain/grading/rubric';
 import type { CacheableSystemBlock } from '~/utils/getLLMCompletion/getLLMCompletion';
 import type { UnitContext } from '~/domain/lesson-planner/unit-plan';
@@ -748,7 +748,7 @@ export function buildLessonPlannerInstructionCore({
  */
 function buildDeckGallerySection(on: boolean, recentArt: RecentArt[] = []): string[] {
   if (!on) return [];
-  const art = DECK_ART.map(
+  const art = selectableDeckArt().map(
     (work) => `\`${work.id}\` (${work.artist}, ${work.title}, ${work.year}: ${work.subject}; about ${work.themes.join(', ')}; colors ${work.colors.join(', ')})`
   ).join('; ');
   return [

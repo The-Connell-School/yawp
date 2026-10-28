@@ -14,6 +14,8 @@ import {
   FreeClassSeatError,
   isFreeClassSeatError,
 } from '~/domain/free-tier/free-class-seat-error';
+import { FREE_CLASS_CLASS_FULL_MESSAGE } from '~/domain/free-tier/class-seat-cap';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 
 export type StudentEmailLookupResult =
   | { status: 'existing'; email: string }
@@ -303,7 +305,13 @@ export async function sendStudentClassInvite({
     });
   } catch (error) {
     if (isFreeClassSeatError(error)) {
-      return { status: 'error', error: error.message };
+      return {
+        status: 'error',
+        error: safeDomainErrorTextForClientResponse(
+          error,
+          FREE_CLASS_CLASS_FULL_MESSAGE,
+        ),
+      };
     }
     throw error;
   }

@@ -228,7 +228,7 @@ describe('api.assignments.create', () => {
         prompt: 'Write the essay.',
         submitForGrade: true,
         pointValue: 100,
-        gradingAssistantStrictnessLevel: 'intermediate',
+        gradingAssistantStrictnessLevel: 'beginner',
       }),
       classIds: ['class-1', 'class-2'],
       deployment: { postAt: null, dueAt: null },
@@ -298,7 +298,7 @@ describe('api.assignments.create', () => {
     });
   });
 
-  test('defaults assignment grading assistant strictness to intermediate', async () => {
+  test('defaults assignment grading assistant strictness to beginner', async () => {
     const response = await action({
       request: requestFor({
         intent: 'create-assignment',
@@ -314,7 +314,7 @@ describe('api.assignments.create', () => {
     expect(body.success).toBe(true);
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        gradingAssistantStrictnessLevel: 'intermediate',
+        gradingAssistantStrictnessLevel: 'beginner',
       }),
       classIds: ['class-1', 'class-2'],
       deployment: { postAt: null, dueAt: null },
@@ -673,7 +673,7 @@ describe('api.assignments.create', () => {
             }),
           ],
         }),
-        gradingAssistantStrictnessLevel: 'intermediate',
+        gradingAssistantStrictnessLevel: 'beginner',
       }),
       classIds: ['class-1', 'class-2'],
       deployment: { postAt: null, dueAt: null },
@@ -936,7 +936,7 @@ describe('api.assignments.create', () => {
       prompt: 'Write the essay.',
       submitForGrade: true,
       pointValue: 50,
-      gradingAssistantStrictnessLevel: 'intermediate',
+      gradingAssistantStrictnessLevel: 'beginner',
       tutorEnabled: false,
       // Saved alongside the rest of the configuration so reusing this assignment
       // preserves the setting. Solo here because the fixture organization is not
@@ -1329,6 +1329,61 @@ describe('api.assignments.create', () => {
       expect(responseStatus(response)).toBe(403);
       expect(body.success).toBe(false);
       expect(body.message).toMatch(/used all 12 free Class Starters/i);
+    });
+
+    test('redacts sensitive substrings in quota error messages', async () => {
+      const { FreeClassroomAssignmentQuotaError } = await import(
+        '~/utils/assignment-quota.server'
+      );
+      createAssignmentDeployedToClasses.mockRejectedValue(
+        new FreeClassroomAssignmentQuotaError(
+          "You've used all 12 free Class Starters. token=SECRET-TOKEN",
+          'quota_exhausted',
+          'class_starter',
+        ),
+      );
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1'],
+          prompt: 'Start class.',
+          title: 'Starter',
+        }),
+        params: {},
+      } as any);
+      const body = await readBody(response);
+      const serialized = JSON.stringify(body);
+
+      expect(responseStatus(response)).toBe(403);
+      expect(serialized).not.toContain('SECRET-TOKEN');
+      expect(body.message).toMatch(/used all 12 free Class Starters/i);
+    });
+
+    test('returns stable copy when deployment fails unexpectedly', async () => {
+      const sensitive =
+        'Invalid `prisma.user.findMany()` token=SECRET-TOKEN teacher@school.edu';
+      createAssignmentDeployedToClasses.mockRejectedValue(new Error(sensitive));
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1'],
+          prompt: 'Start class.',
+          title: 'Starter',
+        }),
+        params: {},
+      } as any);
+      const body = await readBody(response);
+      const serialized = JSON.stringify(body);
+
+      expect(responseStatus(response)).toBe(500);
+      expect(serialized).not.toContain('SECRET-TOKEN');
+      expect(body.message).toBe(
+        'Could not create the assignment. Please try again.'
+      );
     });
 
     test('does not pass quota options for a school org', async () => {

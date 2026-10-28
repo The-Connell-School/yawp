@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { encode } from 'turbo-stream';
 import type { Page } from '@playwright/test';
+import { encodeTurboStreamBody } from '../encode-turbo-stream-body';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { mintFreeTierLinkForE2E } from '../helpers/mint-free-tier-link';
@@ -57,7 +57,7 @@ for (const width of [1280, 390]) {
         await route.fulfill({
           status: 200,
           contentType: 'text/x-script',
-          body: await new Response(encode({ data: result })).text(),
+          body: await encodeTurboStreamBody({ data: result }),
         });
       });
       try {
@@ -184,9 +184,9 @@ for (const width of [1280, 390]) {
         await route.fulfill({
           status: 200,
           contentType: 'text/x-script',
-          body: await new Response(
-            encode({ data: { ok: false, reason: 'invalid' } })
-          ).text(),
+          body: await encodeTurboStreamBody({
+            data: { ok: false, reason: 'invalid' },
+          }),
         });
       });
       try {

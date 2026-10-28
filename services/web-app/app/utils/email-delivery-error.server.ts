@@ -35,6 +35,16 @@ function resendValidationReason(message: string): ValidationReason {
   return 'other';
 }
 
+/** Safe `{ name, message, statusCode }` for sendEmail return values (not browser copy). */
+export function safeEmailProviderErrorPayload(error: unknown, recipient: string) {
+  const diagnostic = emailDeliveryDiagnostic(error, recipient);
+  return {
+    name: diagnostic.name,
+    message: diagnostic.message,
+    statusCode: diagnostic.statusCode ?? 500,
+  };
+}
+
 export function emailDeliveryDiagnostic(error: unknown, recipient: string) {
   const provider = ['ses', 'aws-ses'].includes(process.env.EMAIL_PROVIDER?.toLowerCase() ?? '')
     ? 'ses' : 'resend';

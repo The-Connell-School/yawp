@@ -115,6 +115,13 @@ export const DEMO_FEEDBACK_FLAG = 'demo-feedback-widget' as const;
 export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
 
 /**
+ * LLM "Generate a prompt" for Class Starter, Daily Pages, Exit Ticket, and
+ * Thesis-Driven Essay. Off: the menu item and generator APIs are hidden.
+ * Default off on production; on by default on demo and PR previews.
+ */
+export const TEACHER_PROMPT_GENERATOR_FLAG = 'teacher-prompt-generator' as const;
+
+/**
  * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
  * reads only `feature_flag.free_tier`; these rows are not OR-merged.
  */
@@ -231,6 +238,11 @@ export const FEATURE_FLAGS = {
     label: 'Free classroom page tours',
     description:
       'Welcome cards, page replay and tour progress for free classroom teachers. Default off on demo and production; free tier must also be enabled.',
+  },
+  [TEACHER_PROMPT_GENERATOR_FLAG]: {
+    label: 'Teacher prompt generator',
+    description:
+      'Shows New → Generate a prompt and the LLM drafting sheet on assignment types that support it (Class Starter, Daily Pages, Exit Ticket, Thesis-Driven Essay). Default off on production; on by default on demo and PR previews.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

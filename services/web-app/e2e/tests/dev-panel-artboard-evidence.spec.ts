@@ -3,6 +3,9 @@ import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
 import {
+  clearDevPanelStorageWhenStable,
+  devPanelFreeTierGroupTrigger,
+  devPanelFreeTierStateOption,
   openDevPanelClassSimulationFlyout,
   openDevToolsPanel,
   openGiveFeedback,
@@ -58,9 +61,9 @@ test.describe('Dev panel artboard evidence', () => {
   test('capture designed panel and feedback states', async ({ page }) => {
     test.setTimeout(240_000);
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('/app/assignments');
-    await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
-    await page.reload();
+    await page.goto('/app/assignments', { waitUntil: 'domcontentloaded' });
+    await clearDevPanelStorageWhenStable(page);
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await openDevToolsPanel(page);
     await shot(page, '01');
 
@@ -94,21 +97,22 @@ test.describe('Dev panel artboard evidence', () => {
     await expect(stateSheet).toBeVisible({ timeout: 15_000 });
     await shot(page, '19');
 
-    await stateSheet.getByRole('radio').first().check({ force: true });
+    await devPanelFreeTierGroupTrigger(stateSheet, 'Teacher signup').click();
+    await devPanelFreeTierStateOption(stateSheet, 'Waitlist submitted').click();
     await stateSheet
-      .getByRole('checkbox', { name: 'Use a throwaway test account' })
+      .getByRole('switch', { name: 'Use a throwaway test account' })
       .setChecked(false);
     await stateSheet.getByRole('button', { name: 'Jump to this state' }).click();
     await expect(
-      page.getByRole('heading', { name: 'Change the signed-in account?' })
+      page.getByRole('alertdialog', { name: /Change .+'s test data\?/ })
     ).toBeVisible();
     await shot(page, '20');
 
     await page.getByRole('button', { name: 'Cancel' }).click();
     await stateSheet
-      .getByRole('checkbox', { name: 'Use a throwaway test account' })
+      .getByRole('switch', { name: 'Use a throwaway test account' })
       .setChecked(true);
-    await stateSheet.getByRole('radio').first().check({ force: true });
+    await devPanelFreeTierStateOption(stateSheet, 'Waitlist submitted').click();
     await page.route('**/api/dev-panel/free-tier-jump', async (route) => {
       await route.fulfill({
         status: 200,
@@ -141,17 +145,24 @@ test.describe('Dev panel artboard evidence', () => {
       stateSheet.getByRole('button', { name: 'Jumping…' })
     ).toBeVisible();
     await shot(page, '21');
+    const postJumpNavigation = page
+      .waitForURL((url) => url.pathname === '/app' || url.pathname.startsWith('/app/'), {
+        timeout: 10_000,
+      })
+      .catch(() => null);
     await page
       .evaluate(() => {
         (window as unknown as { __restoreJumpAssign?: () => void }).__restoreJumpAssign?.();
       })
       .catch(() => undefined);
+    await postJumpNavigation;
+    await page.waitForLoadState('domcontentloaded');
     await page.unroute('**/api/dev-panel/free-tier-jump');
-    await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
     await page.request.post('/auth/dev-login', {
       form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
     });
-    await page.goto('/app/assignments');
+    await page.goto('/app/assignments', { waitUntil: 'domcontentloaded' });
+    await clearDevPanelStorageWhenStable(page);
 
     let { panel: feedbackDialog } = await openGiveFeedback(page);
     await shot(page, '55');
@@ -183,19 +194,22 @@ test.describe('Dev panel artboard evidence', () => {
       "Couldn't send your feedback"
     );
     await expect(feedbackDialog.getByRole('alert')).toContainText(
-      'Your note is still here. Check your connection and try again.'
+      'Your note is still here; nothing was lost'
     );
     await shot(page, '60');
 
     await page.unroute('**/api/dev-panel/feedback');
     await page.keyboard.press('Escape');
-    await page.evaluate(() => {
-      const raw = localStorage.getItem('yawp-dev-panel');
-      if (!raw) return;
-      const saved = JSON.parse(raw) as { subSheet?: string | null };
-      saved.subSheet = null;
-      localStorage.setItem('yawp-dev-panel', JSON.stringify(saved));
-    });
+    await expect(async () => {
+      await page.waitForLoadState('domcontentloaded');
+      await page.evaluate(() => {
+        const raw = localStorage.getItem('yawp-dev-panel');
+        if (!raw) return;
+        const saved = JSON.parse(raw) as { subSheet?: string | null };
+        saved.subSheet = null;
+        localStorage.setItem('yawp-dev-panel', JSON.stringify(saved));
+      });
+    }).toPass({ timeout: 15_000 });
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/app/assignments');

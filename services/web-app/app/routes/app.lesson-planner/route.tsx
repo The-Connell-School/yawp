@@ -1233,6 +1233,7 @@ export default function LessonPlannerRoute() {
                   stackV2={reviewFlags.stackV2}
                   intakeV2={reviewFlags.intakeV2}
                   deckV2={reviewFlags.deckV2}
+                  deckGallery={reviewFlags.deckGallery}
                   editedDeck={selectedConversation?.editedDeck ?? null}
                   periodMinutes={selectedConversation?.periodMinutes ?? null}
                   previousUserText={
@@ -1580,6 +1581,7 @@ function MessageBubble({
   intakeV2 = false,
   teacherClasses = [],
   deckV2 = false,
+  deckGallery = false,
   editedDeck = null,
   periodMinutes = null,
   previousUserText = null,
@@ -1642,6 +1644,8 @@ function MessageBubble({
   teacherClasses?: IntakeClass[];
   /** Deck v2 (E2): Edit on the deck card, and an edited deck shown in place. */
   deckV2?: boolean;
+  /** Lesson Deck Kit: gallery slide previews on the deck card. */
+  deckGallery?: boolean;
   editedDeck?: {
     materialId: string;
     sourceMessageId: string;
@@ -2102,6 +2106,7 @@ function MessageBubble({
                         : null
                     }
                     periodMinutes={deckV2 ? periodMinutes : null}
+                    deckGallery={deckGallery}
                     onFit={
                       deckV2 && periodMinutes
                         ? () =>

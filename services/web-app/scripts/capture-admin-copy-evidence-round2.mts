@@ -9,6 +9,7 @@ import { chromium } from 'playwright';
 import { spawnSync } from 'node:child_process';
 import { adminApprovalPass1ForwardBanner } from '../app/domain/free-tier/admin-approval-copy';
 import { buildDesignedAdminApprovalEmail } from '../app/domain/free-tier/admin-approval-email.server';
+import { logScriptError } from '../app/utils/log-script-error.server';
 
 const OUT = '/opt/cursor/artifacts/admin-copy-evidence/round2';
 const TEACHER = 'Jordan Rivera';
@@ -189,6 +190,6 @@ Tokens and emails redacted in rendered fixtures.
 }
 
 main().catch((error) => {
-  console.error(error);
+  logScriptError(error);
   process.exit(1);
 });

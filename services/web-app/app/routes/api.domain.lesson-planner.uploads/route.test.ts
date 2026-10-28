@@ -6,6 +6,8 @@ const requireLessonPlannerAccess = mock();
 const getLessonPlannerReviewFlags = mock();
 const readSourceDocument = mock();
 
+class SourceDocumentError extends Error {}
+
 const prisma = {
   lessonPlanConversation: { findFirst: mock() },
   lessonPlanUpload: { count: mock(), create: mock(), deleteMany: mock() },
@@ -27,13 +29,18 @@ mock.module('~/domain/lesson-planner/source-documents.server', () => ({
   MAX_SOURCE_BYTES,
   MAX_SOURCES_PER_LESSON: 10,
   readSourceDocument,
-  SourceDocumentError: class SourceDocumentError extends Error {},
+  SourceDocumentError,
 }));
 
 const { action } = await import('./route');
 
 const MAX_UPLOAD_BODY_BYTES = MAX_SOURCE_BYTES + 1024 * 1024;
 const URL = 'http://localhost/api/domain/lesson-planner/uploads';
+
+type ActionResult = {
+  init?: { status: number };
+  data?: Record<string, unknown>;
+};
 
 afterAll(() => mock.restore());
 
@@ -77,7 +84,7 @@ describe('api.domain.lesson-planner.uploads action', () => {
       request: uploadRequest('x', {
         'Content-Length': String(MAX_UPLOAD_BODY_BYTES + 1),
       }),
-    } as any)) as { init?: { status: number }; data?: { error: string } };
+    } as any)) as ActionResult;
     expect(response.init?.status).toBe(413);
     expect(response.data?.error).toContain('10 MB');
     expect(readSourceDocument).not.toHaveBeenCalled();
@@ -86,7 +93,7 @@ describe('api.domain.lesson-planner.uploads action', () => {
   test('413 when there is no Content-Length and the body exceeds 11 MB', async () => {
     const response = (await action({
       request: uploadRequest(new Uint8Array(MAX_UPLOAD_BODY_BYTES + 1)),
-    } as any)) as { init?: { status: number }; data?: { error: string } };
+    } as any)) as ActionResult;
     expect(response.init?.status).toBe(413);
     expect(response.data?.error).toContain('10 MB');
     expect(readSourceDocument).not.toHaveBeenCalled();
@@ -98,10 +105,50 @@ describe('api.domain.lesson-planner.uploads action', () => {
     form.append('file', new File(['hello'], 'notes.txt', { type: 'text/plain' }));
     const response = (await action({
       request: uploadRequest(form),
-    } as any)) as any;
+    } as any)) as ActionResult;
     expect(response.data?.ok).toBe(true);
-    expect(response.data?.upload.id).toBe('up-1');
+    expect((response.data?.upload as { id: string })?.id).toBe('up-1');
     expect(readSourceDocument).toHaveBeenCalledTimes(1);
     expect(prisma.lessonPlanUpload.create).toHaveBeenCalledTimes(1);
+  });
+
+  test('domain read failures redact sensitive substrings in messages', async () => {
+    readSourceDocument.mockRejectedValue(
+      new SourceDocumentError(
+        'Only PDF files are supported. token=SECRET-TOKEN teacher@school.edu',
+      ),
+    );
+
+    const form = new FormData();
+    form.append('intent', 'upload');
+    form.append('file', new File(['hello'], 'notes.txt', { type: 'text/plain' }));
+    const response = (await action({
+      request: uploadRequest(form),
+    } as any)) as ActionResult;
+
+    const serialized = JSON.stringify(response.data);
+    expect(response.init?.status).toBe(422);
+    expect(serialized).not.toContain('SECRET-TOKEN');
+    expect(String(response.data?.error)).toContain('Only PDF files are supported');
+  });
+
+  test('unexpected read failures return stable copy without raw exception text', async () => {
+    const sensitive =
+      'Invalid `prisma.user.findMany()` token=SECRET-TOKEN teacher@school.edu';
+    readSourceDocument.mockRejectedValue(new Error(sensitive));
+
+    const form = new FormData();
+    form.append('intent', 'upload');
+    form.append('file', new File(['hello'], 'notes.txt', { type: 'text/plain' }));
+    const response = (await action({
+      request: uploadRequest(form),
+    } as any)) as ActionResult;
+
+    const serialized = JSON.stringify(response.data);
+    expect(response.init?.status).toBe(422);
+    expect(serialized).not.toContain('SECRET-TOKEN');
+    expect(response.data?.error).toBe(
+      'Could not read that document. Try another file.'
+    );
   });
 });

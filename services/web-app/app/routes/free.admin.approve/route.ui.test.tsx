@@ -30,10 +30,12 @@ mock.module('react-router', () => ({
   ...router,
   useLoaderData: () => ({
     ok: true,
-    token: 'token',
+    token: 'approve-token',
+    forwardToken: 'forward-token',
     teacherName: 'Jordan Rivera',
     schoolName: 'Lincoln High School',
     teacherEmail: 'jrivera@lincolnhs.org',
+    showDenyAndQa: false,
   }),
   useActionData: () => undefined,
   useNavigation: () => ({ state: 'idle' }),
