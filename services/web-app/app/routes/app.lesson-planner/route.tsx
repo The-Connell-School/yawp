@@ -1,6 +1,7 @@
 import {
   LessonPlannerMonthlyLimitNotice,
   lessonPlannerPausedPlaceholder,
+  MonthlyUsageNotice,
   useFreeAccountUsage,
 } from '~/components/free-account-usage';
 import { replyTopScroll, transcriptScrollTarget } from '~/domain/lesson-planner/transcript-scroll';
@@ -13,7 +14,7 @@ import {
 import { groupOptionParts } from '~/domain/lesson-planner/option-groups';
 import type { ReplyPart } from '~/domain/lesson-planner/reply-parts';
 import { OptionRow } from '~/components/ai-chat/option-row';
-import { isLessonPlannerMonthlyExhausted } from '~/domain/free-tier/inapp-usage';
+import { isLessonPlannerMonthlyExhausted, lessonPlannerMonthlyUsage } from '~/domain/free-tier/inapp-usage';
 import { useEffect, useRef, useState } from 'react';
 import {
   Link,
@@ -1227,6 +1228,9 @@ export default function LessonPlannerRoute() {
               hasMessages ? 'max-w-3xl' : 'max-w-4xl py-6 sm:py-10'
             )}
           >
+            {freeUsage?.monthly && freeUsage.reporter ? (
+              <MonthlyUsageNotice usage={freeUsage} feature="lesson-planner" />
+            ) : null}
             {!hasMessages ? (
               <LessonPlannerEmptyState
                 prompts={recommendedPrompts}
@@ -1486,12 +1490,15 @@ function LessonPlannerEmptyState({
 }) {
   const [showTemplates, setShowTemplates] = useState(false);
   const freeUsage = useFreeAccountUsage();
+  const monthlyLpUsage =
+    freeUsage &&
+    (freeUsage.monthly || freeUsage.lessonPlannerMonthlyMetering)
+      ? lessonPlannerMonthlyUsage(freeUsage)
+      : null;
   const exhausted =
-    freeUsage && isLessonPlannerMonthlyExhausted(freeUsage);
-  const pausedPlaceholder =
-    exhausted && freeUsage
-      ? lessonPlannerPausedPlaceholder(freeUsage)
-      : undefined;
+    monthlyLpUsage != null
+      ? monthlyLpUsage.remaining === 0
+      : Boolean(freeUsage && isLessonPlannerMonthlyExhausted(freeUsage));
   return (
     <div className="flex flex-col items-center gap-8">
       <div className="flex w-full max-w-3xl flex-col items-center gap-5 text-center">
@@ -1510,7 +1517,11 @@ function LessonPlannerEmptyState({
           onChange={onInput}
           onSend={onSend}
           disabled={disabled || Boolean(exhausted)}
-          placeholderOverride={pausedPlaceholder}
+          {...(exhausted && freeUsage
+            ? {
+                placeholderOverride: lessonPlannerPausedPlaceholder(freeUsage),
+              }
+            : {})}
           sources={sources}
           chip={
             template && onTemplate ? (

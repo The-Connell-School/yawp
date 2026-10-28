@@ -161,6 +161,8 @@ test('free tier usage reflects configured caps without hiding excess students', 
   expect(usage!.students.total).toBe(10);
   expect(usage!.students.remaining).toBe(0);
   expect(usage!.monthly).toBe(true);
+  expect(usage!.lessonPlannerMonthlyMetering).toBe(true);
+  expect(usage!.lessonPlannerMonthly?.used).toBe(2);
   const now = new Date();
   expect(usage!.renewsAt).toBe(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString());
   expect(usage!.reporter).toEqual({ used: 1, total: 100, remaining: 99 });

@@ -92,7 +92,7 @@ export async function readFreeAccountUsage(
         })
       : 0,
     readGradingLimitStatus(membershipId),
-    lessonPlannerMonthlyMetering && !shellMonthly
+    lessonPlannerMonthlyMetering
       ? countOrganizationLessonPlans(organizationId, true)
       : Promise.resolve(null),
   ]);
