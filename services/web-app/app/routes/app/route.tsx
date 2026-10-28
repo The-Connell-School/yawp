@@ -73,7 +73,20 @@ import {
 import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
 import { SchoolYearScopeSwitcher } from './school-year-scope';
 import type { Route as RootRoute } from '../../+types/root';
-import { FLAT_SIDEBAR_SECTIONS, SidebarNavLinks } from './sidebar-nav';
+import { freeTierSidebarIconForPath } from '~/components/free-tier/free-tier-sidebar-icons';
+import {
+  FLAT_SIDEBAR_SECTIONS,
+  SidebarNavLinks,
+  type SidebarNavLink,
+} from './sidebar-nav';
+
+function withFreeTierSidebarChrome(link: SidebarNavLink): SidebarNavLink {
+  return {
+    ...link,
+    label: link.to === '/app' ? 'Home' : link.label,
+    icon: freeTierSidebarIconForPath(link.to) ?? link.icon,
+  };
+}
 import { prisma } from '~/utils/db.server';
 import { shouldRedirectClasslessStudent } from '~/utils/classless-student-gate';
 import { formatUserContactLabel } from '~/utils/user-display';
@@ -417,20 +430,22 @@ export default function Route() {
                 ? [
                     {
                       links: [
-                        ...FLAT_SIDEBAR_SECTIONS[0].links.filter((link) =>
-                          [
-                            '/app',
-                            '/app/my-classes',
-                            '/app/assignments',
-                            '/app/documents',
-                            '/app/lesson-planner',
-                          ].includes(link.to)
-                        ),
-                        {
+                        ...FLAT_SIDEBAR_SECTIONS[0].links
+                          .filter((link) =>
+                            [
+                              '/app',
+                              '/app/my-classes',
+                              '/app/assignments',
+                              '/app/documents',
+                              '/app/lesson-planner',
+                            ].includes(link.to)
+                          )
+                          .map(withFreeTierSidebarChrome),
+                        withFreeTierSidebarChrome({
                           to: '/app/reporter',
                           label: 'Reporter',
                           icon: <Microscope size={18} />,
-                        },
+                        }),
                       ],
                     },
                   ]

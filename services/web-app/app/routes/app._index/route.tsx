@@ -61,7 +61,6 @@ import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/as
 import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
 import { shouldHideFreeTierTeachingSecrets } from '~/domain/free-tier/locked-preview.server';
 import {
-  LOCKED_DASHBOARD_WELCOME_SUBTITLE,
   UNLOCKED_FIRST_RUN_WELCOME_SUBTITLE,
   UNLOCKED_IN_USE_WELCOME_SUBTITLE,
 } from '~/domain/free-tier/locked-dashboard-copy';
@@ -443,42 +442,14 @@ export default function AppRoute() {
         ? `/app/assignment-types/${thesisEssayLockedTile.assignmentTypeId}/how-it-works`
         : assignmentsSeeHowItWorksTo;
 
-    return (
-      <section
-        data-testid="app._index"
-        className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
-      >
-        <div className="flex w-full justify-between border-b bg-secondary">
-          <div className="mx-auto flex w-full max-w-screen-lg flex-wrap items-end justify-between gap-3 p-3 sm:p-5">
-            <div className="flex flex-col">
-              <h2>Welcome, {teacherFirstName(user.name ?? 'Teacher')}!</h2>
-              <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
-                {locked
-                  ? LOCKED_DASHBOARD_WELCOME_SUBTITLE
-                  : freeUsage?.monthly
-                    ? freeUsage.students.used > 0
-                      ? UNLOCKED_IN_USE_WELCOME_SUBTITLE
-                      : UNLOCKED_FIRST_RUN_WELCOME_SUBTITLE
-                    : freeUsage
-                      ? 'Your class, assignments, and grading in one place.'
-                      : 'Your classes, assignments, and grading in one place.'}
-              </p>
-            </div>
-            {!locked && assignmentsSeeHowItWorksTo ? (
-              <SeeHowItWorksLink to={assignmentsSeeHowItWorksTo} />
-            ) : null}
-          </div>
-        </div>
-        <div
-          className={
-            freeUsage
-              ? 'free-dashboard grid w-full max-w-[1136px] items-start gap-7 px-5 py-6 pb-24 sm:px-12 lg:grid-cols-[minmax(0,1fr)_300px]'
-              : 'mx-auto flex w-full max-w-screen-lg flex-col gap-8 px-3 py-6 pb-24 sm:px-5'
-          }
-        >
-          <ContentColumn
-            {...(freeUsage ? { className: 'flex min-w-0 flex-col gap-4' } : {})}
-          >
+    const lockedHomeB2 = Boolean(freeUsage && locked);
+    const welcomeName = teacherFirstName(user.name ?? 'Teacher');
+    const freeAccountRail = freeUsage ? (
+      <FreeAccountRail usage={freeUsage} />
+    ) : null;
+
+    const dashboardSections = (
+      <>
             <ClassesAtAGlance
               classes={data.teacherClassCards}
               totalClassCount={data.totalTeacherClassCount}
@@ -587,8 +558,78 @@ export default function AppRoute() {
                   readyToReleaseCount={readyToReleaseCount}
                 />
             )}
+      </>
+    );
+
+    if (lockedHomeB2) {
+      return (
+        <section
+          data-testid="app._index"
+          className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
+        >
+          <div className="locked-home-b2 free-dashboard w-full pb-24">
+            <h1 className="locked-home-welcome">
+              Welcome, {welcomeName}!
+            </h1>
+            <aside
+              className="locked-home-rail-mobile"
+              aria-label="Your request and next steps"
+            >
+              {freeAccountRail}
+            </aside>
+            <div className="locked-home-columns">
+              <ContentColumn className="flex min-w-0 flex-1 flex-col gap-4">
+                {dashboardSections}
+              </ContentColumn>
+              <aside
+                className="locked-home-rail-desktop"
+                aria-label="Your request and next steps"
+              >
+                {freeAccountRail}
+              </aside>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    return (
+      <section
+        data-testid="app._index"
+        className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
+      >
+        <div className="flex w-full justify-between border-b bg-secondary">
+          <div className="mx-auto flex w-full max-w-screen-lg flex-wrap items-end justify-between gap-3 p-3 sm:p-5">
+            <div className="flex flex-col">
+              <h2>Welcome, {welcomeName}!</h2>
+              <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
+                {freeUsage?.monthly
+                  ? freeUsage.students.used > 0
+                    ? UNLOCKED_IN_USE_WELCOME_SUBTITLE
+                    : UNLOCKED_FIRST_RUN_WELCOME_SUBTITLE
+                  : freeUsage
+                    ? 'Your class, assignments, and grading in one place.'
+                    : 'Your classes, assignments, and grading in one place.'}
+              </p>
+            </div>
+            {assignmentsSeeHowItWorksTo ? (
+              <SeeHowItWorksLink to={assignmentsSeeHowItWorksTo} />
+            ) : null}
+          </div>
+        </div>
+        <div
+          className={
+            freeUsage
+              ? 'free-dashboard grid w-full max-w-[1136px] items-start gap-7 px-5 py-6 pb-24 sm:px-12 lg:grid-cols-[minmax(0,1fr)_300px]'
+              : 'mx-auto flex w-full max-w-screen-lg flex-col gap-8 px-3 py-6 pb-24 sm:px-5'
+          }
+        >
+          <ContentColumn
+            {...(freeUsage ? { className: 'flex min-w-0 flex-col gap-4' } : {})}
+          >
+            {dashboardSections}
           </ContentColumn>
-          {freeUsage ? <FreeAccountRail usage={freeUsage} /> : null}
+          {freeAccountRail}
         </div>
       </section>
     );

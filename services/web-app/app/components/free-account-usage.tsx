@@ -994,7 +994,7 @@ export function FreeAccountRail({ usage }: { usage: FreeAccountUsage }) {
   const { locked: teachingLocked } = useTeachingAccess();
   if (teachingLocked) {
     return (
-      <div className="space-y-5" data-testid="free-account-rail">
+      <div className="flex flex-col gap-4" data-testid="free-account-rail">
         <LockedDashboardPendingCard />
         <LockedDashboardGettingStarted />
       </div>
