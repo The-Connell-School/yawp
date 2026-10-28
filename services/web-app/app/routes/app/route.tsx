@@ -371,44 +371,67 @@ export default function Route() {
         )}
       >
         <div
-          className={cn('mx-2 mt-1 flex justify-between py-2', {
-            'p-3': navExpanded,
+          data-testid="app-nav-header"
+          className={cn('mt-1 flex py-2', {
+            'mx-2 justify-between p-3': navExpanded,
+            'justify-center': !navExpanded,
           })}
         >
-          <Link to=".">
-            <img
-              src="/img/logo_for_light_mode.png"
-              alt="Logo"
-              className={cn('h-auto w-0 rounded object-cover py-2', {
-                'w-24': navExpanded,
-              })}
-            />
-          </Link>
-          <NavStateSwitch>
-            {({ state, fetcher }) => (
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                className="hidden sm:inline-flex"
-                aria-label={
-                  state === 'expanded'
-                    ? 'Collapse app navigation'
-                    : 'Expand app navigation'
-                }
-                disabled={['submitting', 'loading'].includes(fetcher.state)}
-              >
-                {state === 'expanded' ? (
-                  <DoubleArrowLeftIcon />
-                ) : (
-                  <DoubleArrowRightIcon />
+          {navExpanded ? (
+            <>
+              <Link to=".">
+                <img
+                  src="/img/logo_for_light_mode.png"
+                  alt="Logo"
+                  className="app-nav-expanded-logo h-auto w-24 rounded object-cover py-2"
+                />
+              </Link>
+              <NavStateSwitch>
+                {({ state, fetcher }) => (
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    className="hidden sm:inline-flex"
+                    aria-label="Collapse app navigation"
+                    disabled={['submitting', 'loading'].includes(fetcher.state)}
+                  >
+                    <DoubleArrowLeftIcon />
+                  </Button>
                 )}
-              </Button>
-            )}
-          </NavStateSwitch>
+              </NavStateSwitch>
+            </>
+          ) : (
+            <NavStateSwitch>
+              {({ fetcher }) => (
+                <div className="app-nav-collapsed-logo-swap group relative hidden size-11 shrink-0 sm:block">
+                  <Link
+                    to="."
+                    className="absolute inset-0 flex items-center justify-center rounded-xl transition-opacity group-hover:pointer-events-none group-hover:opacity-0 group-focus-within:pointer-events-none group-focus-within:opacity-0"
+                  >
+                    <img
+                      src="/img/logo_for_light_mode.png"
+                      alt="Logo"
+                      className="app-nav-collapsed-logo size-10 object-contain"
+                    />
+                  </Link>
+                  <Button
+                    type="submit"
+                    size="icon-sm"
+                    variant="ghost"
+                    className="absolute inset-0 size-11 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                    aria-label="Expand app navigation"
+                    disabled={['submitting', 'loading'].includes(fetcher.state)}
+                  >
+                    <DoubleArrowRightIcon />
+                  </Button>
+                </div>
+              )}
+            </NavStateSwitch>
+          )}
           <Button
             variant="outline"
             size="icon-sm"
-            className="sm:hidden"
+            className={cn({ 'sm:hidden': navExpanded, hidden: !navExpanded })}
             aria-label="Close app navigation"
             onClick={() => setIsMobileNavOpen(false)}
           >

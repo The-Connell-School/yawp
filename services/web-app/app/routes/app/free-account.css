@@ -11,12 +11,30 @@
   margin: 0 !important;
   padding: 0 0 14px 8px !important;
 }
-[data-free-account] > nav > div:first-child img {
+[data-free-account] > nav > div:first-child .app-nav-expanded-logo {
   width: 72px;
   height: 72px;
   margin-left: 0;
   padding: 0 !important;
   object-fit: contain;
+}
+[data-free-account] > nav.items-center {
+  padding: 20px 0 0;
+}
+[data-free-account] > nav.items-center > div:first-child {
+  justify-content: center;
+  width: 100%;
+  padding: 0 0 14px 0 !important;
+}
+[data-free-account] > nav.items-center .app-nav-collapsed-logo {
+  width: 44px;
+  height: 44px;
+  padding: 0 !important;
+  object-fit: contain;
+}
+[data-free-account] > nav.items-center .app-nav-collapsed-logo-swap {
+  width: 44px;
+  height: 44px;
 }
 [data-free-account] > nav .min-h-0.flex-1 {
   padding: 0;
