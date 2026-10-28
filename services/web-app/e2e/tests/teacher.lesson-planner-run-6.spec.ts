@@ -339,8 +339,10 @@ test.describe("Lesson Planner — Brian's sixth run", () => {
         'href',
         new RegExp(`/present/${conversationId}/[^?]+\\?from=stack$`)
       );
+      // Add it adds it right here (Brian's round 4, item 2).
       await takeToClass.getByTestId('add-conversation-deck').click();
-      await expect(page.getByRole('tab', { name: 'Ask the planner' })).toHaveAttribute('aria-selected', 'true');
+      await expect(takeToClass).toContainText('4 slides from your stack');
+      await expect(page.getByTestId('add-panel')).toHaveCount(0);
       expect(asked).toHaveLength(1);
     });
   });
