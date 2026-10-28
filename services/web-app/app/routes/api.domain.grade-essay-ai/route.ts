@@ -59,6 +59,7 @@ import {
   parseGradingAssistantStrictnessLevel,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
+import { gradingAssistantResponseHasVisibleContent } from '~/domain/grading/grading-assistant-fetcher-result';
 import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
 import { preprocessGradingAssistantCategoriesInput } from '~/domain/grading/grading-assistant-category-filter';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -1845,6 +1846,32 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     }
   }
 
+  const successPayload = {
+    success: true as const,
+    message: 'Grading Assistant suggestions generated.',
+    ...(teacherNotesEnabled ? { teacherNote: parsed.teacherNote } : {}),
+    rubricScores,
+    overallScore,
+    overallComment,
+    numericPercentage,
+    letterGrade,
+    score,
+    grammarIssues,
+    rubricConfig,
+    gradingAssistantStrictnessLevel,
+  };
+
+  if (!gradingAssistantResponseHasVisibleContent(successPayload, minScore)) {
+    return dataResponse(
+      {
+        success: false,
+        message:
+          'Grading Assistant returned no suggestions. Please try again.',
+      },
+      { status: 502 }
+    );
+  }
+
   // Write AI grading results directly to the Submission
   if (gradingDeadlineSignal.aborted) {
     return gradingDeadlineResponse();
@@ -2019,18 +2046,5 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
-  return dataResponse({
-    success: true,
-    message: 'Grading Assistant suggestions generated.',
-    ...(teacherNotesEnabled ? { teacherNote: parsed.teacherNote } : {}),
-    rubricScores,
-    overallScore,
-    overallComment,
-    numericPercentage,
-    letterGrade,
-    score,
-    grammarIssues,
-    rubricConfig,
-    gradingAssistantStrictnessLevel,
-  });
+  return dataResponse(successPayload);
 }

@@ -1,3 +1,4 @@
+import { hasMeaningfulGradingFeedbackText } from '~/domain/grading/grading-feedback-text';
 import { isScored } from '~/domain/grading/rubric-display';
 
 type RubricScore = { score: number; comment: string };
@@ -15,15 +16,16 @@ export function hasGradingDraftToReplace(
   overallComment: string,
   numericPercentage: string,
   grammarIssueCount: number,
-  minScore = 1
+  minScore = 1,
+  hasManualPercentOverride = false
 ): boolean {
   if (grammarIssueCount > 0) return true;
-  if (overallComment.trim().length > 0) return true;
-  if (numericPercentage.trim() !== '') return true;
+  if (hasMeaningfulGradingFeedbackText(overallComment)) return true;
+  if (hasManualPercentOverride && numericPercentage.trim() !== '') return true;
   for (const r of Object.values(rubricScores)) {
     if (!r) continue;
     if (isScored(r.score, minScore)) return true;
-    if (r.comment.trim().length > 0) return true;
+    if (hasMeaningfulGradingFeedbackText(r.comment)) return true;
   }
   return false;
 }
