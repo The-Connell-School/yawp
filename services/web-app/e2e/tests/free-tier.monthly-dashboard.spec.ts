@@ -66,6 +66,11 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
   ] as const) {
     await page.setViewportSize({ width, height });
     await page.goto('/app');
+    await page.evaluate(() => document.fonts.ready);
+    await expect(page.locator('.locked-home-welcome')).toHaveCSS(
+      'font-family',
+      /Caveat/i
+    );
     await shot(page, `dashboard-${label}`);
     if (baseline) {
       for (const [route, name] of [
