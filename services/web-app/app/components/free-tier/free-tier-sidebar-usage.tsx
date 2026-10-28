@@ -30,18 +30,21 @@ export function FreeTierSidebarUsage({
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
+      <PopoverTrigger>
+        <div
           data-testid="free-tier-sidebar-usage"
           className={cn(
-            'free-tier-sidebar-usage-trigger flex w-full items-center justify-between gap-2 text-left text-sm font-medium text-foreground transition hover:bg-foreground/5',
+            'flex w-full items-center justify-between gap-2 border-t text-left text-sm font-medium text-foreground transition hover:bg-foreground/5',
             loading && 'opacity-60'
           )}
         >
           <span>Usage</span>
-          <ChevronRight size={16} className="shrink-0 text-muted-foreground" aria-hidden />
-        </button>
+          <ChevronRight
+            size={16}
+            className="shrink-0 text-muted-foreground"
+            aria-hidden
+          />
+        </div>
       </PopoverTrigger>
       <PopoverContent
         side="right"
