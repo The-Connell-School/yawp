@@ -9,6 +9,19 @@ export function useFreeTierLockedB2PageChrome() {
   return Boolean(freeUsage && locked);
 }
 
+/** Shared main-column inset for all standard /app pages under `[data-free-account]`. */
+export function useFreeTierStandardPageShell() {
+  return Boolean(useFreeAccountUsage());
+}
+
+export function freeTierStandardPageShellClassName(extra?: string) {
+  return freeTierLockedPageOuterClassName(extra);
+}
+
+export function freeTierStandardPageBodyClassName(extra?: string) {
+  return freeTierLockedPageBodyClassName(extra);
+}
+
 export function FreeTierLockedPageHeader({
   title,
   actions,

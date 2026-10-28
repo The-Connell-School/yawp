@@ -2,8 +2,8 @@ import { classCodeUniquenessEnabled, resolveClassCode, ClassCodeCollisionError }
 import { useFreeAccountUsage } from '~/components/free-account-usage';
 import {
   FreeTierLockedPageHeader,
-  freeTierLockedPageBodyClassName,
-  freeTierLockedPageOuterClassName,
+  freeTierStandardPageBodyClassName,
+  freeTierStandardPageShellClassName,
   useFreeTierLockedB2PageChrome,
 } from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { Plus, User } from 'lucide-react';
@@ -457,8 +457,8 @@ function TeacherMyClassesView({
   return (
     <section
       className={
-        freeTierB2
-          ? freeTierLockedPageOuterClassName()
+        freeUsage
+          ? freeTierStandardPageShellClassName()
           : 'no-scrollbar flex h-full w-full flex-col overflow-y-scroll'
       }
     >
@@ -489,8 +489,10 @@ function TeacherMyClassesView({
 
       <div
         className={
-          freeTierB2
-            ? freeTierLockedPageBodyClassName('mx-0 max-w-none')
+          freeUsage
+            ? freeTierStandardPageBodyClassName(
+                freeTierB2 ? 'mx-0 max-w-none' : undefined
+              )
             : 'mx-auto w-full min-w-0 max-w-screen-lg px-3 py-4 pb-24 sm:px-5'
         }
       >

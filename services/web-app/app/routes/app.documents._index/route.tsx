@@ -3,9 +3,10 @@ import { useLoaderData, useSearchParams } from 'react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FreeTierLockedPageHeader,
-  freeTierLockedPageBodyClassName,
-  freeTierLockedPageOuterClassName,
+  freeTierStandardPageBodyClassName,
+  freeTierStandardPageShellClassName,
   useFreeTierLockedB2PageChrome,
+  useFreeTierStandardPageShell,
 } from '~/components/free-tier/free-tier-teacher-page-chrome';
 import {
   TeacherDocumentWorkPanel,
@@ -548,12 +549,13 @@ export default function StudentWorkRoute() {
   };
 
   const freeTierB2 = useFreeTierLockedB2PageChrome();
+  const freeTierShell = useFreeTierStandardPageShell();
 
   return (
     <section
       className={
-        freeTierB2
-          ? freeTierLockedPageOuterClassName()
+        freeTierShell
+          ? freeTierStandardPageShellClassName()
           : 'no-scrollbar flex h-full w-full flex-col overflow-y-scroll'
       }
     >
@@ -575,8 +577,8 @@ export default function StudentWorkRoute() {
 
       <div
         className={
-          freeTierB2
-            ? freeTierLockedPageBodyClassName('max-w-screen-2xl')
+          freeTierShell
+            ? freeTierStandardPageBodyClassName('max-w-screen-2xl')
             : 'mx-auto w-full max-w-screen-2xl px-3 py-4 pb-24 sm:px-5'
         }
       >

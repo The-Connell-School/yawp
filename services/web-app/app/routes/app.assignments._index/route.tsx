@@ -1,5 +1,11 @@
 import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
+import {
+  FreeTierLockedPageHeader,
+  freeTierStandardPageBodyClassName,
+  freeTierStandardPageShellClassName,
+  useFreeTierLockedB2PageChrome,
+} from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import {
   type ActionFunctionArgs,
@@ -567,10 +573,14 @@ export default function MyAssignmentsRoute() {
   }, [filteredAssignments, setSelectedAssignmentIds]);
 
   const hasSelection = selectedAssignmentIds.length > 0;
+  const freeTierB2 = useFreeTierLockedB2PageChrome();
+  const freeTierShell = Boolean(freeUsage);
 
-  return (
-    <div className="mx-auto h-full min-h-0 w-full max-w-5xl overflow-y-auto px-4 py-8">
-      <h1 className="mb-6 text-2xl font-semibold">My Assignments</h1>
+  const assignmentsContent = (
+    <>
+      {!freeTierB2 ? (
+        <h1 className="mb-6 text-2xl font-semibold">My Assignments</h1>
+      ) : null}
 
       {SAVED_ASSIGNMENTS_ENABLED ? (
         <SavedAssignmentsPanel
@@ -825,6 +835,25 @@ export default function MyAssignmentsRoute() {
         teacherClasses={assignmentCreationClasses}
         teachingLocked={teachingLocked}
       />
+    </>
+  );
+
+  if (freeTierShell) {
+    return (
+      <section className={freeTierStandardPageShellClassName()}>
+        {freeTierB2 ? (
+          <FreeTierLockedPageHeader title="My Assignments" />
+        ) : null}
+        <div className={freeTierStandardPageBodyClassName('max-w-5xl')}>
+          {assignmentsContent}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <div className="mx-auto h-full min-h-0 w-full max-w-5xl overflow-y-auto px-4 py-8">
+      {assignmentsContent}
     </div>
   );
 }

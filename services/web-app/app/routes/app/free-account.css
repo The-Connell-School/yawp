@@ -107,6 +107,7 @@
   height: 17px;
 }
 
+/* Standard main-column inset for sidebar + scrollable list pages (see freeTierStandardPageShellClassName). */
 [data-free-account] .free-tier-b2-page-shell {
   box-sizing: border-box;
   padding: 28px 40px 0;
@@ -120,6 +121,7 @@
     padding: 16px 16px 0;
   }
 }
+/* Intentional exceptions (no shell inset on route root): Reporter, Lesson Planner, document/collab editors. */
 
 [data-free-account] .free-dashboard h2 {
   font-size: 17px;
@@ -161,7 +163,7 @@
 [data-free-account] .locked-home-b2 {
   width: 100%;
   max-width: none;
-  padding: 28px 40px 40px;
+  padding: 0;
   box-sizing: border-box;
 }
 [data-free-account] .locked-home-main {
@@ -211,9 +213,6 @@
   }
 }
 @media (max-width: 1023px) {
-  [data-free-account] .locked-home-b2 {
-    padding: 16px;
-  }
   [data-free-account] .locked-home-main {
     gap: 16px;
   }
@@ -228,7 +227,10 @@
 }
 
 @media (min-width: 1024px) {
-  [data-free-account] [data-testid='app._index'] > div:first-child > div {
+  [data-free-account]
+    [data-testid='app._index']
+    > div:first-child:not(.locked-home-b2)
+    > div {
     max-width: 1236px;
     padding: 24px 48px;
   }

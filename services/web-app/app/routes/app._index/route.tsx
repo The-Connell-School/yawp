@@ -4,6 +4,7 @@ import {
   FreeAccountRail,
 } from '~/components/free-account-usage';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import { freeTierStandardPageShellClassName } from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { TeachingAccessDashboardSkeleton } from '~/components/free-tier/teaching-access-dashboard-skeleton';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
@@ -43,6 +44,7 @@ import { AssignmentsAtAGlance } from './components/assignments-at-a-glance';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
 import { TeacherGradingAtAGlance } from './components/teacher-grading-at-a-glance';
 import { formatClassLabel } from '~/utils/class-display';
+import { cn } from '~/utils/misc';
 import { writingPracticeAssignmentTitle } from '~/utils/writing-lessons/assignment-title';
 import {
   computeAssignedProgress,
@@ -565,7 +567,10 @@ export default function AppRoute() {
       return (
         <section
           data-testid="app._index"
-          className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
+          className={cn(
+            'no-scrollbar flex h-full w-full flex-col overflow-y-scroll',
+            freeTierStandardPageShellClassName()
+          )}
         >
           <div className="locked-home-b2 free-dashboard w-full pb-24">
             <div className="locked-home-columns">
@@ -598,7 +603,10 @@ export default function AppRoute() {
     return (
       <section
         data-testid="app._index"
-        className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
+        className={cn(
+          'no-scrollbar flex h-full w-full flex-col overflow-y-scroll',
+          freeUsage && freeTierStandardPageShellClassName()
+        )}
       >
         <div className="flex w-full justify-between border-b bg-secondary">
           <div className="mx-auto flex w-full max-w-screen-lg flex-wrap items-end justify-between gap-3 p-3 sm:p-5">
@@ -622,7 +630,7 @@ export default function AppRoute() {
         <div
           className={
             freeUsage
-              ? 'free-dashboard grid w-full max-w-[1136px] items-start gap-7 px-5 py-6 pb-24 sm:px-12 lg:grid-cols-[minmax(0,1fr)_300px]'
+              ? 'free-dashboard grid w-full max-w-[1136px] items-start gap-7 py-6 pb-24 lg:grid-cols-[minmax(0,1fr)_300px]'
               : 'mx-auto flex w-full max-w-screen-lg flex-col gap-8 px-3 py-6 pb-24 sm:px-5'
           }
         >

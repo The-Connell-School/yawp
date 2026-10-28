@@ -24,6 +24,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
+import { useFreeAccountUsage } from '~/components/free-account-usage';
+import {
+  freeTierStandardPageBodyClassName,
+  freeTierStandardPageShellClassName,
+} from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { useUser } from '~/hooks/useUser.js';
 import { useRouteLoaderData } from 'react-router';
 import type { Route as RootRoute } from '../../+types/root';
@@ -916,12 +921,22 @@ export default function AppAssignmentTypesIdRoute() {
     ? requestedClassId
     : undefined;
 
+  const freeUsage = useFreeAccountUsage();
+  const pageShellClassName = freeUsage
+    ? freeTierStandardPageShellClassName()
+    : 'no-scrollbar h-full w-full overflow-y-scroll';
+  const pageBodyClassName = freeUsage
+    ? freeTierStandardPageBodyClassName(
+        'flex max-w-screen-md flex-col'
+      )
+    : 'mx-auto flex h-full w-full max-w-screen-md flex-col p-3 sm:p-5';
+
   return (
     <div
-      className="no-scrollbar h-full w-full overflow-y-scroll"
+      className={pageShellClassName}
       data-tour-variant={data.assignmentType.kind ?? undefined}
     >
-      <div className="mx-auto flex h-full w-full max-w-screen-md flex-col p-3 sm:p-5">
+      <div className={pageBodyClassName}>
         <div className="mb-4 flex justify-between gap-2">
           {/* Arriving from a lesson, the way back is to that lesson. The
               planner embeds this page's creator inside a plan, so a teacher
