@@ -254,7 +254,7 @@ test.describe("Brian's round 4 (Oct 28)", () => {
     // One card on the left: at a glance, the writing bars in their box, and Contents.
     const sidebar = page.getByTestId('unit-sidebar');
     await expect(sidebar.getByRole('heading', { name: 'Unit at a glance' })).toBeVisible();
-    await expect(sidebar.getByTestId('unit-glance-lessons')).toHaveText('1');
+    await expect(sidebar.getByTestId('unit-glance-lessons')).toHaveText('1 · 1 draft');
     await expect(sidebar.getByTestId('unit-glance-writing')).toHaveText('28 min · 56%');
     await expect(sidebar.getByTestId('day-bars-box')).toContainText('Writing minutes, day by day');
     await expect(sidebar.getByRole('heading', { name: 'Contents' })).toBeVisible();
