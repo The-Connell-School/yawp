@@ -31,6 +31,7 @@ import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/as
 import { scaleDailyPagesForAssignment } from '~/domain/assignment-types/daily-pages-assignment-points';
 import type { RubricCategory as GradingRubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
+  isBandScoredRubric,
   isGrammarHighlightCategory,
   isScoreInCategoryAllowedScores,
   isScoreInCategoryBands,
@@ -62,6 +63,8 @@ import {
 import { gradingAssistantResponseHasVisibleContent } from '~/domain/grading/grading-assistant-fetcher-result';
 import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
 import { preprocessGradingAssistantCategoriesInput } from '~/domain/grading/grading-assistant-category-filter';
+import { expandGradingAssistantCategoriesInput } from '~/domain/grading/grading-assistant-categories-normalize';
+import { inferHolisticTupleFromCategoryScores } from '~/domain/grading/holistic-tier-from-categories';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   extractJsonObjectCandidates,
@@ -176,7 +179,11 @@ function buildAiSchemas({
       : {}),
   });
   const AiCategoriesSchema = z.preprocess(
-    (input) => preprocessGradingAssistantCategoriesInput(input, rubricKeys),
+    (input) =>
+      preprocessGradingAssistantCategoriesInput(
+        expandGradingAssistantCategoriesInput(input, rubricCategories),
+        rubricKeys
+      ),
     z
       .array(AiCategorySchema)
       .superRefine((categories, ctx) => {
@@ -1357,12 +1364,18 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   const extractCategories = (
     value: unknown
   ): z.infer<typeof AiCategoriesSchema> | null => {
-    const categoriesCandidate = Array.isArray(value)
-      ? value
-      : value && typeof value === 'object'
-        ? (value as { categories?: unknown }).categories
+    const expanded = expandGradingAssistantCategoriesInput(
+      value,
+      rubricCategories
+    );
+    const categoriesCandidate = Array.isArray(expanded)
+      ? expanded
+      : expanded && typeof expanded === 'object'
+        ? (expanded as { categories?: unknown }).categories
         : null;
-    const parsedCategories = AiCategoriesSchema.safeParse(categoriesCandidate);
+    const parsedCategories = AiCategoriesSchema.safeParse(
+      expandGradingAssistantCategoriesInput(categoriesCandidate, rubricCategories)
+    );
     return parsedCategories.success ? parsedCategories.data : null;
   };
 
@@ -1602,14 +1615,60 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     let validated =
       assignmentTotalCandidate != null ? validateAndClamp(parsed) : { ok: false as const };
 
+    const inferHolisticFromCategoryScores = () => {
+      const rubricScoreMap = parsed.categories.reduce<
+        Record<string, { score: number }>
+      >((acc, item) => {
+        acc[item.key] = { score: item.score };
+        return acc;
+      }, {});
+      const inferred = inferHolisticTupleFromCategoryScores({
+        rubricScores: rubricScoreMap,
+        rubricCategories,
+        assignmentTotal,
+      });
+      if (!inferred) return { ok: false as const };
+      return validateAndClamp({
+        ...parsed,
+        overallTier: inferred.overallTier,
+        overallPoints: inferred.overallPoints,
+      });
+    };
+
+    if (useHolistic && !validated.ok && isBandScoredRubric(rubricCategories)) {
+      const inferredValidation = inferHolisticFromCategoryScores();
+      if (inferredValidation.ok) {
+        validated = inferredValidation;
+        const rubricScoreMap = Object.fromEntries(
+          parsed.categories.map((item) => [item.key, { score: item.score }])
+        );
+        const inferredTuple = inferHolisticTupleFromCategoryScores({
+          rubricScores: rubricScoreMap,
+          rubricCategories,
+          assignmentTotal,
+        });
+        if (inferredTuple) {
+          parsed = withPreservedHolisticFields(
+            {
+              ...parsed,
+              overallTier: inferredTuple.overallTier,
+              overallPoints: inferredTuple.overallPoints,
+            },
+            parsed
+          ) as typeof parsed;
+        }
+      }
+    }
+
     // Retry once when invalid holistic fields are returned.
     if (useHolistic && !validated.ok) {
+      const parsedBeforeHolisticRetry = parsed;
       try {
         const retryText = await getGradingLlmCompletion({
           model,
           system,
           messages: compiledInvocation.messages,
-          maxTokens,
+          maxTokens: rubricEvaluationMaxTokens,
           metadata: {
             feature: 'grading',
             kind: 'rubric-evaluation',
@@ -1619,8 +1678,14 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
             assignmentTypeGradingLabel: resolvedGradingConfig.label,
           },
         });
-        parsed = await parseAiResponse(retryText);
-        validated = validateAndClamp(parsed);
+        const retryParsed = await parseAiResponse(retryText);
+        const retryValidated = validateAndClamp(retryParsed);
+        if (retryValidated.ok) {
+          parsed = retryParsed;
+          validated = retryValidated;
+        } else {
+          parsed = parsedBeforeHolisticRetry;
+        }
       } catch (error) {
         if (isGradingRequestDeadlineError(error)) {
           return gradingDeadlineResponse();

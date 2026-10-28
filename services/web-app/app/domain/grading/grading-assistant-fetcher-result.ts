@@ -46,7 +46,14 @@ export function gradingAssistantResponseHasVisibleContent(
     return true;
   }
 
-  if (Array.isArray(data.grammarIssues) && data.grammarIssues.length > 0) {
+  const grammarIssueList =
+    data.grammarIssues &&
+    typeof data.grammarIssues === 'object' &&
+    !Array.isArray(data.grammarIssues) &&
+    'issues' in data.grammarIssues
+      ? (data.grammarIssues as { issues?: unknown }).issues
+      : data.grammarIssues;
+  if (Array.isArray(grammarIssueList) && grammarIssueList.length > 0) {
     return true;
   }
 

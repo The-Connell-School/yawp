@@ -268,8 +268,15 @@ export function TeacherGradingPanel({
     }
 
     if (aiFetcher.data?.success) {
+      const responseMinScore =
+        typeof aiFetcher.data.rubricConfig?.minScore === 'number'
+          ? aiFetcher.data.rubricConfig.minScore
+          : 1;
       if (
-        !gradingAssistantResponseHasVisibleContent(aiFetcher.data, 1)
+        !gradingAssistantResponseHasVisibleContent(
+          aiFetcher.data,
+          responseMinScore
+        )
       ) {
         toast.error(
           'Grading Assistant finished without any suggestions. Please try again.'
