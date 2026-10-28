@@ -30,6 +30,8 @@ import { usePaperSteps } from './yawp-checklist';
 import { PIECE_DRAG_TYPE, RunOfShow } from './run-of-show';
 import { TakeToClass } from './take-to-class';
 import { PrintForClass } from './print-for-class';
+import { LessonSetCelebration } from './lesson-set-celebration';
+import { sayYawp } from '~/domain/lesson-planner/celebration';
 import { PostToClass, SendLesson } from './share-cards';
 import { TimeBar } from './time-bar';
 import { HEADING_FONT, STACK_FONTS_HREF, STACK_THEME } from './theme';
@@ -156,6 +158,8 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
     [kevinNotes, timing]
   );
   const [onPaper, markPaper] = usePaperSteps(conversationId);
+  // Confetti and "Yaaaawp!" when the teacher sets the lesson (Brian's round 4, item 4).
+  const [celebrating, setCelebrating] = useState(false);
   const missing = useMemo(() => notYetInYawp(steps, onPaper), [steps, onPaper]);
 
   const [openId, setOpenId] = useState<string | null>(null);
@@ -562,7 +566,13 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
               missing={missing}
               onPaper={markPaper}
               busy={busy}
-              onSet={() => post(setFetcher, STACK_API, { intent: 'set-lesson' })}
+              onSet={() => {
+                if (kevinNotes) {
+                  sayYawp();
+                  setCelebrating(true);
+                }
+                post(setFetcher, STACK_API, { intent: 'set-lesson' });
+              }}
               onKeepEditing={() => post(setFetcher, STACK_API, { intent: 'unset-lesson' })}
               runShow={reviewFlags.runShow}
               templates={reviewFlags.templates}
@@ -677,6 +687,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
         </div>
       </div>
 
+      {celebrating ? <LessonSetCelebration onDone={() => setCelebrating(false)} /> : null}
       <AddPanel
         conversationId={conversationId}
         open={panel.open}
