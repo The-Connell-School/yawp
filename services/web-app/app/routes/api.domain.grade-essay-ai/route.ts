@@ -1846,6 +1846,32 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     }
   }
 
+  const successPayload = {
+    success: true as const,
+    message: 'Grading Assistant suggestions generated.',
+    ...(teacherNotesEnabled ? { teacherNote: parsed.teacherNote } : {}),
+    rubricScores,
+    overallScore,
+    overallComment,
+    numericPercentage,
+    letterGrade,
+    score,
+    grammarIssues,
+    rubricConfig,
+    gradingAssistantStrictnessLevel,
+  };
+
+  if (!gradingAssistantResponseHasVisibleContent(successPayload, minScore)) {
+    return dataResponse(
+      {
+        success: false,
+        message:
+          'Grading Assistant returned no suggestions. Please try again.',
+      },
+      { status: 502 }
+    );
+  }
+
   // Write AI grading results directly to the Submission
   if (gradingDeadlineSignal.aborted) {
     return gradingDeadlineResponse();
@@ -2018,32 +2044,6 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     console.warn('Blackboard AGS passback (mock) failed', {
       error: buildSafeErrorForLog(error),
     });
-  }
-
-  const successPayload = {
-    success: true as const,
-    message: 'Grading Assistant suggestions generated.',
-    ...(teacherNotesEnabled ? { teacherNote: parsed.teacherNote } : {}),
-    rubricScores,
-    overallScore,
-    overallComment,
-    numericPercentage,
-    letterGrade,
-    score,
-    grammarIssues,
-    rubricConfig,
-    gradingAssistantStrictnessLevel,
-  };
-
-  if (!gradingAssistantResponseHasVisibleContent(successPayload, minScore)) {
-    return dataResponse(
-      {
-        success: false,
-        message:
-          'Grading Assistant returned no suggestions. Please try again.',
-      },
-      { status: 502 }
-    );
   }
 
   return dataResponse(successPayload);
