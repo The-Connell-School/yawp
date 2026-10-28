@@ -474,6 +474,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: assignmentType.id,
       title: assignmentType.title,
       kind: assignmentType.kind,
+      systemKey: assignmentType.systemKey,
     },
   });
 

@@ -394,6 +394,16 @@ for (const width of [390, 1440]) {
     await expect(page).toHaveURL(/\/how-it-works/);
     await page.getByRole('link', { name: /Back to dashboard/i }).click();
     await expectLockedAppHome(page);
+    await page
+      .getByTestId('free-assignment-tiles')
+      .getByRole('link', { name: /Daily Pages.*See how it works/i })
+      .click();
+    await expect(page).toHaveURL(/\/how-it-works/);
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Daily Pages' })
+    ).toBeVisible();
+    await page.getByRole('link', { name: /Back to dashboard/i }).click();
+    await expectLockedAppHome(page);
     if (width === 390) {
       await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
     }

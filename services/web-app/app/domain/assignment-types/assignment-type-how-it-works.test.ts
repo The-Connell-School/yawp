@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   assignmentTypeHasHowItWorksGuide,
   assignmentTypeHowItWorksPath,
+  siteLicenseLockedTileHasHowItWorksGuide,
 } from './assignment-type-how-it-works';
 
 describe('assignmentTypeHowItWorksPath', () => {
@@ -47,5 +48,18 @@ describe('assignmentTypeHasHowItWorksGuide', () => {
         kind: 'daily_pages',
       })
     ).toBe(false);
+  });
+});
+
+describe('siteLicenseLockedTileHasHowItWorksGuide', () => {
+  test('links every site-license carousel tile key to how-it-works', () => {
+    expect(siteLicenseLockedTileHasHowItWorksGuide('thesis_driven_essay')).toBe(
+      true
+    );
+    expect(siteLicenseLockedTileHasHowItWorksGuide('daily_pages')).toBe(true);
+    expect(siteLicenseLockedTileHasHowItWorksGuide('ap_history_essay')).toBe(
+      true
+    );
+    expect(siteLicenseLockedTileHasHowItWorksGuide('unknown_tile')).toBe(false);
   });
 });
