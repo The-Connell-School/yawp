@@ -15,8 +15,8 @@ function FreeTierNavSvg({
   return (
     <svg
       aria-hidden
-      width={15}
-      height={15}
+      width={17}
+      height={17}
       viewBox="0 0 24 24"
       className="shrink-0"
       {...stroke}

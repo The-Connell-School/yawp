@@ -1,41 +1,43 @@
 /* V2 presentation is scoped to the existing eligible free-account gate. */
 [data-free-account] > nav:not(.items-center) {
-  width: 208px;
-  min-width: 208px;
+  width: 224px;
+  min-width: 224px;
   background: hsl(53.3333 24.3243% 92.7451%);
   border-right-color: hsl(51.4286 7.8652% 82.549%);
-  padding: 16px 8px 0;
+  padding: 20px 12px 0;
 }
 [data-free-account] > nav > div:first-child {
   min-height: auto;
   margin-bottom: 0;
 }
 [data-free-account] > nav > div:first-child img {
-  width: 64px;
+  width: 72px;
+  height: 72px;
   margin-left: 8px;
+  object-fit: contain;
 }
 [data-free-account] > nav .min-h-0.flex-1 {
   padding: 0 0 8px;
 }
 [data-free-account] > nav .grid.gap-1 {
-  gap: 1px;
+  gap: 2px;
 }
 [data-free-account] > nav .grid > div.flex.w-full {
-  min-height: 28px;
+  min-height: 34px;
   padding: 0;
-  border-radius: 4px;
-  gap: 8px;
+  border-radius: 6px;
+  gap: 10px;
 }
 [data-free-account] > nav .grid > div.flex.w-full:has(a[aria-current='page']) {
   background: hsl(15 55% 51% / 0.1);
 }
 [data-free-account] > nav .grid > div.flex.w-full > a {
-  min-height: 28px;
+  min-height: 34px;
   box-sizing: border-box;
-  padding: 4px 8px;
-  border-radius: 4px;
-  gap: 8px;
-  font-size: 13px;
+  padding: 7px 12px;
+  border-radius: 6px;
+  gap: 10px;
+  font-size: 14px;
   line-height: 20px;
   font-weight: 400;
   box-shadow: none;
@@ -46,11 +48,28 @@
   font-weight: 600;
 }
 [data-free-account] > nav .grid > div.flex.w-full > a svg {
-  width: 15px;
-  height: 15px;
+  width: 17px;
+  height: 17px;
 }
 [data-free-account] > nav a span { white-space: nowrap; }
-[data-free-account] > nav a span.flex-col span { white-space: normal; }
+[data-free-account] > nav a span.flex-col span {
+  white-space: normal;
+  font-size: 12px;
+  line-height: 1.25;
+}
+[data-free-account] > nav > div.flex.shrink-0 .border-t {
+  min-height: 34px;
+  margin-top: auto;
+  border-top-color: hsl(51.4286 7.8652% 82.549%);
+  padding: 7px 12px;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 20px;
+}
+[data-free-account] > nav > div.flex.shrink-0 .border-t svg {
+  width: 17px;
+  height: 17px;
+}
 
 [data-free-account] .free-dashboard h2 {
   font-size: 17px;
@@ -90,15 +109,17 @@
 
 /* Locked Home B2 (plain welcome, sticky right rail on desktop). */
 [data-free-account] .locked-home-b2 {
-  display: flex;
   width: 100%;
   max-width: none;
-  flex-direction: column;
-  gap: 20px;
   padding: 28px 40px 40px;
+  box-sizing: border-box;
+}
+[data-free-account] .locked-home-main {
+  gap: 20px;
 }
 [data-free-account] .locked-home-welcome {
   margin: 0;
+  padding: 0;
   font-size: 24px;
   font-weight: 700;
   line-height: 1.2;
@@ -130,6 +151,8 @@
 @media (max-width: 1023px) {
   [data-free-account] .locked-home-b2 {
     padding: 16px;
+  }
+  [data-free-account] .locked-home-main {
     gap: 16px;
   }
   [data-free-account] .locked-home-welcome {
@@ -150,8 +173,8 @@
 }
 @media (max-width: 639px) {
   [data-free-account] > nav:not(.items-center) {
-    width: 212px;
-    min-width: 212px;
+    width: 224px;
+    min-width: 224px;
   }
   [data-free-account]
     .free-dashboard

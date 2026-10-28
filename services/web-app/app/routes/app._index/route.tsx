@@ -568,18 +568,20 @@ export default function AppRoute() {
           className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
         >
           <div className="locked-home-b2 free-dashboard w-full pb-24">
-            <h1 className="locked-home-welcome">
-              Welcome, {welcomeName}!
-            </h1>
-            <aside
-              className="locked-home-rail-mobile"
-              aria-label="Your request and next steps"
-            >
-              {freeAccountRail}
-            </aside>
             <div className="locked-home-columns">
-              <ContentColumn className="flex min-w-0 flex-1 flex-col gap-4">
-                {dashboardSections}
+              <ContentColumn className="locked-home-main flex min-w-0 flex-1 flex-col">
+                <h1 className="locked-home-welcome">
+                  Welcome, {welcomeName}!
+                </h1>
+                <aside
+                  className="locked-home-rail-mobile"
+                  aria-label="Your request and next steps"
+                >
+                  {freeAccountRail}
+                </aside>
+                <div className="locked-home-sections flex flex-col gap-4">
+                  {dashboardSections}
+                </div>
               </ContentColumn>
               <aside
                 className="locked-home-rail-desktop"
