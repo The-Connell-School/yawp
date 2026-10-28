@@ -47,6 +47,10 @@ import { useUser } from '~/hooks/useUser';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
 import { cn } from '~/utils/misc';
 import { NavStateSwitch, useNavState } from '../api.preferences.nav/route';
+import {
+  appShellNavExpanded,
+  appShellUsesMobileDrawer,
+} from './app-shell-layout';
 import { ContrastPreferenceSwitch } from '../api.preferences.contrast/route';
 import { Switch } from '~/components/ui/switch';
 import { Check } from 'lucide-react';
@@ -297,8 +301,13 @@ export default function Route() {
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'base' || breakpoint === 'sm';
   useFreeTierNavAutoCollapse(Boolean(freeAccountUsage) && !isMobile);
-  const isNavExpanded = navState === 'expanded' || isMobile;
-  const navExpanded = (isMobile && isMobileNavOpen) || isNavExpanded;
+  const navPrefExpanded = navState === 'expanded';
+  const navExpanded = appShellNavExpanded({
+    isMobile,
+    mobileNavOpen: isMobileNavOpen,
+    navPrefExpanded,
+  });
+  const mobileDrawer = appShellUsesMobileDrawer(isMobile);
 
   const mobileTopBarTitle = resolveAppMobileTopBarTitle(
     matches,
@@ -365,10 +374,10 @@ export default function Route() {
       <nav
         data-tour="app-nav"
         className={cn(
-          'z-20 flex h-full min-h-0 w-[212px] min-w-[212px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out sm:translate-x-0',
+          'z-20 flex h-full min-h-0 w-[212px] min-w-[212px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out max-sm:fixed max-sm:inset-y-0 max-sm:left-0 sm:static sm:translate-x-0',
           {
             'translate-x-0': isMobileNavOpen,
-            'w-[56px] min-w-0 items-center': !navExpanded,
+            'w-[56px] min-w-0 items-center': !navExpanded && !mobileDrawer,
           }
         )}
       >
@@ -629,10 +638,8 @@ export default function Route() {
       </nav>
       <div
         className={cn(
-          'flex min-w-full flex-1 flex-col transition-all duration-300 ease-in-out sm:min-w-0 sm:translate-x-0',
+          'flex min-w-0 flex-1 flex-col transition-all duration-300 ease-in-out sm:min-w-0',
           {
-            'translate-x-0': isMobileNavOpen,
-            '-translate-x-[212px]': isNavExpanded,
             'opacity-50': !isInAssistants && isMobileNavOpen,
           }
         )}
