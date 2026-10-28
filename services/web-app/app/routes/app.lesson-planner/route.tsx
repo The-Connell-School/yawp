@@ -26,6 +26,10 @@ import {
   type LoaderFunctionArgs,
 } from 'react-router';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import {
+  FreeTierLockedPageHeader,
+  useFreeTierLockedB2PageChrome,
+} from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { TeachingAccessLessonPlannerSkeleton } from '~/components/free-tier/teaching-access-lesson-planner-skeleton';
 import {
   BookmarkCheck,
@@ -423,6 +427,7 @@ export default function LessonPlannerRoute() {
   const navigation = useNavigation();
   const { locked: teachingLocked, loading: teachingLoading } =
     useTeachingAccess();
+  const freeTierB2 = useFreeTierLockedB2PageChrome();
   const freeUsage = useFreeAccountUsage();
   const {
     conversations,
@@ -1033,6 +1038,87 @@ export default function LessonPlannerRoute() {
 
       {/* Chat */}
       <div className="flex h-full min-w-0 flex-1 flex-col">
+        {freeTierB2 ? (
+          <div className="free-tier-b2-page-shell shrink-0 !pb-0 !pt-4">
+            <FreeTierLockedPageHeader
+              title="Lesson Planner"
+              actions={
+                <>
+                  <Link
+                    to="/app/lesson-planner/how-it-works"
+                    aria-label="See how it works"
+                    data-tour="planner-guide"
+                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-primary/40 bg-background px-2.5 text-sm font-medium text-primary transition hover:bg-primary/10 sm:px-3"
+                  >
+                    <CirclePlay size={16} />
+                    <span className="hidden sm:inline">See how it works</span>
+                  </Link>
+                  <div className="flex shrink-0 items-center gap-2 md:hidden">
+                    <label
+                      className="sr-only"
+                      htmlFor="lesson-planner-mobile-history"
+                    >
+                      Switch lesson
+                    </label>
+                    <select
+                      id="lesson-planner-mobile-history"
+                      aria-label="Switch lesson"
+                      value={selectedConversation?.id ?? ''}
+                      onChange={(event) => {
+                        if (!event.target.value) return;
+                        const next = new URLSearchParams(searchParams);
+                        next.set('c', event.target.value);
+                        next.delete('from');
+                        next.delete('step');
+                        setSearchParams(next);
+                      }}
+                      className="h-9 max-w-32 rounded-md border bg-background px-2 text-sm"
+                    >
+                      <option value="">Switch lesson</option>
+                      {conversations.map((conversation) => (
+                        <option
+                          key={conversation.id}
+                          value={conversation.id}
+                        >
+                          {conversation.title}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      aria-label="New lesson"
+                      onClick={startNewLesson}
+                    >
+                      <Plus size={16} />
+                    </Button>
+                  </div>
+                </>
+              }
+            />
+            {selectedConversation?.unitDay != null && unitMapConversation ? (
+              <p
+                className="mt-1 truncate text-sm text-muted-foreground"
+                data-testid="unit-day-breadcrumb"
+              >
+                Day {selectedConversation.unitDay} ·{' '}
+                <button
+                  type="button"
+                  data-testid="back-to-unit-map"
+                  onClick={() => {
+                    const next = new URLSearchParams(searchParams);
+                    next.set('c', unitMapConversation);
+                    setSearchParams(next);
+                  }}
+                  className="underline hover:text-primary"
+                >
+                  Back to the unit map
+                </button>
+              </p>
+            ) : null}
+          </div>
+        ) : (
         <div className="border-b bg-secondary px-4 py-3">
           <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
             <Lightbulb size={20} className="shrink-0 text-primary" />
@@ -1124,6 +1210,7 @@ export default function LessonPlannerRoute() {
             </div>
           </div>
         </div>
+        )}
 
         <div
           ref={transcriptRef}

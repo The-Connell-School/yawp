@@ -8,16 +8,18 @@
 }
 [data-free-account] > nav > div:first-child {
   min-height: auto;
-  margin-bottom: 0;
+  margin: 0 !important;
+  padding: 0 0 14px 8px !important;
 }
 [data-free-account] > nav > div:first-child img {
   width: 72px;
   height: 72px;
-  margin-left: 8px;
+  margin-left: 0;
+  padding: 0 !important;
   object-fit: contain;
 }
 [data-free-account] > nav .min-h-0.flex-1 {
-  padding: 0 0 8px;
+  padding: 0;
 }
 [data-free-account] > nav .grid.gap-1 {
   gap: 2px;
@@ -51,27 +53,40 @@
   width: 17px;
   height: 17px;
 }
-[data-free-account] > nav a.free-tier-nav-locked-link {
-  align-items: flex-start;
-}
 [data-free-account] > nav a span { white-space: nowrap; }
-[data-free-account] > nav a span.flex-col span {
-  white-space: normal;
-  font-size: 12px;
-  line-height: 1.25;
+[data-free-account] .free-tier-sidebar-usage-trigger {
+  margin: 0 -12px;
+  padding: 12px 24px;
+  border-top: 1px solid hsl(51.4286 7.8652% 82.549%);
+  font-size: 14px;
+  line-height: 20px;
 }
-[data-free-account] > nav > div.flex.shrink-0 .border-t {
+[data-free-account] > nav > div.flex.shrink-0 [data-testid='app-nav-settings'] {
+  margin: auto -12px 0;
   min-height: 34px;
-  margin-top: auto;
   border-top-color: hsl(51.4286 7.8652% 82.549%);
-  padding: 7px 12px;
+  padding: 12px 24px;
   gap: 10px;
   font-size: 14px;
   line-height: 20px;
 }
-[data-free-account] > nav > div.flex.shrink-0 .border-t svg {
+[data-free-account] > nav > div.flex.shrink-0 [data-testid='app-nav-settings'] svg {
   width: 17px;
   height: 17px;
+}
+
+[data-free-account] .free-tier-b2-page-shell {
+  box-sizing: border-box;
+  padding: 28px 40px 0;
+}
+[data-free-account] .free-tier-b2-page-body {
+  padding-top: 20px;
+  padding-bottom: 6rem;
+}
+@media (max-width: 1023px) {
+  [data-free-account] .free-tier-b2-page-shell {
+    padding: 16px 16px 0;
+  }
 }
 
 [data-free-account] .free-dashboard h2 {

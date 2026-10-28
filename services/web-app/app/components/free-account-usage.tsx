@@ -52,6 +52,11 @@ import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-co
 import { LockedDashboardGettingStarted } from '~/components/free-tier/locked-dashboard-getting-started';
 import { LockedDashboardPendingCard } from '~/components/free-tier/locked-dashboard-pending-card';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import {
+  FreeTierLockedPageHeader,
+  freeTierLockedPageBodyClassName,
+  freeTierLockedPageOuterClassName,
+} from '~/components/free-tier/free-tier-teacher-page-chrome';
 import type { RefObject } from 'react';
 import {
   teachingAccessMobileSheetBodyInvite,
@@ -799,17 +804,10 @@ export function FreeReporterLocked({
   return (
     <section
       data-testid="free-reporter-locked"
-      className="flex h-full flex-col overflow-auto"
+      className={freeTierLockedPageOuterClassName()}
     >
-      <header className="bg-secondary px-4 py-6 sm:px-12">
-        <h1 className="text-[28px] font-bold leading-[1.2]">Reporter</h1>
-        {variant === 'pending' ? (
-          <p className="mt-1 text-sm text-muted-foreground">
-            Your class reports.
-          </p>
-        ) : null}
-      </header>
-      <div className="px-4 pb-12 pt-6 sm:px-12">
+      <FreeTierLockedPageHeader title="Reporter" />
+      <div className={freeTierLockedPageBodyClassName('pb-12 pt-2')}>
         <section
           data-testid="free-reporter-card"
           className="flex max-w-[616px] flex-col items-start gap-3.5 rounded-xl border bg-popover p-7 text-left shadow-sm"

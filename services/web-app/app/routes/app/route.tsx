@@ -3,8 +3,8 @@ import { readFreeAccountUsage } from '~/domain/free-tier/inapp-usage.server';
 import {
   freeTierNavMobileWarningDot,
   renderFreeTierNavRow,
-  renderFreeTierNavTrailing,
 } from '~/components/free-tier/free-tier-nav-usage';
+import { FreeTierSidebarUsage } from '~/components/free-tier/free-tier-sidebar-usage';
 import { canUseMockAdmin, requireMockAdmin } from '~/utils/mock-admin.server';
 import {
   Form,
@@ -460,18 +460,6 @@ export default function Route() {
             isAppNavLinkActive={isAppNavLinkActive}
             forceFullNavigation={isClassDetailRoute}
             includeLessonPlannerWhenFeatureOff={Boolean(freeAccountUsage)}
-            renderLinkTrailing={
-              freeAccountUsage
-                ? (link) =>
-                    renderFreeTierNavTrailing({
-                      link,
-                      usage: freeAccountUsage,
-                      loading: usageNavLoading,
-                      navExpanded,
-                      isMobile,
-                    })
-                : undefined
-            }
             renderNavRow={
               freeAccountUsage
                 ? ({ link, isActive, rowClassName, linkClassName, icon }) =>
@@ -499,9 +487,19 @@ export default function Route() {
               onClick={() => setIsMobileNavOpen(false)}
             />
           ) : null}
+          {freeAccountUsage ? (
+            <FreeTierSidebarUsage
+              usage={freeAccountUsage}
+              navExpanded={navExpanded}
+              loading={usageNavLoading}
+            />
+          ) : null}
           <Popover>
             <PopoverTrigger>
-              <div className="flex items-center gap-2 border-t p-4 pb-6 transition hover:bg-foreground/5 sm:pb-3">
+              <div
+                data-testid="app-nav-settings"
+                className="flex items-center gap-2 border-t transition hover:bg-foreground/5"
+              >
                 <Settings2 size={18} />
                 {navExpanded ? <p className="">Settings</p> : null}
               </div>

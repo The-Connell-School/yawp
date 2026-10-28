@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { FreeAccountUsage } from '~/domain/free-tier/inapp-usage';
 import { lessonPlannerMonthlyUsage } from '~/domain/free-tier/inapp-usage';
@@ -6,8 +7,6 @@ import {
   usageNavMobileWarningDot,
   type UsageNavLevel,
 } from '~/domain/free-tier/usage-nav-meter';
-import { UsageNavRing } from '~/components/free-tier/usage-nav-ring';
-import { UsageNavCollapsedLink } from '~/components/free-tier/usage-nav-collapsed-link';
 import type { SidebarNavLink } from '~/routes/app/sidebar-nav';
 import { Lock } from 'lucide-react';
 import { Tooltip } from '~/components/ui/tooltip';
@@ -30,67 +29,80 @@ export function freeTierNavMobileWarningDot(
   return usageNavMobileWarningDot(levels);
 }
 
-function freeTierNavLockedExpandedLinkBody(
-  link: SidebarNavLink,
-  icon: React.ReactNode
-) {
+const UNLOCKS_AFTER_APPROVAL = 'Unlocks after approval';
+
+function FreeTierNavUnlockLock() {
   return (
-    <>
-      <span className="mt-0.5 inline-flex shrink-0">{icon}</span>
-      <span className="flex min-w-0 flex-col gap-0 leading-tight">
-        <span className="truncate">{link.label}</span>
-        <span className="truncate text-xs font-normal leading-[1.3] text-[hsl(50_2.4%_36%)]">
-          Unlocks after approval
-        </span>
+    <Tooltip text={UNLOCKS_AFTER_APPROVAL} contentProps={{ side: 'left' }}>
+      <span
+        className="flex shrink-0 items-center self-center px-2 text-muted-foreground"
+        aria-label={UNLOCKS_AFTER_APPROVAL}
+      >
+        <Lock size={14} aria-hidden />
       </span>
-    </>
+    </Tooltip>
   );
 }
 
-export function renderFreeTierNavTrailing(input: {
+function renderFreeTierLockedApprovalNavRow({
+  link,
+  icon,
+  navExpanded,
+  isMobile,
+  isActive,
+  rowClassName,
+  linkClassName,
+  reloadDocument,
+}: {
   link: SidebarNavLink;
-  usage: FreeAccountUsage;
-  loading: boolean;
+  icon: ReactNode;
   navExpanded: boolean;
   isMobile: boolean;
+  isActive: boolean;
+  rowClassName: string;
+  linkClassName: string;
+  reloadDocument: boolean;
 }) {
-  const { link, usage, loading, navExpanded, isMobile } = input;
-  if (!navExpanded || isMobile) return null;
-
-  const metersHidden = usage.usageNavMetersAvailable === false;
-  const renewsAt = usage.renewsAt;
-
-  if (link.to === '/app/lesson-planner') {
-    if (!usage.lessonPlannerMonthlyMetering && !usage.monthly) return null;
-    if (usage.reporterLocked) {
-      return null;
-    }
+  if (navExpanded) {
     return (
-      <UsageNavRing
-        feature="lesson-planner"
-        count={lessonPlannerMonthlyUsage(usage)}
-        renewsAtIso={renewsAt}
-        loading={loading}
-        hidden={metersHidden}
-        variant="expanded-trailing"
-      />
+      <div
+        key={link.to}
+        className={cn(rowClassName, 'opacity-75')}
+        data-testid={`free-tier-nav-locked-${link.to}`}
+      >
+        <Link
+          to={link.to}
+          reloadDocument={reloadDocument}
+          aria-current={isActive ? 'page' : undefined}
+          className={cn(linkClassName, 'min-w-0 flex-1 items-center')}
+        >
+          {icon}
+          <span className="min-w-0 truncate">{link.label}</span>
+        </Link>
+        <FreeTierNavUnlockLock />
+      </div>
     );
   }
 
-  if (link.to === '/app/reporter') {
-    if (usage.reporterLocked || !usage.monthly) {
-      return null;
-    }
-    if (!usage.reporter) return null;
+  if (!isMobile) {
     return (
-      <UsageNavRing
-        feature="reporter"
-        count={usage.reporter}
-        renewsAtIso={renewsAt}
-        loading={loading}
-        hidden={metersHidden}
-        variant="expanded-trailing"
-      />
+      <div
+        key={link.to}
+        className={cn(rowClassName, 'justify-center px-0 opacity-75')}
+      >
+        <Link
+          to={link.to}
+          reloadDocument={reloadDocument}
+          aria-current={isActive ? 'page' : undefined}
+          aria-label={`${link.label}. ${UNLOCKS_AFTER_APPROVAL}`}
+          className={cn(
+            linkClassName,
+            'flex size-11 shrink-0 items-center justify-center'
+          )}
+        >
+          {icon}
+        </Link>
+      </div>
     );
   }
 
@@ -108,14 +120,17 @@ type NavRowContext = {
   linkClassName: string;
   forceFullNavigation: boolean;
   teachingLocked?: boolean;
-  icon: React.ReactNode;
+  icon: ReactNode;
 };
+
+export function renderFreeTierNavTrailing() {
+  return null;
+}
 
 export function renderFreeTierNavRow(ctx: NavRowContext): React.ReactNode | null {
   const {
     link,
     usage,
-    loading,
     navExpanded,
     isMobile,
     isActive,
@@ -126,232 +141,42 @@ export function renderFreeTierNavRow(ctx: NavRowContext): React.ReactNode | null
     icon,
   } = ctx;
 
-  const metersHidden = usage.usageNavMetersAvailable === false;
-  const renewsAt = usage.renewsAt;
   const reloadDocument = forceFullNavigation;
-  const lockedNavRowClass = cn(rowClassName, 'opacity-75');
-  const lockedNavLinkClass = cn(
-    linkClassName,
-    'items-start free-tier-nav-locked-link'
-  );
-
-  const defaultLinkBody = (
-    <>
-      {icon}
-      {navExpanded ? (
-        <span className="min-w-0 truncate">{link.label}</span>
-      ) : null}
-    </>
-  );
 
   if (link.to === '/app/lesson-planner') {
     const showLockedPreview = usage.reporterLocked || teachingLocked;
-
     if (showLockedPreview) {
-      if (navExpanded && !isMobile) {
-        return (
-          <div key={link.to} className={lockedNavRowClass}>
-            <Link
-              to={link.to}
-              reloadDocument={reloadDocument}
-              aria-current={isActive ? 'page' : undefined}
-              aria-description="Unlocks after approval"
-              className={lockedNavLinkClass}
-            >
-              {freeTierNavLockedExpandedLinkBody(link, icon)}
-            </Link>
-          </div>
-        );
-      }
-      if (!navExpanded && !isMobile) {
-        return (
-          <div key={link.to} className={cn(lockedNavRowClass, 'justify-center px-0')}>
-            <Link
-              to={link.to}
-              reloadDocument={reloadDocument}
-              aria-current={isActive ? 'page' : undefined}
-              aria-label="Lesson Planner. Unlocks after approval"
-              className={cn(
-                linkClassName,
-                'flex size-11 shrink-0 items-center justify-center'
-              )}
-              data-testid="usage-nav-collapsed-link-lesson-planner-locked"
-            >
-              {icon}
-            </Link>
-          </div>
-        );
-      }
-      if (isMobile && navExpanded) {
-        return (
-          <div key={link.to} className={lockedNavRowClass}>
-            <Link
-              to={link.to}
-              reloadDocument={reloadDocument}
-              aria-current={isActive ? 'page' : undefined}
-              aria-description="Unlocks after approval"
-              className={lockedNavLinkClass}
-            >
-              {freeTierNavLockedExpandedLinkBody(link, icon)}
-            </Link>
-          </div>
-        );
-      }
-      return null;
+      return renderFreeTierLockedApprovalNavRow({
+        link,
+        icon,
+        navExpanded,
+        isMobile,
+        isActive,
+        rowClassName,
+        linkClassName,
+        reloadDocument,
+      });
     }
-
     if (!usage.lessonPlannerMonthlyMetering && !usage.monthly) return null;
-
-    if (isMobile && navExpanded) {
-      if (metersHidden && !loading) return null;
-      return (
-        <div key={link.to} className={rowClassName}>
-          <Link
-            to={link.to}
-            reloadDocument={reloadDocument}
-            aria-current={isActive ? 'page' : undefined}
-            className={linkClassName}
-          >
-            {defaultLinkBody}
-          </Link>
-          <UsageNavRing
-            feature="lesson-planner"
-            count={lessonPlannerMonthlyUsage(usage)}
-            renewsAtIso={renewsAt}
-            loading={loading}
-            hidden={metersHidden}
-            variant="mobile-drawer"
-          />
-        </div>
-      );
-    }
-
-    if (!navExpanded && !isMobile) {
-      if (metersHidden && !loading) return null;
-      return (
-        <div key={link.to} className={cn(rowClassName, 'justify-center px-0')}>
-          <UsageNavCollapsedLink
-            to={link.to}
-            feature="lesson-planner"
-            icon={icon}
-            count={lessonPlannerMonthlyUsage(usage)}
-            renewsAtIso={renewsAt}
-            loading={loading}
-            isActive={isActive}
-            reloadDocument={reloadDocument}
-          />
-        </div>
-      );
-    }
-
     return null;
   }
 
   if (link.to === '/app/reporter') {
-    if (usage.reporterLocked || !usage.monthly) {
-      if (navExpanded && !isMobile) {
-        return (
-          <div key={link.to} className={rowClassName}>
-            <Link
-              to={link.to}
-              reloadDocument={reloadDocument}
-              aria-current={isActive ? 'page' : undefined}
-              aria-description="Unlocks after approval"
-              className={linkClassName}
-            >
-              {freeTierNavLockedExpandedLinkBody(link, icon)}
-            </Link>
-          </div>
-        );
-      }
-      if (!navExpanded && !isMobile) {
-        return (
-          <div key={link.to} className={cn(rowClassName, 'justify-center px-0')}>
-            <Link
-              to={link.to}
-              reloadDocument={reloadDocument}
-              aria-current={isActive ? 'page' : undefined}
-              aria-label="Reporter"
-              className={cn(
-                linkClassName,
-                'relative flex size-11 shrink-0 items-center justify-center'
-              )}
-              data-testid="usage-nav-collapsed-link-reporter-locked"
-            >
-              {icon}
-              <Lock
-                size={12}
-                className="absolute bottom-0.5 right-0.5 text-muted-foreground"
-                aria-hidden
-              />
-            </Link>
-          </div>
-        );
-      }
-      if (isMobile && navExpanded) {
-        return (
-          <div key={link.to} className={rowClassName}>
-            <Link
-              to={link.to}
-              reloadDocument={reloadDocument}
-              aria-current={isActive ? 'page' : undefined}
-              className={linkClassName}
-            >
-              {defaultLinkBody}
-            </Link>
-            <Tooltip text="Unlocks after approval" contentProps={{ side: 'left' }}>
-              <Lock size={14} className="shrink-0 text-muted-foreground" aria-hidden />
-            </Tooltip>
-          </div>
-        );
-      }
-      return null;
+    const showLockedPreview =
+      usage.reporterLocked || !usage.monthly || teachingLocked;
+    if (showLockedPreview) {
+      return renderFreeTierLockedApprovalNavRow({
+        link,
+        icon,
+        navExpanded,
+        isMobile,
+        isActive,
+        rowClassName,
+        linkClassName,
+        reloadDocument,
+      });
     }
-
     if (!usage.reporter) return null;
-
-    if (isMobile && navExpanded) {
-      if (metersHidden && !loading) return null;
-      return (
-        <div key={link.to} className={rowClassName}>
-          <Link
-            to={link.to}
-            reloadDocument={reloadDocument}
-            aria-current={isActive ? 'page' : undefined}
-            className={linkClassName}
-          >
-            {defaultLinkBody}
-          </Link>
-          <UsageNavRing
-            feature="reporter"
-            count={usage.reporter}
-            renewsAtIso={renewsAt}
-            loading={loading}
-            hidden={metersHidden}
-            variant="mobile-drawer"
-          />
-        </div>
-      );
-    }
-
-    if (!navExpanded && !isMobile) {
-      if (metersHidden && !loading) return null;
-      return (
-        <div key={link.to} className={cn(rowClassName, 'justify-center px-0')}>
-          <UsageNavCollapsedLink
-            to={link.to}
-            feature="reporter"
-            icon={icon}
-            count={usage.reporter}
-            renewsAtIso={renewsAt}
-            loading={loading}
-            isActive={isActive}
-            reloadDocument={reloadDocument}
-          />
-        </div>
-      );
-    }
-
     return null;
   }
 

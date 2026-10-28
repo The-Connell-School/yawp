@@ -8,9 +8,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useFetchers, useFetcher, useLocation } from 'react-router';
+import { useFetchers, useFetcher } from 'react-router';
 import type { TeachingAccessShellState } from '~/domain/free-tier/teaching-access-shell.server';
-import { TeachingAccessBanner } from './teaching-access-banner';
 import {
   ApprovalRequiredToast,
   ApprovalSuccessToast,
@@ -55,16 +54,10 @@ export function TeachingAccessProvider({
   const [approvalToastOpen, setApprovalToastOpen] = useState(
     state.variant === 'unlocked' && state.showApprovalToast
   );
-  const bannerAnnouncedRef = useRef<string | null>(null);
   const approvalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const approvalPausedRef = useRef(false);
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'base' || breakpoint === 'sm';
-  const location = useLocation();
-  const hideLockedBannerOnDashboard =
-    state.variant === 'locked' &&
-    location.pathname.replace(/\/$/, '') === '/app';
-
   const loading = state.variant === 'loading';
   const locked = state.variant === 'locked' || loading;
 
@@ -100,22 +93,6 @@ export function TeachingAccessProvider({
       window.fetch = originalFetch;
     };
   }, []);
-
-  useEffect(() => {
-    if (state.variant !== 'locked') return;
-    const key = `teaching-access-banner-${state.applicationId}`;
-    if (bannerAnnouncedRef.current === key) return;
-    if (typeof window === 'undefined') return;
-    if (sessionStorage.getItem(key)) return;
-    sessionStorage.setItem(key, '1');
-    bannerAnnouncedRef.current = key;
-    const live = document.getElementById('teaching-access-live');
-    if (live) {
-      live.textContent =
-        document.querySelector('[data-testid="teaching-access-banner"]')
-          ?.textContent ?? null;
-    }
-  }, [state]);
 
   const dismissApprovalToast = useCallback(() => {
     setApprovalToastOpen(false);
@@ -159,9 +136,6 @@ export function TeachingAccessProvider({
   return (
     <TeachingAccessContext.Provider value={value}>
       <div id="teaching-access-live" className="sr-only" aria-live="polite" />
-      {state.variant === 'locked' && !hideLockedBannerOnDashboard ? (
-        <TeachingAccessBanner adminName={state.adminName} />
-      ) : null}
       {children}
       {errorToastOpen ? (
         <ApprovalRequiredToast
