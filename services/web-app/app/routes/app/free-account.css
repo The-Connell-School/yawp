@@ -166,9 +166,6 @@
   padding: 0;
   box-sizing: border-box;
 }
-[data-free-account] .locked-home-main {
-  gap: 20px;
-}
 [data-free-account] .locked-home-welcome {
   margin: 0;
   padding: 0;
@@ -189,20 +186,48 @@
   font-size: 15px;
   font-weight: 600;
 }
+[data-free-account] .locked-home-main {
+  container-type: inline-size;
+  container-name: locked-home-main;
+  flex: 999 1 420px;
+  min-width: 0;
+  gap: 20px;
+}
 [data-free-account] .locked-home-columns {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 28px;
 }
 [data-free-account] .locked-home-rail-desktop {
   display: none;
-  width: 320px;
-  flex-shrink: 0;
+  flex: 1 1 300px;
+  min-width: 0;
+  max-width: 320px;
+  width: auto;
   flex-direction: column;
   gap: 16px;
   position: sticky;
   top: 24px;
   align-self: flex-start;
+}
+[data-free-account] .locked-home-b2 [data-testid='teacher-classes-grid'] > div:last-child {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 300px;
+}
+[data-free-account]
+  .locked-home-b2
+  [data-testid='teacher-grading-grid']
+  .grid.grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@container locked-home-main (min-width: 520px) {
+  [data-free-account]
+    .locked-home-b2
+    [data-testid='teacher-grading-grid']
+    .grid.grid-cols-2 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 @media (min-width: 1024px) {
   [data-free-account] .locked-home-rail-desktop {

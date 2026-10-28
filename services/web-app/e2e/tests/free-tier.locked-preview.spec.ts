@@ -841,3 +841,30 @@ test('flag OFF keeps the waiting page and does not expose the in-app lock', asyn
   await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
   await expect(page.getByTestId('free-assignment-tiles')).toHaveCount(0);
 });
+
+test('mid-width locked home auto-collapses sidebar and keeps grading labels readable', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1100, height: 800 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const { user, app } = await fixture('11', 'SENT');
+  await provisionPendingClassroom(app.id, user.id!);
+  await login(page, user.email!);
+  await page.goto('/app');
+  await expect(page.getByTestId('locked-dashboard-pending-card')).toBeVisible();
+
+  const nav = page.locator('[data-tour="app-nav"]');
+  await expect(nav).toHaveClass(/items-center/);
+
+  const gradeByStudent = page.getByRole('link', {
+    name: /Documents, grade by student/i,
+  });
+  await expect(gradeByStudent).toBeVisible();
+  const gradingCard = gradeByStudent.locator('..');
+  await expect(gradingCard.getByText('By student', { exact: true })).toBeVisible();
+  const cardBox = await gradingCard.boundingBox();
+  expect(cardBox).not.toBeNull();
+  expect(cardBox!.width).toBeGreaterThan(96);
+
+  await expect(page.getByText('Students', { exact: true }).first()).toBeVisible();
+});

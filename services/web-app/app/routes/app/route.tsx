@@ -41,6 +41,7 @@ import {
 } from '~/components/ui/popover.js';
 import { Tooltip } from '~/components/ui/tooltip';
 import useBreakpoint from '~/hooks/useBreakpoint';
+import { useFreeTierNavAutoCollapse } from '~/hooks/useFreeTierNavAutoCollapse';
 import { useOnSwipe } from '~/hooks/useHorizontalSwipe';
 import { useUser } from '~/hooks/useUser';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
@@ -295,6 +296,7 @@ export default function Route() {
   const navState = useNavState();
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'base' || breakpoint === 'sm';
+  useFreeTierNavAutoCollapse(Boolean(freeAccountUsage) && !isMobile);
   const isNavExpanded = navState === 'expanded' || isMobile;
   const navExpanded = (isMobile && isMobileNavOpen) || isNavExpanded;
 

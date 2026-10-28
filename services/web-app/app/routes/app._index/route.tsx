@@ -574,7 +574,7 @@ export default function AppRoute() {
         >
           <div className="locked-home-b2 free-dashboard w-full pb-24">
             <div className="locked-home-columns">
-              <ContentColumn className="locked-home-main flex min-w-0 flex-1 flex-col">
+              <ContentColumn className="locked-home-main flex flex-col">
                 <h1 className="locked-home-welcome">
                   Welcome, {welcomeName}!
                 </h1>

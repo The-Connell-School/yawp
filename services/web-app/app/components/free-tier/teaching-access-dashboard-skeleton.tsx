@@ -10,7 +10,7 @@ export function TeachingAccessDashboardSkeleton() {
     >
       <div className="locked-home-b2 free-dashboard w-full pb-24">
         <div className="locked-home-columns">
-          <div className="locked-home-main flex min-w-0 flex-1 flex-col">
+          <div className="locked-home-main flex flex-col">
             <Skeleton className="h-8 w-48" />
             <div className="locked-home-sections flex flex-col gap-4">
             <Skeleton className="h-40 w-full rounded-xl" />
