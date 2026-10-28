@@ -11,6 +11,7 @@ import {
   requireUserId,
   type RequiredMembership,
 } from '~/utils/auth.server';
+import { monthlyFreeTierPolicy } from '~/domain/free-tier/monthly-policy.server';
 import { isLessonPlannerEnabled } from '~/domain/feature-flags/feature-flags.server';
 
 export type LessonPlannerAccess = {
@@ -27,7 +28,13 @@ export async function getLessonPlannerAccess(
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
   const isTeacher = membership.role === 'TEACHER';
-  const enabled = await isLessonPlannerEnabled(membership.organization.id);
+  const orgFlagOn = await isLessonPlannerEnabled(membership.organization.id);
+  const freeTierMetering =
+    isTeacher && membership.organization.plan === 'FREE_CLASSROOM'
+      ? (await monthlyFreeTierPolicy(membership.organization))
+          .lessonPlannerMeteringEnabled
+      : false;
+  const enabled = orgFlagOn || freeTierMetering;
 
   return {
     userId,
