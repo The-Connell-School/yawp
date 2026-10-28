@@ -1,12 +1,10 @@
 import type { ReactNode } from 'react';
 import { useFreeAccountUsage } from '~/components/free-account-usage';
-import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { cn } from '~/utils/misc';
 
+/** B2 page chrome (plain title, no gray bar) for any free-tier teacher — locked or approved. */
 export function useFreeTierLockedB2PageChrome() {
-  const freeUsage = useFreeAccountUsage();
-  const { locked } = useTeachingAccess();
-  return Boolean(freeUsage && locked);
+  return Boolean(useFreeAccountUsage());
 }
 
 /** Shared main-column inset for all standard /app pages under `[data-free-account]`. */
