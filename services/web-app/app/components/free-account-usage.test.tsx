@@ -123,7 +123,7 @@ test('monthly first steps order and two-of-four progress after class and assignm
       }}
     />
   );
-  expect(html).toContain('2 of 4 done');
+  expect(html).toContain('Step 3 of 4');
   expect(html).toContain('Class ready');
   const assignmentIdx = html.indexOf('First assignment created');
   const studentsIdx = html.indexOf('Add your students');

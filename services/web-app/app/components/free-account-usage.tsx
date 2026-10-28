@@ -51,6 +51,7 @@ import {
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
 import { LockedDashboardGettingStarted } from '~/components/free-tier/locked-dashboard-getting-started';
 import { LockedDashboardPendingCard } from '~/components/free-tier/locked-dashboard-pending-card';
+import { FreeTierGettingStartedTimeline } from '~/components/free-tier/free-tier-getting-started-timeline';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import {
   FreeTierLockedPageHeader,
@@ -65,6 +66,7 @@ import {
 import type { SiteLicenseLockedAssignmentTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 import {
   FREE_TIER_UNLIMITED_TILE_LABEL,
+  LOCKED_DASHBOARD_GETTING_STARTED_TITLE,
   SITE_LICENSE_ONLY_TILE_LABEL,
 } from '~/domain/free-tier/locked-dashboard-copy';
 import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
@@ -536,31 +538,6 @@ export function FreeAssignmentTiles({
     </div>
   );
 }
-function FreeTierChecklistStepMarker({
-  done,
-  current,
-}: {
-  done: boolean;
-  current: boolean;
-}) {
-  return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        'flex size-[22px] shrink-0 items-center justify-center rounded-full border-2',
-        done && 'border-emerald-800 bg-emerald-800 text-white',
-        current && !done && 'border-primary bg-primary',
-        !done && !current && 'border-border bg-background'
-      )}
-    >
-      {done ? <Check size={14} /> : null}
-      {current && !done ? (
-        <span className="size-1.5 rounded-full bg-primary-foreground" />
-      ) : null}
-    </span>
-  );
-}
-
 function FreeTierClassCodeChip({ code }: { code: string }) {
   return (
     <div className="flex min-w-0 items-center gap-1.5 rounded-lg border bg-background py-1 pl-3 pr-1">
@@ -621,94 +598,79 @@ export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
         to: '/app/documents?status=needs-grading&reset=1',
       },
     ] as const;
-    const doneCount = pe3Steps.filter((step) => step.done).length;
-    const currentKey =
-      pe3Steps.find((step) => !step.done)?.key ?? pe3Steps[pe3Steps.length - 1].key;
+    const currentIndex = pe3Steps.findIndex((step) => !step.done);
+    const stepNumber =
+      currentIndex >= 0 ? currentIndex + 1 : pe3Steps.length;
+    const currentKey = pe3Steps.find((step) => !step.done)?.key ?? null;
 
     return (
       <>
-        <aside
-          className="rounded-xl border bg-popover p-5 shadow-sm"
-          data-testid="free-account-checklist"
-        >
-          <div className="flex items-baseline justify-between gap-2">
-            <h2 className="text-[15px] font-bold">Getting started</h2>
-            <span className="text-xs text-muted-foreground">
-              {doneCount} of 4 done
-            </span>
-          </div>
-          <ol className="mt-2 list-none space-y-0 p-0">
-            {pe3Steps.map((step) => {
-              const current = step.key === currentKey && !step.done;
-              const isStudentsStep = step.key === 'students';
-              const showStudentsPanel =
-                isStudentsStep &&
-                usage.classCode &&
-                !step.done &&
-                !teachingLocked;
+        <FreeTierGettingStartedTimeline
+          title={LOCKED_DASHBOARD_GETTING_STARTED_TITLE}
+          progressLabel={`Step ${stepNumber} of ${pe3Steps.length}`}
+          testId="free-account-checklist"
+          steps={pe3Steps.map((step) => {
+            const state = step.done
+              ? ('done' as const)
+              : step.key === currentKey
+                ? ('current' as const)
+                : ('upcoming' as const);
+            const isStudentsStep = step.key === 'students';
+            const showStudentsPanel =
+              isStudentsStep &&
+              usage.classCode &&
+              !step.done &&
+              !teachingLocked;
 
-              return (
-                <li key={step.key} className="border-t py-3 first:border-t-0">
-                  <div className="flex gap-3 text-sm">
-                    <FreeTierChecklistStepMarker
-                      done={step.done}
-                      current={current}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <span
-                        className={cn(
-                          step.done && 'text-muted-foreground line-through',
-                          current && 'font-semibold text-foreground'
-                        )}
+            return {
+              key: step.key,
+              label: step.label,
+              state,
+              content: (
+                <>
+                  {'hint' in step && step.hint && !step.done ? (
+                    <span className="mt-1 block text-[13px] font-normal text-muted-foreground">
+                      {step.hint}
+                    </span>
+                  ) : null}
+                  {showStudentsPanel ? (
+                    <div className="mt-2 space-y-2 rounded-lg border bg-secondary/40 p-3">
+                      <p className="text-[13px] leading-snug text-foreground">
+                        Students join with your class code. It takes about five
+                        minutes with your class in the room.
+                      </p>
+                      <FreeTierClassCodeChip code={usage.classCode!} />
+                      <button
+                        type="button"
+                        ref={invitationTriggerRef}
+                        onClick={() => setInvitationOpen(true)}
+                        className="inline-flex h-9 w-full items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
+                      >
+                        Invite students
+                      </button>
+                    </div>
+                  ) : null}
+                  {isStudentsStep &&
+                  !showStudentsPanel &&
+                  !step.done &&
+                  usage.classId &&
+                  (usage.classCodeHidden ||
+                    (teachingLocked && !usage.classCode)) ? (
+                    <LockedTeachingControl {...lockedInviteProps}>
+                      <button
+                        type="button"
+                        data-testid="checklist-invite-locked"
+                        className="mt-1 text-left text-primary underline opacity-60"
                       >
                         {step.label}
-                      </span>
-                      {'hint' in step && step.hint && !step.done ? (
-                        <span className="mt-1 block text-[13px] text-muted-foreground">
-                          {step.hint}
-                        </span>
-                      ) : null}
-                      {showStudentsPanel ? (
-                        <div className="mt-2 space-y-2 rounded-lg border bg-secondary/40 p-3">
-                          <p className="text-[13px] leading-snug text-foreground">
-                            Students join with your class code. It takes about
-                            five minutes with your class in the room.
-                          </p>
-                          <FreeTierClassCodeChip code={usage.classCode!} />
-                          <button
-                            type="button"
-                            ref={invitationTriggerRef}
-                            onClick={() => setInvitationOpen(true)}
-                            className="inline-flex h-9 w-full items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
-                          >
-                            Invite students
-                          </button>
-                        </div>
-                      ) : null}
-                      {isStudentsStep &&
-                      !showStudentsPanel &&
-                      !step.done &&
-                      'to' in step === false &&
-                      usage.classId &&
-                      (usage.classCodeHidden ||
-                        (teachingLocked && !usage.classCode)) ? (
-                        <LockedTeachingControl {...lockedInviteProps}>
-                          <button
-                            type="button"
-                            data-testid="checklist-invite-locked"
-                            className="mt-1 text-left text-primary underline opacity-60"
-                          >
-                            {step.label}
-                          </button>
-                        </LockedTeachingControl>
-                      ) : null}
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        </aside>
+                      </button>
+                    </LockedTeachingControl>
+                  ) : null}
+                </>
+              ),
+            };
+          })}
+        />
         {usage.classCode ? (
           <StudentInvitationDialog
             returnFocusRef={invitationTriggerRef}

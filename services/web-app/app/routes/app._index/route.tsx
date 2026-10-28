@@ -444,7 +444,7 @@ export default function AppRoute() {
         ? `/app/assignment-types/${thesisEssayLockedTile.assignmentTypeId}/how-it-works`
         : assignmentsSeeHowItWorksTo;
 
-    const lockedHomeB2 = Boolean(freeUsage && locked);
+    const freeTierHomeB2 = Boolean(freeUsage);
     const welcomeName = teacherFirstName(user.name ?? 'Teacher');
     const freeAccountRail = freeUsage ? (
       <FreeAccountRail usage={freeUsage} />
@@ -563,7 +563,7 @@ export default function AppRoute() {
       </>
     );
 
-    if (lockedHomeB2) {
+    if (freeTierHomeB2) {
       return (
         <section
           data-testid="app._index"

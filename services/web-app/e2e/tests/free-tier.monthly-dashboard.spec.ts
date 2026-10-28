@@ -81,12 +81,12 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
       continue;
     }
     await expect(
+      page.getByTestId('free-account-rail').getByTestId('free-account-checklist')
+    ).toContainText('Step 3 of 4');
+    await expect(
       page.getByText("You're approved. Your classroom is ready.")
-    ).toBeVisible();
+    ).toHaveCount(0);
     const rail = page.getByTestId('free-account-rail');
-    await expect(rail.getByTestId('free-account-checklist')).toContainText(
-      '2 of 4 done'
-    );
     await expect(rail.getByText('Class ready')).toBeVisible();
     await expect(
       rail.getByRole('link', { name: 'Share with a colleague' })
