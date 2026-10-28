@@ -82,6 +82,7 @@ export function StackDeckCard({
   onToggle,
   disabled,
   periodMinutes,
+  editHref = null,
 }: {
   conversationId: string;
   messageId: string;
@@ -93,6 +94,8 @@ export function StackDeckCard({
   onToggle: (add: boolean) => void;
   disabled: boolean;
   periodMinutes: number | null;
+  /** The deck editor for this reply (Brian's round 4, item 3); null without deck v2. */
+  editHref?: string | null;
 }) {
   const [previewing, setPreviewing] = useState(false);
   const outcome = readSlideDeck(content);
@@ -108,6 +111,7 @@ export function StackDeckCard({
         onToggle={onToggle}
         disabled={disabled}
         periodMinutes={periodMinutes}
+        editHref={editHref}
       />
       {/* Preview / Hide, as on a new activity's card (run 6, round 2). */}
       <button

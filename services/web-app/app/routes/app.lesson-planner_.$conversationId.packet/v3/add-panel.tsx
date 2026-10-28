@@ -24,6 +24,8 @@ export type PanelDeck = {
   sourceMessageId: string | null;
   hasDeck: boolean;
   onToggle: (messageId: string, add: boolean) => void;
+  /** Where to edit a deck, by its reply; null without deck v2. */
+  editHref: (messageId: string) => string | null;
   building: DeckBuild | null;
   error: string | null;
   periodMinutes: number | null;
@@ -264,6 +266,7 @@ export function AddPanel({
                 added={deck.sourceMessageId === deck.fromConversation.messageId}
                 replaces={deck.hasDeck}
                 onToggle={(add) => deck.onToggle(deck.fromConversation!.messageId, add)}
+                editHref={deck.editHref(deck.fromConversation.messageId)}
                 disabled={busy}
                 periodMinutes={deck.periodMinutes}
               />
@@ -309,6 +312,7 @@ export function AddPanel({
                         added={deck.sourceMessageId === turn.id}
                         replaces={deck.hasDeck}
                         onToggle={(add) => deck.onToggle(turn.id, add)}
+                        editHref={deck.editHref(turn.id)}
                         disabled={busy}
                         periodMinutes={deck.periodMinutes}
                       />

@@ -28,7 +28,8 @@ export function PrintForClass({
   handoutCount: number;
   deck: { id: string; slides: number } | null;
   onBuildDeck: () => void;
-  builtDeck?: { presentHref: string; onStack: boolean; onAdd: () => void } | null;
+  /** A deck built but not in the lesson. `editHref` is null without deck v2. */
+  builtDeck?: { presentHref: string; editHref: string | null; onStack: boolean; onAdd: () => void } | null;
   children?: React.ReactNode;
 }) {
   const base = `/app/lesson-planner/${conversationId}`;
@@ -86,6 +87,11 @@ export function PrintForClass({
                 <Link to={builtDeck.presentHref} data-testid="built-deck-present" className={BUTTON}>
                   Present
                 </Link>
+                {builtDeck.editHref ? (
+                  <Link to={builtDeck.editHref} data-testid="built-deck-edit" className={BUTTON}>
+                    Edit
+                  </Link>
+                ) : null}
                 <button type="button" onClick={builtDeck.onAdd} data-testid="add-conversation-deck" className={BUTTON}>
                   Add it
                 </button>

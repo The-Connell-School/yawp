@@ -284,6 +284,9 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
     openPanel(null, 'ask');
     void deckBuild.build(request, line);
   }
+  // Edit, on a deck the planner built but the lesson doesn't have yet (Brian's round 4, item 3).
+  const deckEditHref = (messageId: string) =>
+    reviewFlags.deckV2 ? `/app/lesson-planner/${conversationId}/deck/${messageId}?from=stack` : null;
   const deckToggled = useRef<string | null>(null);
   function toggleDeck(messageId: string, add: boolean, confirmReplace = false) {
     deckToggled.current = messageId;
@@ -625,8 +628,10 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                     v3.conversationDeck && !v3.deck
                       ? {
                           presentHref: `/present/${conversationId}/${v3.conversationDeck.messageId}?from=stack`,
+                          editHref: deckEditHref(v3.conversationDeck.messageId),
                           onStack: v3.conversationDeck.onStack,
-                          onAdd: () => openPanel(null, v3.conversationDeck!.onStack ? 'ask' : 'conversation'),
+                          // Adds it right here, with no trip to the panel (Brian's round 4, item 2).
+                          onAdd: () => toggleDeck(v3.conversationDeck!.messageId, true),
                         }
                       : null
                   }
@@ -651,8 +656,9 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                 v3.conversationDeck && !v3.deck
                   ? {
                       presentHref: `/present/${conversationId}/${v3.conversationDeck.messageId}?from=stack`,
+                      editHref: deckEditHref(v3.conversationDeck.messageId),
                       onStack: v3.conversationDeck.onStack,
-                      onAdd: () => openPanel(null, v3.conversationDeck!.onStack ? 'ask' : 'conversation'),
+                      onAdd: () => toggleDeck(v3.conversationDeck!.messageId, true),
                     }
                   : null
               }
@@ -704,6 +710,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
           sourceMessageId: v3.deck?.sourceMessageId ?? null,
           hasDeck: Boolean(v3.deck),
           onToggle: (messageId, add) => toggleDeck(messageId, add),
+          editHref: deckEditHref,
           building: deckBuild.progress,
           error: deckBuild.error,
           periodMinutes: data.periodMinutes,

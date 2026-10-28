@@ -64,7 +64,8 @@ export function TakeToClass({
    * A deck already built but not in the lesson (run 6, round 2; Kevin's note,
    * Oct 24): present it, or add it, rather than build it again.
    */
-  builtDeck?: { presentHref: string; onStack: boolean; onAdd: () => void } | null;
+  /** A deck built but not in the lesson. `editHref` is null without deck v2. */
+  builtDeck?: { presentHref: string; editHref: string | null; onStack: boolean; onAdd: () => void } | null;
   /** Post to your class sits inside, when sharing is on. */
   children?: React.ReactNode;
 }) {
@@ -160,6 +161,11 @@ export function TakeToClass({
                 <Link to={builtDeck.presentHref} data-testid="built-deck-present" className={BUTTON}>
                   Present
                 </Link>
+                {builtDeck.editHref ? (
+                  <Link to={builtDeck.editHref} data-testid="built-deck-edit" className={BUTTON}>
+                    Edit
+                  </Link>
+                ) : null}
                 <button type="button" onClick={builtDeck.onAdd} data-testid="add-conversation-deck" className={BUTTON}>
                   Add it
                 </button>
