@@ -36,6 +36,12 @@ import {
   cloneFormDataWithFallbackRetry,
   isLlmRetryResponse,
 } from '~/utils/llm-retry-ui';
+import { toast } from 'sonner';
+import {
+  getGradingAssistantFetcherErrorMessage,
+  gradingAssistantResponseHasVisibleContent,
+} from '~/domain/grading/grading-assistant-fetcher-result';
+import { hasGradingDraftToReplace } from '../../app_.submissions_.$submissionId/teacher-grading/has-grading-draft-to-replace';
 
 type RubricScore = {
   score: number;
@@ -178,6 +184,25 @@ export function TeacherGradingPanel({
   const isSaving = saveFetcher.state !== 'idle';
   const isBusy = isGenerating || isSaving;
 
+  const hasDraftToReplace = useMemo(
+    () =>
+      hasGradingDraftToReplace(
+        rubricScores,
+        overallComment,
+        numericPercentage,
+        grammarIssues.length,
+        1,
+        hasManualPercentOverride
+      ),
+    [
+      grammarIssues.length,
+      hasManualPercentOverride,
+      numericPercentage,
+      overallComment,
+      rubricScores,
+    ]
+  );
+
   useEffect(() => {
     let initialOverallComment = '';
     let initialNumericPercentage = '';
@@ -233,7 +258,28 @@ export function TeacherGradingPanel({
       return;
     }
 
+    const failureMessage = getGradingAssistantFetcherErrorMessage(aiFetcher.data);
+    if (failureMessage) {
+      toast.error(failureMessage);
+      pendingAiFormRef.current = null;
+      hasRetriedAiFormRef.current = false;
+      setIsAiRetrying(false);
+      return;
+    }
+
     if (aiFetcher.data?.success) {
+      if (
+        !gradingAssistantResponseHasVisibleContent(aiFetcher.data, 1)
+      ) {
+        toast.error(
+          'Grading Assistant finished without any suggestions. Please try again.'
+        );
+        pendingAiFormRef.current = null;
+        hasRetriedAiFormRef.current = false;
+        setIsAiRetrying(false);
+        return;
+      }
+
       const aiRubricScores = normalizeRubricScores(aiFetcher.data.rubricScores);
 
       if (aiFetcher.data.rubricScores) {
@@ -366,18 +412,37 @@ export function TeacherGradingPanel({
           </Badge>
         </div>
         <div className="mt-2 flex gap-2">
-          <ConfirmationDialog
-            title="Replace Existing Grading Feedback?"
-            description="Grading Assistant suggestions will replace all current rubric comments, overall feedback, and grammar issue suggestions. Continue?"
-            confirmText="Replace with Grading Assistant Suggestions"
-            cancelText="Go Back"
-            onConfirm={generateAiSuggestions}
-          >
+          {hasDraftToReplace ? (
+            <ConfirmationDialog
+              title="Replace Existing Grading Feedback?"
+              description="Grading Assistant suggestions will replace all current rubric comments, overall feedback, and grammar issue suggestions. Continue?"
+              confirmText="Replace with Grading Assistant Suggestions"
+              cancelText="Go Back"
+              onConfirm={generateAiSuggestions}
+            >
+              <Button
+                size="sm"
+                variant="secondary"
+                data-testid="grading-assistant-generate"
+                disabled={isBusy}
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {isAiRetrying ? 'Retrying...' : 'Grading...'}
+                  </>
+                ) : (
+                  'Grading Assistant Suggestions'
+                )}
+              </Button>
+            </ConfirmationDialog>
+          ) : (
             <Button
               size="sm"
               variant="secondary"
               data-testid="grading-assistant-generate"
               disabled={isBusy}
+              onClick={generateAiSuggestions}
             >
               {isGenerating ? (
                 <>
@@ -388,7 +453,7 @@ export function TeacherGradingPanel({
                 'Grading Assistant Suggestions'
               )}
             </Button>
-          </ConfirmationDialog>
+          )}
           <Button
             size="sm"
             data-testid="grading-save-grade"
