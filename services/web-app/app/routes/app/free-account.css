@@ -73,8 +73,8 @@
   height: 17px;
 }
 [data-free-account] > nav a span { white-space: nowrap; }
-[data-free-account] > nav > div.flex.shrink-0 > button:has([data-testid='free-tier-sidebar-usage']),
-[data-free-account] > nav > div.flex.shrink-0 > button:has([data-testid='app-nav-settings']) {
+[data-free-account] > nav > div.flex.shrink-0 > button[data-testid='free-tier-sidebar-usage'],
+[data-free-account] > nav > div.flex.shrink-0 > button[data-testid='app-nav-settings'] {
   display: flex;
   width: 100%;
   align-self: stretch;

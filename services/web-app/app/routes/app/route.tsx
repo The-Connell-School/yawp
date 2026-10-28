@@ -374,9 +374,11 @@ export default function Route() {
       <nav
         data-tour="app-nav"
         className={cn(
-          'z-20 flex h-full min-h-0 w-[212px] min-w-[212px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out max-sm:fixed max-sm:inset-y-0 max-sm:left-0 sm:static sm:translate-x-0',
+          'z-30 flex h-full min-h-0 w-[212px] min-w-[212px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out max-sm:fixed max-sm:inset-y-0 max-sm:left-0 sm:static sm:translate-x-0',
           {
             'translate-x-0': isMobileNavOpen,
+            'max-sm:pointer-events-none': mobileDrawer && !isMobileNavOpen,
+            'max-sm:pointer-events-auto': mobileDrawer && isMobileNavOpen,
             'w-[56px] min-w-0 items-center': !navExpanded && !mobileDrawer,
           }
         )}
@@ -529,14 +531,15 @@ export default function Route() {
             />
           ) : null}
           <Popover>
-            <PopoverTrigger>
-              <div
+            <PopoverTrigger asChild>
+              <button
+                type="button"
                 data-testid="app-nav-settings"
-                className="flex items-center gap-2 border-t transition hover:bg-foreground/5"
+                className="flex w-full items-center gap-2 border-t text-left transition hover:bg-foreground/5"
               >
                 <Settings2 size={18} />
                 {navExpanded ? <p className="">Settings</p> : null}
-              </div>
+              </button>
             </PopoverTrigger>
             <PopoverContent
               collisionPadding={8}
