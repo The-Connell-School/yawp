@@ -106,3 +106,22 @@ Each item gets its tests first (e2e for the UI, unit tests for helpers), then th
 6. Typecheck, unit tests, the touched e2e specs; push to `claude/keen-keller-56x4ww`.
 
 New e2e file: `e2e/tests/teacher.lesson-planner-round-4.spec.ts`, added to smoke and shard 6 like round 3.
+
+## Status
+
+All five items are built, each in its own commit, on `claude/keen-keller-56x4ww`, which is PR 723's branch plus these commits.
+
+- **Item 1:** the unit page is restyled to the design. Two places differ on purpose:
+  - Open slide deck and Open the stack replace the design's single button (round 3, 1.11).
+  - The "Has handouts" badge is gone, as in the design.
+- **Item 2:** Add it adds the deck in place. Two run-6 tests that expected the panel to open now expect the deck to be added.
+- **Item 3:** Edit is on a stack-built deck's card and in the "isn't in the lesson yet" row, with deck v2 on.
+- **Item 4:** the celebration uses the browser's speech for "Yaaaawp!". A real recording can replace it in `sayYawp()` (`celebration.ts`).
+- **Item 5:** a bug fix for everyone.
+
+**Tests:**
+- **New e2e** `teacher.lesson-planner-round-4.spec.ts`: 4 tests, in smoke and shard 6.
+- **New unit tests** `celebration.test.ts` (in CI), plus a new test in `lesson-share.test.ts`.
+- **Local runs:**
+  - Passed: round 4, round 3, library v2, run 6, stack v2 and unit build (40 tests).
+  - Typecheck is clean.
