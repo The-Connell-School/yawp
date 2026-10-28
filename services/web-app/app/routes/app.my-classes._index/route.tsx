@@ -16,7 +16,6 @@ import {
 import { Link, useFetcher, useLoaderData, useSearchParams } from 'react-router';
 import { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
-import { Badge } from '~/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -428,17 +427,6 @@ function TeacherMyClassesView({
     setSheetOpen(true);
   };
 
-  const yearBadge = scopedToOneYear ? (
-    <Badge
-      variant="outline"
-      size="sm"
-      className="bg-background font-medium"
-      data-testid="my-classes-year-badge"
-    >
-      {data.selectedSchoolYear.replace('-', '–')}
-    </Badge>
-  ) : null;
-
   const headerActions = (
     <>
       {data.canShareClassroomReport && !freeUsage ? (
@@ -475,24 +463,13 @@ function TeacherMyClassesView({
       }
     >
       {freeTierB2 ? (
-        <FreeTierLockedPageHeader
-          title={
-            <span className="inline-flex items-center gap-2">
-              My Classes
-              {yearBadge}
-            </span>
-          }
-          actions={headerActions}
-        />
+        <FreeTierLockedPageHeader title="My Classes" actions={headerActions} />
       ) : (
         <div className="flex w-full justify-between border-b bg-secondary">
           <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <div className="flex items-center gap-2">
-                  <h2>My Classes</h2>
-                  {yearBadge}
-                </div>
+                <h2>My Classes</h2>
                 <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[460px]">
                   Your classes at a glance. Open a class to manage students and
                   assignments.
@@ -513,7 +490,7 @@ function TeacherMyClassesView({
       <div
         className={
           freeTierB2
-            ? freeTierLockedPageBodyClassName('max-w-screen-lg')
+            ? freeTierLockedPageBodyClassName('mx-0 max-w-none')
             : 'mx-auto w-full min-w-0 max-w-screen-lg px-3 py-4 pb-24 sm:px-5'
         }
       >

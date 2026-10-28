@@ -508,17 +508,17 @@ export default function Route() {
               collisionPadding={8}
               className="m-1 max-h-[var(--radix-popover-content-available-height)] overflow-y-auto p-0"
             >
-              <div className="flex justify-between p-3 border-b">
-                <div className="flex flex-col">
+              <div className="flex items-start justify-between gap-2 border-b p-3">
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <p className="text-sm font-bold">{user.name}</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="break-words text-sm text-muted-foreground">
                     {formatUserContactLabel(user)}
                   </p>
                 </div>
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  className="opacity-40 hover:opacity-100"
+                  className="shrink-0 opacity-40 hover:opacity-100"
                   aria-label="User settings"
                   disabled={isReadOnlyImpersonation}
                   title={
