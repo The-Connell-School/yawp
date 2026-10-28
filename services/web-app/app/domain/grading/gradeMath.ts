@@ -1,7 +1,6 @@
 import { rubricCategories } from './rubric';
 import { getCategoryScoreBounds } from '~/domain/assignment-types/rubric-category-options';
 import { isScored, type RubricDisplayCategory } from './rubric-display';
-import { getCategoryScoreBounds } from '~/domain/assignment-types/rubric-category-options';
 import type { RubricScoreBand } from '~/domain/assignment-types/assignment-type-rubric.shared';
 
 export function scoreToPercent(score: number) {
