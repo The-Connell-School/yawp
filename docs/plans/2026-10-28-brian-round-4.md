@@ -124,4 +124,5 @@ All five items are built, each in its own commit, on `claude/keen-keller-56x4ww`
 - **New unit tests** `celebration.test.ts` (in CI), plus a new test in `lesson-share.test.ts`.
 - **Local runs:**
   - Passed: round 4, round 3, library v2, run 6, stack v2 and unit build (40 tests).
+  - Passed: run 2 to run 5, review and the main planner spec (162 tests).
   - Typecheck is clean.
