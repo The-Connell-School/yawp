@@ -44,6 +44,18 @@ describe('gradingAssistantResponseHasVisibleContent', () => {
     ).toBe(true);
   });
 
+  test('treats grammar issue objects as visible content', () => {
+    expect(
+      gradingAssistantResponseHasVisibleContent({
+        success: true,
+        grammarIssues: {
+          version: 1,
+          issues: [{ excerpt: 'Their going', message: 'Use they are.' }],
+        },
+      })
+    ).toBe(true);
+  });
+
   test('is false for an empty success payload', () => {
     expect(
       gradingAssistantResponseHasVisibleContent({
