@@ -149,6 +149,20 @@ describe("share pages name the writing by type (Brian's round 3, 1.7–1.9)", ()
     expect(handoutHeading('The excerpt', null)).toBe('The excerpt');
   });
 
+  test('a prompt is any writing step of a Yawp! assignment type, the exit ticket included (round 4)', async () => {
+    const { isSharedPrompt } = await import('./lesson-share');
+    expect(isSharedPrompt({ kind: 'class-starter', isWriting: true, writingName: 'Class Starter' })).toBe(true);
+    expect(isSharedPrompt({ kind: 'daily-pages', isWriting: true, writingName: 'Daily Pages' })).toBe(true);
+    expect(isSharedPrompt({ kind: 'exit-ticket', isWriting: true, writingName: 'Exit Ticket' })).toBe(true);
+    // A closing step that is an exit ticket.
+    expect(isSharedPrompt({ kind: 'step', isWriting: true, writingName: 'Exit Ticket' })).toBe(true);
+    expect(isSharedPrompt({ kind: 'thesis-module', isWriting: true, writingName: 'Thesis Essay' })).toBe(true);
+    expect(isSharedPrompt({ kind: 'step', isWriting: true, writingName: 'Five-Paragraph Essay' })).toBe(true);
+    // A worksheet to fill in is writing, but a handout, not a prompt.
+    expect(isSharedPrompt({ kind: 'handout', isWriting: true, writingName: 'Activity' })).toBe(false);
+    expect(isSharedPrompt({ kind: 'step', isWriting: false, writingName: undefined })).toBe(false);
+  });
+
   test('a family is told what is expected and by when', async () => {
     const { inYawpLead } = await import('./lesson-share');
     expect(inYawpLead('family')).toBe(

@@ -303,3 +303,24 @@ export function inYawpLead(audience: ShareAudience): string {
     ? 'These assignments are available to your student in Yawp! and should be completed before the next class session (or by an agreed-upon time):'
     : 'These writing exercises are available to students as assignments in Yawp!';
 }
+
+/** The Yawp! assignment types a share page shows as a prompt. */
+const PROMPT_TYPES = new Set([
+  'Class Starter',
+  'Daily Pages',
+  'Exit Ticket',
+  'Thesis Essay',
+  'Five-Paragraph Essay',
+  'AP Essay Practice',
+  'ACT Writing Practice',
+]);
+
+/**
+ * Whether a step shows under "The writing prompt(s)", in its purple box: a
+ * writing step of a Yawp! assignment type. The exit ticket was left out and
+ * showed only as a handout (Brian's round 4).
+ */
+export function isSharedPrompt(step: { kind: string; isWriting: boolean; writingName?: string }): boolean {
+  if (step.kind === 'class-starter' || step.kind === 'daily-pages') return true;
+  return step.isWriting && PROMPT_TYPES.has(step.writingName ?? '');
+}

@@ -12,7 +12,7 @@ import {
 } from '~/domain/feature-flags/feature-flags.server';
 import { buildLessonPacket } from './lesson-packet';
 import { findShareLink } from './lesson-share.server';
-import { parseShareItems, type ShareAudience } from './lesson-share';
+import { isSharedPrompt, parseShareItems, type ShareAudience } from './lesson-share';
 import { readSlideDeck, type SlideDeck } from './slide-deck';
 import { handoutContent, studentVersionKey, answerLinesFor } from './step-handout';
 import { stackSteps } from './stack-steps';
@@ -143,7 +143,7 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
     : [];
   const prompts = includes.has('daily-pages')
     ? steps
-        .filter((step) => step.kind === 'daily-pages' || step.kind === 'class-starter')
+        .filter(isSharedPrompt)
         .map((step) => ({
           id: step.id,
           title: step.title,
