@@ -15,14 +15,11 @@ import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { AssignmentTypeImageThumbnail } from './assignment-type-image-thumbnail';
 import {
   DEFAULT_RUBRIC,
-  DEFAULT_SCORING_SCALE,
   type RubricData,
-  type ScoringScaleData,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
-  RubricConfigurationEditor,
+  RubricGrammarHighlightingControl,
   rubricSnapshot,
-  scoringScaleSnapshot,
 } from '~/components/admin/rubric-config-editors';
 import {
   RubricLibrarySection,
@@ -43,14 +40,12 @@ type AssignmentTypeEditorFormProps = {
   currentPromptLabel?: string | null;
   /** Cross-UI last-save hint (Platform vs Internal). */
   lastEditLine?: string | null;
-  scoringScale?: ScoringScaleData;
   rubric?: RubricData;
   assignmentTypeId?: string;
   titleDefaultValue?: string;
   descriptionDefaultValue?: string | null;
   /** Per-assignment-type override applied on top of the resolved rubric's instructions. */
   gradingInstructionsDefaultValue?: string;
-  tutorInstructionsDefaultValue?: string | null;
   archivedAt?: Date | string | null;
   imageId?: string | null;
   modules?: AssignmentTypeModuleRow[];
@@ -61,18 +56,14 @@ function formSnapshot(values: {
   description: string;
   gradingInstructions: string;
   rubricId: string | null;
-  tutorInstructions: string;
-  scoringScale: ScoringScaleData;
-  rubric: RubricData;
+  rubricJsonSnapshot: string | null;
 }) {
   return [
     values.title.trim(),
     values.description.trim(),
     values.gradingInstructions.trim(),
     values.rubricId ?? '',
-    values.tutorInstructions.trim(),
-    scoringScaleSnapshot(values.scoringScale),
-    rubricSnapshot(values.rubric),
+    values.rubricJsonSnapshot ?? '',
   ].join('\u0000');
 }
 
@@ -127,13 +118,11 @@ export function AssignmentTypeEditorForm({
   error,
   currentPromptLabel = null,
   lastEditLine = null,
-  scoringScale = DEFAULT_SCORING_SCALE,
   rubric = DEFAULT_RUBRIC,
   assignmentTypeId,
   titleDefaultValue = '',
   descriptionDefaultValue = '',
   gradingInstructionsDefaultValue = '',
-  tutorInstructionsDefaultValue = '',
   archivedAt = null,
   imageId = null,
   modules = [],
@@ -158,14 +147,16 @@ export function AssignmentTypeEditorForm({
     gradingInstructionsDefaultValue
   );
   const [rubricId, setRubricId] = useState<string | null>(selectedRubricId);
-  const [tutorInstructions, setTutorInstructions] = useState(
-    tutorInstructionsDefaultValue ?? ''
-  );
-  const [scoringScaleState, setScoringScaleState] =
-    useState<ScoringScaleData>(scoringScale);
   const [rubricState, setRubricState] = useState<RubricData>(rubric);
-  const [editorGeneration, setEditorGeneration] = useState(0);
+  const [grammarControlGeneration, setGrammarControlGeneration] = useState(0);
   const hasHydratedSavedValues = useRef(false);
+  const showBuiltInGrammarControl = isEdit && !rubricId;
+
+  const savedRubricSnapshot = useMemo(
+    () => (showBuiltInGrammarControl ? rubricSnapshot(rubric) : null),
+    [showBuiltInGrammarControl, rubric]
+  );
+
   const savedSnapshot = useMemo(
     () =>
       formSnapshot({
@@ -173,18 +164,14 @@ export function AssignmentTypeEditorForm({
         description: descriptionDefaultValue ?? '',
         gradingInstructions: gradingInstructionsDefaultValue,
         rubricId: selectedRubricId,
-        tutorInstructions: tutorInstructionsDefaultValue ?? '',
-        scoringScale,
-        rubric,
+        rubricJsonSnapshot: savedRubricSnapshot,
       }),
     [
       titleDefaultValue,
       descriptionDefaultValue,
       gradingInstructionsDefaultValue,
       selectedRubricId,
-      tutorInstructionsDefaultValue,
-      scoringScale,
-      rubric,
+      savedRubricSnapshot,
     ]
   );
 
@@ -193,11 +180,9 @@ export function AssignmentTypeEditorForm({
     setDescription(descriptionDefaultValue ?? '');
     setGradingInstructions(gradingInstructionsDefaultValue);
     setRubricId(selectedRubricId);
-    setTutorInstructions(tutorInstructionsDefaultValue ?? '');
-    setScoringScaleState(scoringScale);
     setRubricState(rubric);
     if (hasHydratedSavedValues.current) {
-      setEditorGeneration((generation) => generation + 1);
+      setGrammarControlGeneration((generation) => generation + 1);
     } else {
       hasHydratedSavedValues.current = true;
     }
@@ -219,6 +204,10 @@ export function AssignmentTypeEditorForm({
 
   const imageDirty = hasRemovedImage || previewUrl !== null;
 
+  const currentRubricSnapshot = showBuiltInGrammarControl
+    ? rubricSnapshot(rubricState)
+    : null;
+
   const currentSnapshot = useMemo(
     () =>
       formSnapshot({
@@ -226,23 +215,18 @@ export function AssignmentTypeEditorForm({
         description,
         gradingInstructions,
         rubricId,
-        tutorInstructions,
-        scoringScale: scoringScaleState,
-        rubric: rubricState,
+        rubricJsonSnapshot: currentRubricSnapshot,
       }),
     [
       title,
       description,
       gradingInstructions,
       rubricId,
-      tutorInstructions,
-      scoringScaleState,
-      rubricState,
+      currentRubricSnapshot,
     ]
   );
 
   const isDirty = currentSnapshot !== savedSnapshot || imageDirty;
-  const rubricSelectionDirty = rubricId !== selectedRubricId;
   const canSubmit = isEdit ? isDirty && !isSubmitting : !isSubmitting;
   const submitLabel = isEdit
     ? isSubmitting
@@ -257,10 +241,8 @@ export function AssignmentTypeEditorForm({
     setDescription(descriptionDefaultValue ?? '');
     setGradingInstructions(gradingInstructionsDefaultValue);
     setRubricId(selectedRubricId);
-    setTutorInstructions(tutorInstructionsDefaultValue ?? '');
-    setScoringScaleState(scoringScale);
     setRubricState(rubric);
-    setEditorGeneration((generation) => generation + 1);
+    setGrammarControlGeneration((generation) => generation + 1);
     setPreviewUrl(null);
     setHasRemovedImage(false);
     if (imageFileInputRef.current) {
@@ -384,48 +366,29 @@ export function AssignmentTypeEditorForm({
         </Section>
 
         <Section
-          title="General tutor instructions"
-          description="The top of every tutor prompt for this assignment type. Paste the Universal Yawp! Tutor Instructions here and leave them unedited — this is the Tutor's character, identical across every course. Per-step substance belongs in the modules below."
-        >
-          <div className="space-y-2">
-            <FieldLabel htmlFor="assignmentTypeTutorInstructions">
-              Universal tutor instructions
-            </FieldLabel>
-            <Textarea
-              id="assignmentTypeTutorInstructions"
-              name="tutorInstructions"
-              rows={14}
-              className="font-mono text-xs"
-              placeholder="WHO YOU ARE. You are the Yawp! Tutor..."
-              value={tutorInstructions}
-              onChange={(event) => setTutorInstructions(event.target.value)}
-            />
-            <p className="text-sm text-muted-foreground">
-              Leave this empty to fall back to the built-in universal block.
-            </p>
-          </div>
-        </Section>
-
-        <Section
           title="Rubric"
-          description="The source of truth shared by grading and tutor guidance. Import a rubric or edit categories here, or attach a shared library rubric below."
+          description="Choose a shared library rubric for grading and tutor guidance. Per-type overrides stay limited to grading assistant instructions below."
         >
-          {isEdit ? (
-            <RubricConfigurationEditor
-              key={`rubric-editor-${editorGeneration}`}
-              initialScoringScale={scoringScaleState}
-              initialRubric={rubricState}
-              namePrefix="assignmentType"
-              excludeAssignmentTypeId={assignmentTypeId ?? null}
-              onScoringScaleChange={setScoringScaleState}
-              onRubricChange={setRubricState}
-            />
-          ) : (
+          {isEdit && !selectedRubricId ? (
             <p className="text-sm text-muted-foreground">
-              Save the assignment type, then import or manage its rubric on this
+              This assignment type uses its built-in rubric. Select a library
+              rubric below to switch, or adjust grammar highlighting when
+              available.
+            </p>
+          ) : !isEdit ? (
+            <p className="text-sm text-muted-foreground">
+              Pick a library rubric now, or save and attach one on the edit
               page.
             </p>
-          )}
+          ) : null}
+          {showBuiltInGrammarControl ? (
+            <RubricGrammarHighlightingControl
+              key={`grammar-highlighting-${grammarControlGeneration}`}
+              initialRubric={rubricState}
+              namePrefix="assignmentType"
+              onRubricChange={setRubricState}
+            />
+          ) : null}
           <RubricLibrarySection
             rubrics={rubrics}
             selectedRubricId={rubricId}

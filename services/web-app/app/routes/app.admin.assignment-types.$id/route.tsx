@@ -168,14 +168,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (intent === 'updateCourse') {
     const title = formData.get('title')?.toString().trim();
     const description = formData.get('description')?.toString();
-    // The assignment-level General Tutor Instructions -- the top of every
-    // tutor prompt for this type. Only written when the form actually carried
-    // the field, so a partial submission can never blank it out.
-    const hasTutorInstructions = formData.has('tutorInstructions');
-    const tutorInstructions = formData
-      .get('tutorInstructions')
-      ?.toString()
-      .trim();
     const imageFile = formData.get('image') as File | null;
     const deleteImage = formData.get('deleteImage') === 'true';
     const hasRubricIdField = formData.has('rubricId');
@@ -197,7 +189,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         scoringScaleJson: true,
         gradingPromptConfigJson: true,
         gradingOutputSchemaJson: true,
-        tutorInstructions: true,
         rubric: { select: { schemaJson: true } },
       },
     });
@@ -233,11 +224,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         ),
         gradingAssistantVersion: { increment: 1 },
       } : {});
-    const tutorInstructionsChanged =
-      hasTutorInstructions &&
-      (tutorInstructions || null) !== (existing.tutorInstructions?.trim() || null);
     const stampCrossUiProvenance =
-      tutorInstructionsChanged ||
       overrideChanged ||
       Object.keys(gradingConfig).length > 0 ||
       rubricSelection?.kind === 'per-type';
@@ -252,7 +239,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
       await updateAssignmentType(tx, assignmentTypeId, existing, {
         title, description: description || null,
         ...(rubricSelection ? { rubricSelection } : {}),
-        ...(hasTutorInstructions ? { tutorInstructions: tutorInstructions || null } : {}),
         gradingConfig,
         ...(stampCrossUiProvenance
           ? {
@@ -305,7 +291,6 @@ export default function AssignmentTypeRoute() {
     rubrics,
     currentPromptLabel,
     lastEditLine,
-    scoringScale,
     rubric,
   } = useLoaderData<typeof loader>();
 
@@ -318,13 +303,11 @@ export default function AssignmentTypeRoute() {
       rubrics={rubrics}
       selectedRubricId={course.rubricId ?? null}
       gradingInstructionsDefaultValue={readGradingInstructionsOverride(course.gradingPromptConfigJson)}
-      tutorInstructionsDefaultValue={course.tutorInstructions}
       archivedAt={course.archivedAt}
       imageId={course.image?.id ?? null}
       modules={course.assignmentModules}
       currentPromptLabel={currentPromptLabel}
       lastEditLine={lastEditLine}
-      scoringScale={scoringScale}
       rubric={rubric}
     />
   );
