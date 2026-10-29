@@ -3,6 +3,7 @@ import {
   data as dataResponse,
   Link,
   type LoaderFunctionArgs,
+  redirect,
 } from 'react-router';
 import { useLoaderData, useFetcher } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -18,7 +19,8 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import { ChevronLeft, Settings } from 'lucide-react';
+import { ChevronLeft, Settings, UserPlus, TrashIcon } from 'lucide-react';
+import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { Badge } from '~/components/ui/badge';
 import {
   Sheet,
@@ -29,8 +31,15 @@ import {
 } from '~/components/ui/sheet';
 import { Label } from '~/components/ui/label';
 import { Input } from '~/components/ui/input';
+import { Textarea } from '~/components/ui/textarea';
 import React from 'react';
+import { sendEmail } from '~/utils/email.server';
+import * as E from '@react-email/components';
 import { requireAdmin } from '~/utils/auth.server';
+import { generateTOTP } from '~/utils/totp.server';
+import { getDomainUrl } from '~/utils/misc';
+import { Prisma } from '@app/prisma';
+import { normalizeEmail } from '~/utils/normalize-email';
 import { listAdminOwnerInvitations } from '~/domain/organizations/owner-invitations.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -82,60 +91,260 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 }
 
-export async function action({ request }: ActionFunctionArgs) {
-  await requireAdmin(request);
+export async function action({ request, params }: ActionFunctionArgs) {
+  const currentAdmin = await requireAdmin(request);
+  const userId = currentAdmin.id;
   const formData = await request.formData();
   const intent = formData.get('intent');
+  const profile = await requireMembership(request, userId);
 
   if (intent === 'deleteOrganization') {
-    return dataResponse(
-      {
-        status: 'error',
-        error:
-          'Organization deletion is disabled on the platform admin surface.',
-      },
-      { status: 410 }
-    );
+    // Get current user and organization count to validate deletion
+    const [currentUser, totalOrganizations] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { isAdmin: true },
+      }),
+      prisma.organization.count(),
+    ]);
+
+    if (!currentUser) {
+      throw new Response('User not found', { status: 404 });
+    }
+
+    // Prevent deletion if user is assigned to this organization
+    if (profile?.organization.id === params.id) {
+      throw new Response('Cannot delete organization you are assigned to it', {
+        status: 400,
+      });
+    }
+
+    // Prevent deletion if this is the only organization
+    if (totalOrganizations <= 1) {
+      throw new Response('Cannot delete the only organization', {
+        status: 400,
+      });
+    }
+
+    await prisma.organization.delete({
+      where: { id: params.id },
+    });
+
+    return redirect('/app/admin/organizations');
   }
 
   if (intent === 'update') {
-    return dataResponse(
-      {
-        status: 'error',
-        error: 'Organization updates have moved to Yawp Internal.',
-      },
-      { status: 410 }
+    const name = formData.get('name')?.toString();
+    const numOfStudentSeats = parseInt(
+      formData.get('numOfStudentSeats')?.toString() || '10'
     );
-  }
+    const numOfTeacherSeats = parseInt(
+      formData.get('numOfTeacherSeats')?.toString() || '10'
+    );
+    const accessExpiresAt = formData.get('accessExpiresAt')?.toString();
+    const reporterEnabled = formData.get('reporterEnabled') === 'true';
+    const classInsightsEnabled =
+      formData.get('classInsightsEnabled') === 'true';
+    const writingPracticeEnabled =
+      formData.get('writingPracticeEnabled') === 'true';
+    const submissionActivityEnabled =
+      formData.get('submissionActivityEnabled') === 'true';
+    const revisionFlowEnabled =
+      formData.get('revisionFlowEnabled') === 'true';
+    const assignmentTypeIds = Array.from(
+      new Set(
+        formData
+          .getAll('assignmentTypeIds')
+          .map((value) => value.toString())
+          .filter(Boolean)
+      )
+    );
+    if (!name) {
+      throw new Response('Name is required', { status: 400 });
+    }
 
-  if (intent === 'legacy-update') {
-    return dataResponse(
-      {
-        status: 'error',
-        error: 'Organization updates have moved to Yawp Internal.',
-      },
-      { status: 410 }
-    );
+    if (assignmentTypeIds.length > 0) {
+      const validAssignmentTypes = await prisma.assignmentType.findMany({
+        where: { id: { in: assignmentTypeIds }, archivedAt: null },
+        select: { id: true },
+      });
+      if (validAssignmentTypes.length !== assignmentTypeIds.length) {
+        throw new Response('Assignment type not found', { status: 404 });
+      }
+    }
+
+    await prisma.$transaction([
+      prisma.organization.update({
+        where: { id: params.id },
+        data: {
+          name,
+          numOfStudentSeats,
+          numOfTeacherSeats,
+          accessExpiresAt: accessExpiresAt ? new Date(accessExpiresAt) : null,
+          reporterEnabled,
+          classInsightsEnabled,
+          writingPracticeEnabled,
+          submissionActivityEnabled,
+          revisionFlowEnabled,
+        },
+      }),
+      prisma.organizationAssignmentType.deleteMany({
+        where: { organizationId: params.id },
+      }),
+      ...(assignmentTypeIds.length > 0
+        ? [
+            prisma.organizationAssignmentType.createMany({
+              data: assignmentTypeIds.map((assignmentTypeId) => ({
+                organizationId: params.id!,
+                assignmentTypeId,
+              })),
+              skipDuplicates: true,
+            }),
+          ]
+        : []),
+    ]);
+
+    return dataResponse({ status: 'success' });
   }
 
   if (intent === 'invite-owners') {
-    return dataResponse(
-      {
-        status: 'error',
-        error: 'Owner invitations are disabled on the platform admin surface.',
-      },
-      { status: 410 }
+    const emails = formData.get('emails')?.toString().trim();
+    if (!emails) {
+      return dataResponse({ error: 'Emails are required' }, { status: 400 });
+    }
+
+    const emailList = Array.from(
+      new Set(
+        emails
+          .split(/[,\n]/)
+          .map((email: string) => normalizeEmail(email))
+          .filter((email: string) => email && email.includes('@'))
+      )
     );
+
+    if (emailList.length === 0) {
+      return dataResponse(
+        { error: 'No valid emails provided' },
+        { status: 400 }
+      );
+    }
+
+    const organization = await prisma.organization.findUnique({
+      where: { id: params.id },
+      select: { name: true },
+    });
+
+    let successCount = 0;
+    for (const email of emailList) {
+      try {
+        // Check for existing verification and delete if found
+        const existingInvitation = await prisma.invitation.findFirst({
+          where: {
+            target: { equals: email, mode: 'insensitive' },
+            type: 'onboard-owner',
+            metadata: JSON.stringify({ organizationId: params.id }),
+          },
+        });
+
+        if (existingInvitation) {
+          await prisma.invitation.delete({
+            where: { id: existingInvitation.id },
+          });
+        }
+
+        const { otp, ...verificationConfig } = await generateTOTP({
+          algorithm: 'SHA-256',
+          charSet: 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789', // Leaving off 0 and O on purpose to avoid confusing users.
+          period: 3 * 24 * 60 * 60,
+        });
+
+        const type = 'onboard-owner';
+        const target = email;
+        const verifyUrl = new URL(`${getDomainUrl(request)}/auth/inv/verify`);
+        verifyUrl.searchParams.set('type', type);
+        verifyUrl.searchParams.set('target', target);
+        verifyUrl.searchParams.set('code', otp);
+
+        const verificationData: Prisma.InvitationCreateInput = {
+          type,
+          target,
+          ...verificationConfig,
+          expiresAt: new Date(Date.now() + verificationConfig.period * 1000),
+          metadata: JSON.stringify({ organizationId: params.id }),
+        };
+
+        await prisma.invitation.create({ data: verificationData });
+
+        await sendEmail({
+          to: email,
+          subject: "You're invited to join your organization on Yawp!",
+          react: (
+            <OrganizationInviteEmail
+              verifyUrl={verifyUrl.toString()}
+              organizationName={organization?.name ?? 'your organization'}
+              userType="owner"
+            />
+          ),
+        });
+
+        successCount++;
+      } catch (error) {
+        console.error(`Failed to send invitation to ${email}:`, error);
+      }
+    }
+
+    return dataResponse({
+      success: true,
+      message: `Invitations sent to ${successCount} owners`,
+      invited: successCount,
+    });
   }
 
   return dataResponse({ status: 'error' });
 }
 
+function OrganizationInviteEmail({
+  verifyUrl,
+  userType,
+  organizationName,
+}: {
+  verifyUrl: string;
+  userType: 'teacher' | 'student' | 'owner';
+  organizationName: string;
+}) {
+  return (
+    <E.Html lang="en" dir="ltr">
+      <E.Container>
+        <h1>
+          <E.Text>Welcome to Yawp!</E.Text>
+        </h1>
+        <p>
+          <E.Text>
+            You've been invited to join {organizationName} as{' '}
+            {userType === 'owner' ? 'an owner' : `a ${userType}`} on Yawp!
+          </E.Text>
+        </p>
+        <p>
+          <E.Text>Click the link to get started:</E.Text>
+        </p>
+        <E.Link href={verifyUrl}>{verifyUrl}</E.Link>
+        <p>
+          <E.Text>
+            This invitation will expire in 3 days for security reasons.
+          </E.Text>
+        </p>
+      </E.Container>
+    </E.Html>
+  );
+}
+
 export default function OrganizationRoute() {
-  const { organization, invitations, assignmentTypes } =
+  const { organization, invitations, assignmentTypes, canDelete } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
+  const inviteFetcher = useFetcher();
   const [isEditSheetOpen, setIsEditSheetOpen] = React.useState(false);
+  const [isInviteSheetOpen, setIsInviteSheetOpen] = React.useState(false);
 
   const owners = organization.memberships.filter(
     (membership) => membership.isOrgOwner
@@ -152,12 +361,14 @@ export default function OrganizationRoute() {
     }
   }, [fetcher.data]);
 
+  React.useEffect(() => {
+    if (inviteFetcher.data?.success) {
+      setIsInviteSheetOpen(false);
+    }
+  }, [inviteFetcher.data]);
+
   return (
     <div className="grid gap-4 p-3 md:p-5">
-      <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        Organization create/update writes have moved to Yawp Internal. This
-        platform detail page is read-only for organization settings.
-      </div>
       <div className="flex justify-between">
         <Button variant="ghost" asChild>
           <Link to="/app/admin/organizations">
@@ -166,13 +377,13 @@ export default function OrganizationRoute() {
           </Link>
         </Button>
         <div className="flex gap-2">
+          <Button onClick={() => setIsInviteSheetOpen(true)}>
+            <UserPlus className="mr-2 h-4 w-4" />
+            Invite Owner
+          </Button>
           <Sheet open={isEditSheetOpen} onOpenChange={setIsEditSheetOpen}>
             <SheetTrigger asChild>
-              <Button
-                variant="outline"
-                disabled
-                title="Edit organizations in Yawp Internal"
-              >
+              <Button variant="outline">
                 <Settings className="mr-2 h-4 w-4" />
                 Edit Organization
               </Button>
@@ -252,7 +463,7 @@ export default function OrganizationRoute() {
                       <span className="min-w-0">
                         <span className="block font-medium">Class Summary</span>
                         <span className="block text-xs text-muted-foreground">
-                          Enables assignment-level class summaries.
+                          Enables assignment-level AI class summaries.
                         </span>
                       </span>
                     </label>
@@ -265,7 +476,7 @@ export default function OrganizationRoute() {
                         className="mt-1 h-4 w-4"
                       />
                       <span className="min-w-0">
-                        <span className="block font-medium">Yawp! Reporter</span>
+                        <span className="block font-medium">Yawp Reporter</span>
                         <span className="block text-xs text-muted-foreground">
                           Retired: Reporter is always on for all organizations.
                           This toggle is kept for historical data only.
@@ -285,9 +496,8 @@ export default function OrganizationRoute() {
                           Writing Practice
                         </span>
                         <span className="block text-xs text-muted-foreground">
-                          Retired: Writing Practice is always on for all
-                          organizations. This toggle is kept for historical data
-                          only.
+                          Retired: Writing Practice is always on for all organizations.
+                          This toggle is kept for historical data only.
                         </span>
                       </span>
                     </label>
@@ -387,8 +597,86 @@ export default function OrganizationRoute() {
               </fetcher.Form>
             </SheetContent>
           </Sheet>
+          <ConfirmationDialog
+            variant="destructive"
+            title="Delete Organization"
+            description={
+              !canDelete
+                ? "This organization cannot be deleted because either you are assigned to it or it's the only organization in the system."
+                : `Are you sure you want to delete "${organization.name}"? This action cannot be undone and will permanently remove the organization and all its data.`
+            }
+            confirmText={canDelete ? 'Delete Organization' : 'Cannot Delete'}
+            cancelText="Cancel"
+            onConfirm={() => {
+              if (canDelete) {
+                fetcher.submit(
+                  { intent: 'deleteOrganization' },
+                  { method: 'post' }
+                );
+              }
+            }}
+            onCancel={() => {
+              // Dialog will close automatically
+            }}
+          >
+            <Button
+              variant="destructive-outline"
+              size="icon"
+              disabled={!canDelete}
+              title={
+                !canDelete
+                  ? "Cannot delete: you are assigned to this organization or it's the only organization"
+                  : 'Delete organization'
+              }
+            >
+              <TrashIcon className="h-4 w-4" />
+            </Button>
+          </ConfirmationDialog>
         </div>
       </div>
+
+      {/* Invite Owner Sheet */}
+      <Sheet open={isInviteSheetOpen} onOpenChange={setIsInviteSheetOpen}>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>Invite Owners</SheetTitle>
+          </SheetHeader>
+          <inviteFetcher.Form method="post" className="mt-4 space-y-4">
+            <input type="hidden" name="intent" value="invite-owners" />
+            <div className="space-y-2">
+              <Label htmlFor="emails">
+                Email addresses (comma or line separated)
+              </Label>
+              <Textarea
+                id="emails"
+                name="emails"
+                placeholder="owner1@example.com, owner2@example.com"
+                rows={4}
+                required
+              />
+            </div>
+            {inviteFetcher.data?.error && (
+              <div className="text-sm text-red-600">
+                {inviteFetcher.data.error}
+              </div>
+            )}
+            {inviteFetcher.data?.success && (
+              <div className="text-sm text-green-600">
+                {inviteFetcher.data.message}
+              </div>
+            )}
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={inviteFetcher.state !== 'idle'}
+            >
+              {inviteFetcher.state !== 'idle'
+                ? 'Sending...'
+                : 'Send Invitations'}
+            </Button>
+          </inviteFetcher.Form>
+        </SheetContent>
+      </Sheet>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="bg-muted">
@@ -483,7 +771,8 @@ export default function OrganizationRoute() {
                     colSpan={3}
                     className="text-center text-muted-foreground"
                   >
-                    No owners found.
+                    No owners found. Use the "Invite Owner" button to invite new
+                    owners.
                   </TableCell>
                 </TableRow>
               )}

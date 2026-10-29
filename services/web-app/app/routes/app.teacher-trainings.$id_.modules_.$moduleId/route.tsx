@@ -34,8 +34,10 @@ import { cn } from '~/utils/misc';
 import { getTeacherTrainingProgressPercent } from '~/utils/teacher-training-progress';
 import { getTeacherTrainingMediaAccessibilityResources } from '~/utils/teacher-training-media-accessibility';
 import { getTeacherTrainingPlaybackUrl } from '~/utils/teacher-training-video-link.server';
+import { redirectIfTeacherLoungeTemporarilyDisabled } from '~/domain/teacher-lounge/teacher-lounge-temporary-disable.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
+  redirectIfTeacherLoungeTemporarilyDisabled();
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
@@ -130,6 +132,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
+  redirectIfTeacherLoungeTemporarilyDisabled();
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
   const formData = await request.formData();

@@ -2,6 +2,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { test, expect } from '../test-setup';
 import { EDITOR_SELECTOR } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
+import { teacherLoungeE2eSkipped } from '../helpers/teacher-lounge-disabled';
 
 const STUDENT_PASSWORD = 'johndoe';
 const TEACHER_PASSWORD = 'teacher-e2e-password';
@@ -235,25 +236,27 @@ test.describe.serial('UA manual accessibility evidence automation', () => {
     );
     await collectTabStops(page, testInfo, 'teacher-grading', 8);
 
-    await page.goto(`/app/teacher-trainings/${e2eContext.teacherTrainingId}`);
-    await expect(
-      page.getByRole('heading', { name: 'E2E Teacher Lounge' })
-    ).toBeVisible();
-    const moduleLink = page
-      .getByRole('link', { name: /E2E Lounge Module/i })
-      .first();
-    await moduleLink.focus();
-    await page.keyboard.press('Enter');
-    await page.waitForURL(`**/modules/${moduleId}`);
-    await expect(
-      page.getByRole('heading', { name: 'E2E Lounge Module' }).first()
-    ).toBeVisible();
-    await expect(
-      page.getByTestId('teacher-training-media-accessibility')
-    ).toBeVisible();
-    await expect(page.getByRole('link', { name: /^captions$/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /^transcript$/i })).toBeVisible();
-    await collectTabStops(page, testInfo, 'teacher-lounge-module', 8);
+    if (!teacherLoungeE2eSkipped) {
+      await page.goto(`/app/teacher-trainings/${e2eContext.teacherTrainingId}`);
+      await expect(
+        page.getByRole('heading', { name: 'E2E Teacher Lounge' })
+      ).toBeVisible();
+      const moduleLink = page
+        .getByRole('link', { name: /E2E Lounge Module/i })
+        .first();
+      await moduleLink.focus();
+      await page.keyboard.press('Enter');
+      await page.waitForURL(`**/modules/${moduleId}`);
+      await expect(
+        page.getByRole('heading', { name: 'E2E Lounge Module' }).first()
+      ).toBeVisible();
+      await expect(
+        page.getByTestId('teacher-training-media-accessibility')
+      ).toBeVisible();
+      await expect(page.getByRole('link', { name: /^captions$/i })).toBeVisible();
+      await expect(page.getByRole('link', { name: /^transcript$/i })).toBeVisible();
+      await collectTabStops(page, testInfo, 'teacher-lounge-module', 8);
+    }
 
     await page.context().clearCookies();
     await signIn(e2eContext.adminEmail, ADMIN_PASSWORD);
@@ -329,13 +332,15 @@ test.describe.serial('UA manual accessibility evidence automation', () => {
       'teacher-grading-200-percent'
     );
 
-    await page.goto(
-      `/app/teacher-trainings/${e2eContext.teacherTrainingId}/modules/${moduleId}`
-    );
-    await expectNoDocumentHorizontalScroll(
-      page,
-      testInfo,
-      'teacher-lounge-200-percent'
-    );
+    if (!teacherLoungeE2eSkipped) {
+      await page.goto(
+        `/app/teacher-trainings/${e2eContext.teacherTrainingId}/modules/${moduleId}`
+      );
+      await expectNoDocumentHorizontalScroll(
+        page,
+        testInfo,
+        'teacher-lounge-200-percent'
+      );
+    }
   });
 });
