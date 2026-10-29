@@ -23,10 +23,8 @@ export const buildTutorSystemPrompt = ({
   instructionTutorInstructions,
   moduleRubricGuidance,
 }: {
-  // The assignment-level General Tutor Instructions, stored on the assignment
-  // type and edited in admin. This is the top of the prompt -- where the
-  // Universal Yawp! Tutor Instructions live. Null on assignment types that
-  // have not set one, the built-in Universal Yawp! Tutor block is used.
+  // Assignment-type general tutor instructions (optional DB override). When null
+  // or empty, the built-in Universal Yawp! Tutor block is used.
   generalTutorInstructions?: string | null | undefined;
   tutorInstructions: string | null | undefined;
   instructionTutorInstructions: string | null | undefined;
