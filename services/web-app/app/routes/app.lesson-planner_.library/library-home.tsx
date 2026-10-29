@@ -24,6 +24,7 @@ import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
+import { libraryCourseCookie } from '~/domain/lesson-planner/library-course';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,8 +89,11 @@ function hasDrag(event: DragEvent, type: string) {
   return event.dataTransfer.types.includes(type);
 }
 
-export function LibraryHome({ data }: { data: LibraryHomeData }) {
-  const [courseId, setCourseId] = useState(data.courses[0]?.id ?? '');
+export function LibraryHome({ data }: { data: LibraryHomeData & { lastCourseId?: string | null } }) {
+  // Opens on the class the teacher last chose, and stays there (Brian, Oct 29).
+  const [courseId, setCourseId] = useState(
+    data.courses.find((candidate) => candidate.id === data.lastCourseId)?.id ?? data.courses[0]?.id ?? ''
+  );
   const course = data.courses.find((candidate) => candidate.id === courseId) ?? data.courses[0];
   const [kind, setKind] = useState<UnitKind | 'all'>('all');
   const [selecting, setSelecting] = useState(false);
@@ -109,6 +113,7 @@ export function LibraryHome({ data }: { data: LibraryHomeData }) {
 
   function chooseCourse(id: string) {
     setCourseId(id);
+    document.cookie = libraryCourseCookie(id);
     setKind('all');
     setSelected([]);
     setSelecting(false);

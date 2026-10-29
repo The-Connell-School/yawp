@@ -46,6 +46,7 @@ import {
 } from '~/domain/lesson-planner/lesson-library';
 import { timeAgo } from '~/utils/timeAgo';
 import { loadLibraryHome } from '~/domain/lesson-planner/load-library-v2.server';
+import { readLibraryCourse } from '~/domain/lesson-planner/library-course';
 import { LibraryHome } from './library-home';
 import { DeckArtImage } from '~/components/lesson-planner/deck-art-image';
 
@@ -57,7 +58,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const reviewFlags = await getLessonPlannerReviewFlags(access.membership.organization.id);
   if (reviewFlags.libraryV2) {
     const scope = { membershipId: access.membership.id, organizationId: access.membership.organization.id };
-    return { v2: await loadLibraryHome(scope, reviewFlags.stackV2), lessons: [], folders: false, allFolders: [] };
+    const home = await loadLibraryHome(scope, reviewFlags.stackV2);
+    // The class the teacher last chose (Brian, Oct 29).
+    const lastCourseId = readLibraryCourse(request.headers.get('Cookie'));
+    return { v2: { ...home, lastCourseId }, lessons: [], folders: false, allFolders: [] };
   }
 
   const lessons = await prisma.lessonPlanConversation.findMany({

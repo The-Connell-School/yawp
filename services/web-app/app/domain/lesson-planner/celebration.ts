@@ -1,14 +1,14 @@
 /**
  * "This lesson is set" (Brian's round 4, item 4): a burst of confetti, one
- * Yawp! logo rising through it, and a voice saying "Yaaaawp!". The pieces
- * and the voice are worked out here; the overlay draws them.
+ * Yawp! logo rising through it, and Brian's own "Yaaawp!". The pieces and
+ * the sound are worked out here; the overlay draws them.
  */
 
 /** Yawp! coral, purple, gold, teal and blush. */
 export const CELEBRATION_COLORS = ['#D9714F', '#7B4FB0', '#E3B341', '#3E9C86', '#F2C6B4'] as const;
 
-/** What the voice says. */
-export const YAWP_LINE = 'Yaaaawp!';
+/** Brian's recording: three takes of "Yaaawp!" stacked, 1.1 seconds (round 4 follow-up). */
+export const YAWP_SOUND = '/lesson-planner/sounds/yaaawp.mp3';
 
 export type ConfettiPiece = {
   x: number;
@@ -69,37 +69,15 @@ export function stepPiece(piece: ConfettiPiece, seconds: number): ConfettiPiece 
   };
 }
 
-type Voice = { name: string; lang: string };
-
-const MAN = /\bmale\b|daniel|alex\b|fred|david|mark\b|aaron|arthur|rishi|tom\b|guy|james|lee\b|oliver|gordon/i;
-const WOMAN = /female|samantha|victoria|karen|moira|tessa|zira|fiona|susan|serena|allison|ava\b/i;
-
-/** A man's English voice if the browser has one, else any English voice, else none (the default). */
-export function pickYawpVoice<T extends Voice>(voices: readonly T[]): T | null {
-  const english = voices.filter((voice) => voice.lang.toLowerCase().startsWith('en'));
-  return english.find((voice) => MAN.test(voice.name) && !WOMAN.test(voice.name)) ?? english[0] ?? null;
-}
-
 /**
- * Says "Yaaaawp!", low and drawn out. It runs off the teacher's click, so the
- * browser lets it make a sound. A recording can take its place here.
+ * Plays "Yaaawp!". It runs off the teacher's click, so the browser lets it
+ * make a sound; where it can't, the confetti still flies.
  */
-export function sayYawp(): void {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') return;
+export function playYawp(): void {
+  if (typeof window === 'undefined' || typeof Audio === 'undefined') return;
   try {
-    const line = new SpeechSynthesisUtterance(YAWP_LINE);
-    const voice = pickYawpVoice(window.speechSynthesis.getVoices());
-    if (voice) {
-      line.voice = voice;
-      line.lang = voice.lang;
-    } else {
-      line.lang = 'en-US';
-    }
-    line.pitch = 0.6;
-    line.rate = 0.7;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(line);
+    void new Audio(YAWP_SOUND).play().catch(() => {});
   } catch {
-    // No voice is no loss: the confetti still flies.
+    // No sound is no loss.
   }
 }

@@ -31,7 +31,7 @@ import { PIECE_DRAG_TYPE, RunOfShow } from './run-of-show';
 import { TakeToClass } from './take-to-class';
 import { PrintForClass } from './print-for-class';
 import { LessonSetCelebration } from './lesson-set-celebration';
-import { sayYawp } from '~/domain/lesson-planner/celebration';
+import { playYawp } from '~/domain/lesson-planner/celebration';
 import { PostToClass, SendLesson } from './share-cards';
 import { TimeBar } from './time-bar';
 import { HEADING_FONT, STACK_FONTS_HREF, STACK_THEME } from './theme';
@@ -158,7 +158,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
     [kevinNotes, timing]
   );
   const [onPaper, markPaper] = usePaperSteps(conversationId);
-  // Confetti and "Yaaaawp!" when the teacher sets the lesson (Brian's round 4, item 4).
+  // Confetti and "Yaaawp!" when the teacher sets the lesson (Brian's round 4, item 4).
   const [celebrating, setCelebrating] = useState(false);
   const missing = useMemo(() => notYetInYawp(steps, onPaper), [steps, onPaper]);
 
@@ -568,7 +568,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
               busy={busy}
               onSet={() => {
                 if (kevinNotes) {
-                  sayYawp();
+                  playYawp();
                   setCelebrating(true);
                 }
                 post(setFetcher, STACK_API, { intent: 'set-lesson' });

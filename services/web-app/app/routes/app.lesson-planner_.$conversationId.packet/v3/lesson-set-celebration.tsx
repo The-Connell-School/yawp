@@ -1,29 +1,33 @@
 /**
  * "This lesson is set" (Brian's round 4, item 4): confetti bursts from the
- * middle of the screen, one Yawp! logo rises through it, and a voice says
- * "Yaaaawp!". It never takes a click, and it's gone in about three seconds.
- * With reduced motion there's no confetti: the logo fades in and out.
+ * middle of the screen, one Yawp! logo rises through it, and Brian's
+ * "Yaaawp!" plays. It never takes a click, and it's gone in about three
+ * seconds. With reduced motion there's no confetti: the logo fades in and out.
  *
- * The voice (`sayYawp`) is started by the click itself, where the browser
+ * The sound (`playYawp`) is started by the click itself, where the browser
  * allows sound, not here.
  */
 import { useEffect, useRef, useState } from 'react';
 import { celebrationPieces, stepPiece } from '~/domain/lesson-planner/celebration';
 
 const LENGTH_MS = 3200;
+/** The logo leaves before the confetti settles, in one smooth fade (Brian, Oct 29). */
+const LOGO_MS = 2300;
 const PIECES = 160;
 
 const KEYFRAMES = `
 @keyframes yawp-rise {
-  0% { transform: translateY(60px) scale(0.2) rotate(-12deg); opacity: 0; }
-  35% { transform: translateY(-10px) scale(1.12) rotate(4deg); opacity: 1; }
-  50% { transform: translateY(0) scale(1) rotate(0deg); opacity: 1; }
-  82% { transform: translateY(0) scale(1) rotate(0deg); opacity: 1; }
-  100% { transform: translateY(-20px) scale(0.92); opacity: 0; }
+  0% { transform: translateY(60px) scale(0.2) rotate(-12deg); opacity: 0; animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1); }
+  38% { transform: translateY(-10px) scale(1.12) rotate(4deg); opacity: 1; animation-timing-function: ease-out; }
+  52% { transform: translateY(0) scale(1) rotate(0deg); opacity: 1; }
+  68% { transform: translateY(0) scale(1) rotate(0deg); opacity: 1; animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1); }
+  100% { transform: translateY(-12px) scale(0.97); opacity: 0; }
 }
 @keyframes yawp-fade {
-  0%, 100% { opacity: 0; }
-  20%, 80% { opacity: 1; }
+  0% { opacity: 0; animation-timing-function: ease-out; }
+  20% { opacity: 1; }
+  68% { opacity: 1; animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1); }
+  100% { opacity: 0; }
 }`;
 
 function prefersReducedMotion() {
@@ -95,7 +99,7 @@ export function LessonSetCelebration({ onDone }: { onDone: () => void }) {
       <div
         className="relative rounded-full bg-[radial-gradient(closest-side,rgba(255,250,243,0.95),rgba(255,250,243,0.7)_60%,rgba(255,250,243,0))] px-[12vw] py-[10vw] min-[700px]:px-24 min-[700px]:py-20"
         style={{
-          animation: `${still ? 'yawp-fade' : 'yawp-rise'} ${LENGTH_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1) both`,
+          animation: `${still ? 'yawp-fade' : 'yawp-rise'} ${LOGO_MS}ms linear both`,
           animationDelay: still ? '0ms' : '150ms',
         }}
       >

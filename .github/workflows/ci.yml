@@ -1081,6 +1081,7 @@ jobs:
             app/domain/lesson-planner/deck-freshness.test.ts \
             app/domain/lesson-planner/deck-agenda.test.ts \
             app/domain/lesson-planner/celebration.test.ts \
+            app/domain/lesson-planner/library-course.test.ts \
             app/domain/lesson-planner/lesson-name.test.ts \
             app/domain/lesson-planner/extensions.test.ts \
             app/domain/lesson-planner/before-class.test.ts \

@@ -131,6 +131,40 @@ test.describe("Library redesign (Brian's Oct 24 handoff, Part 2)", () => {
     await expect(page.getByTestId('unit-title')).toHaveText('The Catcher in the Rye');
   });
 
+  test('the library stays on the class the teacher last chose (Brian, Oct 29)', async ({ page, signIn, e2eContext }) => {
+    await seedLibrary(e2eContext);
+    const prisma = createE2EPrismaClient();
+    try {
+      const british = await prisma.lessonPlanCourse.create({ data: { membershipId: e2eContext.teacherMembershipId, name: 'British Literature', position: 1 } });
+      await prisma.lessonPlanUnit.create({
+        data: { membershipId: e2eContext.teacherMembershipId, organizationId: e2eContext.organizationId, title: 'Macbeth', kind: 'book', courseId: british.id, position: 0 },
+      });
+    } finally {
+      await prisma.$disconnect();
+    }
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto('/app/lesson-planner/library');
+    await expect(page.getByRole('tab', { name: 'American Literature' })).toHaveAttribute('data-state', 'active');
+
+    await page.getByRole('tab', { name: 'British Literature' }).click();
+    const macbeth = page.locator('[data-testid="unit-tile"][data-unit="Macbeth"]');
+    await expect(macbeth).toBeVisible();
+
+    // Into a unit and back: still British Literature.
+    await macbeth.getByTestId('unit-open').click();
+    await expect(page.getByTestId('unit-title')).toHaveText('Macbeth');
+    await page.goto('/app/lesson-planner/library');
+    await expect(page.getByRole('tab', { name: 'British Literature' })).toHaveAttribute('data-state', 'active');
+    await expect(macbeth).toBeVisible();
+
+    // And after a reload, until the teacher changes it.
+    await page.reload();
+    await expect(page.getByRole('tab', { name: 'British Literature' })).toHaveAttribute('data-state', 'active');
+    await page.getByRole('tab', { name: 'American Literature' }).click();
+    await page.reload();
+    await expect(page.getByRole('tab', { name: 'American Literature' })).toHaveAttribute('data-state', 'active');
+  });
+
   test('moves show Undo: a lesson into a unit, units into a group, ungroup', async ({ page, signIn, e2eContext }) => {
     await seedLibrary(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);

@@ -2,9 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import {
   CELEBRATION_COLORS,
   celebrationPieces,
-  pickYawpVoice,
   stepPiece,
-  YAWP_LINE,
+  YAWP_SOUND,
 } from './celebration';
 
 describe('the lesson-set celebration (Brian’s round 4, item 4)', () => {
@@ -30,23 +29,7 @@ describe('the lesson-set celebration (Brian’s round 4, item 4)', () => {
     expect(later.rotation).not.toBe(piece!.rotation);
   });
 
-  test('the voice is a man’s English voice when there is one', () => {
-    const voices = [
-      { name: 'Samantha', lang: 'en-US' },
-      { name: 'Thomas', lang: 'fr-FR' },
-      { name: 'Google UK English Male', lang: 'en-GB' },
-    ];
-    expect(pickYawpVoice(voices)?.name).toBe('Google UK English Male');
-    expect(pickYawpVoice([{ name: 'Daniel', lang: 'en-GB' }, { name: 'Karen', lang: 'en-AU' }])?.name).toBe('Daniel');
-  });
-
-  test('otherwise any English voice, and otherwise the browser’s own', () => {
-    expect(pickYawpVoice([{ name: 'Thomas', lang: 'fr-FR' }, { name: 'Samantha', lang: 'en-US' }])?.name).toBe('Samantha');
-    expect(pickYawpVoice([{ name: 'Thomas', lang: 'fr-FR' }])).toBeNull();
-    expect(pickYawpVoice([])).toBeNull();
-  });
-
-  test('what it says', () => {
-    expect(YAWP_LINE).toBe('Yaaaawp!');
+  test('the sound is Brian’s own recording, served with the app', () => {
+    expect(YAWP_SOUND).toBe('/lesson-planner/sounds/yaaawp.mp3');
   });
 });

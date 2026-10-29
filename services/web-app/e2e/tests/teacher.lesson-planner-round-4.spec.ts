@@ -180,31 +180,15 @@ test.describe("Brian's round 4 (Oct 28)", () => {
     await expect(page).toHaveURL(new RegExp(`/app/lesson-planner/${conversationId}/packet$`));
   });
 
-  test('4: This lesson is set throws confetti, raises the Yawp! logo and says "Yaaaawp!"', async ({ page, signIn, e2eContext }) => {
-    // Speech, stubbed so the test can hear it.
+  test('4: This lesson is set throws confetti, raises the Yawp! logo and plays Brian’s "Yaaawp!"', async ({ page, signIn, e2eContext }) => {
+    // The sound, stubbed so the test can hear which clip plays.
     await page.addInitScript(() => {
-      const spoken: string[] = [];
-      (window as unknown as { spoken: string[] }).spoken = spoken;
-      class Utterance {
-        text: string;
-        pitch = 1;
-        rate = 1;
-        volume = 1;
-        voice: unknown = null;
-        lang = '';
-        constructor(text: string) {
-          this.text = text;
-        }
-      }
-      Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: Utterance, configurable: true });
-      Object.defineProperty(window, 'speechSynthesis', {
-        configurable: true,
-        value: {
-          getVoices: () => [{ name: 'Daniel', lang: 'en-GB' }],
-          speak: (utterance: Utterance) => spoken.push(utterance.text),
-          cancel: () => {},
-        },
-      });
+      const played: string[] = [];
+      (window as unknown as { played: string[] }).played = played;
+      HTMLMediaElement.prototype.play = function play(this: HTMLMediaElement) {
+        played.push(new URL(this.src).pathname);
+        return Promise.resolve();
+      };
     });
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     const { conversationId } = await seedWritingLesson(e2eContext);
@@ -217,7 +201,10 @@ test.describe("Brian's round 4 (Oct 28)", () => {
     await expect(party).toBeVisible();
     await expect(party.getByTestId('celebration-confetti')).toBeVisible();
     await expect(party.getByRole('img', { name: 'Yawp!' })).toBeVisible();
-    await expect.poll(() => page.evaluate(() => (window as unknown as { spoken: string[] }).spoken)).toEqual(['Yaaaawp!']);
+    await expect.poll(() => page.evaluate(() => (window as unknown as { played: string[] }).played)).toEqual([
+      '/lesson-planner/sounds/yaaawp.mp3',
+    ]);
+    expect((await page.request.get('/lesson-planner/sounds/yaaawp.mp3')).headers()['content-type']).toContain('audio/mpeg');
     await expect(page.getByTestId('lesson-set')).toBeVisible();
     // It never blocks the page, and it goes away by itself.
     await expect(party).toHaveCount(0, { timeout: 6000 });
