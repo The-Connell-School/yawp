@@ -151,10 +151,11 @@ export function AssignmentTypeEditorForm({
   const [grammarControlGeneration, setGrammarControlGeneration] = useState(0);
   const hasHydratedSavedValues = useRef(false);
   const showBuiltInGrammarControl = isEdit && !rubricId;
+  const savedBuiltInGrammarControl = isEdit && !selectedRubricId;
 
   const savedRubricSnapshot = useMemo(
-    () => (showBuiltInGrammarControl ? rubricSnapshot(rubric) : null),
-    [showBuiltInGrammarControl, rubric]
+    () => (savedBuiltInGrammarControl ? rubricSnapshot(rubric) : null),
+    [savedBuiltInGrammarControl, rubric]
   );
 
   const savedSnapshot = useMemo(
