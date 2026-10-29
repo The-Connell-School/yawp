@@ -152,7 +152,10 @@ test.describe('Dev panel artboard evidence', () => {
       .catch(() => undefined);
     // Client schedules location.assign 350ms after a successful jump; wait for
     // that navigation before loading another route (avoids goto interruptions).
-    await page.waitForURL((url) => url.pathname === '/app', { timeout: 10_000 });
+    await page.waitForURL(
+      (url) => url.pathname === '/app' || url.pathname === '/app/',
+      { timeout: 10_000 }
+    );
     await page.waitForLoadState('domcontentloaded');
     await page.unroute('**/api/dev-panel/free-tier-jump');
     await page.request.post('/auth/dev-login', {
