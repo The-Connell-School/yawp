@@ -5,6 +5,7 @@
 //
 // The document context instruction tells the tutor how to use the explicit
 // current draft message that is sent with every tutor response.
+import { UNIVERSAL_TUTOR_BLOCK } from '../../../../../packages/prisma/scripts/universal-tutor-block';
 import { normalizeModuleRubricAlignment } from '~/domain/assignment-types/assignment-type-rubric-config';
 import type { ModuleRubricRelationship } from '~/domain/assignment-types/assignment-type-rubric-config';
 import type { RubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
@@ -22,17 +23,17 @@ export const buildTutorSystemPrompt = ({
   instructionTutorInstructions,
   moduleRubricGuidance,
 }: {
-  // The assignment-level General Tutor Instructions, stored on the assignment
-  // type and edited in admin. This is the top of the prompt -- where the
-  // Universal Yawp! Tutor Instructions live. Null on assignment types that
-  // have not set one, which leaves the prompt exactly as it was.
+  // Assignment-type general tutor instructions (optional DB override). When null
+  // or empty, the built-in Universal Yawp! Tutor block is used.
   generalTutorInstructions?: string | null | undefined;
   tutorInstructions: string | null | undefined;
   instructionTutorInstructions: string | null | undefined;
   moduleRubricGuidance?: string | null | undefined;
 }): string => {
+  const resolvedGeneral =
+    generalTutorInstructions?.trim() || UNIVERSAL_TUTOR_BLOCK;
   return [
-    generalTutorInstructions,
+    resolvedGeneral,
     tutorInstructions,
     instructionTutorInstructions,
     moduleRubricGuidance,
