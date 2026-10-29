@@ -985,7 +985,7 @@ describe('buildLessonPlannerSystemPrompt — writing toward a self-chosen thesis
   });
 
   test('keeps the day cell to one line and defers the full prompt to when the day is built', () => {
-    expect(lower).toContain('the day cell just names it');
+    expect(lower).toContain('the day cell quotes it');
     expect(lower).toContain('the full prompt with its id appears in its own');
   });
 
@@ -1038,10 +1038,19 @@ describe('buildLessonPlannerSystemPrompt — no bare prompt ids in a unit overvi
     );
   });
 
-  test('requires the cluster preview to bullet the real text, with the ids kept out of sight', () => {
-    expect(lower).toContain('bullet the cluster instead, one line per day');
-    expect(lower).toContain("day 1 — 'how do people gain power?'");
+  test('puts the real prompt text in the day row, with the ids kept out of sight', () => {
+    expect(lower).toContain('quote the prompt word for word in that day\'s `students` cell');
+    expect(lower).toContain("class starter: 'how do people gain power?'");
     expect(lower).toContain('the ids stay in the blocks, out of sight');
+  });
+
+  /**
+   * Kevin, Oct 29: a day-by-day list of the class starter prompts under the
+   * arc paragraph repeats the board below it. The board carries them.
+   */
+  test('never lists the class starter prompts in prose above the board', () => {
+    expect(lower).toContain('never list the class starter prompts day by day in prose');
+    expect(lower).not.toContain('bullet the cluster instead');
   });
 
   test('extends the general no-bare-citation rule to a multi-day overview', () => {
@@ -1722,7 +1731,7 @@ describe("planner prompt — Brian's run 3", () => {
   });
 
   test('the prompt version moved', () => {
-    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-25-unit-build-v2');
+    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-29-unit-map-prompts-in-rows');
   });
 });
 
