@@ -8,8 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { prisma } from '~/utils/db.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { redirectIfTeacherLoungeTemporarilyDisabled } from '~/domain/teacher-lounge/teacher-lounge-temporary-disable.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  redirectIfTeacherLoungeTemporarilyDisabled();
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 

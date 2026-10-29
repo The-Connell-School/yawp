@@ -46,7 +46,10 @@ test.describe('App sidebar on short desktop viewports', () => {
       const navLinks = page.locator(
         '[data-tour="app-nav"] .overflow-y-auto a[href^="/app"]'
       );
-      await expect(navLinks).toHaveCount(9);
+      await expect(navLinks).toHaveCount(8);
+      await expect(
+        page.locator('[data-tour="app-nav"] a[href="/app/teacher-trainings"]')
+      ).toHaveCount(0);
 
       await expectSettingsRowInViewport(page);
 
