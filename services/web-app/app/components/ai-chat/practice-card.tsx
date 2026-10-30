@@ -103,7 +103,7 @@ export function PracticeCard({
               }
             >
               {added ? <Check size={14} /> : <Plus size={14} />}
-              {added ? 'In the stack' : 'Add to stack'}
+              {added ? 'In your lesson' : 'Add to lesson'}
             </button>
           ) : null}
           {classes ? (

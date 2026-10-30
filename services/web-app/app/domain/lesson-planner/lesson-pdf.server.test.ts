@@ -9,6 +9,7 @@ import {
   renderHandoutPdf,
   renderPacketPdf,
   renderStepHandoutPdf,
+  renderSlidesPdf,
   handoutKit,
 } from './lesson-pdf.server';
 
@@ -513,6 +514,51 @@ ${JSON.stringify(
 
   test('carries each slide’s timing', async () => {
     expect(await deckPdfText()).toContain('5 min');
+  });
+
+  test("draws each slide as a picture, in the deck's colors, before its notes (Brian's round 3, 1.6)", async () => {
+    const bytes = await renderPacketPdf(packetWith([{ id: 's1', content: DECK_REPLY }]));
+    const raw = Buffer.from(bytes).toString('latin1');
+    let drawn = '';
+    for (const match of raw.matchAll(/stream\r?\n/g)) {
+      const start = match.index! + match[0].length;
+      const end = raw.indexOf('endstream', start);
+      try {
+        drawn += inflateSync(Buffer.from(bytes).subarray(start, end)).toString('latin1');
+      } catch {
+        // Not a page.
+      }
+    }
+    // A filled 16:9 card per slide: four slides, four paper grounds or more.
+    // A rectangle, its fill color, then the fill.
+    const cards = [...drawn.matchAll(/([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re\n(?:[^\n]*\n){0,3}?f\n/g)].filter(
+      (rect) => Math.abs(Number(rect[3]) / Number(rect[4]) - 16 / 9) < 0.02
+    );
+    expect(cards.length).toBeGreaterThanOrEqual(4);
+    const text = pdfText(bytes);
+    expect(text).toContain('Slide 2 of 4');
+    expect(text.indexOf('Slide 2 of 4')).toBeLessThan(text.indexOf('Three silent minutes of writing'));
+  });
+
+  test('the agenda slide lists its items and minutes on the picture', async () => {
+    const deck = {
+      title: 'Franklin',
+      slides: [
+        {
+          layout: 'agenda',
+          title: "Today's program",
+          speakerNotes: 'Walk through it.',
+          agenda: [
+            { title: 'Close reading discussion', minutes: 15 },
+            { title: 'Daily Pages', minutes: 10 },
+          ],
+        },
+      ],
+    };
+    const text = pdfText(await renderSlidesPdf({ lessonTitle: 'Day 1: Franklin', deck: deck as never }));
+    expect(text).toContain('Close reading discussion');
+    expect(text).toContain('15 min');
+    expect(text).toContain('Daily Pages');
   });
 
   test('a deck that failed to validate prints its prose, not its braces', async () => {

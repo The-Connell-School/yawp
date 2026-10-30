@@ -19,10 +19,13 @@ import {
   planSummaryKey,
   type LessonPlanDoc,
   type LessonPlanSummaries,
+  withTeacherNotes,
 } from './lesson-plan-doc';
+import { storedTeacherNotes } from './teacher-notes.server';
 import { PLAN_SUMMARY_SYSTEM, summarizeLessonPlan } from './plan-summary.server';
 import { buildKitPlan, type KitPlan } from './kit-plan';
 import { teacherStandards } from './teacher-standards';
+import { readExtensionIds } from './extensions';
 
 const SUMMARY_DEADLINE_MS = 25_000;
 const SUMMARY_MAX_TOKENS = 2_000;
@@ -40,7 +43,7 @@ export async function loadLessonPlan({
 }): Promise<{ doc: LessonPlanDoc; kit: KitPlan | null }> {
   const access = await getLessonPlannerAccess(request);
   if (!access.allowed) throw redirect('/app');
-  const { planExportV2, deckGallery } = await getLessonPlannerReviewFlags(access.membership.organization.id);
+  const { planExportV2, deckGallery, teachNotes } = await getLessonPlannerReviewFlags(access.membership.organization.id);
   if (!planExportV2) throw new Response('Not Found', { status: 404 });
 
   const loaded = await loadLessonPacket({ request, conversationId, withStackDetails: false });
@@ -50,7 +53,7 @@ export async function loadLessonPlan({
   const key = `${planSummaryKey(entries)}${deckGallery ? '-kit1' : ''}`;
   const stored = await prisma.lessonPlanConversation.findFirst({
     where: { id: loaded.conversationId },
-    select: { planSummary: true, planSummaryKey: true },
+    select: { planSummary: true, planSummaryKey: true, extensionStepIds: true },
   });
 
   let summaries: LessonPlanSummaries | null =
@@ -107,14 +110,17 @@ export async function loadLessonPlan({
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     select: { content: true },
   });
-  const doc = buildLessonPlanDoc({
+  const built = buildLessonPlanDoc({
     title: loaded.packet.title,
     className: loaded.packet.className,
     periodMinutes: loaded.periodMinutes,
     entries,
     summaries,
     standards: teacherStandards(asked.map((message) => message.content)),
+    extensionIds: teachNotes ? readExtensionIds(stored?.extensionStepIds) : [],
   });
+  // The teacher's notes print under their steps (Oct 24 handoff, task 7).
+  const doc = teachNotes ? withTeacherNotes(built, await storedTeacherNotes(loaded.conversationId)) : built;
   return { doc, kit: deckGallery ? buildKitPlan({ doc, entries }) : null };
 }
 

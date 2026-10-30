@@ -210,7 +210,9 @@ export function RunOfShow({
   onAddAtEnd,
   busy,
   hasDeck = false,
+  onLectureSlides = null,
   missingIds = new Set(),
+  flaggedId = null,
 }: {
   conversationId: string;
   steps: StackStep[];
@@ -231,8 +233,12 @@ export function RunOfShow({
   busy: boolean;
   /** The lesson has a deck already: a lecture's slides rebuild it. */
   hasDeck?: boolean;
+  /** Build this lecture's slides in the stack (Brian's run 6, item 2). Absent: in the chat. */
+  onLectureSlides?: ((step: StackStep) => void) | null;
   /** Writing steps whose Yawp! assignment is not made yet. */
   missingIds?: ReadonlySet<string>;
+  /** The step suggested for extra time while the lesson runs over (Kevin's note 8b). */
+  flaggedId?: string | null;
 }) {
   const [dragKey, setDragKey] = useState<string | null>(null);
   const byId = new Map(blocks.map((block) => [block.id, block]));
@@ -279,6 +285,7 @@ export function RunOfShow({
               data-testid="run-card"
               data-step-id={step.id}
               data-open={open ? 'true' : undefined}
+              data-flagged={flaggedId === step.id ? 'true' : undefined}
               draggable={editable}
               onDragStart={(event) => {
                 event.dataTransfer.setData(STEP_DRAG_TYPE, step.key);
@@ -305,6 +312,8 @@ export function RunOfShow({
               className={cn(
                 'overflow-hidden rounded-xl border bg-[var(--sv-card)] transition',
                 open ? 'border-[var(--sv-ink)] shadow-sm' : 'border-[var(--sv-line)]',
+                // A soft red edge, not an alarm: the step that could wait.
+                flaggedId === step.id && 'border-l-4 border-l-[#E8A49A]',
                 dragKey === step.key && 'opacity-50'
               )}
             >
@@ -343,29 +352,38 @@ export function RunOfShow({
                     <span className="flex flex-wrap items-center gap-1.5">
                       <TypeChip step={step} />
                       {step.isWriting ? <WritingBadge /> : null}
-                      {missingIds.has(step.id) ? (
-                        <span
-                          data-testid="not-in-yawp"
-                          className="inline-flex items-center rounded-full border border-dashed px-2 py-0.5 text-[11px] font-semibold"
-                          style={{ borderColor: 'var(--sv-writing)', color: 'var(--sv-writing)' }}
-                        >
-                          Not in Yawp! yet
-                        </span>
-                      ) : step.create?.created ? (
-                        // Made: said plainly, with the way to open it in the card (Brian's run 4).
-                        <span
-                          data-testid="in-yawp"
-                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white"
-                          style={{ backgroundColor: 'var(--sv-writing)' }}
-                        >
-                          <Check size={11} /> Assignment created
-                        </span>
-                      ) : null}
                     </span>
                     <span data-testid="run-card-title" className="mt-1 block text-sm font-semibold sm:truncate">
                       {step.title}
                     </span>
                   </button>
+                  {/* One record for the chat and the stack (Oct 24 handoff, task 1):
+                      made → "✓ Assignment created" and where; not yet → "+ Create assignment". */}
+                  {step.create?.created ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span
+                        data-testid="in-yawp"
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                        style={{ backgroundColor: 'var(--sv-writing-strip)', color: 'var(--sv-writing)' }}
+                      >
+                        <Check size={11} /> Assignment created
+                      </span>
+                      {step.create.where ? (
+                        <span data-testid="in-yawp-where" className="text-[11px] text-[var(--sv-muted)]">
+                          {step.create.where}
+                        </span>
+                      ) : null}
+                    </span>
+                  ) : step.create && missingIds.has(step.id) ? (
+                    <Link
+                      to={step.create.href}
+                      data-testid="not-in-yawp"
+                      className="inline-flex items-center gap-1 rounded-full border border-dashed px-2 py-0.5 text-[11px] font-semibold"
+                      style={{ borderColor: 'var(--sv-writing)', color: 'var(--sv-writing)' }}
+                    >
+                      <Plus size={11} /> Create assignment
+                    </Link>
+                  ) : null}
                   <div className="ml-auto flex shrink-0 items-center gap-1.5">
                     <button
                       type="button"
@@ -448,7 +466,16 @@ export function RunOfShow({
                     >
                       Rework it in the planner
                     </Link>
-                    {isLectureStep(step.title) ? (
+                    {isLectureStep(step.title) && onLectureSlides ? (
+                      <button
+                        type="button"
+                        onClick={() => onLectureSlides(step)}
+                        data-testid="lecture-slides"
+                        className="inline-flex items-center gap-1 font-semibold text-[var(--sv-primary)] underline underline-offset-2"
+                      >
+                        <MonitorPlay size={12} /> Build slides for this lecture
+                      </button>
+                    ) : isLectureStep(step.title) ? (
                       <Link
                         to={`/app/lesson-planner?c=${conversationId}&build=lecture&step=${encodeURIComponent(step.title)}${hasDeck ? '&deck=1' : ''}`}
                         data-testid="lecture-slides"

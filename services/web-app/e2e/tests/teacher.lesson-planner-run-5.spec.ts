@@ -120,7 +120,7 @@ test.describe("Lesson Planner — Brian's fifth run", () => {
     const card = page.getByTestId('day-lessons');
     await expect(card.getByTestId('day-lesson')).toHaveText([/Day 1 · Lecture — the island · 50 min/, /Day 2 · Close reading · 50 min/]);
     await expect(page.getByTestId('segment-toggle')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Add everything to the stack' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Add everything to the lesson' })).toHaveCount(0);
 
     // The newest week makes its own day lessons (Brian: automatically).
     await expect(card.getByTestId('day-lesson-open')).toHaveCount(2);
@@ -158,7 +158,7 @@ test.describe("Lesson Planner — Brian's fifth run", () => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
     await expect(page.getByTestId('day-lessons')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Add everything to the stack' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add everything to the lesson' })).toBeVisible();
   });
 
   test('item 4: tap the minutes and type them', async ({ page, signIn, e2eContext }) => {

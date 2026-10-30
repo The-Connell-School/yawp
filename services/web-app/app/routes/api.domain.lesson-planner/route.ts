@@ -134,6 +134,8 @@ const POST = z
     unitDay: z.coerce.number().int().min(1).max(60).optional(),
     /** The day's title from the map, so the new lesson is named before it exists. */
     unitDayTitle: z.string().trim().max(120).optional(),
+    /** What the chat shows for a turn a button sent (Kevin, Oct 25, note 5). */
+    displayText: z.string().trim().min(1).max(200).optional(),
     /** A lesson started from one of the teacher's templates (run 3). */
     templateId: z.string().min(1).max(64).optional(),
     /** Documents added before the lesson's first message, to attach to it (Oct 21). */
@@ -148,6 +150,12 @@ const POST = z
      * at the client without touching the server.
      */
     stream: z.enum(['1']).optional(),
+    /**
+     * Asked for on the stack page, not in the chat (Brian's run 6, item 2):
+     * the deck is built where the teacher is working, and both turns are kept
+     * as the stack's, one compact line in the chat.
+     */
+    surface: z.enum(['stack']).optional(),
   })
   .strict();
 
@@ -224,6 +232,9 @@ export async function action({ request }: ActionFunctionArgs) {
   // Bound once here, where the guard above is still in view: the turn itself
   // runs inside a closure, and TypeScript cannot carry the narrowing into it.
   const turn = data;
+  if (turn.surface && !turn.conversationId) {
+    return dataResponse({ error: 'A stack turn belongs to a lesson.' }, { status: 400 });
+  }
 
   const ctx = {
     membershipId: access.membership.id,
@@ -443,7 +454,7 @@ export async function action({ request }: ActionFunctionArgs) {
     // Where this day sits in the arc. Found through the unit rather than by
     // scanning one transcript: a day lives in its own conversation now and
     // cannot look at its own history to discover the map.
-    let unitContext = null;
+    let unitContext: ReturnType<typeof buildUnitContext> = null;
     const unitId = dayTarget?.unitId ?? activeConversation?.unitId ?? null;
     const activeDay = dayTarget
       ? turn.unitDay!
@@ -534,6 +545,13 @@ export async function action({ request }: ActionFunctionArgs) {
             minutes: activeConversation.periodMinutes,
             classLabel: activeConversation.lessonClassLabel ?? null,
           }
+        : null) ??
+      // A day being built for the first time plans to the unit's period (note 8a).
+      (dayTarget && !activeConversation && (unitContext?.day.minutes || conversation?.periodMinutes)
+        ? {
+            minutes: (unitContext?.day.minutes ?? conversation?.periodMinutes)!,
+            classLabel: conversation?.lessonClassLabel ?? null,
+          }
         : null);
 
     // The paintings on this teacher's other recent decks, so a painting is
@@ -574,6 +592,7 @@ export async function action({ request }: ActionFunctionArgs) {
       sources,
       recentArt,
       weekContext,
+      onStack: turn.surface === 'stack',
     });
 
     const messages: { role: AgentType; content: string; name?: string }[] = [
@@ -718,7 +737,8 @@ export async function action({ request }: ActionFunctionArgs) {
         priorReplies: priorMessages
           .filter((message) => message.role === AgentType.Assistant)
           .map((message) => message.content),
-        teacherNamedIt: Boolean(activeConversation?.packetTitle?.trim()),
+        // A packet name, or a rename on the stack or in the library (Oct 24 handoff).
+        teacherNamedIt: Boolean(activeConversation?.packetTitle?.trim() || activeConversation?.originalTitle),
         stillPlaceholder: (() => {
           const first = priorMessages.find((message) => message.role === AgentType.User);
           return Boolean(activeConversation && first && activeConversation.title === firstMessageTitle(first.content));
@@ -746,6 +766,15 @@ export async function action({ request }: ActionFunctionArgs) {
                   unitId: dayTarget.unitId,
                   day: turn.unitDay!,
                   title: turn.unitDayTitle || `Day ${turn.unitDay}`,
+                  // Same class and period as the chat that planned the unit (note 8a).
+                  dayMinutes: unitContext?.day.minutes ?? null,
+                  from: conversation
+                    ? {
+                        periodMinutes: conversation.periodMinutes,
+                        lessonClassLabel: conversation.lessonClassLabel,
+                        originClassAssignmentId: conversation.originClassAssignmentId,
+                      }
+                    : null,
                 })
               : await transaction.lessonPlanConversation.create({
                   data: {
@@ -769,6 +798,8 @@ export async function action({ request }: ActionFunctionArgs) {
               role: AgentType.User,
               content: turn.message,
               createdAt: askedAt,
+              ...(turn.surface ? { surface: turn.surface } : {}),
+              ...(turn.displayText ? { displayText: turn.displayText } : {}),
             },
           });
           // Created on its own rather than as a nested write so its id can go back
@@ -780,6 +811,7 @@ export async function action({ request }: ActionFunctionArgs) {
               role: AgentType.Assistant,
               content: reply,
               createdAt: answeredAt,
+              ...(turn.surface ? { surface: turn.surface } : {}),
             },
             select: { id: true },
           });

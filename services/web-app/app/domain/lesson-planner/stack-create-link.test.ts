@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { lessonBackHref, stackCreateLink } from './stack-create-link';
+import { lessonBackHref, lessonMadeHref, stackCreateLink } from './stack-create-link';
 
 const typeIds = { dailyPages: 'dp-type', classStarter: 'cs-type', exitTicket: 'et-type' };
 
@@ -130,14 +130,21 @@ describe("stackCreateLink — every writing step (Brian's run 3, item 4)", () =>
     expect(link?.href).toContain('fromPiece=m%3Amat-9');
   });
 
-  test('once created: "Created in Yawp! · Open"', () => {
+  test('once created: "✓ Assignment created", and where (Oct 24 handoff, task 1)', () => {
     const link = stackCreateLink({
       ...base,
       kind: 'class-starter',
       content: 'Write.',
-      created: { href: '/app/assignment-types/cs-type' },
+      created: { href: '/app/assignment-types/cs-type', from: 'chat' },
     });
-    expect(link).toEqual({ label: 'Created in Yawp! · Open', href: '/app/assignment-types/cs-type', created: true });
+    expect(link).toEqual({
+      label: 'Assignment created',
+      href: '/app/assignment-types/cs-type',
+      created: true,
+      where: 'in the planner chat',
+    });
+    // Marked before the record existed: no "where".
+    expect(stackCreateLink({ ...base, kind: 'class-starter', content: 'Write.', created: { href: '/x' } })?.where).toBeNull();
   });
 });
 
@@ -170,4 +177,11 @@ test("the writing moments from Brian's week offer a Yawp! quick write (run 5, ro
     const link = stackCreateLink({ kind: 'step', title: 'Step', content, blockKey: 'st', sourceContent: null, typeIds, conversationId: 'plan-1' });
     expect(link?.label).toBe('Create this quick write in Yawp!');
   }
+});
+
+describe("lessonMadeHref (Kevin's note 6b)", () => {
+  test('goes back to where the piece was made from, saying it was made', () => {
+    expect(lessonMadeHref('plan-1', 'stack')).toBe('/app/lesson-planner/plan-1/packet?made=1');
+    expect(lessonMadeHref('plan-1', null)).toBe('/app/lesson-planner?c=plan-1&made=1');
+  });
 });

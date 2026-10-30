@@ -114,6 +114,8 @@ export type LessonPlannerReviewFlag = Extract<
   | 'lesson_planner_templates'
   | 'lesson_planner_deck_gallery'
   | 'lesson_planner_uploads'
+  | 'lesson_planner_teach_notes'
+  | 'lesson_planner_library_v2'
 >;
 
 export async function setLessonPlannerReviewFlag(

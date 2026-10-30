@@ -8,6 +8,8 @@ import { loadStackV3 } from './load-stack-v3.server';
 import { answerLinesFor, handoutContent, isStudentFacing, studentVersionKey } from './step-handout';
 import type { StackStep } from './stack-steps';
 import { handoutKit } from './lesson-pdf.server';
+import { ensureStudentVersion } from './step-handout.server';
+import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 
 export type HandoutStep = Pick<StackStep, 'id' | 'title' | 'type' | 'label' | 'isWriting' | 'kind'> & {
   /** In the handout unless the teacher takes it out. */
@@ -61,4 +63,51 @@ export async function loadStepHandouts({
     steps,
     kit: handoutKit(loaded.packet, loaded.reviewFlags),
   };
+}
+
+/**
+ * The handout's parts for a download: the steps the teacher picked (`ids`),
+ * or every step marked with a handout, in stack order. The PDF, the Word file
+ * and the Google Doc all print these (Oct 24 handoff, task 4).
+ */
+export async function loadHandoutParts({
+  request,
+  conversationId,
+}: {
+  request: Request;
+  conversationId: string | undefined;
+}) {
+  const handouts = await loadStepHandouts({ request, conversationId });
+  const asked = new URL(request.url).searchParams.get('ids');
+  const wanted = asked
+    ? new Set(asked.split(',').map((id) => id.trim()).filter(Boolean).slice(0, 200))
+    : null;
+  const picked = handouts.steps.filter((step) => (wanted ? wanted.has(step.id) : step.included));
+  // A step not yet written for students is written now, not left out (Kevin,
+  // Oct 25, note 11: the handout PDF came back without its steps). Two at a time.
+  const missing = picked.filter((step) => !step.content && step.needsVersion);
+  if (missing.length) {
+    const access = await getLessonPlannerAccess(request);
+    for (let index = 0; index < missing.length; index += 2) {
+      await Promise.all(
+        missing.slice(index, index + 2).map(async (step) => {
+          try {
+            const version = await ensureStudentVersion({
+              request,
+              access,
+              conversationId: handouts.conversationId,
+              materialId: step.id,
+            });
+            if (version) step.content = version.content;
+          } catch {
+            // Left out; the handouts page can try again.
+          }
+        })
+      );
+    }
+  }
+  const parts = picked
+    .filter((step) => step.content)
+    .map((step) => ({ id: step.id, title: step.title, content: step.content!, lines: step.lines }));
+  return { handouts, parts, wantedOne: Boolean(wanted && wanted.size === 1) };
 }

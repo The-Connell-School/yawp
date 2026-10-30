@@ -5,7 +5,8 @@
  * running long is calm: amber, "past the plan. No rush."
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Link, redirect, useLoaderData, type LoaderFunctionArgs, type MetaFunction } from 'react-router';
+import { Link, redirect, useLoaderData, useLocation, type LoaderFunctionArgs, type MetaFunction } from 'react-router';
+import { closeHref } from '~/domain/lesson-planner/lesson-return';
 import { ArrowRight, Check, ChevronLeft, MonitorPlay } from 'lucide-react';
 import { prisma } from '~/utils/db.server';
 import { loadStackV3 } from '~/domain/lesson-planner/load-stack-v3.server';
@@ -17,12 +18,56 @@ import { TileSlideCanvas } from '../present.$conversationId.$messageId/tile-slid
 import { GALLERY_FONTS_HREF, GallerySlideCanvas } from '../present.$conversationId.$messageId/gallery-slide-canvas';
 import { HEADING_FONT, STACK_FONTS_HREF, typeChipStyle } from '../app.lesson-planner_.$conversationId.packet/v3/theme';
 import { cn } from '~/utils/misc';
+import { lessonDeck } from '~/domain/lesson-planner/lesson-deck.server';
+import { syncAgendaToStack } from '~/domain/lesson-planner/deck-agenda';
+import { notesFallback } from '~/domain/lesson-planner/teacher-notes';
+import { storedTeacherNotes } from '~/domain/lesson-planner/teacher-notes.server';
+import { TeacherNotesShow, type NotesShowStep } from './teacher-notes-show';
 
-export const meta: MetaFunction = () => [{ title: 'Run the show · Yawp!' }];
+export const meta: MetaFunction = ({ data }) => [
+  { title: (data as { mode?: string } | undefined)?.mode === 'notes' ? 'Run of show · Yawp!' : 'Run the show · Yawp!' },
+];
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const loaded = await loadStackV3({ request, conversationId: params.conversationId });
   if (!loaded) throw redirect(`/app/lesson-planner/${params.conversationId}/packet`);
+  if (loaded.reviewFlags.teachNotes) {
+    // Run of show with teacher notes (Oct 24 handoff, task 7).
+    const found = await lessonDeck(loaded.conversationId);
+    const blocks = loaded.v3.timing.blocks;
+    const byId = new Map(loaded.v3.steps.map((step) => [step.id, step]));
+    // Open at once with what is stored; notes not written yet come in the
+    // background (Kevin, Oct 25, note 12c: the first open waited on the model).
+    const stored = await storedTeacherNotes(loaded.conversationId);
+    const pending = blocks.filter((block) => !stored[block.id]).map((block) => block.id);
+    return {
+      mode: 'notes' as const,
+      conversationId: loaded.conversationId,
+      title: loaded.packet.title,
+      totalMinutes: loaded.periodMinutes ?? loaded.v3.timing.total,
+      steps: blocks.map((block, index): NotesShowStep => ({
+        id: block.id,
+        title: block.title,
+        type: block.type,
+        minutes: block.minutes,
+        isWriting: block.isWriting,
+        label: byId.get(block.id)?.label ?? null,
+        slide: slideForStep(found?.deck ?? null, index, blocks),
+      })),
+      notes: Object.fromEntries(
+        blocks.map((block) => [block.id, stored[block.id] ?? notesFallback(byId.get(block.id)?.content ?? '')])
+      ),
+      deck: found ? { id: found.id, ...found.deck } : null,
+      gallery: loaded.reviewFlags.deckGallery,
+      pending,
+      extensions: loaded.v3.extensions.map((step) => ({
+        id: step.id,
+        title: step.title,
+        minutes: step.minutes,
+        notes: stored[step.id] ?? step.excerpt,
+      })),
+    };
+  }
   if (!loaded.reviewFlags.runShow) throw new Response('Not Found', { status: 404 });
   const deckRow = loaded.v3.deck
     ? await prisma.lessonPlanMaterial.findFirst({
@@ -32,6 +77,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     : null;
   const deck = deckRow ? readSlideDeck(deckRow.content) : null;
   return {
+    mode: 'show' as const,
     conversationId: loaded.conversationId,
     title: loaded.packet.title,
     className: loaded.packet.className,
@@ -39,7 +85,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     blocks: loaded.v3.timing.blocks,
     notes: Object.fromEntries(loaded.v3.steps.map((step) => [step.id, step.excerpt])),
     labels: Object.fromEntries(loaded.v3.steps.map((step) => [step.id, step.label])),
-    deck: deck?.kind === 'deck' ? { id: deckRow!.id, ...deck.deck } : null,
+    deck: deck?.kind === 'deck' ? { id: deckRow!.id, ...syncAgendaToStack(deck.deck, loaded.v3.timing.blocks) } : null,
     gallery: loaded.reviewFlags.deckGallery,
   };
 }
@@ -56,9 +102,41 @@ function readClock(): ClockMode {
   }
 }
 
-export default function RunTheShowRoute() {
-  const { conversationId, title, className, periodMinutes, blocks, notes, labels, deck, gallery } =
-    useLoaderData<typeof loader>();
+export default function ShowRoute() {
+  const data = useLoaderData<typeof loader>();
+  const location = useLocation();
+  if (data.mode === 'notes') {
+    return (
+      <TeacherNotesShow
+        conversationId={data.conversationId}
+        title={data.title}
+        totalMinutes={data.totalMinutes}
+        steps={data.steps}
+        notes={data.notes}
+        pending={data.pending}
+        extensions={data.extensions}
+        deck={data.deck}
+        gallery={data.gallery}
+        backTo={closeHref(data.conversationId, location.search, 'stack')}
+      />
+    );
+  }
+  return <RunTheShow {...data} />;
+}
+
+function RunTheShow({
+  conversationId,
+  title,
+  className,
+  periodMinutes,
+  blocks,
+  notes,
+  labels,
+  deck,
+  gallery,
+}: Extract<ReturnType<typeof useLoaderData<typeof loader>>, { mode: 'show' }>) {
+  const location = useLocation();
+  const backTo = closeHref(conversationId, location.search, 'stack');
   const [current, setCurrent] = useState(0);
   const [done, setDone] = useState(false);
   const [clock, setClock] = useState<ClockMode>('off');
@@ -149,7 +227,7 @@ export default function RunTheShowRoute() {
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-8">
         <div className="flex items-center gap-4">
           <Link
-            to={`/app/lesson-planner/${conversationId}/packet`}
+            to={backTo}
             className="inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1.5 text-sm font-semibold"
           >
             <ChevronLeft size={15} /> Exit show
@@ -198,7 +276,7 @@ export default function RunTheShowRoute() {
               </span>
             ) : (
               <a
-                href={`/present/${conversationId}/${deck.id}`}
+                href={`/present/${conversationId}/${deck.id}?from=show`}
                 target="yawp-projector"
                 className="inline-flex items-center gap-2 rounded-full border border-white/20 px-3 py-1.5 text-xs font-semibold"
               >
@@ -261,7 +339,7 @@ export default function RunTheShowRoute() {
               </h1>
               <div className="mt-6 flex flex-wrap justify-center gap-3">
                 <Link
-                  to={`/app/lesson-planner/${conversationId}/packet`}
+                  to={backTo}
                   className="rounded-xl border border-[#1C1A17]/20 px-5 py-3 font-semibold"
                 >
                   Back to your lesson
