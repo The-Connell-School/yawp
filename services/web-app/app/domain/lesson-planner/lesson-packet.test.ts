@@ -653,3 +653,12 @@ describe("buildLessonPacket — times come from the step, not its first sentence
     expect(packet.outline[0]!.minutes).toBeNull();
   });
 });
+
+test("a lesson named before titles were cleaned reads clean (Brian's round 3, 1.1)", () => {
+  const packet = buildLessonPacket({
+    title: 'Day 1: The Man Who Made Himself (50 min) {type: context}',
+    className: null,
+    sections: [],
+  });
+  expect(packet.title).toBe('Day 1: The Man Who Made Himself');
+});

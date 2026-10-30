@@ -69,6 +69,9 @@ const LESSON_PLANNER_REVIEW_FLAG_SETTINGS = [
   'feature_flag.lesson_planner_deck_gallery',
   // The teacher's own documents (docs/plans/2026-10-21-sharing-standards-uploads.md).
   'feature_flag.lesson_planner_uploads',
+  // Brian's handoff (docs/plans/2026-10-24-stack-v2-and-library-redesign.md).
+  'feature_flag.lesson_planner_teach_notes',
+  'feature_flag.lesson_planner_library_v2',
 ] as const;
 
 /**

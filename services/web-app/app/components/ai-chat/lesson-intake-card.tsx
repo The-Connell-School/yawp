@@ -64,11 +64,14 @@ export function LessonIntakeCard({
   teacherClasses,
   onSend,
   disabled,
+  severalDays = false,
 }: {
   asks: LessonAsk[];
   teacherClasses: IntakeClass[];
   onSend: (message: string) => void;
   disabled?: boolean;
+  /** Planning a unit or several days: the length is each class period's (Kevin, Oct 25, note 1). */
+  severalDays?: boolean;
 }) {
   const asksClasses = asks.some((ask) => ask.kind === 'classes');
   const asksMinutes = asks.some((ask) => ask.kind === 'minutes');
@@ -144,8 +147,9 @@ export function LessonIntakeCard({
   const looseMinutes =
     !asksClasses && asksMinutes ? lengthFor(NO_CLASS) : null;
   const message = [
-    looseMinutes !== null ? `${looseMinutes} minutes.` : null,
+    looseMinutes !== null ? `${looseMinutes} minutes${severalDays ? ' each class period' : ''}.` : null,
     composeIntakeReply({
+      severalDays,
       classes: classLines,
       choice: finalChoice,
       activityIds,
@@ -243,6 +247,16 @@ export function LessonIntakeCard({
               value={typedClass}
               disabled={disabled}
               onChange={(event) => setTypedClass(event.target.value)}
+              // Enter answers it, as it sends in the chat box (Kevin, Oct 24).
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+                event.preventDefault();
+                if (onLastStep) {
+                  if (!disabled && ready && message) send();
+                } else if (!disabled && current && answered[current]) {
+                  setReached((at) => Math.min(at + 1, steps.length - 1));
+                }
+              }}
               className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
             />
           )}
@@ -281,9 +295,13 @@ export function LessonIntakeCard({
           <div className="mb-3 flex items-center gap-2">
             <Clock size={15} className="shrink-0 text-primary" />
             <span className="text-sm font-medium">
-              {chosenClasses.length > 1
-                ? 'How long does each class meet?'
-                : 'How long is the lesson?'}
+              {severalDays
+                ? chosenClasses.length > 1
+                  ? 'How long is each class period, for each class?'
+                  : 'How long is each class period?'
+                : chosenClasses.length > 1
+                  ? 'How long does each class meet?'
+                  : 'How long is the lesson?'}
             </span>
           </div>
           <div className="flex flex-col gap-4">

@@ -27,6 +27,9 @@ const actions = {
   setStepMinutes: mock(),
 };
 const runStackCommand = mock();
+const saveStepNotes = mock(async (_input: any) => undefined);
+const teacherNotesFor = mock(async (_input: any) => ({ s1: 'Open with: Ask what they carry.' }));
+const noteSteps = mock((_loaded: any) => [{ id: 's1', title: 'Starter', minutes: 5, content: 'Write.' }]);
 
 mock.module('~/utils/auth.server', () => ({ requireMutableRequest, requireUserId: mock(), requireMembership: mock() }));
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -37,6 +40,7 @@ mock.module('~/domain/lesson-planner/stack-actions.server', () => actions);
 mock.module('~/domain/lesson-planner/stack-command.server', () => ({ runStackCommand }));
 mock.module('~/domain/lesson-planner/step-handout.server', () => ({ ensureStudentVersion }));
 mock.module('~/domain/lesson-planner/lesson-share.server', () => share);
+mock.module('~/domain/lesson-planner/teacher-notes.server', () => ({ saveStepNotes, teacherNotesFor, noteSteps }));
 
 const { action } = await import('./route');
 
@@ -259,5 +263,70 @@ describe('Save this shape as a template (stack page redesign)', () => {
     ]);
     expect(JSON.stringify(data)).not.toContain('Hook');
     expect(response.data.templateId).toBe('tpl-1');
+  });
+});
+
+describe('teacher notes (Oct 24 handoff, task 7)', () => {
+  test('an edit saves that step’s notes, only with the flag', async () => {
+    saveStepNotes.mockClear();
+    let response = await post({ intent: 'set-notes', conversationId: 'plan-1', stepId: 'm:a', notes: 'Say: hello' });
+    expect(response.init?.status).toBe(404);
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, teachNotes: true });
+    response = await post({ intent: 'set-notes', conversationId: 'plan-1', stepId: 'mat-1', notes: 'Say: hello' });
+    expect(response.data).toEqual({ ok: true });
+    expect(saveStepNotes).toHaveBeenCalledWith({ conversationId: 'plan-1', stepId: 'mat-1', notes: 'Say: hello' });
+    response = await post({ intent: 'set-notes', conversationId: 'plan-1', notes: 'x' });
+    expect(response.init?.status).toBe(400);
+  });
+});
+
+describe('teacher notes written in the background (Kevin, Oct 25, note 12c)', () => {
+  test('write-notes answers with the lesson\'s notes, only with the flag', async () => {
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true });
+    expect((await post({ intent: 'write-notes', conversationId: 'plan-1' })).init?.status).toBe(404);
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, teachNotes: true });
+    loadStackV3.mockResolvedValue({ packet: { title: 'Day 1', className: null }, v3: {} });
+    const response = await post({ intent: 'write-notes', conversationId: 'plan-1' });
+    expect(response.data).toEqual({ ok: true, notes: { s1: 'Open with: Ask what they carry.' } });
+    expect(teacherNotesFor.mock.calls.at(-1)![0]).toMatchObject({ conversationId: 'plan-1', steps: [{ id: 's1' }] });
+  });
+
+  test('setting the lesson starts the notes, without waiting for them', async () => {
+    teacherNotesFor.mockClear();
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, teachNotes: true });
+    loadStackV3.mockResolvedValue({ packet: { title: 'Day 1', className: null }, v3: {} });
+    const response = await post({ intent: 'set-lesson', conversationId: 'plan-1' });
+    expect(response.data).toEqual({ ok: true });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(teacherNotesFor).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("extensions and the deck (Kevin's notes 8c, 9)", () => {
+  test('a step moves to the extensions, and back', async () => {
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, teachNotes: true });
+    prisma.lessonPlanConversation.findFirst.mockResolvedValue({ id: 'plan-1', extensionStepIds: ['a'] });
+    let response = await post({ intent: 'set-extension', conversationId: 'plan-1', stepId: 'b', extension: 'true' });
+    expect(response.data).toEqual({ ok: true, extension: 'b' });
+    expect(prisma.lessonPlanConversation.update.mock.calls[0][0]).toEqual({
+      where: { id: 'plan-1' },
+      data: { extensionStepIds: ['a', 'b'] },
+    });
+    response = await post({ intent: 'set-extension', conversationId: 'plan-1', stepId: 'a', extension: 'false' });
+    expect(prisma.lessonPlanConversation.update.mock.calls[1][0].data).toEqual({ extensionStepIds: [] });
+  });
+
+  test('extensions need the flag and a step', async () => {
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, teachNotes: false });
+    expect((await post({ intent: 'set-extension', conversationId: 'plan-1', stepId: 'b', extension: 'true' })).init.status).toBe(404);
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, teachNotes: true });
+    expect((await post({ intent: 'set-extension', conversationId: 'plan-1', extension: 'true' })).init.status).toBe(400);
+  });
+
+  test('Keep these slides starts the deck key again', async () => {
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, teachNotes: true });
+    const response = await post({ intent: 'keep-deck', conversationId: 'plan-1' });
+    expect(response.data).toEqual({ ok: true });
+    expect(prisma.lessonPlanConversation.update.mock.calls[0][0]).toEqual({ where: { id: 'plan-1' }, data: { deckStackKey: null } });
   });
 });

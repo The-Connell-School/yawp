@@ -405,7 +405,7 @@ export default function LessonPlannerHowItWorksRoute() {
               media={
                 <Clip
                   name="plan-steps"
-                  label="Scrolling a finished plan: numbered steps with their minutes, Add to stack on the hook, and three framing cards paged side by side with arrows."
+                  label="Scrolling a finished plan: numbered steps with their minutes, Add to lesson on the hook, and three framing cards paged side by side with arrows."
                 />
               }
             >
@@ -417,7 +417,7 @@ export default function LessonPlannerHowItWorksRoute() {
               </Copy>
               <Copy>
                 Keep the whole plan, or tap{' '}
-                <strong className="text-foreground">Add to stack</strong> on just
+                <strong className="text-foreground">Add to lesson</strong> on just
                 the steps you want. When there are options, like three class
                 starters or three exit tickets, they sit side by side: page
                 through them with the arrows.
@@ -546,6 +546,13 @@ export default function LessonPlannerHowItWorksRoute() {
               makes a real deck, timed to the same period. Present it from Yawp!
               or download it as PowerPoint.
             </Copy>
+            {stackV3 ? (
+              <Copy>
+                Already working in your stack? Ask the planner there for slides, or tap{' '}
+                <strong className="text-foreground">Build the deck</strong> in Take it to
+                class. The deck comes back right in the stack, ready to preview and add.
+              </Copy>
+            ) : null}
             {deckGallery ? (
               <Copy>
                 Decks are hung like a gallery: Georgia and Arial on warm paper,
@@ -580,7 +587,7 @@ export default function LessonPlannerHowItWorksRoute() {
           ) : (
             <Clip
               name="deck"
-              label="Tapping Build the slide deck for this lesson. A card appears with the deck’s thumbnails and Add to stack, PowerPoint and Present buttons."
+              label="Tapping Build the slide deck for this lesson. A card appears with the deck’s thumbnails and Add to lesson, PowerPoint and Present buttons."
             />
           )}
         </section>
@@ -592,7 +599,7 @@ export default function LessonPlannerHowItWorksRoute() {
                 <Eyebrow>The stack</Eyebrow>
                 <H2 id="guide-stack">Your lesson, start to finish</H2>
                 <Copy>
-                  Tap <strong className="text-foreground">Add to stack</strong> on
+                  Tap <strong className="text-foreground">Add to lesson</strong> on
                   the pieces you want. The stack is your run of show: every step
                   in order, with when it starts and how long it runs.
                 </Copy>
@@ -749,7 +756,7 @@ export default function LessonPlannerHowItWorksRoute() {
                 Everything for the lesson, in one place to print
               </H2>
               <Copy>
-                Tap <strong className="text-foreground">Add to stack</strong> on
+                Tap <strong className="text-foreground">Add to lesson</strong> on
                 the pieces you want to keep. The stack puts the plan, handouts,
                 answer key, and deck in lesson order, ready to print or save as a
                 PDF.

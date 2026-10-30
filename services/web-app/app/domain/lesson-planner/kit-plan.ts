@@ -12,6 +12,7 @@ import { resolveDeckArt } from './deck-art';
 import { deckColors, normalizedHex, withoutColorMarks } from './deck-colors';
 import { WRITING_PROCESS_STEPS, withoutLessonNumber } from './deck-gallery';
 import type { LessonPlanDoc, LessonPlanEntry, LessonPlanStep } from './lesson-plan-doc';
+import { noteSections } from './teacher-notes';
 import { readSlideDeck, type SlideDeck } from './slide-deck';
 import { upperKeepingBrand } from '~/domain/brand';
 
@@ -102,6 +103,14 @@ function stepBlock(step: LessonPlanStep, num: number, deck: SlideDeck | null): K
     .filter(Boolean);
   if (step.optional && paras.length) paras[0] = `*Optional:* ${paras[0]}`;
   else if (step.optional) paras.push('*Optional.*');
+  // The teacher's notes, after the why (Oct 24 handoff, task 7).
+  if (step.teacherNotes) {
+    paras.push(
+      ...noteSections(step.teacherNotes).map((note) =>
+        note.heading ? `*${note.heading}:* ${note.body.replace(/\n/g, ' ')}` : note.body.replace(/\n/g, ' ')
+      )
+    );
+  }
   const slides = slidesFor(deck, step.piece);
   return {
     type: 'step',
@@ -165,6 +174,11 @@ export function buildKitPlan({ doc, entries }: { doc: LessonPlanDoc; entries: Le
     body.push(stepBlock(step, index + 1, deck));
   });
   if (!doc.closingStep) body.push({ type: 'callout', title: 'Suggested closing', paras: [doc.closing.replace(/^Suggested closing: not in your stack\.\s*/, '')] });
+  // After the closing, for a class that finishes early (Kevin's note 10c).
+  if (doc.extensions?.length) {
+    body.push({ type: 'h2', text: 'If you have more time' });
+    doc.extensions.forEach((step, index) => body.push(stepBlock(step, steps.length + index + 1, deck)));
+  }
 
   return {
     accent,

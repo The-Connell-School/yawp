@@ -5,7 +5,8 @@
  * downloaded on its own.
  */
 import { useEffect, useState } from 'react';
-import { Link, useFetcher, useLoaderData, useRevalidator, type LoaderFunctionArgs } from 'react-router';
+import { Link, useFetcher, useLoaderData, useLocation, useRevalidator, type LoaderFunctionArgs } from 'react-router';
+import { closeHref } from '~/domain/lesson-planner/lesson-return';
 import { ChevronLeft, Download, Loader2, Printer } from 'lucide-react';
 import { loadStepHandouts } from '~/domain/lesson-planner/load-step-handouts.server';
 import { TypeChip, WritingBadge } from '../app.lesson-planner_.$conversationId.packet/v3/run-of-show';
@@ -19,6 +20,8 @@ const STACK_API = '/api/domain/lesson-planner/stack';
 
 export default function StepHandoutsRoute() {
   const { conversationId, title, steps } = useLoaderData<typeof loader>();
+  const location = useLocation();
+  const backTo = closeHref(conversationId, location.search, 'stack');
   const revalidator = useRevalidator();
   const toggle = useFetcher();
   const writer = useFetcher<{ ok?: boolean; materialId?: string; error?: string }>();
@@ -61,7 +64,8 @@ export default function StepHandoutsRoute() {
       <link rel="stylesheet" href={STACK_FONTS_HREF} />
       <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-5 sm:px-6">
         <Link
-          to={`/app/lesson-planner/${conversationId}/packet`}
+          to={backTo}
+          data-testid="handouts-back"
           className="inline-flex items-center gap-1 rounded-full border border-[var(--sv-line)] bg-[var(--sv-card)] px-3 py-1.5 text-sm font-semibold"
         >
           <ChevronLeft size={15} /> Back to your lesson

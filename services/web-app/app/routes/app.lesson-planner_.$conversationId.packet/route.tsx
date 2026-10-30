@@ -504,7 +504,7 @@ function LessonPacketRouteV2() {
             {packet.sections.length === 0 ? (
               <p className="text-sm text-muted-foreground print:hidden">
                 Nothing in this stack yet. Back in the planner, use{' '}
-                <strong>Add to stack</strong> on the pieces you want, and they
+                <strong>Add to lesson</strong> on the pieces you want, and they
                 will assemble here.
               </p>
             ) : view === 'handout' ? (
@@ -535,7 +535,7 @@ function LessonPacketRouteV2() {
                       </span>
                       {part.title}
                     </h2>
-                    <MarkdownContent content={part.content} />
+                    <MarkdownContent content={part.content} codeAsText />
                   </section>
                 ))}
 
@@ -818,14 +818,14 @@ function SectionContent({
         section.audience === 'student' && 'leading-9 print:leading-[2.6]'
       )}
     >
-      {body ? <MarkdownContent content={body} /> : null}
+      {body ? <MarkdownContent content={body} codeAsText /> : null}
       {section.deck ? (
         <div className={cn(body && 'mt-3')}>
           {/* The same controls as the chat's deck card (Brian's run 2,
               item 25): Edit opens the deck editor and comes back here. */}
           <SlideDeckCard
             deck={section.deck}
-            presentHref={`/present/${conversationId}/${section.id}`}
+            presentHref={`/present/${conversationId}/${section.id}?from=stack`}
             downloadHref={`/present/${conversationId}/${section.id}.pptx`}
             editHref={
               deckV2
@@ -866,7 +866,7 @@ function SectionContent({
               material.audience === 'student' && 'leading-9 print:leading-[2.6]'
             )}
           >
-            <MarkdownContent content={material.content} />
+            <MarkdownContent content={material.content} codeAsText />
           </div>
         </div>
       ))}

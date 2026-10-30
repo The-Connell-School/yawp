@@ -143,3 +143,13 @@ describe('kitRuns: inline marks', () => {
     expect(kitRuns('~~2|the reason~~', ['#9C4A22', '#3F5A73'])).toEqual([{ text: 'the reason', color: '3F5A73' }]);
   });
 });
+
+describe('teacher notes in the kit plan (Oct 24 handoff, task 7)', () => {
+  test('after the why, one line per section', () => {
+    const doc = buildLessonPlanDoc({ title: 'Conclusions', className: null, periodMinutes: 50, entries, summaries: null, standards: [] });
+    doc.instructions[0] = { ...doc.instructions[0]!, teacherNotes: 'Open with: Ask what is in their bag.\nSay: Five minutes.' };
+    const steps = ofType(buildKitPlan({ doc, entries }).body, 'step');
+    expect(steps[0]!.paras.slice(-2)).toEqual(['*Open with:* Ask what is in their bag.', '*Say:* Five minutes.']);
+    expect(steps[1]!.paras.join(' ')).not.toContain('Open with');
+  });
+});
