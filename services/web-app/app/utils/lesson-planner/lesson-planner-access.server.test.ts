@@ -124,7 +124,7 @@ describe('requireLessonPlannerAccess', () => {
     expect((thrown as { init: { status: number } }).init.status).toBe(404);
   });
 
-  test('allows FREE_CLASSROOM teachers when monthly Lesson Planner metering is on', async () => {
+  test('denies FREE_CLASSROOM teachers when only monthly Lesson Planner metering is on', async () => {
     flagValue('false');
     lessonPlannerMeteringEnabled = true;
     requireMembership.mockResolvedValue(
@@ -133,8 +133,8 @@ describe('requireLessonPlannerAccess', () => {
     const access = await getLessonPlannerAccess(request);
     expect(access).toMatchObject({
       isTeacher: true,
-      enabled: true,
-      allowed: true,
+      enabled: false,
+      allowed: false,
     });
   });
 });
