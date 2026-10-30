@@ -1850,16 +1850,16 @@ jobs:
   # Keeps the original check name. Passes when every E2E job passed, or when
   # they were skipped on purpose (draft PR or no code changes).
   e2e-web-app:
-    needs: [paths, e2e-smoke, e2e-signon, e2e-browser-checks]
+    needs: [paths, e2e-smoke, e2e-signon, e2e-browser-checks, e2e-locked-preview]
     if: ${{ always() }}
     name: 🧪 E2E Tests (Playwright)
     runs-on: ubuntu-24.04
     steps:
       - name: ✅ Check E2E results
         env:
-          RESULTS: ${{ needs.paths.result }} ${{ needs.e2e-smoke.result }} ${{ needs.e2e-signon.result }} ${{ needs.e2e-browser-checks.result }}
+          RESULTS: ${{ needs.paths.result }} ${{ needs.e2e-smoke.result }} ${{ needs.e2e-signon.result }} ${{ needs.e2e-browser-checks.result }} ${{ needs.e2e-locked-preview.result }}
         run: |
-          echo "paths, smoke, sign-on, browser checks: $RESULTS"
+          echo "paths, smoke, sign-on, browser checks, locked preview: $RESULTS"
           for r in $RESULTS; do
             case "$r" in
               success|skipped) ;;
