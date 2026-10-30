@@ -7,50 +7,17 @@ import { Form, Link, useSearchParams } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary.tsx';
 import { FormInput } from '~/components/rvf-forms/form-input.tsx';
 import { Button } from '~/components/ui/button.tsx';
-import { parseFormData, useForm, validationError } from '@rvf/react-router';
-import { enforceUnauthByIpAndTarget, rateLimitedFormResponse } from '~/utils/rate-limit.server';
-import { RATE_LIMITS } from '~/config/rate-limits';
-import { normalizeEmail } from '~/utils/normalize-email';
-import {
-  verifyInvitationCredentials,
-  verifyInvitationFromQuery,
-  VerifyInvitationSchema,
-} from './verify-invitation.server';
+import { useForm } from '@rvf/react-router';
+import { VerifyInvitationSchema } from './verify-invitation.schema';
 
-export async function loader({ request }: LoaderFunctionArgs) {
-  const autoVerified = await verifyInvitationFromQuery(request);
-  if (autoVerified) return autoVerified;
-  return null;
+export async function loader(args: LoaderFunctionArgs) {
+  const { verifyInvitationLoader } = await import('./verify-invitation.server');
+  return verifyInvitationLoader(args);
 }
 
-export async function action({ request }: ActionFunctionArgs) {
-  const { data, error } = await parseFormData(request, VerifyInvitationSchema);
-  if (error) return validationError(error);
-
-  const { target, type } = data;
-  const normalizedTarget = normalizeEmail(target);
-  {
-    const cfg = RATE_LIMITS.unauth.verify;
-    const decision = await enforceUnauthByIpAndTarget({
-      request,
-      route: '/auth/inv/verify',
-      targetKey: `${type}:${normalizedTarget}`,
-      perIpPerMinute: cfg.perIpPerMinute,
-      perIpPerHour: cfg.perIpPerHour,
-      perTargetPerHour: cfg.perEmailPerHour,
-    });
-    if (!decision.allowed) {
-      return rateLimitedFormResponse(
-        'code',
-        decision.retryAfterSeconds,
-        'Too many verification attempts. Please wait and try again.'
-      );
-    }
-  }
-
-  const result = await verifyInvitationCredentials(data);
-  if (result.ok) return result.response;
-  return validationError({ fieldErrors: result.fieldErrors });
+export async function action(args: ActionFunctionArgs) {
+  const { verifyInvitationAction } = await import('./verify-invitation.server');
+  return verifyInvitationAction(args);
 }
 
 export default function Route() {

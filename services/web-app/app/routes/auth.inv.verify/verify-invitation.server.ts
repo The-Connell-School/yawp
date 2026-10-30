@@ -1,8 +1,18 @@
-import { redirect } from 'react-router';
+import {
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+  redirect,
+} from 'react-router';
+import { parseFormData, validationError } from '@rvf/react-router';
 import { invitationCookieStorage } from '~/cookie-session-storages/invitation.server';
 import { setMembershipId } from '~/cookies/membership-id.server';
+import { RATE_LIMITS } from '~/config/rate-limits';
 import { prisma } from '~/utils/db.server.ts';
 import { normalizeEmail } from '~/utils/normalize-email';
+import {
+  enforceUnauthByIpAndTarget,
+  rateLimitedFormResponse,
+} from '~/utils/rate-limit.server';
 import {
   OwnerOnboardingMetadataSchema,
   StudentOnboardingMetadataSchema,
@@ -12,19 +22,12 @@ import { redirectWithToast } from '~/utils/toast.server';
 import { verifyTOTP } from '~/utils/totp.server.ts';
 import type { OrgMembership } from '@app/prisma';
 import { z } from 'zod';
+import {
+  VerifyInvitationSchema,
+  type VerifyInvitationInput,
+} from './verify-invitation.schema';
 
-export const VerifyInvitationSchema = z.object({
-  code: z.string().min(6).max(6),
-  type: z.enum([
-    'onboard-student',
-    'onboard-teacher',
-    'onboard-owner',
-    'password-reset',
-  ]),
-  target: z.string(),
-});
-
-type VerifyInput = z.infer<typeof VerifyInvitationSchema>;
+type VerifyInput = VerifyInvitationInput;
 
 export type VerifyInvitationResult =
   | { ok: true; response: Response }
@@ -138,7 +141,7 @@ export async function completeVerifiedInvitation({
       invitationCookie.set('schoolId', schoolId);
       return {
         ok: true,
-        response: redirectWithToast(
+        response: await redirectWithToast(
           '/auth/login?redirectTo=%2Fapp',
           {
             title: 'Sign in to join your class',
@@ -207,7 +210,7 @@ export async function completeVerifiedInvitation({
         if (existingUser.memberships[0].role === 'TEACHER') {
           return {
             ok: true,
-            response: redirectWithToast(
+            response: await redirectWithToast(
               '/app',
               {
                 title: 'Teacher membership already exists',
@@ -243,7 +246,7 @@ export async function completeVerifiedInvitation({
 
       return {
         ok: true,
-        response: redirectWithToast(
+        response: await redirectWithToast(
           '/app',
           {
             title: 'Invitation accepted',
@@ -319,7 +322,7 @@ export async function completeVerifiedInvitation({
 
       return {
         ok: true,
-        response: redirectWithToast(
+        response: await redirectWithToast(
           '/app',
           {
             title: 'Invitation accepted',
@@ -382,4 +385,40 @@ export async function verifyInvitationFromQuery(
   const result = await verifyInvitationCredentials(parsed.data);
   if (result.ok) return result.response;
   return null;
+}
+
+export async function verifyInvitationLoader({ request }: LoaderFunctionArgs) {
+  const autoVerified = await verifyInvitationFromQuery(request);
+  if (autoVerified) return autoVerified;
+  return null;
+}
+
+export async function verifyInvitationAction({ request }: ActionFunctionArgs) {
+  const { data, error } = await parseFormData(request, VerifyInvitationSchema);
+  if (error) return validationError(error);
+
+  const { target, type } = data;
+  const normalizedTarget = normalizeEmail(target);
+  {
+    const cfg = RATE_LIMITS.unauth.verify;
+    const decision = await enforceUnauthByIpAndTarget({
+      request,
+      route: '/auth/inv/verify',
+      targetKey: `${type}:${normalizedTarget}`,
+      perIpPerMinute: cfg.perIpPerMinute,
+      perIpPerHour: cfg.perIpPerHour,
+      perTargetPerHour: cfg.perEmailPerHour,
+    });
+    if (!decision.allowed) {
+      return rateLimitedFormResponse(
+        'code',
+        decision.retryAfterSeconds,
+        'Too many verification attempts. Please wait and try again.'
+      );
+    }
+  }
+
+  const result = await verifyInvitationCredentials(data);
+  if (result.ok) return result.response;
+  return validationError({ fieldErrors: result.fieldErrors });
 }
