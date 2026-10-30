@@ -12,17 +12,35 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function parseDevPanelState(raw: unknown): DevPanelPersistedState | null {
   if (!isRecord(raw)) return null;
   const open = raw.open === true;
-  const openSections = Array.isArray(raw.openSections)
-    ? raw.openSections.filter((item): item is string => typeof item === 'string')
-    : DEV_PANEL_DEFAULT_STATE.openSections;
   const org = typeof raw.org === 'string' || raw.org === null ? raw.org : null;
-  const subSheet =
+  let subSheet =
     raw.subSheet === 'free-tier-states' ||
     raw.subSheet === 'give-feedback' ||
     raw.subSheet === 'class-simulation' ||
     raw.subSheet === null
       ? raw.subSheet
       : null;
+  let openSections = Array.isArray(raw.openSections)
+    ? raw.openSections.filter((item): item is string => typeof item === 'string')
+    : DEV_PANEL_DEFAULT_STATE.openSections;
+  if (
+    subSheet === 'free-tier-states' ||
+    subSheet === 'give-feedback' ||
+    subSheet === 'class-simulation'
+  ) {
+    if (subSheet === 'class-simulation') {
+      if (!openSections.includes('tester-tools')) {
+        openSections = [...openSections, 'tester-tools'];
+      }
+      if (!openSections.includes('class-simulation')) {
+        openSections = [...openSections, 'class-simulation'];
+      }
+    } else if (!openSections.includes(subSheet)) {
+      openSections = [...openSections, subSheet];
+    }
+    subSheet = null;
+  }
+  openSections = openSections.filter((id) => id !== 'blackboard');
   const scroll = isRecord(raw.scroll)
     ? {
         main:
@@ -45,16 +63,15 @@ export function parseDevPanelState(raw: unknown): DevPanelPersistedState | null 
           raw.forms.selectedStateId === null
             ? raw.forms.selectedStateId
             : undefined,
-        activeStateId:
-          typeof raw.forms.activeStateId === 'string' ||
-          raw.forms.activeStateId === null
-            ? raw.forms.activeStateId
+        freeTierFollowEmail:
+          typeof raw.forms.freeTierFollowEmail === 'string' ||
+          raw.forms.freeTierFollowEmail === null
+            ? raw.forms.freeTierFollowEmail
             : undefined,
-        blackboardRole:
-          raw.forms.blackboardRole === 'teacher' ||
-          raw.forms.blackboardRole === 'student'
-            ? raw.forms.blackboardRole
-            : 'teacher',
+        freeTierFormFilled:
+          typeof raw.forms.freeTierFormFilled === 'boolean'
+            ? raw.forms.freeTierFormFilled
+            : undefined,
         simulationClassId:
           typeof raw.forms.simulationClassId === 'string' ||
           raw.forms.simulationClassId === null

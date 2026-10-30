@@ -1,22 +1,132 @@
 /* V2 presentation is scoped to the existing eligible free-account gate. */
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&display=swap');
 [data-free-account] > nav:not(.items-center) {
-  width: 204px;
-  min-width: 204px;
-  background: hsl(var(--sidebar));
+  width: 224px;
+  min-width: 224px;
+  background: hsl(53.3333 24.3243% 92.7451%);
+  border-right-color: hsl(51.4286 7.8652% 82.549%);
+  padding: 20px 12px 0;
 }
 [data-free-account] > nav > div:first-child {
-  min-height: 116px;
+  min-height: auto;
+  margin: 0 !important;
+  padding: 0 0 14px 8px !important;
 }
-[data-free-account] > nav a {
-  border-radius: 8px;
+[data-free-account] > nav > div:first-child .app-nav-expanded-logo {
+  width: 72px;
+  height: 72px;
+  margin-left: 0;
+  padding: 0 !important;
+  object-fit: contain;
 }
-[data-free-account] > nav a svg {
-  width: 18px;
-  height: 18px;
+[data-free-account] > nav.items-center {
+  padding: 20px 0 0;
 }
+[data-free-account] > nav.items-center > div:first-child {
+  justify-content: center;
+  width: 100%;
+  padding: 0 0 14px 0 !important;
+}
+[data-free-account] > nav.items-center .app-nav-collapsed-logo {
+  width: 44px;
+  height: 44px;
+  padding: 0 !important;
+  object-fit: contain;
+}
+[data-free-account] > nav.items-center .app-nav-collapsed-logo-swap {
+  width: 44px;
+  height: 44px;
+}
+[data-free-account] > nav .min-h-0.flex-1 {
+  padding: 0;
+}
+[data-free-account] > nav .grid.gap-1 {
+  gap: 2px;
+}
+[data-free-account] > nav .grid > div.flex.w-full {
+  min-height: 34px;
+  padding: 0;
+  border-radius: 6px;
+  gap: 10px;
+}
+[data-free-account] > nav .grid > div.flex.w-full:has(a[aria-current='page']) {
+  background: hsl(15 55% 51% / 0.1);
+}
+[data-free-account] > nav .grid > div.flex.w-full > a {
+  min-height: 34px;
+  box-sizing: border-box;
+  padding: 7px 12px;
+  border-radius: 6px;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+  box-shadow: none;
+  background: transparent !important;
+}
+[data-free-account] > nav .grid > div.flex.w-full > a[aria-current='page'] {
+  color: hsl(15.2174 55.6503% 45%) !important;
+  font-weight: 600;
+}
+[data-free-account] > nav .grid > div.flex.w-full > a svg {
+  width: 17px;
+  height: 17px;
+}
+[data-free-account] > nav a span { white-space: nowrap; }
+[data-free-account] > nav > div.flex.shrink-0 > button:has([data-testid='free-tier-sidebar-usage']),
+[data-free-account] > nav > div.flex.shrink-0 > button:has([data-testid='app-nav-settings']) {
+  display: flex;
+  width: 100%;
+  align-self: stretch;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+[data-free-account] > nav > div.flex.shrink-0 [data-testid='free-tier-sidebar-usage'],
+[data-free-account] > nav > div.flex.shrink-0 [data-testid='app-nav-settings'] {
+  box-sizing: border-box;
+  flex: 1 0 auto;
+  width: 100%;
+  margin: auto -12px 0;
+  min-height: 34px;
+  border-top-color: hsl(51.4286 7.8652% 82.549%);
+  padding: 12px 24px;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 20px;
+  border-radius: 0;
+}
+[data-free-account] > nav > div.flex.shrink-0 [data-testid='app-nav-settings'] svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* Standard main-column inset for sidebar + scrollable list pages (see freeTierStandardPageShellClassName). */
+[data-free-account] .free-tier-b2-page-shell {
+  box-sizing: border-box;
+  padding: 28px 40px 0;
+}
+[data-free-account] .free-tier-b2-page-body {
+  padding-top: 20px;
+  padding-bottom: 6rem;
+}
+@media (max-width: 1023px) {
+  [data-free-account] .free-tier-b2-page-shell {
+    padding: 16px 16px 0;
+  }
+}
+/* Intentional exceptions (no shell inset on route root): Reporter, Lesson Planner, document/collab editors. */
+
 [data-free-account] .free-dashboard h2 {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
+  color: #0f172a;
 }
 [data-free-account]
   .free-dashboard
@@ -29,14 +139,13 @@
   .free-dashboard
   [data-testid='teacher-classes-grid']
   > div:last-child {
-  display: grid;
-  grid-template-columns: minmax(0, 320px);
+  align-content: start;
 }
 [data-free-account]
   .free-dashboard
   [data-testid='teacher-grading-grid']
   > div:first-child
-  > a {
+  > a.teacher-grading-view-all {
   display: none;
 }
 [data-free-account]
@@ -45,16 +154,116 @@
   > div:nth-child(2) {
   border-radius: 12px;
 }
+[data-free-account] .free-tier-assignment-carousel-track > a,
+[data-free-account] .free-tier-assignment-carousel-track > button {
+  flex: 0 0 auto;
+}
+
+/* Locked Home B2 (plain welcome, sticky right rail on desktop). */
+[data-free-account] .locked-home-b2 {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  box-sizing: border-box;
+}
+[data-free-account] .locked-home-welcome {
+  margin: 0;
+  padding: 0;
+  font-family: 'Caveat', 'Segoe Script', 'Apple Chancery', cursive;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  color: #0f172a;
+}
+[data-free-account] .locked-home-b2.free-dashboard h2 {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #0f172a;
+}
+[data-free-account] .locked-home-b2 .locked-home-sections h2 {
+  font-size: 15px;
+  font-weight: 600;
+}
+[data-free-account] .locked-home-main {
+  container-type: inline-size;
+  container-name: locked-home-main;
+  flex: 999 1 420px;
+  min-width: 0;
+  gap: 20px;
+}
+[data-free-account] .locked-home-columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 28px;
+}
+[data-free-account] .locked-home-rail-desktop {
+  display: none;
+  flex: 1 1 300px;
+  min-width: 0;
+  max-width: 320px;
+  width: auto;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 24px;
+  align-self: flex-start;
+}
+[data-free-account] .locked-home-b2 [data-testid='teacher-classes-grid'] > div:last-child {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 300px;
+}
+[data-free-account]
+  .locked-home-b2
+  [data-testid='teacher-grading-grid']
+  .grid.grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@container locked-home-main (min-width: 520px) {
+  [data-free-account]
+    .locked-home-b2
+    [data-testid='teacher-grading-grid']
+    .grid.grid-cols-2 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
 @media (min-width: 1024px) {
-  [data-free-account] [data-testid='app._index'] > div:first-child > div {
+  [data-free-account] .locked-home-rail-desktop {
+    display: flex;
+  }
+  [data-free-account] .locked-home-rail-mobile {
+    display: none;
+  }
+}
+@media (max-width: 1023px) {
+  [data-free-account] .locked-home-main {
+    gap: 16px;
+  }
+  [data-free-account] .locked-home-welcome {
+    font-size: 28px;
+  }
+  [data-free-account] .locked-home-rail-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  [data-free-account]
+    [data-testid='app._index']
+    > div:first-child:not(.locked-home-b2)
+    > div {
     max-width: 1236px;
     padding: 24px 48px;
   }
 }
 @media (max-width: 639px) {
   [data-free-account] > nav:not(.items-center) {
-    width: 212px;
-    min-width: 212px;
+    width: 224px;
+    min-width: 224px;
   }
   [data-free-account]
     .free-dashboard
@@ -64,7 +273,10 @@
   }
 }
 
-[data-free-account] [data-testid='app._index'] > div:first-child h2 {
+[data-free-account]
+  [data-testid='app._index']
+  > div:first-child:not(.locked-home-b2)
+  h2 {
   font-size: 28px;
   line-height: 1.2;
 }
@@ -72,16 +284,3 @@
   margin-top: 8px;
   max-width: none;
 }
-[data-free-account]
-  .free-dashboard
-  [data-testid='teacher-classes-grid']
-  > div:last-child
-  > div
-  > a
-  > div:first-child {
-  height: 112px;
-}
-
-[data-free-account] > nav a span { white-space: nowrap; }
-[data-free-account] > nav a { gap: 10px; padding-top: 10px; padding-bottom: 10px; }
-[data-free-account] > nav > div:first-child img { width: 64px; }

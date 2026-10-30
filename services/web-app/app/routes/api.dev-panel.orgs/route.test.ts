@@ -5,7 +5,7 @@ mock.module('~/dev-panel/dev-panel-route-guard.server', () => ({
 }));
 mock.module('~/dev-panel/dev-panel-orgs.server', () => ({
   listDevPanelOrganizations: async () => [
-    { id: 'local-dev-org', name: 'Yawp Local Dev' },
+    { id: 'local-dev-org', name: 'Yawp Local Dev', kind: 'School' },
   ],
 }));
 

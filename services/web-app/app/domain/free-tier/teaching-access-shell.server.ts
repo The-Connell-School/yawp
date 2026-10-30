@@ -1,6 +1,7 @@
 import { prisma } from '~/utils/db.server';
 import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
+import { isApprovalV2Enabled } from '~/domain/free-tier/approval-v2.server';
 export type TeachingAccessShellState =
   | { variant: 'none' }
   | { variant: 'loading' }
@@ -8,6 +9,11 @@ export type TeachingAccessShellState =
       variant: 'locked';
       applicationId: string;
       adminName: string;
+      adminEmail: string | null;
+      pendingApprovalId: string | null;
+      schoolName: string;
+      approvalFirstSentAt: string | null;
+      forwardDisclosureAvailable: boolean;
     }
   | {
       variant: 'unlocked';
@@ -36,25 +42,40 @@ export async function loadTeachingAccessShellState(args: {
     select: {
       id: true,
       status: true,
+      schoolName: true,
       organizationId: true,
       lockedPreviewApprovalToastSeenAt: true,
       adminApprovals: {
         where: { status: 'PENDING' },
         orderBy: { createdAt: 'desc' },
         take: 1,
-        select: { adminName: true },
+        select: {
+          id: true,
+          adminName: true,
+          adminEmail: true,
+          firstSentAt: true,
+        },
       },
     },
   });
   if (!application) return { variant: 'none' };
 
   if (application.status === 'SENT' || application.status === 'MANUAL_REVIEW') {
-    const adminName =
-      application.adminApprovals[0]?.adminName ?? 'your administrator';
+    const pendingApproval = application.adminApprovals[0];
+    const adminName = pendingApproval?.adminName ?? 'your administrator';
+    const forwardDisclosureAvailable =
+      application.status === 'SENT' &&
+      pendingApproval != null &&
+      (await isApprovalV2Enabled(application));
     return {
       variant: 'locked',
       applicationId: application.id,
       adminName,
+      adminEmail: pendingApproval?.adminEmail ?? null,
+      pendingApprovalId: pendingApproval?.id ?? null,
+      schoolName: application.schoolName ?? 'your school',
+      approvalFirstSentAt: pendingApproval?.firstSentAt?.toISOString() ?? null,
+      forwardDisclosureAvailable,
     };
   }
 

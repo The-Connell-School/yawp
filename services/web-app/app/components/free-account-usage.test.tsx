@@ -87,10 +87,10 @@ test('Advocate Pack stays hidden until a student joins and stays off legacy usag
     },
   };
   const html = render(<FreeAccountRail usage={noStudents} />);
-  expect(html).toContain('Create your first assignment');
+  expect(html).toContain('First assignment created');
   expect(html).not.toContain('Give your first assignment');
-  expect(html).not.toContain('Loving what Yawp!');
-  expect(html).not.toContain('Get the Advocate Pack');
+  expect(html).not.toContain('Tell a colleague');
+  expect(html).not.toContain('Share with a colleague');
   const withStudent = {
     ...noStudents,
     students: { ...count, used: 1 },
@@ -101,14 +101,12 @@ test('Advocate Pack stays hidden until a student joins and stays off legacy usag
     },
   };
   const enrolled = render(<FreeAccountRail usage={withStudent} />);
-  expect(enrolled).toContain('Loving what Yawp!');
-  expect(enrolled.indexOf('free-account-checklist')).toBeLessThan(
-    enrolled.indexOf('Loving what Yawp!')
-  );
-  expect(enrolled).toContain('Get the Advocate Pack');
+  expect(enrolled).toContain('Tell a colleague');
+  expect(enrolled).not.toContain('free-account-checklist');
+  expect(enrolled).toContain('Share with a colleague');
   expect(
     render(<FreeAccountRail usage={{ ...withStudent, monthly: false }} />)
-  ).not.toContain('Get the Advocate Pack');
+  ).not.toContain('Share with a colleague');
 });
 test('monthly first steps order and two-of-four progress after class and assignment', () => {
   const html = render(
@@ -125,11 +123,11 @@ test('monthly first steps order and two-of-four progress after class and assignm
       }}
     />
   );
-  expect(html).toContain('2 of 4');
-  expect(html).toContain('Your class is ready');
-  const assignmentIdx = html.indexOf('Create your first assignment');
-  const studentsIdx = html.indexOf('Add your students to your class');
-  const fourthIdx = html.indexOf('See what your class needs');
+  expect(html).toContain('Step 3 of 4');
+  expect(html).toContain('Class ready');
+  const assignmentIdx = html.indexOf('First assignment created');
+  const studentsIdx = html.indexOf('Add your students');
+  const fourthIdx = html.indexOf('Grade your first submission');
   expect(assignmentIdx).toBeGreaterThan(-1);
   expect(studentsIdx).toBeGreaterThan(assignmentIdx);
   expect(fourthIdx).toBeGreaterThan(studentsIdx);

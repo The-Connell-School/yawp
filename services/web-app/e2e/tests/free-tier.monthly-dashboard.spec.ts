@@ -66,6 +66,11 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
   ] as const) {
     await page.setViewportSize({ width, height });
     await page.goto('/app');
+    await page.evaluate(() => document.fonts.ready);
+    await expect(page.locator('.locked-home-welcome')).toHaveCSS(
+      'font-family',
+      /Caveat/i
+    );
     await shot(page, `dashboard-${label}`);
     if (baseline) {
       for (const [route, name] of [
@@ -81,23 +86,20 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
       continue;
     }
     await expect(
-      page.getByText('Your class, assignments, and grading in one place.')
-    ).toBeVisible();
-    const rail = page.getByTestId('free-account-rail');
-    await expect(rail.getByTestId('free-account-checklist')).toContainText(
-      '2 of 4'
-    );
-    await expect(rail.getByText('Your class is ready')).toBeVisible();
+      page.getByTestId('free-account-rail').getByTestId('free-account-checklist')
+    ).toContainText('Step 3 of 4');
     await expect(
-      rail.getByRole('link', { name: 'Get the Advocate Pack' })
+      page.getByText("You're approved. Your classroom is ready.")
     ).toHaveCount(0);
-    await expect(page.getByTestId('class-code').first()).toBeInViewport();
-    const opener = page
-      .getByRole('button', {
-        name: 'Add your students to your class',
-        exact: true,
-      })
-      .first();
+    const rail = page.getByTestId('free-account-rail');
+    await expect(rail.getByText('Class ready')).toBeVisible();
+    await expect(
+      rail.getByRole('link', { name: 'Share with a colleague' })
+    ).toHaveCount(0);
+    await expect(
+      rail.getByRole('button', { name: 'Copy class code' })
+    ).toBeVisible();
+    const opener = rail.getByRole('button', { name: 'Invite students' });
     await opener.click();
     const dialog = page.getByRole('dialog', {
       name: 'Add your students to your class',
@@ -196,9 +198,9 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
   });
   await page.goto('/app');
   await expect(
-    page.getByRole('link', { name: 'Get the Advocate Pack' })
+    page.getByRole('link', { name: 'Share with a colleague' })
   ).toBeVisible();
-  await page.getByRole('link', { name: 'Get the Advocate Pack' }).click();
+  await page.getByRole('link', { name: 'Share with a colleague' }).click();
   await expect(
     page.getByRole('heading', { name: 'Advocate Pack' })
   ).toBeVisible();

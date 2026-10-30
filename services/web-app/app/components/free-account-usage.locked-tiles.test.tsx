@@ -15,12 +15,24 @@ import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { StaticRouter } from 'react-router';
 import type { FreeAccountUsage } from '~/domain/free-tier/inapp-usage';
+import {
+  FREE_TIER_UNLIMITED_TILE_LABEL,
+  SITE_LICENSE_ONLY_TILE_LABEL,
+} from '~/domain/free-tier/locked-dashboard-copy';
 
 mock.module('~/components/student-invitation-dialog', () => ({
   StudentInvitationDialog: () => null,
 }));
 
-const { FreeAssignmentTiles } = await import('./free-account-usage');
+mock.module('~/components/free-tier/teaching-access-context', () => ({
+  useTeachingAccess: () => ({
+    locked: false,
+    loading: false,
+    state: { variant: 'none' },
+  }),
+}));
+
+const { FreeAssignmentTiles, FreeAccountRail } = await import('./free-account-usage');
 
 let lockedTileRoot: Root | null = null;
 
@@ -32,6 +44,7 @@ afterEach(() => {
 
 const usage: FreeAccountUsage = {
   monthly: true,
+  unlimitedFreeAssignmentTiles: true,
   students: { used: 0, total: 35, remaining: 35 },
   lessonPlans: { used: 0, total: 5, remaining: 5 },
   assignments: [
@@ -159,12 +172,21 @@ test('FreeAssignmentTiles unlocked tiles link to assignment type home', () => {
   );
 });
 
-test('FreeAssignmentTiles locked tiles link to assignment type home', () => {
+test('FreeAssignmentTiles locked tiles link to how-it-works with PE3 labels', () => {
   const html = renderToStaticMarkup(
     <StaticRouter location="/app">
       <FreeAssignmentTiles
         usage={usage}
         teachingLocked
+        assignmentsSeeHowItWorksTo="/app/assignment-types/starter/how-it-works"
+        siteLicenseLockedAssignmentTiles={[
+          {
+            key: 'daily_pages',
+            label: 'Daily Pages',
+            assignmentTypeId: 'daily',
+            imageId: 'img-daily',
+          },
+        ]}
         types={[
           { id: 'starter', kind: 'class_starter', imageId: 'img-1' },
           { id: 'pre', kind: 'prewriting', imageId: 'img-2' },
@@ -174,50 +196,55 @@ test('FreeAssignmentTiles locked tiles link to assignment type home', () => {
       />
     </StaticRouter>
   );
-  expect(html).toContain('href="/app/assignment-types/starter"');
-  expect(html).toContain('href="/app/assignment-types/thesis"');
-  expect(html).not.toMatch(
-    /<button[^>]*data-testid="dashboard-assignment-tile"/
-  );
+  expect(html).toContain('href="/app/assignment-types/starter/how-it-works"');
+  expect(html).toContain('href="/app/assignment-types/pre/how-it-works"');
+  expect(html).toContain('href="/app/assignment-types/thesis/how-it-works"');
+  expect(html).toContain('href="/app/assignment-types/daily/how-it-works"');
+  expect(html).toContain(FREE_TIER_UNLIMITED_TILE_LABEL);
+  expect(html).toContain(SITE_LICENSE_ONLY_TILE_LABEL);
+  expect(html).toContain('/api/image/course/img-1');
+  expect(html).toContain('data-testid="site-license-locked-assignment-tile"');
+  expect(html).not.toContain('site-license-lock-button');
+  expect(html).not.toContain('12 of 12 left');
 });
 
-test('FreeAssignmentTiles locked pending hides create control and uses text-only tiles', () => {
-  const html = renderToStaticMarkup(
-    <StaticRouter location="/app">
-      <FreeAssignmentTiles
-        usage={usage}
-        teachingLocked
-        types={[
-          { id: 'starter', kind: 'class_starter', imageId: 'img-1' },
-          { id: 'pre', kind: 'prewriting', imageId: 'img-2' },
-          { id: 'thesis', kind: 'thesis_statement', imageId: 'img-3' },
-        ]}
-        onCreate={() => {}}
-      />
-    </StaticRouter>
-  );
-  expect(html).not.toContain('preview-assignment-creation-disabled');
-  expect(html).not.toContain('Create assignment');
-  expect(html).not.toContain('/api/image/course/');
-  expect(html).toContain('site-license-lock-button');
-  expect(html).toContain('12 of 12 left');
-  expect(html).not.toContain('Unlimited');
-});
-
-test('FreeAccountRail is hidden while teaching is locked', async () => {
+test('FreeAccountRail shows pending card and getting started while teaching is locked', async () => {
+  mock.module('react-router', () => ({
+    ...require('react-router'),
+    useFetcher: () => ({
+      state: 'idle',
+      data: undefined,
+      Form: ({ children, ...props }: any) => <form {...props}>{children}</form>,
+    }),
+    useRevalidator: () => ({ revalidate: () => {} }),
+  }));
   mock.module('~/components/free-tier/teaching-access-context', () => ({
     useTeachingAccess: () => ({
       locked: true,
       loading: false,
-      state: { variant: 'locked', adminName: 'Dr. Patel' },
+      state: {
+        variant: 'locked',
+        applicationId: 'app-1',
+        adminName: 'Dr. Patel',
+        adminEmail: 'principal@example.test',
+        pendingApprovalId: 'approval-1',
+        schoolName: 'Lincoln High',
+        approvalFirstSentAt: '2026-10-14T15:00:00.000Z',
+        forwardDisclosureAvailable: true,
+      },
     }),
   }));
-  const { FreeAccountRail } = await import('./free-account-usage');
+  const { FreeAccountRail: Rail } = await import('./free-account-usage');
   const html = renderToStaticMarkup(
     <StaticRouter location="/app">
-      <FreeAccountRail usage={usage} />
+      <Rail usage={usage} />
     </StaticRouter>
   );
-  expect(html).toBe('');
+  expect(html).toContain('data-testid="free-account-rail"');
+  expect(html).toContain('data-testid="locked-dashboard-pending-card"');
+  expect(html).toContain('data-testid="locked-dashboard-getting-started"');
+  expect(html).not.toContain('data-testid="free-account-checklist"');
+  expect(html).toContain('Send to an additional administrator');
+  expect(html).not.toContain('/app/free-tier/pending?ask=1');
   mock.restore();
 });

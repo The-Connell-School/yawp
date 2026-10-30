@@ -92,7 +92,7 @@ export async function readFreeAccountUsage(
         })
       : 0,
     readGradingLimitStatus(membershipId),
-    lessonPlannerMonthlyMetering && !shellMonthly
+    lessonPlannerMonthlyMetering
       ? countOrganizationLessonPlans(organizationId, true)
       : Promise.resolve(null),
   ]);
@@ -120,9 +120,7 @@ export async function readFreeAccountUsage(
   return {
     ...usageCounts,
     monthly: shellMonthly,
-    usageNavMetersAvailable: !(
-      'meteringLookupFailed' in policy && policy.meteringLookupFailed
-    ),
+    usageNavMetersAvailable: false,
     lessonPlannerMonthlyMetering,
     unlimitedFreeAssignmentTiles: lessonPlannerMonthlyMetering,
     reporterLocked: lessonPlannerMonthlyMetering && !policy.enabled,

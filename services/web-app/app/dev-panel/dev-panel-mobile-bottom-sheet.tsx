@@ -87,7 +87,7 @@ export function DevPanelMobileBottomSheet({
         showCloseButton={false}
         className={cn(
           'yawp-dev-panel-mobile-sheet flex max-h-[85dvh] flex-col gap-0 rounded-t-2xl border-t p-0',
-          'h-auto data-[state=open]:duration-180 data-[state=closed]:duration-180',
+          'h-auto data-[state=open]:animate-none data-[state=closed]:animate-none',
           className
         )}
         style={{

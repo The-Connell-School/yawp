@@ -16,7 +16,9 @@ import {
 } from '~/components/ui/dropdown-menu';
 import { Link } from 'react-router';
 import { ClassArt } from '~/components/class-art';
+import { freeTierGlassyOverlayChipClassName } from '~/components/free-tier/free-tier-assignment-carousel';
 import { getClassCardHeading } from '~/utils/class-display';
+import { cn } from '~/utils/misc';
 
 export type TeacherClassCardData = {
   id: string;
@@ -40,9 +42,12 @@ export { formatClassCardTitle as formatTeacherClassLabel } from '~/utils/class-d
 export function TeacherClassCard({
   klass,
   showSchoolYear = false,
+  pe3Dashboard = false,
 }: {
   klass: TeacherClassCardData;
   showSchoolYear?: boolean;
+  /** PE3 free-tier dashboard: short card, 112px art, no stretch. */
+  pe3Dashboard?: boolean;
 }) {
   const { title, subtitle } = getClassCardHeading(klass);
   const usage = useFreeAccountUsage();
@@ -65,28 +70,57 @@ export function TeacherClassCard({
     tooltip: TEACHING_ACCESS_LOCKED_TOOLTIP,
   };
 
+  const imageHeightClass = pe3Dashboard ? 'h-[112px]' : 'h-32';
+
   return (
-    <div className="flex min-h-full flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md">
+    <div
+      className={
+        pe3Dashboard
+          ? 'relative flex w-full max-w-[300px] flex-col self-start overflow-hidden rounded-xl bg-popover shadow-[0_0_0_1px_rgba(0,0,0,0.05),0_1px_3px_0_hsl(0_0%_0%/0.1)]'
+          : 'relative flex min-h-full flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md'
+      }
+    >
       <Link
         to={`/app/my-classes/${klass.id}`}
         className={
-          enabled
-            ? 'flex min-h-0 flex-1 flex-col'
-            : 'flex min-h-full flex-1 flex-col'
+          pe3Dashboard
+            ? 'flex flex-col'
+            : enabled
+              ? 'flex min-h-0 flex-1 flex-col'
+              : 'flex min-h-full flex-1 flex-col'
         }
       >
-        <div className="h-32 w-full border-b border-black/5">
+        <div
+          className={cn(
+            imageHeightClass,
+            'w-full shrink-0 overflow-hidden',
+            !pe3Dashboard && 'border-b border-black/5'
+          )}
+        >
           <ClassArt
             seed={klass.id}
             classArtKey={klass.classArtKey}
             legacyClassArtIndex={klass.legacyClassArtIndex ?? null}
+            className={pe3Dashboard ? 'h-full w-full' : undefined}
           />
         </div>
 
-        <div className="flex flex-1 flex-col gap-3 p-4">
+        <div
+          className={
+            pe3Dashboard
+              ? 'flex flex-col gap-0.5 border-b border-border px-4 py-3'
+              : 'flex flex-1 flex-col gap-3 p-4'
+          }
+        >
           <div>
             {klass.school?.name || showSchoolYear ? (
-              <p className="flex items-center gap-1.5 font-mono text-[0.625rem] font-medium uppercase tracking-wide text-muted-foreground">
+              <p
+                className={
+                  pe3Dashboard
+                    ? 'font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground'
+                    : 'flex items-center gap-1.5 font-mono text-[0.625rem] font-medium uppercase tracking-wide text-muted-foreground'
+                }
+              >
                 {klass.school?.name ? <span>{klass.school.name}</span> : null}
                 {/*
                   Only while the list spans years: inside a single year every
@@ -100,26 +134,70 @@ export function TeacherClassCard({
                 ) : null}
               </p>
             ) : null}
-            <h4 className="mt-1 text-balance text-base font-semibold tracking-tight text-foreground">
+            <h4
+              className={
+                pe3Dashboard
+                  ? 'mt-0.5 text-balance text-base font-bold text-[#0f172a]'
+                  : 'mt-1 text-balance text-base font-semibold tracking-tight text-foreground'
+              }
+            >
               {title}
             </h4>
             {subtitle ? (
-              <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
+              <p
+                className={
+                  pe3Dashboard
+                    ? 'mt-0.5 text-[13px] text-muted-foreground'
+                    : 'mt-0.5 text-xs text-muted-foreground'
+                }
+              >
+                {subtitle}
+              </p>
             ) : null}
           </div>
         </div>
 
-        <div className="mt-auto grid grid-cols-2 divide-x divide-black/5 border-t border-black/5">
-          <div className="flex flex-col gap-0.5 px-4 py-3">
-            <p className="text-xl font-semibold tabular-nums text-foreground">
+        <div
+          className={
+            pe3Dashboard
+              ? 'grid grid-cols-2'
+              : 'mt-auto grid grid-cols-2 divide-x divide-black/5 border-t border-black/5'
+          }
+        >
+          <div
+            className={
+              pe3Dashboard
+                ? 'flex flex-col gap-0.5 border-r border-border px-4 py-2.5'
+                : 'flex flex-col gap-0.5 px-4 py-3'
+            }
+          >
+            <p
+              className={
+                pe3Dashboard
+                  ? 'text-lg font-bold tabular-nums text-[#0f172a]'
+                  : 'text-xl font-semibold tabular-nums text-foreground'
+              }
+            >
               {klass._count.students}
             </p>
             <p className="text-xs text-muted-foreground">
               {klass._count.students === 1 ? 'Student' : 'Students'}
             </p>
           </div>
-          <div className="flex flex-col gap-0.5 px-4 py-3">
-            <p className="text-xl font-semibold tabular-nums text-foreground">
+          <div
+            className={
+              pe3Dashboard
+                ? 'flex flex-col gap-0.5 px-4 py-2.5'
+                : 'flex flex-col gap-0.5 px-4 py-3'
+            }
+          >
+            <p
+              className={
+                pe3Dashboard
+                  ? 'text-lg font-bold tabular-nums text-[#0f172a]'
+                  : 'text-xl font-semibold tabular-nums text-foreground'
+              }
+            >
               {klass._count.assignments}
             </p>
             <p className="text-xs text-muted-foreground">
@@ -129,17 +207,27 @@ export function TeacherClassCard({
         </div>
       </Link>
       {showLockedInvite ? (
-        <div className="flex items-center justify-end border-t px-4 py-3">
-          <LockedTeachingControl {...inviteLockProps}>
-            <button
-              type="button"
-              data-testid="my-classes-class-options"
-              aria-label={`Class options for ${title}`}
-              className="rounded-md p-2 hover:bg-secondary"
-            >
-              <MoreHorizontal size={20} />
-            </button>
-          </LockedTeachingControl>
+        <div
+          className={cn(
+            'pointer-events-none absolute inset-x-0 top-0 z-10',
+            imageHeightClass
+          )}
+        >
+          <div className="pointer-events-auto absolute right-2 top-2">
+            <LockedTeachingControl {...inviteLockProps}>
+              <button
+                type="button"
+                data-testid="my-classes-class-options"
+                aria-label={`Class options for ${title}`}
+                className={cn(
+                  'flex size-8 items-center justify-center text-slate-800 hover:bg-white',
+                  freeTierGlassyOverlayChipClassName()
+                )}
+              >
+                <MoreHorizontal size={18} aria-hidden className="text-slate-800" />
+              </button>
+            </LockedTeachingControl>
+          </div>
         </div>
       ) : null}
       {enabled && !showLockedInvite && (

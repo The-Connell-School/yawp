@@ -24,6 +24,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
+import { useFreeAccountUsage } from '~/components/free-account-usage';
+import {
+  freeTierStandardPageBodyClassName,
+  freeTierStandardPageShellClassName,
+} from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { useUser } from '~/hooks/useUser.js';
 import { useRouteLoaderData } from 'react-router';
 import type { Route as RootRoute } from '../../+types/root';
@@ -122,6 +127,7 @@ import {
 import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
+import { assignmentTypeHasHowItWorksGuide } from '~/domain/assignment-types/assignment-type-how-it-works';
 import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { wrapPreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
@@ -460,6 +466,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
+  const { redirectLockedPreviewAssignmentTypeHomeToGuide } =
+    await import('~/domain/free-tier/locked-preview-assignment-type-routing.server');
+  await redirectLockedPreviewAssignmentTypeHomeToGuide({
+    userId,
+    assignmentType: {
+      id: assignmentType.id,
+      title: assignmentType.title,
+      kind: assignmentType.kind,
+      systemKey: assignmentType.systemKey,
+    },
+  });
+
   // Class Starter and Daily Pages share the open-ended prompt library; which
   // of the two this is decides the directions shown above it.
   const promptLibraryVariant = resolvePromptLibraryVariant({
@@ -742,6 +760,7 @@ export function showModulesAccordion(
   moduleCount: number
 ): boolean {
   if (moduleCount === 0) return false;
+  if (assignmentType.kind === 'class_starter') return false;
   return !isExitTicketAssignmentType(assignmentType);
 }
 
@@ -916,12 +935,22 @@ export default function AppAssignmentTypesIdRoute() {
     ? requestedClassId
     : undefined;
 
+  const freeUsage = useFreeAccountUsage();
+  const pageShellClassName = freeUsage
+    ? freeTierStandardPageShellClassName()
+    : 'no-scrollbar h-full w-full overflow-y-scroll';
+  const pageBodyClassName = freeUsage
+    ? freeTierStandardPageBodyClassName(
+        'flex max-w-screen-md flex-col'
+      )
+    : 'mx-auto flex h-full w-full max-w-screen-md flex-col p-3 sm:p-5';
+
   return (
     <div
-      className="no-scrollbar h-full w-full overflow-y-scroll"
+      className={pageShellClassName}
       data-tour-variant={data.assignmentType.kind ?? undefined}
     >
-      <div className="mx-auto flex h-full w-full max-w-screen-md flex-col p-3 sm:p-5">
+      <div className={pageBodyClassName}>
         <div className="mb-4 flex justify-between gap-2">
           {/* Arriving from a lesson, the way back is to that lesson. The
               planner embeds this page's creator inside a plan, so a teacher
@@ -944,9 +973,10 @@ export default function AppAssignmentTypesIdRoute() {
 
           {isTeacher ? (
             <div className="flex items-center gap-2">
-              {isThesisDrivenEssayTitle(data.assignmentType.title) ||
-              (teachingLockedPreview &&
-                data.assignmentType.kind === 'thesis_statement') ? (
+              {assignmentTypeHasHowItWorksGuide({
+                title: data.assignmentType.title,
+                kind: data.assignmentType.kind,
+              }) ? (
                 <SeeHowItWorksLink
                   to={`/app/assignment-types/${data.assignmentType.id}/how-it-works`}
                 />

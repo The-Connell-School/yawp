@@ -2,6 +2,13 @@ import { type LoaderFunctionArgs, redirect } from 'react-router';
 import { useLoaderData, useSearchParams } from 'react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  FreeTierLockedPageHeader,
+  freeTierStandardPageBodyClassName,
+  freeTierStandardPageShellClassName,
+  useFreeTierLockedB2PageChrome,
+  useFreeTierStandardPageShell,
+} from '~/components/free-tier/free-tier-teacher-page-chrome';
+import {
   TeacherDocumentWorkPanel,
   type TeacherDocumentWorkFilters,
 } from '~/components/teacher-document-work/teacher-document-work-panel';
@@ -541,21 +548,40 @@ export default function StudentWorkRoute() {
     setSearchParams(next, { replace: true });
   };
 
+  const freeTierB2 = useFreeTierLockedB2PageChrome();
+  const freeTierShell = useFreeTierStandardPageShell();
+
   return (
-    <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
-      <div className="flex w-full justify-between border-b bg-secondary">
-        <div className="mx-auto w-full max-w-screen-2xl p-3 sm:p-5">
-          <div className="flex flex-col">
-            <h2>Documents</h2>
-            <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[460px]">
-              Review, grade, and release student submissions across your
-              classes.
-            </p>
+    <section
+      className={
+        freeTierShell
+          ? freeTierStandardPageShellClassName()
+          : 'no-scrollbar flex h-full w-full flex-col overflow-y-scroll'
+      }
+    >
+      {freeTierB2 ? (
+        <FreeTierLockedPageHeader title="Documents" />
+      ) : (
+        <div className="flex w-full justify-between border-b bg-secondary">
+          <div className="mx-auto w-full max-w-screen-2xl p-3 sm:p-5">
+            <div className="flex flex-col">
+              <h2>Documents</h2>
+              <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[460px]">
+                Review, grade, and release student submissions across your
+                classes.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="mx-auto w-full max-w-screen-2xl px-3 py-4 pb-24 sm:px-5">
+      <div
+        className={
+          freeTierShell
+            ? freeTierStandardPageBodyClassName('max-w-screen-2xl')
+            : 'mx-auto w-full max-w-screen-2xl px-3 py-4 pb-24 sm:px-5'
+        }
+      >
         <TeacherDocumentWorkPanel
           tableLabel="Documents"
           documents={data.documents}

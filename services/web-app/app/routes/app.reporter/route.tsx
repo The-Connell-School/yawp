@@ -18,6 +18,10 @@ import {
 } from 'react-router';
 import { appRouteDocumentTitle } from '~/utils/app-mobile-top-bar-title';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import {
+  FreeTierLockedPageHeader,
+  useFreeTierLockedB2PageChrome,
+} from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { TeachingAccessReporterSkeleton } from '~/components/free-tier/teaching-access-reporter-skeleton';
 import {
   CornerDownRight,
@@ -140,6 +144,7 @@ export default function ReporterRoute() {
   const { locked: teachingLocked, loading: teachingLoading } =
     useTeachingAccess();
   const usage = useFreeAccountUsage();
+  const freeTierB2 = useFreeTierLockedB2PageChrome();
   const monthlyUsage = usage?.monthly ? usage.reporter : null;
   const exhausted = monthlyUsage?.remaining === 0;
   const {
@@ -355,6 +360,42 @@ export default function ReporterRoute() {
 
       {/* Chat */}
       <div className="flex h-full min-w-0 flex-1 flex-col">
+        {freeTierB2 ? (
+          <div className="free-tier-b2-page-shell shrink-0 !pb-0 !pt-4">
+            <FreeTierLockedPageHeader
+              title="Reporter"
+              actions={
+                <>
+                  <SeeHowItWorksLink to="/app/reporter/how-it-works" />
+                  <div className="flex shrink-0 items-center gap-2 md:hidden">
+                    <label className="sr-only" htmlFor="reporter-mobile-history">
+                      Past reports
+                    </label>
+                    <select
+                      id="reporter-mobile-history"
+                      aria-label="Past reports"
+                      value={selectedConversation?.id ?? ''}
+                      onChange={(event) => {
+                        if (!event.target.value) return;
+                        const next = new URLSearchParams(searchParams);
+                        next.set('c', event.target.value);
+                        setSearchParams(next);
+                      }}
+                      className="h-9 max-w-32 rounded-md border bg-background px-2 text-sm"
+                    >
+                      <option value="">Past reports</option>
+                      {conversations.map((conversation) => (
+                        <option key={conversation.id} value={conversation.id}>
+                          {conversation.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              }
+            />
+          </div>
+        ) : (
         <div className="border-b bg-secondary px-4 py-3">
           <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
             <Search size={20} className="shrink-0 text-primary" />
@@ -408,6 +449,7 @@ export default function ReporterRoute() {
             </div>
           </div>
         </div>
+        )}
 
         <div
           ref={transcriptRef}

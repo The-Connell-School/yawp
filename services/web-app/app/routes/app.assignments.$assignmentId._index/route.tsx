@@ -1,5 +1,9 @@
 import { currentClassInsightRows } from '~/domain/assignment-insights/class-insight-inputs.server';
 import { useFreeAccountUsage } from '~/components/free-account-usage';
+import {
+  freeTierStandardPageBodyClassName,
+  freeTierStandardPageShellClassName,
+} from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { ExitTicketClassReadPanel } from '~/components/assignments/exit-ticket-class-read-panel';
 import { buildExitTicketClassRead } from '~/domain/assignment-types/exit-ticket-class-read';
 import { loadExitTicketResponses } from '~/domain/assignment-types/exit-ticket-class-read.server';
@@ -87,6 +91,16 @@ import {
  * content's width or gutters.
  */
 function PageShell({ children }: { children: ReactNode }) {
+  const freeUsage = useFreeAccountUsage();
+  if (freeUsage) {
+    return (
+      <section className={freeTierStandardPageShellClassName()}>
+        <div className={freeTierStandardPageBodyClassName('max-w-screen-xl')}>
+          {children}
+        </div>
+      </section>
+    );
+  }
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="mx-auto w-full max-w-screen-xl px-3 py-3 pb-24 sm:px-5">

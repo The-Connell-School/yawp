@@ -507,7 +507,7 @@ for (const width of [1440, 390]) {
             cardBox.y - (headerBox.y + headerBox.height)
           ).toBeLessThanOrEqual(50);
           expect(cardBox.x).toBeCloseTo(headerBox.x, 0);
-          await expect(card.getByTestId('reporter-lock-badge')).toHaveCSS(
+          await expect(card.getByTestId('reporter-feature-icon')).toHaveCSS(
             'border-radius',
             '9999px'
           );

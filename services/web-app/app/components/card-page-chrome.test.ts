@@ -22,8 +22,13 @@ describe('back to sign in link visibility', () => {
     expect(shouldShowCardPageBackLink('/auth/login', false)).toBe(false);
   });
 
-  test('is hidden when signed in', () => {
-    expect(shouldShowCardPageBackLink('/free', true)).toBe(false);
+  test('shows on public waitlist when signed in (dev localhost sessions)', () => {
+    expect(shouldShowCardPageBackLink('/free', true)).toBe(true);
+    expect(shouldShowCardPageBackLink('/free/join', true)).toBe(true);
+  });
+
+  test('is hidden when signed in on authenticated free-tier app routes', () => {
+    expect(shouldShowCardPageBackLink('/app/free-tier/pending', true)).toBe(false);
   });
 
   test('is hidden on admin approval pages', () => {

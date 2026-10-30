@@ -27,7 +27,8 @@ export async function getLessonPlannerAccess(
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
   const isTeacher = membership.role === 'TEACHER';
-  const enabled = await isLessonPlannerEnabled(membership.organization.id);
+  const orgFlagOn = await isLessonPlannerEnabled(membership.organization.id);
+  const enabled = orgFlagOn;
 
   return {
     userId,

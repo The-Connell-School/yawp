@@ -12,25 +12,17 @@ describe('dev panel v3 chrome', () => {
     expect(shell.includes('shadow-xl')).toBe(false);
     expect(shell.includes('ChevronsRight')).toBe(true);
     expect(shell.includes('yawp-dev-panel-header')).toBe(true);
-    expect(shell.includes('yawp-dev-panel-header-heading')).toBe(true);
-    expect(shell.includes('<h1')).toBe(false);
-    expect(shell.includes('yawp-dev-panel-header-heading')).toBe(true);
   });
 
-  test('default panel sections match DevPanel.dc signed-out-feedback (collapsed Sign in as)', () => {
-    const types = readFileSync(path.join(devPanelDir, 'dev-panel-types.ts'), 'utf8');
-    expect(types).toContain('openSections: []');
-  });
-
-  test('flyouts use border-only docked chrome', () => {
+  test('inline PE3 sections avoid flyout chrome', () => {
     for (const file of [
-      'dev-panel-give-feedback-flyout.tsx',
-      'dev-panel-free-tier-flyout.tsx',
-      'dev-panel-class-simulation-flyout.tsx',
+      'dev-panel-give-feedback-inline.tsx',
+      'dev-panel-free-tier-inline.tsx',
+      'dev-panel-class-simulation-inline.tsx',
     ]) {
       const src = readFileSync(path.join(devPanelDir, file), 'utf8');
       expect(src.includes('shadow-lg')).toBe(false);
-      expect(src.includes('yawp-dev-panel-flyout-docked')).toBe(true);
+      expect(src.includes('yawp-dev-panel-flyout-docked')).toBe(false);
     }
     const fallback = readFileSync(
       path.join(devPanelDir, 'dev-panel-fallback-shell.tsx'),
@@ -39,16 +31,23 @@ describe('dev panel v3 chrome', () => {
     expect(fallback.includes('shadow-xl')).toBe(false);
   });
 
-  test('stylesheet defines compact rows and reduced-motion flyouts', () => {
+  test('stylesheet defines compact rows and zero-motion flyouts', () => {
     const css = readFileSync(path.join(devPanelDir, 'dev-panel.css'), 'utf8');
     expect(css).toContain('--yawp-dev-panel-inset: 12px');
-    expect(css).toContain('--yawp-dev-panel-row-height: 32px');
-    expect(css).toContain('--yawp-dev-panel-header-height: 40px');
-    expect(css).toContain('yawp-dev-panel-reduced-motion [data-yawp-dev-panel-flyout]');
+    expect(css).toContain('--yawp-dev-panel-header-height: 44px');
+    expect(css).toContain('--yawp-dev-panel-width: 320px');
+    expect(css).toContain('--yawp-dev-panel-border: hsl(51.4286 7.8652% 82.549%)');
+    expect(css).toContain('animation: none !important');
+    expect(css).not.toContain('yawp-dev-panel-slide-in');
     expect(css).toContain('box-shadow: none');
-    expect(css).toContain('yawp-dev-panel-header-heading');
-    expect(css).toContain('yawp-dev-panel-flyout-header');
-    expect(css).toContain('.yawp-dev-panel-docked');
+  });
+
+  test('shell title uses h2 devtools-title not global h1', () => {
+    const shell = readFileSync(path.join(devPanelDir, 'dev-panel-shell.tsx'), 'utf8');
+    expect(shell.includes('id="devtools-title"')).toBe(true);
+    expect(shell.includes('<h1 ref={headingRef}')).toBe(false);
+    expect(shell.includes('Hide tools')).toBe(true);
+    expect(shell.includes('yawp-dev-panel-kbd')).toBe(false);
   });
 
   test('beaker shows locked affordance when preview gate applies', () => {

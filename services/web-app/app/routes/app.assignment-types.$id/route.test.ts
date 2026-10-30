@@ -41,7 +41,6 @@ const createDocumentForAssignmentType = mock();
 const redirectWithToast = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 const isAssignmentTypeAvailableForAnyScope = mock();
-const isTeacherPromptGeneratorEnabled = mock(async () => true);
 
 // bun's module mocks are global to the test run and mock.restore() does not
 // undo mock.module — restore from the pristine copy test-preload.ts captured
@@ -67,9 +66,13 @@ mock.module('~/utils/assignment-type-access.server', () => ({
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForAnyScope,
 }));
-mock.module('~/domain/teacher-prompt-generator/gate.server', () => ({
-  isTeacherPromptGeneratorEnabled,
-}));
+const redirectLockedPreviewAssignmentTypeHomeToGuide = mock(async () => {});
+mock.module(
+  '~/domain/free-tier/locked-preview-assignment-type-routing.server',
+  () => ({
+    redirectLockedPreviewAssignmentTypeHomeToGuide,
+  })
+);
 
 const { action, loader, showModulesAccordion } = await import('./route');
 
@@ -134,6 +137,8 @@ describe('app.assignment-types.$id action', () => {
     createDocumentForAssignmentType.mockReset();
     redirectWithToast.mockReset();
     isAssignmentTypeAvailableForAnyScope.mockReset();
+    redirectLockedPreviewAssignmentTypeHomeToGuide.mockReset();
+    redirectLockedPreviewAssignmentTypeHomeToGuide.mockResolvedValue(undefined);
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -326,6 +331,10 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     prisma.apHistoryPromptLibraryEntry.findMany.mockResolvedValue([]);
     prisma.savedDailyPagesPrompt.findMany.mockReset();
     prisma.savedDailyPagesPrompt.findMany.mockResolvedValue([]);
+  });
+
+  test('hides the modules list on Class Starter (single module)', () => {
+    expect(showModulesAccordion({ kind: 'class_starter' }, 1)).toBe(false);
   });
 
   test('hides the modules list on an exit ticket', () => {

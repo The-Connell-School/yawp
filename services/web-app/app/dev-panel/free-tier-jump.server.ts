@@ -2,7 +2,6 @@ import { createHash, randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { LOCAL_DEV_PASSWORD } from '../../../../packages/prisma/scripts/local-dev/dev-personas';
 import { submitAdminDetails } from '~/domain/free-tier/approval-flow.server';
-import { ensureLockedPreviewClassroomForUser } from '~/domain/free-tier/locked-preview.server';
 import {
   provisionFreeClassroom,
   type ProvisionFreeClassroomResult,
@@ -45,6 +44,12 @@ import type { FreeTierStateDefinition } from './free-tier-states.catalog';
 
 function logFreeTierJumpFailure(stateId: string, error: unknown) {
   const name = error instanceof Error ? error.name : 'Error';
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : undefined;
   let code: string | undefined =
     error instanceof FreeTierConfigError ? error.code : undefined;
   if (
@@ -57,6 +62,7 @@ function logFreeTierJumpFailure(stateId: string, error: unknown) {
   console.error('[dev-panel free-tier jump failed]', {
     stateId,
     errorName: name,
+    ...(message ? { message } : {}),
     ...(code ? { code } : {}),
   });
 }
@@ -157,9 +163,7 @@ async function ensureThrowawayTeacher(organizationId: string): Promise<JumpTarge
   };
 }
 
-async function ensureThrowawayPendingTeacher(
-  organizationId: string
-): Promise<JumpTarget> {
+async function ensureThrowawayPendingTeacher(): Promise<JumpTarget> {
   const teacherDomain = `pending-${randomUUID().slice(0, 12)}.example.test`;
   const email = `dev-panel+${randomUUID()}@${teacherDomain}`;
   const passwordHash = bcrypt.hashSync(LOCAL_DEV_PASSWORD, 10);
@@ -168,24 +172,16 @@ async function ensureThrowawayPendingTeacher(
       email,
       name: 'Test Teacher',
       password: { create: { hash: passwordHash } },
-      memberships: {
-        create: {
-          organizationId,
-          role: 'TEACHER',
-          isActive: true,
-        },
-      },
     },
     select: {
       id: true,
       email: true,
-      memberships: { select: { id: true }, take: 1 },
     },
   });
   return {
     userId: user.id,
     email: user.email!,
-    membershipId: user.memberships[0]!.id,
+    membershipId: null,
     pendingThrowaway: true,
   };
 }
@@ -205,7 +201,7 @@ async function resolveTargetUser(
 ): Promise<JumpTarget> {
   if (input.throwaway) {
     if (state.id.startsWith('pending.')) {
-      return ensureThrowawayPendingTeacher(input.organizationId);
+      return ensureThrowawayPendingTeacher();
     }
     if (state.id.startsWith('approved.') || state.adminSide) {
       return ensureThrowawayTeacherWithoutOrgMembership();
@@ -288,12 +284,66 @@ async function preparePendingApplicationRecord(
   });
 }
 
+/**
+ * Dev-panel pending jumps must provision the locked-preview classroom even when
+ * `feature_flag.free_tier` is off for a null org (localhost development).
+ * `ensureLockedPreviewClassroomForUser` fails closed on that flag before calling
+ * `provisionFreeClassroom`.
+ */
+async function provisionLockedPreviewForDevPanelPendingJump(
+  userId: string,
+  applicationId: string
+) {
+  const result: ProvisionFreeClassroomResult =
+    await provisionFreeClassroom(applicationId);
+  if (
+    result.status !== 'provisioned' &&
+    result.status !== 'already_provisioned'
+  ) {
+    throw new Error('Could not provision locked preview classroom.');
+  }
+  const organizationId = result.organizationId;
+  const { ensureLockedPreviewSampleAssignments } = await import(
+    '~/domain/free-tier/locked-preview-class-seed.server'
+  );
+  const klass = await prisma.class.findFirst({
+    where: {
+      isArchived: false,
+      school: { organizationId },
+      teachers: { some: { userId } },
+    },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  if (klass) {
+    await ensureLockedPreviewSampleAssignments(organizationId, klass.id);
+  }
+  const membership = await prisma.orgMembership.findFirst({
+    where: {
+      userId,
+      organization: { plan: 'FREE_CLASSROOM' },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+  if (!membership) {
+    throw new Error('Could not provision locked preview classroom.');
+  }
+  return { membershipId: membership.id };
+}
+
 async function jumpToPendingTeacherState(args: {
   target: JumpTarget;
   manualReview: boolean;
   devPanelOrganizationId: string;
 }) {
   assertPendingThrowawayTarget(args.target);
+  await prisma.orgMembership.deleteMany({
+    where: {
+      userId: args.target.userId,
+      organizationId: args.devPanelOrganizationId,
+    },
+  });
   const teacherDomain = args.target.email.split('@')[1] ?? '';
   const adminDomain = args.manualReview
     ? `review-${randomUUID().slice(0, 12)}.example.test`
@@ -346,25 +396,10 @@ async function jumpToPendingTeacherState(args: {
     throw new Error('Pending jump produced an unexpected application status.');
   }
 
-  await prisma.orgMembership.deleteMany({
-    where: {
-      userId: args.target.userId,
-      organizationId: args.devPanelOrganizationId,
-    },
-  });
-  await ensureLockedPreviewClassroomForUser(args.target.userId);
-  const membership = await prisma.orgMembership.findFirst({
-    where: {
-      userId: args.target.userId,
-      organization: { plan: 'FREE_CLASSROOM' },
-    },
-    orderBy: { createdAt: 'desc' },
-    select: { id: true },
-  });
-  if (!membership) {
-    throw new Error('Could not provision locked preview classroom.');
-  }
-  return { membershipId: membership.id };
+  return provisionLockedPreviewForDevPanelPendingJump(
+    args.target.userId,
+    app.id
+  );
 }
 
 async function requireDevPanelFreeClassroomOrg(
@@ -598,6 +633,14 @@ export async function executeFreeTierStateJump(
         redirectTo = '/app/free-tier/pending';
         break;
       }
+      case 'lifecycle.rejected':
+        await upsertApplication(target.userId, target.email, 'REJECTED');
+        redirectTo = '/app/free-tier/status';
+        break;
+      case 'lifecycle.expired':
+        await upsertApplication(target.userId, target.email, 'EXPIRED');
+        redirectTo = '/app/free-tier/status';
+        break;
       case 'approved.first-time-toast':
       case 'approved.usage-plenty-left':
       case 'approved.usage-about-half-left':

@@ -6,6 +6,7 @@ import {
   Users,
 } from 'lucide-react';
 import { Link } from 'react-router';
+import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 import { cn } from '~/utils/misc';
 
 // `reset=1` tells the documents page to drop the teacher's stored filters
@@ -93,25 +94,36 @@ function GradingQueueStatStrip({
 
 export function TeacherGradingAtAGlance({
   freeAccount = false,
+  licensedGradingBand = false,
+  seeHowItWorksTo,
   needsGradingCount,
   readyToReleaseCount,
 }: {
   freeAccount?: boolean;
+  licensedGradingBand?: boolean;
+  seeHowItWorksTo?: string;
   needsGradingCount: number;
   readyToReleaseCount: number;
 }) {
-  const allCaughtUp = needsGradingCount === 0 && readyToReleaseCount === 0;
+  const allCaughtUp =
+    !licensedGradingBand &&
+    needsGradingCount === 0 &&
+    readyToReleaseCount === 0;
 
   return (
     <div data-testid="teacher-grading-grid" data-tour="dashboard-grading">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold">Grading</h2>
-        <Link
-          to={GRADING_LINKS.all}
-          className="text-sm text-muted-foreground hover:text-foreground"
-        >
-          View all
-        </Link>
+        {seeHowItWorksTo ? (
+          <SeeHowItWorksLink to={seeHowItWorksTo} />
+        ) : (
+          <Link
+            to={GRADING_LINKS.all}
+            className="teacher-grading-view-all text-sm text-muted-foreground hover:text-foreground"
+          >
+            View all
+          </Link>
+        )}
       </div>
 
       {allCaughtUp ? (

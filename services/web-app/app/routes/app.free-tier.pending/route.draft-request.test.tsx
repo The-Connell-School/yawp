@@ -52,13 +52,11 @@ test('hides draft request when administrator email is missing', async () => {
   expect(html).not.toContain('Draft a Request');
 });
 
-test('shows draft mailto with design body fields when admin email is present', async () => {
+test('does not show draft request when administrator email is present', async () => {
   mockPage('patel@lincolnusd.org');
   const { default: Page } = await import('./route');
   const html = renderWithCardPageChrome(<Page />);
-  expect(html).toContain('data-testid="pending-draft-request"');
-  expect(html).toContain('mailto:patel%40lincolnusd.org?');
-  expect(html).toContain('Lincoln%20High%20School');
-  expect(html).toContain('hello%40yawp.school');
-  expect(html).toContain('Grace%20Okafor');
+  expect(html).not.toContain('data-testid="pending-draft-request"');
+  expect(html).not.toContain('Draft a Request');
+  expect(html).toContain('Not the right person?');
 });

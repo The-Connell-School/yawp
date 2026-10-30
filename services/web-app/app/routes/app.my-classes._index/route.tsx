@@ -1,5 +1,11 @@
 import { classCodeUniquenessEnabled, resolveClassCode, ClassCodeCollisionError } from '~/utils/class-code-write.server';
 import { useFreeAccountUsage } from '~/components/free-account-usage';
+import {
+  FreeTierLockedPageHeader,
+  freeTierStandardPageBodyClassName,
+  freeTierStandardPageShellClassName,
+  useFreeTierLockedB2PageChrome,
+} from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { Plus, User } from 'lucide-react';
 import {
   type ActionFunctionArgs,
@@ -10,7 +16,6 @@ import {
 import { Link, useFetcher, useLoaderData, useSearchParams } from 'react-router';
 import { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
-import { Badge } from '~/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -407,6 +412,7 @@ function TeacherMyClassesView({
   >;
 }) {
   const freeUsage = useFreeAccountUsage();
+  const freeTierB2 = useFreeTierLockedB2PageChrome();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSchoolId = searchParams.get('school') ?? 'all';
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -421,59 +427,75 @@ function TeacherMyClassesView({
     setSheetOpen(true);
   };
 
+  const headerActions = (
+    <>
+      {data.canShareClassroomReport && !freeUsage ? (
+        <>
+          <Button size="sm" variant="outline" asChild>
+            <Link to="/app/classroom-report">Share this report</Link>
+          </Button>
+          <Button size="sm" variant="outline" asChild>
+            <Link to="/app/pitch-packet">Trial pitch packet</Link>
+          </Button>
+          <Button size="sm" variant="outline" asChild>
+            <Link to="/app/free-tier/status">Free classroom status</Link>
+          </Button>
+        </>
+      ) : null}
+      <Button
+        size="sm"
+        onClick={openCreate}
+        className="shrink-0"
+        data-tour="my-classes-create"
+      >
+        <Plus className="mr-2 h-4 w-4" />
+        Create Class
+      </Button>
+    </>
+  );
+
   return (
-    <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
-      <div className="flex w-full justify-between border-b bg-secondary">
-        <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <div className="flex items-center gap-2">
+    <section
+      className={
+        freeUsage
+          ? freeTierStandardPageShellClassName()
+          : 'no-scrollbar flex h-full w-full flex-col overflow-y-scroll'
+      }
+    >
+      {freeTierB2 ? (
+        <FreeTierLockedPageHeader title="My Classes" actions={headerActions} />
+      ) : (
+        <div className="flex w-full justify-between border-b bg-secondary">
+          <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
                 <h2>My Classes</h2>
-                {scopedToOneYear ? (
-                  <Badge
-                    variant="outline"
-                    size="sm"
-                    className="bg-background font-medium"
-                    data-testid="my-classes-year-badge"
-                  >
-                    {data.selectedSchoolYear.replace('-', '–')}
-                  </Badge>
-                ) : null}
+                <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[460px]">
+                  Your classes at a glance. Open a class to manage students and
+                  assignments.
+                </p>
               </div>
-              <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[460px]">
-                Your classes at a glance. Open a class to manage students and
-                assignments.
-              </p>
-            </div>
-            <div className={data.canShareClassroomReport ? 'flex flex-wrap gap-2' : 'contents'}>
-              {data.canShareClassroomReport && !freeUsage ? (
-                <>
-                  <Button size="sm" variant="outline" asChild>
-                    <Link to="/app/classroom-report">Share this report</Link>
-                  </Button>
-                  <Button size="sm" variant="outline" asChild>
-                    <Link to="/app/pitch-packet">Trial pitch packet</Link>
-                  </Button>
-                  <Button size="sm" variant="outline" asChild>
-                    <Link to="/app/free-tier/status">Free classroom status</Link>
-                  </Button>
-                </>
-              ) : null}
-              <Button
-                size="sm"
-                onClick={openCreate}
-                className="shrink-0"
-                data-tour="my-classes-create"
+              <div
+                className={
+                  data.canShareClassroomReport ? 'flex flex-wrap gap-2' : 'contents'
+                }
               >
-                <Plus className="mr-2 h-4 w-4" />
-                Create Class
-              </Button>
+                {headerActions}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="mx-auto w-full min-w-0 max-w-screen-lg px-3 py-4 pb-24 sm:px-5">
+      <div
+        className={
+          freeUsage
+            ? freeTierStandardPageBodyClassName(
+                freeTierB2 ? 'mx-0 max-w-none' : undefined
+              )
+            : 'mx-auto w-full min-w-0 max-w-screen-lg px-3 py-4 pb-24 sm:px-5'
+        }
+      >
         {data.schools.length > 1 ? (
           <div className="mb-4 min-w-0">
             <Tabs

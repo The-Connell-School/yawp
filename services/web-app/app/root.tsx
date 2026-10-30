@@ -47,10 +47,12 @@ import { getMembershipId } from './cookies/membership-id.server.ts';
 import { LocalDevEnvironmentBar } from './components/local-dev-environment-bar.tsx';
 import { DevPanelMount } from './dev-panel/dev-panel-entry.tsx';
 import { devPanelRestoreInlineScript } from './dev-panel/dev-panel-restore-inline.ts';
+import { formatDevPanelBuildFooter } from './dev-panel/dev-panel-build-footer.ts';
 import {
   devPanelEnvBadge,
   isDevPanelRuntimeEnabled,
 } from './dev-panel/dev-panel-runtime.server.ts';
+import { getBuildMetadata } from './utils/build-metadata.server.ts';
 import { isLocalDevAuthEnabled } from './utils/local-dev-auth.server.ts';
 import { isBlackboardLtiMockUiEnabled } from './utils/blackboard-lti-mock-ui.server.ts';
 import { useContrastPreference } from './routes/api.preferences.contrast/route.tsx';
@@ -213,6 +215,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         blackboardLtiMockEnabled: isBlackboardLtiMockUiEnabled(),
         devPanelEnabled,
         devPanelEnvBadge: devPanelEnvBadge(),
+        devPanelBuildFooter: formatDevPanelBuildFooter(getBuildMetadata()),
         lessonPlannerEnabled: false,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
         toast: null,
@@ -352,6 +355,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       blackboardLtiMockEnabled: isBlackboardLtiMockUiEnabled(),
       devPanelEnabled: isDevPanelRuntimeEnabled(),
       devPanelEnvBadge: devPanelEnvBadge(),
+      devPanelBuildFooter: formatDevPanelBuildFooter(getBuildMetadata()),
       impersonation,
       internalImpersonation: internal ? { ...internal, email: user?.email ?? internal.userId } : null,
       toast,

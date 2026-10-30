@@ -14,7 +14,7 @@ import {
 } from '~/utils/preview-access.server';
 import { isLocalDevAuthEnabled } from '~/utils/local-dev-auth.server';
 
-export type DevPanelOrganization = { id: string; name: string };
+export type DevPanelOrganization = { id: string; name: string; kind: string };
 
 export async function assertDevPanelOrganizationInSeatScope(
   request: Request,
@@ -59,10 +59,17 @@ export async function listDevPanelOrganizations(
   ];
   const existing = await prisma.organization.findMany({
     where: { id: { in: known.map((entry) => entry.id) } },
-    select: { id: true, name: true },
+    select: { id: true, name: true, plan: true },
   });
-  const names = new Map(existing.map((row) => [row.id, row.name] as const));
+  const byId = new Map(existing.map((row) => [row.id, row] as const));
   return known
-    .filter((entry) => names.has(entry.id))
-    .map((entry) => ({ id: entry.id, name: names.get(entry.id)! }));
+    .filter((entry) => byId.has(entry.id))
+    .map((entry) => {
+      const row = byId.get(entry.id)!;
+      return {
+        id: entry.id,
+        name: row.name,
+        kind: row.plan === 'FREE_CLASSROOM' ? 'Free' : 'School',
+      };
+    });
 }

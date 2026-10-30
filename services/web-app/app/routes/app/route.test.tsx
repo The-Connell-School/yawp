@@ -28,6 +28,11 @@ const loadFreeTierGateApplication = mock(async () => ({
 const enforceFreeTierTeacherGate = mock(async () => null);
 const retryFreeClassroomProvisioningForUser = mock(async () => {});
 const ensureLockedPreviewClassroomForUser = mock(async () => {});
+const isDevPanelRuntimeEnabled = mock(() => false);
+
+mock.module('~/dev-panel/dev-panel-runtime.server', () => ({
+  isDevPanelRuntimeEnabled,
+}));
 
 mock.module('~/utils/mock-admin.server', () => ({
   canUseMockAdmin,
@@ -77,6 +82,7 @@ describe('app parent free-tier loader gate', () => {
     enforceFreeTierTeacherGate.mockClear();
     retryFreeClassroomProvisioningForUser.mockClear();
     ensureLockedPreviewClassroomForUser.mockClear();
+    isDevPanelRuntimeEnabled.mockReset().mockReturnValue(false);
     if (oldPreviewSlug === undefined) delete process.env.PREVIEW_SLUG;
     else process.env.PREVIEW_SLUG = oldPreviewSlug;
     if (oldYawpEnvironment === undefined) delete process.env.YAWP_ENVIRONMENT;
@@ -119,5 +125,28 @@ describe('app parent free-tier loader gate', () => {
       guidedTours: null,
       teachingAccess: { variant: 'none' },
     });
+  });
+
+  test('opens free-tier parent gate on localhost dev panel when global flag is off', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.YAWP_ENVIRONMENT = 'development';
+    process.env.DATABASE_URL = 'postgresql://localhost:5432/yawp_dev';
+    isFreeTierEnabled.mockResolvedValue(false);
+    isDevPanelRuntimeEnabled.mockReturnValue(true);
+    loadFreeTierGateApplication.mockResolvedValue({
+      id: 'app-pending-1',
+      status: 'SENT',
+      organizationId: 'org-fc-1',
+      adminApprovals: [],
+    });
+
+    await loader({
+      request: new Request('https://yawp.test/app/free-tier/pending'),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    expect(loadFreeTierGateApplication).toHaveBeenCalledWith('user-1');
+    expect(requireMembership).not.toHaveBeenCalled();
   });
 });

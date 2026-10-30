@@ -1,10 +1,11 @@
 import './free-account.css';
 import { readFreeAccountUsage } from '~/domain/free-tier/inapp-usage.server';
 import {
+  freeTierLessonPlannerNavTease,
   freeTierNavMobileWarningDot,
   renderFreeTierNavRow,
-  renderFreeTierNavTrailing,
 } from '~/components/free-tier/free-tier-nav-usage';
+import { FreeTierSidebarUsage } from '~/components/free-tier/free-tier-sidebar-usage';
 import { canUseMockAdmin, requireMockAdmin } from '~/utils/mock-admin.server';
 import {
   Form,
@@ -41,11 +42,16 @@ import {
 } from '~/components/ui/popover.js';
 import { Tooltip } from '~/components/ui/tooltip';
 import useBreakpoint from '~/hooks/useBreakpoint';
+import { useFreeTierNavAutoCollapse } from '~/hooks/useFreeTierNavAutoCollapse';
 import { useOnSwipe } from '~/hooks/useHorizontalSwipe';
 import { useUser } from '~/hooks/useUser';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
 import { cn } from '~/utils/misc';
 import { NavStateSwitch, useNavState } from '../api.preferences.nav/route';
+import {
+  appShellNavExpanded,
+  appShellUsesMobileDrawer,
+} from './app-shell-layout';
 import { ContrastPreferenceSwitch } from '../api.preferences.contrast/route';
 import { Switch } from '~/components/ui/switch';
 import { Check } from 'lucide-react';
@@ -73,7 +79,20 @@ import {
 import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
 import { SchoolYearScopeSwitcher } from './school-year-scope';
 import type { Route as RootRoute } from '../../+types/root';
-import { FLAT_SIDEBAR_SECTIONS, SidebarNavLinks } from './sidebar-nav';
+import { freeTierSidebarIconForPath } from '~/components/free-tier/free-tier-sidebar-icons';
+import {
+  FLAT_SIDEBAR_SECTIONS,
+  SidebarNavLinks,
+  type SidebarNavLink,
+} from './sidebar-nav';
+
+function withFreeTierSidebarChrome(link: SidebarNavLink): SidebarNavLink {
+  return {
+    ...link,
+    label: link.to === '/app' ? 'Home' : link.label,
+    icon: freeTierSidebarIconForPath(link.to) ?? link.icon,
+  };
+}
 import { prisma } from '~/utils/db.server';
 import { shouldRedirectClasslessStudent } from '~/utils/classless-student-gate';
 import { formatUserContactLabel } from '~/utils/user-display';
@@ -121,8 +140,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const mockAdminAvailable = await canUseMockAdmin(userId);
   const { isFreeTierEnabled } =
     await import('~/domain/feature-flags/feature-flags.server');
+  const { isDevPanelRuntimeEnabled } =
+    await import('~/dev-panel/dev-panel-runtime.server');
   const freeTierFeatureOn = await isFreeTierEnabled();
-  const freeTierRouteOpen = freeTierFeatureOn;
+  const freeTierRouteOpen =
+    freeTierFeatureOn || isDevPanelRuntimeEnabled();
   const { loadFreeTierGateApplication, enforceFreeTierTeacherGate } =
     await import('~/domain/free-tier/free-tier-gate.server');
   const freeTierApplication = freeTierRouteOpen
@@ -261,8 +283,15 @@ export default function Route() {
     shellData;
   const freeAccountUsage =
     'freeAccountUsage' in shellData ? shellData.freeAccountUsage : null;
+  const teachingLockedNav =
+    teachingAccess.variant === 'locked' ||
+    teachingAccess.variant === 'loading';
   const usageNavLoading =
     navigation.state === 'loading' && Boolean(freeAccountUsage);
+  const freeTierLessonPlannerLockedNavTease = Boolean(
+    freeAccountUsage &&
+      freeTierLessonPlannerNavTease(freeAccountUsage, teachingLockedNav)
+  );
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const isReadOnlyImpersonation = rootData?.impersonation?.isReadOnly ?? false;
@@ -276,8 +305,14 @@ export default function Route() {
   const navState = useNavState();
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'base' || breakpoint === 'sm';
-  const isNavExpanded = navState === 'expanded' || isMobile;
-  const navExpanded = (isMobile && isMobileNavOpen) || isNavExpanded;
+  useFreeTierNavAutoCollapse(Boolean(freeAccountUsage) && !isMobile);
+  const navPrefExpanded = navState === 'expanded';
+  const navExpanded = appShellNavExpanded({
+    isMobile,
+    mobileNavOpen: isMobileNavOpen,
+    navPrefExpanded,
+  });
+  const mobileDrawer = appShellUsesMobileDrawer(isMobile);
 
   const mobileTopBarTitle = resolveAppMobileTopBarTitle(
     matches,
@@ -344,52 +379,77 @@ export default function Route() {
       <nav
         data-tour="app-nav"
         className={cn(
-          'z-20 flex h-full min-h-0 w-[212px] min-w-[212px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out sm:translate-x-0',
+          'z-20 flex h-full min-h-0 w-[212px] min-w-[212px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out max-sm:fixed max-sm:inset-y-0 max-sm:left-0 sm:static sm:translate-x-0',
           {
             'translate-x-0': isMobileNavOpen,
-            'w-[56px] min-w-0 items-center': !navExpanded,
+            'max-sm:pointer-events-none': mobileDrawer && !isMobileNavOpen,
+            'max-sm:pointer-events-auto': mobileDrawer && isMobileNavOpen,
+            'w-[56px] min-w-0 items-center': !navExpanded && !mobileDrawer,
           }
         )}
       >
         <div
-          className={cn('mx-2 mt-1 flex justify-between py-2', {
-            'p-3': navExpanded,
+          data-testid="app-nav-header"
+          className={cn('mt-1 flex py-2', {
+            'mx-2 justify-between p-3': navExpanded,
+            'justify-center': !navExpanded,
           })}
         >
-          <Link to=".">
-            <img
-              src="/img/logo_for_light_mode.png"
-              alt="Logo"
-              className={cn('h-auto w-0 rounded object-cover py-2', {
-                'w-24': navExpanded,
-              })}
-            />
-          </Link>
-          <NavStateSwitch>
-            {({ state, fetcher }) => (
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                className="hidden sm:inline-flex"
-                aria-label={
-                  state === 'expanded'
-                    ? 'Collapse app navigation'
-                    : 'Expand app navigation'
-                }
-                disabled={['submitting', 'loading'].includes(fetcher.state)}
-              >
-                {state === 'expanded' ? (
-                  <DoubleArrowLeftIcon />
-                ) : (
-                  <DoubleArrowRightIcon />
+          {navExpanded ? (
+            <>
+              <Link to=".">
+                <img
+                  src="/img/logo_for_light_mode.png"
+                  alt="Logo"
+                  className="app-nav-expanded-logo h-auto w-24 rounded object-cover py-2"
+                />
+              </Link>
+              <NavStateSwitch>
+                {({ state, fetcher }) => (
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    className="hidden sm:inline-flex"
+                    aria-label="Collapse app navigation"
+                    disabled={['submitting', 'loading'].includes(fetcher.state)}
+                  >
+                    <DoubleArrowLeftIcon />
+                  </Button>
                 )}
-              </Button>
-            )}
-          </NavStateSwitch>
+              </NavStateSwitch>
+            </>
+          ) : (
+            <NavStateSwitch>
+              {({ fetcher }) => (
+                <div className="app-nav-collapsed-logo-swap group relative hidden size-11 shrink-0 sm:block">
+                  <Link
+                    to="."
+                    className="absolute inset-0 flex items-center justify-center rounded-xl transition-opacity group-hover:pointer-events-none group-hover:opacity-0 group-focus-within:pointer-events-none group-focus-within:opacity-0"
+                  >
+                    <img
+                      src="/img/logo_for_light_mode.png"
+                      alt="Logo"
+                      className="app-nav-collapsed-logo size-10 object-contain"
+                    />
+                  </Link>
+                  <Button
+                    type="submit"
+                    size="icon-sm"
+                    variant="ghost"
+                    className="absolute inset-0 size-11 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                    aria-label="Expand app navigation"
+                    disabled={['submitting', 'loading'].includes(fetcher.state)}
+                  >
+                    <DoubleArrowRightIcon />
+                  </Button>
+                </div>
+              )}
+            </NavStateSwitch>
+          )}
           <Button
             variant="outline"
             size="icon-sm"
-            className="sm:hidden"
+            className={cn({ 'sm:hidden': navExpanded, hidden: !navExpanded })}
             aria-label="Close app navigation"
             onClick={() => setIsMobileNavOpen(false)}
           >
@@ -414,20 +474,22 @@ export default function Route() {
                 ? [
                     {
                       links: [
-                        ...FLAT_SIDEBAR_SECTIONS[0].links.filter((link) =>
-                          [
-                            '/app',
-                            '/app/my-classes',
-                            '/app/assignments',
-                            '/app/documents',
-                            '/app/lesson-planner',
-                          ].includes(link.to)
-                        ),
-                        {
+                        ...FLAT_SIDEBAR_SECTIONS[0].links
+                          .filter((link) =>
+                            [
+                              '/app',
+                              '/app/my-classes',
+                              '/app/assignments',
+                              '/app/documents',
+                              '/app/lesson-planner',
+                            ].includes(link.to)
+                          )
+                          .map(withFreeTierSidebarChrome),
+                        withFreeTierSidebarChrome({
                           to: '/app/reporter',
                           label: 'Reporter',
                           icon: <Microscope size={18} />,
-                        },
+                        }),
                       ],
                     },
                   ]
@@ -438,18 +500,7 @@ export default function Route() {
             pathname={location.pathname}
             isAppNavLinkActive={isAppNavLinkActive}
             forceFullNavigation={isClassDetailRoute}
-            renderLinkTrailing={
-              freeAccountUsage
-                ? (link) =>
-                    renderFreeTierNavTrailing({
-                      link,
-                      usage: freeAccountUsage,
-                      loading: usageNavLoading,
-                      navExpanded,
-                      isMobile,
-                    })
-                : undefined
-            }
+            includeLessonPlannerWhenFeatureOff={freeTierLessonPlannerLockedNavTease}
             renderNavRow={
               freeAccountUsage
                 ? ({ link, isActive, rowClassName, linkClassName, icon }) =>
@@ -463,6 +514,7 @@ export default function Route() {
                       rowClassName,
                       linkClassName,
                       forceFullNavigation: isClassDetailRoute,
+                      teachingLocked: teachingLockedNav,
                       icon,
                     })
                 : undefined
@@ -476,28 +528,43 @@ export default function Route() {
               onClick={() => setIsMobileNavOpen(false)}
             />
           ) : null}
+          {freeAccountUsage ? (
+            <FreeTierSidebarUsage
+              usage={freeAccountUsage}
+              navExpanded={navExpanded}
+              loading={usageNavLoading}
+            />
+          ) : null}
           <Popover>
-            <PopoverTrigger>
-              <div className="flex items-center gap-2 border-t p-4 pb-6 transition hover:bg-foreground/5 sm:pb-3">
-                <Settings2 size={18} />
-                {navExpanded ? <p className="">Settings</p> : null}
-              </div>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="block w-full border-0 bg-transparent p-0 text-inherit"
+              >
+                <div
+                  data-testid="app-nav-settings"
+                  className="flex items-center gap-2 border-t transition hover:bg-foreground/5"
+                >
+                  <Settings2 size={18} />
+                  {navExpanded ? <p className="">Settings</p> : null}
+                </div>
+              </button>
             </PopoverTrigger>
             <PopoverContent
               collisionPadding={8}
               className="m-1 max-h-[var(--radix-popover-content-available-height)] overflow-y-auto p-0"
             >
-              <div className="flex justify-between p-3 border-b">
-                <div className="flex flex-col">
+              <div className="flex items-start justify-between gap-2 border-b p-3">
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <p className="text-sm font-bold">{user.name}</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="break-words text-sm text-muted-foreground">
                     {formatUserContactLabel(user)}
                   </p>
                 </div>
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  className="opacity-40 hover:opacity-100"
+                  className="shrink-0 opacity-40 hover:opacity-100"
                   aria-label="User settings"
                   disabled={isReadOnlyImpersonation}
                   title={
@@ -583,10 +650,8 @@ export default function Route() {
       </nav>
       <div
         className={cn(
-          'flex min-w-full flex-1 flex-col transition-all duration-300 ease-in-out sm:min-w-0 sm:translate-x-0',
+          'flex min-w-0 flex-1 flex-col transition-all duration-300 ease-in-out sm:min-w-0',
           {
-            'translate-x-0': isMobileNavOpen,
-            '-translate-x-[212px]': isNavExpanded,
             'opacity-50': !isInAssistants && isMobileNavOpen,
           }
         )}

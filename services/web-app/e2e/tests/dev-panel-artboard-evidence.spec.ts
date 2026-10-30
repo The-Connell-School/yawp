@@ -92,27 +92,18 @@ test.describe('Dev panel artboard evidence', () => {
     }
 
     const tools = await openDevToolsPanel(page);
-    await tools.getByRole('button', { name: /^Free-tier states/ }).click();
-    const stateSheet = page.getByRole('dialog', { name: 'Free-tier states' });
+    await tools.getByRole('button', { name: /^Free-tier\b/ }).click();
+    const stateSheet = page.getByTestId('free-tier-session-runner');
     await expect(stateSheet).toBeVisible({ timeout: 15_000 });
     await shot(page, '19');
 
-    await devPanelFreeTierGroupTrigger(stateSheet, 'Teacher signup').click();
-    await devPanelFreeTierStateOption(stateSheet, 'Waitlist submitted').click();
-    await stateSheet
-      .getByRole('switch', { name: 'Use a throwaway test account' })
-      .setChecked(false);
-    await stateSheet.getByRole('button', { name: 'Jump to this state' }).click();
-    await expect(
-      page.getByRole('alertdialog', { name: /Change .+'s test data\?/ })
-    ).toBeVisible();
+    await tools.getByRole('button', { name: 'Jump to state (advanced)' }).click();
+    await stateSheet.getByRole('button', { name: /^Waitlisted\b/ }).click();
+    await expect(stateSheet.getByText('Jump to this state?')).toBeVisible();
     await shot(page, '20');
 
-    await page.getByRole('button', { name: 'Cancel' }).click();
-    await stateSheet
-      .getByRole('switch', { name: 'Use a throwaway test account' })
-      .setChecked(true);
-    await devPanelFreeTierStateOption(stateSheet, 'Waitlist submitted').click();
+    await stateSheet.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await stateSheet.getByRole('button', { name: /^Waitlisted\b/ }).click();
     await page.route('**/api/dev-panel/free-tier-jump', async (route) => {
       await route.fulfill({
         status: 200,
