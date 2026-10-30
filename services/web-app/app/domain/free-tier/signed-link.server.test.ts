@@ -33,6 +33,14 @@ describe('signed-link (no db)', () => {
     expect(isFreeTierLinkSigningConfigured()).toBe(true);
   });
 
+  test('test env does not fall back to SESSION_SECRET when HMAC secret is unset', async () => {
+    delete process.env.FREE_TIER_LINK_HMAC_SECRET;
+    process.env.NODE_ENV = 'test';
+    process.env.SESSION_SECRET = 'test-session-secret';
+    const { isFreeTierLinkSigningConfigured } = await import('./signed-link.server');
+    expect(isFreeTierLinkSigningConfigured()).toBe(false);
+  });
+
   test('production mint requires PRIMARY_APP_URL', async () => {
     const primary = process.env.PRIMARY_APP_URL;
     delete process.env.PRIMARY_APP_URL;
