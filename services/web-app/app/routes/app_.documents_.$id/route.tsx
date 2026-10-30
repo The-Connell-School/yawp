@@ -812,6 +812,9 @@ export default function Route() {
     onSubmitted: (newSubmission) => {
       setIsFinalizeDialogOpen(false);
       setSubmissionTitle('');
+      if (titleInputRef.current && newSubmission.title.trim()) {
+        titleInputRef.current.value = newSubmission.title;
+      }
       setLocalSubmissions((prev) => [
         {
           ...newSubmission,
