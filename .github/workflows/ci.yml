@@ -26,6 +26,10 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       preview_tooling: ${{ steps.filter.outputs.preview_tooling }}
       prisma: ${{ steps.filter.outputs.prisma }}
+      # Browser E2E runs whenever `code` changed, except on a pull request
+      # whose every changed file is documentation (docs/** or *.md outside
+      # services/web-app/app/**). main pushes always keep `e2e == code`.
+      e2e: ${{ (steps.filter.outputs.code == 'true' && !(github.event_name == 'pull_request' && steps.docs_only.outputs.non_docs == 'false' && steps.docs_only.outputs.app_markdown == 'false')) && 'true' || 'false' }}
     steps:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,6 +63,23 @@ jobs:
               - 'scripts/preview/**'
             prisma:
               - 'packages/prisma/**'
+      # PR-only docs detector. With predicate-quantifier 'every', a file counts
+      # toward `non_docs` only when it matches every pattern, i.e. it is neither
+      # under docs/ nor a .md file. Markdown under services/web-app/app/** is
+      # treated as code because app code could load it at runtime.
+      - name: 📝 Docs-only detector (PR only)
+        id: docs_only
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            non_docs:
+              - '**'
+              - '!docs/**'
+              - '!**/*.md'
+            app_markdown:
+              - 'services/web-app/app/**/*.md'
   # CI names every test file it runs, so a test file that is merely present never executes.
   # scripts/preview/*.test.js sat unrun for exactly that reason. It matters most here:
   # enforce-cap.sh removes trees as root before every deploy, and the ownership case it
@@ -166,7 +187,7 @@ jobs:
 
       - name: 🧪 Validate deployment contract
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts ./scripts/ci/release-docker-host-port.test.ts ./scripts/ci/bun-install-frozen.test.ts ./scripts/ci/install-playwright-chromium.test.ts ./scripts/preview/deploy-log-secrets.test.js ./scripts/preview/redact-deploy-logs.test.js --max-concurrency=2
+        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts ./scripts/ci/release-docker-host-port.test.ts ./scripts/ci/bun-install-frozen.test.ts ./scripts/ci/install-playwright-chromium.test.ts ./scripts/preview/deploy-log-secrets.test.js ./scripts/ci/check-ci-test-list.test.ts ./scripts/preview/redact-deploy-logs.test.js --max-concurrency=2
 
       - name: 🧪 Validate Blackboard LTI mock
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -343,7 +364,7 @@ jobs:
           ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
           ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
           ./services/web-app/app/utils/mock-admin-environment.test.ts
-          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name 'inapp-usage.server.test.ts' ! -name 'monthly-policy.test.ts' ! -name 'locked-preview.server.test.ts' ! -name 'teaching-access-shell.server.test.ts' ! -name 'email.server.test.ts' ! -name 'demo-signup-admin-email.test.ts' ! -name 'admin-link-gate.server.test.ts' ! -name 'admin-approval-email-facts.test.ts' ! -name 'approval-flow-pass1-send.test.ts' ! -name 'approval-flow.suppress-email.server.test.ts' ! -name 'application-id-opaque-hash-verified.test.ts' ! -name 'admin-token-s9a-actions.test.ts' ! -name 'service.create-token-idempotency.test.ts' ! -name 'posthog-*.test.ts' ! -name 'service.analytics.server.test.ts' ! -name 'public-onboarding.route.test.ts' ! -name 'provision.analytics.server.test.ts' ! -name '*.integration.test.ts')
+          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name 'inapp-usage.server.test.ts' ! -name 'monthly-policy.test.ts' ! -name 'locked-preview.server.test.ts' ! -name 'locked-preview-class-seed.defaults.test.ts' ! -name 'teaching-access-shell.server.test.ts' ! -name 'email.server.test.ts' ! -name 'demo-signup-admin-email.test.ts' ! -name 'admin-link-gate.server.test.ts' ! -name 'admin-approval-email-facts.test.ts' ! -name 'approval-flow-pass1-send.test.ts' ! -name 'approval-flow.suppress-email.server.test.ts' ! -name 'application-id-opaque-hash-verified.test.ts' ! -name 'admin-token-s9a-actions.test.ts' ! -name 'service.create-token-idempotency.test.ts' ! -name 'posthog-*.test.ts' ! -name 'service.analytics.server.test.ts' ! -name 'public-onboarding.route.test.ts' ! -name 'provision.analytics.server.test.ts' ! -name '*.integration.test.ts')
           ./services/web-app/app/routes/app/sidebar-nav.reporter.test.ts
           ./packages/prisma/preview-access-code.free-classroom.test.ts
           ./packages/prisma/scripts/preview-seats.test.ts
@@ -368,6 +389,12 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./services/web-app/app/domain/free-tier/locked-preview.server.test.ts
+
+      - name: Locked preview sample grading defaults (isolated mocks)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/locked-preview-class-seed.defaults.test.ts
 
       - name: Teaching access shell (isolated mocks)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -1106,7 +1133,37 @@ jobs:
             app/domain/lesson-planner/lesson-templates.test.ts \
             app/domain/lesson-planner/yawp-catalog.server.test.ts \
             app/routes/api.domain.lesson-planner.stack/route.test.ts \
-            app/routes/api.domain.lesson-planner.library/route.test.ts
+            app/routes/api.domain.lesson-planner.library/route.test.ts \
+            app/domain/lesson-planner/deck-art.test.ts \
+            app/domain/lesson-planner/deck-edit.test.ts \
+            app/domain/lesson-planner/exit-ticket-block-quick.test.ts \
+            app/domain/lesson-planner/exit-ticket-block.test.ts \
+            app/domain/lesson-planner/lesson-ask.test.ts \
+            app/domain/lesson-planner/lesson-links.test.ts \
+            app/domain/lesson-planner/lesson-material.test.ts \
+            app/domain/lesson-planner/lesson-planner-pending-reporter-delegation.server.test.ts \
+            app/domain/lesson-planner/lesson-planner-tools.server.test.ts \
+            app/domain/lesson-planner/lesson-pptx.server.test.ts \
+            app/domain/lesson-planner/lesson-resource.test.ts \
+            app/domain/lesson-planner/lesson-seed.server.test.ts \
+            app/domain/lesson-planner/lesson-unit.server.test.ts \
+            app/domain/lesson-planner/markdown-blocks.test.ts \
+            app/domain/lesson-planner/material-richtext.test.ts \
+            app/domain/lesson-planner/my-lessons.server.test.ts \
+            app/domain/lesson-planner/planning-progress.test.ts \
+            app/domain/lesson-planner/practice-block.test.ts \
+            app/domain/lesson-planner/repair-slide-deck.server.test.ts \
+            app/domain/lesson-planner/slide-deck.test.ts \
+            app/domain/lesson-planner/student-handout.test.ts \
+            app/domain/lesson-planner/unit-plan.test.ts \
+            app/domain/lesson-planner/yawp-catalog.test.ts \
+            app/routes/api.domain.lesson-planner.class-length/route.test.ts \
+            app/routes/app.lesson-planner/lesson-rail.test.ts \
+            app/routes/app.lesson-planner/prompt-tiles.test.ts \
+            app/routes/app.lesson-planner/rotating-placeholder.test.ts \
+            'app/routes/app.lesson-planner_.$conversationId.packet/resource-index.test.ts' \
+            app/domain/feature-flags/lesson-planner-seed-parity.test.ts \
+            app/domain/feature-flags/production-dark-by-default.server.test.ts
           do
             bun test "$f"
           done
@@ -1116,7 +1173,7 @@ jobs:
   # like teacher.lesson-planner.spec.ts do not skew Playwright test-level sharding.
   e2e-smoke:
     needs: [paths]
-    if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    if: ${{ needs.paths.outputs.e2e == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     name: 🧪 E2E smoke (shard ${{ matrix.shard }})
     runs-on: ubuntu-22.04
     timeout-minutes: 45
@@ -1251,7 +1308,7 @@ jobs:
 
   e2e-locked-preview:
     needs: [paths]
-    if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    if: ${{ needs.paths.outputs.e2e == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     name: 🧪 Free-tier locked preview browser
     runs-on: ubuntu-22.04
     timeout-minutes: 45
@@ -1363,7 +1420,7 @@ jobs:
 
   e2e-signon:
     needs: [paths]
-    if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    if: ${{ needs.paths.outputs.e2e == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     name: 🔐 Sign-on browser flows
     runs-on: ubuntu-22.04
     timeout-minutes: 45
@@ -1553,7 +1610,7 @@ jobs:
 
   e2e-browser-checks:
     needs: [paths]
-    if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    if: ${{ needs.paths.outputs.e2e == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     name: 🧪 Demo feedback + preview access browser checks
     runs-on: ubuntu-22.04
     timeout-minutes: 45
@@ -1820,16 +1877,16 @@ jobs:
   # Keeps the original check name. Passes when every E2E job passed, or when
   # they were skipped on purpose (draft PR or no code changes).
   e2e-web-app:
-    needs: [paths, e2e-smoke, e2e-signon, e2e-browser-checks]
+    needs: [paths, e2e-smoke, e2e-signon, e2e-browser-checks, e2e-locked-preview]
     if: ${{ always() }}
     name: 🧪 E2E Tests (Playwright)
     runs-on: ubuntu-24.04
     steps:
       - name: ✅ Check E2E results
         env:
-          RESULTS: ${{ needs.paths.result }} ${{ needs.e2e-smoke.result }} ${{ needs.e2e-signon.result }} ${{ needs.e2e-browser-checks.result }}
+          RESULTS: ${{ needs.paths.result }} ${{ needs.e2e-smoke.result }} ${{ needs.e2e-signon.result }} ${{ needs.e2e-browser-checks.result }} ${{ needs.e2e-locked-preview.result }}
         run: |
-          echo "paths, smoke, sign-on, browser checks: $RESULTS"
+          echo "paths, smoke, sign-on, browser checks, locked preview: $RESULTS"
           for r in $RESULTS; do
             case "$r" in
               success|skipped) ;;

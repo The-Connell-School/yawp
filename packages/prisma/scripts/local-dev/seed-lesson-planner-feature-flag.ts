@@ -53,7 +53,7 @@ export async function ensureInternalRubricsEnabledForDemo(
 const EVERYONE = '{"mode":"everyone","orgIds":[]}';
 
 /** Brian's review flags (docs/plans/2026-10-11-lesson-planner-brian-review.md). */
-const LESSON_PLANNER_REVIEW_FLAG_SETTINGS = [
+export const LESSON_PLANNER_REVIEW_FLAG_SETTINGS = [
   'feature_flag.lesson_planner_intake_v2',
   'feature_flag.lesson_planner_stack_v2',
   'feature_flag.lesson_planner_deck_v2',
