@@ -170,7 +170,7 @@ test.describe("Lesson Planner — Brian's second run", () => {
       );
       await page.getByTestId('deck-toggle').click();
       expect((await filed).ok()).toBe(true);
-      await expect(page.getByTestId('deck-toggle')).toHaveText(/in your lesson/i);
+      await expect(page.getByTestId('deck-toggle')).toHaveText(/in the stack/i);
 
       await page.goto(`/app/lesson-planner/${conversationId}/packet`);
       const section = page.getByTestId('packet-section').filter({
@@ -193,7 +193,7 @@ test.describe("Lesson Planner — Brian's second run", () => {
       await page.getByLabel('Title', { exact: true }).fill('Warm-up: what you carry');
       await page.getByTestId('deck-editor-save').click();
 
-      // Back to your lesson, where the edit was started, with the deck intact.
+      // Back to the stack, where the edit was started, with the deck intact.
       await expect(page).toHaveURL(
         new RegExp(`/app/lesson-planner/${conversationId}/packet`)
       );
@@ -222,7 +222,7 @@ test.describe("Lesson Planner — Brian's second run", () => {
       );
       await page.getByTestId('deck-toggle').click();
       expect((await filed).ok()).toBe(true);
-      await expect(page.getByTestId('deck-toggle')).toHaveText(/in your lesson/i);
+      await expect(page.getByTestId('deck-toggle')).toHaveText(/in the stack/i);
 
       const prisma = createE2EPrismaClient();
       const deck = await prisma.lessonPlanMaterial.findFirstOrThrow({
@@ -564,7 +564,7 @@ test.describe("Lesson Planner — Brian's second run", () => {
 
       // The stack's deck card says so too.
       await card.getByTestId('deck-toggle').click();
-      await expect(card.getByTestId('deck-toggle')).toHaveText(/in your lesson/i);
+      await expect(card.getByTestId('deck-toggle')).toHaveText(/in the stack/i);
       await page.waitForLoadState('networkidle');
       await page.goto(`/app/lesson-planner/${conversationId}/packet`);
       await expect(page.getByTestId('slide-deck-card').getByTestId('deck-over-time')).toHaveText(
@@ -616,9 +616,9 @@ test.describe("Lesson Planner — Brian's second run", () => {
       await cards.nth(0).getByTestId('daily-pages-stack-toggle').click();
       await done;
 
-      // Each swap option: Add to lesson, Replace, Create.
+      // Each swap option: Add to stack, Replace, Create.
       const second = cards.nth(2);
-      await expect(second.getByTestId('daily-pages-stack-toggle')).toHaveText(/add to lesson/i);
+      await expect(second.getByTestId('daily-pages-stack-toggle')).toHaveText(/add to stack/i);
       await expect(second.getByTestId('daily-pages-replace')).toHaveText(
         'Replace existing class starter with this one'
       );
@@ -628,8 +628,8 @@ test.describe("Lesson Planner — Brian's second run", () => {
       done = filed();
       await second.getByTestId('daily-pages-replace').click();
       await done;
-      await expect(second.getByTestId('daily-pages-stack-toggle')).toHaveText(/in your lesson/i);
-      await expect(cards.nth(0).getByTestId('daily-pages-stack-toggle')).toHaveText(/add to lesson/i);
+      await expect(second.getByTestId('daily-pages-stack-toggle')).toHaveText(/in the stack/i);
+      await expect(cards.nth(0).getByTestId('daily-pages-stack-toggle')).toHaveText(/add to stack/i);
 
       await page.goto(`/app/lesson-planner/${conversationId}/packet`);
       await expect(page.getByTestId('stack-list-row')).toHaveCount(1);
@@ -702,7 +702,7 @@ test.describe("Lesson Planner — Brian's second run", () => {
       const done = saved(page);
       await steps.nth(1).getByTestId('plan-step-toggle').click();
       expect((await done).ok()).toBe(true);
-      await expect(steps.nth(1).getByTestId('plan-step-toggle')).toHaveText(/in your lesson/i);
+      await expect(steps.nth(1).getByTestId('plan-step-toggle')).toHaveText(/in the stack/i);
 
       await page.goto(`/app/lesson-planner/${conversationId}/packet`);
       await expect(page.getByTestId('stack-list-row')).toHaveText([/Read aloud/]);
@@ -724,9 +724,9 @@ test.describe("Lesson Planner — Brian's second run", () => {
       await page.goto(`/app/lesson-planner?c=${conversationId}`);
 
       const done = saved(page);
-      await page.getByRole('button', { name: 'Add everything to the lesson' }).click();
+      await page.getByRole('button', { name: 'Add everything to the stack' }).click();
       expect((await done).ok()).toBe(true);
-      await expect(page.getByText('Everything is in your lesson')).toBeVisible();
+      await expect(page.getByText('Everything is in the stack')).toBeVisible();
 
       await page.goto(`/app/lesson-planner/${conversationId}/packet`);
       await expect(page.getByTestId('stack-list-row')).toHaveText([
@@ -797,7 +797,7 @@ test.describe("Lesson Planner — Brian's second run", () => {
     );
     await toggle.click();
     expect((await filed).ok()).toBe(true);
-    await expect(toggle).toHaveText(/in your lesson/i);
+    await expect(toggle).toHaveText(/in the stack/i);
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
     await expect(page.getByTestId('stack-list-row')).toHaveText([/Writing practice: Comma splice repair/]);
     await expect(page.getByTestId('packet-section')).toContainText('6 problems');
@@ -1024,11 +1024,11 @@ test.describe("Lesson Planner — Brian's second run", () => {
         /something you carry/,
       ]);
 
-      // Remove in the panel: the chat card goes back to "Add to lesson".
+      // Remove in the panel: the chat card goes back to "Add to stack".
       await panel.getByRole('button', { name: /^Remove Class Starter: Write about/ }).click();
       await expect(panel.getByTestId('stack-list-row')).toHaveText([/heaviest thing/]);
       await expect(page.getByTestId('remove-undo')).toBeHidden({ timeout: 10_000 });
-      await expect(toggles.nth(0)).toHaveText(/add to lesson/i);
+      await expect(toggles.nth(0)).toHaveText(/add to stack/i);
 
       // The full stack is one click away, in the order set here.
       await panel.getByRole('link', { name: 'Open the full stack' }).click();

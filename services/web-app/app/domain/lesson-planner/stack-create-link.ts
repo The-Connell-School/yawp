@@ -7,8 +7,6 @@
 import { dailyPagesCreateHref } from './daily-pages-block';
 import { exitTicketCreateHref, readPlannedExitTickets } from './exit-ticket-block';
 import { EXIT_TICKET_BLOCK_KEY } from './lesson-material';
-import { createdWhere, materialRef, type CreatedFrom } from './assignment-links';
-import { lessonPlaceHref, readLessonPlace } from './lesson-return';
 import { hidePromptIds } from './prompt-ids';
 
 export type WritingTypeIds = {
@@ -19,13 +17,7 @@ export type WritingTypeIds = {
   thesis?: string | null;
 };
 
-export type StackCreateLink = {
-  label: string;
-  href: string;
-  created?: boolean;
-  /** Where it was made: "in the planner chat" / "on the stack" (Oct 24 handoff). */
-  where?: string | null;
-};
+export type StackCreateLink = { label: string; href: string; created?: boolean };
 
 /** Which lesson piece a create link came from, so the sheet can say so back. */
 export const FROM_PIECE_PARAM = 'fromPiece';
@@ -37,28 +29,15 @@ export const FROM_PIECE_PARAM = 'fromPiece';
 export const BACK_PARAM = 'back';
 
 export function lessonBackHref(conversationId: string, back: string | null): string {
-  return lessonPlaceHref(conversationId, readLessonPlace(back, 'chat'));
+  return back === 'stack'
+    ? `/app/lesson-planner/${encodeURIComponent(conversationId)}/packet`
+    : `/app/lesson-planner?c=${encodeURIComponent(conversationId)}`;
 }
 
-/** Set on the way back once a piece is made, so the lesson can say so (Kevin's note 6b). */
-export const MADE_PARAM = 'made';
-export const MADE_NOTICE = 'Created in Yawp! and added to your lesson.';
-
-export function lessonMadeHref(conversationId: string, back: string | null): string {
-  const url = new URL(lessonBackHref(conversationId, back), 'http://local');
-  url.searchParams.set(MADE_PARAM, '1');
-  return `${url.pathname}?${url.searchParams}`;
-}
-
-/**
- * The Create link names the piece it came from, so the lesson can record the
- * assignment once it exists: "b:<messageId>:<blockKey>" from the chat (filed
- * or not), "m:<materialId>" from the stack (Oct 24 handoff, task 1).
- */
-export function withPiece(href: string, pieceRef?: string | null): string {
-  if (!pieceRef) return href;
+export function withPiece(href: string, materialId?: string | null): string {
+  if (!materialId) return href;
   const url = new URL(href, 'http://local');
-  url.searchParams.set(FROM_PIECE_PARAM, pieceRef);
+  url.searchParams.set(FROM_PIECE_PARAM, `m:${materialId}`);
   return `${url.pathname}?${url.searchParams}`;
 }
 
@@ -123,8 +102,8 @@ export function stackCreateLink({
   stepType?: string | null;
   /** The filed piece, so the sheet can tell the stack it was created. */
   materialId?: string | null;
-  /** Already created from this piece: where to open it, and where it was made. */
-  created?: { href: string; from?: CreatedFrom | null } | null;
+  /** Already created from this piece: where to open it. */
+  created?: { href: string } | null;
   /** The piece as filed (or as the teacher edited it). */
   content: string;
   blockKey: string;
@@ -133,12 +112,10 @@ export function stackCreateLink({
   typeIds: WritingTypeIds;
   conversationId: string;
 }): StackCreateLink | null {
-  if (created) {
-    return { label: 'Assignment created', href: created.href, created: true, where: createdWhere(created.from ?? null) };
-  }
+  if (created) return { label: 'Created in Yawp! · Open', href: created.href, created: true };
   const link = createLinkFor({ kind, title, stepType, content, blockKey, sourceContent, typeIds, conversationId });
   if (!link) return null;
-  const url = new URL(withPiece(link.href, materialId ? materialRef(materialId) : null), 'http://local');
+  const url = new URL(withPiece(link.href, materialId), 'http://local');
   url.searchParams.set(BACK_PARAM, 'stack');
   return { ...link, href: `${url.pathname}?${url.searchParams}` };
 }

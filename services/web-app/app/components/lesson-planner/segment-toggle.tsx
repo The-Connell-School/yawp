@@ -2,7 +2,7 @@ import { BookmarkCheck, BookmarkPlus } from 'lucide-react';
 import { cn } from '~/utils/misc';
 
 /**
- * "Add to lesson" on one segment of the lesson, wherever it appears in the
+ * "Add to stack" on one segment of the lesson, wherever it appears in the
  * reply (Brian's run 3, item 1). The same status as its card and its line in
  * "Steps in this plan", because all three read the same pieces.
  */
@@ -29,7 +29,7 @@ export function SegmentToggle({
         disabled={disabled}
         data-testid="segment-toggle"
         aria-pressed={isIn}
-        title={isIn ? 'In your lesson. Click to remove it.' : undefined}
+        title={isIn ? 'In the stack. Click to remove it.' : undefined}
         onClick={() => onToggle(!isIn)}
         className={cn(
           'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition disabled:opacity-50',
@@ -39,7 +39,7 @@ export function SegmentToggle({
         )}
       >
         {isIn ? <BookmarkCheck size={12} /> : <BookmarkPlus size={12} />}
-        {isIn ? 'In your lesson' : 'Add to lesson'}
+        {isIn ? 'In the stack' : 'Add to stack'}
       </button>
     </span>
   );

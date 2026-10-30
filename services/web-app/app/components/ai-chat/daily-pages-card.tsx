@@ -35,7 +35,7 @@ export function DailyPagesCard({
   onReplace,
   disabled = false,
   created = null,
-  pieceRef = null,
+  materialId = null,
 }: {
   exercise: DailyPagesExercise;
   /** Null when this org does not have Daily Pages — then it is just a prompt. */
@@ -62,13 +62,10 @@ export function DailyPagesCard({
    */
   onReplace?: (() => void) | null;
   disabled?: boolean;
-  /** Created in Yawp! from this piece, in the chat or the stack (Brian's run 3, item 4). */
+  /** Created in Yawp! from this piece of the stack (Brian's run 3, item 4). */
   created?: { href: string } | null;
-  /**
-   * This card's piece, "b:<messageId>:<blockKey>", filed or not, so creating
-   * it is recorded once for the chat and the stack (Oct 24 handoff, task 1).
-   */
-  pieceRef?: string | null;
+  /** The stack piece this card is, so creating it can be remembered. */
+  materialId?: string | null;
 }) {
   const isStarter = exercise.kind === 'class-starter';
   const targetTypeId =
@@ -118,7 +115,7 @@ export function DailyPagesCard({
               )}
             >
               {added ? <Check size={14} /> : <Plus size={14} />}
-              {added ? 'In your lesson' : 'Add to lesson'}
+              {added ? 'In the stack' : 'Add to stack'}
             </button>
           ) : null}
           {onReplace ? (
@@ -140,7 +137,7 @@ export function DailyPagesCard({
           <Link
             to={withPiece(
               dailyPagesCreateHref(targetTypeId, exercise.prompt, conversationId),
-              pieceRef
+              materialId
             )}
             data-testid="daily-pages-create"
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"

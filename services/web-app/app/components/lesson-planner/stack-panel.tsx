@@ -7,7 +7,7 @@
  * goes there.
  */
 import { useEffect } from 'react';
-import { Link, useFetcher, useNavigate } from 'react-router';
+import { Link, useFetcher } from 'react-router';
 import { Layers, X } from 'lucide-react';
 import { StackList } from './stack-list';
 import { StackUndoToast, useStackRemoval } from './use-stack-removal';
@@ -42,12 +42,11 @@ export function StackPanel({
   conversationId: string;
   /** Bumped by the chat whenever something was filed, so the panel reloads. */
   version: number;
-  /** A piece left the stack here, so its chat card stops saying "In your lesson". */
+  /** A piece left the stack here, so its chat card stops saying "In the stack". */
   onRemoved: (piece: StackItem) => void;
   onClose: () => void;
 }) {
   const list = useFetcher<{ items: StackItem[] }>();
-  const navigate = useNavigate();
   const reorder = useFetcher();
   const href = `/api/domain/lesson-planner/packet?conversationId=${encodeURIComponent(conversationId)}`;
 
@@ -109,15 +108,6 @@ export function StackPanel({
               )
             }
             onRemove={remove}
-            // A piece opens on the stack page; the slides open as slides, and
-            // Close comes back to this chat (Kevin's note, Oct 24).
-            onJump={(item) =>
-              navigate(
-                item.kind === 'slides'
-                  ? `/present/${conversationId}/${item.id}?from=chat`
-                  : `/app/lesson-planner/${conversationId}/packet?open=${encodeURIComponent(item.id)}`
-              )
-            }
           />
         )}
       </div>

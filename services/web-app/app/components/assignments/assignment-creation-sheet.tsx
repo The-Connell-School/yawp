@@ -285,8 +285,7 @@ export type AssignmentCreationSheetProps = {
    * Told once an assignment is created, so a lesson that sent the teacher
    * here can say "Created in Yawp!" (Brian's run 3, item 4). Optional.
    */
-  /** `nextStep`: the sheet is going on to another page (groups to set up). */
-  onCreated?: (info: { nextStep: boolean }) => void;
+  onCreated?: () => void;
   entryPoint: AssignmentCreationEntryPoint;
   assignmentTypes: AssignmentCreationAssignmentType[];
   siteLicenseLockedAssignmentTiles?: SiteLicenseLockedTile[];
@@ -1083,7 +1082,7 @@ export function AssignmentCreationSheetContent({
     onOpenChange(false);
     if (!editingAssignment && toldCreated.current !== createFetcher.data) {
       toldCreated.current = createFetcher.data;
-      onCreated?.({ nextStep: Boolean(createFetcher.data.nextStep) });
+      onCreated?.();
     }
     // Closing the sheet used to be the whole ending, which left a collaborative
     // assignment looking done while its groups did not exist yet. `navigate` is

@@ -7,7 +7,6 @@
 import type { LessonPacket } from './lesson-packet';
 import type { StackCreateLink } from './stack-create-link';
 import { stackEntryKey } from './stack-order';
-import { previewLine } from './plain-preview';
 import { isWritingStep, stepTypeFor, writingName, type StepType } from './step-types';
 import type { TimedStep } from './stack-timing';
 
@@ -41,8 +40,15 @@ const TITLE_MINUTES = /\s*\(\s*\d+[^)]*min[^)]*\)\s*$/i;
 const TYPE_PREFIX = /^(?:Class Starter|Daily Pages|Exit ticket|Writing practice)\s*:\s*/i;
 
 function excerptOf(markdown: string): string {
-  // Clean words, never raw marks (Kevin, Oct 25, note 7).
-  return previewLine(markdown, 240);
+  const text = markdown
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/[*_`>|]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (text.length <= 240) return text;
+  const cut = text.slice(0, 240);
+  return `${cut.slice(0, cut.lastIndexOf(' ')).trim()}…`;
 }
 
 export function stackSteps({

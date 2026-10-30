@@ -38,8 +38,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     templates: flags.templates,
     deckGallery: flags.deckGallery,
     uploads: flags.uploads,
-    teachNotes: flags.teachNotes,
-    libraryV2: flags.libraryV2,
   };
 }
 
@@ -250,22 +248,6 @@ const PERIOD = [
   { minutes: 5, what: 'Exit ticket' },
 ];
 
-/** The lesson page's three points (stack page v2 and Kevin's Oct 25 notes). */
-const LESSON_PAGE_POINTS = [
-  {
-    title: 'Time against the period',
-    body: 'A bar shows every step against your class length. Run long and it says so plainly, suggests a step to move under If you have extra time, and offers fixes with Undo. Fixes never cut writing time.',
-  },
-  {
-    title: 'How much is writing',
-    body: 'A meter shows how much of class students spend writing: the Yawp! writing assignments and the handouts they fill in. Discussion is not counted as writing.',
-  },
-  {
-    title: 'Made in Yawp!, in one click',
-    body: 'Create a class starter or exit ticket from its step. You come straight back to your lesson, with the assignment in it.',
-  },
-];
-
 const WILL = [
   'Work with you. It asks about your class, and you make the calls on what’s best for it.',
   'Plan lessons and full units for your classes.',
@@ -304,7 +286,7 @@ function Still({ name, alt, width, height }: { name: string; alt: string; width:
 }
 
 export default function LessonPlannerHowItWorksRoute() {
-  const { stackV2, stackV3, share, runShow, templates, deckGallery, uploads, teachNotes, libraryV2 } =
+  const { stackV2, stackV3, share, runShow, templates, deckGallery, uploads } =
     useLoaderData<typeof loader>();
   return (
     // Own the scroll: the app shell is a fixed-height, overflow-hidden frame.
@@ -423,7 +405,7 @@ export default function LessonPlannerHowItWorksRoute() {
               media={
                 <Clip
                   name="plan-steps"
-                  label="Scrolling a finished plan: numbered steps with their minutes, Add to lesson on the hook, and three framing cards paged side by side with arrows."
+                  label="Scrolling a finished plan: numbered steps with their minutes, Add to stack on the hook, and three framing cards paged side by side with arrows."
                 />
               }
             >
@@ -435,7 +417,7 @@ export default function LessonPlannerHowItWorksRoute() {
               </Copy>
               <Copy>
                 Keep the whole plan, or tap{' '}
-                <strong className="text-foreground">Add to lesson</strong> on just
+                <strong className="text-foreground">Add to stack</strong> on just
                 the steps you want. When there are options, like three class
                 starters or three exit tickets, they sit side by side: page
                 through them with the arrows.
@@ -564,13 +546,6 @@ export default function LessonPlannerHowItWorksRoute() {
               makes a real deck, timed to the same period. Present it from Yawp!
               or download it as PowerPoint.
             </Copy>
-            {stackV3 ? (
-              <Copy>
-                Already working in your stack? Ask the planner there for slides, or tap{' '}
-                <strong className="text-foreground">Build the deck</strong> in Take it to
-                class. The deck comes back right in the stack, ready to preview and add.
-              </Copy>
-            ) : null}
             {deckGallery ? (
               <Copy>
                 Decks are hung like a gallery: Georgia and Arial on warm paper,
@@ -605,7 +580,7 @@ export default function LessonPlannerHowItWorksRoute() {
           ) : (
             <Clip
               name="deck"
-              label="Tapping Build the slide deck for this lesson. A card appears with the deck’s thumbnails and Add to lesson, PowerPoint and Present buttons."
+              label="Tapping Build the slide deck for this lesson. A card appears with the deck’s thumbnails and Add to stack, PowerPoint and Present buttons."
             />
           )}
         </section>
@@ -614,36 +589,20 @@ export default function LessonPlannerHowItWorksRoute() {
           <>
             <section aria-labelledby="guide-stack" className="flex flex-col gap-8">
               <div className="flex flex-col gap-3">
-                <Eyebrow>{teachNotes ? 'Your lesson' : 'The stack'}</Eyebrow>
+                <Eyebrow>The stack</Eyebrow>
                 <H2 id="guide-stack">Your lesson, start to finish</H2>
-                {teachNotes ? (
-                  <Copy>
-                    Tap <strong className="text-foreground">Add to lesson</strong> on
-                    the pieces you want, or add the whole plan at once. Everything
-                    lands on one page, in order: when each step starts, how long it
-                    runs, and how much of class is writing.
-                  </Copy>
-                ) : (
-                  <Copy>
-                    Tap <strong className="text-foreground">Add to lesson</strong> on
-                    the pieces you want. The stack is your run of show: every step
-                    in order, with when it starts and how long it runs.
-                  </Copy>
-                )}
+                <Copy>
+                  Tap <strong className="text-foreground">Add to stack</strong> on
+                  the pieces you want. The stack is your run of show: every step
+                  in order, with when it starts and how long it runs.
+                </Copy>
               </div>
-              {teachNotes ? (
-                <Clip
-                  name="lesson-page"
-                  label="On the lesson page, adding minutes to the essay repair puts the lesson 5 minutes over; Move to extensions saves that step under If you have extra time; then Create makes the exit ticket in Yawp! and comes straight back to the lesson, which says it was created and added."
-                />
-              ) : (
-                <Clip
-                  name="run-of-show"
-                  label="On the stack page, adding minutes to the hook puts the lesson 5 minutes over; one of two suggested fixes is applied with Undo; then Ask the planner shortens the hook in one line."
-                />
-              )}
+              <Clip
+                name="run-of-show"
+                label="On the stack page, adding minutes to the hook puts the lesson 5 minutes over; one of two suggested fixes is applied with Undo; then Ask the planner shortens the hook in one line."
+              />
               <div className="grid gap-6 md:grid-cols-3">
-                {(teachNotes ? LESSON_PAGE_POINTS : [
+                {[
                   {
                     title: 'Time against the period',
                     body: 'A bar shows every step against your class length. Tap a step’s minutes to type them. Run long and you get at most two fixes, each with Undo. Fixes never cut writing time.',
@@ -656,43 +615,13 @@ export default function LessonPlannerHowItWorksRoute() {
                     title: 'Change it in a line',
                     body: 'Ask the planner: “shorten the hook to 10 minutes.” It makes the change, says so in one line, and offers Undo.',
                   },
-                ]).map((item) => (
+                ].map((item) => (
                   <div key={item.title} className="flex flex-col gap-1.5 border-t-2 border-primary pt-3">
                     <H3>{item.title}</H3>
                     <Copy>{item.body}</Copy>
                   </div>
                 ))}
               </div>
-              {teachNotes ? (
-                <Row
-                  flip
-                  media={
-                    <Still
-                      name="print-for-class"
-                      alt="Print it for class: the lesson plan as Word, Google Docs or PDF; the slide deck; student handouts; and everything in one packet."
-                      width={680}
-                      height={1118}
-                    />
-                  }
-                >
-                  <Eyebrow>The finish line</Eyebrow>
-                  <H3>Set it, and print it for class</H3>
-                  <Copy>
-                    A short <strong className="text-foreground">Before class</strong>{' '}
-                    list ticks itself off as you go: it fits the period, the slides
-                    are built and up to date, the writing is made in Yawp! or on
-                    paper, and the day is picked. When it looks right, tap{' '}
-                    <strong className="text-foreground">This lesson is set</strong>.
-                  </Copy>
-                  <Ticks
-                    items={[
-                      'A one-page timed lesson plan, as Word, Google Docs or PDF, with an If you have more time section when you saved steps for it',
-                      'The slide deck, built from your lesson. Change the lesson and it says so, so you can rebuild it or keep it',
-                      'Handouts for any step, rewritten for students, and everything in one packet',
-                    ]}
-                  />
-                </Row>
-              ) : (
               <Row
                 flip
                 media={
@@ -723,7 +652,6 @@ export default function LessonPlannerHowItWorksRoute() {
                   ]}
                 />
               </Row>
-              )}
               {share ? (
                 <Row
                   media={
@@ -759,36 +687,7 @@ export default function LessonPlannerHowItWorksRoute() {
               ) : null}
             </section>
 
-            {teachNotes ? (
-              <section aria-labelledby="guide-teach" className="flex flex-col gap-8">
-                <Row
-                  media={
-                    <Clip
-                      name="teach-it"
-                      label="Tapping This lesson is set: confetti, the Yawp! logo and Yaaawp!, then the Before class list and Teach it. Run of show with teacher notes opens each step with its slide and notes, and Next step moves on."
-                    />
-                  }
-                >
-                  <Eyebrow>In class</Eyebrow>
-                  <H2 id="guide-teach">Teach it</H2>
-                  <Copy>
-                    Two ways in, once the lesson is set:{' '}
-                    <strong className="text-foreground">Open slideshow</strong> for
-                    the smartboard or projector, and{' '}
-                    <strong className="text-foreground">Run of show with teacher notes</strong>{' '}
-                    for your laptop at the podium.
-                  </Copy>
-                  <Ticks
-                    items={[
-                      'Each step with its slide and your notes: what to ask, what to listen for, and when to move on.',
-                      'Edit any note as you go. It saves as you type and prints with your lesson plan.',
-                      'Steps you saved for extra time wait at the side, ready if class finishes early.',
-                      'A clock if you want one, off by default.',
-                    ]}
-                  />
-                </Row>
-              </section>
-            ) : runShow ? (
+            {runShow ? (
               <section aria-labelledby="guide-show" className="flex flex-col gap-8">
                 <Row
                   media={
@@ -850,7 +749,7 @@ export default function LessonPlannerHowItWorksRoute() {
                 Everything for the lesson, in one place to print
               </H2>
               <Copy>
-                Tap <strong className="text-foreground">Add to lesson</strong> on
+                Tap <strong className="text-foreground">Add to stack</strong> on
                 the pieces you want to keep. The stack puts the plan, handouts,
                 answer key, and deck in lesson order, ready to print or save as a
                 PDF.
@@ -887,35 +786,6 @@ export default function LessonPlannerHowItWorksRoute() {
           </section>
         )}
 
-        {libraryV2 ? (
-          <section aria-labelledby="guide-library" className="flex flex-col gap-8">
-            <Row
-              flip
-              media={
-                <Clip
-                  name="library"
-                  label="The library: a tab for each class, units as tiles with their writing time, and lessons on their own. Switching to English 11 and back, then opening the Fahrenheit 451 unit to its plan, day by day."
-                />
-              }
-            >
-              <Eyebrow>Your library</Eyebrow>
-              <H2 id="guide-library">Your library</H2>
-              <Copy>
-                Every lesson you plan is kept, by class. Each class has its own
-                tab, and the library stays on the last one you chose, so you
-                come back to where you were.
-              </Copy>
-              <Ticks
-                items={[
-                  'Units as tiles, with how much of each is writing. Group them by period or theme.',
-                  'Drag a lesson into a unit, or a unit into a group. Every move has Undo.',
-                  'Open a unit to see its plan: how it ends, and every day, built or not.',
-                ]}
-              />
-            </Row>
-          </section>
-        ) : null}
-
         <section aria-labelledby="guide-units" className="flex flex-col gap-8">
           <div className="flex flex-col gap-3">
             <Eyebrow>Units</Eyebrow>
@@ -938,26 +808,12 @@ export default function LessonPlannerHowItWorksRoute() {
               too, and drag lessons into them.
             </Copy>
           </div>
-          {libraryV2 ? (
-            <Copy>
-              The unit is saved to your library as soon as the map is made,
-              with its plan. Build the days whenever you’re ready, from the
-              chat or from the unit in your library.
-            </Copy>
-          ) : null}
           <Row
             media={
-              libraryV2 ? (
-                <Clip
-                  name="unit-library"
-                  label="A four-day Fahrenheit 451 unit map, with Saved to your library under it. Build this day on Day 1 opens that day as its own lesson, built from the map."
-                />
-              ) : (
-                <Clip
-                  name="unit"
-                  label="Asking for a six-day unit on Of Mice and Men and getting a day-by-day map with a Build this day button on each row."
-                />
-              )
+              <Clip
+                name="unit"
+                label="Asking for a six-day unit on Of Mice and Men and getting a day-by-day map with a Build this day button on each row."
+              />
             }
           >
             <H3>Built toward what they hand in</H3>

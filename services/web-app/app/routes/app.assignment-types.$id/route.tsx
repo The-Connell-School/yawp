@@ -5,7 +5,7 @@ import {
   type ActionFunctionArgs,
   Form,
 } from 'react-router';
-import { Link, useFetcher, useLoaderData, useNavigate, useNavigation, useSearchParams } from 'react-router';
+import { Link, useFetcher, useLoaderData, useNavigation, useSearchParams } from 'react-router';
 import { ChevronDownIcon } from 'lucide-react';
 import { DocumentLink } from '~/components/document-link.js';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -101,7 +101,7 @@ import {
 } from './prompts-library/data';
 import promptsRaw from './prompts-library/prompts.json';
 import { FROM_LESSON_PARAM } from '~/domain/lesson-planner/daily-pages-block';
-import { BACK_PARAM, FROM_PIECE_PARAM, lessonBackHref, lessonMadeHref } from '~/domain/lesson-planner/stack-create-link';
+import { BACK_PARAM, FROM_PIECE_PARAM, lessonBackHref } from '~/domain/lesson-planner/stack-create-link';
 import {
   EXIT_TICKET_PARAMS,
   readExitTicketPrefill,
@@ -821,33 +821,20 @@ export default function AppAssignmentTypesIdRoute() {
   // Which piece of that lesson this came from, so the lesson can say
   // "Created in Yawp! · Open" once it exists (Brian's run 3, item 4).
   const fromPiece = searchParams.get(FROM_PIECE_PARAM);
-  const lessonFetcher = useFetcher<{ backToLesson?: boolean }>();
-  // Made from a lesson, the teacher goes straight back to it (Kevin's note 6b),
-  // unless the sheet has another page to show first.
-  const returnAfterMade = useRef(false);
-  const tellLessonCreated = useCallback(({ nextStep }: { nextStep: boolean }) => {
-    // From the chat ("b:") or the stack ("m:"): one record either way (Oct 24 handoff, task 1).
-    if (!fromLesson || !(fromPiece?.startsWith('m:') || fromPiece?.startsWith('b:'))) return;
-    returnAfterMade.current = !nextStep;
+  const lessonFetcher = useFetcher();
+  const tellLessonCreated = useCallback(() => {
+    if (!fromLesson || !fromPiece?.startsWith('m:')) return;
     lessonFetcher.submit(
       {
         intent: 'mark-created',
         conversationId: fromLesson,
-        piece: fromPiece,
+        materialId: fromPiece.slice(2),
         yawpHref: `/app/assignment-types/${data.assignmentType.id}`,
       },
       { method: 'post', action: '/api/domain/lesson-planner/packet' }
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromLesson, fromPiece, data.assignmentType.id]);
-  const navigate = useNavigate();
-  useEffect(() => {
-    if (lessonFetcher.state !== 'idle' || !lessonFetcher.data?.backToLesson) return;
-    if (!returnAfterMade.current || !fromLesson) return;
-    returnAfterMade.current = false;
-    navigate(lessonMadeHref(fromLesson, searchParams.get(BACK_PARAM)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lessonFetcher.state, lessonFetcher.data]);
   useEffect(() => {
     if (!incomingPrompt || teachingLockedPreview) return;
     setLibraryPrompt(incomingPrompt);

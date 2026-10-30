@@ -51,7 +51,6 @@ import {
   TileSlideCanvas,
   TileSlideThumbnail,
 } from '~/routes/present.$conversationId.$messageId/tile-slide-canvas';
-import { closeHref } from '~/domain/lesson-planner/lesson-return';
 import {
   GALLERY_FONTS_HREF,
   GallerySlideCanvas,
@@ -64,7 +63,10 @@ import {
  * there), otherwise back to the chat.
  */
 export function deckEditorReturnTo(conversationId: string, url: string) {
-  return closeHref(conversationId, url, 'chat');
+  const from = new URL(url, 'http://localhost').searchParams.get('from');
+  return from === 'stack'
+    ? `/app/lesson-planner/${conversationId}/packet`
+    : `/app/lesson-planner?c=${conversationId}`;
 }
 
 async function requireDeckEditor(request: Request) {

@@ -131,7 +131,7 @@ test.describe("Lesson Planner — Brian's review", () => {
       );
       // Brian's run 2 (A4): the whole lesson goes in as separate pieces.
       await expect(
-        page.getByRole('button', { name: 'Add everything to the lesson' })
+        page.getByRole('button', { name: 'Add everything to the stack' })
       ).toBeVisible();
       await expect(
         page.getByRole('button', { name: 'Add all as a handout' })
@@ -146,9 +146,9 @@ test.describe("Lesson Planner — Brian's review", () => {
           response.url().includes('/api/domain/lesson-planner/packet') &&
           response.request().method() === 'POST'
       );
-      await page.getByRole('button', { name: 'Add everything to the lesson' }).click();
+      await page.getByRole('button', { name: 'Add everything to the stack' }).click();
       expect((await filed).ok()).toBe(true);
-      await expect(page.getByText('Everything is in your lesson')).toBeVisible();
+      await expect(page.getByText('Everything is in the stack')).toBeVisible();
     });
   });
 
@@ -204,9 +204,9 @@ test.describe("Lesson Planner — Brian's review", () => {
       );
       await toggles.nth(1).click();
       expect((await filed).ok()).toBe(true);
-      await expect(toggles.nth(1)).toHaveText(/in your lesson/i);
+      await expect(toggles.nth(1)).toHaveText(/in the stack/i);
       await expect(toggles.nth(1)).toHaveAttribute('title', 'Click to remove from stack');
-      await expect(toggles.nth(0)).toHaveText(/add to lesson/i);
+      await expect(toggles.nth(0)).toHaveText(/add to stack/i);
 
       await page.goto(`/app/lesson-planner/${id}/packet`);
       // B5: the raw first message is not presented as the lesson's name.
@@ -236,7 +236,7 @@ test.describe("Lesson Planner — Brian's review", () => {
       // And the chat agrees.
       await page.goto(`/app/lesson-planner?c=${id}`);
       await expect(page.getByTestId('daily-pages-stack-toggle').nth(1)).toHaveText(
-        /add to lesson/i
+        /add to stack/i
       );
     });
   });
@@ -571,7 +571,7 @@ test.describe("Lesson Planner — Brian's review", () => {
       const card = page.getByTestId('slide-deck-card');
       await expect(card).toContainText('3 slides');
       await expect(card.getByTestId('deck-edited-badge')).toBeVisible();
-      await expect(card.getByTestId('deck-toggle')).toHaveText(/in your lesson/i);
+      await expect(card.getByTestId('deck-toggle')).toHaveText(/in the stack/i);
 
       await card.getByRole('link', { name: 'Present' }).click();
       await expect(page.getByTestId('slide-counter')).toHaveText('1 / 3');
@@ -589,7 +589,7 @@ test.describe("Lesson Planner — Brian's review", () => {
     });
   });
 
-  test('"In your lesson" says what clicking it does (B3)', async ({
+  test('"In the stack" says what clicking it does (B3)', async ({
     page,
     signIn,
     e2eContext,
@@ -614,7 +614,7 @@ test.describe("Lesson Planner — Brian's review", () => {
 
     const toggle = page.getByTestId('exit-ticket-stack-toggle');
     await toggle.click();
-    await expect(toggle).toHaveText(/in your lesson/i);
+    await expect(toggle).toHaveText(/in the stack/i);
     await expect(toggle).toHaveAttribute('title', 'Click to remove from stack');
   });
 });

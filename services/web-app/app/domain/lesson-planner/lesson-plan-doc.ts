@@ -23,8 +23,6 @@ export type LessonPlanEntry = {
   content: string;
   /** Its number in the stack, the one a deck's slides carry as `step`. */
   piece?: number;
-  /** The stack step it is (its section id), for its teacher notes. */
-  id?: string;
 };
 
 export type LessonPlanStep = {
@@ -41,10 +39,6 @@ export type LessonPlanStep = {
   /** The stack piece this step comes from, and its kind. */
   piece?: number;
   kind?: string;
-  /** The stack step it comes from (Oct 24 handoff, task 7). */
-  stepId?: string;
-  /** The teacher's notes for it, printed under it, as "Open with: …" lines. */
-  teacherNotes?: string;
 };
 
 export type LessonPlanDoc = {
@@ -64,11 +58,6 @@ export type LessonPlanDoc = {
    */
   closingStep: LessonPlanStep | null;
   closingInStack: boolean;
-  /**
-   * Set aside for a class that finishes early (Kevin's notes 8c, 10c),
-   * printed after the Closing as "If you have more time". Empty: no section.
-   */
-  extensions: LessonPlanStep[];
   /** Prefilled from the exit ticket or Daily Pages in the stack, when any. */
   assessment: string | null;
   /** The standards the teacher named in the planner, never inferred. */
@@ -272,16 +261,7 @@ function expandAll(entries: LessonPlanEntry[]): Expanded[] {
   return entries.flatMap((entry) =>
     expand(entry).map((item) => ({
       ...(item.step && !item.source ? { ...item, source: plain(entry.content) } : item),
-      ...(item.step
-        ? {
-            step: {
-              ...item.step,
-              kind: entry.kind,
-              ...(entry.piece ? { piece: entry.piece } : {}),
-              ...(entry.id ? { stepId: entry.id } : {}),
-            },
-          }
-        : {}),
+      ...(item.step ? { step: { ...item.step, kind: entry.kind, ...(entry.piece ? { piece: entry.piece } : {}) } } : {}),
       kind: entry.kind,
     }))
   );
@@ -305,7 +285,6 @@ export function buildLessonPlanDoc({
   entries,
   summaries,
   standards = [],
-  extensionIds = [],
 }: {
   title: string;
   className: string | null;
@@ -314,8 +293,6 @@ export function buildLessonPlanDoc({
   summaries?: LessonPlanSummaries | null;
   /** The standards the teacher named (teacher-standards.ts). */
   standards?: string[];
-  /** The stack steps set aside as extensions, in the order set aside. */
-  extensionIds?: string[];
 }): LessonPlanDoc {
   const expanded = expandAll(entries);
   const materials = expanded.flatMap((item) =>
@@ -325,7 +302,7 @@ export function buildLessonPlanDoc({
   const base = stepItems.map((item) => item.step!);
   // The model's words only when they are for this exact list of steps.
   const fits = summaries?.steps && summaries.steps.length === base.length;
-  const allInstructions = base.map((step, index) => {
+  const instructions = base.map((step, index) => {
     const written = fits ? summaries!.steps![index] : null;
     const shortTitle = written?.title?.trim();
     return {
@@ -337,17 +314,10 @@ export function buildLessonPlanDoc({
     };
   });
 
-  // Summaries are written for every step; the extensions are then taken out.
-  const aside = new Set(extensionIds);
-  const isAside = (step: LessonPlanStep) => Boolean(step.stepId && aside.has(step.stepId));
-  const extensions = extensionIds.flatMap((id) => allInstructions.filter((step) => step.stepId === id));
-  const kept = stepItems.flatMap((item, index) => (isAside(allInstructions[index]!) ? [] : [{ item, index }]));
-  const instructions = kept.map(({ index }) => allInstructions[index]!);
-
   // The stack decides the sections: its last closing or exit ticket is the
   // Closing, never a second version beside it (Brian's run 3, item 12).
   let closingIndex = -1;
-  kept.forEach(({ item }, index) => {
+  stepItems.forEach((item, index) => {
     if (item.kind === 'exit-ticket' || CLOSING_TITLE.test(item.step!.title)) closingIndex = index;
   });
   const closingStep = closingIndex >= 0 ? instructions[closingIndex]! : null;
@@ -382,7 +352,6 @@ export function buildLessonPlanDoc({
         }`,
     closingStep,
     closingInStack: Boolean(closingStep),
-    extensions,
     assessment: assessmentFrom(entries),
     standards,
   };
@@ -427,7 +396,7 @@ export function entriesFromPacket(
     if (section.origin === 'material') {
       return [
         {
-          ...(isDeck ? {} : { piece, id: section.id }),
+          ...(isDeck ? {} : { piece }),
           kind:
             materialKinds[section.id] ??
             (section.kind === 'slides'
@@ -443,7 +412,7 @@ export function entriesFromPacket(
       ];
     }
     return [
-      { kind: 'lesson', title: section.title, content: section.content, piece, id: section.id },
+      { kind: 'lesson', title: section.title, content: section.content, piece },
       ...(section.deck
         ? [
             {
@@ -460,24 +429,4 @@ export function entriesFromPacket(
       })),
     ];
   });
-}
-
-/**
- * The teacher's notes under each step of the plan (Oct 24 handoff, task 7),
- * once per stack step: a reply read as several steps has them under its first.
- */
-export function withTeacherNotes(doc: LessonPlanDoc, notes: Record<string, string>): LessonPlanDoc {
-  const seen = new Set<string>();
-  const attach = (step: LessonPlanStep): LessonPlanStep => {
-    if (!step.stepId || seen.has(step.stepId)) return step;
-    seen.add(step.stepId);
-    const text = notes[step.stepId]?.trim();
-    return text ? { ...step, teacherNotes: text } : step;
-  };
-  return {
-    ...doc,
-    instructions: doc.instructions.map(attach),
-    closingStep: doc.closingStep ? attach(doc.closingStep) : null,
-    extensions: doc.extensions.map(attach),
-  };
 }

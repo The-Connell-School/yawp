@@ -17,7 +17,6 @@ import { inlinePlannedExitTickets } from './exit-ticket-block';
 import { inlineLessonResources } from './lesson-resource';
 import { inlinePlannedPractice } from './practice-block';
 import { inlineUnitPlan } from './unit-plan';
-import { cleanLessonTitle } from './lesson-title';
 
 export const PACKET_AUDIENCES = ['teacher', 'student'] as const;
 
@@ -327,8 +326,7 @@ export function buildLessonPacket({
   });
 
   return {
-    // Never the planner's tags or minutes (Brian's round 3, 1.1).
-    title: cleanLessonTitle(title) || 'Lesson plan',
+    title: title.trim() || 'Lesson plan',
     className,
     sections: built.map(
       ({
