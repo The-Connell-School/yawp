@@ -10,6 +10,11 @@ on:
       - '.github/workflows/migration-integration.yml'
       - 'services/web-app/**'
 
+# Cancel superseded runs on the same PR (PR-only workflow; never main or deploy).
+concurrency:
+  group: migration-integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   migration-integration:
     runs-on: ubuntu-latest

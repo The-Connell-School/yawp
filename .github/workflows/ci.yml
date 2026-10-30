@@ -166,7 +166,7 @@ jobs:
 
       - name: 🧪 Validate deployment contract
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts ./scripts/ci/release-docker-host-port.test.ts ./scripts/ci/bun-install-frozen.test.ts ./scripts/ci/install-playwright-chromium.test.ts ./scripts/preview/deploy-log-secrets.test.js ./scripts/preview/redact-deploy-logs.test.js --max-concurrency=2
+        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts ./scripts/ci/release-docker-host-port.test.ts ./scripts/ci/bun-install-frozen.test.ts ./scripts/ci/install-playwright-chromium.test.ts ./scripts/preview/deploy-log-secrets.test.js ./scripts/preview/redact-deploy-logs.test.js ./scripts/ci/check-ci-test-list.test.ts --max-concurrency=2
 
       - name: 🧪 Validate Blackboard LTI mock
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -1106,7 +1106,37 @@ jobs:
             app/domain/lesson-planner/lesson-templates.test.ts \
             app/domain/lesson-planner/yawp-catalog.server.test.ts \
             app/routes/api.domain.lesson-planner.stack/route.test.ts \
-            app/routes/api.domain.lesson-planner.library/route.test.ts
+            app/routes/api.domain.lesson-planner.library/route.test.ts \
+            app/domain/lesson-planner/deck-art.test.ts \
+            app/domain/lesson-planner/deck-edit.test.ts \
+            app/domain/lesson-planner/exit-ticket-block-quick.test.ts \
+            app/domain/lesson-planner/exit-ticket-block.test.ts \
+            app/domain/lesson-planner/lesson-ask.test.ts \
+            app/domain/lesson-planner/lesson-links.test.ts \
+            app/domain/lesson-planner/lesson-material.test.ts \
+            app/domain/lesson-planner/lesson-planner-pending-reporter-delegation.server.test.ts \
+            app/domain/lesson-planner/lesson-planner-tools.server.test.ts \
+            app/domain/lesson-planner/lesson-pptx.server.test.ts \
+            app/domain/lesson-planner/lesson-resource.test.ts \
+            app/domain/lesson-planner/lesson-seed.server.test.ts \
+            app/domain/lesson-planner/lesson-unit.server.test.ts \
+            app/domain/lesson-planner/markdown-blocks.test.ts \
+            app/domain/lesson-planner/material-richtext.test.ts \
+            app/domain/lesson-planner/my-lessons.server.test.ts \
+            app/domain/lesson-planner/planning-progress.test.ts \
+            app/domain/lesson-planner/practice-block.test.ts \
+            app/domain/lesson-planner/repair-slide-deck.server.test.ts \
+            app/domain/lesson-planner/slide-deck.test.ts \
+            app/domain/lesson-planner/student-handout.test.ts \
+            app/domain/lesson-planner/unit-plan.test.ts \
+            app/domain/lesson-planner/yawp-catalog.test.ts \
+            app/routes/api.domain.lesson-planner.class-length/route.test.ts \
+            app/routes/app.lesson-planner/lesson-rail.test.ts \
+            app/routes/app.lesson-planner/prompt-tiles.test.ts \
+            app/routes/app.lesson-planner/rotating-placeholder.test.ts \
+            'app/routes/app.lesson-planner_.$conversationId.packet/resource-index.test.ts' \
+            app/domain/feature-flags/lesson-planner-seed-parity.test.ts \
+            app/domain/feature-flags/production-dark-by-default.server.test.ts
           do
             bun test "$f"
           done
