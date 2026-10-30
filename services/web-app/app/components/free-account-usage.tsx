@@ -15,6 +15,7 @@ import {
   Copy,
   Heart,
   Lock,
+  Microscope,
   Plus,
   Users,
 } from 'lucide-react';
@@ -775,10 +776,10 @@ export function FreeReporterLocked({
           className="flex max-w-[616px] flex-col items-start gap-3.5 rounded-xl border bg-popover p-7 text-left shadow-sm"
         >
           <span
-            data-testid="reporter-lock-badge"
-            className="flex size-10 items-center justify-center rounded-full bg-secondary"
+            data-testid="reporter-feature-icon"
+            className="flex size-10 items-center justify-center rounded-full bg-secondary text-muted-foreground"
           >
-            <Lock size={20} aria-hidden="true" />
+            <Microscope size={20} aria-hidden="true" />
           </span>
           <h2 className="text-xl font-bold leading-[1.35]">
             {variant === 'pending'

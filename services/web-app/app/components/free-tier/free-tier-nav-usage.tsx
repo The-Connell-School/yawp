@@ -53,6 +53,7 @@ function renderFreeTierLockedApprovalNavRow({
   rowClassName,
   linkClassName,
   reloadDocument,
+  showUnlockLock = true,
 }: {
   link: SidebarNavLink;
   icon: ReactNode;
@@ -62,6 +63,7 @@ function renderFreeTierLockedApprovalNavRow({
   rowClassName: string;
   linkClassName: string;
   reloadDocument: boolean;
+  showUnlockLock?: boolean;
 }) {
   if (navExpanded) {
     return (
@@ -79,7 +81,7 @@ function renderFreeTierLockedApprovalNavRow({
           {icon}
           <span className="min-w-0 truncate">{link.label}</span>
         </Link>
-        <FreeTierNavUnlockLock />
+        {showUnlockLock ? <FreeTierNavUnlockLock /> : null}
       </div>
     );
   }
@@ -174,6 +176,7 @@ export function renderFreeTierNavRow(ctx: NavRowContext): React.ReactNode | null
         rowClassName,
         linkClassName,
         reloadDocument,
+        showUnlockLock: false,
       });
     }
     if (!usage.reporter) return null;
