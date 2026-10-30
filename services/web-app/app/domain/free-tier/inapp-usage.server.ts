@@ -14,6 +14,7 @@ import {
   getEntitlementsForPlan,
 } from '~/utils/entitlements.server';
 import { effectiveFreeTierLimits } from './limits.server';
+import { reporterMonthlyQuotaEnforced } from './monthly-quota-cap.server';
 import { buildFreeAccountUsage, type FreeAccountUsage } from './inapp-usage';
 import { readGradingLimitStatus } from '~/utils/rate-limit.server';
 import { shouldHideFreeTierTeachingSecrets } from './locked-preview.server';
@@ -96,7 +97,9 @@ export async function readFreeAccountUsage(
       ? countOrganizationLessonPlans(organizationId, true)
       : Promise.resolve(null),
   ]);
-  const reporterUsed = policy.enabled
+  const reporterQuotaEnforced =
+    policy.enabled && reporterMonthlyQuotaEnforced(limits);
+  const reporterUsed = reporterQuotaEnforced
     ? await readMonthlyUsage(organizationId, 'reporter')
     : 0;
   const usageCounts = buildFreeAccountUsage({
@@ -133,7 +136,9 @@ export async function readFreeAccountUsage(
           reporter: {
             used: reporterUsed,
             total: limits.reporterMonthly,
-            remaining: Math.max(0, limits.reporterMonthly - reporterUsed),
+            remaining: reporterQuotaEnforced
+              ? Math.max(0, limits.reporterMonthly - reporterUsed)
+              : limits.reporterMonthly,
           },
         }
       : lessonPlannerMonthlyMetering

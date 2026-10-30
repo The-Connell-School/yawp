@@ -159,6 +159,19 @@ function GradingChoiceGroup<Value extends string>({
  * otherwise. A native <details> keeps everything inside mounted, so every
  * field still posts whether or not the teacher opened it.
  */
+/** Radix checkboxes are buttons, not native inputs, so form posts need a hidden value. */
+function BooleanFormValue({
+  name,
+  value,
+}: {
+  name: string;
+  value: boolean;
+}) {
+  return (
+    <input type="hidden" name={name} value={value ? 'true' : 'false'} />
+  );
+}
+
 function MoreOptions({
   enabled,
   open,
@@ -1589,12 +1602,7 @@ export function AssignmentCreationSheetContent({
         )}
 
         <div className="pt-6">
-          <input type="hidden" name="submitForGrade" value="false" />
-          {isQuickExitTicket ? (
-            submitForGrade ? (
-              <input type="hidden" name="submitForGrade" value="true" />
-            ) : null
-          ) : isExitTicket ? (
+          {isQuickExitTicket ? null : isExitTicket ? (
             /* Same field, same values — this only reframes the choice in the
                terms an exit ticket is actually about. Feedback only still
                reads and scores every response; it just keeps the score out of
@@ -1647,17 +1655,12 @@ export function AssignmentCreationSheetContent({
                   </Label>
                 </div>
               </RadioGroup>
-              {submitForGrade ? (
-                <input type="hidden" name="submitForGrade" value="true" />
-              ) : null}
             </div>
           ) : (
             <>
               <div className="flex items-center gap-2.5">
                 <Checkbox
                   id="assignment-create-submit-for-grade"
-                  name="submitForGrade"
-                  value="true"
                   checked={submitForGrade}
                   onCheckedChange={(checked) =>
                     setSubmitForGrade(checked === true)
@@ -1816,6 +1819,7 @@ export function AssignmentCreationSheetContent({
               />
             </div>
           ) : null}
+          <BooleanFormValue name="submitForGrade" value={submitForGrade} />
         </div>
 
         {showIndividualDocumentNotice ? (
@@ -1857,13 +1861,11 @@ export function AssignmentCreationSheetContent({
             the stored value alone. */}
           <div className="pt-6">
             {isEditing ? null : (
-              <input type="hidden" name="tutorEnabled" value="false" />
+              <BooleanFormValue name="tutorEnabled" value={tutorEnabled} />
             )}
             <div className="flex items-center gap-2.5">
               <Checkbox
                 id="assignment-create-tutor-enabled"
-                name={isEditing ? undefined : 'tutorEnabled'}
-                value="true"
                 checked={tutorEnabled}
                 onCheckedChange={(checked) => setTutorEnabled(checked === true)}
                 disabled={isSaving || isEditing}
@@ -1915,17 +1917,14 @@ export function AssignmentCreationSheetContent({
           {selectedTypeGradesGrammar ? (
             <div className="pt-6">
               {isEditing ? null : (
-                <input
-                  type="hidden"
+                <BooleanFormValue
                   name="grammarGradingEnabled"
-                  value="false"
+                  value={grammarGradingEnabled}
                 />
               )}
               <div className="flex items-center gap-2.5">
                 <Checkbox
                   id="assignment-create-grammar-grading-enabled"
-                  name={isEditing ? undefined : 'grammarGradingEnabled'}
-                  value="true"
                   checked={grammarGradingEnabled}
                   onCheckedChange={(checked) =>
                     setGrammarGradingEnabled(checked === true)
@@ -1958,17 +1957,14 @@ export function AssignmentCreationSheetContent({
           {showCollaborationToggle ? (
             <div className="pt-6">
               {isEditing ? null : (
-                <input
-                  type="hidden"
+                <BooleanFormValue
                   name="collaborationEnabled"
-                  value="false"
+                  value={collaborationEnabled}
                 />
               )}
               <div className="flex items-center gap-2.5">
                 <Checkbox
                   id="assignment-create-collaboration-enabled"
-                  name={isEditing ? undefined : 'collaborationEnabled'}
-                  value="true"
                   checked={collaborationEnabled}
                   onCheckedChange={(checked) =>
                     setCollaborationEnabled(checked === true)
@@ -2073,12 +2069,10 @@ export function AssignmentCreationSheetContent({
 
         {SAVED_ASSIGNMENTS_ENABLED && usesBulkCreateApi && !isEditing ? (
           <div className="pt-6">
-            <input type="hidden" name="saveForReuse" value="false" />
+            <BooleanFormValue name="saveForReuse" value={saveForReuse} />
             <div className="flex items-center gap-2.5">
               <Checkbox
                 id="assignment-create-save-for-reuse"
-                name="saveForReuse"
-                value="true"
                 checked={saveForReuse}
                 onCheckedChange={(checked) => setSaveForReuse(checked === true)}
                 disabled={isSaving}

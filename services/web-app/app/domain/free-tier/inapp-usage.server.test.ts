@@ -17,6 +17,20 @@ mock.module('./limits.server', () => ({
   }),
   readFreeTierLimits: async () => testLimits,
 }));
+mock.module('./monthly-policy.server', () => ({
+  monthlyFreeTierPolicy: async () => {
+    const lessonPlannerMeteringEnabled =
+      applicationStatus != null &&
+      (applicationStatus === 'APPROVED' ||
+        applicationStatus === 'SENT' ||
+        applicationStatus === 'MANUAL_REVIEW');
+    return {
+      enabled: applicationStatus === 'APPROVED',
+      lessonPlannerMeteringEnabled,
+      limits: testLimits,
+    };
+  },
+}));
 let applicationStatus: 'APPROVED' | 'SENT' | 'MANUAL_REVIEW' | null = 'APPROVED';
 let previousYawpEnvironment: string | undefined;
 const classRead = mock(async (..._args: any[]) => ({
@@ -93,12 +107,27 @@ const profile = {
   organization: { id: 'org', plan: 'FREE_CLASSROOM' },
 };
 beforeEach(() => {
+  testLimits.reporterMonthly = 100;
   mock.module('./limits.server', () => ({
     effectiveFreeTierLimits: async () => ({
       monthly: true,
       limits: testLimits,
     }),
     readFreeTierLimits: async () => testLimits,
+  }));
+  mock.module('./monthly-policy.server', () => ({
+    monthlyFreeTierPolicy: async () => {
+      const lessonPlannerMeteringEnabled =
+        applicationStatus != null &&
+        (applicationStatus === 'APPROVED' ||
+          applicationStatus === 'SENT' ||
+          applicationStatus === 'MANUAL_REVIEW');
+      return {
+        enabled: applicationStatus === 'APPROVED',
+        lessonPlannerMeteringEnabled,
+        limits: testLimits,
+      };
+    },
   }));
   previousYawpEnvironment = process.env.YAWP_ENVIRONMENT;
   delete process.env.YAWP_ENVIRONMENT;
@@ -163,9 +192,16 @@ test('free tier usage reflects configured caps without hiding excess students', 
   expect(usage!.monthly).toBe(true);
   const now = new Date();
   expect(usage!.renewsAt).toBe(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString());
-  expect(usage!.reporter).toEqual({ used: 1, total: 100, remaining: 99 });
+  expect(usage!.reporter).toEqual({ used: 0, total: 100, remaining: 100 });
   expect(usage!.lessonPlans.total).toBe(0);
   expect(usage!.lessonPlans.remaining).toBe(0);
+});
+
+test('default reporter cap counts monthly usage for the usage meter', async () => {
+  testLimits.reporterMonthly = 2;
+  freeTierValue = '{"mode":"everyone","orgIds":[]}';
+  const usage = await readFreeAccountUsage(profile, true, 'user-1');
+  expect(usage!.reporter).toEqual({ used: 1, total: 2, remaining: 1 });
 });
 
 for (const value of [null, 'false', '{"mode":"off","orgIds":[]}']) {

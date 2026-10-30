@@ -1,4 +1,5 @@
 import { monthlyFreeTierPolicy } from '~/domain/free-tier/monthly-policy.server';
+import { reporterMonthlyQuotaEnforced } from '~/domain/free-tier/monthly-quota-cap.server';
 import {
   beginMonthlyOperation,
   finishMonthlyOperation,
@@ -176,7 +177,10 @@ export async function action({ request }: ActionFunctionArgs) {
     access.membership.organization
   );
   let reservation: Reservation | null = null;
-  if (monthlyPolicy.enabled) {
+  if (
+    monthlyPolicy.enabled &&
+    reporterMonthlyQuotaEnforced(monthlyPolicy.limits)
+  ) {
     if (!turn.requestId)
       return dataResponse(
         { error: 'Request ID is required.' },

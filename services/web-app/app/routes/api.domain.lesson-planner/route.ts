@@ -1,4 +1,5 @@
 import { monthlyFreeTierPolicy } from '~/domain/free-tier/monthly-policy.server';
+import { lessonPlannerMonthlyQuotaEnforced } from '~/domain/free-tier/monthly-quota-cap.server';
 import { recentArtFrom } from '~/domain/lesson-planner/recent-art';
 import { plannerHistory } from '~/domain/lesson-planner/planner-history';
 import {
@@ -356,7 +357,11 @@ export async function action({ request }: ActionFunctionArgs) {
     });
     if (replay) return monthlyResponse(monthlyOperationResponse(replay));
   }
-  if (lessonPlannerMetering && !activeConversationForQuota) {
+  if (
+    lessonPlannerMetering &&
+    !activeConversationForQuota &&
+    lessonPlannerMonthlyQuotaEnforced(monthlyPolicy.limits)
+  ) {
     if (!turn.requestId)
       return monthlyResponse(
         Response.json({ error: 'Request ID is required.' }, { status: 400 })
