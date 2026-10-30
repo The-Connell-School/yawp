@@ -462,4 +462,27 @@ test.describe("Kevin's unit-build feedback (Oct 25)", () => {
       await cleanup.$disconnect();
     }
   });
+
+  test('See how it works shows the lesson page, Teach it and the library as they are now', async ({ page, signIn, e2eContext }) => {
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto('/app/lesson-planner/how-it-works');
+    await expect(page.getByRole('heading', { name: 'Your lesson, start to finish' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Teach it' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Run the show' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Your library' })).toBeVisible();
+    for (const clip of ['lesson-page', 'teach-it', 'library', 'unit-library']) {
+      await expect(page.locator(`video[poster$="/${clip}.jpg"]`)).toHaveCount(1);
+    }
+    await expect(page.locator('img[src$="/print-for-class.jpg"]')).toHaveCount(1);
+    await expect(page.getByText('If you have extra time', { exact: false }).first()).toBeVisible();
+    // Every clip and still the guide points at is really there.
+    const sources = await page.locator('video source, img[src*="lesson-planner-guide"], video[poster]').evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute('src') ?? node.getAttribute('poster')!)
+    );
+    for (const source of sources) expect((await page.request.get(source)).ok(), source).toBe(true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Teach it' })).toBeAttached();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+  });
 });
