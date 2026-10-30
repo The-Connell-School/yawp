@@ -1,6 +1,7 @@
 import './free-account.css';
 import { readFreeAccountUsage } from '~/domain/free-tier/inapp-usage.server';
 import {
+  freeTierLessonPlannerNavTease,
   freeTierNavMobileWarningDot,
   renderFreeTierNavRow,
 } from '~/components/free-tier/free-tier-nav-usage';
@@ -287,6 +288,10 @@ export default function Route() {
     teachingAccess.variant === 'loading';
   const usageNavLoading =
     navigation.state === 'loading' && Boolean(freeAccountUsage);
+  const freeTierLessonPlannerLockedNavTease = Boolean(
+    freeAccountUsage &&
+      freeTierLessonPlannerNavTease(freeAccountUsage, teachingLockedNav)
+  );
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const isReadOnlyImpersonation = rootData?.impersonation?.isReadOnly ?? false;
@@ -495,7 +500,7 @@ export default function Route() {
             pathname={location.pathname}
             isAppNavLinkActive={isAppNavLinkActive}
             forceFullNavigation={isClassDetailRoute}
-            includeLessonPlannerWhenFeatureOff={Boolean(freeAccountUsage)}
+            includeLessonPlannerWhenFeatureOff={freeTierLessonPlannerLockedNavTease}
             renderNavRow={
               freeAccountUsage
                 ? ({ link, isActive, rowClassName, linkClassName, icon }) =>

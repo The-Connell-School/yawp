@@ -171,7 +171,7 @@ type SidebarNavLinksProps = {
   pathname: string;
   isAppNavLinkActive: (linkTo: string, pathname: string) => boolean;
   forceFullNavigation?: boolean;
-  /** Free-tier sidebar always lists Lesson Planner per Design, even when the org flag is off. */
+  /** Free-tier locked preview: show LP nav with lock row when the org flag is off. */
   includeLessonPlannerWhenFeatureOff?: boolean;
   renderLinkTrailing?: (link: SidebarNavLink) => React.ReactNode;
   renderNavRow?: (input: {

@@ -129,6 +129,14 @@ export function renderFreeTierNavTrailing() {
   return null;
 }
 
+/** Locked-preview tease only: show LP in nav with lock row when the org flag is off. */
+export function freeTierLessonPlannerNavTease(
+  usage: FreeAccountUsage,
+  teachingLocked: boolean
+) {
+  return usage.reporterLocked || teachingLocked;
+}
+
 export function renderFreeTierNavRow(ctx: NavRowContext): React.ReactNode | null {
   const {
     link,
