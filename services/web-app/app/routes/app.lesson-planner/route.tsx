@@ -1,10 +1,8 @@
-import { MadeNotice } from '~/components/lesson-planner/made-notice';
 import {
   LessonPlannerMonthlyLimitNotice,
   lessonPlannerPausedPlaceholder,
   useFreeAccountUsage,
 } from '~/components/free-account-usage';
-import { previewLine } from '~/domain/lesson-planner/plain-preview';
 import { replyTopScroll, transcriptScrollTarget } from '~/domain/lesson-planner/transcript-scroll';
 import {
   SourceAttachButton,
@@ -67,8 +65,7 @@ import {
   printAssistantMessage,
 } from '~/components/ai-chat/assistant-markdown';
 import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
-import { hasSlideDeck, readSlideDeck } from '~/domain/lesson-planner/slide-deck';
-import { blockRef, createdFor, linksByToken, type PieceCreated } from '~/domain/lesson-planner/assignment-links';
+import { readSlideDeck } from '~/domain/lesson-planner/slide-deck';
 import {
   DECK_SLOT,
   readLessonMaterials,
@@ -78,7 +75,6 @@ import { LessonAskCard } from '~/components/ai-chat/lesson-ask-card';
 import {
   asksWorthShowing,
   readLessonAsks,
-  plansSeveralDays,
 } from '~/domain/lesson-planner/lesson-ask';
 import {
   partsSummary,
@@ -94,7 +90,7 @@ import {
   type PracticeContext,
 } from '~/domain/lesson-planner/practice-context.server';
 import { UnitPlanCard } from '~/components/ai-chat/unit-plan-card';
-import { buildDayDisplay, buildDayRequest, readUnitPlan } from '~/domain/lesson-planner/unit-plan';
+import { readUnitPlan } from '~/domain/lesson-planner/unit-plan';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
 import { hidePromptIds } from '~/domain/lesson-planner/prompt-ids';
 import { overTime, planMinutes } from '~/domain/lesson-planner/plan-timing';
@@ -126,7 +122,6 @@ import {
   type PlanningProgressState,
 } from '~/components/ai-chat/planning-progress-bar';
 import { PLANNING_PROGRESS_START } from '~/domain/lesson-planner/planning-progress';
-import { cleanLessonTitle } from '~/domain/lesson-planner/lesson-title';
 
 type PacketAudience = 'teacher' | 'student';
 
@@ -141,13 +136,11 @@ type ChatMessage = {
   id?: string;
   role: 'user' | 'assistant';
   content: string;
-  /** A button's turn shows this one line, with the request under Details (Kevin, Oct 25, note 5). */
-  displayText?: string | null;
   /** Set when this reply is kept in the printable packet. */
   keptAudience?: PacketAudience | null;
 };
 
-type StackPieceRef = { materialId: string | null; created: PieceCreated | null };
+type StackPieceRef = { materialId: string; created: { href: string } | null };
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const access = await getLessonPlannerAccess(request);
@@ -205,7 +198,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 content: true,
                 keptAudience: true,
                 surface: true,
-                displayText: true,
               },
             },
             materials: {
@@ -220,9 +212,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 yawpHref: true,
                 yawpCreatedAt: true,
               },
-            },
-            assignmentLinks: {
-              select: { sourceMessageId: true, blockKey: true, yawpHref: true, createdFrom: true },
             },
             uploads: {
               orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -265,14 +254,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       else builtDays[sibling.unitDay] = sibling.id;
     }
   }
-  // The unit this chat planned, saved in the library (Kevin, Oct 25, note 4).
-  const savedUnit =
-    selected?.unitId && selected.unitDay === null
-      ? await prisma.lessonPlanUnit.findFirst({
-          where: { id: selected.unitId, deletedAt: null },
-          select: { id: true, title: true },
-        })
-      : null;
 
   // Needed to turn what the planner wrote into real assignments: the warm-up at
   // one end of the lesson and the check for understanding at the other. A class
@@ -356,7 +337,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     exitTicketTypeId,
     conversations: conversations.map((conversation) => ({
       id: conversation.id,
-      title: cleanLessonTitle(conversation.packetTitle?.trim() || conversation.title),
+      title: conversation.packetTitle?.trim() || conversation.title,
       published: Boolean(conversation.publishedAt),
       sectionCount:
         conversation._count.messages + conversation._count.materials,
@@ -364,7 +345,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     builtDays,
     daysSourceMessageId,
     unitMapConversation,
-    savedUnit,
     selectedConversation: selected
       ? {
           id: selected.id,
@@ -384,20 +364,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
           // (Brian's run 3, item 4).
           // The teacher's own documents for this lesson (Oct 21).
           uploads: reviewFlags.uploads ? selected.uploads : [],
-          // Every piece with an assignment, filed or not, from the one record
-          // the stack reads too (Oct 24 handoff, task 1).
-          stackPieces: (() => {
-            const links = linksByToken(selected.assignmentLinks);
-            const pieces: Record<string, StackPieceRef> = {};
-            for (const [token, created] of links) pieces[token] = { materialId: null, created };
-            for (const material of selected.materials) {
-              pieces[`${material.sourceMessageId}:${material.blockKey}`] = {
+          stackPieces: Object.fromEntries(
+            selected.materials.map((material) => [
+              `${material.sourceMessageId}:${material.blockKey}`,
+              {
                 materialId: material.id,
-                created: createdFor(links, material),
-              };
-            }
-            return pieces;
-          })(),
+                created:
+                  material.yawpCreatedAt && material.yawpHref
+                    ? { href: material.yawpHref }
+                    : null,
+              },
+            ])
+          ) as Record<string, StackPieceRef>,
           // A deck the teacher edited by hand (Brian's review, E2), which the
           // chat shows in place of the planner's.
           editedDeck: (() => {
@@ -458,7 +436,6 @@ export default function LessonPlannerRoute() {
     builtDays,
     daysSourceMessageId,
     unitMapConversation,
-    savedUnit,
     reviewFlags,
     teacherClasses,
     templates,
@@ -490,7 +467,6 @@ export default function LessonPlannerRoute() {
   const [pendingSubmission, setPendingSubmission] = useState<{
     message: string;
     conversationKey: string;
-    displayText?: string | null;
   } | null>(null);
   // The template a new lesson is being built from (run 3).
   const [activeTemplate, setActiveTemplate] = useState<LessonTemplate | null>(null);
@@ -525,7 +501,7 @@ export default function LessonPlannerRoute() {
       pendingSubmission &&
         pendingSubmission.conversationKey ===
           (selectedConversation?.id ?? 'new')
-        ? [...persisted, { role: 'user', content: pendingSubmission.message, displayText: pendingSubmission.displayText ?? null }]
+        ? [...persisted, { role: 'user', content: pendingSubmission.message }]
         : persisted
     );
     setAddedMaterials(new Set(selectedConversation?.addedMaterials ?? []));
@@ -685,7 +661,7 @@ export default function LessonPlannerRoute() {
       });
       const replace = window.confirm(
         // Plainer words (Brian's run 2): the teacher's edits, and what happens.
-        'You edited this in your lesson. Replace your edits with this version?'
+        'You edited this in the stack. Replace your edits with this version?'
       );
       if (!replace) return;
       setAddedMaterials((prev) => new Set(prev).add(token));
@@ -734,7 +710,7 @@ export default function LessonPlannerRoute() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stackVersion]);
 
-  // "Add everything to the lesson" (Brian's run 2, A4): one piece per step and
+  // "Add everything to the stack" (Brian's run 2, A4): one piece per step and
   // block, so each can be refined in the stack. Shown as in at once; the
   // answer says which, if any, were left alone because they were hand-edited.
   const keepAllFetcher = useFetcher<{ added?: string[]; skipped?: string[] }>();
@@ -779,7 +755,7 @@ export default function LessonPlannerRoute() {
     );
   }
 
-  // Every "In your lesson" matches the stack, however it changed: here, on the
+  // Every "In the stack" matches the stack, however it changed: here, on the
   // stack page, in the panel, or in another tab (Brian's run 3, item 2).
   const tokensFetcher = useFetcher<{ conversationId: string; tokens: string[] }>();
   const savedConversationId = selectedConversation?.id ?? null;
@@ -902,34 +878,6 @@ export default function LessonPlannerRoute() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reworkStep]);
 
-  // "Build this day" on the library's unit page lands here as ?buildDay=N
-  // and builds that day from this chat's map, once (Kevin, Oct 25, note 4).
-  const buildDayParam = searchParams.get('buildDay');
-  const buildDayAsked = useRef(false);
-  useEffect(() => {
-    if (buildDayAsked.current || !buildDayParam || !conversationId || isSending) return;
-    const dayNumber = Number(buildDayParam);
-    const map = [...messages]
-      .reverse()
-      .map((message) => (message.role === 'assistant' ? readUnitPlan(message.content) : null))
-      .find((outcome) => outcome?.kind === 'unit');
-    const next = new URLSearchParams(searchParams);
-    next.delete('buildDay');
-    if (!map || map.kind !== 'unit') {
-      setSearchParams(next, { replace: true });
-      return;
-    }
-    const day = map.unit.days.find((candidate) => candidate.day === dayNumber);
-    buildDayAsked.current = true;
-    setSearchParams(next, { replace: true });
-    if (!day || builtDays[day.day]) return;
-    // After mount settles: the conversation's own reset runs on mount too, and
-    // would otherwise clear the turn this just sent.
-    setTimeout(() => send(buildDayRequest(map.unit, day), { day: day.day, title: day.title, display: buildDayDisplay(map.unit, day) }), 0);
-    // Once per arrival.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildDayParam, conversationId, messages.length]);
-
   const buildRequest = searchParams.get('build');
   const buildAsked = useRef(false);
   useEffect(() => {
@@ -958,12 +906,12 @@ export default function LessonPlannerRoute() {
      * Set by "Build this day". The lesson is written into that day's own
      * conversation, so the reply comes back from somewhere other than here.
      */
-    unitDay?: { day: number; title: string; display?: string }
+    unitDay?: { day: number; title: string }
   ) {
     const trimmed = message.trim();
     if (!trimmed || isSending) return;
-    setMessages((prev) => [...prev, { role: 'user', content: trimmed, displayText: unitDay?.display ?? null }]);
-    setPendingSubmission({ message: trimmed, conversationKey, displayText: unitDay?.display ?? null });
+    setMessages((prev) => [...prev, { role: 'user', content: trimmed }]);
+    setPendingSubmission({ message: trimmed, conversationKey });
     setInput('');
     setStreamed(null);
     void sendStreaming(trimmed, unitDay);
@@ -979,7 +927,7 @@ export default function LessonPlannerRoute() {
    */
   async function sendStreaming(
     message: string,
-    unitDay?: { day: number; title: string; display?: string }
+    unitDay?: { day: number; title: string }
   ) {
     const body = new URLSearchParams({
       intent: 'chat',
@@ -993,7 +941,6 @@ export default function LessonPlannerRoute() {
       ...(unitDay
         ? { unitDay: String(unitDay.day), unitDayTitle: unitDay.title }
         : {}),
-      ...(unitDay?.display ? { displayText: unitDay.display } : {}),
       // A lesson started from a template keeps its shape (run 3).
       ...(activeTemplate ? { templateId: activeTemplate.id } : {}),
       // Documents added before the first message go with it (Oct 21).
@@ -1224,7 +1171,6 @@ export default function LessonPlannerRoute() {
                   practice={practice}
                   conversationId={conversationId}
                   builtDays={builtDays}
-                  savedUnit={reviewFlags.libraryV2 ? savedUnit : null}
                   daysOn={reviewFlags.stackV3}
                   daysSourceMessageId={daysSourceMessageId}
                   frameworksOn={reviewFlags.templates}
@@ -1312,7 +1258,6 @@ export default function LessonPlannerRoute() {
         {hasMessages ? (
           <div className="border-t bg-background px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
             <div className="mx-auto w-full max-w-3xl pr-12">
-              <MadeNotice className="mb-2" />
               <LessonComposer
                 value={input}
                 onChange={setInput}
@@ -1573,7 +1518,6 @@ function MessageBubble({
   practice,
   conversationId,
   builtDays,
-  savedUnit = null,
   onSuggestion,
   onKeep,
   stackV2 = false,
@@ -1615,8 +1559,6 @@ function MessageBubble({
   conversationId: string | null;
   /** Day number → the conversation each already-built day lives in. */
   builtDays: Record<number, string>;
-  /** The unit this chat planned, in the library (note 4). */
-  savedUnit?: { id: string; title: string } | null;
   /** Brian's run 5: a multi-day reply makes each day its own lesson. */
   daysOn?: boolean;
   /** The reply the unit's day lessons were made from, once they are. */
@@ -1657,7 +1599,7 @@ function MessageBubble({
   previousUserText?: string | null;
   /** "Replace existing class starter with this one" (Brian's run 2, E1). */
   onReplaceMaterial?: ((messageId: string, materialKey: string) => void) | null;
-  /** "Add everything to the lesson", as separate pieces (Brian's run 2, A4). */
+  /** "Add everything to the stack", as separate pieces (Brian's run 2, A4). */
   onKeepAll?: ((messageId: string, keys: string[]) => void) | null;
   /** One segment of the plan in or out, however many pieces it files as (run 3). */
   onSegment?: ((messageId: string, keys: string[], add: boolean) => void) | null;
@@ -1668,41 +1610,16 @@ function MessageBubble({
   if (message.surface === 'stack') {
     // A change asked for on the stack page (Brian's run 3, item 7): one
     // compact line here, never a full reply.
-    const line = (
+    return (
       <div
         data-testid="stack-turn"
         data-role={message.role}
         className="flex items-center gap-2 text-xs text-muted-foreground"
       >
         <span className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">
-          {message.role === 'user'
-            ? 'In your lesson'
-            : hasSlideDeck(message.content)
-              ? 'Deck built in your lesson'
-              : 'Stack change'}
+          {message.role === 'user' ? 'On the stack' : 'Stack change'}
         </span>
-        <span className="truncate">
-          {message.displayText ?? previewLine(message.content, 200)}
-        </span>
-      </div>
-    );
-    // A deck built on the stack is one click away here too (Kevin's note,
-    // Oct 24): present it, or add it, without building it again.
-    const stackDeck = message.role === 'assistant' ? readSlideDeck(message.content) : null;
-    if (stackDeck?.kind !== 'deck' || !message.id || !conversationId) return line;
-    const added = addedMaterials.has(`${message.id}:${DECK_SLOT}`);
-    return (
-      <div className="space-y-2">
-        {line}
-        <SlideDeckCard
-          deck={stackDeck.deck}
-          presentHref={`/present/${conversationId}/${message.id}?from=chat`}
-          downloadHref={`/present/${conversationId}/${message.id}.pptx`}
-          editHref={deckV2 ? `/app/lesson-planner/${conversationId}/deck/${message.id}?from=chat` : null}
-          added={added}
-          onToggle={(next) => onMaterial(message.id!, DECK_SLOT, next)}
-          disabled={disabled}
-        />
+        <span className="truncate">{message.content.split('\n')[0]}</span>
       </div>
     );
   }
@@ -1711,19 +1628,7 @@ function MessageBubble({
     return (
       <div className="flex justify-end" data-role="user">
         <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground shadow-sm">
-          {message.displayText ? (
-            <>
-              <span data-testid="user-display">{message.displayText}</span>
-              <details className="mt-1 text-xs text-primary-foreground/80">
-                <summary data-testid="user-details" className="cursor-pointer select-none">
-                  Details
-                </summary>
-                <span className="mt-1 block whitespace-pre-line">{message.content}</span>
-              </details>
-            </>
-          ) : (
-            message.content
-          )}
+          {message.content}
         </div>
       </div>
     );
@@ -1768,7 +1673,7 @@ function MessageBubble({
   const planOverBy =
     stackV2 && deliveredPlan ? overTime(planMinutes(body), periodMinutes) : null;
   // Brian's run 2 (A3, A4): the plan's steps, each a piece of its own, and
-  // everything the reply hands over, for "Add everything to the lesson".
+  // everything the reply hands over, for "Add everything to the stack".
   // Brian's run 3 (items 1, 2): every step, including one that is only its
   // blocks, with the pieces it files as, so its button and its status are
   // the same wherever it appears.
@@ -1833,11 +1738,11 @@ function MessageBubble({
       if (!planSteps.length) {
         return (
           <div key={key} className={index > 0 ? 'mt-3' : undefined}>
-            <MarkdownContent content={text} codeAsText />
+            <MarkdownContent content={text} />
           </div>
         );
       }
-      // Brian's run 3 (item 1): Add to lesson on the hook, the
+      // Brian's run 3 (item 1): Add to stack on the hook, the
       // discussion, the exit ticket… right on each step's heading.
       const { chunks, next } = splitAtStepHeadings(text, planSteps, stepCursor);
       stepCursor = next;
@@ -1845,7 +1750,7 @@ function MessageBubble({
         <div key={key} className={index > 0 ? 'mt-3' : undefined}>
           {chunks.map((chunk, chunkIndex) => {
             if (chunk.kind === 'markdown') {
-              return <MarkdownContent key={chunkIndex} content={chunk.text} codeAsText />;
+              return <MarkdownContent key={chunkIndex} content={chunk.text} />;
             }
             const step = planSteps[chunk.index]!;
             const keys = segmentKeys(step.key);
@@ -1871,7 +1776,7 @@ function MessageBubble({
                     {[...addedMaterials].some((token) =>
                       optionKeysUnder(step.key).some((key) => token === `${message.id}:${key}`)
                     )
-                      ? 'In your lesson'
+                      ? 'In the stack'
                       : 'Pick one below to add it'}
                   </span>
                 ) : null}
@@ -1890,7 +1795,7 @@ function MessageBubble({
           classStarterTypeId={classStarterTypeId}
           conversationId={conversationId}
           created={stackPieces[`${message.id}:${part.blockKey}`]?.created ?? null}
-          pieceRef={message.id ? blockRef(message.id, part.blockKey) : null}
+          materialId={stackPieces[`${message.id}:${part.blockKey}`]?.materialId ?? null}
           added={
             message.id
               ? addedMaterials.has(`${message.id}:${part.blockKey}`)
@@ -1918,7 +1823,7 @@ function MessageBubble({
           assignmentTypeId={exitTicketTypeId}
           conversationId={conversationId}
           created={stackPieces[`${message.id}:${part.blockKey}`]?.created ?? null}
-          pieceRef={message.id ? blockRef(message.id, part.blockKey) : null}
+          materialId={stackPieces[`${message.id}:${part.blockKey}`]?.materialId ?? null}
           added={
             !!message.id &&
             addedMaterials.has(`${message.id}:${part.blockKey}`)
@@ -2029,17 +1934,6 @@ function MessageBubble({
                 builtDays={builtDays}
                 disabled={disabled}
               />
-              {savedUnit ? (
-                <p data-testid="unit-saved" className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-                  <span>
-                    Saved to your library as <strong className="font-semibold text-foreground">{savedUnit.title}</strong>. Build the days
-                    whenever you're ready.
-                  </span>
-                  <Link to={`/app/lesson-planner/library/unit/${savedUnit.id}`} className="font-medium text-primary underline underline-offset-2">
-                    Open the unit
-                  </Link>
-                </p>
-              ) : null}
             </div>
           ) : null}
           {unitOutcome.kind === 'unreadable' ? (
@@ -2080,7 +1974,7 @@ function MessageBubble({
                               !added &&
                               edited &&
                               !window.confirm(
-                                'Taking this deck out of your lesson also discards your edits to it.'
+                                'Taking this deck out of the stack also discards your edits to it.'
                               )
                             ) {
                               return;
@@ -2092,7 +1986,7 @@ function MessageBubble({
                     disabled={disabled}
                     presentHref={
                       deckId && conversationId
-                        ? `/present/${conversationId}/${deckId}?from=chat`
+                        ? `/present/${conversationId}/${deckId}`
                         : null
                     }
                     downloadHref={
@@ -2102,7 +1996,7 @@ function MessageBubble({
                     }
                     editHref={
                       deckV2 && deckId && conversationId
-                        ? `/app/lesson-planner/${conversationId}/deck/${deckId}?from=chat`
+                        ? `/app/lesson-planner/${conversationId}/deck/${deckId}`
                         : null
                     }
                     periodMinutes={deckV2 ? periodMinutes : null}
@@ -2186,7 +2080,7 @@ function MessageBubble({
                         )}
                       >
                         {isIn ? <BookmarkCheck size={12} /> : <BookmarkPlus size={12} />}
-                        {isIn ? 'In your lesson' : 'Add to lesson'}
+                        {isIn ? 'In the stack' : 'Add to stack'}
                       </button>
                     )}
                   </li>
@@ -2226,8 +2120,8 @@ function MessageBubble({
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
                   <BookmarkCheck size={13} />
                   {message.keptAudience === 'student'
-                    ? 'In your lesson · handout'
-                    : 'In your lesson'}
+                    ? 'In the stack · handout'
+                    : 'In the stack'}
                 </span>
                 <button
                   type="button"
@@ -2242,7 +2136,7 @@ function MessageBubble({
                 {stackV2 && everythingIn ? (
                   <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
                     <BookmarkCheck size={13} />
-                    Everything is in your lesson
+                    Everything is in the stack
                   </span>
                 ) : (
                   <button
@@ -2256,7 +2150,7 @@ function MessageBubble({
                     className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground disabled:opacity-50"
                   >
                     <BookmarkPlus size={13} />
-                    {stackV2 ? 'Add everything to the lesson' : 'Add all of this'}
+                    {stackV2 ? 'Add everything to the stack' : 'Add all of this'}
                   </button>
                 )}
                 {stackV2 ? null : (
@@ -2290,7 +2184,6 @@ function MessageBubble({
           <LessonIntakeCard
             asks={asks}
             teacherClasses={teacherClasses}
-            severalDays={plansSeveralDays(previousUserText)}
             onSend={onSuggestion}
             disabled={disabled}
           />

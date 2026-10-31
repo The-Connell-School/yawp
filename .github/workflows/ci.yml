@@ -1095,25 +1095,6 @@ jobs:
             app/domain/brand.test.ts \
             app/domain/lesson-planner/plan-days.test.ts \
             app/domain/lesson-planner/planner-history.test.ts \
-            app/domain/lesson-planner/lesson-return.test.ts \
-            app/domain/lesson-planner/assignment-links.test.ts \
-            app/domain/lesson-planner/one-packet.test.ts \
-            app/domain/lesson-planner/teacher-notes.test.ts \
-            app/domain/lesson-planner/write-teacher-notes.server.test.ts \
-            app/domain/lesson-planner/google-drive.server.test.ts \
-            app/domain/lesson-planner/google-doc.server.test.ts \
-            app/domain/lesson-planner/library-v2.test.ts \
-            app/components/lesson-planner/download-link.test.ts \
-            app/domain/lesson-planner/plain-preview.test.ts \
-            app/domain/lesson-planner/deck-freshness.test.ts \
-            app/domain/lesson-planner/deck-agenda.test.ts \
-            app/domain/lesson-planner/celebration.test.ts \
-            app/domain/lesson-planner/library-course.test.ts \
-            app/domain/lesson-planner/lesson-name.test.ts \
-            app/domain/lesson-planner/extensions.test.ts \
-            app/domain/lesson-planner/before-class.test.ts \
-            app/domain/lesson-planner/lesson-rename.test.ts \
-            app/domain/lesson-planner/handout-docx.server.test.ts \
             app/domain/lesson-planner/lesson-library.test.ts \
             app/domain/lesson-planner/run-show.test.ts \
             app/domain/lesson-planner/slide-deck-gallery.test.ts \
@@ -1133,7 +1114,6 @@ jobs:
             app/domain/lesson-planner/lesson-templates.test.ts \
             app/domain/lesson-planner/yawp-catalog.server.test.ts \
             app/routes/api.domain.lesson-planner.stack/route.test.ts \
-            app/routes/api.domain.lesson-planner.library/route.test.ts \
             app/domain/lesson-planner/deck-art.test.ts \
             app/domain/lesson-planner/deck-edit.test.ts \
             app/domain/lesson-planner/exit-ticket-block-quick.test.ts \

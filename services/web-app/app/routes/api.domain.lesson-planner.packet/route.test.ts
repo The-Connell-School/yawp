@@ -14,7 +14,6 @@ const prisma = {
     findFirst: mock(),
     findMany: mock(),
   },
-  lessonPlanAssignmentLink: { upsert: mock() },
   $transaction: mock(),
 };
 
@@ -45,9 +44,6 @@ mock.module('~/domain/lesson-planner/file-reply-pieces.server', () => ({
   fileReplyPieces,
 }));
 
-const getLessonPlannerReviewFlags = mock();
-mock.module('~/domain/feature-flags/feature-flags.server', () => ({ getLessonPlannerReviewFlags }));
-
 const { action, loader } = await import('./route');
 
 afterAll(() => {
@@ -70,7 +66,6 @@ const access = {
 beforeEach(() => {
   requireMutableRequest.mockReset().mockResolvedValue(undefined);
   requireLessonPlannerAccess.mockReset().mockResolvedValue(access);
-  getLessonPlannerReviewFlags.mockReset().mockResolvedValue({ teachNotes: false });
   prisma.lessonPlanConversation.findFirst
     .mockReset()
     .mockResolvedValue({ id: 'plan-1' });
@@ -518,7 +513,7 @@ describe('lesson packet action', () => {
 
 /**
  * A teacher's own words in a handout, saved directly — and what has to
- * happen the moment a later "Add to lesson" click would write over them.
+ * happen the moment a later "Add to stack" click would write over them.
  */
 describe('lesson packet action — editing a material by hand', () => {
   test('saves the new content and marks it edited', async () => {
@@ -1011,12 +1006,8 @@ describe("lesson packet — one segment, one status (Brian's run 3, items 1, 2)"
 });
 
 describe("lesson packet — created in Yawp! (Brian's run 3, item 4)", () => {
-  test('mark-created from the stack: one record for the piece, and the piece marked', async () => {
+  test('mark-created remembers the assignment on its piece', async () => {
     prisma.lessonPlanMaterial.updateMany.mockReset().mockResolvedValue({ count: 1 });
-    prisma.lessonPlanMaterial.findFirst
-      .mockReset()
-      .mockResolvedValue({ id: 'mat-9', sourceMessageId: 'msg-1', blockKey: 'ticket' });
-    prisma.lessonPlanAssignmentLink.upsert.mockReset().mockResolvedValue({});
     const response = await action({
       request: formRequest({
         intent: 'mark-created',
@@ -1025,98 +1016,11 @@ describe("lesson packet — created in Yawp! (Brian's run 3, item 4)", () => {
         yawpHref: '/app/assignment-types/cs-type',
       }),
     } as any);
-    const link = prisma.lessonPlanAssignmentLink.upsert.mock.calls[0][0];
-    expect(link.where).toEqual({
-      conversationId_sourceMessageId_blockKey: { conversationId: 'plan-1', sourceMessageId: 'msg-1', blockKey: 'ticket' },
-    });
-    expect(link.create).toMatchObject({ yawpHref: '/app/assignment-types/cs-type', createdFrom: 'stack' });
     const call = prisma.lessonPlanMaterial.updateMany.mock.calls[0][0];
-    expect(call.where).toEqual({ conversationId: 'plan-1', sourceMessageId: 'msg-1', blockKey: 'ticket' });
+    expect(call.where).toEqual({ id: 'mat-9', conversationId: 'plan-1' });
     expect(call.data.yawpHref).toBe('/app/assignment-types/cs-type');
     expect(call.data.yawpCreatedAt).toBeInstanceOf(Date);
-    expect((response as any).data).toEqual({ created: true, materialId: 'mat-9', addedToLesson: false, backToLesson: false });
-  });
-
-  test("mark-created from the chat, before the piece is filed (Oct 24 handoff, task 1)", async () => {
-    prisma.lessonPlanMessage.findFirst.mockReset().mockResolvedValue({ id: 'msg-1' });
-    prisma.lessonPlanMaterial.updateMany.mockReset().mockResolvedValue({ count: 0 });
-    prisma.lessonPlanAssignmentLink.upsert.mockReset().mockResolvedValue({});
-    const response = await action({
-      request: formRequest({
-        intent: 'mark-created',
-        conversationId: 'plan-1',
-        piece: 'b:msg-1:ticket',
-        yawpHref: '/app/assignment-types/et-type',
-      }),
-    } as any);
-    expect(prisma.lessonPlanAssignmentLink.upsert.mock.calls[0][0].create).toMatchObject({
-      sourceMessageId: 'msg-1',
-      blockKey: 'ticket',
-      createdFrom: 'chat',
-    });
-    expect((response as any).data).toEqual({ created: true, materialId: null, addedToLesson: false, backToLesson: false });
-  });
-
-  test("Kevin's note 6a: a piece made from the chat is added to the lesson too", async () => {
-    getLessonPlannerReviewFlags.mockResolvedValue({ teachNotes: true });
-    prisma.lessonPlanMessage.findFirst
-      .mockReset()
-      .mockResolvedValue({ id: 'msg-1', createdAt: new Date('2026-10-25T10:00:00Z'), content: 'reply' });
-    // Not in the lesson yet; filed, it is.
-    prisma.lessonPlanMaterial.findFirst.mockReset().mockResolvedValueOnce(null).mockResolvedValue({ id: 'mat-2' });
-    prisma.lessonPlanMaterial.updateMany.mockReset().mockResolvedValue({ count: 1 });
-    prisma.lessonPlanAssignmentLink.upsert.mockReset().mockResolvedValue({});
-    fileReplyPieces.mockReset().mockResolvedValue({ added: ['msg-1:ticket'], skipped: [] });
-    const response = await action({
-      request: formRequest({
-        intent: 'mark-created',
-        conversationId: 'plan-1',
-        piece: 'b:msg-1:ticket',
-        yawpHref: '/app/assignment-types/et-type',
-      }),
-    } as any);
-    expect(fileReplyPieces).toHaveBeenCalledTimes(1);
-    expect(fileReplyPieces.mock.calls[0][0]).toMatchObject({ conversationId: 'plan-1', onlyKeys: ['ticket'] });
-    expect(fileReplyPieces.mock.invocationCallOrder[0]).toBeLessThan(
-      prisma.lessonPlanAssignmentLink.upsert.mock.invocationCallOrder[0]
-    );
-    expect((response as any).data).toMatchObject({ created: true, materialId: 'mat-2', addedToLesson: true, backToLesson: true });
-  });
-
-  test('a piece made from the chat that is already in the lesson is not filed again', async () => {
-    getLessonPlannerReviewFlags.mockResolvedValue({ teachNotes: true });
-    prisma.lessonPlanMessage.findFirst
-      .mockReset()
-      .mockResolvedValue({ id: 'msg-1', createdAt: new Date('2026-10-25T10:00:00Z'), content: 'reply' });
-    prisma.lessonPlanMaterial.findFirst.mockReset().mockResolvedValue({ id: 'mat-2' });
-    prisma.lessonPlanMaterial.updateMany.mockReset().mockResolvedValue({ count: 1 });
-    prisma.lessonPlanAssignmentLink.upsert.mockReset().mockResolvedValue({});
-    fileReplyPieces.mockReset();
-    const response = await action({
-      request: formRequest({
-        intent: 'mark-created',
-        conversationId: 'plan-1',
-        piece: 'b:msg-1:ticket',
-        yawpHref: '/app/assignment-types/et-type',
-      }),
-    } as any);
-    expect(fileReplyPieces).not.toHaveBeenCalled();
-    expect((response as any).data).toMatchObject({ created: true, addedToLesson: false, backToLesson: true });
-  });
-
-  test('a piece from another lesson is refused', async () => {
-    prisma.lessonPlanMessage.findFirst.mockReset().mockResolvedValue(null);
-    prisma.lessonPlanAssignmentLink.upsert.mockReset();
-    const response = await action({
-      request: formRequest({
-        intent: 'mark-created',
-        conversationId: 'plan-1',
-        piece: 'b:not-mine:ticket',
-        yawpHref: '/app/assignment-types/et-type',
-      }),
-    } as any);
-    expect((response as any).init?.status).toBe(404);
-    expect(prisma.lessonPlanAssignmentLink.upsert).not.toHaveBeenCalled();
+    expect((response as any).data).toEqual({ created: true, materialId: 'mat-9' });
   });
 
   test('only a link into Yawp! assignment types is kept', async () => {

@@ -78,7 +78,7 @@ function blocksUnder(pieces: Placed[], index: number): string[] {
 }
 
 /**
- * What each plan step files as, for its one Add to lesson button and its one
+ * What each plan step files as, for its one Add to stack button and its one
  * status, wherever it appears (Brian's run 3, items 1, 2). A step with its own
  * text is itself; a step that is nothing but its blocks ("## Class starter"
  * over the prompt, "## Framing" over three notes) is those blocks, so adding
@@ -110,7 +110,7 @@ const OPTION_BLOCKS = new Set(['yawp-daily-pages', 'yawp-exit-ticket', 'yawp-pra
 /**
  * The steps that offer a choice: two or more class starters, Daily Pages
  * prompts, exit tickets or practice sets under one step (Kevin, Oct 22). Each
- * option has its own Add to lesson, and the step's own button cannot know
+ * option has its own Add to stack, and the step's own button cannot know
  * which one is meant, so it is not shown.
  */
 export function stepsOfferingChoice(content: string): Set<string> {

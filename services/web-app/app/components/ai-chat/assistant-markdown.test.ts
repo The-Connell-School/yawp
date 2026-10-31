@@ -25,13 +25,3 @@ describe('MARKDOWN_CLASS — tables fill their frame', () => {
     expect(MARKDOWN_CLASS).toContain('[&_.md-table]:border');
   });
 });
-
-describe("no code boxes in the lesson planner (Kevin, Oct 25, note 2)", () => {
-  test('inline code reads as the plain word; other formatting is untouched', async () => {
-    const { markdownToHtml } = await import('./assistant-markdown');
-    const text = "Each day's `students` field has **one** prompt.";
-    expect(markdownToHtml(text, { codeAsText: true })).not.toContain('<code>');
-    expect(markdownToHtml(text, { codeAsText: true })).toContain("Each day&#39;s students field has <strong>one</strong> prompt.");
-    expect(markdownToHtml(text)).toContain('<code>students</code>');
-  });
-});

@@ -15,7 +15,6 @@ import {
 } from '../present.$conversationId.$messageId/gallery-slide-canvas';
 import { MarkdownContent } from '~/components/ai-chat/assistant-markdown';
 import { loadSharedLesson } from '~/domain/lesson-planner/load-shared-lesson.server';
-import { handoutHeading, inYawpLead, writingPromptsHeading } from '~/domain/lesson-planner/lesson-share';
 import { HEADING_FONT, STACK_FONTS_HREF, STACK_THEME } from '../app.lesson-planner_.$conversationId.packet/v3/theme';
 
 export const meta: MetaFunction = () => [
@@ -183,7 +182,7 @@ export default function SharedLessonRoute() {
 
         {lesson.body ? (
           <section data-testid="shared-body" className="mt-6 rounded-2xl border border-[var(--sv-line)] bg-[var(--sv-card)] p-5">
-            <MarkdownContent content={lesson.body} codeAsText />
+            <MarkdownContent content={lesson.body} />
           </section>
         ) : null}
 
@@ -196,7 +195,7 @@ export default function SharedLessonRoute() {
 
         {lesson.inYawp.length ? (
           <section data-testid="shared-in-yawp" className="mt-6 rounded-xl border border-[#E7D9F3] p-4 text-sm" style={{ backgroundColor: 'var(--sv-writing-strip)' }}>
-            <p data-testid="shared-in-yawp-lead" className="font-semibold">{inYawpLead(lesson.audience)}</p>
+            <p className="font-semibold">These writing exercises are available to students as assignments in Yawp!</p>
             <ul className="mt-1 list-disc pl-5">
               {lesson.inYawp.map((name) => (
                 <li key={name}>{name}</li>
@@ -212,14 +211,14 @@ export default function SharedLessonRoute() {
 
         {lesson.prompts.length ? (
           <section className="mt-8">
-            <h2 data-testid="shared-prompts-heading" className="text-xl font-bold" style={HEADING_FONT}>
-              {writingPromptsHeading(lesson.prompts.length)}
+            <h2 className="text-xl font-bold" style={HEADING_FONT}>
+              The writing prompt
             </h2>
             {lesson.prompts.map((prompt) => {
               const quote = (
                 <blockquote
                   data-testid="shared-prompt"
-                  className="mt-1 rounded-xl border-l-4 px-4 py-3 text-sm"
+                  className="mt-3 rounded-xl border-l-4 px-4 py-3 text-sm"
                   style={{ borderColor: 'var(--sv-writing)', backgroundColor: 'var(--sv-writing-strip)' }}
                 >
                   {prompt.content}
@@ -228,21 +227,13 @@ export default function SharedLessonRoute() {
                   ) : null}
                 </blockquote>
               );
-              return (
-                <div key={prompt.id} className="mt-4">
-                  {/* Each prompt under its type (Brian's round 3, 1.7). */}
-                  <h3 data-testid="shared-prompt-type" className="text-sm font-bold" style={{ color: 'var(--sv-writing)' }}>
-                    {prompt.type}
-                  </h3>
-                  {/* A student opens a prompt made in Yawp! to write it there. */}
-                  {lesson.audience === 'student' && prompt.inYawp ? (
-                    <a href="/app" target="_blank" rel="noreferrer" data-testid="shared-prompt-link" className="block">
-                      {quote}
-                    </a>
-                  ) : (
-                    quote
-                  )}
-                </div>
+              // A student opens a prompt made in Yawp! to write it there.
+              return lesson.audience === 'student' && prompt.inYawp ? (
+                <a key={prompt.id} href="/app" target="_blank" rel="noreferrer" data-testid="shared-prompt-link" className="block">
+                  {quote}
+                </a>
+              ) : (
+                <div key={prompt.id}>{quote}</div>
               );
             })}
           </section>
@@ -291,9 +282,9 @@ export default function SharedLessonRoute() {
                 className="mt-3 break-before-page rounded-xl border border-[var(--sv-line)] bg-[var(--sv-card)] p-5"
               >
                 <h3 className="mb-2 font-semibold">
-                  {index + 1}. {handoutHeading(handout.title, handout.type)}
+                  {index + 1}. {handout.title}
                 </h3>
-                <MarkdownContent content={handout.content} codeAsText />
+                <MarkdownContent content={handout.content} />
                 {Array.from({ length: handout.lines }, (_, line) => (
                   <div key={line} className="h-7 border-b border-[#C9C2B8]" aria-hidden />
                 ))}

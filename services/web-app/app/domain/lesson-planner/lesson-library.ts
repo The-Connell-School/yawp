@@ -14,9 +14,9 @@
  * list rather than dividing it, so a half-finished lesson and one taught for
  * three years sat in the same place.
  */
-import { cleanLessonTitle } from './lesson-title';
 import { resolveDeckArt } from './deck-art';
 import { readSlideDeck } from './slide-deck';
+
 export type LibraryLessonInput = {
   id: string;
   title: string;
@@ -100,7 +100,7 @@ export function buildLessonLibrary(
     const pieces = (lesson.materials ?? []).filter((material) => material.kind !== 'slides');
     return {
       id: lesson.id,
-      title: cleanLessonTitle(lesson.packetTitle ?? lesson.title) || 'Lesson plan',
+      title: (lesson.packetTitle ?? lesson.title).trim() || 'Lesson plan',
       className: lesson.originClassAssignment
         ? classDisplayName(lesson.originClassAssignment.class)
         : lesson.lessonClassLabel?.trim() || null,

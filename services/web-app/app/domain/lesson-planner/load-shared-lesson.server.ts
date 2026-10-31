@@ -12,14 +12,12 @@ import {
 } from '~/domain/feature-flags/feature-flags.server';
 import { buildLessonPacket } from './lesson-packet';
 import { findShareLink } from './lesson-share.server';
-import { isSharedPrompt, parseShareItems, type ShareAudience } from './lesson-share';
+import { parseShareItems, type ShareAudience } from './lesson-share';
 import { readSlideDeck, type SlideDeck } from './slide-deck';
 import { handoutContent, studentVersionKey, answerLinesFor } from './step-handout';
 import { stackSteps } from './stack-steps';
 import { orderStackEntries } from './stack-order';
 import { stackTiming } from './stack-timing';
-import { syncAgendaToStack } from './deck-agenda';
-import { STEP_TYPE_LABELS } from './step-types';
 
 export type SharedLesson = {
   audience: ShareAudience;
@@ -27,10 +25,8 @@ export type SharedLesson = {
   className: string | null;
   note: string | null;
   body: string | null;
-  /** `type`: the writing it comes from ("Daily Pages"), when it is writing (Brian's round 3, 1.8). */
-  handouts: Array<{ id: string; title: string; type: string | null; content: string; lines: number }>;
-  /** `type`: "Class Starter", "Daily Pages", its own heading (Brian's round 3, 1.7). */
-  prompts: Array<{ id: string; title: string; type: string; content: string; inYawp: boolean }>;
+  handouts: Array<{ id: string; title: string; content: string; lines: number }>;
+  prompts: Array<{ id: string; title: string; content: string; inYawp: boolean }>;
   /**
    * The writing steps the teacher made in Yawp!, by name (Brian's run 4):
    * only these are said to be "available to students as assignments".
@@ -136,21 +132,13 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
             ? row.studentVersion
             : null;
         const content = handoutContent(step, fresh);
-        return content
-          ? [{ id: step.id, title: step.title, type: step.isWriting ? (step.writingName ?? null) : null, content, lines: answerLinesFor(step) }]
-          : [];
+        return content ? [{ id: step.id, title: step.title, content, lines: answerLinesFor(step) }] : [];
       })
     : [];
   const prompts = includes.has('daily-pages')
     ? steps
-        .filter(isSharedPrompt)
-        .map((step) => ({
-          id: step.id,
-          title: step.title,
-          type: step.writingName ?? STEP_TYPE_LABELS[step.type],
-          content: step.content,
-          inYawp: madeInYawp(step.id),
-        }))
+        .filter((step) => step.kind === 'daily-pages' || step.kind === 'class-starter')
+        .map((step) => ({ id: step.id, title: step.title, content: step.content, inYawp: madeInYawp(step.id) }))
     : [];
   const deckRow = includes.has('deck')
     ? conversation.materials.find((material) => material.kind === 'slides')
@@ -171,8 +159,7 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
       includes.has('plan') || includes.has('summary') || includes.has('help') ? link.body : null,
     handouts,
     prompts,
-    // The agenda slide reads the stack's times (Brian's round 3, 1.4).
-    deck: deckOutcome?.kind === 'deck' ? syncAgendaToStack(deckOutcome.deck, timing.blocks) : null,
+    deck: deckOutcome?.kind === 'deck' ? deckOutcome.deck : null,
     withNotes: audience === 'sub',
     writing: includes.has('writing')
       ? { percent: timing.writingPercent, minutes: timing.writingMinutes, sources: timing.writingSources }

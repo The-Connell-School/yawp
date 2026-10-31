@@ -289,20 +289,19 @@ export function markFailedUnitPlans(content: string): string {
  * building the day the teacher pointed at rather than its own recollection.
  */
 export function buildDayRequest(unit: UnitPlan, day: UnitPlanDay): string {
-  // One fact per line: the teacher sees it under "Details" (Kevin, Oct 25, note 5).
-  const lines = [`Build day ${day.day} of "${unit.title}" in full: ${day.title}.`, `Objective: ${day.objective}`];
-  if (day.students) lines.push(`Students: ${day.students}`);
-  if (day.reading) lines.push(`Reading: ${day.reading}`);
-  if (day.minutes) lines.push(`I have ${day.minutes} minutes.`);
-  lines.push(
-    `Keep it inside the arc of the unit: this day comes after day ${day.day - 1} and has to set up what follows.`
+  const parts = [
+    `Build day ${day.day} of "${unit.title}" in full: ${day.title}.`,
+    `The objective is: ${day.objective}`,
+  ];
+  if (day.students) parts.push(`Students: ${day.students}`);
+  if (day.reading) parts.push(`Reading: ${day.reading}`);
+  if (day.minutes) parts.push(`I have ${day.minutes} minutes.`);
+  parts.push(
+    `Keep it inside the arc of the unit — this day comes after day ${
+      day.day - 1
+    } and has to set up what follows.`
   );
-  return lines.join('\n');
-}
-
-/** What the chat shows for that click: one line, not the request (note 5). */
-export function buildDayDisplay(unit: UnitPlan, day: UnitPlanDay): string {
-  return `Building Day ${day.day} of ${unit.title}: ${day.title}`.slice(0, 200);
+  return parts.join(' ');
 }
 
 /**

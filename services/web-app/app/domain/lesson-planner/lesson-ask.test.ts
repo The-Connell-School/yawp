@@ -365,22 +365,3 @@ describe("two classes: the same lesson, said once (Brian's run 4)", () => {
     expect(composeIntakeReply({ classes: classes.slice(0, 1), choice: null, activityIds: [] })).toBe('For English 10 · Period 3, 50 minutes.');
   });
 });
-
-describe('a unit asks about each class period (Kevin, Oct 25, note 1)', () => {
-  test('knows a unit or several days from the request', async () => {
-    const { plansSeveralDays } = await import('./lesson-ask');
-    for (const text of ['Create a unit on Julius Caesar', 'Plan my week for English 10', 'I need five days on Gatsby', '8 class periods on the essay', 'a multi-day lesson']) {
-      expect(plansSeveralDays(text)).toBe(true);
-    }
-    for (const text of ['A lesson on memetic desire', 'Day 1 of the novel', 'one class on commas', null]) {
-      expect(plansSeveralDays(text)).toBe(false);
-    }
-  });
-
-  test('and says the minutes are each period', async () => {
-    const { composeIntakeReply } = await import('./lesson-ask');
-    expect(composeIntakeReply({ classes: [{ title: 'English 10', minutes: 60 }], choice: null, activityIds: [], severalDays: true })).toContain(
-      'For English 10, 60 minutes each class period.'
-    );
-  });
-});

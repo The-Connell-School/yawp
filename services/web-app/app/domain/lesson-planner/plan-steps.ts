@@ -241,7 +241,7 @@ export type StepChunk =
 
 /**
  * One run of a reply's prose, cut at the plan's step headings, so each step
- * can carry its own Add to lesson right where it appears (Brian's run 3, item
+ * can carry its own Add to stack right where it appears (Brian's run 3, item
  * 1). `from` is the next step to look for; prose parts are cut in reply
  * order, so steps are matched in order too.
  */

@@ -8,7 +8,6 @@
  */
 import { redirect } from 'react-router';
 import { prisma } from '~/utils/db.server';
-import { createdFor, linksByToken } from './assignment-links';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { buildLessonPacket, type LessonPacket } from './lesson-packet';
 import { DECK_KIND, MATERIAL_KIND_LABELS, packetKindForMaterial, type ArtifactKind } from './lesson-material';
@@ -23,7 +22,6 @@ import { nameIsProvisional } from './lesson-name';
 import { withoutTrailingCommentary } from './plan-steps';
 import { DEFAULT_STEP_MINUTES, stepTypeFor } from './step-types';
 import { orderStackEntries } from './stack-order';
-import { minutesInTitle } from './lesson-title';
 
 export type LoadedLessonPacket = {
   conversationId: string;
@@ -35,8 +33,6 @@ export type LoadedLessonPacket = {
   packetTitleValue: string;
   /** Whether the teacher has published this lesson to their library. */
   published: boolean;
-  /** The name it started as, once renamed (Oct 24 handoff, task 8). */
-  originalTitle: string | null;
   /**
    * Still named after the teacher's first message (Brian's review, B5), so
    * the page asks for a name rather than presenting that message as one.
@@ -96,10 +92,8 @@ export async function loadLessonPacket({
       id: true,
       title: true,
       packetTitle: true,
-      originalTitle: true,
       publishedAt: true,
       unitDay: true,
-      unitId: true,
       periodMinutes: true,
       lessonClassLabel: true,
       originClassAssignment: {
@@ -119,10 +113,6 @@ export async function loadLessonPacket({
           keptTitle: true,
           position: true,
         },
-      },
-      // One record per assignment, the chat's and the stack's (Oct 24 handoff, task 1).
-      assignmentLinks: {
-        select: { sourceMessageId: true, blockKey: true, yawpHref: true, createdFrom: true },
       },
       materials: {
         orderBy: [{ sourceCreatedAt: 'asc' }, { blockKey: 'asc' }],
@@ -150,38 +140,6 @@ export async function loadLessonPacket({
     },
   });
   if (!conversation) throw new Response('Not Found', { status: 404 });
-  // A day built before days took the unit's period (Kevin, Oct 25, note 8a)
-  // takes it now, once, from the chat that planned the unit.
-  if (conversation.periodMinutes == null && conversation.unitId && conversation.unitDay != null) {
-    const planning = await prisma.lessonPlanConversation.findFirst({
-      where: { unitId: conversation.unitId, unitDay: null, membershipId: access.membership.id, deletedAt: null },
-      select: { periodMinutes: true, lessonClassLabel: true },
-    });
-    if (planning?.periodMinutes) {
-      await prisma.lessonPlanConversation.update({
-        where: { id: conversation.id },
-        data: {
-          periodMinutes: planning.periodMinutes,
-          ...(conversation.lessonClassLabel ? {} : { lessonClassLabel: planning.lessonClassLabel }),
-        },
-      });
-      conversation.periodMinutes = planning.periodMinutes;
-      conversation.lessonClassLabel ??= planning.lessonClassLabel;
-    }
-  }
-  // Still none: the period the lesson's own heading gave, "(50 min)" (Brian's
-  // round 3, 1.2), kept once so every view of the lesson has it.
-  if (conversation.periodMinutes == null) {
-    const fromTitle = minutesInTitle(conversation.packetTitle ?? conversation.title);
-    if (fromTitle) {
-      await prisma.lessonPlanConversation.update({
-        where: { id: conversation.id },
-        data: { periodMinutes: fromTitle },
-      });
-      conversation.periodMinutes = fromTitle;
-    }
-  }
-  const assignmentLinks = linksByToken(conversation.assignmentLinks);
 
   const klass = conversation.originClassAssignment?.class;
   const className = klass
@@ -200,11 +158,49 @@ export async function loadLessonPacket({
   // the reply each came from so the packet reads in lesson order rather than in
   // the order the teacher happened to click — until the teacher puts the stack
   // in their own order (Brian's run 2, A1), which then wins.
-  const sections = stackSections({
-    messages: conversation.messages,
-    materials: conversation.materials,
-    stackV2: reviewFlags.stackV2,
-  });
+  const sections = orderStackEntries([
+    ...conversation.messages.map((message) => ({
+      at: message.createdAt.getTime(),
+      order: 0,
+      position: message.position,
+      item: {
+        id: message.id,
+        content: message.content,
+        keptAudience: message.keptAudience,
+        keptTitle: message.keptTitle,
+      },
+    })),
+    ...conversation.materials.map((material) => ({
+      at: material.sourceCreatedAt.getTime(),
+      // A material sits after the reply that produced it.
+      order: 1,
+      position: material.position,
+      item: {
+        id: material.id,
+        // A closing step filed before run 3 may still carry the planner's
+        // total and closing question (Brian's run 3, item 5). Shown without
+        // them; a teacher's own edit is left as written.
+        content:
+          material.kind === 'step' && !material.editedAt
+            ? withoutTrailingCommentary(material.content)
+            : material.content,
+        keptAudience: material.audience,
+        keptTitle: material.title,
+        kind: packetKindForMaterial(material.kind),
+        origin: 'material' as const,
+        editedAt: material.editedAt,
+        minutes: material.minutes,
+        // Every step shows a time (Brian's run 3, item 9). The deck is built
+        // from the stack, not a step of it.
+        suggestedMinutes:
+          !reviewFlags.stackV2 || material.kind === DECK_KIND
+            ? null
+            : DEFAULT_STEP_MINUTES[
+                stepTypeFor({ kind: material.kind, title: material.title, stored: material.stepType })
+              ],
+      },
+    })),
+  ]);
 
   const stackDetails: LoadedLessonPacket['stackDetails'] = {};
   if (reviewFlags.stackV2 && withStackDetails) {
@@ -248,7 +244,10 @@ export async function loadLessonPacket({
               typeIds,
               conversationId: conversation.id,
               materialId: material.id,
-              created: createdFor(assignmentLinks, material),
+              created:
+                material.yawpCreatedAt && material.yawpHref
+                  ? { href: material.yawpHref }
+                  : null,
             })
           : null,
       };
@@ -273,7 +272,6 @@ export async function loadLessonPacket({
     }),
     packetTitleValue: conversation.packetTitle ?? '',
     published: Boolean(conversation.publishedAt),
-    originalTitle: conversation.originalTitle,
     nameIsProvisional: nameIsProvisional({
       title: conversation.title,
       packetTitle: conversation.packetTitle,
@@ -301,80 +299,10 @@ export async function loadLessonPacket({
           minutes: material.minutes,
           hasHandout: material.hasHandout,
           yawpAssignmentId: material.yawpAssignmentId,
-          yawpCreated: Boolean(createdFor(assignmentLinks, material)),
+          yawpCreated: Boolean(material.yawpCreatedAt),
           slot: material.slot,
         },
       ])
     ),
   };
-}
-
-/**
- * The stack's sections, in order, from a lesson's kept replies and filed
- * materials: the one place the packet, the stack and the library (Oct 24
- * handoff, Part 2) read a lesson the same way.
- */
-export function stackSections({
-  messages,
-  materials,
-  stackV2,
-}: {
-  messages: Array<{ id: string; createdAt: Date; content: string; keptAudience: string | null; keptTitle: string | null; position: number | null }>;
-  materials: Array<{
-    id: string;
-    sourceCreatedAt: Date;
-    kind: string;
-    title: string;
-    audience: string;
-    content: string;
-    editedAt: Date | null;
-    position: number | null;
-    minutes: number | null;
-    stepType: string | null;
-  }>;
-  stackV2: boolean;
-}) {
-  return orderStackEntries([
-    ...messages.map((message) => ({
-      at: message.createdAt.getTime(),
-      order: 0,
-      position: message.position,
-      item: {
-        id: message.id,
-        content: message.content,
-        keptAudience: message.keptAudience,
-        keptTitle: message.keptTitle,
-      },
-    })),
-    ...materials.map((material) => ({
-      at: material.sourceCreatedAt.getTime(),
-      // A material sits after the reply that produced it.
-      order: 1,
-      position: material.position,
-      item: {
-        id: material.id,
-        // A closing step filed before run 3 may still carry the planner's
-        // total and closing question (Brian's run 3, item 5). Shown without
-        // them; a teacher's own edit is left as written.
-        content:
-          material.kind === 'step' && !material.editedAt
-            ? withoutTrailingCommentary(material.content)
-            : material.content,
-        keptAudience: material.audience,
-        keptTitle: material.title,
-        kind: packetKindForMaterial(material.kind),
-        origin: 'material' as const,
-        editedAt: material.editedAt,
-        minutes: material.minutes,
-        // Every step shows a time (Brian's run 3, item 9). The deck is built
-        // from the stack, not a step of it.
-        suggestedMinutes:
-          !stackV2 || material.kind === DECK_KIND
-            ? null
-            : DEFAULT_STEP_MINUTES[
-                stepTypeFor({ kind: material.kind, title: material.title, stored: material.stepType })
-              ],
-      },
-    })),
-  ]);
 }

@@ -13,9 +13,6 @@
  */
 import { deriveSectionTitle } from './lesson-packet';
 import { looksLikeLessonPlan } from './suggestions';
-import { cleanLessonTitle } from './lesson-title';
-
-export { cleanLessonTitle, minutesInTitle } from './lesson-title';
 
 /** Long enough to identify a lesson, short enough for a sidebar row. */
 const MAX_NAME_CHARS = 70;
@@ -40,7 +37,7 @@ export function deriveLessonName(reply: string): string | null {
   if (!looksLikeLessonPlan(reply)) return null;
 
   // Index 0 is only the fallback name, which we reject below anyway.
-  const heading = cleanLessonTitle(deriveSectionTitle(reply, 0).replace(LABEL_PREFIX, '').trim());
+  const heading = deriveSectionTitle(reply, 0).replace(LABEL_PREFIX, '').trim();
   if (!heading || EMPTY_NAMES.test(heading)) return null;
   // deriveSectionTitle falls back to "Section 1" when there is no heading and
   // no usable opening line; that is not a lesson name either.

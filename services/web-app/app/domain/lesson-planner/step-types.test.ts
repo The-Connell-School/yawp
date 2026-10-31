@@ -39,34 +39,14 @@ describe('isWritingStep: set from Yawp!, never by the teacher', () => {
     expect(isWritingStep({ kind: 'step', stepType: 'activity' })).toBe(false);
     expect(isWritingStep({ kind: 'step', title: 'Pair talk', content: 'Partners compare what Holden says about Pencey.' })).toBe(false);
   });
-  test("only real writing counts: a Yawp! assignment type, by kind, tag or title (Brian's round 3, 1.3)", () => {
+  test("writing on paper counts: starters, exit tickets, Daily Pages, thesis, reflections (Brian's run 4, item 6)", () => {
     const step = (title: string, content = '') => isWritingStep({ kind: 'step', title, content });
     expect(isWritingStep({ kind: 'step', stepType: 'class_starter' })).toBe(true);
-    expect(isWritingStep({ kind: 'step', stepType: 'daily_pages' })).toBe(true);
+    expect(step('Closing', 'Exit ticket: what does Holden avoid saying?')).toBe(true);
     expect(step('Daily Pages', 'Ten minutes, any prompt.')).toBe(true);
     expect(step('Thesis workshop')).toBe(true);
-    expect(step('Exit ticket')).toBe(true);
-    expect(step('Five-paragraph essay: draft the body')).toBe(true);
-    expect(step('AP essay practice: the DBQ')).toBe(true);
-    expect(step('ACT writing practice')).toBe(true);
-    expect(isWritingStep({ kind: 'step', stepType: 'closing', title: 'Closing', content: 'Exit ticket: what does Holden avoid saying?' })).toBe(true);
-  });
-
-  test('a discussion is not writing, even when it mentions writing', () => {
-    const closeReading = [
-      'Pairs for 4 minutes, then whole class for 11.',
-      'When students make connections to their own class starter writing, follow those threads.',
-    ].join('\n');
-    expect(isWritingStep({ kind: 'step', stepType: 'activity', title: 'Close Reading Discussion', content: closeReading })).toBe(false);
-    expect(isWritingStep({ kind: 'step', stepType: 'activity', title: 'Wrap-up', content: 'Students write a short reflection on paper.' })).toBe(false);
-    expect(isWritingStep({ kind: 'step', stepType: 'activity', title: 'Quick write (5 min)' })).toBe(false);
-    expect(isWritingStep({ kind: 'step', stepType: 'activity', title: 'Pair talk', content: 'Exit ticket ideas come later.' })).toBe(false);
-  });
-
-  test('a handout made for students to fill in counts; a reading handout does not', () => {
-    expect(isWritingStep({ kind: 'handout', stepType: 'activity', title: 'Virtues tracker' })).toBe(true);
-    expect(isWritingStep({ kind: 'handout', stepType: 'read_aloud', title: 'The excerpt' })).toBe(false);
-    expect(isWritingStep({ kind: 'handout', stepType: 'context', title: 'Who was Franklin?' })).toBe(false);
+    expect(step('Wrap-up', 'Students write a short reflection on paper: one thing that changed their mind.')).toBe(true);
+    expect(step('Quick write (5 min)')).toBe(true);
   });
 });
 
@@ -106,9 +86,9 @@ test("what a writing step's writing is called (Brian's run 4, item 6)", () => {
   expect(writingName({ kind: 'step', stepType: 'thesis_essay', title: 'Module 1' })).toBe('Thesis Essay');
 });
 
-test("a step's passing words about writing are not writing (Brian's round 3, 1.3, over run 5)", () => {
-  const step = (content: string) => isWritingStep({ kind: 'step', stepType: 'activity', title: 'Step', content });
-  expect(step('A one-sentence written answer.')).toBe(false);
-  expect(step('90 seconds of writing on the conch.')).toBe(false);
-  expect(step('One sentence in their notes.')).toBe(false);
+test("the writing in Brian's week counts as writing (run 5, round 2)", () => {
+  const step = (content: string) => isWritingStep({ kind: 'step', title: 'Step', content });
+  expect(step('A one-sentence written answer.')).toBe(true);
+  expect(step('90 seconds of writing on the conch.')).toBe(true);
+  expect(step('One sentence in their notes.')).toBe(true);
 });

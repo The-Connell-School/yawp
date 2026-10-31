@@ -107,13 +107,13 @@ export function MaterialCard({
             )}
           >
             {added ? <Check size={14} /> : <Plus size={14} />}
-            {added ? 'In your lesson' : 'Add to lesson'}
+            {added ? 'In the stack' : 'Add to stack'}
           </button>
         ) : null}
       </div>
       {open ? (
         <div className="border-t bg-foreground/[0.02] px-4 py-3">
-          <MarkdownContent content={material.content} codeAsText />
+          <MarkdownContent content={material.content} />
         </div>
       ) : null}
     </div>

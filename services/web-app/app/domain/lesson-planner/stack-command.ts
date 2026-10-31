@@ -11,7 +11,6 @@
 import { z } from 'zod';
 import { clampMinutes } from './stack-timing';
 import { STEP_TYPES, STEP_TYPE_LABELS, type StepType } from './step-types';
-import { BUILD_FROM_STACK_REQUESTS } from './suggestions';
 
 export type CommandStep = {
   id: string;
@@ -87,31 +86,6 @@ export function findStep(phrase: string, steps: CommandStep[]): CommandStep | nu
   // not a guess.
   if (scored[1] && scored[1].hits === scored[0]!.hits) return null;
   return scored[0]!.step;
-}
-
-const ASKS_FOR_DECK = /\b(?:slide ?deck|slides|deck|power ?point|presentation)\b/i;
-// The words of a plain "make the slides": anything else is the teacher's own
-// say about the deck, and goes to the planner with it.
-const PLAIN_DECK_WORDS = new Set(
-  (
-    'a an the me my us our this that these for of from with in to it please can could you would ' +
-    'i we need want like give make build create generate draft rebuild redo remake new another ' +
-    'put together up slide slides deck decks powerpoint power point presentation lesson class ' +
-    'today tomorrow stack one some now just'
-  ).split(' ')
-);
-
-/**
- * A line on the stack that asks for slides (Brian's run 6, item 2): the deck
- * is built right there, by the planner's full turn, rather than sending the
- * teacher back to the chat. Null: not a deck.
- */
-export function deckRequest(line: string, { hasDeck }: { hasDeck: boolean }): string | null {
-  if (!ASKS_FOR_DECK.test(line)) return null;
-  const base = hasDeck ? BUILD_FROM_STACK_REQUESTS['rebuild-deck'] : BUILD_FROM_STACK_REQUESTS.deck;
-  const words = line.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(Boolean);
-  if (words.every((word) => PLAIN_DECK_WORDS.has(word))) return base;
-  return `${base}. The teacher asked: "${line.trim().slice(0, 300)}"`;
 }
 
 const SET_MINUTES =

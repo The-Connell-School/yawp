@@ -33,7 +33,7 @@ export function ExitTicketCard({
   onToggle,
   disabled,
   created = null,
-  pieceRef = null,
+  materialId = null,
 }: {
   ticket: PlannedExitTicket;
   /**
@@ -46,13 +46,10 @@ export function ExitTicketCard({
   added?: boolean;
   onToggle?: ((added: boolean) => void) | null;
   disabled?: boolean;
-  /** Created in Yawp! from this piece, in the chat or the stack (Brian's run 3, item 4). */
+  /** Created in Yawp! from this piece of the stack (Brian's run 3, item 4). */
   created?: { href: string } | null;
-  /**
-   * This card's piece, "b:<messageId>:<blockKey>", filed or not, so creating
-   * it is recorded once for the chat and the stack (Oct 24 handoff, task 1).
-   */
-  pieceRef?: string | null;
+  /** The stack piece this card is, so creating it can be remembered. */
+  materialId?: string | null;
 }) {
   const { config } = ticket;
   const focus =
@@ -140,7 +137,7 @@ export function ExitTicketCard({
             )}
           >
             {added ? <Check size={14} /> : <Plus size={14} />}
-            {added ? 'In your lesson' : 'Add to lesson'}
+            {added ? 'In the stack' : 'Add to stack'}
           </button>
         ) : null}
         {created ? (
@@ -149,7 +146,7 @@ export function ExitTicketCard({
           <Link
             to={withPiece(
               exitTicketCreateHref(assignmentTypeId, ticket, conversationId),
-              pieceRef
+              materialId
             )}
             data-testid="exit-ticket-create"
             className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-background px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/5"

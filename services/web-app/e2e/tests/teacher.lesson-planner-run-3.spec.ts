@@ -201,18 +201,18 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await expect(page.getByText('I have everything I need')).toHaveCount(0);
     });
 
-    test('the hook has its own Add to lesson, and the summary list says the same', async ({
+    test('the hook has its own Add to stack, and the summary list says the same', async ({
       page,
       signIn,
       e2eContext,
     }) => {
       await openDayOneChat(page, e2eContext, signIn);
       const hook = page.getByTestId('plan-segment').filter({ hasText: 'Hook activity' });
-      await expect(hook.getByTestId('segment-toggle')).toHaveText('Add to lesson');
+      await expect(hook.getByTestId('segment-toggle')).toHaveText('Add to stack');
       await hook.getByTestId('segment-toggle').click();
-      await expect(hook.getByTestId('segment-toggle')).toHaveText('In your lesson');
+      await expect(hook.getByTestId('segment-toggle')).toHaveText('In the stack');
       const listed = page.getByTestId('plan-step').filter({ hasText: 'Hook activity' });
-      await expect(listed.getByTestId('plan-step-toggle')).toHaveText('In your lesson');
+      await expect(listed.getByTestId('plan-step-toggle')).toHaveText('In the stack');
     });
 
     test('a step offering three class starters has no Add of its own: each option has one (Kevin, Oct 22)', async ({
@@ -244,7 +244,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await expect(starterStep.getByTestId('segment-toggle')).toHaveCount(0);
       await expect(starterStep.getByTestId('segment-choice')).toHaveText('Pick one below to add it');
       await expect(page.getByTestId('plan-segment').filter({ hasText: 'Mini-lesson' }).getByTestId('segment-toggle')).toHaveText(
-        'Add to lesson'
+        'Add to stack'
       );
       const listed = page.getByTestId('plan-step').filter({ hasText: 'Class starter' });
       await expect(listed.getByTestId('plan-step-toggle')).toHaveCount(0);
@@ -264,13 +264,13 @@ test.describe("Lesson Planner — Brian's third run", () => {
         .getByTestId('daily-pages-stack-toggle')
         .click();
       const starter = page.getByTestId('plan-segment').filter({ hasText: 'Class starter' });
-      await expect(starter.getByTestId('segment-toggle')).toHaveText('In your lesson');
+      await expect(starter.getByTestId('segment-toggle')).toHaveText('In the stack');
 
       const framing = page.getByTestId('plan-segment').filter({ hasText: 'Framing' });
       await framing.getByTestId('segment-toggle').click();
-      await expect(framing.getByTestId('segment-toggle')).toHaveText('In your lesson');
+      await expect(framing.getByTestId('segment-toggle')).toHaveText('In the stack');
       await expect(page.getByTestId('material-card').filter({ hasText: 'Historical context' })).toContainText(
-        'In your lesson'
+        'In the stack'
       );
     });
 
@@ -284,7 +284,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
       );
       await hook.getByTestId('segment-toggle').click();
       expect((await filed).ok()).toBe(true);
-      await expect(hook.getByTestId('segment-toggle')).toHaveText('In your lesson');
+      await expect(hook.getByTestId('segment-toggle')).toHaveText('In the stack');
 
       const stack = await context.newPage();
       await stack.goto(`/app/lesson-planner/${conversationId}/packet`);
@@ -297,12 +297,12 @@ test.describe("Lesson Planner — Brian's third run", () => {
 
       await page.bringToFront();
       await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-      await expect(hook.getByTestId('segment-toggle')).toHaveText('Add to lesson');
+      await expect(hook.getByTestId('segment-toggle')).toHaveText('Add to stack');
     });
 
     test('"Add everything" twice files nothing twice', async ({ page, signIn, e2eContext }) => {
       const { conversationId } = await openDayOneChat(page, e2eContext, signIn);
-      const addAll = page.getByRole('button', { name: 'Add everything to the lesson' });
+      const addAll = page.getByRole('button', { name: 'Add everything to the stack' });
       const filed = page.waitForResponse(
         (response) =>
           response.url().includes('/api/domain/lesson-planner/packet') &&
@@ -310,7 +310,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
       );
       await addAll.click();
       expect((await filed).ok()).toBe(true);
-      await expect(page.getByText('Everything is in your lesson')).toBeVisible();
+      await expect(page.getByText('Everything is in the stack')).toBeVisible();
       const prisma = createE2EPrismaClient();
       try {
         const first = await prisma.lessonPlanMaterial.count({ where: { conversationId } });
@@ -357,7 +357,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await page.reload();
       await expect(
         page.getByTestId('packet-section').filter({ hasText: 'one object, one sentence' }).getByTestId('stack-create-assignment')
-      ).toHaveText('Assignment created');
+      ).toHaveText('Created in Yawp! · Open');
     });
   });
 
@@ -625,15 +625,13 @@ test.describe("Lesson Planner — Brian's third run", () => {
       const asked: string[] = [];
       await page.route('**/api/domain/lesson-planner', (route) => {
         asked.push(route.request().postData() ?? '');
-        return route.abort();
       });
       await lecture.getByTestId('lecture-slides').click();
-      // Built right in the stack, not in the chat (Brian's run 6, item 2).
+      await expect(page).toHaveURL(new RegExp(`c=${conversationId}`));
       await expect
         .poll(() => decodeURIComponent(asked.join('\n').replace(/\+/g, ' ')))
         .toContain('give the lecture “Mini-lesson: Girard’s three ideas” a slide for each part it teaches');
-      expect(decodeURIComponent(asked.join('\n'))).toContain('surface=stack');
-      await expect(page).toHaveURL(new RegExp(`/app/lesson-planner/${conversationId}/packet$`));
+      await expect(page).not.toHaveURL(/build=|step=/);
     });
 
     test('the deck is built from the stack, not a step in it', async ({ page, signIn, e2eContext }) => {
@@ -1280,11 +1278,11 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await page
         .getByTestId('material-card')
         .filter({ hasText: 'Lecture notes' })
-        .getByRole('button', { name: /Add to lesson/ })
+        .getByRole('button', { name: /Add to stack/ })
         .click();
       await notesAdded;
       const starterAdded = filed();
-      await page.getByTestId('daily-pages-card').getByRole('button', { name: /Add to lesson/ }).click();
+      await page.getByTestId('daily-pages-card').getByRole('button', { name: /Add to stack/ }).click();
       await starterAdded;
 
       await page.goto(`/app/lesson-planner/${conversationId}/packet`);
