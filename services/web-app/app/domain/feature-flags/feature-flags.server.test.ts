@@ -119,6 +119,37 @@ describe('feature flags (server)', () => {
     }
   });
 
+  test('assignment-type landing flags default on for demo and preview, off on production', async () => {
+    const previous = process.env.YAWP_ENVIRONMENT;
+    try {
+      for (const key of [
+        'assignment-type-landing-v2',
+        'assignment-type-landing-thesis-essay',
+      ] as const) {
+        for (const environment of ['demo', 'preview']) {
+          process.env.YAWP_ENVIRONMENT = environment;
+          prisma.setting.findUnique.mockResolvedValue(null);
+          expect({ key, environment, on: await isFeatureFlagEnabled(key) }).toEqual({
+            key,
+            environment,
+            on: true,
+          });
+        }
+        process.env.YAWP_ENVIRONMENT = 'production';
+        prisma.setting.findUnique.mockResolvedValue(null);
+        expect(await isFeatureFlagEnabled(key, 'org-1')).toBe(false);
+        prisma.setting.findUnique.mockResolvedValue({
+          value: '{"mode":"targeted","orgIds":["org-1"]}',
+        });
+        expect(await isFeatureFlagEnabled(key, 'org-1')).toBe(true);
+        expect(await isFeatureFlagEnabled(key, 'org-2')).toBe(false);
+      }
+    } finally {
+      if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
+      else process.env.YAWP_ENVIRONMENT = previous;
+    }
+  });
+
   test('teacher prompt generator defaults on for demo and preview without a row', async () => {
     const previous = process.env.YAWP_ENVIRONMENT;
     const flagName = 'feature_flag.teacher-prompt-generator';
@@ -304,6 +335,8 @@ describe('feature flags (server)', () => {
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       TEACHER_PROMPT_GENERATOR_FLAG,
+      'assignment-type-landing-v2',
+      'assignment-type-landing-thesis-essay',
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -345,6 +378,8 @@ describe('feature flags (server)', () => {
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       TEACHER_PROMPT_GENERATOR_FLAG,
+      'assignment-type-landing-v2',
+      'assignment-type-landing-thesis-essay',
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;

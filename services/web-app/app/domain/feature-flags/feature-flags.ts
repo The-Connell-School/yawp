@@ -122,6 +122,24 @@ export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
 export const TEACHER_PROMPT_GENERATOR_FLAG = 'teacher-prompt-generator' as const;
 
 /**
+ * Brian's teacher-facing assignment-type landing pages (Oct 31 copy edits):
+ * a short Description, How it works, and the Prompt Library intro in a mentor
+ * teacher's voice, with the one-step types' Modules block removed. Off: every
+ * assignment type page as before. Default off on production; on by default on
+ * demo and PR previews. The Thesis-Driven Essay page has its own flag below.
+ */
+export const ASSIGNMENT_TYPE_LANDING_V2_FLAG = 'assignment-type-landing-v2' as const;
+
+/**
+ * The new Thesis-Driven Essay landing page, with How to Teach It (a lesson
+ * stack and tutorial video per step). Demo only until the stacks and videos
+ * exist; turning this on in production is how it goes live. Needs
+ * {@link ASSIGNMENT_TYPE_LANDING_V2_FLAG}.
+ */
+export const ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG =
+  'assignment-type-landing-thesis-essay' as const;
+
+/**
  * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
  * reads only `feature_flag.free_tier`; these rows are not OR-merged.
  */
@@ -243,6 +261,16 @@ export const FEATURE_FLAGS = {
     label: 'Teacher prompt generator',
     description:
       'Shows New → Generate a prompt and the LLM drafting sheet on assignment types that support it (Class Starter, Daily Pages, Exit Ticket, Thesis-Driven Essay). Default off on production; on by default on demo and PR previews.',
+  },
+  [ASSIGNMENT_TYPE_LANDING_V2_FLAG]: {
+    label: 'Assignment type pages: teacher-facing copy',
+    description:
+      "Brian's new landing page for each assignment type (Class Starter, Exit Ticket, Pre-Writing, Thesis Statement, Daily Pages, AP History, and the other built-in types): a short description, How it works, and the Prompt Library intro, with no Modules block on one-step types. Off: the old pages. Default off on production; on by default on demo and PR previews.",
+  },
+  [ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG]: {
+    label: 'Assignment type pages: Thesis-Driven Essay',
+    description:
+      'The new Thesis-Driven Essay landing page, with How to Teach It (lesson stack and tutorial video per step). Needs the teacher-facing copy flag. Turn on in production once the stacks and videos exist. Default off on production; on by default on demo and PR previews.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 
