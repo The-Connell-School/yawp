@@ -114,15 +114,24 @@ export function rubricCategoryLabelToKey(label: string) {
     .replace(/^_|_$/g, '');
 }
 
+/**
+ * The rubric exactly as it should be stored: a key for every category, and
+ * each category's score words, bands, feedback and grammar settings carried
+ * through. Dropping those options here is what used to turn an untouched
+ * Exit Ticket into a plain 1-5 rubric on save.
+ */
 export function prepareRubricForSave(rubric: RubricData): RubricData {
   return {
-    categories: rubric.categories.map(
-      ({ key, label, weight, description }) => ({
-        key: key.trim() || rubricCategoryLabelToKey(label),
-        label,
-        weight,
-        description,
-      })
+    categories: rubric.categories.map((category) =>
+      withRubricCategoryOptions(
+        {
+          key: category.key.trim() || rubricCategoryLabelToKey(category.label),
+          label: category.label,
+          weight: category.weight,
+          description: category.description,
+        },
+        category
+      )
     ),
   };
 }

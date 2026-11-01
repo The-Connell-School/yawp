@@ -185,10 +185,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
       where: { id: assignmentTypeId },
       select: {
         id: true,
+        kind: true,
         rubricJson: true,
         scoringScaleJson: true,
         gradingPromptConfigJson: true,
         gradingOutputSchemaJson: true,
+        gradingCalibrationNotes: true,
         rubric: { select: { schemaJson: true } },
       },
     });

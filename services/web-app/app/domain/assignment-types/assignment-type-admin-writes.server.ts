@@ -10,9 +10,14 @@ import {
   parseRubric,
   parseScoringScale,
   prepareRubricForSave,
+  type RubricData,
 } from './assignment-type-rubric.shared';
 import { normalizeScoreStep } from './score-scale-steps';
-import { isRubricFullyPopulated } from './assignment-type-rubric-config';
+import {
+  classifyAssignmentTypeRubric,
+  isRubricFullyPopulated,
+  parseAssignmentTypeRubricConfig,
+} from './assignment-type-rubric-config';
 
 type Client = Pick<
   Prisma.TransactionClient,
@@ -24,6 +29,7 @@ type GradingConfig = Pick<
   | 'rubricJson'
   | 'gradingPromptConfigJson'
   | 'gradingOutputSchemaJson'
+  | 'gradingCalibrationNotes'
   | 'gradingAssistantVersion'
 >;
 export type AssignmentTypeWriteInput = {
@@ -269,6 +275,59 @@ function stableRubricJson(raw: unknown) {
   return JSON.stringify(prepareRubricForSave(parseRubric(raw)));
 }
 
+/** Only what every rubric form has always posted: key, label, weight, text. */
+function strippedRubricJson(raw: unknown) {
+  return JSON.stringify(
+    prepareRubricForSave(parseRubric(raw)).categories.map(
+      ({ key, label, weight, description }) => ({
+        key,
+        label,
+        weight,
+        description,
+      })
+    )
+  );
+}
+
+const CATEGORY_OPTION_KEYS = [
+  'scoreLabels',
+  'bands',
+  'feedbackEnabled',
+  'grammarHighlighting',
+] as const;
+
+/**
+ * True when no category in the posted rubric carries any option. Edit pages
+ * served before options were kept posted rubrics like this whether or not the
+ * admin touched anything, so such a post cannot be read as changing them.
+ */
+function carriesNoCategoryOptions(rubric: RubricData) {
+  return rubric.categories.every((category) =>
+    CATEGORY_OPTION_KEYS.every((key) => category[key] === undefined)
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+/**
+ * Whether a posted rubric differs from the one this type grades with today:
+ * its own stored rubric, or, when it has none, the built-in rubric for its
+ * kind that the edit page shows in its place.
+ */
+function rubricDiffersFromEffective(
+  submitted: unknown,
+  effective: RubricData
+) {
+  const posted = parseRubric(submitted);
+  if (stableRubricJson(posted) === stableRubricJson(effective)) return false;
+  return !(
+    carriesNoCategoryOptions(posted) &&
+    strippedRubricJson(posted) === strippedRubricJson(effective)
+  );
+}
+
 function scoringScaleSemanticallyEqual(a: unknown, b: unknown) {
   const left = parseScoringScale(a);
   const right = parseScoringScale(b);
@@ -286,10 +345,13 @@ function scoringScaleSemanticallyEqual(a: unknown, b: unknown) {
 export function parseAdminUpdateGradingConfig(
   formData: FormData,
   existing: {
+    /** The type's kind, which picks its built-in rubric when it has none. */
+    kind?: string | null;
     rubricJson?: unknown;
     scoringScaleJson?: unknown;
     gradingPromptConfigJson?: unknown;
     gradingOutputSchemaJson?: unknown;
+    gradingCalibrationNotes?: string | null;
   }
 ): GradingConfig | undefined {
   const hasConfig = [
@@ -317,23 +379,55 @@ export function parseAdminUpdateGradingConfig(
   const submittedScoringScale = formData.has('scoringScale')
     ? parseJsonFormField(formData, 'scoringScale')
     : null;
+
+  // A type with no rubric of its own grades from the built-in rubric for its
+  // kind, and that is what the edit page shows and posts back. Comparing the
+  // post against the stored column (empty) would save the built-in rubric
+  // onto the type on every save, so compare against what it grades with.
+  const ownsRubric =
+    classifyAssignmentTypeRubric(parseRubric(existing.rubricJson)) !== 'none';
+  const builtIn = ownsRubric
+    ? null
+    : parseAssignmentTypeRubricConfig({
+        assignmentTypeKind: existing.kind ?? null,
+      });
+  const effectiveRubric = builtIn
+    ? builtIn.rubric
+    : parseRubric(existing.rubricJson);
+  const postsBuiltInPlaceholder =
+    builtIn != null &&
+    submittedRubricJson != null &&
+    classifyAssignmentTypeRubric(parseRubric(submittedRubricJson)) === 'none';
   const rubricChanged =
     submittedRubricJson != null &&
-    stableRubricJson(submittedRubricJson) !==
-      stableRubricJson(existing.rubricJson);
+    !postsBuiltInPlaceholder &&
+    rubricDiffersFromEffective(submittedRubricJson, effectiveRubric);
+  // Changing a built-in rubric makes it the type's own. The scale, the
+  // instructions and the output shape come with it, or the type would start
+  // grading its new rubric on the generic 1-5 scale with no instructions.
+  const materializesBuiltIn = rubricChanged && builtIn != null;
   const scoringChanged =
     submittedScoringScale != null &&
     !scoringScaleSemanticallyEqual(
       submittedScoringScale,
       existing.scoringScaleJson
     );
+  const basePromptConfig =
+    materializesBuiltIn && builtIn
+      ? {
+          ...(builtIn.promptConfig as Record<string, unknown>),
+          ...(isRecord(existing.gradingPromptConfigJson)
+            ? existing.gradingPromptConfigJson
+            : {}),
+        }
+      : existing.gradingPromptConfigJson;
 
   let gradingPromptConfigJson: Prisma.InputJsonValue | undefined;
   if (formData.has('gradingInstructionsOverride')) {
     gradingPromptConfigJson = withGradingInstructionsOverride(
       formData.has('promptConfigJson')
         ? parseJsonFormField(formData, 'promptConfigJson')
-        : existing.gradingPromptConfigJson,
+        : basePromptConfig,
       formData.get('gradingInstructionsOverride')
     ) as Prisma.InputJsonValue;
   } else if (formData.has('promptConfigJson')) {
@@ -341,11 +435,15 @@ export function parseAdminUpdateGradingConfig(
       formData,
       'promptConfigJson'
     ) as Prisma.InputJsonValue;
+  } else if (materializesBuiltIn) {
+    gradingPromptConfigJson = basePromptConfig as Prisma.InputJsonValue;
   }
+  // No prompt config and an empty one say the same thing; only a real
+  // difference may bump the version or overwrite the column.
   const promptChanged =
     gradingPromptConfigJson !== undefined &&
     JSON.stringify(gradingPromptConfigJson) !==
-      JSON.stringify(existing.gradingPromptConfigJson ?? null);
+      JSON.stringify(existing.gradingPromptConfigJson ?? {});
 
   let gradingOutputSchemaJson: Prisma.InputJsonValue | undefined;
   if (formData.has('outputSchemaJson')) {
@@ -353,6 +451,9 @@ export function parseAdminUpdateGradingConfig(
       formData,
       'outputSchemaJson'
     ) ?? DEFAULT_OUTPUT_SCHEMA_JSON) as Prisma.InputJsonValue;
+  } else if (materializesBuiltIn && builtIn) {
+    gradingOutputSchemaJson = (existing.gradingOutputSchemaJson ??
+      builtIn.outputSchema) as Prisma.InputJsonValue;
   }
   const outputChanged =
     gradingOutputSchemaJson !== undefined &&
@@ -363,7 +464,23 @@ export function parseAdminUpdateGradingConfig(
     return undefined;
   }
 
+  const materializedScale =
+    materializesBuiltIn && builtIn && !scoringChanged
+      ? existing.scoringScaleJson == null
+        ? { scoringScaleJson: builtIn.scoringScale as Prisma.InputJsonValue }
+        : {}
+      : {};
+  const materializedCalibration =
+    materializesBuiltIn &&
+    builtIn &&
+    existing.gradingCalibrationNotes == null &&
+    builtIn.calibrationNotes != null
+      ? { gradingCalibrationNotes: builtIn.calibrationNotes }
+      : {};
+
   return {
+    ...materializedScale,
+    ...materializedCalibration,
     ...(scoringChanged
       ? {
           scoringScaleJson: scoringScaleSemanticallyEqual(
