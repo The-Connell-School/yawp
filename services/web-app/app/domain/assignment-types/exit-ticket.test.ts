@@ -4,6 +4,7 @@ import {
   EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
   EXIT_TICKET_CONFIG_SCHEMA_VERSION,
   EXIT_TICKET_ELABORATION_NOTE,
+  EXIT_TICKET_POLISH_NOTE,
   EXIT_TICKET_FOCUS_OPTIONS,
   EXIT_TICKET_LESSON_NOTE_FIELDS,
   EXIT_TICKET_LESSON_NOTE_MAX_LENGTH,
@@ -137,8 +138,91 @@ describe('composeExitTicketPrompt', () => {
       });
 
       expect(prompt).toInclude('yesterday’s reading');
-      expect(prompt).toInclude(EXIT_TICKET_ELABORATION_NOTE);
+      // Every ticket can say not to worry about polish; only the explain-it
+      // ones push for length (Brian's wording rule).
+      expect(prompt).toInclude(EXIT_TICKET_POLISH_NOTE);
     }
+  });
+});
+
+describe("composeExitTicketPrompt: Brian's wording rule", () => {
+  const OWN_WORDS_ENDING =
+    'Keep it conversational, in your words, and write as much as you can — the more you can explain your thinking, the better. Don’t worry too much about polish. This is about what you understand, not writing perfectly.';
+
+  const specific = (focus: string, answerType: 'objective' | 'subjective' = 'subjective') =>
+    composeExitTicketPrompt({
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      mode: 'specific',
+      focus: focus as never,
+      topic: 'how Edwards uses reason and emotion together to persuade',
+      answerType,
+    });
+
+  const reflection = (reflectionPrompt?: unknown) =>
+    composeExitTicketPrompt({
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      mode: 'basic',
+      ...(reflectionPrompt ? { reflectionPrompt: reflectionPrompt as never } : {}),
+    });
+
+  test('the own-words ending is exactly the one in the doc', () => {
+    expect(EXIT_TICKET_ELABORATION_NOTE).toBe(OWN_WORDS_ENDING);
+    expect(EXIT_TICKET_POLISH_NOTE).toBe('Don’t worry too much about polish.');
+  });
+
+  test('"explain it in your own words" matches the after example word for word', () => {
+    expect(specific('explain-concept')).toBe(
+      `In your own words, explain how Edwards uses reason and emotion together to persuade. ${OWN_WORDS_ENDING}`.replace(
+        '. Keep it',
+        '.\n\nKeep it'
+      )
+    );
+  });
+
+  test('no ticket uses the "someone who missed class" language any more', () => {
+    const prompts = [
+      ...EXIT_TICKET_FOCUS_OPTIONS.flatMap((option) => [
+        specific(option.value, 'objective'),
+        specific(option.value, 'subjective'),
+      ]),
+      reflection(),
+      reflection({ id: 'interesting' }),
+      reflection({ id: 'wondering' }),
+      reflection({ id: 'custom', text: 'What is a semicolon for?' }),
+    ];
+    for (const prompt of prompts) {
+      expect(prompt).not.toInclude('someone who missed class');
+      expect(prompt).not.toInclude('not the definition you were given');
+      expect(prompt).not.toInclude('go further than your first sentence');
+    }
+    for (const option of EXIT_TICKET_FOCUS_OPTIONS) {
+      expect(option.template).not.toInclude('missed class');
+    }
+  });
+
+  test('explain-it tickets end with the own-words ending', () => {
+    for (const prompt of [
+      specific('explain-concept'),
+      specific('explain-concept', 'objective'),
+      specific('understand-text'),
+      reflection(),
+      reflection({ id: 'learned' }),
+      reflection({ id: 'interesting' }),
+    ]) {
+      expect(prompt.endsWith(OWN_WORDS_ENDING)).toBe(true);
+    }
+  });
+
+  test('question tickets just ask the question: no length push', () => {
+    for (const prompt of [specific('ask-question'), reflection({ id: 'wondering' })]) {
+      expect(prompt).not.toInclude('as much as you can');
+      expect(prompt.endsWith(`\n\n${EXIT_TICKET_POLISH_NOTE}`)).toBe(true);
+    }
+  });
+
+  test("a teacher's own question gets only the short polish note", () => {
+    const prompt = reflection({ id: 'custom', text: 'What is a semicolon for?' });
+    expect(prompt).toBe(`What is a semicolon for?\n\n${EXIT_TICKET_POLISH_NOTE}`);
   });
 });
 
