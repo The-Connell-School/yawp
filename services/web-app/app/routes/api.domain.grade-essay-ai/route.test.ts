@@ -2683,6 +2683,197 @@ describe('api.domain.grade-essay-ai', () => {
     });
   });
 
+  describe('an Exit Ticket submission, start to finish', () => {
+    const REFLECTION_CONFIG = {
+      schemaVersion: 1,
+      mode: 'basic',
+      kind: 'reflection',
+      reflectionPrompt: { id: 'wondering' },
+      grading: { basis: 'bands' },
+      lessonNotes: { mainPoints: 'Photosynthesis stores light energy as sugar.' },
+    };
+    const CHECK_OBJECTIVE_CONFIG = {
+      schemaVersion: 1,
+      mode: 'specific',
+      kind: 'check',
+      focus: 'explain-concept',
+      topic: 'photosynthesis',
+      answerType: 'objective',
+      grading: { basis: 'bands' },
+      lessonNotes: {
+        mustMention: 'Plants turn light energy into chemical energy in glucose.',
+        watchFor: 'Saying plants get their food from the soil.',
+      },
+    };
+    const CHECK_SUBJECTIVE_CONFIG = {
+      ...CHECK_OBJECTIVE_CONFIG,
+      answerType: 'subjective',
+      grading: { basis: 'bands', assessFor: 'how well they connect it to their own life' },
+      lessonNotes: undefined,
+    };
+
+    async function gradeExitTicket(
+      id: string,
+      config: Record<string, unknown>,
+      understandingScore: number
+    ) {
+      prisma.assignmentType.findUnique.mockResolvedValue(
+        mockAssignmentType({
+          id: 'assignment-type-exit-ticket',
+          title: 'Exit Ticket',
+          kind: 'exit_ticket',
+        })
+      );
+      const base = mockSubmission({
+        id,
+        text: 'Plants use sunlight to make sugar. I still wonder how the sugar moves to the roots.',
+      });
+      prisma.submission.findFirst.mockResolvedValue({
+        ...base,
+        document: {
+          ...base.document,
+          assignmentTypeId: 'assignment-type-exit-ticket',
+          assignmentType: {
+            id: 'assignment-type-exit-ticket',
+            kind: 'exit_ticket',
+            title: 'Exit Ticket',
+          },
+          assignment: {
+            id: `assignment-${id}`,
+            grammarGradingEnabled: null,
+            gradingAssistantStrictnessLevel: null,
+            tutorEnabled: false,
+            prompt: 'What did you learn today, and what are you still wondering?',
+            pointValue: 10,
+            exitTicketConfigJson: config,
+          },
+        },
+      });
+      prisma.assignment.findUnique.mockResolvedValue({
+        assignmentTypeId: 'assignment-type-exit-ticket',
+        rubricRevision: null,
+        rubricTotalPoints: null,
+        gradingMode: 'bands',
+      });
+      getLLMCompletion.mockReset();
+      getLLMCompletion.mockResolvedValue(
+        JSON.stringify({
+          categories: [{ key: 'understanding', score: understandingScore }],
+          overallComment: 'Jordan, you have the core of it.',
+        })
+      );
+
+      const form = new FormData();
+      form.append('submissionId', id);
+      return action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+    }
+
+    function gradingPromptText() {
+      const call = getLLMCompletion.mock.calls.find(
+        (call: any[]) => call[0]?.metadata?.kind === 'rubric-evaluation'
+      )?.[0];
+      return [
+        call?.system ?? '',
+        ...(call?.messages ?? []).map((message: { content: unknown }) =>
+          typeof message.content === 'string'
+            ? message.content
+            : JSON.stringify(message.content)
+        ),
+      ].join('\n');
+    }
+
+    function stored() {
+      return prisma.submission.update.mock.calls.at(-1)?.[0].data;
+    }
+
+    test('a reflection grades on the Exit Ticket bands and its reflection question', async () => {
+      const response = await gradeExitTicket('sub-et-reflection', REFLECTION_CONFIG, 72);
+      expect(response.status ?? 200).toBe(200);
+
+      const prompt = gradingPromptText();
+      expect(prompt).toContain('81-100 Explains it');
+      expect(prompt).toContain('45-80 Partly there');
+      expect(prompt).toContain('This reflection asks the student for a question they still have.');
+      expect(prompt).toContain('Photosynthesis stores light energy as sugar.');
+      // A reflection has no answer to get wrong.
+      expect(prompt).not.toContain('The teacher says this has a right answer');
+
+      const run =
+        prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data;
+      expect(run.source).toBe('exit-ticket-default');
+
+      expect(stored().rubricScores).toEqual({
+        understanding: { score: 72, comment: '', isAi: true },
+      });
+      expect(stored().score).toBe('72/100');
+      expect(stored().numericPercentage).toBeNull();
+      expect(stored().letterGrade).toBeNull();
+      expect(stored().grammarIssues).toEqual({ version: 1, issues: [] });
+    });
+
+    test('a check for understanding with a right answer grades against that answer', async () => {
+      const response = await gradeExitTicket('sub-et-check', CHECK_OBJECTIVE_CONFIG, 30);
+      expect(response.status ?? 200).toBe(200);
+
+      const prompt = gradingPromptText();
+      expect(prompt).toContain('The teacher says this has a right answer.');
+      expect(prompt).toContain(
+        'Plants turn light energy into chemical energy in glucose.'
+      );
+      expect(prompt).toContain('Saying plants get their food from the soil.');
+      expect(prompt).toContain('What this ticket is checking for:');
+      expect(prompt).not.toContain('This reflection asks');
+
+      expect(stored().rubricScores).toEqual({
+        understanding: { score: 30, comment: '', isAi: true },
+      });
+      expect(stored().score).toBe('30/100');
+    });
+
+    test('a check with no single right answer is told not to mark defensible answers wrong', async () => {
+      await gradeExitTicket('sub-et-check-open', CHECK_SUBJECTIVE_CONFIG, 90);
+
+      const prompt = gradingPromptText();
+      expect(prompt).toContain('The teacher says there is no single right answer here.');
+      expect(prompt).toContain('how well they connect it to their own life');
+      expect(prompt).not.toContain('The teacher says this has a right answer.');
+      expect(stored().score).toBe('90/100');
+    });
+
+    test('a completion-graded reflection tells the grader any honest attempt is 100', async () => {
+      await gradeExitTicket(
+        'sub-et-completion',
+        { ...REFLECTION_CONFIG, grading: { basis: 'completion' } },
+        100
+      );
+
+      expect(gradingPromptText()).toContain(
+        'The teacher is grading this for completion.'
+      );
+      expect(stored().score).toBe('100/100');
+    });
+
+    // The bands cover 0-100 with no gaps, so every whole-number score the
+    // grader can give is accepted and stored, never rejected as "between bands".
+    test.each([0, 1, 44, 45, 67, 80, 81, 99, 100])(
+      'accepts and stores a whole-number score of %i',
+      async (score) => {
+        const response = await gradeExitTicket(
+          `sub-et-score-${score}`,
+          CHECK_OBJECTIVE_CONFIG,
+          score
+        );
+        expect(response.status ?? 200).toBe(200);
+        expect(stored().score).toBe(`${score}/100`);
+      }
+    );
+  });
+
   describe('the revised production Daily Pages library rubric', () => {
     async function gradeRevisedDailyPages(engagementScore: number, pointValue = 30, pin?: 'current' | 'legacy') {
       const { STARTER_RUBRICS, DAILY_PAGES_RUBRIC_NAME } = await import('~/domain/rubrics/starter-rubrics');
