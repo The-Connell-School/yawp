@@ -25,6 +25,8 @@ import {
   RubricLibrarySection,
   type RubricOption,
 } from '~/components/admin/rubric-library-section';
+import { GradingRubricSummaryCard } from './grading-rubric-summary-card';
+import type { GradingRubricSummary } from '~/domain/assignment-types/grading-rubric-summary';
 import {
   AssignmentTypeModulesSection,
   type AssignmentTypeModuleRow,
@@ -41,6 +43,8 @@ type AssignmentTypeEditorFormProps = {
   /** Cross-UI last-save hint (Platform vs Internal). */
   lastEditLine?: string | null;
   rubric?: RubricData;
+  /** What the Grading Assistant grades this type with, as saved. */
+  gradingRubricSummary?: GradingRubricSummary | null;
   assignmentTypeId?: string;
   titleDefaultValue?: string;
   descriptionDefaultValue?: string | null;
@@ -119,6 +123,7 @@ export function AssignmentTypeEditorForm({
   currentPromptLabel = null,
   lastEditLine = null,
   rubric = DEFAULT_RUBRIC,
+  gradingRubricSummary = null,
   assignmentTypeId,
   titleDefaultValue = '',
   descriptionDefaultValue = '',
@@ -370,12 +375,8 @@ export function AssignmentTypeEditorForm({
           title="Rubric"
           description="Choose a shared library rubric for grading and tutor guidance. Per-type overrides stay limited to grading assistant instructions below."
         >
-          {isEdit && !selectedRubricId ? (
-            <p className="text-sm text-muted-foreground">
-              This assignment type uses its built-in rubric. Select a library
-              rubric below to switch, or adjust grammar highlighting when
-              available.
-            </p>
+          {isEdit && gradingRubricSummary ? (
+            <GradingRubricSummaryCard summary={gradingRubricSummary} />
           ) : !isEdit ? (
             <p className="text-sm text-muted-foreground">
               Pick a library rubric now, or save and attach one on the edit

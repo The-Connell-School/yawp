@@ -25,6 +25,7 @@ import {
   parseRubric,
   parseScoringScale,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { summarizeGradingRubric } from '~/domain/assignment-types/grading-rubric-summary';
 
 const PROMPT_PREVIEW_INPUTS = {
   studentFirstName: 'Jordan',
@@ -77,6 +78,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       lastEditLine,
       scoringScale: parseScoringScale(course.scoringScaleJson),
       rubric: parseRubric(course.rubricJson),
+      gradingRubricSummary: null,
       gradingAssistantPromptPreview: null,
       gradingAssistantPromptPreviewUnavailableReason:
         'The AP History prompt is built from the assignment snapshot. Open a graded submission to inspect the full prompt.',
@@ -102,6 +104,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const rubric = parseRubric(
     resolvedGradingConfig.rubricSnapshot ?? course.rubricJson
   );
+  const libraryRubric = course.rubricId
+    ? await prisma.rubric.findUnique({
+        where: { id: course.rubricId },
+        select: { title: true },
+      })
+    : null;
+  const gradingRubricSummary = summarizeGradingRubric(resolvedGradingConfig, {
+    libraryRubricTitle: libraryRubric?.title ?? null,
+  });
 
   return dataResponse({
     course,
@@ -109,6 +120,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     lastEditLine,
     scoringScale,
     rubric,
+    gradingRubricSummary,
     gradingAssistantPromptPreview: {
       ...compiledInvocation,
       version: resolvedGradingConfig.version,
@@ -294,6 +306,7 @@ export default function AssignmentTypeRoute() {
     currentPromptLabel,
     lastEditLine,
     rubric,
+    gradingRubricSummary,
   } = useLoaderData<typeof loader>();
 
   return (
@@ -311,6 +324,7 @@ export default function AssignmentTypeRoute() {
       currentPromptLabel={currentPromptLabel}
       lastEditLine={lastEditLine}
       rubric={rubric}
+      gradingRubricSummary={gradingRubricSummary}
     />
   );
 }
