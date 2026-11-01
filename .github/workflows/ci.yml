@@ -1040,6 +1040,13 @@ jobs:
             app/domain/assignment-types/assignment-type-grading-config.server.test.ts \
             app/domain/assignment-types/daily-pages-assignment-points.test.ts \
             app/domain/assignment-types/daily-pages-engagement-tier-bands.test.ts \
+            app/domain/assignment-types/assignment-type-admin-writes.server.test.ts \
+            app/domain/assignment-types/assignment-type-rubric.shared.test.ts \
+            app/domain/assignment-types/grading-rubric-summary.test.ts \
+            app/domain/assignment-types/class-starter-three-band-rubric.test.ts \
+            app/domain/assignment-types/grading-assistant-rubric-audit.test.ts \
+            'app/routes/app_.submissions_.$submissionId/teacher-grading/whole-number-scores.test.ts' \
+            ../../packages/prisma/scripts/class-starter-three-band-migration.test.ts \
             app/domain/ai-evaluation/grading-assistant-benchmark-run.server.test.ts \
             'app/routes/app.admin.assignment-types.$id_.prompt/route.test.ts' \
             app/routes/api.domain.assignment-type-evaluations/route.test.ts \
