@@ -134,7 +134,6 @@ import {
   enabledLandingPageKey,
   LANDING_PAGES,
   resolveLandingPageKey,
-  THESIS_DRIVEN_ESSAY_STEP_RESOURCES,
 } from './landing-copy/content';
 
 /** How the Lesson Planner hands a written warm-up to this page. */
@@ -1201,11 +1200,6 @@ export default function AppAssignmentTypesIdRoute() {
           <LandingSections
             page={landingPage}
             modules={data.assignmentType.assignmentModules}
-            stepResources={
-              landingPage.key === 'thesis-driven-essay'
-                ? THESIS_DRIVEN_ESSAY_STEP_RESOURCES
-                : undefined
-            }
           />
         ) : null}
         {/* Brian's landing page replaces every block from here to the

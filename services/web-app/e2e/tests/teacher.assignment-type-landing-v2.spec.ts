@@ -114,11 +114,36 @@ test.describe.serial('Assignment type landing pages (v2)', () => {
     await expect(
       page.getByText('Teach these steps in order! (Did we mention that?)')
     ).toBeVisible();
-    const steps = page.getByTestId('how-to-teach-step');
-    expect(await steps.count()).toBeGreaterThan(0);
-    // Lesson stacks and tutorial videos are still to be built.
-    await expect(steps.first()).toContainText('Lesson stack');
-    await expect(steps.first()).toContainText('Tutorial video');
+    // The course card: Brian's eight lessons with their plans and decks.
+    const course = page.getByTestId('thesis-essay-course');
+    await expect(
+      course.getByRole('heading', { name: 'The Thesis-Driven Essay course' })
+    ).toBeVisible();
+    await expect(course.getByTestId('course-lesson')).toHaveCount(8);
+
+    // A lesson plan is a PDF that opens in a new tab.
+    const plan = course.getByRole('link', {
+      name: 'Developing a thesis statement: lesson plan (PDF)',
+    });
+    await expect(plan).toHaveAttribute('target', '_blank');
+    const planResponse = await page.request.get(
+      (await plan.getAttribute('href'))!
+    );
+    expect(planResponse.ok()).toBe(true);
+    expect((await planResponse.body()).subarray(0, 5).toString()).toBe('%PDF-');
+
+    // A slide deck downloads as a PowerPoint file.
+    const downloadPromise = page.waitForEvent('download');
+    await course
+      .getByRole('link', { name: 'Pre-writing: slide deck (PowerPoint)' })
+      .click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe('Pre-Writing.pptx');
+    await expect(
+      course.getByRole('link', {
+        name: 'Body paragraphs: supporting quotes slide deck (PowerPoint)',
+      })
+    ).toBeVisible();
 
     await expect(page.getByRole('button', { name: 'Modules' })).toHaveCount(0);
     await expect(

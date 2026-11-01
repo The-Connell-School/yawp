@@ -86,10 +86,10 @@ describe("Brian's pages, word for word", () => {
     expect(paragraphs(howToTeach.blocks)).toEqual([
       'The Yawp! process is what we wish someone had shown us in our first year teaching. Teach the steps below in order. Each has a lesson stack (slides and handouts you can teach as is or edit) and a short tutorial video. Whether this is your first year or your twentieth, watch each video before you teach that lesson (at least the first time through). This is a step-by-step process, and going in order makes the difference: how students find a focus, develop a thesis, and build body paragraphs that actually prove it.',
     ]);
+    // The course card: each lesson with its lesson plan and slide deck.
     expect(howToTeach.blocks).toContainEqual({
-      type: 'steps',
+      type: 'course',
       lead: '**Teach these steps in order! (Did we mention that?)**',
-      links: true,
     });
     expect(paragraphs(section('thesis-driven-essay', 'prompt-library').blocks)).toEqual([
       'Have your own prompt? Click **New** above to create it in the Assignment Builder. Or choose one from our library: filter by subject, text, or grade level, click a prompt, and edit it however you like in the Assignment Builder.',
@@ -258,19 +258,16 @@ describe('every page', () => {
   });
 
   test('only multi-step essays list their steps; one-step types have no Modules block', () => {
-    const withSteps = keys.filter((key) =>
-      page(key).sections.some((s) => s.blocks.some((b) => b.type === 'steps'))
-    );
+    const blockTypes = (key: LandingPageKey) =>
+      page(key).sections.flatMap((s) => s.blocks.map((b) => b.type));
+    const withSteps = keys.filter((key) => blockTypes(key).includes('steps'));
     expect(withSteps.sort()).toEqual(
-      (['act-writing', 'five-paragraph-essay', 'thesis-driven-essay'] as LandingPageKey[]).sort()
+      (['act-writing', 'five-paragraph-essay'] as LandingPageKey[]).sort()
     );
-    // Only the Thesis-Driven Essay links each step to a stack and a video.
-    const linked = keys.filter((key) =>
-      page(key).sections.some((s) =>
-        s.blocks.some((b) => b.type === 'steps' && b.links)
-      )
-    );
-    expect(linked).toEqual(['thesis-driven-essay']);
+    // Only the Thesis-Driven Essay has the course, with lesson plans and decks.
+    expect(keys.filter((key) => blockTypes(key).includes('course'))).toEqual([
+      'thesis-driven-essay',
+    ]);
   });
 
   test('a page with a library has a Prompt Library section, and one without does not', () => {

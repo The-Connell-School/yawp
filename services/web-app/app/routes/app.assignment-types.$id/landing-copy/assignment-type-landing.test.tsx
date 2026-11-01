@@ -108,7 +108,7 @@ describe('LandingSections', () => {
     );
   });
 
-  it('turns the Thesis-Driven Essay modules into How to Teach It, one row per module with its stack and video', () => {
+  it("shows the Thesis-Driven Essay course under How to Teach It, as in Brian's mock-up", () => {
     const root = render(
       <LandingSections
         page={LANDING_PAGES['thesis-driven-essay']}
@@ -119,44 +119,62 @@ describe('LandingSections', () => {
     expect(root.textContent).toContain(
       'Teach these steps in order! (Did we mention that?)'
     );
-    const rows = [...root.querySelectorAll('[data-testid="how-to-teach-step"]')];
-    expect(rows.map((row) => row.querySelector('[data-step-title]')?.textContent)).toEqual([
-      'Welcome to Yawp!',
-      'Pre-writing',
-      'Thesis Statement',
-      'Introduction Paragraph',
-    ]);
-    for (const row of rows) {
-      // Stacks and videos are still to be built.
-      expect(row.textContent).toContain('Lesson stack');
-      expect(row.textContent).toContain('Tutorial video');
-      expect(row.querySelectorAll('a')).toHaveLength(0);
-      expect(row.querySelectorAll('[aria-disabled="true"]')).toHaveLength(2);
-    }
-  });
-
-  it('links a step to its stack and video once they exist', () => {
-    const root = render(
-      <LandingSections
-        page={LANDING_PAGES['thesis-driven-essay']}
-        modules={THESIS_MODULES}
-        stepResources={{
-          'pre-writing': {
-            stackHref: '/app/lesson-planner/stacks/pre-writing',
-            videoHref: '/app/teachers-lounge/pre-writing',
-          },
-        }}
-      />
+    const card = root.querySelector('[data-testid="thesis-essay-course"]')!;
+    expect(card.querySelector('h3')?.textContent).toBe(
+      'The Thesis-Driven Essay course'
     );
-    const row = [...root.querySelectorAll('[data-testid="how-to-teach-step"]')][1]!;
-    const links = [...row.querySelectorAll('a')];
-    expect(links.map((a) => a.getAttribute('href'))).toEqual([
-      '/app/lesson-planner/stacks/pre-writing',
-      '/app/teachers-lounge/pre-writing',
+    const rows = [...card.querySelectorAll('[data-testid="course-lesson"]')];
+    expect(rows.map((row) => row.querySelector('[data-lesson-title]')?.textContent)).toEqual([
+      'Introduce students to Yawp!',
+      'Pre-writing',
+      'Developing a thesis statement',
+      'Introduction paragraph',
+      'Body paragraphs',
+      'The conclusion',
+      'Titling your essay',
+      'Review my essay',
     ]);
+    // The course replaces the module rows; it does not repeat them.
+    expect(root.querySelectorAll('[data-testid="how-to-teach-step"]')).toHaveLength(0);
   });
 
-  it('lists the 5-Paragraph Essay steps without stack or video links', () => {
+  it('opens a lesson plan in a new tab and downloads a slide deck', () => {
+    const root = render(
+      <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} />
+    );
+    const rows = [...root.querySelectorAll('[data-testid="course-lesson"]')];
+    const prewriting = rows[1]!;
+    const plan = [...prewriting.querySelectorAll('a')].find(
+      (a) => a.textContent === 'Lesson plan'
+    )!;
+    expect(plan.getAttribute('href')).toBe(
+      '/courses/thesis-driven-essay/02-lesson-plan-pre-writing.pdf'
+    );
+    expect(plan.getAttribute('target')).toBe('_blank');
+    expect(plan.getAttribute('rel')).toContain('noopener');
+    expect(plan.getAttribute('aria-label')).toBe('Pre-writing: lesson plan (PDF)');
+
+    const slides = [...prewriting.querySelectorAll('a')].find(
+      (a) => a.textContent === 'Slide deck'
+    )!;
+    expect(slides.getAttribute('href')).toBe(
+      '/courses/thesis-driven-essay/02-pre-writing.pptx'
+    );
+    expect(slides.getAttribute('download')).toBe('Pre-Writing.pptx');
+    expect(slides.getAttribute('aria-label')).toBe('Pre-writing: slide deck (PowerPoint)');
+
+    // Body paragraphs has both of its decks.
+    expect(
+      [...rows[4]!.querySelectorAll('a')].map((a) => a.textContent)
+    ).toEqual(['Lesson plan', 'Slide deck', 'Supporting quotes']);
+    // Titling has a deck only; Review my essay has nothing to open.
+    expect([...rows[6]!.querySelectorAll('a')].map((a) => a.textContent)).toEqual([
+      'Slide deck',
+    ]);
+    expect(rows[7]!.querySelectorAll('a')).toHaveLength(0);
+  });
+
+  it('lists the 5-Paragraph Essay steps from its modules', () => {
     const root = render(
       <LandingSections
         page={LANDING_PAGES['five-paragraph-essay']}
@@ -165,14 +183,14 @@ describe('LandingSections', () => {
     );
     const rows = root.querySelectorAll('[data-testid="how-to-teach-step"]');
     expect(rows).toHaveLength(4);
-    expect(root.textContent).not.toContain('Lesson stack');
+    expect(root.querySelectorAll('a')).toHaveLength(0);
   });
 
   it('renders no steps when a multi-step page somehow has no modules', () => {
     const root = render(
-      <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} />
+      <LandingSections page={LANDING_PAGES['five-paragraph-essay']} modules={[]} />
     );
     expect(root.querySelectorAll('[data-testid="how-to-teach-step"]')).toHaveLength(0);
-    expect(root.textContent).not.toContain('Teach these steps in order!');
+    expect(root.textContent).not.toContain('Teach these steps in order.');
   });
 });

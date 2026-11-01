@@ -1,10 +1,13 @@
 import { Fragment, type ReactNode } from 'react';
-import { Link } from 'react-router';
-import { FileText, PlayCircle } from 'lucide-react';
+import { FileText, Presentation } from 'lucide-react';
 
 import { cn } from '~/utils/misc';
 
 import type { LandingBlock, LandingPage, LandingSection } from './content';
+import {
+  THESIS_ESSAY_COURSE,
+  THESIS_ESSAY_COURSE_TITLE,
+} from './thesis-essay-course';
 
 /**
  * Inline markup used by the landing copy: **bold** and *italic*. Nothing else
@@ -34,68 +37,12 @@ export function RichText({ text }: { text: string }) {
 /** A module, as the route loads it. */
 export type LandingModule = { id: string; title: string };
 
-/** Where a step's lesson stack and tutorial video live, once they exist. */
-export type StepResources = Record<
-  string,
-  { stackHref?: string | null; videoHref?: string | null }
->;
-
-/** The key a module's resources are filed under: its title, slugged. */
-export function stepResourceKey(title: string) {
-  return title
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-function StepResource({
-  href,
-  icon,
-  label,
-}: {
-  href?: string | null;
-  icon: ReactNode;
-  label: string;
-}) {
-  const body = (
-    <>
-      {icon}
-      {label}
-    </>
-  );
-  const className =
-    'inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-xs';
-  if (href) {
-    return (
-      <Link
-        to={href}
-        className={cn(className, 'font-medium text-foreground hover:bg-muted')}
-      >
-        {body}
-      </Link>
-    );
-  }
-  return (
-    <span
-      aria-disabled="true"
-      title="Coming soon"
-      className={cn(className, 'border-dashed text-muted-foreground')}
-    >
-      {body}
-      <span className="sr-only"> (coming soon)</span>
-    </span>
-  );
-}
-
 function Steps({
   block,
   modules,
-  stepResources,
 }: {
   block: Extract<LandingBlock, { type: 'steps' }>;
   modules: LandingModule[];
-  stepResources: StepResources;
 }) {
   if (modules.length === 0) return null;
   return (
@@ -106,40 +53,99 @@ function Steps({
         </p>
       ) : null}
       <ol className="divide-y rounded-lg border" data-tour="type-modules">
-        {modules.map((module, index) => {
-          const resources = stepResources[stepResourceKey(module.title)] ?? {};
-          return (
+        {modules.map((module, index) => (
+          <li
+            key={module.id}
+            data-testid="how-to-teach-step"
+            className="flex items-baseline gap-2 px-3 py-2.5 text-sm"
+          >
+            <span className="w-5 shrink-0 text-right tabular-nums text-muted-foreground">
+              {index + 1}.
+            </span>
+            <span data-step-title className="font-medium">
+              {module.title.trim()}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+const COURSE_LINK_CLASS =
+  'inline-flex items-center gap-1.5 whitespace-nowrap rounded-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+/**
+ * The Thesis-Driven Essay course, as Brian drew it: one row per lesson, in
+ * order, each with its lesson plan (a PDF, opened in a new tab) and slide
+ * deck (a PowerPoint file, downloaded). Lessons without one simply have no
+ * link for it.
+ */
+function ThesisEssayCourse({
+  block,
+}: {
+  block: Extract<LandingBlock, { type: 'course' }>;
+}) {
+  return (
+    <div className="space-y-3">
+      {block.lead ? (
+        <p className="text-sm text-foreground">
+          <RichText text={block.lead} />
+        </p>
+      ) : null}
+      <div
+        className="rounded-xl border bg-background p-5 shadow-sm sm:p-7"
+        data-testid="thesis-essay-course"
+        data-tour="type-modules"
+      >
+        <h3 className="mb-2 text-lg font-semibold sm:text-xl">
+          {THESIS_ESSAY_COURSE_TITLE}
+        </h3>
+        <ol className="flex flex-col divide-y">
+          {THESIS_ESSAY_COURSE.map((lesson, index) => (
             <li
-              key={module.id}
-              data-testid="how-to-teach-step"
-              className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+              key={lesson.title}
+              data-testid="course-lesson"
+              className="flex flex-col gap-1.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
             >
-              <span className="flex items-baseline gap-2 text-sm">
-                <span className="w-5 shrink-0 text-right tabular-nums text-muted-foreground">
-                  {index + 1}.
+              <span className="flex items-baseline gap-3 text-base">
+                <span className="w-4 shrink-0 tabular-nums text-muted-foreground">
+                  {index + 1}
                 </span>
-                <span data-step-title className="font-medium">
-                  {module.title.trim()}
-                </span>
+                <span data-lesson-title>{lesson.title}</span>
               </span>
-              {block.links ? (
-                <span className="flex gap-2 pl-7 sm:pl-0">
-                  <StepResource
-                    href={resources.stackHref}
-                    icon={<FileText className="h-3.5 w-3.5" aria-hidden />}
-                    label="Lesson stack"
-                  />
-                  <StepResource
-                    href={resources.videoHref}
-                    icon={<PlayCircle className="h-3.5 w-3.5" aria-hidden />}
-                    label="Tutorial video"
-                  />
+              {lesson.lessonPlan || lesson.decks.length ? (
+                <span className="flex flex-wrap gap-x-5 gap-y-1 pl-7 text-sm sm:pl-0">
+                  {lesson.lessonPlan ? (
+                    <a
+                      href={lesson.lessonPlan.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`${lesson.title}: lesson plan (PDF)`}
+                      className={COURSE_LINK_CLASS}
+                    >
+                      <FileText className="h-4 w-4" aria-hidden />
+                      Lesson plan
+                    </a>
+                  ) : null}
+                  {lesson.decks.map((deck) => (
+                    <a
+                      key={deck.href}
+                      href={deck.href}
+                      download={deck.fileName}
+                      aria-label={`${lesson.title}: ${deck.label.toLowerCase()}${deck.label === 'Slide deck' ? '' : ' slide deck'} (PowerPoint)`}
+                      className={COURSE_LINK_CLASS}
+                    >
+                      <Presentation className="h-4 w-4" aria-hidden />
+                      {deck.label}
+                    </a>
+                  ))}
                 </span>
               ) : null}
             </li>
-          );
-        })}
-      </ol>
+          ))}
+        </ol>
+      </div>
     </div>
   );
 }
@@ -147,11 +153,9 @@ function Steps({
 function Block({
   block,
   modules,
-  stepResources,
 }: {
   block: LandingBlock;
   modules: LandingModule[];
-  stepResources: StepResources;
 }) {
   if (block.type === 'paragraph') {
     return (
@@ -171,7 +175,8 @@ function Block({
       </ul>
     );
   }
-  return <Steps block={block} modules={modules} stepResources={stepResources} />;
+  if (block.type === 'course') return <ThesisEssayCourse block={block} />;
+  return <Steps block={block} modules={modules} />;
 }
 
 /**
@@ -182,7 +187,7 @@ export function LandingDescription({ page }: { page: LandingPage }) {
   return (
     <div className="flex flex-col gap-3" data-testid="landing-description">
       {page.description.map((block, index) => (
-        <Block key={index} block={block} modules={[]} stepResources={{}} />
+        <Block key={index} block={block} modules={[]} />
       ))}
     </div>
   );
@@ -191,11 +196,9 @@ export function LandingDescription({ page }: { page: LandingPage }) {
 function Section({
   section,
   modules,
-  stepResources,
 }: {
   section: LandingSection;
   modules: LandingModule[];
-  stepResources: StepResources;
 }) {
   const headingId = `landing-${section.id}`;
   // The library right below the intro is labelled "Prompt Library" already;
@@ -215,12 +218,7 @@ function Section({
         {section.heading}
       </h2>
       {section.blocks.map((block, index) => (
-        <Block
-          key={index}
-          block={block}
-          modules={modules}
-          stepResources={stepResources}
-        />
+        <Block key={index} block={block} modules={modules} />
       ))}
     </section>
   );
@@ -235,21 +233,14 @@ function Section({
 export function LandingSections({
   page,
   modules,
-  stepResources = {},
 }: {
   page: LandingPage;
   modules: LandingModule[];
-  stepResources?: StepResources;
 }) {
   return (
     <div className="mb-6 flex flex-col gap-6" data-testid="assignment-type-landing">
       {page.sections.map((section) => (
-        <Section
-          key={section.id}
-          section={section}
-          modules={modules}
-          stepResources={stepResources}
-        />
+        <Section key={section.id} section={section} modules={modules} />
       ))}
     </div>
   );

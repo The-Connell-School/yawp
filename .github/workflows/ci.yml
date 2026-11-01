@@ -1047,6 +1047,7 @@ jobs:
             'app/routes/app.assignment-types.$id/prompts-library/library-variant.test.ts' \
             'app/routes/app.assignment-types.$id/landing-copy/content.test.ts' \
             'app/routes/app.assignment-types.$id/landing-copy/assignment-type-landing.test.tsx' \
+            'app/routes/app.assignment-types.$id/landing-copy/thesis-essay-course.test.ts' \
             app/domain/assignment-types/landing-page-gate.server.test.ts \
             app/domain/assignment-types/exit-ticket.test.ts \
             app/domain/assignment-types/exit-ticket-reflection-prompts.test.ts \

@@ -37,11 +37,15 @@ export type LandingBlock =
   | { type: 'paragraph'; text: string }
   | { type: 'bullets'; items: string[] }
   /**
-   * The assignment type's modules, one row each and in order. With `links`,
-   * every row carries its lesson stack and tutorial video (shown as coming
-   * soon until they exist). `lead` sits directly above the rows.
+   * The assignment type's modules, one row each and in order. `lead` sits
+   * directly above the rows.
    */
-  | { type: 'steps'; lead?: string; links: boolean };
+  | { type: 'steps'; lead?: string }
+  /**
+   * The Thesis-Driven Essay course: each lesson with its lesson plan and
+   * slide deck (see thesis-essay-course.ts). `lead` sits directly above it.
+   */
+  | { type: 'course'; lead?: string };
 
 export type LandingSectionId =
   | 'how-to-teach-it'
@@ -91,9 +95,8 @@ const THESIS_DRIVEN_ESSAY: LandingPage = {
           'The Yawp! process is what we wish someone had shown us in our first year teaching. Teach the steps below in order. Each has a lesson stack (slides and handouts you can teach as is or edit) and a short tutorial video. Whether this is your first year or your twentieth, watch each video before you teach that lesson (at least the first time through). This is a step-by-step process, and going in order makes the difference: how students find a focus, develop a thesis, and build body paragraphs that actually prove it.'
         ),
         {
-          type: 'steps',
+          type: 'course',
           lead: '**Teach these steps in order! (Did we mention that?)**',
-          links: true,
         },
       ],
     },
@@ -413,7 +416,7 @@ const FIVE_PARAGRAPH_ESSAY: LandingPage = {
         p(
           'Teach the steps below in order. Each one builds on the last: students find a focus, write a thesis, and build paragraphs that prove it.'
         ),
-        { type: 'steps', lead: '**Teach these steps in order.**', links: false },
+        { type: 'steps', lead: '**Teach these steps in order.**' },
       ],
     },
     {
@@ -449,7 +452,7 @@ const ACT_WRITING: LandingPage = {
         p(
           'Teach the steps below in order the first time through. Once students know the moves, assign it as timed practice.'
         ),
-        { type: 'steps', lead: '**Teach these steps in order.**', links: false },
+        { type: 'steps', lead: '**Teach these steps in order.**' },
       ],
     },
     {
@@ -566,16 +569,6 @@ export function enabledLandingPageKey(
   if (key === 'thesis-driven-essay' && !flags.thesisEssay) return null;
   return key;
 }
-
-/**
- * Each Thesis-Driven Essay step's lesson stack and tutorial video, keyed by
- * `stepResourceKey(module title)`. Empty until they are built; a step with
- * nothing here shows both as coming soon.
- */
-export const THESIS_DRIVEN_ESSAY_STEP_RESOURCES: Record<
-  string,
-  { stackHref?: string | null; videoHref?: string | null }
-> = {};
 
 const stripMarkup = (text: string) => text.replace(/\*\*|\*/g, '');
 
