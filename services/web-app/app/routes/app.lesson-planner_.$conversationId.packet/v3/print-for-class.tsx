@@ -9,6 +9,7 @@ import { FileText, MonitorPlay, Printer } from 'lucide-react';
 import { DownloadLink } from '~/components/lesson-planner/download-link';
 import { ONE_PACKET_CAPTION } from '~/domain/lesson-planner/one-packet';
 import { BUTTON, Row } from './take-to-class';
+import { OwnDeckRows, type OwnDeck } from './own-deck';
 import { HEADING_FONT } from './theme';
 
 export const GOOGLE_DOCS_CAPTION =
@@ -22,10 +23,13 @@ export function PrintForClass({
   deck,
   onBuildDeck,
   builtDeck = null,
+  ownDecks = [],
   children,
 }: {
   conversationId: string;
   handoutCount: number;
+  /** The teacher's own decks they chose to teach with (Nov 1). */
+  ownDecks?: OwnDeck[];
   deck: { id: string; slides: number } | null;
   onBuildDeck: () => void;
   /** A deck built but not in the lesson. `editHref` is null without deck v2. */
@@ -103,6 +107,8 @@ export function PrintForClass({
           </>
         )}
       </Row>
+
+      <OwnDeckRows decks={ownDecks} />
 
       <Row
         icon={<Printer size={16} />}

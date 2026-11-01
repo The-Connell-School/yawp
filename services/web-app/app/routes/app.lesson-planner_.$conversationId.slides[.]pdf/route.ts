@@ -7,6 +7,7 @@ import type { LoaderFunctionArgs } from 'react-router';
 import { loadLessonPacket } from '~/domain/lesson-planner/load-lesson-packet.server';
 import { lessonDeck } from '~/domain/lesson-planner/lesson-deck.server';
 import { pdfFilename, renderSlidesPdf } from '~/domain/lesson-planner/lesson-pdf.server';
+import { viewerDeckPictureFiles } from '~/domain/lesson-planner/deck-pictures.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   // Access first: the teacher's own lesson, or not found.
@@ -17,7 +18,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
   const found = await lessonDeck(conversationId);
   if (!found) throw new Response('Not Found', { status: 404 });
-  const pdf = await renderSlidesPdf({ lessonTitle: packet.title, deck: found.deck });
+  const pictures = await viewerDeckPictureFiles(request, [found.deck]);
+  const pdf = await renderSlidesPdf({ lessonTitle: packet.title, deck: found.deck, pictures });
   const filename = pdfFilename(packet.title, 'Slides');
   return new Response(pdf as unknown as BodyInit, {
     headers: {

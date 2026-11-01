@@ -481,9 +481,16 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // Brian's review (B6): with stack v2 on, outputs are built from what the
     // teacher kept, so the planner sees the stack itself, not just its titles.
-    const { stackV2, intakeV2, templates: templatesOn, deckGallery, uploads: uploadsOn } = await getLessonPlannerReviewFlags(
-      ctx.organizationId
-    );
+    const {
+      stackV2,
+      intakeV2,
+      templates: templatesOn,
+      deckGallery,
+      uploads: uploadsOn,
+      teachMySlides,
+      refreshMyDeck,
+    } = await getLessonPlannerReviewFlags(ctx.organizationId);
+    const deckChoices = { teach: teachMySlides, refresh: refreshMyDeck };
     // The teacher's own documents (Oct 21): this lesson's, and any added
     // before its first message, which this turn attaches. Only theirs.
     const pendingUploadIds = (turn.uploadIds ?? '').split(',').filter(Boolean).slice(0, MAX_PENDING_UPLOAD_IDS);
@@ -499,7 +506,24 @@ export async function action({ request }: ActionFunctionArgs) {
             ],
           },
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-          select: { id: true, name: true, text: true, truncated: true, conversationId: true },
+          select: {
+            id: true,
+            name: true,
+            text: true,
+            truncated: true,
+            conversationId: true,
+            // The teacher's own deck (Nov 1): what they want from it, and its pictures to place.
+            keptDeck: true,
+            mode: true,
+            ...(refreshMyDeck
+              ? {
+                  pictures: {
+                    orderBy: { position: 'asc' as const },
+                    select: { id: true, position: true, slideNumbers: true, altText: true, width: true, height: true },
+                  },
+                }
+              : {}),
+          },
         })
       : [];
     const attachUploadIds = sources.filter((source) => !source.conversationId).map((source) => source.id);
@@ -590,6 +614,7 @@ export async function action({ request }: ActionFunctionArgs) {
       template,
       deckGallery,
       sources,
+      deckChoices,
       recentArt,
       weekContext,
       onStack: turn.surface === 'stack',

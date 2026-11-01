@@ -11,6 +11,10 @@ import {
   LESSON_PLANNER_TEMPLATES_FLAG,
   LESSON_PLANNER_DECK_GALLERY_FLAG,
   LESSON_PLANNER_UPLOADS_FLAG,
+  LESSON_PLANNER_UPLOAD_PICTURES_FLAG,
+  LESSON_PLANNER_TEACH_MY_SLIDES_FLAG,
+  LESSON_PLANNER_REFRESH_MY_DECK_FLAG,
+  deckUploadFlags,
   LESSON_PLANNER_TEACH_NOTES_FLAG,
   LESSON_PLANNER_LIBRARY_V2_FLAG,
   LESSON_PLANNER_STACK_PANEL_FLAG,
@@ -277,6 +281,9 @@ export async function getLessonPlannerReviewFlags(
     uploads,
     teachNotes,
     libraryV2,
+    uploadPictures,
+    teachMySlides,
+    refreshMyDeck,
   ] = await Promise.all([
     isFeatureFlagEnabled(LESSON_PLANNER_INTAKE_V2_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_STACK_V2_FLAG, orgId),
@@ -291,7 +298,11 @@ export async function getLessonPlannerReviewFlags(
     isFeatureFlagEnabled(LESSON_PLANNER_UPLOADS_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_TEACH_NOTES_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_LIBRARY_V2_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_UPLOAD_PICTURES_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_TEACH_MY_SLIDES_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_REFRESH_MY_DECK_FLAG, orgId),
   ]);
+  const deckFlags = deckUploadFlags({ uploads, uploadPictures, teachMySlides, refreshMyDeck });
   // The panel shows the stack v2 list; without stack v2 it has nothing to show.
   // The run 3 page builds on stack v2, and the rest build on the run 3 page.
   const v3 = stackV3 && stackV2;
@@ -309,6 +320,7 @@ export async function getLessonPlannerReviewFlags(
     uploads,
     teachNotes: teachNotes && v3,
     libraryV2: libraryV2 && v3,
+    ...deckFlags,
   };
 }
 
@@ -336,6 +348,12 @@ export type LessonPlannerReviewFlags = {
   teachNotes: boolean;
   /** The library redesign (Oct 24 handoff, Part 2); needs stack v3. */
   libraryV2: boolean;
+  /** An uploaded deck kept whole with its pictures (Nov 1); needs uploads. */
+  uploadPictures: boolean;
+  /** "Teach with these slides" (Nov 1); needs uploadPictures. */
+  teachMySlides: boolean;
+  /** "Refresh into a Yawp! deck" with the teacher's pictures (Nov 1); needs uploadPictures. */
+  refreshMyDeck: boolean;
 };
 
 /** Yawp! Lesson Planner for teachers at the given school. */

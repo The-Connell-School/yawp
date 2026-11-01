@@ -1841,24 +1841,59 @@ model LessonShareLink {
 }
 
 /// A document a teacher gave the lesson planner as source material (Oct 21).
-/// Only the text read out of it is kept, never the file.
+/// Only the text read out of it is kept, never the file, unless the deck is
+/// kept whole (see `file`, Nov 1).
 model LessonPlanUpload {
-  id             String                  @id @default(cuid())
-  createdAt      DateTime                @default(now()) @db.Timestamptz(6)
+  id             String                    @id @default(cuid())
+  createdAt      DateTime                  @default(now()) @db.Timestamptz(6)
   name           String
   contentType    String
   byteSize       Int
   /// The text read out of the file, capped.
   text           String
   /// More text than was kept.
-  truncated      Boolean                 @default(false)
+  truncated      Boolean                   @default(false)
   /// Null until the lesson's first message, which attaches it.
   conversationId String?
-  conversation   LessonPlanConversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation   LessonPlanConversation?   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   /// The teacher who uploaded it; every read is scoped to them.
   membershipId   String
+  /// The original file (Nov 1), kept only for a PowerPoint with
+  /// lesson_planner_upload_pictures on. Deleted with the row.
+  file           Bytes?
+  /// Whether `file` was kept, readable without loading the bytes.
+  keptDeck       Boolean                   @default(false)
+  /// What the teacher wants from their deck (Nov 1): 'teach' (teach with
+  /// these slides) or 'refresh' (refresh into a Yawp! deck). Null: not said.
+  mode           String?
+  pictures       LessonPlanUploadPicture[]
 
   @@index([conversationId])
+  @@index([membershipId])
+}
+
+/// A picture from a teacher's uploaded deck (Nov 1), saved once however many
+/// slides show it. Only browser-safe raster formats are kept; private to the
+/// teacher who uploaded it, and deleted with the upload.
+model LessonPlanUploadPicture {
+  id           String           @id @default(cuid())
+  createdAt    DateTime         @default(now()) @db.Timestamptz(6)
+  uploadId     String
+  upload       LessonPlanUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  /// Same as the upload's; every read is scoped to it.
+  membershipId String
+  /// Its order in the deck, from 1: "picture 3".
+  position     Int
+  /// The slides (as the teacher numbers them) it appears on.
+  slideNumbers Int[]
+  altText      String
+  contentType  String
+  byteSize     Int
+  width        Int?
+  height       Int?
+  blob         Bytes
+
+  @@index([uploadId])
   @@index([membershipId])
 }
 
@@ -2045,26 +2080,26 @@ model WritingPracticeClassAssignment {
 
 model User {
   classStudentHandles ClassStudentHandle[]
-  signonIdentities SignonIdentity[]
-  id                 String          @id @default(cuid())
-  createdAt          DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt          DateTime        @default(now()) @db.Timestamptz(6)
-  email              String?         @unique
-  username           String?         @unique
-  emailVerifiedAt    DateTime?       @db.Timestamptz(6)
-  mustChangePassword Boolean         @default(false)
-  name               String?
-  password           Password?
-  sessions           Session[]
-  memberships        OrgMembership[]
-  isTester           Boolean         @default(false)
-  testerFeedback     TesterFeedback[]
-  isAdmin            Boolean         @default(false)
-  isSuperAdmin       Boolean         @default(false)
-  mockAdminGranted   Boolean         @default(false)
+  signonIdentities    SignonIdentity[]
+  id                  String               @id @default(cuid())
+  createdAt           DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime             @default(now()) @db.Timestamptz(6)
+  email               String?              @unique
+  username            String?              @unique
+  emailVerifiedAt     DateTime?            @db.Timestamptz(6)
+  mustChangePassword  Boolean              @default(false)
+  name                String?
+  password            Password?
+  sessions            Session[]
+  memberships         OrgMembership[]
+  isTester            Boolean              @default(false)
+  testerFeedback      TesterFeedback[]
+  isAdmin             Boolean              @default(false)
+  isSuperAdmin        Boolean              @default(false)
+  mockAdminGranted    Boolean              @default(false)
   /// Dev-panel-only simulated students scoped to one class for demo data.
   simulatedForClassId String?
-  tours              UserTour[]
+  tours               UserTour[]
 
   @@index([simulatedForClassId])
 }

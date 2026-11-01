@@ -12,6 +12,8 @@ export type OfficeFixture =
   | 'deck.pptx'
   /** The same deck with every text run stripped — a deck of pictures. */
   | 'deck-images-only.pptx'
+  /** A reordered deck whose pictures cover the cases the picture reader handles (Nov 1). */
+  | 'deck-pictures.pptx'
   | 'handout.docx';
 
 export function readFixture(name: OfficeFixture): Buffer {

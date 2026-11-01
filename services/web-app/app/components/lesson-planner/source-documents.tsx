@@ -2,12 +2,23 @@
  * The teacher's own documents in the planner chat (Oct 21): a paperclip to
  * add one, and a chip for each with a way to take it back out. Added before
  * a lesson's first message, they wait in this tab and go with that message.
+ *
+ * A deck kept whole (Nov 1) says how many of its pictures were kept and asks
+ * what the teacher wants from it: teach with these slides, or refresh them
+ * into a Yawp! deck. Pressing the chosen one again takes the choice back.
  */
 import { useEffect, useRef, useState } from 'react';
 import { FileText, Loader2, Paperclip, X } from 'lucide-react';
 import { cn } from '~/utils/misc';
 
-export type SourceChip = { id: string; name: string; truncated: boolean };
+export type DeckChoice = 'teach' | 'refresh';
+/** A deck kept whole: how many pictures were kept, and what the teacher chose. */
+export type SourceDeck = { pictures: number; mode: DeckChoice | null };
+export type SourceChip = { id: string; name: string; truncated: boolean; deck?: SourceDeck | null };
+/** Which deck choices are on for this school. */
+export type DeckChoices = { teach: boolean; refresh: boolean };
+
+const NO_CHOICES: DeckChoices = { teach: false, refresh: false };
 
 const ACCEPT = '.pdf,.docx,.pptx,.txt,.md';
 const API = '/api/domain/lesson-planner/uploads';
@@ -16,14 +27,18 @@ export function useSourceDocuments({
   conversationId,
   saved,
   enabled,
+  deckChoices = NO_CHOICES,
 }: {
   conversationId: string | null;
   /** This lesson's documents, from the loader. */
   saved: SourceChip[];
   enabled: boolean;
+  deckChoices?: DeckChoices;
 }) {
   const [added, setAdded] = useState<SourceChip[]>([]);
   const [removed, setRemoved] = useState<Set<string>>(new Set());
+  // Choices made here, ahead of the loader: id → mode.
+  const [modes, setModes] = useState<Record<string, DeckChoice | null>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,11 +46,14 @@ export function useSourceDocuments({
   useEffect(() => {
     setAdded([]);
     setRemoved(new Set());
+    setModes({});
     setError(null);
   }, [conversationId]);
 
   const savedIds = new Set(saved.map((doc) => doc.id));
-  const docs = [...saved, ...added.filter((doc) => !savedIds.has(doc.id))].filter((doc) => !removed.has(doc.id));
+  const docs = [...saved, ...added.filter((doc) => !savedIds.has(doc.id))]
+    .filter((doc) => !removed.has(doc.id))
+    .map((doc) => (doc.deck && doc.id in modes ? { ...doc, deck: { ...doc.deck, mode: modes[doc.id] ?? null } } : doc));
 
   async function upload(file: File) {
     setBusy(true);
@@ -64,6 +82,21 @@ export function useSourceDocuments({
     await fetch(API, { method: 'POST', body: form }).catch(() => undefined);
   }
 
+  async function choose(id: string, mode: DeckChoice | null) {
+    const before = docs.find((doc) => doc.id === id)?.deck?.mode ?? null;
+    setModes((current) => ({ ...current, [id]: mode }));
+    setError(null);
+    const form = new FormData();
+    form.set('intent', 'mode');
+    form.set('uploadId', id);
+    form.set('mode', mode ?? '');
+    const response = await fetch(API, { method: 'POST', body: form }).catch(() => null);
+    if (!response?.ok) {
+      setModes((current) => ({ ...current, [id]: before }));
+      setError('That choice could not be saved. Try again.');
+    }
+  }
+
   return {
     enabled,
     docs,
@@ -71,6 +104,8 @@ export function useSourceDocuments({
     error,
     upload,
     remove,
+    deckChoices,
+    choose,
     /** Documents waiting for this lesson's first message. */
     pendingIds: conversationId ? [] : docs.map((doc) => doc.id),
   };
@@ -118,11 +153,20 @@ export function SourceChips({ state }: { state: SourceDocumentsState }) {
         <span
           key={doc.id}
           data-testid="source-document"
-          className="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-muted/50 py-1 pl-2.5 pr-1 text-xs"
+          className={cn(
+            'inline-flex max-w-full flex-wrap items-center gap-1.5 border bg-muted/50 py-1 pl-2.5 pr-1 text-xs',
+            doc.deck ? 'rounded-2xl' : 'rounded-full'
+          )}
         >
           <FileText size={12} className="shrink-0 text-muted-foreground" />
           <span className="truncate font-medium">{doc.name}</span>
           {doc.truncated ? <span className="text-muted-foreground">(first part)</span> : null}
+          {doc.deck ? (
+            <span data-testid="source-deck-pictures" className="whitespace-nowrap text-muted-foreground">
+              {doc.deck.pictures === 1 ? '1 picture kept' : `${doc.deck.pictures} pictures kept`}
+            </span>
+          ) : null}
+          {doc.deck ? <DeckChoiceButtons doc={doc} deck={doc.deck} state={state} /> : null}
           <button
             type="button"
             aria-label={`Remove ${doc.name}`}
@@ -140,5 +184,37 @@ export function SourceChips({ state }: { state: SourceDocumentsState }) {
         </span>
       ) : null}
     </div>
+  );
+}
+
+const CHOICE_LABELS: Record<DeckChoice, string> = {
+  teach: 'Teach with these slides',
+  refresh: 'Refresh into a Yawp! deck',
+};
+
+function DeckChoiceButtons({ doc, deck, state }: { doc: SourceChip; deck: SourceDeck; state: SourceDocumentsState }) {
+  const offered = (['teach', 'refresh'] as const).filter((choice) => state.deckChoices[choice]);
+  if (!offered.length) return null;
+  return (
+    <span role="group" aria-label={`What to do with ${doc.name}`} className="inline-flex items-center gap-1">
+      {offered.map((choice) => {
+        const pressed = deck.mode === choice;
+        return (
+          <button
+            key={choice}
+            type="button"
+            aria-pressed={pressed}
+            data-testid={`source-deck-${choice}`}
+            onClick={() => void state.choose(doc.id, pressed ? null : choice)}
+            className={cn(
+              'whitespace-nowrap rounded-full border px-2 py-0.5 transition',
+              pressed ? 'border-foreground bg-foreground text-background' : 'bg-background hover:bg-muted'
+            )}
+          >
+            {CHOICE_LABELS[choice]}
+          </button>
+        );
+      })}
+    </span>
   );
 }

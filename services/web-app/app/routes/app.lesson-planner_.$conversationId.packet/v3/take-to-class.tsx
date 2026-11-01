@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { FileText, MonitorPlay, Printer } from 'lucide-react';
 import { HEADING_FONT } from './theme';
+import { OwnDeckRows, type OwnDeck } from './own-deck';
 import { DeckArtImage } from '~/components/lesson-planner/deck-art-image';
 
 export function Row({
@@ -48,10 +49,13 @@ export function TakeToClass({
   deckV2,
   onBuildDeck = null,
   builtDeck = null,
+  ownDecks = [],
   children,
 }: {
   conversationId: string;
   planExportV2: boolean;
+  /** The teacher's own decks they chose to teach with (Nov 1). */
+  ownDecks?: OwnDeck[];
   stepCount: number;
   handoutCount: number;
   deck: { id: string; slides: number; title: string; artSwatch: string | null } | null;
@@ -190,6 +194,8 @@ export function TakeToClass({
           </Link>
         )}
       </Row>
+
+      <OwnDeckRows decks={ownDecks} />
 
       <Row
         icon={<Printer size={16} />}

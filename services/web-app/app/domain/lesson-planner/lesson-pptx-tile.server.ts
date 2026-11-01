@@ -13,6 +13,8 @@
  */
 import PptxGenJS from 'pptxgenjs';
 import { classicSlide, type Slide, type SlideDeck } from './slide-deck';
+import { pictureSlideText } from './deck-pictures';
+import { addPptxPicture, type DeckPictureFiles } from './deck-pictures.server';
 import {
   DEFAULT_TILE_FOOTER_MARK,
   notesWithMinutes,
@@ -369,7 +371,34 @@ function addClosingSlide(slide: PptxSlide, spec: Slide): void {
   }
 }
 
-function addSlide(pptx: PptxGenJS, raw: Slide, deck: SlideDeck): void {
+/** The teacher's own picture on a white tile, its question beside it (Nov 1). */
+function addPictureSlide(slide: PptxSlide, spec: Slide, pictures: DeckPictureFiles): void {
+  addHeading(slide, spec);
+  const words = pictureSlideText(spec);
+  const tile = { x: MARGIN, y: BODY_TOP, w: words ? CONTENT_WIDTH * 0.58 : CONTENT_WIDTH, h: BODY_HEIGHT };
+  addCard(slide, tile);
+  const inset = 0.2;
+  addPptxPicture(
+    slide as never,
+    spec.image ? pictures.get(spec.image) : undefined,
+    { x: tile.x + inset, y: tile.y + inset, w: tile.w - inset * 2, h: tile.h - inset * 2 },
+    { rule: T.tileBorder, muted: T.muted, fontFace: T.sans }
+  );
+  if (words) {
+    slide.addText(words, {
+      x: MARGIN + CONTENT_WIDTH * 0.62,
+      y: BODY_TOP,
+      w: CONTENT_WIDTH * 0.38,
+      h: BODY_HEIGHT,
+      fontFace: T.serif,
+      fontSize: 26,
+      color: T.ink,
+      valign: 'middle',
+    });
+  }
+}
+
+function addSlide(pptx: PptxGenJS, raw: Slide, deck: SlideDeck, pictures: DeckPictureFiles): void {
   const spec = classicSlide(raw);
   const slide = pptx.addSlide({ masterName: MASTER });
   switch (spec.layout) {
@@ -397,13 +426,19 @@ function addSlide(pptx: PptxGenJS, raw: Slide, deck: SlideDeck): void {
     case 'quote':
       addQuoteSlide(slide, spec);
       break;
+    case 'picture':
+      addPictureSlide(slide, spec, pictures);
+      break;
   }
   slide.addNotes(notesWithMinutes(spec.speakerNotes, spec.minutes));
 }
 
 export async function renderDeckPptxTile(
   deck: SlideDeck,
-  { footerMark = DEFAULT_TILE_FOOTER_MARK }: { footerMark?: TileFooterMark } = {}
+  {
+    footerMark = DEFAULT_TILE_FOOTER_MARK,
+    pictures = new Map(),
+  }: { footerMark?: TileFooterMark; pictures?: DeckPictureFiles } = {}
 ): Promise<Uint8Array> {
   const pptx = new PptxGenJS();
   pptx.defineLayout(LAYOUT);
@@ -441,7 +476,7 @@ export async function renderDeckPptxTile(
           ],
   });
 
-  for (const slide of deck.slides) addSlide(pptx, slide, deck);
+  for (const slide of deck.slides) addSlide(pptx, slide, deck, pictures);
 
   const written = await pptx.write({ outputType: 'nodebuffer' });
   return new Uint8Array(written as Buffer);

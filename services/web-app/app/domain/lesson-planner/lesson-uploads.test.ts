@@ -5,6 +5,7 @@ import {
   readUploadPart,
   SOURCES_BUDGET,
   UPLOAD_TOOL,
+  type LessonUpload,
 } from './lesson-uploads';
 
 const doc = (id: string, name: string, text: string, truncated = false) => ({ id, name, text, truncated });
@@ -60,3 +61,61 @@ describe('readUploadPart: the rest of a document, a part at a time', () => {
     expect(UPLOAD_TOOL.input_schema.required).toEqual(['id']);
   });
 });
+
+describe('the teacher’s own deck: teach it, or refresh it (Nov 1)', () => {
+  const deck = (mode: 'teach' | 'refresh' | null, pictures: LessonUpload['pictures'] = []) => ({
+    ...doc('d1', 'Thesis.pptx', 'Slide 1\nObserve and analyze\n[Picture 1: An elephant]'),
+    keptDeck: true,
+    mode,
+    pictures,
+  });
+  const both = { teach: true, refresh: true };
+
+  test('taught as it is: no new deck, the plan points at its slide numbers', () => {
+    const text = buildSourcesSection([deck('teach')], both).join('\n');
+    expect(text).toContain('“Teach with these slides”');
+    expect(text).toContain('Do not write a yawp-slides deck');
+    expect(text).toContain('slide numbers');
+    expect(text).toContain('<document id="d1" name="Thesis.pptx" characters=');
+  });
+
+  test('refreshed: a Yawp! deck, with the teacher’s pictures by id on picture slides', () => {
+    const text = buildSourcesSection(
+      [
+        deck('refresh', [
+          { id: 'pic_a', position: 1, slideNumbers: [3, 4], altText: 'An elephant in a street', width: 1824, height: 1216 },
+          { id: 'pic_b', position: 4, slideNumbers: [6], altText: '', width: 1545, height: 1790 },
+        ]),
+      ],
+      both
+    ).join('\n');
+    expect(text).toContain('“Refresh into a Yawp! deck”');
+    expect(text).toContain('"layout": "picture"');
+    expect(text).toContain('- "pic_a": picture 1, on slides 3 and 4, landscape: An elephant in a street');
+    expect(text).toContain('- "pic_b": picture 4, on slide 6, portrait: no description');
+  });
+
+  test('not said yet: one short question before any deck', () => {
+    const text = buildSourcesSection([deck(null)], both).join('\n');
+    expect(text).toContain('has not said');
+    expect(text).toContain('teach with it as it is');
+    expect(text).toContain('refresh it into a Yawp! deck');
+  });
+
+  test('only the choices that are on are offered or followed', () => {
+    const teachOnly = buildSourcesSection([deck(null)], { teach: true, refresh: false }).join('\n');
+    expect(teachOnly).toContain('teach with it as it is');
+    expect(teachOnly).not.toContain('refresh it into');
+    // A choice made while its flag was on is not followed once it is off.
+    const off = buildSourcesSection([deck('refresh')], { teach: false, refresh: false }).join('\n');
+    expect(off).not.toContain('Refresh into');
+    expect(off).not.toContain('has not said');
+  });
+
+  test('a document that is not a kept deck says nothing about decks', () => {
+    const text = buildSourcesSection([doc('u1', 'Chapter.pdf', 'words')], both).join('\n');
+    expect(text).not.toContain('Teach with these slides');
+    expect(text).not.toContain('has not said');
+  });
+});
+

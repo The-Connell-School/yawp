@@ -72,6 +72,10 @@ export const LESSON_PLANNER_REVIEW_FLAG_SETTINGS = [
   // Brian's handoff (docs/plans/2026-10-24-stack-v2-and-library-redesign.md).
   'feature_flag.lesson_planner_teach_notes',
   'feature_flag.lesson_planner_library_v2',
+  // The teacher's own decks: kept whole, taught as is, or refreshed (Nov 1).
+  'feature_flag.lesson_planner_upload_pictures',
+  'feature_flag.lesson_planner_teach_my_slides',
+  'feature_flag.lesson_planner_refresh_my_deck',
 ] as const;
 
 /**

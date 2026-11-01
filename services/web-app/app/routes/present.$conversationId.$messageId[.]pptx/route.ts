@@ -20,6 +20,7 @@ import { renderDeckPptxTile } from '~/domain/lesson-planner/lesson-pptx-tile.ser
 import { renderDeckPptxGallery } from '~/domain/lesson-planner/lesson-pptx-gallery.server';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
+import { loadDeckPictureFiles } from '~/domain/lesson-planner/deck-pictures.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const { deck, lessonTitle } = await loadLessonDeck({
@@ -33,12 +34,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const { deckV2, deckGallery } = access.allowed
     ? await getLessonPlannerReviewFlags(access.membership.organization.id)
     : { deckV2: false, deckGallery: false };
+  // The teacher's own pictures go in the file with the deck (Nov 1).
+  const pictures = await loadDeckPictureFiles([deck], access.allowed ? access.membership.id : null);
   // The Lesson Deck Kit, behind its own flag.
   const pptx = deckGallery
-    ? await renderDeckPptxGallery(deck)
+    ? await renderDeckPptxGallery(deck, { pictures })
     : deckV2
-    ? await renderDeckPptxTile(deck)
-    : await renderDeckPptx(deck);
+    ? await renderDeckPptxTile(deck, { pictures })
+    : await renderDeckPptx(deck, { pictures });
   const filename = pptxFilename(deck.title || lessonTitle);
 
   return new Response(pptx as unknown as BodyInit, {

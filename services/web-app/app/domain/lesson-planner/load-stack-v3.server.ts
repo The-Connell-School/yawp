@@ -56,6 +56,8 @@ export type StackV3 = {
    * be saved to once set (Oct 24 handoff, Part 2, L3 "Save to unit").
    */
   saveToUnit: Array<{ id: string; title: string; course: string | null }> | null;
+  /** The teacher's own decks they chose to teach with as they are (Nov 1). */
+  ownDecks: Array<{ id: string; name: string }>;
 };
 
 export async function loadStackV3({
@@ -90,6 +92,11 @@ export async function loadStackV3({
         select: { id: true, role: true, content: true, surface: true },
       },
       materials: { where: { kind: 'slides' }, select: { id: true, content: true, sourceMessageId: true } },
+      uploads: {
+        where: { mode: 'teach', keptDeck: true },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: { id: true, name: true },
+      },
     },
   });
 
@@ -185,6 +192,7 @@ export async function loadStackV3({
               })
             ).map((unit) => ({ id: unit.id, title: unit.title, course: unit.course?.name ?? null }))
           : null,
+      ownDecks: loaded.reviewFlags.teachMySlides ? conversation.uploads : [],
     },
   };
 }

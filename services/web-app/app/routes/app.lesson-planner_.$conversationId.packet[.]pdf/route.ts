@@ -6,6 +6,7 @@
  * teacher has to steer. Access, ordering and titles come from the same loader
  * the packet page uses, so the file always matches the page it came from.
  */
+import { viewerDeckPictureFiles } from '~/domain/lesson-planner/deck-pictures.server';
 import type { LoaderFunctionArgs } from 'react-router';
 import { loadLessonPacket } from '~/domain/lesson-planner/load-lesson-packet.server';
 import {
@@ -95,7 +96,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         excluded: single ? [] : excluded,
         kit: handoutKit(packet, reviewFlags),
       })
-    : await renderPacketPdf(chosen);
+    : await renderPacketPdf(chosen, {
+        pictures: await viewerDeckPictureFiles(
+          request,
+          chosen.sections.map((section) => section.deck)
+        ),
+      });
 
   const filename = pdfFilename(
     packet.title,

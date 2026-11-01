@@ -6,6 +6,8 @@
  * Yawp! template as it changes, then save: the edit replaces the planner's
  * deck in the chat, in the stack, in Present and in PowerPoint.
  */
+import { DeckPicturesProvider } from '~/components/lesson-planner/slide-picture';
+import { viewerDeckPictures } from '~/domain/lesson-planner/deck-pictures.server';
 import { useEffect, useRef, useState } from 'react';
 import {
   Form,
@@ -98,6 +100,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     periodMinutes: lesson?.periodMinutes ?? null,
     gallery: deckGallery,
     returnTo: deckEditorReturnTo(conversationId, request.url),
+    // The teacher's own pictures on its slides (Nov 1).
+    pictures: await viewerDeckPictures(request, [deck]),
   };
 }
 
@@ -146,12 +150,22 @@ const LAYOUT_LABELS: Record<Slide['layout'], string> = {
   look: 'Look',
   excerpt: 'Annotate',
   exit: 'Before you go',
+  picture: 'Your picture',
 };
 
 /** How long a deleted slide can still be brought back. */
 const UNDO_MS = 8000;
 
 export default function DeckEditorRoute() {
+  const { pictures } = useLoaderData<typeof loader>();
+  return (
+    <DeckPicturesProvider pictures={pictures}>
+      <DeckEditor />
+    </DeckPicturesProvider>
+  );
+}
+
+function DeckEditor() {
   const { lessonTitle, deck: loaded, returnTo, periodMinutes, gallery } =
     useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
@@ -321,7 +335,11 @@ export default function DeckEditorRoute() {
                   }
                   className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
                 >
-                  {(gallery ? SLIDE_LAYOUTS : CLASSIC_SLIDE_LAYOUTS).map((layout) => (
+                  {(gallery ? SLIDE_LAYOUTS : CLASSIC_SLIDE_LAYOUTS)
+                    // A picture slide comes only from the teacher's own deck (Nov 1):
+                    // offered to keep, never to turn a slide with no picture into.
+                    .filter((layout) => layout !== 'picture' || slide.layout === 'picture')
+                    .map((layout) => (
                     <option key={layout} value={layout}>
                       {LAYOUT_LABELS[layout]}
                     </option>

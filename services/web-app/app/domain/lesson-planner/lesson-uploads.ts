@@ -16,7 +16,87 @@ export const SOURCES_BUDGET = 24_000;
 /** What one call to read_uploaded_document returns. */
 export const PART_CHARS = 12_000;
 
-export type LessonUpload = { id: string; name: string; text: string; truncated: boolean };
+/** What a teacher wants from their own deck (Nov 1). */
+export const DECK_MODES = ['teach', 'refresh'] as const;
+export type DeckMode = (typeof DECK_MODES)[number];
+
+export function isDeckMode(value: unknown): value is DeckMode {
+  return typeof value === 'string' && (DECK_MODES as readonly string[]).includes(value);
+}
+
+/** A picture kept from a teacher's deck, as the planner may place it. */
+export type UploadPictureRef = {
+  id: string;
+  position: number;
+  slideNumbers: number[];
+  altText: string;
+  width: number | null;
+  height: number | null;
+};
+
+export type LessonUpload = {
+  id: string;
+  name: string;
+  text: string;
+  truncated: boolean;
+  /** A PowerPoint kept whole (Nov 1). */
+  keptDeck?: boolean;
+  mode?: string | null;
+  pictures?: UploadPictureRef[];
+};
+
+/** Which of the deck choices are on for this school. */
+export type DeckChoices = { teach: boolean; refresh: boolean };
+const NO_CHOICES: DeckChoices = { teach: false, refresh: false };
+
+function shapeOf(picture: UploadPictureRef): string {
+  if (!picture.width || !picture.height) return 'size unknown';
+  const ratio = picture.width / picture.height;
+  return ratio > 1.15 ? 'landscape' : ratio < 0.87 ? 'portrait' : 'square';
+}
+
+function slidesOf(numbers: number[]): string {
+  if (numbers.length === 1) return `slide ${numbers[0]}`;
+  return `slides ${numbers.slice(0, -1).join(', ')} and ${numbers[numbers.length - 1]}`;
+}
+
+/** What the planner does with one kept deck, given what the teacher chose. */
+function deckGuidance(upload: LessonUpload, choices: DeckChoices): string[] {
+  if (!upload.keptDeck) return [];
+  const mode = upload.mode === 'teach' && choices.teach ? 'teach' : upload.mode === 'refresh' && choices.refresh ? 'refresh' : null;
+  if (mode === 'teach') {
+    return [
+      `[The teacher chose “Teach with these slides” for "${upload.name}". They will show their own deck as it is.`,
+      '- Do not write a yawp-slides deck for this lesson, not even one slide: their deck is the deck. If they ask you for a Yawp! deck anyway, build it from their slides, in their order.',
+      '- Build the plan, the handouts and the exit ticket around it. At each step say which of its slides to show by their slide numbers ("Slides 3–4"), what students do while they are up, and what the teacher says. Use the slide numbers as written above; never guess one.',
+      '- Where a slide shows a picture, build on what it shows. Never contradict a slide; if one needs fixing, say so in the plan.]',
+    ];
+  }
+  if (mode === 'refresh') {
+    const pictures = upload.pictures ?? [];
+    return [
+      `[The teacher chose “Refresh into a Yawp! deck” for "${upload.name}". Rebuild it as a yawp-slides deck: keep its content, its sequence and its examples; tighten the wording, update what is out of date, and add the questions and notes a Yawp! deck carries.`,
+      '- Their pictures go back on the slides that used them, each on its own picture slide: {"layout": "picture", "title": …, "question" or "body": …, "image": "<picture id>", "speakerNotes": …}. Use only an id listed here, each where the original deck had it. A picture slide shows one picture whole; the painting from the art library still hangs on the rest of the deck.',
+      ...(pictures.length
+        ? [
+            'Pictures you can put on a slide:',
+            ...pictures.map(
+              (picture) =>
+                `- "${attribute(picture.id)}": picture ${picture.position}, on ${slidesOf(picture.slideNumbers)}, ${shapeOf(picture)}: ${picture.altText || 'no description'}`
+            ),
+          ]
+        : ['- None of its pictures could be kept.']),
+      '- A picture marked above as one Yawp! cannot show has no id: describe it in the speaker notes instead.]',
+    ];
+  }
+  const offered = [choices.teach ? 'teach with it as it is' : null, choices.refresh ? 'refresh it into a Yawp! deck' : null].filter(
+    (choice): choice is string => Boolean(choice)
+  );
+  if (!offered.length) return [];
+  return [
+    `[The teacher has not said what they want from "${upload.name}". Unless this message already says, ask them once, in one short question, whether to ${offered.join(' or ')}, before you write any deck. Build the rest of the lesson meanwhile.]`,
+  ];
+}
 
 function attribute(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -27,7 +107,7 @@ function body(text: string): string {
   return text.replace(/<\/?document\b/gi, (tag) => tag.replace('<', '‹'));
 }
 
-export function buildSourcesSection(uploads: LessonUpload[]): string[] {
+export function buildSourcesSection(uploads: LessonUpload[], choices: DeckChoices = NO_CHOICES): string[] {
   if (!uploads.length) return [];
   const each = Math.floor(SOURCES_BUDGET / uploads.length);
   const lines = [
@@ -49,6 +129,7 @@ export function buildSourcesSection(uploads: LessonUpload[]): string[] {
       lines.push(`[Only the opening of "${upload.name}" is shown. It has ${parts} parts: read them with read_uploaded_document, id "${upload.id}".]`);
     }
     if (upload.truncated) lines.push(`[“${upload.name}” was long, so only its first part was kept. Tell the teacher if the lesson needs a later part.]`);
+    lines.push(...deckGuidance(upload, choices));
   }
   return lines;
 }

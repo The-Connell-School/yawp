@@ -23,7 +23,9 @@ export type GalleryTemplate =
   | 'look'
   | 'excerpt'
   | 'exit'
-  | 'compare';
+  | 'compare'
+  // The teacher's own picture (Nov 1), drawn like the Look slide's painting.
+  | 'picture';
 
 export type GalleryGround = 'paper' | 'pine' | 'ink' | 'accent' | 'art';
 
@@ -77,7 +79,17 @@ export const GALLERY_TEMPLATES: Record<GalleryTemplate, { mode: string | null; g
   excerpt: { mode: 'Annotate.', ground: 'paper' },
   exit: { mode: 'Before you go.', ground: 'accent' },
   compare: { mode: null, ground: 'paper' },
+  // On paper: a photograph or a handout reads truest on a light ground.
+  picture: { mode: 'Look.', ground: 'paper' },
 };
+
+/**
+ * Where a picture slide hangs the teacher's picture, in kit pixels: the Look
+ * slide's painting box, so the two read as one family. The words sit to its
+ * right, from `GALLERY_PICTURE_TEXT_LEFT`.
+ */
+export const GALLERY_PICTURE_BOX = { x: 64, y: 74, w: 720, h: 538 } as const;
+export const GALLERY_PICTURE_TEXT_LEFT = 846;
 
 /** The six steps of the writing process, as a divider names them. */
 export const WRITING_PROCESS_STEPS = [

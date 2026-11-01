@@ -634,6 +634,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                   conversationId={conversationId}
                   handoutCount={steps.filter((step) => step.hasHandout).length}
                   deck={v3.deck}
+                  ownDecks={v3.ownDecks}
                   builtDeck={
                     v3.conversationDeck && !v3.deck
                       ? {
@@ -662,6 +663,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
               stepCount={steps.length}
               handoutCount={steps.filter((step) => step.hasHandout).length}
               deck={v3.deck}
+              ownDecks={v3.ownDecks}
               builtDeck={
                 v3.conversationDeck && !v3.deck
                   ? {

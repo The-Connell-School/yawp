@@ -17,11 +17,15 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import PptxGenJS from 'pptxgenjs';
 import { resolveDeckArt, type DeckArt } from './deck-art';
+import { pictureSlideText } from './deck-pictures';
+import { addPptxPicture, type DeckPictureFiles } from './deck-pictures.server';
 import { splitColorMarks } from './deck-colors';
 import {
   GALLERY_COLORS,
   galleryColors,
   galleryRunningHead,
+  GALLERY_PICTURE_BOX,
+  GALLERY_PICTURE_TEXT_LEFT,
   planGalleryDeck,
   promptTypeSize,
   type GallerySlidePlan,
@@ -91,6 +95,8 @@ type Ctx = {
   art: DeckArt | null;
   colors: string[];
   image: (src: string) => string | null;
+  /** The teacher's own pictures this file may carry (Nov 1). */
+  pictures: DeckPictureFiles;
 };
 
 const ROMAN = ['i', 'ii', 'iii', 'iv', 'v', 'vi'];
@@ -453,6 +459,31 @@ function drawSlide(ctx: Ctx): void {
       return;
     }
 
+    case 'picture': {
+      // The teacher's own picture, whole, where the Look slide hangs its painting (Nov 1).
+      const box = GALLERY_PICTURE_BOX;
+      addPptxPicture(
+        ctx.slide as never,
+        spec.image ? ctx.pictures.get(spec.image) : undefined,
+        { x: px(box.x), y: px(box.y), w: px(box.w), h: px(box.h) },
+        { rule: tone.rule, muted: tone.muted, fontFace: SANS }
+      );
+      if (spec.attribution) block(ctx, [[sans(spec.attribution, 14, tone.muted)]], { x: box.x, y: box.y + box.h + 12, w: box.w, h: 30 });
+      const words = pictureSlideText(spec);
+      const left = GALLERY_PICTURE_TEXT_LEFT;
+      block(
+        ctx,
+        [
+          modeRun(ctx),
+          [caps(spec.title, 16, tone.muted)],
+          words ? marked(ctx, words, (t, c, e) => serif(t, 38, c, e), tone.ink) : [],
+          spec.followUp ? [serif(spec.followUp, 28, tone.muted, { italic: true })] : [],
+        ],
+        { x: left, y: 100, w: 1280 - 70 - left, h: 520 }
+      );
+      return;
+    }
+
     case 'compare': {
       runningHead(ctx);
       block(ctx, [[serif(spec.title, 54, tone.ink)]], { x: 80, y: 130, w: 1120, h: 80 });
@@ -467,7 +498,10 @@ function drawSlide(ctx: Ctx): void {
   }
 }
 
-export async function renderDeckPptxGallery(deck: SlideDeck): Promise<Uint8Array> {
+export async function renderDeckPptxGallery(
+  deck: SlideDeck,
+  { pictures = new Map() }: { pictures?: DeckPictureFiles } = {}
+): Promise<Uint8Array> {
   const pptx = new PptxGenJS();
   pptx.defineLayout(LAYOUT);
   pptx.layout = LAYOUT.name;
@@ -486,7 +520,7 @@ export async function renderDeckPptxGallery(deck: SlideDeck): Promise<Uint8Array
   for (const plan of planGalleryDeck(deck)) {
     const slide = pptx.addSlide();
     slide.background = { color: groundColor(plan, colors[0]!) };
-    drawSlide({ slide, plan, tone: toneFor(plan), deck, art, colors, image });
+    drawSlide({ slide, plan, tone: toneFor(plan), deck, art, colors, image, pictures });
     slide.addNotes(notesWithMinutes(plan.slide.speakerNotes, plan.slide.minutes));
   }
 
