@@ -553,6 +553,30 @@ export function resolveLandingPageKey(type: {
   }
 }
 
+/**
+ * The page a teacher actually gets, given which landing flags are on. The
+ * Thesis-Driven Essay has its own flag: it stays on the old page outside demo
+ * until its lesson stacks and tutorial videos exist.
+ */
+export function enabledLandingPageKey(
+  key: LandingPageKey | null,
+  flags: { v2: boolean; thesisEssay: boolean }
+): LandingPageKey | null {
+  if (!key || !flags.v2) return null;
+  if (key === 'thesis-driven-essay' && !flags.thesisEssay) return null;
+  return key;
+}
+
+/**
+ * Each Thesis-Driven Essay step's lesson stack and tutorial video, keyed by
+ * `stepResourceKey(module title)`. Empty until they are built; a step with
+ * nothing here shows both as coming soon.
+ */
+export const THESIS_DRIVEN_ESSAY_STEP_RESOURCES: Record<
+  string,
+  { stackHref?: string | null; videoHref?: string | null }
+> = {};
+
 const stripMarkup = (text: string) => text.replace(/\*\*|\*/g, '');
 
 /** Everything the page says above the library, without markup. */

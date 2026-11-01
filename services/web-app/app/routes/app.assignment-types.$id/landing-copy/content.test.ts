@@ -5,6 +5,7 @@ import {
   type LandingBlock,
   type LandingPage,
   type LandingPageKey,
+  enabledLandingPageKey,
   landingPagePlainText,
   resolveLandingPageKey,
 } from './content';
@@ -52,6 +53,26 @@ describe('resolveLandingPageKey', () => {
     expect(resolveLandingPageKey({ title: 'Nonverbal Communication Assignment' })).toBeNull();
     // Free Write is the student's own space, not something a teacher assigns.
     expect(resolveLandingPageKey({ title: 'Free Write', kind: 'free_write' })).toBeNull();
+  });
+});
+
+describe('enabledLandingPageKey', () => {
+  test('nothing is new while the v2 flag is off', () => {
+    expect(enabledLandingPageKey('class-starter', { v2: false, thesisEssay: true })).toBeNull();
+  });
+  test('the Thesis-Driven Essay waits for its own flag', () => {
+    expect(
+      enabledLandingPageKey('thesis-driven-essay', { v2: true, thesisEssay: false })
+    ).toBeNull();
+    expect(
+      enabledLandingPageKey('thesis-driven-essay', { v2: true, thesisEssay: true })
+    ).toBe('thesis-driven-essay');
+    expect(enabledLandingPageKey('exit-ticket', { v2: true, thesisEssay: false })).toBe(
+      'exit-ticket'
+    );
+  });
+  test('an unknown type stays unknown', () => {
+    expect(enabledLandingPageKey(null, { v2: true, thesisEssay: true })).toBeNull();
   });
 });
 
@@ -241,7 +262,7 @@ describe('every page', () => {
       page(key).sections.some((s) => s.blocks.some((b) => b.type === 'steps'))
     );
     expect(withSteps.sort()).toEqual(
-      ['act-writing', 'five-paragraph-essay', 'thesis-driven-essay'].sort()
+      (['act-writing', 'five-paragraph-essay', 'thesis-driven-essay'] as LandingPageKey[]).sort()
     );
     // Only the Thesis-Driven Essay links each step to a stack and a video.
     const linked = keys.filter((key) =>
