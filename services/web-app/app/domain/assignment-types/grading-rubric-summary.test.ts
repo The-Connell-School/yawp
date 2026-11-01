@@ -72,7 +72,6 @@ describe('summarizeGradingRubric', () => {
               key: 'thesis',
               label: 'Thesis',
               weight: 0.25,
-              description: 'A claim.',
             },
           ],
         },

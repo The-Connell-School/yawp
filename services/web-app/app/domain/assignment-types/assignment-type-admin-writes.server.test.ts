@@ -121,7 +121,7 @@ describe('parseAdminUpdateGradingConfig', () => {
       expect(config?.gradingPromptConfigJson).toEqual(
         builtInExitTicket.promptConfig
       );
-      expect(config?.gradingOutputSchemaJson).toEqual(
+      expect(config?.gradingOutputSchemaJson as unknown).toEqual(
         builtInExitTicket.outputSchema
       );
       expect(config?.gradingCalibrationNotes).toBe(
