@@ -87,26 +87,14 @@ import { useUpdateSubmission } from './use-update-submission';
 import { hasGradingDraftToReplace } from './has-grading-draft-to-replace';
 import { buildGradingFormSnapshot } from './grading-form-snapshot';
 import {
+  scoreFieldBounds,
+  scoreFieldOutOf,
+  snapToScaleValue,
+} from './score-field-bounds';
+import {
   cloneFormDataWithFallbackRetry,
   isLlmRetryResponse,
 } from '~/utils/llm-retry-ui';
-
-/**
- * The nearest score the scale actually offers. A typed 17 on a 0-30 rubric
- * scored in tens becomes 20; anything outside the range is pulled to its
- * nearest end.
- */
-function snapToScaleValue(
-  value: number,
-  bounds: { min: number; max: number; step: number } | null,
-  fallbackMax: number
-): number {
-  if (!bounds) return Math.max(0, Math.min(fallbackMax, Math.round(value)));
-
-  const clamped = Math.max(bounds.min, Math.min(bounds.max, value));
-  const steps = Math.round((clamped - bounds.min) / bounds.step);
-  return Math.min(bounds.max, bounds.min + steps * bounds.step);
-}
 
 function normalizePercentage(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
@@ -746,22 +734,26 @@ export function TeacherGradingPanel({
     }
   }, [rubricScaleGrade, hasManualScoreOverride, isRawPoints, resolvedNumericPercentage, pointValue]);
 
-  const scaleScoreOutOf = assignmentPointTotal(pointValue,
-    isRawPoints ? (activeRubricConfig.scoringType === 'act_writing_2_12' ? 12 : activeRubricConfig.maxScore) : 100);
+  const scoreFieldScale = useMemo(
+    () => ({
+      isRawPoints,
+      scoringType: activeRubricConfig.scoringType,
+      minScore: activeRubricConfig.minScore,
+      maxScore: activeRubricConfig.maxScore,
+      step: activeRubricConfig.step,
+    }),
+    [isRawPoints, activeRubricConfig]
+  );
+  const scaleScoreOutOf = scoreFieldOutOf(scoreFieldScale, pointValue);
 
   /**
    * Configured assignments accept whole points from zero to their total.
    * Unconfigured legacy raw scales retain their original range and step.
    */
-  const totalPointsBounds = useMemo(() => {
-    if (scaleScoreOutOf === null) return null;
-    const isRubricRange = scaleScoreOutOf === activeRubricConfig.maxScore;
-    return {
-      min: isRawPoints && pointValue == null && isRubricRange ? activeRubricConfig.minScore : 0,
-      max: scaleScoreOutOf,
-      step: pointValue != null ? 1 : isRubricRange ? (activeRubricConfig.step ?? 1) : 1,
-    };
-  }, [scaleScoreOutOf, activeRubricConfig, pointValue, isRawPoints]);
+  const totalPointsBounds = useMemo(
+    () => scoreFieldBounds(scoreFieldScale, pointValue),
+    [scoreFieldScale, pointValue]
+  );
 
   /**
    * The total the teacher typed, snapped onto the scale — null while the field
