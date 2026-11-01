@@ -2791,9 +2791,24 @@ describe('api.domain.grade-essay-ai', () => {
       return prisma.submission.update.mock.calls.at(-1)?.[0].data;
     }
 
+    /** A 200 with the grade in it — not a 502 for a score "between bands". */
+    function expectGraded(response: unknown) {
+      const result = response as {
+        status?: number;
+        init?: { status?: number } | null;
+        data?: { success?: boolean };
+      };
+      const status =
+        response instanceof Response
+          ? response.status
+          : (result.init?.status ?? 200);
+      expect(status).toBe(200);
+      expect(result.data?.success).toBe(true);
+    }
+
     test('a reflection grades on the Exit Ticket bands and its reflection question', async () => {
       const response = await gradeExitTicket('sub-et-reflection', REFLECTION_CONFIG, 72);
-      expect(response.status ?? 200).toBe(200);
+      expectGraded(response);
 
       const prompt = gradingPromptText();
       expect(prompt).toContain('81-100 Explains it');
@@ -2818,7 +2833,7 @@ describe('api.domain.grade-essay-ai', () => {
 
     test('a check for understanding with a right answer grades against that answer', async () => {
       const response = await gradeExitTicket('sub-et-check', CHECK_OBJECTIVE_CONFIG, 30);
-      expect(response.status ?? 200).toBe(200);
+      expectGraded(response);
 
       const prompt = gradingPromptText();
       expect(prompt).toContain('The teacher says this has a right answer.');
@@ -2868,7 +2883,7 @@ describe('api.domain.grade-essay-ai', () => {
           CHECK_OBJECTIVE_CONFIG,
           score
         );
-        expect(response.status ?? 200).toBe(200);
+        expectGraded(response);
         expect(stored().score).toBe(`${score}/100`);
       }
     );

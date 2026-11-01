@@ -173,7 +173,7 @@ describe('auditGradingAssistantRubric', () => {
       {
         ...resolvedFrom(parseAssignmentTypeRubricConfig({})),
         rubricCategories: [
-          { key: 'only_one', label: 'Only one', weight: 1, description: 'x' },
+          { key: 'only_one', label: 'Only one', weight: 1 },
         ],
       },
       healthyLibrary
