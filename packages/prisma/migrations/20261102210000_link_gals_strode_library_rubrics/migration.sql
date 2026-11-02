@@ -36,8 +36,9 @@ FROM "Rubric" AS lib
 WHERE lib."name" = 'gals-claims'
   AND at."kind" IS DISTINCT FROM 'gals_claims'
   AND (
-    lower(trim(at."title")) IN ('claims', 'claims assignment')
+    lower(trim(at."title")) IN ('claims', 'claims assignment', 'gals claims')
     OR lower(trim(at."title")) LIKE 'claims %'
+    OR lower(trim(at."title")) LIKE '%gals%claim%'
   )
   AND NOT EXISTS (
     SELECT 1
