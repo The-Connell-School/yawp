@@ -68,7 +68,7 @@ import {
   previewAccessMiddleware,
 } from './utils/preview-access.server.ts';
 import { uaPartnerMiddleware } from './utils/ua-partner.server.ts';
-import { isLessonPlannerEnabled } from './domain/feature-flags/feature-flags.server.ts';
+import { isLessonPlannerEnabledForOrganization } from './utils/lesson-planner/lesson-planner-access.server.ts';
 import { getRootMembershipWhere } from './utils/root-membership-filter.server.ts';
 
 export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware];
@@ -319,9 +319,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     bannerWarning,
     localDevAuthEnabled: isLocalDevAuthEnabled(),
   });
-  const lessonPlannerEnabled = userId
-    ? await isLessonPlannerEnabled(membership?.organizationId ?? null)
-    : false;
+  const lessonPlannerEnabled =
+    userId && membership?.organization
+      ? await isLessonPlannerEnabledForOrganization(membership.organization)
+      : false;
 
   return data(
     {

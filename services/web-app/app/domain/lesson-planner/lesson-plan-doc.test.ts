@@ -193,3 +193,49 @@ describe("buildLessonPlanDoc — the stack decides the sections (Brian's run 3, 
     expect(doc.closing).toMatch(/^Suggested closing: not in your stack\./);
   });
 });
+
+describe('teacher notes on the plan (Oct 24 handoff, task 7)', () => {
+  test('each step carries its stack step, and its notes print under it once', async () => {
+    const { buildLessonPacket } = await import('./lesson-packet');
+    const { entriesFromPacket, withTeacherNotes } = await import('./lesson-plan-doc');
+    const packet = buildLessonPacket({
+      title: 'Day 1',
+      className: null,
+      sections: [
+        { id: 'm1', content: 'Write about what you carry.', keptTitle: 'Class Starter: Carry', origin: 'material', kind: 'handout', keptAudience: 'student' },
+        { id: 'r1', content: '## Read aloud (20 min)\n\nRead the opening.', keptAudience: 'teacher' },
+      ],
+    });
+    const entries = entriesFromPacket(packet, { m1: 'class-starter' });
+    expect(entries.map((entry) => entry.id)).toEqual(['m1', 'r1']);
+    const doc = withTeacherNotes(
+      buildLessonPlanDoc({ title: 'Day 1', className: null, periodMinutes: 50, entries, summaries: null, standards: [] }),
+      { m1: 'Open with: Ask what is in their bag.', r1: '  ' }
+    );
+    const all = [...doc.instructions, ...(doc.closingStep ? [doc.closingStep] : [])];
+    expect(all.find((step) => step.stepId === 'm1')?.teacherNotes).toBe('Open with: Ask what is in their bag.');
+    expect(all.filter((step) => step.teacherNotes)).toHaveLength(1);
+  });
+});
+
+describe("If you have more time (Kevin's notes 8c, 10c)", () => {
+  const entries: LessonPlanEntry[] = [
+    { kind: 'class-starter', title: 'Class Starter', content: 'Write.', id: 's1' },
+    { kind: 'step', title: 'Read on (15 min)', content: 'Keep reading.', id: 's2' },
+    { kind: 'step', title: 'Discussion (10 min)', content: 'Talk.', id: 's3' },
+    { kind: 'exit-ticket', title: 'Exit ticket', content: 'One line.', id: 's4' },
+  ];
+
+  test('extensions leave the instructions and come after the closing, in the order set aside', () => {
+    const doc = buildLessonPlanDoc({ title: 'Day 1', className: null, periodMinutes: 50, entries, extensionIds: ['s3', 's2'] });
+    expect(doc.instructions.map((step) => step.title)).toEqual(['Class starter']);
+    expect(doc.closingStep?.title).toBe('Exit ticket');
+    expect(doc.extensions.map((step) => step.title)).toEqual(['Discussion', 'Read on']);
+  });
+
+  test('none set aside: no section', () => {
+    const doc = buildLessonPlanDoc({ title: 'Day 1', className: null, periodMinutes: 50, entries });
+    expect(doc.extensions).toEqual([]);
+    expect(doc.instructions).toHaveLength(3);
+  });
+});

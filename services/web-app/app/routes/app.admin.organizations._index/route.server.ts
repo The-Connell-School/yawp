@@ -1,3 +1,4 @@
+import { parseFormData, validationError } from '@rvf/react-router';
 import {
   data as dataResponse,
   type ActionFunctionArgs,
@@ -13,25 +14,72 @@ import {
 import { prisma } from '~/utils/db.server';
 import {
   createRuntimePreviewSeat,
+  getConfiguredPreviewOrganizationAccessCode,
   getPreviewMasterAccessCode,
   isIsolatedPreviewSeatMode,
 } from './preview-seat.server';
+import { CreateOrganizationSchema } from './schema';
+
+type Stats = {
+  total_organizations: number;
+  active_organizations: number;
+  total_students: number;
+  total_teachers: number;
+};
 
 export async function organizationsLoader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
+  const { sort, direction, skip, take } =
+    await getOrganizationTableCookie(request);
   const previewSeatMode = isIsolatedPreviewSeatMode();
-  const previewSeats = previewSeatMode
-    ? await prisma.organization.findMany({
-        where: { previewSeatCode: { not: null } },
-        select: { id: true, name: true, previewSeatCode: true },
-        orderBy: { createdAt: 'desc' },
-      })
-    : [];
+
+  const [organizationRows, totalCount, stats] = await Promise.all([
+    prisma.organization.findMany({
+      skip,
+      take,
+      include: {
+        memberships: {
+          include: {
+            user: { select: { id: true } },
+          },
+        },
+      },
+      orderBy: {
+        [sort ?? 'createdAt']: direction === 'asc' ? 'asc' : 'desc',
+      },
+    }),
+    prisma.organization.count(),
+    prisma.$queryRaw<Stats[]>`
+      SELECT
+        (SELECT COUNT(*) FROM "Organization")::int as total_organizations,
+        (SELECT COUNT(*) FROM "Organization" WHERE "createdAt" > NOW() - INTERVAL '30 days')::int as active_organizations,
+        (SELECT COUNT(*) FROM "OrgMembership" WHERE role = 'STUDENT')::int as total_students,
+        (SELECT COUNT(*) FROM "OrgMembership" WHERE role = 'TEACHER')::int as total_teachers
+    `,
+  ]);
+
+  const growthData = await prisma.organization.groupBy({
+    by: ['createdAt'],
+    _count: true,
+    orderBy: { createdAt: 'asc' },
+  });
+  const organizations = organizationRows.map(
+    ({ previewSeatCode, ...organization }) => ({
+      ...organization,
+      previewAccessCode: previewSeatMode
+        ? previewSeatCode ??
+          getConfiguredPreviewOrganizationAccessCode(organization.id)
+        : null,
+    })
+  );
 
   return dataResponse({
+    organizations,
+    stats: stats[0],
+    growthData,
+    totalCount,
+    table: { sort, direction, skip, take },
     previewSeatMode,
-    previewSeats,
-    readSurfaceMoved: true,
   });
 }
 
@@ -41,17 +89,24 @@ export async function organizationsAction({ request }: ActionFunctionArgs) {
   const intent = formData.get('intent');
 
   if (intent === 'create') {
-    return dataResponse(
-      { error: 'Organization creation has moved to Yawp Internal.' },
-      { status: 410 }
+    const { error, data } = await parseFormData(
+      formData,
+      CreateOrganizationSchema
     );
-  }
+    if (error) return validationError(error);
 
-  if (intent === 'legacy-create') {
-    return dataResponse(
-      { error: 'Organization creation has moved to Yawp Internal.' },
-      { status: 410 }
-    );
+    await prisma.organization.create({
+      data: {
+        name: data.name,
+        numOfStudentSeats: Number(data.numOfStudentSeats),
+        numOfTeacherSeats: Number(data.numOfTeacherSeats),
+        accessExpiresAt: data.accessExpiresAt
+          ? new Date(data.accessExpiresAt)
+          : null,
+      },
+    });
+
+    return dataResponse({ success: true });
   }
 
   if (intent === 'createPreviewSeat') {

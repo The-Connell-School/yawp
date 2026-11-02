@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { FreeAccountUsage } from '~/domain/free-tier/inapp-usage';
-import { freeTierLessonPlannerNavTease } from './free-tier-nav-usage';
+import { freeTierLessonPlannerNavIncludeWhenFlagOff, freeTierLessonPlannerNavTease } from './free-tier-nav-usage';
 
 function usage(
   overrides: Partial<FreeAccountUsage> = {}
@@ -26,11 +26,22 @@ describe('freeTierLessonPlannerNavTease', () => {
     );
     expect(freeTierLessonPlannerNavTease(usage(), true)).toBe(true);
   });
+});
 
-  test('is off for approved monthly shell without locked preview', () => {
+describe('freeTierLessonPlannerNavIncludeWhenFlagOff', () => {
+  test('includes approved monthly free-tier shell when the org flag is off', () => {
     expect(
-      freeTierLessonPlannerNavTease(
+      freeTierLessonPlannerNavIncludeWhenFlagOff(
         usage({ reporterLocked: false, monthly: true, lessonPlannerMonthlyMetering: true }),
+        false
+      )
+    ).toBe(true);
+  });
+
+  test('is off outside free-tier LP shells', () => {
+    expect(
+      freeTierLessonPlannerNavIncludeWhenFlagOff(
+        usage({ monthly: false, lessonPlannerMonthlyMetering: false }),
         false
       )
     ).toBe(false);

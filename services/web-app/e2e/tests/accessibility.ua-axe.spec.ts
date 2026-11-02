@@ -1,6 +1,10 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page, TestInfo } from '@playwright/test';
 import { test, expect } from '../test-setup';
+import {
+  teacherLoungeE2eSkipReason,
+  teacherLoungeE2eSkipped,
+} from '../helpers/teacher-lounge-disabled';
 
 const WCAG_21_AA_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 const BLOCKING_IMPACTS = new Set(['critical', 'serious']);
@@ -103,6 +107,8 @@ test.describe.serial('UA accessibility axe audit', () => {
     signIn,
     e2eContext,
   }, testInfo) => {
+    test.skip(teacherLoungeE2eSkipped, teacherLoungeE2eSkipReason);
+
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app/teacher-trainings');
     await expect(

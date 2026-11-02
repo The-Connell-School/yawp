@@ -11,6 +11,7 @@ try {
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import {
   act,
+  useState,
   type ReactElement,
   type ReactNode,
   type FormHTMLAttributes,
@@ -425,7 +426,7 @@ describe('AssignmentCreationSheetContent', () => {
       expect(inputByName('assignmentTypeId').value).toBe(
         expectedAssignmentTypeId
       );
-      expect(inputByName('submitForGrade').value).toBe('false');
+      expect(inputByName('submitForGrade').value).toBe('true');
 
       const submitForGrade = controlById('assignment-create-submit-for-grade');
       expect(isChecked(submitForGrade)).toBe(true);
@@ -437,7 +438,7 @@ describe('AssignmentCreationSheetContent', () => {
       );
 
       // Tutor defaults to enabled, preserving today's behavior.
-      expect(inputByName('tutorEnabled').value).toBe('false');
+      expect(inputByName('tutorEnabled').value).toBe('true');
       const tutorEnabled = controlById('assignment-create-tutor-enabled');
       expect(tutorEnabled.getAttribute('role')).toBe('checkbox');
       expect(isChecked(tutorEnabled)).toBe(true);
@@ -455,6 +456,59 @@ describe('AssignmentCreationSheetContent', () => {
       false
     );
     expect(inputByName('tutorEnabled').value).toBe('false');
+  });
+
+  it('keeps entered prompt and tutor choice after a failed create response', () => {
+    function FailedCreateHarness() {
+      const [createFetcher, setCreateFetcher] = useState(idleFetcher());
+      return (
+        <>
+          <button
+            type="button"
+            id="simulate-failed-create"
+            onClick={() =>
+              setCreateFetcher({
+                state: 'idle',
+                data: {
+                  success: false,
+                  message: 'Could not create the assignment.',
+                },
+                Form: FetcherForm,
+                submit: () => {},
+              })
+            }
+          />
+          <AssignmentCreationSheetContent
+            open
+            onOpenChange={() => {}}
+            entryPoint="dashboard"
+            assignmentTypes={assignmentTypes}
+            teacherClasses={teacherClasses}
+            initialPrompt="Keep this prompt"
+            createFetcher={createFetcher}
+            extractFetcher={idleFetcher()}
+            renderSheet={false}
+          />
+        </>
+      );
+    }
+
+    ({ root } = render(<FailedCreateHarness />));
+    act(() => {
+      controlById('assignment-create-tutor-enabled').click();
+    });
+    act(() => {
+      document.getElementById('simulate-failed-create')!.click();
+    });
+
+    expect(
+      (document.getElementById('assignment-create-prompt') as HTMLTextAreaElement)
+        .value
+    ).toBe('Keep this prompt');
+    expect(isChecked(controlById('assignment-create-tutor-enabled'))).toBe(
+      false
+    );
+    expectText('Could not create the assignment.');
   });
 
   it('names a tutor-off assignment a cold write', () => {

@@ -10,6 +10,7 @@ import { Button } from '~/components/ui/button';
 import { CircularProgress } from '~/components/ui/circular-progress';
 import { prisma } from '~/utils/db.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { redirectIfTeacherLoungeTemporarilyDisabled } from '~/domain/teacher-lounge/teacher-lounge-temporary-disable.server';
 import { cn } from '~/utils/misc';
 import {
   getTeacherTrainingProgressPercent,
@@ -18,6 +19,7 @@ import {
 import { useMemo } from 'react';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
+  redirectIfTeacherLoungeTemporarilyDisabled();
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 

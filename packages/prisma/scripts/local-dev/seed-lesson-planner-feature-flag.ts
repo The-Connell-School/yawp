@@ -53,7 +53,7 @@ export async function ensureInternalRubricsEnabledForDemo(
 const EVERYONE = '{"mode":"everyone","orgIds":[]}';
 
 /** Brian's review flags (docs/plans/2026-10-11-lesson-planner-brian-review.md). */
-const LESSON_PLANNER_REVIEW_FLAG_SETTINGS = [
+export const LESSON_PLANNER_REVIEW_FLAG_SETTINGS = [
   'feature_flag.lesson_planner_intake_v2',
   'feature_flag.lesson_planner_stack_v2',
   'feature_flag.lesson_planner_deck_v2',
@@ -69,6 +69,9 @@ const LESSON_PLANNER_REVIEW_FLAG_SETTINGS = [
   'feature_flag.lesson_planner_deck_gallery',
   // The teacher's own documents (docs/plans/2026-10-21-sharing-standards-uploads.md).
   'feature_flag.lesson_planner_uploads',
+  // Brian's handoff (docs/plans/2026-10-24-stack-v2-and-library-redesign.md).
+  'feature_flag.lesson_planner_teach_notes',
+  'feature_flag.lesson_planner_library_v2',
 ] as const;
 
 /**

@@ -20,32 +20,32 @@ enum FreeTierApplicationStatus {
 }
 
 model FreeTierApplication {
-  id               String                    @id @default(cuid())
-  createdAt        DateTime                  @default(now()) @db.Timestamptz(6)
-  updatedAt        DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
-  status           FreeTierApplicationStatus @default(LEAD)
-  name             String
-  email            String                    @unique
-  schoolName       String
-  location         String
-  starterClassName String? @db.VarChar(100)
-  starterClassGrade String? @db.VarChar(5)
-  gradeLevel       String
-  releaseEmailCopyVersion String? @db.VarChar(40)
-  tags             String[]                  @default([])
-  acquisitionTokenId String?
-  acquisitionToken   AcquisitionToken? @relation(fields: [acquisitionTokenId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  userId           String?
-  organizationId   String?
-  releasedAt       DateTime?                 @db.Timestamptz(6)
-  notes            String?
-  teacherPersonalNote String?
-  adminRedirectCount Int                     @default(0)
-  lockedPreviewApprovalToastSeenAt DateTime? @db.Timestamptz(6)
-  approvalDecisions FreeTierApprovalDecision[]
-  adminApprovals    FreeTierAdminApproval[]
-  signedLinks       FreeTierSignedLink[]
-  emailLogs         FreeTierEmailLog[]
+  id                               String                     @id @default(cuid())
+  createdAt                        DateTime                   @default(now()) @db.Timestamptz(6)
+  updatedAt                        DateTime                   @default(now()) @updatedAt @db.Timestamptz(6)
+  status                           FreeTierApplicationStatus  @default(LEAD)
+  name                             String
+  email                            String                     @unique
+  schoolName                       String
+  location                         String
+  starterClassName                 String?                    @db.VarChar(100)
+  starterClassGrade                String?                    @db.VarChar(5)
+  gradeLevel                       String
+  releaseEmailCopyVersion          String?                    @db.VarChar(40)
+  tags                             String[]                   @default([])
+  acquisitionTokenId               String?
+  acquisitionToken                 AcquisitionToken?          @relation(fields: [acquisitionTokenId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  userId                           String?
+  organizationId                   String?
+  releasedAt                       DateTime?                  @db.Timestamptz(6)
+  notes                            String?
+  teacherPersonalNote              String?
+  adminRedirectCount               Int                        @default(0)
+  lockedPreviewApprovalToastSeenAt DateTime?                  @db.Timestamptz(6)
+  approvalDecisions                FreeTierApprovalDecision[]
+  adminApprovals                   FreeTierAdminApproval[]
+  signedLinks                      FreeTierSignedLink[]
+  emailLogs                        FreeTierEmailLog[]
 
   @@index([userId])
   @@index([organizationId])
@@ -67,14 +67,14 @@ enum FreeTierSignedLinkPurpose {
 }
 
 model FreeTierSignedLink {
-  id            String                    @id @default(cuid())
-  createdAt     DateTime                  @default(now()) @db.Timestamptz(6)
-  applicationId String
-  application   FreeTierApplication       @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  purpose       FreeTierSignedLinkPurpose
-  tokenHash     String                    @unique
-  expiresAt     DateTime                  @db.Timestamptz(6)
-  usedAt        DateTime?                 @db.Timestamptz(6)
+  id             String                    @id @default(cuid())
+  createdAt      DateTime                  @default(now()) @db.Timestamptz(6)
+  applicationId  String
+  application    FreeTierApplication       @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  purpose        FreeTierSignedLinkPurpose
+  tokenHash      String                    @unique
+  expiresAt      DateTime                  @db.Timestamptz(6)
+  usedAt         DateTime?                 @db.Timestamptz(6)
   adminApprovals FreeTierAdminApproval[]
 
   @@index([applicationId])
@@ -101,21 +101,21 @@ model FreeTierAdminApproval {
   personalNote         String?
 
   // Cadence belongs to the current administrator; forwarding starts a new series.
-  firstSentAt          DateTime? @db.Timestamptz(6)
-  reminderCount        Int       @default(0)
-  lastReminderAt       DateTime? @db.Timestamptz(6)
-  lastReminderSource   String?
-  nextAutoReminderAt   DateTime? @db.Timestamptz(6)
-  autoRemindersStopped Boolean   @default(false)
-  stopReason           String?
-  needsManualFollowUp  Boolean   @default(false)
-  teacherFollowUpCount Int       @default(0)
-  lastTeacherFollowUpAt DateTime? @db.Timestamptz(6)
-  nextTeacherFollowUpAt DateTime? @db.Timestamptz(6)
-  forwardedByRole      String?
+  firstSentAt           DateTime?                  @db.Timestamptz(6)
+  reminderCount         Int                        @default(0)
+  lastReminderAt        DateTime?                  @db.Timestamptz(6)
+  lastReminderSource    String?
+  nextAutoReminderAt    DateTime?                  @db.Timestamptz(6)
+  autoRemindersStopped  Boolean                    @default(false)
+  stopReason            String?
+  needsManualFollowUp   Boolean                    @default(false)
+  teacherFollowUpCount  Int                        @default(0)
+  lastTeacherFollowUpAt DateTime?                  @db.Timestamptz(6)
+  nextTeacherFollowUpAt DateTime?                  @db.Timestamptz(6)
+  forwardedByRole       String?
   /// Optional admin deny note; Yawp! team only — never shown to teachers or in email.
-  denyReason           String?
-  deliveries           FreeTierApprovalDelivery[]
+  denyReason            String?
+  deliveries            FreeTierApprovalDelivery[]
 
   @@index([applicationId, createdAt(sort: Desc)])
 }
@@ -124,25 +124,25 @@ model FreeTierAdminApproval {
 // DELIVERING is committed before contacting the provider; uncertain attempts
 // require reconciliation, never an automatic re-send.
 model FreeTierApprovalDelivery {
-  id            String @id @default(cuid())
-  createdAt     DateTime @default(now()) @db.Timestamptz(6)
-  approvalId    String
-  approval      FreeTierAdminApproval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
-  kind          String
-  sequence      Int
-  source        String?
-  actorEmail    String?
-  idempotencyKey String? @unique
-  state         String @default("QUEUED")
-  availableAt   DateTime @db.Timestamptz(6)
-  attemptedAt   DateTime? @db.Timestamptz(6)
-  sentAt        DateTime? @db.Timestamptz(6)
+  id                         String                @id @default(cuid())
+  createdAt                  DateTime              @default(now()) @db.Timestamptz(6)
+  approvalId                 String
+  approval                   FreeTierAdminApproval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  kind                       String
+  sequence                   Int
+  source                     String?
+  actorEmail                 String?
+  idempotencyKey             String?               @unique
+  state                      String                @default("QUEUED")
+  availableAt                DateTime              @db.Timestamptz(6)
+  attemptedAt                DateTime?             @db.Timestamptz(6)
+  sentAt                     DateTime?             @db.Timestamptz(6)
   // Immutable acceptance result for I1 idempotency replays.
-  acceptedReminderCount Int?
-  acceptedNextAutoReminderAt DateTime? @db.Timestamptz(6)
-  attempts      Int @default(0)
-  payload       String
-  error         String?
+  acceptedReminderCount      Int?
+  acceptedNextAutoReminderAt DateTime?             @db.Timestamptz(6)
+  attempts                   Int                   @default(0)
+  payload                    String
+  error                      String?
 
   @@unique([approvalId, kind, sequence])
   @@index([state, availableAt])
@@ -163,35 +163,35 @@ model FreeTierEmailLog {
 }
 
 model AcquisitionToken {
-  id             String    @id @default(cuid())
-  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
-  tokenHash      String    @unique
+  id                   String                 @id @default(cuid())
+  createdAt            DateTime               @default(now()) @db.Timestamptz(6)
+  tokenHash            String                 @unique
   /// Short URL-safe code for /free?t=…; legacy rows may be null (lookup by hash only).
-  code           String?   @unique
-  label          String
-  sourceName     String?
-  eventLocation  String?
-  eventDate      DateTime? @db.Timestamptz(6)
-  notes          String?
-  bypassWaitlist Boolean   @default(false)
-  maxUses        Int?
-  uses           Int       @default(0)
-  scanCount      Int       @default(0)
-  expiresAt      DateTime? @db.Timestamptz(6)
-  disabledAt     DateTime? @db.Timestamptz(6)
-  createdBy      String?
-  createIdempotencyKey String? @unique
-  applications   FreeTierApplication[]
-  scans          AcquisitionTokenScan[]
+  code                 String?                @unique
+  label                String
+  sourceName           String?
+  eventLocation        String?
+  eventDate            DateTime?              @db.Timestamptz(6)
+  notes                String?
+  bypassWaitlist       Boolean                @default(false)
+  maxUses              Int?
+  uses                 Int                    @default(0)
+  scanCount            Int                    @default(0)
+  expiresAt            DateTime?              @db.Timestamptz(6)
+  disabledAt           DateTime?              @db.Timestamptz(6)
+  createdBy            String?
+  createIdempotencyKey String?                @unique
+  applications         FreeTierApplication[]
+  scans                AcquisitionTokenScan[]
 
   @@index([expiresAt])
 }
 
 model AcquisitionTokenScan {
-  id              String           @id @default(cuid())
-  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
-  tokenId         String
-  token           AcquisitionToken @relation(fields: [tokenId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  id               String           @id @default(cuid())
+  createdAt        DateTime         @default(now()) @db.Timestamptz(6)
+  tokenId          String
+  token            AcquisitionToken @relation(fields: [tokenId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   /// Hash of the browser dedupe cookie (no raw cookie stored).
   dedupeCookieHash String
   /// Coarse user agent prefix for debugging; not used for identity.
@@ -211,15 +211,15 @@ enum FreeTierApprovalDecisionType {
 }
 
 model FreeTierApprovalDecision {
-  id              String                        @id @default(cuid())
-  createdAt       DateTime                      @default(now()) @db.Timestamptz(6)
-  applicationId   String
-  application     FreeTierApplication           @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  decision        FreeTierApprovalDecisionType
+  id             String                       @id @default(cuid())
+  createdAt      DateTime                     @default(now()) @db.Timestamptz(6)
+  applicationId  String
+  application    FreeTierApplication          @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  decision       FreeTierApprovalDecisionType
   /// Required for REJECTED; validated in application code.
-  reason          String?
+  reason         String?
   /// Internal operator's email address (validated as an email in application code).
-  decidedByEmail  String
+  decidedByEmail String
 
   @@index([applicationId, createdAt(sort: Desc)])
 }
@@ -263,7 +263,7 @@ enum DocumentArtifactKind {
 }
 
 model Class {
-  studentHandles ClassStudentHandle[]
+  studentHandles                  ClassStudentHandle[]
   id                              String                           @id @default(cuid())
   createdAt                       DateTime                         @default(now()) @db.Timestamptz(6)
   updatedAt                       DateTime                         @default(now()) @db.Timestamptz(6)
@@ -298,19 +298,19 @@ model Class {
 /// written elsewhere and pasted in, which is what makes them movable between
 /// environments — the JSON is the transfer format.
 model Rubric {
-  id              String           @id @default(cuid())
-  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt       DateTime         @default(now()) @updatedAt @db.Timestamptz(6)
+  id                String           @id @default(cuid())
+  createdAt         DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime         @default(now()) @updatedAt @db.Timestamptz(6)
   /// Stable identifier used to match the same rubric across environments.
-  name            String           @unique
+  name              String           @unique
   /// What an admin sees in the picker.
-  title           String
-  schemaJson      Json
-  assignmentTypes AssignmentType[]
+  title             String
+  schemaJson        Json
+  assignmentTypes   AssignmentType[]
   currentRevisionId String?
-  currentRevision RubricRevision? @relation("CurrentRubricRevision", fields: [currentRevisionId], references: [id], onDelete: Restrict)
+  currentRevision   RubricRevision?  @relation("CurrentRubricRevision", fields: [currentRevisionId], references: [id], onDelete: Restrict)
   /// When set, the rubric is hidden from the admin picker and excluded from seed repair.
-  archivedAt      DateTime? @db.Timestamptz(6)
+  archivedAt        DateTime?        @db.Timestamptz(6)
 
   @@index([title])
   @@index([archivedAt])
@@ -351,7 +351,7 @@ model AssignmentType {
   /// Opt-in for student-uploaded figures (charts, graphs, logos) in the
   /// document editor. Defaults off, so every assignment type that exists today
   /// keeps the toolbar it has today.
-  allowsImageUploads                 Boolean                       @default(false)
+  allowsImageUploads                 Boolean                                @default(false)
   image                              AssignmentTypeImage?
   organizationAssignments            OrganizationAssignmentType[]
   schoolAssignments                  SchoolAssignmentType[]
@@ -498,8 +498,8 @@ model AssignmentTypeEvaluationResult {
 }
 
 model Assignment {
-  rubricRevisionId String?
-  rubricRevision RubricRevision? @relation(fields: [rubricRevisionId], references: [id], onDelete: Restrict)
+  rubricRevisionId                String?
+  rubricRevision                  RubricRevision?   @relation(fields: [rubricRevisionId], references: [id], onDelete: Restrict)
   id                              String            @id @default(cuid())
   createdAt                       DateTime          @default(now()) @db.Timestamptz(6)
   updatedAt                       DateTime          @default(now()) @db.Timestamptz(6)
@@ -554,22 +554,21 @@ model Assignment {
 }
 
 model ClassAssignment {
-  id             String                  @id @default(cuid())
-  createdAt      DateTime                @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime                @default(now()) @db.Timestamptz(6)
+  id             String                   @id @default(cuid())
+  createdAt      DateTime                 @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime                 @default(now()) @db.Timestamptz(6)
   assignmentId   String
-  assignment     Assignment              @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignment     Assignment               @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   classId        String
-  class          Class                   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  class          Class                    @relation(fields: [classId], references: [id], onDelete: Cascade)
   /// When set in the future, students do not see this assignment yet.
-  postAt         DateTime?               @db.Timestamptz(6)
+  postAt         DateTime?                @db.Timestamptz(6)
   /// Optional due date for this class's deployment of the assignment.
-  dueAt          DateTime?               @db.Timestamptz(6)
+  dueAt          DateTime?                @db.Timestamptz(6)
   documents      Document[]
   insight        ClassAssignmentInsight?
   documentGroups DocumentGroup[]
-  lessonPlans  LessonPlanConversation[]
-
+  lessonPlans    LessonPlanConversation[]
 
   @@unique([assignmentId, classId])
   @@index([classId, createdAt(sort: Desc)])
@@ -1297,52 +1296,52 @@ model DocumentWriteJournal {
 }
 
 model Organization {
-  id                            String                       @id @default(cuid())
-  createdAt                     DateTime                     @default(now()) @db.Timestamptz(6)
-  updatedAt                     DateTime                     @default(now()) @db.Timestamptz(6)
-  name                          String
+  id                                String                             @id @default(cuid())
+  createdAt                         DateTime                           @default(now()) @db.Timestamptz(6)
+  updatedAt                         DateTime                           @default(now()) @db.Timestamptz(6)
+  name                              String
   /// Free-tier rollout primitive. Defaults to SCHOOL for all existing orgs.
-  plan                          OrganizationPlan             @default(SCHOOL)
-  planActivatedAt               DateTime?                    @db.Timestamptz(6)
-  planExpiresAt                 DateTime?                    @db.Timestamptz(6)
-  accessExpiresAt               DateTime?                    @db.Timestamptz(6)
-  numOfStudentSeats             Int                          @default(10)
-  numOfTeacherSeats             Int                          @default(10)
-  reporterEnabled               Boolean                      @default(false)
-  classInsightsEnabled          Boolean                      @default(false)
-  writingPracticeEnabled        Boolean                      @default(false)
-  submissionActivityEnabled     Boolean                      @default(false)
+  plan                              OrganizationPlan                   @default(SCHOOL)
+  planActivatedAt                   DateTime?                          @db.Timestamptz(6)
+  planExpiresAt                     DateTime?                          @db.Timestamptz(6)
+  accessExpiresAt                   DateTime?                          @db.Timestamptz(6)
+  numOfStudentSeats                 Int                                @default(10)
+  numOfTeacherSeats                 Int                                @default(10)
+  reporterEnabled                   Boolean                            @default(false)
+  classInsightsEnabled              Boolean                            @default(false)
+  writingPracticeEnabled            Boolean                            @default(false)
+  submissionActivityEnabled         Boolean                            @default(false)
   /// Rollout gate for AP History features (per school/organization)
-  apHistoryEnabled              Boolean                      @default(false)
+  apHistoryEnabled                  Boolean                            @default(false)
   /// Rollout gate for the student split-screen revision flow
   /// (/app/revise/:submissionId). Off keeps the legacy
   /// "Revise Essay" -> document editor path.
-  revisionFlowEnabled           Boolean                      @default(false)
+  revisionFlowEnabled               Boolean                            @default(false)
   /// Rollout gate for collaborative drafts: may this organization use the
   /// feature at all. Distinct from Assignment.collaborationEnabled, which is
   /// the teacher's per-assignment toggle.
-  collaborativeDraftsEnabled    Boolean                      @default(false)
+  collaborativeDraftsEnabled        Boolean                            @default(false)
   /// Second gate, for the other road to a shared document: may students start
   /// their own shared draft and invite classmates. Separate from the gate above
   /// on purpose -- a school may want teacher-assigned group work without
   /// students forming their own groups.
-  studentDocumentSharingEnabled Boolean                      @default(false)
-  previewSeatCode               String?                      @unique
-  memberships                   OrgMembership[]
-  invitations                   Invitation[]
-  schools                       School[]
-  assignmentTypes               AssignmentType[]
+  studentDocumentSharingEnabled     Boolean                            @default(false)
+  previewSeatCode                   String?                            @unique
+  memberships                       OrgMembership[]
+  invitations                       Invitation[]
+  schools                           School[]
+  assignmentTypes                   AssignmentType[]
   freeClassroomAssignmentKindUsages FreeClassroomAssignmentKindUsage[]
-  assignmentTypeAssignments     OrganizationAssignmentType[]
-  reporterConversations         ReporterConversation[]
-  lessonPlanConversations    LessonPlanConversation[]
-  lessonPlanUnits            LessonPlanUnit[]
-  lessonPlanTemplates        LessonPlanTemplate[]
-  lessonPlanCarryOvers       LessonPlanCarryOver[]
-  reporterGrowthPlans           ReporterGrowthPlan[]
-  aiRequestReservations         AiRequestReservation[]
-  submissionActivities          SubmissionActivity[]
-  studentLicenses               StudentLicense[]
+  assignmentTypeAssignments         OrganizationAssignmentType[]
+  reporterConversations             ReporterConversation[]
+  lessonPlanConversations           LessonPlanConversation[]
+  lessonPlanUnits                   LessonPlanUnit[]
+  lessonPlanTemplates               LessonPlanTemplate[]
+  lessonPlanCarryOvers              LessonPlanCarryOver[]
+  reporterGrowthPlans               ReporterGrowthPlan[]
+  aiRequestReservations             AiRequestReservation[]
+  submissionActivities              SubmissionActivity[]
+  studentLicenses                   StudentLicense[]
 }
 
 model OrganizationAssignmentType {
@@ -1358,10 +1357,10 @@ model OrganizationAssignmentType {
 
 /// Lifetime assignment-kind consumption for FREE_CLASSROOM orgs. Never decremented.
 model FreeClassroomAssignmentKindUsage {
-  organizationId         String
-  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  kind                   String
-  lifetimeCreatedCount   Int          @default(0)
+  organizationId       String
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  kind                 String
+  lifetimeCreatedCount Int          @default(0)
 
   @@id([organizationId, kind])
 }
@@ -1398,10 +1397,10 @@ model OrgMembership {
   assignmentTypeAssignments         TeacherAssignmentType[]
   writingPracticeAssignmentsCreated WritingPracticeAssignment[]    @relation("WritingPracticeAssignmentCreator")
   reporterConversations             ReporterConversation[]
-  lessonPlanConversations       LessonPlanConversation[]
-  lessonPlanUnits               LessonPlanUnit[]
-  lessonPlanTemplates           LessonPlanTemplate[]
-  lessonPlanCarryOvers          LessonPlanCarryOver[]
+  lessonPlanConversations           LessonPlanConversation[]
+  lessonPlanUnits                   LessonPlanUnit[]
+  lessonPlanTemplates               LessonPlanTemplate[]
+  lessonPlanCarryOvers              LessonPlanCarryOver[]
   reporterGrowthPlansOwned          ReporterGrowthPlan[]           @relation("ReporterGrowthPlanOwner")
   reporterGrowthPlansAsStudent      ReporterGrowthPlan[]           @relation("ReporterGrowthPlanStudent")
   aiRequestReservations             AiRequestReservation[]
@@ -1418,8 +1417,8 @@ model OrgMembership {
   assignmentModuleSessions         AssignmentModuleSession[]
   documentGroupMemberGradesGiven   DocumentGroupMemberGrade[] @relation("DocumentGroupMemberGradedBy")
 
-  writingPracticeAttempts           WritingPracticeAttempt[]    @relation("WritingPracticeAttemptStudent")
-  writingPracticePromptSets         WritingPracticePromptSet[]  @relation("WritingPracticePromptSetStudent")
+  writingPracticeAttempts   WritingPracticeAttempt[]   @relation("WritingPracticeAttemptStudent")
+  writingPracticePromptSets WritingPracticePromptSet[] @relation("WritingPracticePromptSetStudent")
 
   @@unique([userId, organizationId])
   @@unique([id, organizationId])
@@ -1534,9 +1533,74 @@ model LessonPlanUnit {
   organizationId String
   organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   conversations  LessonPlanConversation[]
+  /// The library (Oct 24 handoff, Part 2): the course tab it is under, its
+  /// group (null: on its own), its place in the course, and what it is.
+  courseId       String?
+  course         LessonPlanCourse?        @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  groupId        String?
+  group          LessonPlanUnitGroup?     @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  position       Int?
+  /// book | texts | poetry | writing | language | skills. Null: texts.
+  kind           String?
 
   @@index([membershipId, updatedAt(sort: Desc)])
   @@index([organizationId])
+  @@index([courseId])
+}
+
+/// One per assignment made from a lesson piece, keyed by the reply and block
+/// it came from, so the chat and the stack read the same record (Oct 24
+/// handoff, task 1).
+model LessonPlanAssignmentLink {
+  id              String                 @id @default(cuid())
+  createdAt       DateTime               @default(now()) @db.Timestamptz(6)
+  conversationId  String
+  conversation    LessonPlanConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sourceMessageId String
+  blockKey        String
+  yawpHref        String
+  /// chat | stack
+  createdFrom     String
+
+  @@unique([conversationId, sourceMessageId, blockKey], map: "LessonPlanAssignmentLink_piece_key")
+}
+
+/// A teacher's Google Drive permission, drive.file only (Oct 24 handoff,
+/// task 3). The refresh token is encrypted.
+model GoogleDriveGrant {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  userId       String   @unique
+  refreshToken String
+  scope        String
+}
+
+/// A course on the library home: one tab (Oct 24 handoff, Part 2).
+model LessonPlanCourse {
+  id           String                @id @default(cuid())
+  createdAt    DateTime              @default(now()) @db.Timestamptz(6)
+  membershipId String
+  name         String
+  position     Int                   @default(0)
+  units        LessonPlanUnit[]
+  groups       LessonPlanUnitGroup[]
+
+  @@index([membershipId])
+}
+
+/// A group of units inside a course: an era, a movement, a theme. Never nested.
+model LessonPlanUnitGroup {
+  id        String           @id @default(cuid())
+  createdAt DateTime         @default(now()) @db.Timestamptz(6)
+  courseId  String
+  course    LessonPlanCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title     String
+  subtitle  String?
+  position  Int              @default(0)
+  units     LessonPlanUnit[]
+
+  @@index([courseId])
 }
 
 /// A YAWP! Lesson Planner chat session. Owned by a teacher (OrgMembership) and
@@ -1548,52 +1612,63 @@ model LessonPlanUnit {
 /// part it is. A null `unitDay` on a unit-linked session means the map itself,
 /// and a number means that day's lesson.
 model LessonPlanConversation {
-  id                      String              @id @default(cuid())
-  createdAt               DateTime            @default(now()) @db.Timestamptz(6)
-  updatedAt               DateTime            @default(now()) @updatedAt @db.Timestamptz(6)
-  deletedAt               DateTime?           @db.Timestamptz(6)
+  id                      String                     @id @default(cuid())
+  createdAt               DateTime                   @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime                   @default(now()) @updatedAt @db.Timestamptz(6)
+  deletedAt               DateTime?                  @db.Timestamptz(6)
   /// Set when the teacher stars the lesson as worth finding again. Starring is
   /// a decision they make, separate from keeping a reply in the packet.
   /// Left from starring, which publishing replaced. Unread — see the
   /// 20261008000800_add_lesson_published migration.
-  starredAt               DateTime?           @db.Timestamptz(6)
+  starredAt               DateTime?                  @db.Timestamptz(6)
   /// Set when the teacher publishes this lesson to their library. Null is a
   /// draft, which is where every lesson starts.
-  publishedAt             DateTime?           @db.Timestamptz(6)
-  title                   String              @default("New lesson")
+  publishedAt             DateTime?                  @db.Timestamptz(6)
+  title                   String                     @default("New lesson")
   /// The name the teacher gave the printable packet; falls back to `title`.
   packetTitle             String?
   membershipId            String
-  membership              OrgMembership       @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  membership              OrgMembership              @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
   organizationId          String
-  organization            Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization            Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   originClassAssignmentId String?
-  originClassAssignment   ClassAssignment?    @relation(fields: [originClassAssignmentId], references: [id], onDelete: SetNull)
+  originClassAssignment   ClassAssignment?           @relation(fields: [originClassAssignmentId], references: [id], onDelete: SetNull)
   /// The unit this session belongs to, if any. Deleting a unit leaves its
   /// lessons standing on their own rather than destroying a teacher's work.
   unitId                  String?
-  unit                    LessonPlanUnit?     @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  unit                    LessonPlanUnit?            @relation(fields: [unitId], references: [id], onDelete: SetNull)
   /// Which day of the unit this is. Null on a unit-linked session means the
   /// map; a number means that day's lesson.
   unitDay                 Int?
   /// How long this lesson is and which class it is for, from the teacher's
   /// own answer (Brian's run 2, B1), so the planner keeps every plan and
   /// deck inside the period on every turn. Null until the teacher says.
-  periodMinutes    Int?
-  lessonClassLabel String?
+  periodMinutes           Int?
+  lessonClassLabel        String?
   /// The concise lesson plan's summaries (Brian's run 2, D1), written once
   /// per stack and reused until the stack changes (planSummaryKey).
-  planSummary      Json?
-  planSummaryKey   String?
+  planSummary             Json?
+  planSummaryKey          String?
   /// When the teacher said "This lesson is set" (stack page redesign); null
   /// while it is still being worked on. Built-in time is setAt − createdAt.
-  setAt            DateTime? @db.Timestamptz(6)
+  setAt                   DateTime?                  @db.Timestamptz(6)
   /// The day this lesson will be taught. Null: not chosen yet.
-  lessonDate       DateTime? @db.Timestamptz(6)
+  lessonDate              DateTime?                  @db.Timestamptz(6)
+  /// The lesson's first name, kept once the teacher renames it, for "Started
+  /// as …" (Oct 24 handoff, task 8). Null: never renamed.
+  originalTitle           String?
+  /// The teacher's notes per step, { [stepId]: "Open with: …\nSay: …" },
+  /// shown and edited in the run of show (Oct 24 handoff, task 7).
+  teacherNotes            Json?
+  /// The stack as it was when the slides were filed or rebuilt (Kevin, Oct 25, note 9).
+  deckStackKey            String?
+  /// Steps moved to "If you have extra time", out of the timed lesson (note 8c).
+  extensionStepIds        Json?
   messages                LessonPlanMessage[]
   materials               LessonPlanMaterial[]
   shareLinks              LessonShareLink[]
   uploads                 LessonPlanUpload[]
+  assignmentLinks         LessonPlanAssignmentLink[]
 
   @@index([membershipId, updatedAt(sort: Desc)])
   @@index([membershipId, starredAt(sort: Desc)])
@@ -1625,6 +1700,8 @@ model LessonPlanMessage {
   /// Where the turn was asked: null is the planner chat, 'stack' a change
   /// asked for on the stack page (shown in the chat as one compact line).
   surface        String?
+  /// What the chat shows for a message a button sent as the teacher (Kevin, Oct 25, note 5).
+  displayText    String?
   conversationId String
   conversation   LessonPlanConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -1641,50 +1718,50 @@ model LessonPlanMessage {
 /// than a pointer into the message, so the saved material survives any later
 /// change to how replies are parsed, and can be renamed on its own.
 model LessonPlanMaterial {
-  id              String                 @id @default(cuid())
-  createdAt       DateTime               @default(now()) @db.Timestamptz(6)
-  conversationId  String
-  conversation    LessonPlanConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sourceMessageId String
+  id                String                 @id @default(cuid())
+  createdAt         DateTime               @default(now()) @db.Timestamptz(6)
+  conversationId    String
+  conversation      LessonPlanConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sourceMessageId   String
   /// The message's own createdAt, copied so the packet reads in lesson order
   /// rather than in the order the teacher happened to click.
-  sourceCreatedAt DateTime               @db.Timestamptz(6)
-  blockKey        String
+  sourceCreatedAt   DateTime               @db.Timestamptz(6)
+  blockKey          String
   /// What this artifact IS, rather than where it came from — "handout:diagnose
   /// -repair", "deck". One slot holds one current version, so a revision the
   /// teacher files takes the old one's place instead of piling up beside it.
-  slot            String
-  kind            String
-  title           String
-  audience        String
-  content         String
+  slot              String
+  kind              String
+  title             String
+  audience          String
+  content           String
   /// Set the moment a teacher hand-edits this material's content in the
   /// stack. While set, a revision the planner writes for the same slot no
   /// longer replaces it silently — editing forks the material out of the
   /// model's control, because a hand-edited handout is a decision, not a
   /// draft to be clobbered by the next thing the model happens to write.
-  editedAt        DateTime?              @db.Timestamptz(6)
+  editedAt          DateTime?              @db.Timestamptz(6)
   /// Where this piece sits in the teacher's stack once they have reordered it
   /// (Brian's run 2, A1). Null: ordered by the reply it came from.
-  position        Int?
+  position          Int?
   /// The library prompt a class starter or Daily Pages piece came from
   /// (FW-021, sf-ev-03), kept as data for its assignment sheet and never
   /// shown to the teacher (Brian's run 2, A6).
-  promptId        String?
+  promptId          String?
   /// The step's planned minutes (Brian's run 3, item 9). Null: read from the
   /// title, as before.
-  minutes         Int?
+  minutes           Int?
   /// What the moment is: class_starter, activity, context, read_aloud,
   /// daily_pages, thesis_essay, closing. Null: derived from kind and title.
-  stepType        String?
+  stepType          String?
   /// A label shown in the type chip, e.g. a Thesis Essay module's name.
-  label           String?
+  label             String?
   /// Null: derived (student-facing or writing steps have a handout).
-  hasHandout      Boolean?
+  hasHandout        Boolean?
   /// The Yawp! assignment created from this step ("Created in Yawp! · Open").
-  yawpAssignmentId String?
-  yawpHref         String?
-  yawpCreatedAt    DateTime? @db.Timestamptz(6)
+  yawpAssignmentId  String?
+  yawpHref          String?
+  yawpCreatedAt     DateTime?              @db.Timestamptz(6)
   /// This step rewritten for students, for a handout; studentVersionKey is
   /// the hash of the content it was written from.
   studentVersion    String?
@@ -1766,15 +1843,15 @@ model LessonShareLink {
 /// A document a teacher gave the lesson planner as source material (Oct 21).
 /// Only the text read out of it is kept, never the file.
 model LessonPlanUpload {
-  id             String                 @id @default(cuid())
-  createdAt      DateTime               @default(now()) @db.Timestamptz(6)
+  id             String                  @id @default(cuid())
+  createdAt      DateTime                @default(now()) @db.Timestamptz(6)
   name           String
   contentType    String
   byteSize       Int
   /// The text read out of the file, capped.
   text           String
   /// More text than was kept.
-  truncated      Boolean                @default(false)
+  truncated      Boolean                 @default(false)
   /// Null until the lesson's first message, which attaches it.
   conversationId String?
   conversation   LessonPlanConversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -1875,13 +1952,13 @@ model InternalImpersonationSession {
 
 // Immutable attribution snapshots survive membership/user removal.
 model InternalQaFixture {
-  id             String   @id
+  id             String    @id
   actorId        String
   organizationId String
   requestHash    String
   reason         String
   users          Json
-  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
   archivedAt     DateTime? @db.Timestamptz(6)
   archivedBy     String?
 
@@ -2261,23 +2338,23 @@ model LlmLog {
 
 /// Append-only AI usage and admission decision log. No prompts or bodies stored.
 model AiUsageDecisionLog {
-  id              String   @id @default(cuid())
-  createdAt       DateTime @default(now()) @db.Timestamptz(6)
-  route           String
-  feature         String?
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  route          String
+  feature        String?
   /// 'ALLOWED' | 'DENIED_USER' | 'DENIED_ORG' | 'DENIED_IP' | 'DENIED_GLOBAL' | 'DENIED_PAYLOAD' | 'DENIED_CONCURRENCY'
-  decision        String
-  membershipId    String?
-  organizationId  String?
-  classId         String?
+  decision       String
+  membershipId   String?
+  organizationId String?
+  classId        String?
   /// HMAC of the client IP with a server secret. Never store raw IPs.
-  ipHash          String?
-  requestId       String
-  units           Int
-  inputTokens     Int?
-  outputTokens    Int?
-  latencyMs       Int?
-  providerStatus  String?
+  ipHash         String?
+  requestId      String
+  units          Int
+  inputTokens    Int?
+  outputTokens   Int?
+  latencyMs      Int?
+  providerStatus String?
 
   @@index([organizationId, createdAt(sort: Desc)])
   @@index([route, createdAt(sort: Desc)])
@@ -2285,12 +2362,12 @@ model AiUsageDecisionLog {
 
 /// Token-bucket state for rate limiting. One row per (subject scope + policy key).
 model RateLimitBucket {
-  key           String   @id
-  tokens        Int      @default(0)
-  capacity      Int
-  refillPerMs   Float    @default(0) // tokens per millisecond
-  lastRefillAt  DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt     DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  key          String   @id
+  tokens       Int      @default(0)
+  capacity     Int
+  refillPerMs  Float    @default(0) // tokens per millisecond
+  lastRefillAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 }
 
 /// Append-only decision log for rate limit admissions/denials.
@@ -2304,6 +2381,7 @@ model RateLimitDecision {
   subjectKey        String
   retryAfterSeconds Int?
   metadata          Json?
+
   @@index([route, createdAt(sort: Desc)])
   @@index([scope, createdAt(sort: Desc)])
 }
@@ -2352,7 +2430,7 @@ model WritingPracticePromptSet {
 
 /// Durable receipt and provenance for trusted nonproduction scenario generation.
 model InternalScenarioReceipt {
-  jobId          String   @id
+  jobId          String    @id
   actorId        String
   targetId       String
   environment    String
@@ -2361,9 +2439,9 @@ model InternalScenarioReceipt {
   fingerprint    String
   resources      Json
   receipt        Json
-  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
   retiredAt      DateTime? @db.Timestamptz(6)
-  retiredByJobId  String?
+  retiredByJobId String?
 
   @@index([targetId, organizationId, retiredAt])
 }
@@ -2371,23 +2449,24 @@ model InternalScenarioReceipt {
 /// Immutable portable rubric history. Names, rather than environment-local rubric
 /// IDs, preserve provenance across local fixture resets and environment transfers.
 model RubricRevision {
-  id String @id
-  rubricName String
-  version Int
-  schemaJson Json
-  fingerprint String
-  requestId String @unique
-  requestHash String
-  sourceContentId String?
-  sourceVersion Int?
+  id                String                         @id
+  rubricName        String
+  version           Int
+  schemaJson        Json
+  fingerprint       String
+  requestId         String                         @unique
+  requestHash       String
+  sourceContentId   String?
+  sourceVersion     Int?
   sourceFingerprint String?
-  createdBy String
-  reason String
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  currentFor Rubric[] @relation("CurrentRubricRevision")
-  assignments Assignment[]
-  typeBaselines AssignmentTypeRubricBaseline[]
-  releases RubricRelease[]
+  createdBy         String
+  reason            String
+  createdAt         DateTime                       @default(now()) @db.Timestamptz(6)
+  currentFor        Rubric[]                       @relation("CurrentRubricRevision")
+  assignments       Assignment[]
+  typeBaselines     AssignmentTypeRubricBaseline[]
+  releases          RubricRelease[]
+
   @@unique([rubricName, version])
 }
 
@@ -2411,12 +2490,12 @@ model RubricRelease {
 
 /// Baseline mapping from an AssignmentType's current per-type rubric JSON to an immutable revision.
 model AssignmentTypeRubricBaseline {
-  assignmentTypeId String @id
+  assignmentTypeId String   @id
   rubricRevisionId String
   createdAt        DateTime @default(now()) @db.Timestamptz(6)
 
-  assignmentType   AssignmentType  @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
-  rubricRevision   RubricRevision  @relation(fields: [rubricRevisionId], references: [id], onDelete: Restrict)
+  assignmentType AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  rubricRevision RubricRevision @relation(fields: [rubricRevisionId], references: [id], onDelete: Restrict)
 
   @@index([rubricRevisionId])
 }
@@ -2492,11 +2571,11 @@ model SignonFlow {
 
 /// A provider subject is linked only after explicit consent and account proof.
 model SignonIdentity {
-  id        String @id @default(cuid())
+  id        String   @id @default(cuid())
   provider  String
   subject   String
   userId    String
-  user      User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
 
   @@unique([provider, subject])
@@ -2510,8 +2589,8 @@ model ClassStudentHandle {
   userId    String
   handle    String @db.VarChar(30)
   handleKey String @db.VarChar(90)
-  class     Class @relation(fields: [classId], references: [id], onDelete: Cascade)
-  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  class     Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([classId, handleKey])
   @@unique([classId, userId])

@@ -31,8 +31,6 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const title = formData.get('title')?.toString().trim();
   const description = formData.get('description')?.toString().trim() || null;
-  const tutorInstructions =
-    formData.get('tutorInstructions')?.toString().trim() || null;
 
   if (!title) {
     return dataResponse({ error: 'Title is required' }, { status: 400 });
@@ -75,7 +73,7 @@ export async function action({ request }: ActionFunctionArgs) {
     };
   }
   const assignmentType = await createAssignmentType(prisma, {
-    title, description, tutorInstructions,
+    title, description,
     ...(rubricSelection ? { rubricSelection } : {}),
     gradingConfig: gradingConfigData,
     ...(Object.keys(gradingConfigData).length > 0 || rubricSelection

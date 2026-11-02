@@ -137,6 +137,15 @@ export function freeTierLessonPlannerNavTease(
   return usage.reporterLocked || teachingLocked;
 }
 
+/** Show LP in the free-tier sidebar when the org flag is off (locked tease or approved shell). */
+export function freeTierLessonPlannerNavIncludeWhenFlagOff(
+  usage: FreeAccountUsage,
+  teachingLocked: boolean
+) {
+  if (freeTierLessonPlannerNavTease(usage, teachingLocked)) return true;
+  return Boolean(usage.monthly || usage.lessonPlannerMonthlyMetering);
+}
+
 export function renderFreeTierNavRow(ctx: NavRowContext): React.ReactNode | null {
   const {
     link,

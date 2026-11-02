@@ -128,7 +128,7 @@ export function SlideDeckCard({
             )}
           >
             {added ? <Check size={14} /> : <Plus size={14} />}
-            {added ? 'In the stack' : 'Add to stack'}
+            {added ? 'In your lesson' : 'Add to lesson'}
           </button>
         ) : null}
         {downloadHref ? (
@@ -162,7 +162,7 @@ export function SlideDeckCard({
           </Link>
         ) : (
           <span className="shrink-0 text-xs text-muted-foreground">
-            Add this to the stack to present it
+            Add this to the lesson to present it
           </span>
         )}
       </div>

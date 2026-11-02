@@ -137,4 +137,27 @@ describe('requireLessonPlannerAccess', () => {
       allowed: false,
     });
   });
+
+  test('allows approved FREE_CLASSROOM on local dev panel when lesson_planner flag is off', async () => {
+    flagValue('false');
+    lessonPlannerMeteringEnabled = true;
+    requireMembership.mockResolvedValue(
+      membership('TEACHER', 'org-free', 'FREE_CLASSROOM')
+    );
+    const savedNodeEnv = process.env.NODE_ENV;
+    const savedDb = process.env.DATABASE_URL;
+    process.env.NODE_ENV = 'development';
+    process.env.DATABASE_URL = 'postgresql://yawp:yawp@127.0.0.1:5432/yawp_local';
+    try {
+      const access = await getLessonPlannerAccess(request);
+      expect(access).toMatchObject({
+        isTeacher: true,
+        enabled: true,
+        allowed: true,
+      });
+    } finally {
+      process.env.NODE_ENV = savedNodeEnv;
+      process.env.DATABASE_URL = savedDb;
+    }
+  });
 });
