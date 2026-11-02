@@ -58,6 +58,60 @@ test.describe.serial('Student class detail', () => {
     }
   });
 
+  test('shows a new pill until the student starts the assignment', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      const { assignment, classAssignment } = await createDeployedAssignment({
+        prisma,
+        classId: e2eContext.classId,
+        assignmentTypeId: e2eContext.assignmentTypeId,
+        title: 'E2E New Pill Assignment',
+        prompt: 'Brand-new work.',
+      });
+
+      try {
+        await signIn(e2eContext.userEmail, STUDENT_PASSWORD);
+        await page.goto(`/app/my-classes/${e2eContext.classId}`);
+        await expect(page.getByTestId('student-class-detail')).toBeVisible();
+
+        const assignmentButton = page.getByRole('button', {
+          name: /E2E New Pill Assignment/i,
+        });
+        await expect(assignmentButton).toBeVisible();
+        await expect(
+          assignmentButton.getByTestId('student-assignment-new-pill')
+        ).toBeVisible();
+
+        await assignmentButton.click();
+        await page.waitForURL(/\/app\/documents\//, { timeout: 15000 });
+
+        await page.goto(`/app/my-classes/${e2eContext.classId}`);
+        await expect(
+          page.getByRole('button', { name: /E2E New Pill Assignment/i })
+        ).toBeVisible();
+        await expect(
+          page.getByTestId('student-assignment-new-pill')
+        ).toHaveCount(0);
+
+        const opened = await prisma.classAssignmentStudentFirstOpen.findFirst({
+          where: {
+            classAssignmentId: classAssignment.id,
+            membershipId: e2eContext.membershipId,
+          },
+        });
+        expect(opened).not.toBeNull();
+      } finally {
+        await prisma.assignment.delete({ where: { id: assignment.id } });
+      }
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
   test('a class the student is not enrolled in is refused', async ({
     page,
     signIn,
