@@ -132,6 +132,27 @@ test('monthly first steps order and two-of-four progress after class and assignm
   expect(studentsIdx).toBeGreaterThan(assignmentIdx);
   expect(fourthIdx).toBeGreaterThan(studentsIdx);
 });
+test('monthly checklist hides invite panel until assignment exists and prompts to create', () => {
+  const html = render(
+    <FreeAccountRail
+      usage={{
+        ...usage,
+        classCode: 'DEV-CLASS-101',
+        classId: 'class-1',
+        students: { ...count, used: 0 },
+        checklist: {
+          classReady: true,
+          assignmentCreated: false,
+          writingSubmitted: false,
+          graded: false,
+        },
+      }}
+    />
+  );
+  expect(html).toContain('Create your first assignment');
+  expect(html).toContain('data-testid="checklist-create-first-assignment"');
+  expect(html).not.toContain('Invite students');
+});
 test('Reporter pending lock copy matches approval gate', () => {
   const html = render(<FreeReporterLocked variant="pending" />);
   expect(html).toContain('Unlocks after approval');

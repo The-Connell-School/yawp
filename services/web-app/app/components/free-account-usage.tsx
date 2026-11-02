@@ -324,7 +324,6 @@ function FreeTierCarouselTile({
   assignmentTypeTitle,
   assignmentTypeKind,
   siteLicenseTileKey,
-  onCreate,
   tileDisabled,
 }: {
   label: string;
@@ -512,7 +511,7 @@ export function FreeAssignmentTiles({
               imageTitle={type.imageTitle}
               teachingLocked={teachingLocked}
               assignmentTypeId={type.id}
-              assignmentTypeTitle={type.title}
+              assignmentTypeTitle={type.title ?? undefined}
               assignmentTypeKind={type.kind}
               tileDisabled={
                 !teachingLocked &&
@@ -540,6 +539,8 @@ export function FreeAssignmentTiles({
   );
 }
 function FreeTierClassCodeChip({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+
   return (
     <div className="flex min-w-0 items-center gap-1.5 rounded-lg border bg-background py-1 pl-3 pr-1">
       <code className="min-w-0 flex-1 truncate font-mono text-sm font-bold tracking-wide text-foreground">
@@ -547,19 +548,40 @@ function FreeTierClassCodeChip({ code }: { code: string }) {
       </code>
       <button
         type="button"
-        aria-label="Copy class code"
+        aria-label={copied ? 'Class code copied' : 'Copy class code'}
         className="inline-flex size-[30px] shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-        onClick={() => void navigator.clipboard.writeText(code)}
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(code);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 2000);
+          } catch {
+            // Code remains selectable in the chip.
+          }
+        }}
       >
-        <Copy size={15} aria-hidden />
+        {copied ? (
+          <Check size={15} aria-hidden className="text-green-600" />
+        ) : (
+          <Copy size={15} aria-hidden />
+        )}
       </button>
     </div>
   );
 }
 
-export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
+export function FreeAccountChecklist({
+  usage,
+  classStarterAssignmentTypeId,
+}: {
+  usage: FreeAccountUsage;
+  classStarterAssignmentTypeId?: string | null;
+}) {
   const [invitationOpen, setInvitationOpen] = useState(false);
   const invitationTriggerRef = useRef<HTMLButtonElement>(null);
+  const createFirstAssignmentTo = classStarterAssignmentTypeId
+    ? `/app/assignment-types/${classStarterAssignmentTypeId}`
+    : '/app/assignments';
   const { locked: teachingLocked, state: teachingAccessState } =
     useTeachingAccess();
   const teachingAccessAdminName =
@@ -585,7 +607,7 @@ export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
         label: 'First assignment created',
         done: usage.checklist.assignmentCreated,
         hint: 'Welcome to Yawp! Class Starter',
-        to: '/app/assignments',
+        createTo: createFirstAssignmentTo,
       },
       {
         key: 'students',
@@ -617,15 +639,21 @@ export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
                 ? ('current' as const)
                 : ('upcoming' as const);
             const isStudentsStep = step.key === 'students';
+            const isAssignmentStep = step.key === 'assignment';
             const showStudentsPanel =
               isStudentsStep &&
+              state === 'current' &&
               usage.classCode &&
               !step.done &&
-              !teachingLocked;
+              !teachingLocked &&
+              usage.checklist.assignmentCreated;
 
             return {
               key: step.key,
-              label: step.label,
+              label:
+                isAssignmentStep && !step.done
+                  ? 'Create your first assignment'
+                  : step.label,
               state,
               content: (
                 <>
@@ -633,6 +661,19 @@ export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
                     <span className="mt-1 block text-[13px] font-normal text-muted-foreground">
                       {step.hint}
                     </span>
+                  ) : null}
+                  {isAssignmentStep && state === 'current' && !step.done ? (
+                    <Link
+                      to={
+                        'createTo' in step && step.createTo
+                          ? step.createTo
+                          : createFirstAssignmentTo
+                      }
+                      data-testid="checklist-create-first-assignment"
+                      className="mt-2 inline-flex h-9 items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
+                    >
+                      Create
+                    </Link>
                   ) : null}
                   {showStudentsPanel ? (
                     <div className="mt-2 space-y-2 rounded-lg border bg-secondary/40 p-3">
@@ -951,7 +992,13 @@ export function AdvocatePackEntry() {
   );
 }
 
-export function FreeAccountRail({ usage }: { usage: FreeAccountUsage }) {
+export function FreeAccountRail({
+  usage,
+  classStarterAssignmentTypeId,
+}: {
+  usage: FreeAccountUsage;
+  classStarterAssignmentTypeId?: string | null;
+}) {
   const { locked: teachingLocked } = useTeachingAccess();
   if (teachingLocked) {
     return (
@@ -965,7 +1012,12 @@ export function FreeAccountRail({ usage }: { usage: FreeAccountUsage }) {
   const showAdvocatePack = usage.monthly && usage.students.used > 0;
   return (
     <div className="space-y-5" data-testid="free-account-rail">
-      {showChecklist ? <FreeAccountChecklist usage={usage} /> : null}
+      {showChecklist ? (
+        <FreeAccountChecklist
+          usage={usage}
+          classStarterAssignmentTypeId={classStarterAssignmentTypeId}
+        />
+      ) : null}
       {showAdvocatePack ? <AdvocatePackEntry /> : null}
     </div>
   );

@@ -447,7 +447,10 @@ export default function AppRoute() {
     const freeTierHomeB2 = Boolean(freeUsage);
     const welcomeName = teacherFirstName(user.name ?? 'Teacher');
     const freeAccountRail = freeUsage ? (
-      <FreeAccountRail usage={freeUsage} />
+      <FreeAccountRail
+        usage={freeUsage}
+        classStarterAssignmentTypeId={classStarterType?.id}
+      />
     ) : null;
 
     const dashboardSections = (
