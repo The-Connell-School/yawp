@@ -14,6 +14,10 @@ import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import { parseStoredExitTicketConfig } from '~/domain/assignment-types/exit-ticket';
 import { buildExitTicketGradingContext } from '~/domain/assignment-types/exit-ticket-rubric';
+import {
+  buildGalsClaimsGradingContext,
+  GALS_CLAIMS_ASSIGNMENT_TYPE_KIND,
+} from '~/domain/assignment-types/gals-claims-rubric';
 import { computeIpHash } from '~/utils/ai-usage-log.server';
 import {
   computeWeightedBandPercentage,
@@ -963,14 +967,16 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   const assignmentPrompt = submission.document.assignment?.prompt?.trim();
-  // How to read the rubric for this ticket, plus whatever the teacher said the
-  // lesson covered. Null for every other assignment, leaving the payload
-  // exactly as it was.
-  const gradingContext = buildExitTicketGradingContext(
-    parseStoredExitTicketConfig(
-      submission.document.assignment?.exitTicketConfigJson
-    )
-  );
+  const assignmentTypeKind =
+    submission.document.assignmentType?.kind ?? null;
+  const gradingContext =
+    assignmentTypeKind === GALS_CLAIMS_ASSIGNMENT_TYPE_KIND
+      ? buildGalsClaimsGradingContext(submission.text)
+      : buildExitTicketGradingContext(
+          parseStoredExitTicketConfig(
+            submission.document.assignment?.exitTicketConfigJson
+          )
+        );
 
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   // llmRetry=fallback is the client half of the provider-failover handshake

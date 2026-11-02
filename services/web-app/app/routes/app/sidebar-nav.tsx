@@ -15,7 +15,7 @@ import {
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
 import type { useUser } from '~/hooks/useUser';
-import { TEACHER_LOUNGE_TEMPORARILY_DISABLED } from '~/domain/teacher-lounge/teacher-lounge-temporary-disable';
+import { isTeacherLoungeTemporarilyDisabledForUser } from '~/domain/teacher-lounge/teacher-lounge-temporary-disable';
 
 type User = ReturnType<typeof useUser>;
 
@@ -46,7 +46,8 @@ const reporterNavVisible = (user: User) =>
   user.selectedMembership?.organization?.plan !== 'FREE_CLASSROOM';
 const lessonPlannerNavVisible = (user: User) => teacher(user);
 const teacherLoungeNavVisible = (user: User) =>
-  teacher(user) && !TEACHER_LOUNGE_TEMPORARILY_DISABLED;
+  teacher(user) &&
+  !isTeacherLoungeTemporarilyDisabledForUser({ email: user.email });
 const writingPracticeEnabled = (user: User) => teacher(user) || student(user);
 
 const icons = {

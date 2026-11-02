@@ -425,6 +425,21 @@ describe('the default rubric config for a Class Starter assignment type', () => 
   });
 });
 
+describe('the default rubric config for a GALS Claims assignment type', () => {
+  test('falls back to the two-band GALS Claims rubric', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'gals_claims',
+    });
+
+    expect(config.source).toBe('gals-claims-default');
+    expect(config.rubric.categories.map((category) => category.key)).toEqual([
+      'my_claim',
+    ]);
+    expect(config.scoringScale).toMatchObject({ minScore: 0, maxScore: 1 });
+    expect(config.defaultLabel).toBe('GALS Claims');
+  });
+});
+
 describe('the default rubric config for a Daily Pages assignment type', () => {
   test('grades on the engagement rubric with proportional tiers', () => {
     const config = parseAssignmentTypeRubricConfig({
@@ -546,5 +561,8 @@ describe('the Exit Ticket default rubric', () => {
       parseAssignmentTypeRubricConfig({ assignmentTypeKind: 'class_starter' })
         .source
     ).toBe('class-starter-default');
+    expect(
+      parseAssignmentTypeRubricConfig({ assignmentTypeKind: 'gals_claims' }).source
+    ).toBe('gals-claims-default');
   });
 });

@@ -19,8 +19,12 @@ import {
 import { useMemo } from 'react';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  redirectIfTeacherLoungeTemporarilyDisabled();
   const userId = await requireUserId(request);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+  redirectIfTeacherLoungeTemporarilyDisabled({ email: user?.email ?? null });
   const profile = await requireMembership(request, userId);
 
   if (profile.role !== "TEACHER") {
