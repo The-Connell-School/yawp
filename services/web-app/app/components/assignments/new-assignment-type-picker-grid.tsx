@@ -2,13 +2,9 @@ import { Check } from 'lucide-react';
 import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
 import {
   assignmentTypeTileCardClassName,
-  assignmentTypeTileFooterClassName,
   assignmentTypeTileImageClassName,
   assignmentTypeTileImageWrapClassName,
-  assignmentTypeTileMetaClassName,
-  assignmentTypeTileMetaTestId,
-  assignmentTypeTileNameClassName,
-  assignmentTypeTileNameTestId,
+  DashboardAssignmentTileFooter,
 } from '~/components/assignment-type-tile-layout';
 import { SiteLicenseLockedAssignmentGridTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
@@ -76,26 +72,19 @@ export function NewAssignmentTypePickerGrid({
                   className={assignmentTypeTileImageClassName}
                 />
               </div>
-              <div
-                className={assignmentTypeTileFooterClassName(
-                  'text-sm font-medium'
-                )}
-              >
-                <span
-                  className={assignmentTypeTileNameClassName()}
-                  data-testid={assignmentTypeTileNameTestId}
-                >
-                  {type.label}
-                </span>
-                <span
-                  className={assignmentTypeTileMetaClassName()}
-                  data-testid={assignmentTypeTileMetaTestId}
-                >
-                  {type.meta}
-                </span>
-                {selected ? (
-                  <Check className="ml-auto h-4 w-4 shrink-0" aria-hidden />
-                ) : null}
+              <div className="w-full px-3 py-1.5 sm:py-2">
+                <DashboardAssignmentTileFooter
+                  label={type.label}
+                  meta={type.meta}
+                  metaClassName="whitespace-normal"
+                  trailing={
+                    selected ? (
+                      <Check className="h-4 w-4" aria-hidden />
+                    ) : (
+                      <span className="inline-block h-4 w-4 shrink-0" aria-hidden />
+                    )
+                  }
+                />
               </div>
             </button>
           );

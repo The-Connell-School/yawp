@@ -57,7 +57,7 @@ export const FIRST_ASSIGNMENT_DEFAULT_PROMPT =
 export const FIRST_ASSIGNMENT_PROMPT_CAPTION =
   'Prefilled for you. Keep it or make it your own.';
 
-const mutedFieldClassName = 'bg-muted';
+const mutedFieldClassName = '!bg-muted';
 
 async function assertFreeTierNewAssignmentRoute() {
   const { isFreeTierEnabled } =
