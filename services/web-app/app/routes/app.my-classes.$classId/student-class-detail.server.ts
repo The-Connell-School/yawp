@@ -1,7 +1,12 @@
 import { prisma } from '~/utils/db.server.js';
 import { studentVisibleClassAssignmentWhere } from '~/domain/collaboration/visibility';
+import {
+  isNewStudentClassAssignment,
+  openedClassAssignmentIdsForStudent,
+} from '~/domain/student-class-assignment-first-open.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { buildStudentClassDocumentsScope } from '~/utils/class-assignment-scope.server';
+import { groupStudentClassAssignmentsByType } from '~/utils/student-class-assignment-groups';
 
 /**
  * Read model for the student view of a single class.
@@ -79,7 +84,7 @@ export async function loadStudentClassDetail({
     teacherProfileId: teacher.id,
   }));
 
-  const [assignments, assignmentTypes, documents] = await Promise.all([
+  const [assignments, assignmentTypes, documents, firstOpens] = await Promise.all([
     prisma.classAssignment.findMany({
       where: {
         classId: klass.id,
@@ -106,7 +111,13 @@ export async function loadStudentClassDetail({
             title: true,
             prompt: true,
             collaborationEnabled: true,
-            assignmentType: { select: { id: true, title: true } },
+            assignmentType: {
+              select: {
+                id: true,
+                title: true,
+                image: { select: { id: true, altText: true } },
+              },
+            },
           },
         },
       },
@@ -131,7 +142,32 @@ export async function loadStudentClassDetail({
       include: studentDocumentInclude(membershipId),
       orderBy: { createdAt: 'desc' },
     }),
+    prisma.classAssignmentStudentFirstOpen.findMany({
+      where: {
+        membershipId,
+        classAssignment: { classId: klass.id },
+      },
+      select: { classAssignmentId: true },
+    }),
   ]);
+
+  const openedClassAssignmentIds = openedClassAssignmentIdsForStudent({
+    firstOpenClassAssignmentIds: firstOpens.map((row) => row.classAssignmentId),
+    documentClassAssignmentIds: documents.map((doc) => doc.classAssignmentId),
+  });
+
+  const assignmentsWithNew = assignments.map((classAssignment) => ({
+    ...classAssignment,
+    isNew: isNewStudentClassAssignment(
+      classAssignment.id,
+      openedClassAssignmentIds
+    ),
+  }));
+
+  const assignmentGroups = groupStudentClassAssignmentsByType(
+    assignmentsWithNew,
+    assignmentTypes.map(({ id, title }) => ({ id, title }))
+  );
 
   return {
     klass: {
@@ -148,7 +184,8 @@ export async function loadStudentClassDetail({
         .map((teacher) => teacher.user.name)
         .filter((name): name is string => Boolean(name)),
     },
-    assignments,
+    assignments: assignmentsWithNew,
+    assignmentGroups,
     assignmentTypes: assignmentTypes.map(({ id, title }) => ({ id, title })),
     documents,
   };
