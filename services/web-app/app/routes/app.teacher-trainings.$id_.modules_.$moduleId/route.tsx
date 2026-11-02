@@ -35,7 +35,6 @@ import { getTeacherTrainingProgressPercent } from '~/utils/teacher-training-prog
 import { getTeacherTrainingMediaAccessibilityResources } from '~/utils/teacher-training-media-accessibility';
 import { getTeacherTrainingPlaybackUrl } from '~/utils/teacher-training-video-link.server';
 import {
-  redirectIfTeacherLoungeTemporarilyDisabled,
   redirectIfTeacherLoungeTemporarilyDisabledForOrg,
 } from '~/domain/teacher-lounge/teacher-lounge-temporary-disable.server';
 
@@ -46,7 +45,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: { email: true },
   });
   const profile = await requireMembership(request, userId);
-  redirectIfTeacherLoungeTemporarilyDisabled({ email: user?.email ?? null });
   await redirectIfTeacherLoungeTemporarilyDisabledForOrg(
     profile.organization.id,
     { email: user?.email ?? null },
@@ -149,7 +147,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
     select: { email: true },
   });
   const profile = await requireMembership(request, userId);
-  redirectIfTeacherLoungeTemporarilyDisabled({ email: user?.email ?? null });
   await redirectIfTeacherLoungeTemporarilyDisabledForOrg(
     profile.organization.id,
     { email: user?.email ?? null },

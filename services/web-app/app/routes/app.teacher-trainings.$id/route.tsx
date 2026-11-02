@@ -10,6 +10,7 @@ import { Button } from '~/components/ui/button';
 import { CircularProgress } from '~/components/ui/circular-progress';
 import { prisma } from '~/utils/db.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { redirectIfTeacherLoungeTemporarilyDisabledForOrg } from '~/domain/teacher-lounge/teacher-lounge-temporary-disable.server';
 import { cn } from '~/utils/misc';
 import { isLoungeCommunityEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { LOUNGE_NAME } from '~/domain/lounge/launch';
@@ -21,12 +22,14 @@ import { useMemo } from 'react';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
+  const profile = await requireMembership(request, userId);
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { email: true },
   });
-  redirectIfTeacherLoungeTemporarilyDisabled({ email: user?.email ?? null });
-  const profile = await requireMembership(request, userId);
+  await redirectIfTeacherLoungeTemporarilyDisabledForOrg(profile.organization.id, {
+    email: user?.email ?? null,
+  });
 
   if (profile.role !== "TEACHER") {
     throw new Response('Teacher profile required', { status: 403 });
