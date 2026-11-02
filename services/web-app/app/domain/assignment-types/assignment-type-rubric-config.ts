@@ -40,6 +40,12 @@ import {
   THESIS_STATEMENT_RUBRIC,
   THESIS_STATEMENT_SCORING_SCALE,
 } from './thesis-statement-assignment-type';
+import {
+  GALS_CLAIMS_ASSIGNMENT_TYPE_KIND,
+  GALS_CLAIMS_PROMPT_CONFIG,
+  GALS_CLAIMS_RUBRIC,
+  GALS_CLAIMS_SCORING_SCALE,
+} from './gals-claims-rubric';
 
 export const MODULE_RUBRIC_RELATIONSHIPS = [
   'primary',
@@ -57,7 +63,8 @@ export type AssignmentTypeRubricConfigSource =
   | 'daily-pages-short-form-default'
   | 'daily-pages-engagement-default'
   | 'class-starter-default'
-  | 'exit-ticket-default';
+  | 'exit-ticket-default'
+  | 'gals-claims-default';
 
 export type AssignmentTypeRubricConfigInput = {
   /**
@@ -184,6 +191,18 @@ const classStarterConfig: AssignmentTypeRubricConfig = {
   defaultLabel: 'Class Starter engagement',
 };
 
+const galsClaimsConfig: AssignmentTypeRubricConfig = {
+  source: 'gals-claims-default',
+  scoringScale: GALS_CLAIMS_SCORING_SCALE,
+  rubric: GALS_CLAIMS_RUBRIC,
+  promptConfig: GALS_CLAIMS_PROMPT_CONFIG,
+  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+  calibrationNotes:
+    'GALS Claims (Brian 2026-11-02): grade only the sentence after "My claim:" on Excellent vs Needs Some Improvement.',
+  rubricIncomplete: false,
+  defaultLabel: 'GALS Claims',
+};
+
 const defaultRubricConfigsByKind: Record<string, AssignmentTypeRubricConfig> = {
   [DAILY_PAGES_ASSIGNMENT_TYPE_KIND]: dailyPagesEngagementConfig,
   [CLASS_STARTER_ASSIGNMENT_TYPE_KIND]: classStarterConfig,
@@ -200,6 +219,7 @@ const defaultRubricConfigsByKind: Record<string, AssignmentTypeRubricConfig> = {
   },
   [PREWRITING_ASSIGNMENT_TYPE_KIND]: prewritingConfig,
   [THESIS_STATEMENT_ASSIGNMENT_TYPE_KIND]: thesisStatementConfig,
+  [GALS_CLAIMS_ASSIGNMENT_TYPE_KIND]: galsClaimsConfig,
 };
 
 function getDefaultRubricConfig(
