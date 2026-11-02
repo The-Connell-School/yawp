@@ -77,11 +77,13 @@ function renderPanel({
   rubricConfig,
   assistantSuggestion,
   existingGrade,
+  gradingRubricSummary,
 }: {
   initialGradingAssistantStrictnessLevel?: string | null;
   rubricConfig?: Record<string, unknown>;
   assistantSuggestion?: Record<string, unknown> | null;
   existingGrade?: Record<string, unknown>;
+  gradingRubricSummary?: Record<string, unknown> | null;
 } = {}) {
   return render(
     <TeacherGradingPanel
@@ -109,6 +111,7 @@ function renderPanel({
       }
       rubricConfig={rubricConfig as any}
       assistantSuggestion={assistantSuggestion as any}
+      gradingRubricSummary={gradingRubricSummary as any}
     />
   );
 }
@@ -119,6 +122,20 @@ describe('TeacherGradingPanel', () => {
   afterEach(() => {
     cleanup(root);
     root = null;
+  });
+
+  it('shows View rubric when a grading rubric summary is available', async () => {
+    ({ root } = renderPanel({
+      gradingRubricSummary: {
+        sourceText: "Built-in rubric: Thesis",
+        scaleText: 'Weighted 1–5, 1–5',
+        categories: [],
+      },
+    }));
+
+    expect(
+      document.querySelector('[data-testid="grading-view-rubric"]')
+    ).not.toBeNull();
   });
 
   it('renders the strictness picker for a teacher', async () => {
