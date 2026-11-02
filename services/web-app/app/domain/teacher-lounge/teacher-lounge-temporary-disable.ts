@@ -10,6 +10,8 @@ export const TEACHER_LOUNGE_TEMPORARILY_DISABLED = true;
 /** Teachers who keep Lounge access while the global disable flag is on. */
 export const TEACHER_LOUNGE_DISABLE_ALLOWLIST_EMAILS = [
   'zestlan.simmons@mps.k12.al.us',
+  'eric@theconnellschool.com',
+  'christhewriter@mail.com',
 ] as const;
 
 export const TEACHER_LOUNGE_DISABLED_HOME = '/app';

@@ -33,4 +33,26 @@ describe('isTeacherLoungeTemporarilyDisabledForUser', () => {
       ).toBe(false);
     }
   });
+
+  test('allows Eric Miller (case-insensitive)', () => {
+    for (const email of [
+      TEACHER_LOUNGE_DISABLE_ALLOWLIST_EMAILS[1],
+      'Eric@TheConnellSchool.com',
+    ]) {
+      expect(
+        isTeacherLoungeTemporarilyDisabledForUser({ email })
+      ).toBe(false);
+    }
+  });
+
+  test('allows Chris Davis (case-insensitive)', () => {
+    for (const email of [
+      TEACHER_LOUNGE_DISABLE_ALLOWLIST_EMAILS[2],
+      'ChrisTheWriter@Mail.com',
+    ]) {
+      expect(
+        isTeacherLoungeTemporarilyDisabledForUser({ email })
+      ).toBe(false);
+    }
+  });
 });
