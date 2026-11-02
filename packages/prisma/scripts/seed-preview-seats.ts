@@ -27,6 +27,8 @@ import {
   ensureLessonPlannerEnabledForPreview,
 } from './local-dev/seed-lesson-planner-feature-flag';
 import { ensureFreeTierEnabledForPreview } from './local-dev/seed-free-tier-feature-flag';
+import { ensureLoungeCommunityEnabledForPreview } from './local-dev/seed-lounge-community-feature-flag';
+import { ensureLoungeLaunchContentForPreview } from './lounge-launch/preview';
 import { ensureDemoFeedbackEnabled } from './local-dev/seed-demo-feedback';
 import {
   seedPreviewTeacherNotesQa,
@@ -53,6 +55,19 @@ try {
   console.log(
     `Lesson Planner feature flags seed: ${JSON.stringify(lessonPlannerFlags)}`
   );
+  const loungeFlag = await ensureLoungeCommunityEnabledForPreview(prisma, databaseName);
+  console.log(`Teacher's Lounge community flag seed: ${JSON.stringify(loungeFlag)}`);
+  try {
+    const loungeLaunch = await ensureLoungeLaunchContentForPreview(
+      prisma,
+      databaseName
+    );
+    console.log(
+      `Teachers' Lounge launch content seed: ${JSON.stringify(loungeLaunch)}`
+    );
+  } catch (error) {
+    console.error("Teachers' Lounge launch content seed: failed (non-fatal)", error);
+  }
   const results = await ensurePreviewSeats(prisma, seats);
   const includeFreeClassroomFixture =
     process.env.PREVIEW_SLUG !== 'demo' &&

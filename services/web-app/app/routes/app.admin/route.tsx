@@ -18,6 +18,7 @@ import {
   Settings,
   FlaskConical,
   MessageSquare,
+  MessagesSquare,
 } from 'lucide-react';
 import { requireAdmin } from '~/utils/auth.server';
 import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
@@ -34,12 +35,12 @@ export const adminTabs = [
     icon: <Settings size={16} className="opacity-75 mr-1" />,
   },
   {
-    label: 'Organizations',
+    label: 'Organizations (read-only moved)',
     to: '/app/admin/organizations',
     icon: <User size={16} className="opacity-75 mr-1" />,
   },
   {
-    label: 'Assignment Types',
+    label: 'Assignment Types (moved)',
     to: '/app/admin/assignments',
     icon: <ClipboardList size={16} className="opacity-75 mr-1" />,
   },
@@ -52,6 +53,11 @@ export const adminTabs = [
     label: 'Grading Evaluations',
     to: '/app/admin/ai-evaluations',
     icon: <FlaskConical size={16} className="opacity-75 mr-1" />,
+  },
+  {
+    label: 'Lounge',
+    to: '/app/admin/lounge',
+    icon: <MessagesSquare size={16} className="opacity-75 mr-1" />,
   },
   {
     label: 'Audit',
