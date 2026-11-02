@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   EXIT_TICKET_ANSWER_TYPE_GUIDANCE,
+  EXIT_TICKET_FLEXIBLE_ANSWER_GUIDANCE,
   EXIT_TICKET_PROMPT_CONFIG,
   EXIT_TICKET_RUBRIC,
   EXIT_TICKET_SCORING_SCALE,
@@ -9,8 +10,17 @@ import {
 } from './exit-ticket-rubric';
 import {
   EXIT_TICKET_FOCUS_OPTIONS as EXIT_TICKET_FOCUS_OPTIONS_FOR_TEST,
+  exitTicketActivityOption as exitTicketActivityOptionForTest,
   exitTicketFocusOption,
+  parseExitTicketConfigInput,
+  type ExitTicketConfigInput,
 } from './exit-ticket';
+
+function parseExitTicketConfigInputForTest(input: ExitTicketConfigInput) {
+  const result = parseExitTicketConfigInput(input);
+  if (!result.success) throw new Error(result.message);
+  return result.config;
+}
 import {
   getCategoryScoreBounds,
   isBandScoredRubric,
@@ -243,5 +253,63 @@ describe('buildExitTicketGradingContext', () => {
       buildExitTicketGradingContext({ schemaVersion: 1, mode: 'basic' })
     ).toBeNull();
     expect(buildExitTicketGradingContext(null)).toBeNull();
+  });
+});
+
+describe('the grading context for a v3 ticket', () => {
+  const answerQuestion = parseExitTicketConfigInputForTest({
+    activity: 'answer-question',
+    promptText: 'Who is Allie, and why does Holden keep thinking about him?',
+    lessonMustMention: 'Holden’s younger brother, who died.',
+    graded: true,
+    gradingBasis: 'bands',
+  });
+
+  test('reads the activity’s criteria, not the legacy focus or answer type', () => {
+    const context = buildExitTicketGradingContext(answerQuestion)!;
+    expect(context).toContain(
+      exitTicketActivityOptionForTest('answer-question')!.gradingCriteria
+    );
+    expect(context).not.toContain(EXIT_TICKET_ANSWER_TYPE_GUIDANCE.subjective);
+    expect(context).not.toContain(EXIT_TICKET_ANSWER_TYPE_GUIDANCE.objective);
+    expect(context).not.toContain('What this ticket is checking for: explain a concept');
+  });
+
+  test('credits a right answer in other words or spelling', () => {
+    const context = buildExitTicketGradingContext(answerQuestion)!;
+    expect(context).toContain(EXIT_TICKET_FLEXIBLE_ANSWER_GUIDANCE);
+    expect(EXIT_TICKET_FLEXIBLE_ANSWER_GUIDANCE).toMatch(/Alley/);
+  });
+
+  test('calls the answer key what the form called it', () => {
+    const context = buildExitTicketGradingContext(answerQuestion)!;
+    expect(context).toContain(
+      '- Correct answer or key points: Holden’s younger brother, who died.'
+    );
+  });
+
+  test('a v3 reflection is read as a reflection, not a teacher-written custom question', () => {
+    const reflection = parseExitTicketConfigInputForTest({
+      activity: 'reflect',
+      promptText: 'What surprised you today?',
+    });
+    const context = buildExitTicketGradingContext(reflection)!;
+    expect(context).toContain(
+      exitTicketActivityOptionForTest('reflect')!.gradingCriteria
+    );
+    expect(context).not.toContain('wrote this reflection question themselves');
+    expect(context).not.toContain(EXIT_TICKET_FLEXIBLE_ANSWER_GUIDANCE);
+  });
+
+  test('a completion-graded check still says so', () => {
+    const completion = parseExitTicketConfigInputForTest({
+      activity: 'engage-text',
+      promptText: 'Find the volta.',
+      graded: true,
+      gradingBasis: 'completion',
+    });
+    expect(buildExitTicketGradingContext(completion)).toContain(
+      'The teacher is grading this for completion.'
+    );
   });
 });
