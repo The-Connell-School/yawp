@@ -8,13 +8,57 @@ const requireMembership = mock(async () => ({
   organization: { id: 'org-1', plan: 'FREE_CLASSROOM' as const },
 }));
 const isFreeTierEnabled = mock(async () => true);
-const userHasPendingFreeTierTeachingLock = mock(async () => true);
 const guardTeachingFormAction = mock<
   () => Promise<Awaited<ReturnType<typeof import('~/domain/free-tier/teaching-approval-required.server').guardTeachingFormAction>>>
 >(async () => null);
 const getAvailableAssignmentTypesForScopes = mock(async () => [
-  { id: 'type-1', title: 'Class Starter' },
+  {
+    id: 'type-class-starter',
+    title: 'Class Starter',
+    kind: 'class_starter',
+    image: null,
+    rubric: { name: 'Class Starter rubric' },
+  },
+  {
+    id: 'type-1',
+    title: 'Prewriting',
+    kind: 'prewriting',
+    image: null,
+    rubric: { name: 'Prewriting rubric' },
+  },
 ]);
+const loadSiteLicenseLockedAssignmentTiles = mock(async () => [
+  { key: 'thesis-essay', label: 'Thesis-Driven Essay', imageId: null },
+]);
+const readFreeAccountUsage = mock(async () => ({
+  classId: 'class-1',
+  unlimitedFreeAssignmentTiles: true,
+  assignments: [
+    {
+      kind: 'class_starter',
+      label: 'Class Starter',
+      remaining: 1,
+      total: 1,
+    },
+    {
+      kind: 'prewriting',
+      label: 'Prewriting',
+      remaining: 1,
+      total: 1,
+    },
+  ],
+  checklist: {
+    classReady: true,
+    assignmentCreated: false,
+    writingSubmitted: false,
+    graded: false,
+  },
+}));
+const createAssignmentDeployedToClasses = mock(async () => ({
+  assignment: { id: 'assignment-new' },
+  classIds: ['class-1'],
+}));
+const isAssignmentTypeAvailableForEveryScope = mock(async () => true);
 
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
@@ -23,14 +67,21 @@ mock.module('~/utils/auth.server', () => ({
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({
   isFreeTierEnabled,
 }));
-mock.module('~/domain/free-tier/locked-preview.server', () => ({
-  userHasPendingFreeTierTeachingLock,
-}));
 mock.module('~/domain/free-tier/teaching-approval-required.server', () => ({
   guardTeachingFormAction,
 }));
 mock.module('~/utils/assignment-type-access.server', () => ({
   getAvailableAssignmentTypesForScopes,
+  isAssignmentTypeAvailableForEveryScope,
+}));
+mock.module('~/domain/free-tier/site-license-locked-assignment-tiles.server', () => ({
+  loadSiteLicenseLockedAssignmentTiles,
+}));
+mock.module('~/domain/free-tier/inapp-usage.server', () => ({
+  readFreeAccountUsage,
+}));
+mock.module('~/utils/assignment-deployment.server', () => ({
+  createAssignmentDeployedToClasses,
 }));
 mock.module('~/utils/db.server', () => ({
   prisma: {
@@ -42,26 +93,41 @@ mock.module('~/utils/db.server', () => ({
           grade: '11',
           period: '1',
           title: null,
-          school: { name: 'Lincoln High' },
+          school: { name: 'Lincoln High', organizationId: 'org-1' },
         },
       ]),
+      findFirst: mock(async () => ({
+        id: 'class-1',
+        school: { id: 'school-1', organizationId: 'org-1' },
+      })),
+    },
+    assignmentType: {
+      findFirst: mock(async () => ({
+        id: 'type-class-starter',
+        kind: 'class_starter',
+        rubric: { name: 'Class Starter rubric' },
+      })),
     },
   },
 }));
 
-const { loader, action } = await import('./route');
+const { loader, action, FIRST_ASSIGNMENT_DEFAULT_PROMPT, FIRST_ASSIGNMENT_DEFAULT_TITLE } =
+  await import('./route');
 
 describe('app.assignments.new route gate', () => {
   afterEach(() => {
     requireUserId.mockClear();
     requireMembership.mockClear();
     isFreeTierEnabled.mockClear();
-    userHasPendingFreeTierTeachingLock.mockClear();
     guardTeachingFormAction.mockClear();
     getAvailableAssignmentTypesForScopes.mockClear();
+    loadSiteLicenseLockedAssignmentTiles.mockClear();
+    readFreeAccountUsage.mockClear();
+    createAssignmentDeployedToClasses.mockClear();
+    isAssignmentTypeAvailableForEveryScope.mockClear();
     isFreeTierEnabled.mockResolvedValue(true);
-    userHasPendingFreeTierTeachingLock.mockResolvedValue(true);
     guardTeachingFormAction.mockResolvedValue(null);
+    isAssignmentTypeAvailableForEveryScope.mockResolvedValue(true);
   });
 
   test('loader returns 404 when free-tier is off', async () => {
@@ -73,23 +139,37 @@ describe('app.assignments.new route gate', () => {
         context: {} as never,
       } as never)
     ).rejects.toMatchObject({ status: 404 });
-    expect(userHasPendingFreeTierTeachingLock).not.toHaveBeenCalled();
   });
 
-  test('loader returns 404 for an approved teacher', async () => {
-    userHasPendingFreeTierTeachingLock.mockResolvedValue(false);
-    await expect(
-      loader({
-        request: new Request('http://localhost/app/assignments/new'),
-        params: {},
-        context: {} as never,
-      } as never)
-    ).rejects.toMatchObject({ status: 404 });
+  test('loader succeeds for an approved free-tier teacher', async () => {
+    const result = await loader({
+      request: new Request('http://localhost/app/assignments/new'),
+      params: {},
+      context: {} as never,
+    } as never);
+    expect(result.selectableTypes.length).toBeGreaterThan(0);
+    expect(result.siteLicenseLockedAssignmentTiles).toHaveLength(1);
+  });
+
+  test('first-assignment query preselects Class Starter defaults', async () => {
+    const result = await loader({
+      request: new Request(
+        'http://localhost/app/assignments/new?first=1&assignmentTypeId=type-class-starter&classId=class-1'
+      ),
+      params: {},
+      context: {} as never,
+    } as never);
+    expect(result.isFirstAssignment).toBe(true);
+    expect(result.defaults.assignmentTypeId).toBe('type-class-starter');
+    expect(result.defaults.classId).toBe('class-1');
+    expect(result.defaults.title).toBe(FIRST_ASSIGNMENT_DEFAULT_TITLE);
+    expect(result.defaults.prompt).toBe(FIRST_ASSIGNMENT_DEFAULT_PROMPT);
   });
 
   test('action returns 404 when free-tier is off', async () => {
     isFreeTierEnabled.mockResolvedValue(false);
     const form = new FormData();
+    form.set('intent', 'create-assignment');
     form.set('title', 'Draft');
     await expect(
       action({
@@ -104,21 +184,41 @@ describe('app.assignments.new route gate', () => {
     expect(guardTeachingFormAction).not.toHaveBeenCalled();
   });
 
-  test('action returns 404 for an approved teacher', async () => {
-    userHasPendingFreeTierTeachingLock.mockResolvedValue(false);
+  test('action creates assignment for approved teacher', async () => {
     const form = new FormData();
-    form.set('title', 'Draft');
-    await expect(
-      action({
-        request: new Request('http://localhost/app/assignments/new', {
-          method: 'POST',
-          body: form,
+    form.set('intent', 'create-assignment');
+    form.set('assignmentTypeId', 'type-class-starter');
+    form.set('classId', 'class-1');
+    form.set('title', FIRST_ASSIGNMENT_DEFAULT_TITLE);
+    form.set('prompt', FIRST_ASSIGNMENT_DEFAULT_PROMPT);
+    form.set('submitForGrade', 'true');
+    form.set('gradingAssistantStrictnessLevel', 'beginner');
+    form.set('tutorEnabled', 'true');
+
+    const result = await action({
+      request: new Request('http://localhost/app/assignments/new', {
+        method: 'POST',
+        body: form,
+      }),
+      params: {},
+      context: {} as never,
+    } as never);
+
+    expect(result).toMatchObject({
+      status: 302,
+      headers: expect.objectContaining({
+        get: expect.any(Function),
+      }),
+    });
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classIds: ['class-1'],
+        data: expect.objectContaining({
+          assignmentTypeId: 'type-class-starter',
+          prompt: FIRST_ASSIGNMENT_DEFAULT_PROMPT,
         }),
-        params: {},
-        context: {} as never,
-      } as never)
-    ).rejects.toMatchObject({ status: 404 });
-    expect(guardTeachingFormAction).not.toHaveBeenCalled();
+      })
+    );
   });
 
   test('action returns inline approval_required for a pending teacher', async () => {
@@ -133,6 +233,7 @@ describe('app.assignments.new route gate', () => {
       )
     );
     const form = new FormData();
+    form.set('intent', 'create-assignment');
     form.set('title', 'Community Gardens');
     const result = await action({
       request: new Request('http://localhost/app/assignments/new', {
@@ -151,5 +252,6 @@ describe('app.assignments.new route gate', () => {
       },
     });
     expect(guardTeachingFormAction).toHaveBeenCalled();
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 });

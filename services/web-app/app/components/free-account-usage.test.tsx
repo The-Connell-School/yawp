@@ -147,10 +147,14 @@ test('monthly checklist hides invite panel until assignment exists and prompts t
           graded: false,
         },
       }}
+      classStarterAssignmentTypeId="type-class-starter"
     />
   );
   expect(html).toContain('Create your first assignment');
   expect(html).toContain('data-testid="checklist-create-first-assignment"');
+  expect(html).toContain('/app/assignments/new?first=1');
+  expect(html).toContain('assignmentTypeId=type-class-starter');
+  expect(html).toContain('classId=class-1');
   expect(html).not.toContain('Invite students');
 });
 test('Reporter pending lock copy matches approval gate', () => {

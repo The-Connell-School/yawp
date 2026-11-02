@@ -814,7 +814,11 @@ test('full-page assignment form shows inline approval alert and keeps field valu
   await provisionPendingClassroom(app.id, user.id!);
   await exploreLockedApp(page, user.email!);
   await page.goto('/app/assignments/new');
-  await page.locator('#assignmentTypeId').selectOption({ index: 1 });
+  await page
+    .getByTestId('new-assignment-type-grid')
+    .locator('button[type="button"]')
+    .nth(1)
+    .click();
   await page.getByLabel('Title').fill('Community Gardens — Prewriting');
   await page.getByLabel('Prompt').fill('Pick one community garden in your town.');
   await page

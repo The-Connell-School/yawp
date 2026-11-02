@@ -579,9 +579,16 @@ export function FreeAccountChecklist({
 }) {
   const [invitationOpen, setInvitationOpen] = useState(false);
   const invitationTriggerRef = useRef<HTMLButtonElement>(null);
-  const createFirstAssignmentTo = classStarterAssignmentTypeId
-    ? `/app/assignment-types/${classStarterAssignmentTypeId}`
-    : '/app/assignments';
+  const createFirstAssignmentTo = (() => {
+    const params = new URLSearchParams({ first: '1' });
+    if (classStarterAssignmentTypeId) {
+      params.set('assignmentTypeId', classStarterAssignmentTypeId);
+    }
+    if (usage.classId) {
+      params.set('classId', usage.classId);
+    }
+    return `/app/assignments/new?${params.toString()}`;
+  })();
   const { locked: teachingLocked, state: teachingAccessState } =
     useTeachingAccess();
   const teachingAccessAdminName =
