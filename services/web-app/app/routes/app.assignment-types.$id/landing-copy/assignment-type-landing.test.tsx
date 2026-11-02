@@ -174,6 +174,28 @@ describe('LandingSections', () => {
     expect(rows[7]!.querySelectorAll('a')).toHaveLength(0);
   });
 
+  it('lines the links up in the same two columns on every row', () => {
+    const root = render(
+      <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} />
+    );
+    const rows = [...root.querySelectorAll('[data-testid="course-lesson"]')];
+    for (const row of rows) {
+      // Every row has both columns, empty or not, so links never shift.
+      expect(row.querySelectorAll('[data-course-column="lesson-plan"]')).toHaveLength(1);
+      expect(row.querySelectorAll('[data-course-column="slide-deck"]')).toHaveLength(1);
+    }
+    const column = (row: Element, name: string) =>
+      [...row.querySelector(`[data-course-column="${name}"]`)!.querySelectorAll('a')].map(
+        (a) => a.textContent
+      );
+    // Body paragraphs' second deck sits under its first, in the deck column.
+    expect(column(rows[4]!, 'lesson-plan')).toEqual(['Lesson plan']);
+    expect(column(rows[4]!, 'slide-deck')).toEqual(['Slide deck', 'Supporting quotes']);
+    // Titling has no lesson plan, so its deck stays in the deck column.
+    expect(column(rows[6]!, 'lesson-plan')).toEqual([]);
+    expect(column(rows[6]!, 'slide-deck')).toEqual(['Slide deck']);
+  });
+
   it('lists the 5-Paragraph Essay steps from its modules', () => {
     const root = render(
       <LandingSections

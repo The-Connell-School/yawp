@@ -106,7 +106,7 @@ function ThesisEssayCourse({
             <li
               key={lesson.title}
               data-testid="course-lesson"
-              className="flex flex-col gap-1.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+              className="flex flex-col gap-1.5 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
             >
               <span className="flex items-baseline gap-3 text-base">
                 <span className="w-4 shrink-0 tabular-nums text-muted-foreground">
@@ -114,8 +114,11 @@ function ThesisEssayCourse({
                 </span>
                 <span data-lesson-title>{lesson.title}</span>
               </span>
-              {lesson.lessonPlan || lesson.decks.length ? (
-                <span className="flex flex-wrap gap-x-5 gap-y-1 pl-7 text-sm sm:pl-0">
+              {/* Two fixed-width columns on every row, empty or not, so each
+                  "Lesson plan" and each "Slide deck" starts at the same spot
+                  down the card. A lesson's second deck sits under its first. */}
+              <span className="flex shrink-0 gap-6 pl-7 text-sm sm:pl-0 sm:pt-0.5">
+                <span data-course-column="lesson-plan" className="flex w-28 flex-col">
                   {lesson.lessonPlan ? (
                     <a
                       href={lesson.lessonPlan.href}
@@ -128,6 +131,8 @@ function ThesisEssayCourse({
                       Lesson plan
                     </a>
                   ) : null}
+                </span>
+                <span data-course-column="slide-deck" className="flex w-40 flex-col gap-1.5">
                   {lesson.decks.map((deck) => (
                     <a
                       key={deck.href}
@@ -141,7 +146,7 @@ function ThesisEssayCourse({
                     </a>
                   ))}
                 </span>
-              ) : null}
+              </span>
             </li>
           ))}
         </ol>
