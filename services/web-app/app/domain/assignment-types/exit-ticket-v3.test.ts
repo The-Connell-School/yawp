@@ -32,9 +32,12 @@ function parse(input: ExitTicketConfigInput): ExitTicketConfig {
 
 describe('the v3 activities', () => {
   test('are four, in two groups, reflection first', () => {
-    expect(EXIT_TICKET_ACTIVITY_OPTIONS.map((option) => option.value)).toEqual(
-      ['reflect', 'explain-concept', 'answer-question', 'engage-text']
-    );
+    expect(EXIT_TICKET_ACTIVITY_OPTIONS.map((option) => option.value)).toEqual([
+      'reflect',
+      'explain-concept',
+      'answer-question',
+      'engage-text',
+    ]);
     expect(EXIT_TICKET_ACTIVITY_GROUPS.map((group) => group.kind)).toEqual([
       'reflection',
       'check',
@@ -49,14 +52,12 @@ describe('the v3 activities', () => {
   });
 
   test('are labelled for what the students do', () => {
-    expect(EXIT_TICKET_ACTIVITY_OPTIONS.map((option) => option.label)).toEqual(
-      [
-        'Have the students reflect or ask a question',
-        'Have the students explain a concept',
-        'Have the students answer a question',
-        'Have the students engage with a text or source',
-      ]
-    );
+    expect(EXIT_TICKET_ACTIVITY_OPTIONS.map((option) => option.label)).toEqual([
+      'Have the students reflect or ask a question',
+      'Have the students explain a concept',
+      'Have the students answer a question',
+      'Have the students engage with a text or source',
+    ]);
   });
 
   test('every activity has a description, placeholder and grading criteria', () => {
@@ -69,7 +70,9 @@ describe('the v3 activities', () => {
 
   test('"answer a question" is the teacher asking, not the student', () => {
     const option = exitTicketActivityOption('answer-question')!;
-    expect(option.description).toMatch(/quick question about what you just taught/);
+    expect(option.description).toMatch(
+      /quick question about what you just taught/
+    );
     expect(option.gradingCriteria).toMatch(/misspell/);
   });
 
@@ -266,7 +269,9 @@ describe('parsing a v3 ticket', () => {
       },
     });
     if (config.mode !== 'specific') throw new Error('expected a check');
-    expect(config.topic.length).toBeLessThanOrEqual(EXIT_TICKET_TOPIC_MAX_LENGTH);
+    expect(config.topic.length).toBeLessThanOrEqual(
+      EXIT_TICKET_TOPIC_MAX_LENGTH
+    );
     expect(config.topic).not.toBe('');
   });
 
@@ -282,7 +287,9 @@ describe('parsing a v3 ticket', () => {
       promptText: `Explain ${'the causes of the war '.repeat(30)}`,
     });
     if (config.mode !== 'specific') throw new Error('expected a check');
-    expect(config.topic.length).toBeLessThanOrEqual(EXIT_TICKET_TOPIC_MAX_LENGTH);
+    expect(config.topic.length).toBeLessThanOrEqual(
+      EXIT_TICKET_TOPIC_MAX_LENGTH
+    );
   });
 });
 
@@ -373,9 +380,9 @@ describe('reading a stored v3 ticket', () => {
       schemaVersion: 1,
       mode: 'basic',
     });
-    expect(composeExitTicketPrompt({ schemaVersion: 1, mode: 'basic' })).toMatch(
-      BASIC_EXIT_TICKET_PROMPT
-    );
+    expect(
+      composeExitTicketPrompt({ schemaVersion: 1, mode: 'basic' })
+    ).toMatch(BASIC_EXIT_TICKET_PROMPT);
   });
 });
 
@@ -419,7 +426,10 @@ describe('opening any ticket in the v3 builder', () => {
       exitTicketV3DraftFromConfig({
         schemaVersion: 1,
         mode: 'basic',
-        reflectionPrompt: { id: 'custom', text: 'What would you teach a friend?' },
+        reflectionPrompt: {
+          id: 'custom',
+          text: 'What would you teach a friend?',
+        },
       })
     ).toEqual({
       activity: 'reflect',

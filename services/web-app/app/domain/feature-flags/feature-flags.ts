@@ -122,6 +122,15 @@ export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
 export const TEACHER_PROMPT_GENERATOR_FLAG = 'teacher-prompt-generator' as const;
 
 /**
+ * Exit ticket builder v3 (docs/plans/2026-11-02-exit-ticket-builder-v3.md):
+ * no attachment, four "Have the students…" activities in two groups, a
+ * teacher-written prompt, optional key points instead of a right-answer
+ * question, completion or understanding grading. Off: the quick builder.
+ * Tickets written by either builder open in both.
+ */
+export const EXIT_TICKET_BUILDER_V3_FLAG = 'exit-ticket-builder-v3' as const;
+
+/**
  * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
  * reads only `feature_flag.free_tier`; these rows are not OR-merged.
  */
@@ -243,6 +252,11 @@ export const FEATURE_FLAGS = {
     label: 'Teacher prompt generator',
     description:
       'Shows New → Generate a prompt and the LLM drafting sheet on assignment types that support it (Class Starter, Daily Pages, Exit Ticket, Thesis-Driven Essay). Default off on production; on by default on demo and PR previews.',
+  },
+  [EXIT_TICKET_BUILDER_V3_FLAG]: {
+    label: 'Exit ticket builder v3',
+    description:
+      'The simpler exit ticket form: no attachment, "Have the students…" activities (reflect or ask; explain a concept; answer a question; engage with a text or source), a prompt the teacher writes, and optional key points instead of "Is there a correct answer?". Off: the current quick builder. Tickets made with either open in both.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

@@ -1123,7 +1123,10 @@ function parseV3ConfigInput(
 
   const postedKind = input.kind?.toString().trim() ?? '';
   const postedMode = input.mode?.toString().trim() ?? '';
-  if ((postedKind && postedKind !== kind) || (postedMode && postedMode !== mode)) {
+  if (
+    (postedKind && postedKind !== kind) ||
+    (postedMode && postedMode !== mode)
+  ) {
     return { success: false, message: 'Exit ticket type is invalid.' };
   }
 
@@ -1131,7 +1134,10 @@ function parseV3ConfigInput(
     input.promptText?.toString() ?? ''
   );
   if (!promptText) {
-    return { success: false, message: 'Write the prompt students will answer.' };
+    return {
+      success: false,
+      message: 'Write the prompt students will answer.',
+    };
   }
   if (promptText.length > EXIT_TICKET_PROMPT_TEXT_MAX_LENGTH) {
     return {
@@ -1154,7 +1160,11 @@ function parseV3ConfigInput(
     if (!(EXIT_TICKET_GRADING_BASES as readonly string[]).includes(basis)) {
       return { success: false, message: 'Choose how this ticket is graded.' };
     }
-    const minWords = parseMinimum(input.minWords, EXIT_TICKET_MIN_WORDS_MAX, 'words');
+    const minWords = parseMinimum(
+      input.minWords,
+      EXIT_TICKET_MIN_WORDS_MAX,
+      'words'
+    );
     if (!minWords.success) return minWords;
     const minSentences = parseMinimum(
       input.minSentences,
@@ -1207,7 +1217,8 @@ function parseV3ConfigInput(
         mode: 'specific',
         kind: 'check',
         ...v3,
-        focus: exitTicketActivityOption(activity)?.legacyFocus ?? 'explain-concept',
+        focus:
+          exitTicketActivityOption(activity)?.legacyFocus ?? 'explain-concept',
         topic: legacyTopicFor(promptText),
         // v3 never asks for a single right answer. Older readers get the
         // reading that cannot mark a defensible answer wrong.
@@ -1284,7 +1295,11 @@ export function exitTicketV3DraftFromConfig(
     if (!reflection) return starterDraft(DEFAULT_EXIT_TICKET_STARTER);
     if (reflection.id === 'wondering') return starterDraft('wondering');
     if (reflection.id === 'custom') {
-      return { activity: 'reflect', promptText: reflection.text, starter: null };
+      return {
+        activity: 'reflect',
+        promptText: reflection.text,
+        starter: null,
+      };
     }
     return {
       activity: 'reflect',

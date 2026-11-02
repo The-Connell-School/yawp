@@ -66,7 +66,8 @@ export const EXIT_TICKET_ACTIVITY_OPTIONS: ExitTicketActivityOption[] = [
     label: 'Have the students reflect or ask a question',
     description:
       'They tell you what landed, what surprised them, or what they still don’t get. Good for hearing about the things you didn’t think to ask.',
-    placeholder: 'e.g., What is one question you still have about today’s lesson?',
+    placeholder:
+      'e.g., What is one question you still have about today’s lesson?',
     closer: null,
     legacyFocus: null,
     gradingCriteria:
@@ -137,7 +138,11 @@ export const EXIT_TICKET_ACTIVITY_GROUPS: ExitTicketActivityGroup[] = [
   },
 ];
 
-export const EXIT_TICKET_STARTERS = ['learned', 'surprised', 'wondering'] as const;
+export const EXIT_TICKET_STARTERS = [
+  'learned',
+  'surprised',
+  'wondering',
+] as const;
 export type ExitTicketStarter = (typeof EXIT_TICKET_STARTERS)[number];
 
 export type ExitTicketStarterOption = {
@@ -203,9 +208,13 @@ export function exitTicketCloser(
   starter?: ExitTicketStarter | null
 ): string {
   if (activity === 'reflect') {
-    return exitTicketStarterOption(starter)?.closer ?? EXIT_TICKET_POLISH_CLOSER;
+    return (
+      exitTicketStarterOption(starter)?.closer ?? EXIT_TICKET_POLISH_CLOSER
+    );
   }
-  return exitTicketActivityOption(activity)?.closer ?? EXIT_TICKET_POLISH_CLOSER;
+  return (
+    exitTicketActivityOption(activity)?.closer ?? EXIT_TICKET_POLISH_CLOSER
+  );
 }
 
 /**
