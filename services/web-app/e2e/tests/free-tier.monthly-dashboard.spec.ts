@@ -125,9 +125,7 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
     await expect(dialog).toBeHidden();
     await expect(opener).toBeFocused();
     await page.goto('/app/my-classes');
-    await expect(page.getByTestId('class-code').first()).toHaveText(klass.code);
-    await expect(page.getByTestId('class-code').first()).toBeInViewport();
-    await expect(page.getByText('35 seats available').first()).toBeVisible();
+    await expect(page.getByTestId('my-classes-class-options').first()).toBeVisible();
     await shot(page, `classes-${label}`);
     await page
       .getByRole('button', { name: /Class options/ })

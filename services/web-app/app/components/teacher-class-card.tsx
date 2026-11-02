@@ -85,9 +85,7 @@ export function TeacherClassCard({
         className={
           pe3Dashboard
             ? 'flex flex-col'
-            : enabled
-              ? 'flex min-h-0 flex-1 flex-col'
-              : 'flex min-h-full flex-1 flex-col'
+            : 'flex min-h-full flex-1 flex-col'
         }
       >
         <div
@@ -230,39 +228,38 @@ export function TeacherClassCard({
           </div>
         </div>
       ) : null}
-      {enabled && !showLockedInvite && (
-        <div className="flex items-center justify-between gap-2 border-t px-4 py-3">
-          <div>
-            <p className="text-xs text-muted-foreground">Class code</p>
-            <p
-              data-testid="class-code"
-              className="break-all font-mono text-sm font-semibold"
-            >
-              {klass.code}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {usage.students.remaining} seats available
-            </p>
+      {enabled && !showLockedInvite ? (
+        <div
+          className={cn(
+            'pointer-events-none absolute inset-x-0 top-0 z-10',
+            imageHeightClass
+          )}
+        >
+          <div className="pointer-events-auto absolute right-2 top-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  ref={invitationTriggerRef}
+                  data-testid="my-classes-class-options"
+                  aria-label={`Class options for ${title}`}
+                  className={cn(
+                    'flex size-8 items-center justify-center text-slate-800 hover:bg-white',
+                    freeTierGlassyOverlayChipClassName()
+                  )}
+                >
+                  <MoreHorizontal size={18} aria-hidden className="text-slate-800" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onSelect={() => setInvitationOpen(true)}>
+                  Add your students to your class
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                ref={invitationTriggerRef}
-                aria-label={`Class options for ${title}`}
-                className="rounded-md p-2 hover:bg-secondary"
-              >
-                <MoreHorizontal size={20} />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onSelect={() => setInvitationOpen(true)}>
-                Add your students to your class
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
-      )}
+      ) : null}
       {enabled && !showLockedInvite && klass.code ? (
         <StudentInvitationDialog
           returnFocusRef={invitationTriggerRef}

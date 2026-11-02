@@ -733,7 +733,7 @@ test('pending org owner organization pages omit class code and join token', asyn
   );
 });
 
-test('approved teacher sees the real class code on the dashboard card', async ({
+test('approved teacher sees class options on the dashboard card art', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -743,15 +743,9 @@ test('approved teacher sees the real class code on the dashboard card', async ({
     where: { id: app.id },
     data: { status: 'APPROVED' },
   });
-  const klass = await prisma.class.findFirstOrThrow({
-    where: {
-      teachers: { some: { user: { id: user.id } } },
-    },
-    select: { id: true, code: true },
-  });
   await login(page, user.email!);
   await page.goto('/app');
-  await expect(page.getByTestId('class-code')).toContainText(klass.code);
+  await expect(page.getByTestId('my-classes-class-options')).toBeVisible();
 });
 
 test('locked class surfaces hide the real class code and lock invite controls', async ({
