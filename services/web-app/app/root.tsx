@@ -66,7 +66,7 @@ import {
   previewAccessMiddleware,
 } from './utils/preview-access.server.ts';
 import { uaPartnerMiddleware } from './utils/ua-partner.server.ts';
-import { isLessonPlannerEnabled } from './domain/feature-flags/feature-flags.server.ts';
+import { isLessonPlannerEnabled, isTeacherLoungeCommunityEnabled } from './domain/feature-flags/feature-flags.server.ts';
 import { getRootMembershipWhere } from './utils/root-membership-filter.server.ts';
 
 export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware];
@@ -214,6 +214,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         devPanelEnabled,
         devPanelEnvBadge: devPanelEnvBadge(),
         lessonPlannerEnabled: false,
+        teacherLoungeCommunityEnabled: false,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
         toast: null,
       },
@@ -319,6 +320,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const lessonPlannerEnabled = userId
     ? await isLessonPlannerEnabled(membership?.organizationId ?? null)
     : false;
+  const teacherLoungeCommunityEnabled = userId
+    ? await isTeacherLoungeCommunityEnabled(membership?.organizationId ?? null)
+    : false;
 
   return data(
     {
@@ -332,6 +336,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       testerFeedbackAvailable: process.env.TESTER_FEEDBACK_ENABLED === 'true' && Boolean(user?.isTester),
       demoFeedbackAvailable: Boolean(userId) && !internal && await isDemoFeedbackAvailable(),
       lessonPlannerEnabled,
+      teacherLoungeCommunityEnabled,
       requestInfo: {
         hints: getHints(request),
         origin: getDomainUrl(request),

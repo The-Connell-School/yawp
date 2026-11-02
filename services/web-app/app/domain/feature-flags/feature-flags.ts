@@ -122,6 +122,13 @@ export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
 export const TEACHER_PROMPT_GENERATOR_FLAG = 'teacher-prompt-generator' as const;
 
 /**
+ * Teacher's Lounge community forum (#484). Off: nav and `/app/lounge` stay hidden;
+ * the course grid at `/app/teacher-trainings` follows the temporary-disable guard.
+ * On: Teachers' Lounge opens the community feed.
+ */
+export const TEACHER_LOUNGE_COMMUNITY_FLAG = 'teacher_lounge_community' as const;
+
+/**
  * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
  * reads only `feature_flag.free_tier`; these rows are not OR-merged.
  */
@@ -243,6 +250,11 @@ export const FEATURE_FLAGS = {
     label: 'Teacher prompt generator',
     description:
       'Shows New → Generate a prompt and the LLM drafting sheet on assignment types that support it (Class Starter, Daily Pages, Exit Ticket, Thesis-Driven Essay). Default off on production; on by default on demo and PR previews.',
+  },
+  [TEACHER_LOUNGE_COMMUNITY_FLAG]: {
+    label: "Teacher's Lounge community",
+    description:
+      "Teachers' Lounge nav opens the community forum at /app/lounge. Off: the temporary training guard applies and /app/lounge returns 404.",
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 
