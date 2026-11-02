@@ -68,6 +68,7 @@ describe('feature flag registry', () => {
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       TEACHER_PROMPT_GENERATOR_FLAG,
+      TEACHER_LOUNGE_COMMUNITY_FLAG,
     ]);
   });
 
