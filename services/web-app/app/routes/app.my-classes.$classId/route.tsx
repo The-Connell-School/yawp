@@ -192,7 +192,6 @@ import {
   ensureClassStudentJoinToken,
   teacherResetStudentPassword,
 } from '~/domain/free-tier/student-join.server';
-import { FreeClassStudentJoinCard } from '~/components/free-class-student-join-card';
 import { getDomainUrl } from '~/utils/misc';
 
 export function getDraftDisplayTitle(document: {
@@ -2365,16 +2364,6 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                 full." Remove a student to open a seat.
               </p>
             )}
-          {freeUsage &&
-          (data.studentJoinUrl || data.classCodeHidden) ? (
-            <FreeClassStudentJoinCard
-              joinUrl={data.studentJoinUrl ?? ''}
-              classCode={data.klass.code}
-              compact
-              teachingLocked={teachingLocked || data.classCodeHidden}
-              adminName={teachingAccessAdminName}
-            />
-          ) : null}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="relative min-w-0 w-full max-w-sm flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
