@@ -1,12 +1,21 @@
-import { redirect } from 'react-router';
+import { redirect, type LoaderFunctionArgs } from 'react-router';
 import {
   TEACHER_LOUNGE_DISABLED_HOME,
-  TEACHER_LOUNGE_TEMPORARILY_DISABLED,
+  isTeacherLoungeTemporarilyDisabledForUser,
 } from '~/domain/teacher-lounge/teacher-lounge-temporary-disable';
+import { requireUserId } from '~/utils/auth.server';
+import { prisma } from '~/utils/db.server';
 
-export function loader() {
+export async function loader({ request }: LoaderFunctionArgs) {
+  const userId = await requireUserId(request);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
   return redirect(
-    TEACHER_LOUNGE_TEMPORARILY_DISABLED
+    isTeacherLoungeTemporarilyDisabledForUser({
+      email: user?.email ?? null,
+    })
       ? TEACHER_LOUNGE_DISABLED_HOME
       : '/app/teacher-trainings'
   );
