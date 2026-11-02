@@ -22,7 +22,7 @@ export function StudentClassDetailView({
 }: {
   data: StudentClassDetail & { role: 'STUDENT' };
 }) {
-  const { klass, assignments, documents } = data;
+  const { klass, assignmentGroups, assignments, documents } = data;
   const { title, subtitle } = getClassCardHeading(klass);
 
   return (
@@ -75,12 +75,21 @@ export function StudentClassDetailView({
         <div className="flex flex-col">
           <p className="my-2 text-foreground/60">Assignments</p>
           {assignments.length > 0 ? (
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-              {assignments.map((classAssignment) => (
-                <StudentAssignmentCard
-                  key={classAssignment.id}
-                  classAssignment={classAssignment}
-                />
+            <div className="flex flex-col gap-4">
+              {assignmentGroups.map((group) => (
+                <div key={group.assignmentTypeId} className="flex flex-col gap-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {group.title}
+                  </p>
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                    {group.assignments.map((classAssignment) => (
+                      <StudentAssignmentCard
+                        key={classAssignment.id}
+                        classAssignment={classAssignment}
+                      />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           ) : (
