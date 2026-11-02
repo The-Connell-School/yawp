@@ -175,12 +175,17 @@ function columnsFromCatalogContent(
   };
 }
 
+function libraryContentUsableForPicker(content: unknown): boolean {
+  if (!categoriesOf(content).length) return false;
+  return parseRubricSchema(content).ok;
+}
+
 function resolvePublishedLibraryContent(row: {
   schemaJson: unknown;
   currentRevision: { schemaJson: unknown } | null;
 }): unknown {
   const revisionContent = row.currentRevision?.schemaJson;
-  if (revisionContent && categoriesOf(revisionContent).length) {
+  if (revisionContent && libraryContentUsableForPicker(revisionContent)) {
     return revisionContent;
   }
   return row.schemaJson;
