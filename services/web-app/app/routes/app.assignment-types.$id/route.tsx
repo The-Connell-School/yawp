@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   type LoaderFunctionArgs,
   data as dataResponse,
   type ActionFunctionArgs,
-  Form,
 } from 'react-router';
-import { Link, useFetcher, useLoaderData, useNavigation, useSearchParams } from 'react-router';
+import { Link, useFetcher, useLoaderData, useSearchParams } from 'react-router';
 import { ChevronDownIcon } from 'lucide-react';
 import { DocumentLink } from '~/components/document-link.js';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -32,11 +31,6 @@ import {
 import { useUser } from '~/hooks/useUser.js';
 import { useRouteLoaderData } from 'react-router';
 import type { Route as RootRoute } from '../../+types/root';
-import {
-  createDocumentForAssignmentType,
-  DocumentCreationError,
-  documentCreationErrorTextForClient,
-} from '~/domain/documents.server';
 import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server';
 import { listSavedThesisPrompts } from '~/domain/thesis-prompts/saved-prompts.server';
 import { listSavedDailyPagesPrompts } from '~/domain/daily-pages-prompts/saved-prompts.server';
@@ -44,7 +38,6 @@ import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { stripUnreleasedGradeFromSubmissionSummaries } from '~/domain/submissions/student-submission-grade-visibility.server';
 import {
   getAvailableAssignmentTypesForScopes,
-  isAssignmentTypeAvailableForAnyScope,
   type AssignmentTypeAccessScope,
 } from '~/utils/assignment-type-access.server';
 import { loadAssignmentCreationQuotasForTypes } from '~/utils/assignment-quota.server';
@@ -62,6 +55,7 @@ import {
   type CustomEssayType,
 } from './ap-history/create-custom-sheet';
 import type { ApHistorySourceCardData } from '~/components/ap-history/source-card';
+import { showAssignmentTypeDocumentsSection } from './assignment-type-detail-page-chrome';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { DailyPagesPromptGenerator } from './prompts-library/daily-pages-prompt-generator';
 import { ShortFormPromptGenerator } from './short-form-prompts-library/short-form-prompt-generator';
@@ -346,8 +340,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
+  const includeDocuments = showAssignmentTypeDocumentsSection(profile.role);
   const [documents, archivedDocuments, teacherClasses] = await Promise.all([
-    prisma.document.findMany({
+    includeDocuments
+      ? prisma.document.findMany({
       orderBy: { createdAt: 'desc' },
       where: {
         membershipId: profile.id,
@@ -377,38 +373,41 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
         },
       },
-    }),
-    prisma.document.findMany({
-      orderBy: { archivedAt: 'desc' },
-      where: {
-        membershipId: profile.id,
-        deletedAt: null,
-        archivedAt: { not: null },
-        assignmentModuleSessions: {
-          some: { assignmentModule: { assignmentTypeId: params.id } },
-        },
-      },
-      include: {
-        assignmentModuleSessions: {
-          take: 1,
-          orderBy: { assignmentModule: { position: 'desc' } },
-          include: { assignmentModule: true },
-        },
-        submissions: {
-          where: { archivedAt: null, unsubmittedAt: null },
-          orderBy: { submittedAt: 'desc' },
-          select: {
-            id: true,
-            score: true,
-            overallScore: true,
-            numericPercentage: true,
-            letterGrade: true,
-            releasedAt: true,
-            submittedAt: true,
+    })
+      : [],
+    includeDocuments
+      ? prisma.document.findMany({
+          orderBy: { archivedAt: 'desc' },
+          where: {
+            membershipId: profile.id,
+            deletedAt: null,
+            archivedAt: { not: null },
+            assignmentModuleSessions: {
+              some: { assignmentModule: { assignmentTypeId: params.id } },
+            },
           },
-        },
-      },
-    }),
+          include: {
+            assignmentModuleSessions: {
+              take: 1,
+              orderBy: { assignmentModule: { position: 'desc' } },
+              include: { assignmentModule: true },
+            },
+            submissions: {
+              where: { archivedAt: null, unsubmittedAt: null },
+              orderBy: { submittedAt: 'desc' },
+              select: {
+                id: true,
+                score: true,
+                overallScore: true,
+                numericPercentage: true,
+                letterGrade: true,
+                releasedAt: true,
+                submittedAt: true,
+              },
+            },
+          },
+        })
+      : [],
     profile.role === 'TEACHER'
       ? prisma.class.findMany({
           where: {
@@ -657,93 +656,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  const teacherClasses =
-    profile.role === 'TEACHER'
-      ? await prisma.class.findMany({
-          where: {
-            teachers: { some: { id: profile.id } },
-            isArchived: false,
-          },
-          select: {
-            id: true,
-            school: { select: { id: true, organizationId: true } },
-          },
-        })
-      : [];
-  const assignmentTypeAvailable = params.id
-    ? await isAssignmentTypeAvailableForAnyScope({
-        assignmentTypeId: params.id,
-        scopes: buildAssignmentTypeScopes({
-          organizationId: profile.organization.id,
-          teacherProfileId: profile.id,
-          teacherClasses,
-        }),
-      })
-    : false;
-  const assignmentType = assignmentTypeAvailable
-    ? await prisma.assignmentType.findFirst({
-        where: {
-          id: params.id,
-          archivedAt: null,
-        },
-        select: { id: true, systemKey: true },
-      })
-    : null;
+  const redirectPath = params.id
+    ? `/app/assignment-types/${params.id}`
+    : '/app';
 
-  if (!assignmentType) {
-    return redirectWithToast('/app', {
-      type: 'error',
-      description: 'Assignment type not found',
-    });
-  }
-
-  if (profile.role !== 'TEACHER') {
-    return redirectWithToast('/app', {
-      type: 'error',
-      description: 'Start writing from an assignment in one of your classes.',
-    });
-  }
-
-  if (assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
-    return redirectWithToast(`/app/assignment-types/${params.id}`, {
-      type: 'error',
-      description: 'Choose an APUSH prompt from the library first.',
-    });
-  }
-
-  let documentId = '';
-  try {
-    const created = await createDocumentForAssignmentType({
-      membershipId: profile.id,
-      assignmentTypeId: assignmentType.id,
-    });
-    documentId = created.documentId;
-  } catch (creationError) {
-    if (creationError instanceof DocumentCreationError) {
-      return redirectWithToast(`/app/assignment-types/${params.id}`, {
-        type: 'error',
-        description: documentCreationErrorTextForClient(
-          creationError,
-          'Could not create a document. Please try again.',
-        ),
-      });
-    }
-    throw creationError;
-  }
-
-  const requestUrl = new URL(request.url);
-  const currentPath = `${requestUrl.pathname}${requestUrl.search}`;
-  const redirectParams = new URLSearchParams({
-    exitTo: currentPath,
+  return redirectWithToast(redirectPath, {
+    type: 'error',
+    description:
+      profile.role === 'TEACHER'
+        ? 'Documents are created from assignments, not from this page.'
+        : 'Start writing from an assignment in one of your classes.',
   });
-
-  return redirectWithToast(
-    `/app/documents/${documentId}?${redirectParams.toString()}`,
-    {
-      type: 'success',
-      description: 'Document created successfully.',
-    }
-  );
 }
 
 /**
@@ -753,7 +676,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
  * document is created from — but an exit ticket's is a single row whose
  * description restates the prompt, sitting directly under directions that
  * already explain the whole thing. Hidden there rather than deleted, because
- * the module itself is still what New -> Document builds from.
+ * the module itself is still what assignments build from.
  */
 export function showModulesAccordion(
   assignmentType: { kind?: string | null },
@@ -777,9 +700,6 @@ export default function AppAssignmentTypesIdRoute() {
     data.assignmentType,
     data.assignmentType.assignmentModules.length
   );
-  const navigation = useNavigation();
-  const isLoading = navigation.state !== 'idle';
-  const docFormRef = useRef<HTMLFormElement>(null);
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
   const [isPromptGeneratorOpen, setIsPromptGeneratorOpen] = useState(false);
   const [customEssayType, setCustomEssayType] =
@@ -874,8 +794,7 @@ export default function AppAssignmentTypesIdRoute() {
     isTeacher && data.assignmentType.kind === 'daily_pages';
   // Daily Pages carries one module, whose blurb is freewrite-era copy telling
   // students to throw ideas around — which the about section directly above it
-  // now contradicts. The module row itself stays: documents are created inside
-  // it, and `hasModules` still gates New → Document.
+  // now contradicts. The module row itself stays for student-facing context.
   const showModules = modulesVisible && !showShortFormLibrary;
   // The same door, for the other end of the lesson: the planner sends a
   // teacher here with the exit ticket its plan ended on, already answered.
@@ -911,7 +830,7 @@ export default function AppAssignmentTypesIdRoute() {
   const showThesisLibrary = data.thesisPromptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
-  const canCreateDirectDocument = !isApHistoryAssignmentType;
+  const showTeacherNewMenu = isTeacher && !isApHistoryAssignmentType;
   const assignmentSheetClasses = isApHistoryAssignmentType
     ? (data.apHistoryLibrary?.teacherClasses ?? [])
     : data.teacherClasses;
@@ -968,9 +887,8 @@ export default function AppAssignmentTypesIdRoute() {
                   to={`/app/assignment-types/${data.assignmentType.id}/how-it-works`}
                 />
               ) : null}
-              {canCreateDirectDocument ? (
+              {showTeacherNewMenu ? (
                 <>
-                  <Form method="post" ref={docFormRef} className="hidden" />
                   {teachingLockedPreview ? (
                     wrapPreviewAssignmentCreationControl(
                       true,
@@ -994,12 +912,6 @@ export default function AppAssignmentTypesIdRoute() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          disabled={!hasModules || isLoading}
-                          onSelect={() => docFormRef.current?.requestSubmit()}
-                        >
-                          Document
-                        </DropdownMenuItem>
                         <DropdownMenuItem
                           disabled={data.teacherClasses.length === 0}
                           onSelect={() => {
@@ -1294,6 +1206,7 @@ export default function AppAssignmentTypesIdRoute() {
             </div>
           </>
         ) : null}
+        {showAssignmentTypeDocumentsSection(user.selectedMembership?.role) ? (
         <div data-tour="type-documents">
           {data.documents.length ? (
             <>
@@ -1340,21 +1253,11 @@ export default function AppAssignmentTypesIdRoute() {
           ) : (
             <NoDataPlaceholder
               title="No documents"
-              subtitle={
-                isTeacher && canCreateDirectDocument ? (
-                  <>
-                    Hit the <code className="px-1">New +</code> button above to
-                    create your first document.
-                  </>
-                ) : isTeacher ? (
-                  'Choose a prompt from the AP History library to create an assignment.'
-                ) : (
-                  'Open an assignment from one of your classes to start writing.'
-                )
-              }
+              subtitle="Open an assignment from one of your classes to start writing."
             />
           )}
         </div>
+        ) : null}
       </div>
     </div>
   );

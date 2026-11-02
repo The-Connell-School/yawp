@@ -37,7 +37,6 @@ const prisma = {
 
 const requireUserId = mock();
 const requireMembership = mock();
-const createDocumentForAssignmentType = mock();
 const redirectWithToast = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 const isAssignmentTypeAvailableForAnyScope = mock();
@@ -52,10 +51,6 @@ mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
-}));
-mock.module('~/domain/documents.server', () => ({
-  createDocumentForAssignmentType,
-  DocumentCreationError: class DocumentCreationError extends Error {},
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
@@ -134,7 +129,6 @@ describe('app.assignment-types.$id action', () => {
     prisma.savedThesisPrompt.findMany.mockResolvedValue([]);
     requireUserId.mockReset();
     requireMembership.mockReset();
-    createDocumentForAssignmentType.mockReset();
     redirectWithToast.mockReset();
     isAssignmentTypeAvailableForAnyScope.mockReset();
     redirectLockedPreviewAssignmentTypeHomeToGuide.mockReset();
@@ -172,7 +166,6 @@ describe('app.assignment-types.$id action', () => {
       }
     );
     mockActionAssignmentTypeAvailable();
-    createDocumentForAssignmentType.mockResolvedValue({ documentId: 'doc-1' });
     redirectWithToast.mockImplementation((url, toast) => ({
       redirectedTo: url,
       toast,
@@ -188,95 +181,36 @@ describe('app.assignment-types.$id action', () => {
     } as never);
 
     expect(response as unknown).toEqual({
-      redirectedTo: '/app',
+      redirectedTo: '/app/assignment-types/at-1',
       toast: {
         type: 'error',
         description: 'Start writing from an assignment in one of your classes.',
       },
     });
-    expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
   });
 
-  test('requires assignment type availability before creating a document', async () => {
+  test('rejects direct document creation for teachers', async () => {
     requireMembership.mockResolvedValue({
       id: 'profile-1',
       role: 'TEACHER',
       organization: { id: 'org-1', name: 'Org' },
     });
 
-    await action({
+    const response = await action({
       request: new Request('https://example.test/app/assignment-types/at-1', {
         method: 'POST',
       }),
       params: { id: 'at-1' },
     } as never);
 
-    expect(prisma.assignmentType.findFirst).toHaveBeenNthCalledWith(1, {
-      where: { id: 'at-1', archivedAt: null },
-      select: {
-        id: true,
-      },
-    });
-    expect(prisma.assignmentType.findFirst).toHaveBeenNthCalledWith(2, {
-      where: { archivedAt: null, id: 'at-1' },
-      select: { id: true, systemKey: true },
-    });
-    expect(createDocumentForAssignmentType).toHaveBeenCalledWith({
-      membershipId: 'profile-1',
-      assignmentTypeId: 'at-1',
-    });
-  });
-
-  test('rejects direct document creation for unavailable assignment types', async () => {
-    prisma.assignmentType.findFirst.mockResolvedValue(null);
-
-    const response = await action({
-      request: new Request('https://example.test/app/assignment-types/at-2', {
-        method: 'POST',
-      }),
-      params: { id: 'at-2' },
-    } as never);
-
     expect(response as unknown).toEqual({
-      redirectedTo: '/app',
+      redirectedTo: '/app/assignment-types/at-1',
       toast: {
         type: 'error',
-        description: 'Assignment type not found',
+        description:
+          'Documents are created from assignments, not from this page.',
       },
     });
-    expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
-  });
-
-  test('rejects direct document creation for AP History assignment types', async () => {
-    requireMembership.mockResolvedValue({
-      id: 'profile-1',
-      role: 'TEACHER',
-      organization: { id: 'org-1', name: 'Org' },
-    });
-    mockActionAssignmentTypeAvailable({
-      id: 'ap-history-type',
-      systemKey: 'ap_history_essay',
-    });
-    prisma.organizationAssignmentType.findMany.mockResolvedValue([
-      { organizationId: 'org-1', assignmentTypeId: 'ap-history-type' },
-    ]);
-
-    const response = await action({
-      request: new Request(
-        'https://example.test/app/assignment-types/ap-history-type',
-        { method: 'POST' }
-      ),
-      params: { id: 'ap-history-type' },
-    } as never);
-
-    expect(response as unknown).toEqual({
-      redirectedTo: '/app/assignment-types/ap-history-type',
-      toast: {
-        type: 'error',
-        description: 'Choose an APUSH prompt from the library first.',
-      },
-    });
-    expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
   });
 });
 
@@ -835,6 +769,17 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
 
     expect(response.data.apHistoryLibrary).toBeNull();
     expect(prisma.apHistoryPromptLibraryEntry.findMany).not.toHaveBeenCalled();
+  });
+
+  test('omits document queries for teachers', async () => {
+    const response = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(response.data.documents).toEqual([]);
+    expect(response.data.archivedDocuments).toEqual([]);
+    expect(prisma.document.findMany).not.toHaveBeenCalled();
   });
 
   test('strips unreleased grade fields from document submission summaries', async () => {
