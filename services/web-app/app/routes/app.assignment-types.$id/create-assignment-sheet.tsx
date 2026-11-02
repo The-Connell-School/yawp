@@ -64,6 +64,8 @@ type Props = {
    * them the composed prompt before anything is created.
    */
   plannedExitTicket?: ExitTicketPrefill | null;
+  /** The v3 exit ticket builder; off renders the quick builder. */
+  exitTicketBuilderV3Enabled?: boolean;
   titleRequired?: boolean;
   apHistoryEntry?: {
     externalKey: string;
@@ -93,6 +95,7 @@ export function CreateAssignmentSheet({
   onOpenChange,
   initialPrompt = '',
   plannedExitTicket = null,
+  exitTicketBuilderV3Enabled = false,
   titleRequired = false,
   apHistoryEntry = null,
   teachingLocked = false,
@@ -139,6 +142,7 @@ export function CreateAssignmentSheet({
         onOpenChange={onOpenChange}
         onCreated={onCreated}
         entryPoint="assignment-type"
+        exitTicketBuilderV3Enabled={exitTicketBuilderV3Enabled}
         fixedAssignmentTypeId={assignmentTypeId}
         assignmentTypes={[
           {

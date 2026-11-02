@@ -113,7 +113,8 @@ and clients that predate v3.
   (`answer-question`): no length push. They get only "Don't worry about
   polish."
 - `engage-text`, *What surprised me*, and a reflection the teacher rewrote:
-  "Don't worry about polish."
+  "Don't worry about polish." A starter only decides the closer while its
+  words are unchanged; edit them and it is the teacher's own question.
 - No v3 text uses "someone who missed class", "not the definition you were
   given", "ask the real one", or "the one you were afraid to ask".
 - **Planner generation rules:** `build-system-prompt.ts` exit-ticket section
@@ -175,8 +176,9 @@ column versus table) before building.
 ## 7. Rollout and backward compatibility
 
 - Flag `exit-ticket-builder-v3` in `domain/feature-flags/feature-flags.ts`:
-  off by default; on by default on demo and PR previews, like the prompt
-  generator.
+  off everywhere (demo and PR previews included) until a Setting row turns it
+  on from Yawp Internal, per school or for everyone. Not default-on for
+  previews, so the quick-builder e2e spec keeps testing the flag-off form.
 - The sheet gets `exitTicketBuilderV3Enabled` (default `false`). Each of the
   five routes that render `AssignmentCreationSheet` reads the flag in its
   loader for the teacher's org and passes it on.
@@ -210,6 +212,22 @@ column versus table) before building.
 
 ## Status
 
-- Phases 1–3 in progress on `claude/affectionate-noether-6g3y31`.
-- E2E specs are written to this plan but could not be run in the build
-  container (no Docker/Postgres); they need a CI or local run before review.
+On `claude/affectionate-noether-6g3y31`:
+
+- **Phase 1 (domain): done.** `exit-ticket-activities.ts`, v3 parse/compose/
+  dual-write and legacy-to-v3 draft in `exit-ticket.ts`, v3 grading context in
+  `exit-ticket-rubric.ts`. Unit tests: `exit-ticket-v3.test.ts`,
+  `exit-ticket-rubric.test.ts`.
+- **Phase 2 (flag + server): done.** Flag registered; `isExitTicketBuilderV3Enabled`
+  gate; `assignment-exit-ticket.server.ts` reads `exitTicketActivity`,
+  `exitTicketPromptText`, `exitTicketStarter`.
+- **Phase 3 (sheet): done, e2e not yet run.** `exit-ticket-builder-v3.tsx`,
+  sheet wiring (no attachment, v3 builder, tutor copy, key points not asked
+  twice), flag passed from all five routes, `initialExitTicketConfig` on the
+  edit and duplicate sheets. Component tests in
+  `assignment-creation-sheet.test.tsx`. E2E spec
+  `e2e/tests/teacher.exit-ticket-v3.spec.ts` is written but could not run in
+  the build container (no Docker/Postgres); it needs a local or CI run.
+- **Phase 4 (planner): not started.** Until it lands, planner hand-offs still
+  work: the v3 sheet converts the legacy prefill into an activity and prompt.
+- **Phase 5 (class summary): not started.**
