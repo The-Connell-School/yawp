@@ -175,6 +175,17 @@ function columnsFromCatalogContent(
   };
 }
 
+function resolvePublishedLibraryContent(row: {
+  schemaJson: unknown;
+  currentRevision: { schemaJson: unknown } | null;
+}): unknown {
+  const revisionContent = row.currentRevision?.schemaJson;
+  if (revisionContent && categoriesOf(revisionContent).length) {
+    return revisionContent;
+  }
+  return row.schemaJson;
+}
+
 async function publishedLibraryContentByName(
   db: PickerDb,
   names: string[]
@@ -189,10 +200,7 @@ async function publishedLibraryContentByName(
     },
   });
   return new Map(
-    rows.map((row) => [
-      row.name,
-      row.currentRevision?.schemaJson ?? row.schemaJson,
-    ])
+    rows.map((row) => [row.name, resolvePublishedLibraryContent(row)])
   );
 }
 
@@ -342,10 +350,9 @@ export async function resolveAdminRubricPickerSelection(
         currentRevision: { select: { schemaJson: true } },
       },
     });
-    const content =
-      rubric?.currentRevision?.schemaJson ??
-      rubric?.schemaJson ??
-      fallbackBuiltinPublishedSchema(trimmed);
+    const content = rubric
+      ? resolvePublishedLibraryContent(rubric)
+      : fallbackBuiltinPublishedSchema(trimmed);
     if (!categoriesOf(content).length) {
       throw new Response('That rubric no longer exists. Choose another rubric.', {
         status: 400,
@@ -426,7 +433,7 @@ export async function resolveAdminRubricPickerSelection(
       status: 400,
     });
   }
-  const content = rubric.currentRevision?.schemaJson ?? rubric.schemaJson;
+  const content = resolvePublishedLibraryContent(rubric);
   if (!categoriesOf(content).length) {
     throw new Response('That rubric no longer exists. Choose another rubric.', {
       status: 400,

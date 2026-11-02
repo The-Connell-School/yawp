@@ -107,6 +107,7 @@ describe('rubric schema', () => {
       'daily-pages-short-form',
       'strode-eng101-essay-1-description',
       'strode-eng101-essay-2-autobiography',
+      'gals-claims',
     ]);
 
     const thesis = STARTER_RUBRICS[0];

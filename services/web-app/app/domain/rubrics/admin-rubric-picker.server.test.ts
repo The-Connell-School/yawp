@@ -288,6 +288,42 @@ describe('listLiveRubricsForAdminPicker', () => {
     );
   });
 
+  test('falls back to live schemaJson when the current revision has no categories', async () => {
+    catalogList.mockResolvedValue({
+      rubrics: [
+        {
+          key: 'strode-eng101-essay-2-autobiography',
+          source: 'library',
+          name: 'strode-eng101-essay-2-autobiography',
+          title: 'Strode ENG 101: Autobiographical Narrative (Essay 2)',
+          editable: true,
+        },
+      ],
+    });
+    rubric.findMany.mockImplementation(async (args: { where?: { archivedAt?: unknown; name?: { in: string[] } } }) => {
+      if (args?.where?.archivedAt) return [];
+      if (args?.where?.name?.in) {
+        return [
+          {
+            id: 'lib-strode-2',
+            name: 'strode-eng101-essay-2-autobiography',
+            title: 'Strode ENG 101: Autobiographical Narrative (Essay 2)',
+            schemaJson: validLibrarySchema,
+            currentRevision: {
+              schemaJson: { ...validLibrarySchema, rubric: { categories: [] } },
+            },
+          },
+        ];
+      }
+      return [];
+    });
+
+    const options = await listLiveRubricsForAdminPicker(db as never);
+    expect(options.map((row) => row.name)).toEqual([
+      'strode-eng101-essay-2-autobiography',
+    ]);
+  });
+
   test('omits per-type rows when live columns are empty and there is no baseline revision', async () => {
     const actTypeId = 'cmpphw7w303lh01l15z0pr6nd';
     catalogList.mockResolvedValue({
