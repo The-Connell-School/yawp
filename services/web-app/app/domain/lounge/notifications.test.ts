@@ -54,7 +54,7 @@ describe('Contact Us email', () => {
       { kind: 'contact', messageId: 'm1', actorName: 'Maria S.', excerpt: 'The grade did not release.' },
       origin
     );
-    expect(email.subject).toBe('Faculty Lounge: message from Maria S.');
+    expect(email.subject).toBe("Teachers' Lounge: message from Maria S.");
     expect(email.text).toContain('The grade did not release.');
     expect(email.text).toContain('https://yawp.school/app/admin/lounge#messages');
   });

@@ -3,6 +3,7 @@ import { TEACHER_LOUNGE_DISABLE_ALLOWLIST_EMAILS } from '~/domain/teacher-lounge
 import {
   FLAT_SIDEBAR_SECTIONS,
   getVisibleSidebarSections,
+  hideLegacyLoungeNavWhenDisabled,
 } from './sidebar-nav';
 
 function teacherUser(email = 'teacher@example.com') {
@@ -17,10 +18,14 @@ function teacherUser(email = 'teacher@example.com') {
   } as any;
 }
 
-function visibleDestinations(user: any) {
-  return getVisibleSidebarSections(FLAT_SIDEBAR_SECTIONS, user).flatMap(
-    (section) => section.links.map((link) => link.to)
-  );
+function visibleDestinations(user: any, communityOn = false) {
+  return getVisibleSidebarSections(
+    hideLegacyLoungeNavWhenDisabled(
+      FLAT_SIDEBAR_SECTIONS,
+      communityOn,
+    ),
+    user,
+  ).flatMap((section) => section.links.map((link) => link.to));
 }
 
 describe("Teacher's Lounge sidebar (temporarily disabled)", () => {

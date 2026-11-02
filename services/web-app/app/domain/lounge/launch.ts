@@ -1,13 +1,12 @@
 /**
- * The Faculty Lounge as Brian wrote it for launch (Seeding the Faculty
- * Lounge, Oct 16 2026): its name, the team's name, and the house rules every
- * teacher agrees to on their first visit.
+ * Teachers' Lounge community copy (Bryant product name, 2026-11-02). House rules
+ * from Brian's launch seed (Seeding the Faculty Lounge, Oct 16 2026).
  */
-export const LOUNGE_NAME = 'Faculty Lounge';
+export const LOUNGE_NAME = "Teachers' Lounge";
 export const LOUNGE_TEAM_NAME = 'YAWP! team';
 
 export const LOUNGE_WELCOME_INTRO =
-  'Welcome to the Faculty Lounge, a place where we ask questions, share ideas, and connect with each other. To keep this the good kind of faculty lounge, we follow a few House Rules:';
+  "Welcome to the Teachers' Lounge, a place where we ask questions, share ideas, and connect with each other. To keep this the good kind of teachers' lounge, we follow a few House Rules:";
 
 export const LOUNGE_HOUSE_RULES = [
   { title: 'Protect your students.', detail: 'No names, photos, or details that could identify a student.' },

@@ -4,11 +4,12 @@ import {
   applyLoungeCommunityLink,
   isSidebarLinkActive,
 } from './sidebar-nav';
+import { LOUNGE_NAME } from '~/domain/lounge/launch';
 
 function loungeLink(enabled: boolean) {
   return applyLoungeCommunityLink(FLAT_SIDEBAR_SECTIONS, enabled)
     .flatMap((section) => section.links)
-    .find((link) => link.label === "Teacher's Lounge" || link.label === 'Faculty Lounge');
+    .find((link) => link.label === LOUNGE_NAME || link.label === "Teacher's Lounge");
 }
 
 const active = (linkTo: string, pathname: string) =>
@@ -25,7 +26,7 @@ describe("Teacher's Lounge nav item", () => {
   test('flag on: opens the community feed and stays highlighted on the course grid', () => {
     const link = loungeLink(true)!;
     expect(link.to).toBe('/app/lounge');
-    expect(link.label).toBe('Faculty Lounge');
+    expect(link.label).toBe(LOUNGE_NAME);
     expect(isSidebarLinkActive(link, '/app/lounge/abc', active)).toBe(true);
     expect(isSidebarLinkActive(link, '/app/teacher-trainings/t1', active)).toBe(true);
     expect(isSidebarLinkActive(link, '/app/reporter', active)).toBe(false);

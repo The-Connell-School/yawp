@@ -16,6 +16,7 @@ import {
   LESSON_PLANNER_STACK_PANEL_FLAG,
   FREE_TIER_FLAG,
   LESSON_PLANNER_FLAG,
+  TEACHER_LOUNGE_COMMUNITY_FLAG,
   UNIFIED_SIGN_ON_FLAG,
   TEACHER_PROMPT_GENERATOR_FLAG,
   FEATURE_FLAGS,
@@ -345,6 +346,16 @@ export async function isLessonPlannerEnabled(
   if (!(await isFreeTierCapabilityEnabled(orgId))) return false;
   return isFeatureFlagEnabled(LESSON_PLANNER_FLAG, orgId);
 }
+
+/** Teacher's Lounge community forum for teachers at the given school. */
+export async function isTeacherLoungeCommunityEnabled(
+  orgId: string | null | undefined
+): Promise<boolean> {
+  return isFeatureFlagEnabled(TEACHER_LOUNGE_COMMUNITY_FLAG, orgId);
+}
+
+/** Alias used by the Lounge community routes ported from PR #484. */
+export const isLoungeCommunityEnabled = isTeacherLoungeCommunityEnabled;
 
 /**
  * Whether Free Tier is live for public/anonymous routes. Only `everyone`

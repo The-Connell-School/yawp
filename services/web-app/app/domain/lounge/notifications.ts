@@ -1,4 +1,5 @@
 import type { LoungeNotification } from './lounge.server';
+import { LOUNGE_NAME } from './launch';
 
 function escapeHtml(value: string): string {
   return value
@@ -22,9 +23,9 @@ export function buildLoungeEmail(
 ): { subject: string; text: string; html: string } {
   if (notification.kind === 'contact') {
     const link = `${origin}/app/admin/lounge#messages`;
-    const lead = `${notification.actorName} used Contact Us in the Faculty Lounge:`;
+    const lead = `${notification.actorName} used Contact Us in ${LOUNGE_NAME}:`;
     return {
-      subject: `Faculty Lounge: message from ${notification.actorName}`,
+      subject: `${LOUNGE_NAME}: message from ${notification.actorName}`,
       text: [lead, '', notification.excerpt, '', `Open the inbox: ${link}`].join('\n'),
       html: [
         `<p>${escapeHtml(lead)}</p>`,
@@ -52,7 +53,7 @@ export function buildLoungeEmail(
   }
   const lead =
     notification.kind === 'staff-request'
-      ? `${notification.actorName} asked in the Faculty Lounge:`
+      ? `${notification.actorName} asked in ${LOUNGE_NAME}:`
       : `${notification.actorName} wrote:`;
   const text = [lead, '', notification.excerpt, '', `Open it in YAWP!: ${link}`].join('\n');
   const html = [

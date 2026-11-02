@@ -9,8 +9,8 @@ import {
 } from './launch';
 
 describe('names', () => {
-  test('the community is the Faculty Lounge, run by the YAWP! team', () => {
-    expect(LOUNGE_NAME).toBe('Faculty Lounge');
+  test("the community is Teachers' Lounge, run by the YAWP! team", () => {
+    expect(LOUNGE_NAME).toBe("Teachers' Lounge");
     expect(LOUNGE_TEAM_NAME).toBe('YAWP! team');
   });
 });

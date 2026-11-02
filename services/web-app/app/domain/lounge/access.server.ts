@@ -34,7 +34,7 @@ export async function requireLoungeAccess(request: Request): Promise<LoungeAcces
     flagOn,
   });
   if (!decision.allowed) {
-    throw data({ error: 'The Faculty Lounge is not available.' }, { status: 404 });
+    throw data({ error: "The Teachers' Lounge is not available." }, { status: 404 });
   }
   return {
     viewer: { userId, isStaff: decision.isStaff },

@@ -7,6 +7,7 @@ import {
 import { createE2EPrismaClient } from './prisma-client';
 
 const LESSON_PLANNER_SETTING = 'feature_flag.lesson_planner';
+const TEACHER_LOUNGE_COMMUNITY_SETTING = 'feature_flag.teacher_lounge_community';
 const FREE_TIER_SETTING = 'feature_flag.free_tier';
 const FOLDED_FREE_TIER_SETTINGS = [
   'feature_flag.free-tier-onboarding-v2',
@@ -71,6 +72,10 @@ export async function setLessonPlannerFlag(enabled: boolean) {
   } finally {
     await prisma.$disconnect();
   }
+}
+
+export async function setLoungeCommunityFlag(enabled: boolean) {
+  await setFeatureFlag('teacher_lounge_community', enabled);
 }
 
 /** Local test toggle for registered feature flags. */
