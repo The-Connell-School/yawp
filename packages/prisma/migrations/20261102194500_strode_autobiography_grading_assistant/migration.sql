@@ -10,7 +10,7 @@ WHERE NOT EXISTS (SELECT 1 FROM "Rubric" WHERE "name" = 'strode-eng101-essay-2-a
 UPDATE "AssignmentType" AS at
 SET
   "kind" = 'strode_autobiography',
-  "rubricId" = NULL,
+  "rubricId" = (SELECT "id" FROM "Rubric" WHERE "name" = 'strode-eng101-essay-2-autobiography' LIMIT 1),
   "rubricJson" = NULL,
   "scoringScaleJson" = NULL,
   "gradingPromptConfigJson" = NULL,

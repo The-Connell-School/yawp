@@ -10,7 +10,7 @@ WHERE NOT EXISTS (SELECT 1 FROM "Rubric" WHERE "name" = 'gals-claims');
 UPDATE "AssignmentType" AS at
 SET
   "kind" = 'gals_claims',
-  "rubricId" = NULL,
+  "rubricId" = (SELECT "id" FROM "Rubric" WHERE "name" = 'gals-claims' LIMIT 1),
   "rubricJson" = NULL,
   "scoringScaleJson" = NULL,
   "gradingPromptConfigJson" = NULL,
