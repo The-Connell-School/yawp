@@ -44,6 +44,15 @@ afterEach(() => {
 const headings = (root: HTMLElement) =>
   [...root.querySelectorAll('h2')].map((h) => h.textContent);
 
+/** The drop-down button for a section, found by its heading text. */
+const toggle = (root: HTMLElement, name: string) =>
+  [...root.querySelectorAll('button')].find((b) => b.textContent === name);
+
+function open(button: HTMLButtonElement | undefined) {
+  if (!button) throw new Error('no such drop-down');
+  act(() => button.click());
+}
+
 const THESIS_MODULES = [
   { id: 'm0', title: 'Welcome to Yawp! ' },
   { id: 'm1', title: 'Pre-writing' },
@@ -67,19 +76,32 @@ describe('RichText', () => {
 });
 
 describe('LandingDescription', () => {
-  it('renders every description paragraph with no heading', () => {
+  it('shows the first paragraph and keeps the rest behind Read more', () => {
     const root = render(<LandingDescription page={LANDING_PAGES.prewriting} />);
-    const paragraphs = [...root.querySelectorAll('p')];
-    expect(paragraphs).toHaveLength(2);
-    expect(paragraphs[0]!.querySelector('strong')?.textContent).toBe(
+    expect(root.querySelectorAll('p')).toHaveLength(1);
+    expect(root.querySelector('p strong')?.textContent).toBe(
       'Step 1 of the Yawp! writing process.'
     );
+    expect(root.textContent).not.toContain('big, hot, rambling mess');
     expect(root.querySelector('h2')).toBeNull();
+
+    const more = toggle(root, 'Read more');
+    expect(more?.getAttribute('aria-expanded')).toBe('false');
+    open(more);
+    expect(root.querySelectorAll('p')).toHaveLength(2);
+    expect(root.textContent).toContain('big, hot, rambling mess');
+    expect(toggle(root, 'Show less')?.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('has no Read more when the description is one paragraph', () => {
+    const root = render(<LandingDescription page={LANDING_PAGES['exit-ticket']} />);
+    expect(root.querySelectorAll('p')).toHaveLength(1);
+    expect(toggle(root, 'Read more')).toBeUndefined();
   });
 });
 
 describe('LandingSections', () => {
-  it("lays out Exit Ticket's sections with Brian's headings and bold leads", () => {
+  it("lays out Exit Ticket's sections with Brian's headings, closed until a teacher opens one", () => {
     const root = render(
       <LandingSections page={LANDING_PAGES['exit-ticket']} modules={[]} />
     );
@@ -87,12 +109,53 @@ describe('LandingSections', () => {
       'How it works',
       'What makes a good exit ticket',
     ]);
+    // Closed by default: the heading shows, the wall of text does not.
+    const how = toggle(root, 'How it works');
+    expect(how?.getAttribute('aria-expanded')).toBe('false');
+    expect(root.textContent).not.toContain('Tutor off or on?');
+
+    open(how);
+    expect(how?.getAttribute('aria-expanded')).toBe('true');
     const leads = [...root.querySelectorAll('strong')].map((s) => s.textContent);
     expect(leads).toContain('Tutor off or on?');
     expect(leads).toContain('Grading is optional.');
     expect(leads).toContain('New');
+
+    open(toggle(root, 'What makes a good exit ticket'));
     expect(root.querySelectorAll('ul > li')).toHaveLength(5);
     expect(root.textContent).not.toContain('Modules');
+  });
+
+  it('collapses How it works, When to use it, and the what-makes-a-good-one lists, on every page', () => {
+    const collapsible = new Set([
+      'How it works',
+      'When to use it',
+      'What makes a good exit ticket',
+      'What makes a strong thesis',
+    ]);
+    for (const page of Object.values(LANDING_PAGES)) {
+      const root = render(<LandingSections page={page} modules={THESIS_MODULES} />);
+      for (const section of page.sections) {
+        const button = toggle(root, section.heading);
+        expect({ page: page.key, section: section.id, dropDown: !!button }).toEqual({
+          page: page.key,
+          section: section.id,
+          dropDown: collapsible.has(section.heading),
+        });
+        if (button) expect(button.getAttribute('aria-expanded')).toBe('false');
+      }
+      act(() => activeRoot?.unmount());
+      activeRoot = null;
+    }
+  });
+
+  it('keeps How to Teach It and the Prompt Library intro open', () => {
+    const root = render(
+      <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} />
+    );
+    expect(toggle(root, 'How to Teach It')).toBeUndefined();
+    expect(root.querySelector('[data-testid="thesis-essay-course"]')).not.toBeNull();
+    expect(root.textContent).toContain('Have your own prompt?');
   });
 
   it('labels the Prompt Library intro for screen readers only, since the library below carries the visible label', () => {

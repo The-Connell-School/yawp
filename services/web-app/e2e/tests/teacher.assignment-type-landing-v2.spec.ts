@@ -32,7 +32,12 @@ test.describe.serial('Assignment type landing pages (v2)', () => {
         { exact: false }
       )
     ).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'How it works' })).toBeVisible();
+    // How it works is a drop-down that starts closed.
+    const howItWorks = page.getByRole('button', { name: 'How it works' });
+    await expect(howItWorks).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByText('Grading is about effort.')).toHaveCount(0);
+    await howItWorks.click();
+    await expect(howItWorks).toHaveAttribute('aria-expanded', 'true');
     await expect(page.getByText('Grading is about effort.')).toBeVisible();
     await expect(
       page.getByText('Need an idea to get students thinking? Browse the library!')
@@ -66,10 +71,11 @@ test.describe.serial('Assignment type landing pages (v2)', () => {
         exact: false,
       })
     ).toBeVisible();
+    await expect(page.getByText('Tutor off or on?')).toHaveCount(0);
+    await page.getByRole('button', { name: 'How it works' }).click();
     await expect(page.getByText('Tutor off or on?')).toBeVisible();
-    await expect(
-      page.getByRole('heading', { name: 'What makes a good exit ticket' })
-    ).toBeVisible();
+    await page.getByRole('button', { name: 'What makes a good exit ticket' }).click();
+    await expect(page.getByText('Ask for one thing.')).toBeVisible();
     await expect(
       page.getByRole('heading', { name: 'About exit tickets' })
     ).toHaveCount(0);

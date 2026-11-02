@@ -1,9 +1,15 @@
-import { Fragment, type ReactNode } from 'react';
-import { FileText, Presentation } from 'lucide-react';
+import { Fragment, useId, useState } from 'react';
+import * as AccordionPrimitive from '@radix-ui/react-accordion';
+import { ChevronDown, FileText, Presentation } from 'lucide-react';
 
 import { cn } from '~/utils/misc';
 
-import type { LandingBlock, LandingPage, LandingSection } from './content';
+import type {
+  LandingBlock,
+  LandingPage,
+  LandingSection,
+  LandingSectionId,
+} from './content';
 import {
   THESIS_ESSAY_COURSE,
   THESIS_ESSAY_COURSE_TITLE,
@@ -187,14 +193,91 @@ function Block({
 /**
  * The description, in the page header where the type's stored description
  * used to sit. It needs no heading: it is the first thing under the title.
+ *
+ * Only the first paragraph shows at first. A longer description (Pre-Writing,
+ * Thesis Statement) keeps the rest behind Read more, so the header is never a
+ * wall of text before the teacher asks for it.
  */
 export function LandingDescription({ page }: { page: LandingPage }) {
+  const [expanded, setExpanded] = useState(false);
+  const restId = useId();
+  const [first, ...rest] = page.description;
   return (
     <div className="flex flex-col gap-3" data-testid="landing-description">
-      {page.description.map((block, index) => (
-        <Block key={index} block={block} modules={[]} />
-      ))}
+      {first ? <Block block={first} modules={[]} /> : null}
+      {rest.length > 0 && expanded ? (
+        <div id={restId} className="flex flex-col gap-3">
+          {rest.map((block, index) => (
+            <Block key={index} block={block} modules={[]} />
+          ))}
+        </div>
+      ) : null}
+      {rest.length > 0 ? (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={expanded ? restId : undefined}
+          onClick={() => setExpanded((open) => !open)}
+          className="w-fit text-sm font-medium text-foreground underline underline-offset-4 hover:text-primary"
+        >
+          {expanded ? 'Show less' : 'Read more'}
+        </button>
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * Sections that start closed: the heading shows with a chevron, and a teacher
+ * opens the ones they want. Brian's copy is all still there, word for word;
+ * it just is not a wall of text by default. How to Teach It (the course or
+ * the steps) and the Prompt Library intro stay open: they are what a teacher
+ * came to the page to use.
+ */
+export const COLLAPSED_SECTIONS: ReadonlySet<LandingSectionId> = new Set([
+  'how-it-works',
+  'when-to-use-it',
+  'what-makes-a-good-one',
+  'what-makes-a-strong-thesis',
+]);
+
+function CollapsibleSection({
+  section,
+  modules,
+}: {
+  section: LandingSection;
+  modules: LandingModule[];
+}) {
+  const headingId = `landing-${section.id}`;
+  return (
+    <section
+      aria-labelledby={headingId}
+      data-testid={`landing-section-${section.id}`}
+      data-tour={section.id === 'how-it-works' ? 'type-directions' : undefined}
+    >
+      <AccordionPrimitive.Root type="single" collapsible>
+        <AccordionPrimitive.Item value={section.id} className="border-b">
+          <AccordionPrimitive.Header asChild>
+            <h2 id={headingId} className="flex">
+              <AccordionPrimitive.Trigger className="group flex flex-1 items-center justify-between gap-3 py-3 text-left text-base font-semibold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                {section.heading}
+                <ChevronDown
+                  className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180"
+                  aria-hidden
+                />
+              </AccordionPrimitive.Trigger>
+            </h2>
+          </AccordionPrimitive.Header>
+          <AccordionPrimitive.Content className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
+            <div className="flex flex-col gap-3 pb-5 pt-1">
+              {section.blocks.map((block, index) => (
+                <Block key={index} block={block} modules={modules} />
+              ))}
+            </div>
+          </AccordionPrimitive.Content>
+        </AccordionPrimitive.Item>
+      </AccordionPrimitive.Root>
+    </section>
   );
 }
 
@@ -205,6 +288,9 @@ function Section({
   section: LandingSection;
   modules: LandingModule[];
 }) {
+  if (COLLAPSED_SECTIONS.has(section.id)) {
+    return <CollapsibleSection section={section} modules={modules} />;
+  }
   const headingId = `landing-${section.id}`;
   // The library right below the intro is labelled "Prompt Library" already;
   // a second visible heading saying the same thing would only stack up.
@@ -242,10 +328,29 @@ export function LandingSections({
   page: LandingPage;
   modules: LandingModule[];
 }) {
+  // Back-to-back drop-downs stack as one list, like the library's own row;
+  // open sections keep their breathing room around them.
+  const groups: LandingSection[][] = [];
+  for (const section of page.sections) {
+    const last = groups.at(-1);
+    if (
+      last &&
+      COLLAPSED_SECTIONS.has(section.id) &&
+      COLLAPSED_SECTIONS.has(last[0]!.id)
+    ) {
+      last.push(section);
+    } else {
+      groups.push([section]);
+    }
+  }
   return (
     <div className="mb-6 flex flex-col gap-6" data-testid="assignment-type-landing">
-      {page.sections.map((section) => (
-        <Section key={section.id} section={section} modules={modules} />
+      {groups.map((group) => (
+        <div key={group[0]!.id} className="flex flex-col">
+          {group.map((section) => (
+            <Section key={section.id} section={section} modules={modules} />
+          ))}
+        </div>
       ))}
     </div>
   );
