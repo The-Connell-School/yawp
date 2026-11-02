@@ -166,6 +166,7 @@ export function CreateAssignmentSheet({
           plannedExitTicket?.reflectionPrompt ?? null
         }
         initialExitTicketGrading={plannedExitTicket?.grading ?? null}
+        initialExitTicketConfig={plannedExitTicket?.config ?? null}
         initialExitTicketGradebook={
           plannedExitTicket
             ? {

@@ -10,6 +10,9 @@ import {
   BASIC_EXIT_TICKET_PROMPT,
   EXIT_TICKET_CONFIG_SCHEMA_VERSION,
   EXIT_TICKET_ELABORATION_NOTE,
+  EXIT_TICKET_EXPLAIN_CLOSER,
+  EXIT_TICKET_POLISH_CLOSER,
+  exitTicketStarterOption,
 } from '~/domain/assignment-types/exit-ticket';
 
 function fenced(body: string) {
@@ -257,5 +260,130 @@ describe('readExitTicketPrefill', () => {
       pointValue: null,
       grading: null,
     });
+  });
+});
+
+describe('a v3 exit ticket block', () => {
+  const QUESTION = 'Who is Allie, and why does Holden keep thinking about him?';
+
+  it('reads an activity and the planner’s own prompt', () => {
+    const { tickets } = readPlannedExitTickets(
+      fenced(
+        [
+          'title: Exit ticket: Allie',
+          'activity: answer-question',
+          `promptText: ${QUESTION}`,
+          'mustMention: His younger brother, who died.',
+        ].join('\n')
+      )
+    );
+    expect(tickets).toHaveLength(1);
+    expect(tickets[0]!.config).toMatchObject({
+      mode: 'specific',
+      activity: 'answer-question',
+      promptText: QUESTION,
+      lessonNotes: { mustMention: 'His younger brother, who died.' },
+    });
+    expect(tickets[0]!.prompt).toBe(
+      `${QUESTION}\n\n${EXIT_TICKET_POLISH_CLOSER}`
+    );
+    expect(tickets[0]!.title).toBe('Exit ticket: Allie');
+  });
+
+  it('a reflection starter keeps the starter’s closer', () => {
+    const learned = exitTicketStarterOption('learned')!;
+    const { tickets } = readPlannedExitTickets(
+      fenced(
+        [
+          'activity: reflect',
+          `promptText: ${learned.prompt}`,
+          'starter: learned',
+        ].join('\n')
+      )
+    );
+    expect(tickets[0]!.prompt).toBe(
+      `${learned.prompt}\n\n${EXIT_TICKET_EXPLAIN_CLOSER}`
+    );
+  });
+
+  it('a graded block with no basis is graded for completion', () => {
+    const { tickets } = readPlannedExitTickets(
+      fenced(
+        [
+          'activity: explain-concept',
+          'promptText: Explain irony.',
+          'graded: yes',
+        ].join('\n')
+      )
+    );
+    expect(tickets[0]!.graded).toBe(true);
+    expect(tickets[0]!.config.grading).toEqual({ basis: 'completion' });
+  });
+
+  it('“quality” still means understanding', () => {
+    const { tickets } = readPlannedExitTickets(
+      fenced(
+        [
+          'activity: engage-text',
+          'promptText: Find the volta.',
+          'graded: yes',
+          'basis: quality',
+        ].join('\n')
+      )
+    );
+    expect(tickets[0]!.config.grading).toEqual({ basis: 'bands' });
+  });
+
+  it('“understanding” is the v3 name for the same basis', () => {
+    const { tickets } = readPlannedExitTickets(
+      fenced(
+        [
+          'activity: reflect',
+          'promptText: What surprised you?',
+          'graded: yes',
+          'basis: understanding',
+        ].join('\n')
+      )
+    );
+    expect(tickets[0]!.config.grading).toEqual({ basis: 'bands' });
+  });
+
+  it('drops a block with an activity but no prompt', () => {
+    const { tickets } = readPlannedExitTickets(
+      fenced('activity: answer-question')
+    );
+    expect(tickets).toHaveLength(0);
+  });
+
+  it('carries the activity through the create link to the sheet', () => {
+    const { tickets } = readPlannedExitTickets(
+      fenced(
+        [
+          'activity: answer-question',
+          `promptText: ${QUESTION}`,
+          'mustMention: His younger brother.',
+          'graded: yes',
+          'basis: completion',
+          'points: 5',
+        ].join('\n')
+      )
+    );
+    const href = exitTicketCreateHref('type-1', tickets[0]!, 'conv-1');
+    const prefill = readExitTicketPrefill(
+      new URL(href, 'http://x').searchParams
+    );
+    expect(prefill?.config).toEqual(tickets[0]!.config);
+    expect(prefill?.graded).toBe(true);
+    expect(prefill?.pointValue).toBe(5);
+    // The legacy fields still ride along for the quick builder.
+    expect(prefill?.mode).toBe('specific');
+    expect(prefill?.lessonNotes?.mustMention).toBe('His younger brother.');
+  });
+
+  it('a legacy link has no v3 config', () => {
+    const prefill = readExitTicketPrefill(
+      new URLSearchParams({ exitTicketMode: 'basic' })
+    );
+    expect(prefill?.config ?? null).toBeNull();
   });
 });
