@@ -14,7 +14,7 @@ const {
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, UNIFIED_SIGN_ON_FLAG, TEACHER_PROMPT_GENERATOR_FLAG, EXIT_TICKET_BUILDER_V3_FLAG, FOLDED_FREE_TIER_LEGACY_SETTINGS, FOLDED_UNIFIED_SIGNON_LEGACY_SETTINGS } = await import(
+const { GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, UNIFIED_SIGN_ON_FLAG, TEACHER_PROMPT_GENERATOR_FLAG, EXIT_TICKET_BUILDER_V3_FLAG, EXIT_TICKET_CLASS_SUMMARY_FLAG, FOLDED_FREE_TIER_LEGACY_SETTINGS, FOLDED_UNIFIED_SIGNON_LEGACY_SETTINGS } = await import(
   './feature-flags'
 );
 const { isUnifiedSignOnEnabled } = await import('../unified-signon/gate.server');
@@ -334,6 +334,7 @@ describe('feature flags (server)', () => {
       GUIDED_TOURS_FLAG,
       TEACHER_PROMPT_GENERATOR_FLAG,
       EXIT_TICKET_BUILDER_V3_FLAG,
+      EXIT_TICKET_CLASS_SUMMARY_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -376,6 +377,7 @@ describe('feature flags (server)', () => {
       GUIDED_TOURS_FLAG,
       TEACHER_PROMPT_GENERATOR_FLAG,
       EXIT_TICKET_BUILDER_V3_FLAG,
+      EXIT_TICKET_CLASS_SUMMARY_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;

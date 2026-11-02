@@ -138,6 +138,7 @@ describe('internal feature-flag endpoints', () => {
       'guided-tours',
       'teacher-prompt-generator',
       'exit-ticket-builder-v3',
+      'exit-ticket-class-summary',
     ]);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
@@ -237,6 +238,7 @@ describe('internal feature-flag endpoints', () => {
       'guided-tours',
       'teacher-prompt-generator',
       'exit-ticket-builder-v3',
+      'exit-ticket-class-summary',
     ]);
   });
 

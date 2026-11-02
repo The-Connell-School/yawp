@@ -294,4 +294,90 @@ test.describe.serial('Exit tickets, v3 builder', () => {
       'In your own words, explain erosion.'
     );
   });
+
+  test('the class summary reads every response and plans tomorrow from it', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await setFeatureFlag('exit-ticket-class-summary', true);
+    try {
+      const title = 'Exit ticket v3: summary';
+      const prisma = createE2EPrismaClient();
+      let assignmentId: string;
+      try {
+        const assignment = await prisma.assignment.create({
+          data: {
+            title,
+            prompt: `${QUESTION}\n\n${EXIT_TICKET_POLISH_CLOSER}`,
+            assignmentTypeId: e2eContext.exitTicketAssignmentTypeId,
+            submitForGrade: false,
+            tutorEnabled: false,
+          },
+          select: { id: true },
+        });
+        assignmentId = assignment.id;
+        const classAssignment = await prisma.classAssignment.create({
+          data: { assignmentId, classId: e2eContext.classId },
+          select: { id: true },
+        });
+        for (const text of [
+          'Allie is his little brother who died.',
+          'He is Holden’s brother, D.B.?',
+          'A friend from Pencey.',
+        ]) {
+          const document = await prisma.document.create({
+            data: {
+              title,
+              text,
+              html: `<p>${text}</p>`,
+              membershipId: e2eContext.membershipId,
+              assignmentTypeId: e2eContext.exitTicketAssignmentTypeId,
+              assignmentId,
+              classAssignmentId: classAssignment.id,
+            },
+            select: { id: true },
+          });
+          await prisma.submission.create({
+            data: {
+              documentId: document.id,
+              text,
+              html: `<p>${text}</p>`,
+              title,
+              submittedAt: new Date(),
+            },
+          });
+        }
+      } finally {
+        await prisma.$disconnect();
+      }
+
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto(`/app/assignments/${assignmentId}`);
+      const summary = page.getByTestId('exit-ticket-summary');
+      await summary
+        .getByRole('button', { name: 'Summarize responses' })
+        .click();
+      // E2E runs the summary in fixture mode: no model call.
+      await expect(summary).toContainText('Across 3 responses');
+      await expect(summary).toContainText('Quick review');
+      await expect(summary).toContainText('Tomorrow: Explain it back');
+      await expect(summary).toContainText(
+        'Every response is still in the list below.'
+      );
+      // Nothing new since, so nothing to click.
+      await expect(summary.getByRole('button')).toHaveCount(0);
+      await page.screenshot({
+        path: 'test-results/exit-ticket-class-summary.png',
+        fullPage: true,
+      });
+
+      await page.getByTestId('exit-ticket-plan-tomorrow').click();
+      await expect(page.getByTestId('lesson-planner-seed')).toContainText(
+        'Recommendation: Quick review'
+      );
+    } finally {
+      await setFeatureFlag('exit-ticket-class-summary', false);
+    }
+  });
 });

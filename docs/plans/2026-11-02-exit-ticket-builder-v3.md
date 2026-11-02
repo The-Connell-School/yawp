@@ -228,6 +228,27 @@ On `claude/affectionate-noether-6g3y31`:
   `assignment-creation-sheet.test.tsx`. E2E spec
   `e2e/tests/teacher.exit-ticket-v3.spec.ts` is written but could not run in
   the build container (no Docker/Postgres); it needs a local or CI run.
-- **Phase 4 (planner): not started.** Until it lands, planner hand-offs still
-  work: the v3 sheet converts the legacy prefill into an activity and prompt.
-- **Phase 5 (class summary): not started.**
+- **Phase 4 (planner): done.** The `yawp-exit-ticket` block takes
+  `activity`, `promptText` and `starter`; the create link and prefill carry
+  them as a config, so the v3 sheet opens what the planner wrote. With the
+  flag on, the system prompt teaches the activities, key points, completion
+  or understanding grading, and Brian's wording rule (for printed tickets too),
+  and tells the planner not to write the closing line. Cached under a `-et3`
+  marker; flag off is byte-for-byte unchanged.
+- **Phase 5 (class summary): done, e2e not yet run.** Flag
+  `exit-ticket-class-summary`. New table `ExitTicketClassSummary` (migration
+  `20261102120000_exit_ticket_class_summary`, with rollback). Teacher clicks
+  **Summarize responses** on the Class read; one model call reads the
+  response texts (never names) and returns what the class understood, up to
+  three shared confusions, a call (Move on / Quick review / Reteach) and a
+  5–15 minute opening block for tomorrow. Stored with a fingerprint of the
+  responses: a second click costs nothing until a response arrives or
+  changes, then the button reads **Update summary**. Same admission limits as
+  the class insight; fixture in dev and e2e. **Plan tomorrow from this**
+  passes the call and the opening block to the planner while the summary is
+  current. Files: `exit-ticket-class-summary.ts` (+ `.server.ts`),
+  `routes/api.domain.exit-ticket-summary`, `exit-ticket-summary-section.tsx`,
+  `lesson-seed.server.ts`.
+
+Still open for the team: whether the summary should generate on its own once
+a class has handed in (cost per class per day), and whether admins see it.
