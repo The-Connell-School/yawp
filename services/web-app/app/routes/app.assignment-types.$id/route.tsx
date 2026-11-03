@@ -63,9 +63,15 @@ import { ShortFormPromptGenerator } from './short-form-prompts-library/short-for
 import { ExitTicketPromptGenerator } from './exit-ticket-prompt-generator/exit-ticket-prompt-generator';
 import type { GeneratedExitTicketOption } from './exit-ticket-prompt-generator/prompt-generator';
 import { isTeacherPromptGeneratorEnabled } from '~/domain/teacher-prompt-generator/gate.server';
+import { isHowToTeachItEnabled } from '~/domain/assignment-types/how-to-teach-it.server';
+import {
+  normalizeTeachLink,
+  showHowToTeachIt,
+} from '~/domain/assignment-types/how-to-teach-it';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
 import { AboutExitTicket } from './about-exit-ticket/about-exit-ticket';
+import { HowToTeachIt } from './how-to-teach-it/how-to-teach-it';
 import { isExitTicketAssignmentType } from '~/domain/assignment-types/exit-ticket';
 import {
   resolvePromptLibraryVariant,
@@ -159,6 +165,8 @@ type AssignmentTypeDetailRow = {
     title: string;
     description: string | null;
     position: number;
+    lessonUrl: string | null;
+    tutorialVideoUrl: string | null;
   }>;
 };
 
@@ -445,6 +453,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             title: true,
             description: true,
             position: true,
+            lessonUrl: true,
+            tutorialVideoUrl: true,
           },
           orderBy: { position: 'asc' },
         },
@@ -612,9 +622,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isTeacher
       ? await isTeacherPromptGeneratorEnabled(profile.organization.id)
       : false;
+  const howToTeachItEnabled = isTeacher
+    ? await isHowToTeachItEnabled(profile.organization.id)
+    : false;
 
   return dataResponse({
-    assignmentType,
+    assignmentType: {
+      ...assignmentType,
+      // Admin-typed links: only http(s) and in-app paths reach an href.
+      assignmentModules: assignmentType.assignmentModules.map((module) => ({
+        ...module,
+        lessonUrl: normalizeTeachLink(module.lessonUrl),
+        tutorialVideoUrl: normalizeTeachLink(module.tutorialVideoUrl),
+      })),
+    },
     assignmentCreationAvailability,
     assignmentTypeGradesGrammar,
     documents: isStudent
@@ -634,6 +655,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       profile.role === 'TEACHER' &&
       isExitTicketAssignmentType(assignmentType),
     teacherPromptGeneratorEnabled,
+    howToTeachItEnabled,
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -871,6 +893,13 @@ export default function AppAssignmentTypesIdRoute() {
   // now contradicts. The module row itself stays: documents are created inside
   // it, and `hasModules` still gates New → Document.
   const showModules = modulesVisible && !showShortFormLibrary;
+  // Teachers see the same modules as How to Teach It rows; students, and
+  // everyone while the flag is off, keep the Modules dropdown.
+  const showTeachIt = showHowToTeachIt({
+    isTeacher,
+    flagEnabled: data.howToTeachItEnabled,
+    modulesVisible: showModules,
+  });
   // The same door, for the other end of the lesson: the planner sends a
   // teacher here with the exit ticket its plan ended on, already answered.
   // They still read the composed prompt in the sheet before a class sees it.
@@ -1172,7 +1201,9 @@ export default function AppAssignmentTypesIdRoute() {
         {data.apHistoryLibrary?.mode === 'teacher' ? (
           <ApHistoryTeacherDirections />
         ) : null}
-        {showModules ? (
+        {showTeachIt ? (
+          <HowToTeachIt modules={data.assignmentType.assignmentModules} />
+        ) : showModules ? (
           <Accordion type="single" collapsible data-tour="type-modules">
             <AccordionItem value="modules">
               <AccordionTrigger className="py-2 text-base">
