@@ -1,4 +1,5 @@
 import { MadeNotice } from '~/components/lesson-planner/made-notice';
+import { useActiveTime } from '~/components/lesson-planner/use-active-time';
 import { DeckPicturesProvider } from '~/components/lesson-planner/slide-picture';
 import { picturedDecks, viewerDeckPictures } from '~/domain/lesson-planner/deck-pictures.server';
 import {
@@ -547,6 +548,8 @@ export default function LessonPlannerRoute() {
 
   // A streamed turn is in flight exactly while there is a bar to draw.
   const isSending = fetcher.state !== 'idle' || progress !== null;
+  // "Planned in" is working time (Nov 3): this page counts it.
+  useActiveTime({ conversationId, enabled: reviewFlags.activeTime, waiting: isSending });
   // Whichever path answered. Only one runs per turn.
   const result = streamed ?? (fetcher.state === 'idle' ? fetcher.data : null);
 

@@ -1666,8 +1666,17 @@ model LessonPlanConversation {
   planSummary             Json?
   planSummaryKey          String?
   /// When the teacher said "This lesson is set" (stack page redesign); null
-  /// while it is still being worked on. Built-in time is setAt − createdAt.
+  /// while it is still being worked on. Built-in time was setAt − createdAt;
+  /// with lesson_planner_active_time it is the working time below (Nov 3).
   setAt                   DateTime?                  @db.Timestamptz(6)
+  /// Seconds the teacher spent working on the lesson before setting it: the
+  /// planner pages count while they are in front of the teacher and in use.
+  activeSeconds           Int                        @default(0)
+  /// When that clock first counted this lesson; earlier activity is estimated.
+  activeSince             DateTime?                  @db.Timestamptz(6)
+  /// When the page last reported, so no report is credited more than the
+  /// time that has passed since the one before.
+  activeReportedAt        DateTime?                  @db.Timestamptz(6)
   /// The day this lesson will be taught. Null: not chosen yet.
   lessonDate              DateTime?                  @db.Timestamptz(6)
   /// The lesson's first name, kept once the teacher renames it, for "Started

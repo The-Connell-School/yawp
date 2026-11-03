@@ -11,6 +11,7 @@ import type { StackTiming } from '~/domain/lesson-planner/stack-timing';
 import { READY_LINE, type BeforeClassItem } from '~/domain/lesson-planner/before-class';
 import { YawpChecklist } from './yawp-checklist';
 import { HEADING_FONT } from './theme';
+import { formatPlanningTime } from '~/domain/lesson-planner/active-time';
 
 function weekday(iso: string | null): string {
   if (!iso) return 'class';
@@ -73,6 +74,7 @@ export function FinishLine({
   timing,
   createdAt,
   setAt,
+  planningSeconds = null,
   lessonDate,
   onSet,
   onKeepEditing,
@@ -91,6 +93,8 @@ export function FinishLine({
   timing: StackTiming;
   createdAt: string;
   setAt: string | null;
+  /** Working time (Nov 3); null shows the time from first message to set. */
+  planningSeconds?: number | null;
   lessonDate: string | null;
   onSet: () => void;
   onKeepEditing: () => void;
@@ -154,13 +158,24 @@ export function FinishLine({
         <Check size={18} /> Lesson set for {shortDate(lessonDate)}
       </h2>
       <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
-        {/* Not class time (Kevin's note 12b): how long the planning took. */}
-        <div className="rounded-lg bg-[#F1EBE2] p-2" title="From your first message to setting the lesson">
+        {/* Not class time (Kevin's note 12b): how long the planning took. With
+            the planning clock on (Nov 3), the time spent working on it, not the
+            time since it was started. */}
+        <div
+          className="rounded-lg bg-[#F1EBE2] p-2"
+          title={
+            planningSeconds !== null
+              ? 'Time you spent working on this lesson, with breaks and time away left out'
+              : 'From your first message to setting the lesson'
+          }
+        >
           <dt className="text-[10px] font-semibold uppercase tracking-wide text-[var(--sv-muted)]">Planned in</dt>
           <dd data-testid="stat-built" className="text-lg font-bold" style={HEADING_FONT}>
-            {builtIn(createdAt, setAt)}
+            {planningSeconds !== null ? formatPlanningTime(planningSeconds) : builtIn(createdAt, setAt)}
           </dd>
-          <dd className="text-[10px] leading-tight text-[var(--sv-muted)]">from first message to set</dd>
+          <dd className="text-[10px] leading-tight text-[var(--sv-muted)]">
+            {planningSeconds !== null ? 'of actual work' : 'from first message to set'}
+          </dd>
         </div>
         <div className="rounded-lg bg-[#F1EBE2] p-2">
           <dt className="text-[10px] font-semibold uppercase tracking-wide text-[var(--sv-muted)]">Class time</dt>

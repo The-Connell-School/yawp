@@ -109,6 +109,9 @@ export const LESSON_PLANNER_TEACH_MY_SLIDES_FLAG = 'lesson_planner_teach_my_slid
 /** "Refresh into a Yawp! deck": the teacher's pictures on Yawp! slides (Nov 1). Needs upload pictures. */
 export const LESSON_PLANNER_REFRESH_MY_DECK_FLAG = 'lesson_planner_refresh_my_deck' as const;
 
+/** "Planned in" counts the time the teacher was actually working on the lesson (Nov 3). */
+export const LESSON_PLANNER_ACTIVE_TIME_FLAG = 'lesson_planner_active_time' as const;
+
 /**
  * The teacher's own deck flags as they apply (Nov 1): keeping the deck needs
  * uploads, and both choices work from the kept deck.
@@ -256,6 +259,11 @@ export const FEATURE_FLAGS = {
     label: 'Lesson Planner: refresh my deck',
     description:
       'An attached PowerPoint can be marked “Refresh into a Yawp! deck”: the planner rebuilds it as a Yawp! deck and keeps the teacher’s own pictures on picture slides, in Present, PowerPoint and PDF. A shared lesson shows a placeholder in place of the teacher’s pictures. Needs keep uploaded decks. Off: no refresh choice; decks already made still show their pictures.',
+  },
+  [LESSON_PLANNER_ACTIVE_TIME_FLAG]: {
+    label: 'Lesson Planner: planning time is working time',
+    description:
+      'The planner pages count the time a teacher is actually working on a lesson (the page in front of them and in use, or waiting on the planner), and “Planned in” on a set lesson shows that instead of the clock time since the lesson was started. Lessons from before are estimated from their activity, with breaks left out. Off: “Planned in” is the time from the first message to set, and nothing is counted.',
   },
   [UNIFIED_SIGN_ON_FLAG]: {
     label: 'Unified sign-on',

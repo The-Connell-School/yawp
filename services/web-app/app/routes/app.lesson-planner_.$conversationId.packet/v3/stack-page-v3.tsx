@@ -562,6 +562,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
               timing={timing}
               createdAt={v3.createdAt}
               setAt={v3.setAt}
+              planningSeconds={v3.planningSeconds}
               lessonDate={v3.lessonDate}
               missing={missing}
               onPaper={markPaper}

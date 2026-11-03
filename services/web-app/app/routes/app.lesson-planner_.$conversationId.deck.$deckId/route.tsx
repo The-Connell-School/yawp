@@ -6,6 +6,7 @@
  * Yawp! template as it changes, then save: the edit replaces the planner's
  * deck in the chat, in the stack, in Present and in PowerPoint.
  */
+import { useActiveTime } from '~/components/lesson-planner/use-active-time';
 import { DeckPicturesProvider } from '~/components/lesson-planner/slide-picture';
 import { viewerDeckPictures } from '~/domain/lesson-planner/deck-pictures.server';
 import { useEffect, useRef, useState } from 'react';
@@ -72,15 +73,15 @@ export function deckEditorReturnTo(conversationId: string, url: string) {
 async function requireDeckEditor(request: Request) {
   const access = await getLessonPlannerAccess(request);
   if (!access.allowed) throw redirect('/app');
-  const { deckV2, deckGallery } = await getLessonPlannerReviewFlags(
+  const { deckV2, deckGallery, activeTime } = await getLessonPlannerReviewFlags(
     access.membership.organization.id
   );
   if (!deckV2) throw new Response('Not Found', { status: 404 });
-  return { access, deckGallery };
+  return { access, deckGallery, activeTime };
 }
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  const { deckGallery } = await requireDeckEditor(request);
+  const { deckGallery, activeTime } = await requireDeckEditor(request);
   const { conversationId, lessonTitle, deck } = await loadLessonDeck({
     request,
     conversationId: params.conversationId,
@@ -102,6 +103,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     returnTo: deckEditorReturnTo(conversationId, request.url),
     // The teacher's own pictures on its slides (Nov 1).
     pictures: await viewerDeckPictures(request, [deck]),
+    activeTime,
   };
 }
 
@@ -166,8 +168,10 @@ export default function DeckEditorRoute() {
 }
 
 function DeckEditor() {
-  const { lessonTitle, deck: loaded, returnTo, periodMinutes, gallery } =
+  const { lessonTitle, deck: loaded, returnTo, periodMinutes, gallery, conversationId, activeTime } =
     useLoaderData<typeof loader>();
+  // "Planned in" is working time (Nov 3): editing the deck is planning too.
+  useActiveTime({ conversationId, enabled: activeTime });
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const [deck, setDeck] = useState<SlideDeck>(loaded);
