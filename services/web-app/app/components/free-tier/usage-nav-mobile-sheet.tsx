@@ -144,7 +144,6 @@ export function UsageNavMobileSheet({
             count={count}
             level={level}
             renewsAtIso={renewsAtIso}
-            showFeatureLabel={false}
           />
         </SheetPrimitive.Content>
     </SheetPrimitive.Portal>

@@ -15,6 +15,14 @@ function usage(
     lessonPlannerMonthlyMetering: true,
     usageNavMetersAvailable: true,
     renewsAt: '2026-11-01T00:00:00.000Z',
+    classId: null,
+    checklist: {
+      classReady: false,
+      assignmentCreated: false,
+      writingSubmitted: false,
+      graded: false,
+    },
+    gradingPause: null,
     ...overrides,
   };
 }

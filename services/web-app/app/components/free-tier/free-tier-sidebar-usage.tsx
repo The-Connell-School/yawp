@@ -1,4 +1,4 @@
-import { ChevronRight } from 'lucide-react';
+import { ChartColumn, ChevronRight } from 'lucide-react';
 import type { FreeAccountUsage } from '~/domain/free-tier/inapp-usage';
 import { lessonPlannerMonthlyUsage } from '~/domain/free-tier/inapp-usage';
 import { usageNavLevelFromCount } from '~/domain/free-tier/usage-nav-meter';
@@ -7,7 +7,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '~/components/ui/popover';
-import { UsageNavPopoverBody } from '~/components/free-tier/usage-nav-popover-body';
+import { UsageNavMonthlyUsagePopover } from '~/components/free-tier/usage-nav-popover-body';
 import { cn } from '~/utils/misc';
 
 export function FreeTierSidebarUsage({
@@ -27,6 +27,26 @@ export function FreeTierSidebarUsage({
   if (!showLessonPlanner && !showReporter) return null;
 
   const renewsAt = usage.renewsAt;
+  const rows = [
+    ...(showLessonPlanner
+      ? [
+          {
+            feature: 'lesson-planner' as const,
+            count: lessonPlannerMonthlyUsage(usage),
+            level: usageNavLevelFromCount(lessonPlannerMonthlyUsage(usage)),
+          },
+        ]
+      : []),
+    ...(showReporter && usage.reporter
+      ? [
+          {
+            feature: 'reporter' as const,
+            count: usage.reporter,
+            level: usageNavLevelFromCount(usage.reporter),
+          },
+        ]
+      : []),
+  ];
 
   return (
     <Popover>
@@ -38,11 +58,18 @@ export function FreeTierSidebarUsage({
           <div
             data-testid="free-tier-sidebar-usage"
             className={cn(
-              'flex w-full items-center justify-between gap-2 border-t text-left text-sm font-medium text-foreground transition hover:bg-foreground/5',
+              'flex w-full items-center justify-between gap-2 border-t text-left text-sm text-foreground transition hover:bg-foreground/5',
               loading && 'opacity-60'
             )}
           >
-            <span>Usage</span>
+            <span className="flex min-w-0 items-center gap-2">
+              <ChartColumn
+                size={18}
+                className="size-[17px] shrink-0"
+                aria-hidden
+              />
+              Usage
+            </span>
             <ChevronRight
               size={16}
               className="shrink-0 text-muted-foreground"
@@ -54,25 +81,11 @@ export function FreeTierSidebarUsage({
       <PopoverContent
         side="right"
         align="end"
+        sideOffset={10}
         collisionPadding={8}
-        className="w-72 space-y-4 p-4"
+        className="w-[185px] rounded-[10px] border-0 p-3 shadow-[0_8px_28px_rgba(15,23,42,0.12)]"
       >
-        {showLessonPlanner ? (
-          <UsageNavPopoverBody
-            feature="lesson-planner"
-            count={lessonPlannerMonthlyUsage(usage)}
-            level={usageNavLevelFromCount(lessonPlannerMonthlyUsage(usage))}
-            renewsAtIso={renewsAt}
-          />
-        ) : null}
-        {showReporter && usage.reporter ? (
-          <UsageNavPopoverBody
-            feature="reporter"
-            count={usage.reporter}
-            level={usageNavLevelFromCount(usage.reporter)}
-            renewsAtIso={renewsAt}
-          />
-        ) : null}
+        <UsageNavMonthlyUsagePopover renewsAtIso={renewsAt} rows={rows} />
       </PopoverContent>
     </Popover>
   );
