@@ -121,6 +121,60 @@ test.describe.serial('How to Teach It on assignment-type pages', () => {
     await expect(row.getByRole('link')).toHaveCount(0);
   });
 
+  test('admins set a module\'s lesson and tutorial links in its editor', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    let moduleId: string;
+    try {
+      moduleId = (
+        await prisma.assignmentModule.findFirstOrThrow({
+          where: { assignmentTypeId: e2eContext.thesisEssayAssignmentTypeId },
+          select: { id: true },
+        })
+      ).id;
+    } finally {
+      await prisma.$disconnect();
+    }
+
+    await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
+    await page.goto(
+      `/app/admin/assignment-types/${e2eContext.thesisEssayAssignmentTypeId}/modules/${moduleId}`
+    );
+
+    await page.getByRole('button', { name: 'Edit Module' }).click();
+    await page.getByLabel('How to Teach It: lesson link').fill(LESSON_URL);
+    await page.getByLabel('How to Teach It: tutorial video link').fill(VIDEO_URL);
+    await page.getByRole('button', { name: 'Save Changes' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByText(VIDEO_URL)).toBeVisible();
+    await expect(page.getByText(LESSON_URL)).toBeVisible();
+
+    // A link that is not https or an in-app path never saves.
+    await page.getByRole('button', { name: 'Edit Module' }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page
+      .getByLabel('How to Teach It: tutorial video link')
+      .fill('javascript:alert(1)');
+    await page.getByRole('button', { name: 'Save Changes' }).click();
+    await expect(
+      page.getByText('Use a full https:// link, or an in-app path starting with /')
+    ).toBeVisible();
+
+    const check = createE2EPrismaClient();
+    try {
+      const saved = await check.assignmentModule.findUniqueOrThrow({
+        where: { id: moduleId },
+        select: { lessonUrl: true, tutorialVideoUrl: true },
+      });
+      expect(saved).toEqual({ lessonUrl: LESSON_URL, tutorialVideoUrl: VIDEO_URL });
+    } finally {
+      await check.$disconnect();
+    }
+  });
+
   test('flag on: students keep the Modules dropdown', async ({
     page,
     e2eContext,

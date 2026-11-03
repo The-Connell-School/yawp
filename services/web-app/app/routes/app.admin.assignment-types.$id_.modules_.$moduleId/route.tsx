@@ -335,6 +335,9 @@ export default function AssignmentModuleRoute() {
     setIsMounted(true);
   }, []);
 
+  // Set when the module sheet submits; see the sheet close effect below.
+  const moduleSavePending = React.useRef(false);
+
   // Module form
   const moduleForm = useForm({
     id: 'edit-module-form',
@@ -348,6 +351,7 @@ export default function AssignmentModuleRoute() {
       tutorialVideoUrl: module.tutorialVideoUrl || '',
     },
     handleSubmit: (_data, formData) => {
+      moduleSavePending.current = true;
       moduleFetcher.submit(formData, {
         method: 'post',
         action: `/app/admin/assignment-types/${course.id}/modules/${module.id}`,
@@ -355,13 +359,17 @@ export default function AssignmentModuleRoute() {
     },
   });
 
-  // Sheet close effect for module
+  // Sheet close effect for module. Only a save made from this opening closes
+  // it: the fetcher keeps the last save's `success`, which would otherwise
+  // snap the sheet shut the moment it is reopened for a second edit.
   React.useEffect(() => {
     if (
       moduleFetcher.state === 'idle' &&
       moduleFetcher.data?.status === 'success' &&
-      isModuleSheetOpen
+      isModuleSheetOpen &&
+      moduleSavePending.current
     ) {
+      moduleSavePending.current = false;
       setIsModuleSheetOpen(false);
     }
   }, [moduleFetcher.state, moduleFetcher.data, isModuleSheetOpen]);
