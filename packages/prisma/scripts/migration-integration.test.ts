@@ -55,9 +55,14 @@ function jsonQuery(sql: string) {
   return JSON.parse(line);
 }
 
-// Migrations that redefine the #383/#386 trigger functions. They must never be applied
-// before those two in the "up to before" copies, or they create the functions early.
-const DEPENDS_ON_PIN_MIGRATIONS = ['20261007160000_rubric_revision_actor'];
+// Migrations that redefine or call the #383/#386 functions (canonical_json and the
+// rubric-revision triggers). They must never be applied before those two in the
+// "up to before" copies: they would create the functions early, or call
+// canonical_json before it exists.
+const DEPENDS_ON_PIN_MIGRATIONS = [
+  '20261007160000_rubric_revision_actor',
+  '20261101120000_class_starter_three_band_rubric',
+];
 
 function setupTempCopy(excludeMigrations: string[] = []) {
   const dir = mkdtempSync(join(tmpdir(), 'yawp-prisma-'));
@@ -402,12 +407,19 @@ describe('migration integration (real Postgres)', () => {
         `SELECT md5(COALESCE(string_agg((to_jsonb(t))::text, '' ORDER BY id), ''))
          FROM (SELECT * FROM "${tbl}" ${where} ORDER BY id) t;`]).stdout.trim().split('\n').pop();
     }
+    // Rubrics added by DEPENDS_ON_PIN_MIGRATIONS only exist after the full
+    // deploy, never in the pre-migration snapshot. RubricRevision is
+    // append-only, so they are left in place and excluded from the compare.
+    const POST_PIN_ONLY_RUBRICS = `'class-starter-three-band'`;
     const postHash = {
-      Rubric: hash('Rubric'),
+      Rubric: hashWhere('Rubric', `"name" NOT IN (${POST_PIN_ONLY_RUBRICS})`),
       AssignmentType: hash('AssignmentType'),
       Assignment: hash('Assignment'),
       // Exclude rev-pub-3 which is intentionally preserved after rollback
-      RubricRevision: hashWhere('RubricRevision', `id <> 'rev-pub-3'`),
+      RubricRevision: hashWhere(
+        'RubricRevision',
+        `id <> 'rev-pub-3' AND "rubricName" NOT IN (${POST_PIN_ONLY_RUBRICS})`
+      ),
     };
     try {
       expect(postHash).toEqual(preHash);
