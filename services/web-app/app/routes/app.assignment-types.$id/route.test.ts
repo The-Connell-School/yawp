@@ -267,24 +267,11 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     prisma.savedDailyPagesPrompt.findMany.mockResolvedValue([]);
   });
 
-  test('hides the modules list on Class Starter (single module)', () => {
+  test('hides the modules accordion on this tip', () => {
     expect(showModulesAccordion({ kind: 'class_starter' }, 1)).toBe(false);
-  });
-
-  test('hides the modules list on an exit ticket', () => {
-    // The exit ticket has one module whose whole description is "answer the
-    // exit ticket in your own words". The directions above it already say
-    // that, so the accordion is noise on this page only.
     expect(showModulesAccordion({ kind: 'exit_ticket' }, 1)).toBe(false);
-    expect(showModulesAccordion({ kind: null }, 1)).toBe(true);
-  });
-
-  test('hides the modules list on an exit ticket for students too', () => {
-    // Not gated on role: the row is equally uninformative either way.
+    expect(showModulesAccordion({ kind: null }, 1)).toBe(false);
     expect(showModulesAccordion({ kind: 'exit_ticket' }, 3)).toBe(false);
-  });
-
-  test('still hides the modules list when there are no modules at all', () => {
     expect(showModulesAccordion({ kind: null }, 0)).toBe(false);
   });
 
@@ -410,6 +397,24 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     expect(response.data.thesisPromptLibrary.facets.categories).toContain(
       'general'
     );
+  });
+
+  test('provides thesis prompt library for Thesis Statement kind', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      withOrganizationAssignment(
+        makeAssignmentType({
+          title: 'Thesis Statement',
+          kind: 'thesis_statement',
+        })
+      ),
+    ]);
+
+    const response = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(response.data.thesisPromptLibrary.totalCount).toBeGreaterThan(0);
   });
 
   test('merges the teacher\'s saved prompts into the thesis library as "My prompts"', async () => {

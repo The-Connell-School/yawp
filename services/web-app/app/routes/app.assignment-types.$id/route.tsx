@@ -49,7 +49,7 @@ import { AboutDailyPages } from './about-daily-pages/about-daily-pages';
 import { ApHistoryLibrary } from './ap-history-library';
 import { ApPromptsLibrary } from './ap-history/ap-prompts-library';
 import { ApHistoryGradingBreakdown } from './ap-history/grading-breakdown';
-import { ApHistoryTeacherDirections } from './ap-history/teacher-directions';
+import { ApHistoryTeacherDirections, AP_HISTORY_HOW_IT_WORKS_TAB_LABEL } from './ap-history/teacher-directions';
 import {
   CreateCustomApHistorySheet,
   type CustomEssayType,
@@ -63,7 +63,10 @@ import { ExitTicketPromptGenerator } from './exit-ticket-prompt-generator/exit-t
 import type { GeneratedExitTicketOption } from './exit-ticket-prompt-generator/prompt-generator';
 import { isTeacherPromptGeneratorEnabled } from '~/domain/teacher-prompt-generator/gate.server';
 import { PromptsLibrary } from './prompts-library/prompts-library';
-import { TeacherDirections } from './prompts-library/teacher-directions';
+import {
+  TeacherDirections,
+  CLASS_STARTER_HOW_IT_WORKS_TAB_LABEL,
+} from './prompts-library/teacher-directions';
 import { AboutExitTicket } from './about-exit-ticket/about-exit-ticket';
 import { isExitTicketAssignmentType } from '~/domain/assignment-types/exit-ticket';
 import {
@@ -73,6 +76,10 @@ import {
   type OpenEndedPromptLibraryVariant,
 } from './prompts-library/library-variant';
 import { ShortFormPromptsLibrary } from './short-form-prompts-library/short-form-prompts-library';
+import {
+  SHORT_FORM_LIBRARY_HEADING,
+  ShortFormTeacherDirections,
+} from './short-form-prompts-library/short-form-teacher-directions';
 import {
   applyFilters as applyShortFormFilters,
   buildFacets as buildShortFormFacets,
@@ -106,9 +113,8 @@ import {
   readExitTicketPrefill,
   type ExitTicketPrefill,
 } from '~/domain/lesson-planner/exit-ticket-block';
-import { ThesisPromptsLibrary } from './thesis-prompts-library/thesis-prompts-library';
+import { AssignmentTypeLibraryTabs } from './assignment-type-library-tabs/assignment-type-library-tabs';
 import { ThesisPromptGenerator } from './thesis-prompts-library/thesis-prompt-generator';
-import { ThesisTeacherDirections } from './thesis-prompts-library/thesis-teacher-directions';
 import {
   applyFilters as applyThesisFilters,
   buildFacets as buildThesisFacets,
@@ -119,8 +125,14 @@ import {
   type ThesisPrompt,
 } from './thesis-prompts-library/data';
 import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
+import { ThesisPromptsLibrary } from './thesis-prompts-library/thesis-prompts-library';
+import {
+  THESIS_HOW_IT_WORKS_TAB_LABEL,
+  ThesisTeacherDirections,
+} from './thesis-prompts-library/thesis-teacher-directions';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
-import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
+import { isThesisPromptLibraryType } from '~/domain/assignment-types/thesis-driven-essay';
+import { buildFreeTierNewAssignmentHref } from '~/domain/free-tier/new-assignment-page-url';
 import { assignmentTypeHasHowItWorksGuide } from '~/domain/assignment-types/assignment-type-how-it-works';
 import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
@@ -489,7 +501,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isTeacher && usesOpenEndedLibrary(promptLibraryVariant);
   const showsShortFormLibrary =
     isTeacher && usesShortFormLibrary(promptLibraryVariant);
-  const isThesisEssay = isThesisDrivenEssayTitle(assignmentType.title);
+  const isThesisEssay = isThesisPromptLibraryType({
+    title: assignmentType.title,
+    kind: assignmentType.kind,
+  });
   const isApHistory =
     assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   // "My prompts": prompts this teacher generated and kept, shown in the same
@@ -679,12 +694,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
  * the module itself is still what assignments build from.
  */
 export function showModulesAccordion(
-  assignmentType: { kind?: string | null },
-  moduleCount: number
+  _assignmentType: { kind?: string | null },
+  _moduleCount: number
 ): boolean {
-  if (moduleCount === 0) return false;
-  if (assignmentType.kind === 'class_starter') return false;
-  return !isExitTicketAssignmentType(assignmentType);
+  return false;
 }
 
 export default function AppAssignmentTypesIdRoute() {
@@ -695,11 +708,6 @@ export default function AppAssignmentTypesIdRoute() {
   const data = useLoaderData<typeof loader>();
   const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const { locked: teachingLockedPreview } = useTeachingAccess();
-  const hasModules = data.assignmentType.assignmentModules.length > 0;
-  const modulesVisible = showModulesAccordion(
-    data.assignmentType,
-    data.assignmentType.assignmentModules.length
-  );
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
   const [isPromptGeneratorOpen, setIsPromptGeneratorOpen] = useState(false);
   const [customEssayType, setCustomEssayType] =
@@ -716,11 +724,6 @@ export default function AppAssignmentTypesIdRoute() {
     isPromptGeneratorOpen,
     customEssayType,
   ]);
-
-  function beginAssignmentCreation() {
-    if (teachingLockedPreview) return;
-    setIsAssignmentSheetOpen(true);
-  }
 
   const [libraryPrompt, setLibraryPrompt] = useState('');
   const [plannedExitTicket, setPlannedExitTicket] =
@@ -752,6 +755,45 @@ export default function AppAssignmentTypesIdRoute() {
   // assigned rather than retyped. Open the sheet on it once, then drop the
   // param so a refresh (or the back button) does not reopen it.
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const freeUsage = useFreeAccountUsage();
+  const isApHistoryAssignmentType =
+    data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
+  const assignmentSheetClasses = isApHistoryAssignmentType
+    ? (data.apHistoryLibrary?.teacherClasses ?? [])
+    : data.teacherClasses;
+  const requestedClassId = searchParams.get('classId');
+  const initialApHistoryClassId =
+    requestedClassId &&
+    assignmentSheetClasses.some((klass) => klass.id === requestedClassId)
+      ? requestedClassId
+      : undefined;
+  const defaultCreateClassId =
+    initialApHistoryClassId ?? assignmentSheetClasses[0]?.id;
+
+  function openLegacyAssignmentSheet() {
+    if (teachingLockedPreview) return;
+    setIsAssignmentSheetOpen(true);
+  }
+
+  function beginAssignmentCreation(options?: { prompt?: string }) {
+    if (teachingLockedPreview) return;
+    const prompt =
+      options?.prompt !== undefined ? options.prompt : libraryPrompt;
+    if (freeUsage) {
+      navigate(
+        buildFreeTierNewAssignmentHref({
+          assignmentTypeId: data.assignmentType.id,
+          classId: defaultCreateClassId,
+          prompt,
+        })
+      );
+      return;
+    }
+    if (options?.prompt !== undefined) setLibraryPrompt(options.prompt);
+    openLegacyAssignmentSheet();
+  }
+
   const incomingPrompt = searchParams.get(NEW_PROMPT_PARAM);
   // Kept in the URL after the prompt is consumed: a teacher who followed a
   // button out of a half-finished lesson needs the way back to still be there
@@ -779,7 +821,6 @@ export default function AppAssignmentTypesIdRoute() {
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromLesson, fromPiece, data.assignmentType.id]);
-  const navigate = useNavigate();
   useEffect(() => {
     if (lessonFetcher.state !== 'idle' || !lessonFetcher.data?.backToLesson) return;
     if (!returnAfterMade.current || !fromLesson) return;
@@ -789,9 +830,19 @@ export default function AppAssignmentTypesIdRoute() {
   }, [lessonFetcher.state, lessonFetcher.data]);
   useEffect(() => {
     if (!incomingPrompt || teachingLockedPreview) return;
-    setLibraryPrompt(incomingPrompt);
     setApHistoryEntry(null);
-    beginAssignmentCreation();
+    if (freeUsage) {
+      navigate(
+        buildFreeTierNewAssignmentHref({
+          assignmentTypeId: data.assignmentType.id,
+          classId: defaultCreateClassId,
+          prompt: incomingPrompt,
+        })
+      );
+    } else {
+      setLibraryPrompt(incomingPrompt);
+      openLegacyAssignmentSheet();
+    }
     setSearchParams(
       (previous) => {
         const next = new URLSearchParams(previous);
@@ -800,15 +851,12 @@ export default function AppAssignmentTypesIdRoute() {
       },
       { replace: true, preventScrollReset: true }
     );
-  }, [incomingPrompt, setSearchParams, teachingLockedPreview]);
+  }, [incomingPrompt, setSearchParams, teachingLockedPreview, freeUsage, navigate, data.assignmentType.id, defaultCreateClassId]);
 
   const showShortFormLibrary = data.shortFormPromptLibrary != null;
   const showDailyPagesAbout =
     isTeacher && data.assignmentType.kind === 'daily_pages';
-  // Daily Pages carries one module, whose blurb is freewrite-era copy telling
-  // students to throw ideas around — which the about section directly above it
-  // now contradicts. The module row itself stays for student-facing context.
-  const showModules = modulesVisible && !showShortFormLibrary;
+  const showModules = false;
   // The same door, for the other end of the lesson: the planner sends a
   // teacher here with the exit ticket its plan ended on, already answered.
   // They still read the composed prompt in the sheet before a class sees it.
@@ -832,7 +880,7 @@ export default function AppAssignmentTypesIdRoute() {
     if (!incomingExitTicket || teachingLockedPreview) return;
     setPlannedExitTicket(incomingExitTicket);
     setApHistoryEntry(null);
-    beginAssignmentCreation();
+    openLegacyAssignmentSheet();
   }, [
     incomingExitTicketMode,
     incomingExitTicket,
@@ -841,27 +889,17 @@ export default function AppAssignmentTypesIdRoute() {
   ]);
 
   const showThesisLibrary = data.thesisPromptLibrary != null;
-  const isApHistoryAssignmentType =
-    data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const showTeacherNewMenu = isTeacher && !isApHistoryAssignmentType;
-  const assignmentSheetClasses = isApHistoryAssignmentType
-    ? (data.apHistoryLibrary?.teacherClasses ?? [])
-    : data.teacherClasses;
-  const requestedClassId = searchParams.get('classId');
-  const initialApHistoryClassId = requestedClassId && assignmentSheetClasses.some(
-    (klass) => klass.id === requestedClassId
-  )
-    ? requestedClassId
-    : undefined;
+  const createAssignmentPageHref = buildFreeTierNewAssignmentHref({
+    assignmentTypeId: data.assignmentType.id,
+    classId: defaultCreateClassId,
+  });
 
-  const freeUsage = useFreeAccountUsage();
   const pageShellClassName = freeUsage
     ? freeTierStandardPageShellClassName()
     : 'no-scrollbar h-full w-full overflow-y-scroll';
   const pageBodyClassName = freeUsage
-    ? freeTierStandardPageBodyClassName(
-        'flex max-w-screen-md flex-col'
-      )
+    ? freeTierStandardPageBodyClassName('flex flex-col', { width: 'reading' })
     : 'mx-auto flex h-full w-full max-w-screen-md flex-col p-3 sm:p-5';
 
   return (
@@ -927,13 +965,22 @@ export default function AppAssignmentTypesIdRoute() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
                           disabled={data.teacherClasses.length === 0}
-                          onSelect={() => {
-                            setLibraryPrompt('');
-                            setApHistoryEntry(null);
-                            beginAssignmentCreation();
-                          }}
+                          asChild={Boolean(freeUsage)}
+                          onSelect={
+                            freeUsage
+                              ? undefined
+                              : () => {
+                                  setLibraryPrompt('');
+                                  setApHistoryEntry(null);
+                                  beginAssignmentCreation({ prompt: '' });
+                                }
+                          }
                         >
-                          Assignment
+                          {freeUsage ? (
+                            <Link to={createAssignmentPageHref}>Assignment</Link>
+                          ) : (
+                            'Assignment'
+                          )}
                         </DropdownMenuItem>
                         {showAnyPromptGenerator ? (
                           <DropdownMenuItem
@@ -1013,9 +1060,8 @@ export default function AppAssignmentTypesIdRoute() {
                     if (teachingLockedPreview) return;
                     setApHistoryEntry(null);
                     setPlannedExitTicket(null);
-                    setLibraryPrompt(promptBody);
                     setIsPromptGeneratorOpen(false);
-                    beginAssignmentCreation();
+                    beginAssignmentCreation({ prompt: promptBody });
                   }}
                 />
               ) : showShortFormPromptGenerator ? (
@@ -1027,9 +1073,8 @@ export default function AppAssignmentTypesIdRoute() {
                     if (teachingLockedPreview) return;
                     setApHistoryEntry(null);
                     setPlannedExitTicket(null);
-                    setLibraryPrompt(prompt);
                     setIsPromptGeneratorOpen(false);
-                    beginAssignmentCreation();
+                    beginAssignmentCreation({ prompt });
                   }}
                 />
               ) : showClassStarterPromptGenerator ? (
@@ -1041,9 +1086,8 @@ export default function AppAssignmentTypesIdRoute() {
                     if (teachingLockedPreview) return;
                     setApHistoryEntry(null);
                     setPlannedExitTicket(null);
-                    setLibraryPrompt(prompt);
                     setIsPromptGeneratorOpen(false);
-                    beginAssignmentCreation();
+                    beginAssignmentCreation({ prompt });
                   }}
                 />
               ) : showExitTicketPromptGenerator ? (
@@ -1066,7 +1110,7 @@ export default function AppAssignmentTypesIdRoute() {
                       grading: null,
                     });
                     setIsPromptGeneratorOpen(false);
-                    beginAssignmentCreation();
+                    openLegacyAssignmentSheet();
                   }}
                 />
               ) : null}
@@ -1100,20 +1144,7 @@ export default function AppAssignmentTypesIdRoute() {
           </div>
         </div>
         {data.showAboutExitTicket ? <AboutExitTicket /> : null}
-        {data.promptLibrary ? (
-          <div data-tour="type-directions">
-            <TeacherDirections variant={data.promptLibrary.variant} />
-          </div>
-        ) : null}
         {showDailyPagesAbout ? <AboutDailyPages /> : null}
-        {showThesisLibrary ? (
-          <div data-tour="type-directions">
-            <ThesisTeacherDirections />
-          </div>
-        ) : null}
-        {data.apHistoryLibrary?.mode === 'teacher' ? (
-          <ApHistoryTeacherDirections />
-        ) : null}
         {showModules ? (
           <Accordion type="single" collapsible data-tour="type-modules">
             <AccordionItem value="modules">
@@ -1150,73 +1181,101 @@ export default function AppAssignmentTypesIdRoute() {
           </Accordion>
         ) : null}
         {data.promptLibrary ? (
-          <div className="pb-6" data-tour="type-library">
-            <PromptsLibrary
-              prompts={data.promptLibrary.prompts}
-              facets={data.promptLibrary.facets}
-              optionCounts={data.promptLibrary.optionCounts}
-              totalCount={data.promptLibrary.totalCount}
-              assignmentCreationLocked={teachingLockedPreview}
-              onSelectPrompt={(prompt) => {
-                if (teachingLockedPreview) return;
-                setApHistoryEntry(null);
-                setLibraryPrompt(prompt);
-                beginAssignmentCreation();
-              }}
-            />
-          </div>
+          <AssignmentTypeLibraryTabs
+            howItWorksLabel={CLASS_STARTER_HOW_IT_WORKS_TAB_LABEL}
+            howItWorksPanel={
+              <TeacherDirections variant={data.promptLibrary.variant} />
+            }
+            promptLibraryPanel={
+              <PromptsLibrary
+                prompts={data.promptLibrary.prompts}
+                facets={data.promptLibrary.facets}
+                optionCounts={data.promptLibrary.optionCounts}
+                totalCount={data.promptLibrary.totalCount}
+                assignmentCreationLocked={teachingLockedPreview}
+                onSelectPrompt={(prompt) => {
+                  if (teachingLockedPreview) return;
+                  setApHistoryEntry(null);
+                  beginAssignmentCreation({ prompt });
+                }}
+              />
+            }
+          />
         ) : null}
         {data.shortFormPromptLibrary ? (
-          <div className="pb-6">
-            <ShortFormPromptsLibrary
-              prompts={data.shortFormPromptLibrary.prompts}
-              facets={data.shortFormPromptLibrary.facets}
-              optionCounts={data.shortFormPromptLibrary.optionCounts}
-              totalCount={data.shortFormPromptLibrary.totalCount}
-              assignmentCreationLocked={teachingLockedPreview}
-              onSelectPrompt={(prompt) => {
-                if (teachingLockedPreview) return;
-                setApHistoryEntry(null);
-                setLibraryPrompt(prompt);
-                beginAssignmentCreation();
-              }}
-            />
-          </div>
+          <AssignmentTypeLibraryTabs
+            howItWorksLabel={SHORT_FORM_LIBRARY_HEADING}
+            howItWorksPanel={<ShortFormTeacherDirections />}
+            promptLibraryPanel={
+              <ShortFormPromptsLibrary
+                prompts={data.shortFormPromptLibrary.prompts}
+                facets={data.shortFormPromptLibrary.facets}
+                optionCounts={data.shortFormPromptLibrary.optionCounts}
+                totalCount={data.shortFormPromptLibrary.totalCount}
+                assignmentCreationLocked={teachingLockedPreview}
+                onSelectPrompt={(prompt) => {
+                  if (teachingLockedPreview) return;
+                  setApHistoryEntry(null);
+                  beginAssignmentCreation({ prompt });
+                }}
+              />
+            }
+          />
         ) : null}
         {data.thesisPromptLibrary ? (
-          <div className="pb-6" data-tour="type-library">
-            <ThesisPromptsLibrary
-              prompts={data.thesisPromptLibrary.prompts}
-              facets={data.thesisPromptLibrary.facets}
-              optionCounts={data.thesisPromptLibrary.optionCounts}
-              totalCount={data.thesisPromptLibrary.totalCount}
-              assignmentCreationLocked={teachingLockedPreview}
-              onSelectPrompt={(prompt) => {
-                if (teachingLockedPreview) return;
-                setApHistoryEntry(null);
-                setLibraryPrompt(prompt);
-                beginAssignmentCreation();
-              }}
-            />
-          </div>
+          <AssignmentTypeLibraryTabs
+            howItWorksLabel={THESIS_HOW_IT_WORKS_TAB_LABEL}
+            howItWorksPanel={<ThesisTeacherDirections />}
+            promptLibraryPanel={
+              <ThesisPromptsLibrary
+                prompts={data.thesisPromptLibrary.prompts}
+                facets={data.thesisPromptLibrary.facets}
+                optionCounts={data.thesisPromptLibrary.optionCounts}
+                totalCount={data.thesisPromptLibrary.totalCount}
+                assignmentCreationLocked={teachingLockedPreview}
+                onSelectPrompt={(prompt) => {
+                  if (teachingLockedPreview) return;
+                  setApHistoryEntry(null);
+                  beginAssignmentCreation({ prompt });
+                }}
+              />
+            }
+          />
         ) : null}
         {data.apHistoryLibrary ? (
           <>
-            <ApHistoryGradingBreakdown
-              audience="teacher"
-            />
-            <div className="pb-6">
-              <ApPromptsLibrary
-                entries={data.apHistoryLibrary.entries}
-                assignmentCreationLocked={teachingLockedPreview}
-                onSelectEntry={(entry) => {
-                  if (teachingLockedPreview) return;
-                  setApHistoryEntry(entry);
-                  setLibraryPrompt('');
-                  beginAssignmentCreation();
-                }}
+            <ApHistoryGradingBreakdown audience="teacher" />
+            {data.apHistoryLibrary.mode === 'teacher' ? (
+              <AssignmentTypeLibraryTabs
+                howItWorksLabel={AP_HISTORY_HOW_IT_WORKS_TAB_LABEL}
+                howItWorksPanel={<ApHistoryTeacherDirections />}
+                promptLibraryPanel={
+                  <ApPromptsLibrary
+                    entries={data.apHistoryLibrary.entries}
+                    assignmentCreationLocked={teachingLockedPreview}
+                    onSelectEntry={(entry) => {
+                      if (teachingLockedPreview) return;
+                      setApHistoryEntry(entry);
+                      setLibraryPrompt('');
+                      openLegacyAssignmentSheet();
+                    }}
+                  />
+                }
               />
-            </div>
+            ) : (
+              <div className="pb-6">
+                <ApPromptsLibrary
+                  entries={data.apHistoryLibrary.entries}
+                  assignmentCreationLocked={teachingLockedPreview}
+                  onSelectEntry={(entry) => {
+                    if (teachingLockedPreview) return;
+                    setApHistoryEntry(entry);
+                    setLibraryPrompt('');
+                    openLegacyAssignmentSheet();
+                  }}
+                />
+              </div>
+            )}
           </>
         ) : null}
         {showAssignmentTypeDocumentsSection(user.selectedMembership?.role) ? (

@@ -1,8 +1,10 @@
+export const AP_HISTORY_HOW_IT_WORKS_TAB_LABEL = 'How AP History Essays work';
+
 export function ApHistoryTeacherDirections() {
   return (
     <section className="mb-6 rounded-lg border bg-muted/40 p-4">
       <h3 className="mb-2 text-base font-semibold">
-        How AP History Essays work
+        {AP_HISTORY_HOW_IT_WORKS_TAB_LABEL}
       </h3>
       <p className="mb-3 text-sm text-muted-foreground">
         Assign a curated AP U.S., European, or World History prompt from the

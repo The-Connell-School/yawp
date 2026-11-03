@@ -299,10 +299,7 @@ export function ApPromptsLibrary({
       : `${filtered.length} of ${entries.length} prompts`;
 
   return (
-    <div className="pb-6">
-      <h3 className="mb-2 text-foreground/75">Prompt Library</h3>
-      <div className="border-b" />
-      <div className="flex flex-col gap-6 pt-4 lg:flex-row">
+    <div className="flex flex-col gap-6 lg:flex-row">
         <aside className="hidden lg:block lg:w-[240px] lg:shrink-0">
           {filterPanel}
         </aside>
@@ -369,7 +366,6 @@ export function ApPromptsLibrary({
             </ul>
           )}
         </main>
-      </div>
     </div>
   );
 }

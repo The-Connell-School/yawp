@@ -1,5 +1,7 @@
 import { TEACHING_NOTES } from './data';
 
+export const THESIS_HOW_IT_WORKS_TAB_LABEL = 'How it works';
+
 export function ThesisTeacherDirections() {
   return (
     <section className="mb-6 rounded-lg border bg-muted/40 p-4">

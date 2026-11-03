@@ -214,13 +214,7 @@ export function ShortFormPromptsLibrary({
       : `${prompts.length} of ${totalCount} prompts`;
 
   return (
-    <Accordion type="single" collapsible>
-      <AccordionItem value="library">
-        <AccordionTrigger className="py-2 text-base">
-          Prompt Library
-        </AccordionTrigger>
-        <AccordionContent>
-          <div className="flex flex-col gap-6 pt-2 lg:flex-row">
+    <div className="flex flex-col gap-6 lg:flex-row">
             <aside className="hidden lg:block lg:w-[240px] lg:shrink-0">
               {filterPanel}
             </aside>
@@ -289,10 +283,7 @@ export function ShortFormPromptsLibrary({
                 </ul>
               )}
             </main>
-          </div>
-        </AccordionContent>
-      </AccordionItem>
-    </Accordion>
+    </div>
   );
 }
 
