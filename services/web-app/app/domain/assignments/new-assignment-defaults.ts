@@ -1,4 +1,5 @@
 import { CLASS_STARTER_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/class-starter-rubric';
+import { GALS_CLAIMS_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/gals-claims-rubric';
 import { DAILY_PAGES_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/daily-pages-rubric';
 import {
   EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
@@ -10,6 +11,9 @@ import { DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE } from '~/domain/assignments/saved
 
 /** PKG-03: Brian walkthrough Oct 26 — Class Starter opens at 10 points. */
 export const CLASS_STARTER_DEFAULT_POINT_VALUE = 10;
+
+/** GALS Claims is low-stakes; match Class Starter’s default total. */
+export const GALS_CLAIMS_DEFAULT_POINT_VALUE = 10;
 
 /** PKG-03: Daily Pages (and engagement-rubric variants) open at 20 points. */
 export const DAILY_PAGES_DEFAULT_POINT_VALUE = 20;
@@ -27,6 +31,9 @@ export function defaultPointValueForNewAssignment(
   }
   if (context.kind === CLASS_STARTER_ASSIGNMENT_TYPE_KIND) {
     return CLASS_STARTER_DEFAULT_POINT_VALUE;
+  }
+  if (context.kind === GALS_CLAIMS_ASSIGNMENT_TYPE_KIND) {
+    return GALS_CLAIMS_DEFAULT_POINT_VALUE;
   }
   if (
     assignmentTypeUsesDailyPagesEngagementRubric({

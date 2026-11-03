@@ -11,8 +11,12 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { redirectIfTeacherLoungeTemporarilyDisabled } from '~/domain/teacher-lounge/teacher-lounge-temporary-disable.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  redirectIfTeacherLoungeTemporarilyDisabled();
   const userId = await requireUserId(request);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+  redirectIfTeacherLoungeTemporarilyDisabled({ email: user?.email ?? null });
   const profile = await requireMembership(request, userId);
 
   if (profile.role !== "TEACHER") {
