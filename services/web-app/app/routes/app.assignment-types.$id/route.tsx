@@ -899,8 +899,8 @@ export default function AppAssignmentTypesIdRoute() {
     ? freeTierStandardPageShellClassName()
     : 'no-scrollbar h-full w-full overflow-y-scroll';
   const pageBodyClassName = freeUsage
-    ? freeTierStandardPageBodyClassName('flex flex-col', { width: 'reading' })
-    : 'mx-auto flex h-full w-full max-w-screen-md flex-col p-3 sm:p-5';
+    ? freeTierStandardPageBodyClassName('flex flex-col')
+    : 'mx-auto flex h-full w-full max-w-screen-xl flex-col p-3 sm:p-5';
 
   return (
     <div
