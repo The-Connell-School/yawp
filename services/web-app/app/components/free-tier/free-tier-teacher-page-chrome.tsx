@@ -16,8 +16,18 @@ export function freeTierStandardPageShellClassName(extra?: string) {
   return freeTierLockedPageOuterClassName(extra);
 }
 
-export function freeTierStandardPageBodyClassName(extra?: string) {
-  return freeTierLockedPageBodyClassName(extra);
+export type FreeTierPageBodyWidth = 'standard' | 'reading';
+
+function freeTierPageBodyExtraHasMaxWidth(extra?: string) {
+  if (!extra) return false;
+  return /\bmax-w-/.test(extra);
+}
+
+export function freeTierStandardPageBodyClassName(
+  extra?: string,
+  opts?: { width?: FreeTierPageBodyWidth }
+) {
+  return freeTierLockedPageBodyClassName(extra, opts);
 }
 
 export function FreeTierLockedPageHeader({
@@ -46,6 +56,20 @@ export function freeTierLockedPageOuterClassName(extra?: string) {
   return cn('free-tier-b2-page-shell no-scrollbar flex h-full w-full flex-col overflow-y-scroll', extra);
 }
 
-export function freeTierLockedPageBodyClassName(extra?: string) {
-  return cn('free-tier-b2-page-body mx-auto w-full min-w-0 flex-1', extra);
+export function freeTierLockedPageBodyClassName(
+  extra?: string,
+  opts?: { width?: FreeTierPageBodyWidth }
+) {
+  const width = opts?.width ?? 'standard';
+  const widthClass = freeTierPageBodyExtraHasMaxWidth(extra)
+    ? undefined
+    : width === 'reading'
+      ? 'max-w-screen-md'
+      : 'max-w-screen-xl';
+
+  return cn(
+    'free-tier-b2-page-body mx-auto w-full min-w-0 flex-1',
+    widthClass,
+    extra
+  );
 }

@@ -578,7 +578,7 @@ export default function StudentWorkRoute() {
       <div
         className={
           freeTierShell
-            ? freeTierStandardPageBodyClassName('max-w-screen-2xl')
+            ? freeTierStandardPageBodyClassName()
             : 'mx-auto w-full max-w-screen-2xl px-3 py-4 pb-24 sm:px-5'
         }
       >

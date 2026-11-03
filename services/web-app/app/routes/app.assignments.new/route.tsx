@@ -20,6 +20,10 @@ import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { Textarea } from '~/components/ui/textarea';
 import { TeachingApprovalRequiredAlert } from '~/components/free-tier/teaching-approval-required-alert';
+import {
+  freeTierStandardPageBodyClassName,
+  freeTierStandardPageShellClassName,
+} from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { lockedTeachingButtonProps } from '~/components/free-tier/locked-teaching-control';
 import { CLASS_STARTER_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/class-starter-rubric';
@@ -54,10 +58,7 @@ export const FIRST_ASSIGNMENT_INTRO =
 export const FIRST_ASSIGNMENT_DEFAULT_TITLE = 'Welcome to Yawp! Class Starter';
 export const FIRST_ASSIGNMENT_DEFAULT_PROMPT =
   'Introduce yourself as a writer. What is one thing you like to write, or would like to get better at writing this year? Write five or more sentences.';
-export const FIRST_ASSIGNMENT_PROMPT_CAPTION =
-  'Prefilled for you. Keep it or make it your own.';
-
-const mutedFieldClassName = '!bg-muted';
+const inputFieldClassName = 'bg-input-background';
 
 async function assertFreeTierNewAssignmentRoute() {
   const { isFreeTierEnabled } =
@@ -82,6 +83,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const isFirstAssignment = isFirstAssignmentRequest(url);
   const queryAssignmentTypeId = url.searchParams.get('assignmentTypeId') ?? '';
   const queryClassId = url.searchParams.get('classId') ?? '';
+  const queryPrompt = url.searchParams.get('prompt') ?? '';
 
   const classes = await prisma.class.findMany({
     where: { teachers: { some: { id: profile.id } }, isArchived: false },
@@ -196,7 +198,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       assignmentTypeId: defaultAssignmentTypeId,
       classId: defaultClassId,
       title: isFirstAssignment ? FIRST_ASSIGNMENT_DEFAULT_TITLE : '',
-      prompt: isFirstAssignment ? FIRST_ASSIGNMENT_DEFAULT_PROMPT : '',
+      prompt: isFirstAssignment
+        ? FIRST_ASSIGNMENT_DEFAULT_PROMPT
+        : queryPrompt,
     },
   };
 }
@@ -445,7 +449,12 @@ export default function NewAssignmentPage() {
     : null;
 
   return (
-    <div className="mx-auto h-full min-h-0 w-full max-w-4xl overflow-y-auto px-4 py-8">
+    <section className={freeTierStandardPageShellClassName()}>
+      <div
+        className={freeTierStandardPageBodyClassName(
+          'h-full min-h-0 overflow-y-auto max-w-4xl'
+        )}
+      >
       {!isFirstAssignment ? (
         <Button asChild variant="ghost" size="sm" className="mb-4 px-0">
           <Link to="/app/assignments" className="w-fit">
@@ -508,7 +517,7 @@ export default function NewAssignmentPage() {
             placeholder={
               isFirstAssignment ? undefined : 'e.g. Community Gardens — Prewriting'
             }
-            className={mutedFieldClassName}
+            className={inputFieldClassName}
           />
         </div>
 
@@ -521,7 +530,7 @@ export default function NewAssignmentPage() {
             defaultValue={values.classId}
             className={cn(
               'h-9 w-full rounded-md border border-input px-3 text-sm',
-              mutedFieldClassName
+              inputFieldClassName
             )}
           >
             {classes.map((klass) => (
@@ -543,13 +552,13 @@ export default function NewAssignmentPage() {
             placeholder={
               isFirstAssignment ? undefined : 'What should students write about?'
             }
-            className={mutedFieldClassName}
+            className={inputFieldClassName}
           />
-          <p className="text-xs text-muted-foreground">
-            {isFirstAssignment
-              ? FIRST_ASSIGNMENT_PROMPT_CAPTION
-              : 'Students see this exactly as written.'}
-          </p>
+          {!isFirstAssignment ? (
+            <p className="text-xs text-muted-foreground">
+              Students see this exactly as written.
+            </p>
+          ) : null}
         </div>
 
         {!isFirstAssignment ? (
@@ -562,7 +571,7 @@ export default function NewAssignmentPage() {
                 type="date"
                 defaultValue={values.dueAt}
                 placeholder="Optional"
-                className={mutedFieldClassName}
+                className={inputFieldClassName}
               />
             </div>
             <div className="space-y-1">
@@ -625,6 +634,7 @@ export default function NewAssignmentPage() {
           </div>
         )}
       </Form>
-    </div>
+      </div>
+    </section>
   );
 }

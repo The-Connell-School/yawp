@@ -95,7 +95,7 @@ function PageShell({ children }: { children: ReactNode }) {
   if (freeUsage) {
     return (
       <section className={freeTierStandardPageShellClassName()}>
-        <div className={freeTierStandardPageBodyClassName('max-w-screen-xl')}>
+        <div className={freeTierStandardPageBodyClassName()}>
           {children}
         </div>
       </section>

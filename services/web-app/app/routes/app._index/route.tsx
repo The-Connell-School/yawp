@@ -576,7 +576,8 @@ export default function AppRoute() {
           )}
         >
           <div className="locked-home-b2 free-dashboard w-full pb-24">
-            <div className="locked-home-columns">
+            <div className="mx-auto w-full max-w-screen-xl">
+              <div className="locked-home-columns">
               <ContentColumn className="locked-home-main flex flex-col">
                 <h1 className="locked-home-welcome">
                   Welcome, {welcomeName}!
@@ -597,6 +598,7 @@ export default function AppRoute() {
               >
                 {freeAccountRail}
               </aside>
+              </div>
             </div>
           </div>
         </section>

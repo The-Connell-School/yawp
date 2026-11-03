@@ -614,21 +614,30 @@ export default function MyAssignmentsRoute() {
         />
       ) : null}
 
-      <h2 className="mb-2 text-lg font-semibold">Assigned</h2>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="relative min-w-0 w-full max-w-sm flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            name="my-assignments-search"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search assignments"
-            className="h-9 rounded-md border-0 bg-background pl-9 shadow-none ring-1 ring-black/5 focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Search assignments"
-            data-testid="my-assignments-search"
-          />
-        </div>
-        <div className="ml-auto flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
+      <section
+        className="flex min-w-0 flex-col gap-4"
+        aria-labelledby="my-assignments-assigned-heading"
+      >
+        <h2
+          id="my-assignments-assigned-heading"
+          className="m-0 text-lg font-semibold"
+        >
+          Assigned
+        </h2>
+        <div className="flex min-w-0 flex-nowrap items-center justify-between gap-3">
+          <div className="relative min-w-0 flex-1 sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              name="my-assignments-search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search assignments"
+              className="h-9 pl-9"
+              aria-label="Search assignments"
+              data-testid="my-assignments-search"
+            />
+          </div>
+          <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
           {hasSelection ? (
             <Form
               method="post"
@@ -672,7 +681,7 @@ export default function MyAssignmentsRoute() {
               <Button
                 type="button"
                 size="sm"
-                className="shrink-0"
+                className="h-9 shrink-0"
                 data-testid="my-assignments-new-assignment"
                 data-tour="my-assignments-new"
                 disabled={
@@ -699,32 +708,38 @@ export default function MyAssignmentsRoute() {
               No free assignments left
             </span>
           )}
+          </div>
         </div>
-      </div>
 
-      {assignments.length === 0 ? (
+        {assignments.length === 0 ? (
+          <div
+            data-tour="my-assignments-list"
+            className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/50 p-12 text-center"
+          >
+            <span className="text-lg font-bold">No assignments yet</span>
+            <span className="text-base/7 text-muted-foreground sm:text-sm/6">
+              Assignments you create for your classes will show up here.
+            </span>
+          </div>
+        ) : filteredAssignments.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/50 p-12 text-center">
+            <span className="text-lg font-bold">No assignments found</span>
+            <span className="text-base/7 text-muted-foreground sm:text-sm/6">
+              Try a different search term
+            </span>
+          </div>
+        ) : (
         <div
           data-tour="my-assignments-list"
-          className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/50 p-12 text-center"
+          className="min-w-0 overflow-hidden rounded-lg border bg-muted/50"
         >
-          <span className="text-lg font-bold">No assignments yet</span>
-          <span className="text-base/7 text-muted-foreground sm:text-sm/6">
-            Assignments you create for your classes will show up here.
-          </span>
-        </div>
-      ) : filteredAssignments.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/50 p-12 text-center">
-          <span className="text-lg font-bold">No assignments found</span>
-          <span className="text-base/7 text-muted-foreground sm:text-sm/6">
-            Try a different search term
-          </span>
-        </div>
-      ) : (
-        <div data-tour="my-assignments-list" className="rounded-lg bg-muted/50">
-          <Table aria-label="My Assignments">
-            <TableHeader className="rounded-t-lg">
-              <TableRow className="rounded-t-lg bg-muted/50">
-                <TableHead className="w-[50px] rounded-tl-lg pl-4">
+          <Table
+            aria-label="My Assignments"
+            containerClassName="border-0 rounded-none"
+          >
+            <TableHeader>
+              <TableRow className="bg-muted/50 hover:bg-muted/50">
+                <TableHead className="h-11 w-[50px] px-4 align-middle">
                   <Checkbox
                     aria-label="Select all assignments"
                     checked={
@@ -735,12 +750,12 @@ export default function MyAssignmentsRoute() {
                     onCheckedChange={handleSelectAll}
                   />
                 </TableHead>
-                <TableHead>
+                <TableHead className="h-11 px-4 align-middle">
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="-ml-2 h-8 gap-2 px-2"
+                    className="h-8 gap-2 px-0"
                     aria-label={`Sort assignments by title ${
                       sortDirection === 'asc' ? 'descending' : 'ascending'
                     }`}
@@ -758,9 +773,13 @@ export default function MyAssignmentsRoute() {
                     )}
                   </Button>
                 </TableHead>
-                <TableHead className="whitespace-nowrap">Classes</TableHead>
-                <TableHead className="whitespace-nowrap">Type</TableHead>
-                <TableHead className="whitespace-nowrap rounded-tr-lg pr-4">
+                <TableHead className="h-11 whitespace-nowrap px-4 align-middle">
+                  Classes
+                </TableHead>
+                <TableHead className="h-11 px-4 align-middle md:whitespace-nowrap">
+                  Type
+                </TableHead>
+                <TableHead className="h-11 px-4 align-middle md:whitespace-nowrap">
                   Documents
                 </TableHead>
               </TableRow>
@@ -769,13 +788,14 @@ export default function MyAssignmentsRoute() {
               {paginatedAssignments.map((assignment) => (
                 <TableRow
                   key={assignment.assignmentId}
+                  className="h-11"
                   data-state={
                     selectedAssignmentIds.includes(assignment.assignmentId)
                       ? 'selected'
                       : undefined
                   }
                 >
-                  <TableCell className="max-h-[37px] pl-4">
+                  <TableCell className="h-11 px-4 align-middle">
                     <Checkbox
                       aria-label={`Select assignment ${assignment.title}`}
                       checked={selectedAssignmentIds.includes(
@@ -786,7 +806,7 @@ export default function MyAssignmentsRoute() {
                       }
                     />
                   </TableCell>
-                  <TableCell className="font-medium">
+                  <TableCell className="h-11 px-4 align-middle font-medium">
                     <div className="flex flex-wrap items-center gap-2">
                       <Link
                         to={assignment.href}
@@ -798,13 +818,16 @@ export default function MyAssignmentsRoute() {
                       <TutorOffBadge tutorEnabled={assignment.tutorEnabled} />
                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="h-11 px-4 align-middle text-muted-foreground">
                     <AssignmentClasses classes={assignment.classes} />
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell
+                    className="h-11 min-w-0 px-4 align-middle text-muted-foreground md:max-w-[12rem] md:truncate md:whitespace-nowrap"
+                    title={assignment.assignmentTypeTitle}
+                  >
                     {assignment.assignmentTypeTitle}
                   </TableCell>
-                  <TableCell className="pr-4 text-muted-foreground">
+                  <TableCell className="h-11 px-4 align-middle text-muted-foreground md:whitespace-nowrap">
                     {assignment.documentCount}
                   </TableCell>
                 </TableRow>
@@ -814,14 +837,17 @@ export default function MyAssignmentsRoute() {
         </div>
       )}
 
-      {filteredAssignments.length > 0 ? (
-        <Pagination
-          totalCount={filteredAssignments.length}
-          skip={pagination.skip}
-          take={pagination.take}
-          onChange={(skip, take) => setPagination({ skip, take })}
-        />
-      ) : null}
+        {filteredAssignments.length > 0 ? (
+          <div className="w-full min-w-0">
+            <Pagination
+              totalCount={filteredAssignments.length}
+              skip={pagination.skip}
+              take={pagination.take}
+              onChange={(skip, take) => setPagination({ skip, take })}
+            />
+          </div>
+        ) : null}
+      </section>
 
       {/* Creating from here spans classes, so the sheet takes the teacher's
           whole class list rather than being fixed to one. Editing uses this
@@ -844,7 +870,7 @@ export default function MyAssignmentsRoute() {
         {freeTierB2 ? (
           <FreeTierLockedPageHeader title="My Assignments" />
         ) : null}
-        <div className={freeTierStandardPageBodyClassName('max-w-5xl')}>
+        <div className={freeTierStandardPageBodyClassName()}>
           {assignmentsContent}
         </div>
       </section>

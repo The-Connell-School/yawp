@@ -490,9 +490,7 @@ function TeacherMyClassesView({
       <div
         className={
           freeUsage
-            ? freeTierStandardPageBodyClassName(
-                freeTierB2 ? 'mx-0 max-w-none' : undefined
-              )
+            ? freeTierStandardPageBodyClassName()
             : 'mx-auto w-full min-w-0 max-w-screen-lg px-3 py-4 pb-24 sm:px-5'
         }
       >
