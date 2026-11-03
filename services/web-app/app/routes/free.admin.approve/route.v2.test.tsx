@@ -79,6 +79,7 @@ test('approval rejects a blank role on the server without consuming a link', asy
       method: 'POST',
       body: new URLSearchParams({
         token: 'token',
+        intent: 'approve',
         adminRole: ' ',
         authorized: 'on',
       }),

@@ -20,6 +20,8 @@ import { z } from 'zod';
 import { readBoundedText } from '~/utils/bounded-body.server';
 import { isBelowHsGrade } from '~/domain/free-tier/grade-gate';
 import { isPublicOnboardingV2Enabled, isSupportedSignupGrade } from '~/domain/free-tier/public-onboarding.server';
+import { normalizeEmail } from '~/domain/free-tier/service.server';
+import { sendBelowHsTeamContact } from '~/domain/free-tier/team-contact.server';
 import { FreeTierWelcomeCard, FreeTierNameField, FreeTierSubmissionCard, FreeTierBelowHighSchoolCard, FreeTierGradeField } from './WelcomePresentation';
 import {
   FreeTierAuthCard,
@@ -105,6 +107,30 @@ export async function action({ request }: ActionFunctionArgs) {
   } catch { return { ok: false, error: 'invalid' as const }; }
   const onboardingV2 = await isPublicOnboardingV2Enabled();
   const intent = String(formData.get('intent') ?? 'waitlist');
+
+  if (intent === 'talk_to_team') {
+    const applicationId = String(formData.get('applicationId') ?? '').trim();
+    if (!applicationId || formData.getAll('applicationId').length > 1) {
+      return { ok: false as const, error: 'invalid' as const };
+    }
+    const gate = await enforceUnauthByIpAndTarget({
+      request,
+      route: '/api/free-tier/waitlist',
+      targetKey: applicationId,
+      perIpPerMinute: RATE_LIMITS.unauth.freeTierWaitlist.perIpPerMinute,
+      perIpPerHour: RATE_LIMITS.unauth.freeTierWaitlist.perIpPerHour,
+      perTargetPerHour: RATE_LIMITS.unauth.freeTierWaitlist.perEmailPerHour,
+    });
+    if (!gate.allowed) {
+      return { ok: false as const, error: 'rate_limited' as const };
+    }
+    const delivered = await sendBelowHsTeamContact({ applicationId });
+    if (!delivered.ok) {
+      return { ok: false as const, error: 'invalid' as const };
+    }
+    return { ok: true as const, talkToTeamSent: true as const };
+  }
+
   const raw = {
     name: String(formData.get('name') ?? ''),
     email: String(formData.get('email') ?? ''),
@@ -146,7 +172,14 @@ export async function action({ request }: ActionFunctionArgs) {
     if (isBelowHsGrade(parsed.data.gradeLevel)) {
       if (intent === 'redeem' && !z.string().min(1).max(500).safeParse(raw.token).success) return { ok: false, error: 'invalid' as const };
       const result = await (await import('~/domain/free-tier/grade-gate.server')).recordBelowHsDecline({ ...parsed.data, ...(intent === 'redeem' ? { token: raw.token } : {}) });
-      return result.ok ? { ok: true as const, declined: true as const } : { ok: false, error: 'invalid' as const };
+      if (!result.ok) return { ok: false, error: 'invalid' as const };
+      const application = await (await import('~/utils/db.server')).prisma.freeTierApplication.findUnique({
+        where: { email: normalizeEmail(parsed.data.email) },
+        select: { id: true },
+      });
+      return application?.id
+        ? { ok: true as const, declined: true as const, applicationId: application.id }
+        : { ok: true as const, declined: true as const };
     }
   }
 
@@ -205,7 +238,17 @@ export default function FreeTierLandingRoute() {
     ? freeTierSubmitSuccessCopy({ ...fetcher.data, email: submittedEmail })
     : null;
 
-  if (fetcher.data?.ok && 'declined' in fetcher.data && fetcher.data.declined) return <FreeTierBelowHighSchoolCard />;
+  if (fetcher.data?.ok && 'declined' in fetcher.data && fetcher.data.declined) {
+    return (
+      <FreeTierBelowHighSchoolCard
+        applicationId={
+          'applicationId' in fetcher.data && typeof fetcher.data.applicationId === 'string'
+            ? fetcher.data.applicationId
+            : ''
+        }
+      />
+    );
+  }
   if (data.onboardingV2 && submitted) return <FreeTierSubmissionCard onboardingV2 bypassWaitlist={!!(fetcher.data && 'bypassWaitlist' in fetcher.data && fetcher.data.bypassWaitlist)} email={submittedEmail} />;
 
   const title = data.mode === 'token' && data.linkClosed

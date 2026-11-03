@@ -18,6 +18,7 @@ import {
   resolveAdminLinkReplacedGate,
 } from '~/domain/free-tier/admin-link-gate.server';
 import { completeSchoolAdminApproval } from '~/domain/free-tier/approval-flow.server';
+import { sendAdminLearnMoreTeamContact } from '~/domain/free-tier/team-contact.server';
 import { prisma } from '~/utils/db.server';
 import { FreeTierAuthCard } from '../free-tier/FreeTierAuthCard';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
@@ -167,7 +168,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   await requireFreeTierEnabled();
   const formData = await request.formData();
+  const intent = String(formData.get('intent') ?? 'approve');
   const token = String(formData.get('token') ?? '');
+
+  if (intent === 'learn_more') {
+    const adminRole = String(formData.get('adminRole') ?? '');
+    const result = await sendAdminLearnMoreTeamContact({ token, adminRole });
+    if (!result.ok) {
+      return {
+        ok: false as const,
+        reason:
+          result.reason === 'invalid'
+            ? ('learn_more_invalid' as const)
+            : ('learn_more_failed' as const),
+      };
+    }
+    return { ok: true as const, learnMoreSent: true as const };
+  }
+
   const authorized = formData.get('authorized') === 'on';
   const adminRole = String(formData.get('adminRole') ?? '');
   if (!adminRole.trim() || adminRole.trim().length > 120 || !authorized) {

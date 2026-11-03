@@ -10,6 +10,9 @@ export const ADMIN_APPROVAL_LINK_DAYS = 14;
 
 export const FREE_TIER_SUPPORT_EMAIL = 'support@yawp.school';
 
+/** Inbound team inbox for free-tier “talk to us” handoffs (Brian / hello). */
+export const FREE_TIER_HELLO_EMAIL = 'hello@yawp.school';
+
 export const FREE_TIER_ADMIN_MODEL_TRAINING_LINE =
   'Student writing is never used to train outside models.';
 

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Form, Link, useNavigation } from 'react-router';
+import { Form, Link, useActionData, useNavigation } from 'react-router';
 import { Checkbox } from '~/components/ui/checkbox';
 import {
   approveCheckboxError,
@@ -52,7 +52,8 @@ function ValidationSummary({
   );
 }
 
-const LEARN_MORE_URL = 'https://app.usemotion.com/meet/brian-connell/ryxkqvr';
+const LEARN_MORE_CONFIRMATION =
+  'Message sent, someone will be in touch shortly.';
 
 export function AdminApproveForm({
   token,
@@ -70,9 +71,18 @@ export function AdminApproveForm({
   showDenyAndQa?: boolean;
 }) {
   const navigation = useNavigation();
+  const actionData = useActionData<{
+    ok?: boolean;
+    learnMoreSent?: boolean;
+    reason?: string;
+  }>();
+  const learnMoreSent = Boolean(actionData?.ok && actionData.learnMoreSent);
   const submitting =
     navigation.state === 'submitting' &&
-    navigation.formData?.get('intent') !== 'forward';
+    navigation.formData?.get('intent') === 'approve';
+  const learnMoreSubmitting =
+    navigation.state === 'submitting' &&
+    navigation.formData?.get('intent') === 'learn_more';
   const [clientErrors, setClientErrors] = useState<FieldErrors>({});
   const [authorized, setAuthorized] = useState(false);
   const [adminRole, setAdminRole] = useState('');
@@ -103,6 +113,19 @@ export function AdminApproveForm({
       className="flex flex-col gap-4"
       noValidate
       onSubmit={(event) => {
+        const submitter = (event.nativeEvent as SubmitEvent).submitter;
+        const submitIntent =
+          submitter instanceof HTMLButtonElement ||
+          submitter instanceof HTMLInputElement
+            ? submitter.value
+            : null;
+        if (
+          submitter?.getAttribute('name') === 'intent' &&
+          submitIntent === 'learn_more'
+        ) {
+          setClientErrors({});
+          return;
+        }
         const next: FieldErrors = {};
         if (!adminRole.trim()) next.adminRole = 'Enter your role.';
         if (!authorized)
@@ -175,15 +198,38 @@ export function AdminApproveForm({
         ) : null}
       </div>
       <div className="flex flex-col gap-2">
-        <FreeTierButton type="submit" isLoading={submitting} disabled={submitting}>
+        <FreeTierButton
+          type="submit"
+          name="intent"
+          value="approve"
+          isLoading={submitting}
+          disabled={submitting || learnMoreSubmitting}
+        >
           {submitting ? 'Approving…' : 'Approve Yawp!'}
         </FreeTierButton>
         {showDenyAndQa ? (
-          <FreeTierButton asChild variant="outline">
-            <a href={LEARN_MORE_URL} target="_blank" rel="noopener noreferrer">
-              I&apos;d like to learn more first
-            </a>
-          </FreeTierButton>
+          learnMoreSent ? (
+            <p className="text-sm text-muted-foreground">{LEARN_MORE_CONFIRMATION}</p>
+          ) : (
+            <FreeTierButton
+              type="submit"
+              name="intent"
+              value="learn_more"
+              variant="outline"
+              isLoading={learnMoreSubmitting}
+              disabled={submitting || learnMoreSubmitting}
+            >
+              {learnMoreSubmitting ? 'Sending…' : "I'd like to learn more first"}
+            </FreeTierButton>
+          )
+        ) : null}
+        {showDenyAndQa &&
+        actionData?.ok === false &&
+        (actionData.reason === 'learn_more_failed' ||
+          actionData.reason === 'learn_more_invalid') ? (
+          <p className="text-sm text-destructive" role="alert">
+            We couldn&apos;t send your message. Please try again in a moment.
+          </p>
         ) : null}
         {showDenyAndQa ? (
           <FreeTierButton
