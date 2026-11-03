@@ -1,14 +1,18 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { FilterIcon, XIcon, FileTextIcon } from 'lucide-react';
+import { FilterIcon, XIcon } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from '~/components/ui/accordion';
-import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
 import { Button } from '~/components/ui/button';
+import {
+  PromptLibraryEmptyState,
+  PromptLibraryTable,
+  PromptLibraryTableRow,
+} from '../assignment-type-prompt-library-table';
 import { Input } from '~/components/ui/input';
 import {
   Sheet,
@@ -329,7 +333,7 @@ export function ApPromptsLibrary({
           </Sheet>
         </div>
 
-        <main className="min-w-0 flex-1 lg:max-w-[720px]">
+        <main className="min-w-0 flex-1">
           <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/40 pb-3 text-xs text-muted-foreground">
             <span>{countLabel}</span>
             {activeChips.length > 0 ? (
@@ -350,102 +354,47 @@ export function ApPromptsLibrary({
           </div>
 
           {filtered.length === 0 ? (
-            <p className="py-12 text-center text-sm text-muted-foreground">
-              No prompts match the current filters.
-            </p>
+            <PromptLibraryEmptyState />
           ) : (
-            <ul className="divide-y divide-border/40">
-              {filtered.map((p) => (
-                <ApPromptRow
+            <PromptLibraryTable>
+              {filtered.map((p, index) => (
+                <PromptLibraryTableRow
                   key={p.externalKey}
-                  prompt={p}
+                  isFirst={index === 0}
+                  primary={p.title}
+                  meta={formatApPromptMetaLine(p)}
                   assignmentCreationLocked={assignmentCreationLocked}
                   onSelect={() => onSelectEntry(p)}
                 />
               ))}
-            </ul>
+            </PromptLibraryTable>
           )}
         </main>
     </div>
   );
 }
 
-function ApPromptRow({
-  prompt,
-  onSelect,
-  assignmentCreationLocked = false,
-}: {
-  prompt: ApPrompt;
-  onSelect: () => void;
-  assignmentCreationLocked?: boolean;
-}) {
-  const rowButton = (
-    <button
-      type="button"
-      onClick={assignmentCreationLocked ? undefined : onSelect}
-      className="group/card block w-full cursor-pointer rounded-md py-5 text-left transition-colors hover:bg-foreground/[0.03] focus-visible:bg-foreground/[0.03] focus-visible:outline-none"
-    >
-        <div className="space-y-1 px-2">
-          <h4 className="text-base font-semibold leading-snug text-foreground">
-            {prompt.title}
-          </h4>
-          <p className="text-[17px] leading-relaxed text-foreground">
-            {prompt.prompt}
-          </p>
-        </div>
-
-        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-2 text-xs text-muted-foreground">
-          <span className="rounded bg-foreground/[0.06] px-1.5 py-0.5 font-medium">
-            {ESSAY_TYPE_LABEL[prompt.essayType] ?? prompt.essayType}
-          </span>
-          {prompt.period || prompt.periodNumber ? (
-            <>
-              <span aria-hidden>·</span>
-              <span>
-                {prompt.course === 'apush'
-                  ? (APUSH_PERIOD_LABEL[prompt.periodNumber] ??
-                    `Period ${prompt.periodNumber}`)
-                  : prompt.period}
-              </span>
-            </>
-          ) : null}
-          <>
-            <span aria-hidden>·</span>
-            <span>
-              {REASONING_SKILL_LABEL[prompt.reasoningSkill] ??
-                prompt.reasoningSkill}
-            </span>
-          </>
-          {prompt.difficulty ? (
-            <>
-              <span aria-hidden>·</span>
-              <span>
-                {DIFFICULTY_LABEL[prompt.difficulty] ?? prompt.difficulty}
-              </span>
-            </>
-          ) : null}
-          {prompt.essayType === 'dbq' && prompt.sources.length > 0 ? (
-            <>
-              <span aria-hidden>·</span>
-              <span className="inline-flex items-center gap-1">
-                <FileTextIcon className="h-3 w-3" />
-                {prompt.sources.length} sources
-              </span>
-            </>
-          ) : null}
-        </div>
-      </button>
+function formatApPromptMetaLine(prompt: ApPrompt): string {
+  const parts: string[] = [prompt.prompt];
+  const tags: string[] = [
+    ESSAY_TYPE_LABEL[prompt.essayType] ?? prompt.essayType,
+  ];
+  if (prompt.period || prompt.periodNumber) {
+    tags.push(
+      prompt.course === 'apush'
+        ? (APUSH_PERIOD_LABEL[prompt.periodNumber] ??
+            `Period ${prompt.periodNumber}`)
+        : (prompt.period ?? '')
+    );
+  }
+  tags.push(
+    REASONING_SKILL_LABEL[prompt.reasoningSkill] ?? prompt.reasoningSkill
   );
-
-  return (
-    <li>
-      {assignmentCreationLocked ? (
-        <PreviewAssignmentCreationControl fullWidth>
-          {rowButton}
-        </PreviewAssignmentCreationControl>
-      ) : (
-        rowButton
-      )}
-    </li>
-  );
+  if (prompt.difficulty) {
+    tags.push(DIFFICULTY_LABEL[prompt.difficulty] ?? prompt.difficulty);
+  }
+  if (prompt.essayType === 'dbq' && prompt.sources.length > 0) {
+    tags.push(`${prompt.sources.length} sources`);
+  }
+  return `${parts[0]} · ${tags.filter(Boolean).join(' · ')}`;
 }

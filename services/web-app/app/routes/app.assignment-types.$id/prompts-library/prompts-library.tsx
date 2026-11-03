@@ -7,8 +7,12 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '~/components/ui/accordion';
-import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
 import { Button } from '~/components/ui/button';
+import {
+  PromptLibraryEmptyState,
+  PromptLibraryTable,
+  PromptLibraryTableRow,
+} from '../assignment-type-prompt-library-table';
 import { Input } from '~/components/ui/input';
 import {
   Sheet,
@@ -237,7 +241,7 @@ export function PromptsLibrary({
               </Sheet>
             </div>
 
-            <main className="min-w-0 flex-1 lg:max-w-[720px]">
+            <main className="min-w-0 flex-1">
               <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/40 pb-3 text-xs text-muted-foreground">
                 <span>{countLabel}</span>
                 {activeChips.length > 0 ? (
@@ -258,104 +262,40 @@ export function PromptsLibrary({
               </div>
 
               {prompts.length === 0 ? (
-                <p className="py-12 text-center text-sm text-muted-foreground">
-                  {showingOnlyMine
-                    ? 'You haven’t saved any prompts yet. Use New → Generate a prompt, then “Save prompt” (or “Use this prompt”) to keep one here.'
-                    : 'No prompts match the current filters.'}
-                </p>
+                <PromptLibraryEmptyState showingOnlyMine={showingOnlyMine} />
               ) : (
-                <ul className="divide-y divide-border/40">
-                  {prompts.map((p) => (
-                    <PromptRow
+                <PromptLibraryTable>
+                  {prompts.map((p, index) => (
+                    <PromptLibraryTableRow
                       key={p.id}
-                      prompt={p}
+                      isFirst={index === 0}
+                      primary={p.prompt}
+                      meta={formatDailyPagesPromptMetaLine(p)}
                       assignmentCreationLocked={assignmentCreationLocked}
                       onSelect={() => onSelectPrompt(p.prompt)}
                     />
                   ))}
-                </ul>
+                </PromptLibraryTable>
               )}
             </main>
     </div>
   );
 }
 
-function PromptRow({
-  prompt,
-  onSelect,
-  assignmentCreationLocked = false,
-}: {
-  prompt: LibraryEntry;
-  onSelect: () => void;
-  assignmentCreationLocked?: boolean;
-}) {
+function formatDailyPagesPromptMetaLine(prompt: LibraryEntry): string | undefined {
   const textOrUnit = prompt.textsOrUnits[0];
   const move = prompt.cognitiveMoves[0];
-
-  const rowButton = (
-    <button
-      type="button"
-      onClick={assignmentCreationLocked ? undefined : onSelect}
-      className="group/card block w-full cursor-pointer rounded-md py-5 text-left transition-colors hover:bg-foreground/[0.03] focus-visible:bg-foreground/[0.03] focus-visible:outline-none"
-    >
-        <div className="flex items-start justify-between gap-3 px-2">
-          <p className="text-[17px] leading-relaxed text-foreground">
-            {prompt.prompt}
-          </p>
-          {prompt.collection === 'mine' ? (
-            <span className="mt-1 shrink-0 rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[11px] leading-5 text-muted-foreground">
-              {COLLECTION_LABEL.mine}
-            </span>
-          ) : null}
-        </div>
-
-        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-2 text-xs text-muted-foreground">
-          {textOrUnit ? <span>{textOrUnit}</span> : null}
-          {textOrUnit && move ? <span aria-hidden>·</span> : null}
-          {move ? <span>{COGNITIVE_MOVE_LABEL[move]}</span> : null}
-        </div>
-
-        <div className="hidden px-2 lg:group-hover/card:block lg:group-focus-visible/card:block">
-          <ExtraTags prompt={prompt} />
-        </div>
-      </button>
-  );
-
-  return (
-    <li>
-      {assignmentCreationLocked ? (
-        <PreviewAssignmentCreationControl fullWidth>
-          {rowButton}
-        </PreviewAssignmentCreationControl>
-      ) : (
-        rowButton
-      )}
-    </li>
-  );
-}
-
-function ExtraTags({ prompt }: { prompt: LibraryEntry }) {
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground/80">
-      {prompt.type ? <span>{PROMPT_TYPE_LABEL[prompt.type]}</span> : null}
-      {prompt.type && prompt.seriousness ? <span aria-hidden>·</span> : null}
-      {prompt.seriousness ? (
-        <span>{SERIOUSNESS_LABEL[prompt.seriousness]}</span>
-      ) : null}
-      {prompt.themes.length > 0 ? (
-        <>
-          <span aria-hidden>·</span>
-          <span>{prompt.themes.join(', ')}</span>
-        </>
-      ) : null}
-      {prompt.gradeBands.length > 0 ? (
-        <>
-          <span aria-hidden>·</span>
-          <span>Grades {prompt.gradeBands.join(', ')}</span>
-        </>
-      ) : null}
-    </div>
-  );
+  const parts: string[] = [];
+  if (textOrUnit) parts.push(textOrUnit);
+  if (move) parts.push(COGNITIVE_MOVE_LABEL[move]);
+  if (prompt.type) parts.push(PROMPT_TYPE_LABEL[prompt.type]);
+  if (prompt.seriousness) parts.push(SERIOUSNESS_LABEL[prompt.seriousness]);
+  if (prompt.themes.length > 0) parts.push(prompt.themes.join(', '));
+  if (prompt.gradeBands.length > 0) {
+    parts.push(`Grades ${prompt.gradeBands.join(', ')}`);
+  }
+  if (prompt.collection === 'mine') parts.push(COLLECTION_LABEL.mine);
+  return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 
 function FilterPanel({
