@@ -6,7 +6,6 @@ import {
 
 const needsGradingSubmissionWhere = {
   unsubmittedAt: null,
-  submittedAt: { not: null },
   releasedAt: null,
   gradedAt: null,
   score: null,
