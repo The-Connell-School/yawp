@@ -342,7 +342,6 @@ export type LessonPlannerReviewFlags = {
 export async function isLessonPlannerEnabled(
   orgId: string | null | undefined
 ): Promise<boolean> {
-  if (!(await isFreeTierCapabilityEnabled(orgId))) return false;
   return isFeatureFlagEnabled(LESSON_PLANNER_FLAG, orgId);
 }
 

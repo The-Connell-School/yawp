@@ -43,6 +43,7 @@ describe('defaultPointValueForNewAssignment', () => {
     expect(defaultPointValueForNewAssignment({ kind: 'thesis_statement' })).toBe(
       DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE
     );
+    expect(defaultPointValueForNewAssignment({ kind: 'gals_claims' })).toBe(10);
     expect(defaultPointValueForNewAssignment({ kind: null })).toBe(100);
   });
 });

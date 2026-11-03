@@ -8,6 +8,7 @@ const requireUserId = mock();
 const requireMembership = mock();
 const createDocumentForAssignmentType = mock();
 const findStudentGroupDocument = mock();
+const recordClassAssignmentFirstOpen = mock();
 const redirectWithToast = mock();
 class DocumentCreationError extends Error {}
 
@@ -16,6 +17,9 @@ mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }))
 mock.module('~/domain/documents.server', () => ({
   createDocumentForAssignmentType,
   DocumentCreationError,
+}));
+mock.module('~/domain/student-class-assignment-first-open.server', () => ({
+  recordClassAssignmentFirstOpen,
 }));
 // Spread the pristine module: bun's mock.module is global to the test run, so
 // replacing it wholesale would strip arrangeGroups/openGroups for other files
@@ -68,6 +72,7 @@ describe('class assignment start', () => {
       .mockReset()
       .mockResolvedValue({ documentId: 'doc-solo' });
     findStudentGroupDocument.mockReset().mockResolvedValue(null);
+    recordClassAssignmentFirstOpen.mockReset().mockResolvedValue(undefined);
     redirectWithToast.mockReset().mockImplementation((to: string) => ({ to }));
   });
 
@@ -86,6 +91,10 @@ describe('class assignment start', () => {
       expect(result.to).toContain('/app/documents/doc-solo');
       // The collaborative branch must not be consulted at all.
       expect(findStudentGroupDocument).not.toHaveBeenCalled();
+      expect(recordClassAssignmentFirstOpen).toHaveBeenCalledWith({
+        classAssignmentId: 'ca-1',
+        membershipId: 'member-1',
+      });
     });
   });
 

@@ -206,7 +206,7 @@ describe('feature flags (server)', () => {
     }
   });
 
-  test('stays off in production when free tier is off even if lesson planner is on', async () => {
+  test('does not require free tier when lesson planner is on for a school', async () => {
     const previous = process.env.YAWP_ENVIRONMENT;
     process.env.YAWP_ENVIRONMENT = 'production';
     try {
@@ -214,7 +214,8 @@ describe('feature flags (server)', () => {
         '{"mode":"everyone","orgIds":[]}',
         '{"mode":"off","orgIds":[]}'
       );
-      expect(await isLessonPlannerEnabled('org-1')).toBe(false);
+      expect(await isFreeTierCapabilityEnabled('org-1')).toBe(false);
+      expect(await isLessonPlannerEnabled('org-1')).toBe(true);
     } finally {
       if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
       else process.env.YAWP_ENVIRONMENT = previous;

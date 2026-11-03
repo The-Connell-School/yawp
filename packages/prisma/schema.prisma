@@ -569,11 +569,26 @@ model ClassAssignment {
   insight        ClassAssignmentInsight?
   documentGroups DocumentGroup[]
   lessonPlans    LessonPlanConversation[]
+  studentFirstOpens ClassAssignmentStudentFirstOpen[]
 
   @@unique([assignmentId, classId])
   @@index([classId, createdAt(sort: Desc)])
   @@index([postAt])
   @@index([dueAt])
+}
+
+/// When a student first opened a class assignment (via Start or an equivalent entry).
+/// Drives the "new" pill on the student class dashboard until first open.
+model ClassAssignmentStudentFirstOpen {
+  id                String          @id @default(cuid())
+  openedAt          DateTime        @default(now()) @db.Timestamptz(6)
+  classAssignmentId String
+  classAssignment   ClassAssignment @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  membershipId      String
+  membership        OrgMembership   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([classAssignmentId, membershipId])
+  @@index([membershipId])
 }
 
 /// One collaboration group within one ClassAssignment.
@@ -1416,6 +1431,7 @@ model OrgMembership {
   documentGroupMemberGrades        DocumentGroupMemberGrade[]
   assignmentModuleSessions         AssignmentModuleSession[]
   documentGroupMemberGradesGiven   DocumentGroupMemberGrade[] @relation("DocumentGroupMemberGradedBy")
+  classAssignmentFirstOpens        ClassAssignmentStudentFirstOpen[]
 
   writingPracticeAttempts   WritingPracticeAttempt[]   @relation("WritingPracticeAttemptStudent")
   writingPracticePromptSets WritingPracticePromptSet[] @relation("WritingPracticePromptSetStudent")

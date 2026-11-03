@@ -7,6 +7,7 @@ import {
   DocumentCreationError,
   documentCreationErrorTextForClient,
 } from '~/domain/documents.server';
+import { recordClassAssignmentFirstOpen } from '~/domain/student-class-assignment-first-open.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -83,6 +84,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
     }
 
+    await recordClassAssignmentFirstOpen({
+      classAssignmentId: classAssignment.id,
+      membershipId: profile.id,
+    });
+
     const collabParams = new URLSearchParams({
       exitTo: '/app?tab=assignments',
     });
@@ -114,6 +120,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
     throw creationError;
   }
+
+  await recordClassAssignmentFirstOpen({
+    classAssignmentId: classAssignment.id,
+    membershipId: profile.id,
+  });
 
   const redirectParams = new URLSearchParams({
     spa: '1',

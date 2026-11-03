@@ -2,13 +2,8 @@ import type { RubricCategory } from './assignment-type-rubric.shared';
 import type { AssignmentTypeRubricConfigSource } from './assignment-type-rubric-config';
 
 /**
- * A plain-words read of the rubric the Grading Assistant will use for an
- * assignment type, for the admin edit page.
- *
- * It is built from the resolved grading config — the same object grading
- * reads — so it shows what grading does rather than what any one column says.
- * A type with no rubric of its own grades from the built-in one for its kind,
- * and this is where an admin checking the type can see that.
+ * Plain-words read of the rubric the Grading Assistant uses, built from the
+ * same resolved grading config grading reads at runtime.
  */
 
 export type GradingRubricSummaryInput = {
