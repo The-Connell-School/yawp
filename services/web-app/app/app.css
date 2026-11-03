@@ -2225,3 +2225,20 @@ ul.free-tier-qa-answer:not(.free-tier-qa-privacy-list) {
   border-radius: 8px;
   background: theme('colors.background');
 }
+
+/* Design 2026-11-03 setup/timeline: timeline card + form card share one 640px column */
+.free-tier-setup-page .free-tier-form-card {
+  max-width: none;
+  width: 100%;
+  margin-inline: 0;
+}
+.free-tier-setup-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+@media (min-width: 640px) {
+  .free-tier-setup-form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

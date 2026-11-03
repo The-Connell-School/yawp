@@ -34,60 +34,67 @@ export function ClassPreparationForm({
     >
       <Form method="post" className="flex flex-col gap-4">
         <input type="hidden" name="intent" value="prepare-class" />
-        <FreeTierFieldLabel label="Class name" htmlFor="className">
-          <FreeTierTextInput
-            id="className"
-            name="className"
-            placeholder="i.e., English 9, AP English Language"
-            required
-            maxLength={MAX_CLASS_NAME}
-            defaultValue={className}
-            aria-invalid={!!errors?.className}
-            aria-describedby={
-              errors?.className ? 'class-name-error' : undefined
-            }
-          />
-        </FreeTierFieldLabel>
-        {errors?.className ? (
-          <p
-            id="class-name-error"
-            role="alert"
-            className="text-xs text-destructive"
-          >
-            {errors.className}
-          </p>
-        ) : null}
-        <FreeTierFieldLabel label="Grade" htmlFor="grade">
-          <select
-            id="grade"
-            name="grade"
-            required
-            defaultValue={grade}
-            aria-invalid={!!errors?.grade}
-            aria-describedby={errors?.grade ? 'class-grade-error' : undefined}
-            className="h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-          >
-            <option value="">Choose a grade</option>
-            {CLASS_GRADES.map((value) => (
-              <option key={value} value={value}>
-                {value === 'mixed' ? 'Mixed high school grades' : value}
-              </option>
-            ))}
-          </select>
-        </FreeTierFieldLabel>
-        {errors?.grade ? (
-          <p
-            id="class-grade-error"
-            role="alert"
-            className="text-xs text-destructive"
-          >
-            {errors.grade}
-          </p>
-        ) : null}
+        <div className="free-tier-setup-form-grid">
+          <div className="flex flex-col gap-1.5">
+            <FreeTierFieldLabel label="Class name" htmlFor="className">
+              <FreeTierTextInput
+                id="className"
+                name="className"
+                placeholder="i.e., English 9, AP English Language"
+                required
+                maxLength={MAX_CLASS_NAME}
+                defaultValue={className}
+                aria-invalid={!!errors?.className}
+                aria-describedby={
+                  errors?.className ? 'class-name-error' : undefined
+                }
+              />
+            </FreeTierFieldLabel>
+            {errors?.className ? (
+              <p
+                id="class-name-error"
+                role="alert"
+                className="text-xs text-destructive"
+              >
+                {errors.className}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <FreeTierFieldLabel label="Grade" htmlFor="grade">
+              <select
+                id="grade"
+                name="grade"
+                required
+                defaultValue={grade}
+                aria-invalid={!!errors?.grade}
+                aria-describedby={
+                  errors?.grade ? 'class-grade-error' : undefined
+                }
+                className="h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              >
+                <option value="">Choose a grade</option>
+                {CLASS_GRADES.map((value) => (
+                  <option key={value} value={value}>
+                    {value === 'mixed' ? 'Mixed high school grades' : value}
+                  </option>
+                ))}
+              </select>
+            </FreeTierFieldLabel>
+            {errors?.grade ? (
+              <p
+                id="class-grade-error"
+                role="alert"
+                className="text-xs text-destructive"
+              >
+                {errors.grade}
+              </p>
+            ) : null}
+          </div>
+        </div>
         <p className="text-sm text-muted-foreground">
           Pick the class where you’d most like to see your students’ writing
-          grow. You can rename it later. Your students will join after
-          approval.
+          grow. You can rename it later. Your students will join after approval.
         </p>
         {error ? (
           <p role="alert" className="text-sm text-destructive">
