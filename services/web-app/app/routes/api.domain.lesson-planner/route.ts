@@ -52,6 +52,7 @@ import {
 } from '~/domain/lesson-planner/lesson-links';
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
+import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
 import { readLessonLength } from '~/domain/lesson-planner/lesson-length';
 import { asksForDeck } from '~/domain/lesson-planner/suggestions';
 import { loadStackContents } from '~/domain/lesson-planner/stack-contents.server';
@@ -478,6 +479,10 @@ export async function action({ request }: ActionFunctionArgs) {
     const exitTicketsAvailable = Boolean(
       (await findWritingExerciseTypeIds(ctx)).exitTicket
     );
+    // The v3 hand-off only where the v3 sheet will open it: same flag, same school.
+    const exitTicketBuilderV3 =
+      exitTicketsAvailable &&
+      (await isExitTicketBuilderV3Enabled(ctx.organizationId));
 
     // Brian's review (B6): with stack v2 on, outputs are built from what the
     // teacher kept, so the planner sees the stack itself, not just its titles.
@@ -586,6 +591,7 @@ export async function action({ request }: ActionFunctionArgs) {
       intakeV2,
       unitContext,
       exitTicketsAvailable,
+      exitTicketBuilderV3,
       writingPracticeAvailable: ctx.writingPracticeEnabled,
       template,
       deckGallery,

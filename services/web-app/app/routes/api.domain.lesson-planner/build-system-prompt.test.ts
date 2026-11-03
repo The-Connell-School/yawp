@@ -6,6 +6,9 @@ import { UNIT_PLAN_FENCE } from '~/domain/lesson-planner/unit-plan';
 import { EXIT_TICKET_FENCE } from '~/domain/lesson-planner/exit-ticket-block';
 import { PRACTICE_FENCE } from '~/domain/lesson-planner/practice-block';
 import {
+  EXIT_TICKET_ACTIVITY_OPTIONS,
+  EXIT_TICKET_EXPLAIN_CLOSER,
+  EXIT_TICKET_STARTER_OPTIONS,
   EXIT_TICKET_FOCUS_OPTIONS,
   EXIT_TICKET_LESSON_NOTE_FIELDS,
   EXIT_TICKET_REFLECTION_PROMPT_OPTIONS,
@@ -1970,5 +1973,72 @@ describe("Kevin's unit-build notes (Oct 25)", () => {
     const text = JSON.stringify(buildLessonPlannerSystemPromptBlocks({} as any));
     expect(text).toContain('two or three short questions, never more');
     expect(text).toContain('Building on your Girard lesson');
+  });
+});
+
+describe('the Yawp exit ticket, v3 builder', () => {
+  const v3 = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+    exitTicketsAvailable: true,
+    exitTicketBuilderV3: true,
+  });
+  const legacy = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+    exitTicketsAvailable: true,
+  });
+
+  test('teaches every activity the v3 form offers, and the prompt the planner writes', () => {
+    for (const option of EXIT_TICKET_ACTIVITY_OPTIONS) {
+      expect(v3).toContain(`\`${option.value}\``);
+      expect(v3).toContain(option.label);
+    }
+    expect(v3).toContain('activity: answer-question');
+    expect(v3).toContain('promptText:');
+    for (const starter of EXIT_TICKET_STARTER_OPTIONS) {
+      expect(v3).toContain(`\`${starter.id}\``);
+    }
+  });
+
+  test('no longer teaches the fill-in-the-blank focus or the right-answer question', () => {
+    expect(v3).not.toContain('focus: explain-concept');
+    expect(v3).not.toContain('answer: objective');
+    expect(v3).not.toContain('`ask-question`');
+  });
+
+  test('carries Brian’s wording rule, and leaves the closing line to Yawp!', () => {
+    expect(v3).toContain('someone who missed class');
+    expect(v3).toContain('not the definition you were given');
+    expect(v3).toMatch(/Do not write the closing line/);
+    // The printed ticket follows the same rule, closer included.
+    expect(v3).toContain(EXIT_TICKET_EXPLAIN_CLOSER);
+  });
+
+  test('leaves the prompt unchanged while the flag is off', () => {
+    expect(legacy).toContain('focus: explain-concept');
+    expect(legacy).not.toContain('activity: answer-question');
+    expect(legacy).not.toContain(EXIT_TICKET_EXPLAIN_CLOSER);
+  });
+
+  test('has nothing to say without the Exit Ticket type', () => {
+    const none = buildLessonPlannerSystemPrompt({
+      teacherName: null,
+      organizationName: 'Connell School',
+      exitTicketsAvailable: false,
+      exitTicketBuilderV3: true,
+    });
+    expect(none).not.toContain('activity: answer-question');
+  });
+
+  test('caches the v3 instructions apart from the legacy ones', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      exitTicketsAvailable: true,
+      exitTicketBuilderV3: true,
+    });
+    expect(blocks[0]!.text).toContain(`${LESSON_PLANNER_PROMPT_VERSION}-et3`);
+    expect(blocks[0]!.text).toContain('activity: answer-question');
   });
 });

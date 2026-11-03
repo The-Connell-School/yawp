@@ -56,6 +56,9 @@ const FIELD_LINE = /^\s*([A-Za-z][A-Za-z0-9]*)\s*:\s*(.*)$/;
  */
 type BlockFields = {
   title?: string;
+  /** v3: what students do; with it, `promptText` is the whole question. */
+  activity?: string;
+  starter?: string;
   minutes?: string;
   kind?: string;
   mode?: string;
@@ -78,6 +81,8 @@ type BlockFields = {
 const FIELD_ALIASES: Record<string, keyof BlockFields> = {
   title: 'title',
   minutes: 'minutes',
+  activity: 'activity',
+  starter: 'starter',
   kind: 'kind',
   mode: 'mode',
   prompt: 'prompt',
@@ -114,10 +119,13 @@ export type PlannedExitTicket = {
 
 const YES = new Set(['yes', 'true', 'graded', 'y', '1']);
 
-/** The form calls bands "Quality"; the planner may say either. */
+/**
+ * The quick builder calls bands "Quality" and the v3 builder "Understanding";
+ * the planner may say any of the three.
+ */
 function blockBasis(value: string | undefined): string | undefined {
   const basis = value?.trim().toLowerCase();
-  return basis === 'quality' ? 'bands' : basis;
+  return basis === 'quality' || basis === 'understanding' ? 'bands' : basis;
 }
 
 function blockPoints(value: string | undefined): number | null {
@@ -149,6 +157,7 @@ function readFields(raw: string): BlockFields {
  */
 function readBlock(raw: string): PlannedExitTicket | null {
   const fields = readFields(raw);
+  if (fields.activity) return readV3Block(fields);
   if (!fields.kind && !fields.mode && !fields.focus && !fields.topic) {
     return null;
   }
@@ -209,6 +218,61 @@ function readBlock(raw: string): PlannedExitTicket | null {
   };
 }
 
+function namedFields(fields: BlockFields) {
+  const minutes = Number(fields.minutes?.replace(/\s*min.*$/i, '').trim());
+  return {
+    title: fields.title?.trim().slice(0, 80) || null,
+    minutes:
+      Number.isInteger(minutes) && minutes >= 1 && minutes <= 120
+        ? minutes
+        : null,
+  };
+}
+
+/**
+ * A v3 block: an activity and the question the planner wrote, plus the key
+ * points. Graded without a basis means completion, the usual reason to grade
+ * an exit ticket at all; a basis the parser refuses drops the grade, not the
+ * ticket, as for legacy blocks.
+ */
+function readV3Block(fields: BlockFields): PlannedExitTicket | null {
+  const base = {
+    activity: fields.activity,
+    promptText: fields.promptText,
+    starter: fields.starter,
+    lessonMainPoints: fields.mainPoints,
+    lessonMustMention: fields.mustMention,
+    lessonWatchFor: fields.watchFor,
+  };
+  const named = namedFields(fields);
+  if (YES.has(fields.graded?.trim().toLowerCase() ?? '')) {
+    const graded = parseExitTicketConfigInput({
+      ...base,
+      graded: true,
+      gradingBasis: blockBasis(fields.basis) ?? 'completion',
+    });
+    if (graded.success) {
+      return {
+        config: graded.config,
+        prompt: composeExitTicketPrompt(graded.config),
+        graded: true,
+        pointValue:
+          blockPoints(fields.points) ?? EXIT_TICKET_DEFAULT_POINT_VALUE,
+        ...named,
+      };
+    }
+  }
+  const parsed = parseExitTicketConfigInput(base);
+  if (!parsed.success) return null;
+  return {
+    config: parsed.config,
+    prompt: composeExitTicketPrompt(parsed.config),
+    graded: false,
+    pointValue: null,
+    ...named,
+  };
+}
+
 /**
  * The exit tickets in a reply, and the reply without their blocks.
  */
@@ -252,6 +316,9 @@ export function inlinePlannedExitTickets(content: string): string {
  * for the form fields they fill so the two stay obviously connected.
  */
 export const EXIT_TICKET_PARAMS = {
+  activity: 'exitTicketActivity',
+  promptText: 'exitTicketPromptText',
+  starter: 'exitTicketStarter',
   mode: 'exitTicketMode',
   focus: 'exitTicketFocus',
   topic: 'exitTicketTopic',
@@ -330,6 +397,11 @@ export function exitTicketCreateHref(
       }
     }
   }
+  if (config.activity && config.promptText) {
+    params.set(EXIT_TICKET_PARAMS.activity, config.activity);
+    params.set(EXIT_TICKET_PARAMS.promptText, config.promptText);
+    if (config.starter) params.set(EXIT_TICKET_PARAMS.starter, config.starter);
+  }
   if (conversationId) params.set(FROM_LESSON_PARAM, conversationId);
   return `/app/assignment-types/${assignmentTypeId}?${params}`;
 }
@@ -348,7 +420,35 @@ export type ExitTicketPrefill = {
   pointValue: number | null;
   /** Null when absent or unreadable: the form opens on its defaults. */
   grading: ExitTicketGrading | null;
+  /**
+   * A v3 ticket, whole, for the v3 builder to open exactly. Absent or null
+   * for a legacy link; the quick builder reads the fields above either way.
+   */
+  config?: ExitTicketConfig | null;
 };
+
+/** The v3 ticket a link describes, through the same parser the form uses. */
+function readPrefillV3Config(params: URLSearchParams): ExitTicketConfig | null {
+  const activity = params.get(EXIT_TICKET_PARAMS.activity)?.trim();
+  if (!activity) return null;
+  const graded = params.get(EXIT_TICKET_PARAMS.graded) === 'true';
+  const parsed = parseExitTicketConfigInput({
+    activity,
+    promptText: params.get(EXIT_TICKET_PARAMS.promptText),
+    starter: params.get(EXIT_TICKET_PARAMS.starter),
+    lessonMainPoints: params.get(EXIT_TICKET_PARAMS.mainPoints),
+    lessonMustMention: params.get(EXIT_TICKET_PARAMS.mustMention),
+    lessonWatchFor: params.get(EXIT_TICKET_PARAMS.watchFor),
+    ...(graded
+      ? {
+          graded: true,
+          gradingBasis:
+            params.get(EXIT_TICKET_PARAMS.gradingBasis) ?? 'completion',
+        }
+      : {}),
+  });
+  return parsed.success ? parsed.config : null;
+}
 
 function prefillCount(value: string | null, max: number): number | undefined {
   const count = Number(value?.trim());
@@ -428,6 +528,9 @@ export function readExitTicketPrefill(
     watchFor: params.get(EXIT_TICKET_PARAMS.watchFor)?.trim() ?? '',
   };
   const hasNotes = Object.values(notes).some((value) => value.length > 0);
+  const config = readPrefillV3Config(params);
+  // Absent, not null, on a legacy link: those prefills read as they always did.
+  const v3Field = config ? { config } : {};
 
   return {
     mode,
@@ -444,5 +547,6 @@ export function readExitTicketPrefill(
       params.get(EXIT_TICKET_PARAMS.pointValue) ?? undefined
     ),
     grading: readPrefillGrading(params),
+    ...v3Field,
   };
 }
