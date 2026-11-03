@@ -110,7 +110,13 @@ export function FinishLine({
    * Stack page v2 (Oct 24 handoff, task 6): two Teach it buttons in place of
    * Run the show. With no deck yet, Open slideshow builds one first.
    */
-  teach?: { slideshowHref: string | null; notesHref: string; onBuildDeck: () => void } | null;
+  teach?: {
+    slideshowHref: string | null;
+    notesHref: string;
+    onBuildDeck: () => void;
+    /** The teacher's own deck, added as is (Nov 3): theirs to open, never one to build. */
+    ownDeckHref?: string | null;
+  } | null;
   /** The library redesign (Part 2, L3): a set lesson in no unit can be saved to one. */
   saveToUnit?: Array<{ id: string; title: string; course: string | null }> | null;
   /** The Before class list; null with it off. */
@@ -208,6 +214,19 @@ export function FinishLine({
                 <span className="block text-xs text-white/80">For the smartboard or projector</span>
               </span>
             </Link>
+          ) : teach.ownDeckHref ? (
+            <a
+              href={teach.ownDeckHref}
+              download
+              data-testid="open-own-deck"
+              className="flex w-full items-center gap-3 rounded-xl bg-[var(--sv-primary)] px-4 py-3 text-left text-white transition hover:opacity-90"
+            >
+              <MonitorPlay size={18} className="shrink-0" />
+              <span>
+                <span className="block text-sm font-bold">Open your slides</span>
+                <span className="block text-xs text-white/80">Your own deck, as you uploaded it</span>
+              </span>
+            </a>
           ) : (
             <button
               type="button"

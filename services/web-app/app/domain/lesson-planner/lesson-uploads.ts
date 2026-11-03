@@ -20,6 +20,16 @@ export const PART_CHARS = 12_000;
 export const DECK_MODES = ['teach', 'refresh'] as const;
 export type DeckMode = (typeof DECK_MODES)[number];
 
+/**
+ * The two choices, as the teacher reads them (Nov 3), on the page and in the
+ * planner's question alike. 'teach' keeps its stored name: the teacher's own
+ * deck goes in the lesson as is. 'refresh': a new Yawp! deck made from it.
+ */
+export const DECK_MODE_LABELS: Record<DeckMode, string> = {
+  refresh: 'Make me a new slide deck (your original won’t be affected)',
+  teach: 'Add my existing slide deck to the stack as is',
+};
+
 export function isDeckMode(value: unknown): value is DeckMode {
   return typeof value === 'string' && (DECK_MODES as readonly string[]).includes(value);
 }
@@ -66,8 +76,8 @@ function deckGuidance(upload: LessonUpload, choices: DeckChoices): string[] {
   const mode = upload.mode === 'teach' && choices.teach ? 'teach' : upload.mode === 'refresh' && choices.refresh ? 'refresh' : null;
   if (mode === 'teach') {
     return [
-      `[The teacher chose “Teach with these slides” for "${upload.name}". They will show their own deck as it is.`,
-      '- Do not write a yawp-slides deck for this lesson, not even one slide: their deck is the deck. If they ask you for a Yawp! deck anyway, build it from their slides, in their order.',
+      `[The teacher chose “${DECK_MODE_LABELS.teach}” for "${upload.name}". Their own deck is in the lesson as its slide deck, exactly as they uploaded it, and they will show it as it is.`,
+      '- Do not write a yawp-slides deck for this lesson, not even one slide: their deck is the deck. If they ask you for a new one anyway, build it from their slides, in their order; theirs stays as it is.',
       '- Build the plan, the handouts and the exit ticket around it. At each step say which of its slides to show by their slide numbers ("Slides 3–4"), what students do while they are up, and what the teacher says. Use the slide numbers as written above; never guess one.',
       '- Where a slide shows a picture, build on what it shows. Never contradict a slide; if one needs fixing, say so in the plan.]',
     ];
@@ -75,7 +85,7 @@ function deckGuidance(upload: LessonUpload, choices: DeckChoices): string[] {
   if (mode === 'refresh') {
     const pictures = upload.pictures ?? [];
     return [
-      `[The teacher chose “Refresh into a Yawp! deck” for "${upload.name}". Rebuild it as a yawp-slides deck: keep its content, its sequence and its examples; tighten the wording, update what is out of date, and add the questions and notes a Yawp! deck carries.`,
+      `[The teacher chose “${DECK_MODE_LABELS.refresh}” for "${upload.name}". Make a new yawp-slides deck from it: keep its content, its sequence and its examples; tighten the wording, update what is out of date, and add the questions and notes a Yawp! deck carries. Their original file stays as it is.`,
       '- Their pictures go back on the slides that used them, each on its own picture slide: {"layout": "picture", "title": …, "question" or "body": …, "image": "<picture id>", "speakerNotes": …}. Use only an id listed here, each where the original deck had it. A picture slide shows one picture whole; the painting from the art library still hangs on the rest of the deck.',
       ...(pictures.length
         ? [
@@ -89,12 +99,11 @@ function deckGuidance(upload: LessonUpload, choices: DeckChoices): string[] {
       '- A picture marked above as one Yawp! cannot show has no id: describe it in the speaker notes instead.]',
     ];
   }
-  const offered = [choices.teach ? 'teach with it as it is' : null, choices.refresh ? 'refresh it into a Yawp! deck' : null].filter(
-    (choice): choice is string => Boolean(choice)
-  );
+  // Refresh first: the page offers them in this order.
+  const offered = (['refresh', 'teach'] as const).filter((choice) => choices[choice]).map((choice) => `“${DECK_MODE_LABELS[choice]}”`);
   if (!offered.length) return [];
   return [
-    `[The teacher has not said what they want from "${upload.name}". Unless this message already says, ask them once, in one short question, whether to ${offered.join(' or ')}, before you write any deck. Build the rest of the lesson meanwhile.]`,
+    `[The teacher has not said what to do with "${upload.name}". The page asks them under the document; unless this message already says, ask them once too, in one short question offering exactly these choices: ${offered.join(' or ')}. Write no deck until they answer. Build the rest of the lesson meanwhile.]`,
   ];
 }
 

@@ -1,7 +1,9 @@
 /**
  * The teacher's own deck (Nov 1): an uploaded PowerPoint kept whole with its
- * pictures, taught as it is ("Teach with these slides"), or refreshed into a
- * Yawp! deck that keeps the teacher's pictures ("Refresh into a Yawp! deck").
+ * pictures. On upload the page asks what to do with it: "Add my existing
+ * slide deck to the stack as is" (the lesson's slide deck is their file), or
+ * "Make me a new slide deck (your original won't be affected)" (a Yawp! deck
+ * that keeps the teacher's pictures).
  *
  * Every reply is seeded: the model is never called. Each test turns on the
  * flags it needs and the afterEach turns every flag back off.
@@ -17,6 +19,8 @@ import { DAY_ONE_REPLY } from '../fixtures/lesson-planner/day-one-reply';
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 const DECK_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), '../fixtures/lesson-planner/deck-pictures.pptx');
 const DECK_BYTES = readFileSync(DECK_FILE);
+const AS_IS = 'Add my existing slide deck to the stack as is';
+const NEW_DECK = 'Make me a new slide deck (your original won’t be affected)';
 const deckUpload = { name: 'Thesis deck.pptx', mimeType: 'application/octet-stream', buffer: DECK_BYTES };
 
 const OWN_DECK_FLAGS: LessonPlannerReviewFlag[] = [
@@ -117,7 +121,8 @@ test.describe('Lesson Planner — the teacher’s own deck (Nov 1)', () => {
     await page.waitForLoadState('networkidle');
     await page.getByTestId('source-file-input').setInputFiles(DECK_FILE);
     await expect(page.getByTestId('source-document')).toContainText('deck-pictures.pptx');
-    await expect(page.getByRole('button', { name: 'Teach with these slides' })).toHaveCount(0);
+    await expect(page.getByTestId('source-deck-question')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: AS_IS })).toHaveCount(0);
 
     const prisma = createE2EPrismaClient();
     try {
@@ -146,8 +151,13 @@ test.describe('Lesson Planner — the teacher’s own deck (Nov 1)', () => {
     // Four of its six pictures can be shown: an EMF and a web link cannot.
     await expect(page.getByTestId('source-deck-pictures')).toHaveText('4 pictures kept');
 
-    const teach = page.getByRole('button', { name: 'Teach with these slides' });
-    const refresh = page.getByRole('button', { name: 'Refresh into a Yawp! deck' });
+    // The page asks what to do with it, the moment it is in.
+    const question = page.getByTestId('source-deck-question');
+    await expect(question).toContainText('What should I do with deck-pictures.pptx?');
+    const teach = question.getByRole('button', { name: AS_IS });
+    const refresh = question.getByRole('button', { name: NEW_DECK });
+    // A new deck first, then theirs as is.
+    await expect(question.getByRole('button')).toHaveText([NEW_DECK, AS_IS]);
     await expect(teach).toHaveAttribute('aria-pressed', 'false');
     await teach.click();
     await expect(teach).toHaveAttribute('aria-pressed', 'true');
@@ -190,7 +200,7 @@ test.describe('Lesson Planner — the teacher’s own deck (Nov 1)', () => {
     }
   });
 
-  test('teach: Print it for class hands the teacher their own deck', async ({ page, signIn, e2eContext }) => {
+  test('as is: the lesson’s slide deck is the teacher’s own file', async ({ page, signIn, e2eContext }) => {
     for (const flag of [...OWN_DECK_FLAGS, ...STACK_FLAGS]) await setLessonPlannerReviewFlag(flag, true);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     const { conversationId, assistantIds } = await seedConversation(e2eContext, [
@@ -208,9 +218,19 @@ test.describe('Lesson Planner — the teacher’s own deck (Nov 1)', () => {
     expect(chose.ok()).toBe(true);
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
-    const own = page.getByTestId('print-for-class').getByTestId('own-deck');
-    await expect(own).toContainText('Your slides');
-    await expect(own).toContainText('Thesis deck.pptx');
+    const box = page.getByTestId('print-for-class');
+    const own = box.getByTestId('own-deck');
+    await expect(own).toContainText('Slide deck');
+    await expect(own).toContainText('Your own deck, as you uploaded it: Thesis deck.pptx');
+    // It is the lesson's deck: no "No deck yet", nothing to build.
+    await expect(box).not.toContainText('No deck yet');
+    await expect(box.getByTestId('build-deck')).toHaveCount(0);
+    await expect(page.getByTestId('before-class-item').filter({ hasText: 'Slides' })).toHaveAttribute('data-done', 'true');
+
+    // Set: Teach it opens their deck rather than building a new one.
+    await page.getByTestId('set-lesson').click();
+    await expect(page.getByTestId('open-own-deck')).toHaveAttribute('href', `/api/lesson-planner-deck/${upload.id}`);
+    await expect(page.getByTestId('open-slideshow')).toHaveCount(0);
     await expect(own.getByRole('link', { name: 'Download' })).toHaveAttribute(
       'href',
       `/api/lesson-planner-deck/${upload.id}`

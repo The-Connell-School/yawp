@@ -1,7 +1,7 @@
 /**
  * A teacher's own deck, back exactly as they uploaded it (Nov 1): the file
- * they teach from when they choose "Teach with these slides". Only theirs,
- * and only a deck that was kept whole.
+ * they teach from when they choose "Add my existing slide deck to the stack
+ * as is". Only theirs, and only a deck that was kept whole.
  */
 import { data, type LoaderFunctionArgs } from 'react-router';
 import { prisma } from '~/utils/db.server';

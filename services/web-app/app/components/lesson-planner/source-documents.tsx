@@ -3,13 +3,15 @@
  * add one, and a chip for each with a way to take it back out. Added before
  * a lesson's first message, they wait in this tab and go with that message.
  *
- * A deck kept whole (Nov 1) says how many of its pictures were kept and asks
- * what the teacher wants from it: teach with these slides, or refresh them
- * into a Yawp! deck. Pressing the chosen one again takes the choice back.
+ * A deck kept whole (Nov 1) says how many of its pictures were kept, and the
+ * moment it is in, the page asks what to do with it (Nov 3): make a new slide
+ * deck from it, or add it to the stack as is. Pressing the chosen one again
+ * takes the choice back.
  */
 import { useEffect, useRef, useState } from 'react';
 import { FileText, Loader2, Paperclip, X } from 'lucide-react';
 import { cn } from '~/utils/misc';
+import { DECK_MODE_LABELS } from '~/domain/lesson-planner/lesson-uploads';
 
 export type DeckChoice = 'teach' | 'refresh';
 /** A deck kept whole: how many pictures were kept, and what the teacher chose. */
@@ -166,7 +168,6 @@ export function SourceChips({ state }: { state: SourceDocumentsState }) {
               {doc.deck.pictures === 1 ? '1 picture kept' : `${doc.deck.pictures} pictures kept`}
             </span>
           ) : null}
-          {doc.deck ? <DeckChoiceButtons doc={doc} deck={doc.deck} state={state} /> : null}
           <button
             type="button"
             aria-label={`Remove ${doc.name}`}
@@ -177,6 +178,9 @@ export function SourceChips({ state }: { state: SourceDocumentsState }) {
           </button>
         </span>
       ))}
+      {state.docs.map((doc) =>
+        doc.deck ? <DeckQuestion key={`${doc.id}:question`} doc={doc} deck={doc.deck} state={state} /> : null
+      )}
       {state.busy ? <span className="text-xs text-muted-foreground">Reading your document…</span> : null}
       {state.error ? (
         <span role="alert" data-testid="source-error" className={cn('text-xs text-red-700')}>
@@ -187,34 +191,41 @@ export function SourceChips({ state }: { state: SourceDocumentsState }) {
   );
 }
 
-const CHOICE_LABELS: Record<DeckChoice, string> = {
-  teach: 'Teach with these slides',
-  refresh: 'Refresh into a Yawp! deck',
-};
-
-function DeckChoiceButtons({ doc, deck, state }: { doc: SourceChip; deck: SourceDeck; state: SourceDocumentsState }) {
-  const offered = (['teach', 'refresh'] as const).filter((choice) => state.deckChoices[choice]);
+/** What to do with an uploaded deck, asked as soon as it is in (Nov 3). */
+function DeckQuestion({ doc, deck, state }: { doc: SourceChip; deck: SourceDeck; state: SourceDocumentsState }) {
+  // A new deck first, then theirs as is.
+  const offered = (['refresh', 'teach'] as const).filter((choice) => state.deckChoices[choice]);
   if (!offered.length) return null;
   return (
-    <span role="group" aria-label={`What to do with ${doc.name}`} className="inline-flex items-center gap-1">
-      {offered.map((choice) => {
-        const pressed = deck.mode === choice;
-        return (
-          <button
-            key={choice}
-            type="button"
-            aria-pressed={pressed}
-            data-testid={`source-deck-${choice}`}
-            onClick={() => void state.choose(doc.id, pressed ? null : choice)}
-            className={cn(
-              'whitespace-nowrap rounded-full border px-2 py-0.5 transition',
-              pressed ? 'border-foreground bg-foreground text-background' : 'bg-background hover:bg-muted'
-            )}
-          >
-            {CHOICE_LABELS[choice]}
-          </button>
-        );
-      })}
-    </span>
+    <div
+      role="group"
+      aria-label={`What should I do with ${doc.name}?`}
+      data-testid="source-deck-question"
+      className="w-full rounded-xl border bg-background p-2.5 text-xs"
+    >
+      <p className="mb-2 font-medium">
+        What should I do with <span className="font-semibold">{doc.name}</span>?
+      </p>
+      <div className="flex flex-col gap-1.5 sm:flex-row">
+        {offered.map((choice) => {
+          const pressed = deck.mode === choice;
+          return (
+            <button
+              key={choice}
+              type="button"
+              aria-pressed={pressed}
+              data-testid={`source-deck-${choice}`}
+              onClick={() => void state.choose(doc.id, pressed ? null : choice)}
+              className={cn(
+                'flex-1 rounded-lg border px-3 py-2 text-left transition',
+                pressed ? 'border-foreground bg-foreground text-background' : 'bg-muted/40 hover:bg-muted'
+              )}
+            >
+              {DECK_MODE_LABELS[choice]}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

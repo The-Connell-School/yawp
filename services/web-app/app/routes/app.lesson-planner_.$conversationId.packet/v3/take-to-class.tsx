@@ -126,76 +126,82 @@ export function TakeToClass({
         </ol>
       ) : null}
 
-      <Row
-        icon={<MonitorPlay size={16} />}
-        title="Slide deck"
-        line={
-          deck
-            ? `${deck.slides} slides from your stack`
-            : builtDeck
-              ? builtDeck.onStack
-                ? 'You built a deck here. It isn’t in the lesson yet'
-                : 'The planner already made a deck in your conversation'
-              : `About one slide per step (${stepCount} steps)`
-        }
-      >
-        {deck?.artSwatch ? (
-          <DeckArtImage
-            src={deck.artSwatch}
-            alt=""
-            aria-hidden
-            className="mb-2 h-14 w-full max-w-[8rem] rounded-lg border border-white/20 object-cover"
-          />
-        ) : null}
-        {deck ? (
-          <>
-            <Link to={`/present/${conversationId}/${deck.id}?from=stack`} data-testid="deck-present" className={BUTTON}>
-              Present
-            </Link>
-            {deckV2 ? (
-              <Link to={`${base}/deck/${deck.id}?from=stack`} className={BUTTON}>
-                Edit
+      {/* "Add my existing slide deck to the stack as is" (Nov 3): with no Yawp! deck in
+          the lesson, the teacher's own file is the lesson's slide deck. */}
+      {ownDecks.length && !deck ? (
+        <OwnDeckRows decks={ownDecks} asLessonDeck />
+      ) : (
+        <Row
+          icon={<MonitorPlay size={16} />}
+          title="Slide deck"
+          line={
+            deck
+              ? `${deck.slides} slides from your stack`
+              : builtDeck
+                ? builtDeck.onStack
+                  ? 'You built a deck here. It isn’t in the lesson yet'
+                  : 'The planner already made a deck in your conversation'
+                : `About one slide per step (${stepCount} steps)`
+          }
+        >
+          {deck?.artSwatch ? (
+            <DeckArtImage
+              src={deck.artSwatch}
+              alt=""
+              aria-hidden
+              className="mb-2 h-14 w-full max-w-[8rem] rounded-lg border border-white/20 object-cover"
+            />
+          ) : null}
+          {deck ? (
+            <>
+              <Link to={`/present/${conversationId}/${deck.id}?from=stack`} data-testid="deck-present" className={BUTTON}>
+                Present
               </Link>
-            ) : null}
-            {onBuildDeck ? (
-              <button type="button" onClick={onBuildDeck} data-testid="rebuild-deck" className={BUTTON}>
-                Rebuild
-              </button>
-            ) : (
-              <Link to={`/app/lesson-planner?c=${conversationId}&build=rebuild-deck`} className={BUTTON}>
-                Rebuild
-              </Link>
-            )}
-          </>
-        ) : onBuildDeck ? (
-          <>
-            {builtDeck ? (
-              <>
-                <Link to={builtDeck.presentHref} data-testid="built-deck-present" className={BUTTON}>
-                  Present
+              {deckV2 ? (
+                <Link to={`${base}/deck/${deck.id}?from=stack`} className={BUTTON}>
+                  Edit
                 </Link>
-                {builtDeck.editHref ? (
-                  <Link to={builtDeck.editHref} data-testid="built-deck-edit" className={BUTTON}>
-                    Edit
-                  </Link>
-                ) : null}
-                <button type="button" onClick={builtDeck.onAdd} data-testid="add-conversation-deck" className={BUTTON}>
-                  Add it
+              ) : null}
+              {onBuildDeck ? (
+                <button type="button" onClick={onBuildDeck} data-testid="rebuild-deck" className={BUTTON}>
+                  Rebuild
                 </button>
-              </>
-            ) : null}
-            <button type="button" onClick={onBuildDeck} data-testid="build-deck" className={BUTTON}>
-              {builtDeck ? 'Build a new one' : 'Build the deck'}
-            </button>
-          </>
-        ) : (
-          <Link to={`/app/lesson-planner?c=${conversationId}&build=deck`} data-testid="build-deck" className={BUTTON}>
-            Build the deck
-          </Link>
-        )}
-      </Row>
+              ) : (
+                <Link to={`/app/lesson-planner?c=${conversationId}&build=rebuild-deck`} className={BUTTON}>
+                  Rebuild
+                </Link>
+              )}
+            </>
+          ) : onBuildDeck ? (
+            <>
+              {builtDeck ? (
+                <>
+                  <Link to={builtDeck.presentHref} data-testid="built-deck-present" className={BUTTON}>
+                    Present
+                  </Link>
+                  {builtDeck.editHref ? (
+                    <Link to={builtDeck.editHref} data-testid="built-deck-edit" className={BUTTON}>
+                      Edit
+                    </Link>
+                  ) : null}
+                  <button type="button" onClick={builtDeck.onAdd} data-testid="add-conversation-deck" className={BUTTON}>
+                    Add it
+                  </button>
+                </>
+              ) : null}
+              <button type="button" onClick={onBuildDeck} data-testid="build-deck" className={BUTTON}>
+                {builtDeck ? 'Build a new one' : 'Build the deck'}
+              </button>
+            </>
+          ) : (
+            <Link to={`/app/lesson-planner?c=${conversationId}&build=deck`} data-testid="build-deck" className={BUTTON}>
+              Build the deck
+            </Link>
+          )}
+        </Row>
+      )}
 
-      <OwnDeckRows decks={ownDecks} />
+      {deck ? <OwnDeckRows decks={ownDecks} /> : null}
 
       <Row
         icon={<Printer size={16} />}

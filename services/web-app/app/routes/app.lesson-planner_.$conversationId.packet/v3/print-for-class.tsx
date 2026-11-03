@@ -56,59 +56,65 @@ export function PrintForClass({
         </DownloadLink>
       </Row>
 
-      <Row
-        icon={<MonitorPlay size={16} />}
-        title="Slide deck"
-        line={
-          deck
-            ? `${deck.slides} ${deck.slides === 1 ? 'slide' : 'slides'} from your stack`
-            : builtDeck
-              ? builtDeck.onStack
-                ? 'You built a deck here. It isn’t in the lesson yet'
-                : 'The planner already made a deck in your conversation'
-              : 'No deck yet'
-        }
-      >
-        {deck ? (
-          <>
-            <Link to={`/present/${conversationId}/${deck.id}?from=stack`} data-testid="deck-present" className={BUTTON}>
-              Present
-            </Link>
-            <Link to={`${base}/deck/${deck.id}?from=stack`} data-testid="deck-edit" className={BUTTON}>
-              Edit
-            </Link>
-            <button type="button" onClick={onBuildDeck} data-testid="rebuild-deck" className={BUTTON}>
-              Rebuild
-            </button>
-            <DownloadLink href={`${base}/slides.pdf`} testId="deck-pdf" className={BUTTON}>
-          PDF
-        </DownloadLink>
-          </>
-        ) : (
-          <>
-            {builtDeck ? (
-              <>
-                <Link to={builtDeck.presentHref} data-testid="built-deck-present" className={BUTTON}>
-                  Present
-                </Link>
-                {builtDeck.editHref ? (
-                  <Link to={builtDeck.editHref} data-testid="built-deck-edit" className={BUTTON}>
-                    Edit
+      {/* "Add my existing slide deck to the stack as is" (Nov 3): with no Yawp! deck in
+          the lesson, the teacher's own file is the lesson's slide deck. */}
+      {ownDecks.length && !deck ? (
+        <OwnDeckRows decks={ownDecks} asLessonDeck />
+      ) : (
+        <Row
+          icon={<MonitorPlay size={16} />}
+          title="Slide deck"
+          line={
+            deck
+              ? `${deck.slides} ${deck.slides === 1 ? 'slide' : 'slides'} from your stack`
+              : builtDeck
+                ? builtDeck.onStack
+                  ? 'You built a deck here. It isn’t in the lesson yet'
+                  : 'The planner already made a deck in your conversation'
+                : 'No deck yet'
+          }
+        >
+          {deck ? (
+            <>
+              <Link to={`/present/${conversationId}/${deck.id}?from=stack`} data-testid="deck-present" className={BUTTON}>
+                Present
+              </Link>
+              <Link to={`${base}/deck/${deck.id}?from=stack`} data-testid="deck-edit" className={BUTTON}>
+                Edit
+              </Link>
+              <button type="button" onClick={onBuildDeck} data-testid="rebuild-deck" className={BUTTON}>
+                Rebuild
+              </button>
+              <DownloadLink href={`${base}/slides.pdf`} testId="deck-pdf" className={BUTTON}>
+            PDF
+          </DownloadLink>
+            </>
+          ) : (
+            <>
+              {builtDeck ? (
+                <>
+                  <Link to={builtDeck.presentHref} data-testid="built-deck-present" className={BUTTON}>
+                    Present
                   </Link>
-                ) : null}
-                <button type="button" onClick={builtDeck.onAdd} data-testid="add-conversation-deck" className={BUTTON}>
-                  Add it
-                </button>
-              </>
-            ) : null}
-            <button type="button" onClick={onBuildDeck} data-testid="build-deck" className={BUTTON}>
-              {builtDeck ? 'Build a new one' : 'Build the deck'}
-            </button>
-          </>
-        )}
-      </Row>
+                  {builtDeck.editHref ? (
+                    <Link to={builtDeck.editHref} data-testid="built-deck-edit" className={BUTTON}>
+                      Edit
+                    </Link>
+                  ) : null}
+                  <button type="button" onClick={builtDeck.onAdd} data-testid="add-conversation-deck" className={BUTTON}>
+                    Add it
+                  </button>
+                </>
+              ) : null}
+              <button type="button" onClick={onBuildDeck} data-testid="build-deck" className={BUTTON}>
+                {builtDeck ? 'Build a new one' : 'Build the deck'}
+              </button>
+            </>
+          )}
+        </Row>
+      )}
 
-      <OwnDeckRows decks={ownDecks} />
+      {deck ? <OwnDeckRows decks={ownDecks} /> : null}
 
       <Row
         icon={<Printer size={16} />}

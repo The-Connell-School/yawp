@@ -1876,13 +1876,13 @@ describe('planner prompt — the teacher’s own documents (Oct 21)', () => {
       sources: [{ id: 'd1', name: 'Thesis.pptx', text: 'Slide 1', truncated: false, keptDeck: true, mode: 'teach' }],
       deckChoices: { teach: true, refresh: true },
     });
-    expect(blocks.at(-1)!.text).toContain('“Teach with these slides”');
+    expect(blocks.at(-1)!.text).toContain('“Add my existing slide deck to the stack as is”');
     const off = buildLessonPlannerSystemPromptBlocks({
       teacherName: null,
       organizationName: 'School',
       sources: [{ id: 'd1', name: 'Thesis.pptx', text: 'Slide 1', truncated: false, keptDeck: true, mode: 'teach' }],
     });
-    expect(off.at(-1)!.text).not.toContain('Teach with these slides');
+    expect(off.at(-1)!.text).not.toContain('Add my existing slide deck');
   });
 });
 

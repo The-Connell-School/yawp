@@ -585,7 +585,11 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                   ? beforeClass({
                       over: timing.over,
                       period: timing.period,
-                      deck: { built: Boolean(v3.deck ?? v3.conversationDeck), stale: v3.deckStale },
+                      // The teacher's own deck, added as is, is the lesson's slides (Nov 3).
+                      deck:
+                        !v3.deck && v3.ownDecks.length
+                          ? { built: true, stale: false }
+                          : { built: Boolean(v3.deck ?? v3.conversationDeck), stale: v3.deckStale },
                       missingWriting: missing.length,
                       lessonDate: v3.lessonDate,
                     })
@@ -597,6 +601,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                       slideshowHref: slideshowHref(conversationId, v3.deck?.id ?? v3.conversationDeck?.messageId ?? null),
                       notesHref: `/show/${conversationId}?from=stack`,
                       onBuildDeck: () => buildDeck(BUILD_FROM_STACK_REQUESTS.deck, 'Build the slide deck'),
+                      ownDeckHref: v3.ownDecks[0] ? `/api/lesson-planner-deck/${v3.ownDecks[0].id}` : null,
                     }
                   : null
               }
