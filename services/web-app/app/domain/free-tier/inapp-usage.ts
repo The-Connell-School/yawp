@@ -106,6 +106,8 @@ export type FreeAccountUsage = ReturnType<typeof buildFreeAccountUsage> & {
     writingSubmitted: boolean;
     graded: boolean;
   };
+  /** Deep link for the getting-started grade step CTA (needs-grading list fallback). */
+  gradeStepHref?: string;
   gradingPause: { retryAt: string; limit: number; window: string } | null;
   /** When false, nav usage rings are hidden (load failure); nav links still work. */
   usageNavMetersAvailable?: boolean;

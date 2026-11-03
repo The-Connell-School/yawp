@@ -53,6 +53,11 @@ import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-co
 import { LockedDashboardGettingStarted } from '~/components/free-tier/locked-dashboard-getting-started';
 import { LockedDashboardPendingCard } from '~/components/free-tier/locked-dashboard-pending-card';
 import { FreeTierGettingStartedTimeline } from '~/components/free-tier/free-tier-getting-started-timeline';
+import {
+  FREE_TIER_NEEDS_GRADING_DOCUMENTS_HREF,
+  freeTierShowAdvocatePack,
+  freeTierShowGettingStartedChecklist,
+} from '~/domain/free-tier/getting-started-grade';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import {
   FreeTierLockedPageHeader,
@@ -601,6 +606,8 @@ export function FreeAccountChecklist({
     mobileSheetBody: teachingAccessMobileSheetBodyInvite(teachingAccessAdminName),
     tooltip: TEACHING_ACCESS_LOCKED_TOOLTIP,
   };
+  const gradeStepHref =
+    usage.gradeStepHref ?? FREE_TIER_NEEDS_GRADING_DOCUMENTS_HREF;
 
   if (usage.monthly) {
     const pe3Steps = [
@@ -625,7 +632,7 @@ export function FreeAccountChecklist({
         key: 'grade',
         label: 'Grade your first submission',
         done: usage.checklist.graded,
-        to: '/app/documents?status=needs-grading&reset=1',
+        to: gradeStepHref,
       },
     ] as const;
     const currentIndex = pe3Steps.findIndex((step) => !step.done);
@@ -647,6 +654,7 @@ export function FreeAccountChecklist({
                 : ('upcoming' as const);
             const isStudentsStep = step.key === 'students';
             const isAssignmentStep = step.key === 'assignment';
+            const isGradeStep = step.key === 'grade';
             const showStudentsPanel =
               isStudentsStep &&
               state === 'current' &&
@@ -680,6 +688,19 @@ export function FreeAccountChecklist({
                       className="mt-2 inline-flex h-9 items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
                     >
                       Create
+                    </Link>
+                  ) : null}
+                  {isGradeStep &&
+                  state === 'current' &&
+                  !step.done &&
+                  'to' in step &&
+                  step.to ? (
+                    <Link
+                      to={step.to}
+                      data-testid="checklist-grade-first-submission"
+                      className="mt-2 inline-flex h-9 items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
+                    >
+                      Grade
                     </Link>
                   ) : null}
                   {showStudentsPanel ? (
@@ -755,7 +776,7 @@ export function FreeAccountChecklist({
         {
           label: 'Grade it',
           done: usage.checklist.graded,
-          to: '/app/documents?status=needs-grading&reset=1',
+          to: gradeStepHref,
           hint: 'Using the grading assistant.',
         },
       ];
@@ -1015,8 +1036,8 @@ export function FreeAccountRail({
       </div>
     );
   }
-  const showChecklist = usage.monthly && usage.students.used === 0;
-  const showAdvocatePack = usage.monthly && usage.students.used > 0;
+  const showChecklist = freeTierShowGettingStartedChecklist(usage);
+  const showAdvocatePack = freeTierShowAdvocatePack(usage);
   return (
     <div className="space-y-5" data-testid="free-account-rail">
       {showChecklist ? (

@@ -18,6 +18,8 @@ import { reporterMonthlyQuotaEnforced } from './monthly-quota-cap.server';
 import { buildFreeAccountUsage, type FreeAccountUsage } from './inapp-usage';
 import { readGradingLimitStatus } from '~/utils/rate-limit.server';
 import { shouldHideFreeTierTeachingSecrets } from './locked-preview.server';
+import { readFreeTierGettingStartedGradeProgress } from './getting-started-grade.server';
+import { FREE_TIER_NEEDS_GRADING_DOCUMENTS_HREF } from './getting-started-grade';
 
 /** Gate before performing any additional v2 usage reads. */
 export async function readFreeAccountUsage(
@@ -61,9 +63,9 @@ export async function readFreeAccountUsage(
     assignmentCounts,
     lessonPlans,
     writingSubmitted,
-    graded,
     gradingPause,
     monthlyLessonPlansUsed,
+    gettingStartedGrade,
   ] = await Promise.all([
     klass
       ? countFreeClassSeatUsage(
@@ -82,20 +84,19 @@ export async function readFreeAccountUsage(
           },
         })
       : 0,
-    klass
-      ? prisma.document.count({
-          where: {
-            classAssignment: { classId: klass.id },
-            submissions: {
-              some: { unsubmittedAt: null, gradedAt: { not: null } },
-            },
-          },
-        })
-      : 0,
     readGradingLimitStatus(membershipId),
     lessonPlannerMonthlyMetering
       ? countOrganizationLessonPlans(organizationId, true)
       : Promise.resolve(null),
+    klass
+      ? readFreeTierGettingStartedGradeProgress(prisma, {
+          classId: klass.id,
+          membershipId,
+        })
+      : Promise.resolve({
+          graded: false,
+          gradeStepHref: FREE_TIER_NEEDS_GRADING_DOCUMENTS_HREF,
+        }),
   ]);
   const reporterQuotaEnforced =
     policy.enabled && reporterMonthlyQuotaEnforced(limits);
@@ -151,8 +152,9 @@ export async function readFreeAccountUsage(
       classReady: Boolean(klass?.id),
       assignmentCreated: [...assignmentCounts.values()].some((n) => n > 0),
       writingSubmitted: writingSubmitted > 0,
-      graded: graded > 0,
+      graded: gettingStartedGrade.graded,
     },
+    gradeStepHref: gettingStartedGrade.gradeStepHref,
     gradingPause,
   };
 }
