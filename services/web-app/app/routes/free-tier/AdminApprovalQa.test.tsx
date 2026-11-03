@@ -27,7 +27,9 @@ test('Q&A copy omits AI and uses Yawp! verbatim phrasing', () => {
   );
   expect(html).not.toMatch(/\bAI\b/i);
   expect(html).not.toMatch(/\bartificial intelligence\b/i);
-  expect(html).toContain('Jordan Rivera has a free Yawp! license');
+  expect(html).toContain(
+    'If approved, Jordan Rivera will have a free Yawp! license'
+  );
 });
 
 test('Q&A group labels use authored title case', () => {

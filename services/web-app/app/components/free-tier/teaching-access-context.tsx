@@ -172,7 +172,9 @@ export function TeachingAccessProvider({
         >
           <ApprovalSuccessToast
             className={
-              isMobile ? 'left-3 right-3 top-[calc(3.5rem+0.5rem)]' : undefined
+              isMobile
+                ? 'left-3 right-3 bottom-[var(--teaching-access-toast-bottom,1.5rem)]'
+                : undefined
             }
             onDismiss={dismissApprovalToast}
           />

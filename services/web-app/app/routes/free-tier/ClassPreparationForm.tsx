@@ -38,7 +38,7 @@ export function ClassPreparationForm({
           <FreeTierTextInput
             id="className"
             name="className"
-            placeholder="English 9, AP English Language, World History"
+            placeholder="i.e., English 9, AP English Language"
             required
             maxLength={MAX_CLASS_NAME}
             defaultValue={className}

@@ -1861,12 +1861,35 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
   margin: 0;
   color: theme('colors.slate.600');
 }
-.free-tier-qa-answer ul {
-  margin: 8px 0 0;
+ul.free-tier-qa-answer:not(.free-tier-qa-privacy-list) {
+  list-style: disc;
   padding-left: 1.25rem;
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+.free-tier-qa-answer ul {
+  margin: 8px 0 0;
+  padding-left: 1.25rem;
+  list-style: disc;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.free-tier-qa-answer > ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+.free-tier-qa-group-label-emphasis {
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: theme('colors.slate.700');
+}
+.free-tier-qa-privacy-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
 }
 .free-tier-qa-privacy-list {
   list-style: none;

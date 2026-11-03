@@ -1,5 +1,6 @@
 import React, { useId, useReducer, useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { Badge } from '~/components/ui/badge';
 
 type QaRow = {
   id: string;
@@ -110,9 +111,9 @@ function AboutYawpAnswer({ teacherName }: { teacherName: string }) {
 function ItsFreeAnswer({ teacherName }: { teacherName: string }) {
   return (
     <p className="free-tier-qa-answer">
-      {teacherName} has a free Yawp! license for one class of up to 35 students.
-      There&apos;s no cost to the teacher or the school, no credit card, and
-      nothing to purchase.
+      If approved, {teacherName} will have a free Yawp! license for one class of
+      up to 35 students. There&apos;s no cost to the teacher or the school, no
+      credit card, and nothing to purchase.
     </p>
   );
 }
@@ -136,7 +137,7 @@ function WhyBuiltAnswer() {
           Teachers (especially new teachers) lacking a strong writing curriculum
         </li>
       </ul>
-      <p>
+      <p className="mt-3">
         Yawp! keeps the thinking with the student, the feedback timely, and the
         teacher in charge.
       </p>
@@ -166,7 +167,16 @@ function WhyAskAnswer() {
 
 function PrivacyAnswers() {
   return (
-    <ul className="free-tier-qa-answer free-tier-qa-privacy-list">
+    <>
+      <div className="free-tier-qa-privacy-badges">
+        <Badge variant="secondary" size="sm">
+          FERPA
+        </Badge>
+        <Badge variant="secondary" size="sm">
+          NDPA
+        </Badge>
+      </div>
+      <ul className="free-tier-qa-answer free-tier-qa-privacy-list">
       <li>
         <strong>Is Yawp! FERPA compliant?</strong> Yes. Yawp! has completed the
         National Student Data Privacy Agreement (NDPA).
@@ -192,6 +202,7 @@ function PrivacyAnswers() {
         only.
       </li>
     </ul>
+    </>
   );
 }
 
@@ -251,7 +262,9 @@ export function AdminApprovalQa({ teacherName }: { teacherName: string }) {
           reducedMotion={reducedMotion}
         />
       ))}
-      <p className="free-tier-qa-group-label">Student privacy</p>
+      <p className="free-tier-qa-group-label free-tier-qa-group-label-emphasis">
+        Student privacy
+      </p>
       <QaAccordionRow
         row={privacyRow}
         open={Boolean(open[privacyRow.id])}

@@ -264,12 +264,13 @@ export function AdminApprovePageIntro({
         <p className="text-sm text-muted-foreground">
           {approvePageIntro(teacherName, schoolName)}
         </p>
-      ) : null}
-      <FreeTierPerson
-        name={teacherName}
-        email={teacherEmail}
-        subtitle={`Teacher at ${schoolName}`}
-      />
+      ) : (
+        <FreeTierPerson
+          name={teacherName}
+          email={teacherEmail}
+          subtitle={`Teacher at ${schoolName}`}
+        />
+      )}
       <AdminApprovalFeatureList />
     </>
   );
