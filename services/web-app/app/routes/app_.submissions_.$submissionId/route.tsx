@@ -4,6 +4,7 @@ import {
   type TeacherNotesUiState,
 } from '~/domain/grading/teacher-notes';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { summarizeGradingRubric } from '~/domain/assignment-types/grading-rubric-summary';
 import { TeacherNotes } from './teacher-grading/teacher-notes';
 import { invariant } from '@epic-web/invariant';
 import {
@@ -505,11 +506,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isAdmin,
   });
 
+  const gradingRubricSummary =
+    gradingConfig != null
+      ? summarizeGradingRubric(gradingConfig, {
+          libraryRubricTitle: gradingConfig.rubricName ?? null,
+        })
+      : null;
+
   const submissionPayload = {
     ...publicSubmission,
     comments: sortedComments,
     rubricConfig,
     grammarHighlightingEnabled,
+    gradingRubricSummary,
     // What the Grading Assistant last suggested, so a teacher who has since
     // edited the grade can put the suggestions back.
     ...(hideUnreleasedGrade
@@ -1485,6 +1494,7 @@ function SubmissionDetail({
               initialGradingAssistantStrictnessLevel={
                 submission.document.assignment?.gradingAssistantStrictnessLevel
               }
+              gradingRubricSummary={submission.gradingRubricSummary ?? null}
             />
           ) : (
             <>
@@ -1616,11 +1626,11 @@ function SubmissionDetail({
                     </div>
                   ) : null}
                 </div>
-                <p className="mt-1.5 text-sm leading-snug select-text">
+                <p className="mt-1.5 text-sm leading-relaxed text-foreground select-text">
                   {currentIssue.message}
                 </p>
                 {currentIssue.rule ? (
-                  <p className="mt-1.5 text-xs text-muted-foreground select-text border-t pt-1.5">
+                  <p className="mt-1.5 text-sm text-foreground/75 select-text border-t pt-1.5">
                     Rule: {currentIssue.rule}
                   </p>
                 ) : null}

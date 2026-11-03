@@ -1,17 +1,24 @@
 import { Form } from 'react-router';
 import { Users } from 'lucide-react';
+import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
+import { Badge } from '~/components/ui/badge';
 import { formatDateOnly } from '~/utils/date-only';
+import { cn } from '~/utils/misc';
 
 export type StudentAssignmentCardAssignment = {
   /** ClassAssignment id — what the start action is posted against. */
   id: string;
   /** Optional due date for this class assignment. */
   dueAt?: Date | string | null;
+  isNew?: boolean;
   assignment: {
     title: string | null;
     prompt: string | null;
     collaborationEnabled?: boolean;
-    assignmentType: { title: string };
+    assignmentType: {
+      title: string;
+      image?: { id: string; altText?: string | null } | null;
+    };
   };
 };
 
@@ -35,12 +42,40 @@ export function StudentAssignmentCard({
     >
       <button
         type="submit"
-        className="flex h-full w-full flex-col rounded-lg border bg-muted text-left transition-shadow hover:shadow"
+        className="relative flex h-full w-full flex-col rounded-lg border bg-muted text-left transition-shadow hover:shadow"
       >
-        <div className="h-24 w-full rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20 px-3 py-2">
-          <p className="line-clamp-3 text-xs text-muted-foreground">
-            {classAssignment.assignment.prompt}
-          </p>
+        {classAssignment.isNew ? (
+          <Badge
+            variant="success"
+            size="sm"
+            className="absolute right-2 top-2 z-10 px-1.5 py-0 text-[0.625rem] font-semibold uppercase tracking-wide"
+            data-testid="student-assignment-new-pill"
+          >
+            New
+          </Badge>
+        ) : null}
+        <div
+          className={cn(
+            'h-24 w-full overflow-hidden rounded-t-lg px-3 py-2',
+            classAssignment.assignment.assignmentType.image?.id
+              ? ''
+              : 'bg-gradient-to-br from-foreground/5 to-foreground/20'
+          )}
+        >
+          {classAssignment.assignment.assignmentType.image?.id ? (
+            <AssignmentTypeTileImage
+              imageId={classAssignment.assignment.assignmentType.image.id}
+              alt={
+                classAssignment.assignment.assignmentType.image.altText ??
+                classAssignment.assignment.assignmentType.title
+              }
+              className="h-full w-full rounded-md object-cover"
+            />
+          ) : (
+            <p className="line-clamp-3 text-xs text-muted-foreground">
+              {classAssignment.assignment.prompt}
+            </p>
+          )}
         </div>
         <div className="flex flex-1 flex-col gap-1 p-3">
           <h4 className="text-foreground/90 font-medium">
