@@ -309,7 +309,9 @@ describe('admin assignment module action', () => {
   });
 
   test('a cleared link box clears that link', async () => {
-    await submitModuleForm({ lessonUrl: '', tutorialVideoUrl: '  ' });
+    // Whitespace, not '': happy-dom (registered globally by component tests in
+    // the same bun run) drops empty-string FormData entries in transit.
+    await submitModuleForm({ lessonUrl: ' ', tutorialVideoUrl: '  ' });
 
     const updateData = prisma.assignmentModule.update.mock.calls[0][0].data;
     expect(updateData.lessonUrl).toBeNull();
