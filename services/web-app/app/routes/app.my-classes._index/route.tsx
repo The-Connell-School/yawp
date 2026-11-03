@@ -5,6 +5,7 @@ import {
   freeTierStandardPageBodyClassName,
   freeTierStandardPageShellClassName,
   useFreeTierLockedB2PageChrome,
+  useFreeTierStandardPageShell,
 } from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { Plus, User } from 'lucide-react';
 import {
@@ -413,6 +414,7 @@ function TeacherMyClassesView({
 }) {
   const freeUsage = useFreeAccountUsage();
   const freeTierB2 = useFreeTierLockedB2PageChrome();
+  const freeTierShell = useFreeTierStandardPageShell();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSchoolId = searchParams.get('school') ?? 'all';
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -457,7 +459,7 @@ function TeacherMyClassesView({
   return (
     <section
       className={
-        freeUsage
+        freeTierShell
           ? freeTierStandardPageShellClassName()
           : 'no-scrollbar flex h-full w-full flex-col overflow-y-scroll'
       }
@@ -489,7 +491,7 @@ function TeacherMyClassesView({
 
       <div
         className={
-          freeUsage
+          freeTierShell
             ? freeTierStandardPageBodyClassName()
             : 'mx-auto w-full min-w-0 max-w-screen-lg px-3 py-4 pb-24 sm:px-5'
         }

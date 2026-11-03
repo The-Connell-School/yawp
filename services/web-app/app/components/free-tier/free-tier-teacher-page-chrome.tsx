@@ -1,15 +1,19 @@
 import type { ReactNode } from 'react';
-import { useFreeAccountUsage } from '~/components/free-account-usage';
+import { useUser } from '~/hooks/useUser';
 import { cn } from '~/utils/misc';
 
-/** B2 page chrome (plain title, no gray bar) for any free-tier teacher — locked or approved. */
-export function useFreeTierLockedB2PageChrome() {
-  return Boolean(useFreeAccountUsage());
+function useTeacherAppPageChrome() {
+  return useUser().selectedMembership?.role === 'TEACHER';
 }
 
-/** Shared main-column inset for all standard /app pages under `[data-free-account]`. */
+/** B2 page chrome (plain title, no gray bar) for teacher /app pages — free, locked preview, or licensed. */
+export function useFreeTierLockedB2PageChrome() {
+  return useTeacherAppPageChrome();
+}
+
+/** Shared max-width shell for standard teacher /app pages. */
 export function useFreeTierStandardPageShell() {
-  return Boolean(useFreeAccountUsage());
+  return useTeacherAppPageChrome();
 }
 
 export function freeTierStandardPageShellClassName(extra?: string) {

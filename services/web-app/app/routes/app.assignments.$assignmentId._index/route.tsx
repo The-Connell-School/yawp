@@ -3,6 +3,7 @@ import { useFreeAccountUsage } from '~/components/free-account-usage';
 import {
   freeTierStandardPageBodyClassName,
   freeTierStandardPageShellClassName,
+  useFreeTierStandardPageShell,
 } from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { ExitTicketClassReadPanel } from '~/components/assignments/exit-ticket-class-read-panel';
 import { buildExitTicketClassRead } from '~/domain/assignment-types/exit-ticket-class-read';
@@ -91,8 +92,8 @@ import {
  * content's width or gutters.
  */
 function PageShell({ children }: { children: ReactNode }) {
-  const freeUsage = useFreeAccountUsage();
-  if (freeUsage) {
+  const teacherPageShell = useFreeTierStandardPageShell();
+  if (teacherPageShell) {
     return (
       <section className={freeTierStandardPageShellClassName()}>
         <div className={freeTierStandardPageBodyClassName()}>

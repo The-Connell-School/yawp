@@ -5,6 +5,7 @@ import {
   freeTierStandardPageBodyClassName,
   freeTierStandardPageShellClassName,
   useFreeTierLockedB2PageChrome,
+  useFreeTierStandardPageShell,
 } from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import {
@@ -574,7 +575,7 @@ export default function MyAssignmentsRoute() {
 
   const hasSelection = selectedAssignmentIds.length > 0;
   const freeTierB2 = useFreeTierLockedB2PageChrome();
-  const freeTierShell = Boolean(freeUsage);
+  const freeTierShell = useFreeTierStandardPageShell();
 
   const assignmentsContent = (
     <>

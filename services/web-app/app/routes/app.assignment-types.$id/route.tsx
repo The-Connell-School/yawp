@@ -23,10 +23,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
-import { useFreeAccountUsage } from '~/components/free-account-usage';
 import {
   freeTierStandardPageBodyClassName,
   freeTierStandardPageShellClassName,
+  useFreeTierStandardPageShell,
 } from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { useUser } from '~/hooks/useUser.js';
 import { useRouteLoaderData } from 'react-router';
@@ -756,7 +756,7 @@ export default function AppAssignmentTypesIdRoute() {
   // param so a refresh (or the back button) does not reopen it.
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const freeUsage = useFreeAccountUsage();
+  const teacherPageShell = useFreeTierStandardPageShell();
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const assignmentSheetClasses = isApHistoryAssignmentType
@@ -780,7 +780,7 @@ export default function AppAssignmentTypesIdRoute() {
     if (teachingLockedPreview) return;
     const prompt =
       options?.prompt !== undefined ? options.prompt : libraryPrompt;
-    if (freeUsage) {
+    if (teacherPageShell) {
       navigate(
         buildFreeTierNewAssignmentHref({
           assignmentTypeId: data.assignmentType.id,
@@ -831,7 +831,7 @@ export default function AppAssignmentTypesIdRoute() {
   useEffect(() => {
     if (!incomingPrompt || teachingLockedPreview) return;
     setApHistoryEntry(null);
-    if (freeUsage) {
+    if (teacherPageShell) {
       navigate(
         buildFreeTierNewAssignmentHref({
           assignmentTypeId: data.assignmentType.id,
@@ -851,7 +851,7 @@ export default function AppAssignmentTypesIdRoute() {
       },
       { replace: true, preventScrollReset: true }
     );
-  }, [incomingPrompt, setSearchParams, teachingLockedPreview, freeUsage, navigate, data.assignmentType.id, defaultCreateClassId]);
+  }, [incomingPrompt, setSearchParams, teachingLockedPreview, teacherPageShell, navigate, data.assignmentType.id, defaultCreateClassId]);
 
   const showShortFormLibrary = data.shortFormPromptLibrary != null;
   const showDailyPagesAbout =
@@ -895,10 +895,10 @@ export default function AppAssignmentTypesIdRoute() {
     classId: defaultCreateClassId,
   });
 
-  const pageShellClassName = freeUsage
+  const pageShellClassName = teacherPageShell
     ? freeTierStandardPageShellClassName()
     : 'no-scrollbar h-full w-full overflow-y-scroll';
-  const pageBodyClassName = freeUsage
+  const pageBodyClassName = teacherPageShell
     ? freeTierStandardPageBodyClassName('flex flex-col')
     : 'mx-auto flex h-full w-full max-w-screen-xl flex-col p-3 sm:p-5';
 
@@ -965,9 +965,9 @@ export default function AppAssignmentTypesIdRoute() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
                           disabled={data.teacherClasses.length === 0}
-                          asChild={Boolean(freeUsage)}
+                          asChild={teacherPageShell}
                           onSelect={
-                            freeUsage
+                            teacherPageShell
                               ? undefined
                               : () => {
                                   setLibraryPrompt('');
@@ -976,7 +976,7 @@ export default function AppAssignmentTypesIdRoute() {
                                 }
                           }
                         >
-                          {freeUsage ? (
+                          {teacherPageShell ? (
                             <Link to={createAssignmentPageHref}>Assignment</Link>
                           ) : (
                             'Assignment'
