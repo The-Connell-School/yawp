@@ -18,6 +18,7 @@ import {
   LESSON_PLANNER_FLAG,
   UNIFIED_SIGN_ON_FLAG,
   TEACHER_PROMPT_GENERATOR_FLAG,
+  HOW_TO_TEACH_IT_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
   type FeatureFlagKey,
@@ -85,7 +86,8 @@ function runtimeDefaultOn(key: FeatureFlagKey, env: Record<string, string | unde
   return (
     key === FREE_TIER_FLAG ||
     key === UNIFIED_SIGN_ON_FLAG ||
-    key === TEACHER_PROMPT_GENERATOR_FLAG
+    key === TEACHER_PROMPT_GENERATOR_FLAG ||
+    key === HOW_TO_TEACH_IT_FLAG
   );
 }
 
@@ -228,17 +230,17 @@ export async function isFeatureFlagEnabled(
       return false;
     }
   }
-  if (key === TEACHER_PROMPT_GENERATOR_FLAG) {
+  if (key === TEACHER_PROMPT_GENERATOR_FLAG || key === HOW_TO_TEACH_IT_FLAG) {
     if (isNonProductionDefaultOnDeployment(process.env)) return true;
     try {
       const row = await prisma.setting.findUnique({
-        where: { name: featureFlagSettingName(TEACHER_PROMPT_GENERATOR_FLAG) },
+        where: { name: featureFlagSettingName(key) },
         select: { value: true },
       });
       return evaluateFeatureFlag(parseFeatureFlagValue(row?.value), orgId);
     } catch (error) {
       console.error('feature_flag_read_failed', {
-        key: TEACHER_PROMPT_GENERATOR_FLAG,
+        key,
         error: buildSafeErrorForLog(error),
       });
       return false;

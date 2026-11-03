@@ -122,6 +122,14 @@ export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
 export const TEACHER_PROMPT_GENERATOR_FLAG = 'teacher-prompt-generator' as const;
 
 /**
+ * Assignment-type pages: teachers see each module as a How to Teach It row
+ * (description, lesson link, tutorial link) instead of the Modules dropdown.
+ * Students keep the dropdown. Default off on production; on by default on
+ * demo and PR previews.
+ */
+export const HOW_TO_TEACH_IT_FLAG = 'assignment-type-how-to-teach-it' as const;
+
+/**
  * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
  * reads only `feature_flag.free_tier`; these rows are not OR-merged.
  */
@@ -243,6 +251,11 @@ export const FEATURE_FLAGS = {
     label: 'Teacher prompt generator',
     description:
       'Shows New → Generate a prompt and the LLM drafting sheet on assignment types that support it (Class Starter, Daily Pages, Exit Ticket, Thesis-Driven Essay). Default off on production; on by default on demo and PR previews.',
+  },
+  [HOW_TO_TEACH_IT_FLAG]: {
+    label: 'How to Teach It on assignment types',
+    description:
+      'Teachers see each module on an assignment-type page as a How to Teach It row with its lesson and tutorial links, in place of the Modules dropdown. Students keep the dropdown. Default off on production; on by default on demo and PR previews.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 
