@@ -1,4 +1,4 @@
-import { Fragment, useId, useState } from 'react';
+import { Fragment } from 'react';
 import * as AccordionPrimitive from '@radix-ui/react-accordion';
 import { ChevronDown, FileText, Presentation } from 'lucide-react';
 
@@ -99,8 +99,10 @@ function ThesisEssayCourse({
           <RichText text={block.lead} />
         </p>
       ) : null}
+      {/* Flat: the How to Teach It box around it is the card. A rule above
+          sets the lessons apart from Brian's paragraph. */}
       <div
-        className="rounded-xl border bg-background p-5 shadow-sm sm:p-7"
+        className="mt-2 border-t border-[#E4DCCF] pt-5 dark:border-border"
         data-testid="thesis-essay-course"
         data-tour="type-modules"
       >
@@ -191,38 +193,17 @@ function Block({
 }
 
 /**
- * The description, in the page header where the type's stored description
- * used to sit. It needs no heading: it is the first thing under the title.
- *
- * Only the first paragraph shows at first. A longer description (Pre-Writing,
- * Thesis Statement) keeps the rest behind Read more, so the header is never a
- * wall of text before the teacher asks for it.
+ * The description, in the page header beside the type's image, where its
+ * stored description used to sit. It needs no heading: it is the first thing
+ * under the title. Always shown whole, never collapsed or cut short (Brian,
+ * Nov 3): the image beside it is what keeps it from reading as a wall of text.
  */
 export function LandingDescription({ page }: { page: LandingPage }) {
-  const [expanded, setExpanded] = useState(false);
-  const restId = useId();
-  const [first, ...rest] = page.description;
   return (
     <div className="flex flex-col gap-3" data-testid="landing-description">
-      {first ? <Block block={first} modules={[]} /> : null}
-      {rest.length > 0 && expanded ? (
-        <div id={restId} className="flex flex-col gap-3">
-          {rest.map((block, index) => (
-            <Block key={index} block={block} modules={[]} />
-          ))}
-        </div>
-      ) : null}
-      {rest.length > 0 ? (
-        <button
-          type="button"
-          aria-expanded={expanded}
-          aria-controls={expanded ? restId : undefined}
-          onClick={() => setExpanded((open) => !open)}
-          className="w-fit text-sm font-medium text-foreground underline underline-offset-4 hover:text-primary"
-        >
-          {expanded ? 'Show less' : 'Read more'}
-        </button>
-      ) : null}
+      {page.description.map((block, index) => (
+        <Block key={index} block={block} modules={[]} />
+      ))}
     </div>
   );
 }
@@ -281,6 +262,24 @@ function CollapsibleSection({
   );
 }
 
+/**
+ * How to Teach It is set off in a spotlight box (Brian, Nov 3): a shade
+ * lighter than the page, and it rises with a deeper shadow on hover or when
+ * a link inside it has focus. The border, shadows and lift are the Lesson
+ * Library's Units tiles (library-home.tsx, TILE), on a lighter fill so it
+ * stands out against this page. No lift when the teacher prefers reduced
+ * motion.
+ */
+export const HOW_TO_TEACH_SPOTLIGHT = [
+  'relative rounded-2xl border border-[#E4DCCF] bg-[#FDFCF9] p-5 sm:p-7',
+  'shadow-[0_1px_2px_rgba(28,26,23,.06),0_4px_12px_-4px_rgba(28,26,23,.10)]',
+  'transition duration-[160ms] ease-out',
+  'hover:-translate-y-0.5 hover:border-[#D5CABA] hover:shadow-[0_2px_4px_rgba(28,26,23,.06),0_14px_28px_-8px_rgba(28,26,23,.20)]',
+  'focus-within:-translate-y-0.5 focus-within:shadow-[0_2px_4px_rgba(28,26,23,.06),0_14px_28px_-8px_rgba(28,26,23,.20)]',
+  'motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:focus-within:translate-y-0',
+  'dark:border-border dark:bg-white/[0.04]',
+].join(' ');
+
 function Section({
   section,
   modules,
@@ -291,6 +290,23 @@ function Section({
   if (COLLAPSED_SECTIONS.has(section.id)) {
     return <CollapsibleSection section={section} modules={modules} />;
   }
+  if (section.id === 'how-to-teach-it') {
+    return (
+      <div data-testid="how-to-teach-spotlight" className={HOW_TO_TEACH_SPOTLIGHT}>
+        <OpenSection section={section} modules={modules} />
+      </div>
+    );
+  }
+  return <OpenSection section={section} modules={modules} />;
+}
+
+function OpenSection({
+  section,
+  modules,
+}: {
+  section: LandingSection;
+  modules: LandingModule[];
+}) {
   const headingId = `landing-${section.id}`;
   // The library right below the intro is labelled "Prompt Library" already;
   // a second visible heading saying the same thing would only stack up.

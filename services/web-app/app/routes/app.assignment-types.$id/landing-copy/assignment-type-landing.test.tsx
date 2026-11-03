@@ -76,27 +76,68 @@ describe('RichText', () => {
 });
 
 describe('LandingDescription', () => {
-  it('shows the first paragraph and keeps the rest behind Read more', () => {
+  it('always shows the whole description: never collapsed or cut short (Brian)', () => {
+    for (const page of Object.values(LANDING_PAGES)) {
+      const root = render(<LandingDescription page={page} />);
+      expect({ page: page.key, paragraphs: root.querySelectorAll('p').length }).toEqual({
+        page: page.key,
+        paragraphs: page.description.length,
+      });
+      expect(root.querySelector('button')).toBeNull();
+      expect(root.textContent).not.toContain('Read more');
+      act(() => activeRoot?.unmount());
+      activeRoot = null;
+    }
     const root = render(<LandingDescription page={LANDING_PAGES.prewriting} />);
-    expect(root.querySelectorAll('p')).toHaveLength(1);
     expect(root.querySelector('p strong')?.textContent).toBe(
       'Step 1 of the Yawp! writing process.'
     );
-    expect(root.textContent).not.toContain('big, hot, rambling mess');
-    expect(root.querySelector('h2')).toBeNull();
-
-    const more = toggle(root, 'Read more');
-    expect(more?.getAttribute('aria-expanded')).toBe('false');
-    open(more);
-    expect(root.querySelectorAll('p')).toHaveLength(2);
     expect(root.textContent).toContain('big, hot, rambling mess');
-    expect(toggle(root, 'Show less')?.getAttribute('aria-expanded')).toBe('true');
+    expect(root.querySelector('h2')).toBeNull();
+  });
+});
+
+describe('How to Teach It spotlight', () => {
+  it('sets How to Teach It off in a lighter box that rises on hover, like the Units boxes', () => {
+    for (const key of ['thesis-driven-essay', 'five-paragraph-essay', 'act-writing'] as const) {
+      const root = render(
+        <LandingSections page={LANDING_PAGES[key]} modules={THESIS_MODULES} />
+      );
+      const box = root.querySelector('[data-testid="how-to-teach-spotlight"]')!;
+      expect({ key, boxed: !!box }).toEqual({ key, boxed: true });
+      // The heading, the copy and the lessons are all inside the box.
+      expect(box.querySelector('h2')?.textContent).toBe('How to Teach It');
+      expect(box.textContent).toContain('Teach the');
+      const classes = box.className.split(/\s+/);
+      expect(classes).toContain('hover:-translate-y-0.5');
+      expect(classes).toContain('focus-within:-translate-y-0.5');
+      expect(classes).toContain('motion-reduce:hover:translate-y-0');
+      expect(classes.some((c) => c.startsWith('hover:shadow-'))).toBe(true);
+      act(() => activeRoot?.unmount());
+      activeRoot = null;
+    }
   });
 
-  it('has no Read more when the description is one paragraph', () => {
-    const root = render(<LandingDescription page={LANDING_PAGES['exit-ticket']} />);
-    expect(root.querySelectorAll('p')).toHaveLength(1);
-    expect(toggle(root, 'Read more')).toBeUndefined();
+  it('puts the course inside the box without a second border around it', () => {
+    const root = render(
+      <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} />
+    );
+    const box = root.querySelector('[data-testid="how-to-teach-spotlight"]')!;
+    const course = box.querySelector('[data-testid="thesis-essay-course"]')!;
+    expect(course).not.toBeNull();
+    expect(course.className).not.toContain('shadow');
+    expect(course.className.split(/\s+/)).not.toContain('border');
+  });
+
+  it('boxes only How to Teach It', () => {
+    for (const page of Object.values(LANDING_PAGES)) {
+      const root = render(<LandingSections page={page} modules={THESIS_MODULES} />);
+      const boxed = root.querySelectorAll('[data-testid="how-to-teach-spotlight"]').length;
+      const hasHowToTeach = page.sections.some((s) => s.id === 'how-to-teach-it');
+      expect({ page: page.key, boxed }).toEqual({ page: page.key, boxed: hasHowToTeach ? 1 : 0 });
+      act(() => activeRoot?.unmount());
+      activeRoot = null;
+    }
   });
 });
 
