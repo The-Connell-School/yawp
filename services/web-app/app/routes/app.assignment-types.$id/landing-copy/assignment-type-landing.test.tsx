@@ -97,6 +97,96 @@ describe('LandingDescription', () => {
   });
 });
 
+describe("Brian's Nov 3 round 2", () => {
+  const buttonByLabel = (root: HTMLElement, label: string) =>
+    root.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`) ?? undefined;
+
+  it('How to Teach It opens expanded, and a teacher can collapse it to a two-line preview', () => {
+    const root = render(
+      <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} />
+    );
+    const box = root.querySelector('[data-testid="how-to-teach-spotlight"]')!;
+    const hide = buttonByLabel(root, 'Hide How to Teach It');
+    expect(hide?.getAttribute('aria-expanded')).toBe('true');
+    expect(hide?.textContent).toBe('Hide');
+    expect(box.querySelector('[data-testid="thesis-essay-course"]')).not.toBeNull();
+
+    open(hide);
+    const show = buttonByLabel(root, 'Show How to Teach It');
+    expect(show?.getAttribute('aria-expanded')).toBe('false');
+    expect(show?.textContent).toBe('Show');
+    // Collapsed: the heading and a two-line preview of the paragraph stay.
+    expect(box.querySelector('h2')?.textContent).toBe('How to Teach It');
+    const preview = box.querySelector('[data-testid="how-to-teach-preview"]')!;
+    expect(preview.className).toContain('line-clamp-2');
+    expect(preview.textContent).toContain('The Yawp! process is what we wish');
+    expect(box.querySelector('[data-testid="thesis-essay-course"]')).toBeNull();
+    expect(box.textContent).not.toContain('Teach these steps in order!');
+
+    open(show);
+    expect(buttonByLabel(root, 'Hide How to Teach It')?.getAttribute('aria-expanded')).toBe('true');
+    expect(box.querySelector('[data-testid="thesis-essay-course"]')).not.toBeNull();
+  });
+
+  it('every How to Teach It box can collapse, the step lists included', () => {
+    for (const key of ['five-paragraph-essay', 'act-writing'] as const) {
+      const root = render(<LandingSections page={LANDING_PAGES[key]} modules={THESIS_MODULES} />);
+      open(buttonByLabel(root, 'Hide How to Teach It'));
+      expect(root.querySelectorAll('[data-testid="how-to-teach-step"]')).toHaveLength(0);
+      act(() => activeRoot?.unmount());
+      activeRoot = null;
+    }
+  });
+
+  it('an opened drop-down shows its text in the same kind of box as How to Teach It', () => {
+    const root = render(<LandingSections page={LANDING_PAGES['class-starter']} modules={[]} />);
+    expect(root.querySelector('[data-testid="landing-section-panel"]')).toBeNull();
+    open(toggle(root, 'How it works'));
+    const panel = root.querySelector('[data-testid="landing-section-panel"]')!;
+    expect(panel.textContent).toContain('Tutor on or off?');
+    const classes = panel.className.split(/\s+/);
+    expect(classes).toContain('hover:-translate-y-0.5');
+    expect(classes).toContain('rounded-2xl');
+    expect(classes.some((c) => c.startsWith('bg-['))).toBe(true);
+  });
+
+  it('text on the cream page is the dark text color; text in the light boxes keeps its softer color', () => {
+    const tone = (el: Element | null) => {
+      const classes = el?.className.split(/\s+/) ?? [];
+      return classes.includes('text-foreground')
+        ? 'dark'
+        : classes.includes('text-muted-foreground')
+          ? 'soft'
+          : 'other';
+    };
+    // The description, beside the image.
+    const desc = render(<LandingDescription page={LANDING_PAGES.prewriting} />);
+    for (const p of desc.querySelectorAll('p')) expect(tone(p)).toBe('dark');
+    act(() => activeRoot?.unmount());
+    activeRoot = null;
+
+    // Pre-Writing: the Prompt Library intro and its Note sit on the page.
+    const root = render(<LandingSections page={LANDING_PAGES.prewriting} modules={[]} />);
+    const library = root.querySelector('[data-testid="landing-section-prompt-library"]')!;
+    const libraryParagraphs = [...library.querySelectorAll('p')];
+    expect(libraryParagraphs.length).toBe(2);
+    for (const p of libraryParagraphs) expect(tone(p)).toBe('dark');
+    // Inside an opened drop-down's box, the text stays as it is in How to Teach It.
+    open(toggle(root, 'How it works'));
+    for (const p of root.querySelectorAll('[data-testid="landing-section-panel"] p')) {
+      expect(tone(p)).toBe('soft');
+    }
+    act(() => activeRoot?.unmount());
+    activeRoot = null;
+
+    const tde = render(
+      <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} />
+    );
+    const paragraph = tde.querySelector('[data-testid="how-to-teach-spotlight"] p');
+    expect(tone(paragraph)).toBe('soft');
+  });
+});
+
 describe('How to Teach It spotlight', () => {
   it('sets How to Teach It off in a lighter box that rises on hover, like the Units boxes', () => {
     for (const key of ['thesis-driven-essay', 'five-paragraph-essay', 'act-writing'] as const) {

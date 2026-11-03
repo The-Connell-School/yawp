@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, useId, useState } from 'react';
 import * as AccordionPrimitive from '@radix-ui/react-accordion';
 import { ChevronDown, FileText, Presentation } from 'lucide-react';
 
@@ -163,23 +163,37 @@ function ThesisEssayCourse({
   );
 }
 
+/**
+ * Where copy sits, which sets its color (Brian, Nov 3). On the cream page it
+ * is the dark text color; inside a light box (How to Teach It, an opened
+ * drop-down) it keeps the softer gray the How to Teach It box already uses.
+ */
+type Tone = 'page' | 'box';
+
+const TONE_CLASS: Record<Tone, string> = {
+  page: 'text-foreground',
+  box: 'text-muted-foreground',
+};
+
 function Block({
   block,
   modules,
+  tone,
 }: {
   block: LandingBlock;
   modules: LandingModule[];
+  tone: Tone;
 }) {
   if (block.type === 'paragraph') {
     return (
-      <p className="text-sm text-muted-foreground sm:text-base">
+      <p className={cn('text-sm sm:text-base', TONE_CLASS[tone])}>
         <RichText text={block.text} />
       </p>
     );
   }
   if (block.type === 'bullets') {
     return (
-      <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground sm:text-base">
+      <ul className={cn('list-disc space-y-1.5 pl-5 text-sm sm:text-base', TONE_CLASS[tone])}>
         {block.items.map((item) => (
           <li key={item}>
             <RichText text={item} />
@@ -202,7 +216,7 @@ export function LandingDescription({ page }: { page: LandingPage }) {
   return (
     <div className="flex flex-col gap-3" data-testid="landing-description">
       {page.description.map((block, index) => (
-        <Block key={index} block={block} modules={[]} />
+        <Block key={index} block={block} modules={[]} tone="page" />
       ))}
     </div>
   );
@@ -250,10 +264,19 @@ function CollapsibleSection({
             </h2>
           </AccordionPrimitive.Header>
           <AccordionPrimitive.Content className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
-            <div className="flex flex-col gap-3 pb-5 pt-1">
-              {section.blocks.map((block, index) => (
-                <Block key={index} block={block} modules={modules} />
-              ))}
+            {/* Opened, the text sits in the same light box as How to Teach It
+                (Brian, Nov 3). The padding around it, offset by a negative
+                margin, leaves room for the box's shadow and lift inside the
+                clipped drop-down while keeping it flush with the rows. */}
+            <div className="-mx-3 px-3 pb-8 pt-2">
+              <div
+                data-testid="landing-section-panel"
+                className={cn(SPOTLIGHT_BOX, 'flex flex-col gap-3')}
+              >
+                {section.blocks.map((block, index) => (
+                  <Block key={index} block={block} modules={modules} tone="box" />
+                ))}
+              </div>
             </div>
           </AccordionPrimitive.Content>
         </AccordionPrimitive.Item>
@@ -263,14 +286,14 @@ function CollapsibleSection({
 }
 
 /**
- * How to Teach It is set off in a spotlight box (Brian, Nov 3): a shade
- * lighter than the page, and it rises with a deeper shadow on hover or when
- * a link inside it has focus. The border, shadows and lift are the Lesson
- * Library's Units tiles (library-home.tsx, TILE), on a lighter fill so it
- * stands out against this page. No lift when the teacher prefers reduced
- * motion.
+ * The spotlight box (Brian, Nov 3), around How to Teach It and around each
+ * opened drop-down's text: a shade lighter than the page, and it rises with a
+ * deeper shadow on hover or when a link inside it has focus. The border,
+ * shadows and lift are the Lesson Library's Units tiles (library-home.tsx,
+ * TILE), on a lighter fill so it stands out against this page. No lift when
+ * the teacher prefers reduced motion.
  */
-export const HOW_TO_TEACH_SPOTLIGHT = [
+export const SPOTLIGHT_BOX = [
   'relative rounded-2xl border border-[#E4DCCF] bg-[#FDFCF9] p-5 sm:p-7',
   'shadow-[0_1px_2px_rgba(28,26,23,.06),0_4px_12px_-4px_rgba(28,26,23,.10)]',
   'transition duration-[160ms] ease-out',
@@ -279,6 +302,77 @@ export const HOW_TO_TEACH_SPOTLIGHT = [
   'motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:focus-within:translate-y-0',
   'dark:border-border dark:bg-white/[0.04]',
 ].join(' ');
+
+/**
+ * How to Teach It, in its spotlight box. Always expanded when a teacher
+ * arrives; Hide collapses it to the heading and a two-line preview of its
+ * first paragraph (Brian's Nov 3 mock-up), and Show brings the rest back.
+ * Nothing is remembered between visits, so it is open again next time.
+ */
+function HowToTeachSection({
+  section,
+  modules,
+}: {
+  section: LandingSection;
+  modules: LandingModule[];
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const bodyId = useId();
+  const headingId = `landing-${section.id}`;
+  const preview = section.blocks.find(
+    (block): block is Extract<LandingBlock, { type: 'paragraph' }> =>
+      block.type === 'paragraph'
+  );
+  const label = expanded ? 'Hide' : 'Show';
+  return (
+    <section
+      aria-labelledby={headingId}
+      data-testid="how-to-teach-spotlight"
+      className={SPOTLIGHT_BOX}
+    >
+      <div className="flex items-center justify-between gap-4">
+        <h2 id={headingId} className="text-lg font-semibold sm:text-xl">
+          {section.heading}
+        </h2>
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={expanded ? bodyId : undefined}
+          aria-label={`${label} ${section.heading}`}
+          onClick={() => setExpanded((open) => !open)}
+          className="group flex shrink-0 items-center gap-3 rounded-full text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {label}
+          <span
+            aria-hidden
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E4DCCF] bg-[#F3F1EC] text-foreground transition-colors group-hover:bg-[#ECE8E0] dark:border-border dark:bg-white/[0.06]"
+          >
+            <ChevronDown
+              className={cn(
+                'h-4 w-4 transition-transform duration-200 motion-reduce:transition-none',
+                expanded && 'rotate-180'
+              )}
+            />
+          </span>
+        </button>
+      </div>
+      {expanded ? (
+        <div id={bodyId} className="mt-3 flex flex-col gap-3">
+          {section.blocks.map((block, index) => (
+            <Block key={index} block={block} modules={modules} tone="box" />
+          ))}
+        </div>
+      ) : preview ? (
+        <p
+          data-testid="how-to-teach-preview"
+          className={cn('mt-3 line-clamp-2 text-sm sm:text-base', TONE_CLASS.box)}
+        >
+          <RichText text={preview.text} />
+        </p>
+      ) : null}
+    </section>
+  );
+}
 
 function Section({
   section,
@@ -291,11 +385,7 @@ function Section({
     return <CollapsibleSection section={section} modules={modules} />;
   }
   if (section.id === 'how-to-teach-it') {
-    return (
-      <div data-testid="how-to-teach-spotlight" className={HOW_TO_TEACH_SPOTLIGHT}>
-        <OpenSection section={section} modules={modules} />
-      </div>
-    );
+    return <HowToTeachSection section={section} modules={modules} />;
   }
   return <OpenSection section={section} modules={modules} />;
 }
@@ -325,7 +415,7 @@ function OpenSection({
         {section.heading}
       </h2>
       {section.blocks.map((block, index) => (
-        <Block key={index} block={block} modules={modules} />
+        <Block key={index} block={block} modules={modules} tone="page" />
       ))}
     </section>
   );

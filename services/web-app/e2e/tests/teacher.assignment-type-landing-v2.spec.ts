@@ -127,6 +127,15 @@ test.describe.serial('Assignment type landing pages (v2)', () => {
     ).toBeVisible();
     await expect(course.getByTestId('course-lesson')).toHaveCount(8);
 
+    // Expanded on arrival; Hide collapses it to a preview, Show brings it back.
+    const hide = page.getByRole('button', { name: 'Hide How to Teach It' });
+    await expect(hide).toHaveAttribute('aria-expanded', 'true');
+    await hide.click();
+    await expect(page.getByTestId('thesis-essay-course')).toHaveCount(0);
+    await expect(page.getByTestId('how-to-teach-preview')).toBeVisible();
+    await page.getByRole('button', { name: 'Show How to Teach It' }).click();
+    await expect(course.getByTestId('course-lesson')).toHaveCount(8);
+
     // A lesson plan is a PDF that opens in a new tab.
     const plan = course.getByRole('link', {
       name: 'Developing a thesis statement: lesson plan (PDF)',
