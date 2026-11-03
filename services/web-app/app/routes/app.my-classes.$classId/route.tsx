@@ -86,7 +86,7 @@ import {
 } from '~/components/class-manage-sheet';
 import { DocumentLink } from '~/components/document-link';
 import { Checkbox } from '~/components/ui/checkbox';
-import { HandleStudentPasswordResetButton } from './handle-student-password-reset';
+import { HandleStudentPasswordReset } from './handle-student-password-reset';
 import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
 import { UnsubmitSubmissionsSheet } from '~/components/teacher-document-work/unsubmit-submissions-sheet';
 import {
@@ -2768,18 +2768,34 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                             onCheckedChange={() => handleSelectStudent(s.id)}
                           />
                         </TableCell>
-                        <TableCell className="font-medium">
-                          {s.user.name ?? 'Unnamed Student'}
+                        <TableCell className="max-h-[37px] font-medium">
+                          <button
+                            type="button"
+                            className="cursor-pointer text-left font-medium hover:underline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setGrowthPlanStudent({
+                                id: s.id,
+                                name: s.user.name ?? s.user.email,
+                                email: s.user.email,
+                              });
+                            }}
+                          >
+                            {s.user.name ?? 'Unnamed Student'}
+                          </button>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          <div className="flex flex-col gap-1">
-                            <span>{formatUserContactLabel(s.user)}</span>
+                          <div className="flex items-center gap-0.5">
+                            <span className="truncate">
+                              {formatUserContactLabel(s.user)}
+                            </span>
                             {!s.user.email ? (
-                              <HandleStudentPasswordResetButton
+                              <HandleStudentPasswordReset
                                 studentMembershipId={s.id}
                                 studentName={
                                   s.user.name?.trim() || 'this student'
                                 }
+                                trigger="icon"
                               />
                             ) : null}
                           </div>
@@ -2970,6 +2986,9 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
         }
         pasteAlertsExitTo={classDetailExitTo}
         showGrowthPlans={reporterEnabled}
+        showHandlePasswordReset={
+          growthPlanStudent ? !growthPlanStudent.email : false
+        }
       />
     </section>
   );

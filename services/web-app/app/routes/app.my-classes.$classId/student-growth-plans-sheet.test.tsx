@@ -11,7 +11,7 @@ try {
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 
 import {
   StudentGrowthPlansSheetContent,
@@ -42,8 +42,11 @@ function render(element: ReactElement) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+  const router = createMemoryRouter([{ path: '/', element }], {
+    initialEntries: ['/'],
+  });
   act(() => {
-    root!.render(<MemoryRouter>{element}</MemoryRouter>);
+    root!.render(<RouterProvider router={router} />);
   });
   return container;
 }
@@ -87,6 +90,29 @@ describe('StudentGrowthPlansSheetContent', () => {
     expect(el.textContent?.toLowerCase()).not.toContain('edit');
     expect(el.textContent?.toLowerCase()).not.toContain('supersede');
     expect(el.querySelector('input, textarea')).toBeNull();
+  });
+
+  it('shows reset login in the sheet for handle-only students', () => {
+    const handleStudent: GrowthPlanSheetStudent = {
+      id: 'student-handle',
+      name: 'Sam Student',
+      email: '',
+    };
+    const el = render(
+      <StudentGrowthPlansSheetContent
+        renderSheet={false}
+        student={handleStudent}
+        growthPlans={[]}
+        onViewDocuments={() => {}}
+        showGrowthPlans={false}
+        showHandlePasswordReset
+      />
+    );
+    expect(
+      Array.from(el.querySelectorAll('button')).some((button) =>
+        button.textContent?.includes('Reset login')
+      )
+    ).toBe(true);
   });
 
   it('routes the pill link through onViewDocuments so the caller can close the sheet and navigate', () => {
