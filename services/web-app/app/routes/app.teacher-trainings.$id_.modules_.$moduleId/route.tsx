@@ -39,9 +39,15 @@ import { cn } from '~/utils/misc';
 import { getTeacherTrainingProgressPercent } from '~/utils/teacher-training-progress';
 import { getTeacherTrainingMediaAccessibilityResources } from '~/utils/teacher-training-media-accessibility';
 import { getTeacherTrainingPlaybackUrl } from '~/utils/teacher-training-video-link.server';
+import { redirectIfTeacherLoungeTemporarilyDisabled } from '~/domain/teacher-lounge/teacher-lounge-temporary-disable.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+  redirectIfTeacherLoungeTemporarilyDisabled({ email: user?.email ?? null });
   const profile = await requireMembership(request, userId);
 
   if (profile.role !== "TEACHER") {
@@ -146,6 +152,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+  redirectIfTeacherLoungeTemporarilyDisabled({ email: user?.email ?? null });
   const profile = await requireMembership(request, userId);
   const formData = await request.formData();
   const intent = formData.get('intent');

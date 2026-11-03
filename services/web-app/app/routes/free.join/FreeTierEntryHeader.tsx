@@ -1,8 +1,8 @@
 export function FreeTierEntryHeader(props: { title: string; subtitle?: string; kicker?: string }) {
   return (
     <>
-      <a className="yawp-entry-logo" href="/" aria-label="YAWP! home">
-        <img src="/img/landing/yawp-logo-circle.jpg" alt="YAWP!" />
+      <a className="yawp-entry-logo" href="/" aria-label="Yawp! home">
+        <img src="/img/landing/yawp-logo-circle.jpg" alt="Yawp!" />
       </a>
       <div className="yawp-entry-copy">
         {props.kicker ? <p className="yawp-entry-kicker">{props.kicker}</p> : null}

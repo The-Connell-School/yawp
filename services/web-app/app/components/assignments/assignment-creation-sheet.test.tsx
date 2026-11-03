@@ -11,6 +11,7 @@ try {
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import {
   act,
+  useState,
   type ReactElement,
   type ReactNode,
   type FormHTMLAttributes,
@@ -26,7 +27,14 @@ mock.module('~/components/ui/tooltip', () => ({
       <span>{text}</span>
     </>
   ),
+  TooltipProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipRoot: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: ReactNode }) => (
+    <span>{children}</span>
+  ),
 }));
+
 
 const { AssignmentCreationSheetContent, assignmentCreationClassLabel } =
   await import('./assignment-creation-sheet');
@@ -91,7 +99,7 @@ function idleFetcher(data: Record<string, unknown> | null = null) {
 }
 
 const assignmentTypes = [
-  // type-1 is in the collaborative-drafts pilot; type-2 is not.
+  // type-1 is a group-project type (collaborationSupported); type-2 is not.
   {
     id: 'type-1',
     title: 'Literary Analysis',
@@ -246,6 +254,7 @@ describe('AssignmentCreationSheetContent', () => {
       fixedClassId: 'class-1',
       initialTitle: 'Existing essay',
       initialPrompt: 'Existing prompt',
+      initialPointValue: 100,
     }));
     expect(inputByName('assignmentTypeId').value).toBe('existing-type');
     expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
@@ -261,6 +270,7 @@ describe('AssignmentCreationSheetContent', () => {
       fixedClassId: 'class-1',
       initialTitle: 'Existing essay',
       initialPrompt: 'Existing prompt',
+      initialPointValue: 100,
     }));
     expect(inputByName('assignmentTypeId').value).toBe('existing-type');
     expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
@@ -268,11 +278,12 @@ describe('AssignmentCreationSheetContent', () => {
 
   it('allows unchanged-type edits after creation availability is exhausted', () => {
     ({ root } = renderSheet({
-      assignmentTypes: [{ ...assignmentTypes[0], quotaExhausted: true, unavailableReason: 'Available with a paid plan.' }],
+      assignmentTypes: [{ ...assignmentTypes[0], quotaExhausted: true, unavailableReason: 'Available with a site license.' }],
       editingAssignment: { id: 'existing-assignment' },
       initialAssignmentTypeId: 'type-1',
       fixedClassId: 'class-1',
       initialPrompt: 'Existing prompt',
+      initialPointValue: 100,
     }));
     expect(inputByName('assignmentTypeId').value).toBe('type-1');
     expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
@@ -296,7 +307,7 @@ describe('AssignmentCreationSheetContent', () => {
       assignmentTypes: [
         {
           ...assignmentTypes[0],
-          unavailableReason: 'Available with a paid plan.',
+          unavailableReason: 'Available with a site license.',
         },
         { ...assignmentTypes[1], quotaExhausted: true },
         {
@@ -316,7 +327,7 @@ describe('AssignmentCreationSheetContent', () => {
 
   it('clears a fixed paid type instead of submitting its forbidden id', () => {
     ({ root } = renderSheet({
-      assignmentTypes: [{ ...assignmentTypes[0], unavailableReason: 'Available with a paid plan.' }],
+      assignmentTypes: [{ ...assignmentTypes[0], unavailableReason: 'Available with a site license.' }],
       fixedAssignmentTypeId: 'type-1',
       fixedClassId: 'class-1',
     }));
@@ -328,7 +339,7 @@ describe('AssignmentCreationSheetContent', () => {
       assignmentTypes: [
         {
           ...assignmentTypes[0],
-          unavailableReason: 'Available with a paid plan.',
+          unavailableReason: 'Available with a site license.',
         },
       ],
       initialAssignmentTypeId: 'type-1',
@@ -395,9 +406,11 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Prompt');
       expectText('Extract from PDF');
       expectText('Submit for grade');
-      expectText(
-        'Graded out of 100 points, read at the intermediate level.'
-      );
+      if (expectedAssignmentTypeId === 'type-2') {
+        expectText('Graded out of 10 points, read at the beginner level.');
+      } else {
+        expectText('Graded out of 100 points, read at the beginner level.');
+      }
       expectText('Tutor enabled');
       expectText(
         "The tutor is on by default. Turning it off removes it from students' documents — the digital equivalent of an in-class essay. Assigning one now and then shows what a student can do unaided, and gives the Reporter a baseline to measure independent growth against."
@@ -413,17 +426,19 @@ describe('AssignmentCreationSheetContent', () => {
       expect(inputByName('assignmentTypeId').value).toBe(
         expectedAssignmentTypeId
       );
-      expect(inputByName('submitForGrade').value).toBe('false');
+      expect(inputByName('submitForGrade').value).toBe('true');
 
       const submitForGrade = controlById('assignment-create-submit-for-grade');
       expect(isChecked(submitForGrade)).toBe(true);
-      expect(inputByName('pointValue').value).toBe('100');
+      expect(inputByName('pointValue').value).toBe(
+        expectedAssignmentTypeId === 'type-2' ? '10' : '100'
+      );
       expect(inputByName('gradingAssistantStrictnessLevel').value).toBe(
-        'intermediate'
+        'beginner'
       );
 
       // Tutor defaults to enabled, preserving today's behavior.
-      expect(inputByName('tutorEnabled').value).toBe('false');
+      expect(inputByName('tutorEnabled').value).toBe('true');
       const tutorEnabled = controlById('assignment-create-tutor-enabled');
       expect(tutorEnabled.getAttribute('role')).toBe('checkbox');
       expect(isChecked(tutorEnabled)).toBe(true);
@@ -441,6 +456,59 @@ describe('AssignmentCreationSheetContent', () => {
       false
     );
     expect(inputByName('tutorEnabled').value).toBe('false');
+  });
+
+  it('keeps entered prompt and tutor choice after a failed create response', () => {
+    function FailedCreateHarness() {
+      const [createFetcher, setCreateFetcher] = useState(idleFetcher());
+      return (
+        <>
+          <button
+            type="button"
+            id="simulate-failed-create"
+            onClick={() =>
+              setCreateFetcher({
+                state: 'idle',
+                data: {
+                  success: false,
+                  message: 'Could not create the assignment.',
+                },
+                Form: FetcherForm,
+                submit: () => {},
+              })
+            }
+          />
+          <AssignmentCreationSheetContent
+            open
+            onOpenChange={() => {}}
+            entryPoint="dashboard"
+            assignmentTypes={assignmentTypes}
+            teacherClasses={teacherClasses}
+            initialPrompt="Keep this prompt"
+            createFetcher={createFetcher}
+            extractFetcher={idleFetcher()}
+            renderSheet={false}
+          />
+        </>
+      );
+    }
+
+    ({ root } = render(<FailedCreateHarness />));
+    act(() => {
+      controlById('assignment-create-tutor-enabled').click();
+    });
+    act(() => {
+      document.getElementById('simulate-failed-create')!.click();
+    });
+
+    expect(
+      (document.getElementById('assignment-create-prompt') as HTMLTextAreaElement)
+        .value
+    ).toBe('Keep this prompt');
+    expect(isChecked(controlById('assignment-create-tutor-enabled'))).toBe(
+      false
+    );
+    expectText('Could not create the assignment.');
   });
 
   it('names a tutor-off assignment a cold write', () => {
@@ -480,16 +548,14 @@ describe('AssignmentCreationSheetContent', () => {
     expectNoText('point adjustment');
 
     expect(inputByName('gradingAssistantStrictnessLevel').value).toBe(
-      'intermediate'
+      'beginner'
     );
   });
 
   it('rests as a plain-language grading summary with nothing to expand past', () => {
     root = renderSheet().root;
 
-    expectText(
-      'Graded out of 100 points, read at the intermediate level.'
-    );
+    expectText('Graded out of 100 points, read at the beginner level.');
     // The old block stated the same facts four times over three nested boxes.
     expectNoText('Grade Configuration');
     expectNoText('Default point value');
@@ -830,119 +896,59 @@ describe('AssignmentCreationSheetContent', () => {
   });
 
   describe('collaborative drafts', () => {
-    it('offers the toggle for a kind of writing in the pilot', () => {
+    it('does not offer the toggle when creating any assignment type', () => {
+      for (const typeId of ['type-1', 'type-2'] as const) {
+        root = renderSheet({
+          entryPoint: 'assignment-type',
+          fixedAssignmentTypeId: typeId,
+        }).root;
+
+        expect(
+          document.getElementById('assignment-create-collaboration-enabled')
+        ).toBeNull();
+        expectText('Each student receives their own document');
+        expectText('Yawp! does not create a shared group document');
+      }
+    });
+
+    it('shows the frozen toggle when editing an existing collaborative assignment', () => {
       root = renderSheet({
-        entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-1',
+        entryPoint: 'dashboard',
+        editingAssignment: { id: 'a-1' },
+        initialCollaborationEnabled: true,
       }).root;
 
       expect(
         controlById('assignment-create-collaboration-enabled')
       ).not.toBeNull();
-    });
-
-    it('offers the toggle for a kind of writing outside the former pilot', () => {
-      root = renderSheet({
-        entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-2',
-      }).root;
-
-      expect(
-        document.getElementById('assignment-create-collaboration-enabled')
-      ).not.toBeNull();
-    });
-
-    it('offers every group mode, not just a size', () => {
-      // The sheet shipped with only a size stepper, so the three modes designed
-      // for this feature were unreachable and every assignment silently got the
-      // parser's default.
-      root = renderSheet({
-        entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-1',
-        initialCollaborationEnabled: true,
-      }).root;
-
-      const labels = Array.from(
-        document.querySelectorAll('button[aria-pressed]')
-      ).map((button) => button.textContent ?? '');
-      for (const fragment of [
-        'make the groups',
-        'Group them for me',
-        'whole class',
-      ]) {
-        expect(labels.some((label) => label.includes(fragment))).toBe(true);
-      }
-    });
-
-    it('posts the chosen mode', () => {
-      root = renderSheet({
-        entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-1',
-        initialCollaborationEnabled: true,
-      }).root;
-
-      expect(inputByName('collaborationGroupMode').value).toBe('teacher');
-    });
-
-    it('asks for a group size for the sized modes', () => {
-      root = renderSheet({
-        entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-1',
-        initialCollaborationEnabled: true,
-      }).root;
-
-      expect(
-        document.getElementById('assignment-create-collaboration-group-size')
-      ).not.toBeNull();
-    });
-
-    it('sends the teacher to group setup once the assignment is created', () => {
-      // Closing the sheet was the whole ending, which left a collaborative
-      // assignment looking done while its groups did not exist yet.
-      const went: string[] = [];
-      root = renderSheet({
-        entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-1',
-        createFetcher: idleFetcher({
-          success: true,
-          nextStep: {
-            url: '/app/class-assignments/ca-1/groups',
-            classCount: 1,
-          },
-        }),
-        navigate: (to: string) => went.push(to),
-      }).root;
-
-      expect(went).toEqual(['/app/class-assignments/ca-1/groups']);
-    });
-
-    it('does not navigate for a solo assignment', () => {
-      const went: string[] = [];
-      root = renderSheet({
-        entryPoint: 'dashboard',
-        createFetcher: idleFetcher({ success: true, nextStep: null }),
-        navigate: (to: string) => went.push(to),
-      }).root;
-
-      expect(went).toEqual([]);
-    });
-
-    it('posts collaboration off by default even when the toggle is shown', () => {
-      // A hidden false accompanies the checkbox, so an unchecked box still posts
-      // a value and the server keeps producing solo assignments.
-      root = renderSheet({
-        entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-1',
-      }).root;
-
-      const values = allInputsByName('collaborationEnabled').map(
-        (input) => input.value
-      );
-      expect(values).toContain('false');
       expect(
         isChecked(controlById('assignment-create-collaboration-enabled'))
-      ).toBe(false);
+      ).toBe(true);
     });
+
+  });
+
+  it('prefills Daily Pages at 20 points for new assignments', () => {
+    root = renderSheet({
+      entryPoint: 'assignment-type',
+      fixedAssignmentTypeId: 'daily-pages',
+      assignmentTypes: [
+        ...assignmentTypes,
+        {
+          id: 'daily-pages',
+          title: 'Daily Pages',
+          kind: 'daily_pages',
+          rubricName: null,
+          collaborationSupported: false,
+          gradesGrammar: false,
+        },
+      ],
+    }).root;
+
+    expect(inputByName('pointValue').value).toBe('20');
+    expect(inputByName('gradingAssistantStrictnessLevel').value).toBe(
+      'beginner'
+    );
   });
 
   it('shows scaled engagement tiers when the grading panel is open', () => {
@@ -1348,11 +1354,13 @@ describe('AssignmentCreationSheetContent', () => {
       expect((more as HTMLDetailsElement).open).toBe(false);
       for (const id of [
         'assignment-create-tutor-enabled',
-        'assignment-create-collaboration-enabled',
         'assignment-create-exit-ticket-lesson-notes',
       ]) {
         expect(more.contains(controlById(id))).toBe(true);
       }
+      expect(document.body.textContent).toMatch(
+        /Each student receives their own document/
+      );
       // Tucked away is not switched off: the tutor still posts its value.
       expect(allInputsByName('tutorEnabled').length).toBeGreaterThan(0);
     });

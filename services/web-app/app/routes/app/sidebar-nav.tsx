@@ -16,6 +16,7 @@ import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
 import { LOUNGE_NAME } from '~/domain/lounge/launch';
 import type { useUser } from '~/hooks/useUser';
+import { isTeacherLoungeTemporarilyDisabledForUser } from '~/domain/teacher-lounge/teacher-lounge-temporary-disable';
 
 type User = ReturnType<typeof useUser>;
 
@@ -47,6 +48,9 @@ const reporterNavVisible = (user: User) =>
   teacher(user) &&
   user.selectedMembership?.organization?.plan !== 'FREE_CLASSROOM';
 const lessonPlannerNavVisible = (user: User) => teacher(user);
+const teacherLoungeNavVisible = (user: User) =>
+  teacher(user) &&
+  !isTeacherLoungeTemporarilyDisabledForUser({ email: user.email });
 const writingPracticeEnabled = (user: User) => teacher(user) || student(user);
 
 const icons = {
@@ -106,7 +110,7 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
         to: '/app/teacher-trainings',
         label: "Teacher's Lounge",
         icon: icons.lounge,
-        requires: teacher,
+        requires: teacherLoungeNavVisible,
       },
       {
         to: '/app/reporter',
@@ -208,6 +212,14 @@ type SidebarNavLinksProps = {
   pathname: string;
   isAppNavLinkActive: (linkTo: string, pathname: string) => boolean;
   forceFullNavigation?: boolean;
+  renderLinkTrailing?: (link: SidebarNavLink) => React.ReactNode;
+  renderNavRow?: (input: {
+    link: SidebarNavLink;
+    isActive: boolean;
+    rowClassName: string;
+    linkClassName: string;
+    icon: React.ReactNode;
+  }) => React.ReactNode | null;
 };
 
 export function SidebarNavLinks({
@@ -217,6 +229,8 @@ export function SidebarNavLinks({
   pathname,
   isAppNavLinkActive,
   forceFullNavigation = false,
+  renderLinkTrailing,
+  renderNavRow,
 }: SidebarNavLinksProps) {
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
@@ -249,70 +263,79 @@ export function SidebarNavLinks({
           <div className="grid gap-1">
             {section.links.map((link) => {
               const isActive = isSidebarLinkActive(link, pathname, isAppNavLinkActive);
-              const className = cn(
-                'flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
+              const rowClassName = cn(
+                'flex w-full items-center gap-1 rounded-xl px-3 py-2 text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
                 {
                   'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary':
                     isActive,
-                  'py-2': !navExpanded,
+                  'justify-center py-2': !navExpanded,
                 }
               );
+              const linkClassName = cn(
+                'flex min-w-0 flex-1 items-center gap-2 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                { 'flex-1': navExpanded, 'justify-center': !navExpanded }
+              );
+              const trailing = renderLinkTrailing?.(link);
+              const icon = link.icon ? (
+                navExpanded ? (
+                  link.icon
+                ) : (
+                  <Tooltip
+                    key={link.to}
+                    text={link.label}
+                    open={navExpanded ? false : undefined}
+                    contentProps={{ side: 'right' }}
+                  >
+                    {link.icon}
+                  </Tooltip>
+                )
+              ) : null;
+
+              const linkBody = (
+                <>
+                  {icon}
+                  {navExpanded ? (
+                    <span className="min-w-0 truncate">{link.label}</span>
+                  ) : null}
+                </>
+              );
+
+              const customRow = renderNavRow?.({
+                link,
+                isActive,
+                rowClassName,
+                linkClassName,
+                icon,
+              });
+              if (customRow) return customRow;
 
               if (forceFullNavigation) {
                 return (
-                  <Link
-                    key={link.to}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={className}
-                    reloadDocument
-                    to={link.to}
-                  >
-                    {link.icon ? (
-                      navExpanded ? (
-                        link.icon
-                      ) : (
-                        <Tooltip
-                          key={link.to}
-                          text={link.label}
-                          open={navExpanded ? false : undefined}
-                          contentProps={{ side: 'right' }}
-                        >
-                          {link.icon}
-                        </Tooltip>
-                      )
-                    ) : null}
-                    {navExpanded ? (
-                      <span className="w-full min-w-0">{link.label}</span>
-                    ) : null}
-                  </Link>
+                  <div key={link.to} className={rowClassName}>
+                    <Link
+                      aria-current={isActive ? 'page' : undefined}
+                      className={linkClassName}
+                      reloadDocument
+                      to={link.to}
+                    >
+                      {linkBody}
+                    </Link>
+                    {trailing}
+                  </div>
                 );
               }
 
               return (
-                <Link
-                  key={link.to}
-                  to={link.to}
-                  aria-current={isActive ? 'page' : undefined}
-                  className={className}
-                >
-                  {link.icon ? (
-                    navExpanded ? (
-                      link.icon
-                    ) : (
-                      <Tooltip
-                        key={link.to}
-                        text={link.label}
-                        open={navExpanded ? false : undefined}
-                        contentProps={{ side: 'right' }}
-                      >
-                        {link.icon}
-                      </Tooltip>
-                    )
-                  ) : null}
-                  {navExpanded ? (
-                    <span className="w-full min-w-0">{link.label}</span>
-                  ) : null}
-                </Link>
+                <div key={link.to} className={rowClassName}>
+                  <Link
+                    to={link.to}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={linkClassName}
+                  >
+                    {linkBody}
+                  </Link>
+                  {trailing}
+                </div>
               );
             })}
           </div>

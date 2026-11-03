@@ -4,8 +4,13 @@ import {
   LOCAL_DEV_PERSONA_EMAILS,
   LOCAL_DEV_PERSONAS,
 } from '../../../../../packages/prisma/scripts/local-dev/dev-personas';
+import { DEV_PANEL_SIGNED_OUT_TESTER_EMAIL } from '~/dev-panel/dev-panel-signed-out-feedback.server';
 
 type PreviewSeat = { organizationId: string; label: string };
+
+function isDevPanelSignedOutTester(email: string | null | undefined) {
+  return email === DEV_PANEL_SIGNED_OUT_TESTER_EMAIL;
+}
 
 export type DevLoginOption = {
   email: string;
@@ -63,6 +68,9 @@ export function createDevLoginAction({
     const email = String(formData.get('email') ?? '')
       .trim()
       .toLowerCase();
+    if (isDevPanelSignedOutTester(email)) {
+      return Response.json({ error: 'This account cannot sign in.' }, { status: 403 });
+    }
     const gateEnabled = previewGateEnabled();
     const previewSeat = gateEnabled
       ? await previewSeatForRequest(request)
@@ -91,6 +99,7 @@ export function createDevLoginAction({
             },
             select: {
               id: true,
+              simulatedForClassId: true,
               memberships: {
                 where: { isActive: true, organizationId: previewSeat.organizationId },
                 select: { id: true, role: true },
@@ -103,6 +112,7 @@ export function createDevLoginAction({
             where: { email },
             select: {
               id: true,
+              simulatedForClassId: true,
               memberships: {
                 where: { isActive: true },
                 select: { id: true, role: true },
@@ -111,6 +121,13 @@ export function createDevLoginAction({
               },
             },
           });
+
+    if (user?.simulatedForClassId) {
+      return Response.json(
+        { error: 'Simulated demo students cannot sign in.' },
+        { status: 403 }
+      );
+    }
 
     if (!user || !user.memberships[0]) {
       return Response.json(
@@ -232,12 +249,14 @@ export async function getLocalDevLoginOptionsPage(
     const pageOptions = LOCAL_DEV_PERSONAS.slice(
       cursor,
       cursor + DEV_LOGIN_OPTIONS_PAGE_SIZE
-    ).map((persona) => ({
-      email: persona.email,
-      label: persona.label,
-      description: persona.description,
-      role: persona.key,
-    }));
+    )
+      .filter((persona) => persona.email !== DEV_PANEL_SIGNED_OUT_TESTER_EMAIL)
+      .map((persona) => ({
+        email: persona.email,
+        label: persona.label,
+        description: persona.description,
+        role: persona.key,
+      }));
     const nextCursor =
       cursor + pageOptions.length < LOCAL_DEV_PERSONAS.length
         ? cursor + pageOptions.length
@@ -247,6 +266,8 @@ export async function getLocalDevLoginOptionsPage(
 
   const users = await prismaClient.user.findMany({
     where: {
+      email: { not: DEV_PANEL_SIGNED_OUT_TESTER_EMAIL },
+      simulatedForClassId: null,
       memberships: {
         some: { isActive: true, organizationId },
       },

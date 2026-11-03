@@ -14,6 +14,7 @@ import {
   previewServiceHostname,
 } from './wake-server.mjs';
 import { isBotRequest, isHumanActivity, createWakeLimiter, createWakeAttemptLimiter } from './wake-policy.mjs';
+import { buildSafeErrorForLog } from './log-script-error.mjs';
 
 export function isDirectExecution(moduleUrl, argv1 = process.argv[1]) {
   if (!argv1) return false;
@@ -281,7 +282,7 @@ function proxyHttp({ request, response, target, hostname, pr, recordAccess, reco
     upstream.setTimeout(120_000, () => upstream.destroy(new Error('Preview upstream timed out')));
     upstream.once('error', (error) => {
       if (!response.headersSent) {
-        console.error(`Preview pr-${pr} upstream unavailable`, error.message);
+        console.error(`Preview pr-${pr} upstream unavailable`, buildSafeErrorForLog(error));
         send(response, 503, 'Preview is starting; retry shortly.\n', { 'retry-after': '5' });
       } else {
         response.destroy(error);
@@ -616,7 +617,7 @@ export function createDockerTargetResolver({
       cache.set(cacheKey, { target, expires: now + (target ? cacheMs : Math.min(cacheMs, 250)) });
       return target;
     } catch (error) {
-      console.error(`Preview pr-${pr} target resolution failed`, error.message);
+      console.error(`Preview pr-${pr} target resolution failed`, buildSafeErrorForLog(error));
       return null;
     }
   };

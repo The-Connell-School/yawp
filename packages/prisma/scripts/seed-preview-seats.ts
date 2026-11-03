@@ -24,6 +24,7 @@ import {
 import {
   ensureInternalRubricsEnabledForDemo,
   ensureLessonPlannerEnabledForDemo,
+  ensureLessonPlannerEnabledForPreview,
 } from './local-dev/seed-lesson-planner-feature-flag';
 import { ensureThesisEssayDecksEnabledForPreview } from './local-dev/seed-thesis-essay-decks-feature-flag';
 import { ensureFreeTierEnabledForPreview } from './local-dev/seed-free-tier-feature-flag';
@@ -48,6 +49,13 @@ try {
   await ensureDemoFeedbackEnabled(prisma);
   const freeTierFlag = await ensureFreeTierEnabledForPreview(prisma, databaseName);
   console.log(`Free tier feature flag seed: ${JSON.stringify(freeTierFlag)}`);
+  const lessonPlannerFlags = await ensureLessonPlannerEnabledForPreview(
+    prisma,
+    databaseName
+  );
+  console.log(
+    `Lesson Planner feature flags seed: ${JSON.stringify(lessonPlannerFlags)}`
+  );
   const loungeFlag = await ensureLoungeCommunityEnabledForPreview(prisma, databaseName);
   console.log(`Teacher's Lounge community flag seed: ${JSON.stringify(loungeFlag)}`);
   try {

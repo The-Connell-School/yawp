@@ -15,6 +15,7 @@ import {
 import { adminApprovalEmailCopyVersionHash } from './email-copy.server';
 import {
   mintSignedLink,
+  mintSignedLinkForDevPanel,
   claimSignedLinkInTransaction,
   applicationIdFromSignedToken,
   FREE_TIER_LINK_TTL_MS,
@@ -22,14 +23,26 @@ import {
   invalidateOpenAdminApprovalLinks,
   abandonMintedSignedLinks,
 } from './signed-link.server';
+import { verifiedApplicationIdForAdminToken } from './admin-link-known-request.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import { ensureFreeTierProductionApprovalHooks } from './approval-hooks.server';
+import { forwardApprovalSchema } from './approval-waiting';
 import {
+  fetchFreeTierApplicationTerminalGate,
+  forwardIdempotentReplay,
+  resolveAdminLinkReplacedGate,
+  resolveAdminLinkTerminalGate,
+} from './admin-link-gate.server';
+import {
+  recordFreeTierAdminApprovalEmailLogged,
   sendFreeTierAdminApprovalEmail,
   sendFreeTierAdminReminderEmail,
   sendFreeTierCongratulationsEmail,
   sendFreeTierReleaseEmail,
 } from './email.server';
+import { resolveAdminApprovalEmailContext } from './admin-approval-email-context.server';
+import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
+import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { getApprovalHooks } from './approval-hooks.server';
 import { getClientIp } from '~/utils/ip.server';
 import {
@@ -122,6 +135,8 @@ export async function submitAdminDetails(args: {
   adminEmail: string;
   adminRole: string;
   personalNote?: string;
+  /** Dev-panel jumps only: write approval state and logs without SES. */
+  suppressEmailDelivery?: boolean;
 }) {
   const adminEmail = normalizeEmail(args.adminEmail);
   const app = await prisma.freeTierApplication.findFirst({
@@ -154,7 +169,8 @@ export async function submitAdminDetails(args: {
     resolveFreeTierRuntimeEnvironment()
   );
 
-  const copyHash = adminApprovalEmailCopyVersionHash();
+  const pass1 = await isFeatureFlagEnabled(FREE_TIER_FLAG, app.organizationId);
+  const copyHash = await adminApprovalEmailCopyVersionHash(pass1);
   // Kept in the API for older callers; introductions are no longer accepted.
   const note = null;
 
@@ -185,13 +201,16 @@ export async function submitAdminDetails(args: {
       data: { teacherPersonalNote: note },
     });
 
-    const approveMint = await mintSignedLink({
+    const mintLink = args.suppressEmailDelivery
+      ? mintSignedLinkForDevPanel
+      : mintSignedLink;
+    const approveMint = await mintLink({
       applicationId: app.id,
       purpose: 'ADMIN_APPROVE',
       ttlMs: FREE_TIER_LINK_TTL_MS,
       tx,
     });
-    const declineMint = await mintSignedLink({
+    const declineMint = await mintLink({
       applicationId: app.id,
       purpose: 'ADMIN_NOT_RIGHT_PERSON',
       ttlMs: FREE_TIER_LINK_TTL_MS,
@@ -234,18 +253,36 @@ export async function submitAdminDetails(args: {
 
   if (!result.ok) return result;
   if (!result.manualReview) {
-    const base = freeTierPublicAppOrigin();
-    const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(result.approveToken)}`;
-    const declineUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(result.declineToken)}`;
-    const emailResult = await sendFreeTierAdminApprovalEmail({
-      applicationId: app.id,
-      to: result.adminEmail,
-      teacherEmail: app.email,
-      teacherName: app.name,
-      schoolName: app.schoolName,
-      approveUrl,
-      notRightPersonUrl: declineUrl,
-    });
+    const approveUrl = args.suppressEmailDelivery
+      ? `/free/admin/approve?t=${encodeURIComponent(result.approveToken)}`
+      : `${freeTierPublicAppOrigin()}/free/admin/approve?t=${encodeURIComponent(result.approveToken)}`;
+    const declineUrl = args.suppressEmailDelivery
+      ? `/free/admin/not-right-person?t=${encodeURIComponent(result.declineToken)}`
+      : `${freeTierPublicAppOrigin()}/free/admin/not-right-person?t=${encodeURIComponent(result.declineToken)}`;
+    const emailResult = args.suppressEmailDelivery
+      ? await recordFreeTierAdminApprovalEmailLogged({
+          applicationId: app.id,
+          to: result.adminEmail,
+          approveUrl,
+          notRightPersonUrl: declineUrl,
+        })
+      : await sendFreeTierAdminApprovalEmail({
+          applicationId: app.id,
+          to: result.adminEmail,
+          teacherEmail: app.email,
+          teacherName: app.name,
+          schoolName: app.schoolName,
+          approveUrl,
+          notRightPersonUrl: declineUrl,
+          pass1,
+        });
+    if (emailResult.ok && args.suppressEmailDelivery) {
+      const sentAt = new Date();
+      await prisma.freeTierAdminApproval.update({
+        where: { id: result.approvalId },
+        data: { firstSentAt: sentAt },
+      });
+    }
     if (!emailResult.ok) {
       await abandonMintedSignedLinks([result.approveLinkId, result.declineLinkId]);
       await prisma.$transaction(async (tx) => {
@@ -454,14 +491,25 @@ export async function resendFreeTierAdminApprovalReminder(args: {
   if (args.requireV2) return { ok: false as const, reason: 'flag_off' as const };
   const app = await prisma.freeTierApplication.findFirst({
     where: { id: args.applicationId, status: 'SENT' },
-    select: { id: true, name: true, schoolName: true, email: true },
+    select: {
+      id: true,
+      name: true,
+      schoolName: true,
+      email: true,
+      organizationId: true,
+    },
   });
   if (!app) return { ok: false as const, reason: 'not_allowed' as const };
 
   const pendingRow = await prisma.freeTierAdminApproval.findFirst({
     where: { applicationId: app.id, status: 'PENDING' },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, adminEmail: true },
+    select: {
+      id: true,
+      adminEmail: true,
+      redirectedFromId: true,
+      forwardedByRole: true,
+    },
   });
   if (!pendingRow) return { ok: false as const, reason: 'not_found' as const };
 
@@ -485,6 +533,12 @@ export async function resendFreeTierAdminApprovalReminder(args: {
   const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(minted.approveMint.token)}`;
   const notRightPersonUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(minted.declineMint.token)}`;
 
+  const pass1 = await isFeatureFlagEnabled(FREE_TIER_FLAG, app.organizationId);
+  const emailContext = pass1
+    ? await resolveAdminApprovalEmailContext(pendingRow, prisma, {
+        organizationId: app.organizationId,
+      })
+    : {};
   const emailResult = await sendFreeTierAdminReminderEmail({
     applicationId: app.id,
     to: pendingRow.adminEmail,
@@ -493,6 +547,13 @@ export async function resendFreeTierAdminApprovalReminder(args: {
     schoolName: app.schoolName,
     approveUrl,
     notRightPersonUrl,
+    pass1,
+    ...(pass1
+      ? {
+          forwardedByAdminName: emailContext.forwardedByAdminName,
+          routedByTeacher: emailContext.routedByTeacher,
+        }
+      : {}),
   });
 
   if (!emailResult.ok) {
@@ -513,40 +574,145 @@ export async function resendFreeTierAdminApprovalReminder(args: {
   return { ok: true as const };
 }
 
+function terminalGateFromApplication(app: {
+  status: string;
+  schoolName: string;
+  name: string;
+}): {
+  ok: false;
+  reason: 'already_approved' | 'declined';
+  schoolName: string;
+  teacherName: string;
+} | null {
+  if (app.status === 'APPROVED') {
+    return {
+      ok: false as const,
+      reason: 'already_approved' as const,
+      schoolName: app.schoolName,
+      teacherName: app.name,
+    };
+  }
+  if (app.status === 'REJECTED' || app.status === 'EXPIRED') {
+    return {
+      ok: false as const,
+      reason: 'declined' as const,
+      schoolName: app.schoolName,
+      teacherName: app.name,
+    };
+  }
+  return null;
+}
+
 export async function redirectSchoolAdmin(args: {
   token: string;
   newAdminName: string;
   newAdminEmail: string;
   request: Request;
 }) {
-  const signed = await peekSignedLink({
-    token: args.token,
-    expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+  const parsed = forwardApprovalSchema.safeParse({
+    newAdminName: args.newAdminName,
+    newAdminEmail: args.newAdminEmail,
   });
-  if (signed.ok) {
-    const identity = await prisma.freeTierApplication.findUnique({
-      where: { id: signed.applicationId },
-      select: { id: true, userId: true, organizationId: true },
-    });
-    if (identity && (await isApprovalV2Enabled(identity)))
-      return forwardApprovalByToken(args);
+  if (!parsed.success) {
+    return {
+      ok: false as const,
+      reason: 'validation' as const,
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
   }
-  const newEmail = normalizeEmail(args.newAdminEmail);
-  const meta = hashRequestMeta(args.request);
-  const copyHash = adminApprovalEmailCopyVersionHash();
+
+  const earlyAppId = await verifiedApplicationIdForAdminToken(
+    args.token,
+    'ADMIN_NOT_RIGHT_PERSON'
+  );
+  if (earlyAppId) {
+    const gate = await fetchFreeTierApplicationTerminalGate(earlyAppId);
+    if (gate) return { ok: false as const, ...gate };
+  }
+  if (
+    await forwardIdempotentReplay({
+      token: args.token,
+      newAdminName: parsed.data.newAdminName,
+      newAdminEmail: parsed.data.newAdminEmail,
+    })
+  ) {
+    return { ok: true as const, idempotent: true as const };
+  }
 
   const peek = await peekSignedLink({
     token: args.token,
     expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
   });
-  if (!peek.ok) return peek;
+  if (!peek.ok) {
+    if (
+      peek.reason === 'used' &&
+      (await forwardIdempotentReplay({
+        token: args.token,
+        newAdminName: parsed.data.newAdminName,
+        newAdminEmail: parsed.data.newAdminEmail,
+      }))
+    ) {
+      return { ok: true as const, idempotent: true as const };
+    }
+    const gate = await resolveAdminLinkTerminalGate({
+      token: args.token,
+      peek,
+      expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+    });
+    if (gate) return { ok: false as const, ...gate };
+    const replaced = await resolveAdminLinkReplacedGate({
+      token: args.token,
+      peek,
+      expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+    });
+    if (replaced) return { ok: false as const, ...replaced };
+    return peek;
+  }
+
+  const identity = await prisma.freeTierApplication.findUnique({
+    where: { id: peek.applicationId },
+    select: {
+      id: true,
+      userId: true,
+      organizationId: true,
+      status: true,
+      schoolName: true,
+      name: true,
+    },
+  });
+  const preTerminal = identity ? terminalGateFromApplication(identity) : null;
+  if (preTerminal) return preTerminal;
+
+  if (identity && (await isApprovalV2Enabled(identity))) {
+    return forwardApprovalByToken({
+      token: args.token,
+      newAdminName: parsed.data.newAdminName,
+      newAdminEmail: parsed.data.newAdminEmail,
+      request: args.request,
+    });
+  }
+
+  const newEmail = parsed.data.newAdminEmail;
+  const meta = hashRequestMeta(args.request);
+  const pass1 = await isFeatureFlagEnabled(
+    FREE_TIER_FLAG,
+    identity!.organizationId
+  );
+  const copyHash = await adminApprovalEmailCopyVersionHash(pass1);
 
   const preApp = await prisma.freeTierApplication.findUnique({
     where: { id: peek.applicationId },
     select: { id: true, email: true, name: true, schoolName: true, status: true, adminRedirectCount: true },
   });
-  if (!preApp || (preApp.status !== 'SENT' && preApp.status !== 'MANUAL_REVIEW')) {
-    return { ok: false as const, reason: 'illegal_state' as const };
+  if (!preApp) return { ok: false as const, reason: 'not_found' as const };
+  const appGate = terminalGateFromApplication(preApp);
+  if (appGate) return appGate;
+  if (preApp.status !== 'SENT' && preApp.status !== 'MANUAL_REVIEW') {
+    return {
+      ok: false as const,
+      reason: 'illegal_state' as const,
+      status: preApp.status,
+    };
   }
   if (preApp.adminRedirectCount >= ADMIN_REDIRECT_CHAIN_CAP) {
     return { ok: false as const, reason: 'chain_cap' as const };
@@ -555,9 +721,13 @@ export async function redirectSchoolAdmin(args: {
   const prePending = await prisma.freeTierAdminApproval.findFirst({
     where: { applicationId: preApp.id, status: 'PENDING' },
     orderBy: { createdAt: 'desc' },
-    select: { id: true },
+    select: { id: true, adminName: true },
   });
-  if (!prePending) return { ok: false as const, reason: 'not_found' as const };
+  if (!prePending) {
+    const decided = await fetchFreeTierApplicationTerminalGate(preApp.id);
+    if (decided) return { ok: false as const, ...decided };
+    return { ok: false as const, reason: 'not_found' as const };
+  }
 
   const rules = evaluateAdminEmailForRuntime(
     {
@@ -568,7 +738,7 @@ export async function redirectSchoolAdmin(args: {
     resolveFreeTierRuntimeEnvironment()
   );
 
-  const newAdminNameTrim = args.newAdminName.trim();
+  const newAdminNameTrim = parsed.data.newAdminName;
 
   const minted = await prisma.$transaction(async (tx) => {
     const approveMint = await mintSignedLink({
@@ -600,6 +770,8 @@ export async function redirectSchoolAdmin(args: {
       approveUrl,
       notRightPersonUrl,
       adminRecipientName: newAdminNameTrim,
+      forwardedByAdminName: prePending.adminName,
+      pass1,
     });
     if (!emailResult.ok) {
       await abandonMintedSignedLinks([minted.approveMint.linkId, minted.declineMint.linkId]);
@@ -614,7 +786,10 @@ export async function redirectSchoolAdmin(args: {
       where: { id: peek.applicationId },
       select: { id: true, email: true, name: true, schoolName: true, status: true, adminRedirectCount: true },
     });
-    if (!app || (app.status !== 'SENT' && app.status !== 'MANUAL_REVIEW')) {
+    if (!app) return { ok: false as const, reason: 'not_found' as const };
+    const txGate = terminalGateFromApplication(app);
+    if (txGate) return txGate;
+    if (app.status !== 'SENT' && app.status !== 'MANUAL_REVIEW') {
       return { ok: false as const, reason: 'illegal_state' as const };
     }
     if (app.adminRedirectCount >= ADMIN_REDIRECT_CHAIN_CAP) {
@@ -679,6 +854,7 @@ export async function redirectSchoolAdmin(args: {
   }
 
   if (!result.ok) return result;
+  if ('idempotent' in result && result.idempotent) return result;
   return { ok: true as const };
 }
 

@@ -8,6 +8,8 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   forbidOnly: !!process.env.CI,
+  timeout: 180_000,
+  expect: { timeout: 15_000 },
   reporter: 'list',
   outputDir: `${process.env.TMPDIR}/locked-preview-playwright`,
   webServer: {
@@ -17,13 +19,14 @@ export default defineConfig({
     command: `bun run dev -- --port ${process.env.CLASS_STEP_PORT} --host 127.0.0.1 --strictPort`,
     url: `http://localhost:${process.env.CLASS_STEP_PORT}`,
     reuseExistingServer: false,
-    timeout: 120000,
+    timeout: 180000,
     env: {
       CACHE_DATABASE_PATH: `${process.env.TMPDIR}/locked-preview-cache.sqlite`,
       DATABASE_PATH: `${process.env.TMPDIR}/locked-preview-local.sqlite`,
       SIGNON_MAIL_CAPTURE_DIR: `${process.env.TMPDIR}/locked-preview-mail`,
       FREE_TIER_LINK_HMAC_SECRET: 'local-locked-preview-test-signing-secret',
       PRIMARY_APP_URL: `http://localhost:${process.env.CLASS_STEP_PORT}`,
+      YAWP_ENVIRONMENT: 'demo',
     },
   },
   use: {

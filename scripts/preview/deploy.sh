@@ -36,6 +36,7 @@ DEMO_BACKUP_RETENTION="${DEMO_BACKUP_RETENTION:-14}"
 DEMO_BACKUP_S3_URI="${DEMO_BACKUP_S3_URI:-s3://yawp-preview-videos/demo-backups}"
 DEMO_RESET_BACKUP_FILE=""
 DEMO_RESET_RECOVERY_ARMED=false
+DEMO_TESTER_FEEDBACK_BACKUP_FILE=""
 if [[ ! "$DEMO_BACKUP_RETENTION" =~ ^[0-9]+$ ]] \
   || (( DEMO_BACKUP_RETENTION < 1 || DEMO_BACKUP_RETENTION > 365 )); then
   echo "DEMO_BACKUP_RETENTION must be between 1 and 365" >&2
@@ -171,7 +172,7 @@ load_or_create_access_config() {
         -e PREVIEW_MASTER_ACCESS_CODE="${PREVIEW_MASTER_ACCESS_CODE:-}" \
         -v "$SOURCE_DIR:/app:ro" \
         -w /app \
-        oven/bun:1.3.1 \
+        oven/bun:1.4.4 \
         bun scripts/preview/access-code.mjs --seats
     )"
     printf '%s\n' "$PREVIEW_ACCESS_SEATS" > "$ACCESS_SEATS_FILE"
@@ -395,6 +396,68 @@ database_exists() {
   [[ "$exists" == "1" ]]
 }
 
+cleanup_demo_tester_feedback_backup() {
+  if [[ -n "${DEMO_TESTER_FEEDBACK_BACKUP_FILE:-}" ]]; then
+    DEMO_TESTER_FEEDBACK_BACKUP_FILE="$DEMO_TESTER_FEEDBACK_BACKUP_FILE" \
+      bash "$SCRIPT_DIR/preserve-demo-tester-feedback.sh" cleanup || true
+    DEMO_TESTER_FEEDBACK_BACKUP_FILE=""
+  fi
+}
+
+demo_tester_feedback_row_count() {
+  local count
+  if ! database_exists "$DATABASE_NAME"; then
+    echo 0
+    return 0
+  fi
+  count="$(docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 \
+    -U postgres -d "$DATABASE_NAME" -Atc \
+    "SELECT CASE WHEN to_regclass('public.\"TesterFeedback\"') IS NOT NULL
+      THEN (SELECT count(*)::bigint FROM \"TesterFeedback\")
+      ELSE 0::bigint END;" | tr -d '[:space:]')"
+  [[ "$count" =~ ^[0-9]+$ ]] || {
+    echo "Could not read TesterFeedback row count" >&2
+    return 1
+  }
+  echo "$count"
+}
+
+log_demo_tester_feedback_count() {
+  [[ "$SLUG" == "demo" ]] || return 0
+  local label="$1"
+  local count
+  count="$(demo_tester_feedback_row_count)"
+  echo "DEMO_TESTER_FEEDBACK_COUNT_${label}=${count}"
+}
+
+export_demo_tester_feedback_before_reset() {
+  [[ "$SLUG" == "demo" ]] || return 0
+  database_exists "$DATABASE_NAME" || return 0
+  log_demo_tester_feedback_count "BEFORE_RESET"
+  local backup_file=""
+  backup_file="$(PREVIEW_ROOT="$ROOT" DATABASE_NAME="$DATABASE_NAME" \
+    PREVIEW_POSTGRES_CONTAINER="$POSTGRES_CONTAINER" \
+    bash "$SCRIPT_DIR/preserve-demo-tester-feedback.sh" export)"
+  if [[ -n "$backup_file" ]]; then
+    DEMO_TESTER_FEEDBACK_BACKUP_FILE="$backup_file"
+    chmod 600 "$backup_file" 2>/dev/null || true
+    echo "Preserved demo tester feedback for reset restore."
+  fi
+}
+
+restore_demo_tester_feedback_after_reset() {
+  [[ "$SLUG" == "demo" ]] || return 0
+  [[ -n "${DEMO_TESTER_FEEDBACK_BACKUP_FILE:-}" ]] || return 0
+  PREVIEW_ROOT="$ROOT" DATABASE_NAME="$DATABASE_NAME" \
+    PREVIEW_POSTGRES_CONTAINER="$POSTGRES_CONTAINER" \
+    DEMO_TESTER_FEEDBACK_BACKUP_FILE="$DEMO_TESTER_FEEDBACK_BACKUP_FILE" \
+    BACKUP_FILE="$DEMO_TESTER_FEEDBACK_BACKUP_FILE" \
+    bash "$SCRIPT_DIR/preserve-demo-tester-feedback.sh" restore
+  DEMO_TESTER_FEEDBACK_BACKUP_FILE=""
+  log_demo_tester_feedback_count "AFTER_RESET"
+  echo "Restored demo tester feedback after reset seed."
+}
+
 backup_demo_database_before_reset() {
   local backup_file backup_output
   [[ "$SLUG" == "demo" ]] || return 0
@@ -439,9 +502,15 @@ recover_demo_database_on_failure() {
       bash "$SCRIPT_DIR/restore-demo-backup.sh" \
       && harden_preview_database; then
       echo "Demo pre-reset database restored; existing web container can reconnect." >&2
+      cleanup_demo_tester_feedback_backup
     else
       echo "CRITICAL: automatic demo database recovery failed; use $DEMO_RESET_BACKUP_FILE." >&2
+      if [[ -n "${DEMO_TESTER_FEEDBACK_BACKUP_FILE:-}" ]]; then
+        echo "Tester feedback backup retained at ${DEMO_TESTER_FEEDBACK_BACKUP_FILE} for manual restore." >&2
+      fi
     fi
+  else
+    cleanup_demo_tester_feedback_backup
   fi
   return "$status"
 }
@@ -527,6 +596,7 @@ reset_preview_database_for_data_source_change() {
 
   echo "Preview data source changed; replacing database $DATABASE_NAME..."
   backup_demo_database_before_reset
+  export_demo_tester_feedback_before_reset
   if [[ "$SLUG" == "demo" ]]; then
     arm_demo_reset_recovery
   else
@@ -540,6 +610,7 @@ reset_seed_preview_database() {
   validate_database_name "$DATABASE_NAME"
   echo "Resetting preview database $DATABASE_NAME for seeded local-dev data..."
   backup_demo_database_before_reset
+  export_demo_tester_feedback_before_reset
   if [[ "$SLUG" == "demo" ]]; then
     arm_demo_reset_recovery
   else
@@ -626,6 +697,30 @@ sha256_stream() {
   fi
 }
 
+demo_registry_images_configured() {
+  [[ -n "${DEMO_WEB_IMAGE:-}" && -n "${DEMO_TOOLBOX_IMAGE:-}" ]]
+}
+
+ecr_login_for_demo_images() {
+  local registry="${DEMO_WEB_IMAGE%%/*}"
+  [[ "$registry" =~ ^[0-9]+\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com$ ]] || {
+    echo "DEMO_WEB_IMAGE must be an ECR image URI" >&2
+    exit 1
+  }
+  aws ecr get-login-password --region "${AWS_REGION:-us-east-1}" \
+    | docker login --username AWS --password-stdin "$registry"
+}
+
+build_or_pull_production_images() {
+  local -a services=("$@")
+  if demo_registry_images_configured; then
+    ecr_login_for_demo_images
+    COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" pull "${services[@]}"
+  else
+    COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build "${services[@]}"
+  fi
+}
+
 compute_tooling_fingerprint() {
   (
     cd "$SOURCE_DIR"
@@ -697,7 +792,20 @@ compute_tooling_fingerprint() {
   )
 }
 
+preview_toolbox_uses_control_mount() {
+  [[ "$SLUG" =~ ^pr-[1-9][0-9]*$ || "$RUNTIME" == "production" ]]
+}
+
 run_tooling_if_needed() {
+  local prisma_cli
+  if preview_toolbox_uses_control_mount; then
+    # Application refs can predate reviewed control-plane scripts. Production demo
+    # toolboxes use registry images without the full scripts/preview tree; fast PR
+    # previews mount reviewed scripts at /preview-control instead of the PR checkout.
+    prisma_cli='PRISMA_CLI_REPO_ROOT=/app bash /preview-control/prisma-cli.sh'
+  else
+    prisma_cli='bash scripts/preview/prisma-cli.sh'
+  fi
   local fingerprint
   local previous_fingerprint=""
   fingerprint="$(compute_tooling_fingerprint)"
@@ -713,42 +821,43 @@ run_tooling_if_needed() {
   # Docker's layer cache keeps unchanged builds cheap while guaranteeing code-only refs
   # cannot silently restart the previously tagged image.
   if [[ "$RUNTIME" == "production" ]]; then
-    COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web
+    build_or_pull_production_images web
   fi
 
   if [[ "$DATABASE_CREATED" == "0" && "$fingerprint" == "$previous_fingerprint" && -z "$missing_artifacts" ]]; then
     echo "Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate."
+    echo "DEMO_PRISMA_MIGRATE_SUMMARY=Skipped (tooling fingerprint unchanged; migrate deploy not run)"
     TOOLING_CHANGED=0
     # Even when skipping full tooling, always run idempotent seeds that must
     # keep preview data current with the codebase (e.g., AP History library).
     # Bundle availability is required before serving code-only demo updates.
     # Run this separately from optional fixture seeds so failure aborts rollout.
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-bundle-assignment-types.ts" ]]; then
-      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && cd packages/prisma && bun run seed-free-tier-bundle-assignment-types'
+      "${compose[@]}" run --rm toolbox bash -lc "$prisma_cli generate && cd packages/prisma && bun run seed-free-tier-bundle-assignment-types"
     fi
-    local skip_path_seeds='bun prisma generate'
+    local skip_path_seeds="$prisma_cli generate && cd packages/prisma"
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-ap-history-library.ts" ]]; then
       skip_path_seeds+=' && bun run seed-ap-history-library'
     fi
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-planner-qa.ts" ]]; then
       skip_path_seeds+=' && bun run seed-preview-planner-qa'
     fi
-    if [[ "$skip_path_seeds" != 'bun prisma generate' ]]; then
+    if [[ "$skip_path_seeds" != "$prisma_cli generate && cd packages/prisma" ]]; then
       echo "Running idempotent preview seeds on existing database (skip path)."
       if ! "${compose[@]}" run --rm toolbox bash -lc "$skip_path_seeds"; then
         echo "Warning: idempotent preview seeds failed; continuing deploy (non-fatal)." >&2
       fi
     fi
     if should_run_signon_qa_seed && [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-signon-qa.ts" ]]; then
-      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && cd packages/prisma && bun run seed-preview-signon-qa'
+      "${compose[@]}" run --rm toolbox bash -lc "$prisma_cli generate && cd packages/prisma && bun run seed-preview-signon-qa"
     fi
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-ship-review.ts" ]] && should_run_free_tier_ship_review_seed; then
       echo "Running free-tier ship-review fixture seed on existing preview database (skip path)."
-      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && bun run seed-free-tier-ship-review'
+      "${compose[@]}" run --rm toolbox bash -lc "$prisma_cli generate && cd packages/prisma && bun run seed-free-tier-ship-review"
     fi
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts" ]]; then
       echo "Applying Daily Pages engagement v2 preview seed on existing database (skip path)."
-      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)'
+      "${compose[@]}" run --rm toolbox bash -lc "$prisma_cli generate && cd packages/prisma && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)"
     fi
     return 0
   fi
@@ -761,8 +870,13 @@ run_tooling_if_needed() {
     "${compose[@]}" pull --quiet toolbox web || true
   fi
 
-  local tooling_command
-  tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy'
+  local tooling_command migrate_wrapper
+  if preview_toolbox_uses_control_mount; then
+    migrate_wrapper='PRISMA_MIGRATE_REPO_ROOT=/app PRISMA_MIGRATE_PRISMA_CLI_SCRIPT=/preview-control/prisma-cli.sh PRISMA_MIGRATE_SUMMARY_SCRIPT=/preview-control/emit-prisma-migrate-summary.mjs bash /preview-control/prisma-migrate-deploy-with-summary.sh'
+  else
+    migrate_wrapper='bash scripts/preview/prisma-migrate-deploy-with-summary.sh'
+  fi
+  tooling_command="bun install --ignore-scripts && ${prisma_cli} generate && ${migrate_wrapper} && cd packages/prisma"
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/backfill-class-art-key.ts" ]]; then
     tooling_command+=' && bun run scripts/backfill-class-art-key.ts'
   fi
@@ -824,7 +938,7 @@ prebuild_production_images() {
   [[ "$RUNTIME" == "production" ]] || return 0
   # Complete every fallible image build before an explicit demo reset can touch data.
   # Docker's layer cache keeps unchanged builds cheap while code-only refs still rebuild.
-  COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web toolbox
+  build_or_pull_production_images web toolbox
 }
 
 ensure_preview_seats() {
@@ -873,6 +987,8 @@ rollout_demo_web_without_downtime() {
     PREVIEW_ACCESS_CODE="$smoke_access_code" \
     PREVIEW_DATA_MODE="$DATA_MODE" \
     PREVIEW_RUNTIME="$RUNTIME" \
+    PREVIEW_SLUG="$SLUG" \
+    PR_NUMBER="${PR_NUMBER:-}" \
     PREVIEW_DEV_LOGIN_EMAIL="$PREVIEW_DEV_LOGIN_EMAIL" \
     PREVIEW_LOGIN_EMAIL="${PREVIEW_LOGIN_EMAIL:-}" \
     PREVIEW_LOGIN_PASSWORD="${PREVIEW_LOGIN_PASSWORD:-}" \
@@ -887,6 +1003,10 @@ apply_preview_signon_flag() {
   [[ "$SLUG" =~ ^pr-[1-9][0-9]*$ ]] || return 0
   "${compose[@]}" run --rm toolbox bun /preview-control/unified-signon-flag.mjs
 }
+
+if [[ "${DEMO_TRAINING_MEDIA_ENABLED:-false}" == "true" ]]; then
+  bash "$SCRIPT_DIR/install-demo-training-media.sh"
+fi
 
 ensure_shared_postgres
 
@@ -918,6 +1038,7 @@ reset_preview_database_for_data_source_change
 ensure_preview_database
 harden_preview_database
 run_tooling_if_needed
+restore_demo_tester_feedback_after_reset
 ensure_preview_seats
 # Outside run_tooling_if_needed: also apply OFF after label removal on its early-return path.
 apply_preview_signon_flag
@@ -960,6 +1081,9 @@ for attempt in $(seq 1 90); do
   if curl -fsS --connect-timeout 1 --max-time 2 "$health_url" >/dev/null; then
     PREVIEW_BASE_URL="$login_url" \
       PREVIEW_DATA_MODE="$DATA_MODE" \
+      PREVIEW_RUNTIME="$RUNTIME" \
+      PREVIEW_SLUG="$SLUG" \
+      PR_NUMBER="${PR_NUMBER:-}" \
       PREVIEW_ACCESS_CODE="$smoke_access_code" \
       node "$SCRIPT_DIR/smoke-login.mjs"
     end_ms="$(date +%s%3N)"
@@ -970,17 +1094,19 @@ for attempt in $(seq 1 90); do
     echo "UA_PREVIEW_HOSTNAME=$UA_HOSTNAME"
     echo "BLACKBOARD_URL=$BLACKBOARD_URL"
     echo "BLACKBOARD_HOSTNAME=$BLACKBOARD_HOSTNAME"
-    echo "PREVIEW_ACCESS_CODE=$smoke_access_code"
+    echo "PREVIEW_ACCESS_SEATS_FILE=$ACCESS_SEATS_FILE"
     echo "PREVIEW_MASTER_ORG_GATE_ENABLED=$PREVIEW_MASTER_ORG_GATE_ENABLED"
     write_preview_metadata
     PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e '
-      for (const [index, seat] of JSON.parse(process.env.PREVIEW_ACCESS_SEATS).entries()) {
-        console.log(`PREVIEW_SEAT_CODE_${index + 1}=${seat.code}`)
-        console.log(`Preview seat ${index + 1} (${seat.label}): ${seat.code}`)
+      const seats = JSON.parse(process.env.PREVIEW_ACCESS_SEATS);
+      console.log(`PREVIEW_SEAT_COUNT=${seats.length}`);
+      for (const [index, seat] of seats.entries()) {
+        console.log(`PREVIEW_SEAT_LABEL_${index + 1}=${seat.label}`);
       }
     '
     echo "PREVIEW_ELAPSED_MS=$elapsed_ms"
     printf '%s\n' "$DATA_SOURCE_FINGERPRINT" > "$DATA_SOURCE_FINGERPRINT_FILE"
+    cleanup_demo_tester_feedback_backup
     DEMO_RESET_RECOVERY_ARMED=false
     exit 0
   fi

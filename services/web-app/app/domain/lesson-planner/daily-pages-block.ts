@@ -56,6 +56,13 @@ export type DailyPagesExercise = {
    * disclaimer about where it did not come from.
    */
   promptId: string | null;
+  /**
+   * A short, real name for the step ("What one item reveals"), from the
+   * block's `title:` line (Brian's run 3, item 11). Null: made from the prompt.
+   */
+  title?: string | null;
+  /** The minutes the planner gave the block's `minutes:` line. */
+  minutes?: number | null;
 };
 
 const DAILY_PAGES_BLOCK = new RegExp(
@@ -98,6 +105,10 @@ export function kindForPromptId(promptId: string): WritingExerciseKind | null {
 
 /** An optional `kind: class-starter` header line. */
 const KIND_LINE = /^\s*kind:\s*([A-Za-z][A-Za-z -]{0,31})\s*$/;
+/** `title: What one item reveals` — a short name for the step (run 3). */
+const TITLE_LINE = /^\s*title:\s*(\S.{0,79})$/i;
+/** `minutes: 10` — the planner's time for the step (run 3). */
+const MINUTES_LINE = /^\s*minutes:\s*(\d{1,3})\s*(?:min(?:utes?)?)?\s*$/i;
 
 /**
  * What a block is when nothing in it says otherwise.
@@ -147,15 +158,31 @@ function readKind(raw: string): WritingExerciseKind {
 function splitHeader(raw: string): {
   kind: WritingExerciseKind;
   promptId: string | null;
+  title: string | null;
+  minutes: number | null;
   rest: string;
 } {
   const lines = raw.split('\n');
   let kind: WritingExerciseKind = DEFAULT_KIND;
   let promptId: string | null = null;
+  let title: string | null = null;
+  let minutes: number | null = null;
   let cursor = 0;
 
   while (cursor < lines.length) {
     const line = lines[cursor]!;
+    const titleMatch = TITLE_LINE.exec(line);
+    if (titleMatch) {
+      title = titleMatch[1]!.trim().replace(/^["“]|["”]$/g, '') || null;
+      cursor += 1;
+      continue;
+    }
+    const minutesMatch = MINUTES_LINE.exec(line);
+    if (minutesMatch) {
+      minutes = Number(minutesMatch[1]);
+      cursor += 1;
+      continue;
+    }
     const idMatch: RegExpExecArray | null =
       promptId === null ? ID_LINE.exec(line) : null;
     if (idMatch) {
@@ -177,7 +204,46 @@ function splitHeader(raw: string): {
   // depth whatever the line above it says.
   if (promptId) kind = kindForPromptId(promptId) ?? kind;
 
-  return { kind, promptId, rest: lines.slice(cursor).join('\n') };
+  return { kind, promptId, title, minutes, rest: lines.slice(cursor).join('\n') };
+}
+
+/**
+ * One block, one prompt — even when the planner bundled several into one
+ * fence (Brian's run 2, E2: "the teacher can't pick one prompt").
+ *
+ * A new prompt starts at an `id:` or `kind:` line that comes after some
+ * prompt text. A blank line inside a single prompt does not split it. Each
+ * later prompt inherits the first one's `kind:` when it does not say.
+ */
+function splitBundledBlock(raw: string): string[] {
+  const chunks: string[][] = [[]];
+  let sawText = false;
+  for (const line of raw.split('\n')) {
+    const isHeader = ID_LINE.test(line) || KIND_LINE.test(line);
+    // A title or minutes line belongs to the prompt it heads; it never
+    // starts a new one on its own.
+    const isLabel = TITLE_LINE.test(line) || MINUTES_LINE.test(line);
+    if (isLabel) {
+      if (sawText) {
+        chunks.push([]);
+        sawText = false;
+      }
+      chunks[chunks.length - 1]!.push(line);
+      continue;
+    }
+    if (isHeader && sawText) {
+      chunks.push([]);
+      sawText = false;
+    }
+    chunks[chunks.length - 1]!.push(line);
+    if (!isHeader && line.trim()) sawText = true;
+  }
+  const leadingKind = chunks[0]!.find((line) => KIND_LINE.test(line));
+  return chunks.map((chunk, index) =>
+    index > 0 && leadingKind && !chunk.some((line) => KIND_LINE.test(line))
+      ? [leadingKind, ...chunk].join('\n')
+      : chunk.join('\n')
+  );
 }
 
 /**
@@ -196,15 +262,20 @@ export function readDailyPagesExercises(content: string): {
 
   for (const match of content.matchAll(DAILY_PAGES_BLOCK)) {
     body = body.replace(match[0], '');
-    const { kind, promptId, rest } = splitHeader(match[1] ?? '');
-    const prompt = unquote(rest);
-    // An empty block is the model opening one and thinking better of it.
-    if (!prompt) continue;
-    exercises.push({
-      kind,
-      prompt: prompt.slice(0, MAX_PROMPT_CHARS),
-      promptId,
-    });
+    for (const chunk of splitBundledBlock(match[1] ?? '')) {
+      const { kind, promptId, title, minutes, rest } = splitHeader(chunk);
+      const prompt = unquote(rest);
+      // An empty block is the model opening one and thinking better of it.
+      if (!prompt) continue;
+      exercises.push({
+        kind,
+        prompt: prompt.slice(0, MAX_PROMPT_CHARS),
+        promptId,
+        // Only when the block said: older readers see the shape they knew.
+        ...(title ? { title } : {}),
+        ...(minutes != null ? { minutes } : {}),
+      });
+    }
   }
 
   if (body === content) return { exercises, body: content };
@@ -219,14 +290,18 @@ export function readDailyPagesExercises(content: string): {
  * fence instead would put a code block in the middle of a lesson plan.
  */
 export function inlineDailyPagesExercises(content: string): string {
-  return content.replace(DAILY_PAGES_BLOCK, (_match, raw: string) => {
-    const prompt = unquote(splitHeader(raw ?? '').rest);
-    if (!prompt) return '';
-    return prompt
-      .split('\n')
-      .map((line) => `> ${line}`)
-      .join('\n');
-  });
+  return content.replace(DAILY_PAGES_BLOCK, (_match, raw: string) =>
+    splitBundledBlock(raw ?? '')
+      .map((chunk) => unquote(splitHeader(chunk).rest))
+      .filter(Boolean)
+      .map((prompt) =>
+        prompt
+          .split('\n')
+          .map((line) => `> ${line}`)
+          .join('\n')
+      )
+      .join('\n\n')
+  );
 }
 
 /** The search param that carries the lesson a teacher came from. */
@@ -250,4 +325,21 @@ export function dailyPagesCreateHref(
   const params = new URLSearchParams({ newPrompt: prompt });
   if (conversationId) params.set(FROM_LESSON_PARAM, conversationId);
   return `/app/assignment-types/${assignmentTypeId}?${params}`;
+}
+
+/**
+ * The stack key for the nth writing exercise in a reply: `dp`, `dp:1`, `dp:2`.
+ * The packet API caps a material key at 8 characters, as it does for `ticket`.
+ */
+export const DAILY_PAGES_BLOCK_KEY = 'dp';
+
+export function dailyPagesBlockKey(index: number): string {
+  return index === 0 ? DAILY_PAGES_BLOCK_KEY : `${DAILY_PAGES_BLOCK_KEY}:${index}`;
+}
+
+/** The position a stack key names, or null for a key that is not ours. */
+export function dailyPagesIndexForKey(key: string): number | null {
+  if (key === DAILY_PAGES_BLOCK_KEY) return 0;
+  const match = /^dp:(\d{1,5})$/.exec(key);
+  return match ? Number(match[1]) : null;
 }

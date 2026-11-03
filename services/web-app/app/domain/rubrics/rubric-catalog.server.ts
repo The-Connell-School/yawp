@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Prisma, PrismaClient } from '@app/prisma';
+import { redactEmailForLog } from '~/utils/redact-email-for-log.server';
 import { validateRubricPromotion, type RubricValidationIssue } from './rubric-promotion';
 import { STARTER_RUBRICS } from './starter-rubrics';
 
@@ -676,7 +677,12 @@ export class RubricCatalog {
       const previous = await tx.rubricRelease.findUnique({ where: { catalogKey: name }, select: releaseSelect });
       if (!previous) return { key: name, cleared: false, previous: null };
       await tx.rubricRelease.delete({ where: { catalogKey: name } });
-      console.info('rubric_release_cleared', { key: name, revisionId: previous.rubricRevisionId, actorEmail: input.actorEmail, reason: input.reason });
+      console.info('rubric_release_cleared', {
+        key: name,
+        revisionId: previous.rubricRevisionId,
+        actorEmail: redactEmailForLog(input.actorEmail),
+        reason: input.reason,
+      });
       return { key: name, cleared: true, previous: publicRelease(previous as ReleaseRow) };
     });
   }

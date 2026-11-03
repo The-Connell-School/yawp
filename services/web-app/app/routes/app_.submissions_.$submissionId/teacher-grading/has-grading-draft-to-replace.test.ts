@@ -24,10 +24,23 @@ describe('hasGradingDraftToReplace', () => {
     ).toBe(true);
   });
 
-  test('is true when percentage is set', () => {
+  test('is true when the teacher manually set a percentage', () => {
     expect(
-      hasGradingDraftToReplace(emptyRubric(), '', '42', 0)
+      hasGradingDraftToReplace(emptyRubric(), '', '42', 0, 1, true)
     ).toBe(true);
+  });
+
+  test('is false when only an auto-calculated zero percent is present', () => {
+    expect(
+      hasGradingDraftToReplace(emptyRubric(), '', '0', 0, 1, false)
+    ).toBe(false);
+  });
+
+  test('is false for whitespace-only and empty rich-text feedback', () => {
+    expect(hasGradingDraftToReplace(emptyRubric(), '   ', '', 0)).toBe(false);
+    expect(hasGradingDraftToReplace(emptyRubric(), '<p></p>', '', 0)).toBe(
+      false
+    );
   });
 
   test('is true when a rubric score is set', () => {

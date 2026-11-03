@@ -1,11 +1,12 @@
 import { signonRequestOrigin } from './origin.server';
 import { safeRedirect } from 'remix-utils/safe-redirect';
-import { requireAnonymous } from '~/utils/auth.server';
+import { getUserId, requireAnonymous } from '~/utils/auth.server';
 import { isUnifiedSignOnEnabled } from './gate.server';
 import type { ActionFunctionArgs } from 'react-router';
 import { redirect } from 'react-router';
 import { loginAction } from '~/routes/auth.login/login.server';
 import type { SignonState } from './contracts';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 
 export async function unifiedEntry(request: Request) {
   let authenticated = false;
@@ -23,7 +24,8 @@ export async function unifiedEntry(request: Request) {
   }
   if (!(await isUnifiedSignOnEnabled())) return null;
   const { browserContext, withFlow } = await import('./flow.server');
-  const { googleAvailable } = await import('./google.server');
+  const { googleAvailableFor, googleVisibleFor } =
+    await import('./google.server');
   const context = await browserContext(request);
   let initialState: SignonState | undefined;
   let destination = safeRedirect(
@@ -74,10 +76,18 @@ export async function unifiedEntry(request: Request) {
       if (authenticated) throw redirect('/app');
     }
   } else if (authenticated) throw redirect('/app');
+  const userId = authenticated ? await getUserId(request) : null;
+  const teacherPromptAccount = userId
+    ? await (
+        await import('./teacher-prompts.server')
+      ).loadTeacherPromptAccount(userId)
+    : undefined;
   return {
+    ...(teacherPromptAccount ? { teacherPromptAccount } : {}),
     unified: true as const,
     redirectTo: destination,
-    googleAvailable: googleAvailable(),
+    googleAvailable: googleAvailableFor(request),
+    googleVisible: googleVisibleFor(request),
     ...(initialState ? { initialState } : {}),
   };
 }
@@ -140,7 +150,12 @@ export async function dispatchUnifiedLogin(args: ActionFunctionArgs) {
     if (error instanceof FlowError)
       return Response.json(
         {
-          error: error.fieldErrors ? '' : error.message,
+          error: error.fieldErrors
+            ? ''
+            : safeDomainErrorTextForClientResponse(
+                error,
+                'This sign-in session expired. Please start again.',
+              ),
           ...(error.fieldErrors ? { fieldErrors: error.fieldErrors } : {}),
           ...(error.retryAfterSeconds
             ? { retryAfterSeconds: error.retryAfterSeconds }

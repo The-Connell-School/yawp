@@ -14,8 +14,12 @@ import {
   isAssignmentTypeAvailableForAnyScope,
   type AssignmentTypeAccessScope,
 } from '~/utils/assignment-type-access.server';
+import { teacherPromptGeneratorDisabledResponse } from '~/domain/teacher-prompt-generator/gate.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import {
+  safeDomainErrorTextForClientResponse,
+} from '~/utils/server-error-request-context.server';
 
 const GENERIC_ERROR = "That prompt couldn't be saved. Please try again.";
 
@@ -45,6 +49,13 @@ export async function action({ request }: ActionFunctionArgs) {
       { success: false, message: 'Only teachers can save prompts.' },
       { status: 403 }
     );
+  }
+
+  {
+    const disabled = await teacherPromptGeneratorDisabledResponse(
+      profile.organization.id
+    );
+    if (disabled) return disabled;
   }
 
   const formData = await request.formData();
@@ -99,7 +110,13 @@ export async function action({ request }: ActionFunctionArgs) {
   } catch (error) {
     if (error instanceof SavedPromptError) {
       return dataResponse(
-        { success: false, message: error.message },
+        {
+          success: false,
+          message: safeDomainErrorTextForClientResponse(
+            error,
+            'That prompt could not be saved.',
+          ),
+        },
         { status: 400 }
       );
     }

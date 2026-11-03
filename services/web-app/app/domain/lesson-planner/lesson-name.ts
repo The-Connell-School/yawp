@@ -13,6 +13,9 @@
  */
 import { deriveSectionTitle } from './lesson-packet';
 import { looksLikeLessonPlan } from './suggestions';
+import { cleanLessonTitle } from './lesson-title';
+
+export { cleanLessonTitle, minutesInTitle } from './lesson-title';
 
 /** Long enough to identify a lesson, short enough for a sidebar row. */
 const MAX_NAME_CHARS = 70;
@@ -37,7 +40,7 @@ export function deriveLessonName(reply: string): string | null {
   if (!looksLikeLessonPlan(reply)) return null;
 
   // Index 0 is only the fallback name, which we reject below anyway.
-  const heading = deriveSectionTitle(reply, 0).replace(LABEL_PREFIX, '').trim();
+  const heading = cleanLessonTitle(deriveSectionTitle(reply, 0).replace(LABEL_PREFIX, '').trim());
   if (!heading || EMPTY_NAMES.test(heading)) return null;
   // deriveSectionTitle falls back to "Section 1" when there is no heading and
   // no usable opening line; that is not a lesson name either.
@@ -59,14 +62,54 @@ export function shouldRenameLesson({
   reply,
   priorReplies,
   teacherNamedIt,
+  stillPlaceholder = false,
 }: {
   reply: string;
   /** Assistant replies already in this conversation, oldest first. */
   priorReplies: string[];
   /** The teacher gave the packet a name of their own. */
   teacherNamedIt: boolean;
+  /**
+   * The lesson is still called after the teacher's first message: an earlier
+   * plan gave it no name worth using, so this one may (Brian's run 4: drafts
+   * kept the first prompt as their title).
+   */
+  stillPlaceholder?: boolean;
 }): string | null {
   if (teacherNamedIt) return null;
-  if (priorReplies.some(looksLikeLessonPlan)) return null;
+  if (!stillPlaceholder && priorReplies.some((prior) => looksLikeLessonPlan(prior))) return null;
   return deriveLessonName(reply);
+}
+
+/**
+ * The name a lesson gets the moment it is created: the teacher's first message,
+ * whitespace collapsed, cut at 57 characters. It is a placeholder until the
+ * first plan names the lesson.
+ */
+export function firstMessageTitle(message: string): string {
+  const trimmed = message.trim().replace(/\s+/g, ' ');
+  if (trimmed.length <= 60) return trimmed || 'New lesson';
+  return `${trimmed.slice(0, 57)}…`;
+}
+
+/**
+ * Whether the lesson's name is still that placeholder (Brian's review, B5), so
+ * the stack screen can ask for a name instead of showing the teacher's raw
+ * first message as though it were one.
+ */
+export function nameIsProvisional({
+  title,
+  packetTitle,
+  firstUserMessage,
+  unitDay,
+}: {
+  title: string;
+  packetTitle: string | null;
+  firstUserMessage: string | null;
+  unitDay: number | null;
+}): boolean {
+  if (packetTitle?.trim()) return false;
+  if (unitDay !== null) return false;
+  if (firstUserMessage === null) return title === 'New lesson';
+  return title === firstMessageTitle(firstUserMessage);
 }

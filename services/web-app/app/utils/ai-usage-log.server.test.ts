@@ -90,4 +90,23 @@ describe('writers never throw', () => {
       })
     ).resolves.toBeUndefined();
   });
+
+  test('database failure logs redacted errors, not raw messages', async () => {
+    const warn = mock(() => {});
+    const previousWarn = console.warn;
+    console.warn = warn as typeof console.warn;
+    try {
+      create.mockRejectedValueOnce(
+        new Error('write failed for teacher@school.edu token=SECRET'),
+      );
+      await logAllowedUsage({ route: 'r', requestId: 'q', units: 1 });
+      expect(warn).toHaveBeenCalled();
+      const payload = JSON.stringify(warn.mock.calls[0]);
+      expect(payload).not.toContain('teacher@school.edu');
+      expect(payload).not.toContain('SECRET');
+      expect(payload).toContain('ai_usage_log_failed');
+    } finally {
+      console.warn = previousWarn;
+    }
+  });
 });

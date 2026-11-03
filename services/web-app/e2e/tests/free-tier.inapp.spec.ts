@@ -151,11 +151,9 @@ async function assertMobileUsage(page: import('@playwright/test').Page) {
 test.describe.configure({ mode: 'serial' });
 test.beforeAll(async () => {
   await setFreeTierFlag(true);
-  await setFeatureFlag('free-tier-inapp-v2', true);
   await setLessonPlannerFlag(true);
 });
 test.afterAll(async () => {
-  await setFeatureFlag('free-tier-inapp-v2', false);
   await db.$disconnect();
 });
 for (const width of [1440, 390]) {
@@ -172,11 +170,10 @@ for (const width of [1440, 390]) {
     });
     try {
       await db.setting.deleteMany({
-        where: { name: 'feature_flag.free-tier-inapp-v2' },
+        where: { name: 'feature_flag.free_tier' },
       });
       await login(page);
       await expect(page.locator('[data-free-account]')).toHaveCount(0);
-      await setFeatureFlag('free-tier-inapp-v2', false);
       for (const [route, name] of [
         ['/app', 'dashboard'],
         ['/app/my-classes', 'classes'],
@@ -224,11 +221,9 @@ for (const width of [1440, 390]) {
           await page.keyboard.press('Escape');
         }
       }
-      await setFeatureFlag('free-tier-inapp-v2', true);
       await login(page, false);
       await capture(page, `paid-app-${width}`);
     } finally {
-      await setFeatureFlag('free-tier-inapp-v2', true);
     }
   });
 }

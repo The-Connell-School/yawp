@@ -1,3 +1,4 @@
+import { currentClassInsightRows } from '~/domain/assignment-insights/class-insight-inputs.server';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
   Link,
@@ -104,7 +105,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       })
     : null;
   const insight: ClassInsight | null =
-    insightRow && insightRow.status === 'ready' && insightRow.summaryJson
+    insightRow &&
+    insightRow.status === 'ready' &&
+    insightRow.summaryJson &&
+    (
+      await currentClassInsightRows([
+        { ...insightRow, classAssignmentId: classAssignment.id },
+      ])
+    ).length > 0
       ? {
           status: 'ready',
           submissionCount: insightRow.submissionCount,
@@ -248,7 +256,11 @@ export default function AssignmentSubmissionsRoute() {
   const backUrl = `/app/my-classes/${klass.id}?tab=assignments`;
   const artifactLabel = (document: {
     membership: {
-      user: { name: string | null; email: string | null; username?: string | null };
+      user: {
+        name: string | null;
+        email: string | null;
+        username?: string | null;
+      };
     } | null;
     group: { label: string } | null;
   }) =>
@@ -329,11 +341,16 @@ export default function AssignmentSubmissionsRoute() {
           }
           const retryAfter = Number(response.headers.get('Retry-After')) || 10;
           attempt += 1;
-          if (retryAfter > MAX_AUTO_WAIT_SECONDS || attempt >= MAX_PACING_ATTEMPTS) {
+          if (
+            retryAfter > MAX_AUTO_WAIT_SECONDS ||
+            attempt >= MAX_PACING_ATTEMPTS
+          ) {
             const minutes = Math.ceil(retryAfter / 60);
             const remaining = ids.length - index;
             stoppedMessage = `Grading is paused by the usage limit. ${remaining} essay${remaining === 1 ? ' was' : 's were'} not graded and still selected. Try again in about ${
-              retryAfter > 90 ? `${minutes} minute${minutes === 1 ? '' : 's'}` : `${retryAfter} seconds`
+              retryAfter > 90
+                ? `${minutes} minute${minutes === 1 ? '' : 's'}`
+                : `${retryAfter} seconds`
             }.`;
             break;
           }

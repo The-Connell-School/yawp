@@ -7,6 +7,7 @@ import {
   loadGradingStats,
   parseGradingStatsRange,
 } from '~/utils/internal-grading-stats.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 
 const response = (value: unknown, status = 200) =>
   Response.json(value, {
@@ -40,7 +41,7 @@ export async function loader({ request }: { request: Request }) {
     });
   } catch (error) {
     console.error('internal_grading_stats_failed', {
-      error: error instanceof Error ? error.message : String(error),
+      error: buildSafeErrorForLog(error),
     });
     return response({ error: 'Grading stats unavailable' }, 503);
   }

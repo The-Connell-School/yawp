@@ -44,11 +44,12 @@ ${json}
 
 Rules you have to satisfy:
 - Every slide needs a non-empty "speakerNotes" string.
-- Every slide needs "layout" (one of title, statement, bullets, compare, prompt, steps, quote, closing) and a "title" of at most 90 characters.
+- Every slide needs "layout" (one of title, statement, bullets, compare, prompt, steps, quote, closing, or a gallery layout below) and a "title" of at most 90 characters.
 - statement, prompt, and quote slides need "body" (at most 320 characters). Not "prompt", not "text" — "body".
 - bullets and steps slides need "bullets": 1 to 7 strings, each at most 200 characters.
 - compare slides need "left" and "right", each { "label": string, "text": string }.
 - quote slides may add "attribution". Any slide may add "minutes" as a number.
+- Gallery slides keep their layout (agenda, discuss, big_idea, write, notes, divider, read, look, excerpt, exit): agenda needs "agenda" ([{ "title", "minutes" }], up to 6); discuss and look need "question"; big_idea, write, excerpt and exit need "body"; notes needs "timeline" (up to 5 { "year", "caption" }) or "facts" (up to 3 strings); read needs "tasks" (3 or fewer { "verb", "text" }). "processStep" is 1 to 6; "choices" is 2 to 5 strings and "answer" the number of one of them; "button" is at most 40 characters; "color" is 1, 2 or 3. Keep "course", "mode" and any ~~N|text~~ color marks as written. Keep the deck's "unit", "colors" (at most three hex colors), "accent" and "art" as they are.
 - Keep the wording short enough to read from the back of a room; move the talking into speakerNotes.
 
 Return only the corrected JSON object for the whole deck — { "title": ..., "slides": [ ... ] }. No explanation, no apology, no commentary before or after it.`;

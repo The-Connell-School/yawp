@@ -8,7 +8,7 @@ function PublicLegalHeader() {
         <a
           className="inline-flex items-center gap-3 font-semibold text-foreground"
           href="/"
-          aria-label="YAWP! home"
+          aria-label="Yawp! home"
         >
           <AuthBrandLockup />
         </a>

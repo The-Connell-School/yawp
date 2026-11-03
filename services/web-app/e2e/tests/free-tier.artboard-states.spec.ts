@@ -1,15 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createRequire } from 'node:module';
 import type { Page } from '@playwright/test';
+import { encodeTurboStreamBody } from '../encode-turbo-stream-body';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { mintFreeTierLinkForE2E } from '../helpers/mint-free-tier-link';
-
-const require = createRequire(import.meta.url);
-const { encode } = require(
-  require.resolve('turbo-stream', { paths: [require.resolve('react-router')] })
-);
 const evidence = process.env.ONBOARDING_EVIDENCE_DIR;
 
 // Intercept only action responses to inspect rare presentation states. Normal
@@ -62,7 +57,7 @@ for (const width of [1280, 390]) {
         await route.fulfill({
           status: 200,
           contentType: 'text/x-script',
-          body: await new Response(encode({ data: result })).text(),
+          body: await encodeTurboStreamBody({ data: result }),
         });
       });
       try {
@@ -189,9 +184,9 @@ for (const width of [1280, 390]) {
         await route.fulfill({
           status: 200,
           contentType: 'text/x-script',
-          body: await new Response(
-            encode({ data: { ok: false, reason: 'invalid' } })
-          ).text(),
+          body: await encodeTurboStreamBody({
+            data: { ok: false, reason: 'invalid' },
+          }),
         });
       });
       try {
@@ -233,7 +228,7 @@ for (const width of [1280, 390]) {
       const approvePath = `/free/admin/approve?t=${encodeURIComponent(approve.token)}`;
       await admin.goto(approvePath);
       await admin
-        .getByRole('button', { name: 'Approve YAWP', exact: true })
+        .getByRole('button', { name: 'Approve Yawp!', exact: true })
         .click();
       await expect(
         admin.locator('input[name="adminRole"]:invalid')
@@ -246,7 +241,7 @@ for (const width of [1280, 390]) {
         await reply(
           admin,
           { ok: false, reason },
-          'Approve YAWP',
+          'Approve Yawp!',
           `approval-${reason}`,
           reason === 'email_failed'
             ? /approval.*(saved|recorded)|recorded your approval/

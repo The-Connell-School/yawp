@@ -17,6 +17,7 @@ import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import crypto from 'node:crypto';
 import { computeIpHash } from '~/utils/ai-usage-log.server';
+import { safeErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 
 const ScratchTestInputSchema = z.object({
   assignmentTypeId: z.string().min(1),
@@ -170,10 +171,10 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse(
       {
         success: false,
-        message:
-          error instanceof Error
-            ? error.message
-            : 'The scratch evaluation could not run.',
+        message: safeErrorTextForClientResponse(
+          error,
+          'The scratch evaluation could not run.',
+        ),
       },
       { status: 500 }
     );

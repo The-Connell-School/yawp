@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { renderPreviewCompose } from './render-compose.mjs';
+import { googleOriginAllowlist, renderPreviewCompose } from './render-compose.mjs';
 
 const requireFromWebApp = createRequire(
   new URL('../../services/web-app/package.json', import.meta.url)
@@ -71,7 +71,7 @@ describe('renderPreviewCompose', () => {
     expect(compose).not.toContain('\n  postgres:\n');
     expect(compose).not.toContain('image: postgres:16');
     expect(compose).toContain('toolbox:');
-    expect(compose).toContain('image: oven/bun:1.3.1');
+    expect(compose).toContain('image: oven/bun:1.4.4');
     expect(compose).toContain('yawp-pr-142-node-modules');
     expect(compose).not.toContain(
       'rm -rf services/web-app/.react-router services/web-app/.vite'
@@ -127,6 +127,27 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('dockerfile: services/web-app/Dockerfile');
     expect(compose).toContain('target: deps');
     expect(compose).toContain('target: production');
+    expect(compose).not.toMatch(/build:[\s\S]*args:[\s\S]*DATABASE_URL/);
+  });
+
+  test('uses pre-built registry images for demo when image variables are set', () => {
+    const webImage =
+      '422348803522.dkr.ecr.us-east-1.amazonaws.com/yawp-demo-web:abc123def4567890abcdef1234567890abcdef12';
+    const toolboxImage =
+      '422348803522.dkr.ecr.us-east-1.amazonaws.com/yawp-demo-toolbox:abc123def4567890abcdef1234567890abcdef12';
+    const compose = renderCompose({
+      prNumber: undefined,
+      slug: 'demo',
+      runtime: 'production',
+      demoWebImage: webImage,
+      demoToolboxImage: toolboxImage,
+    });
+
+    expect(compose).toContain(`image: "${webImage}"`);
+    expect(compose).toContain(`image: "${toolboxImage}"`);
+    expect(compose).not.toContain('target: production');
+    expect(compose).not.toContain('target: deps');
+    expect(compose).not.toContain('build:');
   });
 
   test('joins the shared preview network for the host ingress', () => {
@@ -576,10 +597,43 @@ describe('deployment-only unified sign-on control', () => {
         expect(parsed.services.web.environment.YAWP_INTERNAL_API_KEYS).toBeUndefined();
         const demo = Bun.YAML.parse(renderCompose({ runtime, slug: 'demo', unifiedSignOn: enabled }));
         expect(demo.services.toolbox.environment.PREVIEW_UNIFIED_SIGN_ON).toBeUndefined();
-        expect(demo.services.toolbox.volumes?.some(volume => volume.includes('/preview-control')) ?? false).toBe(false);
+        const demoHasControlMount =
+          demo.services.toolbox.volumes?.some(volume => volume.includes('/preview-control')) ?? false;
+        if (runtime === 'production') {
+          expect(demoHasControlMount).toBe(true);
+        } else {
+          expect(demoHasControlMount).toBe(false);
+        }
       }
     });
   }
+  test('PR previews offer Google only on allowlisted origins; demo is unchanged', () => {
+    const saved = process.env.PREVIEW_GOOGLE_OAUTH_ORIGINS;
+    try {
+      delete process.env.PREVIEW_GOOGLE_OAUTH_ORIGINS;
+      for (const runtime of ['fast', 'production']) {
+        const preview = Bun.YAML.parse(renderCompose({ runtime })).services.web.environment;
+        expect(preview.GOOGLE_OAUTH_REQUIRE_ORIGIN_ALLOWLIST).toBe('true');
+        expect(preview.GOOGLE_OAUTH_ORIGIN_ALLOWLIST).toBe('');
+        const demo = Bun.YAML.parse(renderCompose({ runtime, slug: 'demo' })).services.web.environment;
+        expect(demo.GOOGLE_OAUTH_REQUIRE_ORIGIN_ALLOWLIST).toBeUndefined();
+        expect(demo.GOOGLE_OAUTH_ORIGIN_ALLOWLIST).toBeUndefined();
+      }
+      process.env.PREVIEW_GOOGLE_OAUTH_ORIGINS = ' https://pr-565.preview.yawp.school , https://pr-142.preview.yawp.school';
+      const preview = Bun.YAML.parse(renderCompose()).services.web.environment;
+      expect(preview.GOOGLE_OAUTH_ORIGIN_ALLOWLIST).toBe('https://pr-565.preview.yawp.school,https://pr-142.preview.yawp.school');
+      expect(Bun.YAML.parse(renderCompose()).services.toolbox?.environment?.GOOGLE_OAUTH_ORIGIN_ALLOWLIST).toBeUndefined();
+    } finally {
+      if (saved === undefined) delete process.env.PREVIEW_GOOGLE_OAUTH_ORIGINS;
+      else process.env.PREVIEW_GOOGLE_OAUTH_ORIGINS = saved;
+    }
+  });
+  test('refuses Google origin allowlist entries that are not bare https origins', () => {
+    expect(googleOriginAllowlist('')).toBe('');
+    for (const bad of ['http://pr-1.preview.yawp.school', 'https://pr-1.preview.yawp.school/path', 'pr-1.preview.yawp.school', 'https://a.test,"x: y"']) {
+      expect(() => googleOriginAllowlist(bad)).toThrow('https origins');
+    }
+  });
   test('refuses malformed label transport boolean', () => {
     expect(() => renderCompose({ unifiedSignOn: 'true; echo bad' })).toThrow('true or false');
   });

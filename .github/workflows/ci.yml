@@ -1,14 +1,17 @@
-# CI: pull_request synchronize runs full test matrix including Playwright E2E.
+# CI: pull_request synchronize runs full test matrix including Playwright E2E (locked preview evidence).
 name: CI
 on:
   pull_request:
     branches:
       - main
     types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches:
+      - main
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   actions: write
@@ -23,12 +26,18 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       preview_tooling: ${{ steps.filter.outputs.preview_tooling }}
       prisma: ${{ steps.filter.outputs.prisma }}
+      # Draft PRs skip Playwright and other heavy jobs; mark Ready for review for full CI.
+      pr_run_heavy_jobs: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+      # Browser E2E runs whenever `code` changed, except on a pull request
+      # whose every changed file is documentation (docs/** or *.md outside
+      # services/web-app/app/**). main pushes always keep `e2e == code`.
+      e2e: ${{ (steps.filter.outputs.code == 'true' && !(github.event_name == 'pull_request' && steps.docs_only.outputs.non_docs == 'false' && steps.docs_only.outputs.app_markdown == 'false')) && 'true' || 'false' }}
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: 🔍 Paths filter
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
         with:
           filters: |
             # scripts/** is included in the core code filter so the Prisma job
@@ -56,6 +65,23 @@ jobs:
               - 'scripts/preview/**'
             prisma:
               - 'packages/prisma/**'
+      # PR-only docs detector. With predicate-quantifier 'every', a file counts
+      # toward `non_docs` only when it matches every pattern, i.e. it is neither
+      # under docs/ nor a .md file. Markdown under services/web-app/app/** is
+      # treated as code because app code could load it at runtime.
+      - name: 📝 Docs-only detector (PR only)
+        id: docs_only
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            non_docs:
+              - '**'
+              - '!docs/**'
+              - '!**/*.md'
+            app_markdown:
+              - 'services/web-app/app/**/*.md'
   # CI names every test file it runs, so a test file that is merely present never executes.
   # scripts/preview/*.test.js sat unrun for exactly that reason. It matters most here:
   # enforce-cap.sh removes trees as root before every deploy, and the ownership case it
@@ -67,23 +93,34 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: ⏭️ Skip (no preview tooling changes)
         if: ${{ needs.paths.outputs.preview_tooling != 'true' }}
         run: echo "No scripts/preview changes; skipping heavy steps."
 
       - name: 📥 Setup Bun
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
+        with:
+          bun-version: '1.4.4'
+
+      - name: 💾 Cache bun install
+        if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
 
       - name: 📦 Install dependencies
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       # The root-owned-build-output test needs the image the preview host itself runs.
       - name: 🐳 Pull the preview runtime image
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
-        run: docker pull oven/bun:1.3.1
+        run: docker pull oven/bun:1.4.4
 
       # Fail rather than skip if the runner cannot produce root-owned files: a silent skip
       # here would leave the regression uncovered everywhere.
@@ -102,7 +139,7 @@ jobs:
     runs-on: ubuntu-22.04
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16@sha256:f9d1e581cde3e4c8bc696b07e6f7b7aea1d41014b33a52b27990762daae61beb # postgres:16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -115,18 +152,29 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: ⏭️ Skip (no Prisma or core/code changes)
         if: ${{ !(needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true') }}
         run: echo "No packages/prisma changes; skipping heavy steps."
 
       - name: 📥 Setup Bun
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
+        with:
+          bun-version: '1.4.4'
+
+      - name: 💾 Cache bun install
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
 
       - name: 📦 Install dependencies
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       # bunfig.toml preloads services/web-app/test-preload.ts for every `bun test` run in
       # this repo, and that preload imports ~/utils/auth.server, which imports @app/prisma.
@@ -141,7 +189,7 @@ jobs:
 
       - name: 🧪 Validate deployment contract
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js
+        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts ./scripts/ci/release-docker-host-port.test.ts ./scripts/ci/bun-install-frozen.test.ts ./scripts/ci/install-playwright-chromium.test.ts ./scripts/preview/deploy-log-secrets.test.js ./scripts/ci/check-ci-test-list.test.ts ./scripts/preview/redact-deploy-logs.test.js --max-concurrency=2
 
       - name: 🧪 Validate Blackboard LTI mock
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -223,9 +271,12 @@ jobs:
           ./services/web-app/app/utils/free-tier-class-create-route.real-db.integration.test.ts
           ./services/web-app/app/utils/assignment-quota.real-db.integration.test.ts
           ./services/web-app/app/domain/free-tier/approval-flow.integration.test.ts
+          ./services/web-app/app/domain/free-tier/approval-flow-pass1-send.integration.test.ts
           ./services/web-app/app/domain/free-tier/approval.integration.test.ts
           ./services/web-app/app/domain/free-tier/service.integration.test.ts
           ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
+          ./services/web-app/app/domain/free-tier/site-license-locked-tiles.join-flow.integration.test.ts
+          ./services/web-app/app/dev-panel/dev-panel-feedback.server.integration.test.ts
 
       - name: Free tier class preparation (isolated Postgres)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -242,10 +293,22 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
           APPROVAL_V2_DB_TESTS: '1'
+          FREE_TIER_JUMP_DB_TESTS: '1'
+          FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
+          PRIMARY_APP_URL: https://yawp.test
         run: |
           bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/approval-v2.real-db.integration.test.ts
+          bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/application-id-opaque-hash-verified.test.ts
+          bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/admin-token-s9a-actions.test.ts
+          bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/approval-deny.integration.test.ts
           bun test --max-concurrency=2 ./services/web-app/app/routes/app.free-tier.pending/route.v2.test.tsx
           bun test --max-concurrency=2 ./services/web-app/app/routes/free.admin.approve/route.v2.test.tsx
+          bun test --max-concurrency=2 ./services/web-app/app/dev-panel/free-tier-jump.pending.real-db.integration.test.ts
+          bun test --max-concurrency=2 ./services/web-app/app/dev-panel/free-tier-jump.approved.real-db.integration.test.ts
+
+      - name: Free-tier approval suppress-email (isolated prisma mocks)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        run: bun test ./services/web-app/app/domain/free-tier/approval-flow.suppress-email.server.test.ts
 
       - name: 🧪 Free-tier operator cap denial persistence (isolated)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -303,7 +366,7 @@ jobs:
           ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
           ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
           ./services/web-app/app/utils/mock-admin-environment.test.ts
-          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name 'inapp-usage.server.test.ts' ! -name 'monthly-policy.test.ts' ! -name 'locked-preview.server.test.ts' ! -name 'email.server.test.ts' ! -name 'service.create-token-idempotency.test.ts' ! -name 'posthog-*.test.ts' ! -name 'service.analytics.server.test.ts' ! -name 'public-onboarding.route.test.ts' ! -name 'provision.analytics.server.test.ts' ! -name '*.integration.test.ts')
+          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name 'inapp-usage.server.test.ts' ! -name 'monthly-policy.test.ts' ! -name 'locked-preview.server.test.ts' ! -name 'locked-preview-class-seed.defaults.test.ts' ! -name 'teaching-access-shell.server.test.ts' ! -name 'email.server.test.ts' ! -name 'demo-signup-admin-email.test.ts' ! -name 'admin-link-gate.server.test.ts' ! -name 'admin-approval-email-facts.test.ts' ! -name 'approval-flow-pass1-send.test.ts' ! -name 'approval-flow.suppress-email.server.test.ts' ! -name 'application-id-opaque-hash-verified.test.ts' ! -name 'admin-token-s9a-actions.test.ts' ! -name 'service.create-token-idempotency.test.ts' ! -name 'posthog-*.test.ts' ! -name 'service.analytics.server.test.ts' ! -name 'public-onboarding.route.test.ts' ! -name 'provision.analytics.server.test.ts' ! -name '*.integration.test.ts')
           ./services/web-app/app/routes/app/sidebar-nav.reporter.test.ts
           ./packages/prisma/preview-access-code.free-classroom.test.ts
           ./packages/prisma/scripts/preview-seats.test.ts
@@ -329,6 +392,18 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./services/web-app/app/domain/free-tier/locked-preview.server.test.ts
 
+      - name: Locked preview sample grading defaults (isolated mocks)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/locked-preview-class-seed.defaults.test.ts
+
+      - name: Teaching access shell (isolated mocks)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/teaching-access-shell.server.test.ts
+
       - name: Locked preview legacy public enrollment (isolated mocks)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
@@ -340,7 +415,24 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
           LOCKED_PREVIEW_DB_TESTS: '1'
-        run: bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/locked-preview.real-db.integration.test.ts
+        run: |
+          bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/locked-preview.real-db.integration.test.ts
+          bun test --max-concurrency=2 ./services/web-app/app/utils/cookies.organization-classes-table.test.ts
+          bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/teaching-secrets-loader.integration.test.ts
+
+      - name: 🧪 Free-tier locked teaching UI (isolated)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        run: |
+          set -e
+          bun test app/components/free-tier/locked-teaching-control.test.tsx
+          bun test app/components/free-tier/teaching-access-banner.test.tsx
+          bun test app/components/free-tier/teaching-access-toasts.test.tsx
+          bun test app/components/assignments/assignment-creation-locked-picker.test.tsx
+          bun test app/components/site-license-lock-button.test.tsx
+          bun test app/components/site-license-locked-assignment-tile.test.tsx
+          bun test app/components/free-account-usage.locked-tiles.test.tsx
+          bun test app/components/free-tier/preview-assignment-creation-control.test.tsx
 
       - name: 🧪 Free-account in-app usage adapter (isolated; mocks prisma)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -396,6 +488,30 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./services/web-app/app/domain/free-tier/email.server.test.ts
+
+      - name: 🧪 Legacy pass1 send unit tests (isolated; mocks prisma)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/approval-flow-pass1-send.test.ts
+
+      - name: 🧪 Demo signup admin email subjects (isolated; mocks prisma)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/demo-signup-admin-email.test.ts
+
+      - name: 🧪 Free-tier admin link gate tests (isolated; mocks prisma)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/admin-link-gate.server.test.ts
+
+      - name: 🧪 Free-tier admin approval email facts tests (isolated; mocks prisma)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/admin-approval-email-facts.test.ts
 
       - name: 🧪 Free-tier PostHog signup tests (isolated; mocks prisma)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -582,13 +698,30 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun run --cwd packages/prisma seed-local-dev
 
+      - name: 🐳 Set up Docker Buildx
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      # Layer cache in the GitHub Actions cache, so unchanged layers are not rebuilt.
+      - name: 🐳 Build production image (cached layers)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: services/web-app/Dockerfile
+          platforms: linux/amd64
+          tags: yawp-web-app:ci
+          load: true
+          push: false
+          cache-from: type=gha,scope=ci-web-app
+          cache-to: type=gha,scope=ci-web-app,mode=max
+
       - name: 🐳 Verify production image resolves preview seed imports
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: |
           set -euo pipefail
-          docker build --platform linux/amd64 -t yawp-web-app:ci -f services/web-app/Dockerfile .
           docker run --rm yawp-web-app:ci bun -e "
             await import('./packages/prisma/scripts/local-dev/seed-free-tier-feature-flag.ts');
             await import('./scripts/preview/free-tier-ship-review-seed-guard.mjs');
@@ -599,6 +732,12 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./packages/prisma/scripts/seed-preview-teacher-notes-qa.integration.test.ts
+
+      - name: 🧪 Intern QA demo teachers ensure integration
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./packages/prisma/scripts/local-dev/ensure-intern-qa-teachers.test.ts
 
       # Entitlements/reporter-gate tests were never run by CI. Each file mocks
       # different modules, so they run in separate bun processes. The DB test
@@ -657,30 +796,73 @@ jobs:
         working-directory: services/web-app
         run: bun test app/utils/login-rate-limit.fail-closed.test.ts
 
+      - name: Assignment type write API database lifecycle
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          INTERNAL_DIRECTORY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: |
+          CI=1 bun test --max-concurrency=2 app/utils/internal-assignment-type-writes.integration.test.ts app/utils/internal-assignment-type-module-writes.integration.test.ts app/utils/internal-grading-workspace.integration.test.ts
+          CI=1 bun test --max-concurrency=2 app/utils/internal-owner-invitations.integration.test.ts
+
+      - name: Teacher training API database lifecycle
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          INTERNAL_DIRECTORY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: CI=1 bun test --max-concurrency=2 app/utils/internal-teacher-trainings.integration.test.ts
+
+      - name: Organization teachers invite delivery tests
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        run: |
+          set -e
+          for file in \
+            app/routes/app.organization.teachers/route.invite-teachers.action.test.ts \
+            app/routes/app.organization.teachers/teacher-invite-copy.test.ts \
+            app/routes/app.organization.teachers/invite-teachers-sheet.test.tsx; do
+            CI=1 bun test --max-concurrency=2 "$file"
+          done
+
   typecheck-web-app:
     needs: [paths]
     name: ʦ TypeScript
     runs-on: ubuntu-22.04
+    env:
+      YAWP_CI_TYPECHECK_NO_DATABASE: '1'
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: ⏭️ Skip (no code changes)
         if: ${{ needs.paths.outputs.code != 'true' }}
         run: echo "No code changes; skipping heavy steps."
 
       - name: ⎔ Setup node
         if: ${{ needs.paths.outputs.code == 'true' }}
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: 📥 Download deps
         if: ${{ needs.paths.outputs.code == 'true' }}
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
+        with:
+          bun-version: '1.4.4'
+
+      - name: 💾 Cache bun install
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
 
       - name: 📦 Install dependencies
         if: ${{ needs.paths.outputs.code == 'true' }}
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: ⚙️ Generate Prisma Client
         if: ${{ needs.paths.outputs.code == 'true' }}
@@ -698,6 +880,19 @@ jobs:
         if: ${{ needs.paths.outputs.code == 'true' }}
         working-directory: services/web-app
         run: bun test app/utils/ai-usage-log.server.test.ts app/utils/getLLMCompletion/getLLMCompletion.test.ts
+
+      - name: 🧪 E2E smoke shard assignment guard
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        run: bun test e2e/smoke-specs.test.ts e2e/test-helpers.manifest-console.test.ts
+
+      - name: Teacher training API contracts
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        run: CI=1 ./bin/project test --profile internal-teacher-trainings --json
+
+      - name: Assignment type write API contracts
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        run: CI=1 ./bin/project test --profile internal-assignment-type-writes --json
 
       - name: 🧪 Free-tier spend admission and caller denials (isolated)
         if: ${{ needs.paths.outputs.code == 'true' }}
@@ -722,6 +917,12 @@ jobs:
             bun test --max-concurrency=2 "$file"
           done
 
+      # route.test.ts mocks preview-access modules; guard integration must run alone.
+      - name: Dev panel preview-access unlock route (isolated)
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        run: bun test app/routes/api.dev-panel.preview-access/route.guard.test.ts
+
       # Free-tier / enrollment suites also mock Prisma; run isolated like Daily Pages.
       # Feature flags (and the suites around them). These suites
       # replace modules with mocks, which leak across files in one bun process,
@@ -732,10 +933,18 @@ jobs:
         run: |
           set -e
           for f in \
+            app/entry.server.test.ts \
+            app/utils/server-error-request-context.server.test.ts \
+            app/utils/email.server.test.ts \
+            app/utils/email-log.server.test.ts \
+            app/domain/rubrics/rubric-catalog.logging.test.ts \
+            'app/routes/app.organization.teachers/route.logging.test.ts' \
             app/domain/feature-flags/feature-flags.test.ts \
             app/domain/feature-flags/feature-flags.server.test.ts \
             app/utils/internal-feature-flags-http.server.test.ts \
             app/domain/rubrics/rubric-promotion.test.ts \
+            app/utils/internal-rubrics-http.server.test.ts \
+            app/utils/internal-rubrics-body.server.test.ts \
             app/domain/assignment-types/assignment-type-grading-config.server.test.ts \
             app/domain/assignment-types/assignment-type-grading-config.qa431-legacy.server.test.ts \
             app/domain/assignment-types/assignment-type-grading-config.qa431-probe.server.test.ts \
@@ -765,6 +974,11 @@ jobs:
             app/domain/free-tier/admin-email-rules.server.test.ts \
             app/routes/app.free-tier.pending/route.test.tsx \
             app/routes/free.admin.approve/route.loader.test.ts \
+            app/routes/free.admin.approve_.deny/route.loader.test.ts \
+            app/routes/free.admin.approve_.deny/route.action.test.ts \
+            app/routes/free.admin.not-right-person/route.loader.test.ts \
+            app/routes/free.admin.not-right-person/route.action.test.ts \
+            app/routes/free-tier/AdminApprovalStates.test.tsx \
             app/routes/free._index/route.action.test.ts \
             app/routes/free._index/LegalLinks.test.tsx \
             app/routes/privacy/route.test.tsx \
@@ -773,9 +987,14 @@ jobs:
             app/utils/free-tier/free-tier-feature-gate.server.test.ts \
             app/domain/feature-flags/is-free-tier-enabled.server.test.ts \
             app/routes/auth.login/route.test.tsx \
+            app/components/free-account-usage.test.tsx \
             app/components/assignments/assignment-creation-sheet.test.tsx \
             app/routes/api.domain.grade-essay-ai/route.test.ts \
             app/domain/assignment-insights/class-insight-generation.server.test.ts \
+            app/domain/assignment-insights/class-insight-cache.test.ts \
+            app/domain/assignment-insights/aggregate-rubric-performance.test.ts \
+            app/domain/assignment-insights/class-insight-synthesis.test.ts \
+            'app/routes/app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel.test.tsx' \
             'app/routes/app.assignments.$assignmentId._index/route.test.ts' \
             'app/routes/app.my-classes.$classId/route.test.ts' \
             'app/routes/app.my-classes.$classId/class-student-enrollment.server.test.ts' \
@@ -783,14 +1002,37 @@ jobs:
             'app/utils/internal-management.server.test.ts' \
             'app/utils/internal-platform-auth.server.test.ts' \
             'app/utils/tester-feedback-gate.server.test.ts' \
+            'app/utils/tester-feedback-screenshot.server.test.ts' \
             'app/utils/tester-feedback-request.server.test.ts' \
+            'app/routes/api.internal.v1.tester-feedback.$id.screenshot/route.test.ts' \
             'app/utils/demo-feedback.server.test.ts' \
             'app/utils/demo-feedback-context.test.ts' \
             'app/utils/demo-feedback-analytics.test.ts' \
             'app/utils/tester-feedback.server.test.ts' \
             'app/utils/tester-feedback-runtime.server.test.ts' \
             'app/routes/api.admin.tester-feedback/route.test.ts' \
+            'app/dev-panel/dev-panel-api-production.test.ts' \
+            'app/dev-panel/dev-panel-runtime.server.test.ts' \
+            'app/dev-panel/dev-panel-production-guard.test.ts' \
+            'app/dev-panel/dev-panel-route-guard.server.test.ts' \
+            'app/dev-panel/dev-panel-orgs.server.test.ts' \
+            'app/dev-panel/dev-panel-storage.test.ts' \
+            'app/dev-panel/dev-panel-provider.test.tsx' \
+            'app/dev-panel/dev-panel-shell-boundary.test.tsx' \
+            'app/root.dev-panel-user.test.ts' \
+            'app/dev-panel/dev-panel-free-tier-flyout.test.tsx' \
+            'app/dev-panel/dev-panel-flyout-instant.test.tsx' \
+            'app/dev-panel/dev-panel-feedback-path.test.ts' \
+            'app/dev-panel/dev-panel-bundle.test.ts' \
+            'app/dev-panel/dev-panel-feedback-screenshot.server.test.ts' \
+            'app/dev-panel/feedback-route-contract.test.ts' \
+            'app/routes/auth.dev-login/route.test.ts' \
+            'app/dev-panel/feedback-route-contract.isolated.test.ts' \
+            'app/dev-panel/free-tier-jump.server.test.ts' \
+            'app/dev-panel/free-tier-states.catalog.test.ts' \
+            'app/dev-panel/free-tier-jump-expectations.test.ts' \
             'app/utils/preview-access.server.test.ts' \
+            'app/utils/preview-free-tier-access.server.test.ts' \
             'app/utils/internal-grading-stats.server.test.ts' \
             'app/routes/api.internal.v1.stats.grading/route.test.ts' \
             'app/routes/api.internal.v1.audit/route.test.ts' \
@@ -817,26 +1059,133 @@ jobs:
             ../../packages/prisma/scripts/seed-preview-planner-qa.test.ts \
             ../../packages/prisma/scripts/exit-ticket-migration-image.test.ts \
             ../../packages/prisma/scripts/preview-seats.test.ts \
-            app/domain/lesson-planner/lesson-seed.test.ts
+            app/domain/lesson-planner/lesson-seed.test.ts \
+            app/routes/api.domain.lesson-planner/build-system-prompt.test.ts \
+            app/domain/lesson-planner/suggestions.test.ts \
+            app/domain/lesson-planner/daily-pages-block.test.ts \
+            app/domain/lesson-planner/reply-parts.test.ts \
+            app/domain/lesson-planner/stack-contents.server.test.ts \
+            app/domain/lesson-planner/deck-edit.server.test.ts \
+            app/domain/lesson-planner/lesson-pptx-tile.server.test.ts \
+            app/domain/lesson-planner/stack-order.test.ts \
+            app/domain/lesson-planner/stack-order.server.test.ts \
+            app/domain/lesson-planner/stack-items.test.ts \
+            app/domain/lesson-planner/stack-create-link.test.ts \
+            app/domain/lesson-planner/prompt-ids.test.ts \
+            app/domain/lesson-planner/lesson-length.test.ts \
+            app/domain/lesson-planner/plan-timing.test.ts \
+            app/domain/lesson-planner/plan-steps.test.ts \
+            app/domain/lesson-planner/reply-pieces.test.ts \
+            app/domain/lesson-planner/file-reply-pieces.server.test.ts \
+            app/domain/lesson-planner/lesson-plan-doc.test.ts \
+            app/domain/lesson-planner/plan-summary.server.test.ts \
+            app/domain/lesson-planner/lesson-plan-render.server.test.ts \
+            app/domain/lesson-planner/branding.test.ts \
+            app/components/lesson-planner/stack-list.test.ts \
+            app/domain/lesson-planner/step-types.test.ts \
+            app/domain/lesson-planner/stack-timing.test.ts \
+            app/domain/lesson-planner/short-title.test.ts \
+            app/domain/lesson-planner/fileable-material.test.ts \
+            app/domain/lesson-planner/plan-framing.test.ts \
+            app/domain/lesson-planner/stack-suggestions.test.ts \
+            app/domain/lesson-planner/stack-command.test.ts \
+            app/domain/lesson-planner/stack-steps.test.ts \
+            app/domain/lesson-planner/stack-actions.server.test.ts \
+            app/domain/lesson-planner/step-handout.test.ts \
+            app/domain/lesson-planner/lesson-share.test.ts \
+            app/domain/lesson-planner/lesson-share.server.test.ts \
+            app/domain/brand.test.ts \
+            app/domain/lesson-planner/plan-days.test.ts \
+            app/domain/lesson-planner/planner-history.test.ts \
+            app/domain/lesson-planner/lesson-return.test.ts \
+            app/domain/lesson-planner/assignment-links.test.ts \
+            app/domain/lesson-planner/one-packet.test.ts \
+            app/domain/lesson-planner/teacher-notes.test.ts \
+            app/domain/lesson-planner/write-teacher-notes.server.test.ts \
+            app/domain/lesson-planner/google-drive.server.test.ts \
+            app/domain/lesson-planner/google-doc.server.test.ts \
+            app/domain/lesson-planner/library-v2.test.ts \
+            app/components/lesson-planner/download-link.test.ts \
+            app/domain/lesson-planner/plain-preview.test.ts \
+            app/domain/lesson-planner/deck-freshness.test.ts \
+            app/domain/lesson-planner/deck-agenda.test.ts \
+            app/domain/lesson-planner/celebration.test.ts \
+            app/domain/lesson-planner/library-course.test.ts \
+            app/domain/lesson-planner/lesson-name.test.ts \
+            app/domain/lesson-planner/extensions.test.ts \
+            app/domain/lesson-planner/before-class.test.ts \
+            app/domain/lesson-planner/lesson-rename.test.ts \
+            app/domain/lesson-planner/handout-docx.server.test.ts \
+            app/domain/lesson-planner/lesson-library.test.ts \
+            app/domain/lesson-planner/run-show.test.ts \
+            app/domain/lesson-planner/slide-deck-gallery.test.ts \
+            app/domain/lesson-planner/deck-gallery.test.ts \
+            app/domain/lesson-planner/deck-colors.test.ts \
+            app/domain/lesson-planner/kit-plan.test.ts \
+            app/domain/lesson-planner/teacher-standards.test.ts \
+            app/domain/lesson-planner/lesson-uploads.test.ts \
+            app/domain/lesson-planner/transcript-scroll.test.ts \
+            app/domain/lesson-planner/recent-art.test.ts \
+            app/domain/lesson-planner/source-documents.server.test.ts \
+            app/utils/bounded-body.server.test.ts \
+            app/routes/api.domain.lesson-planner.uploads/route.test.ts \
+            app/domain/lesson-planner/kit-plan-render.server.test.ts \
+            app/domain/lesson-planner/lesson-pptx-gallery.server.test.ts \
+            app/domain/lesson-planner/option-groups.test.ts \
+            app/domain/lesson-planner/lesson-templates.test.ts \
+            app/domain/lesson-planner/yawp-catalog.server.test.ts \
+            app/routes/api.domain.lesson-planner.stack/route.test.ts \
+            app/routes/api.domain.lesson-planner.library/route.test.ts \
+            app/domain/lesson-planner/deck-art.test.ts \
+            app/domain/lesson-planner/deck-edit.test.ts \
+            app/domain/lesson-planner/exit-ticket-block-quick.test.ts \
+            app/domain/lesson-planner/exit-ticket-block.test.ts \
+            app/domain/lesson-planner/lesson-ask.test.ts \
+            app/domain/lesson-planner/lesson-links.test.ts \
+            app/domain/lesson-planner/lesson-material.test.ts \
+            app/domain/lesson-planner/lesson-planner-pending-reporter-delegation.server.test.ts \
+            app/domain/lesson-planner/lesson-planner-tools.server.test.ts \
+            app/domain/lesson-planner/lesson-pptx.server.test.ts \
+            app/domain/lesson-planner/lesson-resource.test.ts \
+            app/domain/lesson-planner/lesson-seed.server.test.ts \
+            app/domain/lesson-planner/lesson-unit.server.test.ts \
+            app/domain/lesson-planner/markdown-blocks.test.ts \
+            app/domain/lesson-planner/material-richtext.test.ts \
+            app/domain/lesson-planner/my-lessons.server.test.ts \
+            app/domain/lesson-planner/planning-progress.test.ts \
+            app/domain/lesson-planner/practice-block.test.ts \
+            app/domain/lesson-planner/repair-slide-deck.server.test.ts \
+            app/domain/lesson-planner/slide-deck.test.ts \
+            app/domain/lesson-planner/student-handout.test.ts \
+            app/domain/lesson-planner/unit-plan.test.ts \
+            app/domain/lesson-planner/yawp-catalog.test.ts \
+            app/routes/api.domain.lesson-planner.class-length/route.test.ts \
+            app/routes/app.lesson-planner/lesson-rail.test.ts \
+            app/routes/app.lesson-planner/prompt-tiles.test.ts \
+            app/routes/app.lesson-planner/rotating-placeholder.test.ts \
+            'app/routes/app.lesson-planner_.$conversationId.packet/resource-index.test.ts' \
+            app/domain/feature-flags/lesson-planner-seed-parity.test.ts \
+            app/domain/feature-flags/production-dark-by-default.server.test.ts
           do
             bun test "$f"
           done
 
-  e2e-web-app:
-    needs: [typecheck-web-app, validate-prisma-migrations, paths]
-    name: 🧪 E2E Tests (Playwright)
+  # Smoke specs run serially (workers: 1) and share one database per runner.
+  # CI assigns whole spec files to shards (see e2e/smoke-specs.ts) so heavy files
+  # like teacher.lesson-planner.spec.ts do not skew Playwright test-level sharding.
+  e2e-smoke:
+    needs: [paths]
+    if: ${{ needs.paths.outputs.e2e == 'true' && needs.paths.outputs.pr_run_heavy_jobs == 'true' }}
+    name: 🧪 E2E smoke (shard ${{ matrix.shard }})
     runs-on: ubuntu-22.04
-    env:
-      # Fixture steps isolate XDG_CACHE_HOME; keep browser install and lookup shared.
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
-    # The browser download hung for five hours on 2026-08-18 and would have run
-    # to GitHub's six-hour default before failing. Nothing about this job is
-    # worth half a day of a runner: the tests themselves take about seven
-    # minutes, so anything past half an hour is wedged, not slow.
-    timeout-minutes: 30
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16@sha256:f9d1e581cde3e4c8bc696b07e6f7b7aea1d41014b33a52b27990762daae61beb # postgres:16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -849,65 +1198,76 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
-      - name: ⏭️ Skip (draft PR or no code changes)
-        if: ${{ github.event_name == 'pull_request' && (github.event.pull_request.draft || needs.paths.outputs.code != 'true') }}
-        run: echo "Draft PR or no code changes; skipping heavy steps."
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: ⎔ Setup node
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: 📥 Setup Bun
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
+        with:
+          bun-version: '1.4.4'
+
+      - name: 💾 Cache bun install
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
 
       - name: 📦 Install dependencies
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
-        run: bun install --frozen-lockfile
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
 
       - name: ⚙️ Generate Prisma Client
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         run: bun prisma generate
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
 
-      # Keyed on the resolved version rather than a hardcoded one, so a bump in
-      # package.json invalidates the cache instead of restoring browsers that no
-      # longer match the runner.
+      # Keyed on the resolved version from bun.lock so lockfile bumps invalidate stale browsers.
+
       - name: 🔖 Resolve Playwright version
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         id: playwright-version
-        working-directory: services/web-app
         run: |
-          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "version=$(bash scripts/ci/resolve-playwright-version.sh)" >> "$GITHUB_OUTPUT"
 
-      - name: 💾 Cache Playwright browsers
+      - name: 💾 Restore Playwright browsers cache
         id: playwright-cache
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
-        uses: actions/cache@v4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
-          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
 
-      # Chromium only. On a browser cache hit, install the binary only — apt deps
-      # are already on the runner and `install-deps` has timed out on cache hits.
+      # On cache hit, browsers live under ~/.cache/ms-playwright; only sync OS deps.
+      # On miss, download chromium with deps. Only shard 1 saves the shared cache entry.
+
       - name: Install Playwright chromium
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         working-directory: services/web-app
-        timeout-minutes: 15
-        run: |
-          version=$(node -p "require('@playwright/test/package.json').version")
-          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            bunx --package "@playwright/test@${version}" playwright install chromium
-          else
-            bunx --package "@playwright/test@${version}" playwright install --with-deps chromium
-          fi
+        timeout-minutes: 28
+        env:
+          PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
+        run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
+
+      - name: 🧹 Prune Playwright browsers cache
+        if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' && matrix.shard == 1 }}
+        run: bash ../../scripts/ci/prune-playwright-browser-cache.sh
+
+      - name: 💾 Save Playwright browsers cache
+        if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' && matrix.shard == 1 }}
+        continue-on-error: true
+        id: playwright-cache-save
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
+
+      - name: Playwright cache save warning
+        if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' && matrix.shard == 1 && steps.playwright-cache-save.outcome == 'failure' }}
+        run: echo "::warning::Playwright browsers cache save failed (often cache service HTTP 400); E2E continues with a fresh install on the next run"
 
       - name: 🧪 Run Playwright tests
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         working-directory: services/web-app
         env:
           CI: true
@@ -917,65 +1277,233 @@ jobs:
           RESEND_API_KEY: ''
           RESEND_FROM_EMAIL: ''
           TRIAL_STATUS_SHOTS: test-results/trial-status
-        run: bun run test:e2e:smoke
+          PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report
+        run: bun run test:e2e:smoke -- --shard=${{ matrix.shard }} --reporter=blob,list
 
-      - name: Verify demo feedback headless browser executable
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
+      - name: Upload blob report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: blob-report-${{ matrix.shard }}
+          path: services/web-app/blob-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload free classroom status evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: free-classroom-status-evidence-${{ matrix.shard }}
+          path: services/web-app/test-results/trial-status/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # HTML report + traces for smoke failures (see playwright.config.ts).
+
+      - name: Upload test results on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-results-${{ github.run_id }}-${{ matrix.shard }}
+          path: services/web-app/test-results/
+          retention-days: 7
+
+  e2e-locked-preview:
+    needs: [paths]
+    if: ${{ needs.paths.outputs.e2e == 'true' && needs.paths.outputs.pr_run_heavy_jobs == 'true' }}
+    name: 🧪 Free-tier locked preview browser
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16@sha256:f9d1e581cde3e4c8bc696b07e6f7b7aea1d41014b33a52b27990762daae61beb # postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.4
+
+      - name: 📥 Setup Bun
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
+        with:
+          bun-version: '1.4.4'
+
+      - name: 💾 Cache bun install
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: 📦 Install dependencies
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
+
+      - name: ⚙️ Generate Prisma Client
+        run: bun prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+
+      - name: 🧱 Apply Prisma migrations
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+        run: bun prisma migrate deploy
+
+      - name: 🌱 Seed free-tier assignment catalog
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+        run: bun run --cwd packages/prisma seed-free-tier-bundle-assignment-types
+
+      - name: 🔖 Resolve Playwright version
+        id: playwright-version
+        run: |
+          echo "version=$(bash scripts/ci/resolve-playwright-version.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: 💾 Restore Playwright browsers cache
+        id: playwright-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Playwright chromium
+        working-directory: services/web-app
+        timeout-minutes: 28
+        env:
+          PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
+        run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
+
+      - name: 🧪 Locked preview Playwright + evidence
         working-directory: services/web-app
         env:
-          TMPDIR: ${{ runner.temp }}/demo-feedback
-          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/demo-feedback/bun-cache
-          XDG_CACHE_HOME: ${{ runner.temp }}/demo-feedback/cache
+          CI: true
+          NODE_ENV: development
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          SESSION_SECRET: ci-locked-preview-session-secret
+          CLASS_STEP_PORT: '5199'
+          LOCKED_PREVIEW_EVIDENCE_DIR: locked-preview-evidence
+          TMPDIR: ${{ runner.temp }}/locked-preview
+          FREE_TIER_LINK_HMAC_SECRET: ci-locked-preview-free-tier-link-hmac-secret
+          PRIMARY_APP_URL: http://127.0.0.1:5199
         run: |
-          mkdir -p "$TMPDIR"
-          version=$(node -p "require('@playwright/test/package.json').version")
-          actual_version=$(bun x playwright --version)
-          if [ "$actual_version" != "Version $version" ]; then
-            echo "::error::Fixture runner $actual_version does not match installed Playwright $version"
-            exit 1
-          fi
-          shell_dir=$(bun x playwright install --dry-run --only-shell chromium | sed -n 's/^ *Install location: *\(.*chromium_headless_shell[^ ]*\) *$/\1/p')
-          executable="$shell_dir/chrome-headless-shell-linux64/chrome-headless-shell"
-          if [ -z "$shell_dir" ] || [ ! -x "$executable" ]; then
-            echo "::error::Missing Playwright $version chrome-headless-shell executable: $executable (PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH)"
-            exit 1
-          fi
+          mkdir -p locked-preview-evidence "$TMPDIR"
+          bun x playwright test --config playwright.locked-preview.config.ts --workers=1
 
-      - name: Demo feedback local fixture browser regression
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
+      - name: Upload locked preview evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: locked-preview-evidence-${{ github.run_id }}
+          path: services/web-app/locked-preview-evidence/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload Playwright results on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: locked-preview-playwright-results-${{ github.run_id }}
+          path: services/web-app/test-results/
+          retention-days: 7
+
+  e2e-signon:
+    needs: [paths]
+    if: ${{ needs.paths.outputs.e2e == 'true' && needs.paths.outputs.pr_run_heavy_jobs == 'true' }}
+    name: 🔐 Sign-on browser flows
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16@sha256:f9d1e581cde3e4c8bc696b07e6f7b7aea1d41014b33a52b27990762daae61beb # postgres:16
         env:
-          CI: '1'
-          # The fixture targets IPv4; Vite's default localhost bind must match it.
-          NODE_OPTIONS: --dns-result-order=ipv4first
-          TMPDIR: ${{ runner.temp }}/demo-feedback
-          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/demo-feedback/bun-cache
-          XDG_CACHE_HOME: ${{ runner.temp }}/demo-feedback/cache
-          RECORD_PORT_APP: '5489'
-          RECORD_PORT_DATABASE: '54489'
-          RECORD_PORT_LTI_MOCK: '9789'
-          YAWP_ENVIRONMENT: demo
-          TESTER_FEEDBACK_ENABLED: 'true'
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.4
+
+      - name: 📥 Setup Bun
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
+        with:
+          bun-version: '1.4.4'
+
+      - name: 💾 Cache bun install
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: 📦 Install dependencies
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
+
+      - name: ⚙️ Generate Prisma Client
+        run: bun prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+
+      # Keyed on the resolved version from bun.lock so lockfile bumps invalidate stale browsers.
+
+      - name: 🔖 Resolve Playwright version
+        id: playwright-version
+        run: |
+          echo "version=$(bash scripts/ci/resolve-playwright-version.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: 💾 Restore Playwright browsers cache
+        id: playwright-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Playwright chromium
+        working-directory: services/web-app
+        timeout-minutes: 28
+        env:
+          PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
+        run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
+
+      # The sign-on flows used to run after the smoke suite, which migrated and
+      # seeded yop_e2e on startup. Prepare it the same way here.
+      - name: 🛠️ Prepare E2E database
+        working-directory: services/web-app
+        env:
+          CI: true
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
+          PRIMARY_APP_URL: http://127.0.0.1:5173
           RESEND_API_KEY: ''
           RESEND_FROM_EMAIL: ''
-        run: |
-          mkdir -p "$TMPDIR"
-          cleanup() {
-            ./bin/project dev stop --json || true
-            if [ -f .worktree-local/config.env ]; then
-              source .worktree-local/config.env
-              docker rm -f "$CONTAINER_NAME" || true
-              docker volume rm "$VOLUME_NAME" || true
-            fi
-          }
-          trap cleanup EXIT
-          ./bin/project bootstrap --fresh --json
-          ./bin/project fixture verify local-dev --json
-          ./bin/project dev start --json
-          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5489/ > /dev/null
-          ./bin/project test --profile demo-feedback-browser --json
+        run: bun ./e2e/ensure-e2e-env.ts
 
       - name: Unified sign-on local-handler browser flows
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         working-directory: services/web-app
         env:
           CI: true
@@ -992,8 +1520,21 @@ jobs:
           trap 'rm -rf "$SIGNON_MAIL_CAPTURE_DIR"' EXIT
           bun x playwright test --config playwright.unified-backend.config.ts --workers=1
 
+      - name: Sign-on teacher prompts browser flows (mocked flag reads)
+        env:
+          CI: true
+          NODE_ENV: development
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          SESSION_SECRET: ci-local-signon-session-secret
+          SIGNON_LOCAL_TEST: '1'
+          TMPDIR: ${{ runner.temp }}/teacher-prompts
+        run: |
+          mkdir -p "$TMPDIR"
+          ./bin/project test --profile signon-teacher-prompts-unit --json
+          ./bin/project test --profile signon-teacher-prompts-browser --json
+
       - name: Unified sign-on isolated-preview resend browser flows
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         working-directory: services/web-app
         env:
           CI: true
@@ -1015,7 +1556,6 @@ jobs:
           bun x playwright test --config playwright.unified-resend.config.ts --workers=1
 
       - name: Unified sign-on inactive recovery browser flows
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         working-directory: services/web-app
         env:
           CI: true
@@ -1042,7 +1582,6 @@ jobs:
           bun x playwright test --config playwright.unified-recovery.config.ts --workers=1
 
       - name: Unified sign-on mocked-provider browser flows
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         working-directory: services/web-app
         env:
           CI: true
@@ -1061,31 +1600,298 @@ jobs:
           export NODE_OPTIONS="--import=$PWD/e2e/unified-google-provider.mjs"
           bun x playwright test --config playwright.unified-backend.config.ts --workers=1 --grep 'mocked Google'
 
-      - name: Upload free classroom status evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+      - name: Upload Playwright results on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: free-classroom-status-evidence
-          path: services/web-app/test-results/trial-status/
-          if-no-files-found: ignore
-          retention-days: 7
-
-      # HTML report + traces for smoke failures (see playwright.config.ts).
-      - name: Upload Playwright report on failure
-        if: failure() && (github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true'))
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-${{ github.run_id }}
+          name: e2e-signon-results-${{ github.run_id }}
           path: |
-            services/web-app/playwright-report/
             services/web-app/test-results/
             ${{ runner.temp }}/signon/signon-playwright-results/
           retention-days: 7
 
+  e2e-browser-checks:
+    needs: [paths]
+    if: ${{ needs.paths.outputs.e2e == 'true' && needs.paths.outputs.pr_run_heavy_jobs == 'true' }}
+    name: 🧪 Demo feedback + preview access browser checks
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16@sha256:f9d1e581cde3e4c8bc696b07e6f7b7aea1d41014b33a52b27990762daae61beb # postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Fixture steps isolate XDG_CACHE_HOME; keep browser lookup on the shared CI cache path.
+      - name: Configure Playwright browser path
+        run: echo "PLAYWRIGHT_BROWSERS_PATH=${HOME}/.cache/ms-playwright" >> "$GITHUB_ENV"
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.4
+
+      - name: 📥 Setup Bun
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
+        with:
+          bun-version: '1.4.4'
+
+      - name: 💾 Cache bun install
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: 📦 Install dependencies
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
+
+      - name: ⚙️ Generate Prisma Client
+        run: bun prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+
+      # Keyed on the resolved version from bun.lock so lockfile bumps invalidate stale browsers.
+
+      - name: 🔖 Resolve Playwright version
+        id: playwright-version
+        run: |
+          echo "version=$(bash scripts/ci/resolve-playwright-version.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: 💾 Restore Playwright browsers cache
+        id: playwright-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Playwright chromium
+        working-directory: services/web-app
+        timeout-minutes: 28
+        env:
+          PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
+        run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
+
+      - name: Verify demo feedback headless browser executable
+        working-directory: services/web-app
+        env:
+          TMPDIR: ${{ runner.temp }}/demo-feedback
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/demo-feedback/bun-cache
+          XDG_CACHE_HOME: ${{ runner.temp }}/demo-feedback/cache
+        run: |
+          mkdir -p "$TMPDIR"
+          version=$(node -p "require('@playwright/test/package.json').version")
+          actual_version=$(bun x playwright --version)
+          if [ "$actual_version" != "Version $version" ]; then
+            echo "::error::Fixture runner $actual_version does not match installed Playwright $version"
+            exit 1
+          fi
+          shell_dir=$(bun x playwright install --dry-run --only-shell chromium | sed -n 's/^ *Install location: *\(.*chromium_headless_shell[^ ]*\) *$/\1/p')
+          executable="$shell_dir/chrome-headless-shell-linux64/chrome-headless-shell"
+          if [ -z "$shell_dir" ] || [ ! -x "$executable" ]; then
+            echo "::error::Missing Playwright $version chrome-headless-shell executable: $executable (PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH)"
+            exit 1
+          fi
+
+      - name: Demo feedback local fixture browser regression
+        env:
+          CI: '1'
+          # The fixture targets IPv4; Vite's default localhost bind must match it.
+          NODE_OPTIONS: --dns-result-order=ipv4first
+          TMPDIR: ${{ runner.temp }}/demo-feedback
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/demo-feedback/bun-cache
+          XDG_CACHE_HOME: ${{ runner.temp }}/demo-feedback/cache
+          RECORD_PORT_APP: '5489'
+          RECORD_PORT_DATABASE: '54489'
+          RECORD_PORT_LTI_MOCK: '9789'
+          YAWP_ENVIRONMENT: demo
+          PREVIEW_SLUG: demo
+          TESTER_FEEDBACK_ENABLED: 'true'
+          FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
+          DEV_PANEL_EVIDENCE_DIR: dev-panel-evidence
+          DEV_PANEL_ARTIFACT_COPY_DIR: /opt/cursor/artifacts/screenshots
+          RESEND_API_KEY: ''
+          RESEND_FROM_EMAIL: ''
+        run: |
+          REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
+          cd "$REPO_ROOT"
+          mkdir -p "$TMPDIR" services/web-app/dev-panel-evidence
+          cleanup() {
+            bash "$REPO_ROOT/scripts/ci/demo-feedback-worktree-cleanup.sh" 54489 54490 5489 5490
+          }
+          trap cleanup EXIT
+          bash "$REPO_ROOT/scripts/ci/demo-feedback-worktree-cleanup.sh" 54489 54490 5489 5490
+          "$REPO_ROOT/bin/project" bootstrap --fresh --json
+          "$REPO_ROOT/bin/project" fixture verify local-dev --json
+          "$REPO_ROOT/bin/project" dev start --json
+          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5489/ > /dev/null
+          "$REPO_ROOT/bin/project" test --profile demo-feedback-browser --json
+
+      - name: Cat dev panel free-tier jump log
+        if: ${{ !cancelled() && always() }}
+        run: |
+          if [ -f services/web-app/test-results/dev-panel-free-tier-jump.log ]; then
+            cat services/web-app/test-results/dev-panel-free-tier-jump.log
+          else
+            echo "(no dev-panel free-tier jump log)"
+          fi
+          if [ -f .worktree-local/dev.log ]; then
+            grep '\[dev-panel free-tier jump failed\]' .worktree-local/dev.log || true
+          fi
+
+      - name: Assert dev panel free-tier jump catalog complete
+        if: ${{ !cancelled() && always() }}
+        run: |
+          log=services/web-app/test-results/dev-panel-free-tier-jump.log
+          if [ ! -f "$log" ]; then
+            echo "::error::Missing dev-panel free-tier jump log"
+            exit 1
+          fi
+          ok_count=$(grep -cE '^[^#[:space:]].*: ok$' "$log" || true)
+          if [ "$ok_count" -ne 16 ]; then
+            echo "::error::Expected 16 catalog jump ok lines, found $ok_count"
+            exit 1
+          fi
+
+      - name: Dev panel signed-out /free browser regression
+        if: ${{ !cancelled() && always() }}
+        env:
+          CI: '1'
+          NODE_OPTIONS: --dns-result-order=ipv4first
+          TMPDIR: ${{ runner.temp }}/dev-panel-free-signed-out
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/dev-panel-free-signed-out/bun-cache
+          XDG_CACHE_HOME: ${{ runner.temp }}/dev-panel-free-signed-out/cache
+          RECORD_PORT_APP: '5490'
+          RECORD_PORT_DATABASE: '54490'
+          RECORD_PORT_LTI_MOCK: '9790'
+          YAWP_ENVIRONMENT: demo
+          PREVIEW_SLUG: demo
+          PREVIEW_ACCESS_GATE: 'on'
+          PREVIEW_ACCESS_SECRET: 'ci-demo-feedback-preview-access-secret-32c'
+          PREVIEW_MASTER_ACCESS_CODE: 'ci-demo-master-access'
+          PREVIEW_ACCESS_SEATS: '[{"code":"ci-fixture-4193","organizationId":"local-dev-org","label":"Master"}]'
+          TESTER_FEEDBACK_ENABLED: 'true'
+          DEMO_FEEDBACK_BASE_URL: http://127.0.0.1:5490
+        run: |
+          REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
+          cd "$REPO_ROOT"
+          mkdir -p "$TMPDIR"
+          cleanup() {
+            bash "$REPO_ROOT/scripts/ci/demo-feedback-worktree-cleanup.sh" 54489 54490 5489 5490
+          }
+          trap cleanup EXIT
+          bash "$REPO_ROOT/scripts/ci/demo-feedback-worktree-cleanup.sh" 54489 54490 5489 5490
+          "$REPO_ROOT/bin/project" bootstrap --fresh --json
+          "$REPO_ROOT/bin/project" fixture verify local-dev --json
+          "$REPO_ROOT/bin/project" dev start --json
+          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5490/ > /dev/null
+          cd "$REPO_ROOT/services/web-app"
+          bun x playwright test --config=playwright.dev-panel-free-signed-out.config.ts --workers=1
+
+      - name: Upload dev panel artboard evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dev-panel-artboard-evidence-${{ github.run_id }}
+          path: services/web-app/dev-panel-evidence/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: 🔐 Run preview access gate tests
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         working-directory: services/web-app
         env:
           CI: true
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
         run: bun run test:e2e:preview-access
+
+      - name: Upload Playwright results on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-browser-checks-results-${{ github.run_id }}
+          path: |
+            services/web-app/test-results/
+            services/web-app/playwright-report/
+          retention-days: 7
+
+  # One HTML report for all smoke shards (non-gating; download the artifact on failure).
+  e2e-report:
+    needs: [e2e-smoke]
+    if: ${{ !cancelled() && needs.e2e-smoke.result != 'skipped' }}
+    name: 📊 Merge E2E smoke reports
+    runs-on: ubuntu-22.04
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: 📥 Setup Bun
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
+        with:
+          bun-version: '1.4.4'
+
+      - name: 💾 Cache bun install
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: 📦 Install dependencies
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
+
+      - name: 📥 Download blob reports
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: services/web-app/all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+
+      - name: 🧩 Merge into one HTML report
+        working-directory: services/web-app
+        run: |
+          if ls all-blob-reports/*.zip >/dev/null 2>&1; then
+            bun x playwright merge-reports --reporter html ./all-blob-reports
+          else
+            echo "No blob reports to merge."
+          fi
+
+      - name: Upload merged Playwright report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: services/web-app/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Keeps the original check name. Passes when every E2E job passed, or when
+  # they were skipped on purpose (draft PR or no code changes).
+  e2e-web-app:
+    needs: [paths, e2e-smoke, e2e-signon, e2e-browser-checks, e2e-locked-preview]
+    if: ${{ always() }}
+    name: 🧪 E2E Tests (Playwright)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: ✅ Check E2E results
+        env:
+          RESULTS: ${{ needs.paths.result }} ${{ needs.e2e-smoke.result }} ${{ needs.e2e-signon.result }} ${{ needs.e2e-browser-checks.result }} ${{ needs.e2e-locked-preview.result }}
+        run: |
+          echo "paths, smoke, sign-on, browser checks, locked preview: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "::error::An E2E job ended with: $r"; exit 1 ;;
+            esac
+          done

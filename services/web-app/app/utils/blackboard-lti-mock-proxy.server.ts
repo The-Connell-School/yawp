@@ -1,4 +1,5 @@
 import { blackboardLtiMockUpstreamUrl } from './blackboard-lti-mock-ui.server';
+import { rejectWithoutExplicitPreviewDevLoginAccess } from './preview-access.server';
 
 const HOP_BY_HOP = new Set([
   'connection',
@@ -14,6 +15,9 @@ const HOP_BY_HOP = new Set([
 ]);
 
 export async function proxyBlackboardLtiMock(request: Request, splat = '') {
+  const accessBlock = await rejectWithoutExplicitPreviewDevLoginAccess(request);
+  if (accessBlock) return accessBlock;
+
   const upstream = blackboardLtiMockUpstreamUrl();
   if (!upstream) {
     return new Response('Not found', { status: 404 });

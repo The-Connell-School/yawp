@@ -33,6 +33,20 @@ function optionalManagementServiceKey(value) {
   return value;
 }
 
+/** Comma-separated https origins (no paths) for which a PR preview offers
+ * Google sign-in. Anything else fails the render rather than widening it. */
+export function googleOriginAllowlist(raw = '') {
+  const entries = String(raw).split(',').map((entry) => entry.trim()).filter(Boolean);
+  for (const entry of entries) {
+    let url;
+    try { url = new URL(entry); } catch { url = null; }
+    if (!url || url.protocol !== 'https:' || url.origin !== entry) {
+      throw new Error('PREVIEW_GOOGLE_OAUTH_ORIGINS must be comma-separated https origins');
+    }
+  }
+  return entries.join(',');
+}
+
 export function renderPreviewCompose({
   prNumber = process.env.PR_NUMBER,
   slug = process.env.PREVIEW_SLUG,
@@ -43,7 +57,7 @@ export function renderPreviewCompose({
   enableTls = process.env.PREVIEW_TLS !== 'false',
   runtime = process.env.PREVIEW_RUNTIME || 'fast',
   dataMode = process.env.PREVIEW_DATA_MODE || 'seed',
-  unifiedSignOn = process.env.PREVIEW_UNIFIED_SIGN_ON ?? 'false',
+  unifiedSignOn = process.env.PREVIEW_UNIFIED_SIGN_ON ?? 'true',
   controlDir = process.env.PREVIEW_CONTROL_DIR || dirname(fileURLToPath(import.meta.url)),
   databaseUser = process.env.PREVIEW_DB_USER,
   databasePassword = process.env.PREVIEW_DB_PASSWORD,
@@ -55,7 +69,10 @@ export function renderPreviewCompose({
   aiMode = process.env.PREVIEW_AI_MODE || 'live',
   managementServiceKey = process.env.PREVIEW_MANAGEMENT_SERVICE_KEY,
   internalApiKeys = process.env.DEMO_INTERNAL_API_KEYS,
+  demoTrainingMediaEnabled = process.env.DEMO_TRAINING_MEDIA_ENABLED || 'false',
   customIngressActive = process.env.PREVIEW_CUSTOM_INGRESS_ACTIVE !== 'false',
+  demoWebImage = process.env.DEMO_WEB_IMAGE,
+  demoToolboxImage = process.env.DEMO_TOOLBOX_IMAGE,
 } = {}) {
   if (!['true', 'false'].includes(unifiedSignOn)) {
     throw new Error('PREVIEW_UNIFIED_SIGN_ON must be true or false');
@@ -87,6 +104,17 @@ export function renderPreviewCompose({
     databasePassword,
   });
   const demoKeys = demoInternalApiKeys(internalApiKeys);
+  if (!['true', 'false'].includes(demoTrainingMediaEnabled)) {
+    throw new Error('DEMO_TRAINING_MEDIA_ENABLED must be true or false');
+  }
+  const demoMedia = demoTrainingMediaEnabled === 'true';
+  if (demoMedia && (env.slug !== 'demo' || String(prNumber ?? '').trim())) {
+    throw new Error('Demo training media requires the demo target');
+  }
+  // Only web receives the scoped, expiring credentials. Never expose host IMDS.
+  const demoMediaVolume = demoMedia
+    ? `\n      - ${q(`${env.root}/training-media-credentials:/run/demo-training-media:ro`)}`
+    : '';
   if (demoKeys && (env.slug !== 'demo' || String(prNumber ?? '').trim())) {
     throw new Error('Demo Internal API keys require the demo target');
   }
@@ -181,6 +209,7 @@ ${tlsLabels}
       MOCK_ADMIN_ENABLED: ${q(env.slug === 'demo' ? 'true' : 'false')}
       PRIMARY_APP_URL: ${q(env.url)}
       PREVIEW_SLUG: ${q(env.slug)}
+${env.prNumber ? `      PR_NUMBER: ${q(String(env.prNumber))}\n` : ''}
       TESTER_FEEDBACK_ENABLED: ${q(env.slug === 'demo' ? 'true' : 'false')}
       PREVIEW_DOMAIN: ${q(env.domain)}
       PREVIEW_DATA_MODE: ${q(env.dataMode)}
@@ -194,9 +223,9 @@ ${masterAccessEnvironment}      PREVIEW_ACCESS_SECRET: ${q(previewAccessSecret)}
       SESSION_SECRET: ${q(previewSessionSecret)}
 ${uaStudentBillingEnvironment}      INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PREVIEW_INTERNAL_COMMAND_TOKEN', 'preview-internal-token'))}
       HONEYPOT_SECRET: ${q(optionalEnv('PREVIEW_HONEYPOT_SECRET', 'preview-honeypot-secret'))}
-      AWS_S3_BUCKET_FOR_VIDEOS: ${q(optionalEnv('PREVIEW_AWS_S3_BUCKET_FOR_VIDEOS', 'preview-videos'))}
-      AWS_S3_REGION_FOR_VIDEOS: ${q(optionalEnv('PREVIEW_AWS_S3_REGION_FOR_VIDEOS', 'us-east-1'))}
-      RESEND_FROM_EMAIL: ${q(optionalEnv('PREVIEW_RESEND_FROM_EMAIL', 'preview@yawp.local'))}
+      AWS_S3_BUCKET_FOR_VIDEOS: ${q(demoMedia ? 'yawp-demo-training-media-422348803522' : optionalEnv('PREVIEW_AWS_S3_BUCKET_FOR_VIDEOS', 'preview-videos'))}
+      AWS_S3_REGION_FOR_VIDEOS: ${q(demoMedia ? 'us-east-1' : optionalEnv('PREVIEW_AWS_S3_REGION_FOR_VIDEOS', 'us-east-1'))}
+${env.slug === 'demo' ? '      EMAIL_PROVIDER: "resend"\n' : ''}      RESEND_FROM_EMAIL: ${q(optionalEnv('PREVIEW_RESEND_FROM_EMAIL', 'preview@yawp.local'))}
       RESEND_API_KEY: ${q(optionalEnv('PREVIEW_RESEND_API_KEY', ''))}
       OPENAI_ORGANIZATION_ID: ${q(optionalEnv('PREVIEW_OPENAI_ORGANIZATION_ID'))}
       OPENAI_API_KEY: ${q(optionalEnv('PREVIEW_OPENAI_API_KEY'))}
@@ -210,8 +239,19 @@ ${uaStudentBillingEnvironment}      INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PRE
   // it those routes 404, which is the right state for every PR preview.
   // Compose expands dollar signs even in quoted YAML. Preserve literal key bytes.
   const webEnvironment = commonEnvironment
+    + (demoMedia ? `
+      AWS_REGION: "us-east-1"
+      AWS_PROFILE: "demo-training-media"
+      AWS_CONFIG_FILE: "/run/demo-training-media/config"` : '')
     + `\n      GOOGLE_OAUTH_CLIENT_ID: ${q(optionalEnv('PREVIEW_GOOGLE_OAUTH_CLIENT_ID').replaceAll('$', '$$$$'))}`
     + `\n      GOOGLE_OAUTH_CLIENT_SECRET: ${q(optionalEnv('PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET').replaceAll('$', '$$$$'))}`
+    // PR previews share the OAuth client but most of their origins are not
+    // registered with Google: offer Google only on allowlisted origins. Demo
+    // (no PR number) keeps its current behavior.
+    + (env.prNumber
+      ? `\n      GOOGLE_OAUTH_REQUIRE_ORIGIN_ALLOWLIST: "true"`
+        + `\n      GOOGLE_OAUTH_ORIGIN_ALLOWLIST: ${q(googleOriginAllowlist(optionalEnv('PREVIEW_GOOGLE_OAUTH_ORIGINS')))}`
+      : '')
     + (previewManagementServiceKey
       ? `\n      YAWP_MANAGEMENT_SERVICE_KEY: ${q(previewManagementServiceKey)}` : '')
     + (demoKeys
@@ -220,17 +260,33 @@ ${uaStudentBillingEnvironment}      INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PRE
       - ${q(`${env.sourceDir}:/app`)}
       - ${env.composeProject}-node-modules:/app/node_modules
       - ${env.composeProject}-web-node-modules:/app/services/web-app/node_modules`;
-  // Mount reviewed default-branch tooling even when the PR source predates it.
-  // This also avoids baking control-plane updates into PR-owned Dockerfiles.
-  const toolboxControlVolume = env.prNumber
+  // Mount reviewed control-plane tooling when the toolbox image does not carry the
+  // full scripts/preview tree (production registry images) or when the PR ref may
+  // predate reviewed host scripts (fast previews).
+  const mountPreviewControl = Boolean(env.prNumber) || env.runtime === 'production';
+  const toolboxControlVolume = mountPreviewControl
     ? `      - ${q(`${controlDir}:/preview-control:ro`)}` : '';
   const toolboxFlagEnvironment = env.prNumber
     ? `      PREVIEW_UNIFIED_SIGN_ON: ${q(unifiedSignOn)}` : '';
+  const registryImagesConfigured = Boolean(demoWebImage && demoToolboxImage);
+  if (demoWebImage && !demoToolboxImage) {
+    throw new Error('DEMO_TOOLBOX_IMAGE is required when DEMO_WEB_IMAGE is set');
+  }
+  if (demoToolboxImage && !demoWebImage) {
+    throw new Error('DEMO_WEB_IMAGE is required when DEMO_TOOLBOX_IMAGE is set');
+  }
+  const productionToolboxBuild = registryImagesConfigured
+    ? ''
+    : `    build:
+      context: ${q(env.sourceDir)}
+      dockerfile: services/web-app/Dockerfile
+      target: deps
+`;
   const toolboxService =
     env.runtime === 'fast'
       ? `  toolbox:
     profiles: ["tools"]
-    image: oven/bun:1.3.1
+    image: oven/bun:1.4.4
     working_dir: /app
 ${fastVolumes}
 ${toolboxControlVolume}
@@ -242,13 +298,8 @@ ${toolboxFlagEnvironment}
 `
       : `  toolbox:
     profiles: ["tools"]
-    build:
-      context: ${q(env.sourceDir)}
-      dockerfile: services/web-app/Dockerfile
-      target: deps
-      args:
-        DATABASE_URL: ${q(env.databaseUrl)}
-${toolboxControlVolume ? `    volumes:
+    image: ${q(registryImagesConfigured ? demoToolboxImage : `${env.composeProject}-toolbox:current`)}
+${productionToolboxBuild}${toolboxControlVolume ? `    volumes:
 ${toolboxControlVolume}` : ''}
     environment:
 ${commonEnvironment}
@@ -259,23 +310,21 @@ ${toolboxFlagEnvironment}
   const webService =
     env.runtime === 'fast'
       ? `  web:
-    image: oven/bun:1.3.1
+    image: oven/bun:1.4.4
     restart: unless-stopped
     working_dir: /app
     command: bash -lc "cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080"
-${fastVolumes}${mediaVolumeMount}
+${fastVolumes}${mediaVolumeMount}${demoMediaVolume}
     environment:
 ${webEnvironment}
 `
       : `  web:
-    image: ${q(`${routerBase}-web:current`)}
-    build:
+    image: ${q(registryImagesConfigured ? demoWebImage : `${routerBase}-web:current`)}
+${registryImagesConfigured ? '' : `    build:
       context: ${q(env.sourceDir)}
       dockerfile: services/web-app/Dockerfile
       target: production
-      args:
-        DATABASE_URL: ${q(env.databaseUrl)}
-    environment:
+`}${demoMedia ? `    volumes:${demoMediaVolume}\n` : ''}    environment:
 ${webEnvironment}
     restart: unless-stopped
 `;
@@ -341,7 +390,7 @@ ${rendererService}${webService}${legacyTraefikLabels}
       - preview${directPortBlock}
 
   blackboard-lti-mock:
-    image: oven/bun:1.3.1
+    image: oven/bun:1.4.4
     working_dir: /app
     command: bun scripts/blackboard-lti-mock/server.mjs
     volumes:

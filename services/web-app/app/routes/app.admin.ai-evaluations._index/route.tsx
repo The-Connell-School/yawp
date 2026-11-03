@@ -8,7 +8,7 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { requireAdmin } from '~/utils/auth.server';
-import { cn } from '~/utils/misc';
+import { cn, getErrorMessage } from '~/utils/misc';
 import {
   type GradingBenchmarkCase,
   type GradingEvaluationDefinition,
@@ -255,10 +255,11 @@ export default function AdminAiEvaluationsRoute() {
         setCaseResults((current) => ({ ...current, [caseId]: caseResult }));
         setLastRunAt(new Date().toISOString());
       } catch (error) {
+        const message = getErrorMessage(error);
         setRunError(
-          error instanceof Error
-            ? error.message
-            : 'The benchmark case could not run.'
+          message === 'Unknown Error'
+            ? 'The benchmark case could not run.'
+            : message,
         );
       } finally {
         setRunningCaseId(null);
@@ -284,8 +285,11 @@ export default function AdminAiEvaluationsRoute() {
       }
       setLastRunAt(new Date().toISOString());
     } catch (error) {
+      const message = getErrorMessage(error);
       setRunError(
-        error instanceof Error ? error.message : 'The benchmark could not run.'
+        message === 'Unknown Error'
+          ? 'The benchmark could not run.'
+          : message,
       );
     } finally {
       setRunningCaseId(null);

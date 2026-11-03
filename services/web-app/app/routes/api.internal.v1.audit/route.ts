@@ -8,6 +8,7 @@ import {
   parsePlatformApiAuditRange,
   platformApiAuditQuerySchema,
 } from '~/utils/internal-platform-api-audit-list.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 
 const response = (value: unknown, status = 200) =>
   Response.json(value, {
@@ -55,7 +56,7 @@ export async function loader({ request }: { request: Request }) {
       return response({ error: 'Invalid query' }, 400);
     }
     console.error('internal_platform_api_audit_list_failed', {
-      error: error instanceof Error ? error.message : String(error),
+      error: buildSafeErrorForLog(error),
     });
     return response({ error: 'Platform API audit unavailable' }, 503);
   }

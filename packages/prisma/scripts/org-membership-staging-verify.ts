@@ -4,6 +4,7 @@
  * Runs postcheck invariants plus forensic/parity checks expected after a prod snapshot migrate.
  */
 import { createPrismaClient } from './local-dev/connection';
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 import {
   buildPostcheckReport,
   type PostcheckInput,
@@ -225,7 +226,7 @@ async function main() {
 
 if (import.meta.main) {
   main().catch((error) => {
-    console.error(error);
+    logScriptError(error);
     process.exit(1);
   });
 }

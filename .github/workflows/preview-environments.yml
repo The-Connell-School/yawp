@@ -43,28 +43,34 @@ jobs:
 
           gh pr view "$PR_NUMBER" \
             --repo "$GITHUB_REPOSITORY" \
-            --json title,body,headRefName,baseRefName,labels \
+            --json title,body,headRefName,baseRefName,labels,headRefOid \
             > "$RUNNER_TEMP/pr.json"
 
-          # Use the live label list and jq equality for an exact, case-sensitive
-          # label match, including removal queued behind another deployment.
-          unified_sign_on="$(jq -r '[.labels[]?.name] | index("preview-flag:unified-sign-on") != null' "$RUNNER_TEMP/pr.json")"
+          # Unified sign-on is ON in every PR preview by default. The exact,
+          # case-sensitive opt-out label turns it OFF for that preview only. Use
+          # the live label list so removal queued behind another deploy counts.
+          unified_sign_on="$(jq -r '[.labels[]?.name] | index("preview-flag:unified-sign-on-off") == null' "$RUNNER_TEMP/pr.json")"
           echo "unified_sign_on=$unified_sign_on" >> "$GITHUB_OUTPUT"
 
           title="$(jq -r '.title // ""' "$RUNNER_TEMP/pr.json")"
           body="$(jq -r '.body // ""' "$RUNNER_TEMP/pr.json")"
           head_ref="$(jq -r '.headRefName // ""' "$RUNNER_TEMP/pr.json")"
           base_ref="$(jq -r '.baseRefName // ""' "$RUNNER_TEMP/pr.json")"
+          head_sha="$(jq -r '.headRefOid // ""' "$RUNNER_TEMP/pr.json")"
+          head_commit_message=""
+          if [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            head_commit_message="$(gh api "/repos/${GITHUB_REPOSITORY}/commits/${head_sha}" --jq '.commit.message // ""')"
+          fi
 
           if [[ "$EVENT_ACTION" == "closed" ]]; then
             reason=closed
-          elif [[ ( "$EVENT_ACTION" == "labeled" || "$EVENT_ACTION" == "unlabeled" ) && "$EVENT_LABEL" != "preview-flag:unified-sign-on" && "$EVENT_LABEL" != "sanitized-production-data" ]]; then
+          elif [[ ( "$EVENT_ACTION" == "labeled" || "$EVENT_ACTION" == "unlabeled" ) && "$EVENT_LABEL" != "preview-flag:unified-sign-on-off" && "$EVENT_LABEL" != "sanitized-production-data" ]]; then
             reason=unrelated_label
           elif [[ "$base_ref" != "$DEFAULT_BRANCH" ]]; then
             reason=non_default_base
           elif [[ "$EVENT_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]]; then
             reason=fork
-          elif [[ "$title" == *"[skip preview]"* || "$body" == *"[skip preview]"* || "$head_ref" == *"[skip preview]"* ]]; then
+          elif [[ "$title" == *"[skip preview]"* || "$body" == *"[skip preview]"* || "$head_ref" == *"[skip preview]"* || "$head_commit_message" == *"[skip preview]"* ]]; then
             reason=skip_preview
           else
             should_deploy=true
@@ -84,7 +90,7 @@ jobs:
       github.event.pull_request.base.ref == github.event.repository.default_branch &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(github.event.pull_request.title, '[skip preview]') == false &&
-      startsWith(github.event.pull_request.body || '', '[skip preview]') == false &&
+      contains(github.event.pull_request.body || '', '[skip preview]') == false &&
       contains(github.event.pull_request.head.ref, '[skip preview]') == false
     runs-on: ubuntu-22.04
     environment: preview-host
@@ -117,6 +123,7 @@ jobs:
       PREVIEW_UA_PARTNER_CODE: ${{ vars.PREVIEW_UA_PARTNER_CODE || 'UA-PREVIEW-2026' }}
       PREVIEW_GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.PREVIEW_GOOGLE_OAUTH_CLIENT_ID }}
       PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET }}
+      PREVIEW_GOOGLE_OAUTH_ORIGINS: ${{ vars.PREVIEW_GOOGLE_OAUTH_ORIGINS || '' }}
       PREVIEW_STRIPE_SECRET_KEY: ${{ secrets.PREVIEW_STRIPE_SECRET_KEY }}
       PREVIEW_STRIPE_WEBHOOK_SECRET: ${{ secrets.PREVIEW_STRIPE_WEBHOOK_SECRET }}
       PREVIEW_STRIPE_UA_2026_PRICE_ID: ${{ vars.PREVIEW_STRIPE_UA_2026_PRICE_ID }}
@@ -154,7 +161,7 @@ jobs:
           done
 
       - name: Checkout preview guard
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
@@ -206,7 +213,7 @@ jobs:
 
       - name: Checkout reviewed preview control plane
         if: steps.preview_gate.outputs.skip_preview != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           path: preview-control
@@ -333,6 +340,7 @@ jobs:
             "PREVIEW_UA_PARTNER_CODE=$(shell_quote "$PREVIEW_UA_PARTNER_CODE")"
             "PREVIEW_GOOGLE_OAUTH_CLIENT_ID=$(shell_quote "$PREVIEW_GOOGLE_OAUTH_CLIENT_ID")"
             "PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET=$(shell_quote "$PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET")"
+            "PREVIEW_GOOGLE_OAUTH_ORIGINS=$(shell_quote "$PREVIEW_GOOGLE_OAUTH_ORIGINS")"
             "PREVIEW_STRIPE_SECRET_KEY=$(shell_quote "$PREVIEW_STRIPE_SECRET_KEY")"
             "PREVIEW_STRIPE_WEBHOOK_SECRET=$(shell_quote "$PREVIEW_STRIPE_WEBHOOK_SECRET")"
             "PREVIEW_STRIPE_UA_2026_PRICE_ID=$(shell_quote "$PREVIEW_STRIPE_UA_2026_PRICE_ID")"
@@ -357,6 +365,7 @@ jobs:
           deploy_log="${PREVIEW_ROOT}/logs/pr-${PR_NUMBER}-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.log"
           deploy_command="cd $(shell_quote "$remote_control") && ${remote_env[*]} bash scripts/preview/admit-and-deploy.sh"
           set +e
+          REDACT_DEPLOY_LOGS_SCRIPT="${remote_control}/scripts/preview/redact-deploy-logs.sh" \
           SSH_IDENTITY="$HOME/.ssh/preview_key" \
           SSH_TARGET="$ssh_target" \
           LOCK_FILE="$lock_file" \
@@ -397,11 +406,18 @@ jobs:
           preview_url="$(awk -F= '/^PREVIEW_URL=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
           ua_preview_url="$(awk -F= '/^UA_PREVIEW_URL=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
           blackboard_url="$(awk -F= '/^BLACKBOARD_URL=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
-          access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
+          access_seats_file="$(awk -F= '/^PREVIEW_ACCESS_SEATS_FILE=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
           elapsed_ms="$(awk -F= '/^PREVIEW_ELAPSED_MS=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
           master_org_gate_enabled="$(awk -F= '/^PREVIEW_MASTER_ORG_GATE_ENABLED=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
           test -n "$preview_url" || { echo "Deploy script did not print PREVIEW_URL"; exit 1; }
-          test -n "$access_code" || { echo "Deploy script did not print PREVIEW_ACCESS_CODE"; exit 1; }
+          test -n "$access_seats_file" || { echo "Deploy script did not print PREVIEW_ACCESS_SEATS_FILE"; exit 1; }
+          read_smoke_script="${remote_control}/scripts/preview/read-smoke-access-code-from-seats-file.mjs"
+          access_code="$(
+            ssh -i "$HOME/.ssh/preview_key" -o BatchMode=yes "$ssh_target" \
+              "node $(shell_quote "$read_smoke_script") $(shell_quote "$access_seats_file")"
+          )"
+          test -n "$access_code" || { echo "Could not read smoke access code from host seats file"; exit 1; }
+          echo "::add-mask::$access_code"
           echo "Preview capacity OK: ${running}/${PREVIEW_MAX_RUNNING} running before deploy, ${resident}/${PREVIEW_MAX_RESIDENT} resident."
           {
             echo "url=$preview_url"
@@ -411,6 +427,11 @@ jobs:
             echo "elapsed_ms=${elapsed_ms:-unknown}"
             echo "master_org_gate_enabled=${master_org_gate_enabled:-false}"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Print deploy log redaction summary
+        if: always() && steps.preview_gate.outputs.skip_preview != 'true'
+        run: |
+          grep -sE '^REDACT_(FILES_CHANGED|VALUES_MASKED|WARNING)=[0-9]+$' "$RUNNER_TEMP/preview-deploy.log" || echo 'REDACT_SUMMARY=none'
 
       - name: Verify preview access gate
         if: steps.preview_gate.outputs.skip_preview != 'true'
@@ -495,7 +516,7 @@ jobs:
 
       - name: Comment preview URL on PR
         if: steps.preview_gate.outputs.skip_preview != 'true'
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405 # v2.9.4
         with:
           header: pr-preview-${{ github.event.pull_request.number }}
           append: false
@@ -556,7 +577,7 @@ jobs:
           ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
 
       - name: Checkout current cleanup implementation
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
 
@@ -603,7 +624,7 @@ jobs:
           test -n "$PREVIEW_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_SSH_PRIVATE_KEY"; exit 1; }
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
 

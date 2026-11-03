@@ -1,3 +1,5 @@
+import { buildInsightPrompt } from './class-insight-synthesis';
+import { currentClassInsightRows } from './class-insight-inputs.server';
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
@@ -38,12 +40,14 @@ mock.module('~/utils/ai-admission.server', () => ({
 // needs them real — the assignment-insights route test among them, whose action
 // then never reaches the LLM it asserts on. Restore from the pristine copies
 // test-preload.ts captured (see the comment there).
-const actualSynthesis = globalThis.__realModules[
-  '~/domain/assignment-insights/class-insight-synthesis.server'
-];
-const actualGradingConfig = globalThis.__realModules[
-  '~/domain/assignment-types/assignment-type-grading-config.server'
-];
+const actualSynthesis =
+  globalThis.__realModules[
+    '~/domain/assignment-insights/class-insight-synthesis.server'
+  ];
+const actualGradingConfig =
+  globalThis.__realModules[
+    '~/domain/assignment-types/assignment-type-grading-config.server'
+  ];
 
 afterAll(() => {
   mock.module('./class-insight-synthesis.server', () => actualSynthesis);
@@ -53,9 +57,8 @@ afterAll(() => {
   );
 });
 
-const { generateClassAssignmentInsight } = await import(
-  './class-insight-generation.server'
-);
+const { generateClassAssignmentInsight } =
+  await import('./class-insight-generation.server');
 
 const ACT_RUBRIC_CATEGORIES = [
   {
@@ -196,14 +199,14 @@ describe('generateClassAssignmentInsight rubric scoping', () => {
     });
 
     const aggregate = generateClassInsight.mock.calls[0]?.[0]?.aggregate;
-    expect(aggregate.categories.map((category: { key: string }) => category.key)).toEqual(
-      ['conventions', 'development']
-    );
+    expect(
+      aggregate.categories.map((category: { key: string }) => category.key)
+    ).toEqual(['conventions', 'development']);
     expect(aggregate.weakest).toBe('conventions');
     expect(aggregate.strongest).toBe('development');
-    expect(result.success && result.insight.summary.nextSteps[0].rubricCategory).toBe(
-      'conventions'
-    );
+    expect(
+      result.success && result.insight.summary.nextSteps[0].rubricCategory
+    ).toBe('conventions');
   });
 
   /**
@@ -321,5 +324,87 @@ describe('generateClassAssignmentInsight rubric scoping', () => {
     expect(
       rubric.categories.map((category: { key: string }) => category.key)
     ).toEqual(['development']);
+  });
+
+  test('passes twelve released 30/30 grades without category rows into the prompt input', async () => {
+    prisma.classAssignmentInsight.findUnique.mockResolvedValue(null);
+    prisma.document.findMany.mockResolvedValue(
+      Array.from({ length: 12 }, (_, index) => ({
+        id: `doc-${index}`,
+        membership: null,
+        submissions: [
+          {
+            id: `sub-${index}`,
+            rubricScores: null,
+            overallComment: null,
+            overallScore: 30,
+            score: '30/30',
+            numericPercentage: null,
+            gradedAt: new Date('2026-10-18'),
+            releasedAt: new Date('2026-10-18'),
+          },
+        ],
+      }))
+    );
+    const result = await generateClassAssignmentInsight({
+      classAssignmentId: 'ca-1',
+      organizationId: 'org-1',
+      generatedByMembershipId: null,
+    });
+    expect(result.success).toBe(true);
+    expect(prisma.document.findMany.mock.calls[0][0].select.submissions).toMatchObject({
+      where: { OR: [{ gradedAt: { not: null } }, { releasedAt: { not: null } }] },
+      take: 1,
+      select: { score: true, overallScore: true, numericPercentage: true, releasedAt: true },
+    });
+    const aggregate = generateClassInsight.mock.calls.at(-1)?.[0]?.aggregate;
+    expect(aggregate.scoredCount).toBe(12);
+    expect(buildInsightPrompt(aggregate, {}).user).toContain(
+      '12 scored; 0 unscored.'
+    );
+    expect(aggregate.finalGrades).toHaveLength(12);
+    expect(
+      aggregate.finalGrades.every(
+        (grade: { score: string }) => grade.score === '30/30'
+      )
+    ).toBe(true);
+    // An overall grade supplies no evidence about any individual category.
+    expect(
+      aggregate.categories.every(
+        (category: { scoredCount: number }) => category.scoredCount === 0
+      )
+    ).toBe(true);
+  });
+
+  test('invalidates legacy summaries and grade changes immediately, retaining cooldown for unchanged grades', async () => {
+    const input = {
+      classAssignmentId: 'ca-1',
+      organizationId: 'org-1',
+      generatedByMembershipId: null,
+    };
+    prisma.classAssignmentInsight.findUnique.mockResolvedValue({
+      status: 'ready',
+      generatedAt: new Date(),
+      submissionCount: 12,
+      summaryJson: { overview: 'Old incorrect summary' },
+    });
+    expect((await generateClassAssignmentInsight(input)).success).toBe(true);
+    let stored =
+      prisma.classAssignmentInsight.upsert.mock.calls.at(-1)![0].create;
+    prisma.classAssignmentInsight.findUnique.mockResolvedValue(stored);
+    expect(await currentClassInsightRows([stored])).toHaveLength(1);
+    expect(await generateClassAssignmentInsight(input)).toMatchObject({
+      success: false,
+      status: 429,
+    });
+    const documents = await prisma.document.findMany();
+    documents[0].submissions[0].score = '0/30';
+    documents[0].submissions[0].overallScore = 0;
+    expect(await currentClassInsightRows([stored])).toHaveLength(0);
+    expect((await generateClassAssignmentInsight(input)).success).toBe(true);
+    stored = prisma.classAssignmentInsight.upsert.mock.calls.at(-1)![0].create;
+    prisma.classAssignmentInsight.findUnique.mockResolvedValue(stored);
+    documents[0].submissions[0].releasedAt = new Date('2026-10-19');
+    expect((await generateClassAssignmentInsight(input)).success).toBe(true);
   });
 });

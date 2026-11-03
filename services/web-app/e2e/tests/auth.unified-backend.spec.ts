@@ -1151,9 +1151,13 @@ for (const width of [1280, 390])
     // Exercise the full-document reset continuation with slow client startup.
     // Server-rendered headings alone do not prove React handlers are attached.
     const delayResetScripts = async (route: Route) => {
-      if (route.request().resourceType() === 'script')
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      await route.continue();
+      try {
+        if (route.request().resourceType() === 'script')
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        await route.continue();
+      } catch {
+        // Full-document navigation can abort in-flight routes while scripts delay.
+      }
     };
     await page.route('**/*', delayResetScripts);
     await page.getByRole('button', { name: 'Forgot password?' }).click();

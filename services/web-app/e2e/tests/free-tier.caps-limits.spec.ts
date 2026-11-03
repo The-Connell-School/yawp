@@ -233,7 +233,7 @@ test.describe.serial('Free-tier caps, limits, and cookie QA', () => {
       const first = await page.goto(url);
       expect(first?.status()).toBe(200);
       await expect(
-        page.getByText('Use your event link to continue.')
+        page.getByText('Sign up below to start your free Yawp! classroom.')
       ).toBeVisible();
       await shot(page, '02-missing-cookie-recovery.png');
 
@@ -261,7 +261,7 @@ test.describe.serial('Free-tier caps, limits, and cookie QA', () => {
       const cleared = await page.goto(url);
       expect(cleared?.status()).toBe(200);
       await expect(
-        page.getByText('Use your event link to continue.')
+        page.getByText('Sign up below to start your free Yawp! classroom.')
       ).toBeVisible();
       await shot(page, '03-cleared-cookie-recovery.png');
 
@@ -279,7 +279,7 @@ test.describe.serial('Free-tier caps, limits, and cookie QA', () => {
       const invalid = await page.goto(url);
       expect(invalid?.status()).toBe(200);
       await expect(
-        page.getByText('Use your event link to continue.')
+        page.getByText('Sign up below to start your free Yawp! classroom.')
       ).toBeVisible();
       await shot(page, '04-invalid-cookie-recovery.png');
 

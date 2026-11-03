@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import { readBoundedText } from './bounded-body.server';
 import { FEEDBACK_CAPTURE_EVENTS, feedbackPath } from './demo-feedback-context';
+import { isDevPanelRuntimeEnabled } from '~/dev-panel/dev-panel-runtime.server';
+import { DEMO_FEEDBACK_NOTE_LIMIT } from './demo-feedback-limits';
 import { severitySchema, type FeedbackInput } from './tester-feedback.server';
+
+export { DEMO_FEEDBACK_NOTE_LIMIT } from './demo-feedback-limits';
 
 export interface DemoFeedbackDependencies {
   environment(): string;
@@ -14,7 +18,9 @@ export interface DemoFeedbackDependencies {
 export async function demoFeedbackAvailable(
   deps: Pick<DemoFeedbackDependencies, 'environment' | 'flagEnabled'>
 ) {
-  if (deps.environment() !== 'demo') return false;
+  const onDemo = deps.environment() === 'demo';
+  const onDevPanel = isDevPanelRuntimeEnabled();
+  if (!onDemo && !onDevPanel) return false;
   try {
     return await deps.flagEnabled();
   } catch {
@@ -51,10 +57,11 @@ const actionSchema = z.discriminatedUnion('type', [
     .strict(),
 ]);
 const submissionSchema = z.object({
-  note: z.string().trim().min(1).max(4000),
+  note: z.string().trim().min(1).max(DEMO_FEEDBACK_NOTE_LIMIT),
   severity: severitySchema.nullable().optional(),
   url: pathSchema,
   actions: z.array(actionSchema).max(5),
+  screenshot: z.string().max(500_000).nullable().optional(),
 });
 const json = (body: unknown, status: number) =>
   Response.json(body, {
@@ -94,15 +101,14 @@ export async function submitDemoFeedback(
   if (!parsed.success)
     return json(
       {
-        error:
-          'Add a note of up to 4,000 characters with a valid page location.',
+        error: `Add a note of up to ${DEMO_FEEDBACK_NOTE_LIMIT.toLocaleString('en-US')} characters with a valid page location.`,
       },
       400
     );
   try {
     const saved = await deps.save({
       userId: user.id,
-      environment: 'demo',
+      environment: deps.environment().slice(0, 100) || 'demo',
       userAgent: (request.headers.get('user-agent') || '').slice(0, 1000),
       url: parsed.data.url,
       whatHappened: parsed.data.note,
@@ -120,7 +126,9 @@ export async function submitDemoFeedback(
         })
         .join(' → ')
         .slice(0, 4000),
-      whatIWish: '',
+      whatIWish: parsed.data.screenshot
+        ? '[screenshot attached in dev panel feedback]'
+        : '',
       severity: parsed.data.severity ?? null,
       actions: parsed.data.actions,
     });

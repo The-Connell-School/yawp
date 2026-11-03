@@ -2,11 +2,9 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { createRequire } from 'node:module';
+import { encodeTurboStreamBody } from '../encode-turbo-stream-body';
 import { loadE2eEnvFromFile } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-const require = createRequire(import.meta.url);
-const { encode } = require(require.resolve('turbo-stream', { paths: [require.resolve('react-router')] }));
 
 const before = process.env.LEGAL_EVIDENCE_PHASE === 'before';
 const evidence = process.env.LEGAL_EVIDENCE_DIR;
@@ -98,14 +96,21 @@ for (const [name, result, message] of [
       if (route.request().method() !== 'POST') return route.continue();
       await route.fulfill({
         status: 200, contentType: 'text/x-script',
-        body: await new Response(encode({ data: result })).text(),
+        body: await encodeTurboStreamBody({ data: result }),
       });
     });
-    for (const [field, value] of Object.entries({
-      name: 'Local Teacher', email: 'legal-fixture@example.test', schoolName: 'Example Organization', location: 'Local', gradeLevel: '10',
-    })) await page.locator(`input[name="${field}"]`).fill(value);
+    const { fillFreeTierWaitlistForm } = await import('../helpers/free-tier-waitlist-form');
+    await fillFreeTierWaitlistForm(page, {
+      name: 'Local Teacher',
+      email: 'legal-fixture@example.test',
+      schoolName: 'Example Organization',
+      location: 'Local',
+      gradeLevel: '10',
+    });
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(page.getByText(message, { exact: true })).toBeVisible();
+    await expect(
+      page.getByText(new RegExp(`^${message.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}!?$`))
+    ).toBeVisible();
     if (!result.ok) await expect(page.getByRole('link', { name: 'Join the waitlist', exact: true })).toBeVisible();
     await capture(page, `fixture-${name}`);
   });

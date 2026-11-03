@@ -54,7 +54,7 @@ export async function requireReporterAccess(
 ): Promise<ReporterAccess> {
   const access = await getReporterAccess(request);
   if (!access.allowed) {
-    throw data({ error: 'Yawp Reporter is not available.' }, { status: 404 });
+    throw data({ error: 'Yawp! Reporter is not available.' }, { status: 404 });
   }
   return access;
 }

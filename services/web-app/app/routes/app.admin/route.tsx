@@ -35,12 +35,12 @@ export const adminTabs = [
     icon: <Settings size={16} className="opacity-75 mr-1" />,
   },
   {
-    label: 'Organizations (read-only moved)',
+    label: 'Organizations',
     to: '/app/admin/organizations',
     icon: <User size={16} className="opacity-75 mr-1" />,
   },
   {
-    label: 'Assignment Types (moved)',
+    label: 'Assignment Types',
     to: '/app/admin/assignments',
     icon: <ClipboardList size={16} className="opacity-75 mr-1" />,
   },

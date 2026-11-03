@@ -336,10 +336,7 @@ export async function runGradingBenchmark({
           {
             evaluatorId: 'execution',
             status: 'fail',
-            message:
-              error instanceof Error
-                ? error.message
-                : 'Benchmark execution failed.',
+            message: 'Benchmark execution failed.',
           },
         ],
       });

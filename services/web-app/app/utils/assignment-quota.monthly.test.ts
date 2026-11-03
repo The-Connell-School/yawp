@@ -3,6 +3,9 @@ let enabled = true;
 mock.module('~/domain/free-tier/monthly-policy.server', () => ({
   monthlyFreeTierPolicy: async () => ({ enabled }),
 }));
+mock.module('~/domain/free-tier/locked-preview.server', () => ({
+  assertOrganizationTeachingApproved: async () => {},
+}));
 const {
   assertCanCreateAssignmentOfKindInTransaction,
   assertCanRetypeAssignmentOfKindInTransaction,
@@ -60,6 +63,6 @@ test('unlimited creation loaders remove quota exhausted fields', async () => {
   ]);
   expect(quotas.get('starter')).toEqual({});
   expect(quotas.get('essay')).toEqual({
-    unavailableReason: 'Available with a paid plan.',
+    unavailableReason: 'Available with a site license.',
   });
 });

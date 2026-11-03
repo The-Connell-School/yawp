@@ -4,6 +4,9 @@ import {
   beginGoogle,
   exchangeGoogle,
   googleAvailable,
+  googleAvailableFor,
+  googleOriginAllowed,
+  googleVisibleFor,
   toCallbackRedirect,
 } from './google.server';
 import type { Flow } from './flow.server';
@@ -168,8 +171,69 @@ test('linked Google callback turns a JSON screen state into a sign-in page redir
   const response = toCallbackRedirect(json);
   expect(response.status).toBe(302);
   expect(response.headers.get('location')).toBe('/auth/login?continue=1');
-  expect(response.headers.getSetCookie()).toEqual(['en_session=abc; Path=/; HttpOnly']);
+  expect(response.headers.getSetCookie()).toEqual([
+    'en_session=abc; Path=/; HttpOnly',
+  ]);
   expect(await response.text()).toBe('');
-  const already = new Response(null, { status: 302, headers: { Location: '/app' } });
+  const already = new Response(null, {
+    status: 302,
+    headers: { Location: '/app' },
+  });
   expect(toCallbackRedirect(already)).toBe(already);
+});
+
+test('without the preview allowlist switch every origin keeps Google (demo, production)', () => {
+  expect(googleOriginAllowed('https://yawp.school', {})).toBe(true);
+  expect(
+    googleOriginAllowed('https://demo.yawp.school', {
+      GOOGLE_OAUTH_ORIGIN_ALLOWLIST: '',
+    })
+  ).toBe(true);
+  expect(googleVisibleFor(new Request('http://localhost/auth/login'))).toBe(
+    true
+  );
+  expect(googleAvailableFor(new Request('http://localhost/auth/login'))).toBe(
+    true
+  );
+});
+test('a PR preview offers Google only on an allowlisted https origin', () => {
+  const env = { GOOGLE_OAUTH_REQUIRE_ORIGIN_ALLOWLIST: 'true' };
+  expect(googleOriginAllowed('https://pr-437.preview.yawp.school', env)).toBe(
+    false
+  );
+  const listed = {
+    ...env,
+    GOOGLE_OAUTH_ORIGIN_ALLOWLIST:
+      ' https://pr-565.preview.yawp.school ,bad, http://pr-437.preview.yawp.school',
+  };
+  expect(
+    googleOriginAllowed('https://pr-565.preview.yawp.school', listed)
+  ).toBe(true);
+  expect(
+    googleOriginAllowed('https://pr-437.preview.yawp.school', listed)
+  ).toBe(false);
+  expect(googleOriginAllowed('http://pr-437.preview.yawp.school', listed)).toBe(
+    false
+  );
+  const saved = { ...process.env };
+  try {
+    process.env.GOOGLE_OAUTH_REQUIRE_ORIGIN_ALLOWLIST = 'true';
+    process.env.GOOGLE_OAUTH_ORIGIN_ALLOWLIST =
+      'https://pr-565.preview.yawp.school';
+    const other = new Request('https://pr-437.preview.yawp.school/auth/login');
+    expect(googleVisibleFor(other)).toBe(false);
+    expect(googleAvailableFor(other)).toBe(false);
+    expect(() => beginGoogle(flow(), other)).toThrow();
+    const allowed = new Request(
+      'https://pr-565.preview.yawp.school/auth/login'
+    );
+    expect(googleAvailableFor(allowed)).toBe(true);
+    expect(beginGoogle(flow(), allowed).redirectTo).toContain(
+      'accounts.google.com'
+    );
+  } finally {
+    delete process.env.GOOGLE_OAUTH_REQUIRE_ORIGIN_ALLOWLIST;
+    delete process.env.GOOGLE_OAUTH_ORIGIN_ALLOWLIST;
+    Object.assign(process.env, saved);
+  }
 });

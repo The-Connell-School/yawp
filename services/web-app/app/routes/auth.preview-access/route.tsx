@@ -14,14 +14,14 @@ export const loader = createPreviewAccessLoader();
 export const action = createPreviewAccessAction();
 
 export const meta: Route.MetaFunction = () => [
-  { title: 'Preview Access | YAWP!' },
+  { title: 'Preview Access | Yawp!' },
   {
     name: 'description',
-    content: 'Enter an access code to open this YAWP! preview.',
+    content: 'Enter an access code to open this Yawp! preview.',
   },
 ];
 
-// The auth layout already shows the YAWP! logo above this card, so the card
+// The auth layout already shows the Yawp! logo above this card, so the card
 // itself carries no logo. Styling reuses the unified sign-on card tokens.
 export default function PreviewAccessRoute({
   loaderData,
@@ -48,7 +48,7 @@ export default function PreviewAccessRoute({
     >
       <div className="signon-stack">
         <AuthFormCard
-          title={master ? 'Choose an organization' : 'Find your YAWP!'}
+          title={master ? 'Choose an organization' : 'Find your Yawp!'}
           className="signon-card"
           icon={
             <p className="preview-access-eyebrow">

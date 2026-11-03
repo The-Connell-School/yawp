@@ -11,6 +11,7 @@
  *   cd packages/prisma && SOURCE_DATABASE_URL=... TARGET_DATABASE_URL=... bun ./scripts/compare-grade-submission-parity.ts
  */
 import pg from 'pg';
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 
 const SOURCE_URL = process.env.SOURCE_DATABASE_URL;
 const TARGET_URL = process.env.TARGET_DATABASE_URL ?? process.env.DATABASE_URL;
@@ -181,6 +182,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error(e);
+  logScriptError(e);
   process.exit(1);
 });

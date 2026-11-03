@@ -1,5 +1,6 @@
 import { Link, useLocation, useRouteError } from 'react-router';
 import { ChevronRight } from 'lucide-react';
+import { buildSafeErrorScalarsForLog } from '~/utils/error-log-scalars';
 import { Button } from './ui/button';
 
 export function GeneralErrorBoundary() {
@@ -9,7 +10,7 @@ export function GeneralErrorBoundary() {
 
   if (typeof document !== 'undefined') {
     // eslint-disable-next-line no-console
-    console.error(error);
+    console.error('route_error_boundary', buildSafeErrorScalarsForLog(error));
   }
 
   return isAppDocumentRoute ? (

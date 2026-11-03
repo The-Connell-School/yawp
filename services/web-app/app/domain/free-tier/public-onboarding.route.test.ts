@@ -98,7 +98,7 @@ for (const [value, expected] of [['true', true], ['false', false], ['{"mode":"ta
     setting.mockResolvedValue(value === null ? null : { value });
     const result = await landing.loader({ request: new Request('http://localhost/free') } as never);
     expect(result).toMatchObject({ onboardingV2: expected });
-    expect(setting.mock.calls[0][0]).toEqual({ where: { name: 'feature_flag.free-tier-onboarding-v2' }, select: { value: true } });
+    expect(setting.mock.calls[0][0]).toEqual({ where: { name: 'feature_flag.free_tier' }, select: { value: true } });
   });
 }
 test('unreadable setting keeps the legacy public loader', async () => {

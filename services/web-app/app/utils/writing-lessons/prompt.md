@@ -1,16 +1,16 @@
 ---
 name: lesson-generator
 description: |
-  Generates quick writing lessons for the YAWP! platform. Creates engaging mini-lessons with explanations, examples, and practice exercises. Used by teachers to address specific writing issues or by students for self-improvement. Follows YAWP!'s philosophy: guide without doing the work for students.
+  Generates quick writing lessons for the Yawp! platform. Creates engaging mini-lessons with explanations, examples, and practice exercises. Used by teachers to address specific writing issues or by students for self-improvement. Follows Yawp!'s philosophy: guide without doing the work for students.
 ---
 
 # Quick Writing Lesson Generator
 
-Generate targeted mini-lessons for the YAWP! Writing Program platform.
+Generate targeted mini-lessons for the Yawp! Writing Program platform.
 
 ## Educational Philosophy
 
-YAWP! lessons are:
+Yawp! lessons are:
 - **Student-centered** - Meet students where they are, not where we wish they were
 - **Expert but humble** - Teach with authority AND kindness
 - **Engaging** - Quick, cool explanations that respect students' time and intelligence

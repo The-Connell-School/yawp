@@ -1,19 +1,29 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from 'bun:test';
 
 let monthlyEnabled = false;
+let reporterMonthlyLimit = 2;
 const beginMonthlyOperation = mock();
 const finishMonthlyOperation = mock();
 const failMonthlyOperation = mock();
 mock.module('~/domain/free-tier/monthly-policy.server', () => ({
   monthlyFreeTierPolicy: async () => ({
     enabled: monthlyEnabled,
-    limits: { reporterMonthly: 2, lessonPlannerMonthly: 5 },
+    limits: { reporterMonthly: reporterMonthlyLimit, lessonPlannerMonthly: 5 },
   }),
 }));
 mock.module('~/domain/free-tier/monthly-operations.server', () => ({
   beginMonthlyOperation,
   finishMonthlyOperation,
   failMonthlyOperation,
+  readMonthlyUsage: async () => 0,
   replayMonthlyOperation: async () => null,
   monthlyOperationResponse: (result: any) =>
     Response.json(result.payload ?? { error: result.kind }, {
@@ -107,6 +117,7 @@ const access = {
 
 beforeEach(() => {
   monthlyEnabled = false;
+  reporterMonthlyLimit = 2;
   beginMonthlyOperation
     .mockReset()
     .mockResolvedValue({ kind: 'reserved', name: 'operation', operation: {} });
@@ -126,6 +137,11 @@ beforeEach(() => {
   prisma.$transaction.mockImplementation(
     async (callback: (client: typeof prisma) => unknown) => callback(prisma)
   );
+});
+
+afterEach(() => {
+  monthlyEnabled = false;
+  reporterMonthlyLimit = 2;
 });
 
 describe('api.domain.reporter action', () => {
@@ -510,6 +526,20 @@ describe('api.domain.reporter action', () => {
 });
 
 describe('monthly direct action admission', () => {
+  test('approved free-tier teacher at zero remaining cannot start a new report', async () => {
+    monthlyEnabled = true;
+    beginMonthlyOperation.mockResolvedValue({ kind: 'exhausted' });
+    const result = (await action({
+      request: formRequest({
+        message: 'New report turn',
+        requestId: 'zero-remaining',
+      }),
+    } as any)) as Response;
+    expect(result.status).toBe(403);
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(reserveAiRequest).not.toHaveBeenCalled();
+    expect(prisma.reporterConversation.create).not.toHaveBeenCalled();
+  });
   test('zero/exhausted cap denies generation and persistence; pending duplicates return 409', async () => {
     monthlyEnabled = true;
     for (const kind of ['exhausted', 'pending', 'conflict']) {
@@ -565,5 +595,23 @@ describe('monthly direct action admission', () => {
     } as any);
     expect(failMonthlyOperation).toHaveBeenCalledTimes(1);
     expect(finishMonthlyOperation).not.toHaveBeenCalled();
+  });
+  test('max reporter cap skips monthly admission and request id', async () => {
+    monthlyEnabled = true;
+    reporterMonthlyLimit = 100;
+    getLLMCompletion.mockResolvedValue('Unmetered turn.');
+    prisma.reporterConversation.create.mockResolvedValue({
+      id: 'conv-max',
+      messages: [],
+    });
+    prisma.reporterConversation.update.mockResolvedValue({});
+
+    const response = await action({
+      request: formRequest({ message: 'Intern week question' }),
+    } as any);
+
+    expect(beginMonthlyOperation).not.toHaveBeenCalled();
+    const body = (await jsonResult(response).data) as { reply: string };
+    expect(body.reply).toBe('Unmetered turn.');
   });
 });

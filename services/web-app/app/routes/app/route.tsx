@@ -1,6 +1,10 @@
 import './free-account.css';
 import { readFreeAccountUsage } from '~/domain/free-tier/inapp-usage.server';
-import { FreeAccountUsagePopover } from '~/components/free-account-usage';
+import {
+  freeTierNavMobileWarningDot,
+  renderFreeTierNavRow,
+  renderFreeTierNavTrailing,
+} from '~/components/free-tier/free-tier-nav-usage';
 import { canUseMockAdmin, requireMockAdmin } from '~/utils/mock-admin.server';
 import {
   Form,
@@ -16,8 +20,9 @@ import {
   useFetcher,
   useRevalidator,
   useRouteLoaderData,
+  useNavigation,
 } from 'react-router';
-import { Settings2, Cog, Microscope, Lock } from 'lucide-react';
+import { Settings2, Cog, Microscope } from 'lucide-react';
 import { useCallback, useEffect, useState, useRef, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
@@ -26,10 +31,9 @@ import {
   ExitIcon,
   HamburgerIcon,
   ReloadIcon,
-  SlashIcon,
   XIcon,
 } from '~/components/icons';
-import { Button, button } from '~/components/ui/button';
+import { Button } from '~/components/ui/button';
 import {
   Popover,
   PopoverContent,
@@ -39,10 +43,7 @@ import { Tooltip } from '~/components/ui/tooltip';
 import useBreakpoint from '~/hooks/useBreakpoint';
 import { useOnSwipe } from '~/hooks/useHorizontalSwipe';
 import { useUser } from '~/hooks/useUser';
-import {
-  BreadcrumbHandleMatch,
-  type BreadcrumbHandle,
-} from '~/utils/breadcrumb';
+import { type BreadcrumbHandle } from '~/utils/breadcrumb';
 import { cn } from '~/utils/misc';
 import { NavStateSwitch, useNavState } from '../api.preferences.nav/route';
 import { ContrastPreferenceSwitch } from '../api.preferences.contrast/route';
@@ -82,7 +83,13 @@ import {
   TourThisPageButton,
 } from '~/components/guided-tour/guided-tour';
 import { loadGuidedTours } from '~/domain/guided-tours/guided-tours.server';
-import { isDemoFreeTierRouteOpen } from '~/utils/free-tier/free-tier-feature-gate.server';
+import { TeachingAccessProvider } from '~/components/free-tier/teaching-access-context';
+import type { TeachingAccessShellState } from '~/domain/free-tier/teaching-access-shell.server';
+import { getMembershipId } from '~/cookies/membership-id.server';
+import {
+  appRouteDocumentTitle,
+  resolveAppMobileTopBarTitle,
+} from '~/utils/app-mobile-top-bar-title';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -106,16 +113,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
         options: [] as string[],
         isStudent: false,
       },
-      guidedTours: null,
-    });
+        guidedTours: null,
+        teachingAccess: { variant: 'none' } satisfies TeachingAccessShellState,
+      });
   }
   const userId = await requireUserId(request);
   const mockAdminAvailable = await canUseMockAdmin(userId);
   const { isFreeTierEnabled } =
     await import('~/domain/feature-flags/feature-flags.server');
   const freeTierFeatureOn = await isFreeTierEnabled();
-  const freeTierRouteOpen =
-    freeTierFeatureOn || isDemoFreeTierRouteOpen(process.env);
+  const freeTierRouteOpen = freeTierFeatureOn;
   const { loadFreeTierGateApplication, enforceFreeTierTeacherGate } =
     await import('~/domain/free-tier/free-tier-gate.server');
   const freeTierApplication = freeTierRouteOpen
@@ -125,6 +132,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (freeTierApplication) {
     const { retryFreeClassroomProvisioningForUser } =
       await import('~/domain/free-tier/provision-free-classroom.server');
+    const { ensureLockedPreviewClassroomForUser } =
+      await import('~/domain/free-tier/locked-preview.server');
+    await ensureLockedPreviewClassroomForUser(userId);
     await retryFreeClassroomProvisioningForUser(userId);
     await enforceFreeTierTeacherGate({
       userId,
@@ -142,6 +152,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           isStudent: false,
         },
         guidedTours: null,
+        teachingAccess: { variant: 'none' } satisfies TeachingAccessShellState,
       });
     }
   }
@@ -192,16 +203,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Free classroom teachers get page tours instead of a hands-on orientation.
   const guidedTours = await loadGuidedTours(userId, profile, request);
-
+  const { loadTeachingAccessShellState } =
+    await import('~/domain/free-tier/teaching-access-shell.server');
+  const teachingAccess = freeTierRouteOpen
+    ? await loadTeachingAccessShellState({
+        userId,
+        membershipId: await getMembershipId(request),
+        role: profile.role,
+        organizationPlan: profile.organization.plan,
+        organizationId: profile.organization.id,
+      })
+    : ({ variant: 'none' } satisfies TeachingAccessShellState);
   return data({
     mockAdminAvailable,
-    freeAccountUsage: await readFreeAccountUsage(profile, freeTierRouteOpen),
+    freeAccountUsage: await readFreeAccountUsage(
+      profile,
+      freeTierRouteOpen,
+      userId
+    ),
     schoolYearScope: {
       selected,
       options: selectableOptions,
       isStudent: profile.role === 'STUDENT',
     },
     guidedTours,
+    teachingAccess,
   });
 }
 
@@ -227,12 +253,16 @@ function isAppNavLinkActive(linkTo: string, pathname: string) {
 }
 
 export default function Route() {
+  const navigation = useNavigation();
   const location = useLocation();
   const user = useUser();
   const shellData = useLoaderData<typeof loader>();
-  const { schoolYearScope, guidedTours, mockAdminAvailable } = shellData;
+  const { schoolYearScope, guidedTours, mockAdminAvailable, teachingAccess } =
+    shellData;
   const freeAccountUsage =
     'freeAccountUsage' in shellData ? shellData.freeAccountUsage : null;
+  const usageNavLoading =
+    navigation.state === 'loading' && Boolean(freeAccountUsage);
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const isReadOnlyImpersonation = rootData?.impersonation?.isReadOnly ?? false;
@@ -249,23 +279,15 @@ export default function Route() {
   const isNavExpanded = navState === 'expanded' || isMobile;
   const navExpanded = (isMobile && isMobileNavOpen) || isNavExpanded;
 
-  const breadcrumbs = matches
-    .map((m) => {
-      const result = BreadcrumbHandleMatch.safeParse(m);
-      if (!result.success || !result.data.handle.breadcrumb) return null;
-      if (typeof result.data.handle.breadcrumb !== 'string')
-        return result.data.handle.breadcrumb;
-      return (
-        <Link
-          key={m.id}
-          to={m.pathname}
-          className={button({ variant: 'ghost', size: 'sm' })}
-        >
-          {result.data.handle.breadcrumb}
-        </Link>
-      );
-    })
-    .filter(Boolean);
+  const mobileTopBarTitle = resolveAppMobileTopBarTitle(
+    matches,
+    location.pathname
+  );
+
+  useEffect(() => {
+    if (!isMobile) return;
+    document.title = appRouteDocumentTitle(mobileTopBarTitle);
+  }, [isMobile, mobileTopBarTitle]);
 
   const onSwipe = useCallback(
     (direction: 'left' | 'right') => {
@@ -322,7 +344,7 @@ export default function Route() {
       <nav
         data-tour="app-nav"
         className={cn(
-          'z-20 flex h-full w-[212px] min-w-[212px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out sm:translate-x-0',
+          'z-20 flex h-full min-h-0 w-[212px] min-w-[212px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out sm:translate-x-0',
           {
             'translate-x-0': isMobileNavOpen,
             'w-[56px] min-w-0 items-center': !navExpanded,
@@ -374,7 +396,7 @@ export default function Route() {
             <XIcon />
           </Button>
         </div>
-        <div className="p-3">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
           {mockAdminAvailable && (
             <Link
               to="/app/tester/waitlist"
@@ -404,12 +426,7 @@ export default function Route() {
                         {
                           to: '/app/reporter',
                           label: 'Reporter',
-                          icon: (
-                            <>
-                              <Microscope size={18} />
-                              {!freeAccountUsage.monthly && <Lock size={12} />}
-                            </>
-                          ),
+                          icon: <Microscope size={18} />,
                         },
                       ],
                     },
@@ -421,18 +438,38 @@ export default function Route() {
             pathname={location.pathname}
             isAppNavLinkActive={isAppNavLinkActive}
             forceFullNavigation={isClassDetailRoute}
+            renderLinkTrailing={
+              freeAccountUsage
+                ? (link) =>
+                    renderFreeTierNavTrailing({
+                      link,
+                      usage: freeAccountUsage,
+                      loading: usageNavLoading,
+                      navExpanded,
+                      isMobile,
+                    })
+                : undefined
+            }
+            renderNavRow={
+              freeAccountUsage
+                ? ({ link, isActive, rowClassName, linkClassName, icon }) =>
+                    renderFreeTierNavRow({
+                      link,
+                      usage: freeAccountUsage,
+                      loading: usageNavLoading,
+                      navExpanded,
+                      isMobile,
+                      isActive,
+                      rowClassName,
+                      linkClassName,
+                      forceFullNavigation: isClassDetailRoute,
+                      icon,
+                    })
+                : undefined
+            }
           />
         </div>
-        <div className="flex flex-grow flex-col justify-end">
-          {freeAccountUsage && (
-            <FreeAccountUsagePopover
-              usage={freeAccountUsage}
-              expanded={navExpanded}
-              isMobile={isMobile}
-              onMobileOpen={() => setIsMobileNavOpen(false)}
-              onMobileClose={() => mobileNavTrigger.current?.focus()}
-            />
-          )}
+        <div className="flex shrink-0 flex-col justify-end">
           {guidedTours && !isReadOnlyImpersonation ? (
             <TourThisPageButton
               navExpanded={navExpanded}
@@ -446,7 +483,10 @@ export default function Route() {
                 {navExpanded ? <p className="">Settings</p> : null}
               </div>
             </PopoverTrigger>
-            <PopoverContent className="m-1 p-0">
+            <PopoverContent
+              collisionPadding={8}
+              className="m-1 max-h-[var(--radix-popover-content-available-height)] overflow-y-auto p-0"
+            >
               <div className="flex justify-between p-3 border-b">
                 <div className="flex flex-col">
                   <p className="text-sm font-bold">{user.name}</p>
@@ -576,27 +616,19 @@ export default function Route() {
             ref={mobileNavTrigger}
             aria-label={freeAccountUsage ? 'Open app navigation' : undefined}
             onClick={() => setIsMobileNavOpen(true)}
+            className="relative"
           >
             <HamburgerIcon />
+            {freeAccountUsage &&
+            freeTierNavMobileWarningDot(freeAccountUsage, usageNavLoading) ? (
+              <span
+                className="absolute right-1 top-1 size-2 rounded-full bg-primary"
+                aria-hidden
+              />
+            ) : null}
           </Button>
           <div className="flex items-center">
-            {freeAccountUsage &&
-            normalizePathname(location.pathname) === '/app' ? (
-              <span className="px-3 text-sm">Dashboard</span>
-            ) : (
-              breadcrumbs.map((bc, i) => (
-                <slot key={bc.key}>
-                  {i === 0 ? (
-                    bc
-                  ) : (
-                    <>
-                      <SlashIcon />
-                      {bc}
-                    </>
-                  )}
-                </slot>
-              ))
-            )}
+            <span className="px-3 text-sm font-medium">{mobileTopBarTitle}</span>
           </div>
           <Button
             variant="outline"
@@ -612,13 +644,19 @@ export default function Route() {
           height:100% of this whole column (which double-counts that chrome
           and pushes fixed-height app shells like the Reporter off-screen).
         */}
-        <NavExpandedContext.Provider
-          value={{ isMobileNavOpen, setIsMobileNavOpen }}
+        <TeachingAccessProvider
+          state={
+            teachingAccess ?? ({ variant: 'none' } satisfies TeachingAccessShellState)
+          }
         >
-          <div className="min-h-0 flex-1">
-            <Outlet key={location.pathname} />
-          </div>
-        </NavExpandedContext.Provider>
+          <NavExpandedContext.Provider
+            value={{ isMobileNavOpen, setIsMobileNavOpen }}
+          >
+            <div className="min-h-0 flex-1">
+              <Outlet key={location.pathname} />
+            </div>
+          </NavExpandedContext.Provider>
+        </TeachingAccessProvider>
         {guidedTours && !isReadOnlyImpersonation ? (
           <GuidedTour {...guidedTours} />
         ) : null}

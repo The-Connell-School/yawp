@@ -201,8 +201,7 @@ export async function submitGroupDraft({
       where: { id: journal.id },
       data: {
         status: 'rejected',
-        failureReason:
-          error instanceof Error ? error.message : 'collab_submit_failed',
+        failureReason: 'collab_submit_failed',
       },
     });
     throw error;

@@ -74,3 +74,15 @@ describe('splitReplyParts', () => {
     expect(parts[0]!.material.key).toBe('0');
   });
 });
+
+describe("splitReplyParts — writing exercises carry a stack key (Brian's review, B1)", () => {
+  test('numbers class starters and Daily Pages in reply order', () => {
+    const parts = splitReplyParts(
+      '```yawp-daily-pages\nOne.\n```\n\ntext\n\n```yawp-daily-pages\nTwo.\n```'
+    );
+    const keys = parts
+      .filter((part) => part.kind === 'daily-pages')
+      .map((part) => (part.kind === 'daily-pages' ? part.blockKey : null));
+    expect(keys).toEqual(['dp', 'dp:1']);
+  });
+});

@@ -283,6 +283,7 @@ describe('findWritingExerciseTypeIds', () => {
       dailyPages: 'at-1',
       classStarter: 'at-2',
       exitTicket: 'at-4',
+      thesis: null,
     });
   });
 
@@ -313,6 +314,7 @@ describe('findWritingExerciseTypeIds', () => {
       dailyPages: 'at-1',
       classStarter: 'at-2',
       exitTicket: 'at-3',
+      thesis: null,
     });
   });
 
@@ -331,6 +333,7 @@ describe('findWritingExerciseTypeIds', () => {
       dailyPages: 'at-1',
       classStarter: 'at-2',
       exitTicket: null,
+      thesis: null,
     });
   });
 
@@ -369,11 +372,21 @@ describe('findWritingExerciseTypeIds', () => {
       dailyPages: null,
       classStarter: null,
       exitTicket: null,
+      thesis: null,
     });
   });
 
   test('resolves all three from one pass over the assignable types', async () => {
     await findWritingExerciseTypeIds(ctx, dependencies);
     expect(getAvailableAssignmentTypesForScopes).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("findWritingExerciseTypeIds — Thesis Essay modules (Brian's run 3, item 4)", () => {
+  test('finds the thesis statement type by its kind', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-9', title: 'Thesis Statement', systemKey: null, kind: 'thesis_statement' },
+    ]);
+    expect((await findWritingExerciseTypeIds(ctx, dependencies)).thesis).toBe('at-9');
   });
 });

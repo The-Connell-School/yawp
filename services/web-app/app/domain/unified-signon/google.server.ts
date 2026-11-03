@@ -22,8 +22,37 @@ export function googleAvailable() {
     process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim()
   );
 }
+/** PR previews share one OAuth client whose redirect URIs list only a few
+ * origins. Their deploy sets GOOGLE_OAUTH_REQUIRE_ORIGIN_ALLOWLIST=true, so
+ * Google is offered only on an origin in GOOGLE_OAUTH_ORIGIN_ALLOWLIST
+ * (comma-separated, empty by default). Demo and production never set it and
+ * keep their current behavior. */
+export function googleOriginAllowed(
+  origin: string,
+  env: Record<string, string | undefined> = process.env
+) {
+  if (env.GOOGLE_OAUTH_REQUIRE_ORIGIN_ALLOWLIST !== 'true') return true;
+  return (env.GOOGLE_OAUTH_ORIGIN_ALLOWLIST ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .some((entry) => {
+      try {
+        const url = new URL(entry);
+        return url.protocol === 'https:' && url.origin === origin;
+      } catch {
+        return false;
+      }
+    });
+}
+export function googleVisibleFor(request: Request) {
+  return googleOriginAllowed(signonRequestOrigin(request));
+}
+export function googleAvailableFor(request: Request) {
+  return googleAvailable() && googleVisibleFor(request);
+}
 export function beginGoogle(flow: Flow, request: Request, linkUserId?: string) {
-  if (!googleAvailable())
+  if (!googleAvailableFor(request))
     throw new FlowError(
       'Google sign-in is unavailable. Use your email or class code.',
       503
@@ -122,17 +151,21 @@ export function toCallbackRedirect(response: Response): Response {
   if (response.status >= 300 && response.status < 400) return response;
   const headers = new Headers();
   response.headers.forEach((value, key) => {
-    if (key.toLowerCase() !== 'set-cookie' && key.toLowerCase() !== 'content-type')
+    if (
+      key.toLowerCase() !== 'set-cookie' &&
+      key.toLowerCase() !== 'content-type'
+    )
       headers.set(key, value);
   });
-  for (const cookie of response.headers.getSetCookie()) headers.append('set-cookie', cookie);
+  for (const cookie of response.headers.getSetCookie())
+    headers.append('set-cookie', cookie);
   headers.set('Location', '/auth/login?continue=1');
   return new Response(null, { status: 302, headers });
 }
 export async function googleCallback(request: Request): Promise<Response> {
   if (!(await isUnifiedSignOnEnabled()))
     return new Response('Not found', { status: 404 });
-  if (!googleAvailable())
+  if (!googleAvailableFor(request))
     return Response.json(
       { error: 'Google sign-in is unavailable.' },
       { status: 503 }

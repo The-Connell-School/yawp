@@ -296,3 +296,16 @@ describe('aggregating against an assignment type’s own rubric', () => {
     });
   });
 });
+
+
+test('recorded scores include zero and points grades, and never infer a final grade from category rows', () => {
+  const aggregate = aggregateRubricPerformance([
+    { submissionId: 'points', score: '30/30', overallScore: 30 },
+    { submissionId: 'zero', numericPercentage: 0 },
+    { submissionId: 'legacy', score: 'B' },
+    { submissionId: 'ungraded', rubricScores: { thesis_and_content: 5 } },
+  ]);
+  expect(aggregate.submissionCount).toBe(4);
+  expect(aggregate.scoredCount).toBe(3);
+  expect(aggregate.finalGrades).toHaveLength(3);
+});

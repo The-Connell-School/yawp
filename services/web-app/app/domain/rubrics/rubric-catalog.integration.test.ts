@@ -83,6 +83,8 @@ run('editing an already-versioned rubric leaves pinned assignments and every old
   // Baseline the way production did on 2026-09-30: a write of schemaJson creates v1 via the trigger.
   const first = await catalog.get(name);
   const doc1 = structuredClone(first.live.editable) as any; doc1.calibrationNotes = 'Baseline notes';
+  // New revisions retain the scale used by existing weighted_percent content.
+  expect(doc1.scoringScale.type).toBe('weighted_percent');
   const v1 = await catalog.save({ key: name, requestId: randomUUID(), actorEmail: actor, reason: 'Baseline', expectedFingerprint: first.live.fingerprint, document: doc1 });
   const existing = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'Pinned to current' } });
   expect(existing.rubricRevisionId).toBe(v1.revision.id);
@@ -97,6 +99,7 @@ run('editing an already-versioned rubric leaves pinned assignments and every old
   expect((await db.assignment.findUniqueOrThrow({ where: { id: existing.id } })).rubricRevisionId).toBe(v1.revision.id);
   const afterRows = await db.rubricRevision.findMany({ where: { rubricName: name }, orderBy: { version: 'asc' } });
   expect(afterRows.slice(0, snapshot.length)).toEqual(snapshot);
+  expect((afterRows.at(-1)!.schemaJson as any).scoringScale.type).toBe('weighted_percent');
   await expect((async () => db.rubricRevision.update({ where: { id: v1.revision.id }, data: { reason: 'tamper' } }))()).rejects.toBeTruthy();
   cleanup.push(() => db.assignment.deleteMany({ where: { assignmentTypeId: type.id } }));
 });

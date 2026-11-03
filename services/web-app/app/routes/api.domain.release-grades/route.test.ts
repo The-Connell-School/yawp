@@ -526,6 +526,65 @@ describe('api.domain.release-grades', () => {
     expect(query.where.unsubmittedAt).toBeNull();
   });
 
+  test('logs safe error metadata when Blackboard passback prefetch fails', async () => {
+    const warnSpy = mock(() => {});
+    const originalWarn = console.warn;
+    console.warn = warnSpy as typeof console.warn;
+
+    const transactionSubmission = {
+      id: 'sub-1',
+      releasedAt: null,
+      updatedAt: new Date('2026-08-21T10:00:00.000Z'),
+      document: {
+        membership: { organizationId: 'org-1' },
+        classAssignment: {
+          class: {
+            id: 'class-1',
+            schoolId: 'school-1',
+            school: { organizationId: 'org-1' },
+            teachers: [{ id: 'teacher-1' }],
+          },
+        },
+      },
+    };
+
+    prisma.submission.findMany
+      .mockResolvedValueOnce([transactionSubmission])
+      .mockRejectedValueOnce(new Error('token=super-secret-value'));
+
+    const form = new FormData();
+    form.append('submissionIds', 'sub-1');
+
+    try {
+      const response = await action({
+        request: new Request('https://example.com/api/domain/release-grades', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+      const payload = response as {
+        data: Record<string, unknown>;
+        init?: { status?: number };
+      };
+
+      expect(payload.data.success).toBe(true);
+      expect(warnSpy).toHaveBeenCalledWith(
+        'blackboard_ags_passback_on_release_failed',
+        expect.objectContaining({
+          error: expect.objectContaining({
+            name: 'Error',
+            message: expect.stringContaining('[redacted-token]'),
+          }),
+        })
+      );
+      expect(JSON.stringify(warnSpy.mock.calls[0])).not.toContain(
+        'super-secret-value'
+      );
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
   test('rejects non-teachers', async () => {
     canManageGrades.mockReturnValue(false);
 

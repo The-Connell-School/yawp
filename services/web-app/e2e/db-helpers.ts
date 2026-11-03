@@ -1,3 +1,7 @@
+import {
+  CLASS_INSIGHT_INPUT_VERSION,
+  classInsightFingerprint,
+} from '../app/domain/assignment-insights/class-insight-cache';
 import type { E2EPrismaClient } from './prisma-client';
 import { currentSchoolYear } from '../app/utils/school-year';
 import { generateTOTP } from '../app/utils/totp.server';
@@ -122,7 +126,9 @@ export async function ensureDocumentUnsubmitted(params: {
   const { prisma, documentId } = params;
   // Fixture cleanup may remove its own audit rows. Production flows retain them.
   await prisma.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe("SET LOCAL session_replication_role = 'replica'");
+    await tx.$executeRawUnsafe(
+      "SET LOCAL session_replication_role = 'replica'"
+    );
     await tx.submissionActivity.deleteMany({
       where: { submission: { documentId } },
     });
@@ -333,5 +339,47 @@ export async function createTeacherClassPilotFixture(params: {
     assignmentId: assignment.id,
     documentId: document.id,
     submissionId: submission.id,
+  };
+}
+
+/** Seed cache metadata from the actual grades instead of constructing an obsolete summary. */
+export async function currentInsightSummary<T extends Record<string, unknown>>(
+  prisma: E2EPrismaClient,
+  classAssignmentId: string,
+  summary: T
+) {
+  const documents = await prisma.document.findMany({
+    where: { classAssignmentId, deletedAt: null },
+    select: {
+      submissions: {
+        where: {
+          OR: [{ gradedAt: { not: null } }, { releasedAt: { not: null } }],
+        },
+        orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
+        take: 1,
+        select: {
+          id: true,
+          score: true,
+          overallScore: true,
+          numericPercentage: true,
+          gradedAt: true,
+          releasedAt: true,
+          rubricScores: true,
+          overallComment: true,
+        },
+      },
+    },
+  });
+  return {
+    ...summary,
+    inputVersion: CLASS_INSIGHT_INPUT_VERSION,
+    gradeFingerprint: classInsightFingerprint(
+      documents.flatMap((doc) =>
+        doc.submissions.map(({ id, ...grade }) => ({
+          submissionId: id,
+          ...grade,
+        }))
+      )
+    ),
   };
 }

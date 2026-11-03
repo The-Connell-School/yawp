@@ -3,8 +3,8 @@ name: Demo environment
 # The demo box at demo.yawp.school. Brian demos from this, so it is the one environment
 # that must not surprise anyone:
 #
-#   - It ships ONLY when someone asks. No push trigger, no schedule. A merge to main does
-#     not change what a client sees mid-demo.
+#   - It auto-ships after a successful production deploy of the default branch (same commit
+#     SHA as Deploy). Manual workflow_dispatch remains for rollbacks and optional reseeds.
 #   - It runs the PRODUCTION build path, not the fast dev-server path previews use. Slower
 #     to deploy, but what Brian shows is what production does.
 #   - It lives on its own host, so a preview host wedging cannot take the demo down with it.
@@ -13,6 +13,11 @@ name: Demo environment
 # Rolling back is the same operation as shipping: dispatch again with an older ref.
 
 on:
+  workflow_run:
+    workflows:
+      - '🚀 Deploy'
+    types:
+      - completed
   workflow_dispatch:
     inputs:
       ref:
@@ -36,17 +41,145 @@ on:
         default: '14'
 
 concurrency:
-  group: demo-environment
+  group: >-
+    ${{ (github.event_name == 'workflow_dispatch' ||
+         (github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_branch == github.event.repository.default_branch &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_repository.full_name == github.repository)) &&
+        'demo-environment' ||
+        format('demo-environment-ignored-{0}', github.run_id) }}
   cancel-in-progress: false
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
-  demo-deploy:
+  build-demo-images:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == github.event.repository.default_branch &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-22.04
     environment: demo
     env:
+      DEMO_APP_REF: >-
+        ${{ github.event_name == 'workflow_dispatch' && inputs.ref ||
+            github.event.workflow_run.head_sha }}
+    outputs:
+      demo_web_image: ${{ steps.images-ecr.outputs.web_image || steps.images-fallback.outputs.web_image }}
+      demo_toolbox_image: ${{ steps.images-ecr.outputs.toolbox_image || steps.images-fallback.outputs.toolbox_image }}
+      demo_git_sha: ${{ steps.shipping.outputs.full_sha }}
+    steps:
+      - name: Checkout the requested application ref
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.DEMO_APP_REF }}
+          path: demo-source
+          persist-credentials: false
+
+      - name: Resolve immutable image tag
+        id: shipping
+        working-directory: demo-source
+        run: |
+          set -euo pipefail
+          echo "full_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: On-host build fallback (ECR push role unset)
+        id: images-fallback
+        if: vars.DEMO_ECR_PUSH_ROLE_ARN == ''
+        run: |
+          set -euo pipefail
+          echo "web_image=" >> "$GITHUB_OUTPUT"
+          echo "toolbox_image=" >> "$GITHUB_OUTPUT"
+          echo "DEMO_ECR_PUSH_ROLE_ARN is unset; demo host will build production images locally."
+
+      - name: Configure AWS credentials for ECR push
+        if: vars.DEMO_ECR_PUSH_ROLE_ARN != ''
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ vars.DEMO_ECR_PUSH_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Log in to Amazon ECR
+        if: vars.DEMO_ECR_PUSH_ROLE_ARN != ''
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2
+
+      - name: Resolve demo image URIs
+        id: images-ecr
+        if: vars.DEMO_ECR_PUSH_ROLE_ARN != ''
+        env:
+          FULL_SHA: ${{ steps.shipping.outputs.full_sha }}
+        run: |
+          set -euo pipefail
+          account="$(aws sts get-caller-identity --query Account --output text)"
+          registry="${account}.dkr.ecr.us-east-1.amazonaws.com"
+          web_image="${registry}/yawp-demo-web:${FULL_SHA}"
+          toolbox_image="${registry}/yawp-demo-toolbox:${FULL_SHA}"
+          echo "web_image=${web_image}" >> "$GITHUB_OUTPUT"
+          echo "toolbox_image=${toolbox_image}" >> "$GITHUB_OUTPUT"
+          if aws ecr describe-images --repository-name yawp-demo-web --image-ids "imageTag=${FULL_SHA}" >/dev/null 2>&1; then
+            echo "skip_web=true" >> "$GITHUB_OUTPUT"
+            echo "Demo web image already exists in ECR for ${FULL_SHA}; skipping web push."
+          else
+            echo "skip_web=false" >> "$GITHUB_OUTPUT"
+          fi
+          if aws ecr describe-images --repository-name yawp-demo-toolbox --image-ids "imageTag=${FULL_SHA}" >/dev/null 2>&1; then
+            echo "skip_toolbox=true" >> "$GITHUB_OUTPUT"
+            echo "Demo toolbox image already exists in ECR for ${FULL_SHA}; skipping toolbox push."
+          else
+            echo "skip_toolbox=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        if: vars.DEMO_ECR_PUSH_ROLE_ARN != '' && (steps.images-ecr.outputs.skip_web != 'true' || steps.images-ecr.outputs.skip_toolbox != 'true')
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Build and push demo web image
+        if: vars.DEMO_ECR_PUSH_ROLE_ARN != '' && steps.images-ecr.outputs.skip_web != 'true'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: demo-source
+          file: demo-source/services/web-app/Dockerfile
+          target: production
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.images-ecr.outputs.web_image }}
+          build-args: |
+            YAWP_ENVIRONMENT=demo
+            YAWP_GIT_COMMIT=${{ steps.shipping.outputs.full_sha }}
+            YAWP_BUILT_AT=${{ steps.shipping.outputs.built_at }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push demo toolbox image
+        if: vars.DEMO_ECR_PUSH_ROLE_ARN != '' && steps.images-ecr.outputs.skip_toolbox != 'true'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: demo-source
+          file: demo-source/services/web-app/Dockerfile
+          target: deps
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.images-ecr.outputs.toolbox_image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  demo-deploy:
+    if: >-
+      !cancelled() && needs.build-demo-images.result == 'success'
+    runs-on: ubuntu-22.04
+    needs: build-demo-images
+    environment: demo
+    env:
+      DEMO_APP_REF: >-
+        ${{ github.event_name == 'workflow_dispatch' && inputs.ref ||
+            github.event.workflow_run.head_sha }}
       PREVIEW_SLUG: demo
       PREVIEW_DOMAIN: ${{ vars.DEMO_DOMAIN || 'yawp.school' }}
       PREVIEW_HOST: ${{ vars.DEMO_HOST }}
@@ -75,14 +208,22 @@ jobs:
       PREVIEW_MANAGEMENT_SERVICE_KEY: ${{ secrets.DEMO_MANAGEMENT_SERVICE_KEY }}
       # Existing demo-scoped HMAC keys; never fall back to production keys.
       DEMO_INTERNAL_API_KEYS: ${{ secrets.DEMO_INTERNAL_API_KEYS }}
+      # Enable only after the isolated storage plan has been reviewed and applied.
+      DEMO_TRAINING_MEDIA_ENABLED: ${{ vars.DEMO_TRAINING_MEDIA_ENABLED || 'false' }}
       PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
       PREVIEW_LOGIN_EMAIL: ${{ secrets.DEMO_LOGIN_EMAIL || secrets.PREVIEW_LOGIN_EMAIL }}
       PREVIEW_LOGIN_PASSWORD: ${{ secrets.DEMO_LOGIN_PASSWORD || secrets.PREVIEW_LOGIN_PASSWORD }}
-      DEMO_RESET_DATA: ${{ inputs.reset_data }}
-      DEMO_RESET_CONFIRMATION: ${{ inputs.reset_confirmation }}
-      DEMO_BACKUP_RETENTION: ${{ inputs.backup_retention }}
+      DEMO_RESET_DATA: >-
+        ${{ github.event_name == 'workflow_dispatch' && inputs.reset_data == true &&
+            'true' || 'false' }}
+      DEMO_RESET_CONFIRMATION: >-
+        ${{ github.event_name == 'workflow_dispatch' && inputs.reset_confirmation || '' }}
+      DEMO_BACKUP_RETENTION: >-
+        ${{ github.event_name == 'workflow_run' && '14' || inputs.backup_retention }}
       DEMO_BACKUP_S3_URI: ${{ vars.DEMO_BACKUP_S3_URI || 's3://yawp-preview-videos/demo-backups' }}
-      DEMO_REQUESTED_REF: ${{ inputs.ref }}
+      DEMO_REQUESTED_REF: >-
+        ${{ github.event_name == 'workflow_dispatch' && inputs.ref ||
+            github.event.workflow_run.head_sha }}
       DEMO_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
       - name: Mask optional Google OAuth credentials
@@ -115,13 +256,14 @@ jobs:
           test -n "$PREVIEW_ANTHROPIC_API_KEY" || { echo "Missing an Anthropic API key secret"; exit 1; }
           test -n "$PREVIEW_POSTGRES_ADMIN_PASSWORD" || { echo "Missing demo secret PREVIEW_DB_PASSWORD"; exit 1; }
           test -n "$PREVIEW_MASTER_ACCESS_CODE" || { echo "Missing repository secret PREVIEW_MASTER_ACCESS_CODE"; exit 1; }
+          # Owner invitations also use Resend when billing is disabled.
+          test -n "$PREVIEW_RESEND_API_KEY" || { echo "Missing demo secret DEMO_RESEND_API_KEY"; exit 1; }
           if [[ "$PREVIEW_UA_STUDENT_BILLING_ENABLED" == "true" ]]; then
             test -n "$PREVIEW_UA_ORGANIZATION_ID" || { echo "Missing demo variable DEMO_UA_ORGANIZATION_ID"; exit 1; }
             test -n "$PREVIEW_UA_PARTNER_CODE" || { echo "Missing demo variable DEMO_UA_PARTNER_CODE"; exit 1; }
             test -n "$PREVIEW_STRIPE_SECRET_KEY" || { echo "Missing demo secret DEMO_STRIPE_SECRET_KEY"; exit 1; }
             test -n "$PREVIEW_STRIPE_WEBHOOK_SECRET" || { echo "Missing demo secret DEMO_STRIPE_WEBHOOK_SECRET"; exit 1; }
             test -n "$PREVIEW_STRIPE_UA_2026_PRICE_ID" || { echo "Missing demo variable DEMO_STRIPE_UA_2026_PRICE_ID"; exit 1; }
-            test -n "$PREVIEW_RESEND_API_KEY" || { echo "Missing demo secret DEMO_RESEND_API_KEY"; exit 1; }
           fi
           if [[ ! "$DEMO_BACKUP_RETENTION" =~ ^[1-9][0-9]{0,2}$ ]] \
             || (( DEMO_BACKUP_RETENTION < 1 || DEMO_BACKUP_RETENTION > 365 )); then
@@ -144,7 +286,7 @@ jobs:
           fi
 
       - name: Checkout reviewed demo control plane
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           path: demo-control
@@ -154,9 +296,9 @@ jobs:
         run: node demo-control/scripts/preview/demo-internal-api-config.mjs
 
       - name: Checkout the requested application ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ env.DEMO_APP_REF }}
           path: demo-source
           persist-credentials: false
 
@@ -166,6 +308,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "full_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "subject=$(git log -1 --pretty=%s)" >> "$GITHUB_OUTPUT"
 
       - name: Prepare SSH
@@ -223,6 +366,8 @@ jobs:
           jq -e 'all(.[]; type == "number" and . >= 0)' <<<"$signature" >/dev/null
           echo "signature=$signature" >> "$GITHUB_OUTPUT"
           echo "Demo aggregate data before deploy: $signature"
+          tester_feedback_before="$(jq -er '.testerFeedback // 0' <<<"$signature")"
+          echo "TesterFeedback rows before deploy: ${tester_feedback_before}"
 
       - name: Prepare demo host capacity
         run: |
@@ -248,6 +393,8 @@ jobs:
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           remote_source="${PREVIEW_ROOT}/sources/demo"
           remote_control="${PREVIEW_ROOT}/control/demo"
+          demo_web_image='${{ needs.build-demo-images.outputs.demo_web_image }}'
+          demo_toolbox_image='${{ needs.build-demo-images.outputs.demo_toolbox_image }}'
           remote_env=(
             "PREVIEW_SLUG=$(shell_quote "$PREVIEW_SLUG")"
             "PREVIEW_DOMAIN=$(shell_quote "$PREVIEW_DOMAIN")"
@@ -273,6 +420,7 @@ jobs:
             "PREVIEW_RESEND_API_KEY=$(shell_quote "$PREVIEW_RESEND_API_KEY")"
             "PREVIEW_MANAGEMENT_SERVICE_KEY=$(shell_quote "$PREVIEW_MANAGEMENT_SERVICE_KEY")"
             "DEMO_INTERNAL_API_KEYS=$(shell_quote "$DEMO_INTERNAL_API_KEYS")"
+            "DEMO_TRAINING_MEDIA_ENABLED=$(shell_quote "$DEMO_TRAINING_MEDIA_ENABLED")"
             "PREVIEW_POSTGRES_ADMIN_PASSWORD=$(shell_quote "$PREVIEW_POSTGRES_ADMIN_PASSWORD")"
             "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"
@@ -282,28 +430,64 @@ jobs:
             "DEMO_BACKUP_S3_URI=$(shell_quote "$DEMO_BACKUP_S3_URI")"
             "SOURCE_DIR=$(shell_quote "$remote_source")"
           )
+          deploy_timeout_seconds=3600
+          if [[ -n "$demo_web_image" && -n "$demo_toolbox_image" ]]; then
+            remote_env+=(
+              "DEMO_WEB_IMAGE=$(shell_quote "$demo_web_image")"
+              "DEMO_TOOLBOX_IMAGE=$(shell_quote "$demo_toolbox_image")"
+            )
+            deploy_timeout_seconds=1200
+          fi
           lock_file="${PREVIEW_ROOT}/preview-host.lock"
           deploy_log="${PREVIEW_ROOT}/logs/demo-deploy-${GITHUB_RUN_ID}.log"
           deploy_command="cd $(shell_quote "$remote_control") && ${remote_env[*]} bash scripts/preview/deploy.sh"
+          REDACT_DEPLOY_LOGS_SCRIPT="${remote_control}/scripts/preview/redact-deploy-logs.sh" \
           SSH_IDENTITY="$HOME/.ssh/demo_key" \
           SSH_TARGET="$ssh_target" \
           LOCK_FILE="$lock_file" \
           DEPLOY_LOG="$deploy_log" \
+          DEPLOY_TIMEOUT_SECONDS="$deploy_timeout_seconds" \
           REMOTE_COMMAND="$deploy_command" \
           bash demo-control/scripts/preview/run-host-deploy-detached.sh \
             | tee /tmp/demo-deploy.log
           url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/demo-deploy.log | tail -1)"
           ua_url="$(awk -F= '/^UA_PREVIEW_URL=/{print $2}' /tmp/demo-deploy.log | tail -1)"
-          access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' /tmp/demo-deploy.log | tail -1)"
+          access_seats_file="$(awk -F= '/^PREVIEW_ACCESS_SEATS_FILE=/{print $2}' /tmp/demo-deploy.log | tail -1)"
           master_org_gate_enabled="$(awk -F= '/^PREVIEW_MASTER_ORG_GATE_ENABLED=/{print $2}' /tmp/demo-deploy.log | tail -1)"
           test -n "$url" || { echo "Deploy did not print PREVIEW_URL"; exit 1; }
-          test -n "$access_code" || { echo "Deploy did not print PREVIEW_ACCESS_CODE"; exit 1; }
+          test -n "$access_seats_file" || { echo "Deploy did not print PREVIEW_ACCESS_SEATS_FILE"; exit 1; }
+          read_smoke_script="${remote_control}/scripts/preview/read-smoke-access-code-from-seats-file.mjs"
+          access_code="$(
+            ssh -i "$HOME/.ssh/demo_key" -o BatchMode=yes "$ssh_target" \
+              "node $(shell_quote "$read_smoke_script") $(shell_quote "$access_seats_file")"
+          )"
+          test -n "$access_code" || { echo "Could not read smoke access code from host seats file"; exit 1; }
+          echo "::add-mask::$access_code"
           {
             echo "url=$url"
             echo "ua_url=$ua_url"
             echo "access_code=$access_code"
             echo "master_org_gate_enabled=${master_org_gate_enabled:-false}"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Print deploy log redaction summary
+        if: always()
+        run: |
+          grep -sE '^REDACT_(FILES_CHANGED|VALUES_MASKED|WARNING)=[0-9]+$' /tmp/demo-deploy.log || echo 'REDACT_SUMMARY=none'
+
+      - name: Surface demo deploy database signals
+        if: always()
+        run: |
+          set -euo pipefail
+          log=/tmp/demo-deploy.log
+          if [[ ! -f "$log" ]]; then
+            echo "Demo deploy log not available on runner; skipping host-log database signals"
+            exit 0
+          fi
+          echo "=== Prisma migrate deploy summary (from host deploy log) ==="
+          grep -E '^DEMO_PRISMA_MIGRATE_' "$log" || echo 'DEMO_PRISMA_MIGRATE_SUMMARY=none'
+          echo "=== TesterFeedback row counts recorded during deploy (host log) ==="
+          grep -E '^DEMO_TESTER_FEEDBACK_COUNT_' "$log" || echo 'DEMO_TESTER_FEEDBACK_COUNT_host=not-recorded'
 
       - name: Verify the demo actually serves
         run: |
@@ -313,9 +497,35 @@ jobs:
           health="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' "$url/api/healthcheck")"
           test "$health" = "200" || { echo "Demo healthcheck returned HTTP $health"; exit 1; }
 
-          gated_page="$(curl -skL -m 15 "$url")"
-          grep -q 'data-preview-access-screen' <<<"$gated_page" || {
-            echo "Demo request without a preview access cookie did not render the access screen" >&2
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            expected_commit='${{ needs.build-demo-images.outputs.demo_git_sha }}'
+            version_http="$(curl -sk -o /tmp/demo-version.json -m 15 -w '%{http_code}' "$url/api/version")"
+            case "$version_http" in
+              200)
+                reported_commit="$(jq -er '.commit' </tmp/demo-version.json)"
+                test "$reported_commit" = "$expected_commit" || {
+                  echo "/api/version commit=$reported_commit expected=$expected_commit" >&2
+                  exit 1
+                }
+                ;;
+              404) ;;
+              *)
+                echo "/api/version returned HTTP $version_http" >&2
+                exit 1
+                ;;
+            esac
+          fi
+
+          public_home="$(curl -skL -m 15 "$url")"
+          grep -q 'data-preview-access-screen' <<<"$public_home" && {
+            echo "Demo homepage still renders the site-wide preview access screen" >&2
+            exit 1
+          }
+
+          approval_entry="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
+            "$url/free/admin/approve")"
+          test "$approval_entry" = "200" || {
+            echo "Demo /free/admin/approve without a preview access cookie returned HTTP $approval_entry, expected 200" >&2
             exit 1
           }
 
@@ -324,6 +534,21 @@ jobs:
             "$url/auth/dev-login")"
           test "$blocked" = "401" || {
             echo "POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401" >&2
+            exit 1
+          }
+
+          dev_options="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
+            "$url/auth/dev-login/options?cursor=0")"
+          test "$dev_options" = "401" || {
+            echo "GET /auth/dev-login/options without an access cookie returned HTTP $dev_options, expected 401" >&2
+            exit 1
+          }
+
+          lti_blocked="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
+            -X POST --data-urlencode 'id_token=fixture' \
+            "$url/lti/launch")"
+          test "$lti_blocked" = "401" || {
+            echo "POST /lti/launch without an access cookie returned HTTP $lti_blocked, expected 401" >&2
             exit 1
           }
 
@@ -397,6 +622,14 @@ jobs:
           jq -e 'all(.[]; type == "number" and . >= 0)' <<<"$signature" >/dev/null
           echo "signature=$signature" >> "$GITHUB_OUTPUT"
           echo "Demo aggregate data after deploy: $signature"
+          tester_feedback_before="$(jq -er '.testerFeedback // 0' <<<"$BEFORE_SIGNATURE")"
+          tester_feedback_after="$(jq -er '.testerFeedback // 0' <<<"$signature")"
+          echo "TesterFeedback rows before deploy: ${tester_feedback_before}"
+          echo "TesterFeedback rows after deploy: ${tester_feedback_after}"
+          (( tester_feedback_after >= tester_feedback_before )) || {
+            echo "TesterFeedback row count decreased during deploy: ${tester_feedback_before} -> ${tester_feedback_after}" >&2
+            exit 1
+          }
           if [[ "$DEMO_RESET_DATA" == "false" ]]; then
             for key in organizations users classes assignments documents submissions moduleSessions; do
               before_count="$(jq -er --arg key "$key" '.[$key]' <<<"$BEFORE_SIGNATURE")"

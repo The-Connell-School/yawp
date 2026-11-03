@@ -2,10 +2,11 @@ import { fileURLToPath } from 'node:url';
 
 // Match internal-platform-auth.server.ts without importing application/database
 // code into the deploy control path. Diagnostics must never include key material.
-const scopes = new Set([
+export const DEMO_INTERNAL_API_SCOPE_SET = new Set([
   'rubrics:read', 'rubrics:write', 'flags:read', 'flags:write',
   'stats:read', 'audit:read', 'management:read', 'management:write',
 ]);
+const scopes = DEMO_INTERNAL_API_SCOPE_SET;
 const invalid = 'DEMO_INTERNAL_API_KEYS must contain valid, uniquely identified scoped keys including management:write';
 
 export function demoInternalApiKeys(value, { required = false } = {}) {

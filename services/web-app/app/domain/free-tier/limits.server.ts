@@ -2,9 +2,9 @@ import type { Prisma } from '@app/prisma';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import {
-  FREE_TIER_FLAG, FREE_TIER_ONBOARDING_V2_FLAG, evaluateFeatureFlag,
-  featureFlagSettingName, isFreeTierGloballyEnabled, parseFeatureFlagValue,
+  featureFlagSettingName,
 } from '~/domain/feature-flags/feature-flags';
+import { isFreeTierCapabilityEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { DEFAULT_FREE_TIER_LIMITS, FREE_TIER_LIMIT_BOUNDS, type FreeTierLimits } from './limits';
 
 export const FREE_TIER_LIMITS_SETTING = 'free_tier.limits.v1';
@@ -53,10 +53,7 @@ export async function updateFreeTierLimits(input: FreeTierLimitsUpdate, actorEma
 export async function effectiveFreeTierLimits(organizationId: string, client: Client = prisma) {
   // A seat check already holds a transaction and class lock. Keep its reads on
   // that connection instead of waiting for another pool connection under load.
-  const base = await client.setting.findUnique({ where: { name: featureFlagSettingName(FREE_TIER_FLAG) }, select: { value: true } });
-  if (!isFreeTierGloballyEnabled(parseFeatureFlagValue(base?.value)))
-    return { limits: DEFAULT_FREE_TIER_LIMITS, monthly: false };
-  const v2 = await client.setting.findUnique({ where: { name: featureFlagSettingName(FREE_TIER_ONBOARDING_V2_FLAG) }, select: { value: true } });
-  const monthly = evaluateFeatureFlag(parseFeatureFlagValue(v2?.value), organizationId);
-  return { limits: monthly ? await readFreeTierLimits(client) : DEFAULT_FREE_TIER_LIMITS, monthly };
+  const monthly = await isFreeTierCapabilityEnabled(organizationId, client);
+  if (!monthly) return { limits: DEFAULT_FREE_TIER_LIMITS, monthly: false };
+  return { limits: await readFreeTierLimits(client), monthly: true };
 }

@@ -9,6 +9,7 @@ import {
 } from '~/utils/entitlements.server';
 import { prisma } from '~/utils/db.server';
 import { assertOrganizationTeachingApproved } from '~/domain/free-tier/locked-preview.server';
+import { SITE_LICENSE_UNAVAILABLE_REASON } from '~/domain/free-tier/site-license-message';
 
 export class FreeClassroomAssignmentQuotaError extends Error {
   readonly code: 'quota_exhausted' | 'kind_not_allowed';
@@ -109,7 +110,7 @@ export function buildAssignmentCreationQuotaFields(
 ) {
   if (plan !== 'FREE_CLASSROOM') return {};
   if (!isFreeClassroomAssignmentKind(kind)) {
-    return { unavailableReason: 'Available with a paid plan.' };
+    return { unavailableReason: SITE_LICENSE_UNAVAILABLE_REASON };
   }
   const cap = FREE_CLASSROOM_ASSIGNMENT_QUOTAS[kind];
   const remaining = Math.max(0, cap - createdCount);
@@ -139,7 +140,7 @@ export async function loadAssignmentCreationQuotasForTypes(
         type.id,
         isFreeClassroomAssignmentKind(type.kind)
           ? {}
-          : { unavailableReason: 'Available with a paid plan.' },
+          : { unavailableReason: SITE_LICENSE_UNAVAILABLE_REASON },
       ])
     );
   }

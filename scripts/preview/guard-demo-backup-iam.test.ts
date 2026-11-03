@@ -111,6 +111,8 @@ describe('demo backup IAM guard', () => {
     expect(commands).toContain('yawp-demo-host-backup-access');
     expect(commands).toContain('s3:GetObject');
     expect(commands).toContain('s3:PutObject');
+    expect(commands).toContain('ecr:BatchGetImage');
+    expect(commands).toContain('ecr:GetAuthorizationToken');
     expect(commands).toContain('yawp-demo-backup-deny-delete');
     expect(commands).toContain('s3:DeleteObject');
     expect(commands).toContain('s3:DeleteObjectVersion');

@@ -11,6 +11,7 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { prisma } from '~/utils/db.server';
+import * as trainingAdmin from '~/domain/teacher-trainings/teacher-training-admin.server';
 import { Plus } from 'lucide-react';
 import {
   Sheet,
@@ -87,13 +88,9 @@ export async function action({ request }: ActionFunctionArgs) {
       throw new Response('Title is required', { status: 400 });
     }
 
-    const count = await prisma.teacherTraining.count();
-    const teacherTraining = await prisma.teacherTraining.create({
-      data: {
-        title,
-        description: description || null,
-        position: count,
-      },
+    const teacherTraining = await trainingAdmin.createTraining(prisma, {
+      title,
+      description: description || null,
     });
 
     return redirect(`/app/admin/teacher-trainings/${teacherTraining.id}`);

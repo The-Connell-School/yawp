@@ -2,17 +2,26 @@ import { sendEmail } from '~/utils/email.server';
 import { prisma } from '~/utils/db.server';
 import {
   ADMIN_APPROVAL_EMAIL_COPY_VERSION,
-  renderAdminApprovalEmailBody,
   renderCongratulationsEmailBody,
   renderReleaseEmailBody,
 } from './email-copy.server';
-import { renderReleaseEmailSubject } from './email-copy';
+import {
+  CONGRATULATIONS_V2_SUBJECT,
+  isOnboardingV2CopyVersion,
+  renderReleaseEmailSubject,
+} from './email-copy';
 import { mintSignedLink, RELEASE_LINK_TTL_MS } from './signed-link.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import { plainTextEmailToHtml } from './email-html.server';
+import { buildDesignedAdminApprovalEmail } from './admin-approval-email.server';
+import {
+  buildTeacherApprovedDesignedEmail,
+  buildTeacherReleaseDesignedEmail,
+} from '~/emails/build-free-tier-emails.server';
 import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { assertFreeTierRuntimeConfigured } from './free-tier-config.server';
 import { resolveFreeTierRuntimeEnvironment } from './usage-budget.server';
+import { safeErrorTextForLog } from '~/utils/server-error-request-context.server';
 
 export type EmailSendResult = { ok: true } | { ok: false; error: string };
 
@@ -22,7 +31,8 @@ function emailSendErrorMessage(result: {
 }) {
   if (result.status === 'success') return null;
   const message = result.error?.message?.trim();
-  return message || 'email_send_failed';
+  if (!message) return 'email_send_failed';
+  return safeErrorTextForLog(new Error(message));
 }
 
 async function deliverEmail(args: {
@@ -30,8 +40,9 @@ async function deliverEmail(args: {
   bcc?: string[];
   subject: string;
   text: string;
+  html?: string;
 }): Promise<EmailSendResult> {
-  const html = plainTextEmailToHtml(args.text);
+  const html = args.html ?? plainTextEmailToHtml(args.text);
   const result = await sendEmail({
     to: args.to,
     ...(args.bcc?.length ? { bcc: args.bcc } : {}),
@@ -95,10 +106,17 @@ export async function sendFreeTierReleaseEmail(
     });
     const joinUrl = `${base}/free/join?t=${encodeURIComponent(minted.token)}`;
     const text = renderReleaseEmailBody({ name: payload.name, joinUrl, copyVersion });
+    const designed = isOnboardingV2CopyVersion(copyVersion)
+      ? await buildTeacherReleaseDesignedEmail({
+          name: payload.name,
+          joinUrl,
+        })
+      : null;
     const delivered = await deliverEmail({
       to: payload.email,
-      subject: renderReleaseEmailSubject({ copyVersion }),
-      text,
+      subject: designed?.subject ?? renderReleaseEmailSubject({ copyVersion }),
+      text: designed?.text ?? text,
+      html: designed?.html,
     });
     if (!delivered.ok) {
       await logEmail({
@@ -120,7 +138,7 @@ export async function sendFreeTierReleaseEmail(
     });
     return { ok: true };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = safeErrorTextForLog(error);
     await logEmail({
       applicationId: payload.applicationId,
       kind: 'release',
@@ -130,6 +148,27 @@ export async function sendFreeTierReleaseEmail(
     });
     return { ok: false, error: message };
   }
+}
+
+/** Dev-panel and fixtures: persist the same email log row without calling SES. */
+export async function recordFreeTierAdminApprovalEmailLogged(args: {
+  applicationId: string;
+  to: string;
+  approveUrl: string;
+  notRightPersonUrl: string;
+  isReminder?: boolean;
+}): Promise<EmailSendResult> {
+  await logEmail({
+    applicationId: args.applicationId,
+    kind: args.isReminder ? 'admin_approval_reminder' : 'admin_approval',
+    toEmail: args.to,
+    success: true,
+    payload: {
+      approveUrl: args.approveUrl,
+      notRightPersonUrl: args.notRightPersonUrl,
+    },
+  });
+  return { ok: true };
 }
 
 export async function sendFreeTierAdminApprovalEmail(args: {
@@ -142,32 +181,35 @@ export async function sendFreeTierAdminApprovalEmail(args: {
   approveUrl: string;
   notRightPersonUrl: string;
   adminRecipientName?: string | null;
+  forwardedByAdminName?: string | null;
+  routedByTeacher?: boolean;
   isReminder?: boolean;
+  pass1: boolean;
 }): Promise<EmailSendResult> {
-  const text = renderAdminApprovalEmailBody({
+  const { subject, text, html } = await buildDesignedAdminApprovalEmail({
     teacherName: args.teacherName,
     teacherEmail: args.teacherEmail,
     schoolName: args.schoolName,
     approveUrl: args.approveUrl,
     notRightPersonUrl: args.notRightPersonUrl,
-    adminRecipientName: args.adminRecipientName,
-    reminderLead: args.isReminder
-      ? 'This is a reminder about the approval request below.'
-      : undefined,
+    forwardedByAdminName: args.forwardedByAdminName,
+    routedByTeacher: args.routedByTeacher,
+    reminder: args.isReminder,
+    pass1: args.pass1,
   });
-  const subject = args.isReminder
-    ? `Reminder: Approve YAWP for ${args.schoolName}`
-    : `Approve YAWP for ${args.schoolName}`;
   try {
     assertFreeTierRuntimeConfigured();
-    const delivered = await deliverEmail({
+    const result = await sendEmail({
       to: args.to,
       ...(resolveFreeTierRuntimeEnvironment() === 'demo'
         ? { bcc: [args.teacherEmail] }
         : {}),
       subject,
       text,
+      html,
     });
+    const error = emailSendErrorMessage(result);
+    const delivered = error ? { ok: false as const, error } : { ok: true as const };
     if (!delivered.ok) {
       await logEmail({
         applicationId: args.applicationId,
@@ -194,7 +236,7 @@ export async function sendFreeTierAdminApprovalEmail(args: {
     });
     return { ok: true };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = safeErrorTextForLog(error);
     await logEmail({
       applicationId: args.applicationId,
       kind: args.isReminder ? 'admin_approval_reminder' : 'admin_approval',
@@ -213,17 +255,30 @@ export async function sendFreeTierCongratulationsEmail(args: {
   adminName: string;
   signInUrl: string;
 }): Promise<EmailSendResult> {
-  const text = renderCongratulationsEmailBody({
-    teacherName: args.teacherName,
-    adminName: args.adminName,
-    signInUrl: args.signInUrl,
-  });
   try {
     assertFreeTierRuntimeConfigured();
+    // Copy follows the version stored with the application, never the live flag.
+    const application = await prisma.freeTierApplication.findUnique({
+      where: { id: args.applicationId }, select: { releaseEmailCopyVersion: true },
+    });
+    const v2 = isOnboardingV2CopyVersion(application?.releaseEmailCopyVersion);
+    const designed = v2
+      ? await buildTeacherApprovedDesignedEmail(args)
+      : null;
+    const text = designed?.text
+      ?? renderCongratulationsEmailBody({
+          teacherName: args.teacherName,
+          adminName: args.adminName,
+          signInUrl: args.signInUrl,
+        });
     const delivered = await deliverEmail({
       to: args.teacherEmail,
-      subject: `${args.adminName} approved YAWP for your classroom`,
+      subject: designed?.subject
+        ?? (v2
+          ? CONGRATULATIONS_V2_SUBJECT
+          : `${args.adminName} approved Yawp! for your classroom`),
       text,
+      html: designed?.html,
     });
     if (!delivered.ok) {
       await logEmail({
@@ -243,7 +298,7 @@ export async function sendFreeTierCongratulationsEmail(args: {
     });
     return { ok: true };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = safeErrorTextForLog(error);
     await logEmail({
       applicationId: args.applicationId,
       kind: 'congratulations',
@@ -264,6 +319,9 @@ export async function sendFreeTierAdminReminderEmail(args: {
   personalNote?: string | null;
   approveUrl: string;
   notRightPersonUrl: string;
+  forwardedByAdminName?: string | null;
+  routedByTeacher?: boolean;
+  pass1: boolean;
 }) {
   return sendFreeTierAdminApprovalEmail({
     ...args,

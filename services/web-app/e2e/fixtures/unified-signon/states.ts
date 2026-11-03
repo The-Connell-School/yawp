@@ -196,7 +196,7 @@ group(
   9,
   'account-type',
   'account-type',
-  'Welcome to YAWP!',
+  'Welcome to Yawp!',
   'resolver; Google identity proof',
   [
     ['email', 'From email'],

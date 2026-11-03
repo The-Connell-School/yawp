@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { DEV_PANEL_SIGNED_OUT_TESTER_EMAIL } from '~/dev-panel/dev-panel-signed-out-feedback.server';
 
 const prisma = {
   user: { findFirst: mock(), findMany: mock(), findUnique: mock() },
@@ -107,6 +108,7 @@ describe('auth.dev-login action', () => {
     prisma.session.deleteMany.mockResolvedValue({ count: 1 });
     prisma.user.findUnique.mockResolvedValue({
       id: 'user-1',
+      simulatedForClassId: null,
       memberships: [{ id: 'mem-1', role: 'STUDENT' }],
     });
     prisma.session.create.mockResolvedValue({
@@ -114,6 +116,26 @@ describe('auth.dev-login action', () => {
       expirationDate: new Date('2030-01-01T00:00:00.000Z'),
       userId: 'user-1',
     });
+  });
+
+  test('rejects simulated demo students', async () => {
+    isPreviewAccessGateEnabled.mockReturnValue(true);
+    getPreviewAccessSeat.mockResolvedValue({
+      organizationId: 'preview-seat-2',
+      label: 'Preview',
+    });
+    prisma.user.findFirst.mockResolvedValueOnce({
+      id: 'sim-user',
+      simulatedForClassId: 'class-1',
+      memberships: [{ id: 'mem-sim', role: 'STUDENT' }],
+    });
+
+    const response = await action(
+      actionArgs(makeRequest('sim-abc12x-1@example.test', 'preview=seat-2'))
+    );
+
+    expect(response.status).toBe(403);
+    expect(prisma.session.create).not.toHaveBeenCalled();
   });
 
   test('sets auth and membership cookies as separate headers', async () => {
@@ -148,6 +170,21 @@ describe('auth.dev-login action', () => {
     expect(response.status).toBe(404);
   });
 
+  test('rejects dev login without a preview access cookie when the code is required', async () => {
+    isPreviewAccessGateEnabled.mockReturnValue(true);
+    getPreviewAccessSeat.mockResolvedValue(null);
+
+    const response = await action(
+      actionArgs(makeRequest('dev.admin@yawp.local'))
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({
+      error: 'Preview access code required.',
+    });
+    expect(prisma.session.create).not.toHaveBeenCalled();
+  });
+
   test('binds preview dev-login to the organization in the access cookie', async () => {
     isPreviewAccessGateEnabled.mockReturnValue(true);
     getPreviewAccessSeat.mockResolvedValue({
@@ -156,6 +193,7 @@ describe('auth.dev-login action', () => {
     });
     prisma.user.findFirst.mockResolvedValue({
       id: 'seat-2-user',
+      simulatedForClassId: null,
       memberships: [{ id: 'seat-2-membership', role: 'STUDENT' }],
     });
 
@@ -171,6 +209,7 @@ describe('auth.dev-login action', () => {
       },
       select: {
         id: true,
+        simulatedForClassId: true,
         memberships: {
           where: { isActive: true, organizationId: 'preview-seat-2' },
           select: { id: true, role: true },
@@ -206,6 +245,7 @@ describe('auth.dev-login action', () => {
     });
     prisma.user.findFirst.mockResolvedValue({
       id: 'returning-teacher',
+      simulatedForClassId: null,
       memberships: [{ id: 'returning-membership', role: 'TEACHER' }],
     });
 
@@ -221,6 +261,7 @@ describe('auth.dev-login action', () => {
       },
       select: {
         id: true,
+        simulatedForClassId: true,
         memberships: {
           where: { isActive: true, organizationId: 'default-org' },
           select: { id: true, role: true },
@@ -254,7 +295,11 @@ describe('auth.dev-login action', () => {
     );
 
     expect(prisma.user.findMany).toHaveBeenCalledWith({
-      where: { memberships: { some: { isActive: true, organizationId: 'preview-seat-2' } } },
+      where: {
+        email: { not: DEV_PANEL_SIGNED_OUT_TESTER_EMAIL },
+        simulatedForClassId: null,
+        memberships: { some: { isActive: true, organizationId: 'preview-seat-2' } },
+      },
       select: {
         email: true,
         name: true,
@@ -295,7 +340,11 @@ describe('auth.dev-login action', () => {
     );
 
     expect(prisma.user.findMany).toHaveBeenCalledWith({
-      where: { memberships: { some: { isActive: true, organizationId: 'default-org' } } },
+      where: {
+        email: { not: DEV_PANEL_SIGNED_OUT_TESTER_EMAIL },
+        simulatedForClassId: null,
+        memberships: { some: { isActive: true, organizationId: 'default-org' } },
+      },
       select: {
         email: true,
         name: true,
@@ -371,7 +420,11 @@ describe('auth.dev-login options pagination', () => {
     );
 
     expect(prisma.user.findMany).toHaveBeenCalledWith({
-      where: { memberships: { some: { isActive: true, organizationId: 'preview-seat-2' } } },
+      where: {
+        email: { not: DEV_PANEL_SIGNED_OUT_TESTER_EMAIL },
+        simulatedForClassId: null,
+        memberships: { some: { isActive: true, organizationId: 'preview-seat-2' } },
+      },
       select: {
         email: true,
         name: true,

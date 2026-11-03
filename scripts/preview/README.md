@@ -2,6 +2,8 @@
 
 PR previews use one shared Docker host. `wake-preview.sh` starts existing Compose containers without rebuilding, and `enforce-cap.sh` admits deployments under the shared host lock.
 
+PR toolbox containers mount reviewed control-plane scripts at `/preview-control` (including `prisma-cli.sh`) so application refs are not required to carry every host tooling script.
+
 At the default cap of eight running previews, both paths sleep the preview with the oldest `last-human-activity`. Missing activity falls back to the web container's `StartedAt`, then legacy Compose deploy metadata if Docker history is unavailable. Equal timestamps use ascending PR number. The incoming preview is never selected. All running previews compete regardless of branch, author, draft state, or how recently they woke.
 
 `idle-sleep.sh` applies the 48-hour human idle deadline to every preview. Wake rate limits, open-PR validation, quarantine, and browser/origin checks remain active. Wake leases still serialize idle handling but do not exempt previews from capacity eviction.

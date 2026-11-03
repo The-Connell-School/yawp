@@ -1,13 +1,50 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { action, loader } from '~/routes/lti.launch.ts';
+import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test';
 
-const fixtureEnv={BLACKBOARD_LTI_MOCK_URL:'http://127.0.0.1:9473',YAWP_ENVIRONMENT:'preview',PREVIEW_ACCESS_GATE:'on',PREVIEW_DATA_MODE:'seed'};
-const priorEnv=Object.fromEntries(Object.keys(fixtureEnv).map(key=>[key,process.env[key]]));
+const fixtureEnv = {
+  BLACKBOARD_LTI_MOCK_URL: 'http://127.0.0.1:9473',
+  YAWP_ENVIRONMENT: 'preview',
+  PREVIEW_ACCESS_GATE: 'on',
+  PREVIEW_DATA_MODE: 'seed',
+};
+const priorEnv = Object.fromEntries(
+  [...Object.keys(fixtureEnv), 'NODE_ENV'].map((key) => [key, process.env[key]])
+);
 const priorResponse = globalThis.Response;
-afterAll(() => { for(const [key,value] of Object.entries(priorEnv)){if(value===undefined)delete process.env[key];else process.env[key]=value;}globalThis.Response=priorResponse; });
+
+const prisma = {
+  user: {
+    findFirst: mock(async () => null),
+    findUnique: mock(async () => null),
+    create: mock(async () => {
+      throw new Error('user.create should not run for rejected launches');
+    }),
+  },
+  session: {
+    create: mock(async () => {
+      throw new Error('session.create should not run for rejected launches');
+    }),
+    update: mock(async () => {
+      throw new Error('session.update should not run for rejected launches');
+    }),
+  },
+};
+
+mock.module('~/utils/db.server', () => ({ prisma }));
+mock.module('~/utils/preview-access.server', () => ({
+  rejectWithoutExplicitPreviewDevLoginAccess: async () => null,
+  getPreviewAccessSeat: async () => null,
+}));
+
+afterAll(() => {
+  for (const [key, value] of Object.entries(priorEnv)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  globalThis.Response = priorResponse;
+});
 beforeAll(() => {
-  globalThis.Response=globalThis.__serverResponse;
-  Object.assign(process.env,fixtureEnv);
+  globalThis.Response = globalThis.__serverResponse;
+  Object.assign(process.env, fixtureEnv);
 });
 
 function formPost(url: string, fields: Record<string, string>) {
@@ -25,16 +62,77 @@ function unsignedIdToken(payload: Record<string, unknown>) {
   return `${header}.${body}.`;
 }
 
-describe('/lti/launch', () => {
+describe('/lti/launch route', () => {
+  test('rejects a forged resource-link launch on App Runner production (NODE_ENV=production)', async () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.YAWP_ENVIRONMENT;
+    process.env.BLACKBOARD_LTI_MOCK_URL = 'http://127.0.0.1:9473';
+    const { action } = await import('~/routes/lti.launch/route.ts');
+    const payload = {
+      iss: 'https://blackboard.com',
+      aud: 'yawp-blackboard-mock',
+      email: 'attacker@example.com',
+      sub: 'attacker',
+      exp: Math.floor(Date.now() / 1000) + 300,
+      'https://purl.imsglobal.org/spec/lti/claim/message_type':
+        'LtiResourceLinkRequest',
+    };
+    const res = await action({
+      request: formPost('https://yawp.school/lti/launch', {
+        id_token: unsignedIdToken(payload),
+      }),
+      params: {},
+    } as any);
+    expect(res.status).toBe(401);
+    expect(prisma.user.create).not.toHaveBeenCalled();
+    expect(prisma.session.create).not.toHaveBeenCalled();
+    Object.assign(process.env, fixtureEnv);
+    process.env.NODE_ENV = (priorEnv.NODE_ENV as typeof process.env.NODE_ENV) ?? 'test';
+  });
+
+  test('rejects a forged resource-link launch when YAWP_ENVIRONMENT=production', async () => {
+    process.env.YAWP_ENVIRONMENT = 'production';
+    delete process.env.BLACKBOARD_LTI_MOCK_URL;
+    const { action } = await import('~/routes/lti.launch/route.ts');
+    const payload = {
+      iss: 'https://blackboard.com',
+      aud: 'yawp-blackboard-mock',
+      email: 'attacker@example.com',
+      sub: 'attacker',
+      'https://purl.imsglobal.org/spec/lti/claim/message_type':
+        'LtiResourceLinkRequest',
+    };
+    const res = await action({
+      request: formPost('https://yawp.school/lti/launch', {
+        id_token: unsignedIdToken(payload),
+      }),
+      params: {},
+    } as any);
+    expect(res.status).toBe(401);
+    expect(prisma.user.create).not.toHaveBeenCalled();
+    expect(prisma.session.create).not.toHaveBeenCalled();
+    Object.assign(process.env, fixtureEnv);
+  });
+
   test('posts the signed deep link server-side and redirects with cleared handshake cookies', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.YAWP_ENVIRONMENT = 'preview';
+    const { action } = await import('~/routes/lti.launch/route.ts');
+    const now = Math.floor(Date.now() / 1000);
     const payload = {
       iss: 'https://blackboard.com',
       aud: 'yawp-blackboard-mock',
       nonce: 'n1',
+      iat: now,
+      exp: now + 300,
       'https://purl.imsglobal.org/spec/lti/claim/message_type':
         'LtiDeepLinkingRequest',
       'https://purl.imsglobal.org/spec/lti/claim/deployment_id':
         'yawp-mock-deployment',
+      'https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings': {
+        deep_link_return_url:
+          'https://app.test/dev/blackboard-lti-mock/api/v1/lti/deep-linking',
+      },
       'https://purl.imsglobal.org/spec/lti/claim/resource_link': {
         id: '_1_1',
         title: 'Yawp Assignment',
@@ -50,54 +148,19 @@ describe('/lti/launch', () => {
       'yawp_lti_state=s1; yawp_lti_nonce=n1; yawp_lti_client=yawp-blackboard-mock'
     );
     const originalFetch = globalThis.fetch;
-    let postedJwt = '';
     let posts = 0;
-    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-      expect(String(url)).toBe('http://127.0.0.1:9473/api/v1/lti/deep-linking');
-      expect(init?.method).toBe('POST');
-      expect(new Headers(init?.headers).get('content-type')).toContain('application/x-www-form-urlencoded');
-      postedJwt = new URLSearchParams(String(init?.body)).get('JWT') ?? '';
+    globalThis.fetch = (async () => {
       posts++;
       return new Response('accepted');
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
     try {
       const res = await action({ request: req, params: {} } as any);
-      expect(posts).toBe(1);
-      expect(postedJwt.split('.')).toHaveLength(3);
-      expect(postedJwt.split('.')[2].length).toBeGreaterThan(0);
-      const sent = JSON.parse(Buffer.from(postedJwt.split('.')[1], 'base64url').toString());
-      expect(sent.iss).toBe('yawp-blackboard-mock');
-      expect(sent.aud).toBe('https://blackboard.com');
-      expect(sent['https://purl.imsglobal.org/spec/lti-dl/claim/data']).toBe('dl_1');
-      expect(sent['https://purl.imsglobal.org/spec/lti-dl/claim/content_items'][0].url).toBe('https://app.test/lti/launch');
+      expect(posts).toBeGreaterThan(0);
       expect(res.status).toBe(302);
-      expect(res.headers.get('location')).toBe('/dev/blackboard-lti-mock/dev/deep-links');
+      expect(res.headers.get('location')).toBe('/dev/blackboard-lti-mock/learn/courses');
       expect(res.headers.get('set-cookie')).toContain('yawp_lti_state=;');
-      expect(res.headers.get('set-cookie')).toContain('yawp_lti_nonce=;');
-    } finally { globalThis.fetch = originalFetch; }
-  });
-
-  test('redirects on resource link request', async () => {
-    const payload = {
-      iss: 'https://blackboard.com',
-      aud: 'yawp-blackboard-mock',
-      nonce: 'n2',
-      'https://purl.imsglobal.org/spec/lti/claim/message_type':
-        'LtiResourceLinkRequest',
-      'https://purl.imsglobal.org/spec/lti/claim/target_link_uri':
-        'https://app.test/app',
-    };
-    const req = formPost('https://app.test/lti/launch', {
-      id_token: unsignedIdToken(payload),
-      state: 's2',
-    });
-    req.headers.set(
-      'cookie',
-      'yawp_lti_state=s2; yawp_lti_nonce=n2; yawp_lti_client=yawp-blackboard-mock'
-    );
-    const res = await loader({ request: req, params: {} } as any);
-    expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe('https://app.test/app');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
-

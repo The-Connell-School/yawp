@@ -13,6 +13,11 @@ const LICENSE_CUTOFF = new Date('2027-01-01T06:00:00.000Z');
 const APP_ORIGIN = 'http://127.0.0.1:5173';
 const UA_APP_ORIGIN = 'http://ua.localhost:5173';
 
+/** Card-page chrome uses a logo link; UA entry pages still expose a Yawp image alt. */
+function yawpBrandLocator(page: Page) {
+  return page.getByRole('link', { name: 'Yawp! home' }).or(page.getByAltText('Yawp'));
+}
+
 async function signIn(
   page: Page,
   email: string,
@@ -184,7 +189,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await expect(page.getByAltText('The University of Alabama')).toHaveCount(
         0
       );
-      await expect(page.getByAltText('Yawp')).toBeVisible();
+      await expect(yawpBrandLocator(page)).toBeVisible();
 
       await page.getByLabel('Email').fill(studentEmail);
       await page.getByRole('button', { name: 'Submit' }).click();
@@ -222,7 +227,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await expect(page.getByAltText('The University of Alabama')).toHaveCount(
         0
       );
-      await expect(page.getByAltText('Yawp')).toBeVisible();
+      await expect(yawpBrandLocator(page)).toBeVisible();
 
       const { otp } = await generateTOTP({
         secret: invitation.secret,
@@ -238,7 +243,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await expect(page.getByAltText('The University of Alabama')).toHaveCount(
         0
       );
-      await expect(page.getByAltText('Yawp')).toBeVisible();
+      await expect(yawpBrandLocator(page)).toBeVisible();
       await expect(page.getByLabel('Class')).toHaveCount(0);
       await page.getByLabel('Name').fill('UA New Student');
       await page
@@ -280,7 +285,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await expect(page.getByAltText('The University of Alabama')).toHaveCount(
         0
       );
-      await expect(page.getByAltText('Yawp')).toBeVisible();
+      await expect(yawpBrandLocator(page)).toBeVisible();
     } finally {
       await prisma.$disconnect();
     }
@@ -392,7 +397,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await expect(page.getByAltText('The University of Alabama')).toHaveCount(
         0
       );
-      await expect(page.getByAltText('Yawp')).toBeVisible();
+      await expect(yawpBrandLocator(page)).toBeVisible();
       await page.getByLabel('Email').fill(e2eContext.userEmail);
       await page.getByLabel('Password').fill('johndoe');
       await page.getByRole('button', { name: 'Log in' }).click();
@@ -808,13 +813,14 @@ test.describe.serial('University of Alabama student onboarding', () => {
         `pi_${created.data[0]!.id}`
       );
 
+      const duplicateEventId = `evt_duplicate_after_activation_${crypto.randomUUID()}`;
       const duplicate = await page.request.post(
-        `${E2E_STRIPE_BASE_URL}/test/sessions/${created.data[0]!.id}/webhook?eventId=evt_duplicate_after_activation&repeat=2`
+        `${E2E_STRIPE_BASE_URL}/test/sessions/${created.data[0]!.id}/webhook?eventId=${duplicateEventId}&repeat=2`
       );
       expect(duplicate.ok()).toBe(true);
       expect(
         await prisma.stripeWebhookEvent.count({
-          where: { id: 'evt_duplicate_after_activation' },
+          where: { id: duplicateEventId },
         })
       ).toBe(1);
 
@@ -886,16 +892,29 @@ test.describe.serial('University of Alabama student onboarding', () => {
         `${E2E_STRIPE_BASE_URL}/test/metrics/reset`
       );
       expect(metricsReset.ok()).toBe(true);
+      // The fake server resets between tests, but PostgreSQL retains processed
+      // events. Each execution needs new IDs; repeated deliveries keep one ID.
+      const refundEventId = `evt_concurrent_refund_${crypto.randomUUID()}`;
+      const disputeEventId = `evt_concurrent_dispute_${crypto.randomUUID()}`;
       const [refund, dispute] = await Promise.all([
         page.request.post(
-          `${E2E_STRIPE_BASE_URL}/test/sessions/${sessionId}/refund?amount=3500&eventId=evt_concurrent_refund`
+          `${E2E_STRIPE_BASE_URL}/test/sessions/${sessionId}/refund?amount=3500&eventId=${refundEventId}`
         ),
         page.request.post(
-          `${E2E_STRIPE_BASE_URL}/test/sessions/${sessionId}/dispute?status=under_review&eventId=evt_concurrent_dispute`
+          `${E2E_STRIPE_BASE_URL}/test/sessions/${sessionId}/dispute?status=under_review&eventId=${disputeEventId}`
         ),
       ]);
       expect(refund.ok()).toBe(true);
       expect(dispute.ok()).toBe(true);
+      for (const response of [refund, dispute]) {
+        const delivery = await response.json();
+        expect(delivery.responses).toHaveLength(1);
+        expect(JSON.parse(delivery.responses[0].body)).toEqual({
+          received: true,
+          duplicate: false,
+          handled: true,
+        });
+      }
 
       const metrics = await page.request.get(
         `${E2E_STRIPE_BASE_URL}/test/metrics`
@@ -908,7 +927,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       expect(
         await prisma.stripeWebhookEvent.count({
           where: {
-            id: { in: ['evt_concurrent_refund', 'evt_concurrent_dispute'] },
+            id: { in: [refundEventId, disputeEventId] },
           },
         })
       ).toBe(2);
@@ -1074,20 +1093,22 @@ test.describe.serial('University of Alabama student onboarding', () => {
         0
       );
 
+      const delayedEventId = `evt_delayed_checkout_${crypto.randomUUID()}`;
       const delayed = await page.request.post(
-        `${E2E_STRIPE_BASE_URL}/test/sessions/${firstSession.id}/webhook?eventId=evt_delayed_checkout`
+        `${E2E_STRIPE_BASE_URL}/test/sessions/${firstSession.id}/webhook?eventId=${delayedEventId}`
       );
       expect(delayed.ok()).toBe(true);
       await page.goto('/app');
       await expect(page.getByRole('dialog')).toBeVisible();
 
+      const refundEventId = `evt_full_refund_${crypto.randomUUID()}`;
       const fullRefund = await page.request.post(
-        `${E2E_STRIPE_BASE_URL}/test/sessions/${firstSession.id}/refund?amount=3500&eventId=evt_full_refund&repeat=2`
+        `${E2E_STRIPE_BASE_URL}/test/sessions/${firstSession.id}/refund?amount=3500&eventId=${refundEventId}&repeat=2`
       );
       expect(fullRefund.ok()).toBe(true);
       expect(
         await prisma.stripeWebhookEvent.count({
-          where: { id: 'evt_full_refund' },
+          where: { id: refundEventId },
         })
       ).toBe(1);
       await page.goto('/app');

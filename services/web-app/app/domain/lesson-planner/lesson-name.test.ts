@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { deriveLessonName, shouldRenameLesson } from './lesson-name';
+import {
+  cleanLessonTitle,
+  deriveLessonName,
+  minutesInTitle,
+  firstMessageTitle,
+  nameIsProvisional,
+  shouldRenameLesson,
+} from './lesson-name';
 
 const PLAN = [
   '## Evidence That Earns Its Place',
@@ -99,5 +106,107 @@ describe('shouldRenameLesson', () => {
         teacherNamedIt: false,
       })
     ).toBeNull();
+  });
+});
+
+describe("a lesson still named after the teacher's first message (Brian's review, B5)", () => {
+  const first = "I'm teaching 'the things they carried' for the first time and I don't really know how to begin.";
+
+  test('firstMessageTitle is the old 57-character cut', () => {
+    expect(firstMessageTitle(first)).toBe(`${first.slice(0, 57)}…`);
+    expect(firstMessageTitle('  short  ')).toBe('short');
+    expect(firstMessageTitle('   ')).toBe('New lesson');
+  });
+
+  test('is provisional while the title is still that cut', () => {
+    expect(
+      nameIsProvisional({
+        title: firstMessageTitle(first),
+        packetTitle: null,
+        firstUserMessage: first,
+        unitDay: null,
+      })
+    ).toBe(true);
+  });
+
+  test('is not provisional once the plan renamed it', () => {
+    expect(
+      nameIsProvisional({
+        title: 'The Things They Carried — Day 1',
+        packetTitle: null,
+        firstUserMessage: first,
+        unitDay: null,
+      })
+    ).toBe(false);
+  });
+
+  test('a name the teacher typed always counts', () => {
+    expect(
+      nameIsProvisional({
+        title: firstMessageTitle(first),
+        packetTitle: 'TTTC day one',
+        firstUserMessage: first,
+        unitDay: null,
+      })
+    ).toBe(false);
+  });
+
+  test('a unit day is named by its unit, never provisional', () => {
+    expect(
+      nameIsProvisional({
+        title: firstMessageTitle(first),
+        packetTitle: null,
+        firstUserMessage: first,
+        unitDay: 2,
+      })
+    ).toBe(false);
+  });
+});
+
+describe("a lesson still named after its first message takes the next plan's name (Brian's run 4)", () => {
+  const plan = '# Catcher, chapters 1–4\n\n## Discussion (20 min)\n\nTalk.\n\n## Closing (5 min)\n\nWrap up.';
+  test('an earlier plan named nothing: this one names it', () => {
+    expect(shouldRenameLesson({ reply: plan, priorReplies: [plan.replace('# Catcher, chapters 1–4', '# Lesson Plan')], teacherNamedIt: false, stillPlaceholder: true })).toBe('Catcher, chapters 1–4');
+  });
+  test('already named from a plan: a revision does not rename it', () => {
+    expect(shouldRenameLesson({ reply: plan, priorReplies: [plan], teacherNamedIt: false })).toBeNull();
+  });
+});
+
+describe("no backstage language in titles (Brian's round 3, 1.1)", () => {
+  test('drops the type tag and the duration the planner wrote', () => {
+    expect(cleanLessonTitle('Day 1: The Man Who Made Himself (50 min) {type: context}')).toBe(
+      'Day 1: The Man Who Made Himself'
+    );
+    expect(cleanLessonTitle('Read aloud (12 min) {type: read_aloud}')).toBe('Read aloud');
+    expect(cleanLessonTitle('Day 2 — The Virtues · 50 min')).toBe('Day 2 — The Virtues');
+    expect(cleanLessonTitle('Holden and the ducks (45–50 minutes)')).toBe('Holden and the ducks');
+    expect(cleanLessonTitle('The essay [type: thesis_essay]')).toBe('The essay');
+  });
+
+  test("leaves a teacher's own words alone", () => {
+    expect(cleanLessonTitle('Franklin: the self-made man')).toBe('Franklin: the self-made man');
+    expect(cleanLessonTitle('Act 2 (scenes 1–3)')).toBe('Act 2 (scenes 1–3)');
+    expect(cleanLessonTitle('[Draft] Gatsby')).toBe('[Draft] Gatsby');
+    expect(cleanLessonTitle('2 mini-lessons on commas')).toBe('2 mini-lessons on commas');
+  });
+
+  test('never empties a title', () => {
+    expect(cleanLessonTitle('{type: context}')).toBe('{type: context}');
+    expect(cleanLessonTitle('  ')).toBe('');
+  });
+
+  test('a plan names the lesson without its tags', () => {
+    const reply = ['# Day 1: The Man Who Made Himself (50 min) {type: context}', '', '## Class starter (5 min)', '', 'Write.', '', '## Read aloud (12 min)', '', 'Read.'].join('\n');
+    expect(deriveLessonName(reply)).toBe('Day 1: The Man Who Made Himself');
+  });
+
+  test('the minutes a title gave, for a lesson that has no period', () => {
+    expect(minutesInTitle('Day 1: The Man Who Made Himself (50 min) {type: context}')).toBe(50);
+    expect(minutesInTitle('Day 1 — Franklin (45–50 minutes)')).toBe(50);
+    expect(minutesInTitle('Franklin')).toBeNull();
+    expect(minutesInTitle('Day 1 (5 min)')).toBeNull();
+    // A step's length is not a period: a lesson named "Hook (15 min)" keeps none.
+    expect(minutesInTitle('Hook (15 min) {type: activity}')).toBeNull();
   });
 });

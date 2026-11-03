@@ -5,7 +5,9 @@ import { findStudentGroupDocument } from '~/domain/collaboration/groups.server';
 import {
   createDocumentForAssignmentType,
   DocumentCreationError,
+  documentCreationErrorTextForClient,
 } from '~/domain/documents.server';
+import { recordClassAssignmentFirstOpen } from '~/domain/student-class-assignment-first-open.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -85,6 +87,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
     }
 
+    await recordClassAssignmentFirstOpen({
+      classAssignmentId: classAssignment.id,
+      membershipId: profile.id,
+    });
+
     const collabParams = new URLSearchParams({
       exitTo: '/app?tab=assignments',
     });
@@ -108,11 +115,19 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (creationError instanceof DocumentCreationError) {
       return redirectWithToast('/app?tab=assignments', {
         type: 'error',
-        description: creationError.message,
+        description: documentCreationErrorTextForClient(
+          creationError,
+          'Could not start this assignment.',
+        ),
       });
     }
     throw creationError;
   }
+
+  await recordClassAssignmentFirstOpen({
+    classAssignmentId: classAssignment.id,
+    membershipId: profile.id,
+  });
 
   const redirectParams = new URLSearchParams({
     spa: '1',

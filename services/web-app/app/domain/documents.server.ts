@@ -3,6 +3,23 @@ import { prisma } from '~/utils/db.server';
 
 export class DocumentCreationError extends Error {}
 
+/** Copy on DocumentCreationError that is safe to show in toasts and JSON. */
+const DOCUMENT_CREATION_USER_SAFE_MESSAGES = new Set([
+  'AssignmentType is not available.',
+  'No modules for this AssignmentType.',
+]);
+
+export function documentCreationErrorTextForClient(
+  error: DocumentCreationError,
+  fallback: string,
+): string {
+  const message = error.message.trim();
+  if (DOCUMENT_CREATION_USER_SAFE_MESSAGES.has(message)) {
+    return message;
+  }
+  return fallback;
+}
+
 type AssignmentModuleForSessionCreate = {
   id: string;
   instructions: Array<{ id: string; prompt: string }>;

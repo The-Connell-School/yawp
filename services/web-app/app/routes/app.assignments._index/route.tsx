@@ -1,4 +1,6 @@
 import { useFreeAccountUsage } from '~/components/free-account-usage';
+import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
+import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -51,12 +53,14 @@ import {
 } from '~/utils/assignment-quota.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { prisma } from '~/utils/db.server';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import {
   resolveTeacherSchoolYearScope,
   schoolYearWhere,
 } from '~/utils/school-year-scope.server';
 import { formatClassLabel } from '~/utils/teacher-document-work-utils';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
 
 export const handle = { breadcrumb: 'My Assignments' };
 
@@ -214,6 +218,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     creationTypeRows.map((type) => type.id)
   );
+  const siteLicenseLockedAssignmentTiles =
+    await loadSiteLicenseLockedAssignmentTiles(profile.organization);
 
   return {
     assignments,
@@ -241,6 +247,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         ...quotaByTypeId.get(type.id),
       }));
     })(),
+    siteLicenseLockedAssignmentTiles,
   };
 }
 
@@ -321,7 +328,13 @@ export async function action({ request }: ActionFunctionArgs) {
     } catch (error) {
       if (error instanceof AssignmentHasCollaborativeWorkError) {
         return dataResponse(
-          { success: false, message: error.message },
+          {
+            success: false,
+            message: safeDomainErrorTextForClientResponse(
+              error,
+              'This assignment has shared group work and cannot be deleted.',
+            ),
+          },
           { status: 409 }
         );
       }
@@ -465,11 +478,18 @@ function SavedAssignmentsPanel({
 
 export default function MyAssignmentsRoute() {
   const freeUsage = useFreeAccountUsage();
+  const { locked: teachingLocked, state: teachingAccessState } =
+    useTeachingAccess();
+  const teachingAccessAdminName =
+    teachingAccessState.variant === 'locked'
+      ? teachingAccessState.adminName
+      : 'your administrator';
   const {
     assignments,
     savedAssignments,
     assignmentCreationClasses,
     assignmentCreationTypes,
+    siteLicenseLockedAssignmentTiles,
   } = useLoaderData<typeof loader>();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -549,7 +569,7 @@ export default function MyAssignmentsRoute() {
   const hasSelection = selectedAssignmentIds.length > 0;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
+    <div className="mx-auto h-full min-h-0 w-full max-w-5xl overflow-y-auto px-4 py-8">
       <h1 className="mb-6 text-2xl font-semibold">My Assignments</h1>
 
       {SAVED_ASSIGNMENTS_ENABLED ? (
@@ -570,6 +590,7 @@ export default function MyAssignmentsRoute() {
           }}
           entryPoint="dashboard"
           assignmentTypes={assignmentCreationTypes}
+          siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
           teacherClasses={assignmentCreationClasses}
           initialAssignmentTypeId={reusedAssignment.assignmentTypeId}
           initialTitle={reusedAssignment.title}
@@ -636,18 +657,33 @@ export default function MyAssignmentsRoute() {
               </Tooltip>
             </Form>
           ) : null}
-          <Button
-            type="button"
-            size="sm"
-            className="shrink-0"
-            data-testid="my-assignments-new-assignment"
-            data-tour="my-assignments-new"
-            disabled={!freeUsage?.monthly && freeUsage?.allAssignmentsUsed}
-            onClick={() => setIsCreateSheetOpen(true)}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            New Assignment
-          </Button>
+          {(() => {
+            const createButton = (
+              <Button
+                type="button"
+                size="sm"
+                className="shrink-0"
+                data-testid="my-assignments-new-assignment"
+                data-tour="my-assignments-new"
+                disabled={
+                  !teachingLocked &&
+                  !freeUsage?.monthly &&
+                  freeUsage?.allAssignmentsUsed
+                }
+                onClick={() => setIsCreateSheetOpen(true)}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New Assignment
+              </Button>
+            );
+            return teachingLocked ? (
+              <PreviewAssignmentCreationControl>
+                {createButton}
+              </PreviewAssignmentCreationControl>
+            ) : (
+              createButton
+            );
+          })()}
           {!freeUsage?.monthly && freeUsage?.allAssignmentsUsed && (
             <span className="text-xs text-amber-800">
               No free assignments left
@@ -785,7 +821,9 @@ export default function MyAssignmentsRoute() {
         onOpenChange={setIsCreateSheetOpen}
         entryPoint="dashboard"
         assignmentTypes={assignmentCreationTypes}
+        siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
         teacherClasses={assignmentCreationClasses}
+        teachingLocked={teachingLocked}
       />
     </div>
   );

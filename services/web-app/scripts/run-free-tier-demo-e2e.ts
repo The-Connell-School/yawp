@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { logScriptError } from '../app/utils/log-script-error.server';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -421,7 +422,7 @@ async function main() {
 
 if (import.meta.main) {
   main().catch((error) => {
-    console.error(error);
+    logScriptError(error);
     process.exit(1);
   });
 }

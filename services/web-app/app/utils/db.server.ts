@@ -4,6 +4,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { parse } from 'pg-connection-string';
 import chalk from 'chalk';
 import { createAttributedPrisma } from './internal-impersonation-context.server';
+import { summarizePrismaQueryForLog } from './prisma-query-log.server';
 
 /**
  * Prisma resolves the Postgres namespace from `DATABASE_URL` (e.g. `?schema=pr_7`).
@@ -109,7 +110,7 @@ export const basePrisma = remember('prisma', () => {
               : 'red';
     const dur = chalk[color](`${e.duration}ms`);
     // eslint-disable-next-line no-console
-    console.info(`prisma:query - ${dur} - ${e.query}`);
+    console.info(`prisma:query - ${dur} - ${summarizePrismaQueryForLog(e.query)}`);
   });
   return client;
 });

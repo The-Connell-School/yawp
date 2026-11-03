@@ -77,11 +77,13 @@ function renderPanel({
   rubricConfig,
   assistantSuggestion,
   existingGrade,
+  gradingRubricSummary,
 }: {
   initialGradingAssistantStrictnessLevel?: string | null;
   rubricConfig?: Record<string, unknown>;
   assistantSuggestion?: Record<string, unknown> | null;
   existingGrade?: Record<string, unknown>;
+  gradingRubricSummary?: Record<string, unknown> | null;
 } = {}) {
   return render(
     <TeacherGradingPanel
@@ -109,6 +111,7 @@ function renderPanel({
       }
       rubricConfig={rubricConfig as any}
       assistantSuggestion={assistantSuggestion as any}
+      gradingRubricSummary={gradingRubricSummary as any}
     />
   );
 }
@@ -119,6 +122,20 @@ describe('TeacherGradingPanel', () => {
   afterEach(() => {
     cleanup(root);
     root = null;
+  });
+
+  it('shows View rubric when a grading rubric summary is available', async () => {
+    ({ root } = renderPanel({
+      gradingRubricSummary: {
+        sourceText: "Built-in rubric: Thesis",
+        scaleText: 'Weighted 1–5, 1–5',
+        categories: [],
+      },
+    }));
+
+    expect(
+      document.querySelector('[data-testid="grading-view-rubric"]')
+    ).not.toBeNull();
   });
 
   it('renders the strictness picker for a teacher', async () => {
@@ -287,5 +304,40 @@ describe('TeacherGradingPanel', () => {
         '[data-testid="grading-overall-comment"]'
       )?.value
     ).toBe('Assistant feedback.');
+  });
+
+  it('shows rubric band names without a numeric score suffix in accordion headers', async () => {
+    ({ root } = renderPanel({
+      rubricConfig: {
+        source: 'assignment-type',
+        minScore: 0,
+        maxScore: 30,
+        scoringType: 'points_scale',
+        categories: [
+          {
+            key: 'engagement_with_prompt',
+            label: 'Engagement with Prompt',
+            description: 'Engagement only.',
+            weight: 1,
+            bands: [
+              {
+                label: 'SHOWED UP',
+                min: 17,
+                max: 23,
+                description: 'Meaningful engagement.',
+              },
+            ],
+          },
+        ],
+      },
+      existingGrade: {
+        rubricScores: {
+          engagement_with_prompt: { score: 20, comment: '' },
+        },
+      },
+    }));
+
+    expect(document.body.textContent).toContain('Good');
+    expect(document.body.textContent).not.toMatch(/Good\s*\(\s*20\/30\s*\)/);
   });
 });

@@ -38,7 +38,7 @@ import { FreeTierOnboardingTimeline } from '../free-tier/FreeTierOnboardingTimel
 
 const MAX_NAME = 200;
 
-function progressedDestination(status: string) {
+async function progressedDestination(status: string) {
   if (status === 'SENT' || status === 'MANUAL_REVIEW')
     return '/app/free-tier/pending';
   if (status === 'APPROVED') return '/app/my-classes';
@@ -67,7 +67,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const onboardingV2 =
     !!app && (await isClassPreparationEnabled(userId, app.organizationId));
   const destination =
-    onboardingV2 && app ? progressedDestination(app.status) : null;
+    onboardingV2 && app
+      ? await progressedDestination(app.status)
+      : null;
   if (destination) throw redirect(destination);
   const step = new URL(request.url).searchParams.get('step');
   if (needsClassPreparation(app, onboardingV2) && step === 'administrator')
@@ -116,7 +118,9 @@ export async function action({ request }: ActionFunctionArgs) {
     userId,
     app.organizationId
   );
-  const destination = onboardingV2 ? progressedDestination(app.status) : null;
+  const destination = onboardingV2
+    ? await progressedDestination(app.status)
+    : null;
   if (destination) return redirect(destination);
   if (formData.get('intent') === 'prepare-class') {
     const values = {
@@ -154,7 +158,14 @@ export async function action({ request }: ActionFunctionArgs) {
         return redirect('/app/free-tier/onboarding');
       return result;
     }
-    throw redirect('/app/free-tier/pending');
+    const { ensureLockedPreviewClassroomForUser } =
+      await import('~/domain/free-tier/locked-preview.server');
+    await ensureLockedPreviewClassroomForUser(userId);
+    const nextStatus = result.status;
+    const nextDestination = onboardingV2
+      ? await progressedDestination(nextStatus)
+      : '/app/free-tier/pending';
+    throw redirect(nextDestination ?? '/app/free-tier/pending');
   } catch (error) {
     if (error instanceof Response) throw error;
     return {
@@ -216,16 +227,29 @@ export default function FreeTierOnboardingRoute() {
 
   return (
     <FreeTierAuthCard
-      title={onboardingV2 ? 'Ask your administrator' : 'Who can approve YAWP?'}
+      title={onboardingV2 ? 'One last step: your administrator’s approval' : 'Who can approve Yawp!'}
       footer={<FreeTierSignOut />}
-      subtitle="A site or district administrator. Department chairs and teachers can’t."
+      subtitle={onboardingV2 ? undefined : 'A site or district administrator. Department chairs and teachers can’t.'}
     >
       {onboardingV2 ? (
         <>
           <FreeTierOnboardingTimeline current={1} />
           <p className="text-sm text-muted-foreground">
-            You’re almost there. We’ll ask your administrator to approve YAWP
-            before you start teaching.
+            The technology we bring into our classrooms matters. Students
+            deserve tools that are safe, transparent, and built to help them
+            learn, not do the work for them. That’s why we ask an administrator
+            to approve every free Yawp! classroom.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            It protects your students, and it protects you. And in our
+            experience, when an administrator knows about the good work
+            happening in a classroom, that work gets noticed, supported, and
+            shared.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            We’ll send your administrator a short email explaining Yawp! and
+            asking for a one-click approval. Ask a site or district
+            administrator; department chairs and teachers can’t approve.
           </p>
           {app?.status === 'ACCOUNT_CREATED' ? (
             <Link to="?step=class" className="text-sm text-primary underline">
@@ -256,7 +280,7 @@ export default function FreeTierOnboardingRoute() {
           }
         }}
       >
-        <FreeTierFieldLabel label="Administrator name" htmlFor="adminName">
+        <FreeTierFieldLabel label={onboardingV2 ? 'Administrator’s name' : 'Administrator name'} htmlFor="adminName">
           <FreeTierTextInput
             id="adminName"
             name="adminName"
@@ -289,11 +313,11 @@ export default function FreeTierOnboardingRoute() {
             {adminEmailError}
           </p>
         ) : null}
-        <FreeTierFieldLabel label="Administrator role" htmlFor="adminRole">
+        <FreeTierFieldLabel label={onboardingV2 ? 'Title' : 'Administrator role'} htmlFor="adminRole">
           <FreeTierTextInput
             id="adminRole"
             name="adminRole"
-            placeholder="Principal, Technology Director"
+            placeholder={onboardingV2 ? 'Principal, Assistant Principal, Director of Curriculum and Instruction' : 'Principal, Technology Director'}
             required
             maxLength={100}
             defaultValue={pending?.adminRole ?? ''}

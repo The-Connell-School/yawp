@@ -1,0 +1,27 @@
+This is a reminder about the approval request below.
+
+Approve Yawp! for Jordan Rivera at Lincoln High School
+
+Jordan Rivera at Lincoln High School would like to use Yawp! in their classroom. They named you as the administrator who can approve classroom software.
+
+Teacher: Jordan Rivera
+School: Lincoln High School
+Email: jrivera@example.test
+
+About Yawp!
+Students draft essays with feedback as they write.
+Teachers control assignments and grading.
+Student writing is never used to train outside models.
+
+Review and approve:
+https://yawp.test/free/admin/approve?t=GOLDEN
+
+Not the right person? Forward this request:
+https://yawp.test/free/admin/not-right-person?t=GOLDEN
+
+This link works for 14 days. You don't need a Yawp! account.
+
+--
+Sent by Yawp! · https://yawp.test
+You're getting this because Jordan Rivera named you as an administrator who can approve classroom software at Lincoln High School.
+Questions? support@yawp.school

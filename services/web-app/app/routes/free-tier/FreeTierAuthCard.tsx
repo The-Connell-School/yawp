@@ -1,4 +1,4 @@
-import {
+import React, {
   useId,
   useState,
   cloneElement,
@@ -22,6 +22,8 @@ export function FreeTierAuthCard({
   icon,
   status,
   aside,
+  belowCard,
+  stackAfterCard,
 }: {
   title: string;
   subtitle?: string;
@@ -29,27 +31,49 @@ export function FreeTierAuthCard({
   footer?: ReactNode;
   icon?: ReactNode;
   status?: boolean;
+  /** @deprecated Use stackAfterCard for Q&A below the approve card. */
   aside?: ReactNode;
+  belowCard?: ReactNode;
+  stackAfterCard?: ReactNode;
 }) {
+  const stacked = Boolean(stackAfterCard || belowCard);
   return (
-    <div className={`free-tier-page${aside ? ' free-tier-approval-v2' : ''}`}>
+    <div
+      className={`free-tier-page${
+        stacked
+          ? ' free-tier-approval-stack'
+          : aside
+            ? ' free-tier-approval-v2'
+            : ''
+      }`}
+    >
       <AuthPageShell>
-        {aside ? <div className="free-tier-approval-info">{aside}</div> : null}
-        <AuthFormCard
-          title={title}
-          subtitle={subtitle}
-          className="free-tier-form-card"
-          role={status ? 'status' : undefined}
-          icon={
-            icon ? (
-              <div className="free-tier-state-icon" aria-hidden="true">
-                {icon}
-              </div>
-            ) : undefined
-          }
-        >
-          <div className="flex flex-col gap-4">{children}</div>
-        </AuthFormCard>
+        {aside && !stacked ? (
+          <div className="free-tier-approval-info">{aside}</div>
+        ) : null}
+        <div className={stacked ? 'free-tier-approval-column' : undefined}>
+          <AuthFormCard
+            title={title}
+            subtitle={subtitle}
+            className="free-tier-form-card"
+            role={status ? 'status' : undefined}
+            icon={
+              icon ? (
+                <div className="free-tier-state-icon" aria-hidden="true">
+                  {icon}
+                </div>
+              ) : undefined
+            }
+          >
+            <div className="flex flex-col gap-4">{children}</div>
+          </AuthFormCard>
+          {belowCard ? (
+            <div className="free-tier-below-card">{belowCard}</div>
+          ) : null}
+          {stackAfterCard ? (
+            <div className="free-tier-stack-after-card">{stackAfterCard}</div>
+          ) : null}
+        </div>
         {footer ? <div className="free-tier-footer">{footer}</div> : null}
         <FreeTierLegalLinks />
       </AuthPageShell>
@@ -57,8 +81,18 @@ export function FreeTierAuthCard({
   );
 }
 
-export function FreeTierButton(props: ButtonProps) {
-  return <Button {...props} className="h-11 w-full text-sm" />;
+export function FreeTierButton({
+  isLoading,
+  ...props
+}: ButtonProps) {
+  return (
+    <Button
+      {...props}
+      isLoading={isLoading}
+      aria-busy={isLoading ? true : props['aria-busy']}
+      className={`h-11 w-full text-sm ${props.className ?? ''}`}
+    />
+  );
 }
 
 export function FreeTierSignOut() {
@@ -96,10 +130,13 @@ export function FreeTierFieldLabel(props: {
   );
 }
 
-export function FreeTierTextInput({
+export const FreeTierTextInput = React.forwardRef<
+  HTMLInputElement,
+  InputProps & { invalidMessage?: string }
+>(function FreeTierTextInput({
   invalidMessage,
   ...props
-}: InputProps & { invalidMessage?: string }) {
+}, ref) {
   const [error, setError] = useState<string>();
   const errorId = useId();
   const missing: Record<string, string> = {
@@ -112,6 +149,7 @@ export function FreeTierTextInput({
   return (
     <>
       <Input
+        ref={ref}
         {...props}
         className={`text-base ${props.className ?? ''}`}
         aria-invalid={error ? true : props['aria-invalid']}
@@ -142,7 +180,7 @@ export function FreeTierTextInput({
       ) : null}
     </>
   );
-}
+});
 
 /** Presentation of existing approval states; does not grant access or navigate. */
 export function FreeTierProgress({
@@ -181,18 +219,30 @@ export function FreeTierProgress({
 export function FreeTierPerson({
   name,
   email,
+  subtitle,
 }: {
   name: string;
   email?: string;
+  subtitle?: string;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border p-3.5 text-sm text-card-foreground">
+    <div className="flex min-w-0 items-center gap-3 rounded-lg border border-border p-3.5 text-sm text-card-foreground">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary">
         <UserRound aria-hidden="true" className="h-4 w-4" />
       </span>
-      <div>
+      <div className="min-w-0">
         <p className="font-semibold">{name}</p>
-        {email ? <p className="text-muted-foreground">{email}</p> : null}
+        {subtitle ? (
+          <p className="text-muted-foreground">{subtitle}</p>
+        ) : null}
+        {email ? (
+          <p
+            className="text-muted-foreground [overflow-wrap:anywhere]"
+            data-testid="free-tier-person-email"
+          >
+            {email}
+          </p>
+        ) : null}
       </div>
     </div>
   );

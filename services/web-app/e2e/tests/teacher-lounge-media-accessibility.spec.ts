@@ -1,5 +1,9 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import {
+  teacherLoungeE2eSkipReason,
+  teacherLoungeE2eSkipped,
+} from '../helpers/teacher-lounge-disabled';
 
 const RESOURCE_NAMES = [
   'e2e-module-handout.pdf',
@@ -63,6 +67,8 @@ test('Teacher Lounge module keeps media accessibility links below primary resour
   signIn,
   e2eContext,
 }) => {
+  test.skip(teacherLoungeE2eSkipped, teacherLoungeE2eSkipReason);
+
   const { moduleId } = await seedModuleResources({
     teacherTrainingId: e2eContext.teacherTrainingId,
   });

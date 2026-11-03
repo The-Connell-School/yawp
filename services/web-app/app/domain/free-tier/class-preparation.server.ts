@@ -1,6 +1,6 @@
 import { prisma } from '~/utils/db.server';
 import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { FREE_TIER_ONBOARDING_V2_FLAG } from '~/domain/feature-flags/feature-flags';
+import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
 import { parseClassPreparation } from './class-preparation';
 
 /** Existing site accounts are outside this rollout. No flag is activated here. */
@@ -9,7 +9,7 @@ export async function isClassPreparationEnabled(
   organizationId?: string | null
 ) {
   if (
-    !(await isFeatureFlagEnabled(FREE_TIER_ONBOARDING_V2_FLAG, organizationId))
+    !(await isFeatureFlagEnabled(FREE_TIER_FLAG, organizationId))
   )
     return false;
   const siteMembership = await prisma.orgMembership.findFirst({

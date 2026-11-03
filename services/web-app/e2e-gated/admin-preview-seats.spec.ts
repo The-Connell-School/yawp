@@ -6,12 +6,12 @@ test('admin creates a persistent seeded preview seat and retrieves its code', as
   page,
 }) => {
   await page.goto('/accessibility');
-  await page.getByLabel('Access code').fill(MASTER_CODE);
+  await page.locator('#preview-access-code').fill(MASTER_CODE);
   await page.getByRole('button', { name: 'Open preview' }).click();
 
   await page
     .getByRole('button', {
-      name: 'Local development environment. Open dev login menu.',
+      name: /Open dev login menu\.$/,
     })
     .click();
   await page.getByRole('button', { name: /^Dev Admin\b/ }).click();
@@ -36,11 +36,11 @@ test('admin creates a persistent seeded preview seat and retrieves its code', as
 
   await page
     .getByRole('button', {
-      name: 'Local development environment. Open dev login menu.',
+      name: /Open dev login menu\.$/,
     })
     .click();
   await page.getByRole('button', { name: 'Re-enter access code' }).click();
-  await page.getByLabel('Access code').fill(accessCode!);
+  await page.locator('#preview-access-code').fill(accessCode!);
   await page.getByRole('button', { name: 'Open preview' }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(page.locator('[data-preview-access-screen]')).toHaveCount(0);
@@ -49,7 +49,7 @@ test('admin creates a persistent seeded preview seat and retrieves its code', as
   await page.goto('/accessibility');
   await page
     .getByRole('button', {
-      name: 'Local development environment. Open dev login menu.',
+      name: /Open dev login menu\.$/,
     })
     .click();
   await expect(

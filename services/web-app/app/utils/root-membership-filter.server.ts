@@ -1,3 +1,4 @@
+import { isYawpProductionEnvironment } from './lti/platform.server';
 import { previewSessionAllowedWithoutSeatMembership } from './preview-session-seat.server';
 
 type RootMembershipFilterOptions = {
@@ -29,7 +30,14 @@ export async function getRootMembershipWhere(
     isolatedPreviewSeatMode &&
     !(await sessionAllowedWithoutSeatMembership(userId))
   ) {
-    return { organizationId: previewAccessSeat.organizationId };
+    return {
+      organizationId: previewAccessSeat.organizationId,
+      isActive: true,
+    };
+  }
+
+  if (isYawpProductionEnvironment()) {
+    return { isActive: true };
   }
 
   return undefined;

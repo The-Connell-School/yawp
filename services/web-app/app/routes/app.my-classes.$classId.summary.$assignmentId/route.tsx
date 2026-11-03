@@ -1,3 +1,4 @@
+import { currentClassInsightRows } from '~/domain/assignment-insights/class-insight-inputs.server';
 import {
   type LoaderFunctionArgs,
   Link,
@@ -107,11 +108,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     classAssignments.map((classAssignment) => classAssignment.class)
   );
 
+  const currentRows = await currentClassInsightRows(
+    classAssignments.flatMap((ca) =>
+      ca.insight ? [{ ...ca.insight, classAssignmentId: ca.id }] : []
+    )
+  );
+  const currentIds = new Set(currentRows.map((row) => row.classAssignmentId));
   const sections: SectionInsightInput[] = classAssignments.map(
     (classAssignment, index) => {
       const insight = classAssignment.insight;
       const isReady =
-        insight != null && insight.status === 'ready' && insight.summaryJson;
+        insight != null &&
+        insight.status === 'ready' &&
+        insight.summaryJson &&
+        currentIds.has(classAssignment.id);
       return {
         classId: classAssignment.classId,
         classAssignmentId: classAssignment.id,
@@ -211,7 +221,10 @@ export default function ClassSummaryRoute() {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold" data-testid="class-summary-page-title">
+        <h2
+          className="text-lg font-semibold"
+          data-testid="class-summary-page-title"
+        >
           {title}
         </h2>
 
@@ -254,10 +267,7 @@ export default function ClassSummaryRoute() {
 
       {parentData.classInsightsEnabled === true ? (
         showingAllSections && canReadAcrossSections ? (
-          <AcrossSectionsPanel
-            sections={sections}
-            currentClassId={classId}
-          />
+          <AcrossSectionsPanel sections={sections} currentClassId={classId} />
         ) : (
           <ClassInsightsPanel
             classAssignmentId={classAssignment.classAssignmentId}
@@ -279,9 +289,9 @@ export default function ClassSummaryRoute() {
           data-testid="class-summary-insights-disabled"
         >
           <p className="text-sm text-muted-foreground">
-            Class performance summaries are not turned on for your
-            organization. Ask your administrator to enable them, then come
-            back to see how the class did on this assignment.
+            Class performance summaries are not turned on for your organization.
+            Ask your administrator to enable them, then come back to see how the
+            class did on this assignment.
           </p>
         </div>
       )}

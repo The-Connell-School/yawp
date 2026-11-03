@@ -13,16 +13,21 @@ import {
   printsForStudents,
   renderHandoutPdf,
   renderPacketPdf,
+  handoutKit,
 } from '~/domain/lesson-planner/lesson-pdf.server';
 import { buildStudentHandout } from '~/domain/lesson-planner/student-handout';
+import { onePacketOrder } from '~/domain/lesson-planner/one-packet';
+import { newestBuiltDeck, stackAgendaSteps } from '~/domain/lesson-planner/lesson-deck.server';
+import { syncAgendaToStack } from '~/domain/lesson-planner/deck-agenda';
 
 /** Guards against a hand-edited URL asking us to allocate for nothing. */
 const MAX_EXCLUSIONS = 200;
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  const { packet } = await loadLessonPacket({
+  const { packet, reviewFlags } = await loadLessonPacket({
     request,
     conversationId: params.conversationId,
+    withStackDetails: false,
   });
 
   const url = new URL(request.url);
@@ -48,7 +53,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     );
     if (!piece) throw new Response('Not Found', { status: 404 });
 
-    const pdf = await renderHandoutPdf({ packet, only: onlyPiece });
+    const pdf = await renderHandoutPdf({ packet, only: onlyPiece, kit: handoutKit(packet, reviewFlags) });
     return pdfResponse(pdf, pdfFilename(packet.title, piece.title));
   }
 
@@ -63,7 +68,24 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   // Exclusions are dropped when one piece was asked for by name: the teacher
   // pointed at that piece, so leaving it out would answer with nothing.
-  const chosen = single ? { ...packet, sections: [single] } : packet;
+  // The whole packet is the lesson plan, the slides, then the handouts, with
+  // the deck built for the lesson even if it was never added (Oct 24 handoff,
+  // task 2).
+  const ordered = single
+    ? { ...packet, sections: [single] }
+    : wantsHandout
+      ? packet
+      : onePacketOrder(packet, (await newestBuiltDeck(params.conversationId!))?.deck ?? null);
+  // A filed deck's agenda reads the stack's times too (Brian's round 3, 1.4).
+  const agendaSteps = ordered.sections.some((section) => section.deck)
+    ? await stackAgendaSteps(params.conversationId!)
+    : [];
+  const chosen = {
+    ...ordered,
+    sections: ordered.sections.map((section) =>
+      section.deck ? { ...section, deck: syncAgendaToStack(section.deck, agendaSteps) } : section
+    ),
+  };
   const pdf = printsForStudents({
     wantsHandout,
     singleSectionAudience: single?.audience,
@@ -71,6 +93,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? await renderHandoutPdf({
         packet: chosen,
         excluded: single ? [] : excluded,
+        kit: handoutKit(packet, reviewFlags),
       })
     : await renderPacketPdf(chosen);
 

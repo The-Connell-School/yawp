@@ -25,6 +25,7 @@ import { resolveCurrentAssignmentModuleSession } from '~/utils/assignment-module
 import { Tutor } from '../app_.documents_.$id/tutor/tutor';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import {
   documentAuthorWhere,
   documentReadWhere,
@@ -112,12 +113,14 @@ const moduleSessionInclude = {
   assignmentModule: {
     include: {
       instructions: {
+        omit: { answerKey: true },
         orderBy: { position: 'asc' as const },
         include: { buttons: { orderBy: { position: 'asc' as const } } },
       },
       assignmentType: {
         select: {
           assignmentModules: {
+            where: { deletedAt: null },
             select: { id: true, position: true },
             orderBy: { position: 'asc' as const },
           },
@@ -316,7 +319,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
   } catch (error) {
     if (error instanceof DraftCommentError) {
       return dataResponse(
-        { success: false, message: error.message },
+        {
+          success: false,
+          message: safeDomainErrorTextForClientResponse(
+            error,
+            'Could not save that comment.',
+          ),
+        },
         { status: 400 }
       );
     }

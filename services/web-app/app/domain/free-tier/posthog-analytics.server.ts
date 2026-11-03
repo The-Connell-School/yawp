@@ -1,4 +1,5 @@
 import { posthog } from '~/services/posthog.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 
 type FreeTierEnvironment =
   | 'demo'
@@ -101,11 +102,17 @@ export function captureFreeTierAnalyticsEvent(args: {
       // Link previous -> new before capturing the new actor.
       void Promise.resolve(
         posthog.alias({ distinctId: alias, alias: args.distinctId })
-      ).catch(() => {
-        console.error('free_tier_posthog_alias_failed', { event: args.event });
+      ).catch((error) => {
+        console.error('free_tier_posthog_alias_failed', {
+          event: args.event,
+          error: buildSafeErrorForLog(error),
+        });
       });
-    } catch {
-      console.error('free_tier_posthog_alias_failed', { event: args.event });
+    } catch (error) {
+      console.error('free_tier_posthog_alias_failed', {
+        event: args.event,
+        error: buildSafeErrorForLog(error),
+      });
     }
   }
   try {
@@ -120,11 +127,17 @@ export function captureFreeTierAnalyticsEvent(args: {
           preview_slug: process.env.PREVIEW_SLUG?.trim() || null,
         },
       })
-    ).catch(() =>
-      console.error('free_tier_posthog_capture_failed', { event: args.event })
+    ).catch((error) =>
+      console.error('free_tier_posthog_capture_failed', {
+        event: args.event,
+        error: buildSafeErrorForLog(error),
+      })
     );
-  } catch {
-    console.error('free_tier_posthog_capture_failed', { event: args.event });
+  } catch (error) {
+    console.error('free_tier_posthog_capture_failed', {
+      event: args.event,
+      error: buildSafeErrorForLog(error),
+    });
   }
 }
 
@@ -132,7 +145,9 @@ export function captureFreeTierAnalyticsEvent(args: {
 export async function runFreeTierAnalytics(work: () => Promise<void>) {
   try {
     await work();
-  } catch {
-    console.error('free_tier_analytics_enrichment_failed');
+  } catch (error) {
+    console.error('free_tier_analytics_enrichment_failed', {
+      error: buildSafeErrorForLog(error),
+    });
   }
 }

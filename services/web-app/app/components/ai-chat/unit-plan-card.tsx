@@ -9,6 +9,7 @@
 import { CalendarRange, Hammer, Flag, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router';
 import {
+  buildDayDisplay,
   buildDayRequest,
   type UnitPlan,
 } from '~/domain/lesson-planner/unit-plan';
@@ -25,7 +26,7 @@ export function UnitPlanCard({
    * packet, where there is nothing to click.
    */
   onBuildDay?:
-    | ((message: string, day: { day: number; title: string }) => void)
+    | ((message: string, day: { day: number; title: string; display?: string }) => void)
     | null;
   /**
    * Day number → the conversation that day's lesson already lives in. A built
@@ -77,6 +78,11 @@ export function UnitPlanCard({
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {day.objective}
               </p>
+              {day.reading ? (
+                <p data-testid="unit-day-reading" className="mt-1 text-xs">
+                  <span className="font-medium">Reading:</span> {day.reading}
+                </p>
+              ) : null}
               <p className="mt-1 text-xs">{day.students}</p>
               {day.check ? (
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -101,6 +107,8 @@ export function UnitPlanCard({
                   onBuildDay(buildDayRequest(unit, day), {
                     day: day.day,
                     title: day.title,
+                    // The chat shows one line, not the request (Kevin, Oct 25, note 5).
+                    display: buildDayDisplay(unit, day),
                   })
                 }
                 disabled={disabled}

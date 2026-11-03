@@ -787,4 +787,149 @@ describe('getLLMCompletion', () => {
     });
     expect(response).toBe('Logged response');
   });
+  test('audit-only internal scratch completion persists no provider or usage rows on either provider', async () => {
+    const attribution = {
+      organizationId: null,
+      membershipId: null,
+      route: 'api/internal/v1/admin/grading-workspace',
+      requestId: 'scratch-test',
+    };
+    const request = {
+      model: 'claude-sonnet-4-6',
+      messages: [
+        { role: 'user' as const, content: 'Synthetic scratch sample' },
+      ],
+      attribution,
+      logPayload: 'audit-only' as const,
+    };
+    expect(await getLLMCompletion(request)).toBe('Logged response');
+    openAiCreate.mockResolvedValue(openAiTextResponse('Fallback response'));
+    expect(await getLLMCompletion({ ...request, forceFallback: true })).toBe(
+      'Fallback response'
+    );
+    expect(llmLogCreate).not.toHaveBeenCalled();
+    expect(usageLogCreate).not.toHaveBeenCalled();
+  });
+
+  test('audit-only internal scratch failures persist no provider payload', async () => {
+    anthropicCreate.mockRejectedValue(new Error('Provider failed'));
+    await expect(
+      getLLMCompletion({
+        model: 'claude-sonnet-4-6',
+        messages: [{ role: 'user', content: 'Scratch sample' }],
+        attribution: {
+          organizationId: null,
+          membershipId: null,
+          route: 'api/internal/v1/admin/grading-workspace',
+          requestId: 'scratch-failure',
+        },
+        logPayload: 'audit-only',
+        allowFallbackProvider: false,
+      })
+    ).rejects.toThrow('Provider failed');
+    expect(llmLogCreate).not.toHaveBeenCalled();
+    expect(usageLogCreate).not.toHaveBeenCalled();
+  });
+
+  test('audit-only persistence cannot suppress tenant or unrelated-route logging', async () => {
+    for (const attribution of [
+      { ...testAttribution, route: 'api/internal/v1/admin/grading-workspace' },
+      {
+        ...testAttribution,
+        organizationId: null,
+        route: 'api/internal/v1/admin/grading-workspace',
+      },
+      {
+        ...testAttribution,
+        organizationId: null,
+        membershipId: null,
+        classId: 'class-1',
+        route: 'api/internal/v1/admin/grading-workspace',
+      },
+      { ...testAttribution, organizationId: null, membershipId: null },
+    ]) {
+      await expect(
+        getLLMCompletion({
+          model: 'claude-sonnet-4-6',
+          messages: [{ role: 'user', content: 'Hello' }],
+          attribution,
+          logPayload: 'audit-only',
+        })
+      ).rejects.toThrow(
+        'Audit-only persistence requires internal grading workspace attribution'
+      );
+    }
+    expect(anthropicCreate).not.toHaveBeenCalled();
+  });
+
+  test('persists provider-safe error text when the Anthropic call fails', async () => {
+    anthropicCreate.mockRejectedValueOnce(
+      Object.assign(
+        new Error('prompt echoed: token=super-secret teacher@school.edu'),
+        {
+          name: 'BadRequestError',
+          status: 400,
+          error: { type: 'invalid_request_error' },
+        }
+      )
+    );
+
+    await expect(
+      getLLMCompletion({
+        model: 'claude-sonnet-4-6',
+        messages: [{ role: 'user', content: 'Hello' }],
+        attribution: testAttribution,
+        allowFallbackProvider: false,
+      })
+    ).rejects.toThrow('prompt echoed');
+
+    expect(llmLogCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        provider: 'anthropic',
+        error: 'BadRequestError · invalid_request_error · HTTP 400',
+      }),
+    });
+    expect(JSON.stringify(llmLogCreate.mock.calls[0])).not.toContain(
+      'super-secret'
+    );
+    expect(JSON.stringify(llmLogCreate.mock.calls[0])).not.toContain(
+      'teacher@school.edu'
+    );
+  });
+
+  test('logs safe metadata when LLM call persistence fails', async () => {
+    const errorSpy = mock(() => {});
+    const originalError = console.error;
+    console.error = errorSpy as typeof console.error;
+
+    anthropicCreate.mockResolvedValueOnce(anthropicTextResponse('Hi'));
+    llmLogCreate.mockRejectedValueOnce(
+      new Error('token=super-secret-value teacher@school.edu')
+    );
+
+    try {
+      await getLLMCompletion({
+        model: 'claude-sonnet-4-6',
+        messages: [{ role: 'user', content: 'Hello' }],
+        attribution: testAttribution,
+      });
+    } finally {
+      console.error = originalError;
+    }
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      'llm_call_persist_failed',
+      expect.objectContaining({
+        error: expect.objectContaining({
+          message: expect.stringContaining('[redacted-token]'),
+        }),
+      })
+    );
+    expect(JSON.stringify(errorSpy.mock.calls[0])).not.toContain(
+      'super-secret-value'
+    );
+    expect(JSON.stringify(errorSpy.mock.calls[0])).not.toContain(
+      'teacher@school.edu'
+    );
+  });
 });

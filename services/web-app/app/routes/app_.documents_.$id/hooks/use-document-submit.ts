@@ -1,6 +1,10 @@
 import { useCallback, useState, type RefObject } from 'react';
 import { toast } from 'sonner';
 import type { EditorBridge } from '../document-editor/use-editor-sync';
+import {
+  SUBMIT_DOCUMENT_GENERIC_ERROR,
+  submitDocumentErrorTextForClient,
+} from './submit-document-client-messages';
 
 type Options = {
   documentId: string;
@@ -76,7 +80,11 @@ export function useDocumentSubmit({
 
         if (!res.ok) {
           const body = await res.json().catch(() => null);
-          toast.error((body as any)?.message ?? 'Submission failed.');
+          toast.error(
+            submitDocumentErrorTextForClient(
+              (body as { message?: string } | null)?.message,
+            ),
+          );
           return;
         }
 
@@ -105,11 +113,8 @@ export function useDocumentSubmit({
               ? submission.submittedAt
               : submission.submittedAt.toISOString(),
         });
-      } catch (err) {
-        toast.error(
-          'Submission failed: ' +
-            (err instanceof Error ? err.message : 'unknown')
-        );
+      } catch {
+        toast.error(SUBMIT_DOCUMENT_GENERIC_ERROR);
       } finally {
         setIsSubmitting(false);
       }

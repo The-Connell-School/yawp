@@ -20,6 +20,7 @@
  */
 import pg from 'pg';
 import { existsSync, readFileSync } from 'node:fs';
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const FREE_WRITE_ID = 'cfreewrite0000000000000000';
@@ -316,6 +317,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error(e);
+  logScriptError(e);
   process.exit(1);
 });

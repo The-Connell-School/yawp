@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import {
   saveTesterFeedback,
-  listTesterFeedback,
+  loadTesterFeedbackScreenshotPresence,
   type FeedbackWriteTransaction,
 } from './tester-feedback-runtime.server';
 import type { FeedbackInput } from './tester-feedback.server';
@@ -58,7 +58,25 @@ describe('feedback database rate limit', () => {
   });
 });
 
+test('screenshot presence query uses the prisma client, not the testerFeedback delegate', async () => {
+  const queryRaw = mock(async () => [{ id: 'new', hasScreenshot: true }]);
+  const presence = await loadTesterFeedbackScreenshotPresence(['new'], {
+    $queryRaw: queryRaw,
+  } as never);
+  expect(queryRaw).toHaveBeenCalledTimes(1);
+  expect(presence.get('new')).toBe(true);
+});
+
 test('list joins only server User email/name, keeps filters and pagination, normalizes historical actions', async () => {
+  const queryRaw = mock(async () => [
+    { id: 'new', hasScreenshot: true },
+    { id: 'legacy', hasScreenshot: false },
+    { id: 'invalid-json', hasScreenshot: false },
+  ]);
+  mock.module('./db.server', () => ({
+    prisma: { $queryRaw: queryRaw },
+  }));
+  const { listTesterFeedback } = await import('./tester-feedback-runtime.server');
   const findMany = mock(async () => [
     {
       id: 'new',
@@ -82,7 +100,7 @@ test('list joins only server User email/name, keeps filters and pagination, norm
     limit: 51,
     format: 'json',
   } as const;
-  const rows = await listTesterFeedback(query, { findMany } as any);
+  const rows = await listTesterFeedback(query, { findMany } as never);
   expect(findMany).toHaveBeenCalledWith({
     where: {
       environment: 'demo',
@@ -90,18 +108,33 @@ test('list joins only server User email/name, keeps filters and pagination, norm
       severity: 'high',
       createdAt: { gte: new Date(query.since), lte: new Date(query.until) },
     },
-    include: { user: { select: { email: true, name: true } } },
+    select: {
+      id: true,
+      userId: true,
+      url: true,
+      userAgent: true,
+      whatIDid: true,
+      whatHappened: true,
+      whatIWish: true,
+      severity: true,
+      createdAt: true,
+      environment: true,
+      actions: true,
+      user: { select: { email: true, name: true } },
+    },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     cursor: { id: 'cursor' },
     skip: 1,
     take: 51,
   });
+  expect(queryRaw).toHaveBeenCalledTimes(1);
   expect(
-    rows.map(({ id, actions, userEmail, userName }) => ({
+    rows.map(({ id, actions, userEmail, userName, hasScreenshot }) => ({
       id,
       actions,
       userEmail,
       userName,
+      hasScreenshot,
     }))
   ).toEqual([
     {
@@ -109,9 +142,22 @@ test('list joins only server User email/name, keeps filters and pagination, norm
       actions: [{ type: 'route', path: '/app' }],
       userEmail: 'server@example.test',
       userName: 'Server User',
+      hasScreenshot: true,
     },
-    { id: 'legacy', actions: null, userEmail: null, userName: null },
-    { id: 'invalid-json', actions: null, userEmail: null, userName: null },
+    {
+      id: 'legacy',
+      actions: null,
+      userEmail: null,
+      userName: null,
+      hasScreenshot: false,
+    },
+    {
+      id: 'invalid-json',
+      actions: null,
+      userEmail: null,
+      userName: null,
+      hasScreenshot: false,
+    },
   ]);
 });
 test('writes exact validated structured actions through the existing transaction', async () => {

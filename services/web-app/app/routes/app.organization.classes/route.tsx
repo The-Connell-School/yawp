@@ -45,6 +45,7 @@ import {
   getOrganizationClassesTableCookieValue,
 } from '~/utils/cookies.server';
 import { assertCanCreateClassForOrganizationPlan } from '~/utils/assignment-quota.server';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import { prisma } from '~/utils/db.server';
 import { SearchInput } from '~/components/search-input';
 import {
@@ -73,6 +74,12 @@ import {
 } from '~/utils/school-year';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
+import {
+  organizationClassListQueryParts,
+  organizationClassListTableState,
+  redactClassTeachingSecrets,
+  shouldHideFreeTierTeachingSecrets,
+} from '~/domain/free-tier/locked-preview.server';
 
 const COLUMNS: CookieColumns = {
   school: {
@@ -179,32 +186,24 @@ async function connectTeachersToSchool(
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireOwner(request);
   const profile = await requireMembership(request, user.id);
+  const hideTeachingSecrets = await shouldHideFreeTierTeachingSecrets(user.id);
   const url = new URL(request.url);
   const q = url.searchParams.get('q');
-  const { sort, direction, skip, take } =
-    await getOrganizationClassesTableCookie(request);
+  const tableFilters = await getOrganizationClassesTableCookie(request);
+  const { sort, direction, skip, take } = tableFilters;
+
+  const { orClause, orderByField } = organizationClassListQueryParts({
+    q,
+    sort,
+    hideTeachingSecrets,
+  });
 
   const where = {
     school: {
       organizationId: profile.organization.id,
     },
     isArchived: false, // Only show non-archived classes
-    ...(q
-      ? {
-          OR: [
-            { code: { contains: q, mode: 'insensitive' as const } },
-            { schoolYear: { contains: q, mode: 'insensitive' as const } },
-            { grade: { contains: q, mode: 'insensitive' as const } },
-            { period: { contains: q, mode: 'insensitive' as const } },
-            { title: { contains: q, mode: 'insensitive' as const } },
-            {
-              school: {
-                name: { contains: q, mode: 'insensitive' as const },
-              },
-            },
-          ],
-        }
-      : {}),
+    ...(orClause ? { OR: orClause } : {}),
   } as const;
 
   const [classes, totalCount, schools, teachers] = await Promise.all([
@@ -219,12 +218,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         _count: {
           select: {
-            students: true,
+            students: {
+              where: {
+                isActive: true,
+                role: 'STUDENT',
+                user: { simulatedForClassId: null },
+              },
+            },
             teachers: true,
           },
         },
       },
-      orderBy: { [sort]: direction },
+      orderBy: { [orderByField]: direction },
       skip,
       take,
     }),
@@ -250,13 +255,23 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
   ]);
 
+  const classesForClient = hideTeachingSecrets
+    ? classes.map((klass) => redactClassTeachingSecrets(klass, true))
+    : classes;
+
   return {
     classCodeUniqueEnabled: await classCodeUniquenessEnabled(prisma),
-    classes,
+    classes: classesForClient,
     totalCount,
     schools,
     teachers,
-    table: { sort, direction, skip, take },
+    table: organizationClassListTableState({
+      sort,
+      direction,
+      skip,
+      take,
+      hideTeachingSecrets,
+    }),
     q,
   };
 }
@@ -264,6 +279,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   const user = await requireOwner(request);
   const profile = await requireMembership(request, user.id);
+  const hideTeachingSecrets = await shouldHideFreeTierTeachingSecrets(user.id);
   const formData = await request.formData();
   const intent = formData.get('intent');
 
@@ -289,7 +305,8 @@ export async function action({ request }: ActionFunctionArgs) {
         'asc' | 'desc',
       ];
       const cookie = await setOrganizationClassesTableCookie(request, {
-        sort,
+        sort:
+          hideTeachingSecrets && sort === 'code' ? 'createdAt' : sort,
         direction,
       });
       return dataResponse(
@@ -383,7 +400,16 @@ export async function action({ request }: ActionFunctionArgs) {
         return dataResponse({ success: true });
       } catch (error: unknown) {
         if (error instanceof ClassCodeCollisionError) {
-          return dataResponse({ error: error.message, field: 'code' }, { status: 400 });
+          return dataResponse(
+            {
+              error: safeDomainErrorTextForClientResponse(
+                error,
+                'Class code already in use. Choose a different code.',
+              ),
+              field: 'code',
+            },
+            { status: 400 },
+          );
         }
         const uniqueTargets = prismaUniqueConstraintTargets(error);
         const isCodeCollision =
@@ -410,7 +436,15 @@ export async function action({ request }: ActionFunctionArgs) {
           error instanceof Error &&
           error.message.includes('Free classroom accounts include one class')
         ) {
-          return dataResponse({ error: error.message }, { status: 403 });
+          return dataResponse(
+            {
+              error: safeDomainErrorTextForClientResponse(
+                error,
+                'Free classroom accounts include one class. Archive your existing class or upgrade to add another.',
+              ),
+            },
+            { status: 403 },
+          );
         }
         throw error;
       }
@@ -491,7 +525,16 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ success: true });
     } catch (error: unknown) {
       if (error instanceof ClassCodeCollisionError) {
-        return dataResponse({ error: error.message, field: 'code' }, { status: 400 });
+        return dataResponse(
+          {
+            error: safeDomainErrorTextForClientResponse(
+              error,
+              'Class code already in use. Choose a different code.',
+            ),
+            field: 'code',
+          },
+          { status: 400 },
+        );
       }
       const uniqueTargets = prismaUniqueConstraintTargets(error);
       if (uniqueTargets) {
@@ -716,8 +759,16 @@ function CopyCodeButton({ code }: { code: string }) {
 }
 
 export default function OrganizationClassesRoute() {
-  const { classes, totalCount, schools, teachers, table, q, classCodeUniqueEnabled } =
-    useLoaderData<typeof loader>();
+  const {
+    classes,
+    totalCount,
+    schools,
+    teachers,
+    table,
+    q,
+    classCodeUniqueEnabled,
+  } = useLoaderData<typeof loader>();
+  const codeSortDisabled = table.codeSortDisabled === true;
   const fetcher = useFetcher();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -913,7 +964,11 @@ export default function OrganizationClassesRoute() {
                         />
                       </TableHead>
                       {Object.entries(COLUMNS).map(
-                        ([key, { label, value }]) => (
+                        ([key, { label, value }]) => {
+                          const sortDisabled =
+                            !value ||
+                            (codeSortDisabled && value === 'code');
+                          return (
                           <TableHead
                             key={key}
                             className={key === 'actions' ? 'pr-4' : ''}
@@ -922,10 +977,10 @@ export default function OrganizationClassesRoute() {
                               variant="unstyled"
                               className={cn(
                                 'h-8 p-0',
-                                !value ? 'pointer-events-none' : ''
+                                sortDisabled ? 'pointer-events-none' : ''
                               )}
                               onClick={() =>
-                                value
+                                !sortDisabled
                                   ? handleSort(
                                       value,
                                       table.direction === 'asc' ? 'desc' : 'asc'
@@ -934,7 +989,7 @@ export default function OrganizationClassesRoute() {
                               }
                             >
                               {label}
-                              {!value ? null : table.sort === value ? (
+                              {sortDisabled ? null : table.sort === value ? (
                                 table.direction === 'desc' ? (
                                   <ArrowUp
                                     className="ml-2 h-4 w-4 text-primary"
@@ -951,7 +1006,8 @@ export default function OrganizationClassesRoute() {
                               )}
                             </Button>
                           </TableHead>
-                        )
+                          );
+                        }
                       )}
                     </TableRow>
                   </TableHeader>
@@ -983,10 +1039,12 @@ export default function OrganizationClassesRoute() {
                           <div className="flex items-center">
                             <TooltipIdCopy id={cls.id}>
                               <span className="font-mono font-semibold">
-                                {cls.code}
+                                {cls.code ?? ''}
                               </span>
                             </TooltipIdCopy>
-                            <CopyCodeButton code={cls.code} />
+                            {cls.code ? (
+                              <CopyCodeButton code={cls.code} />
+                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell>{cls.schoolYear}</TableCell>

@@ -61,9 +61,10 @@ import {
 } from '~/components/ui/sheet';
 import { Textarea } from '~/components/ui/textarea';
 import {
-  DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE,
-  SAVED_ASSIGNMENTS_ENABLED,
-} from '~/domain/assignments/saved-assignments';
+  resolveNewAssignmentPointValue,
+  type AssignmentTypeDefaultContext,
+} from '~/domain/assignments/new-assignment-defaults';
+import { SAVED_ASSIGNMENTS_ENABLED } from '~/domain/assignments/saved-assignments';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   gradingAssistantStrictnessOptions,
@@ -81,6 +82,9 @@ import {
   type ExitTicketGradingDraft,
 } from './exit-ticket-builder';
 import { cn } from '~/utils/misc';
+import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
+import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
+import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
 import { toDateInputValue } from '~/utils/date-only';
 import {
   assignmentTypeUsesDailyPagesEngagementRubric,
@@ -155,6 +159,19 @@ function GradingChoiceGroup<Value extends string>({
  * otherwise. A native <details> keeps everything inside mounted, so every
  * field still posts whether or not the teacher opened it.
  */
+/** Radix checkboxes are buttons, not native inputs, so form posts need a hidden value. */
+function BooleanFormValue({
+  name,
+  value,
+}: {
+  name: string;
+  value: boolean;
+}) {
+  return (
+    <input type="hidden" name={name} value={value ? 'true' : 'false'} />
+  );
+}
+
 function MoreOptions({
   enabled,
   open,
@@ -209,6 +226,8 @@ export type AssignmentCreationAssignmentType = {
    * forgot to load it would render an exit ticket as a blank prompt.
    */
   kind: string | null;
+  imageId?: string | null;
+  imageTitle?: string | null;
   /** Library rubric name when the type points at a shared rubric (e.g. SJP Daily Pages). */
   rubricName?: string | null;
   /** Displayed for a catalog type excluded by the organization plan. */
@@ -262,8 +281,15 @@ type AssignmentCreationFetcher<Data> = {
 export type AssignmentCreationSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Told once an assignment is created, so a lesson that sent the teacher
+   * here can say "Created in Yawp!" (Brian's run 3, item 4). Optional.
+   */
+  /** `nextStep`: the sheet is going on to another page (groups to set up). */
+  onCreated?: (info: { nextStep: boolean }) => void;
   entryPoint: AssignmentCreationEntryPoint;
   assignmentTypes: AssignmentCreationAssignmentType[];
+  siteLicenseLockedAssignmentTiles?: SiteLicenseLockedTile[];
   teacherClasses: AssignmentCreationClassOption[];
   fixedAssignmentTypeId?: string;
   initialAssignmentTypeId?: string;
@@ -322,6 +348,8 @@ export type AssignmentCreationSheetProps = {
   initialExitTicketAnswerType?: ExitTicketAnswerType | null;
   /** Present reopens the notes section filled in; absent leaves the default. */
   initialExitTicketLessonNotes?: ExitTicketLessonNotes | null;
+  teachingLocked?: boolean;
+  createAssignmentTriggerRef?: React.RefObject<HTMLButtonElement | null>;
 };
 
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
@@ -419,6 +447,17 @@ function isExitTicketTypeId(
   );
 }
 
+function assignmentTypeContextFor(
+  assignmentTypes: AssignmentCreationAssignmentType[],
+  assignmentTypeId: string
+): AssignmentTypeDefaultContext {
+  const type = assignmentTypes.find((entry) => entry.id === assignmentTypeId);
+  return {
+    kind: type?.kind ?? null,
+    rubricName: type?.rubricName ?? null,
+  };
+}
+
 /**
  * What the tutor toggle starts at. Editing keeps whatever the assignment has —
  * the toggle is frozen after creation anyway. Otherwise an exit ticket starts
@@ -449,6 +488,7 @@ export function initialGradingFor({
   initialSubmitForGrade,
   initialPointValue,
   plannedGradebook = null,
+  assignmentTypeContext = {},
 }: {
   isEditing: boolean;
   isExitTicket: boolean;
@@ -459,11 +499,16 @@ export function initialGradingFor({
     submitForGrade: boolean;
     pointValue: number | null;
   } | null;
+  assignmentTypeContext?: AssignmentTypeDefaultContext;
 }) {
   if (isEditing || !isExitTicket) {
     return {
       submitForGrade: initialSubmitForGrade,
-      pointValue: initialPointValue,
+      pointValue: resolveNewAssignmentPointValue({
+        isEditing,
+        explicitPointValue: initialPointValue,
+        assignmentType: assignmentTypeContext,
+      }),
     };
   }
   if (plannedGradebook) {
@@ -490,7 +535,12 @@ export function AssignmentCreationSheet({
   useEffect(() => {
     if (!props.open) setPickedTypeId(undefined);
   }, [props.open]);
+  if (props.teachingLocked && !props.editingAssignment) {
+    return null;
+  }
+
   if (
+    !props.teachingLocked &&
     usage &&
     props.assignmentTypes.some(
       (type) => !type.unavailableReason && !type.quotaExhausted
@@ -524,8 +574,9 @@ export function AssignmentCreationSheet({
                   key={row.kind}
                   disabled={
                     !type ||
-                    (!usage.monthly && row.remaining === 0) ||
-                    Boolean(type.unavailableReason)
+                    (!usage.unlimitedFreeAssignmentTiles &&
+                      row.remaining === 0) ||
+                    Boolean(type?.unavailableReason)
                   }
                   onClick={() => setPickedTypeId(type?.id)}
                   className={cn(
@@ -533,6 +584,10 @@ export function AssignmentCreationSheet({
                     selected && 'bg-secondary'
                   )}
                 >
+                  <AssignmentTypeTileImage
+                    imageId={type?.imageId}
+                    className="h-10 w-10 shrink-0 rounded-md"
+                  />
                   <span className="w-4 shrink-0">
                     {selected && <Check size={14} />}
                   </span>
@@ -544,20 +599,29 @@ export function AssignmentCreationSheet({
                         row.remaining === 0 && 'text-amber-800'
                       )}
                     >
-                      {usage.monthly
-                        ? 'Unlimited assignments'
+                      {usage.unlimitedFreeAssignmentTiles
+                        ? 'Unlimited'
                         : row.remaining
                           ? `${row.remaining} of ${row.total} left`
                           : 'None left'}
                     </span>
                   </span>
-                  {!usage.monthly && row.remaining === 0 && <Lock size={14} />}
+                  {!usage.unlimitedFreeAssignmentTiles &&
+                    row.remaining === 0 && <Lock size={14} />}
                 </button>
               );
             })}
+            {(props.siteLicenseLockedAssignmentTiles ?? []).map((tile) => (
+              <SiteLicenseLockedAssignmentTile
+                key={tile.key}
+                label={tile.label}
+                variant="picker"
+                imageId={tile.imageId}
+              />
+            ))}
           </div>
           <p className="mt-5 text-xs text-muted-foreground">
-            {usage.monthly
+            {usage.unlimitedFreeAssignmentTiles
               ? 'Unlimited Class Starter, pre-writing, and thesis assignments.'
               : "Deleting an assignment doesn't give it back."}
           </p>
@@ -579,6 +643,7 @@ export function AssignmentCreationSheet({
 export function AssignmentCreationSheetContent({
   open,
   onOpenChange,
+  onCreated,
   entryPoint,
   assignmentTypes,
   teacherClasses,
@@ -591,7 +656,7 @@ export function AssignmentCreationSheetContent({
   emptyClassesMessage = "You don't have any assignment-enabled classes yet.",
   titleRequired = false,
   initialSubmitForGrade = true,
-  initialPointValue = DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE,
+  initialPointValue,
   initialTutorEnabled = true,
   initialCollaborationEnabled = false,
   initialCollaborationGroupMode = DEFAULT_COLLABORATION_GROUP_MODE,
@@ -630,20 +695,22 @@ export function AssignmentCreationSheetContent({
   );
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState(initialPrompt);
+  const initialSelectedTypeId = initialAssignmentTypeSelection(
+    assignmentTypes,
+    fixedAssignmentTypeId,
+    initialAssignmentTypeId,
+    Boolean(editingAssignment)
+  );
   const initialGrading = initialGradingFor({
     isEditing: Boolean(editingAssignment),
-    isExitTicket: isExitTicketTypeId(
-      assignmentTypes,
-      initialAssignmentTypeSelection(
-        assignmentTypes,
-        fixedAssignmentTypeId,
-        initialAssignmentTypeId,
-        Boolean(editingAssignment)
-      )
-    ),
+    isExitTicket: isExitTicketTypeId(assignmentTypes, initialSelectedTypeId),
     initialSubmitForGrade,
     initialPointValue,
     plannedGradebook: initialExitTicketGradebook,
+    assignmentTypeContext: assignmentTypeContextFor(
+      assignmentTypes,
+      initialSelectedTypeId
+    ),
   });
   const [submitForGrade, setSubmitForGrade] = useState(
     initialGrading.submitForGrade
@@ -750,9 +817,11 @@ export function AssignmentCreationSheetContent({
       selectedType.quotaExhausted)
       ? ''
       : requestedTypeId;
-  // Collaboration is offered for every assignment type now, so this only asks
-  // whether a type has been chosen at all.
-  const selectedTypeSupportsCollaboration = Boolean(assignmentTypeId);
+  const showIndividualDocumentNotice =
+    !isEditing && Boolean(assignmentTypeId);
+  // New assignments are always solo; only show the frozen control when editing
+  // an assignment that was already collaborative.
+  const showCollaborationToggle = isEditing && collaborationEnabled;
   // Offered only where there is something to turn off. Switching it on cannot
   // invent a grammar category for a rubric that has none.
   const selectedTypeGradesGrammar = Boolean(
@@ -909,20 +978,22 @@ export function AssignmentCreationSheetContent({
     setSelectedClassIds(initialClassIds(fixedClassId));
     setTitle(initialTitle);
     setPrompt(initialPrompt);
+    const resetTypeId = initialAssignmentTypeSelection(
+      assignmentTypes,
+      fixedAssignmentTypeId,
+      initialAssignmentTypeId,
+      Boolean(editingAssignment)
+    );
     const grading = initialGradingFor({
       isEditing: Boolean(editingAssignment),
-      isExitTicket: isExitTicketTypeId(
-        assignmentTypes,
-        initialAssignmentTypeSelection(
-          assignmentTypes,
-          fixedAssignmentTypeId,
-          initialAssignmentTypeId,
-          Boolean(editingAssignment)
-        )
-      ),
+      isExitTicket: isExitTicketTypeId(assignmentTypes, resetTypeId),
       initialSubmitForGrade,
       initialPointValue,
       plannedGradebook: initialExitTicketGradebook,
+      assignmentTypeContext: assignmentTypeContextFor(
+        assignmentTypes,
+        resetTypeId
+      ),
     });
     setSubmitForGrade(grading.submitForGrade);
     setPointValue(pointValueFieldValue(grading.pointValue));
@@ -1006,9 +1077,14 @@ export function AssignmentCreationSheetContent({
     teacherClasses,
   ]);
 
+  const toldCreated = useRef<unknown>(null);
   useEffect(() => {
     if (createFetcher.state !== 'idle' || !createFetcher.data?.success) return;
     onOpenChange(false);
+    if (!editingAssignment && toldCreated.current !== createFetcher.data) {
+      toldCreated.current = createFetcher.data;
+      onCreated?.({ nextStep: Boolean(createFetcher.data.nextStep) });
+    }
     // Closing the sheet used to be the whole ending, which left a collaborative
     // assignment looking done while its groups did not exist yet. `navigate` is
     // injectable so this is testable without a router.
@@ -1228,7 +1304,11 @@ export function AssignmentCreationSheetContent({
                 isEditing,
                 isExitTicket: nextIsExitTicket,
                 initialSubmitForGrade,
-                initialPointValue,
+                initialPointValue: undefined,
+                assignmentTypeContext: assignmentTypeContextFor(
+                  assignmentTypes,
+                  nextTypeId
+                ),
               });
               setSubmitForGrade(grading.submitForGrade);
               setPointValue(pointValueFieldValue(grading.pointValue));
@@ -1522,12 +1602,7 @@ export function AssignmentCreationSheetContent({
         )}
 
         <div className="pt-6">
-          <input type="hidden" name="submitForGrade" value="false" />
-          {isQuickExitTicket ? (
-            submitForGrade ? (
-              <input type="hidden" name="submitForGrade" value="true" />
-            ) : null
-          ) : isExitTicket ? (
+          {isQuickExitTicket ? null : isExitTicket ? (
             /* Same field, same values — this only reframes the choice in the
                terms an exit ticket is actually about. Feedback only still
                reads and scores every response; it just keeps the score out of
@@ -1580,17 +1655,12 @@ export function AssignmentCreationSheetContent({
                   </Label>
                 </div>
               </RadioGroup>
-              {submitForGrade ? (
-                <input type="hidden" name="submitForGrade" value="true" />
-              ) : null}
             </div>
           ) : (
             <>
               <div className="flex items-center gap-2.5">
                 <Checkbox
                   id="assignment-create-submit-for-grade"
-                  name="submitForGrade"
-                  value="true"
                   checked={submitForGrade}
                   onCheckedChange={(checked) =>
                     setSubmitForGrade(checked === true)
@@ -1749,7 +1819,18 @@ export function AssignmentCreationSheetContent({
               />
             </div>
           ) : null}
+          <BooleanFormValue name="submitForGrade" value={submitForGrade} />
         </div>
+
+        {showIndividualDocumentNotice ? (
+          <div className="pt-6">
+            <p className="text-sm text-muted-foreground">
+              Each student receives their own document when they start this
+              assignment. Yawp! does not create a shared group document, and
+              you do not need to set up groups.
+            </p>
+          </div>
+        ) : null}
 
         {/* The quick builder keeps a default exit ticket to one screen:
             everything a teacher rarely changes waits in here, still posting
@@ -1780,13 +1861,11 @@ export function AssignmentCreationSheetContent({
             the stored value alone. */}
           <div className="pt-6">
             {isEditing ? null : (
-              <input type="hidden" name="tutorEnabled" value="false" />
+              <BooleanFormValue name="tutorEnabled" value={tutorEnabled} />
             )}
             <div className="flex items-center gap-2.5">
               <Checkbox
                 id="assignment-create-tutor-enabled"
-                name={isEditing ? undefined : 'tutorEnabled'}
-                value="true"
                 checked={tutorEnabled}
                 onCheckedChange={(checked) => setTutorEnabled(checked === true)}
                 disabled={isSaving || isEditing}
@@ -1838,17 +1917,14 @@ export function AssignmentCreationSheetContent({
           {selectedTypeGradesGrammar ? (
             <div className="pt-6">
               {isEditing ? null : (
-                <input
-                  type="hidden"
+                <BooleanFormValue
                   name="grammarGradingEnabled"
-                  value="false"
+                  value={grammarGradingEnabled}
                 />
               )}
               <div className="flex items-center gap-2.5">
                 <Checkbox
                   id="assignment-create-grammar-grading-enabled"
-                  name={isEditing ? undefined : 'grammarGradingEnabled'}
-                  value="true"
                   checked={grammarGradingEnabled}
                   onCheckedChange={(checked) =>
                     setGrammarGradingEnabled(checked === true)
@@ -1875,25 +1951,20 @@ export function AssignmentCreationSheetContent({
             </div>
           ) : null}
 
-          {/* Collaborative drafts. Available for every assignment type, and frozen
-            after creation for the same reason the tutor toggle is: students may
-            already have group drafts built around it.
-            Group membership itself is arranged per class afterwards, because an
-            assignment fans out to one ClassAssignment per class. */}
-          {selectedTypeSupportsCollaboration ? (
+          {/* Frozen after creation for assignments that were already
+            collaborative: students may already have group drafts built around
+            it. */}
+          {showCollaborationToggle ? (
             <div className="pt-6">
               {isEditing ? null : (
-                <input
-                  type="hidden"
+                <BooleanFormValue
                   name="collaborationEnabled"
-                  value="false"
+                  value={collaborationEnabled}
                 />
               )}
               <div className="flex items-center gap-2.5">
                 <Checkbox
                   id="assignment-create-collaboration-enabled"
-                  name={isEditing ? undefined : 'collaborationEnabled'}
-                  value="true"
                   checked={collaborationEnabled}
                   onCheckedChange={(checked) =>
                     setCollaborationEnabled(checked === true)
@@ -1915,7 +1986,7 @@ export function AssignmentCreationSheetContent({
               <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
                 {isEditing
                   ? 'Collaboration cannot be switched on or off after an assignment is created — groups may already be writing in shared drafts.'
-                  : 'You must assign every student to a group before students can open this assignment. You can arrange groups yourself, shuffle automatically, or use the whole class. Students cannot create groups, move themselves, or create shared documents. When you finalize the groups, Yawp creates one shared document for each group.'}
+                  : 'You must assign every student to a group before students can open this assignment. You can arrange groups yourself, shuffle automatically, or use the whole class. Students cannot create groups, move themselves, or create shared documents. When you finalize the groups, Yawp! creates one shared document for each group.'}
               </p>
               {collaborationEnabled && !isEditing ? (
                 <div className="mt-3 space-y-3 pl-[calc(1rem+0.625rem)]">
@@ -1998,12 +2069,10 @@ export function AssignmentCreationSheetContent({
 
         {SAVED_ASSIGNMENTS_ENABLED && usesBulkCreateApi && !isEditing ? (
           <div className="pt-6">
-            <input type="hidden" name="saveForReuse" value="false" />
+            <BooleanFormValue name="saveForReuse" value={saveForReuse} />
             <div className="flex items-center gap-2.5">
               <Checkbox
                 id="assignment-create-save-for-reuse"
-                name="saveForReuse"
-                value="true"
                 checked={saveForReuse}
                 onCheckedChange={(checked) => setSaveForReuse(checked === true)}
                 disabled={isSaving}
@@ -2030,7 +2099,6 @@ export function AssignmentCreationSheetContent({
         {formError ? (
           <p className="text-sm text-destructive">{formError}</p>
         ) : null}
-
         <div className="flex items-center justify-end gap-2 pt-4">
           <Button
             type="button"

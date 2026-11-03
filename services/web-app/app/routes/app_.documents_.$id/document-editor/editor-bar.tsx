@@ -12,6 +12,7 @@ import {
 } from '~/components/ui/dropdown-menu';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
+import { buildSafeErrorScalarsForLog } from '~/utils/error-log-scalars';
 import { type Command, commands, COMMAND_STYLE } from './commands';
 import { DocumentImageButton } from './document-image-button';
 import camelCase from 'lodash/camelCase';
@@ -129,7 +130,10 @@ export const Bar = ({
                     }
                   })
                   .catch((err) => {
-                    console.error('Failed to create comment:', err);
+                    console.error(
+                      'document_comment_create_failed',
+                      buildSafeErrorScalarsForLog(err),
+                    );
                   });
               }
             }}

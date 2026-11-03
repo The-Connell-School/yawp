@@ -50,7 +50,7 @@ for (const width of [1280, 390])
           ).toBeVisible();
         else
           await expect(
-            page.getByRole('heading', { name: 'Welcome to YAWP!' })
+            page.getByRole('heading', { name: 'Welcome to Yawp!' })
           ).toBeVisible();
       } else if (state === 'activation')
         await expect(

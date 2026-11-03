@@ -37,6 +37,8 @@ type TeacherClass = {
 };
 
 type Props = {
+  /** Told once the assignment exists (the Lesson Planner's "Created in Yawp!"). */
+  onCreated?: (info: { nextStep: boolean }) => void;
   assignmentTypeAvailability?: Pick<
     AssignmentCreationAssignmentType,
     'unavailableReason' | 'quotaRemaining' | 'quotaTotal' | 'quotaLabel' |
@@ -70,6 +72,7 @@ type Props = {
     essayType: string;
     sources?: ApHistorySourceCardData[];
   } | null;
+  teachingLocked?: boolean;
 };
 
 function classLabel(klass: TeacherClass) {
@@ -92,6 +95,8 @@ export function CreateAssignmentSheet({
   plannedExitTicket = null,
   titleRequired = false,
   apHistoryEntry = null,
+  teachingLocked = false,
+  onCreated,
 }: Props) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
   // Only a class the teacher came from is preselected; with several targets
@@ -123,11 +128,16 @@ export function CreateAssignmentSheet({
     }
   }, [fetcher.state, fetcher.data, onOpenChange]);
 
+  if (teachingLocked) {
+    return null;
+  }
+
   if (!apHistoryEntry || assignmentTypeAvailability.unavailableReason) {
     return (
       <AssignmentCreationSheet
         open={open}
         onOpenChange={onOpenChange}
+        onCreated={onCreated}
         entryPoint="assignment-type"
         fixedAssignmentTypeId={assignmentTypeId}
         assignmentTypes={[

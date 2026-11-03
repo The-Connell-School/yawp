@@ -1,5 +1,14 @@
+import { currentClassInsightRows } from '~/domain/assignment-insights/class-insight-inputs.server';
 import { classCodeUniquenessEnabled } from '~/utils/class-code-write.server';
 import { useFreeAccountUsage } from '~/components/free-account-usage';
+import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
+import { TeachingAccessClassPageSkeleton } from '~/components/free-tier/teaching-access-class-page-skeleton';
+import {
+  shouldHideFreeTierTeachingSecrets,
+} from '~/domain/free-tier/locked-preview.server';
+import { ensureLockedPreviewSampleAssignments } from '~/domain/free-tier/locked-preview-class-seed.server';
+import { teachingAccessMobileSheetBodyInvite } from '~/domain/free-tier/teaching-access-copy';
 import { Prisma } from '@app/prisma';
 import {
   type ActionFunctionArgs,
@@ -14,6 +23,7 @@ import {
   useFetcher,
   useLocation,
   useNavigate,
+  useNavigation,
   useOutlet,
   useRevalidator,
 } from 'react-router';
@@ -33,6 +43,7 @@ import {
   type ClassDisplayFields,
 } from '~/utils/class-display';
 import { prisma } from '~/utils/db.server.js';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
   AssignmentHasCollaborativeWorkError,
@@ -44,6 +55,7 @@ import {
   FreeClassroomAssignmentQuotaError,
   loadAssignmentCreationQuotasForTypes,
 } from '~/utils/assignment-quota.server';
+import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
 import {
   AssignmentPromptAttachmentError,
   assignmentPromptAttachmentRequestTooLarge,
@@ -331,7 +343,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
     } catch (error) {
       if (error instanceof AssignmentHasCollaborativeWorkError) {
         return dataResponse(
-          { success: false, message: error.message },
+          {
+            success: false,
+            message: safeDomainErrorTextForClientResponse(
+              error,
+              'This assignment has shared group work and cannot be deleted.',
+            ),
+          },
           { status: 409 }
         );
       }
@@ -373,7 +391,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
     } catch (error) {
       if (error instanceof AssignmentHasCollaborativeWorkError) {
         return dataResponse(
-          { success: false, message: error.message },
+          {
+            success: false,
+            message: safeDomainErrorTextForClientResponse(
+              error,
+              'This assignment has shared group work and cannot be deleted.',
+            ),
+          },
           { status: 409 }
         );
       }
@@ -511,7 +535,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    const gradingIntent = parseAssignmentGradingIntent(formData);
+    const gradingIntent = parseAssignmentGradingIntent(formData, {
+      kind: selectedAssignmentType?.kind ?? null,
+    });
     if (!gradingIntent.success) {
       return dataResponse(
         { success: false, message: gradingIntent.message },
@@ -564,7 +590,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
       } catch (error) {
         if (error instanceof AssignmentPromptAttachmentError) {
           return dataResponse(
-            { success: false, message: error.message },
+            {
+              success: false,
+              message: safeDomainErrorTextForClientResponse(
+                error,
+                'Could not upload that PDF. Please try another file.',
+              ),
+            },
             { status: 400 }
           );
         }
@@ -637,7 +669,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
         }
         if (error instanceof FreeClassroomAssignmentQuotaError) {
           return dataResponse(
-            { success: false, message: error.message },
+            {
+              success: false,
+              message: safeDomainErrorTextForClientResponse(
+                error,
+                'This assignment type is not available on your plan.',
+              ),
+            },
             { status: 403 }
           );
         }
@@ -710,7 +748,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
       }
       if (error instanceof FreeClassroomAssignmentQuotaError) {
         return dataResponse(
-          { success: false, message: error.message },
+          {
+            success: false,
+            message: safeDomainErrorTextForClientResponse(
+              error,
+              'This assignment type is not available on your plan.',
+            ),
+          },
           { status: 403 }
         );
       }
@@ -1030,6 +1074,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   ]);
   if (!klass) throw new Response('Class not found', { status: 404 });
 
+  const hideTeachingSecrets = await shouldHideFreeTierTeachingSecrets(userId);
+  if (
+    hideTeachingSecrets &&
+    klass.school.organization.plan === 'FREE_CLASSROOM'
+  ) {
+    await ensureLockedPreviewSampleAssignments(
+      klass.school.organizationId,
+      classId
+    );
+  }
+
   const classInsightsEnabled = klass.school.organization.classInsightsEnabled;
   // Reporter is now always enabled for all organizations.
   const reporterEnabled = true;
@@ -1287,7 +1342,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         })
       : [];
   const insightByClassAssignmentId = new Map(
-    insightRows
+    (await currentClassInsightRows(insightRows))
       .filter((row) => row.status === 'ready' && row.summaryJson)
       .map((row) => [
         row.classAssignmentId,
@@ -1394,9 +1449,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     { id: klass.school.organizationId, plan: klass.school.organization.plan },
     creationTypeRows.map(({ id, kind }) => ({ id, kind }))
   );
+  const siteLicenseLockedAssignmentTiles =
+    await loadSiteLicenseLockedAssignmentTiles(klass.school.organization);
 
   let studentJoinUrl: string | null = null;
-  if (klass.school.organization.plan === 'FREE_CLASSROOM') {
+  if (
+    klass.school.organization.plan === 'FREE_CLASSROOM' &&
+    !hideTeachingSecrets
+  ) {
     const joinToken = await ensureClassStudentJoinToken(klass.id);
     if (joinToken) {
       const joinPath = new URL('/join', getDomainUrl(request));
@@ -1405,11 +1465,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }
   }
 
+  const klassForClient = hideTeachingSecrets
+    ? { ...klass, code: '' }
+    : klass;
+
   return dataResponse({
     role: 'TEACHER' as const,
     classCodeUniqueEnabled: await classCodeUniquenessEnabled(prisma),
+    classCodeHidden: hideTeachingSecrets,
     studentJoinUrl,
-    klass,
+    klass: klassForClient,
     submissions,
     inProgressDocuments,
     assignments,
@@ -1424,6 +1489,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         ...quotaByTypeId.get(id),
       })
     ),
+    siteLicenseLockedAssignmentTiles,
     apHistoryAssignmentTypeId:
       availableAssignmentTypes.find(
         (assignmentType) =>
@@ -1497,7 +1563,14 @@ export default function ClassDetailRoute() {
 }
 
 function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
+  const navigation = useNavigation();
   const freeUsage = useFreeAccountUsage();
+  const { locked: teachingLocked, loading: teachingLoading, state: teachingAccessState } =
+    useTeachingAccess();
+  const teachingAccessAdminName =
+    teachingAccessState.variant === 'locked'
+      ? teachingAccessState.adminName
+      : 'your administrator';
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -2260,8 +2333,13 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
           }}
           assignments={managedAssignments}
           assignmentTypes={data.assignmentTypes}
+          siteLicenseLockedAssignmentTiles={
+            data.siteLicenseLockedAssignmentTiles
+          }
           apHistoryAssignmentTypeId={data.apHistoryAssignmentTypeId}
           classInsightsEnabled={classInsightsEnabled}
+          teachingLocked={teachingLocked}
+          teachingAccessAdminName={teachingAccessAdminName}
           onViewDocuments={handleViewAssignmentDocuments}
           onSelectAssignment={(assignmentId) =>
             navigate(
@@ -2287,11 +2365,14 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                 full." Remove a student to open a seat.
               </p>
             )}
-          {data.studentJoinUrl ? (
+          {freeUsage &&
+          (data.studentJoinUrl || data.classCodeHidden) ? (
             <FreeClassStudentJoinCard
-              joinUrl={data.studentJoinUrl}
+              joinUrl={data.studentJoinUrl ?? ''}
               classCode={data.klass.code}
-              compact={Boolean(freeUsage)}
+              compact
+              teachingLocked={teachingLocked || data.classCodeHidden}
+              adminName={teachingAccessAdminName}
             />
           ) : null}
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2370,14 +2451,31 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                   </Tooltip>
                 </>
               )}
-              <Button
-                size="sm"
-                type="button"
-                onClick={() => setIsAddStudentSheetOpen(true)}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add Student
-              </Button>
+              {(() => {
+                const addButton = (
+                  <Button
+                    size="sm"
+                    type="button"
+                    onClick={() => setIsAddStudentSheetOpen(true)}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Student
+                  </Button>
+                );
+                return teachingLocked ? (
+                  <LockedTeachingControl
+                    locked
+                    adminName={teachingAccessAdminName}
+                    mobileSheetBody={teachingAccessMobileSheetBodyInvite(
+                      teachingAccessAdminName
+                    )}
+                  >
+                    {addButton}
+                  </LockedTeachingControl>
+                ) : (
+                  addButton
+                );
+              })()}
             </div>
           </div>
 
@@ -2732,6 +2830,13 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
     return null;
   };
 
+  if (
+    (teachingLocked || teachingLoading) &&
+    navigation.state === 'loading'
+  ) {
+    return <TeachingAccessClassPageSkeleton />;
+  }
+
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="mx-auto w-full max-w-screen-xl px-3 py-3 pb-24 sm:px-5">
@@ -2766,6 +2871,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
           }
           onTabChange={handleHeaderTabChange}
           onEdit={() => setIsClassEditSheetOpen(true)}
+          classCodeHidden={data.classCodeHidden}
         />
 
         {isAssignmentDetailActive ? (

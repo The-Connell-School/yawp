@@ -4,8 +4,8 @@
 // intentionally model-architecture-agnostic: it reads only from the snapshot,
 // not from any AP-specific tables, so it layers onto the generic tutor.
 //
-// The prompt is two layers. The Universal YAWP! Tutor Instructions come first,
-// unchanged, so this tutor is the same character as every other YAWP! Tutor.
+// The prompt is two layers. The Universal Yawp! Tutor Instructions come first,
+// unchanged, so this tutor is the same character as every other Yawp! Tutor.
 // Everything below it is AP History substance — what a strong DBQ or LEQ move
 // looks like — and is written to specialize the universal layer, never to
 // contradict it.

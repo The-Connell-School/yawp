@@ -31,6 +31,8 @@ export type FlowData = {
   legacyOrganizationId?: string;
   proof?: 'email' | 'google' | 'password';
   purpose?: 'signin' | 'reset' | 'signup' | 'trial';
+  /** Authenticated recovery pages may resume only their own enrollment flow. */
+  teacherPromptEntry?: boolean;
   otp?: {
     hash: string;
     generation: string;

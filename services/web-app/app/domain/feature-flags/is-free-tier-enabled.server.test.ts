@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { featureFlagPrismaTables } from './feature-flags.server.test-support';
 
-const prisma = {
-  setting: {
-    findUnique: mock(),
-  },
-};
+const prisma = featureFlagPrismaTables();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
@@ -14,6 +11,7 @@ describe('isFreeTierEnabled', () => {
   beforeEach(() => {
     mock.module('~/utils/db.server', () => ({ prisma }));
     prisma.setting.findUnique.mockReset();
+    prisma.setting.findMany.mockReset().mockResolvedValue([]);
   });
 
   test('is on only for everyone', async () => {
@@ -29,6 +27,18 @@ describe('isFreeTierEnabled', () => {
       where: { name: 'feature_flag.free_tier' },
       select: { value: true },
     });
+  });
+
+  test('defaults on for demo and preview without reading the database', async () => {
+    const previous = process.env.YAWP_ENVIRONMENT;
+    try {
+      process.env.YAWP_ENVIRONMENT = 'preview';
+      expect(await isFreeTierEnabled()).toBe(true);
+      expect(prisma.setting.findUnique).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
+      else process.env.YAWP_ENVIRONMENT = previous;
+    }
   });
 });
 

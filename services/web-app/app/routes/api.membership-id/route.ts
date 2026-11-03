@@ -18,14 +18,13 @@ export async function action({ request }: ActionFunctionArgs) {
     const userId = await requireUserId(request);
 
     const membership = await prisma.orgMembership.findFirst({
-      where: { id: data.membershipId, userId },
+      where: { id: data.membershipId, userId, isActive: true },
       select: { id: true },
     });
 
-    const redirectTo = request.headers.get('Referer') || '/app';
-    if (!membership) return redirect(redirectTo);
+    if (!membership) return redirect('/app');
 
-    return redirect(redirectTo, {
+    return redirect('/app', {
       headers: { 'set-cookie': await setMembershipId(membership.id) },
     });
   }

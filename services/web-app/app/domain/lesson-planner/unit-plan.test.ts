@@ -139,8 +139,32 @@ describe('readUnitPlan — a map that will not render', () => {
     expect(validateUnitPlan('{"title":"T","days":[]}').ok).toBe(false);
   });
 
+  test('a cell a little over the limit is trimmed at a word, not the whole map lost (Oct 21)', () => {
+    const wordy = `${'Students reread the opening and mark every weight '.repeat(5)}then share.`;
+    const result = validateUnitPlan(
+      JSON.stringify({ title: 'T', days: [{ day: 1, title: 'D', objective: 'Find weights', students: wordy }] })
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const students = result.unit.days[0]!.students;
+    expect(students.length).toBeLessThanOrEqual(220);
+    expect(students.endsWith('…')).toBe(true);
+    expect(students).not.toMatch(/\s…$/);
+  });
+
+  test('each day says what students read, and where', () => {
+    const result = validateUnitPlan(
+      JSON.stringify({ title: 'T', days: [{ day: 1, title: 'D', objective: 'O', students: 'S', assignedReading: 'pp. 1–12, in class' }] })
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.unit.days[0]!.reading).toBe('pp. 1–12, in class');
+    expect(inlineUnitPlan(block(result.unit))).toContain('| pp. 1–12, in class |');
+    expect(buildDayRequest(result.unit, result.unit.days[0]!)).toContain('Reading: pp. 1–12, in class');
+  });
+
   test('catches a paragraph pretending to be a cell', () => {
-    const long = 'x'.repeat(400);
+    const long = 'x'.repeat(600);
     const result = validateUnitPlan(
       JSON.stringify({
         title: 'T',

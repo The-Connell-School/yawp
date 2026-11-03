@@ -12,7 +12,7 @@ angle, and a closing note about formal organization. Each prompt therefore has
 a short `title` (the library row heading) plus the full `prompt` body that
 becomes the assignment when a teacher clicks it.
 
-The voice and structure follow the YAWP "Sample Essay Prompts" sheet.
+The voice and structure follow the Yawp! "Sample Essay Prompts" sheet.
 
 ## Categories
 

@@ -6,14 +6,30 @@ import {
   type PreviewSeatSessionGuard,
 } from './preview-session-seat.server';
 
+import {
+  freeTierPreviewAccess,
+  freeTierPreviewDependencies,
+  type FreeTierPreviewDependencies,
+} from './preview-free-tier-access.server';
+export {
+  FREE_TIER_ACCESS_COOKIE_NAME,
+  FREE_TIER_ACCESS_MAX_AGE,
+  createFreeTierAccessCookie,
+  type FreeTierPreviewDependencies,
+} from './preview-free-tier-access.server';
+
 export const PREVIEW_ACCESS_COOKIE_NAME = '__yawp_preview_access';
 export const PREVIEW_MASTER_SELECTION_COOKIE_NAME = '__yawp_preview_master';
 export const PREVIEW_ACCESS_PATH = '/auth/preview-access';
 export const PREVIEW_ACCESS_MAX_AGE = 60 * 60 * 24 * 30;
 export const PREVIEW_MASTER_SELECTION_MAX_AGE = 10 * 60;
 export const PREVIEW_AUTHORIZED_ACTIVITY_HEADER = 'X-Yawp-Preview-Authorized';
+/** Panel unlock is separate from site gate access so frame-01 locked beaker is reachable. */
+export const DEV_PANEL_UNLOCK_COOKIE_NAME = '__yawp_dev_panel_unlock';
+export const DEV_PANEL_UNLOCK_MAX_AGE = PREVIEW_ACCESS_MAX_AGE;
 
 const ACCESS_SEAT_VALUE_PREFIX = 'seat-v3:';
+const DEV_PANEL_UNLOCK_VALUE_PREFIX = 'unlock-v1:';
 const MASTER_ACCESS_SEAT_VALUE_PREFIX = 'seat-master-v1:';
 const LEGACY_ACCESS_SEAT_VALUE_PREFIX = 'seat-v2:';
 const MASTER_SELECTION_VALUE_PREFIX = 'master-v2:';
@@ -22,10 +38,15 @@ const ACCESS_CODE_PATTERN = /^[a-z]+-[a-z]+-[1-9][0-9]{3}$/;
 const MASTER_ACCESS_CODE_PATTERN =
   /^(?=.{8,64}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
 const OPEN_PATHS = new Set([
+  '/api/internal/v1/admin/teacher-trainings',
   // Private QA endpoint performs its own preview/database and Bearer checks.
   '/api/preview/qa/signon-code',
   '/api/healthcheck',
   '/api/healthcheck/', // be tolerant of a trailing slash from probes
+  '/api/readyz',
+  '/api/readyz/',
+  '/api/version',
+  '/api/version/',
   // Stripe cannot present the human preview-access cookie. The route itself
   // remains protected by Stripe's signed webhook secret.
   '/api/stripe/webhook',
@@ -54,12 +75,23 @@ const OPEN_PATHS = new Set([
  */
 const OPEN_SINGLE_SEGMENT_PREFIXES = ['/api/internal/v1/feature-flags/'];
 /** Yawp Internal operator APIs; the routes still require HMAC/service auth. */
-const OPEN_PATH_PREFIXES = ['/api/internal/v1/free-tier/', '/api/internal/v1/admin/organizations'];
+const OPEN_PATH_PREFIXES = [
+  '/api/internal/v1/free-tier/',
+  '/api/internal/v1/admin/organizations',
+  '/api/internal/v1/admin/assignment-types',
+  '/api/internal/v1/admin/grading-benchmark',
+  '/api/internal/v1/admin/teacher-trainings/',
+];
 const OPEN_SEGMENT = /^[A-Za-z0-9_-]{1,128}$/;
+const TESTER_FEEDBACK_SCREENSHOT_PATH =
+  /^\/api\/internal\/v1\/tester-feedback\/[A-Za-z0-9_-]{1,128}\/screenshot$/;
 
 function isOpenPath(pathname: string) {
   if (OPEN_PATHS.has(pathname)) return true;
-  if (OPEN_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return true;
+  if (TESTER_FEEDBACK_SCREENSHOT_PATH.test(pathname)) return true;
+  if (OPEN_PATH_PREFIXES.some((prefix) =>
+    pathname === prefix || pathname.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`)
+  )) return true;
   return OPEN_SINGLE_SEGMENT_PREFIXES.some(
     (prefix) =>
       pathname.startsWith(prefix) &&
@@ -163,8 +195,52 @@ function masterCredentialVersion() {
     .slice(0, 24);
 }
 
+/** Named demo host (demo.yawp.school), not a PR preview slug. */
+export function isDemoEnvironment(
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  const slug = String(env.PREVIEW_SLUG ?? env.SLUG ?? '').trim();
+  const prNumber = String(env.PR_NUMBER ?? '').trim();
+  return slug === 'demo' && !prNumber;
+}
+
+/** Site-wide gate: PR previews only. Demo behaves like production for normal browsing. */
 export function isPreviewAccessGateEnabled() {
+  return process.env.PREVIEW_ACCESS_GATE === 'on' && !isDemoEnvironment();
+}
+
+/** Dev-login and beaker panel still require the preview access cookie on demo and previews. */
+export function isPreviewDevLoginAccessCodeRequired() {
   return process.env.PREVIEW_ACCESS_GATE === 'on';
+}
+
+/**
+ * Demo (and any future box with dev-login codes but no site-wide gate) must guard
+ * dev-only HTTP surfaces explicitly — middleware no longer wraps them.
+ */
+export function requiresExplicitPreviewDevLoginAccessGuard() {
+  return (
+    isPreviewDevLoginAccessCodeRequired() && !isPreviewAccessGateEnabled()
+  );
+}
+
+export async function rejectWithoutExplicitPreviewDevLoginAccess(
+  request: Request,
+  repository: PreviewAccessSeatRepository = databasePreviewSeatRepository
+): Promise<Response | null> {
+  if (!requiresExplicitPreviewDevLoginAccessGuard()) return null;
+  if (!isPreviewAccessConfigured()) {
+    return Response.json(
+      { error: 'Preview access is not configured.' },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } }
+    );
+  }
+  const seat = await getPreviewAccessSeat(request, repository);
+  if (seat) return null;
+  return Response.json(
+    { error: 'Preview access code required.' },
+    { status: 401, headers: { 'Cache-Control': 'no-store' } }
+  );
 }
 
 export function isIsolatedPreviewSeatMode() {
@@ -227,6 +303,19 @@ const databasePreviewSeatRepository: PreviewAccessSeatRepository = {
 
 export function getPreviewMasterAccessCode() {
   return configuredGlobalMasterCode() ?? configuredPrimarySeat()?.code ?? null;
+}
+
+/** Master override seat for dev-panel unlock (configured primary org, not org-picker flow). */
+export function getPreviewMasterPanelSeat(): PreviewAccessSeat | null {
+  const primarySeat = configuredPrimarySeat();
+  if (!primarySeat || masterCredentialVersion() === null) {
+    return null;
+  }
+  return {
+    organizationId: primarySeat.organizationId,
+    label: primarySeat.label,
+    accessKind: 'master',
+  };
 }
 
 export function getConfiguredPreviewOrganizationAccessCode(
@@ -384,6 +473,56 @@ export async function grantPreviewAccessCookie(seat: PreviewAccessSeat) {
 
 export async function clearPreviewAccessCookie() {
   return createPreviewAccessCookie().serialize('', { maxAge: 0 });
+}
+
+export function createDevPanelUnlockCookie() {
+  const secrets = accessSecrets();
+  return createCookie(DEV_PANEL_UNLOCK_COOKIE_NAME, {
+    httpOnly: true,
+    maxAge: DEV_PANEL_UNLOCK_MAX_AGE,
+    path: '/',
+    sameSite: 'lax',
+    secrets: secrets.length > 0 ? secrets : ['preview-access-unconfigured'],
+    secure: shouldUseSecureCookies(),
+  });
+}
+
+export async function grantDevPanelUnlockCookie(seat: Pick<PreviewAccessSeat, 'label'>) {
+  if (!isPreviewAccessConfigured()) {
+    throw new Error('Preview access gate is not configured.');
+  }
+  const label = seat.label.trim();
+  if (!label) {
+    throw new Error('Dev panel unlock requires a seat label.');
+  }
+  const issuedAt = Math.floor(Date.now() / 1000);
+  return createDevPanelUnlockCookie().serialize(
+    `${DEV_PANEL_UNLOCK_VALUE_PREFIX}${issuedAt}:${label}`
+  );
+}
+
+export async function getDevPanelUnlockSeatLabel(
+  request: Request
+): Promise<string | null> {
+  if (!isPreviewAccessConfigured()) return null;
+  const value = await createDevPanelUnlockCookie().parse(
+    request.headers.get('cookie')
+  );
+  if (typeof value !== 'string' || !value.startsWith(DEV_PANEL_UNLOCK_VALUE_PREFIX)) {
+    return null;
+  }
+  const payload = value.slice(DEV_PANEL_UNLOCK_VALUE_PREFIX.length);
+  const separator = payload.indexOf(':');
+  if (separator < 1) return null;
+  if (!timestampIsCurrent(payload.slice(0, separator), DEV_PANEL_UNLOCK_MAX_AGE)) {
+    return null;
+  }
+  const label = payload.slice(separator + 1).trim();
+  return label || null;
+}
+
+export async function clearDevPanelUnlockCookie() {
+  return createDevPanelUnlockCookie().serialize('', { maxAge: 0 });
 }
 
 export async function grantPreviewMasterSelectionCookie() {
@@ -572,14 +711,13 @@ async function consumeCodeQueryParam(
   if (!seat) return null;
 
   url.searchParams.delete('code');
-  return new Response(null, {
-    status: 303,
-    headers: {
-      'Cache-Control': 'no-store',
-      'set-cookie': await grantPreviewAccessCookie(seat),
-      Location: `${url.pathname}${url.search}`,
-    },
+  const headers = new Headers({
+    'Cache-Control': 'no-store',
+    Location: `${url.pathname}${url.search}`,
   });
+  headers.append('Set-Cookie', await clearDevPanelUnlockCookie());
+  headers.append('Set-Cookie', await grantPreviewAccessCookie(seat));
+  return new Response(null, { status: 303, headers });
 }
 
 /**
@@ -609,13 +747,14 @@ function stripCodeQueryParam(request: Request): Response | null {
 }
 
 /**
- * The preview access flag and this request-boundary middleware are the same switch.
- * Therefore PREVIEW_ACCESS_GATE=on cannot expose role-swap without also putting the
- * gate in front of every descendant loader, action, and resource/API route.
+ * Site-wide preview middleware runs only when {@link isPreviewAccessGateEnabled}.
+ * Demo keeps PREVIEW_ACCESS_GATE=on for dev-login codes but skips this middleware;
+ * dev-only routes must call {@link rejectWithoutExplicitPreviewDevLoginAccess} themselves.
  */
 export function createPreviewAccessMiddleware(
   sessionGuard: PreviewSeatSessionGuard = enforcePreviewSeatSession,
-  repository: PreviewAccessSeatRepository = databasePreviewSeatRepository
+  repository: PreviewAccessSeatRepository = databasePreviewSeatRepository,
+  freeTierDependencies: FreeTierPreviewDependencies = freeTierPreviewDependencies
 ): MiddlewareFunction<Response> {
   return async ({ request }, next) => {
     if (!isPreviewAccessGateEnabled()) return next();
@@ -641,7 +780,19 @@ export function createPreviewAccessMiddleware(
       const cleanedEntry = stripCodeQueryParam(request);
       if (cleanedEntry) return cleanedEntry;
     }
-    if (!seat) return blockedResponse(request);
+    if (!seat) {
+      const freeTierAccess = await freeTierPreviewAccess(
+        request,
+        freeTierDependencies
+      );
+      if (!freeTierAccess) return blockedResponse(request);
+      const response = await next();
+      if (freeTierAccess.setCookie) {
+        response?.headers.append('Set-Cookie', freeTierAccess.setCookie);
+      }
+      if (response) response.headers.set('Cache-Control', 'no-store');
+      return response;
+    }
 
     if (isIsolatedPreviewSeatMode()) {
       const sessionBlock = await sessionGuard(request, seat);

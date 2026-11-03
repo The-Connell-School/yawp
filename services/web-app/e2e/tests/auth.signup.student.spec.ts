@@ -5,12 +5,12 @@ import type { Page } from '@playwright/test';
 
 const E2E_BASE_URL = 'http://127.0.0.1:5173';
 
-async function openVerifyPage(page: Page, verifySearch: string) {
+async function followStudentInviteVerifyLink(page: Page, verifySearch: string) {
   await page.goto('about:blank');
   await page.goto(`${E2E_BASE_URL}/auth/inv/verify?${verifySearch}`, {
     waitUntil: 'domcontentloaded',
   });
-  await expect(page).toHaveURL(/\/auth\/inv\/verify/);
+  await expect(page).toHaveURL(/\/auth\/inv\/onboard-student/);
 }
 
 async function fillCodeInputWithRetry(page: Page, code: string) {
@@ -57,25 +57,8 @@ async function verifyStudentSignupCodeWithRetry(args: {
       code: otp,
     }).toString();
 
-    await openVerifyPage(page, verifySearch);
-    await fillCodeInputWithRetry(page, otp);
-    await page.getByRole('button', { name: /submit/i }).click();
-
-    try {
-      await page.waitForURL('**/auth/inv/onboard-student**', {
-        timeout: 8000,
-      });
-      return;
-    } catch (error) {
-      lastError = error;
-      const pathname = new URL(page.url()).pathname;
-      const stillOnVerify = pathname.startsWith('/auth/inv/verify');
-      if (!stillOnVerify || attempt === attempts - 1) {
-        break;
-      }
-      // Wait until the page is no longer mid-navigation before retrying
-      await page.waitForLoadState('domcontentloaded');
-    }
+    await followStudentInviteVerifyLink(page, verifySearch);
+    return;
   }
 
   throw lastError;

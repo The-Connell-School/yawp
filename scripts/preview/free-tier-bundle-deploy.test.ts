@@ -15,6 +15,9 @@ for (const [skip, failSeed] of [[true, false], [false, false], [true, true]] as 
       writeFileSync(join(root, 'fingerprint'), skip ? 'current\n' : 'previous\n');
       const source = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
       const qaSeedGuard = source.match(/should_run_signon_qa_seed\(\) \{[\s\S]*?\n\}/)![0];
+      const controlMountGuard = source.match(
+        /preview_toolbox_uses_control_mount\(\) \{[\s\S]*?\n\}/
+      )![0];
       const fn = source.slice(source.indexOf('run_tooling_if_needed() {'), source.indexOf('\nprebuild_production_images()'));
       const script = `set -euo pipefail
 SOURCE_DIR="$TEST_ROOT"
@@ -28,8 +31,10 @@ RUNTIME=production
 compose=(record_compose)
 compute_tooling_fingerprint() { echo current; }
 preview_missing_tooling_artifacts() { :; }
+build_or_pull_production_images() { :; }
 record_compose() { printf '%s\\n' "$*"; if [[ ${failSeed} == true && "$*" == *seed-free-tier-bundle-assignment-types* ]]; then return 17; fi; }
 ${qaSeedGuard}
+${controlMountGuard}
 ${fn}
 run_tooling_if_needed
 printf 'SERVING\\n'
@@ -45,7 +50,12 @@ printf 'SERVING\\n'
       expect(result.exitCode).toBe(0);
       expect(output.match(/bun run seed-free-tier-bundle-assignment-types/g)?.length).toBe(1);
       expect(output.indexOf('bun run seed-free-tier-bundle-assignment-types')).toBeLessThan(output.indexOf('SERVING'));
-      if (!skip) expect(output.indexOf('bun prisma migrate deploy')).toBeLessThan(output.indexOf('bun run seed-free-tier-bundle-assignment-types'));
+      if (!skip)
+        expect(
+          output.indexOf('scripts/preview/prisma-cli.sh migrate deploy')
+        ).toBeLessThan(
+          output.indexOf('bun run seed-free-tier-bundle-assignment-types')
+        );
       expect(output).not.toContain('seed-preview-signon-qa');
       expect(output).not.toContain('seed-local-dev');
       expect(output).not.toContain('drop');
@@ -55,7 +65,8 @@ printf 'SERVING\\n'
 
 test('Demo environment code-only workflow uses the reviewed deploy tooling with the demo target', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/demo-environment.yml', import.meta.url), 'utf8');
-  expect(workflow).toContain('DEMO_RESET_DATA: ${{ inputs.reset_data }}');
+  expect(workflow).toContain("inputs.reset_data == true &&");
+  expect(workflow).toContain("'true' || 'false'");
   expect(workflow).toContain('bash scripts/preview/deploy.sh');
   expect(workflow).toContain('yawp_demo');
 });

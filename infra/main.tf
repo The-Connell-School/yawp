@@ -209,6 +209,10 @@ resource "random_password" "db_master" {
 resource "aws_secretsmanager_secret" "db_url" {
   name        = "${var.app_name}-${var.env}-db-url"
   description = "URL for ${var.env} RDS"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "db_url_version" {
@@ -238,11 +242,12 @@ resource "aws_db_instance" "postgres" {
   db_subnet_group_name   = aws_db_subnet_group.db_subnets.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
-  skip_final_snapshot     = true
-  publicly_accessible     = false
-  multi_az                = false
-  storage_encrypted       = true
-  backup_retention_period = 7
+  skip_final_snapshot       = var.env != "production"
+  final_snapshot_identifier = var.env == "production" ? "${var.app_name}-${var.env}-postgres-final" : null
+  publicly_accessible       = false
+  multi_az                  = false
+  storage_encrypted         = true
+  backup_retention_period   = 7
 
   tags = {
     Name        = "${var.app_name}-${var.env}-rds-instance"
@@ -412,6 +417,10 @@ resource "aws_cloudwatch_log_group" "apprunner" {
 
 resource "aws_secretsmanager_secret" "honeypot" {
   name = "${var.app_name}-${var.env}-honeypot-secret"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "honeypot" {
@@ -421,6 +430,10 @@ resource "aws_secretsmanager_secret_version" "honeypot" {
 
 resource "aws_secretsmanager_secret" "openai_org" {
   name = "${var.app_name}-${var.env}-openai-org"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "openai_org" {
@@ -430,6 +443,10 @@ resource "aws_secretsmanager_secret_version" "openai_org" {
 
 resource "aws_secretsmanager_secret" "openai_key" {
   name = "${var.app_name}-${var.env}-openai-key"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "openai_key" {
@@ -439,6 +456,10 @@ resource "aws_secretsmanager_secret_version" "openai_key" {
 
 resource "aws_secretsmanager_secret" "anthropic_key" {
   name = "${var.app_name}-${var.env}-anthropic-key"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "anthropic_key" {
@@ -448,6 +469,10 @@ resource "aws_secretsmanager_secret_version" "anthropic_key" {
 
 resource "aws_secretsmanager_secret" "session" {
   name = "${var.app_name}-${var.env}-session-secret"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "session" {
@@ -457,6 +482,10 @@ resource "aws_secretsmanager_secret_version" "session" {
 
 resource "aws_secretsmanager_secret" "ai_usage_ip_hmac" {
   name = "${var.app_name}-${var.env}-ai-usage-ip-hmac-secret"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "ai_usage_ip_hmac" {
@@ -466,6 +495,10 @@ resource "aws_secretsmanager_secret_version" "ai_usage_ip_hmac" {
 
 resource "aws_secretsmanager_secret" "internal_token" {
   name = "${var.app_name}-${var.env}-internal-token"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "internal_token" {
@@ -476,6 +509,10 @@ resource "aws_secretsmanager_secret_version" "internal_token" {
 resource "aws_secretsmanager_secret" "free_tier_link_hmac" {
   count = var.free_tier_link_hmac_enabled ? 1 : 0
   name  = "${var.app_name}-${var.env}-free-tier-link-hmac-secret"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "free_tier_link_hmac" {
@@ -486,6 +523,10 @@ resource "aws_secretsmanager_secret_version" "free_tier_link_hmac" {
 
 resource "aws_secretsmanager_secret" "resend_api_key" {
   name = "${var.app_name}-${var.env}-resend-api-key"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "resend_api_key" {
@@ -495,6 +536,10 @@ resource "aws_secretsmanager_secret_version" "resend_api_key" {
 
 resource "aws_secretsmanager_secret" "sentry_dsn" {
   name = "${var.app_name}-${var.env}-sentry-dsn"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "sentry_dsn" {
@@ -505,6 +550,10 @@ resource "aws_secretsmanager_secret_version" "sentry_dsn" {
 resource "aws_secretsmanager_secret" "stripe_secret_key" {
   count = var.ua_stripe_credentials_configured ? 1 : 0
   name  = "${var.app_name}-${var.env}-stripe-secret-key"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "stripe_secret_key" {
@@ -516,6 +565,10 @@ resource "aws_secretsmanager_secret_version" "stripe_secret_key" {
 resource "aws_secretsmanager_secret" "stripe_webhook_secret" {
   count = var.ua_stripe_credentials_configured ? 1 : 0
   name  = "${var.app_name}-${var.env}-stripe-webhook-secret"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "stripe_webhook_secret" {

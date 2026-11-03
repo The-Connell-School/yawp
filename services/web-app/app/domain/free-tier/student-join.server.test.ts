@@ -1,4 +1,7 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { FreeClassSeatError } from './free-class-seat-error';
+import { FREE_CLASS_CLASS_FULL_MESSAGE } from './class-seat-cap';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 
 const capture = mock();
 mock.module('~/services/posthog.server', () => ({
@@ -29,7 +32,6 @@ const clearFailedLoginRateLimitsForTarget = mock(
 mock.module('~/utils/rate-limit.server', () => ({
   clearFailedLoginRateLimitsForTarget,
 }));
-
 afterAll(() => {
   mock.restore();
 });
@@ -41,6 +43,30 @@ const {
 } = await import('./student-join.server');
 
 describe('student-join', () => {
+  test('seat-cap domain payload keeps teacher-facing class-full copy', () => {
+    const err = new FreeClassSeatError(
+      'class_full',
+      FREE_CLASS_CLASS_FULL_MESSAGE
+    );
+    expect(
+      safeDomainErrorTextForClientResponse(err, 'This class is full.')
+    ).toBe(FREE_CLASS_CLASS_FULL_MESSAGE);
+  });
+
+  test('seat-cap domain payload redacts sensitive exception substrings', () => {
+    const sensitive = new FreeClassSeatError(
+      'class_full',
+      'Invalid `prisma.orgMembership.create()` token=SECRET-TOKEN teacher@school.edu'
+    );
+    const error = safeDomainErrorTextForClientResponse(
+      sensitive,
+      FREE_CLASS_CLASS_FULL_MESSAGE
+    );
+    expect(error).not.toContain('SECRET-TOKEN');
+    expect(error).not.toContain('teacher@school.edu');
+    expect(error.length).toBeGreaterThan(0);
+  });
+
   beforeEach(() => {
     capture.mockReset();
     clearFailedLoginRateLimitsForTarget.mockClear();

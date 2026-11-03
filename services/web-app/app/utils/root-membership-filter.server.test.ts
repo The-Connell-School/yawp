@@ -39,7 +39,27 @@ describe('root membership filter', () => {
   test('keeps the seat filter for a user who is not allowed', async () => {
     expect(await getRootMembershipWhere(options, async () => false)).toEqual({
       organizationId: 'demo-seat-org',
+      isActive: true,
     });
+  });
+
+  test('filters inactive memberships in production when no other filter applies', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousYawpEnv = process.env.YAWP_ENVIRONMENT;
+    process.env.NODE_ENV = 'production';
+    delete process.env.YAWP_ENVIRONMENT;
+    try {
+      expect(
+        await getRootMembershipWhere(
+          { ...options, previewAccessSeat: null },
+          async () => true
+        )
+      ).toEqual({ isActive: true });
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      if (previousYawpEnv === undefined) delete process.env.YAWP_ENVIRONMENT;
+      else process.env.YAWP_ENVIRONMENT = previousYawpEnv;
+    }
   });
 
   test('does not filter in non-isolated mode', async () => {

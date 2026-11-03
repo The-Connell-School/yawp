@@ -5,112 +5,163 @@ import {
   useLoaderData,
 } from 'react-router';
 import {
-  isApprovalV2Enabled,
-  forwardApprovalByToken,
-} from '~/domain/free-tier/approval-v2.server';
-import {
-  ApprovalForwardForm,
-  approvalForwardError,
-} from '../free-tier/ApprovalForwardForm';
-import {
-  CircleCheck,
-  CircleAlert,
-  PencilLine,
-  Shield,
-  UserRound,
-} from 'lucide-react';
-import { Form } from 'react-router';
-import { Checkbox } from '~/components/ui/checkbox';
+  freeClassroomsPausedBody,
+  thankYouTeacherEmailFailedBody,
+} from '~/domain/free-tier/admin-approval-copy';
+import type { FreeTierAdminLinkReplacedVariant } from '~/domain/free-tier/admin-link-gate.server';
+import { useFreeTierEnabled } from '../free-tier/useFreeTierLayoutContext';
+import { CircleAlert, CircleCheck } from 'lucide-react';
+import { applicationIdForAdminLinkNaming } from '~/domain/free-tier/admin-link-known-request.server';
 import { peekSignedLink } from '~/domain/free-tier/signed-link.server';
+import {
+  fetchFreeTierApplicationTerminalGate,
+  resolveAdminLinkReplacedGate,
+} from '~/domain/free-tier/admin-link-gate.server';
 import { completeSchoolAdminApproval } from '~/domain/free-tier/approval-flow.server';
 import { prisma } from '~/utils/db.server';
-import {
-  FreeTierAuthCard,
-  FreeTierButton,
-  FreeTierFieldLabel,
-  FreeTierTextInput,
-  FreeTierPerson,
-} from '../free-tier/FreeTierAuthCard';
+import { FreeTierAuthCard } from '../free-tier/FreeTierAuthCard';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
+import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
+import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { resolveAdminDenyAnsweredGate } from '~/domain/free-tier/approval-deny.server';
+import {
+  AdminAlreadyApprovedCard,
+  AdminApprovePageIntro,
+  AdminDeclinedCard,
+  AdminDenyAlreadyAnsweredCard,
+  AdminLinkExpiredCard,
+  AdminLinkInvalidCard,
+  AdminLinkReplacedCard,
+  AdminThankYouCard,
+  adminApprovePageTitle,
+  approveCheckboxError,
+} from '../free-tier/AdminApprovalStates';
+import { AdminApproveForm } from '../free-tier/AdminApprovalForms';
+import { AdminApprovalQa } from '../free-tier/AdminApprovalQa';
+import { resolveAdminForwardTokenForApproveLink } from '~/domain/free-tier/admin-approve-forward-link.server';
+import { AdminForwardLink } from '../free-tier/AdminApprovalStates';
 
 type LoaderData =
-  | { ok: false; reason?: string }
+  | {
+      ok: false;
+      reason?: string;
+      schoolName?: string;
+      teacherName?: string;
+      variant?: FreeTierAdminLinkReplacedVariant;
+      decidedAt?: string;
+    }
   | {
       ok: true;
       token: string;
+      forwardToken?: string;
       schoolName: string;
       teacherName: string;
       teacherEmail?: string;
-      approvalV2?: boolean;
+      showDenyAndQa: boolean;
     };
+
+async function applicationFromVerifiedToken(
+  token: string,
+  peek: Awaited<ReturnType<typeof peekSignedLink>>
+) {
+  const applicationId = await applicationIdForAdminLinkNaming(
+    token,
+    peek,
+    'ADMIN_APPROVE'
+  );
+  if (!applicationId) return null;
+  return prisma.freeTierApplication.findUnique({
+    where: { id: applicationId },
+    select: { schoolName: true, name: true, email: true, status: true },
+  });
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
   const token = new URL(request.url).searchParams.get('t') ?? '';
-  if (!token) return { ok: false as const };
+  if (!token) return { ok: false as const, reason: 'invalid' as const };
   const peek = await peekSignedLink({
     token,
     expectedPurpose: 'ADMIN_APPROVE',
   });
-  if (!peek.ok) {
-    if (peek.reason === 'used' || peek.reason === 'superseded') {
-      const earlyId =
-        await import('~/domain/free-tier/signed-link.server').then((m) =>
-          m.applicationIdFromSignedToken(token)
-        );
-      if (earlyId) {
-        const app = await prisma.freeTierApplication.findUnique({
-          where: { id: earlyId },
-          select: { status: true, schoolName: true },
-        });
-        if (app?.status === 'APPROVED') {
-          return {
-            ok: false as const,
-            reason: 'already_approved' as const,
-            schoolName: app.schoolName,
-          };
-        }
-      }
-      if (peek.reason === 'superseded') {
-        return { ok: false as const, reason: 'superseded' as const };
+  const appId = await applicationIdForAdminLinkNaming(
+    token,
+    peek,
+    'ADMIN_APPROVE'
+  );
+  const showDenyAndQa = await isFeatureFlagEnabled(FREE_TIER_FLAG);
+  if (appId) {
+    const gate = await fetchFreeTierApplicationTerminalGate(appId);
+    if (gate) return { ok: false as const, ...gate };
+    if (showDenyAndQa) {
+      const denied = await resolveAdminDenyAnsweredGate({ token });
+      if (denied?.reason === 'admin_denied') {
+        return {
+          ok: false as const,
+          reason: 'admin_denied' as const,
+          teacherName: denied.teacherName,
+          schoolName: denied.schoolName,
+          decidedAt: denied.decidedAt.toISOString(),
+        };
       }
     }
-    return { ok: false as const, reason: peek.reason };
   }
-  const app = await prisma.freeTierApplication.findUnique({
-    where: { id: peek.applicationId },
-    select: {
-      id: true,
-      userId: true,
-      organizationId: true,
-      schoolName: true,
-      name: true,
-      email: true,
-      status: true,
-    },
-  });
-  if (app?.status === 'APPROVED') {
+  if (peek.ok) {
+    const app = await prisma.freeTierApplication.findUnique({
+      where: { id: peek.applicationId },
+      select: {
+        schoolName: true,
+        name: true,
+        email: true,
+      },
+    });
+    let forwardToken: string | undefined;
+    try {
+      forwardToken =
+        (await resolveAdminForwardTokenForApproveLink({
+          approveToken: token,
+          applicationId: peek.applicationId,
+          approveLinkId: peek.linkId,
+        })) ?? undefined;
+    } catch {
+      forwardToken = undefined;
+    }
     return {
-      ok: false as const,
-      reason: 'already_approved' as const,
-      schoolName: app.schoolName,
+      ok: true as const,
+      token,
+      forwardToken,
+      schoolName: app?.schoolName ?? 'your school',
+      teacherName: app?.name ?? 'A teacher',
+      teacherEmail: app?.email,
+      showDenyAndQa,
     };
   }
-  if (app?.status === 'REJECTED' || app?.status === 'EXPIRED') {
-    return {
-      ok: false as const,
-      reason: 'declined' as const,
-      schoolName: app.schoolName,
-    };
+  if (peek.reason === 'expired') {
+    const app = await applicationFromVerifiedToken(token, peek);
+    if (app) {
+      return {
+        ok: false as const,
+        reason: 'expired' as const,
+        schoolName: app.schoolName,
+        teacherName: app.name,
+      };
+    }
+    return { ok: false as const, reason: 'invalid' as const };
   }
-  return {
-    ok: true as const,
+  const replaced = await resolveAdminLinkReplacedGate({
     token,
-    schoolName: app?.schoolName ?? 'your school',
-    teacherName: app?.name ?? 'A teacher',
-    teacherEmail: app?.email,
-    approvalV2: app ? await isApprovalV2Enabled(app) : false,
-  };
+    peek,
+    expectedPurpose: 'ADMIN_APPROVE',
+  });
+  if (replaced) return { ok: false as const, ...replaced };
+  if (
+    peek.reason === 'invalid' ||
+    peek.reason === 'purpose_mismatch' ||
+    !peek.reason
+  ) {
+    return { ok: false as const, reason: 'invalid' as const };
+  }
+  return { ok: false as const, reason: peek.reason };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -119,277 +170,308 @@ export async function action({ request }: ActionFunctionArgs) {
   const token = String(formData.get('token') ?? '');
   const authorized = formData.get('authorized') === 'on';
   const adminRole = String(formData.get('adminRole') ?? '');
-  const peek = await peekSignedLink({
-    token,
-    expectedPurpose: 'ADMIN_APPROVE',
-  });
-  const app = peek.ok
-    ? await prisma.freeTierApplication.findUnique({
-        where: { id: peek.applicationId },
-        select: { id: true, userId: true, organizationId: true },
-      })
-    : null;
-  const v2 = app ? await isApprovalV2Enabled(app) : false;
-  if (formData.get('intent') === 'forward') {
-    if (!v2) return { ok: false as const, reason: 'not_allowed' };
-    const result = await forwardApprovalByToken({
-      token,
-      purpose: 'ADMIN_APPROVE',
-      newAdminName: String(formData.get('adminName') ?? ''),
-      newAdminEmail: String(formData.get('adminEmail') ?? ''),
-      request,
-    });
-    return { ...result, intent: 'forward' as const };
+  if (!adminRole.trim() || adminRole.trim().length > 120 || !authorized) {
+    return { ok: false as const, reason: 'validation' as const };
   }
-  if (v2 && (!adminRole.trim() || adminRole.trim().length > 120 || !authorized))
-    return { ok: false as const, reason: 'validation' };
   const result = await completeSchoolAdminApproval({
     token,
     authorized,
     adminRole,
     request,
   });
+  if (!result.ok && result.reason === 'superseded') {
+    const peek = await peekSignedLink({
+      token,
+      expectedPurpose: 'ADMIN_APPROVE',
+    });
+    const replaced = await resolveAdminLinkReplacedGate({
+      token,
+      peek,
+      expectedPurpose: 'ADMIN_APPROVE',
+    });
+    if (replaced) return { ok: false as const, ...replaced };
+    const appId = await applicationIdForAdminLinkNaming(
+      token,
+      peek,
+      'ADMIN_APPROVE'
+    );
+    if (appId) {
+      const gate = await fetchFreeTierApplicationTerminalGate(appId);
+      if (gate) return { ok: false as const, ...gate };
+    }
+    const app = await applicationFromVerifiedToken(token, peek);
+    if (app && !['APPROVED', 'REJECTED', 'EXPIRED'].includes(app.status)) {
+      return {
+        ok: false as const,
+        reason: 'link_replaced' as const,
+        variant: 'resent' as const,
+        teacherName: app.name,
+        schoolName: app.schoolName,
+      };
+    }
+  }
   return result;
+}
+
+function terminalFromLoader(data: Extract<LoaderData, { ok: false }>) {
+  const teacherName = data.teacherName ?? 'A teacher';
+  const schoolName = data.schoolName ?? 'your school';
+  if (data.reason === 'already_approved') {
+    return (
+      <AdminAlreadyApprovedCard
+        teacherName={teacherName}
+        schoolName={schoolName}
+      />
+    );
+  }
+  if (data.reason === 'declined') {
+    return (
+      <AdminDeclinedCard teacherName={teacherName} schoolName={schoolName} />
+    );
+  }
+  if (
+    data.reason === 'admin_denied' &&
+    'decidedAt' in data &&
+    typeof data.decidedAt === 'string'
+  ) {
+    return (
+      <AdminDenyAlreadyAnsweredCard
+        teacherName={teacherName}
+        schoolName={schoolName}
+        decidedAt={new Date(data.decidedAt)}
+      />
+    );
+  }
+  if (data.reason === 'expired') {
+    return (
+      <AdminLinkExpiredCard teacherName={teacherName} schoolName={schoolName} />
+    );
+  }
+  if (data.reason === 'link_replaced') {
+    return (
+      <AdminLinkReplacedCard
+        teacherName={teacherName}
+        schoolName={schoolName}
+        variant={data.variant ?? 'forwarded'}
+      />
+    );
+  }
+  if (data.reason === 'invalid') {
+    return (
+      <AdminLinkInvalidCard
+        teacherName={data.teacherName}
+        schoolName={data.schoolName}
+      />
+    );
+  }
+  return null;
+}
+
+function terminalFromAction(actionData: NonNullable<ReturnType<typeof useActionData<typeof action>>>) {
+  if (actionData.ok) return null;
+  const actionApp =
+    'app' in actionData
+      ? (actionData as { app?: { name?: string; schoolName?: string } }).app
+      : undefined;
+  const teacherName =
+    actionApp?.name ??
+    ('teacherName' in actionData &&
+    typeof (actionData as { teacherName?: string }).teacherName === 'string'
+      ? (actionData as { teacherName: string }).teacherName
+      : 'A teacher');
+  const schoolName =
+    actionApp?.schoolName ??
+    ('schoolName' in actionData &&
+    typeof (actionData as { schoolName?: string }).schoolName === 'string'
+      ? (actionData as { schoolName: string }).schoolName
+      : 'your school');
+  if (actionData.reason === 'already_approved') {
+    return (
+      <AdminAlreadyApprovedCard
+        teacherName={teacherName}
+        schoolName={schoolName}
+      />
+    );
+  }
+  if (actionData.reason === 'declined') {
+    return (
+      <AdminDeclinedCard teacherName={teacherName} schoolName={schoolName} />
+    );
+  }
+  if (
+    actionData.reason === 'link_replaced' ||
+    actionData.reason === 'superseded'
+  ) {
+    return (
+      <AdminLinkReplacedCard
+        teacherName={teacherName}
+        schoolName={schoolName}
+        variant={
+          'variant' in actionData
+            ? (actionData as { variant?: FreeTierAdminLinkReplacedVariant })
+                .variant ?? 'forwarded'
+            : 'forwarded'
+        }
+      />
+    );
+  }
+  if (
+    actionData.reason === 'illegal_state' &&
+    'status' in actionData &&
+    actionData.status === 'APPROVED'
+  ) {
+    return (
+      <AdminAlreadyApprovedCard
+        teacherName={teacherName}
+        schoolName={schoolName}
+      />
+    );
+  }
+  if (
+    actionData.reason === 'illegal_state' &&
+    'status' in actionData &&
+    (actionData.status === 'REJECTED' || actionData.status === 'EXPIRED')
+  ) {
+    return (
+      <AdminDeclinedCard teacherName={teacherName} schoolName={schoolName} />
+    );
+  }
+  return null;
 }
 
 export default function FreeAdminApproveRoute() {
   const data = useLoaderData<LoaderData>();
   const actionData = useActionData<typeof action>();
+  const pass1 = useFreeTierEnabled();
 
-  if (
-    actionData &&
-    actionData.ok &&
-    'idempotent' in actionData &&
-    actionData.idempotent
-  ) {
+  if (actionData?.ok && 'idempotent' in actionData && actionData.idempotent) {
+    const teacherName = data.ok ? data.teacherName : 'A teacher';
+    const schoolName = data.ok ? data.schoolName : 'your school';
     return (
-      <FreeTierAuthCard title="Already approved" icon={<CircleCheck />}>
-        <p className="text-sm text-muted-foreground">
-          The teacher already has access. Nothing else to do.
-        </p>
-      </FreeTierAuthCard>
+      <AdminAlreadyApprovedCard
+        teacherName={teacherName}
+        schoolName={schoolName}
+      />
     );
   }
 
-  if (actionData?.ok && 'queued' in actionData && actionData.queued)
+  if (actionData?.ok && 'app' in actionData && actionData.app) {
+    const app = actionData.app as { name: string; schoolName: string };
     return (
-      <FreeTierAuthCard title="Request forwarded" icon={<CircleCheck />}>
-        <p className="text-sm text-muted-foreground">
-          Your request is queued for the new administrator. We will let the
-          teacher know.
-        </p>
-      </FreeTierAuthCard>
-    );
-
-  if (actionData && actionData.ok && 'app' in actionData && actionData.app) {
-    return (
-      <FreeTierAuthCard title="Thank you" icon={<CircleCheck />}>
-        <p className="text-sm text-muted-foreground">
-          {actionData.app.name} can start using YAWP. We let them know.
-        </p>
-      </FreeTierAuthCard>
-    );
-  }
-
-  if (
-    actionData &&
-    !actionData.ok &&
-    actionData.reason !== 'validation' &&
-    !('intent' in actionData && actionData.intent === 'forward')
-  ) {
-    const declined =
-      actionData.reason === 'illegal_state' &&
-      'status' in actionData &&
-      (actionData.status === 'REJECTED' || actionData.status === 'EXPIRED');
-    const message = declined
-      ? 'YAWP did not approve it. Questions? Email support@yawp.school.'
-      : actionData.reason === 'email_failed'
-        ? "Your approval is saved, but we couldn't send your confirmation email."
-        : actionData.reason === 'superseded'
-          ? 'Use the link in our most recent email.'
-          : actionData.reason === 'used'
-            ? 'This approval link was already used.'
-            : actionData.reason === 'budget_exceeded'
-              ? 'YAWP has reached the current free-tier budget for this environment. We did not use this approval link; our team will follow up.'
-              : 'We could not complete this approval. The link may be invalid or expired.';
-    return (
-      <FreeTierAuthCard
-        title={
-          declined
-            ? 'This request is closed'
-            : actionData.reason === 'email_failed'
-              ? 'Thank you'
-              : actionData.reason === 'superseded'
-                ? 'This link was replaced'
-                : actionData.reason === 'budget_exceeded'
-                  ? 'Free classrooms are paused'
-                  : 'Unable to approve'
-        }
-        icon={
-          actionData.reason === 'email_failed' ? (
-            <CircleCheck />
-          ) : (
-            <CircleAlert />
-          )
-        }
-      >
-        {actionData.reason === 'email_failed' ? (
-          <p className="text-sm text-muted-foreground">
-            The teacher can start using YAWP.
-          </p>
-        ) : null}
-        <p
-          className={
-            actionData.reason === 'email_failed'
-              ? 'rounded-lg bg-secondary p-3 text-sm text-muted-foreground'
-              : 'text-sm text-muted-foreground'
-          }
-        >
-          {message}
-        </p>
-      </FreeTierAuthCard>
+      <AdminThankYouCard teacherName={app.name} schoolName={app.schoolName} />
     );
   }
 
   if (!data.ok) {
-    if (data.reason === 'already_approved') {
+    const terminal = terminalFromLoader(data);
+    if (terminal) return terminal;
+    return <AdminLinkInvalidCard />;
+  }
+
+  const actionTerminal = actionData ? terminalFromAction(actionData) : null;
+  if (actionTerminal) return actionTerminal;
+
+  if (actionData && !actionData.ok && actionData.reason !== 'validation') {
+    const declined =
+      actionData.reason === 'illegal_state' &&
+      'status' in actionData &&
+      (actionData.status === 'REJECTED' || actionData.status === 'EXPIRED');
+    if (declined) {
       return (
-        <FreeTierAuthCard title="Already approved" icon={<CircleCheck />}>
+        <AdminDeclinedCard
+          teacherName={data.teacherName}
+          schoolName={data.schoolName}
+        />
+      );
+    }
+    if (actionData.reason === 'email_failed') {
+      return (
+        <FreeTierAuthCard title="Thank you" icon={<CircleCheck />} status>
           <p className="text-sm text-muted-foreground">
-            YAWP is already approved for{' '}
-            {(data as { schoolName?: string }).schoolName ?? 'this school'}.
+            {thankYouTeacherEmailFailedBody(
+              data.teacherName,
+              data.schoolName,
+              pass1
+            )}
           </p>
         </FreeTierAuthCard>
       );
     }
-    if (data.reason === 'superseded') {
+    if (
+      actionData.reason === 'link_replaced' ||
+      actionData.reason === 'superseded'
+    ) {
       return (
-        <FreeTierAuthCard title="This link was replaced" icon={<CircleAlert />}>
+        <AdminLinkReplacedCard
+          teacherName={data.teacherName}
+          schoolName={data.schoolName}
+          variant={
+            'variant' in actionData
+              ? (actionData as { variant?: FreeTierAdminLinkReplacedVariant })
+                  .variant ?? 'forwarded'
+              : 'forwarded'
+          }
+        />
+      );
+    }
+    if (actionData.reason === 'budget_exceeded') {
+      return (
+        <FreeTierAuthCard
+          title="Free classrooms are paused"
+          icon={<CircleAlert />}
+        >
           <p className="text-sm text-muted-foreground">
-            Use the link in our most recent email.
+            {freeClassroomsPausedBody(
+              data.teacherName,
+              data.schoolName,
+              pass1
+            )}
           </p>
         </FreeTierAuthCard>
       );
     }
-    if (data.reason === 'declined') {
-      return (
-        <FreeTierAuthCard title="This request is closed" icon={<CircleAlert />}>
-          <p className="text-sm text-muted-foreground">
-            YAWP did not approve it. Questions? Email support@yawp.school.
-          </p>
-        </FreeTierAuthCard>
-      );
-    }
-    return (
-      <FreeTierAuthCard
-        title={
-          data.reason === 'invalid' || !data.reason
-            ? "We couldn't open this link"
-            : 'This link expired or was used'
-        }
-        icon={<CircleAlert />}
-      >
-        <p className="text-sm text-muted-foreground">
-          {data.reason === 'invalid' || !data.reason
-            ? 'Copy it again from the email.'
-            : 'Ask the teacher to send a reminder.'}
-        </p>
-      </FreeTierAuthCard>
-    );
   }
 
   return (
     <FreeTierAuthCard
-      title={`Approve YAWP for ${data.schoolName}`}
-      aside={
-        data.approvalV2 ? (
-          <>
-            <h2 className="text-lg font-semibold">About YAWP</h2>
-            <FreeTierPerson name={data.teacherName} email={data.teacherEmail} />
-            <ul className="flex flex-col gap-3 text-sm text-card-foreground">
-              <li>Students draft essays with feedback as they write.</li>
-              <li>Teachers control assignments and grading.</li>
-              <li>Student writing is never used to train outside models.</li>
-            </ul>
-            <section
-              aria-label="Administrator guide"
-              data-guide-slot="administrator"
-            />
-          </>
+      title={adminApprovePageTitle(data.teacherName, data.schoolName)}
+      belowCard={
+        data.showDenyAndQa && data.forwardToken ? (
+          <AdminForwardLink
+            forwardToken={data.forwardToken}
+            approveToken={data.token}
+          />
+        ) : undefined
+      }
+      stackAfterCard={
+        data.showDenyAndQa ? (
+          <AdminApprovalQa teacherName={data.teacherName} />
         ) : undefined
       }
     >
-      {!data.approvalV2 ? (
-        <>
-          <FreeTierPerson name={data.teacherName} />
-          <ul className="flex flex-col gap-2.5 text-sm text-card-foreground">
-            <li className="flex items-start gap-2.5">
-              <PencilLine
-                aria-hidden="true"
-                className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
-              />
-              Students draft essays with feedback as they write.
-            </li>
-            <li className="flex items-start gap-2.5">
-              <UserRound
-                aria-hidden="true"
-                className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
-              />
-              Teachers control assignments and grading.
-            </li>
-            <li className="flex items-start gap-2.5">
-              <Shield
-                aria-hidden="true"
-                className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
-              />
-              Student writing is never used to train outside models.
-            </li>
-          </ul>
-        </>
-      ) : null}
-      {actionData &&
-      !actionData.ok &&
-      actionData.reason === 'validation' &&
-      !('intent' in actionData) ? (
-        <p role="alert" className="text-sm text-destructive">
-          Enter your role and confirm you can approve classroom software.
-        </p>
-      ) : null}
-      <Form method="post" className="flex flex-col gap-4">
-        <input type="hidden" name="token" value={data.token} />
-        <FreeTierFieldLabel label="Your role" htmlFor="adminRole">
-          <FreeTierTextInput
-            id="adminRole"
-            name="adminRole"
-            invalidMessage="Enter your role."
-            placeholder="Principal, Technology Director"
-            required
-          />
-        </FreeTierFieldLabel>
-        <label className="flex gap-2 text-sm items-start text-left">
-          <Checkbox name="authorized" required className="mt-1" />
-          <span>I can approve classroom software for {data.schoolName}.</span>
-        </label>
-        <FreeTierButton type="submit">Approve YAWP</FreeTierButton>
-      </Form>
-      {data.approvalV2 ? (
-        <details
-          className="text-sm"
-          open={actionData && 'intent' in actionData ? true : undefined}
-        >
-          <summary className="cursor-pointer py-2 text-primary underline underline-offset-4">
-            Not the right person? Forward this request
-          </summary>
-          <div className="pt-3">
-            {actionData && !actionData.ok && 'intent' in actionData ? (
-              <p role="alert" className="mb-3 text-sm text-destructive">
-                {approvalForwardError(actionData.reason)}
-              </p>
-            ) : null}
-            <ApprovalForwardForm token={data.token} />
-          </div>
-        </details>
-      ) : null}
+      <AdminApprovePageIntro
+        teacherName={data.teacherName}
+        schoolName={data.schoolName}
+        teacherEmail={data.teacherEmail}
+      />
+      <AdminApproveForm
+        token={data.token}
+        forwardToken={data.forwardToken}
+        schoolName={data.schoolName}
+        teacherName={data.teacherName}
+        showDenyAndQa={data.showDenyAndQa}
+        serverErrors={
+          actionData && !actionData.ok && actionData.reason === 'validation'
+            ? {
+                adminRole: 'Enter your role.',
+                authorized: approveCheckboxError(
+                  data.teacherName,
+                  data.schoolName
+                ),
+              }
+            : undefined
+        }
+      />
     </FreeTierAuthCard>
   );
 }

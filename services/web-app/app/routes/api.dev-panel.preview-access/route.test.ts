@@ -1,0 +1,61 @@
+import { describe, expect, mock, test } from 'bun:test';
+import * as previewAccessRateLimit from '~/utils/preview-access-rate-limit.server';
+
+mock.module('~/dev-panel/dev-panel-route-guard.server', () => ({
+  assertDevPanelUnlockRoute: async () => null,
+}));
+mock.module('~/utils/preview-access.server', () => ({
+  isPreviewAccessConfigured: () => true,
+  findPreviewAccessCredentialByCode: async (code: string) => {
+    if (code === 'seat-ok') {
+      return {
+        kind: 'organization',
+        seat: { organizationId: 'org-1', label: 'Preview seat' },
+      };
+    }
+    if (code === 'master-code') return { kind: 'master' };
+    return null;
+  },
+  getPreviewMasterPanelSeat: () => ({
+    organizationId: 'local-dev-org',
+    label: 'Master panel seat',
+    accessKind: 'master' as const,
+  }),
+  grantPreviewAccessCookie: async () => 'preview-access=test',
+}));
+mock.module('~/utils/preview-access-rate-limit.server', () => ({
+  ...previewAccessRateLimit,
+  checkPreviewAccessAttempt: () => ({ allowed: true }),
+  clearFailedPreviewAccessAttempts: () => {},
+  recordFailedPreviewAccessAttempt: () => {},
+}));
+
+const { action } = await import('./route');
+
+describe('api.dev-panel.preview-access', () => {
+  test('accepts seat codes and returns seat label', async () => {
+    const response = await action({
+      request: new Request('http://localhost/api/dev-panel/preview-access', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ code: 'seat-ok' }),
+      }),
+    } as never);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.seatLabel).toBe('Preview seat');
+  });
+
+  test('accepts master credentials via the configured master panel seat', async () => {
+    const response = await action({
+      request: new Request('http://localhost/api/dev-panel/preview-access', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ code: 'master-code' }),
+      }),
+    } as never);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.seatLabel).toBe('Master panel seat');
+  });
+});

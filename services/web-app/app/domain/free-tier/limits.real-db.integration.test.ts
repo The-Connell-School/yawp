@@ -14,7 +14,7 @@ const enabled = process.env.FREE_TIER_LIMITS_LOCAL_TEST === '1';
 const local = enabled ? test : test.skip;
 const prefix = `limits-${Date.now()}`;
 const baseFlag = 'feature_flag.free_tier';
-const v2Flag = 'feature_flag.free-tier-onboarding-v2';
+const v2Flag = 'feature_flag.free_tier';
 const savedEnv = { ...process.env };
 const url = 'http://localhost/api/internal/v1/free-tier/limits';
 const secret = 'local-limits-database-test-secret-32-characters';
@@ -153,8 +153,8 @@ local('durable replay rejection and flag-off writes never change the setting', a
   expect((await call(replay)).status).toBe(401);
   await setting(v2Flag, 'false');
   const off = await call(request('PUT', { version: 1, reporterMonthly: 10 }));
-  expect(off.status).toBe(409); expect(await off.json()).toEqual({ error: 'flag_off' });
-  expect(await (await call(request())).json()).toEqual(before);
+  expect(off.status).toBe(404);
+  expect((await call(request())).status).toBe(404);
 });
 local('configured caps include pending invites and block only new enrollment', async () => {
   await updateFreeTierLimits({ version: 0, studentSeatCap: 2 }, 'staff@example.test');
@@ -329,7 +329,7 @@ local('flag-off, targeted organizations, base access and paid seats retain rollo
   await setting(v2Flag, JSON.stringify({ mode: 'targeted', orgIds: [orgId] }));
   expect(await check()).toMatchObject({ ok: false, code: 'class_full' });
   const write = await call(request('PUT', { version: 1, studentSeatCap: 2 }));
-  expect(write.status).toBe(409); expect(await write.json()).toEqual({ error: 'flag_off' });
+  expect(write.status).toBe(404);
   await setting(baseFlag, 'false'); expect(await check()).toMatchObject({ ok: true });
   expect((await effectiveFreeTierLimits(orgId)).limits.studentSeatCap).toBe(35);
   await setting(baseFlag, 'true'); await setting(v2Flag, 'true');

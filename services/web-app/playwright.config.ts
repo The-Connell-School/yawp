@@ -13,6 +13,7 @@ export default defineConfig({
     '**/free-tier.approval-v2.spec.ts',
     '**/auth.unified-signon.spec.ts',
     '**/auth.unified-backend.spec.ts',
+    '**/auth.unified-teacher-prompts.spec.ts',
     '**/auth.unified-resend.spec.ts',
     '**/auth.unified-google-backend.spec.ts',
     '**/auth.unified-origin-backend.spec.ts',
@@ -29,7 +30,7 @@ export default defineConfig({
   use: {
     trace: process.env.CI ? 'retain-on-failure' : 'on-first-retry',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    video: process.env.CI ? 'on-first-retry' : 'retain-on-failure',
     baseURL: 'http://127.0.0.1:5173',
     launchOptions: process.env.PW_EXECUTABLE_PATH
       ? { executablePath: process.env.PW_EXECUTABLE_PATH }

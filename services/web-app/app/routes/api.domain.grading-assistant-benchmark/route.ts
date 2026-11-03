@@ -10,6 +10,7 @@ import { requireAdmin } from '~/utils/auth.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import crypto from 'node:crypto';
 import { computeIpHash } from '~/utils/ai-usage-log.server';
+import { safeErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 
 const RunBenchmarkInputSchema = z.object({
   intent: z.enum(['runCase', 'runAll']),
@@ -141,10 +142,10 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse(
       {
         success: false,
-        message:
-          error instanceof Error
-            ? error.message
-            : 'The benchmark could not run.',
+        message: safeErrorTextForClientResponse(
+          error,
+          'The benchmark could not run.',
+        ),
       },
       { status: 500 }
     );

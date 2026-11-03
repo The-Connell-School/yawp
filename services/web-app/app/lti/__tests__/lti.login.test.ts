@@ -1,11 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { loader } from '~/routes/lti.login.ts';
+import { loader } from '~/routes/lti.login/route.ts';
 
 const priorUrl = process.env.BLACKBOARD_LTI_MOCK_URL;
 const priorResponse = globalThis.Response;
-afterAll(() => { if(priorUrl===undefined)delete process.env.BLACKBOARD_LTI_MOCK_URL;else process.env.BLACKBOARD_LTI_MOCK_URL=priorUrl;globalThis.Response=priorResponse; });
+afterAll(() => {
+  if (priorUrl === undefined) delete process.env.BLACKBOARD_LTI_MOCK_URL;
+  else process.env.BLACKBOARD_LTI_MOCK_URL = priorUrl;
+  globalThis.Response = priorResponse;
+});
 beforeAll(() => {
-  globalThis.Response=globalThis.__serverResponse;
+  globalThis.Response = globalThis.__serverResponse;
   process.env.BLACKBOARD_LTI_MOCK_URL = 'http://127.0.0.1:9473';
 });
 
@@ -23,12 +27,11 @@ describe('/lti/login', () => {
     } as any);
     expect(res.status).toBe(302);
     const location = res.headers.get('location') || '';
-    expect(location.startsWith('https://app.test/dev/blackboard-lti-mock/api/v1/gateway/oidcauth')).toBe(
-      true
-    );
+    expect(
+      location.startsWith('https://app.test/dev/blackboard-lti-mock/api/v1/gateway/oidcauth')
+    ).toBe(true);
     const cookie = res.headers.get('set-cookie') || '';
     expect(cookie).toContain('yawp_lti_state=');
     expect(cookie).toContain('yawp_lti_nonce=');
   });
 });
-

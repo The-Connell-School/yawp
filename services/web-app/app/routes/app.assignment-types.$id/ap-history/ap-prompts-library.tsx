@@ -7,6 +7,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '~/components/ui/accordion';
+import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import {
@@ -31,6 +32,7 @@ import {
 type Props = {
   entries: ApPrompt[];
   onSelectEntry: (entry: ApPrompt) => void;
+  assignmentCreationLocked?: boolean;
 };
 
 type FacetSpec = {
@@ -127,6 +129,7 @@ function applyFilters(
 export function ApPromptsLibrary({
   entries,
   onSelectEntry,
+  assignmentCreationLocked = false,
 }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchInput, setSearchInput] = useState(
@@ -359,6 +362,7 @@ export function ApPromptsLibrary({
                 <ApPromptRow
                   key={p.externalKey}
                   prompt={p}
+                  assignmentCreationLocked={assignmentCreationLocked}
                   onSelect={() => onSelectEntry(p)}
                 />
               ))}
@@ -373,17 +377,18 @@ export function ApPromptsLibrary({
 function ApPromptRow({
   prompt,
   onSelect,
+  assignmentCreationLocked = false,
 }: {
   prompt: ApPrompt;
   onSelect: () => void;
+  assignmentCreationLocked?: boolean;
 }) {
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onSelect}
-        className="group/card block w-full cursor-pointer rounded-md py-5 text-left transition-colors hover:bg-foreground/[0.03] focus-visible:bg-foreground/[0.03] focus-visible:outline-none"
-      >
+  const rowButton = (
+    <button
+      type="button"
+      onClick={assignmentCreationLocked ? undefined : onSelect}
+      className="group/card block w-full cursor-pointer rounded-md py-5 text-left transition-colors hover:bg-foreground/[0.03] focus-visible:bg-foreground/[0.03] focus-visible:outline-none"
+    >
         <div className="space-y-1 px-2">
           <h4 className="text-base font-semibold leading-snug text-foreground">
             {prompt.title}
@@ -434,6 +439,17 @@ function ApPromptRow({
           ) : null}
         </div>
       </button>
+  );
+
+  return (
+    <li>
+      {assignmentCreationLocked ? (
+        <PreviewAssignmentCreationControl fullWidth>
+          {rowButton}
+        </PreviewAssignmentCreationControl>
+      ) : (
+        rowButton
+      )}
     </li>
   );
 }

@@ -156,6 +156,85 @@ describe('useDocumentSubmit', () => {
     });
   });
 
+  it('redacts unknown submit API error messages in toasts', async () => {
+    const saveNow = mock(async () => 'synced' as const);
+    const editorBridgeRef = {
+      current: { getContent: () => ({ html: '<p>x</p>', text: 'x' }), saveNow },
+    } as RefObject<EditorBridge>;
+    const onSubmitted = mock();
+    globalThis.fetch = mock(async () =>
+      Response.json(
+        { message: 'PrismaClientKnownRequestError: document_id unique' },
+        { status: 500 },
+      ),
+    ) as unknown as typeof fetch;
+
+    let api: SubmitApi | null = null;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <Harness
+          editorBridgeRef={editorBridgeRef}
+          onReady={(value) => {
+            api = value;
+          }}
+          onSubmitted={onSubmitted}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await api?.submitNow();
+    });
+
+    expect(toastError).toHaveBeenCalledWith('Submission failed.');
+    expect(toastError.mock.calls[0]?.[0]).not.toContain('Prisma');
+    expect(onSubmitted).not.toHaveBeenCalled();
+  });
+
+  it('shows whitelisted conflict copy from the submit API', async () => {
+    const saveNow = mock(async () => 'synced' as const);
+    const editorBridgeRef = {
+      current: { getContent: () => ({ html: '<p>x</p>', text: 'x' }), saveNow },
+    } as RefObject<EditorBridge>;
+    const onSubmitted = mock();
+    globalThis.fetch = mock(async () =>
+      Response.json(
+        {
+          message:
+            'This document changed before it could be submitted. Please refresh and try again.',
+        },
+        { status: 409 },
+      ),
+    ) as unknown as typeof fetch;
+
+    let api: SubmitApi | null = null;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <Harness
+          editorBridgeRef={editorBridgeRef}
+          onReady={(value) => {
+            api = value;
+          }}
+          onSubmitted={onSubmitted}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await api?.submitNow();
+    });
+
+    expect(toastError).toHaveBeenCalledWith(
+      'This document changed before it could be submitted. Please refresh and try again.',
+    );
+  });
+
   it('blocks Revision Flow submission until its editor bridge is hydrated', async () => {
     const { saveNow, fetchMock, onSubmitted } = await submitWithSaveStatus(
       'unmounted',

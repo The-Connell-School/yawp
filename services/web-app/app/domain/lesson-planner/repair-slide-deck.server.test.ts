@@ -145,6 +145,13 @@ describe('buildDeckRepairInstruction', () => {
     expect(instruction).toContain('What a conclusion does');
   });
 
+  test('keeps the Deck Kit v3 slots and the deck colors', () => {
+    for (const slot of ['processStep', 'choices', 'answer', 'button', 'course', 'color', 'colors']) {
+      expect(instruction).toContain(`"${slot}"`);
+    }
+    expect(instruction).toContain('3 or fewer');
+  });
+
   test('asks for JSON only, so the fix can be spliced in', () => {
     const lower = instruction.toLowerCase();
     expect(lower).toContain('only the corrected json');

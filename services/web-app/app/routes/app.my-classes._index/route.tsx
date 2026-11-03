@@ -29,19 +29,20 @@ import { StudentClassCard } from '~/components/student-class-card';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { assertCanCreateClassForOrganizationPlan } from '~/utils/assignment-quota.server';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import { getEntitlements } from '~/utils/entitlements.server';
 import { prisma } from '~/utils/db.server.js';
 import { generateClassCode } from '~/utils/class';
 import { studentJoinTokenForClassCreate } from '~/utils/class-student-join-token.server';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
+import { shouldHideFreeTierTeachingSecrets } from '~/domain/free-tier/locked-preview.server';
 import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
 import { getStudentEnrolledClasses } from '~/utils/student-classes.server';
 import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
 import { resolveTeacherSchoolYearScope } from '~/utils/school-year-scope.server';
 import { resolveStudentSchoolYearScope } from '~/utils/school-year-scope.server';
 import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { isDemoFreeTierRouteOpen } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 async function getTeacherSchoolIds(membershipId: string) {
   const teacher = await prisma.orgMembership.findUnique({
@@ -131,10 +132,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ).values()
   ).sort((a, b) => a.name.localeCompare(b.name));
 
+  const hideTeachingSecrets = await shouldHideFreeTierTeachingSecrets(userId);
+
   const classesWithStats = classes.map((klass) => {
     const stats = classStats.find((s) => s.classId === klass.id);
     return {
       ...klass,
+      code: hideTeachingSecrets ? null : klass.code,
       legacyClassArtIndex: klass.classArtIndex,
       stats,
       _count: {
@@ -146,7 +150,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const entitlements = getEntitlements(profile.organization);
   const canShareClassroomReport = profile.organization.plan === 'FREE_CLASSROOM'
-    && (isDemoFreeTierRouteOpen(process.env) || await isFreeTierEnabled());
+    && (await isFreeTierEnabled());
   let classCreateBlockedMessage: string | null = null;
   if (entitlements.activeClassCap != null) {
     const activeClassCount = await prisma.class.count({
@@ -236,10 +240,27 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ success: true });
     } catch (error: any) {
       if (error instanceof ClassCodeCollisionError) {
-        return dataResponse({ error: error.message, field: 'code' }, { status: 400 });
+        return dataResponse(
+          {
+            error: safeDomainErrorTextForClientResponse(
+              error,
+              'Class code already in use. Choose a different code.',
+            ),
+            field: 'code',
+          },
+          { status: 400 },
+        );
       }
       if (error instanceof Error && error.message.includes('Free classroom accounts include one class')) {
-        return dataResponse({ error: error.message }, { status: 403 });
+        return dataResponse(
+          {
+            error: safeDomainErrorTextForClientResponse(
+              error,
+              'Free classroom accounts include one class. Archive your existing class or upgrade to add another.',
+            ),
+          },
+          { status: 403 },
+        );
       }
       if (error.code === 'P2002') {
         return dataResponse(
@@ -307,7 +328,16 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ success: true });
     } catch (error: any) {
       if (error instanceof ClassCodeCollisionError) {
-        return dataResponse({ error: error.message, field: 'code' }, { status: 400 });
+        return dataResponse(
+          {
+            error: safeDomainErrorTextForClientResponse(
+              error,
+              'Class code already in use. Choose a different code.',
+            ),
+            field: 'code',
+          },
+          { status: 400 },
+        );
       }
       if (error.code === 'P2002') {
         return dataResponse(

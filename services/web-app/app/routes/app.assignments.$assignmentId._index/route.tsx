@@ -1,3 +1,4 @@
+import { currentClassInsightRows } from '~/domain/assignment-insights/class-insight-inputs.server';
 import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { ExitTicketClassReadPanel } from '~/components/assignments/exit-ticket-class-read-panel';
 import { buildExitTicketClassRead } from '~/domain/assignment-types/exit-ticket-class-read';
@@ -20,6 +21,7 @@ import { toCollaborationGroupMode } from '~/domain/assignments/collaboration';
 import { Copy, Pencil, UsersIcon } from 'lucide-react';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { CaretLeftIcon } from '~/components/icons';
@@ -265,7 +267,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       })
     : null;
   const insight =
-    insightRow && insightRow.status === 'ready' && insightRow.summaryJson
+    insightRow &&
+    insightRow.status === 'ready' &&
+    insightRow.summaryJson &&
+    (
+      await currentClassInsightRows([
+        { ...insightRow, classAssignmentId: active.id },
+      ])
+    ).length > 0
       ? {
           status: 'ready' as const,
           submissionCount: insightRow.submissionCount,
@@ -468,7 +477,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    const gradingIntent = parseAssignmentGradingIntent(formData);
+    const gradingIntent = parseAssignmentGradingIntent(formData, {
+      kind: selectedAssignmentType?.kind ?? null,
+    });
     if (!gradingIntent.success) {
       return dataResponse(
         { success: false, message: gradingIntent.message },
@@ -532,7 +543,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
       } catch (error) {
         if (error instanceof AssignmentPromptAttachmentError) {
           return dataResponse(
-            { success: false, message: error.message },
+            {
+              success: false,
+              message: safeDomainErrorTextForClientResponse(
+                error,
+                'Could not upload that PDF. Please try another file.',
+              ),
+            },
             { status: 400 }
           );
         }
@@ -610,7 +627,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
         }
         if (error instanceof FreeClassroomAssignmentQuotaError) {
           return dataResponse(
-            { success: false, message: error.message },
+            {
+              success: false,
+              message: safeDomainErrorTextForClientResponse(
+                error,
+                'This assignment type is not available on your plan.',
+              ),
+            },
             { status: 403 }
           );
         }
@@ -735,7 +758,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
       }
       if (error instanceof FreeClassroomAssignmentQuotaError) {
         return dataResponse(
-          { success: false, message: error.message },
+          {
+            success: false,
+            message: safeDomainErrorTextForClientResponse(
+              error,
+              'This assignment type is not available on your plan.',
+            ),
+          },
           { status: 403 }
         );
       }

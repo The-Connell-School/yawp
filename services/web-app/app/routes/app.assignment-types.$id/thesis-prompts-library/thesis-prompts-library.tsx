@@ -17,6 +17,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '~/components/ui/sheet';
+import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
 import {
   CATEGORY_LABEL,
   COGNITIVE_MOVE_LABEL,
@@ -38,6 +39,7 @@ type Props = {
   optionCounts: OptionCounts;
   totalCount: number;
   onSelectPrompt: (prompt: string) => void;
+  assignmentCreationLocked?: boolean;
 };
 
 type FacetSpec = {
@@ -92,6 +94,7 @@ export function ThesisPromptsLibrary({
   optionCounts,
   totalCount,
   onSelectPrompt,
+  assignmentCreationLocked = false,
 }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchInput, setSearchInput] = useState(
@@ -265,6 +268,7 @@ export function ThesisPromptsLibrary({
                     <PromptCard
                       key={p.id}
                       prompt={p}
+                      assignmentCreationLocked={assignmentCreationLocked}
                       onSelect={() => onSelectPrompt(p.prompt)}
                     />
                   ))}
@@ -281,20 +285,21 @@ export function ThesisPromptsLibrary({
 function PromptCard({
   prompt,
   onSelect,
+  assignmentCreationLocked = false,
 }: {
   prompt: ThesisLibraryEntry;
   onSelect: () => void;
+  assignmentCreationLocked?: boolean;
 }) {
   const text = prompt.textsOrUnits[0];
   const move = prompt.cognitiveMoves[0];
 
-  return (
-    <li className="min-w-0">
-      <button
-        type="button"
-        onClick={onSelect}
-        className="block w-full min-w-0 cursor-pointer rounded-lg border bg-card p-4 text-left text-card-foreground shadow-sm transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
+  const cardButton = (
+    <button
+      type="button"
+      onClick={assignmentCreationLocked ? undefined : onSelect}
+      className="block w-full min-w-0 cursor-pointer rounded-lg border bg-card p-4 text-left text-card-foreground shadow-sm transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
         <div className="flex w-full min-w-0 flex-col gap-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <h3 className="min-w-0 break-words text-base font-semibold leading-snug">
@@ -335,6 +340,17 @@ function PromptCard({
           </div>
         </div>
       </button>
+  );
+
+  return (
+    <li className="min-w-0">
+      {assignmentCreationLocked ? (
+        <PreviewAssignmentCreationControl fullWidth>
+          {cardButton}
+        </PreviewAssignmentCreationControl>
+      ) : (
+        cardButton
+      )}
     </li>
   );
 }

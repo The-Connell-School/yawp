@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { isLocalDatabaseUrl } from './seed-overlay-connection';
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 
 /**
  * Raised when the database has no organization to attach the type to. Named so
@@ -194,7 +195,7 @@ if (import.meta.main) {
         console.warn(`${error.message} Skipping.`);
         return;
       }
-      console.error(error);
+      logScriptError(error);
       process.exit(1);
     })
     .finally(() => prisma.$disconnect());

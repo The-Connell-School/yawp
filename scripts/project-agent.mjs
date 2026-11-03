@@ -9,7 +9,7 @@ const CONFIG_FILE = path.join(ROOT, ".worktree-local", "config.env");
 const DEV_PID_FILE = path.join(ROOT, ".worktree-local", "dev.pid");
 const DEV_LOG_FILE = path.join(ROOT, ".worktree-local", "dev.log");
 const MIN_NODE_MAJOR = 22;
-const MIN_BUN_VERSION = [1, 3, 1];
+const MIN_BUN_VERSION = [1, 4, 4];
 const MAX_CAPTURE_BYTES = 64 * 1024;
 
 function cleanVersion(value) {
@@ -166,7 +166,7 @@ export function capabilities() {
       qa: "./bin/project qa prepare --json",
     },
     fixtures: ["local-dev"],
-    proofProfiles: ["free-tier-approval-migration", "free-tier-approval-unit", "free-tier-approval-browser", "demo-feedback-unit", "demo-feedback-browser", "signon-classcode", "classcode-unit", "classcode-db", "classcode-browser", "classcode-enter-code", "classcode-report", "unified-signon-preview-fixtures", "unified-signon-preview-otp", "free-tier-monthly-unit", "free-tier-monthly-db", "free-tier-monthly-browser", "free-tier-inapp-unit", "free-tier-inapp-browser", "internal-preview-auth", "internal-grade-declines", "internal-grade-declines-integration", "internal-free-tier-limits", "internal-free-tier-limits-integration", "internal-class-code-duplicates", "internal-class-code-duplicates-integration", "internal-approvals", "internal-approvals-integration", "internal-scenario-browser", "internal-scenario-container", "internal-scenario-integration", "internal-fresh-migrations", "internal-content-pair", "internal-rubrics-http", "internal-rubrics-integration", "internal-content-validation", "internal-qa-http", "internal-qa-integration", "internal-audit", "internal-impersonation-browser", "internal-impersonation-http", "internal-impersonation-writes", "internal-impersonation", "internal-impersonation-integration", "internal-management", "internal-directory-integration", "project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "assignment-create", "grading-queue", "grading-queue-unit", "grading-points", "grading-points-unit", "assignment-rubric-unit", "assignment-prompt-unit", "teacher-paste-unit", "teacher-paste-browser", "private-notes-unit", "private-notes-browser", "daily-pages-scaling-unit", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
+    proofProfiles: ["signon-teacher-prompts-unit", "signon-teacher-prompts-browser", "free-tier-approval-migration", "free-tier-approval-unit", "free-tier-approval-browser", "demo-feedback-unit", "demo-feedback-browser", "signon-classcode", "classcode-unit", "classcode-db", "classcode-browser", "classcode-enter-code", "classcode-report", "unified-signon-preview-fixtures", "unified-signon-preview-otp", "free-tier-monthly-unit", "free-tier-monthly-db", "free-tier-monthly-browser", "free-tier-inapp-unit", "free-tier-inapp-browser", "internal-preview-auth", "internal-grade-declines", "internal-grade-declines-integration", "internal-free-tier-limits", "internal-free-tier-limits-integration", "internal-class-code-duplicates", "internal-class-code-duplicates-integration", "internal-approvals", "internal-approvals-integration", "internal-scenario-browser", "internal-scenario-container", "internal-scenario-integration", "internal-fresh-migrations", "internal-content-pair", "internal-rubrics-http", "internal-rubrics-integration", "internal-content-validation", "internal-qa-http", "internal-qa-integration", "internal-audit", "internal-impersonation-browser", "internal-impersonation-http", "internal-impersonation-writes", "internal-impersonation", "internal-impersonation-integration", "internal-management", "internal-teacher-trainings", "internal-teacher-trainings-integration", "internal-assignment-type-writes", "internal-assignment-type-writes-integration", "internal-directory-integration", "project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "assignment-create", "grading-queue", "grading-queue-unit", "grading-points", "grading-points-unit", "assignment-rubric-unit", "assignment-prompt-unit", "teacher-paste-unit", "teacher-paste-browser", "private-notes-unit", "private-notes-browser", "daily-pages-scaling-unit", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
     nextCommands: [
       "./bin/project doctor --json",
       "./bin/project fixture verify local-dev --json",
@@ -309,7 +309,16 @@ async function devStart({ json }) {
   const logFd = fs.openSync(DEV_LOG_FILE, "a", 0o600);
   const child = spawn(selected.bun, ["run", "web-app:dev"], {
     cwd: ROOT,
-    env: { ...selected.env, PORT: local.DEV_PORT, DATABASE_URL: local.DATABASE_URL, E2E_PORT: process.env.RECORD_PORT_E2E || process.env.E2E_PORT || "" },
+    env: {
+      ...selected.env,
+      PORT: local.DEV_PORT,
+      DATABASE_URL: local.DATABASE_URL,
+      E2E_PORT: process.env.RECORD_PORT_E2E || process.env.E2E_PORT || "",
+      TESTER_FEEDBACK_ENABLED: process.env.TESTER_FEEDBACK_ENABLED || "true",
+      ...(process.env.FREE_TIER_LINK_HMAC_SECRET
+        ? { FREE_TIER_LINK_HMAC_SECRET: process.env.FREE_TIER_LINK_HMAC_SECRET }
+        : {}),
+    },
     detached: true,
     stdio: ["ignore", logFd, logFd],
   });
@@ -375,7 +384,7 @@ function runTestProfile(profile, { json }) {
   if (chosen === "docs") {
     const result = execute("git", ["diff", "--check", process.env.RECORD_PROOF_BASE_SHA ? `${process.env.RECORD_PROOF_BASE_SHA}..HEAD` : "HEAD"], { json, env: selected.env, timeout: 30000 });
     results.push({ id: "diff-check", ...result });
-  } else if (chosen === "project-cli") run("project-cli", ["test", "./scripts/project-agent.test.js", "./scripts/deployment-contract.test.ts"], 120000);
+  } else if (chosen === "project-cli") run("project-cli", ["test", "--max-concurrency=2", "./scripts/project-agent.test.js", "./scripts/deployment-contract.test.ts", "./scripts/preview/demo-mail-config.test.ts"], 120000);
   else if (chosen === "internal-fresh-migrations") {
     const local = requireConfig();
     results.push({id: chosen, ...execute(selected.bun, ["run", "packages/prisma/scripts/internal-fresh-migrations.ts"], {json, env: {...selected.env, INTERNAL_DIRECTORY_TEST_DATABASE_URL: local.DATABASE_URL}, timeout: 240000})});
@@ -397,6 +406,12 @@ function runTestProfile(profile, { json }) {
     if (process.env.SIGNON_PREVIEW_FIXTURE_TEST === "1") runWebApp("preview-fixture-real-database", ["test", "app/domain/unified-signon/preview-fixtures.real-db.integration.test.ts"]);
     if (process.env.SIGNON_PREVIEW_FIXTURE_TEST === "1") runWebApp("preview-seat-policy-real-database", ["test", "app/domain/unified-signon/preview-seat-policy.real-db.integration.test.ts"]);
   }
+  else if (chosen === "signon-teacher-prompts-unit") {
+    runWebApp("teacher-prompts-flow", ["test", "--max-concurrency=2", "app/domain/unified-signon/teacher-prompts.server.test.ts"]);
+    for (const file of ["app/routes/enter-code/teacher-prompts-compat.test.ts", "app/routes/enter-code/authz.test.ts", "app/routes/enter-code/selection-screen.test.tsx", "app/utils/auth.server.test.ts", "app/domain/unified-signon/teacher-prompts.test.ts", "app/routes/auth.logout/route.test.ts", "app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/utils/internal-feature-flags-http.server.test.ts", "app/routes/auth.login/unified-dispatch.test.ts"])
+      runWebApp(file, ["test", "--max-concurrency=2", file]);
+  }
+  else if (chosen === "signon-teacher-prompts-browser") runWebApp("teacher-prompts-browser", ["x", "playwright", "test", "--config", "playwright.teacher-prompts.config.ts", "--workers=1"]);
   else if (chosen === "signon-classcode") {
     run("read-only-route-contract", ["test", "./scripts/read-only-impersonation-contract.test.ts"]);
     runWebApp("login-rate-limit-target", ["test", "app/utils/login-rate-limit-target.test.ts"]);
@@ -463,8 +478,27 @@ function runTestProfile(profile, { json }) {
   else if (chosen === "internal-preview-auth") runWebApp("internal-preview-auth", ["test", "app/routes/auth.dev-login/route.test.ts"]);
   else if (chosen === "internal-qa-http") runWebApp("internal-qa-http", ["test", "app/utils/internal-qa-http.server.test.ts"]);
   else if (chosen === "internal-audit") runWebApp("internal-audit", ["test", "app/utils/internal-audit.server.test.ts"]);
-  else if (chosen === "internal-rubrics-http") runWebApp("internal-rubrics-http", ["test", "app/utils/internal-rubrics-http.server.test.ts"]);
+  else if (chosen === "internal-rubrics-http") {
+    for (const file of ["internal-rubrics-http.server.test.ts", "internal-rubric-catalog-http.server.test.ts", "internal-rubrics-body.server.test.ts"])
+      runWebApp(file, ["test", "--max-concurrency=2", `app/utils/${file}`]);
+  }
   else if (chosen === "internal-content-validation") runWebApp("internal-content-validation", ["test", "app/domain/rubrics/rubric-promotion.test.ts"]);
+  else if (chosen === "internal-assignment-type-writes") {
+    for (const file of ["app/utils/getLLMCompletion/getLLMCompletion.test.ts", "app/utils/internal-grading-workspace.server.test.ts", "app/routes/api.domain.assignment-type-evaluations/route.test.ts", "app/routes/api.domain.grading-assistant-test/route.test.ts", "app/routes/api.domain.grading-assistant-benchmark/route.test.ts", "app/routes/app.admin.assignment-types.$id_.prompt/route.test.ts", "app/utils/internal-owner-invitations.server.test.ts", "app/domain/organizations/owner-invitations.server.test.ts", "app/utils/email-delivery-error.server.test.ts", "app/utils/email.server.test.ts", "app/utils/preview-access.server.test.ts", "app/routes/app.admin.organizations.$id/route.test.ts", "app/utils/internal-assignment-type-module-writes.server.test.ts", "app/routes/api.model.assignment-module-session/route.test.ts", "app/routes/api.model.assignment-module-session.$id/route.test.ts", "app/routes/api.domain.tutor-response/route.test.ts", "app/routes/app_.documents_.$id/route.test.ts", "app/utils/internal-assignment-type-writes.server.test.ts", "app/utils/internal-assignment-types.server.test.ts", "app/utils/internal-admin-organizations.server.test.ts", "app/routes/app.admin.assignment-types.new/route.test.ts", "app/routes/app.admin.assignment-types.$id/route.test.ts", "app/routes/app.admin.assignment-types.$id_.modules_.$moduleId/route.test.ts"])
+      runWebApp(file, ["test", "--max-concurrency=2", file]);
+    run("instruction-fixtures", ["test", "--max-concurrency=2", "./packages/prisma/scripts/seed-local-dev.test.ts", "./packages/prisma/scripts/exit-ticket-fixture.test.ts"]);
+  }
+  else if (chosen === "internal-teacher-trainings") {
+    for (const file of ["app/utils/internal-teacher-training-routes.server.test.ts", "app/utils/internal-teacher-trainings.server.test.ts", "app/domain/teacher-trainings/teacher-training-media.server.test.ts", "app/domain/teacher-trainings/teacher-training-admin.server.test.ts", "app/domain/teacher-trainings/teacher-training-admin-forms.server.test.ts", "app/utils/preview-access.server.test.ts"])
+      runWebApp(file, ["test", "--max-concurrency=2", file]);
+  }
+  else if (chosen === "internal-teacher-trainings-integration") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["test", "--max-concurrency=2", "app/utils/internal-teacher-trainings.integration.test.ts"], {
+      json, cwd: webAppRoot, timeout: 60000,
+      env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, INTERNAL_DIRECTORY_TEST_DATABASE_URL: local.DATABASE_URL },
+    }) });
+  }
   else if (chosen === "internal-management") runWebApp("internal-management", ["test", "app/utils/internal-management.server.test.ts"]);
   else if (chosen === "internal-impersonation") runWebApp("internal-impersonation", ["test", "app/utils/internal-impersonation-client.server.test.ts"]);
   else if (["internal-impersonation-browser", "internal-scenario-browser"].includes(chosen)) {
@@ -477,30 +511,33 @@ function runTestProfile(profile, { json }) {
     }) });
   }
   else if (chosen === "internal-impersonation-http") runWebApp("internal-impersonation-http", ["test", "app/utils/internal-impersonation-http.server.test.ts"]);
-  else if (["internal-scenario-integration", "internal-scenario-container", "internal-content-pair", "internal-rubrics-integration", "internal-directory-integration", "internal-impersonation-integration", "internal-impersonation-writes", "internal-qa-integration"].includes(chosen)) {
+  else if (["internal-scenario-integration", "internal-scenario-container", "internal-content-pair", "internal-rubrics-integration", "internal-assignment-type-writes-integration", "internal-directory-integration", "internal-impersonation-integration", "internal-impersonation-writes", "internal-qa-integration"].includes(chosen)) {
     if (chosen === "internal-content-pair" && !process.env.INTERNAL_PAIR_WORKSPACE) throw new Error("INTERNAL_PAIR_WORKSPACE is required for paired publication proof");
     const local = requireConfig();
     results.push({ id: chosen, ...execute(selected.bun,
-      ["test", chosen === "internal-scenario-container" ? "app/utils/internal-scenario.container.test.ts" : chosen === "internal-scenario-integration" ? "app/utils/internal-scenario.integration.test.ts" : chosen === "internal-content-pair" ? "app/utils/internal-content-pair.test.ts" : chosen === "internal-rubrics-integration" ? "app/utils/internal-rubrics.integration.test.ts" : chosen === "internal-qa-integration" ? "app/utils/internal-qa.integration.test.ts" : chosen === "internal-directory-integration" ? "app/utils/internal-directory.integration.test.ts" : chosen === "internal-impersonation-writes" ? "app/utils/internal-impersonation-writes.integration.test.ts" : "app/utils/internal-impersonation.integration.test.ts"], {
+      ["test", "--max-concurrency=2", ...(chosen === "internal-assignment-type-writes-integration" ? ["app/utils/internal-grading-workspace.integration.test.ts", "app/utils/internal-owner-invitations.integration.test.ts", "app/utils/internal-assignment-type-module-writes.integration.test.ts", "../../packages/prisma/scripts/instruction-fields-migration.integration.test.ts"] : []), chosen === "internal-scenario-container" ? "app/utils/internal-scenario.container.test.ts" : chosen === "internal-scenario-integration" ? "app/utils/internal-scenario.integration.test.ts" : chosen === "internal-content-pair" ? "app/utils/internal-content-pair.test.ts" : chosen === "internal-rubrics-integration" ? "app/utils/internal-rubrics.integration.test.ts" : chosen === "internal-qa-integration" ? "app/utils/internal-qa.integration.test.ts" : chosen === "internal-assignment-type-writes-integration" ? "app/utils/internal-assignment-type-writes.integration.test.ts" : chosen === "internal-directory-integration" ? "app/utils/internal-directory.integration.test.ts" : chosen === "internal-impersonation-writes" ? "app/utils/internal-impersonation-writes.integration.test.ts" : "app/utils/internal-impersonation.integration.test.ts"], {
         json, cwd: webAppRoot, timeout: chosen === "internal-scenario-container" ? 900000 : 60000,
         env: { ...selected.env, INTERNAL_DIRECTORY_TEST_DATABASE_URL: local.DATABASE_URL, INTERNAL_SCENARIO_TEST_CONTAINER: local.CONTAINER_NAME },
       }) });
   }
   else if (chosen === "free-tier-locked-preview-unit") {
-    for (const file of ["app/routes/auth.inv.onboard-student/ua-onboarding.test.ts", "app/domain/free-tier/locked-preview.test.ts", "app/domain/free-tier/locked-preview.server.test.ts", "app/domain/collaboration/student-roster.server.test.ts", "app/domain/lesson-planner/lesson-planner-tools.server.test.ts", "app/domain/reporter/reporter-tools.server.test.ts", "app/utils/assignment-quota.server.test.ts", "app/utils/ai-admission.server.test.ts", "app/utils/impersonation-read-only.server.test.ts", "app/utils/auth.server.test.ts"]) runWebApp(file, ["test", "--max-concurrency=2", file]);
+    for (const file of ["app/routes/auth.inv.onboard-student/ua-onboarding.test.ts", "app/domain/free-tier/locked-preview.test.ts", "app/domain/free-tier/locked-preview.server.test.ts", "app/domain/free-tier/monthly-policy.test.ts", "app/domain/free-tier/inapp-usage.test.ts",
+      "app/domain/free-tier/usage-nav-meter.test.ts",  "app/domain/collaboration/student-roster.server.test.ts", "app/domain/lesson-planner/lesson-planner-tools.server.test.ts",
+      "app/domain/lesson-planner/lesson-planner-pending-reporter-delegation.server.test.ts", "app/domain/reporter/reporter-tools.server.test.ts", "app/utils/assignment-quota.server.test.ts", "app/utils/ai-admission.server.test.ts", "app/utils/impersonation-read-only.server.test.ts", "app/utils/auth.server.test.ts"]) runWebApp(file, ["test", "--max-concurrency=2", file]);
   }
   else if (chosen === "free-tier-locked-preview-db") {
     const local = requireConfig();
-    results.push({ id: chosen, ...execute(selected.bun, ["test", "--max-concurrency=2", "app/domain/free-tier/locked-preview.real-db.integration.test.ts"], {
+    results.push({ id: chosen, ...execute(selected.bun, ["test", "--max-concurrency=2", "app/utils/cookies.organization-classes-table.test.ts", "app/domain/free-tier/locked-preview.real-db.integration.test.ts", "app/domain/free-tier/teaching-secrets-loader.integration.test.ts"], {
       json, cwd: webAppRoot, timeout: 120000,
       env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, LOCKED_PREVIEW_DB_TESTS: '1' },
     }) });
   }
   else if (chosen === "free-tier-locked-preview-browser") {
     const local = requireConfig();
+    const evidenceDir = path.join(webAppRoot, "locked-preview-evidence");
     results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.locked-preview.config.ts", "--workers=1"], {
       json, cwd: webAppRoot, timeout: 600000,
-      env: { ...selected.env, ...parseEnvFile(fs.readFileSync(path.join(webAppRoot, '.env'), 'utf8')), CI: '1', DATABASE_URL: local.DATABASE_URL, CLASS_STEP_PORT: local.DEV_PORT },
+      env: { ...selected.env, ...parseEnvFile(fs.readFileSync(path.join(webAppRoot, '.env'), 'utf8')), CI: '1', DATABASE_URL: local.DATABASE_URL, CLASS_STEP_PORT: local.DEV_PORT, LOCKED_PREVIEW_EVIDENCE_DIR: evidenceDir },
     }) });
   }
   else if (chosen === "free-tier-class-step-unit") {
@@ -567,6 +604,8 @@ function runTestProfile(profile, { json }) {
       'app/domain/free-tier/approval-v2.real-db.integration.test.ts',
       'app/domain/free-tier/approval-waiting.test.ts',
       'app/routes/app.free-tier.pending/route.v2.test.tsx',
+      'app/routes/app.free-tier.pending/route.draft-request.test.tsx',
+      'app/routes/app.free-tier.pending/route.explore-button.test.tsx',
       'app/routes/free.admin.approve/route.v2.test.tsx',
       'app/routes/app.free-tier.pending/route.test.tsx',
       'app/routes/free.admin.approve/route.loader.test.ts',
@@ -704,7 +743,8 @@ function runTestProfile(profile, { json }) {
     });
   }
   else if (chosen === "free-tier-inapp-unit") {
-    for (const file of ["app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/utils/internal-feature-flags-http.server.test.ts", "app/domain/feature-flags/is-free-tier-enabled.server.test.ts", "app/domain/free-tier/inapp-usage.test.ts", "app/domain/free-tier/inapp-usage.server.test.ts", "app/utils/grading-limit-status.server.test.ts", "app/utils/assignment-quota.server.test.ts", "app/utils/entitlements.server.test.ts", "app/domain/free-tier/class-seat-cap.test.ts", "app/utils/lesson-planner/lesson-planner-quota.server.test.ts", "app/routes/app/route.test.tsx", "app/components/assignments/assignment-creation-sheet.test.tsx"]) runWebApp(file, ["test", file]);
+    for (const file of ["app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/utils/internal-feature-flags-http.server.test.ts", "app/domain/feature-flags/is-free-tier-enabled.server.test.ts", "app/domain/free-tier/inapp-usage.test.ts",
+      "app/domain/free-tier/usage-nav-meter.test.ts", "app/domain/free-tier/inapp-usage.server.test.ts", "app/domain/free-tier/site-license-locked-assignment-tiles.test.ts", "app/utils/grading-limit-status.server.test.ts", "app/utils/assignment-quota.server.test.ts", "app/utils/entitlements.server.test.ts", "app/domain/free-tier/class-seat-cap.test.ts", "app/utils/lesson-planner/lesson-planner-quota.server.test.ts", "app/routes/app/route.test.tsx", "app/components/site-license-locked-assignment-tile.test.tsx", "app/components/free-account-usage.locked-tiles.test.tsx", "app/components/assignments/assignment-creation-sheet.test.tsx"]) runWebApp(file, ["test", file]);
   }
   else if (chosen === "free-tier-inapp-browser") {
     const local = requireConfig();
@@ -766,9 +806,17 @@ function runTestProfile(profile, { json }) {
   else if (chosen === "demo-feedback-browser") {
     const local = requireConfig();
     if (!['localhost', '127.0.0.1'].includes(new URL(local.DATABASE_URL).hostname)) throw new Error('Demo feedback E2E requires the isolated local database');
+    results.push({
+      id: 'demo-feedback-bundle-fixture',
+      ...execute(
+        selected.bun,
+        ['run', '--cwd', 'packages/prisma', 'seed-free-tier-bundle-assignment-types'],
+        { json, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL }, timeout: 120000 }
+      ),
+    });
     results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.demo-feedback.config.ts", "--workers=1"], {
-      json, cwd: webAppRoot, timeout: 180000,
-      env: { ...selected.env, CI: '1', E2E_DATABASE_URL: local.DATABASE_URL, DEMO_FEEDBACK_BASE_URL: `http://127.0.0.1:${local.DEV_PORT}` },
+      json, cwd: webAppRoot, timeout: 900000,
+      env: { ...selected.env, CI: '1', TESTER_FEEDBACK_ENABLED: 'true', E2E_DATABASE_URL: local.DATABASE_URL, DEMO_FEEDBACK_BASE_URL: `http://127.0.0.1:${local.DEV_PORT}`, DEV_PANEL_EVIDENCE_DIR: process.env.DEV_PANEL_EVIDENCE_DIR || 'dev-panel-evidence' },
     }) });
   }
   else if (chosen === "unit") run("unit", ["run", "--cwd", "services/web-app", "test"]);
@@ -928,10 +976,10 @@ async function qaPrepare({ json, routes }) {
 
 function help(topic = "root") {
   const pages = {
-    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project internal-integration-config INPUT_JSON --json\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <demo-feedback-unit|demo-feedback-browser|signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-approval-migration|free-tier-approval-unit|free-tier-approval-browser|free-tier-monthly-unit|free-tier-monthly-db|free-tier-monthly-browser|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-grade-declines|internal-grade-declines-integration|internal-free-tier-limits|internal-free-tier-limits-integration|internal-class-code-duplicates|internal-class-code-duplicates-integration|internal-approvals|internal-approvals-integration|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
+    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project internal-integration-config INPUT_JSON --json\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <demo-feedback-unit|demo-feedback-browser|signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-approval-migration|free-tier-approval-unit|free-tier-approval-browser|free-tier-monthly-unit|free-tier-monthly-db|free-tier-monthly-browser|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-grade-declines|internal-grade-declines-integration|internal-free-tier-limits|internal-free-tier-limits-integration|internal-class-code-duplicates|internal-class-code-duplicates-integration|internal-approvals|internal-approvals-integration|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-teacher-trainings|internal-teacher-trainings-integration|internal-assignment-type-writes|internal-assignment-type-writes-integration|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
     fixture: "Usage: ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n",
     dev: "Usage: ./bin/project dev <start|status|stop> [--json]\n",
-    test: "Usage: ./bin/project test --profile <demo-feedback-unit|demo-feedback-browser|signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-approval-migration|free-tier-approval-unit|free-tier-approval-browser|free-tier-monthly-unit|free-tier-monthly-db|free-tier-monthly-browser|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-grade-declines|internal-grade-declines-integration|internal-free-tier-limits|internal-free-tier-limits-integration|internal-class-code-duplicates|internal-class-code-duplicates-integration|internal-approvals|internal-approvals-integration|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
+    test: "Usage: ./bin/project test --profile <demo-feedback-unit|demo-feedback-browser|signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-approval-migration|free-tier-approval-unit|free-tier-approval-browser|free-tier-monthly-unit|free-tier-monthly-db|free-tier-monthly-browser|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-grade-declines|internal-grade-declines-integration|internal-free-tier-limits|internal-free-tier-limits-integration|internal-class-code-duplicates|internal-class-code-duplicates-integration|internal-approvals|internal-approvals-integration|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-teacher-trainings|internal-teacher-trainings-integration|internal-assignment-type-writes|internal-assignment-type-writes-integration|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
   };
   const classStepHelp = "\nAdditional test profiles: free-tier-locked-preview-unit|free-tier-locked-preview-db|free-tier-locked-preview-browser|free-tier-class-step-unit|free-tier-class-step-browser|free-tier-welcome-unit|free-tier-welcome-browser|free-tier-welcome-live-browser|free-tier-welcome-db\n";

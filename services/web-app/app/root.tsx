@@ -45,6 +45,12 @@ import posthog from 'posthog-js';
 import omit from 'lodash/omit';
 import { getMembershipId } from './cookies/membership-id.server.ts';
 import { LocalDevEnvironmentBar } from './components/local-dev-environment-bar.tsx';
+import { DevPanelMount } from './dev-panel/dev-panel-entry.tsx';
+import { devPanelRestoreInlineScript } from './dev-panel/dev-panel-restore-inline.ts';
+import {
+  devPanelEnvBadge,
+  isDevPanelRuntimeEnabled,
+} from './dev-panel/dev-panel-runtime.server.ts';
 import { isLocalDevAuthEnabled } from './utils/local-dev-auth.server.ts';
 import { isBlackboardLtiMockUiEnabled } from './utils/blackboard-lti-mock-ui.server.ts';
 import { useContrastPreference } from './routes/api.preferences.contrast/route.tsx';
@@ -53,9 +59,10 @@ import {
   shouldEnableLocalDevQuickLogin,
 } from './utils/environment-banner.server.ts';
 import {
+  getDevPanelUnlockSeatLabel,
   getPreviewAccessSeat,
   isIsolatedPreviewSeatMode,
-  isPreviewAccessGateEnabled,
+  isPreviewDevLoginAccessCodeRequired,
   previewAccessMiddleware,
 } from './utils/preview-access.server.ts';
 import { uaPartnerMiddleware } from './utils/ua-partner.server.ts';
@@ -103,6 +110,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     url.pathname === '/' ||
     url.pathname === '/info' ||
     /^\/(privacy|terms)(?:\/|\.data)?$/.test(url.pathname) ||
+    // A shared lesson (Lesson Planner run 3) opens without a login.
+    /^\/l\/[\w-]+(?:\.data)?$/.test(url.pathname) ||
     url.pathname === '/auth/preview-access' ||
     url.pathname === '/auth/preview-access.data';
   const cookieHeader = request.headers.get('Cookie');
@@ -112,11 +121,77 @@ export async function loader({ request }: LoaderFunctionArgs) {
     contrastCookie.contrast === 'high' ? 'high' : 'standard';
 
   if (publicLandingPage && !internal) {
+    const previewAccessSeat = isPreviewDevLoginAccessCodeRequired()
+      ? await getPreviewAccessSeat(request)
+      : null;
+    const devPanelUnlockSeatLabel = isPreviewDevLoginAccessCodeRequired()
+      ? await getDevPanelUnlockSeatLabel(request)
+      : null;
+    const devPanelEnabled = isDevPanelRuntimeEnabled();
+    let user = null;
+    if (devPanelEnabled) {
+      const { getUserId } = await import('./utils/auth.server.ts');
+      const { prisma } = await import('./utils/db.server.ts');
+      const userId = await getUserId(request);
+      const membershipWhere = userId
+        ? await getRootMembershipWhere({
+            userId,
+            internal,
+            previewAccessSeat,
+            isolatedPreviewSeatMode: isIsolatedPreviewSeatMode(),
+          })
+        : undefined;
+      const userRecord = userId
+        ? await prisma.user.findUnique({
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              username: true,
+              mustChangePassword: true,
+              isTester: process.env.TESTER_FEEDBACK_ENABLED === 'true',
+              isAdmin: true,
+              memberships: {
+                ...(membershipWhere ? { where: membershipWhere } : {}),
+                orderBy: { createdAt: 'asc' },
+                select: {
+                  id: true,
+                  role: true,
+                  isOrgOwner: true,
+                  organizationId: true,
+                  organization: {
+                    select: {
+                      name: true,
+                      plan: true,
+                      reporterEnabled: true,
+                      classInsightsEnabled: true,
+                      writingPracticeEnabled: true,
+                      submissionActivityEnabled: true,
+                    },
+                  },
+                },
+              },
+            },
+            where: { id: userId },
+          })
+        : null;
+      const membershipId = await getMembershipId(request);
+      const selectedMembership =
+        userRecord?.memberships.find((m) => m.id === membershipId) ??
+        userRecord?.memberships[0];
+      user = userRecord
+        ? {
+            ...userRecord,
+            isAdmin: Boolean(userRecord.isAdmin),
+            selectedMembership,
+          }
+        : null;
+    }
     return data(
       {
         testerFeedbackAvailable: false,
         demoFeedbackAvailable: false,
-        user: null,
+        user,
         internalImpersonation: null,
         requestInfo: {
           hints: getHints(request),
@@ -128,11 +203,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         },
         ENV: getEnv(),
-        bannerWarning: null,
-        localDevQuickLogin: { enabled: false },
-        previewAccessGateEnabled: isPreviewAccessGateEnabled(),
-        previewAccessSeat: null,
-        blackboardLtiMockEnabled: false,
+        bannerWarning: getEnvironmentBannerWarning(request.url),
+        localDevQuickLogin: {
+          enabled: shouldEnableLocalDevQuickLogin({
+            bannerWarning: getEnvironmentBannerWarning(request.url),
+            localDevAuthEnabled: isLocalDevAuthEnabled(),
+          }),
+        },
+        previewAccessGateEnabled: isPreviewDevLoginAccessCodeRequired(),
+        previewAccessSeat,
+        devPanelUnlockSeatLabel,
+        blackboardLtiMockEnabled: isBlackboardLtiMockUiEnabled(),
+        devPanelEnabled,
+        devPanelEnvBadge: devPanelEnvBadge(),
         lessonPlannerEnabled: false,
         loungeCommunityEnabled: false,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
@@ -155,8 +238,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     desc: 'getUserId in root',
   });
   const { prisma } = await import('./utils/db.server.ts');
-  const previewAccessSeat = isPreviewAccessGateEnabled()
+  const previewAccessSeat = isPreviewDevLoginAccessCodeRequired()
     ? await getPreviewAccessSeat(request)
+    : null;
+  const devPanelUnlockSeatLabel = isPreviewDevLoginAccessCodeRequired()
+    ? await getDevPanelUnlockSeatLabel(request)
     : null;
   const membershipWhere = userId
     ? await getRootMembershipWhere({
@@ -246,11 +332,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return data(
     {
-      user: {
-        ...user,
-        isAdmin: Boolean(user?.isAdmin),
-        selectedMembership: membership,
-      },
+      user: user
+        ? {
+            ...user,
+            isAdmin: Boolean(user.isAdmin),
+            selectedMembership: membership,
+          }
+        : null,
       testerFeedbackAvailable: process.env.TESTER_FEEDBACK_ENABLED === 'true' && Boolean(user?.isTester),
       demoFeedbackAvailable: Boolean(userId) && !internal && await isDemoFeedbackAvailable(),
       lessonPlannerEnabled,
@@ -269,9 +357,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
       localDevQuickLogin: {
         enabled: localDevQuickLoginEnabled,
       },
-      previewAccessGateEnabled: isPreviewAccessGateEnabled(),
+      previewAccessGateEnabled: isPreviewDevLoginAccessCodeRequired(),
       previewAccessSeat,
+      devPanelUnlockSeatLabel,
       blackboardLtiMockEnabled: isBlackboardLtiMockUiEnabled(),
+      devPanelEnabled: isDevPanelRuntimeEnabled(),
+      devPanelEnvBadge: devPanelEnvBadge(),
       impersonation,
       internalImpersonation: internal ? { ...internal, email: user?.email ?? internal.userId } : null,
       toast,
@@ -321,6 +412,15 @@ function Document({
         />
         <meta name="theme-color" content="#ffffff" />
         <Links />
+        {typeof __YAWP_DEV_PANEL_BUILD__ !== 'undefined' &&
+        __YAWP_DEV_PANEL_BUILD__ ? (
+          <script
+            nonce={nonce}
+            dangerouslySetInnerHTML={{
+              __html: devPanelRestoreInlineScript(),
+            }}
+          />
+        ) : null}
       </head>
       <body style={internal ? { paddingTop: '4rem' } : undefined}>
         {internal ? (
@@ -375,7 +475,9 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
           if (response.ok) {
             window.location.href = '/app';
           }
-        } catch (error) {}
+        } catch {
+          // Dev-only window.authenticate helper: network failures need no UI signal.
+        }
       };
     }
 
@@ -409,16 +511,24 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         },
       });
 
-      // Identify user if logged in
-      if (data.user) {
-        posthog.identify(data.user.id, {
-          ...(data.user.email ? { email: data.user.email } : {}),
-          ...(data.user.username ? { username: data.user.username } : {}),
-          name: data.user.name,
-          membership_id: data.user.selectedMembership?.id,
-          is_admin: data.user.isAdmin,
-          is_owner: data.user.selectedMembership?.isOrgOwner,
-          ...omit(data.user, ['id', 'email', 'name', 'username']),
+      const publicLandingPath =
+        data.requestInfo.path === '/' ||
+        data.requestInfo.path === '/info' ||
+        data.requestInfo.path === '/privacy' ||
+        data.requestInfo.path === '/terms';
+      const shouldIdentifyUser =
+        Boolean(data.user?.id) &&
+        !(publicLandingPath && !data.devPanelEnabled);
+      if (shouldIdentifyUser && data.user?.id) {
+        const identifiedUser = data.user;
+        posthog.identify(identifiedUser.id, {
+          ...(identifiedUser.email ? { email: identifiedUser.email } : {}),
+          ...(identifiedUser.username ? { username: identifiedUser.username } : {}),
+          name: identifiedUser.name,
+          membership_id: identifiedUser.selectedMembership?.id,
+          is_admin: identifiedUser.isAdmin,
+          is_owner: identifiedUser.selectedMembership?.isOrgOwner,
+          ...omit(identifiedUser, ['id', 'email', 'name', 'username']),
         });
       }
     }
@@ -430,7 +540,13 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
       env={data.ENV}
       contrastPreference={contrastPreference}
     >
-      {data.bannerWarning && !data.internalImpersonation ? (
+      {data.devPanelEnabled && !data.internalImpersonation ? (
+        <DevPanelMount
+          envBadge={data.devPanelEnvBadge}
+          previewAccessGateEnabled={data.previewAccessGateEnabled}
+          previewAccessSeatLabel={data.devPanelUnlockSeatLabel ?? null}
+        />
+      ) : data.bannerWarning && !data.internalImpersonation ? (
         <LocalDevEnvironmentBar
           bannerWarning={data.bannerWarning}
           localDevQuickLogin={data.localDevQuickLogin}
@@ -440,13 +556,29 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         />
       ) : null}
       <GlobalLoading />
-      <div data-feedback-content-frame className="flex h-screen min-h-screen flex-col justify-between">
+      <div
+        data-yawp-app-shell
+        data-feedback-content-frame
+        className="flex h-screen min-h-screen flex-col justify-between"
+      >
         <div className="flex-1 bg-background">
           <Outlet />
         </div>
       </div>
-      {data.testerFeedbackAvailable && !data.demoFeedbackAvailable ? <TesterFeedbackWidget /> : null}
-      {data.demoFeedbackAvailable ? <DemoFeedbackWidget analytics={data.ENV.POSTHOG_API_KEY && !data.internalImpersonation ? posthog : undefined} /> : null}
+      {!data.internalImpersonation &&
+      data.testerFeedbackAvailable &&
+      !data.demoFeedbackAvailable ? (
+        <TesterFeedbackWidget />
+      ) : null}
+      {!data.devPanelEnabled && data.demoFeedbackAvailable ? (
+        <DemoFeedbackWidget
+          analytics={
+            data.ENV.POSTHOG_API_KEY && !data.internalImpersonation
+              ? posthog
+              : undefined
+          }
+        />
+      ) : null}
       <Toaster toast={data.toast} />
     </Document>
   );

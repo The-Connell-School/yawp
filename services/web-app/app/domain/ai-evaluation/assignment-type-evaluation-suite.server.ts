@@ -97,10 +97,7 @@ export async function runAssignmentTypeEvaluationSuite({
         criterion: evaluationCase.criterion,
         expectedOutput: evaluationCase.expectedOutputJson ?? null,
         status: 'fail',
-        evidence:
-          error instanceof Error
-            ? error.message
-            : 'This evaluation case could not run.',
+        evidence: 'This evaluation case could not run.',
         gradingOutput: null,
         responseContract: {
           status: 'blocked',

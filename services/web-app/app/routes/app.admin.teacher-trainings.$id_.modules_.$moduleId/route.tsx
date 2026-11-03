@@ -9,6 +9,7 @@ import { TrashIcon, VideoIcon, FileIcon, Plus, Upload } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { prisma } from '~/utils/db.server';
+import * as trainingAdmin from '~/domain/teacher-trainings/teacher-training-admin.server';
 import { useFetcher } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { getUserId } from '~/utils/auth.server';
@@ -27,6 +28,7 @@ import React from 'react';
 import { useMultipartUpload } from '~/hooks/useMultipartUpload';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { requireAdmin } from '~/utils/auth.server';
+import { buildSafeErrorScalarsForLog } from '~/utils/error-log-scalars';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
@@ -83,9 +85,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const intent = formData.get('intent');
 
   if (intent === 'deleteModule') {
-    await prisma.teacherTrainingModule.delete({
-      where: { id: params.moduleId },
-    });
+    await trainingAdmin.deleteModule(prisma, params.moduleId!);
 
     return redirect(`/app/admin/teacher-trainings/${params.id}`);
   }
@@ -110,14 +110,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       ? Math.floor(Number(videoDurationStr))
       : null;
 
-    await prisma.teacherTrainingModule.update({
-      where: { id: params.moduleId },
-      data: {
-        title,
-        description: description || null,
-        ...(videoS3Key ? { videoS3Key } : {}),
-        ...(videoDuration !== undefined && { videoDuration }),
-      },
+    await trainingAdmin.updateModule(prisma, params.moduleId!, {
+      title,
+      description: description || null,
+      ...(videoS3Key ? { videoS3Key } : {}),
+      ...(videoDuration !== undefined && { videoDuration }),
     });
 
     return dataResponse({ status: 'success' });
@@ -136,13 +133,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
           const arrayBuffer = await file.arrayBuffer();
           const buffer = Buffer.from(arrayBuffer);
 
-          await prisma.teacherTrainingModuleResource.create({
-            data: {
-              name: file.name,
-              contentType: file.type,
-              blob: buffer,
-              teacherTrainingModuleId: params.moduleId!,
-            },
+          await trainingAdmin.createResource(prisma, params.moduleId!, {
+            name: file.name,
+            contentType: file.type,
+            blob: buffer,
           });
         }
       })
@@ -158,9 +152,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Resource ID is required', { status: 400 });
     }
 
-    await prisma.teacherTrainingModuleResource.delete({
-      where: { id: resourceId },
-    });
+    await trainingAdmin.deleteResource(prisma, resourceId);
 
     return dataResponse({ status: 'success' });
   }
@@ -217,7 +209,10 @@ export default function TeacherTrainingModuleRoute() {
         ) as HTMLInputElement | null;
         if (hidden) hidden.value = key;
       } catch (error) {
-        console.error('Could not get video duration:', error);
+        console.error(
+          'teacher_training_video_duration_failed',
+          buildSafeErrorScalarsForLog(error),
+        );
         setVideoDuration(null);
       } finally {
         setIsVideoLoading(false);

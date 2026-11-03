@@ -1,7 +1,11 @@
+import { currentInsightSummary } from '../db-helpers';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { readFile } from 'node:fs/promises';
-import { EDITOR_SELECTOR } from '../test-helpers';
+import {
+  EDITOR_SELECTOR,
+  assertChatControlsInBoundsAtBreakpoints,
+} from '../test-helpers';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 const STUDENT_PASSWORD = 'johndoe';
@@ -115,13 +119,21 @@ async function seedClassInsight(classAssignmentId: string) {
         status: 'ready',
         submissionCount: 12,
         generatedAt: new Date(),
-        summaryJson,
+        summaryJson: await currentInsightSummary(
+          prisma,
+          classAssignmentId,
+          summaryJson
+        ),
       },
       update: {
         status: 'ready',
         submissionCount: 12,
         generatedAt: new Date(),
-        summaryJson,
+        summaryJson: await currentInsightSummary(
+          prisma,
+          classAssignmentId,
+          summaryJson
+        ),
       },
     });
   } finally {
@@ -890,7 +902,7 @@ async function seedBareLessonPlan(e2eContext: {
   }
 }
 
-test.describe('YAWP! Lesson Planner', () => {
+test.describe('Yawp! Lesson Planner', () => {
   test.afterEach(async ({ e2eContext }) => {
     // Seeded lessons would otherwise pile up across tests and retries, and the
     // library legitimately shows every one of them.
@@ -1063,52 +1075,19 @@ test.describe('YAWP! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    const consoleErrors: string[] = [];
-    const pageErrors: string[] = [];
-    page.on('console', (message) => {
-      if (message.type() === 'error') consoleErrors.push(message.text());
-    });
-    page.on('pageerror', (error) => pageErrors.push(error.message));
-
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
-    for (const viewport of [
-      { width: 1440, height: 1000 },
-      { width: 390, height: 844 },
-    ]) {
-      await page.setViewportSize(viewport);
-      await page.goto('/app/lesson-planner');
-
-      const composer = page.getByLabel('Message the Lesson Planner');
-      const send = page.getByRole('button', { name: 'Send message' });
-      await expect(composer).toBeVisible();
-      await expect(send).toBeVisible();
-      if (viewport.width === 390) {
-        await expect(page.getByLabel('Switch lesson')).toBeVisible();
+    await assertChatControlsInBoundsAtBreakpoints(page, {
+      path: '/app/lesson-planner',
+      composerLabel: 'Message the Lesson Planner',
+      sendButtonName: 'Send message',
+      assertMobileControls: async (mobilePage) => {
+        await expect(mobilePage.getByLabel('Switch lesson')).toBeVisible();
         await expect(
-          page.getByRole('button', { name: 'New lesson' })
+          mobilePage.getByRole('button', { name: 'New lesson' })
         ).toBeVisible();
-      }
-
-      for (const control of [composer, send]) {
-        const box = await control.boundingBox();
-        expect(box).not.toBeNull();
-        expect(box!.x).toBeGreaterThanOrEqual(0);
-        expect(box!.y).toBeGreaterThanOrEqual(0);
-        expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
-        expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
-      }
-
-      const overflow = await page.evaluate(() => ({
-        body: document.body.scrollWidth - window.innerWidth,
-        document: document.documentElement.scrollWidth - window.innerWidth,
-      }));
-      expect(overflow.body).toBeLessThanOrEqual(0);
-      expect(overflow.document).toBeLessThanOrEqual(0);
-    }
-
-    expect(consoleErrors).toEqual([]);
-    expect(pageErrors).toEqual([]);
+      },
+    });
   });
 
   /**
@@ -1208,6 +1187,35 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(page.getByText('Four minutes of writing.')).toBeVisible();
     // The bar goes when the lesson arrives.
     await expect(page.getByTestId('planning-progress')).toHaveCount(0);
+  });
+
+  // Kevin (Oct 22): a long reply lands at its top, to read down from, not at
+  // its bottom with the teacher scrolling back up to find where it starts.
+  test('a long reply opens at its top, not its bottom', async ({ page, signIn, e2eContext }) => {
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    const long = ['## Conclusions that land', '', ...Array.from({ length: 60 }, (_, i) => `Step ${i + 1}: four minutes of writing, then a share.\n`)].join('\n');
+    await page.route('**/api/domain/lesson-planner', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'application/x-ndjson; charset=utf-8' },
+        body:
+          JSON.stringify({
+            type: 'done',
+            status: 200,
+            payload: { conversationId: 'streamed-2', messageId: 'streamed-msg-2', reply: long, isNewConversation: true },
+          }) + '\n',
+      });
+    });
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('/app/lesson-planner');
+    await page.waitForLoadState('networkidle');
+    await page.getByLabel('Message the Lesson Planner').fill('Plan a lesson on conclusions');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    const heading = page.getByRole('heading', { name: 'Conclusions that land' });
+    await expect(heading).toBeVisible();
+    await expect(heading).toBeInViewport();
+    await expect(page.getByText('Step 60: four minutes of writing')).not.toBeInViewport();
   });
 
   /**
@@ -1880,7 +1888,7 @@ test.describe('YAWP! Lesson Planner', () => {
     await handout.getByTestId('material-toggle').click();
     await save;
     await expect(handout.getByTestId('material-toggle')).toContainText(
-      'In the stack'
+      'In your lesson'
     );
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
@@ -1916,11 +1924,11 @@ test.describe('YAWP! Lesson Planner', () => {
     await page.reload();
     await expect(
       page.getByTestId('material-card').first().getByTestId('material-toggle')
-    ).toContainText('In the stack');
+    ).toContainText('In your lesson');
     // The one beside it is untouched.
     await expect(
       page.getByTestId('material-card').nth(1).getByTestId('material-toggle')
-    ).toContainText('Add to stack');
+    ).toContainText('Add to lesson');
   });
 
   test('combines the student pieces into one handout to lead a class through', async ({
@@ -2359,10 +2367,10 @@ test.describe('YAWP! Lesson Planner', () => {
 
     // The original stops claiming to be filed — there is one handout, not two.
     await expect(cards.nth(0).getByTestId('material-toggle')).toContainText(
-      'Add to stack'
+      'Add to lesson'
     );
     await expect(cards.nth(1).getByTestId('material-toggle')).toContainText(
-      'In the stack'
+      'In your lesson'
     );
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
@@ -2517,7 +2525,7 @@ test.describe('YAWP! Lesson Planner', () => {
     );
     await page.getByTestId('deck-toggle').click();
     await save;
-    await expect(page.getByTestId('deck-toggle')).toContainText('In the stack');
+    await expect(page.getByTestId('deck-toggle')).toContainText('In your lesson');
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
     // The seeded reply is kept too, so the filed deck is the later card.
@@ -2548,6 +2556,8 @@ test.describe('YAWP! Lesson Planner', () => {
     const slider = page.getByRole('slider', {
       name: /lesson length in minutes/i,
     });
+    // Filled before hydration, the change never reaches React.
+    await page.waitForLoadState('networkidle');
     await slider.fill('90');
     await expect(page.getByTestId('lesson-minutes-value')).toHaveText(
       '1 hr 30 min'
@@ -3009,7 +3019,7 @@ test.describe('YAWP! Lesson Planner', () => {
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
 
     const toggle = page.getByTestId('exit-ticket-stack-toggle');
-    await expect(toggle).toContainText('Add to stack');
+    await expect(toggle).toContainText('Add to lesson');
     const save = page.waitForResponse(
       (response) =>
         response.url().includes('/api/domain/lesson-planner/packet') &&
@@ -3017,7 +3027,7 @@ test.describe('YAWP! Lesson Planner', () => {
     );
     await toggle.click();
     await save;
-    await expect(toggle).toContainText('In the stack');
+    await expect(toggle).toContainText('In your lesson');
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
     await expect(page.getByText(/exit ticket/i).first()).toBeVisible();

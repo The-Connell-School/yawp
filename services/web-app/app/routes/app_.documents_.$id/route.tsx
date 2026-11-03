@@ -194,6 +194,7 @@ const assignmentModuleSessionsInclude = {
   assignmentModule: {
     include: {
       instructions: {
+        omit: { answerKey: true },
         orderBy: { position: 'asc' as const },
         include: {
           buttons: {
@@ -204,6 +205,7 @@ const assignmentModuleSessionsInclude = {
       assignmentType: {
         select: {
           assignmentModules: {
+            where: { deletedAt: null },
             select: { id: true, position: true },
             orderBy: { position: 'asc' as const },
           },
@@ -468,7 +470,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       moduleSessionsByModuleId.set(session.assignmentModuleId, session);
     }
   }
-  const orderedModuleSessions = Array.from(moduleSessionsByModuleId.values());
+  const orderedModuleSessions = Array.from(
+    moduleSessionsByModuleId.values()
+  ).filter((session) => session.assignmentModule.deletedAt == null);
 
   const { currentCms, currentCmsIdx } = resolveCurrentAssignmentModuleSession(
     orderedModuleSessions,
@@ -549,6 +553,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 export function shouldRevalidate(args: ShouldRevalidateFunctionArgs) {
+  // Teacher prev/next and the student dropdown hop between document ids on this
+  // route. Without a pathname check the loader stays on the first document and
+  // navigation looks broken even though the URL updates.
+  if (args.currentUrl.pathname !== args.nextUrl.pathname) {
+    return true;
+  }
+
   // Revalidate when the module session index changes (navigating between modules).
   const currentCmsIdx = args.currentUrl.searchParams.get('cmsIdx');
   const nextCmsIdx = args.nextUrl.searchParams.get('cmsIdx');
@@ -801,6 +812,9 @@ export default function Route() {
     onSubmitted: (newSubmission) => {
       setIsFinalizeDialogOpen(false);
       setSubmissionTitle('');
+      if (titleInputRef.current && newSubmission.title.trim()) {
+        titleInputRef.current.value = newSubmission.title;
+      }
       setLocalSubmissions((prev) => [
         {
           ...newSubmission,

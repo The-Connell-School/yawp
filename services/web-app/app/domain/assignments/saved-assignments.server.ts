@@ -8,6 +8,7 @@
 // saved assignment re-opens the creation sheet pre-filled.
 
 import { createHash } from 'node:crypto';
+import { SOLO_COLLABORATION_SETTINGS } from '~/domain/assignments/collaboration';
 import type { SavedAssignment } from '~/domain/assignments/saved-assignments';
 import {
   toCollaborationGroupMode,
@@ -141,11 +142,7 @@ export async function saveAssignmentForReuse(params: {
     pointValue,
     gradingAssistantStrictnessLevel: params.gradingAssistantStrictnessLevel,
     tutorEnabled: params.tutorEnabled,
-    // Default to solo so an existing caller that does not pass collaboration
-    // settings keeps saving ordinary single-author assignments.
-    collaborationEnabled: params.collaborationEnabled ?? false,
-    collaborationGroupMode: params.collaborationGroupMode ?? 'teacher',
-    collaborationGroupSize: params.collaborationGroupSize ?? null,
+    ...SOLO_COLLABORATION_SETTINGS,
   };
 
   const row = await prisma.savedAssignment.upsert({

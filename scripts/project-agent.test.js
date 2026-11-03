@@ -181,10 +181,10 @@ describe("Yawp project agent CLI", () => {
 
   test("rejects Bun older than the package-manager contract", () => {
     const selected = selectCompatibleBun(["old", "pinned"], (candidate) => ({
-      old: "1.2.2",
-      pinned: "1.3.1",
+      old: "1.3.1",
+      pinned: "1.4.4",
     })[candidate]);
-    expect(selected).toEqual({ executable: "pinned", version: "1.3.1" });
+    expect(selected).toEqual({ executable: "pinned", version: "1.4.4" });
   });
 
   test("parses the generated worktree configuration without evaluating shell", () => {
@@ -238,7 +238,7 @@ describe("Yawp project agent CLI", () => {
     expect(setup).not.toContain("copy_optional_env_value ANTHROPIC_API_KEY");
     const ci = fs.readFileSync(path.join(root, ".github", "workflows", "ci.yml"), "utf8");
     expect(ci).not.toMatch(/node-version:\s*20\b/);
-    expect(ci).toMatch(/node-version:\s*22\b/);
+    expect(ci).toMatch(/node-version:\s*22\.23\.4\b/);
   });
 
   test("worktree setup preserves Record-reserved ports from existing config", () => {
@@ -256,6 +256,12 @@ describe("Yawp project agent CLI", () => {
       path.join(scriptsDir, "worktree-local-setup.sh")
     );
     fs.chmodSync(path.join(scriptsDir, "worktree-local-setup.sh"), 0o755);
+    fs.mkdirSync(path.join(scriptsDir, "ci"), { recursive: true });
+    fs.copyFileSync(
+      path.join(root, "scripts", "ci", "release-docker-host-port.sh"),
+      path.join(scriptsDir, "ci", "release-docker-host-port.sh")
+    );
+    fs.chmodSync(path.join(scriptsDir, "ci", "release-docker-host-port.sh"), 0o755);
     fs.writeFileSync(
       path.join(configDir, "config.env"),
       [
@@ -277,6 +283,7 @@ describe("Yawp project agent CLI", () => {
       `#!/usr/bin/env bash
 case "$1" in
   ps) exit 0 ;;
+  rm) exit 0 ;;
   inspect)
     if [[ "$2" == "-f" ]]; then echo true; fi
     exit 0

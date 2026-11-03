@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test, mock } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test, mock } from 'bun:test';
 const transport = mock(async (_args: any) => ({ status: 'success' as const }));
 mock.module('~/utils/email.server', () => ({ sendEmail: transport }));
 import { prisma } from '~/utils/db.server';
@@ -8,7 +8,7 @@ import * as token from '~/routes/api.free-tier.token/route';
 import { hashToken, releaseBatch } from './service.server';
 const local = process.env.FREE_WELCOME_DB_TESTS === '1' ? test : test.skip;
 const prefix = `welcome-route-${Date.now()}`;
-const flagName = 'feature_flag.free-tier-onboarding-v2';
+const flagName = 'feature_flag.free_tier';
 const baseFlag = 'feature_flag.free_tier';
 const paths = ['free', 'waitlist', 'token'] as const;
 let saved: any[] = [];
@@ -24,8 +24,16 @@ async function post(path: typeof paths[number], body: object) {
   const request = new Request(`http://localhost/${path === 'free' ? 'free?index' : 'api/free-tier/' + path}`, {
     method: 'POST', headers, body: path === 'free' ? new URLSearchParams(body as Record<string, string>) : JSON.stringify(body),
   });
-  const result = await ({ free, waitlist, token }[path]).action({ request } as never);
-  return result instanceof Response ? { status: result.status, body: await result.json().catch(() => null) } : { status: 200, body: result };
+  try {
+    const result = await ({ free, waitlist, token }[path]).action({ request } as never);
+    return result instanceof Response ? { status: result.status, body: await result.json().catch(() => null) } : { status: 200, body: result };
+  } catch (error) {
+    const init = (error as { init?: { status?: number }; data?: unknown })?.init;
+    if (init?.status === 404) {
+      return { status: 404, body: (error as { data?: unknown }).data ?? null };
+    }
+    throw error;
+  }
 }
 async function fixture(suffix: string, override: object = {}) {
   const credential = prefix + suffix;
@@ -51,6 +59,7 @@ afterAll(async () => {
   }
   await prisma.$disconnect();
 });
+describe.serial('public decline by path', () => {
 for (const path of paths) {
   local(`${path}: decline has no admission side effects, duplicates preserve first write and later eligible/off cannot admit`, async () => {
     await flag('true');
@@ -71,12 +80,17 @@ for (const path of paths) {
     const promotion = { ...fields, gradeLevel: '11' };
     expect((await post(path, promotion)).body.ok).toBe(true);
     await flag('false');
-    expect((await post(path, promotion)).body.ok).toBe(true);
+    const flagOffPost = await post(path, promotion);
+    if (path === 'free') expect(flagOffPost.status).toBe(404);
+    else expect(flagOffPost.body.ok).toBe(true);
     expect(await prisma.freeTierApplication.findUniqueOrThrow({ where: { id: row.id } })).toEqual(row);
     expect((await prisma.acquisitionToken.findUniqueOrThrow({ where: { id: event.id } })).uses).toBe(0);
     expect((await releaseBatch({ applicationIds: [row.id] })).released).toBe(0);
     expect(transport).not.toHaveBeenCalled();
   });
+}
+});
+for (const path of paths) {
   local(`${path}: an existing eligible application remains unchanged under a decline submission`, async () => {
     await flag('true');
     const fields = input(path + '-existing');

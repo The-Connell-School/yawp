@@ -1041,10 +1041,22 @@ describe('additive reviewer contract', () => {
       const response = await readTesterFeedback(new Request('https://demo.example/api/internal/v1/tester-feedback'), deps, mode);
       expect(response.status).toBe(200);
       const body = await response.json();
-      expect(body.entries[0]).toMatchObject({ actions: reviewed.actions, userEmail: reviewed.userEmail, userName: reviewed.userName });
-      expect(body.entries[1]).toMatchObject({ actions: null, userEmail: null, userName: null });
+      expect(body.entries[0]).toMatchObject({
+        actions: reviewed.actions,
+        userEmail: reviewed.userEmail,
+        userName: reviewed.userName,
+        hasScreenshot: false,
+      });
+      expect(body.entries[1]).toMatchObject({
+        actions: null,
+        userEmail: null,
+        userName: null,
+        hasScreenshot: false,
+      });
       for (const row of body.entries) {
+        expect(row).not.toHaveProperty('screenshot');
         for (const key of ['id', 'userId', 'url', 'userAgent', 'whatIDid', 'whatHappened', 'whatIWish', 'environment', 'createdAt']) expect(typeof row[key]).toBe('string');
+        expect(typeof row.hasScreenshot).toBe('boolean');
       }
     }
   });

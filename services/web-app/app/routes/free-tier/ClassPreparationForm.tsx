@@ -27,8 +27,8 @@ export function ClassPreparationForm({
 }) {
   return (
     <FreeTierAuthCard
-      title="Create your class"
-      subtitle="A little setup now, so you’re ready when your administrator approves."
+      title="Let’s set up your classroom"
+      subtitle="Your free license covers one class of up to 35 students. Tell us a little about the class you’d like to start with."
       footer={<FreeTierSignOut />}
     >
       <FreeTierOnboardingTimeline current={0} />
@@ -38,7 +38,7 @@ export function ClassPreparationForm({
           <FreeTierTextInput
             id="className"
             name="className"
-            placeholder="AP English 11"
+            placeholder="English 9, AP English Language, World History"
             required
             maxLength={MAX_CLASS_NAME}
             defaultValue={className}
@@ -70,7 +70,7 @@ export function ClassPreparationForm({
             <option value="">Choose a grade</option>
             {CLASS_GRADES.map((value) => (
               <option key={value} value={value}>
-                {value === 'mixed' ? 'Mixed grades' : value}
+                {value === 'mixed' ? 'Mixed high school grades' : value}
               </option>
             ))}
           </select>
@@ -85,7 +85,8 @@ export function ClassPreparationForm({
           </p>
         ) : null}
         <p className="text-sm text-muted-foreground">
-          You can change these details later. Your students will join after
+          Pick the class where you’d most like to see your students’ writing
+          grow. You can rename it later. Your students will join after
           approval.
         </p>
         {error ? (
@@ -94,7 +95,7 @@ export function ClassPreparationForm({
           </p>
         ) : null}
         <FreeTierButton type="submit" disabled={saving}>
-          {saving ? 'Saving…' : 'Continue'}
+          {saving ? 'Saving…' : 'Create my class'}
         </FreeTierButton>
       </Form>
     </FreeTierAuthCard>

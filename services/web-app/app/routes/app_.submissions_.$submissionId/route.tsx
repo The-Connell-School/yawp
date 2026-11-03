@@ -4,6 +4,7 @@ import {
   type TeacherNotesUiState,
 } from '~/domain/grading/teacher-notes';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { summarizeGradingRubric } from '~/domain/assignment-types/grading-rubric-summary';
 import { TeacherNotes } from './teacher-grading/teacher-notes';
 import { invariant } from '@epic-web/invariant';
 import {
@@ -66,6 +67,7 @@ import { parseAssistantSuggestion } from '~/domain/grading/assistant-suggestion'
 import { resolveGrammarHighlightingEnabled } from '~/domain/assignment-types/rubric-category-options';
 import { resolveRevisionEntryPath } from '~/domain/revisions/revision-flow';
 import { findExcerptRange } from '~/utils/excerpt-position';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import {
   readLastNonDocumentRoute,
   sanitizeExitTarget,
@@ -113,7 +115,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function shouldRevalidate({
   defaultShouldRevalidate,
+  currentUrl,
+  nextUrl,
 }: ShouldRevalidateFunctionArgs) {
+  if (currentUrl.pathname !== nextUrl.pathname) {
+    return true;
+  }
   return defaultShouldRevalidate;
 }
 
@@ -384,10 +391,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             assignmentTypeId,
             assignmentId: submission.document.assignment?.id ?? null,
           }).catch((error) => {
-            console.error(
-              'Failed to resolve assignment type grading config for submission view',
-              { assignmentTypeId, error }
-            );
+            console.error('submission_grading_config_resolve_failed', {
+              assignmentTypeId,
+              error: buildSafeErrorForLog(error),
+            });
             return null;
           })
         : Promise.resolve(null),
@@ -499,11 +506,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isAdmin,
   });
 
+  const gradingRubricSummary =
+    gradingConfig != null
+      ? summarizeGradingRubric(gradingConfig, {
+          libraryRubricTitle: gradingConfig.rubricName ?? null,
+        })
+      : null;
+
   const submissionPayload = {
     ...publicSubmission,
     comments: sortedComments,
     rubricConfig,
     grammarHighlightingEnabled,
+    gradingRubricSummary,
     // What the Grading Assistant last suggested, so a teacher who has since
     // edited the grade can put the suggestions back.
     ...(hideUnreleasedGrade
@@ -1479,6 +1494,7 @@ function SubmissionDetail({
               initialGradingAssistantStrictnessLevel={
                 submission.document.assignment?.gradingAssistantStrictnessLevel
               }
+              gradingRubricSummary={submission.gradingRubricSummary ?? null}
             />
           ) : (
             <>
@@ -1610,11 +1626,11 @@ function SubmissionDetail({
                     </div>
                   ) : null}
                 </div>
-                <p className="mt-1.5 text-sm leading-snug select-text">
+                <p className="mt-1.5 text-sm leading-relaxed text-foreground select-text">
                   {currentIssue.message}
                 </p>
                 {currentIssue.rule ? (
-                  <p className="mt-1.5 text-xs text-muted-foreground select-text border-t pt-1.5">
+                  <p className="mt-1.5 text-sm text-foreground/75 select-text border-t pt-1.5">
                     Rule: {currentIssue.rule}
                   </p>
                 ) : null}

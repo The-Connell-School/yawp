@@ -49,6 +49,16 @@ export function applicationIdFromSignedToken(token: string): string | null {
   return decoded?.payload.applicationId ?? null;
 }
 
+/** Read signed JWT payload from a full admin link token (signed segment + opaque). */
+export function readSignedLinkPayloadFromAdminToken(
+  token: string
+): SignedLinkPayload | null {
+  const segments = token.split('.');
+  if (segments.length !== 3) return null;
+  const decoded = decodeToken(`${segments[0]}.${segments[1]}`);
+  return decoded?.payload ?? null;
+}
+
 function decodeToken(token: string): { payload: SignedLinkPayload; secret: string } | null {
   const parts = token.split('.');
   if (parts.length !== 2) return null;
@@ -73,13 +83,12 @@ function decodeToken(token: string): { payload: SignedLinkPayload; secret: strin
   return null;
 }
 
-export async function mintSignedLink(args: {
+async function mintSignedLinkCore(args: {
   applicationId: string;
   purpose: FreeTierSignedLinkPurpose;
   ttlMs?: number;
   tx?: Prisma.TransactionClient;
 }) {
-  assertFreeTierRuntimeConfigured();
   const secrets = linkSecrets();
   if (!secrets.length) throw new Error('FREE_TIER_LINK_HMAC_SECRET is not configured');
   const secret = secrets[0]!;
@@ -109,6 +118,29 @@ export async function mintSignedLink(args: {
   };
   const signed = encodeToken(payload, secret);
   return { token: `${signed}.${opaque}`, linkId: row.id, expiresAt: row.expiresAt };
+}
+
+export async function mintSignedLink(args: {
+  applicationId: string;
+  purpose: FreeTierSignedLinkPurpose;
+  ttlMs?: number;
+  tx?: Prisma.TransactionClient;
+}) {
+  assertFreeTierRuntimeConfigured();
+  return mintSignedLinkCore(args);
+}
+
+/** Dev panel jumps use same-origin redirects; signing secret only, no PRIMARY_APP_URL. */
+export async function mintSignedLinkForDevPanel(args: {
+  applicationId: string;
+  purpose: FreeTierSignedLinkPurpose;
+  ttlMs?: number;
+  tx?: Prisma.TransactionClient;
+}) {
+  if (!isFreeTierLinkSigningConfigured()) {
+    throw new Error('FREE_TIER_LINK_HMAC_SECRET is not configured');
+  }
+  return mintSignedLinkCore(args);
 }
 
 export type ConsumeLinkResult =
@@ -226,6 +258,39 @@ export async function abandonMintedSignedLinks(linkIds: string[]) {
     where: { id: { in: ids }, usedAt: null },
     data: { usedAt: now },
   });
+}
+
+/** Opaque hash + signature verified; ignores JWT/link expiry (S9a naming on expired links). */
+export async function applicationIdIfOpaqueHashVerified(args: {
+  token: string;
+  expectedPurpose: FreeTierSignedLinkPurpose;
+}): Promise<string | null> {
+  const segments = args.token.split('.');
+  if (segments.length !== 3) return null;
+  const signedPart = `${segments[0]}.${segments[1]}`;
+  const opaque = segments[2]!;
+  const decoded = decodeToken(signedPart);
+  if (!decoded) return null;
+  const { payload } = decoded;
+  if (payload.purpose !== args.expectedPurpose) return null;
+  const tokenHash = hashToken(opaque);
+  const row = await prisma.freeTierSignedLink.findUnique({
+    where: { id: payload.linkId },
+    select: {
+      applicationId: true,
+      purpose: true,
+      tokenHash: true,
+    },
+  });
+  if (
+    !row ||
+    row.applicationId !== payload.applicationId ||
+    row.purpose !== args.expectedPurpose
+  ) {
+    return null;
+  }
+  if (row.tokenHash !== tokenHash) return null;
+  return row.applicationId;
 }
 
 export async function peekSignedLink(args: {

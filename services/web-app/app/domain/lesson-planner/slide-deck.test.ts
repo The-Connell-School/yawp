@@ -150,6 +150,13 @@ describe('parseSlideDeck', () => {
       if (layout === 'statement' || layout === 'prompt' || layout === 'quote') {
         slide.body = 'The body.';
       }
+      // The gallery templates, each with the slot it is made of.
+      if (['big_idea', 'write', 'excerpt', 'exit', 'discuss', 'look'].includes(layout)) {
+        slide.body = 'The body.';
+      }
+      if (layout === 'agenda') slide.agenda = [{ title: 'Hook', minutes: 10 }];
+      if (layout === 'notes') slide.facts = ['One fact.'];
+      if (layout === 'read') slide.tasks = [{ verb: 'Circle', text: 'names' }];
       const parsed = parseSlideDeck(fenced({ title: 'Deck', slides: [slide] }));
       expect(parsed?.deck.slides[0]!.layout).toBe(layout);
     }
@@ -650,5 +657,17 @@ describe('parseSlideDeck — forgiving about how the model writes it', () => {
       })
     );
     expect(parsed?.deck.slides[0]!.minutes).toBe(5);
+  });
+
+  test('drops art ids that are not in the shipped deck-art registry', () => {
+    const json = JSON.stringify({
+      title: 'Deck',
+      art: 'klee-castle-sun',
+      slides: [{ layout: 'title', title: 'Day', speakerNotes: 'Open.', minutes: 1 }],
+    });
+    const validated = validateSlideDeck(json);
+    expect(validated.ok).toBe(true);
+    if (!validated.ok) throw new Error('expected valid deck');
+    expect(validated.deck.art).toBeUndefined();
   });
 });

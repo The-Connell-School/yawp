@@ -5,7 +5,7 @@ import { prisma } from '~/utils/db.server';
 import { isLocalDevAuthEnabled } from '~/utils/local-dev-auth.server';
 import {
   getPreviewAccessSeat,
-  isPreviewAccessGateEnabled,
+  isPreviewDevLoginAccessCodeRequired,
 } from '~/utils/preview-access.server';
 import {
   createDevLoginAction,
@@ -28,7 +28,7 @@ export const devLoginAction = createDevLoginAction({
   sessionStorage: authSessionStorage,
   membershipCookie: setMembershipId,
   localDevAuthEnabled: isLocalDevAuthEnabled,
-  previewGateEnabled: isPreviewAccessGateEnabled,
+  previewGateEnabled: isPreviewDevLoginAccessCodeRequired,
   previewSeatForRequest: getPreviewAccessSeat,
   redirectResponse: (headers) => new Response(null, { status: 302, headers }),
 });
@@ -36,6 +36,6 @@ export const devLoginAction = createDevLoginAction({
 export const devLoginOptionsLoader = createDevLoginOptionsLoader({
   prismaClient: prisma,
   localDevAuthEnabled: isLocalDevAuthEnabled,
-  previewGateEnabled: isPreviewAccessGateEnabled,
+  previewGateEnabled: isPreviewDevLoginAccessCodeRequired,
   previewSeatForRequest: getPreviewAccessSeat,
 });

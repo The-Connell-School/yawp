@@ -103,7 +103,7 @@ for (const width of [1280, 390])
     await shot('signon-35-class-found');
     await page
       .getByRole('button', {
-        name: process.env.SIGNON_BEFORE === '1' ? /I'm new to YAWP/ : /^New/,
+        name: process.env.SIGNON_BEFORE === '1' ? /I'm new to Yawp!/ : /^New/,
       })
       .click();
     if (process.env.SIGNON_BEFORE === '1') {

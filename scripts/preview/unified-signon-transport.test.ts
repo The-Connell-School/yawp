@@ -8,14 +8,15 @@ const workflow = Bun.YAML.parse(readFileSync(new URL('../../.github/workflows/pr
 const policy = workflow.jobs['preview-policy'].steps[0].run;
 for (const action of ['labeled', 'unlabeled']) {
   for (const [label, body, head, base, deploy] of [
-    ['preview-flag:unified-sign-on', '', 'same', 'main', true],
-    ['preview-flag:unified-sign-on', '[skip preview]\nBody', 'same', 'main', false],
-    ['preview-flag:unified-sign-on', '', 'fork', 'main', false],
-    ['preview-flag:unified-sign-on', '', 'same', 'other', false],
-    ['preview-flag:unified-sign-on-extra', '', 'same', 'main', false],
-    ['other-preview-flag:unified-sign-on', '', 'same', 'main', false],
+    ['preview-flag:unified-sign-on-off', '', 'same', 'main', true],
+    ['preview-flag:unified-sign-on-off', '[skip preview]\nBody', 'same', 'main', false],
+    ['preview-flag:unified-sign-on-off', '', 'fork', 'main', false],
+    ['preview-flag:unified-sign-on-off', '', 'same', 'other', false],
+    ['preview-flag:unified-sign-on-off-extra', '', 'same', 'main', false],
+    ['other-preview-flag:unified-sign-on-off', '', 'same', 'main', false],
+    ['preview-flag:unified-sign-on', '', 'same', 'main', false],
     ['unrelated', '', 'same', 'main', false],
-    ['PREVIEW-FLAG:UNIFIED-SIGN-ON', '', 'same', 'main', false],
+    ['PREVIEW-FLAG:UNIFIED-SIGN-ON-OFF', '', 'same', 'main', false],
     ['sanitized-production-data', '', 'same', 'main', true],
   ]) {
     test(`live policy ${action} ${label}, skip=${!!body}, head=${head}, base=${base}`, () => {
@@ -30,7 +31,7 @@ for (const action of ['labeled', 'unlabeled']) {
           PR_FIXTURE: JSON.stringify({ title: 'Fixture', body, headRefName: 'qa/fixture', baseRefName: base, labels: action === 'labeled' ? [{ name: label }] : [] }),
         } });
         expect(readFileSync(output, 'utf8')).toContain(`should_deploy=${deploy}`);
-        expect(readFileSync(output, 'utf8')).toContain(`unified_sign_on=${action === 'labeled' && label === 'preview-flag:unified-sign-on'}`);
+        expect(readFileSync(output, 'utf8')).toContain(`unified_sign_on=${!(action === 'labeled' && label === 'preview-flag:unified-sign-on-off')}`);
       } finally { rmSync(root, { recursive: true, force: true }); }
     });
   }

@@ -56,6 +56,7 @@ type DifferentiationSummary = {
 };
 
 export type ClassInsightSummary = {
+  scoredCount?: number;
   overview: string;
   categories: CategoryInsight[];
   nextSteps: TeachingNextStep[];
@@ -426,6 +427,10 @@ function InsightBody({
       {/* Stat row */}
       <div className="flex flex-wrap items-center gap-2">
         <StatChip value={insight.submissionCount} label="submissions" />
+        {summary.scoredCount != null &&
+          summary.scoredCount < insight.submissionCount && (
+            <StatChip value={summary.scoredCount} label="scored" />
+          )}
         {strengthCount > 0 && (
           <StatChip
             value={strengthCount}

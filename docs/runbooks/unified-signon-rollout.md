@@ -111,13 +111,16 @@ runbook for that later task, not actions performed by this implementation.
    `preview-postgres`, port `5432`. Do not print its URL/password. Do not use a
    shared database, external database, demo or production. No remote SQL writes
    or migrations are authorized by this runbook.
-2. Activation uses the exact, case-sensitive PR label
-   **`preview-flag:unified-sign-on`**. The existing preview workflow handles
-   `labeled` and `unlabeled` events for this label; unrelated labels do not request
-   a deploy. It reads the current live PR labels, emits a boolean and forwards
-   `PREVIEW_UNIFIED_SIGN_ON` with shell quoting through the detached deployment
-   helper, admission wrapper and toolbox configuration. A similar label or a
-   label embedded in another name does not activate the flag.
+2. Every PR preview gets unified sign-on **ON by default**; no label is needed.
+   The exact, case-sensitive PR label **`preview-flag:unified-sign-on-off`**
+   opts one preview out. The existing preview workflow handles `labeled` and
+   `unlabeled` events for that label; unrelated labels (including the retired
+   `preview-flag:unified-sign-on`) do not request a deploy. It reads the current
+   live PR labels, emits a boolean and forwards `PREVIEW_UNIFIED_SIGN_ON` with
+   shell quoting through the detached deployment helper, admission wrapper and
+   toolbox configuration. A similar label or a label embedded in another name
+   does not turn the flag off. Demo and production never run this updater:
+   production stays OFF and demo's value is managed from Internal.
 3. On every deployment, after migrations and **all** seeds (including preview
    seats), the reviewed, read-only mounted
    `scripts/preview/unified-signon-flag.mjs` runs in the toolbox before web rollout.
@@ -133,14 +136,15 @@ runbook for that later task, not actions performed by this implementation.
    constructing a database client. Named environment deployments never invoke
    it. The toolbox alone receives the boolean; it is not a runtime application
    override and does not change the flag's default.
-5. Exact label present writes only `Setting.name = feature_flag.unified-sign-on`,
-   `valueType=json`, `value={"mode":"everyone","orgIds":[]}`. Label absent writes
+5. Opt-out label absent (the default) writes only
+   `Setting.name = feature_flag.unified-sign-on`, `valueType=json`,
+   `value={"mode":"everyone","orgIds":[]}`. Opt-out label present writes
    explicit `{"mode":"off","orgIds":[]}`, including a previously enabled
    database. Upserts are idempotent; unrelated settings are preserved. A seed
    cannot overwrite this final state. Invalid transport or updater failure is
    fatal and prevents rollout; the admission wrapper stops the failed preview.
    Logs report only the selected mode, never connection details. The Setting
-   description identifies `preview deployment label` as its last writer.
+   description identifies the preview deployment as its last writer.
 6. After the authorized workflow succeeds, confirm its exact application and
    control-plane SHAs, then check entry in a fresh browser at the authorized
    hostname. Clear the existing preview access gate with the authorized seat;
@@ -152,18 +156,18 @@ runbook for that later task, not actions performed by this implementation.
 
 ### Removal and rollback
 
-Removing the exact label requests the same gated deployment with `false`; the
-updater restores explicit OFF even for an existing database with unchanged
+Adding the exact opt-out label requests the same gated deployment with `false`;
+the updater restores explicit OFF even for an existing database with unchanged
 tooling. Wait for successful deployment and verify legacy `/auth/login` in a
 fresh request, along with legacy signup/reset and callback 404 when rollback
 verification is authorized. An already-open page can retain its old client state
 until navigation. OFF does not delete accounts, memberships or identities, or
-revoke sessions. An absent label is the rollback source of truth, so later
-redeploys keep OFF; manual management changes on this isolated preview will be
+revoke sessions. The opt-out label is the rollback source of truth, so later
+redeploys keep OFF while it stays on the PR; manual management changes on this isolated preview will be
 overwritten by its next deployment. Coordinate operators accordingly.
 
 The manager's current #565 QA instructions require leaving its flag ON until
-told otherwise; do not remove its label merely to exercise this rollback text.
+told otherwise; do not add the opt-out label merely to exercise this rollback text.
 If a deployment or updater fails, do not claim readback or OFF, bypass its guards,
 add signing keys or edit remote storage. Record the failure and hand it to the
 authorized driver. Rollback requires the same reviewed deployment path and

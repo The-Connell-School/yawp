@@ -1,6 +1,11 @@
 import { afterAll, expect, mock, test } from 'bun:test';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { writeFileSync } from 'node:fs';
+import {
+  mockCardPageChromeForSsr,
+  renderWithCardPageChrome,
+} from '~/components/card-page-chrome.ssr-test-setup';
+
+mockCardPageChromeForSsr({ signedIn: false });
 
 // Keep the page and shared auth layout real; replace router state only.
 const router = { ...(await import('react-router')) };
@@ -24,7 +29,7 @@ for (const [reason, message] of [
 ]) {
   test(`${reason} keeps distinct feedback and waitlist navigation in the current auth layout`, () => {
     error = reason;
-    const html = renderToStaticMarkup(<FreeTierLanding />);
+    const html = renderWithCardPageChrome(<FreeTierLanding />, '/free');
     // Optional local browser evidence uses exactly the DOM asserted here.
     if (process.env.CAP_DENIAL_CAPTURE_PREFIX) {
       writeFileSync(`${process.env.CAP_DENIAL_CAPTURE_PREFIX}-${reason}.html`, html);

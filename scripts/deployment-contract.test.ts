@@ -54,6 +54,66 @@ function listTrackedRepoFiles(): string[] {
     .filter(Boolean);
 }
 
+const thirdPartyWorkflowUse =
+  /^\s*-?\s*uses:\s*(?<reference>\S+)/;
+const pinnedActionSha = /^[0-9a-f]{40}$/i;
+const workflowActionVersionComment = /#\s*(?<label>v[\d.]+(?:\.[\d.]+)*|beta)\b/i;
+
+function listThirdPartyWorkflowUses(): Array<{
+  file: string;
+  line: number;
+  reference: string;
+  lineText: string;
+}> {
+  const workflowDir = join(repoRoot, '.github/workflows');
+  const uses: Array<{
+    file: string;
+    line: number;
+    reference: string;
+    lineText: string;
+  }> = [];
+  for (const name of readdirSync(workflowDir)) {
+    if (!name.endsWith('.yml') && !name.endsWith('.yaml')) continue;
+    const relativePath = join('.github/workflows', name);
+    const lines = readRepoFile(relativePath).split(/\r?\n/);
+    lines.forEach((lineText, index) => {
+      const match = lineText.match(thirdPartyWorkflowUse);
+      if (!match?.groups?.reference) return;
+      const reference = match.groups.reference;
+      if (reference.startsWith('./')) return;
+      if (!reference.includes('/')) return;
+      uses.push({
+        file: name,
+        line: index + 1,
+        reference,
+        lineText,
+      });
+    });
+  }
+  return uses;
+}
+
+describe('GitHub Actions supply-chain contract', () => {
+  test('third-party workflow uses are pinned to full commit SHAs with version comments', () => {
+    const violations: string[] = [];
+    for (const entry of listThirdPartyWorkflowUses()) {
+      const [, ref = ''] = entry.reference.split('@');
+      if (!pinnedActionSha.test(ref)) {
+        violations.push(
+          `${entry.file}:${entry.line} ${entry.reference} (expected owner/action@<40-char-sha>)`
+        );
+        continue;
+      }
+      if (!workflowActionVersionComment.test(entry.lineText)) {
+        violations.push(
+          `${entry.file}:${entry.line} ${entry.reference} (missing # vX.Y.Z or # beta comment)`
+        );
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+});
+
 describe('private preview sign-in code deployment contract', () => {
   test('rendered PR configurations permit private capture; demo and production return 404 with the same secret', async () => {
     const { renderPreviewCompose } = await import('./preview/render-compose.mjs');
@@ -250,6 +310,27 @@ describe('production deployment contract', () => {
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 
+  test('CI smoke shards assign each smoke spec file exactly once', async () => {
+    const { E2E_SMOKE_SHARDS, E2E_SMOKE_SPECS } = await import(
+      '../services/web-app/e2e/smoke-specs.ts'
+    );
+    const assigned: string[] = [];
+    for (let shard = 1; shard <= 6; shard += 1) {
+      assigned.push(...E2E_SMOKE_SHARDS[shard as 1 | 2 | 3 | 4 | 5 | 6]);
+    }
+    expect(assigned.length).toBe(E2E_SMOKE_SPECS.length);
+    expect(new Set(assigned).size).toBe(E2E_SMOKE_SPECS.length);
+    expect([...assigned].sort()).toEqual([...E2E_SMOKE_SPECS].sort());
+    for (const spec of E2E_SMOKE_SPECS) {
+      expect(existsSync(join(repoRoot, 'services/web-app', spec))).toBe(true);
+    }
+    const webAppPackage = JSON.parse(readRepoFile('services/web-app/package.json'));
+    expect(webAppPackage.scripts['test:e2e:smoke']).toBe('bun ./scripts/run-smoke-e2e.ts');
+    const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
+    expect(ciWorkflow).toContain('bun run test:e2e:smoke -- --shard=');
+    expect(ciWorkflow).not.toContain('--shard=${{ matrix.shard }}/${{ strategy.job-total }}');
+  });
+
   test('root build context excludes local credentials and host dependencies', () => {
     const patterns = readRepoFile('.dockerignore').split(/\r?\n/).map(line => line.trim());
     for (const required of ['.git', '**/.env', '**/.env.*', '**/node_modules', '**/build']) {
@@ -331,7 +412,83 @@ describe('production deployment contract', () => {
   test('Docker build uses the Bun version that wrote the lockfile', () => {
     const dockerfile = readRepoFile('services/web-app/Dockerfile');
 
-    expect(dockerfile).toContain('FROM oven/bun:1.3.1 AS base');
+    expect(dockerfile).toContain('FROM oven/bun:1.4.4 AS base');
+  });
+
+  test('dev panel Docker build args default to production; demo web image passes demo', () => {
+    const dockerfile = readRepoFile('services/web-app/Dockerfile');
+    const demoWorkflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const compose = readRepoFile('scripts/preview/render-compose.mjs');
+    const viteConfig = readRepoFile('services/web-app/vite.config.ts');
+
+    expect(dockerfile).toMatch(/ARG YAWP_ENVIRONMENT=production/);
+    expect(dockerfile).toMatch(/ARG YAWP_GIT_COMMIT=unknown/);
+    expect(dockerfile).toMatch(/ARG YAWP_BUILT_AT=unknown/);
+    expect(dockerfile).toMatch(
+      /FROM base AS production[\s\S]*ARG YAWP_ENVIRONMENT=production[\s\S]*ENV YAWP_ENVIRONMENT=\$YAWP_ENVIRONMENT/m
+    );
+    expect(dockerfile).toMatch(
+      /EXPOSE 8080[\s\S]*ARG YAWP_ENVIRONMENT=production[\s\S]*ARG YAWP_GIT_COMMIT=unknown[\s\S]*ENV YAWP_ENVIRONMENT=\$YAWP_ENVIRONMENT[\s\S]*ENV YAWP_GIT_COMMIT=\$YAWP_GIT_COMMIT[\s\S]*CMD \["bash", "services\/web-app\/start\.sh"\]/
+    );
+    const buildStage = dockerfile.slice(
+      dockerfile.indexOf('FROM deps AS build'),
+      dockerfile.indexOf('FROM base AS production')
+    );
+    expect(buildStage).toMatch(/ARG YAWP_ENVIRONMENT=production/);
+    expect(buildStage).not.toContain('YAWP_GIT_COMMIT');
+    expect(buildStage).not.toContain('YAWP_BUILT_AT');
+
+    const rootPackage = JSON.parse(readRepoFile('package.json'));
+    expect(rootPackage.scripts['web-app:docker:build']).toContain(
+      '--build-arg YAWP_GIT_COMMIT=$(git rev-parse HEAD)'
+    );
+    expect(rootPackage.scripts['web-app:docker:build']).toContain(
+      '--build-arg YAWP_BUILT_AT='
+    );
+
+    const demoWebBuild = demoWorkflow.slice(
+      demoWorkflow.indexOf('- name: Build and push demo web image'),
+      demoWorkflow.indexOf('- name: Build and push demo toolbox image')
+    );
+    expect(demoWebBuild).toContain('build-args:');
+    expect(demoWebBuild).toContain('YAWP_ENVIRONMENT=demo');
+    expect(demoWebBuild).toContain('YAWP_GIT_COMMIT=${{ steps.shipping.outputs.full_sha }}');
+    expect(demoWorkflow).toContain(
+      'built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+    );
+    expect(demoWebBuild).toContain(
+      'YAWP_BUILT_AT=${{ steps.shipping.outputs.built_at }}'
+    );
+
+    const demoToolboxBuild = demoWorkflow.slice(
+      demoWorkflow.indexOf('- name: Build and push demo toolbox image'),
+      demoWorkflow.indexOf('  demo-deploy:')
+    );
+    expect(demoToolboxBuild).not.toContain('build-args:');
+
+    expect(compose).toContain('dockerfile: services/web-app/Dockerfile');
+    expect(compose).toContain('target: production');
+    expect(compose).not.toMatch(
+      /web:[\s\S]*?build:[\s\S]*?args:[\s\S]*?YAWP_ENVIRONMENT/m
+    );
+
+    expect(viteConfig).toContain(
+      "process.env.YAWP_ENVIRONMENT === 'production'"
+    );
+    expect(viteConfig).toContain('__YAWP_DEV_PANEL_BUILD__');
+    expect(viteConfig).toContain('process.env.YAWP_ENVIRONMENT !== \'production\'');
+  });
+
+  test('Docker image build does not bake preview database credentials into the image', () => {
+    const dockerfile = readRepoFile('services/web-app/Dockerfile');
+    const renderCompose = readRepoFile('scripts/preview/render-compose.mjs');
+
+    expect(dockerfile).not.toMatch(/^\s*ARG DATABASE_URL/m);
+    expect(dockerfile).not.toMatch(/^\s*ENV DATABASE_URL/m);
+    expect(dockerfile).toContain(
+      'DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build bun prisma generate'
+    );
+    expect(renderCompose).not.toMatch(/build:[\s\S]*args:[\s\S]*DATABASE_URL/);
   });
 
   test('Dockerfile exposes a dependency target for preview migration tooling', () => {
@@ -341,11 +498,13 @@ describe('production deployment contract', () => {
     expect(dockerfile).toContain('FROM deps AS build');
   });
 
-  test('Docker runtime image includes workspace node_modules for web app binaries', () => {
+  test('Docker runtime image resolves web app serve binaries when Bun hoists deps', () => {
     const dockerfile = readRepoFile('services/web-app/Dockerfile');
+    const startScript = readRepoFile('services/web-app/start.sh');
 
-    expect(dockerfile).toContain(
-      'COPY --from=build /app/services/web-app/node_modules ./services/web-app/node_modules'
+    expect(dockerfile).toContain('mkdir -p services/web-app/node_modules');
+    expect(startScript).toContain(
+      '../../node_modules/@react-router/serve/bin.js'
     );
   });
 
@@ -376,9 +535,8 @@ describe('production deployment contract', () => {
     const startScript = readRepoFile('services/web-app/start.sh');
 
     expect(startScript).toContain('cd "$(dirname "$0")"');
-    expect(startScript).toContain(
-      'exec bun node_modules/@react-router/serve/bin.js'
-    );
+    expect(startScript).toContain('@react-router/serve/bin.js');
+    expect(startScript).toContain('exec bun "$serve_bin"');
     expect(startScript).not.toContain('bun run web-app:start');
   });
 
@@ -397,6 +555,27 @@ describe('production deployment contract', () => {
     );
 
     expect(reactRouterConfig).toContain('unstable_optimizeDeps: true');
+  });
+
+  test('SSR React Router request handler aligns preview ingress URLs before CSRF', () => {
+    const viteConfig = readRepoFile('services/web-app/vite.config.ts');
+    const aliasModule = readRepoFile(
+      'services/web-app/vite/preview-ingress-ssr-alias.ts'
+    );
+    const wrapper = readRepoFile(
+      'services/web-app/vite/react-router-with-preview-ingress.ts'
+    );
+    const routerConfig = readRepoFile(
+      'services/web-app/react-router.config.ts'
+    );
+
+    expect(viteConfig).toContain('react-router-with-preview-ingress');
+    expect(viteConfig).toContain('preview-ingress-ssr-alias');
+    expect(aliasModule).toContain("=== 'preview'");
+    expect(wrapper).toContain('adaptPreviewIngressRequest');
+    expect(routerConfig).toContain('*.preview.yawp.school');
+    expect(routerConfig).toContain('YAWP_ENVIRONMENT');
+    expect(routerConfig).toContain('"preview"');
   });
 
   test('main deploy runs production Prisma migrations before publishing the image', () => {
@@ -439,6 +618,7 @@ describe('production deployment contract', () => {
       'seed-free-tier-bundle-assignment-types'
     );
 
+    expect(deployWorkflow).toContain("bun-version: '1.4.4'");
     expect(deployWorkflow).toContain('validate-prisma-migrations');
     expect(deployWorkflow).toContain('needs: [validate-prisma-migrations]');
     expect(deployWorkflow).toContain('bun prisma generate');
@@ -540,6 +720,8 @@ describe('worktree local setup contract', () => {
     expect(setupScript).not.toContain('WORKTREE_NAME="$(basename "$(dirname "$ROOT")")"');
     expect(setupScript).toContain('CONTAINER_NAME="yawp-${SLUG}-postgres"');
     expect(setupScript).toContain('VOLUME_NAME="yawp-${SLUG}-postgres-data"');
+    expect(setupScript).toContain('release_postgres_host_port');
+    expect(setupScript).toContain('scripts/ci/release-docker-host-port.sh');
   });
 
   test('worktree setup installs dependencies before any Prisma generation', () => {
@@ -579,6 +761,15 @@ describe('worktree local setup contract', () => {
     expect(setupScript).toContain('LTI_MOCK_PORT');
     expect(rootPackage.scripts['blackboard-lti-mock']).toContain(
       'BLACKBOARD_LTI_MOCK_ENABLED=true'
+    );
+  });
+
+  test('demo feedback browser CI cleanup stays cwd-safe after cd into web-app', () => {
+    const workflow = readRepoFile('.github/workflows/ci.yml');
+
+    expect(workflow).toContain('REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"');
+    expect(workflow).toContain(
+      '"$REPO_ROOT/scripts/ci/demo-feedback-worktree-cleanup.sh"'
     );
   });
 
@@ -700,8 +891,11 @@ describe('PR preview deployment contract', () => {
       'drop_preview_database "$DATABASE_NAME"',
       resetIndex
     );
-    const generateIndex = deployScript.indexOf('bun prisma generate');
-    const migrateIndex = deployScript.indexOf('bun prisma migrate deploy');
+    const generateIndex = deployScript.indexOf('${prisma_cli} generate');
+    const migrateIndex = deployScript.indexOf('${migrate_wrapper}');
+    expect(deployScript).toContain(
+      "prisma_cli='PRISMA_CLI_REPO_ROOT=/app bash /preview-control/prisma-cli.sh'"
+    );
     const backfillIndex = deployScript.indexOf(
       'bun run scripts/backfill-class-art-key.ts'
     );
@@ -742,7 +936,7 @@ describe('PR preview deployment contract', () => {
     );
     expect(deployScript).toContain('packages/prisma/fixtures/prod-fidelity');
     expect(deployScript).toContain('bun run seed-preview-seats');
-    expect(deployScript).toContain('oven/bun:1.3.1');
+    expect(deployScript).toContain('oven/bun:1.4.4');
     expect(deployScript).toContain(
       'bun scripts/preview/access-code.mjs --seats'
     );
@@ -763,7 +957,13 @@ describe('PR preview deployment contract', () => {
     expect(seedIndex).toBeGreaterThan(backfillIndex);
     expect(syncIndex).toBeGreaterThan(backfillIndex);
     expect(releaseGateIndex).toBeGreaterThan(seedIndex);
-    expect(webStartIndex).toBeGreaterThan(releaseGateIndex);
+    expect(deployScript).toMatch(
+      /run_tooling_if_needed\nrestore_demo_tester_feedback_after_reset/
+    );
+    const restoreCallIndex = deployScript.indexOf(
+      'run_tooling_if_needed\nrestore_demo_tester_feedback_after_reset'
+    );
+    expect(webStartIndex).toBeGreaterThan(restoreCallIndex);
   });
 
   test('the database deletion boundary independently rejects unconfirmed demo resets', () => {
@@ -914,7 +1114,7 @@ describe('PR preview deployment contract', () => {
       )
     );
     const buildIndex = prebuildFunction.indexOf(
-      'COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web toolbox'
+      'build_or_pull_production_images web toolbox'
     );
     const cacheReturnIndex = deployScript.indexOf(
       'Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate.'
@@ -974,7 +1174,10 @@ describe('PR preview deployment contract', () => {
       'export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware]'
     );
     expect(gate).toContain("process.env.PREVIEW_ACCESS_GATE === 'on'");
+    expect(gate).toContain('isDemoEnvironment');
     expect(gate).toContain("'/api/healthcheck'");
+    expect(gate).toContain("'/api/readyz'");
+    expect(gate).toContain("'/api/version'");
     expect(compose).toContain('PREVIEW_ACCESS_GATE: "on"');
     expect(compose).toContain('requirePreviewAccessSeats(accessSeats)');
     expect(compose).toContain('requirePreviewAccessSecret(accessSecret)');
@@ -1430,6 +1633,14 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).not.toContain('sleep 2');
   });
 
+  test('deploy health probe /api/healthcheck fails closed when Postgres is unreachable', () => {
+    const healthcheck = readRepoFile(
+      'services/web-app/app/routes/api.healthcheck.ts'
+    );
+    expect(healthcheck).toContain('isDatabaseReady');
+    expect(healthcheck).toMatch(/503/);
+  });
+
   test('preview deploy tooling contains no transitional transport auth references', () => {
     for (const path of [
       'scripts/preview/deploy.sh',
@@ -1644,6 +1855,68 @@ describe('PR preview deployment contract', () => {
 });
 
 describe('demo environment deployment contract', () => {
+  test('demo auto-ships after production deploy succeeds on the default branch', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const buildJob = workflow.slice(
+      workflow.indexOf('  build-demo-images:'),
+      workflow.indexOf('  demo-deploy:')
+    );
+
+    expect(workflow).toContain('workflow_run:');
+    expect(workflow).toContain("'🚀 Deploy'");
+    expect(workflow).toContain('github.event.workflow_run.head_sha');
+    expect(workflow).toContain('github.event.workflow_run.conclusion');
+    expect(workflow).toContain('github.event.workflow_run.event');
+    expect(workflow).toContain("github.event.workflow_run.event == 'push'");
+    expect(workflow).toContain('github.event.workflow_run.head_repository.full_name');
+    expect(workflow).toContain(
+      'github.event.workflow_run.head_repository.full_name == github.repository'
+    );
+    expect(buildJob).toContain("github.event_name == 'workflow_dispatch'");
+    expect(buildJob).toContain(
+      'github.event.workflow_run.head_branch == github.event.repository.default_branch'
+    );
+    expect(workflow).toContain('cancel-in-progress: false');
+    expect(workflow).toContain('demo-environment-ignored-');
+    expect(workflow).toContain("format('demo-environment-ignored-{0}', github.run_id)");
+    expect(workflow).toContain('/api/version');
+    expect(workflow).toContain('"workflow_run"');
+    expect(workflow).toContain("inputs.reset_data == true &&");
+    expect(workflow).toContain("'true' || 'false'");
+    expect(workflow).toContain("github.event_name == 'workflow_run' && '14' || inputs.backup_retention");
+    expect(workflow).toContain('demo_git_sha');
+  });
+
+  test('demo images build on GitHub-hosted runners with on-host build fallback', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const deployScript = readRepoFile('scripts/preview/deploy.sh');
+    const buildJob = workflow.slice(
+      workflow.indexOf('  build-demo-images:'),
+      workflow.indexOf('  demo-deploy:')
+    );
+    const deployStep = workflow.slice(
+      workflow.indexOf('- name: Deploy demo'),
+      workflow.indexOf('- name: Verify the demo actually serves')
+    );
+
+    expect(workflow).toContain('build-demo-images');
+    expect(workflow).toContain('id-token: write');
+    expect(buildJob).toContain('images-fallback');
+    expect(buildJob).toContain('skip_web');
+    expect(buildJob).toContain('skip_toolbox');
+    expect(deployStep).toContain('if [[ -n "$demo_web_image" && -n "$demo_toolbox_image" ]]; then');
+    expect(deployStep).not.toMatch(
+      /DEMO_WEB_IMAGE: \$\{\{ needs\.build-demo-images/
+    );
+    expect(deployStep).toContain('DEPLOY_TIMEOUT_SECONDS="$deploy_timeout_seconds"');
+    expect(deployStep).toContain('deploy_timeout_seconds=1200');
+    expect(deployStep).toContain('deploy_timeout_seconds=3600');
+    expect(deployScript).toContain('demo_registry_images_configured');
+    expect(existsSync(join(repoRoot, 'infra/demo-image-registry/main.tf'))).toBe(
+      true
+    );
+  });
+
   test('demo capacity cleanup protects all container images before the build', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
     const prepare = workflow.slice(
@@ -1671,6 +1944,90 @@ describe('demo environment deployment contract', () => {
       expect(source).not.toMatch(/docker\s+(?:system\s+prune|container\s+(?:prune|rm)|volume\s+(?:prune|rm)|rm\b|compose\s+down)/);
       expect(source).not.toMatch(/docker\s+image\s+(?:prune|rm[^\n]*(?:--force|\s-[a-z]*f))/);
     }
+  });
+
+  test('demo internal API keys audit is manual, read-only, and uses demo SSH only', () => {
+    const workflow = readRepoFile(
+      '.github/workflows/demo-internal-keys-audit.yml'
+    );
+    const parsed = Bun.YAML.parse(workflow) as {
+      on: Record<string, unknown>;
+      permissions: Record<string, string>;
+      jobs: { audit: { environment: string; steps: { run?: string; env?: Record<string, string> }[] } };
+    };
+
+    expect(parsed.on).toEqual({ workflow_dispatch: null });
+    expect(parsed.permissions).toEqual({ contents: 'read' });
+    expect(parsed.jobs.audit.environment).toBe('demo');
+    expect(workflow).toContain('group: demo-environment');
+    expect(workflow).toContain('cancel-in-progress: false');
+    expect(workflow).toContain('bash scripts/preview/prepare-demo-ssh.sh');
+    expect(workflow).toContain('timeout-minutes: 5');
+    expect(workflow).toContain('ConnectTimeout=20');
+    const auditStep = workflow.slice(
+      workflow.indexOf('- name: Audit live demo internal API keys'),
+      workflow.indexOf('- name: Summary')
+    );
+    expect(workflow).toContain('docker exec -i');
+    expect(auditStep).toContain('bun build');
+    expect(auditStep).toContain('print-demo-internal-api-key-audit.cli.mjs');
+    expect(auditStep).toContain('bun run -');
+    expect(auditStep).toContain('< "$audit_bundle"');
+    expect(auditStep).not.toMatch(/\bdocker cp\b/);
+    expect(auditStep).not.toMatch(/\bcat > /);
+    expect(auditStep).not.toMatch(/yawp-key-audit/);
+    expect(auditStep).not.toMatch(/ssh[^\n]*\bmkdir\b/);
+    expect(auditStep).not.toMatch(/docker exec[^\n]*\bmkdir\b/);
+    expect(workflow).toContain('audit-demo-internal-api-keys-on-host.sh');
+    expect(workflow).toContain('validate_audit_output');
+    expect(workflow).toContain('^PARSE_ERROR[[:space:]][A-Za-z]+$');
+    expect(workflow).not.toContain('DEMO_INTERNAL_API_KEYS');
+    expect(workflow).not.toContain('set -x');
+    expect(workflow).not.toMatch(/PARSE_ERROR[\s\S]*exit 0/);
+    for (const step of parsed.jobs.audit.steps) {
+      for (const value of Object.values(step.env ?? {})) {
+        expect(String(value)).not.toContain('secrets.DEMO_INTERNAL_API_KEYS');
+      }
+    }
+  });
+
+  test('demo intern QA teachers workflow is dispatch-only and targets yawp_demo additively', () => {
+    const workflow = readRepoFile(
+      '.github/workflows/demo-ensure-intern-qa-teachers.yml'
+    );
+    const parsed = Bun.YAML.parse(workflow) as {
+      on: Record<string, unknown>;
+      jobs: { 'ensure-teachers': { environment: string } };
+    };
+
+    expect(parsed.on).toEqual({
+      workflow_dispatch: { inputs: { ref: expect.any(Object) } },
+    });
+    expect(parsed.jobs['ensure-teachers'].environment).toBe('demo');
+    expect(workflow).toContain('group: demo-environment');
+    expect(workflow).toContain(
+      'demo-source/scripts/preview/prepare-demo-ssh.sh'
+    );
+    expect(workflow).toContain(
+      'demo-source/scripts/preview/ensure-intern-qa-teachers-on-demo-host.sh'
+    );
+    expect(workflow).not.toMatch(
+      /run: bash scripts\/preview\/prepare-demo-ssh\.sh/
+    );
+    expect(workflow).toContain('teacher name=Thomas Patton');
+    expect(workflow).toContain('org=local-dev-org');
+    const syncStep = workflow.slice(
+      workflow.indexOf(
+        '- name: Sync source and ensure intern QA teachers on demo'
+      ),
+      workflow.indexOf('- name: Summary')
+    );
+    expect(syncStep).toMatch(/\brsync\b[\s\S]*-e "ssh -i ~\/\.ssh\/demo_key"/);
+    expect(syncStep).toMatch(/\bssh -i ~\/\.ssh\/demo_key\b/);
+    expect(syncStep).toMatch(/\bscp -i ~\/\.ssh\/demo_key\b/);
+    expect(workflow).not.toContain('reset_data');
+    expect(workflow).not.toContain('RESET yawp_demo');
+    expect(workflow).not.toContain('seed-local-dev');
   });
 
   test('demo host diagnostics expose only non-secret container and mount metadata', () => {
@@ -1788,13 +2145,20 @@ describe('demo environment deployment contract', () => {
     expect(workflow).toContain('default: false');
   });
 
-  test('the demo deploy proves the in-app gate blocks data before trusting a code', () => {
+  test('the demo deploy keeps browsing public while dev-login stays code-gated', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
 
-    expect(workflow).toContain('data-preview-access-screen');
+    expect(workflow).toContain(
+      'Demo homepage still renders the site-wide preview access screen'
+    );
+    expect(workflow).toContain('/free/admin/approve');
     expect(workflow).toContain(
       'POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401'
     );
+    expect(workflow).toContain('/auth/dev-login/options');
+    expect(workflow).toContain('POST /lti/launch without an access cookie');
+    expect(workflow).toContain('/auth/dev-login/options');
+    expect(workflow).toContain('POST /lti/launch without an access cookie');
     expect(workflow).toContain('--data-urlencode "code=$access_code"');
     expect(workflow).not.toContain(deprecatedPreviewBasicAuth);
     expect(workflow).not.toContain('curl --user');
@@ -1852,6 +2216,25 @@ describe('demo environment deployment contract', () => {
     expect(deployScript).toContain('recover_demo_database_on_failure');
     expect(deployScript).toContain('restore-demo-backup.sh');
     expect(deployScript).toContain('install_demo_backup_tooling');
+    expect(deployScript).toContain('export_demo_tester_feedback_before_reset');
+    expect(deployScript).toContain('restore_demo_tester_feedback_after_reset');
+    expect(deployScript).toContain('preserve-demo-tester-feedback.sh');
+    expect(deployScript).toContain('prisma-migrate-deploy-with-summary.sh');
+    expect(deployScript).toContain('preview_toolbox_uses_control_mount');
+    expect(deployScript).toContain(
+      'bash /preview-control/prisma-migrate-deploy-with-summary.sh'
+    );
+    const composeScript = readRepoFile('scripts/preview/render-compose.mjs');
+    expect(composeScript).toContain("env.runtime === 'production'");
+    expect(composeScript).toContain('/preview-control:ro');
+    expect(deployScript).toContain('DEMO_PRISMA_MIGRATE_SUMMARY=Skipped');
+    expect(deployScript).toContain('log_demo_tester_feedback_count');
+    expect(existsSync(join(repoRoot, 'scripts/preview/preserve-demo-tester-feedback.sh'))).toBe(
+      true
+    );
+    expect(existsSync(join(repoRoot, 'scripts/preview/preserve-demo-tester-feedback.mjs'))).toBe(
+      true
+    );
   });
 
   test('demo deploy runs detached from the GitHub Actions SSH session', () => {
@@ -1864,13 +2247,31 @@ describe('demo environment deployment contract', () => {
     expect(workflow).toContain('ensure-host-swap.sh');
     expect(workflow).toContain('install-host-metrics.sh');
     expect(workflow).toContain('run-host-deploy-detached.sh');
+    expect(workflow).toContain('Surface demo deploy database signals');
+    expect(workflow).toContain("grep -E '^DEMO_PRISMA_MIGRATE_'");
+    expect(workflow).toContain('TesterFeedback rows before deploy');
+    expect(workflow).toContain('TesterFeedback row count decreased during deploy');
     expect(detached).toContain('FAILURE_LOG_LINES="${FAILURE_LOG_LINES:-120}"');
     expect(detached).toContain('emit_failure_log_tail');
     expect(detached).toContain('mask_deploy_log');
+    expect(detached).toContain('REDACT_DEPLOY_LOGS_SCRIPT');
+    expect(detached).toContain('redact-deploy-logs.last');
+    expect(detached).toContain('timeout -k 30 600');
     expect(detached).toContain('PREVIEW_ACCESS_CODE=');
     expect(detached).toContain('[REDACTED]');
+    expect(workflow).toContain('REDACT_DEPLOY_LOGS_SCRIPT');
+    expect(workflow).toContain('redact-deploy-logs.sh');
     expect(workflow).not.toContain(
       'flock -w 1800 $(shell_quote "$lock_file") bash -lc $(shell_quote "$deploy_command")'
+    );
+
+    const demoRedactSummaryStep = `      - name: Print deploy log redaction summary
+        if: always()
+        run: |
+          grep -sE '^REDACT_(FILES_CHANGED|VALUES_MASKED|WARNING)=[0-9]+$' /tmp/demo-deploy.log || echo 'REDACT_SUMMARY=none'
+`;
+    expect(workflow).toContain(
+      `} >> "$GITHUB_OUTPUT"\n\n${demoRedactSummaryStep}`
     );
   });
 
@@ -1898,6 +2299,22 @@ describe('demo environment deployment contract', () => {
     expect(workflow).toContain('DEMO_RESET_DATA');
     expect(workflow).toContain(
       'Demo aggregate data decreased during no-reset deploy'
+    );
+    expect(workflow).toContain('TesterFeedback row count decreased during deploy');
+    expect(readRepoFile(signaturePath)).toContain('testerFeedback');
+    const signatureScript = readRepoFile(signaturePath);
+    expect(signatureScript).toContain(
+      'to_regclass($reg$public."TesterFeedback"$reg$)'
+    );
+    expect(signatureScript).not.toMatch(
+      /to_regclass\('public\."TesterFeedback"'\)/
+    );
+    expect(signatureScript).toContain('tester_feedback_count=0');
+    expect(signatureScript).toContain(
+      '$json$testerFeedback$json$, \'"${tester_feedback_count}"\'::bigint'
+    );
+    expect(signatureScript).not.toMatch(
+      /json_build_object\([\s\S]*FROM "TesterFeedback"/
     );
   });
   test('demo backups are scheduled daily with configurable count retention', () => {
@@ -1972,20 +2389,21 @@ describe('demo environment deployment contract', () => {
     expect(guard).toContain('iam simulate-principal-policy');
     expect(guard).toContain('explicitDeny');
   });
-  test('workflow verification is anonymous and retains in-app gate assertions', () => {
-    for (const path of [
-      '.github/workflows/preview-environments.yml',
-      '.github/workflows/demo-environment.yml',
-    ]) {
-      const workflow = readRepoFile(path);
+  test('workflow verification is anonymous and retains preview gate assertions', () => {
+    const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
+    const demoWorkflow = readRepoFile('.github/workflows/demo-environment.yml');
 
+    for (const workflow of [previewWorkflow, demoWorkflow]) {
       expect(workflow).not.toContain(deprecatedPreviewBasicAuth);
       expect(workflow).not.toContain('curl --user');
-      expect(workflow).toContain('data-preview-access-screen');
       expect(workflow).toContain(
         'POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401'
       );
     }
+    expect(previewWorkflow).toContain('data-preview-access-screen');
+    expect(demoWorkflow).toContain(
+      'Demo homepage still renders the site-wide preview access screen'
+    );
   });
 });
 
@@ -2005,9 +2423,22 @@ describe('isolated preview unified sign-on label deployment contract', () => {
     expect(workflow).toContain("PREVIEW_UNIFIED_SIGN_ON: ${{ needs.preview-policy.outputs.unified_sign_on }}");
     expect(workflow).toContain('"PREVIEW_UNIFIED_SIGN_ON=$(shell_quote "$PREVIEW_UNIFIED_SIGN_ON")"');
     expect(workflow).toContain('REMOTE_COMMAND=');
+    expect(workflow).toContain('REDACT_DEPLOY_LOGS_SCRIPT');
+    expect(workflow).toContain('redact-deploy-logs.sh');
     expect(workflow).toContain('run-host-deploy-detached.sh');
+    const previewRedactSummaryStep = `      - name: Print deploy log redaction summary
+        if: always() && steps.preview_gate.outputs.skip_preview != 'true'
+        run: |
+          grep -sE '^REDACT_(FILES_CHANGED|VALUES_MASKED|WARNING)=[0-9]+$' "$RUNNER_TEMP/preview-deploy.log" || echo 'REDACT_SUMMARY=none'
+`;
+    expect(workflow).toContain(
+      `} >> "$GITHUB_OUTPUT"\n\n${previewRedactSummaryStep}`
+    );
     expect(workflow).toContain("needs.preview-policy.outputs.should_deploy == 'true'");
-    expect(workflow).toContain("startsWith(github.event.pull_request.body || '', '[skip preview]') == false");
+    expect(workflow).toContain(
+      "contains(github.event.pull_request.body || '', '[skip preview]') == false"
+    );
+    expect(workflow).toContain('head_commit_message" == *"[skip preview]"*');
     expect(workflow).toContain('bash scripts/preview/check-skip-preview.sh');
     expect(readRepoFile('.github/workflows/demo-environment.yml')).not.toContain('PREVIEW_UNIFIED_SIGN_ON');
   });

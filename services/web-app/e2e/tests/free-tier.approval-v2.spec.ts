@@ -16,9 +16,9 @@ const db = createE2EPrismaClient();
 const shots = process.env.APPROVAL_V2_EVIDENCE_DIR;
 async function flag(mode: 'off' | 'everyone' | 'targeted') {
   await db.setting.upsert({
-    where: { name: 'feature_flag.free-tier-onboarding-v2' },
+    where: { name: 'feature_flag.free_tier' },
     create: {
-      name: 'feature_flag.free-tier-onboarding-v2',
+      name: 'feature_flag.free_tier',
       value: JSON.stringify({ mode, orgIds: ['another-org'] }),
     },
     update: { value: JSON.stringify({ mode, orgIds: ['another-org'] }) },
@@ -138,14 +138,21 @@ for (const width of [1280, 390])
     await expect(
       page.getByText('Sent to Dr. Patel on October 14')
     ).toBeVisible();
-    await expect(
-      page.getByRole('link', { name: 'Draft an email' })
-    ).toHaveAttribute(
+    const draftRequest = page.getByRole('link', { name: 'Draft a Request' });
+    await expect(draftRequest).toBeVisible();
+    await expect(draftRequest).toHaveAttribute(
       'href',
       /mailto:patel%2Bapproval%40example\.org\?subject=/
     );
+    const explore = page.getByRole('link', { name: 'Explore my classroom' });
+    await expect(explore).toBeVisible();
+    await expect(explore).toHaveAttribute('href', '/app');
+    await explore.click();
+    await expect(page).toHaveURL(/\/app$/);
+    await expect(page.getByTestId('app._index')).toBeVisible();
+    await page.goto('/app/free-tier/pending');
     await capture(page, `${width}-waiting`);
-    await page.getByText('Not the right person? Forward this request').click();
+    await page.getByRole('button', { name: 'Not the right person?' }).click();
     await capture(page, `${width}-forward`);
     await page
       .getByRole('button', { name: 'Forward request', exact: true })
@@ -181,10 +188,8 @@ for (const width of [1280, 390])
       .getByRole('button', { name: 'Forward request', exact: true })
       .click();
     await expect(
-      page.getByText(
-        'Request forwarded. We will notify your administrator and email you an update.'
-      )
-    ).toBeVisible();
+      page.getByTestId('pending-forward-success')
+    ).toContainText('Request forwarded to Ms. Rivera.');
     await expect(
       page.getByText('rivera@example.org', { exact: true })
     ).toBeVisible();
@@ -204,11 +209,11 @@ test('flag-off and non-target controls', async ({ page }) => {
     await flag(mode);
     await page.goto('/app/free-tier/pending');
     await expect(
-      page.getByRole('link', { name: 'Draft an email' })
+      page.getByRole('link', { name: 'Draft a Request' })
     ).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Resend reminder' })
-    ).toBeVisible();
+    ).toHaveCount(0);
     await capture(page, `1280-${mode}`);
   }
 });
@@ -240,24 +245,23 @@ for (const width of [1280, 390])
     await flag('everyone');
     await page.reload();
     await expect(
-      page.getByRole('heading', { name: 'About YAWP' })
+      page.getByRole('heading', {
+        name: 'Approve Yawp! for Ms. Okafor at Lincoln High',
+      })
     ).toBeVisible();
-    await expect(page.locator('[data-guide-slot=administrator]')).toHaveCount(
-      1
-    );
-    if (width === 1280) {
-      const info = await page.locator('.free-tier-approval-info').boundingBox();
-      const form = await page.locator('.free-tier-form-card').boundingBox();
-      expect(info!.x + info!.width).toBeLessThan(form!.x);
-    }
+    await expect(
+      page.getByText(
+        'Ms. Okafor at Lincoln High would like to use Yawp! in their classroom.'
+      )
+    ).toHaveCount(0);
     await capture(page, `${width}-admin`);
     await page
-      .getByRole('button', { name: 'Approve YAWP', exact: true })
+      .getByRole('button', { name: 'Approve Yawp!', exact: true })
       .click();
-    await expect(page.getByLabel('Your role')).toHaveAttribute(
-      'aria-invalid',
-      'true'
+    await expect(page.getByRole('alert')).toContainText(
+      'Two things need your attention before you can approve.'
     );
+    await expect(page.getByText('Enter your role.')).toBeVisible();
     await capture(page, `${width}-admin-validation`);
     await page.goto(
       `/free/admin/not-right-person?t=${encodeURIComponent(redirect.token)}`
@@ -266,19 +270,16 @@ for (const width of [1280, 390])
     await page
       .getByRole('button', { name: 'Forward request', exact: true })
       .click();
-    await expect(page.getByLabel('Administrator name')).toHaveAttribute(
-      'aria-invalid',
-      'true'
+    await expect(page.getByRole('alert')).toContainText(
+      'Two things need your attention before you can forward this.'
     );
     await capture(page, `${width}-admin-forward-validation`);
-    await page.getByLabel('Administrator name').fill('Ms. Rivera');
-    await page.getByLabel('Administrator email').fill(app.email);
+    await page.getByLabel('Their name').fill('Ms. Rivera');
+    await page.getByLabel('Their email').fill(app.email);
     await page
       .getByRole('button', { name: 'Forward request', exact: true })
       .click();
-    await expect(
-      page.getByRole('heading', { name: 'Unable to forward' })
-    ).toBeVisible();
+    await expect(page.getByRole('alert')).toBeVisible();
     expect(
       await db.freeTierSignedLink.count({
         where: { applicationId: app.id, usedAt: null },
@@ -291,8 +292,8 @@ for (const width of [1280, 390])
     await page.goto(
       `/free/admin/not-right-person?t=${encodeURIComponent(redirect.token)}`
     );
-    await page.getByLabel('Administrator name').fill('Ms. Rivera');
-    await page.getByLabel('Administrator email').fill('rivera@example.org');
+    await page.getByLabel('Their name').fill('Ms. Rivera');
+    await page.getByLabel('Their email').fill('rivera@example.org');
     await page
       .getByRole('button', { name: 'Forward request', exact: true })
       .click();
@@ -303,6 +304,9 @@ for (const width of [1280, 390])
     await page.goto(url);
     await expect(
       page.getByRole('heading', { name: 'This link was replaced' })
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Ms\. Okafor at Lincoln High was forwarded to someone else/)
     ).toBeVisible();
     await capture(page, `${width}-admin-replaced`);
     for (const status of [
@@ -318,7 +322,7 @@ for (const width of [1280, 390])
       await page.goto('/app/free-tier/pending');
       await capture(page, `${width}-waiting-${status.toLowerCase()}`);
       await expect(
-        page.getByRole('link', { name: 'Draft an email' })
+        page.getByRole('link', { name: 'Draft a Request' })
       ).toHaveCount(0);
     }
     await page.goto('/free/admin/approve?t=invalid');
@@ -341,11 +345,11 @@ test('paid member remains on legacy waiting page with rollout on', async ({
     });
     await page.goto('/app/free-tier/pending');
     await expect(
-      page.getByRole('link', { name: 'Draft an email' })
+      page.getByRole('link', { name: 'Draft a Request' })
     ).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Resend reminder' })
-    ).toBeVisible();
+    ).toHaveCount(0);
     await capture(page, '1280-paid-member');
   } finally {
     await db.orgMembership.deleteMany({ where: { organizationId: org.id } });

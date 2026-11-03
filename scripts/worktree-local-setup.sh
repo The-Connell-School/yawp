@@ -82,11 +82,20 @@ docker_available() {
   command -v docker >/dev/null 2>&1 && docker ps >/dev/null 2>&1
 }
 
+release_postgres_host_port() {
+  if [[ -z "${PG_PORT:-}" ]]; then
+    return 0
+  fi
+  bash "$ROOT/scripts/ci/release-docker-host-port.sh" "$PG_PORT"
+}
+
 ensure_postgres() {
   if ! docker_available; then
     echo "Docker is required for isolated worktree Postgres." >&2
     exit 1
   fi
+
+  release_postgres_host_port
 
   if docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
     local mapped_port
@@ -101,19 +110,33 @@ ensure_postgres() {
       docker start "$CONTAINER_NAME" >/dev/null
     fi
   else
-    docker run -d \
-      --name "$CONTAINER_NAME" \
-      --restart unless-stopped \
-      -e POSTGRES_USER="$PG_USER" \
-      -e POSTGRES_PASSWORD="$PG_PASSWORD" \
-      -e POSTGRES_DB="$DB_NAME" \
-      -p "${PG_PORT}:5432" \
-      -v "${VOLUME_NAME}:/var/lib/postgresql/data" \
-      postgres:16 >/dev/null
+    local attempt
+    for attempt in 1 2; do
+      if docker run -d \
+        --name "$CONTAINER_NAME" \
+        --restart unless-stopped \
+        -e POSTGRES_USER="$PG_USER" \
+        -e POSTGRES_PASSWORD="$PG_PASSWORD" \
+        -e POSTGRES_DB="$DB_NAME" \
+        -p "${PG_PORT}:5432" \
+        -v "${VOLUME_NAME}:/var/lib/postgresql/data" \
+        postgres:16 >/dev/null 2>&1; then
+        break
+      fi
+      if [[ "$attempt" -eq 1 ]]; then
+        docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+        release_postgres_host_port
+      else
+        echo "Failed to start Postgres container on host port ${PG_PORT}." >&2
+        exit 1
+      fi
+    done
   fi
 
   for _ in $(seq 1 60); do
-    if docker exec "$CONTAINER_NAME" pg_isready -U "$PG_USER" >/dev/null 2>&1; then
+    # The image's temporary init server accepts Unix-socket connections while
+    # creating POSTGRES_DB, then shuts down. Only the final server listens on TCP.
+    if docker exec "$CONTAINER_NAME" pg_isready -h 127.0.0.1 -U "$PG_USER" >/dev/null 2>&1; then
       return
     fi
     sleep 1
@@ -130,6 +153,9 @@ EOF
 
   cat >"$ROOT/services/web-app/.env" <<EOF
 NODE_ENV=development
+YAWP_ENVIRONMENT="${YAWP_ENVIRONMENT:-development}"
+PREVIEW_SLUG="${PREVIEW_SLUG:-}"
+TESTER_FEEDBACK_ENABLED=true
 DATABASE_URL="${DATABASE_URL}"
 DATABASE_PATH=".local-dev.sqlite"
 CACHE_DATABASE_PATH=".cache.sqlite"

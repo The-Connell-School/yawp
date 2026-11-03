@@ -1,5 +1,6 @@
 import { prisma } from '~/utils/db.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import { getClientIp, ipHash } from '~/utils/ip.server';
 import { createHash } from 'node:crypto';
 import { hashLoginRateLimitTarget } from '~/utils/login-rate-limit-target';
@@ -209,6 +210,41 @@ export type SingleFlightResult<T> =
   | { ran: true; value: T }
   | { ran: false };
 
+async function acquireSingleFlightLease(key: string, ttlMs: number): Promise<string | null> {
+  const inserted = await withTimeout(
+    prisma.$queryRawUnsafe<{ lease: string }[]>(
+      `
+      INSERT INTO "RateLimitBucket" ("key", "tokens", "capacity", "refillPerMs", "lastRefillAt", "updatedAt")
+      VALUES ($1::text, 1, 1, 0, clock_timestamp() + ($2::int * interval '1 millisecond'), now())
+      ON CONFLICT ("key") DO NOTHING
+      RETURNING (EXTRACT(EPOCH FROM "lastRefillAt") * 1000000)::bigint::text AS lease
+      `,
+      key,
+      ttlMs
+    ),
+    LIMITER_TIMEOUT_MS
+  );
+  if (inserted.length > 0) return inserted[0]!.lease;
+
+  const updated = await withTimeout(
+    prisma.$queryRawUnsafe<{ lease: string }[]>(
+      `
+      UPDATE "RateLimitBucket"
+         SET "tokens" = 1,
+             "lastRefillAt" = clock_timestamp() + ($2::int * interval '1 millisecond'),
+             "updatedAt" = now()
+       WHERE "key" = $1::text
+         AND "lastRefillAt" <= clock_timestamp()
+      RETURNING (EXTRACT(EPOCH FROM "lastRefillAt") * 1000000)::bigint::text AS lease
+      `,
+      key,
+      ttlMs
+    ),
+    LIMITER_TIMEOUT_MS
+  );
+  return updated[0]?.lease ?? null;
+}
+
 export async function withSingleFlight<T>(
   name: string,
   fn: () => Promise<T>,
@@ -218,28 +254,14 @@ export async function withSingleFlight<T>(
   const ttlMs = Math.max(1_000, Math.floor(options.ttlMs ?? RATE_LIMITS.pdfExtract.leaseTtlMs));
   let lease: string | null = null;
   try {
-    const rows = await withTimeout(
-      prisma.$queryRawUnsafe<{ lease: string }[]>(
-        `
-        INSERT INTO "RateLimitBucket" ("key", "tokens", "capacity", "refillPerMs", "lastRefillAt", "updatedAt")
-        VALUES ($1::text, 1, 1, 0, clock_timestamp() + ($2::int * interval '1 millisecond'), now())
-        ON CONFLICT ("key") DO UPDATE SET
-          "tokens" = 1,
-          "lastRefillAt" = clock_timestamp() + ($2::int * interval '1 millisecond'),
-          "updatedAt" = now()
-        WHERE "RateLimitBucket"."lastRefillAt" <= clock_timestamp()
-        RETURNING (EXTRACT(EPOCH FROM "lastRefillAt") * 1000000)::bigint::text AS lease
-        `,
-        key,
-        ttlMs
-      ),
-      LIMITER_TIMEOUT_MS
-    );
-    if (rows.length === 0) return { ran: false };
-    lease = rows[0]!.lease;
+    lease = await acquireSingleFlightLease(key, ttlMs);
+    if (!lease) return { ran: false };
   } catch (error) {
     // Fail open: the lease is a cost guard, not a correctness requirement.
-    console.warn('single_flight_failed_open', { name, error });
+    console.warn('single_flight_failed_open', {
+      name,
+      error: buildSafeErrorForLog(error),
+    });
   }
 
   try {
@@ -285,7 +307,9 @@ async function logDecision(params: {
     });
   } catch (error) {
     // Do not fail requests on logging errors.
-    console.warn('rate_limit_decision_log_failed', { error });
+    console.warn('rate_limit_decision_log_failed', {
+      error: buildSafeErrorForLog(error),
+    });
   }
 }
 
@@ -339,7 +363,9 @@ async function consumeAll(buckets: BucketSpec[]): Promise<LimitResult> {
     for (const done of charged) {
       await refundTokens(done).catch(() => {});
     }
-    console.warn('rate_limit_failed_open', { error });
+    console.warn('rate_limit_failed_open', {
+      error: buildSafeErrorForLog(error),
+    });
     return { allowed: true };
   }
 }
@@ -392,7 +418,9 @@ async function consumeAllFailClosed(
     for (const done of charged) {
       await refundTokens(done).catch(() => {});
     }
-    console.warn('rate_limit_failed_closed', { error });
+    console.warn('rate_limit_failed_closed', {
+      error: buildSafeErrorForLog(error),
+    });
     return { allowed: false, scope: 'ip', retryAfterSeconds: 60 };
   }
 }

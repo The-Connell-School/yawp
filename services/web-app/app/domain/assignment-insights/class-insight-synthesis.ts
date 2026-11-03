@@ -30,6 +30,7 @@ export type TeachingNextStep = {
 };
 
 export type ClassInsightSummary = {
+  scoredCount?: number;
   overview: string;
   categories: CategoryInsight[];
   nextSteps: TeachingNextStep[];
@@ -137,6 +138,8 @@ Return ONLY valid JSON, no markdown, matching this schema:
 }
 Rules:
 - Base every claim on the supplied aggregate data; do not invent student names or specifics.
+- Final recorded grades determine whether work is scored. Missing category detail does not mean a submission is unscored.
+- Never infer individual category performance from an overall grade. If category detail is unavailable, say so without telling the teacher to grade already graded work.
 - Prioritize the weakest categories in next steps.
 - Keep language warm, concrete, and teacher-facing.${conditionRules}`;
 
@@ -152,7 +155,14 @@ Rules:
       : ''
   }.
 
-Per-category performance:
+${
+  aggregate.finalGrades
+    ? `Final recorded grades: ${JSON.stringify(aggregate.finalGrades)}
+${aggregate.scoredCount} scored; ${aggregate.submissionCount - (aggregate.scoredCount ?? 0)} unscored.
+`
+    : ''
+}
+Per-category performance (category detail may be absent on graded work):
 ${categoryLines}`;
 
   return { system, user };

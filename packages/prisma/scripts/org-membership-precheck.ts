@@ -5,6 +5,7 @@
  * use org-membership-postcheck (when added) instead of running this script live.
  */
 import { createPrismaClient } from './local-dev/connection';
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 
 export type PrecheckInput = {
   counts: Record<string, number>;
@@ -174,7 +175,7 @@ async function main() {
 
 if (import.meta.main) {
   main().catch((error) => {
-    console.error(error);
+    logScriptError(error);
     process.exit(1);
   });
 }

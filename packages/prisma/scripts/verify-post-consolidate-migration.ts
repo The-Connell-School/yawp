@@ -6,6 +6,7 @@
  */
 import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -36,7 +37,7 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error(e);
+    logScriptError(e);
     process.exit(1);
   })
   .finally(() => prisma.$disconnect());

@@ -1,13 +1,22 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { featureFlagPrismaTables } from '~/domain/feature-flags/feature-flags.server.test-support';
 
+const featureFlagTables = featureFlagPrismaTables();
 const prisma = {
+  ...featureFlagTables,
   $transaction: mock(async (fn: any) => fn(prisma)),
   $queryRaw: mock(),
-  class: { findFirst: mock() },
+  class: { findFirst: mock(), findUnique: mock() },
   user: { findFirst: mock() },
   orgMembership: { update: mock(), create: mock() },
   invitation: { findFirst: mock(), delete: mock(), create: mock(), count: mock() },
-  organization: { findUnique: mock() },
+  organization: {
+    ...featureFlagTables.organization,
+    findUnique: mock(),
+  },
+  freeTierApplication: {
+    findFirst: mock(async () => null),
+  },
 };
 
 function mockNonFreeClassSeatCap() {
@@ -27,6 +36,9 @@ mock.module('~/utils/totp.server.ts', () => ({ generateTOTP }));
 mock.module('~/utils/totp.server', () => ({ generateTOTP }));
 mock.module('~/utils/email.server.ts', () => ({ sendEmail }));
 mock.module('~/utils/email.server', () => ({ sendEmail }));
+mock.module('~/domain/free-tier/locked-preview.server', () => ({
+  assertOrganizationTeachingApproved: async () => {},
+}));
 
 const {
   lookupStudentEmailForClass,
@@ -418,8 +430,15 @@ describe('sendStudentClassInvite', () => {
     prisma.$transaction.mockReset();
     prisma.$queryRaw.mockReset();
     prisma.class.findFirst.mockReset();
+    prisma.class.findUnique.mockReset();
     prisma.invitation.count.mockReset();
     mockNonFreeClassSeatCap();
+    prisma.class.findUnique.mockResolvedValue({
+      title: 'English 10',
+      period: 3,
+      grade: 10,
+      teachers: [{ user: { name: 'Ms. Whitaker' } }],
+    });
     generateTOTP.mockReset();
     sendEmail.mockReset();
 
@@ -523,5 +542,30 @@ describe('sendStudentClassInvite', () => {
     expect(result.status).toBe('error');
     expect(prisma.invitation.delete).not.toHaveBeenCalled();
     expect(prisma.invitation.create).not.toHaveBeenCalled();
+  });
+
+  test('redacts sensitive substrings when the class seat cap blocks an invite', async () => {
+    const { FreeClassSeatError } = await import(
+      '~/domain/free-tier/free-class-seat-error'
+    );
+    prisma.$transaction.mockImplementationOnce(async () => {
+      throw new FreeClassSeatError(
+        'class_full',
+        'This class is full. token=SECRET-TOKEN teacher@school.edu',
+      );
+    });
+
+    const result = await sendStudentClassInvite({
+      email: 'new@example.com',
+      classId: 'class-1',
+      organizationId: 'org-1',
+      request: new Request('https://example.test/app/my-classes/class-1'),
+    });
+
+    expect(result.status).toBe('error');
+    if (result.status === 'error') {
+      expect(JSON.stringify(result)).not.toContain('SECRET-TOKEN');
+      expect(result.error).toMatch(/full/i);
+    }
   });
 });

@@ -54,7 +54,12 @@ async function submitEventSignup(page: Page, input: {
   await page.getByLabel('School email').fill(input.email);
   await page.getByLabel('School name').fill(input.schoolName);
   await page.getByLabel('Location').fill(input.location);
-  await page.getByLabel('Grade level').fill(input.gradeLevel);
+  const gradeSelect = page.locator('select[name="gradeLevel"]');
+  if (await gradeSelect.count()) {
+    await gradeSelect.selectOption(input.gradeLevel);
+  } else {
+    await page.getByLabel('Grade level').fill(input.gradeLevel);
+  }
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('status')).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('body')).not.toContainText(

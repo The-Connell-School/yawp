@@ -1,0 +1,13 @@
+import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
+import { prisma } from '~/utils/db.server';
+import { recordInternalPlatformWriteAudit } from '~/utils/internal-platform-auth.server';
+import { createInternalOwnerInvitationHandlers } from '~/utils/internal-owner-invitations.server';
+
+const handlers = createInternalOwnerInvitationHandlers({
+  db: prisma,
+  auditRead: recordInternalPlatformWriteAudit,
+});
+export const loader = ({ request, params }: LoaderFunctionArgs) =>
+  handlers.list(request, params.id);
+export const action = ({ request, params }: ActionFunctionArgs) =>
+  handlers.create(request, params.id);

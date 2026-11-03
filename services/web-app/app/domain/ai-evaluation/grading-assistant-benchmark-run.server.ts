@@ -192,10 +192,7 @@ export async function runLiveGradingAssistantBenchmarkCase({
         {
           evaluatorId: 'execution',
           status: 'fail',
-          message:
-            error instanceof Error
-              ? error.message
-              : 'Benchmark execution failed.',
+          message: 'Benchmark execution failed.',
         },
       ],
     };

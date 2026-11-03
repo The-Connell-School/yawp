@@ -9,7 +9,7 @@ import {
   FEATURE_FLAG_MODES,
   MAX_FEATURE_FLAG_ORG_IDS,
   type FeatureFlagValue,
-  isFeatureFlagKey,
+  resolveFeatureFlagKey,
   normalizeFeatureFlagValue,
 } from '~/domain/feature-flags/feature-flags';
 import {
@@ -17,6 +17,7 @@ import {
   listFeatureFlags,
   setFeatureFlag,
 } from '~/domain/feature-flags/feature-flags.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 
 /**
  * Read and set the feature flags from the internal app: off, on for
@@ -60,7 +61,7 @@ export async function featureFlagsList(request: Request) {
     return response({ flags: await listFeatureFlags() });
   } catch (error) {
     console.error('feature_flags_list_failed', {
-      error: error instanceof Error ? error.message : String(error),
+      error: buildSafeErrorForLog(error),
     });
     return response({ error: 'Could not read feature flags' }, 500);
   }
@@ -78,7 +79,8 @@ export async function featureFlagUpdate(request: Request, key: string | undefine
     const denied = await authenticateAndAuditWrite(request, { body: text ?? '' });
     if (denied) return denied;
   }
-  if (!isFeatureFlagKey(key)) return response({ error: 'Unknown feature flag' }, 404);
+  const flagKey = resolveFeatureFlagKey(key);
+  if (!flagKey) return response({ error: 'Unknown feature flag' }, 404);
   if (!request.headers.get('content-type')?.startsWith('application/json')) {
     return response({ error: 'Invalid content type' }, 400);
   }
@@ -108,9 +110,9 @@ export async function featureFlagUpdate(request: Request, key: string | undefine
     if (unknownOrgIds.length > 0) {
       return response({ error: 'Unknown organizations', unknownOrgIds }, 400);
     }
-    const result = await setFeatureFlag(key, next, operator.data);
+    const result = await setFeatureFlag(flagKey, next, operator.data);
     console.info('feature_flag_set', {
-      key,
+      key: flagKey,
       mode: next.mode,
       orgCount: next.orgIds.length,
       changed: result.changed,
@@ -124,7 +126,7 @@ export async function featureFlagUpdate(request: Request, key: string | undefine
   } catch (error) {
     console.error('feature_flag_set_failed', {
       key,
-      error: error instanceof Error ? error.message : String(error),
+      error: buildSafeErrorForLog(error),
     });
     return response({ error: 'Could not update feature flag' }, 500);
   }

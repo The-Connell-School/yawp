@@ -27,6 +27,7 @@ const loadFreeTierGateApplication = mock(async () => ({
 }));
 const enforceFreeTierTeacherGate = mock(async () => null);
 const retryFreeClassroomProvisioningForUser = mock(async () => {});
+const ensureLockedPreviewClassroomForUser = mock(async () => {});
 
 mock.module('~/utils/mock-admin.server', () => ({
   canUseMockAdmin,
@@ -51,6 +52,9 @@ mock.module('~/domain/free-tier/free-tier-gate.server', () => ({
 mock.module('~/domain/free-tier/provision-free-classroom.server', () => ({
   retryFreeClassroomProvisioningForUser,
 }));
+mock.module('~/domain/free-tier/locked-preview.server', () => ({
+  ensureLockedPreviewClassroomForUser,
+}));
 
 const { loader } = await import('./route');
 
@@ -72,15 +76,16 @@ describe('app parent free-tier loader gate', () => {
     loadFreeTierGateApplication.mockClear();
     enforceFreeTierTeacherGate.mockClear();
     retryFreeClassroomProvisioningForUser.mockClear();
+    ensureLockedPreviewClassroomForUser.mockClear();
     if (oldPreviewSlug === undefined) delete process.env.PREVIEW_SLUG;
     else process.env.PREVIEW_SLUG = oldPreviewSlug;
     if (oldYawpEnvironment === undefined) delete process.env.YAWP_ENVIRONMENT;
     else process.env.YAWP_ENVIRONMENT = oldYawpEnvironment;
   });
 
-  test('lets demo free-tier applicants reach the onboarding shell when the stored flag is off', async () => {
+  test('lets demo free-tier applicants reach the onboarding shell when demo default-on applies', async () => {
     process.env.YAWP_ENVIRONMENT = 'demo';
-    isFreeTierEnabled.mockResolvedValue(false);
+    isFreeTierEnabled.mockResolvedValue(true);
 
     const response = await loader({
       request: new Request('https://yawp.test/app/free-tier/onboarding'),
@@ -89,6 +94,7 @@ describe('app parent free-tier loader gate', () => {
     } as any);
 
     expect(loadFreeTierGateApplication).toHaveBeenCalledWith('user-1');
+    expect(ensureLockedPreviewClassroomForUser).toHaveBeenCalledWith('user-1');
     expect(retryFreeClassroomProvisioningForUser).toHaveBeenCalledWith('user-1');
     expect(enforceFreeTierTeacherGate).toHaveBeenCalledWith({
       userId: 'user-1',
@@ -111,6 +117,7 @@ describe('app parent free-tier loader gate', () => {
         isStudent: false,
       },
       guidedTours: null,
+      teachingAccess: { variant: 'none' },
     });
   });
 });

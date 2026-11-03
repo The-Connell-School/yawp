@@ -50,7 +50,7 @@ import { assertResendMailAvailable } from './resend-mail.server';
 import { finishAuthentication } from './authentication.server';
 import { rememberClassConfirmation } from './class-confirmation.server';
 import { readInvitation, prepareInvitation } from './invitations.server';
-import { beginGoogle, googleAvailable } from './google.server';
+import { beginGoogle, googleAvailableFor } from './google.server';
 
 export async function limit(
   request: Request,
@@ -695,7 +695,7 @@ async function operate(
       throw new FlowError('Sign in to link this account.', 401);
     if (operation === 'link-google') {
       await assertCurrentIdentity(tx, flow);
-      if (!googleAvailable())
+      if (!googleAvailableFor(request))
         throw new FlowError('Google sign-in is unavailable.', 503);
       const existing = await tx.signonIdentity.findFirst({
         where: {

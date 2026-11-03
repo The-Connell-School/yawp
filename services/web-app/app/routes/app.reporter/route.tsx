@@ -1,7 +1,8 @@
 import {
   FreeReporterLocked,
+  FreeReporterMonthlyLimit,
   useFreeAccountUsage,
-  FULL_ACCESS_CONTACT,
+  MonthlyUsageNotice,
 } from '~/components/free-account-usage';
 import { isFreeTierInappV2Enabled } from '~/domain/free-tier/inapp-feature-gate.server';
 import { useEffect, useRef, useState } from 'react';
@@ -9,9 +10,15 @@ import {
   redirect,
   useFetcher,
   useLoaderData,
+  useNavigation,
   useSearchParams,
+  useRevalidator,
   type LoaderFunctionArgs,
+  type MetaFunction,
 } from 'react-router';
+import { appRouteDocumentTitle } from '~/utils/app-mobile-top-bar-title';
+import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import { TeachingAccessReporterSkeleton } from '~/components/free-tier/teaching-access-reporter-skeleton';
 import {
   CornerDownRight,
   Loader2,
@@ -34,6 +41,12 @@ import {
 } from '~/components/ai-chat/assistant-markdown';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
+
+export const handle = { breadcrumb: 'Reporter' };
+
+export const meta: MetaFunction = () => [
+  { title: appRouteDocumentTitle('Reporter') },
+];
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const access = await getReporterAccess(request);
@@ -123,6 +136,9 @@ type GrowthPlanProposal = {
 };
 
 export default function ReporterRoute() {
+  const navigation = useNavigation();
+  const { locked: teachingLocked, loading: teachingLoading } =
+    useTeachingAccess();
   const usage = useFreeAccountUsage();
   const monthlyUsage = usage?.monthly ? usage.reporter : null;
   const exhausted = monthlyUsage?.remaining === 0;
@@ -134,6 +150,7 @@ export default function ReporterRoute() {
   } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const fetcher = useFetcher<ReporterActionData>();
+  const revalidator = useRevalidator();
 
   const [messages, setMessages] = useState<ChatMessage[]>(
     selectedConversation?.messages ?? []
@@ -226,6 +243,7 @@ export default function ReporterRoute() {
         // Replace so the browser back button doesn't bounce between states.
         setSearchParams(next, { replace: true });
       }
+      revalidator.revalidate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher.state, fetcher.data]);
@@ -268,7 +286,18 @@ export default function ReporterRoute() {
 
   const hasMessages = messages.length > 0;
 
-  if (freeLocked) return <FreeReporterLocked />;
+  if (
+    (teachingLocked || teachingLoading) &&
+    navigation.state === 'loading'
+  ) {
+    return <TeachingAccessReporterSkeleton />;
+  }
+
+  if (freeLocked) return <FreeReporterLocked variant="pending" />;
+
+  if (usage?.monthly && usage.reporter?.remaining === 0) {
+    return <FreeReporterMonthlyLimit usage={usage} />;
+  }
 
   return (
     <section className="flex h-full w-full">
@@ -331,7 +360,7 @@ export default function ReporterRoute() {
             <Search size={20} className="shrink-0 text-primary" />
             <div className="min-w-0 flex-1">
               <h2 className="text-lg font-semibold leading-none">
-                Yawp Reporter
+                Yawp! Reporter
               </h2>
               <p className="hidden text-sm text-muted-foreground sm:block">
                 Ask about your classes and students in plain language.
@@ -385,31 +414,8 @@ export default function ReporterRoute() {
           className="no-scrollbar flex-1 overflow-y-auto px-4 py-6"
         >
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-            {monthlyUsage && (
-              <div
-                data-testid="reporter-monthly-remaining"
-                className="rounded-xl border bg-popover p-4 text-sm"
-              >
-                <p>
-                  {monthlyUsage.remaining} of {monthlyUsage.total} Reporter uses
-                  left this month
-                </p>
-                {exhausted && (
-                  <p className="mt-2">
-                    Come back next month to prepare another report. Your saved
-                    reports are still available.
-                  </p>
-                )}
-                <a
-                  href={FULL_ACCESS_CONTACT}
-                  className="mt-2 inline-block text-primary underline"
-                >
-                  Need more? Talk to us
-                </a>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Unlimited with a site license
-                </p>
-              </div>
+            {monthlyUsage && usage && (
+              <MonthlyUsageNotice usage={usage} feature="reporter" />
             )}
             {!hasMessages ? (
               <ReporterEmptyState
@@ -483,8 +489,8 @@ export default function ReporterRoute() {
                 }
               }}
               rows={1}
-              placeholder="Ask Yawp Reporter…"
-              aria-label="Message Yawp Reporter"
+              placeholder="Ask Yawp! Reporter…"
+              aria-label="Message Yawp! Reporter"
               className="max-h-40 min-h-[44px] flex-1 resize-none max-sm:text-base"
               disabled={isSending || exhausted}
             />
@@ -520,7 +526,7 @@ function ReporterEmptyState({
         </div>
         <h3 className="text-xl font-semibold">What would you like to know?</h3>
         <p className="max-w-md text-sm text-muted-foreground">
-          Yawp Reporter reads your classes, assignments, and released grades to
+          Yawp! Reporter reads your classes, assignments, and released grades to
           answer questions and build reports. Try one of these, or just ask.
         </p>
       </div>
@@ -579,7 +585,7 @@ function MessageBubble({
           <div className="mt-1.5 flex justify-end">
             <button
               type="button"
-              onClick={() => printAssistantMessage(body, 'Yawp Reporter')}
+              onClick={() => printAssistantMessage(body, 'Yawp! Reporter')}
               className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
             >
               <Printer size={13} />

@@ -43,17 +43,15 @@ test.beforeEach(async () => {
   });
 });
 test.afterAll(async () => {
-  await flag('free-tier-onboarding-v2', false);
+  await flag('free-tier', false);
   await db.$disconnect();
 });
 test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dialog', async ({
   page,
   context,
 }) => {
-  await flag('free_tier', true);
-  await flag('free-tier-inapp-v2', true);
+  await flag('free-tier', { mode: 'targeted', orgIds: [org] });
   await flag('lesson_planner', true);
-  await flag('free-tier-onboarding-v2', { mode: 'targeted', orgIds: [org] });
   const emptyClass = await db.class.findFirstOrThrow({
     where: { school: { organizationId: org }, isArchived: false },
   });
@@ -85,6 +83,14 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
     await expect(
       page.getByText('Your class, assignments, and grading in one place.')
     ).toBeVisible();
+    const rail = page.getByTestId('free-account-rail');
+    await expect(rail.getByTestId('free-account-checklist')).toContainText(
+      '2 of 4'
+    );
+    await expect(rail.getByText('Your class is ready')).toBeVisible();
+    await expect(
+      rail.getByRole('link', { name: 'Get the Advocate Pack' })
+    ).toHaveCount(0);
     await expect(page.getByTestId('class-code').first()).toBeInViewport();
     const opener = page
       .getByRole('button', {
@@ -137,14 +143,22 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
     await shot(page, `assignments-${label}`);
     await page.getByTestId('my-assignments-new-assignment').click();
     await expect(
-      page.getByRole('dialog').getByText('Unlimited assignments').first()
+      page.getByRole('dialog').getByText('Unlimited').first()
     ).toBeVisible();
     await shot(page, `type-picker-${label}`);
     await page.keyboard.press('Escape');
     await page.goto('/app/lesson-planner');
+    await expect(page.getByTestId('free-lesson-remaining')).toContainText(
+      /Your free classroom includes \d+ lesson plans and \d+ reports each month\. Renews/
+    );
     await shot(page, `lesson-planner-${label}`);
     await page.goto('/app/reporter');
-    await expect(page.getByTestId('reporter-monthly-remaining')).toBeVisible();
+    await expect(page.getByTestId('reporter-monthly-remaining')).toContainText(
+      'Unlimited with a site license'
+    );
+    await expect(page.getByTestId('reporter-monthly-remaining')).toContainText(
+      /Renews [A-Z][a-z]+ 1/
+    );
     await expect(page.getByTestId('free-reporter-locked')).toHaveCount(0);
     await shot(page, `reporter-${label}`);
   }
@@ -166,7 +180,25 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
   );
   await shot(page, 'monthly-usage');
   await page.keyboard.press('Escape');
-  await page.getByRole('link', { name: 'Ready for full access?' }).click();
+  const studentMembership = await db.orgMembership.findFirstOrThrow({
+    where: {
+      organizationId: org,
+      role: 'STUDENT',
+      user: { email: 'dev.student.free@yawp.local' },
+    },
+  });
+  const enrolledClass = await db.class.findFirstOrThrow({
+    where: { school: { organizationId: org }, isArchived: false },
+  });
+  await db.class.update({
+    where: { id: enrolledClass.id },
+    data: { students: { connect: { id: studentMembership.id } } },
+  });
+  await page.goto('/app');
+  await expect(
+    page.getByRole('link', { name: 'Get the Advocate Pack' })
+  ).toBeVisible();
+  await page.getByRole('link', { name: 'Get the Advocate Pack' }).click();
   await expect(
     page.getByRole('heading', { name: 'Advocate Pack' })
   ).toBeVisible();
@@ -178,13 +210,15 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
     page.getByRole('main').getByRole('link', { name: 'Need more? Talk to us' })
   ).toHaveAttribute('href', /mailto:hello@yawp.school\?subject=/);
   await shot(page, 'advocate-pack');
+  await db.class.update({
+    where: { id: enrolledClass.id },
+    data: { students: { set: [] } },
+  });
 });
 for (const control of ['flag-off', 'untargeted', 'paid', 'pending'] as const)
   test(`compatibility ${control}`, async ({ page }) => {
-    await flag('free_tier', true);
-    await flag('free-tier-inapp-v2', true);
     await flag(
-      'free-tier-onboarding-v2',
+      'free-tier',
       control === 'flag-off'
         ? false
         : {
@@ -211,7 +245,7 @@ for (const control of ['flag-off', 'untargeted', 'paid', 'pending'] as const)
         await page.waitForURL(/\/app\/free-tier\/preview/);
       } else await login(page, control !== 'paid');
       await expect(
-        page.getByRole('link', { name: 'Ready for full access?' })
+        page.getByRole('link', { name: 'Get the Advocate Pack' })
       ).toHaveCount(0);
       await expect(
         page.getByRole('button', {
@@ -236,10 +270,8 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
     baseline,
     'Consumer behavior is implemented after the main-baseline captures'
   );
-  await flag('free_tier', true);
-  await flag('free-tier-inapp-v2', true);
+  await flag('free-tier', { mode: 'targeted', orgIds: [org] });
   await flag('lesson_planner', true);
-  await flag('free-tier-onboarding-v2', { mode: 'targeted', orgIds: [org] });
   await login(page);
   const klass = await db.class.findFirstOrThrow({
     where: { school: { organizationId: org }, isArchived: false },
@@ -332,13 +364,13 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
     await expect(
       page
         .getByTestId('free-assignment-tiles')
-        .getByRole('button', { name: /New .* assignment/ })
+        .getByRole('link', { name: /New .* assignment/ })
     ).toHaveCount(3);
-    for (const button of await page
+    for (const link of await page
       .getByTestId('free-assignment-tiles')
-      .getByRole('button', { name: /New .* assignment/ })
+      .getByRole('link', { name: /New .* assignment/ })
       .all())
-      await expect(button).toBeEnabled();
+      await expect(link).toBeVisible();
     await shot(page, 'dashboard-above-old-caps');
     // The displayed meter can be stale when a competing request consumes the
     // last use. The actual streamed browser request must show the server refusal.
@@ -444,6 +476,17 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
       await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
       for (const route of ['lesson-planner', 'reporter']) {
         await page.goto(`/app/${route}`);
+        await expect(
+          page.getByText("and everything you've already made is still here.", {
+            exact: false,
+          })
+        ).toBeVisible();
+        await expect(
+          page.getByRole('link', { name: 'Share Yawp! with my administrator' })
+        ).toHaveAttribute('href', '/app/advocate-pack');
+        await expect(
+          page.getByRole('link', { name: 'Learn about site licenses' })
+        ).toBeVisible();
         await shot(page, `${route}-zero-${width}`);
       }
       if (width === 390) {
@@ -557,16 +600,22 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
           },
         });
         expect(response.status()).toBe(403);
-        expect(await response.json()).toMatchObject({ error: 'approval_required' });
+        expect(await response.json()).toMatchObject({
+          error: 'approval_required',
+        });
       }
     }
-    expect(await db.reporterMessage.count({
-      where: { conversationId: saved.id },
-    })).toBe(messagesBefore);
-    expect(await db.setting.findMany({
-      where: { name: { startsWith: 'free_tier.monthly.' } },
-      orderBy: { name: 'asc' },
-    })).toEqual(usageBefore);
+    expect(
+      await db.reporterMessage.count({
+        where: { conversationId: saved.id },
+      })
+    ).toBe(messagesBefore);
+    expect(
+      await db.setting.findMany({
+        where: { name: { startsWith: 'free_tier.monthly.' } },
+        orderBy: { name: 'asc' },
+      })
+    ).toEqual(usageBefore);
   } finally {
     await db.freeTierApplication.updateMany({
       where: { organizationId: org },
@@ -595,4 +644,26 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
       });
     else await db.setting.deleteMany({ where: { name: limitsName } });
   }
+});
+
+test('unlocked free dashboard assignment tiles navigate to assignment type home', async ({
+  page,
+}) => {
+  await flag('free-tier', { mode: 'targeted', orgIds: [org] });
+  await login(page);
+  const classStarter = await db.assignmentType.findFirstOrThrow({
+    where: { kind: 'class_starter' },
+  });
+  await page.goto('/app');
+  const tile = page
+    .getByTestId('free-assignment-tiles')
+    .getByRole('link', { name: 'New Class Starter assignment' });
+  await expect(tile).toHaveAttribute(
+    'href',
+    `/app/assignment-types/${classStarter.id}`
+  );
+  await tile.click();
+  await expect(page).toHaveURL(
+    new RegExp(`/app/assignment-types/${classStarter.id}$`)
+  );
 });

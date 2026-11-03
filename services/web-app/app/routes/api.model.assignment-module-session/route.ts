@@ -27,12 +27,14 @@ function cmsInclude() {
     assignmentModule: {
       include: {
         instructions: {
+          omit: { answerKey: true },
           orderBy: { position: 'asc' as const },
           include: { buttons: { orderBy: { position: 'asc' as const } } },
         },
         assignmentType: {
           select: {
             assignmentModules: {
+              where: { deletedAt: null },
               select: { id: true, position: true },
               orderBy: { position: 'asc' as const },
             },

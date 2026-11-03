@@ -6,6 +6,9 @@ import {
   data,
 } from 'react-router';
 import { Form, useLoaderData, useSearchParams } from 'react-router';
+import { AuthPageShell } from '~/components/auth-brand-lockup';
+import { UnifiedLogin } from '~/components/unified-signon/unified-login';
+import { signedInTeacherPromptEntry } from '~/domain/unified-signon/teacher-prompts.server';
 import { z } from 'zod';
 import { parseFormData, useForm, validationError } from '@rvf/react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
@@ -45,9 +48,18 @@ function requireStudentMembership(membership: { role: string }) {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
+  const url = new URL(request.url);
+  // Existing tabs and dashboard forms can already be midway through enrollment.
+  if (!url.searchParams.has('code') && url.searchParams.get('modal') !== '1') {
+    const prompt = await signedInTeacherPromptEntry(
+      request,
+      userId,
+      'class-code'
+    );
+    if (prompt) return prompt;
+  }
   const membership = await requireMembership(request, userId);
   requireStudentMembership(membership);
-  const url = new URL(request.url);
   const code = url.searchParams.get('code');
 
   if (!code) {
@@ -211,6 +223,13 @@ export default function Route() {
     method: 'POST',
     defaultValues: { classId: '', code: validatedCode },
   });
+
+  if ('teacherPromptEntry' in data)
+    return (
+      <AuthPageShell>
+        <UnifiedLogin entry={data.teacherPromptEntry} />
+      </AuthPageShell>
+    );
 
   if (!hasCode) {
     return (

@@ -4,12 +4,21 @@ const sendEmail = mock((_options: any): any => undefined);
 
 mock.module('~/utils/email.server', () => ({ sendEmail }));
 const logEmail = mock(async (_options: any) => ({}));
+const findUniqueOrThrow = mock(async () => ({
+  releaseEmailCopyVersion: null,
+}));
 mock.module('~/utils/db.server', () => ({
-  prisma: { freeTierEmailLog: { create: logEmail } },
+  prisma: {
+    freeTierEmailLog: { create: logEmail },
+    freeTierApplication: { findUniqueOrThrow, findUnique: findUniqueOrThrow },
+  },
 }));
 
-const { sendFreeTierAdminApprovalEmail, sendFreeTierAdminReminderEmail } =
-  await import('./email.server');
+const {
+  sendFreeTierAdminApprovalEmail,
+  sendFreeTierAdminReminderEmail,
+  sendFreeTierReleaseEmail,
+} = await import('./email.server');
 
 describe('free-tier email delivery', () => {
   const secret = process.env.FREE_TIER_LINK_HMAC_SECRET;
@@ -28,6 +37,51 @@ describe('free-tier email delivery', () => {
     else process.env.PRIMARY_APP_URL = primary;
   });
 
+  test('redacts provider error messages returned to callers', async () => {
+    sendEmail.mockResolvedValue({
+      status: 'error',
+      error: {
+        message: 'Rejected recipient teacher@school.edu token=abc123',
+      },
+    });
+    const result = await sendFreeTierAdminApprovalEmail({
+      applicationId: 'app_test',
+      to: 'admin@school.edu',
+      teacherEmail: 'teacher@school.edu',
+      teacherName: 'Teacher',
+      schoolName: 'Test HS',
+      approveUrl: 'https://yawp.test/a',
+      notRightPersonUrl: 'https://yawp.test/n',
+      pass1: false,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected failure');
+    expect(result.error).not.toContain('teacher@school.edu');
+    expect(result.error).not.toContain('abc123');
+    const logged = logEmail.mock.calls.at(-1)?.[0].data.error as string;
+    expect(logged).not.toContain('teacher@school.edu');
+    expect(logged).not.toContain('abc123');
+  });
+
+  test('redacts unexpected catch-path errors for release email', async () => {
+    findUniqueOrThrow.mockRejectedValueOnce(
+      new Error('join failed for teacher@school.edu token=SECRET-TOKEN'),
+    );
+    const result = await sendFreeTierReleaseEmail({
+      applicationId: 'app_test',
+      email: 'teacher@school.edu',
+      name: 'Teacher',
+      schoolName: 'Test HS',
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected failure');
+    expect(result.error).not.toContain('teacher@school.edu');
+    expect(result.error).not.toContain('SECRET-TOKEN');
+    const logged = logEmail.mock.calls.at(-1)?.[0].data.error as string;
+    expect(logged).not.toContain('teacher@school.edu');
+    expect(logged).not.toContain('SECRET-TOKEN');
+  });
+
   test('returns email_failed when sendEmail reports error status', async () => {
     sendEmail.mockResolvedValue({
       status: 'error',
@@ -41,6 +95,7 @@ describe('free-tier email delivery', () => {
       schoolName: 'Test HS',
       approveUrl: 'https://yawp.test/a',
       notRightPersonUrl: 'https://yawp.test/n',
+      pass1: false,
     });
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error('expected failure');
@@ -94,14 +149,18 @@ describe('approval recipients and fixed copy', () => {
         const args = {
           applicationId: 'app_test',
           to: 'principal@example.edu',
-          teacherEmail: 'teacher@example.edu',
-          teacherName: 'Teacher',
-          schoolName: 'Example High',
+          teacherEmail: 'jrivera@lincolnhs.org',
+          teacherName: 'Jordan Rivera',
+          schoolName: 'Lincoln High School',
           personalNote: 'CRAFTED OR HISTORICAL INTRODUCTION',
           approveUrl: 'https://yawp.test/approve',
           notRightPersonUrl: 'https://yawp.test/forward',
+          pass1: false,
           ...(path === 'replacement'
-            ? { adminRecipientName: 'New Principal' }
+            ? {
+                adminRecipientName: 'New Principal',
+                forwardedByAdminName: 'Sam Chen',
+              }
             : {}),
         };
         const result = await (
@@ -119,7 +178,25 @@ describe('approval recipients and fixed copy', () => {
         expect(delivered.html).not.toContain(args.personalNote);
         expect(delivered.text).toContain(args.approveUrl);
         expect(delivered.text).toContain(args.notRightPersonUrl);
-        expect(delivered.text).toContain('link expires in 14 days');
+        expect(delivered.text).toContain('This link works for 14 days');
+        expect(delivered.text).toContain('Review and approve:');
+        expect(delivered.html).toContain('Review and approve</a>');
+        expect(delivered.html).toContain(`href="${args.approveUrl}"`);
+        if (path === 'replacement') {
+          expect(delivered.subject).toBe(
+            'Can you approve Yawp! for Jordan Rivera at Lincoln High School?'
+          );
+        } else {
+          expect(delivered.subject).toBe(
+            path === 'reminder'
+              ? 'Reminder: Jordan Rivera at Lincoln High School would like to use Yawp!'
+              : 'Jordan Rivera at Lincoln High School would like to use Yawp!'
+          );
+        }
+        expect(delivered.subject).not.toBe('Approve Yawp! for Lincoln High School');
+        expect(delivered.html).toContain(
+          'Approve Yawp! for Jordan Rivera at Lincoln High School'
+        );
         expect(logEmail.mock.calls.at(-1)?.[0].data.success).toBe(true);
       });
     }

@@ -5,7 +5,7 @@ import {
 } from './universal-tutor-block';
 
 describe('UNIVERSAL_TUTOR_BLOCK', () => {
-  test('carries every section of the canonical Universal YAWP! Tutor Instructions', () => {
+  test('carries every section of the canonical Universal Yawp! Tutor Instructions', () => {
     for (const heading of [
       'WHO YOU ARE.',
       "THE ONE RULE — NEVER WRITE THE STUDENT'S WORK, BUT ALWAYS SCAFFOLD.",
@@ -22,11 +22,11 @@ describe('UNIVERSAL_TUTOR_BLOCK', () => {
     }
   });
 
-  test('opens by establishing the YAWP! Tutor identity', () => {
+  test('opens by establishing the Yawp! Tutor identity', () => {
     expect(UNIVERSAL_TUTOR_BLOCK.trimStart().startsWith('WHO YOU ARE.')).toBe(
       true
     );
-    expect(UNIVERSAL_TUTOR_BLOCK).toContain('You are the YAWP! Tutor');
+    expect(UNIVERSAL_TUTOR_BLOCK).toContain('You are the Yawp! Tutor');
   });
 
   test('carries the two verbatim tutor lines word for word', () => {

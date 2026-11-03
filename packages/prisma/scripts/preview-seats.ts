@@ -15,6 +15,7 @@ import {
   generateUniquePreviewAccessCode,
   PREVIEW_ACCESS_CODE_PATTERN,
 } from '../preview-access-code';
+import { buildSafeErrorForLog } from '../../../services/web-app/app/utils/server-error-request-context.server';
 
 export const DEFAULT_PREVIEW_SEAT_COUNT = 1;
 
@@ -360,7 +361,7 @@ export async function seedCollaborationDemoForSeat(
       );
     }
   } catch (error) {
-    console.error('Engagement preview assignment top-up failed:', error);
+    console.error('Engagement preview assignment top-up failed:', buildSafeErrorForLog(error));
   }
 
   // Top-up: Cristo Rey holistic tier assignment type + 20-point demo submission.
@@ -558,7 +559,7 @@ export async function seedCollaborationDemoForSeat(
       );
     }
   } catch (error) {
-    console.error('Holistic preview top-up failed:', error);
+    console.error('Holistic preview top-up failed:', buildSafeErrorForLog(error));
   }
 }
 

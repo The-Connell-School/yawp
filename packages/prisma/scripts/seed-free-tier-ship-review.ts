@@ -2,6 +2,7 @@
 import { createPrismaClient, assertLocalSeedTarget } from './local-dev/connection';
 import { seedFreeTierShipReview } from './local-dev/seed-free-tier-ship-review';
 import { shouldRunFreeTierShipReviewSeed } from '../../../scripts/preview/free-tier-ship-review-seed-guard.mjs';
+import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 
 assertLocalSeedTarget();
 
@@ -18,7 +19,7 @@ try {
   await seedFreeTierShipReview(prisma);
   console.log('Free tier ship-review fixture ready.');
 } catch (error) {
-  console.error(error);
+  logScriptError(error);
   process.exitCode = 1;
 } finally {
   await prisma.$disconnect();

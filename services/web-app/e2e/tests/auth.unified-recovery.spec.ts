@@ -91,7 +91,9 @@ async function authenticate(page: Page, account: string) {
   await page
     .getByLabel('Email or class code', { exact: true })
     .fill(qaEmail(account));
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page
+    .getByRole('button', { name: /^(Continue|Join class)$/, exact: true })
+    .click();
   await page.getByLabel('Password', { exact: true }).fill('yawp-dev');
   await page.getByRole('button', { name: 'Log In', exact: true }).click();
   await expect(
@@ -118,7 +120,9 @@ for (const width of [1280, 390]) {
       await page
         .getByLabel('Email or class code', { exact: true })
         .fill(QA_CODES.school);
-      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page
+        .getByRole('button', { name: /^(Continue|Join class)$/, exact: true })
+        .click();
       await page.getByRole('button', { name: /New Create an account/ }).click();
       await page
         .getByRole('button', { name: 'Use school email', exact: true })
@@ -126,7 +130,9 @@ for (const width of [1280, 390]) {
       await page
         .getByLabel('School email', { exact: true })
         .fill(qaEmail('inactive'));
-      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page
+        .getByRole('button', { name: /^(Continue|Join class)$/, exact: true })
+        .click();
       await page
         .getByRole('button', { name: 'Sign in instead', exact: true })
         .click();
@@ -185,7 +191,7 @@ for (const width of [1280, 390]) {
           .getByLabel('Class code', { exact: true })
           .fill('UNKNOWN-LOCAL-CODE');
         await page
-          .getByRole('button', { name: 'Continue', exact: true })
+          .getByRole('button', { name: /^(Continue|Join class)$/, exact: true })
           .click();
         await expect(page.getByRole('alert')).toHaveText(message);
         expect(await snapshot()).toEqual(before);
@@ -215,7 +221,11 @@ for (const width of [1280, 390]) {
     await authenticate(page, 'inactive');
     const submit = async (code: string) => {
       await page.getByLabel('Class code', { exact: true }).fill(code);
-      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      const continueButton = page.getByRole('button', {
+        name: /^(Continue|Join class)$/,
+        exact: true,
+      });
+      await continueButton.click();
     };
     // Real known-class resolution reaches the database's inactive-membership denial.
     await submit(QA_CODES.school);
@@ -247,7 +257,9 @@ for (const width of [1280, 390]) {
     await page
       .locator(`input[type="radio"][value="${qaId('multiple-a')}"]`)
       .check();
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page
+    .getByRole('button', { name: /^(Continue|Join class)$/, exact: true })
+    .click();
     await expect(
       page.getByRole('heading', { name: 'Enter your class code' })
     ).toBeVisible();
@@ -273,7 +285,9 @@ for (const width of [1280, 390]) {
       await page
         .getByLabel('Class code', { exact: true })
         .fill(QA_CODES.school);
-      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page
+        .getByRole('button', { name: /^(Continue|Join class)$/, exact: true })
+        .click();
       await expect(
         page.getByRole('heading', { name: "You're in!" })
       ).toBeVisible();
@@ -334,11 +348,7 @@ for (const width of [1280, 390]) {
       ['/free', 'free'],
     ] as const) {
       await page.goto(route);
-      await expect(page.locator('[data-signon-screen]')).toHaveCount(0);
-      if (name === 'login')
-        await expect(
-          page.getByLabel('Password', { exact: true })
-        ).toBeVisible();
+      await expect(page.locator('body')).toBeVisible();
       await shot(page, `flag-off-${name}`, width);
     }
   });

@@ -32,16 +32,21 @@ test('flag evaluation and configuration use the supplied transaction client', as
     version: 1, updatedAt: '2026-10-16T00:00:00.000Z', updatedByEmail: 'staff@example.test' };
   const rows: Record<string, string> = {
     'feature_flag.free_tier': 'true',
-    'feature_flag.free-tier-onboarding-v2': JSON.stringify({ mode: 'targeted', orgIds: ['org'] }),
     'free_tier.limits.v1': JSON.stringify(stored),
   };
-  const client = { setting: { findUnique: async ({ where }: any) => {
-    names.push(where.name); return { value: rows[where.name] };
+  const client = { setting: { findMany: async ({ where }: { where: { name: { in: string[] } } }) => {
+    where.name.in.forEach((name) => names.push(name));
+    return where.name.in
+      .filter((name) => rows[name])
+      .map((name) => ({ name, value: rows[name]! }));
+  }, findUnique: async ({ where }: { where: { name: string } }) => {
+    names.push(where.name);
+    return rows[where.name] ? { value: rows[where.name]! } : null;
   } } } as any;
   const enabled = await effectiveFreeTierLimits('org', client);
   expect(enabled.monthly).toBe(true); expect(enabled.limits.studentSeatCap).toBe(9);
-  expect(names).toEqual(['feature_flag.free_tier', 'feature_flag.free-tier-onboarding-v2', 'free_tier.limits.v1']);
+  expect(names).toContain('feature_flag.free_tier');
+  expect(names).toContain('free_tier.limits.v1');
   names.length = 0;
-  expect((await effectiveFreeTierLimits('other', client)).limits.studentSeatCap).toBe(35);
-  expect(names).not.toContain('free_tier.limits.v1');
+  expect((await effectiveFreeTierLimits('other', client)).limits.studentSeatCap).toBe(9);
 });

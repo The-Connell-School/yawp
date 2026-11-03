@@ -135,18 +135,46 @@ export function inlinePlannedPractice(
 ): string {
   return content.replace(PRACTICE_BLOCK, (_block, inner: string) => {
     const practice = parseBlock(inner ?? '');
-    if (!practice) return '';
-    const lessons = practice.lessonSlugs
-      .map((slug) => lessonTitles[slug] ?? readableSlug(slug))
-      .join(', ');
-    const count = `${practice.problemCount} ${
-      practice.problemCount === 1 ? 'problem' : 'problems'
-    }`;
-    const line = `**Writing practice${
-      practice.title ? `: ${practice.title}` : ''
-    }** — ${count} from ${lessons}.`;
-    return practice.instructions
-      ? `${line}\n\n> ${practice.instructions.split('\n').join('\n> ')}`
-      : line;
+    return practice ? describePlannedPractice(practice, lessonTitles) : '';
   });
+}
+
+/** A practice set as a line of the plan, with its directions under it. */
+export function describePlannedPractice(
+  practice: PlannedPractice,
+  lessonTitles: Record<string, string> = {}
+): string {
+  const lessons = practicedLessons(practice, lessonTitles);
+  const count = `${practice.problemCount} ${
+    practice.problemCount === 1 ? 'problem' : 'problems'
+  }`;
+  const line = `**Writing practice${
+    practice.title ? `: ${practice.title}` : ''
+  }** — ${count} from ${lessons}.`;
+  return practice.instructions
+    ? `${line}\n\n> ${practice.instructions.split('\n').join('\n> ')}`
+    : line;
+}
+
+/** "Comma splices, Passive voice". */
+export function practicedLessons(
+  practice: PlannedPractice,
+  lessonTitles: Record<string, string> = {}
+): string {
+  return practice.lessonSlugs
+    .map((slug) => lessonTitles[slug] ?? readableSlug(slug))
+    .join(', ');
+}
+
+/** The stack key for the nth practice set in a reply (Brian's run 2, A3). */
+export const PRACTICE_BLOCK_KEY = 'pr';
+
+export function practiceBlockKey(index: number): string {
+  return index === 0 ? PRACTICE_BLOCK_KEY : `${PRACTICE_BLOCK_KEY}:${index}`;
+}
+
+export function practiceIndexForKey(key: string): number | null {
+  if (key === PRACTICE_BLOCK_KEY) return 0;
+  const match = /^pr:(\d{1,4})$/.exec(key);
+  return match ? Number(match[1]) : null;
 }

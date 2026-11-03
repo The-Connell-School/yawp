@@ -1,5 +1,6 @@
 import { PrismaClient, Prisma } from '../generated/prisma';
 import { Database } from 'bun:sqlite';
+import { buildSafeErrorForLog } from '../../../services/web-app/app/utils/server-error-request-context.server';
 
 const sqliteDb = new Database(__dirname + '/test.db');
 const psqlPrisma = new PrismaClient();
@@ -650,7 +651,7 @@ async function migrateData() {
 
     console.log('Migration completed successfully!');
   } catch (error) {
-    console.error('Migration failed:', error);
+    console.error('Migration failed:', buildSafeErrorForLog(error));
     throw error;
   } finally {
     console.log('Closing database connections...');
@@ -661,6 +662,6 @@ async function migrateData() {
 
 // Run the migration
 migrateData().catch((error) => {
-  console.error('Migration failed:', error);
+  console.error('Migration failed:', buildSafeErrorForLog(error));
   process.exit(1);
 });

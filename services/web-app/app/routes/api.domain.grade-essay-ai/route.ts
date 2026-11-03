@@ -14,6 +14,15 @@ import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import { parseStoredExitTicketConfig } from '~/domain/assignment-types/exit-ticket';
 import { buildExitTicketGradingContext } from '~/domain/assignment-types/exit-ticket-rubric';
+import {
+  buildGalsClaimsGradingContext,
+  GALS_CLAIMS_ASSIGNMENT_TYPE_KIND,
+} from '~/domain/assignment-types/gals-claims-rubric';
+import { STRODE_AUTOBIOGRAPHY_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/strode-autobiography-rubric';
+import {
+  computeStrodeAutobiographyFinalPercent,
+  strodeEng101LetterFromPercent,
+} from '~/domain/assignment-types/strode-autobiography-scoring';
 import { computeIpHash } from '~/utils/ai-usage-log.server';
 import {
   computeWeightedBandPercentage,
@@ -31,6 +40,7 @@ import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/as
 import { scaleDailyPagesForAssignment } from '~/domain/assignment-types/daily-pages-assignment-points';
 import type { RubricCategory as GradingRubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
+  isBandScoredRubric,
   isGrammarHighlightCategory,
   isScoreInCategoryAllowedScores,
   isScoreInCategoryBands,
@@ -59,8 +69,11 @@ import {
   parseGradingAssistantStrictnessLevel,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
+import { gradingAssistantResponseHasVisibleContent } from '~/domain/grading/grading-assistant-fetcher-result';
 import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
 import { preprocessGradingAssistantCategoriesInput } from '~/domain/grading/grading-assistant-category-filter';
+import { expandGradingAssistantCategoriesInput } from '~/domain/grading/grading-assistant-categories-normalize';
+import { inferHolisticTupleFromCategoryScores } from '~/domain/grading/holistic-tier-from-categories';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   extractJsonObjectCandidates,
@@ -95,6 +108,7 @@ import {
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 import { maybePostGradeToBlackboard } from '~/integrations/blackboard-ags.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import { enforceGradingLimits, rateLimitedJson } from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import type {
@@ -174,7 +188,11 @@ function buildAiSchemas({
       : {}),
   });
   const AiCategoriesSchema = z.preprocess(
-    (input) => preprocessGradingAssistantCategoriesInput(input, rubricKeys),
+    (input) =>
+      preprocessGradingAssistantCategoriesInput(
+        expandGradingAssistantCategoriesInput(input, rubricCategories),
+        rubricKeys
+      ),
     z
       .array(AiCategorySchema)
       .superRefine((categories, ctx) => {
@@ -518,15 +536,31 @@ function computeLegacyGradeFields({
 function computeBandScoredGradeFields({
   rubricScores,
   rubricCategories,
+  assignmentTypeKind,
 }: {
   rubricScores: Record<string, Prisma.InputJsonValue>;
   rubricCategories: GradingRubricCategory[];
+  assignmentTypeKind?: string | null;
 }) {
   const numericPercentage = computeWeightedBandPercentage(
     rubricScores as unknown as Record<string, unknown>,
     rubricCategories
   );
   if (numericPercentage === null) return null;
+
+  if (assignmentTypeKind === STRODE_AUTOBIOGRAPHY_ASSIGNMENT_TYPE_KIND) {
+    const capped = computeStrodeAutobiographyFinalPercent(
+      rubricScores as unknown as Record<string, unknown>
+    );
+    if (capped === null) return null;
+    const letterGrade = strodeEng101LetterFromPercent(capped);
+    return {
+      overallScore: capped,
+      numericPercentage: capped,
+      letterGrade,
+      score: formatGrade(capped, letterGrade) ?? '',
+    };
+  }
 
   const letterGrade = letterFromPercent(numericPercentage);
 
@@ -545,6 +579,7 @@ function buildDynamicGradeFields({
   maxScore,
   rubricCategories,
   bandScored,
+  assignmentTypeKind,
 }: {
   categories: Array<{ score: number }>;
   rubricScores: Record<string, Prisma.InputJsonValue>;
@@ -552,6 +587,7 @@ function buildDynamicGradeFields({
   maxScore: number;
   rubricCategories: GradingRubricCategory[];
   bandScored: boolean;
+  assignmentTypeKind?: string | null;
 }) {
   // Bands define valid category scores; the scoring type determines whether
   // the result is raw points or a percentage. Daily Pages remains 18/30.
@@ -559,7 +595,11 @@ function buildDynamicGradeFields({
   if (nonLegacy) return nonLegacy;
 
   if (bandScored) {
-    const banded = computeBandScoredGradeFields({ rubricScores, rubricCategories });
+    const banded = computeBandScoredGradeFields({
+      rubricScores,
+      rubricCategories,
+      assignmentTypeKind,
+    });
     if (banded) return banded;
   }
 
@@ -577,6 +617,7 @@ function applyStrictnessToGradeFields({
   score,
   scoringType,
   gradingAssistantStrictnessLevel,
+  assignmentTypeKind,
 }: {
   overallScore: number;
   numericPercentage: number | null;
@@ -584,6 +625,7 @@ function applyStrictnessToGradeFields({
   score: string | null;
   scoringType: string;
   gradingAssistantStrictnessLevel: GradingAssistantStrictnessLevel;
+  assignmentTypeKind?: string | null;
 }) {
   if (scoringType === ACT_WRITING_SCORING_TYPE) {
     const adjustedComposite = applyGradingAssistantStrictnessToActComposite(
@@ -606,7 +648,10 @@ function applyStrictnessToGradeFields({
     numericPercentage,
     gradingAssistantStrictnessLevel
   );
-  const adjustedLetterGrade = letterFromPercent(adjustedPercentage);
+  const adjustedLetterGrade =
+    assignmentTypeKind === STRODE_AUTOBIOGRAPHY_ASSIGNMENT_TYPE_KIND
+      ? strodeEng101LetterFromPercent(adjustedPercentage)
+      : letterFromPercent(adjustedPercentage);
   return {
     overallScore,
     numericPercentage: adjustedPercentage,
@@ -954,14 +999,16 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   const assignmentPrompt = submission.document.assignment?.prompt?.trim();
-  // How to read the rubric for this ticket, plus whatever the teacher said the
-  // lesson covered. Null for every other assignment, leaving the payload
-  // exactly as it was.
-  const gradingContext = buildExitTicketGradingContext(
-    parseStoredExitTicketConfig(
-      submission.document.assignment?.exitTicketConfigJson
-    )
-  );
+  const assignmentTypeKind =
+    submission.document.assignmentType?.kind ?? null;
+  const gradingContext =
+    assignmentTypeKind === GALS_CLAIMS_ASSIGNMENT_TYPE_KIND
+      ? buildGalsClaimsGradingContext(submission.text)
+      : buildExitTicketGradingContext(
+          parseStoredExitTicketConfig(
+            submission.document.assignment?.exitTicketConfigJson
+          )
+        );
 
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   // llmRetry=fallback is the client half of the provider-failover handshake
@@ -1225,7 +1272,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     try {
       await maybePostGradeToBlackboard({ numericPercentage });
     } catch (error) {
-      console.warn('Blackboard AGS passback (mock) failed', { error });
+      console.warn('Blackboard AGS passback (mock) failed', {
+        error: buildSafeErrorForLog(error),
+      });
     }
 
     return dataResponse({
@@ -1353,12 +1402,18 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   const extractCategories = (
     value: unknown
   ): z.infer<typeof AiCategoriesSchema> | null => {
-    const categoriesCandidate = Array.isArray(value)
-      ? value
-      : value && typeof value === 'object'
-        ? (value as { categories?: unknown }).categories
+    const expanded = expandGradingAssistantCategoriesInput(
+      value,
+      rubricCategories
+    );
+    const categoriesCandidate = Array.isArray(expanded)
+      ? expanded
+      : expanded && typeof expanded === 'object'
+        ? (expanded as { categories?: unknown }).categories
         : null;
-    const parsedCategories = AiCategoriesSchema.safeParse(categoriesCandidate);
+    const parsedCategories = AiCategoriesSchema.safeParse(
+      expandGradingAssistantCategoriesInput(categoriesCandidate, rubricCategories)
+    );
     return parsedCategories.success ? parsedCategories.data : null;
   };
 
@@ -1598,14 +1653,60 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     let validated =
       assignmentTotalCandidate != null ? validateAndClamp(parsed) : { ok: false as const };
 
+    const inferHolisticFromCategoryScores = () => {
+      const rubricScoreMap = parsed.categories.reduce<
+        Record<string, { score: number }>
+      >((acc, item) => {
+        acc[item.key] = { score: item.score };
+        return acc;
+      }, {});
+      const inferred = inferHolisticTupleFromCategoryScores({
+        rubricScores: rubricScoreMap,
+        rubricCategories,
+        assignmentTotal,
+      });
+      if (!inferred) return { ok: false as const };
+      return validateAndClamp({
+        ...parsed,
+        overallTier: inferred.overallTier,
+        overallPoints: inferred.overallPoints,
+      });
+    };
+
+    if (useHolistic && !validated.ok && isBandScoredRubric(rubricCategories)) {
+      const inferredValidation = inferHolisticFromCategoryScores();
+      if (inferredValidation.ok) {
+        validated = inferredValidation;
+        const rubricScoreMap = Object.fromEntries(
+          parsed.categories.map((item) => [item.key, { score: item.score }])
+        );
+        const inferredTuple = inferHolisticTupleFromCategoryScores({
+          rubricScores: rubricScoreMap,
+          rubricCategories,
+          assignmentTotal,
+        });
+        if (inferredTuple) {
+          parsed = withPreservedHolisticFields(
+            {
+              ...parsed,
+              overallTier: inferredTuple.overallTier,
+              overallPoints: inferredTuple.overallPoints,
+            },
+            parsed
+          ) as typeof parsed;
+        }
+      }
+    }
+
     // Retry once when invalid holistic fields are returned.
     if (useHolistic && !validated.ok) {
+      const parsedBeforeHolisticRetry = parsed;
       try {
         const retryText = await getGradingLlmCompletion({
           model,
           system,
           messages: compiledInvocation.messages,
-          maxTokens,
+          maxTokens: rubricEvaluationMaxTokens,
           metadata: {
             feature: 'grading',
             kind: 'rubric-evaluation',
@@ -1615,8 +1716,14 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
             assignmentTypeGradingLabel: resolvedGradingConfig.label,
           },
         });
-        parsed = await parseAiResponse(retryText);
-        validated = validateAndClamp(parsed);
+        const retryParsed = await parseAiResponse(retryText);
+        const retryValidated = validateAndClamp(retryParsed);
+        if (retryValidated.ok) {
+          parsed = retryParsed;
+          validated = retryValidated;
+        } else {
+          parsed = parsedBeforeHolisticRetry;
+        }
       } catch (error) {
         if (isGradingRequestDeadlineError(error)) {
           return gradingDeadlineResponse();
@@ -1650,11 +1757,13 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         maxScore,
         rubricCategories,
         bandScored: promptShape.bandScored,
+        assignmentTypeKind,
       });
       const adjusted = applyStrictnessToGradeFields({
         ...baseGradeFields,
         scoringType,
         gradingAssistantStrictnessLevel,
+        assignmentTypeKind,
       });
       const pct =
         typeof adjusted.numericPercentage === 'number' &&
@@ -1697,11 +1806,13 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       maxScore,
       rubricCategories,
       bandScored: promptShape.bandScored,
+      assignmentTypeKind,
     });
     const adjusted = applyStrictnessToGradeFields({
       ...baseGradeFields,
       scoringType,
       gradingAssistantStrictnessLevel,
+      assignmentTypeKind,
     });
     overallScore = adjusted.overallScore;
     numericPercentage = adjusted.numericPercentage;
@@ -1840,6 +1951,32 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       if (isLlmFallbackRetrySignal(error)) return retryResponse();
       grammarIssues = null;
     }
+  }
+
+  const successPayload = {
+    success: true as const,
+    message: 'Grading Assistant suggestions generated.',
+    ...(teacherNotesEnabled ? { teacherNote: parsed.teacherNote } : {}),
+    rubricScores,
+    overallScore,
+    overallComment,
+    numericPercentage,
+    letterGrade,
+    score,
+    grammarIssues,
+    rubricConfig,
+    gradingAssistantStrictnessLevel,
+  };
+
+  if (!gradingAssistantResponseHasVisibleContent(successPayload, minScore)) {
+    return dataResponse(
+      {
+        success: false,
+        message:
+          'Grading Assistant returned no suggestions. Please try again.',
+      },
+      { status: 502 }
+    );
   }
 
   // Write AI grading results directly to the Submission
@@ -2011,21 +2148,10 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   try {
     await maybePostGradeToBlackboard({ numericPercentage: ltiPassbackPercentage });
   } catch (error) {
-    console.warn('Blackboard AGS passback (mock) failed', { error });
+    console.warn('Blackboard AGS passback (mock) failed', {
+      error: buildSafeErrorForLog(error),
+    });
   }
 
-  return dataResponse({
-    success: true,
-    message: 'Grading Assistant suggestions generated.',
-    ...(teacherNotesEnabled ? { teacherNote: parsed.teacherNote } : {}),
-    rubricScores,
-    overallScore,
-    overallComment,
-    numericPercentage,
-    letterGrade,
-    score,
-    grammarIssues,
-    rubricConfig,
-    gradingAssistantStrictnessLevel,
-  });
+  return dataResponse(successPayload);
 }

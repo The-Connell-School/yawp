@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
-import { FREE_TIER_ONBOARDING_V2_FLAG } from '~/domain/feature-flags/feature-flags';
+import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
 import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { isBelowHsGrade, withBelowHsTag } from './grade-gate';
 import { canRedeemToken, findAcquisitionTokenByCredential, waitlistInputSchema } from './service.server';
@@ -21,7 +21,7 @@ const response = (body: unknown, status = 200) => Response.json(body, {
  * Returns the same success for a new, repeated or already eligible email.
  */
 export async function recordBelowHsDecline(input: BelowHsDeclineInput): Promise<Response> {
-  if (!(await isFeatureFlagEnabled(FREE_TIER_ONBOARDING_V2_FLAG))) return response({ error: 'flag_off' }, 409);
+  if (!(await isFeatureFlagEnabled(FREE_TIER_FLAG))) return response({ error: 'flag_off' }, 409);
   const parsed = schema.safeParse(input);
   if (!parsed.success) return response({ error: 'Invalid input' }, 400);
   const { token: credential, middleName, ...applicant } = parsed.data;

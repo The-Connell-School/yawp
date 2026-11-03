@@ -18,6 +18,7 @@ import {
 import { dailyPagesCalibrationV1 } from '../app/domain/ai-evaluation/daily-pages-calibration.v1';
 import { formatCalibrationReport } from '../app/domain/ai-evaluation/daily-pages-calibration-report';
 import { getLLMCompletion } from '../app/utils/getLLMCompletion';
+import { logScriptError } from '../app/utils/log-script-error.server';
 
 function argValues(flag: string) {
   const values: string[] = [];
@@ -65,6 +66,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error);
+  logScriptError(error);
   process.exit(1);
 });

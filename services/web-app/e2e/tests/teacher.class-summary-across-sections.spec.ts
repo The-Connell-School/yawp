@@ -1,3 +1,4 @@
+import { currentInsightSummary } from '../db-helpers';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { currentSchoolYear } from '../../app/utils/school-year';
@@ -98,14 +99,22 @@ async function seedSecondSection(
           classAssignmentId: e2eContext.classAssignmentId,
           status: 'ready',
           submissionCount: 24,
-          summaryJson: BIG_SECTION_SUMMARY,
+          summaryJson: await currentInsightSummary(
+            prisma,
+            e2eContext.classAssignmentId,
+            BIG_SECTION_SUMMARY
+          ),
           generatedAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
         },
         {
           classAssignmentId: classAssignment.id,
           status: 'ready',
           submissionCount: 3,
-          summaryJson: SMALL_SECTION_SUMMARY,
+          summaryJson: await currentInsightSummary(
+            prisma,
+            classAssignment.id,
+            SMALL_SECTION_SUMMARY
+          ),
           generatedAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
         },
       ],
@@ -161,7 +170,9 @@ test.describe.serial('teacher class summary across sections', () => {
 
     // Single class is the default — nothing about the other section yet.
     await expect(page.getByTestId('across-sections-panel')).toHaveCount(0);
-    await expect(summaryPage.getByText(/based on 24 submissions/i)).toBeVisible();
+    await expect(
+      summaryPage.getByText(/based on 24 submissions/i)
+    ).toBeVisible();
 
     const toggle = page.getByTestId('class-summary-scope-toggle');
     await expect(toggle).toBeVisible();
@@ -220,7 +231,9 @@ test.describe.serial('teacher class summary across sections', () => {
     await page.getByTestId('class-summary-scope-this-class').click();
     await expect(page).not.toHaveURL(/sections=all/);
     await expect(page.getByTestId('across-sections-panel')).toHaveCount(0);
-    await expect(summaryPage.getByText(/based on 24 submissions/i)).toBeVisible();
+    await expect(
+      summaryPage.getByText(/based on 24 submissions/i)
+    ).toBeVisible();
   });
 
   test('a deep link with the across-sections param lands on the combined view', async ({
@@ -262,7 +275,11 @@ test.describe.serial('teacher class summary across sections', () => {
           classAssignmentId: e2eContext.classAssignmentId,
           status: 'ready',
           submissionCount: 1,
-          summaryJson: BIG_SECTION_SUMMARY,
+          summaryJson: await currentInsightSummary(
+            prisma,
+            e2eContext.classAssignmentId,
+            BIG_SECTION_SUMMARY
+          ),
           generatedAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
         },
       });

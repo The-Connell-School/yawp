@@ -171,6 +171,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
         body,
       }),
     } as any);
+    expect(prisma.assignmentModuleSession.findUnique.mock.calls.at(-1)![0].include.assignmentModule.include.instructions.omit).toEqual({ answerKey: true });
     const completionArgs = getLLMCompletion.mock.calls.at(-1)?.[0] as any;
     return completionArgs.system[0].text as string;
   }
@@ -446,9 +447,9 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect((completionArgs.system[0].text as string)).toContain(
       'Build a working sense of each document before drafting.'
     );
-    // The universal YAWP! Tutor character rides at the top of every AP History
+    // The universal Yawp! Tutor character rides at the top of every AP History
     // prompt, and the section's register mode resolves from its title.
-    expect((completionArgs.system[0].text as string)).toContain('You are the YAWP! Tutor');
+    expect((completionArgs.system[0].text as string)).toContain('You are the Yawp! Tutor');
     expect((completionArgs.system[0].text as string)).toContain(
       'REGISTER MODE FOR THIS MODULE: DRAFTING'
     );
@@ -548,7 +549,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     // defaults and legacy string are both superseded.
     expect(systemText).not.toContain('ADMIN LEQ');
     expect(systemText).not.toContain('Legacy single-string guidance.');
-    expect(systemText).not.toContain('You are the YAWP! Tutor');
+    expect(systemText).not.toContain('You are the Yawp! Tutor');
     expect(systemText).not.toContain('HIPP angle');
     // AP History substance still comes from code.
     expect(systemText).toContain('DBQ Rubric (7 points');
@@ -635,6 +636,39 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     // LEQ-specific guidance, not the DBQ document/HIPP playbook.
     expect((completionArgs.system[0].text as string)).toContain('no documents on an LEQ');
     expect((completionArgs.system[0].text as string)).not.toContain('HIPP angle');
+  });
+
+  test('returns stable tutor failure copy without raw LLM exception text', async () => {
+    mockCms();
+    getLLMCompletion.mockRejectedValueOnce(
+      new Error(
+        'Anthropic API 401 invalid x-api-key token=SECRET-KEY teacher@school.edu',
+      ),
+    );
+
+    const body = new FormData();
+    body.set('response', 'Can you review this?');
+    body.set('cmsId', 'cms-1');
+    body.set('content', 'Current draft');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+    const payload = response as {
+      data: { error?: string };
+      init?: { status?: number };
+    };
+
+    expect(payload.init?.status).toBe(500);
+    expect(payload.data.error).toBe(
+      'Failed to get a response from the tutor. Please try again.',
+    );
+    expect(JSON.stringify(payload.data)).not.toContain('SECRET-KEY');
+    expect(JSON.stringify(payload.data)).not.toContain('Anthropic API 401');
+    expect(prisma.assignmentModuleSession.update).not.toHaveBeenCalled();
   });
 
   test('returns a retry signal without writing messages when fallback retry is requested', async () => {

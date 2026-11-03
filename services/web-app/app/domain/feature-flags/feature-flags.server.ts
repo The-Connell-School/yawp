@@ -1,8 +1,24 @@
 import { prisma } from '~/utils/db.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import {
-  LESSON_PLANNER_FLAG,
   LOUNGE_COMMUNITY_FLAG,
+  LESSON_PLANNER_INTAKE_V2_FLAG,
+  LESSON_PLANNER_STACK_V2_FLAG,
+  LESSON_PLANNER_DECK_V2_FLAG,
+  LESSON_PLANNER_PLAN_EXPORT_V2_FLAG,
+  LESSON_PLANNER_STACK_V3_FLAG,
+  LESSON_PLANNER_SHARE_FLAG,
+  LESSON_PLANNER_RUN_SHOW_FLAG,
+  LESSON_PLANNER_TEMPLATES_FLAG,
+  LESSON_PLANNER_DECK_GALLERY_FLAG,
+  LESSON_PLANNER_UPLOADS_FLAG,
+  LESSON_PLANNER_TEACH_NOTES_FLAG,
+  LESSON_PLANNER_LIBRARY_V2_FLAG,
+  LESSON_PLANNER_STACK_PANEL_FLAG,
   FREE_TIER_FLAG,
+  LESSON_PLANNER_FLAG,
+  UNIFIED_SIGN_ON_FLAG,
+  TEACHER_PROMPT_GENERATOR_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
   type FeatureFlagKey,
@@ -28,7 +44,7 @@ export type FeatureFlagState = {
   persisted: FeatureFlagValue;
   /** Rollout used by the route gate; targeted still blocks anonymous entry. */
   effective: FeatureFlagValue;
-  runtimeOverride: 'demo_free_tier' | null;
+  runtimeOverride: 'non_production_default' | null;
   /** Schools the flag is on for; empty unless mode is "targeted". */
   orgIds: string[];
   /** On for everyone. Kept for readers that predate per-school targeting. */
@@ -40,6 +56,103 @@ export type FeatureFlagState = {
 };
 
 const LAST_CHANGED_BY_PREFIX = 'Last changed by ';
+const EVERYONE: FeatureFlagValue = { mode: 'everyone', orgIds: [] };
+
+export function isDemoDeployment(env: Record<string, string | undefined>) {
+  return (
+    env.PREVIEW_SLUG?.trim().toLowerCase() === 'demo' ||
+    env.YAWP_ENVIRONMENT?.trim().toLowerCase() === 'demo'
+  );
+}
+
+export function isPreviewDeployment(env: Record<string, string | undefined>) {
+  return env.YAWP_ENVIRONMENT?.trim().toLowerCase() === 'preview';
+}
+
+/**
+ * Demo and PR previews ship with free tier and unified sign-on on without Internal
+ * changes. This replaces a separate demo-only route gate (`isDemoFreeTierRouteOpen`);
+ * Internal may have surfaced that as a synthetic `demo_free_tier` override — runtime
+ * and the management API use `free-tier` persisted/effective only.
+ */
+export function isNonProductionDefaultOnDeployment(
+  env: Record<string, string | undefined>
+) {
+  return isDemoDeployment(env) || isPreviewDeployment(env);
+}
+
+function runtimeDefaultOn(key: FeatureFlagKey, env: Record<string, string | undefined>) {
+  if (!isNonProductionDefaultOnDeployment(env)) return false;
+  return (
+    key === FREE_TIER_FLAG ||
+    key === UNIFIED_SIGN_ON_FLAG ||
+    key === TEACHER_PROMPT_GENERATOR_FLAG
+  );
+}
+
+async function readSettingValue(name: string): Promise<string | null | undefined> {
+  const row = await prisma.setting.findUnique({
+    where: { name },
+    select: { value: true },
+  });
+  return row?.value;
+}
+
+type SettingReader = {
+  setting: {
+    findMany: (args: {
+      where: { name: { in: string[] } };
+      select: { name?: true; value: true };
+    }) => Promise<Array<{ name?: string; value: string }>>;
+  };
+};
+
+async function readParsedValues(
+  names: readonly string[],
+  client: SettingReader = prisma
+) {
+  if (names.length === 0) return [] as FeatureFlagValue[];
+  if (typeof client.setting.findMany === 'function') {
+    const rows = await client.setting.findMany({
+      where: { name: { in: [...names] } },
+      select: { name: true, value: true },
+    });
+    const byName = new Map(rows.map((row) => [row.name!, row.value]));
+    return names.map((name) => parseFeatureFlagValue(byName.get(name)));
+  }
+  const findUnique = (
+    client.setting as {
+      findUnique?: (args: {
+        where: { name: string };
+        select: { value: true };
+      }) => Promise<{ value: string } | null>;
+    }
+  ).findUnique;
+  if (!findUnique) return names.map(() => parseFeatureFlagValue(undefined));
+  return Promise.all(
+    names.map(async (name) =>
+      parseFeatureFlagValue(
+        (await findUnique({ where: { name }, select: { value: true } }))?.value
+      )
+    )
+  );
+}
+
+async function readPrimaryFlagValue(
+  key: typeof FREE_TIER_FLAG | typeof UNIFIED_SIGN_ON_FLAG,
+  client: SettingReader = prisma
+): Promise<FeatureFlagValue> {
+  const [value] = await readParsedValues([featureFlagSettingName(key)], client);
+  return value ?? { mode: 'off', orgIds: [] };
+}
+
+/** Primary `feature_flag.free_tier` rollout (demo/preview default on). */
+export async function resolvedFreeTierRollout(
+  client: SettingReader = prisma
+): Promise<FeatureFlagValue> {
+  if (isNonProductionDefaultOnDeployment(process.env)) return EVERYONE;
+  return readPrimaryFlagValue(FREE_TIER_FLAG, client);
+}
 
 function stateFor(
   key: FeatureFlagKey,
@@ -47,17 +160,17 @@ function stateFor(
 ): FeatureFlagState {
   const description = row?.description ?? '';
   const { mode, orgIds } = parseFeatureFlagValue(row?.value);
+  const persisted = { mode, orgIds };
+  const defaultOn = runtimeDefaultOn(key, process.env);
   return {
     key,
     label: FEATURE_FLAGS[key].label,
     description: FEATURE_FLAGS[key].description,
     mode,
     orgIds,
-    persisted: { mode, orgIds },
-    effective: key === FREE_TIER_FLAG && isDemoDeployment(process.env)
-      ? { mode: 'everyone', orgIds: [] } : { mode, orgIds },
-    runtimeOverride: key === FREE_TIER_FLAG && isDemoDeployment(process.env)
-      ? 'demo_free_tier' : null,
+    persisted,
+    effective: defaultOn ? EVERYONE : persisted,
+    runtimeOverride: defaultOn ? 'non_production_default' : null,
     enabled: mode === 'everyone',
     updatedAt: row ? row.updatedAt.toISOString() : null,
     lastChangedBy: description.startsWith(LAST_CHANGED_BY_PREFIX)
@@ -66,16 +179,28 @@ function stateFor(
   };
 }
 
-function isDemoDeployment(env: Record<string, string | undefined>) {
-  return (
-    env.PREVIEW_SLUG?.trim().toLowerCase() === 'demo' ||
-    env.YAWP_ENVIRONMENT?.trim().toLowerCase() === 'demo'
-  );
+function applyRuntimeOverrides(state: FeatureFlagState): FeatureFlagState {
+  if (!runtimeDefaultOn(state.key, process.env)) return state;
+  return { ...state, mode: 'everyone', orgIds: [], enabled: true };
 }
 
-function applyRuntimeOverrides(state: FeatureFlagState): FeatureFlagState {
-  if (state.key !== FREE_TIER_FLAG || !isDemoDeployment(process.env)) return state;
-  return { ...state, mode: 'everyone', orgIds: [], enabled: true };
+/** Whether free tier is on for a school from `feature_flag.free_tier` only. */
+export async function isFreeTierCapabilityEnabled(
+  orgId?: string | null,
+  client: SettingReader = prisma
+): Promise<boolean> {
+  if (isNonProductionDefaultOnDeployment(process.env)) return true;
+  try {
+    const primary = await readPrimaryFlagValue(FREE_TIER_FLAG, client);
+    if (isFreeTierGloballyEnabled(primary)) return true;
+    return evaluateFeatureFlag(primary, orgId);
+  } catch (error) {
+    console.error('feature_flag_read_failed', {
+      key: FREE_TIER_FLAG,
+      error: buildSafeErrorForLog(error),
+    });
+    return false;
+  }
 }
 
 /**
@@ -89,6 +214,37 @@ export async function isFeatureFlagEnabled(
   key: FeatureFlagKey,
   orgId?: string | null
 ): Promise<boolean> {
+  if (key === FREE_TIER_FLAG) return isFreeTierCapabilityEnabled(orgId);
+  if (key === UNIFIED_SIGN_ON_FLAG) {
+    if (isNonProductionDefaultOnDeployment(process.env)) return true;
+    try {
+      const primary = await readPrimaryFlagValue(UNIFIED_SIGN_ON_FLAG);
+      if (primary.mode === 'everyone') return true;
+      return evaluateFeatureFlag(primary, orgId);
+    } catch (error) {
+      console.error('feature_flag_read_failed', {
+        key: UNIFIED_SIGN_ON_FLAG,
+        error: buildSafeErrorForLog(error),
+      });
+      return false;
+    }
+  }
+  if (key === TEACHER_PROMPT_GENERATOR_FLAG) {
+    if (isNonProductionDefaultOnDeployment(process.env)) return true;
+    try {
+      const row = await prisma.setting.findUnique({
+        where: { name: featureFlagSettingName(TEACHER_PROMPT_GENERATOR_FLAG) },
+        select: { value: true },
+      });
+      return evaluateFeatureFlag(parseFeatureFlagValue(row?.value), orgId);
+    } catch (error) {
+      console.error('feature_flag_read_failed', {
+        key: TEACHER_PROMPT_GENERATOR_FLAG,
+        error: buildSafeErrorForLog(error),
+      });
+      return false;
+    }
+  }
   try {
     const row = await prisma.setting.findUnique({
       where: { name: featureFlagSettingName(key) },
@@ -98,14 +254,93 @@ export async function isFeatureFlagEnabled(
   } catch (error) {
     console.error('feature_flag_read_failed', {
       key,
-      error: error instanceof Error ? error.message : String(error),
+      error: buildSafeErrorForLog(error),
     });
     return false;
   }
 }
 
-/** YAWP! Lesson Planner for teachers at the given school. */
-export function isLessonPlannerEnabled(
+/** Which of the Lesson Planner review flags are on for this school. */
+export async function getLessonPlannerReviewFlags(
+  orgId: string | null | undefined
+): Promise<LessonPlannerReviewFlags> {
+  const [
+    intakeV2,
+    stackV2,
+    deckV2,
+    stackPanel,
+    planExportV2,
+    stackV3,
+    share,
+    runShow,
+    templates,
+    deckGallery,
+    uploads,
+    teachNotes,
+    libraryV2,
+  ] = await Promise.all([
+    isFeatureFlagEnabled(LESSON_PLANNER_INTAKE_V2_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_STACK_V2_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_DECK_V2_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_STACK_PANEL_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_PLAN_EXPORT_V2_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_STACK_V3_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_SHARE_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_RUN_SHOW_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_TEMPLATES_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_DECK_GALLERY_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_UPLOADS_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_TEACH_NOTES_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_LIBRARY_V2_FLAG, orgId),
+  ]);
+  // The panel shows the stack v2 list; without stack v2 it has nothing to show.
+  // The run 3 page builds on stack v2, and the rest build on the run 3 page.
+  const v3 = stackV3 && stackV2;
+  return {
+    intakeV2,
+    stackV2,
+    deckV2,
+    stackPanel: stackPanel && stackV2,
+    planExportV2,
+    stackV3: v3,
+    share: share && v3,
+    runShow: runShow && v3,
+    templates: templates && v3,
+    deckGallery: deckGallery && deckV2,
+    uploads,
+    teachNotes: teachNotes && v3,
+    libraryV2: libraryV2 && v3,
+  };
+}
+
+export type LessonPlannerReviewFlags = {
+  intakeV2: boolean;
+  stackV2: boolean;
+  deckV2: boolean;
+  /** Brian's run 2 (A7). */
+  stackPanel: boolean;
+  /** Brian's run 2 (D1, D2). */
+  planExportV2: boolean;
+  /** Brian's run 3 and the stack page redesign; needs stack v2. */
+  stackV3: boolean;
+  /** Post to your class, Send this lesson; needs stack v3. */
+  share: boolean;
+  /** Run the show; needs stack v3. */
+  runShow: boolean;
+  /** Templates; needs stack v3. */
+  templates: boolean;
+  /** The gallery deck (Lesson Deck Kit); needs deck v2. */
+  deckGallery: boolean;
+  /** The teacher's own documents as source material (Oct 21). */
+  uploads: boolean;
+  /** Stack page v2 (Oct 24 handoff, Part 1); needs stack v3. */
+  teachNotes: boolean;
+  /** The library redesign (Oct 24 handoff, Part 2); needs stack v3. */
+  libraryV2: boolean;
+};
+
+/** Yawp! Lesson Planner for teachers at the given school. */
+export async function isLessonPlannerEnabled(
   orgId: string | null | undefined
 ): Promise<boolean> {
   return isFeatureFlagEnabled(LESSON_PLANNER_FLAG, orgId);
@@ -119,12 +354,14 @@ export function isLoungeCommunityEnabled(
 }
 
 /**
- * Whether Free Tier C is live. Only `everyone` counts as on; `targeted` is off
- * for anonymous `/free` routes because there is no school context.
+ * Whether Free Tier is live for public/anonymous routes. Only `everyone`
+ * counts as on; `targeted` is off for anonymous `/free` routes because there
+ * is no school context. Demo and PR previews default on.
  */
 export async function isFreeTierEnabled(
   { throwOnError = false }: { throwOnError?: boolean } = {}
 ): Promise<boolean> {
+  if (isNonProductionDefaultOnDeployment(process.env)) return true;
   try {
     const row = await prisma.setting.findUnique({
       where: { name: featureFlagSettingName(FREE_TIER_FLAG) },
@@ -136,7 +373,7 @@ export async function isFreeTierEnabled(
     if (throwOnError) throw error;
     console.error('feature_flag_read_failed', {
       key: FREE_TIER_FLAG,
-      error: error instanceof Error ? error.message : String(error),
+      error: buildSafeErrorForLog(error),
     });
     return false;
   }
@@ -203,3 +440,4 @@ export async function setFeatureFlag(
     changed: !sameFeatureFlagValue(previous, normalized),
   };
 }
+
