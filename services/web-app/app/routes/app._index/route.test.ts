@@ -115,6 +115,7 @@ describe('app index loader assignments', () => {
     getTeacherClassCardStats.mockResolvedValue({
       ungradedCount: 0,
       gradedUnreleasedCount: 0,
+      documentCount: 0,
     });
     getTeacherRecentActiveClassIds.mockResolvedValue([]);
 
@@ -792,6 +793,7 @@ describe('app index loader assignments', () => {
     getTeacherClassCardStats.mockResolvedValue({
       ungradedCount: 0,
       gradedUnreleasedCount: 0,
+      documentCount: 0,
     });
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
 
@@ -855,6 +857,7 @@ describe('app index loader assignments', () => {
     getTeacherClassCardStats.mockResolvedValue({
       ungradedCount: 0,
       gradedUnreleasedCount: 0,
+      documentCount: 0,
     });
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
 

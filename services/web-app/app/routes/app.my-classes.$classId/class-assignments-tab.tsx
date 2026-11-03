@@ -18,6 +18,7 @@ import { badgeVariants } from '~/components/ui/badge';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import { TutorOffBadge } from '~/components/assignments/tutor-off-badge';
+import { AssignmentTryItPill } from '~/components/assignments/assignment-try-it-pill';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
@@ -369,6 +370,12 @@ export function ClassAssignmentsTab({
                         >
                           {title}
                         </span>
+                        <AssignmentTryItPill
+                          assignment={{
+                            id: assignment.id,
+                            assignmentTypeId: assignment.assignmentType.id,
+                          }}
+                        />
                         {teachingLocked ? (
                           <Badge variant="secondary" className="font-normal">
                             Sample · Not sent

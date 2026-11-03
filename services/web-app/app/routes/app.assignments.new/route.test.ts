@@ -55,9 +55,9 @@ const readFreeAccountUsage = mock(async () => ({
   },
 }));
 const createAssignmentDeployedToClasses = mock(async () => ({
-  assignment: { id: 'assignment-new' },
-  classIds: ['class-1'],
+  id: 'assignment-new',
 }));
+const classAssignmentCount = mock(async () => 1);
 const isAssignmentTypeAvailableForEveryScope = mock(async () => true);
 
 mock.module('~/utils/auth.server', () => ({
@@ -108,6 +108,9 @@ mock.module('~/utils/db.server', () => ({
         rubric: { name: 'Class Starter rubric' },
       })),
     },
+    classAssignment: {
+      count: classAssignmentCount,
+    },
   },
 }));
 
@@ -124,10 +127,12 @@ describe('app.assignments.new route gate', () => {
     loadSiteLicenseLockedAssignmentTiles.mockClear();
     readFreeAccountUsage.mockClear();
     createAssignmentDeployedToClasses.mockClear();
+    classAssignmentCount.mockClear();
     isAssignmentTypeAvailableForEveryScope.mockClear();
     isFreeTierEnabled.mockResolvedValue(true);
     guardTeachingFormAction.mockResolvedValue(null);
     isAssignmentTypeAvailableForEveryScope.mockResolvedValue(true);
+    classAssignmentCount.mockResolvedValue(1);
   });
 
   test('loader returns 404 when free-tier is off', async () => {
@@ -231,6 +236,32 @@ describe('app.assignments.new route gate', () => {
           prompt: FIRST_ASSIGNMENT_DEFAULT_PROMPT,
         }),
       })
+    );
+  });
+
+  test('first teacher assignment redirects to dashboard celebration', async () => {
+    classAssignmentCount.mockResolvedValue(0);
+    const form = new FormData();
+    form.set('intent', 'create-assignment');
+    form.set('assignmentTypeId', 'type-class-starter');
+    form.set('classId', 'class-1');
+    form.set('title', FIRST_ASSIGNMENT_DEFAULT_TITLE);
+    form.set('prompt', FIRST_ASSIGNMENT_DEFAULT_PROMPT);
+    form.set('submitForGrade', 'true');
+    form.set('gradingAssistantStrictnessLevel', 'beginner');
+    form.set('tutorEnabled', 'true');
+
+    const result = await action({
+      request: new Request('http://localhost/app/assignments/new', {
+        method: 'POST',
+        body: form,
+      }),
+      params: {},
+      context: {} as never,
+    } as never);
+
+    expect((result as Response).headers.get('Location')).toBe(
+      '/app?firstAssignment=assignment-new&firstAssignmentClassId=class-1'
     );
   });
 

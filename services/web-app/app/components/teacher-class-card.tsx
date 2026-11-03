@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { ClassArt } from '~/components/class-art';
 import { TeacherClassCardMenuOverlay } from '~/components/teacher-class-card-menu-overlay';
 import { getClassCardHeading } from '~/utils/class-display';
+import { cn } from '~/utils/misc';
 
 export type TeacherClassCardData = {
   id: string;
@@ -19,6 +20,7 @@ export type TeacherClassCardData = {
   stats?: {
     ungradedCount: number;
     gradedUnreleasedCount: number;
+    documentCount: number;
   };
 };
 
@@ -26,12 +28,37 @@ export { formatClassCardTitle as formatTeacherClassLabel } from '~/utils/class-d
 
 const IMAGE_HEIGHT_CLASS = 'h-32';
 
+function ClassCardTabLink({
+  to,
+  count,
+  label,
+  testId,
+}: {
+  to: string;
+  count: number;
+  label: string;
+  testId: string;
+}) {
+  return (
+    <Link
+      to={to}
+      data-testid={testId}
+      className="flex flex-col gap-0.5 px-4 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+    >
+      <p className="text-xl font-semibold tabular-nums text-foreground">{count}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+    </Link>
+  );
+}
+
 export function TeacherClassCard({
   klass,
   showSchoolYear = false,
+  showAssignmentsTab = true,
 }: {
   klass: TeacherClassCardData;
   showSchoolYear?: boolean;
+  showAssignmentsTab?: boolean;
 }) {
   const { title, subtitle } = getClassCardHeading(klass);
   const usage = useFreeAccountUsage();
@@ -39,11 +66,45 @@ export function TeacherClassCard({
   const enabled =
     usage?.monthly && usage.classId === klass.id && Boolean(klass.code);
   const showLockedInvite = teachingLocked && usage?.classId === klass.id;
-  const showInviteMenu = enabled && !showLockedInvite;
+  const showInviteMenu = Boolean(enabled && !showLockedInvite);
+  const classPath = `/app/my-classes/${klass.id}`;
+  const documentCount = klass.stats?.documentCount ?? 0;
+
+  const footerTabs = [
+    {
+      id: 'students' as const,
+      to: `${classPath}?tab=students`,
+      count: klass._count.students,
+      label: klass._count.students === 1 ? 'Student' : 'Students',
+      testId: 'teacher-class-card-tab-students',
+    },
+    {
+      id: 'documents' as const,
+      to: `${classPath}?tab=documents`,
+      count: documentCount,
+      label: documentCount === 1 ? 'Document' : 'Documents',
+      testId: 'teacher-class-card-tab-documents',
+    },
+    ...(showAssignmentsTab
+      ? [
+          {
+            id: 'assignments' as const,
+            to: `${classPath}?tab=assignments`,
+            count: klass._count.assignments,
+            label: klass._count.assignments === 1 ? 'Assignment' : 'Assignments',
+            testId: 'teacher-class-card-tab-assignments',
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div className="relative flex min-h-full flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md">
-      <Link to={`/app/my-classes/${klass.id}`} className="flex min-h-full flex-1 flex-col">
+      <Link
+        to={classPath}
+        data-testid="teacher-class-card-main-link"
+        className="flex min-h-0 flex-1 flex-col"
+      >
         <div
           className={`${IMAGE_HEIGHT_CLASS} w-full shrink-0 overflow-hidden border-b border-black/5`}
         >
@@ -59,10 +120,6 @@ export function TeacherClassCard({
             {klass.school?.name || showSchoolYear ? (
               <p className="flex items-center gap-1.5 font-mono text-[0.625rem] font-medium uppercase tracking-wide text-muted-foreground">
                 {klass.school?.name ? <span>{klass.school.name}</span> : null}
-                {/*
-                  Only while the list spans years: inside a single year every
-                  card would carry the same label and it would be noise.
-                */}
                 {showSchoolYear && klass.schoolYear ? (
                   <>
                     {klass.school?.name ? <span aria-hidden>•</span> : null}
@@ -79,26 +136,23 @@ export function TeacherClassCard({
             ) : null}
           </div>
         </div>
-
-        <div className="mt-auto grid grid-cols-2 divide-x divide-black/5 border-t border-black/5">
-          <div className="flex flex-col gap-0.5 px-4 py-3">
-            <p className="text-xl font-semibold tabular-nums text-foreground">
-              {klass._count.students}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {klass._count.students === 1 ? 'Student' : 'Students'}
-            </p>
-          </div>
-          <div className="flex flex-col gap-0.5 px-4 py-3">
-            <p className="text-xl font-semibold tabular-nums text-foreground">
-              {klass._count.assignments}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {klass._count.assignments === 1 ? 'Assignment' : 'Assignments'}
-            </p>
-          </div>
-        </div>
       </Link>
+      <div
+        className={cn(
+          'mt-auto grid divide-x divide-black/5 border-t border-black/5',
+          footerTabs.length === 3 ? 'grid-cols-3' : 'grid-cols-2'
+        )}
+      >
+        {footerTabs.map((tab) => (
+          <ClassCardTabLink
+            key={tab.id}
+            to={tab.to}
+            count={tab.count}
+            label={tab.label}
+            testId={tab.testId}
+          />
+        ))}
+      </div>
       <TeacherClassCardMenuOverlay
         title={title}
         imageHeightClass={IMAGE_HEIGHT_CLASS}

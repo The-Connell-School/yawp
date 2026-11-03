@@ -14,11 +14,12 @@ import {
   data as dataResponse,
   redirect,
 } from 'react-router';
-import { Form, Link, useFetcher, useLoaderData } from 'react-router';
+import { Form, Link, useFetcher, useLoaderData, useSearchParams } from 'react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Search, Trash2 } from 'lucide-react';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { TutorOffBadge } from '~/components/assignments/tutor-off-badge';
+import { AssignmentTryItPill } from '~/components/assignments/assignment-try-it-pill';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
@@ -68,6 +69,7 @@ import {
 import { formatClassLabel } from '~/utils/teacher-document-work-utils';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
+import { cn } from '~/utils/misc';
 
 export const handle = { breadcrumb: 'My Assignments' };
 
@@ -105,6 +107,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           // tutor is a cold write, and a teacher scanning this list needs to
           // see which rows those are.
           tutorEnabled: true,
+          assignmentTypeId: true,
           assignmentType: { select: { title: true } },
         },
       },
@@ -123,6 +126,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     {
       assignmentId: string;
       title: string;
+      assignmentTypeId: string;
       assignmentTypeTitle: string;
       tutorEnabled: boolean;
       documentCount: number;
@@ -135,6 +139,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const entry = existing ?? {
       assignmentId: classAssignment.assignment.id,
       title: classAssignment.assignment.title?.trim() || 'Untitled Assignment',
+      assignmentTypeId: classAssignment.assignment.assignmentTypeId,
       assignmentTypeTitle: classAssignment.assignment.assignmentType.title,
       // A property of the Assignment, so it is the same across every class the
       // assignment was deployed to; collapsing rows cannot disagree about it.
@@ -498,6 +503,8 @@ export default function MyAssignmentsRoute() {
     assignmentCreationTypes,
     siteLicenseLockedAssignmentTiles,
   } = useLoaderData<typeof loader>();
+  const [searchParams] = useSearchParams();
+  const highlightAssignmentId = searchParams.get('highlightAssignment');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
@@ -789,7 +796,11 @@ export default function MyAssignmentsRoute() {
               {paginatedAssignments.map((assignment) => (
                 <TableRow
                   key={assignment.assignmentId}
-                  className="h-11"
+                  className={cn(
+                    'h-11',
+                    highlightAssignmentId === assignment.assignmentId &&
+                      'ring-2 ring-primary ring-inset'
+                  )}
                   data-state={
                     selectedAssignmentIds.includes(assignment.assignmentId)
                       ? 'selected'
@@ -816,6 +827,12 @@ export default function MyAssignmentsRoute() {
                       >
                         {assignment.title}
                       </Link>
+                      <AssignmentTryItPill
+                        assignment={{
+                          id: assignment.assignmentId,
+                          assignmentTypeId: assignment.assignmentTypeId,
+                        }}
+                      />
                       <TutorOffBadge tutorEnabled={assignment.tutorEnabled} />
                     </div>
                   </TableCell>

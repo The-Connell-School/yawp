@@ -40,6 +40,7 @@ import {
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { TutorOffBadge } from '~/components/assignments/tutor-off-badge';
+import { AssignmentTryItPill } from '~/components/assignments/assignment-try-it-pill';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   parseGradingAssistantStrictnessLevel,
@@ -915,9 +916,17 @@ export default function AssignmentDetailRoute() {
           <div className="mb-6 overflow-hidden rounded-xl border bg-white dark:bg-card">
             <div className="flex flex-wrap items-start justify-between gap-4 p-4 sm:p-5">
               <div className="min-w-0 flex-1">
-                <h1 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
-                  {assignment.title?.trim() || 'Untitled Assignment'}
-                </h1>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
+                    {assignment.title?.trim() || 'Untitled Assignment'}
+                  </h1>
+                  <AssignmentTryItPill
+                    assignment={{
+                      id: assignment.id,
+                      assignmentTypeId: assignment.assignmentType?.id,
+                    }}
+                  />
+                </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base/6 text-muted-foreground sm:text-sm/5">
                   {assignment.assignmentType ? (
                     <Badge variant="outline" size="sm">

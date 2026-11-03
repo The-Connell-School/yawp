@@ -15,6 +15,7 @@ import {
   useRevalidator,
   useRouteLoaderData,
   useNavigate,
+  useSearchParams,
 } from 'react-router';
 import { PenLine } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -59,6 +60,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '~/components/ui/dialog';
+import {
+  FirstAssignmentCelebrationReopenButton,
+  FirstAssignmentCongratulationsDialog,
+} from '~/components/free-tier/first-assignment-congratulations-dialog';
+import {
+  readFirstAssignmentCelebrationPending,
+  writeFirstAssignmentCelebrationPending,
+} from '~/domain/free-tier/first-assignment-celebration.client';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
 import { shouldHideFreeTierTeachingSecrets } from '~/domain/free-tier/locked-preview.server';
@@ -400,6 +409,7 @@ export default function AppRoute() {
   const { locked, loading } = useTeachingAccess();
   const ContentColumn = 'div';
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const user = useUser();
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
@@ -408,8 +418,37 @@ export default function AppRoute() {
   const [createAssignmentTypeId, setCreateAssignmentTypeId] = useState<
     string | undefined
   >();
+  const [firstAssignmentCelebrationOpen, setFirstAssignmentCelebrationOpen] =
+    useState(false);
+  const [firstAssignmentCelebrationId, setFirstAssignmentCelebrationId] =
+    useState<string | null>(null);
+  const [firstAssignmentCelebrationClassId, setFirstAssignmentCelebrationClassId] =
+    useState<string | null>(null);
+  const [firstAssignmentCelebrationSyncKey, setFirstAssignmentCelebrationSyncKey] =
+    useState(0);
   const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const assignmentsEnabled = data.assignmentsEnabled ?? false;
+
+  useEffect(() => {
+    if (!isTeacher) return;
+    const fromUrl = searchParams.get('firstAssignment');
+    const classFromUrl = searchParams.get('firstAssignmentClassId');
+    if (fromUrl) {
+      setFirstAssignmentCelebrationId(fromUrl);
+      setFirstAssignmentCelebrationClassId(classFromUrl);
+      setFirstAssignmentCelebrationOpen(true);
+      writeFirstAssignmentCelebrationPending(fromUrl);
+      const next = new URLSearchParams(searchParams);
+      next.delete('firstAssignment');
+      next.delete('firstAssignmentClassId');
+      setSearchParams(next, { replace: true });
+      return;
+    }
+    const pending = readFirstAssignmentCelebrationPending();
+    if (pending) {
+      setFirstAssignmentCelebrationId(pending);
+    }
+  }, [isTeacher, searchParams, setSearchParams]);
 
   if (isTeacher && freeUsage && loading) {
     return <TeachingAccessDashboardSkeleton />;
@@ -451,6 +490,7 @@ export default function AppRoute() {
             <ClassesAtAGlance
               classes={data.teacherClassCards}
               totalClassCount={data.totalTeacherClassCount}
+              showAssignmentsTab={assignmentsEnabled}
             />
             {assignmentsEnabled ? (
               <>
@@ -573,6 +613,20 @@ export default function AppRoute() {
               <ContentColumn className="locked-home-main flex flex-col">
                 <h1 className="locked-home-welcome">
                   Welcome, {welcomeName}!
+                  <span className="ml-3 inline-flex align-middle">
+                    <FirstAssignmentCelebrationReopenButton
+                      syncKey={firstAssignmentCelebrationSyncKey}
+                      onReopen={() => {
+                        const pending =
+                          firstAssignmentCelebrationId ??
+                          readFirstAssignmentCelebrationPending();
+                        if (pending) {
+                          setFirstAssignmentCelebrationId(pending);
+                          setFirstAssignmentCelebrationOpen(true);
+                        }
+                      }}
+                    />
+                  </span>
                 </h1>
                 {freeAccountRail ? (
                   <aside
@@ -597,6 +651,19 @@ export default function AppRoute() {
             </div>
           </div>
         </div>
+        {firstAssignmentCelebrationId ? (
+          <FirstAssignmentCongratulationsDialog
+            assignmentId={firstAssignmentCelebrationId}
+            classId={firstAssignmentCelebrationClassId}
+            open={firstAssignmentCelebrationOpen}
+            onOpenChange={(open) => {
+              setFirstAssignmentCelebrationOpen(open);
+              if (!open) {
+                setFirstAssignmentCelebrationSyncKey((key) => key + 1);
+              }
+            }}
+          />
+        ) : null}
       </section>
     );
   }

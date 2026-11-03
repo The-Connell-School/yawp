@@ -10,7 +10,7 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from 'react-router';
-import { CaretLeftIcon, CaretRightIcon } from '~/components/icons';
+import { CaretLeftIcon } from '~/components/icons';
 import {
   NewAssignmentTypePickerGrid,
   metaLabelForFreeAssignmentTile,
@@ -320,7 +320,16 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const { assignment } = await createAssignmentDeployedToClasses({
+    const priorAssignmentCount = await prisma.classAssignment.count({
+      where: {
+        class: {
+          teachers: { some: { id: profile.id } },
+          isArchived: false,
+        },
+      },
+    });
+
+    const assignment = await createAssignmentDeployedToClasses({
       data: {
         assignmentTypeId,
         title,
@@ -342,6 +351,14 @@ export async function action({ request }: ActionFunctionArgs) {
       classIds: [classId],
       deployment: { postAt: null, dueAt },
     });
+
+    if (priorAssignmentCount === 0) {
+      const celebrationParams = new URLSearchParams({
+        firstAssignment: assignment.id,
+        firstAssignmentClassId: classId,
+      });
+      return redirect(`/app?${celebrationParams.toString()}`);
+    }
 
     return redirect(`/app/assignments/${assignment.id}`);
   } catch (error) {
@@ -444,16 +461,10 @@ export default function NewAssignmentPage() {
     }
   }, [approvalBlocked]);
 
-  const howItWorksTo = selectedTypeId
-    ? `/app/assignment-types/${selectedTypeId}/how-it-works`
-    : null;
-
   return (
     <section className={freeTierStandardPageShellClassName()}>
       <div
-        className={freeTierStandardPageBodyClassName(
-          'h-full min-h-0 overflow-y-auto max-w-4xl'
-        )}
+        className={freeTierStandardPageBodyClassName('max-w-4xl')}
       >
       {!isFirstAssignment ? (
         <Button asChild variant="ghost" size="sm" className="mb-4 px-0">
@@ -588,19 +599,6 @@ export default function NewAssignmentPage() {
         {isFirstAssignment ? (
           <div className="space-y-4 pt-2">
             <div className="flex flex-wrap items-center gap-3">
-              {howItWorksTo ? (
-                <Button type="button" variant="outline" asChild>
-                  <Link to={howItWorksTo}>
-                    Try it as your students will
-                    <CaretRightIcon className="ml-1 h-4 w-4" />
-                  </Link>
-                </Button>
-              ) : (
-                <Button type="button" variant="outline" disabled>
-                  Try it as your students will
-                  <CaretRightIcon className="ml-1 h-4 w-4" />
-                </Button>
-              )}
               <Button
                 type="submit"
                 disabled={navigation.state !== 'idle' && !approvalBlocked}

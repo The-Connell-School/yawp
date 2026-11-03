@@ -38,5 +38,12 @@ export async function getTeacherClassCardStats(classId: string) {
       hasMeaningfulGrade(submission) && !submission.releasedAt
   ).length;
 
-  return { ungradedCount, gradedUnreleasedCount };
+  const documentCount = await prisma.document.count({
+    where: {
+      deletedAt: null,
+      classAssignment: { classId },
+    },
+  });
+
+  return { ungradedCount, gradedUnreleasedCount, documentCount };
 }
