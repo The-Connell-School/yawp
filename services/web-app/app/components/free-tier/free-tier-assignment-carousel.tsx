@@ -5,8 +5,15 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { ChevronLeft, ChevronRight, Lock, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  freeTierGlassyOverlayChipClassName,
+  GlassyOverlayChipLockIcon,
+  GlassyOverlayChipPlusIcon,
+} from '~/components/free-tier/glassy-overlay-chip';
 import { cn } from '~/utils/misc';
+
+export { freeTierGlassyOverlayChipClassName } from '~/components/free-tier/glassy-overlay-chip';
 
 export const FREE_TIER_ASSIGNMENT_TILE_SIZE_PX = 168;
 
@@ -102,7 +109,7 @@ export function FreeTierAssignmentCarouselTrack({
 }) {
   return (
     <div
-      ref={trackRef}
+      ref={trackRef as React.RefObject<HTMLDivElement>}
       data-testid="free-tier-assignment-carousel-track"
       onScroll={onScroll}
       className={cn(
@@ -112,14 +119,6 @@ export function FreeTierAssignmentCarouselTrack({
     >
       {children}
     </div>
-  );
-}
-
-/** Frosted chip on assignment tiles and PE3 class-card menu overlay. */
-export function freeTierGlassyOverlayChipClassName(extra?: string) {
-  return cn(
-    'rounded-full bg-white/[0.97] backdrop-blur-sm shadow-[0_1px_4px_0_hsl(0_0%_0%/0.16),0_0_0_1px_hsl(0_0%_0%/0.12)]',
-    extra
   );
 }
 
@@ -138,9 +137,9 @@ export function FreeTierAssignmentTileImageBadge({
       )}
     >
       {variant === 'create' ? (
-        <Plus size={14} aria-hidden className="text-slate-800" />
+        <GlassyOverlayChipPlusIcon />
       ) : (
-        <Lock size={14} aria-hidden className="text-slate-800" />
+        <GlassyOverlayChipLockIcon />
       )}
     </span>
   );

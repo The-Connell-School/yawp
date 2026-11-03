@@ -13,10 +13,7 @@ import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
 import { StudentInvitationDialog } from '~/components/student-invitation-dialog';
-import {
-  teachingAccessMobileSheetBodyInvite,
-  TEACHING_ACCESS_LOCKED_TOOLTIP,
-} from '~/domain/free-tier/teaching-access-copy';
+import { useLockedTeachingInviteControlProps } from '~/components/free-tier/locked-teaching-invite-props';
 import { ClassArt } from '~/components/class-art';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -237,12 +234,8 @@ function ClassDetailStudentInviteButton({
   classCodeHidden: boolean;
 }) {
   const usage = useFreeAccountUsage();
-  const { locked: teachingLocked, state: teachingAccessState } =
-    useTeachingAccess();
-  const teachingAccessAdminName =
-    teachingAccessState.variant === 'locked'
-      ? teachingAccessState.adminName
-      : 'your administrator';
+  const { locked: teachingLocked } = useTeachingAccess();
+  const inviteLockProps = useLockedTeachingInviteControlProps();
   const inviteState = resolveClassDetailStudentInviteState({
     usageMonthly: Boolean(usage?.monthly),
     usageClassId: usage?.classId,
@@ -266,13 +259,6 @@ function ClassDetailStudentInviteButton({
     className: 'shrink-0',
     'data-testid': 'class-detail-add-students' as const,
     children: inviteLabel,
-  };
-
-  const inviteLockProps = {
-    locked: true as const,
-    adminName: teachingAccessAdminName,
-    mobileSheetBody: teachingAccessMobileSheetBodyInvite(teachingAccessAdminName),
-    tooltip: TEACHING_ACCESS_LOCKED_TOOLTIP,
   };
 
   return (
