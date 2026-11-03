@@ -288,7 +288,8 @@ function CollapsibleSection({
 /**
  * The spotlight box (Brian, Nov 3), around How to Teach It and around each
  * opened drop-down's text: a shade lighter than the page, and it rises with a
- * deeper shadow on hover or when a link inside it has focus. The border,
+ * deeper shadow on hover or when a link or button inside it has keyboard
+ * focus (not a mouse click, so Hide/Show does not leave it raised). The border,
  * shadows and lift are the Lesson Library's Units tiles (library-home.tsx,
  * TILE), on a lighter fill so it stands out against this page. No lift when
  * the teacher prefers reduced motion.
@@ -298,8 +299,8 @@ export const SPOTLIGHT_BOX = [
   'shadow-[0_1px_2px_rgba(28,26,23,.06),0_4px_12px_-4px_rgba(28,26,23,.10)]',
   'transition duration-[160ms] ease-out',
   'hover:-translate-y-0.5 hover:border-[#D5CABA] hover:shadow-[0_2px_4px_rgba(28,26,23,.06),0_14px_28px_-8px_rgba(28,26,23,.20)]',
-  'focus-within:-translate-y-0.5 focus-within:shadow-[0_2px_4px_rgba(28,26,23,.06),0_14px_28px_-8px_rgba(28,26,23,.20)]',
-  'motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:focus-within:translate-y-0',
+  'has-[:focus-visible]:-translate-y-0.5 has-[:focus-visible]:shadow-[0_2px_4px_rgba(28,26,23,.06),0_14px_28px_-8px_rgba(28,26,23,.20)]',
+  'motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:has-[:focus-visible]:translate-y-0',
   'dark:border-border dark:bg-white/[0.04]',
 ].join(' ');
 

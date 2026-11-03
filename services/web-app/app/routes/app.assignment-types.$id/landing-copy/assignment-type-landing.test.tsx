@@ -200,7 +200,10 @@ describe('How to Teach It spotlight', () => {
       expect(box.textContent).toContain('Teach the');
       const classes = box.className.split(/\s+/);
       expect(classes).toContain('hover:-translate-y-0.5');
-      expect(classes).toContain('focus-within:-translate-y-0.5');
+      // Keyboard focus lifts it too, but a mouse click on Hide/Show does not
+      // leave it raised.
+      expect(classes).toContain('has-[:focus-visible]:-translate-y-0.5');
+      expect(classes.some((c) => c.startsWith('focus-within:'))).toBe(false);
       expect(classes).toContain('motion-reduce:hover:translate-y-0');
       expect(classes.some((c) => c.startsWith('hover:shadow-'))).toBe(true);
       act(() => activeRoot?.unmount());
