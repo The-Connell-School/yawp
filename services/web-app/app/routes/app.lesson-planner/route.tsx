@@ -1,4 +1,5 @@
 import { MadeNotice } from '~/components/lesson-planner/made-notice';
+import { DeckAskCard } from '~/components/lesson-planner/deck-ask-card';
 import { useActiveTime } from '~/components/lesson-planner/use-active-time';
 import { DeckPicturesProvider } from '~/components/lesson-planner/slide-picture';
 import { picturedDecks, viewerDeckPictures } from '~/domain/lesson-planner/deck-pictures.server';
@@ -473,6 +474,8 @@ type LessonPlannerActionData = {
   /** Set when the turn was a "build this day" click. */
   unitDay?: number | null;
   openedNewDay?: boolean;
+  /** Pieces the turn filed into the stack itself: an uploaded deck's deck (Nov 4). */
+  filed?: string[];
 };
 
 export default function LessonPlannerRoute() {
@@ -587,6 +590,9 @@ export default function LessonPlannerRoute() {
         ]);
       }
       return;
+    }
+    if (result.filed?.length) {
+      setAddedMaterials((prev) => new Set([...prev, ...result.filed!]));
     }
     if (result.reply) {
       // A "build this day" turn is written into that day's own conversation.
@@ -1003,6 +1009,8 @@ export default function LessonPlannerRoute() {
     setMessages((prev) => [...prev, { role: 'user', content: trimmed, displayText: unitDay?.display ?? null }]);
     setPendingSubmission({ message: trimmed, conversationKey, displayText: unitDay?.display ?? null });
     setInput('');
+    // The documents went with this message: they leave the message bar (Brian, Nov 4).
+    sources.markSent();
     setStreamed(null);
     void sendStreaming(trimmed, unitDay);
   }
@@ -1290,6 +1298,19 @@ export default function LessonPlannerRoute() {
                 />
               ))
             )}
+            {/* "Rework it, or keep it as is?" for an uploaded deck, in the
+                conversation under the planner's reply (Brian, Nov 4). */}
+            {hasMessages && !isSending && messages[messages.length - 1]?.role === 'assistant' ? (
+              <DeckAskCard
+                decks={sources.allDocs.filter((doc) => doc.deck && !doc.deck.mode)}
+                choices={sources.deckChoices}
+                disabled={isSending}
+                onChoose={async (deck, mode, message) => {
+                  await sources.choose(deck.id, mode);
+                  send(message);
+                }}
+              />
+            ) : null}
             {isSending &&
             pendingSubmission?.conversationKey === conversationKey ? (
               progress ? (

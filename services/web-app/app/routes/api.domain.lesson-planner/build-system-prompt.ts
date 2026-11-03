@@ -849,7 +849,7 @@ export function buildLessonPlannerSystemPromptBlocks({
       : []),
     ...buildTemplateSection(template),
     ...buildDeckGallerySection(deckGallery, recentArt),
-    ...buildSourcesSection(sources, deckChoices),
+    ...buildSourcesSection(sources, deckChoices, { onStack }),
   ].join('\n');
   const variable = tail ? `${intro}\n${tail}` : intro;
 

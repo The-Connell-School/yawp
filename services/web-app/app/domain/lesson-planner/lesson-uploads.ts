@@ -20,16 +20,6 @@ export const PART_CHARS = 12_000;
 export const DECK_MODES = ['teach', 'refresh'] as const;
 export type DeckMode = (typeof DECK_MODES)[number];
 
-/**
- * The two choices, as the teacher reads them (Nov 3), on the page and in the
- * planner's question alike. 'teach' keeps its stored name: the teacher's own
- * deck goes in the lesson as is. 'refresh': a new Yawp! deck made from it.
- */
-export const DECK_MODE_LABELS: Record<DeckMode, string> = {
-  refresh: 'Make me a new slide deck (your original won’t be affected)',
-  teach: 'Add my existing slide deck to the stack as is',
-};
-
 export function isDeckMode(value: unknown): value is DeckMode {
   return typeof value === 'string' && (DECK_MODES as readonly string[]).includes(value);
 }
@@ -52,6 +42,8 @@ export type LessonUpload = {
   /** A PowerPoint kept whole (Nov 1). */
   keptDeck?: boolean;
   mode?: string | null;
+  /** A deck has been made from it, in the reply that answered the question (Nov 4). */
+  deckBuilt?: boolean;
   pictures?: UploadPictureRef[];
 };
 
@@ -70,40 +62,69 @@ function slidesOf(numbers: number[]): string {
   return `slides ${numbers.slice(0, -1).join(', ')} and ${numbers[numbers.length - 1]}`;
 }
 
-/** What the planner does with one kept deck, given what the teacher chose. */
-function deckGuidance(upload: LessonUpload, choices: DeckChoices): string[] {
+/** The teacher's pictures from a deck, by id, for slides that use them. */
+function pictureLines(upload: LessonUpload): string[] {
+  const pictures = upload.pictures ?? [];
+  if (!pictures.length) return ['- None of its pictures could be kept.'];
+  return [
+    'Pictures from it you can put on a slide, each on its own picture slide: {"layout": "picture", "title": …, "question" or "body": …, "image": "<picture id>", "speakerNotes": …}. Use only an id listed here, each where their deck had it; a picture marked above as one Yawp! cannot show has no id, so describe it in the speaker notes instead.',
+    ...pictures.map(
+      (picture) =>
+        `- "${attribute(picture.id)}": picture ${picture.position}, on ${slidesOf(picture.slideNumbers)}, ${shapeOf(picture)}: ${picture.altText || 'no description'}`
+    ),
+  ];
+}
+
+const REWORK_HOW =
+  'keep its content, its sequence and its examples; tighten the wording, update what is out of date, and add the questions and notes a Yawp! deck carries. Their original file stays as it is.';
+
+/**
+ * What the planner does with one kept deck (Brian, Nov 4). The page asks the
+ * teacher "rework it, or keep it as is?" under the planner's reply; the
+ * answer is read before the planner sees the turn, and the deck it asks for
+ * is made in the reply that answers it, so it is in the stack when the
+ * teacher opens it.
+ */
+function deckGuidance(upload: LessonUpload, choices: DeckChoices, onStack: boolean): string[] {
   if (!upload.keptDeck) return [];
   const mode = upload.mode === 'teach' && choices.teach ? 'teach' : upload.mode === 'refresh' && choices.refresh ? 'refresh' : null;
+  const name = upload.name;
+  if (mode === 'teach' && upload.deckBuilt) {
+    return [
+      `[The teacher chose to keep "${name}" as is. It is already in the lesson as its slide deck, slide for slide, with their words, pictures and notes.`,
+      '- Build the plan, the handouts and the exit ticket around it: at each step say which of its slides to show by their slide numbers ("Slides 3–4"), what students do while they are up, and what the teacher says. Use the slide numbers as written above; never guess one.',
+      '- Do not write a new deck unless the teacher asks for slides. If they do, build it from their slides, in their order, with their words and their pictures.',
+      ...pictureLines(upload),
+      ']',
+    ];
+  }
   if (mode === 'teach') {
     return [
-      `[The teacher chose “${DECK_MODE_LABELS.teach}” for "${upload.name}". Their own deck is in the lesson as its slide deck, exactly as they uploaded it, and they will show it as it is.`,
-      '- Do not write a yawp-slides deck for this lesson, not even one slide: their deck is the deck. If they ask you for a new one anyway, build it from their slides, in their order; theirs stays as it is.',
-      '- Build the plan, the handouts and the exit ticket around it. At each step say which of its slides to show by their slide numbers ("Slides 3–4"), what students do while they are up, and what the teacher says. Use the slide numbers as written above; never guess one.',
-      '- Where a slide shows a picture, build on what it shows. Never contradict a slide; if one needs fixing, say so in the plan.]',
+      `[The teacher chose to keep "${name}" as is. Yawp! adds it to this reply as the lesson's slide deck, slide for slide, with their words, pictures and notes.`,
+      '- Do not write a yawp-slides deck yourself.',
+      '- Build the plan, the handouts and the exit ticket around it: at each step say which of its slides to show by their slide numbers ("Slides 3–4"), what students do while they are up, and what the teacher says. Use the slide numbers as written above; never guess one. Where a slide shows a picture, build on what it shows.]',
     ];
   }
-  if (mode === 'refresh') {
-    const pictures = upload.pictures ?? [];
+  if (mode === 'refresh' && upload.deckBuilt) {
     return [
-      `[The teacher chose “${DECK_MODE_LABELS.refresh}” for "${upload.name}". Make a new yawp-slides deck from it: keep its content, its sequence and its examples; tighten the wording, update what is out of date, and add the questions and notes a Yawp! deck carries. Their original file stays as it is.`,
-      '- Their pictures go back on the slides that used them, each on its own picture slide: {"layout": "picture", "title": …, "question" or "body": …, "image": "<picture id>", "speakerNotes": …}. Use only an id listed here, each where the original deck had it. A picture slide shows one picture whole; the painting from the art library still hangs on the rest of the deck.',
-      ...(pictures.length
-        ? [
-            'Pictures you can put on a slide:',
-            ...pictures.map(
-              (picture) =>
-                `- "${attribute(picture.id)}": picture ${picture.position}, on ${slidesOf(picture.slideNumbers)}, ${shapeOf(picture)}: ${picture.altText || 'no description'}`
-            ),
-          ]
-        : ['- None of its pictures could be kept.']),
-      '- A picture marked above as one Yawp! cannot show has no id: describe it in the speaker notes instead.]',
+      `[The teacher chose to rework "${name}". The new deck you made from it is in the lesson. Change or rebuild it only when the teacher asks, and then ${REWORK_HOW}`,
+      ...pictureLines(upload),
+      ']',
     ];
   }
-  // Refresh first: the page offers them in this order.
-  const offered = (['refresh', 'teach'] as const).filter((choice) => choices[choice]).map((choice) => `“${DECK_MODE_LABELS[choice]}”`);
-  if (!offered.length) return [];
+  if (mode === 'refresh' || (onStack && (choices.refresh || choices.teach))) {
+    return [
+      mode === 'refresh'
+        ? `[The teacher chose to rework "${name}" into a new Yawp! deck for this lesson.`
+        : `[The teacher has not said what to do with "${name}". Asked for slides here on the stack, rework it into a new Yawp! deck for this lesson; do not ask.`,
+      `- Write the new deck in this reply, with the lesson: it goes straight into the lesson's stack. As you make it, ${REWORK_HOW}`,
+      ...pictureLines(upload),
+      ']',
+    ];
+  }
+  if (!choices.teach && !choices.refresh) return [];
   return [
-    `[The teacher has not said what to do with "${upload.name}". The page asks them under the document; unless this message already says, ask them once too, in one short question offering exactly these choices: ${offered.join(' or ')}. Write no deck until they answer. Build the rest of the lesson meanwhile.]`,
+    `[The teacher has not said what to do with "${name}". The page asks the teacher, under your reply, whether to rework it or keep it as is, with a button for each. Do not ask it yourself, and write no yawp-slides deck yet: the deck is made in the reply after they answer. Plan the rest of the lesson meanwhile.]`,
   ];
 }
 
@@ -116,7 +137,11 @@ function body(text: string): string {
   return text.replace(/<\/?document\b/gi, (tag) => tag.replace('<', '‹'));
 }
 
-export function buildSourcesSection(uploads: LessonUpload[], choices: DeckChoices = NO_CHOICES): string[] {
+export function buildSourcesSection(
+  uploads: LessonUpload[],
+  choices: DeckChoices = NO_CHOICES,
+  { onStack = false }: { onStack?: boolean } = {}
+): string[] {
   if (!uploads.length) return [];
   const each = Math.floor(SOURCES_BUDGET / uploads.length);
   const lines = [
@@ -138,7 +163,7 @@ export function buildSourcesSection(uploads: LessonUpload[], choices: DeckChoice
       lines.push(`[Only the opening of "${upload.name}" is shown. It has ${parts} parts: read them with read_uploaded_document, id "${upload.id}".]`);
     }
     if (upload.truncated) lines.push(`[“${upload.name}” was long, so only its first part was kept. Tell the teacher if the lesson needs a later part.]`);
-    lines.push(...deckGuidance(upload, choices));
+    lines.push(...deckGuidance(upload, choices, onStack));
   }
   return lines;
 }

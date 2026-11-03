@@ -3,15 +3,17 @@
  * add one, and a chip for each with a way to take it back out. Added before
  * a lesson's first message, they wait in this tab and go with that message.
  *
- * A deck kept whole (Nov 1) says how many of its pictures were kept, and the
- * moment it is in, the page asks what to do with it (Nov 3): make a new slide
- * deck from it, or add it to the stack as is. Pressing the chosen one again
- * takes the choice back.
+ * A deck kept whole (Nov 1) says how many of its pictures were kept. What to
+ * do with it, rework it or keep it as is, is asked in the conversation under
+ * the planner's reply (Brian, Nov 4; see deck-ask-card.tsx), not here.
+ *
+ * The chips are what goes with the next message: once it is sent, they clear
+ * (Brian, Nov 4). The documents stay in the lesson, and the planner keeps
+ * reading them.
  */
 import { useEffect, useRef, useState } from 'react';
 import { FileText, Loader2, Paperclip, X } from 'lucide-react';
 import { cn } from '~/utils/misc';
-import { DECK_MODE_LABELS } from '~/domain/lesson-planner/lesson-uploads';
 
 export type DeckChoice = 'teach' | 'refresh';
 /** A deck kept whole: how many pictures were kept, and what the teacher chose. */
@@ -41,6 +43,8 @@ export function useSourceDocuments({
   const [removed, setRemoved] = useState<Set<string>>(new Set());
   // Choices made here, ahead of the loader: id → mode.
   const [modes, setModes] = useState<Record<string, DeckChoice | null>>({});
+  // Sent with a message: no longer shown above the message bar.
+  const [sent, setSent] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,13 +53,19 @@ export function useSourceDocuments({
     setAdded([]);
     setRemoved(new Set());
     setModes({});
+    setSent(new Set());
     setError(null);
   }, [conversationId]);
 
   const savedIds = new Set(saved.map((doc) => doc.id));
-  const docs = [...saved, ...added.filter((doc) => !savedIds.has(doc.id))]
+  const withMode = (doc: SourceChip): SourceChip =>
+    doc.deck && doc.id in modes ? { ...doc, deck: { ...doc.deck, mode: modes[doc.id] ?? null } } : doc;
+  /** Every document in the lesson, saved or just added. */
+  const allDocs = [...saved, ...added.filter((doc) => !savedIds.has(doc.id))]
     .filter((doc) => !removed.has(doc.id))
-    .map((doc) => (doc.deck && doc.id in modes ? { ...doc, deck: { ...doc.deck, mode: modes[doc.id] ?? null } } : doc));
+    .map(withMode);
+  /** What goes with the next message: added here and not sent yet. */
+  const docs = added.filter((doc) => !removed.has(doc.id) && !sent.has(doc.id)).map(withMode);
 
   async function upload(file: File) {
     setBusy(true);
@@ -102,6 +112,9 @@ export function useSourceDocuments({
   return {
     enabled,
     docs,
+    allDocs,
+    /** The next message has gone: its documents leave the message bar. */
+    markSent: () => setSent(new Set([...sent, ...docs.map((doc) => doc.id)])),
     busy,
     error,
     upload,
@@ -109,7 +122,7 @@ export function useSourceDocuments({
     deckChoices,
     choose,
     /** Documents waiting for this lesson's first message. */
-    pendingIds: conversationId ? [] : docs.map((doc) => doc.id),
+    pendingIds: conversationId ? [] : allDocs.map((doc) => doc.id),
   };
 }
 
@@ -178,54 +191,12 @@ export function SourceChips({ state }: { state: SourceDocumentsState }) {
           </button>
         </span>
       ))}
-      {state.docs.map((doc) =>
-        doc.deck ? <DeckQuestion key={`${doc.id}:question`} doc={doc} deck={doc.deck} state={state} /> : null
-      )}
       {state.busy ? <span className="text-xs text-muted-foreground">Reading your document…</span> : null}
       {state.error ? (
         <span role="alert" data-testid="source-error" className={cn('text-xs text-red-700')}>
           {state.error}
         </span>
       ) : null}
-    </div>
-  );
-}
-
-/** What to do with an uploaded deck, asked as soon as it is in (Nov 3). */
-function DeckQuestion({ doc, deck, state }: { doc: SourceChip; deck: SourceDeck; state: SourceDocumentsState }) {
-  // A new deck first, then theirs as is.
-  const offered = (['refresh', 'teach'] as const).filter((choice) => state.deckChoices[choice]);
-  if (!offered.length) return null;
-  return (
-    <div
-      role="group"
-      aria-label={`What should I do with ${doc.name}?`}
-      data-testid="source-deck-question"
-      className="w-full rounded-xl border bg-background p-2.5 text-xs"
-    >
-      <p className="mb-2 font-medium">
-        What should I do with <span className="font-semibold">{doc.name}</span>?
-      </p>
-      <div className="flex flex-col gap-1.5 sm:flex-row">
-        {offered.map((choice) => {
-          const pressed = deck.mode === choice;
-          return (
-            <button
-              key={choice}
-              type="button"
-              aria-pressed={pressed}
-              data-testid={`source-deck-${choice}`}
-              onClick={() => void state.choose(doc.id, pressed ? null : choice)}
-              className={cn(
-                'flex-1 rounded-lg border px-3 py-2 text-left transition',
-                pressed ? 'border-foreground bg-foreground text-background' : 'bg-muted/40 hover:bg-muted'
-              )}
-            >
-              {DECK_MODE_LABELS[choice]}
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }

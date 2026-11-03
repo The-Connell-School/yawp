@@ -1139,6 +1139,10 @@ jobs:
             'app/routes/api.lesson-planner-deck.$uploadId/route.test.ts' \
             app/domain/lesson-planner/active-time.test.ts \
             app/routes/api.domain.lesson-planner.active-time/route.test.ts \
+            app/domain/lesson-planner/deck-choice.test.ts \
+            app/domain/lesson-planner/deck-from-upload.test.ts \
+            app/domain/lesson-planner/uploaded-deck.server.test.ts \
+            app/routes/api.domain.lesson-planner.slide-picture/route.test.ts \
             app/domain/lesson-planner/kit-plan-render.server.test.ts \
             app/domain/lesson-planner/lesson-pptx-gallery.server.test.ts \
             app/domain/lesson-planner/option-groups.test.ts \

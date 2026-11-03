@@ -1694,6 +1694,7 @@ model LessonPlanConversation {
   shareLinks              LessonShareLink[]
   uploads                 LessonPlanUpload[]
   assignmentLinks         LessonPlanAssignmentLink[]
+  slidePictures           LessonPlanUploadPicture[]
 
   @@index([membershipId, updatedAt(sort: Desc)])
   @@index([membershipId, starredAt(sort: Desc)])
@@ -1891,6 +1892,9 @@ model LessonPlanUpload {
   /// What the teacher wants from their deck (Nov 1): 'teach' (teach with
   /// these slides) or 'refresh' (refresh into a Yawp! deck). Null: not said.
   mode           String?
+  /// The planner reply that carries the deck made from it (Nov 4): the deck
+  /// kept as is, or the reworked one. Null until it is made.
+  deckMessageId  String?
   pictures       LessonPlanUploadPicture[]
 
   @@index([conversationId])
@@ -1901,24 +1905,29 @@ model LessonPlanUpload {
 /// slides show it. Only browser-safe raster formats are kept; private to the
 /// teacher who uploaded it, and deleted with the upload.
 model LessonPlanUploadPicture {
-  id           String           @id @default(cuid())
-  createdAt    DateTime         @default(now()) @db.Timestamptz(6)
-  uploadId     String
-  upload       LessonPlanUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  id             String                  @id @default(cuid())
+  createdAt      DateTime                @default(now()) @db.Timestamptz(6)
+  /// The deck it came from; null for a picture added in the slide editor.
+  uploadId       String?
+  upload         LessonPlanUpload?       @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  /// The lesson a picture added in the slide editor belongs to (Nov 4).
+  conversationId String?
+  conversation   LessonPlanConversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   /// Same as the upload's; every read is scoped to it.
-  membershipId String
+  membershipId   String
   /// Its order in the deck, from 1: "picture 3".
-  position     Int
+  position       Int
   /// The slides (as the teacher numbers them) it appears on.
-  slideNumbers Int[]
-  altText      String
-  contentType  String
-  byteSize     Int
-  width        Int?
-  height       Int?
-  blob         Bytes
+  slideNumbers   Int[]
+  altText        String
+  contentType    String
+  byteSize       Int
+  width          Int?
+  height         Int?
+  blob           Bytes
 
   @@index([uploadId])
+  @@index([conversationId])
   @@index([membershipId])
 }
 

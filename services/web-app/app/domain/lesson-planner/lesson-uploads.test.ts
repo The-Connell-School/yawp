@@ -5,7 +5,6 @@ import {
   readUploadPart,
   SOURCES_BUDGET,
   UPLOAD_TOOL,
-  DECK_MODE_LABELS,
   type LessonUpload,
 } from './lesson-uploads';
 
@@ -63,69 +62,72 @@ describe('readUploadPart: the rest of a document, a part at a time', () => {
   });
 });
 
-describe('the teacher’s own deck: teach it, or refresh it (Nov 1)', () => {
-  const deck = (mode: 'teach' | 'refresh' | null, pictures: LessonUpload['pictures'] = []) => ({
+describe('the teacher’s own deck: rework it, or keep it as is (Brian, Nov 4)', () => {
+  const deck = (mode: 'teach' | 'refresh' | null, extra: Partial<LessonUpload> = {}): LessonUpload => ({
     ...doc('d1', 'Thesis.pptx', 'Slide 1\nObserve and analyze\n[Picture 1: An elephant]'),
     keptDeck: true,
     mode,
-    pictures,
+    pictures: [
+      { id: 'pic_a', position: 1, slideNumbers: [3, 4], altText: 'An elephant in a street', width: 1824, height: 1216 },
+      { id: 'pic_b', position: 4, slideNumbers: [6], altText: '', width: 1545, height: 1790 },
+    ],
+    ...extra,
   });
   const both = { teach: true, refresh: true };
+  const text = (upload: LessonUpload, options?: { onStack?: boolean }, choices = both) =>
+    buildSourcesSection([upload], choices, options).join('\n');
 
-  test('taught as it is: no new deck, the plan points at its slide numbers', () => {
-    const text = buildSourcesSection([deck('teach')], both).join('\n');
-    expect(text).toContain(`“${DECK_MODE_LABELS.teach}”`);
-    expect(text).toContain('in the lesson as its slide deck');
-    expect(text).toContain('Do not write a yawp-slides deck');
-    expect(text).toContain('slide numbers');
-    expect(text).toContain('<document id="d1" name="Thesis.pptx" characters=');
+  test('not answered yet: the page asks under the reply, so the planner neither asks nor writes a deck', () => {
+    const said = text(deck(null));
+    expect(said).toContain('The page asks the teacher, under your reply');
+    expect(said).toContain('Do not ask it yourself');
+    expect(said).toContain('write no yawp-slides deck yet');
   });
 
-  test('refreshed: a Yawp! deck, with the teacher’s pictures by id on picture slides', () => {
-    const text = buildSourcesSection(
-      [
-        deck('refresh', [
-          { id: 'pic_a', position: 1, slideNumbers: [3, 4], altText: 'An elephant in a street', width: 1824, height: 1216 },
-          { id: 'pic_b', position: 4, slideNumbers: [6], altText: '', width: 1545, height: 1790 },
-        ]),
-      ],
-      both
-    ).join('\n');
-    expect(text).toContain(`“${DECK_MODE_LABELS.refresh}”`);
-    expect(text).toContain('"layout": "picture"');
-    expect(text).toContain('- "pic_a": picture 1, on slides 3 and 4, landscape: An elephant in a street');
-    expect(text).toContain('- "pic_b": picture 4, on slide 6, portrait: no description');
+  test('not answered, on the stack: build it reworked, never ask', () => {
+    const said = text(deck(null), { onStack: true });
+    expect(said).toContain('rework it');
+    expect(said).not.toContain('Do not ask it yourself');
+    expect(said).toContain('"pic_a"');
   });
 
-  test('not said yet: one short question before any deck', () => {
-    const text = buildSourcesSection([deck(null)], both).join('\n');
-    expect(text).toContain('has not said');
-    // The same two choices the page offers, word for word.
-    expect(text).toContain(`“${DECK_MODE_LABELS.refresh}”`);
-    expect(text).toContain(`“${DECK_MODE_LABELS.teach}”`);
+  test('keep as is, being made now: Yawp! adds their deck to this reply, slide for slide', () => {
+    const said = text(deck('teach'));
+    expect(said).toContain('keep "Thesis.pptx" as is');
+    expect(said).toContain('Yawp! adds it to this reply');
+    expect(said).toContain('Do not write a yawp-slides deck');
+    expect(said).toContain('slide numbers');
   });
 
-  test('only the choices that are on are offered or followed', () => {
-    const teachOnly = buildSourcesSection([deck(null)], { teach: true, refresh: false }).join('\n');
-    expect(teachOnly).toContain(DECK_MODE_LABELS.teach);
-    expect(teachOnly).not.toContain(DECK_MODE_LABELS.refresh);
-    // A choice made while its flag was on is not followed once it is off.
-    const off = buildSourcesSection([deck('refresh')], { teach: false, refresh: false }).join('\n');
-    expect(off).not.toContain(DECK_MODE_LABELS.refresh);
-    expect(off).not.toContain('has not said');
+  test('keep as is, already in the lesson: slides when asked come from theirs, in their order', () => {
+    const said = text(deck('teach', { deckBuilt: true }));
+    expect(said).toContain('already in the lesson as its slide deck');
+    expect(said).toContain('build it from their slides, in their order');
+    expect(said).toContain('"pic_a"');
+  });
+
+  test('rework, not made yet: the new deck is written in this reply, with the teacher’s pictures', () => {
+    const said = text(deck('refresh'));
+    expect(said).toContain('rework "Thesis.pptx"');
+    expect(said).toContain('Write the new deck in this reply');
+    expect(said).toContain('"layout": "picture"');
+    expect(said).toContain('- "pic_a": picture 1, on slides 3 and 4, landscape: An elephant in a street');
+    expect(said).toContain('- "pic_b": picture 4, on slide 6, portrait: no description');
+  });
+
+  test('rework, already made: changed only when asked', () => {
+    expect(text(deck('refresh', { deckBuilt: true }))).toContain('is in the lesson. Change or rebuild it only when the teacher asks');
+  });
+
+  test('a choice whose flag is off is not followed, and nothing is asked when no choice is on', () => {
+    const off = text(deck('refresh'), undefined, { teach: false, refresh: false });
+    expect(off).not.toContain('rework "Thesis.pptx"');
+    expect(off).not.toContain('The page asks');
   });
 
   test('a document that is not a kept deck says nothing about decks', () => {
-    const text = buildSourcesSection([doc('u1', 'Chapter.pdf', 'words')], both).join('\n');
-    expect(text).not.toContain(DECK_MODE_LABELS.teach);
-    expect(text).not.toContain('has not said');
+    const said = buildSourcesSection([doc('u1', 'Chapter.pdf', 'words')], both).join('\n');
+    expect(said).not.toContain('The page asks');
+    expect(said).not.toContain('as is');
   });
 });
-
-describe('the two choices, as the teacher reads them', () => {
-  test('a new deck, or theirs as it is', () => {
-    expect(DECK_MODE_LABELS.refresh).toBe('Make me a new slide deck (your original won’t be affected)');
-    expect(DECK_MODE_LABELS.teach).toBe('Add my existing slide deck to the stack as is');
-  });
-});
-

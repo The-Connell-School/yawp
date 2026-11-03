@@ -7,7 +7,8 @@
  * deck in the chat, in the stack, in Present and in PowerPoint.
  */
 import { useActiveTime } from '~/components/lesson-planner/use-active-time';
-import { DeckPicturesProvider } from '~/components/lesson-planner/slide-picture';
+import { DeckPicturesProvider, SlidePicture } from '~/components/lesson-planner/slide-picture';
+import type { DeckPicture, DeckPictures } from '~/domain/lesson-planner/deck-pictures';
 import { viewerDeckPictures } from '~/domain/lesson-planner/deck-pictures.server';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -25,6 +26,8 @@ import {
   ArrowUp,
   ChevronLeft,
   Copy,
+  ImagePlus,
+  Loader2,
   Save,
   Trash2,
 } from 'lucide-react';
@@ -40,7 +43,11 @@ import {
   deleteSlide,
   duplicateSlide,
   moveSlide,
+  slideListFields,
+  slideTextFields,
   updateSlide,
+  withoutSlidePicture,
+  withSlidePicture,
 } from '~/domain/lesson-planner/deck-edit';
 import { saveEditedDeck } from '~/domain/lesson-planner/deck-edit.server';
 import {
@@ -73,15 +80,15 @@ export function deckEditorReturnTo(conversationId: string, url: string) {
 async function requireDeckEditor(request: Request) {
   const access = await getLessonPlannerAccess(request);
   if (!access.allowed) throw redirect('/app');
-  const { deckV2, deckGallery, activeTime } = await getLessonPlannerReviewFlags(
+  const { deckV2, deckGallery, activeTime, uploadPictures } = await getLessonPlannerReviewFlags(
     access.membership.organization.id
   );
   if (!deckV2) throw new Response('Not Found', { status: 404 });
-  return { access, deckGallery, activeTime };
+  return { access, deckGallery, activeTime, uploadPictures };
 }
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  const { deckGallery, activeTime } = await requireDeckEditor(request);
+  const { deckGallery, activeTime, uploadPictures } = await requireDeckEditor(request);
   const { conversationId, lessonTitle, deck } = await loadLessonDeck({
     request,
     conversationId: params.conversationId,
@@ -104,6 +111,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     // The teacher's own pictures on its slides (Nov 1).
     pictures: await viewerDeckPictures(request, [deck]),
     activeTime,
+    // Add, replace and remove a slide's picture (Brian, Nov 4).
+    pictureUploads: uploadPictures,
   };
 }
 
@@ -159,17 +168,14 @@ const LAYOUT_LABELS: Record<Slide['layout'], string> = {
 const UNDO_MS = 8000;
 
 export default function DeckEditorRoute() {
-  const { pictures } = useLoaderData<typeof loader>();
-  return (
-    <DeckPicturesProvider pictures={pictures}>
-      <DeckEditor />
-    </DeckPicturesProvider>
-  );
+  return <DeckEditor />;
 }
 
 function DeckEditor() {
-  const { lessonTitle, deck: loaded, returnTo, periodMinutes, gallery, conversationId, activeTime } =
+  const { lessonTitle, deck: loaded, returnTo, periodMinutes, gallery, conversationId, activeTime, pictures, pictureUploads } =
     useLoaderData<typeof loader>();
+  // Pictures added here (Brian, Nov 4), shown before the deck is saved.
+  const [addedPictures, setAddedPictures] = useState<DeckPictures>({});
   // "Planned in" is working time (Nov 3): editing the deck is planning too.
   useActiveTime({ conversationId, enabled: activeTime });
   const actionData = useActionData<typeof action>();
@@ -208,6 +214,7 @@ function DeckEditor() {
       .filter(Boolean);
 
   return (
+    <DeckPicturesProvider pictures={{ ...pictures, ...addedPictures }}>
     <section className="h-full w-full overflow-y-auto">
       {gallery ? <link rel="stylesheet" href={GALLERY_FONTS_HREF} /> : null}
       <Form method="post" className="mx-auto w-full max-w-7xl px-4 py-6">
@@ -372,38 +379,31 @@ function DeckEditor() {
                   className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
                 />
               </Field>
-              {slide.layout === 'title' ? (
-                <Field label="Subtitle" wide>
-                  <input
-                    value={slide.subtitle ?? ''}
-                    onChange={(event) => edit({ subtitle: event.target.value || undefined })}
-                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
-                  />
+              {/* Every piece of text on the slide has a field (Brian, Nov 4): the
+                  layout's own, and any other the slide carries. */}
+              {slideTextFields(slide).map((field) => (
+                <Field key={field.key} label={field.label} wide>
+                  {field.long ? (
+                    <textarea
+                      data-testid={`deck-field-${field.key}`}
+                      value={(slide[field.key] as string | undefined) ?? ''}
+                      maxLength={field.max}
+                      rows={3}
+                      onChange={(event) => edit({ [field.key]: event.target.value || undefined } as Partial<Slide>)}
+                      className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                    />
+                  ) : (
+                    <input
+                      data-testid={`deck-field-${field.key}`}
+                      value={(slide[field.key] as string | undefined) ?? ''}
+                      maxLength={field.max}
+                      onChange={(event) => edit({ [field.key]: event.target.value || undefined } as Partial<Slide>)}
+                      className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                    />
+                  )}
                 </Field>
-              ) : null}
-              {['statement', 'prompt', 'quote', 'closing', 'big_idea', 'write', 'excerpt', 'exit'].includes(slide.layout) ? (
-                <Field label="Text" wide>
-                  <textarea
-                    value={slide.body ?? ''}
-                    maxLength={320}
-                    rows={3}
-                    onChange={(event) => edit({ body: event.target.value || undefined })}
-                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
-                  />
-                </Field>
-              ) : null}
-              {slide.layout === 'discuss' || slide.layout === 'look' ? (
-                <Field label="Question" wide>
-                  <textarea
-                    value={slide.question ?? slide.body ?? ''}
-                    maxLength={320}
-                    rows={3}
-                    onChange={(event) => edit({ question: event.target.value || undefined, body: undefined })}
-                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
-                  />
-                </Field>
-              ) : null}
-              {slide.layout === 'agenda' ? (
+              ))}
+              {slideListFields(slide).includes('agenda') ? (
                 <Field label="Agenda, one per line" wide>
                   <textarea
                     value={(slide.agenda ?? []).map((item) => item.title).join('\n')}
@@ -420,7 +420,26 @@ function DeckEditor() {
                   />
                 </Field>
               ) : null}
-              {slide.layout === 'notes' ? (
+              {slideListFields(slide).includes('timeline') ? (
+                <Field label="Timeline, one per line (year: what happened)" wide>
+                  <textarea
+                    data-testid="deck-field-timeline"
+                    value={(slide.timeline ?? []).map((entry) => `${entry.year}: ${entry.caption}`).join('\n')}
+                    rows={4}
+                    onChange={(event) => {
+                      const next = lines(event.target.value)
+                        .slice(0, 5)
+                        .map((line, i) => {
+                          const [year, ...rest] = line.split(':');
+                          return { year: (year ?? '').trim().slice(0, 14) || '…', caption: rest.join(':').trim() || '…', mark: slide.timeline?.[i]?.mark };
+                        });
+                      edit({ timeline: next.length ? next : undefined });
+                    }}
+                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                  />
+                </Field>
+              ) : null}
+              {slideListFields(slide).includes('facts') ? (
                 <Field label="Facts, one per line" wide>
                   <textarea
                     value={(slide.facts ?? []).join('\n')}
@@ -433,7 +452,7 @@ function DeckEditor() {
                   />
                 </Field>
               ) : null}
-              {slide.layout === 'read' ? (
+              {slideListFields(slide).includes('tasks') ? (
                 <Field label="Tasks, one per line (the first word is the verb)" wide>
                   <textarea
                     value={(slide.tasks ?? []).map((task) => `${task.verb} ${task.text}`).join('\n')}
@@ -451,16 +470,7 @@ function DeckEditor() {
                   />
                 </Field>
               ) : null}
-              {slide.layout === 'quote' ? (
-                <Field label="Attribution" wide>
-                  <input
-                    value={slide.attribution ?? ''}
-                    onChange={(event) => edit({ attribution: event.target.value || undefined })}
-                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
-                  />
-                </Field>
-              ) : null}
-              {slide.layout === 'bullets' || slide.layout === 'steps' ? (
+              {slideListFields(slide).includes('bullets') ? (
                 <Field label="One per line" wide>
                   <textarea
                     value={(slide.bullets ?? []).join('\n')}
@@ -497,6 +507,39 @@ function DeckEditor() {
                     </Field>
                   ))
                 : null}
+              {slideListFields(slide).includes('choices') ? (
+                <Field label="Choices, one per line" wide>
+                  <textarea
+                    data-testid="deck-field-choices"
+                    value={(slide.choices ?? []).join('\n')}
+                    rows={4}
+                    onChange={(event) => {
+                      const next = lines(event.target.value).slice(0, 5);
+                      edit({ choices: next.length >= 2 ? next : undefined });
+                    }}
+                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                  />
+                </Field>
+              ) : null}
+              {pictureUploads ? (
+                <SlidePictureField
+                  conversationId={conversationId}
+                  image={slide.image}
+                  onPicture={(picture) => {
+                    setAddedPictures((current) => ({ ...current, [picture.id]: picture }));
+                    setDeck((current) => ({
+                      ...current,
+                      slides: current.slides.map((entry, index) => (index === at ? withSlidePicture(entry, picture.id) : entry)),
+                    }));
+                  }}
+                  onRemove={() =>
+                    setDeck((current) => ({
+                      ...current,
+                      slides: current.slides.map((entry, index) => (index === at ? withoutSlidePicture(entry) : entry)),
+                    }))
+                  }
+                />
+              ) : null}
               <Field label="Speaker notes" wide>
                 <textarea
                   value={slide.speakerNotes}
@@ -530,6 +573,7 @@ function DeckEditor() {
         </div>
       ) : null}
     </section>
+    </DeckPicturesProvider>
   );
 }
 
@@ -581,3 +625,86 @@ function Field({
     </label>
   );
 }
+
+/**
+ * A slide's picture (Brian, Nov 4): replace it, remove it, or add one, from
+ * the teacher's computer. Most useful on an uploaded deck, where the pictures
+ * are often the point.
+ */
+function SlidePictureField({
+  conversationId,
+  image,
+  onPicture,
+  onRemove,
+}: {
+  conversationId: string;
+  image: string | undefined;
+  onPicture: (picture: DeckPicture) => void;
+  onRemove: () => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function upload(file: File) {
+    setBusy(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.set('conversationId', conversationId);
+      form.set('file', file);
+      const response = await fetch('/api/domain/lesson-planner/slide-picture', { method: 'POST', body: form });
+      const body = (await response.json().catch(() => ({}))) as { picture?: DeckPicture; error?: string };
+      if (!response.ok || !body.picture) throw new Error(body.error ?? 'That picture could not be added.');
+      onPicture(body.picture);
+    } catch (problem) {
+      setError((problem as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <input
+        ref={input}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        data-testid="slide-picture-input"
+        className="sr-only"
+        tabIndex={-1}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file) void upload(file);
+        }}
+      />
+      <Field label="Picture" wide>
+      <div className="flex flex-wrap items-center gap-3">
+        {image ? (
+          <div className="h-20 w-32 overflow-hidden rounded-md border bg-muted/40">
+            <SlidePicture id={image} />
+          </div>
+        ) : null}
+        <Button type="button" variant="outline" size="sm" disabled={busy} data-testid="slide-picture-choose" onClick={() => input.current?.click()}>
+          {busy ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <ImagePlus size={14} className="mr-1.5" />}
+          {image ? 'Replace picture' : 'Add a picture'}
+        </Button>
+        {image ? (
+          <Button type="button" variant="ghost" size="sm" data-testid="slide-picture-remove" onClick={onRemove}>
+            <Trash2 size={14} className="mr-1.5" />
+            Remove picture
+          </Button>
+        ) : null}
+      </div>
+      {error ? (
+        <p role="alert" className="mt-1.5 text-xs text-destructive">
+          {error}
+        </p>
+      ) : null}
+      <p className="mt-1.5 text-xs text-muted-foreground">PNG, JPEG, GIF or WebP, up to 8 MB. Adding one makes this a picture slide; its words stay.</p>
+      </Field>
+    </>
+  );
+}
+

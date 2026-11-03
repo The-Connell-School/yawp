@@ -101,6 +101,63 @@ const ASSIGNMENT_TITLE =
 const EXIT_TICKET = /\bexit (?:ticket|slip)s?\b/i;
 
 /**
+ * Brian's rule of thumb (Nov 4): "if the teacher is talking, it's not an
+ * assignment; if the students are writing, it is." A step led by the teacher
+ * (explaining, modeling, a mini-lesson, "What pre-writing is and why") is
+ * never writing, whatever it says about writing.
+ */
+const TEACHER_TALK =
+  /^\s*(?:what|why|how)\b|\b(?:mini[- ]?lesson|mini[- ]?lecture|lecture|explain\w*|explanation|introduc\w*|model(?:s|ing|ed)?|think[- ]?aloud|direct instruction|present(?:s|ing|ation)?|teacher[- ](?:talk|led)|walk(?:s|ing)? through|demonstrat\w*)\b/i;
+/** A step named for what students write. */
+const WRITING_ACT =
+  /\b(?:pre[- ]?writ(?:e|es|ing)|quick[- ]?writ(?:e|es|ing)|free[- ]?writ(?:e|es|ing)|journal(?:ing)?|class starter|daily pages|draft(?:s|ing)?|essay|reflection|writ(?:e|ing))\b/i;
+/** Talk, reading and closings: writing only with a written prompt in them. */
+const TALK_TITLE =
+  /\b(?:discuss\w*|talk|share(?:[- ]out)?|review|go(?:ing)? over|debrief|recap|close|closing|wrap[- ]?up|hook|launch|read(?:ing)?|look|observ\w*|find)\b/i;
+const WRITTEN_PROMPT = /\b(pre[- ]?write|quick[- ]?write|free[- ]?write|journal|(?:written )?reflection|write)\s*[:—–]\s*\S/i;
+const STUDENTS_WRITE =
+  /\b(?:quick[- ]?write|free[- ]?write|pre[- ]?write|journal|(?:written|writing a) reflection|reflection (?:writing|paragraph|prompt)|written (?:response|answer)|(?:one|a)[- ]sentence (?:written )?(?:answer|response)|(?:write|jot)s?\b[^.\n]{0,40}\bin (?:their|your) (?:notes|notebooks?)|\d+\s*(?:seconds?|minutes?|min) of writing|students write|write for (?:\d+|one|two|three|four|five|a few) min)/i;
+
+export function isTeacherTalk(title: string): boolean {
+  return TEACHER_TALK.test(title);
+}
+
+function plain(text: string): string {
+  return text.replace(/\[\[[^\]]*\]\]/g, '').replace(/\*\*|__/g, '');
+}
+
+function firstLine(text: string): string {
+  return (text.split('\n').find((line) => line.trim()) ?? '').replace(/^[-*>\s]+/, '').trim();
+}
+
+/**
+ * What students write in a step written as prose, or null when nobody writes
+ * (Brian's run 3, item 4; run 5, item 6; Nov 4). The one rule behind both a
+ * step's "Create … in Yawp!" and whether its minutes count as writing time,
+ * so the two can never disagree.
+ */
+export function studentWritingTask(
+  title: string,
+  content: string
+): { kind: 'exit-ticket' | 'quick-write'; prompt: string } | null {
+  if (TEACHER_TALK.test(title)) return null;
+  const text = plain(content);
+  const ticket = /\bexit (?:ticket|slip)\b\s*[:—–-]\s*([^\n]+)/i.exec(text);
+  if (ticket) return { kind: 'exit-ticket', prompt: ticket[1]!.trim() };
+  const quoted = () => /["“]([^"”]{8,300})["”]/.exec(text)?.[1];
+  if (/\bexit (?:ticket|slip)s?\b/i.test(title)) return { kind: 'exit-ticket', prompt: firstLine(text) || title };
+  if (WRITING_ACT.test(title)) return { kind: 'quick-write', prompt: (quoted() ?? (firstLine(text) || title)).trim() };
+  if (TALK_TITLE.test(title)) {
+    const prompt = WRITTEN_PROMPT.exec(text);
+    return prompt ? { kind: 'quick-write', prompt: (quoted() ?? firstLine(text.slice(prompt.index))).trim() } : null;
+  }
+  if (STUDENTS_WRITE.test(title) || STUDENTS_WRITE.test(text)) {
+    return { kind: 'quick-write', prompt: (quoted() ?? firstLine(text)).trim() };
+  }
+  return null;
+}
+
+/**
  * A step counts as writing only when it is real writing (Brian's round 3,
  * 1.3): tied to a Yawp! assignment type by its kind, its tag, an assignment
  * made from it, or a title that names the type (Class Starter, Daily Pages,
@@ -124,11 +181,15 @@ export function isWritingStep({
 }): boolean {
   if (WRITING_KINDS.has(kind)) return true;
   if (yawpAssignmentId) return true;
+  // The teacher talking is not writing (Brian, Nov 4).
+  if (kind === 'step' && TEACHER_TALK.test(title)) return false;
   if (stepType === 'daily_pages' || stepType === 'thesis_essay' || stepType === 'class_starter') return true;
   // A reading or a background sheet is something students hold, not write on.
   if (kind === 'handout') return stepType !== 'read_aloud' && stepType !== 'context';
   if (ASSIGNMENT_TITLE.test(title)) return true;
-  return stepType === 'closing' && EXIT_TICKET.test(content);
+  if (stepType === 'closing' && EXIT_TICKET.test(content)) return true;
+  // Students writing: the same steps that get "Create … in Yawp!" (Brian, Nov 4).
+  return kind === 'step' && studentWritingTask(title, content) !== null;
 }
 
 /**
