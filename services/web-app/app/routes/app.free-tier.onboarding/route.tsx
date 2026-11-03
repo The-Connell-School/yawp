@@ -34,7 +34,7 @@ import {
   needsClassPreparation,
 } from '~/domain/free-tier/class-preparation';
 import { ClassPreparationForm } from '../free-tier/ClassPreparationForm';
-import { FreeTierOnboardingTimeline } from '../free-tier/FreeTierOnboardingTimeline';
+import { FreeTierSetupTimelineCard } from '~/components/free-tier/free-tier-setup-timeline-card';
 
 const MAX_NAME = 200;
 
@@ -230,10 +230,14 @@ export default function FreeTierOnboardingRoute() {
       title={onboardingV2 ? 'One last step: your administrator’s approval' : 'Who can approve Yawp!'}
       footer={<FreeTierSignOut />}
       subtitle={onboardingV2 ? undefined : 'A site or district administrator. Department chairs and teachers can’t.'}
+      aboveCard={
+        onboardingV2 ? (
+          <FreeTierSetupTimelineCard phase="admin-approval" />
+        ) : undefined
+      }
     >
       {onboardingV2 ? (
         <>
-          <FreeTierOnboardingTimeline current={1} />
           <p className="text-sm text-muted-foreground">
             The technology we bring into our classrooms matters. Students
             deserve tools that are safe, transparent, and built to help them

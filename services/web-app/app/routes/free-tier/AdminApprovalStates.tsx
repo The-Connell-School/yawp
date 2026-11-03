@@ -252,10 +252,12 @@ export function AdminApprovePageIntro({
   teacherName,
   schoolName,
   teacherEmail,
+  showIfApprovedCopy = false,
 }: {
   teacherName: string;
   schoolName: string;
   teacherEmail?: string;
+  showIfApprovedCopy?: boolean;
 }) {
   const pass1 = useFreeTierEnabled();
   return (
@@ -271,6 +273,20 @@ export function AdminApprovePageIntro({
           subtitle={`Teacher at ${schoolName}`}
         />
       )}
+      {showIfApprovedCopy ? (
+        <p className="text-base text-card-foreground">
+          If approved,{' '}
+          <span
+            className="font-medium underline decoration-primary decoration-dotted underline-offset-[3px]"
+            title={teacherName}
+          >
+            {teacherName}
+          </span>{' '}
+          will have a free Yawp! license for one class of up to 35 students.
+          There&apos;s no cost to the teacher or the school, no credit card, and
+          nothing to purchase.
+        </p>
+      ) : null}
       <AdminApprovalFeatureList />
     </>
   );

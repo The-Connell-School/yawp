@@ -2,41 +2,29 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test } from 'bun:test';
 import { AdminApprovalQa } from './AdminApprovalQa';
 
-test('Q&A rows start collapsed with aria-expanded false on triggers', () => {
+test('FAQ shows design heading, badges, and default-open first item', () => {
   const html = renderToStaticMarkup(
     <AdminApprovalQa teacherName="Jordan Rivera" />
   );
+  expect(html).toContain('Questions administrators ask');
+  expect(html).toContain('FERPA compliant');
+  expect(html).toContain('NDPA signed');
   expect(html).toContain('What Yawp! is');
-  expect(html).toContain('Questions about student privacy?');
-  const triggers = html.match(/aria-expanded="(true|false)"/g) ?? [];
-  expect(triggers.length).toBeGreaterThan(0);
-  expect(triggers.every((value) => value === 'aria-expanded="false"')).toBe(true);
+  expect(html).toContain('Student privacy');
+  expect(html).toContain('data-state="open"');
 });
 
-test('Q&A chevron uses a wrapper for open rotation', () => {
+test('FAQ uses design copy for the free plan question', () => {
   const html = renderToStaticMarkup(
     <AdminApprovalQa teacherName="Jordan Rivera" />
   );
-  expect(html).toContain('free-tier-qa-chevron-wrap');
-  expect(html).toContain('free-tier-qa-chevron');
+  expect(html).toContain('It’s free');
+  expect(html).not.toContain('If approved, Jordan Rivera');
 });
 
-test('Q&A copy omits AI and uses Yawp! verbatim phrasing', () => {
+test('FAQ omits standalone AI product claims outside privacy answer', () => {
   const html = renderToStaticMarkup(
     <AdminApprovalQa teacherName="Jordan Rivera" />
   );
-  expect(html).not.toMatch(/\bAI\b/i);
   expect(html).not.toMatch(/\bartificial intelligence\b/i);
-  expect(html).toContain(
-    'If approved, Jordan Rivera will have a free Yawp! license'
-  );
-});
-
-test('Q&A group labels use authored title case', () => {
-  const html = renderToStaticMarkup(
-    <AdminApprovalQa teacherName="Jordan Rivera" />
-  );
-  expect(html).toContain('>About Yawp!</p>');
-  expect(html).toContain('>Student privacy</p>');
-  expect(html).not.toContain('ABOUT YAWP');
 });

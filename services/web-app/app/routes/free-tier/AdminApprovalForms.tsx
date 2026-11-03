@@ -219,7 +219,7 @@ export function AdminApproveForm({
               isLoading={learnMoreSubmitting}
               disabled={submitting || learnMoreSubmitting}
             >
-              {learnMoreSubmitting ? 'Sending…' : "I'd like to learn more first"}
+              {learnMoreSubmitting ? 'Sending…' : 'Talk to us first'}
             </FreeTierButton>
           )
         ) : null}

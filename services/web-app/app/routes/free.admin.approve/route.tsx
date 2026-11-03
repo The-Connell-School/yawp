@@ -461,7 +461,7 @@ export default function FreeAdminApproveRoute() {
           />
         ) : undefined
       }
-      stackAfterCard={
+      splitAside={
         data.showDenyAndQa ? (
           <AdminApprovalQa teacherName={data.teacherName} />
         ) : undefined
@@ -471,6 +471,7 @@ export default function FreeAdminApproveRoute() {
         teacherName={data.teacherName}
         schoolName={data.schoolName}
         teacherEmail={data.teacherEmail}
+        showIfApprovedCopy={data.showDenyAndQa}
       />
       <AdminApproveForm
         token={data.token}

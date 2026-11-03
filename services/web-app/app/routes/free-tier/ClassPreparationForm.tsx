@@ -10,7 +10,7 @@ import {
   FreeTierSignOut,
   FreeTierTextInput,
 } from './FreeTierAuthCard';
-import { FreeTierOnboardingTimeline } from './FreeTierOnboardingTimeline';
+import { FreeTierSetupTimelineCard } from '~/components/free-tier/free-tier-setup-timeline-card';
 
 export function ClassPreparationForm({
   className,
@@ -27,11 +27,11 @@ export function ClassPreparationForm({
 }) {
   return (
     <FreeTierAuthCard
-      title="Let’s set up your classroom"
-      subtitle="Your free license covers one class of up to 35 students. Tell us a little about the class you’d like to start with."
+      aboveCard={<FreeTierSetupTimelineCard phase="class-setup" />}
+      title="Tell us about your class"
+      subtitle="Your administrator approves Yawp! next. Then you can invite students."
       footer={<FreeTierSignOut />}
     >
-      <FreeTierOnboardingTimeline current={0} />
       <Form method="post" className="flex flex-col gap-4">
         <input type="hidden" name="intent" value="prepare-class" />
         <FreeTierFieldLabel label="Class name" htmlFor="className">
