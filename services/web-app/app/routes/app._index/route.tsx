@@ -62,11 +62,16 @@ import {
 } from '~/components/ui/dialog';
 import {
   FirstAssignmentCelebrationReopenButton,
-  FirstAssignmentCongratulationsDialog,
+  FirstAssignmentCelebrationScrim,
+  type FirstAssignmentCelebrationPreview,
+  syncFirstAssignmentCelebrationPending,
 } from '~/components/free-tier/first-assignment-congratulations-dialog';
 import {
+  acknowledgeFirstAssignmentCelebration,
   readFirstAssignmentCelebrationPending,
+  readFirstAssignmentCelebrationPendingClassId,
   writeFirstAssignmentCelebrationPending,
+  isFirstAssignmentCelebrationAcknowledged,
 } from '~/domain/free-tier/first-assignment-celebration.client';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
@@ -379,6 +384,45 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ? teacherClassesOrdered.map(({ code: _code, ...klass }) => klass)
     : teacherClassesOrdered;
 
+  const celebrationAssignmentId = new URL(request.url).searchParams.get(
+    'firstAssignment'
+  );
+  const celebrationClassIdParam = new URL(request.url).searchParams.get(
+    'firstAssignmentClassId'
+  );
+  let firstAssignmentCelebrationPreview: FirstAssignmentCelebrationPreview | null =
+    null;
+  if (!useStudentExperience && celebrationAssignmentId) {
+    const classAssignment = await prisma.classAssignment.findFirst({
+      where: {
+        assignmentId: celebrationAssignmentId,
+        ...(celebrationClassIdParam
+          ? { classId: celebrationClassIdParam }
+          : {}),
+        class: { teachers: { some: { id: profile.id } } },
+      },
+      select: {
+        dueAt: true,
+        assignment: {
+          select: { id: true, title: true, assignmentTypeId: true },
+        },
+        class: {
+          select: { id: true, title: true, grade: true, period: true },
+        },
+      },
+    });
+    if (classAssignment) {
+      firstAssignmentCelebrationPreview = {
+        assignmentId: classAssignment.assignment.id,
+        classId: classAssignment.class.id,
+        title: classAssignment.assignment.title?.trim() || 'Untitled assignment',
+        assignmentTypeId: classAssignment.assignment.assignmentTypeId,
+        dueAt: classAssignment.dueAt?.toISOString() ?? null,
+        classDisplayName: formatClassLabel(classAssignment.class),
+      };
+    }
+  }
+
   return dataResponse({
     requiresClassCode: isStudentOnlyWithNoClasses,
     enrolledClasses,
@@ -395,6 +439,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     })),
     assignmentCreationTypes,
     siteLicenseLockedAssignmentTiles,
+    firstAssignmentCelebrationPreview,
   });
 }
 
@@ -426,8 +471,60 @@ export default function AppRoute() {
     useState<string | null>(null);
   const [firstAssignmentCelebrationSyncKey, setFirstAssignmentCelebrationSyncKey] =
     useState(0);
+  const [celebrationPreview, setCelebrationPreview] =
+    useState<FirstAssignmentCelebrationPreview | null>(
+      () => data.firstAssignmentCelebrationPreview ?? null
+    );
+  const celebrationPreviewFetcher = useFetcher<typeof loader>();
   const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const assignmentsEnabled = data.assignmentsEnabled ?? false;
+
+  const dismissFirstAssignmentCelebration = () => {
+    if (!firstAssignmentCelebrationId) return;
+    acknowledgeFirstAssignmentCelebration(firstAssignmentCelebrationId);
+    setFirstAssignmentCelebrationOpen(false);
+    setFirstAssignmentCelebrationSyncKey((key) => key + 1);
+  };
+
+  const resolvedCelebrationPreview =
+    celebrationPreview &&
+    firstAssignmentCelebrationId &&
+    celebrationPreview.assignmentId === firstAssignmentCelebrationId
+      ? celebrationPreview
+      : null;
+
+  useEffect(() => {
+    if (data.firstAssignmentCelebrationPreview) {
+      setCelebrationPreview(data.firstAssignmentCelebrationPreview);
+    }
+  }, [data.firstAssignmentCelebrationPreview]);
+
+  useEffect(() => {
+    if (!isTeacher || !firstAssignmentCelebrationId || celebrationPreview) {
+      return;
+    }
+    const params = new URLSearchParams({
+      firstAssignment: firstAssignmentCelebrationId,
+    });
+    if (firstAssignmentCelebrationClassId) {
+      params.set('firstAssignmentClassId', firstAssignmentCelebrationClassId);
+    }
+    celebrationPreviewFetcher.load(`/app?${params.toString()}`);
+  }, [
+    celebrationPreview,
+    celebrationPreviewFetcher,
+    firstAssignmentCelebrationClassId,
+    firstAssignmentCelebrationId,
+    isTeacher,
+  ]);
+
+  useEffect(() => {
+    if (celebrationPreviewFetcher.data?.firstAssignmentCelebrationPreview) {
+      setCelebrationPreview(
+        celebrationPreviewFetcher.data.firstAssignmentCelebrationPreview
+      );
+    }
+  }, [celebrationPreviewFetcher.data?.firstAssignmentCelebrationPreview]);
 
   useEffect(() => {
     if (!isTeacher) return;
@@ -437,7 +534,8 @@ export default function AppRoute() {
       setFirstAssignmentCelebrationId(fromUrl);
       setFirstAssignmentCelebrationClassId(classFromUrl);
       setFirstAssignmentCelebrationOpen(true);
-      writeFirstAssignmentCelebrationPending(fromUrl);
+      writeFirstAssignmentCelebrationPending(fromUrl, classFromUrl);
+      syncFirstAssignmentCelebrationPending(fromUrl, classFromUrl);
       const next = new URLSearchParams(searchParams);
       next.delete('firstAssignment');
       next.delete('firstAssignmentClassId');
@@ -447,8 +545,32 @@ export default function AppRoute() {
     const pending = readFirstAssignmentCelebrationPending();
     if (pending) {
       setFirstAssignmentCelebrationId(pending);
+      const pendingClass = readFirstAssignmentCelebrationPendingClassId();
+      if (pendingClass) {
+        setFirstAssignmentCelebrationClassId(pendingClass);
+      }
     }
   }, [isTeacher, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (
+      firstAssignmentCelebrationOpen &&
+      firstAssignmentCelebrationId &&
+      !isFirstAssignmentCelebrationAcknowledged(firstAssignmentCelebrationId)
+    ) {
+      syncFirstAssignmentCelebrationPending(
+        firstAssignmentCelebrationId,
+        firstAssignmentCelebrationClassId ??
+          celebrationPreview?.classId ??
+          readFirstAssignmentCelebrationPendingClassId()
+      );
+    }
+  }, [
+    celebrationPreview?.classId,
+    firstAssignmentCelebrationClassId,
+    firstAssignmentCelebrationId,
+    firstAssignmentCelebrationOpen,
+  ]);
 
   if (isTeacher && freeUsage && loading) {
     return <TeachingAccessDashboardSkeleton />;
@@ -491,6 +613,17 @@ export default function AppRoute() {
               classes={data.teacherClassCards}
               totalClassCount={data.totalTeacherClassCount}
               showAssignmentsTab={assignmentsEnabled}
+              firstAssignmentCelebration={
+                firstAssignmentCelebrationId &&
+                firstAssignmentCelebrationOpen &&
+                resolvedCelebrationPreview
+                  ? {
+                      open: true,
+                      preview: resolvedCelebrationPreview,
+                      onDismiss: dismissFirstAssignmentCelebration,
+                    }
+                  : undefined
+              }
             />
             {assignmentsEnabled ? (
               <>
@@ -651,19 +784,14 @@ export default function AppRoute() {
             </div>
           </div>
         </div>
-        {firstAssignmentCelebrationId ? (
-          <FirstAssignmentCongratulationsDialog
-            assignmentId={firstAssignmentCelebrationId}
-            classId={firstAssignmentCelebrationClassId}
-            open={firstAssignmentCelebrationOpen}
-            onOpenChange={(open) => {
-              setFirstAssignmentCelebrationOpen(open);
-              if (!open) {
-                setFirstAssignmentCelebrationSyncKey((key) => key + 1);
-              }
-            }}
-          />
-        ) : null}
+        <FirstAssignmentCelebrationScrim
+          open={Boolean(
+            firstAssignmentCelebrationOpen &&
+              firstAssignmentCelebrationId &&
+              resolvedCelebrationPreview
+          )}
+          onDismiss={dismissFirstAssignmentCelebration}
+        />
       </section>
     );
   }

@@ -1,10 +1,26 @@
 import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { Link } from 'react-router';
+import type { RefObject } from 'react';
 import { ClassArt } from '~/components/class-art';
 import { TeacherClassCardMenuOverlay } from '~/components/teacher-class-card-menu-overlay';
 import { getClassCardHeading } from '~/utils/class-display';
 import { cn } from '~/utils/misc';
+import type { FirstAssignmentCelebrationPreview } from '~/components/free-tier/first-assignment-congratulations-dialog';
+
+export type TeacherClassCardFeaturedAssignment = Pick<
+  FirstAssignmentCelebrationPreview,
+  'assignmentId' | 'title' | 'dueAt'
+>;
+
+function formatFeaturedAssignmentDue(iso: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(iso));
+}
 
 export type TeacherClassCardData = {
   id: string;
@@ -55,10 +71,18 @@ export function TeacherClassCard({
   klass,
   showSchoolYear = false,
   showAssignmentsTab = true,
+  featuredAssignment,
+  highlightFeaturedAssignment = false,
+  featuredAssignmentRowRef,
+  celebrationElevated = false,
 }: {
   klass: TeacherClassCardData;
   showSchoolYear?: boolean;
   showAssignmentsTab?: boolean;
+  featuredAssignment?: TeacherClassCardFeaturedAssignment | null;
+  highlightFeaturedAssignment?: boolean;
+  featuredAssignmentRowRef?: RefObject<HTMLAnchorElement | null>;
+  celebrationElevated?: boolean;
 }) {
   const { title, subtitle } = getClassCardHeading(klass);
   const usage = useFreeAccountUsage();
@@ -99,7 +123,12 @@ export function TeacherClassCard({
   ];
 
   return (
-    <div className="relative flex min-h-full flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md">
+    <div
+      className={cn(
+        'relative flex min-h-full flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md',
+        celebrationElevated && 'z-[8] shadow-md ring-primary/30'
+      )}
+    >
       <Link
         to={classPath}
         data-testid="teacher-class-card-main-link"
@@ -137,6 +166,30 @@ export function TeacherClassCard({
           </div>
         </div>
       </Link>
+      {featuredAssignment ? (
+        <div className="space-y-2 px-4 pb-4">
+          <p className="text-xs font-medium text-muted-foreground">Assignments</p>
+          <Link
+            ref={featuredAssignmentRowRef as React.Ref<HTMLAnchorElement>}
+            to={`/app/assignments/${featuredAssignment.assignmentId}`}
+            data-testid="teacher-class-card-featured-assignment"
+            className={cn(
+              'flex flex-col gap-0.5 rounded-md border border-border bg-popover px-3 py-2.5 text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              highlightFeaturedAssignment &&
+                'border-primary shadow-[0_0_0_2px_hsl(var(--primary))]'
+            )}
+          >
+            <span className="text-sm font-medium text-foreground">
+              {featuredAssignment.title.trim() || 'Untitled assignment'}
+            </span>
+            {featuredAssignment.dueAt ? (
+              <span className="text-xs text-muted-foreground">
+                Due {formatFeaturedAssignmentDue(featuredAssignment.dueAt)}
+              </span>
+            ) : null}
+          </Link>
+        </div>
+      ) : null}
       <div
         className={cn(
           'mt-auto grid divide-x divide-black/5 border-t border-black/5',
