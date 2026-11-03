@@ -55,6 +55,10 @@ function TeachLink({
  * tutor helps, and go straight to that step's lesson and tutorial video.
  */
 export function HowToTeachIt({ modules }: { modules: HowToTeachItModule[] }) {
+  // A link column only appears once some step has that link; inside it, every
+  // row keeps the slot so the chevrons and links line up down the list.
+  const lessonColumn = modules.some((module) => module.lessonUrl);
+  const videoColumn = modules.some((module) => module.tutorialVideoUrl);
   return (
     // `type-modules` is the guided tours' anchor for "The writing process".
     <section className="pb-6" data-testid="how-to-teach-it" data-tour="type-modules">
@@ -71,27 +75,35 @@ export function HowToTeachIt({ modules }: { modules: HowToTeachItModule[] }) {
             className="border-b border-border/40"
             data-testid="how-to-teach-it-row"
           >
-            <div className="flex flex-wrap items-center gap-x-4">
+            <div className="flex items-center gap-x-4">
               <div className="min-w-0 flex-1">
                 <AccordionTrigger className="py-2 text-left text-sm">
                   {module.title}
                 </AccordionTrigger>
               </div>
-              {module.lessonUrl || module.tutorialVideoUrl ? (
-                <div className="flex gap-4 pb-2 text-sm sm:pb-0">
-                  {module.lessonUrl ? (
-                    <TeachLink
-                      href={module.lessonUrl}
-                      label="Open lesson"
-                      step={module.title}
-                    />
+              {lessonColumn || videoColumn ? (
+                <div className="flex gap-4 text-sm">
+                  {lessonColumn ? (
+                    <span className="w-24 text-right">
+                      {module.lessonUrl ? (
+                        <TeachLink
+                          href={module.lessonUrl}
+                          label="Open lesson"
+                          step={module.title}
+                        />
+                      ) : null}
+                    </span>
                   ) : null}
-                  {module.tutorialVideoUrl ? (
-                    <TeachLink
-                      href={module.tutorialVideoUrl}
-                      label="Watch tutorial"
-                      step={module.title}
-                    />
+                  {videoColumn ? (
+                    <span className="w-28 text-right">
+                      {module.tutorialVideoUrl ? (
+                        <TeachLink
+                          href={module.tutorialVideoUrl}
+                          label="Watch tutorial"
+                          step={module.title}
+                        />
+                      ) : null}
+                    </span>
                   ) : null}
                 </div>
               ) : null}
