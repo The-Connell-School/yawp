@@ -19,13 +19,14 @@ describe('requireFreeTierEnabled', () => {
   const oldDatabaseUrl = process.env.DATABASE_URL;
 
   beforeEach(() => {
-    if (oldPreviewSlug === undefined) delete process.env.PREVIEW_SLUG;
+    if (oldPreviewSlug === undefined) Reflect.deleteProperty(process.env, 'PREVIEW_SLUG');
     else process.env.PREVIEW_SLUG = oldPreviewSlug;
-    if (oldYawpEnvironment === undefined) delete process.env.YAWP_ENVIRONMENT;
+    if (oldYawpEnvironment === undefined)
+      Reflect.deleteProperty(process.env, 'YAWP_ENVIRONMENT');
     else process.env.YAWP_ENVIRONMENT = oldYawpEnvironment;
-    if (oldNodeEnv === undefined) delete process.env.NODE_ENV;
+    if (oldNodeEnv === undefined) Reflect.deleteProperty(process.env, 'NODE_ENV');
     else process.env.NODE_ENV = oldNodeEnv;
-    if (oldDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+    if (oldDatabaseUrl === undefined) Reflect.deleteProperty(process.env, 'DATABASE_URL');
     else process.env.DATABASE_URL = oldDatabaseUrl;
     isFreeTierEnabled.mockReset().mockResolvedValue(true);
     isDevPanelRuntimeEnabled.mockReset().mockReturnValue(false);

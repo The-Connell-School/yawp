@@ -16,6 +16,20 @@ export function usagePercentLeft(count: UsageCount): number {
   return Math.round((count.remaining / count.total) * 100);
 }
 
+export function usagePercentUsed(count: UsageCount): number {
+  if (count.total <= 0) return 0;
+  return Math.round((count.used / count.total) * 100);
+}
+
+export function usageNavRenewsHeaderLabel(renewsAtIso: string): string {
+  const date = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(renewsAtIso));
+  return `Renews ${date}`;
+}
+
 export function usageNavLevelFromCount(count: UsageCount): UsageNavLevel {
   const left = usagePercentLeft(count);
   if (left <= 0) return 'all-used';
@@ -99,26 +113,18 @@ export function usageNavAccessibleName(input: {
   return `${feature}: ${levelPhrase}, ${input.count.remaining} of ${input.count.total} this month`;
 }
 
-export function usageNavPopoverDetail(input: {
-  feature: UsageNavFeature;
-  count: UsageCount;
-  renewsAtIso?: string;
-}): string {
-  const left = usagePercentLeft(input.count);
-  const renews =
-    input.renewsAtIso != null
-      ? formatUsageRenewsLabel(input.renewsAtIso).replace(/^Renews /, 'Renews ')
-      : '';
-  const parts = [
-    usageNavFeatureLabel(input.feature),
-    `${left}% left`,
-    renews,
-  ].filter(Boolean);
-  return parts.join(' · ');
-}
-
 export function usageNavShowsTerracotta(level: UsageNavLevel): boolean {
   return level === 'few';
+}
+
+export function usageNavProgressBarTerracotta(level: UsageNavLevel): boolean {
+  return level === 'few' || level === 'all-used';
+}
+
+/** Short status copy for usage popover rows (renews live in the panel header). */
+export function usageNavLevelPopoverStatus(level: UsageNavLevel): string {
+  if (level === 'all-used') return 'All used';
+  return usageNavLevelLabel(level);
 }
 
 export function usageNavMobileWarningDot(

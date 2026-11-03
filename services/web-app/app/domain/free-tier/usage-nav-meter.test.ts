@@ -5,7 +5,10 @@ import {
   usageNavLevelFromCount,
   usageNavMobileWarningDot,
   usageNavLevelHeadline,
+  usageNavLevelPopoverStatus,
+  usageNavRenewsHeaderLabel,
   usagePercentLeft,
+  usagePercentUsed,
 } from './usage-nav-meter';
 import {
   USAGE_NAV_MOBILE_HIT_SIZE,
@@ -22,6 +25,22 @@ const count = (remaining: number, total: number) => ({
 test('usagePercentLeft uses remaining over total', () => {
   expect(usagePercentLeft(count(20, 100))).toBe(20);
   expect(usagePercentLeft(count(0, 5))).toBe(0);
+});
+
+test('usagePercentUsed uses used over total', () => {
+  expect(usagePercentUsed(count(20, 100))).toBe(80);
+  expect(usagePercentUsed(count(0, 5))).toBe(100);
+});
+
+test('usageNavRenewsHeaderLabel uses short UTC month', () => {
+  expect(usageNavRenewsHeaderLabel('2026-11-01T00:00:00.000Z')).toBe(
+    'Renews Nov 1'
+  );
+});
+
+test('usageNavLevelPopoverStatus shortens all-used copy', () => {
+  expect(usageNavLevelPopoverStatus('all-used')).toBe('All used');
+  expect(usageNavLevelPopoverStatus('plenty')).toBe('Plenty left');
 });
 
 test('usageNavLevelFromCount thresholds at 66, 33, and 0', () => {

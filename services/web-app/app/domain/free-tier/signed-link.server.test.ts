@@ -11,11 +11,13 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  if (saved.hmac === undefined) delete process.env.FREE_TIER_LINK_HMAC_SECRET;
+  if (saved.hmac === undefined)
+    Reflect.deleteProperty(process.env, 'FREE_TIER_LINK_HMAC_SECRET');
   else process.env.FREE_TIER_LINK_HMAC_SECRET = saved.hmac;
-  if (saved.nodeEnv === undefined) delete process.env.NODE_ENV;
+  if (saved.nodeEnv === undefined) Reflect.deleteProperty(process.env, 'NODE_ENV');
   else process.env.NODE_ENV = saved.nodeEnv;
-  if (saved.sessionSecret === undefined) delete process.env.SESSION_SECRET;
+  if (saved.sessionSecret === undefined)
+    Reflect.deleteProperty(process.env, 'SESSION_SECRET');
   else process.env.SESSION_SECRET = saved.sessionSecret;
 });
 

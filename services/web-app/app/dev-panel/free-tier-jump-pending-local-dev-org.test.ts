@@ -136,7 +136,7 @@ mock.module('~/utils/db.server', () => ({
         }
         if (
           args.where?.organization?.plan &&
-          'not' in (args.where.organization.plan as object)
+          'not' in (args.where.organization.plan as unknown as object)
         ) {
           return null;
         }
@@ -178,8 +178,8 @@ function restoreEnv() {
     'SESSION_SECRET',
   ] as const) {
     const value = savedEnv[key];
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
+    if (value === undefined) Reflect.deleteProperty(process.env, key);
+    else (process.env as Record<string, string | undefined>)[key] = value;
   }
 }
 
@@ -212,8 +212,8 @@ describe('executeFreeTierStateJump pending (localhost worktree env)', () => {
   });
 
   test('pending.waiting-on-admin returns generic 400 when no signing secret is available (live failure mode)', async () => {
-    delete process.env.SESSION_SECRET;
-    delete process.env.INTERNAL_COMMAND_TOKEN;
+    Reflect.deleteProperty(process.env, 'SESSION_SECRET');
+    Reflect.deleteProperty(process.env, 'INTERNAL_COMMAND_TOKEN');
     delete process.env.FREE_TIER_LINK_HMAC_SECRET;
     delete process.env.PREVIEW_ACCESS_SECRET;
     process.env.NODE_ENV = 'production';

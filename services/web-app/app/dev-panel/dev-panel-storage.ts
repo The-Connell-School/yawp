@@ -3,6 +3,7 @@ import {
   DEV_PANEL_STORAGE_KEY,
   type DevPanelPersistedForms,
   type DevPanelPersistedState,
+  type DevPanelSubSheet,
 } from './dev-panel-types';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -13,7 +14,7 @@ export function parseDevPanelState(raw: unknown): DevPanelPersistedState | null 
   if (!isRecord(raw)) return null;
   const open = raw.open === true;
   const org = typeof raw.org === 'string' || raw.org === null ? raw.org : null;
-  let subSheet =
+  let subSheet: DevPanelSubSheet =
     raw.subSheet === 'free-tier-states' ||
     raw.subSheet === 'give-feedback' ||
     raw.subSheet === 'class-simulation' ||

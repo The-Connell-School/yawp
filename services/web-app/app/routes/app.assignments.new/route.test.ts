@@ -166,6 +166,19 @@ describe('app.assignments.new route gate', () => {
     expect(result.defaults.prompt).toBe(FIRST_ASSIGNMENT_DEFAULT_PROMPT);
   });
 
+  test('prompt query pre-fills the assignment prompt when not first assignment', async () => {
+    const result = await loader({
+      request: new Request(
+        'http://localhost/app/assignments/new?assignmentTypeId=type-1&prompt=Argue%20for%20mercy'
+      ),
+      params: {},
+      context: {} as never,
+    } as never);
+    expect(result.isFirstAssignment).toBe(false);
+    expect(result.defaults.prompt).toBe('Argue for mercy');
+    expect(result.defaults.title).toBe('');
+  });
+
   test('action returns 404 when free-tier is off', async () => {
     isFreeTierEnabled.mockResolvedValue(false);
     const form = new FormData();

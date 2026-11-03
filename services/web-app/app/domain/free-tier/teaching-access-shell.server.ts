@@ -66,7 +66,7 @@ export async function loadTeachingAccessShellState(args: {
     const forwardDisclosureAvailable =
       application.status === 'SENT' &&
       pendingApproval != null &&
-      (await isApprovalV2Enabled(application));
+      (await isApprovalV2Enabled({ ...application, userId: args.userId }));
     return {
       variant: 'locked',
       applicationId: application.id,

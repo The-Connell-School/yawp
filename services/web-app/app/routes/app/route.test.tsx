@@ -22,7 +22,7 @@ const isFreeTierEnabled = mock(async () => false);
 const loadFreeTierGateApplication = mock(async () => ({
   id: 'app-1',
   status: 'ACCOUNT_CREATED',
-  organizationId: null,
+  organizationId: null as string | null,
   adminApprovals: [],
 }));
 const enforceFreeTierTeacherGate = mock(async () => null);

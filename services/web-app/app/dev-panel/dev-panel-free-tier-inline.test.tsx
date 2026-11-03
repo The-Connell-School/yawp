@@ -54,7 +54,10 @@ afterEach(() => {
 describe('DevPanelFreeTierInline', () => {
   test('session runner is primary; advanced jumps stay inline with confirm', async () => {
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (input, init) => {
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
       const url = String(input);
       if (url.includes('/api/dev-panel/free-tier-session')) {
         return new Response(
@@ -75,7 +78,7 @@ describe('DevPanelFreeTierInline', () => {
         );
       }
       return originalFetch(input, init);
-    };
+    }) as unknown as typeof fetch;
 
     writeDevPanelState(window.localStorage, {
       open: true,

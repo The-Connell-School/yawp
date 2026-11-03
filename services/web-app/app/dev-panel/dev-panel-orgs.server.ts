@@ -47,9 +47,18 @@ export async function listDevPanelOrganizations(
     if (!seat) return [];
     const organization = await prisma.organization.findUnique({
       where: { id: seat.organizationId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, plan: true },
     });
-    return organization ? [organization] : [];
+    return organization
+      ? [
+          {
+            id: organization.id,
+            name: organization.name,
+            kind:
+              organization.plan === 'FREE_CLASSROOM' ? 'Free' : 'School',
+          },
+        ]
+      : [];
   }
 
   const known = [

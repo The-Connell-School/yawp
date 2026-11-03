@@ -17,7 +17,7 @@ export const Pagination = ({
   onChange: (skip: number, take: number) => void;
 }) => {
   return (
-    <div className="flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
+    <div className="flex w-full min-w-0 flex-col items-start justify-between gap-2 md:flex-row md:items-center">
       <div className="flex gap-1">
         <button
           className="rounded-md border bg-white p-2 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
@@ -52,7 +52,7 @@ export const Pagination = ({
           <ChevronsRight size={16} />
         </button>
       </div>
-      <div className="mr-2 flex min-w-max items-center gap-2 text-sm">
+      <div className="flex min-w-max items-center gap-2 text-sm">
         <div>Page</div>
         <strong>
           {Math.floor(skip / take) + 1} of {Math.ceil(totalCount / take)}
