@@ -262,7 +262,7 @@ function ClassDetailStudentInviteButton({
   const inviteButtonProps = {
     size: 'sm' as const,
     type: 'button' as const,
-    variant: 'default' as const,
+    variant: 'outline' as const,
     className: 'shrink-0',
     'data-testid': 'class-detail-add-students' as const,
     children: inviteLabel,
