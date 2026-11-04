@@ -24,7 +24,7 @@ Fast path is active only when **every changed file** stays under:
 Any change under these prefixes **blocks** the fast path (full CI runs even with the label):
 
 - `packages/**` (including **`packages/prisma/migrations/**`**)
-- `scripts/**`, `.github/**`, `bin/**`, `infra/**`, `design/**`, `qa/**`, `granola/**`, `state/**`
+- `scripts/**`, `.github/**`, `bin/**`, `infra/**`, `design/**`, `qa/**`, `granola/**`, `state/**` **except** top-level Ship Review artifacts matching `state/SHIP_REVIEW_*.md` (single segment under `state/`, `.md` only — not nested paths or backup suffixes)
 - Lockfiles, `package.json`, `tsconfig*`, `bunfig.toml`, `playwright.config.*`, `Dockerfile*`
 
 Eligibility logic is mirrored in `scripts/ci/factory-l0-eligibility.ts` (unit tested).
