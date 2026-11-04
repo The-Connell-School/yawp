@@ -4,12 +4,23 @@
 **Title:** fix(ci): allow SHIP_REVIEW artifacts on factory-l0 path  
 **Branch:** `cursor/factory-l0-ship-review-exception-f793`  
 **Base:** `main`  
-**Reviewed product/code SHA:** `5137a280c7f6ccdc99276a92973833accc69c87d` (`5137a280c`)  
+**Reviewed product/code SHA:** `d21a6b405` (includes this artifact)  
+**Merge head SHA (exact-head CI gate):** `d21a6b405`  
 
 **Reviewer:** Independent ship review (Cloud Agent; not PR author)  
 **Date:** 2026-11-04  
 
 **SHIP**
+
+---
+
+## Exact-head CI (required gate)
+
+| Check | Result |
+| --- | --- |
+| CI workflow (Changed paths, Prisma migrations, ʦ TypeScript, E2E shards, browser jobs) | **pass** on run `41903391131` |
+| Factory L0 smoke | **skipped** (expected — PR touches `.github/` and `scripts/`) |
+| Preview deploy | **pass** on run `41903388711` |
 
 ---
 
