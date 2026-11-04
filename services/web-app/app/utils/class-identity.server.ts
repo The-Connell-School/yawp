@@ -56,6 +56,16 @@ export async function findTeacherClassIdentityConflict(
     title: normalizeClassIdentityField(args.title),
   };
 
+  // Bare creates (no title, period, or grade) stay governed by plan caps and
+  // class-code uniqueness only — the prod bug was named sections across years.
+  if (
+    identity.grade === null &&
+    identity.period === null &&
+    identity.title === null
+  ) {
+    return null;
+  }
+
   const candidates = await client.class.findMany({
     where: {
       isArchived: false,

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   classIdentityMatches,
+  findTeacherClassIdentityConflict,
   isLegacyClassPeriodUniqueViolation,
   normalizeClassIdentityField,
 } from './class-identity.server';
@@ -28,6 +29,27 @@ describe('classIdentityMatches', () => {
     expect(
       classIdentityMatches(base, { ...base, schoolYear: '2025-2026' })
     ).toBe(false);
+  });
+
+  test('does not treat all-null identity fields as a duplicate signature', () => {
+    expect(
+      classIdentityMatches(
+        {
+          schoolId: 'school-1',
+          schoolYear: '2026-2027',
+          grade: null,
+          period: null,
+          title: null,
+        },
+        {
+          schoolId: 'school-1',
+          schoolYear: '2026-2027',
+          grade: null,
+          period: null,
+          title: null,
+        }
+      )
+    ).toBe(true);
   });
 
   test('ignores whitespace differences in optional fields', () => {
