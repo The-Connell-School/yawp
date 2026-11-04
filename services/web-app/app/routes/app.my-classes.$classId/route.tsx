@@ -1575,6 +1575,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
   const location = useLocation();
   const revalidator = useRevalidator();
   const studentFetcher = useFetcher();
+  const pendingRemoveStudentsRef = useRef(false);
   // Non-null when a nested detail route matches — either the assignment
   // detail route (app.my-classes.$classId.assignment.$assignmentId) or the
   // class summary route (app.my-classes.$classId.summary.$assignmentId).
@@ -2064,6 +2065,15 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
       return;
     }
 
+    if (pendingRemoveStudentsRef.current) {
+      pendingRemoveStudentsRef.current = false;
+      if ('success' in studentFetcher.data && studentFetcher.data.success) {
+        setSelectedStudentIds([]);
+        revalidator.revalidate();
+      }
+      return;
+    }
+
     if (addStudentStep !== 'email') {
       if ('success' in studentFetcher.data && studentFetcher.data.success) {
         setSelectedStudentIds([]);
@@ -2412,7 +2422,9 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                             e.preventDefault();
                             return;
                           }
-                          setSelectedStudentIds([]);
+                          // Clear selection only after the POST succeeds (see effect);
+                          // clearing here unmounts the form before it submits.
+                          pendingRemoveStudentsRef.current = true;
                         }}
                       >
                         <UserMinus className="h-4 w-4" />
