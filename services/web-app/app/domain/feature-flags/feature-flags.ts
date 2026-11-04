@@ -122,6 +122,14 @@ export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
 export const TEACHER_PROMPT_GENERATOR_FLAG = 'teacher-prompt-generator' as const;
 
 /**
+ * Teacher's Lounge (`/app/teacher-trainings`). Off: hidden and redirected except
+ * for emails on the `teacher_lounge` access list. Everyone: on for all teachers
+ * (role checks unchanged). Targeted: on for listed schools only, with the same
+ * access-list bypass when off for a school.
+ */
+export const TEACHER_LOUNGE_FLAG = 'teacher-lounge' as const;
+
+/**
  * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
  * reads only `feature_flag.free_tier`; these rows are not OR-merged.
  */
@@ -243,6 +251,11 @@ export const FEATURE_FLAGS = {
     label: 'Teacher prompt generator',
     description:
       'Shows New → Generate a prompt and the LLM drafting sheet on assignment types that support it (Class Starter, Daily Pages, Exit Ticket, Thesis-Driven Essay). Default off on production; on by default on demo and PR previews.',
+  },
+  [TEACHER_LOUNGE_FLAG]: {
+    label: "Teacher's Lounge",
+    description:
+      "Controls Teacher's Lounge nav and `/app/teacher-trainings` access. Off: hidden for all teachers except the runtime access list. Everyone: on for all teachers. Targeted: on for listed schools only.",
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

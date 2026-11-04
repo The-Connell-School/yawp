@@ -12,6 +12,9 @@ export function featureFlagPrismaTables() {
       findMany: mock(),
       findUnique: mock(),
     },
+    adminConfigAudit: {
+      create: mock(),
+    },
   };
 }
 
