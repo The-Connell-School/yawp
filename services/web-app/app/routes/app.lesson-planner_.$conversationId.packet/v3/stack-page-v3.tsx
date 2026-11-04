@@ -154,7 +154,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
     return ordered
       .filter((step) => !hiddenIds.includes(step.id))
       .map((step) => (localMinutes[step.id] != null ? { ...step, minutes: localMinutes[step.id]! } : step))
-      .map((step) => (step.id in localWriting ? withWritingCall(step, localWriting[step.id]!) : step));
+      .map((step) => (step.id in localWriting ? withWritingCall(step, localWriting[step.id] ?? null) : step));
   }, [v3.steps, localOrder, localMinutes, localWriting, hiddenIds]);
   const timing = useMemo(() => stackTiming(steps, data.periodMinutes), [steps, data.periodMinutes]);
   const fixes = useMemo(() => timeFixes(timing), [timing]);
