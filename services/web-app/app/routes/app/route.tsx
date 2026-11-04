@@ -115,6 +115,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
         guidedTours: null,
         teachingAccess: { variant: 'none' } satisfies TeachingAccessShellState,
+        teacherLoungeNavVisible: false,
       });
   }
   const userId = await requireUserId(request);
