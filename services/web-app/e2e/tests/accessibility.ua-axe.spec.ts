@@ -107,7 +107,7 @@ test.describe.serial('UA accessibility axe audit', () => {
     signIn,
     e2eContext,
   }, testInfo) => {
-    test.skip(teacherLoungeE2eSkipped, teacherLoungeE2eSkipReason);
+    test.skip(await teacherLoungeE2eSkipped(), teacherLoungeE2eSkipReason);
 
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app/teacher-trainings');
