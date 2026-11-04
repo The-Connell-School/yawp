@@ -137,7 +137,8 @@ export function isLegacyClassPeriodUniqueViolation(error: unknown): boolean {
         fields.includes('schoolId') &&
         fields.includes('period') &&
         fields.includes('grade') &&
-        !fields.includes('code')
+        !fields.includes('code') &&
+        !fields.includes('schoolYear')
       ) {
         return true;
       }

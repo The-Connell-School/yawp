@@ -1,5 +1,5 @@
 import { ClassCodeInput } from '~/components/class-code-input';
-import { classCodeUniquenessEnabled, resolveClassCode, ClassCodeCollisionError } from '~/utils/class-code-write.server';
+import { classCodeUniquenessEnabled, resolveClassCode } from '~/utils/class-code-write.server';
 import {
   data as dataResponse,
   redirect,
@@ -47,10 +47,12 @@ import {
 import { assertCanCreateClassForOrganizationPlan } from '~/utils/assignment-quota.server';
 import {
   findTeacherClassIdentityConflict,
-  isLegacyClassPeriodUniqueViolation,
   TEACHER_CLASS_IDENTITY_CONFLICT_MESSAGE,
 } from '~/utils/class-identity.server';
-import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
+import {
+  classManageActionErrorFromCaught,
+  isClassCodeUniqueViolation,
+} from '~/utils/class-manage-action-errors.server';
 import { prisma } from '~/utils/db.server';
 import { SearchInput } from '~/components/search-input';
 import {
@@ -132,45 +134,6 @@ type TeacherSchoolConnector = {
     }) => Promise<unknown>;
   };
 };
-
-function prismaUniqueConstraintTargets(error: unknown): string[] | null {
-  if (!error || typeof error !== 'object') return null;
-
-  const prismaError = error as {
-    code?: unknown;
-    meta?: {
-      target?: unknown;
-      driverAdapterError?: {
-        cause?: { constraint?: { fields?: unknown } };
-      };
-    };
-  };
-  if (prismaError.code !== 'P2002') return null;
-
-  const values = [
-    prismaError.meta?.target,
-    prismaError.meta?.driverAdapterError?.cause?.constraint?.fields,
-  ];
-
-  return values.flatMap((value) => {
-    if (Array.isArray(value)) {
-      return value.filter((item): item is string => typeof item === 'string');
-    }
-    return typeof value === 'string' ? [value] : [];
-  });
-}
-
-function uniqueConstraintIncludes(
-  targets: readonly string[],
-  field: string
-): boolean {
-  return targets.some((target) =>
-    target
-      .replace(/[()"']/g, '')
-      .split(',')
-      .some((part) => part.trim() === field)
-  );
-}
 
 async function connectTeachersToSchool(
   tx: TeacherSchoolConnector,
@@ -419,58 +382,17 @@ export async function action({ request }: ActionFunctionArgs) {
 
         return dataResponse({ success: true });
       } catch (error: unknown) {
-        if (error instanceof ClassCodeCollisionError) {
-          return dataResponse(
-            {
-              error: safeDomainErrorTextForClientResponse(
-                error,
-                'Class code already in use. Choose a different code.',
-              ),
-              field: 'code',
-            },
-            { status: 400 },
-          );
-        }
-        const uniqueTargets = prismaUniqueConstraintTargets(error);
-        const isCodeCollision =
-          uniqueTargets && uniqueConstraintIncludes(uniqueTargets, 'code');
-
-        if (isCodeCollision && attempt + 1 < maxAttempts) {
+        if (isClassCodeUniqueViolation(error) && attempt + 1 < maxAttempts) {
           code = generateClassCode();
           continue;
         }
 
-        if (isCodeCollision) {
-          return dataResponse(
-            { error: 'Class code already in use. Choose a different code.', field: 'code' },
-            { status: 400 }
-          );
-        }
-        if (isLegacyClassPeriodUniqueViolation(error)) {
-          return dataResponse(
-            { error: TEACHER_CLASS_IDENTITY_CONFLICT_MESSAGE },
-            { status: 400 }
-          );
-        }
-        if (uniqueTargets) {
-          return dataResponse(
-            { error: 'Class could not be created.' },
-            { status: 400 }
-          );
-        }
-        if (
-          error instanceof Error &&
-          error.message.includes('Free classroom accounts include one class')
-        ) {
-          return dataResponse(
-            {
-              error: safeDomainErrorTextForClientResponse(
-                error,
-                'Free classroom accounts include one class. Archive your existing class or upgrade to add another.',
-              ),
-            },
-            { status: 403 },
-          );
+        const mapped = classManageActionErrorFromCaught(error, 'create');
+        if (mapped) {
+          const body = mapped.field
+            ? { error: mapped.error, field: mapped.field }
+            : { error: mapped.error };
+          return dataResponse(body, { status: mapped.status });
         }
         throw error;
       }
@@ -566,33 +488,12 @@ export async function action({ request }: ActionFunctionArgs) {
 
       return dataResponse({ success: true });
     } catch (error: unknown) {
-      if (error instanceof ClassCodeCollisionError) {
-        return dataResponse(
-          {
-            error: safeDomainErrorTextForClientResponse(
-              error,
-              'Class code already in use. Choose a different code.',
-            ),
-            field: 'code',
-          },
-          { status: 400 },
-        );
-      }
-      const uniqueTargets = prismaUniqueConstraintTargets(error);
-      if (uniqueTargets) {
-        if (uniqueConstraintIncludes(uniqueTargets, 'code')) {
-          return dataResponse(
-            { error: 'Class code already in use. Choose a different code.', field: 'code' },
-            { status: 400 }
-          );
-        }
-        if (isLegacyClassPeriodUniqueViolation(error)) {
-          return dataResponse(
-            { error: TEACHER_CLASS_IDENTITY_CONFLICT_MESSAGE },
-            { status: 400 }
-          );
-        }
-        return dataResponse({ error: 'Class could not be updated.' }, { status: 400 });
+      const mapped = classManageActionErrorFromCaught(error, 'update');
+      if (mapped) {
+        const body = mapped.field
+          ? { error: mapped.error, field: mapped.field }
+          : { error: mapped.error };
+        return dataResponse(body, { status: mapped.status });
       }
       throw error;
     }
@@ -1273,11 +1174,11 @@ function ClassSheet({
           </SheetDescription>
         </SheetHeader>
 
-        {fetcher.data?.error && !(classCodeUniqueEnabled && fetcher.data?.field === 'code') && (
-          <div className="mt-4 p-3 rounded-md bg-destructive/10 border border-destructive text-destructive text-sm">
+        {fetcher.data?.error ? (
+          <div className="mt-4 rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
             {fetcher.data.error}
           </div>
-        )}
+        ) : null}
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-6">
           <div className="space-y-2">
@@ -1303,10 +1204,21 @@ function ClassSheet({
               value={code}
               onChange={setCode}
               enabled={classCodeUniqueEnabled}
-              error={fetcher.state === 'idle' && submittedCode === code && fetcher.data?.field === 'code' ? fetcher.data.error : null}
+              excludeClassId={editingClass?.id}
+              skipLiveAvailability={
+                !editingClass && Boolean(generatedCode) && code === generatedCode
+              }
+              error={
+                fetcher.state === 'idle' &&
+                submittedCode === code &&
+                fetcher.data?.field === 'code'
+                  ? fetcher.data.error
+                  : null
+              }
               onGenerate={() => {
                 const next = generateClassCode();
-                setCode(next); setGeneratedCode(next);
+                setCode(next);
+                setGeneratedCode(next);
               }}
             />
             <p className="text-xs text-muted-foreground">

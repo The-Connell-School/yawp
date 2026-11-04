@@ -70,6 +70,12 @@ describe('isLegacyClassPeriodUniqueViolation', () => {
         code: 'P2002',
         meta: { target: ['schoolId', 'schoolYear', 'period', 'grade'] },
       })
+    ).toBe(false);
+    expect(
+      isLegacyClassPeriodUniqueViolation({
+        code: 'P2002',
+        meta: { target: ['schoolId', 'period', 'grade'] },
+      })
     ).toBe(true);
     expect(
       isLegacyClassPeriodUniqueViolation({
