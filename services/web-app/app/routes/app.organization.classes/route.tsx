@@ -45,6 +45,11 @@ import {
   getOrganizationClassesTableCookieValue,
 } from '~/utils/cookies.server';
 import { assertCanCreateClassForOrganizationPlan } from '~/utils/assignment-quota.server';
+import {
+  findTeacherClassIdentityConflict,
+  isLegacyClassPeriodUniqueViolation,
+  TEACHER_CLASS_IDENTITY_CONFLICT_MESSAGE,
+} from '~/utils/class-identity.server';
 import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import { prisma } from '~/utils/db.server';
 import { SearchInput } from '~/components/search-input';
@@ -365,6 +370,21 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ error: 'Invalid school' }, { status: 400 });
     }
 
+    const identityConflict = await findTeacherClassIdentityConflict(prisma, {
+      schoolId,
+      schoolYear,
+      grade,
+      period,
+      title,
+      teacherMembershipIds: teacherIds,
+    });
+    if (identityConflict) {
+      return dataResponse(
+        { error: TEACHER_CLASS_IDENTITY_CONFLICT_MESSAGE },
+        { status: 400 }
+      );
+    }
+
     const classArtKey = await pickClassArtKeyForOrganization(
       profile.organization.id
     );
@@ -423,6 +443,12 @@ export async function action({ request }: ActionFunctionArgs) {
         if (isCodeCollision) {
           return dataResponse(
             { error: 'Class code already in use. Choose a different code.', field: 'code' },
+            { status: 400 }
+          );
+        }
+        if (isLegacyClassPeriodUniqueViolation(error)) {
+          return dataResponse(
+            { error: TEACHER_CLASS_IDENTITY_CONFLICT_MESSAGE },
             { status: 400 }
           );
         }
@@ -499,6 +525,22 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ error: 'Class not found' }, { status: 404 });
     }
 
+    const identityConflict = await findTeacherClassIdentityConflict(prisma, {
+      schoolId,
+      schoolYear,
+      grade,
+      period,
+      title,
+      teacherMembershipIds: teacherIds,
+      excludeClassId: classId,
+    });
+    if (identityConflict) {
+      return dataResponse(
+        { error: TEACHER_CLASS_IDENTITY_CONFLICT_MESSAGE },
+        { status: 400 }
+      );
+    }
+
     try {
       await prisma.$transaction(async (tx) => {
         const resolvedCode = await resolveClassCode(tx, code, { classId });
@@ -541,6 +583,12 @@ export async function action({ request }: ActionFunctionArgs) {
         if (uniqueConstraintIncludes(uniqueTargets, 'code')) {
           return dataResponse(
             { error: 'Class code already in use. Choose a different code.', field: 'code' },
+            { status: 400 }
+          );
+        }
+        if (isLegacyClassPeriodUniqueViolation(error)) {
+          return dataResponse(
+            { error: TEACHER_CLASS_IDENTITY_CONFLICT_MESSAGE },
             { status: 400 }
           );
         }
@@ -1162,7 +1210,9 @@ function ClassSheet({
     setSubmittedCode(null);
     const sourceClass = editingClass || duplicatingClass;
     setSchoolId(sourceClass?.schoolId || '');
-    setSchoolYear(sourceClass?.schoolYear || currentSchoolYear());
+    setSchoolYear(
+      duplicatingClass ? currentSchoolYear() : sourceClass?.schoolYear || currentSchoolYear()
+    );
     setGrade(sourceClass?.grade || '');
     setPeriod(sourceClass?.period || '');
     setTitle(sourceClass?.title || '');

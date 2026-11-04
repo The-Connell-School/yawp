@@ -43,6 +43,11 @@ import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
 import { resolveTeacherSchoolYearScope } from '~/utils/school-year-scope.server';
 import { resolveStudentSchoolYearScope } from '~/utils/school-year-scope.server';
 import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
+import {
+  findTeacherClassIdentityConflict,
+  isLegacyClassPeriodUniqueViolation,
+  TEACHER_CLASS_IDENTITY_CONFLICT_MESSAGE,
+} from '~/utils/class-identity.server';
 
 async function getTeacherSchoolIds(membershipId: string) {
   const teacher = await prisma.orgMembership.findUnique({
@@ -213,6 +218,21 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (!code) code = generateClassCode();
 
+    const identityConflict = await findTeacherClassIdentityConflict(prisma, {
+      schoolId,
+      schoolYear,
+      grade,
+      period,
+      title,
+      teacherMembershipIds: [profile.id],
+    });
+    if (identityConflict) {
+      return dataResponse(
+        { error: TEACHER_CLASS_IDENTITY_CONFLICT_MESSAGE },
+        { status: 400 }
+      );
+    }
+
     try {
       const classArtKey = await pickClassArtKeyForOrganization(
         profile.organization.id
@@ -262,6 +282,15 @@ export async function action({ request }: ActionFunctionArgs) {
           { status: 403 },
         );
       }
+      if (isLegacyClassPeriodUniqueViolation(error)) {
+        return dataResponse(
+          {
+            error:
+              'A class with this period and grade already exists at your school from a previous year. Your administrator needs to apply the latest Yawp database migration before you can recreate this section for the new school year.',
+          },
+          { status: 400 }
+        );
+      }
       if (error.code === 'P2002') {
         return dataResponse(
           { error: 'Class code already in use. Choose a different code.', field: 'code' },
@@ -307,6 +336,22 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ error: 'Class not found.' }, { status: 404 });
     }
 
+    const identityConflict = await findTeacherClassIdentityConflict(prisma, {
+      schoolId,
+      schoolYear,
+      grade,
+      period,
+      title,
+      teacherMembershipIds: [profile.id],
+      excludeClassId: classId,
+    });
+    if (identityConflict) {
+      return dataResponse(
+        { error: TEACHER_CLASS_IDENTITY_CONFLICT_MESSAGE },
+        { status: 400 }
+      );
+    }
+
     try {
       await prisma.$transaction(async tx => {
         const resolvedCode = await resolveClassCode(tx, code, { classId });
@@ -337,6 +382,12 @@ export async function action({ request }: ActionFunctionArgs) {
             field: 'code',
           },
           { status: 400 },
+        );
+      }
+      if (isLegacyClassPeriodUniqueViolation(error)) {
+        return dataResponse(
+          { error: TEACHER_CLASS_IDENTITY_CONFLICT_MESSAGE },
+          { status: 400 }
         );
       }
       if (error.code === 'P2002') {
