@@ -54,7 +54,12 @@ describe('app.organization.classes action', () => {
     prisma.$transaction.mockReset();
 
     prisma.class.findMany.mockImplementation(
-      async ({ where }: { where: { id?: { in: string[] } } }) => {
+      async ({
+        where,
+      }: {
+        where: { id?: { in: string[] }; schoolYear?: string };
+      }) => {
+        if (where?.schoolYear) return [];
         const ids = where?.id?.in ?? [];
         return ids.map((id: string) => ({ id, schoolId: `${id}-school` }));
       }

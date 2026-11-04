@@ -4,7 +4,12 @@ const assertCanCreateClassInTransaction = mock(async () => {});
 
 const prisma = {
   setting: { findUnique: mock(async () => null) },
-  class: { findMany: mock(), create: mock(), update: mock(), findFirst: mock() },
+  class: {
+    findMany: mock(async () => []),
+    create: mock(),
+    update: mock(),
+    findFirst: mock(),
+  },
   orgMembership: { findUnique: mock() },
   $transaction: mock(async (fn: (tx: typeof prisma) => unknown) => fn(prisma)),
 };
@@ -123,6 +128,8 @@ describe('my classes route (teacher create/edit)', () => {
     prisma.class.create.mockReset();
     prisma.class.update.mockReset();
     prisma.class.findFirst.mockReset();
+    prisma.class.findMany.mockReset();
+    prisma.class.findMany.mockResolvedValue([]);
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -193,6 +200,44 @@ describe('my classes route (teacher create/edit)', () => {
         data: expect.objectContaining({ period: null, grade: null }),
       })
     );
+  });
+
+  test('create-class rejects a duplicate identity in the same school year', async () => {
+    (prisma.class.findMany as ReturnType<typeof mock>).mockImplementation(
+      async (args: any) => {
+      const where = args?.where;
+      if (where?.schoolYear === '2026-2027') {
+        return [
+          {
+            id: 'existing-class',
+            grade: '11',
+            period: '3',
+            title: 'Theology III',
+          },
+        ];
+      }
+      return [];
+    }
+    );
+
+    const body = new URLSearchParams();
+    body.set('intent', 'create-class');
+    body.set('schoolId', 'school-1');
+    body.set('schoolYear', '2026-2027');
+    body.set('grade', '11');
+    body.set('period', '3');
+    body.set('title', 'Theology III');
+    body.set('code', 'ABC123');
+
+    const response = (await action({ request: new Request('https://example.test/app/my-classes?index', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    }) } as any)) as { init?: { status: number }; data?: { error: string } };
+
+    expect(response.init?.status).toBe(400);
+    expect(response.data?.error).toContain('same title, period, and grade');
+    expect(prisma.class.create).not.toHaveBeenCalled();
   });
 
   test('create-class allows a missing grade', async () => {
