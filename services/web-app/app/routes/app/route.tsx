@@ -154,6 +154,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         guidedTours: null,
         teachingAccess: { variant: 'none' } satisfies TeachingAccessShellState,
+        teacherLoungeNavVisible: false,
       });
     }
   }
@@ -275,13 +276,12 @@ export default function Route() {
   const location = useLocation();
   const user = useUser();
   const shellData = useLoaderData<typeof loader>();
-  const {
-    schoolYearScope,
-    guidedTours,
-    mockAdminAvailable,
-    teachingAccess,
-    teacherLoungeNavVisible,
-  } = shellData;
+  const { schoolYearScope, guidedTours, mockAdminAvailable, teachingAccess } =
+    shellData;
+  const teacherLoungeNavVisible =
+    'teacherLoungeNavVisible' in shellData
+      ? shellData.teacherLoungeNavVisible
+      : false;
   const freeAccountUsage =
     'freeAccountUsage' in shellData ? shellData.freeAccountUsage : null;
   const usageNavLoading =
@@ -457,7 +457,7 @@ export default function Route() {
                 : FLAT_SIDEBAR_SECTIONS
             }
             user={user}
-            teacherLoungeNavVisible={teacherLoungeNavVisible ?? false}
+            teacherLoungeNavVisible={teacherLoungeNavVisible}
             navExpanded={navExpanded}
             pathname={location.pathname}
             isAppNavLinkActive={isAppNavLinkActive}
