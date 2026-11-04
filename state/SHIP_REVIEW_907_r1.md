@@ -4,8 +4,8 @@
 **Title:** Improve class sheet errors and live code availability  
 **Branch:** `cursor/class-sheet-error-messages-578b`  
 **Base:** `main`  
-**Reviewed code head SHA:** `1f7c800755fd904c5b2d3573f2347b968a4ff746` (`1f7c80075`)  
-**GitHub `headRefOid` at review time:** `1f7c800755fd904c5b2d3573f2347b968a4ff746` — **matches; freshness OK**
+**Reviewed product/code SHA:** `1f7c800755fd904c5b2d3573f2347b968a4ff746` (`1f7c80075`)  
+**Merge head SHA (exact-head CI gate):** `0c33434a82b1d4bc279dc1433b3d47b8000a5ee9` (`0c33434a8`) — includes Ship Review doc + CI fixes (mock typing, integration assertion)
 
 **Reviewer:** Independent ship review (Cloud Agent; not PR author)  
 **Date:** 2026-11-04  
