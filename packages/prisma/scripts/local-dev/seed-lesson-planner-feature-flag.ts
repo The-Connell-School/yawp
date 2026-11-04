@@ -78,6 +78,8 @@ export const LESSON_PLANNER_REVIEW_FLAG_SETTINGS = [
   'feature_flag.lesson_planner_refresh_my_deck',
   // "Planned in" is the time the teacher was working (Nov 3).
   'feature_flag.lesson_planner_active_time',
+  // The teacher decides what counts as writing (Nov 4 follow-up).
+  'feature_flag.lesson_planner_writing_override',
 ] as const;
 
 /**

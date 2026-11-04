@@ -15,6 +15,7 @@ import {
   LESSON_PLANNER_TEACH_MY_SLIDES_FLAG,
   LESSON_PLANNER_REFRESH_MY_DECK_FLAG,
   LESSON_PLANNER_ACTIVE_TIME_FLAG,
+  LESSON_PLANNER_WRITING_OVERRIDE_FLAG,
   deckUploadFlags,
   LESSON_PLANNER_TEACH_NOTES_FLAG,
   LESSON_PLANNER_LIBRARY_V2_FLAG,
@@ -286,6 +287,7 @@ export async function getLessonPlannerReviewFlags(
     teachMySlides,
     refreshMyDeck,
     activeTime,
+    writingOverride,
   ] = await Promise.all([
     isFeatureFlagEnabled(LESSON_PLANNER_INTAKE_V2_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_STACK_V2_FLAG, orgId),
@@ -304,6 +306,7 @@ export async function getLessonPlannerReviewFlags(
     isFeatureFlagEnabled(LESSON_PLANNER_TEACH_MY_SLIDES_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_REFRESH_MY_DECK_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_ACTIVE_TIME_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_WRITING_OVERRIDE_FLAG, orgId),
   ]);
   const deckFlags = deckUploadFlags({ uploads, uploadPictures, teachMySlides, refreshMyDeck });
   // The panel shows the stack v2 list; without stack v2 it has nothing to show.
@@ -325,6 +328,7 @@ export async function getLessonPlannerReviewFlags(
     libraryV2: libraryV2 && v3,
     ...deckFlags,
     activeTime,
+    writingOverride: writingOverride && v3,
   };
 }
 
@@ -360,6 +364,8 @@ export type LessonPlannerReviewFlags = {
   refreshMyDeck: boolean;
   /** "Planned in" is the time the teacher was working (Nov 3). */
   activeTime: boolean;
+  /** The teacher's call on what counts as writing (Nov 4 follow-up); needs stackV3. */
+  writingOverride: boolean;
 };
 
 /** Yawp! Lesson Planner for teachers at the given school. */

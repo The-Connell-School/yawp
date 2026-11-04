@@ -112,6 +112,9 @@ export const LESSON_PLANNER_REFRESH_MY_DECK_FLAG = 'lesson_planner_refresh_my_de
 /** "Planned in" counts the time the teacher was actually working on the lesson (Nov 3). */
 export const LESSON_PLANNER_ACTIVE_TIME_FLAG = 'lesson_planner_active_time' as const;
 
+/** The teacher's call on whether a stack step is writing time (Nov 4 follow-up). Needs the stack page redesign. */
+export const LESSON_PLANNER_WRITING_OVERRIDE_FLAG = 'lesson_planner_writing_override' as const;
+
 /**
  * The teacher's own deck flags as they apply (Nov 1): keeping the deck needs
  * uploads, and both choices work from the kept deck.
@@ -264,6 +267,11 @@ export const FEATURE_FLAGS = {
     label: 'Lesson Planner: planning time is working time',
     description:
       'The planner pages count the time a teacher is actually working on a lesson (the page in front of them and in use, or waiting on the planner), and “Planned in” on a set lesson shows that instead of the clock time since the lesson was started. Lessons from before are estimated from their activity, with breaks left out. Off: “Planned in” is the time from the first message to set, and nothing is counted.',
+  },
+  [LESSON_PLANNER_WRITING_OVERRIDE_FLAG]: {
+    label: 'Lesson Planner: teacher decides what counts as writing',
+    description:
+      'On the stack page, an opened step offers “Don’t count as writing” or “Count as writing”, with Undo: a lecture that introduces pre-writing can be taken out of the writing tally, and a step the rule missed can be counted. The teacher’s call drives the Writing badge, the writing minutes and percent, and Create in Yawp!. Needs the stack page redesign. Off: Yawp! decides, as before.',
   },
   [UNIFIED_SIGN_ON_FLAG]: {
     label: 'Unified sign-on',
