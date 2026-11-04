@@ -414,7 +414,16 @@ function runPrepushStep(step, { selected, json, results }) {
   if (step === "project-cli") {
     results.push({
       id: step,
-      ...executeBun(["test", "--max-concurrency=2", "./scripts/project-agent.test.js", "./scripts/deployment-contract.test.ts", "./scripts/preview/demo-mail-config.test.ts"], 120000),
+      ...executeBun(
+        [
+          "test",
+          "--max-concurrency=2",
+          "./scripts/project-agent.test.js",
+          "--test-name-pattern",
+          "prepush verify plan|advertises stable commands|extensionless bin entrypoint|rejects unknown flags|command families expose help",
+        ],
+        120000,
+      ),
       durationMs: Date.now() - started,
     });
     return;
@@ -1087,7 +1096,7 @@ function help(topic = "root") {
     dev: "Usage: ./bin/project dev <start|status|stop> [--json]\n",
     test: "Usage: ./bin/project test --profile <demo-feedback-unit|demo-feedback-browser|signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-approval-migration|free-tier-approval-unit|free-tier-approval-browser|free-tier-monthly-unit|free-tier-monthly-db|free-tier-monthly-browser|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-grade-declines|internal-grade-declines-integration|internal-free-tier-limits|internal-free-tier-limits-integration|internal-class-code-duplicates|internal-class-code-duplicates-integration|internal-approvals|internal-approvals-integration|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-teacher-trainings|internal-teacher-trainings-integration|internal-assignment-type-writes|internal-assignment-type-writes-integration|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
-    verify: "Usage: ./bin/project verify --profile prepush [--json]\n\nFast local gate before git push: Prisma client generation when schema/migrations changed, then the same web-app typecheck CI runs in the ʦ TypeScript job.\n",
+    verify: "Usage: ./bin/project verify --profile prepush [--json]\n\nFast local gate before git push: Prisma client generation when schema/migrations changed, the same web-app typecheck CI runs in the ʦ TypeScript job, and focused project-agent contract tests when agent CLI files changed. Use ./bin/project test --profile project-cli for the full CLI suite.\n",
   };
   const classStepHelp = "\nAdditional test profiles: free-tier-locked-preview-unit|free-tier-locked-preview-db|free-tier-locked-preview-browser|free-tier-class-step-unit|free-tier-class-step-browser|free-tier-welcome-unit|free-tier-welcome-browser|free-tier-welcome-live-browser|free-tier-welcome-db\n";
   pages.root += classStepHelp;
