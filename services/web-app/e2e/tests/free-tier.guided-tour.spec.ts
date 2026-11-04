@@ -297,7 +297,7 @@ test.describe.serial('Free tier guided tour', () => {
     },
     { path: '/app/lesson-planner', welcome: /Welcome to the Lesson Planner/i },
     { path: '/app/organization/classes', welcome: /Welcome to Organization/i },
-  )) {
+  ]) {
     test(`${path} has its own tour`, async ({ page }) => {
       if (path === '/app/teacher-trainings' && (await teacherLoungeE2eSkipped())) {
         test.skip(true, teacherLoungeE2eSkipReason);
