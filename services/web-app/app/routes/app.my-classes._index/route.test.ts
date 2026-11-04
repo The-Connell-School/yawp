@@ -203,7 +203,8 @@ describe('my classes route (teacher create/edit)', () => {
   });
 
   test('create-class rejects a duplicate identity in the same school year', async () => {
-    prisma.class.findMany.mockImplementation(async (args: any) => {
+    (prisma.class.findMany as ReturnType<typeof mock>).mockImplementation(
+      async (args: any) => {
       const where = args?.where;
       if (where?.schoolYear === '2026-2027') {
         return [
@@ -216,7 +217,8 @@ describe('my classes route (teacher create/edit)', () => {
         ];
       }
       return [];
-    });
+    }
+    );
 
     const body = new URLSearchParams();
     body.set('intent', 'create-class');

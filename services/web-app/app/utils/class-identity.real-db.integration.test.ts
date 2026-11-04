@@ -58,16 +58,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
         },
         select: { id: true },
       });
+      const user = await prisma.user.create({
+        data: {
+          email: `identity-${Date.now()}@yawp.test`,
+          name: 'Identity Teacher',
+        },
+        select: { id: true },
+      });
       const teacher = await prisma.orgMembership.create({
         data: {
+          userId: user.id,
           organizationId: org.id,
           role: 'TEACHER',
-          user: {
-            create: {
-              email: `identity-${Date.now()}@yawp.test`,
-              name: 'Identity Teacher',
-            },
-          },
           schools: { connect: { id: school.id } },
         },
         select: { id: true },
