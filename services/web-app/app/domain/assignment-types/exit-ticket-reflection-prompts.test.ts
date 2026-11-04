@@ -5,6 +5,7 @@ import {
   EXIT_TICKET_CONFIG_SCHEMA_VERSION,
   EXIT_TICKET_CUSTOM_PROMPT_MAX_LENGTH,
   EXIT_TICKET_ELABORATION_NOTE,
+  EXIT_TICKET_POLISH_NOTE,
   EXIT_TICKET_REFLECTION_PROMPT_OPTIONS,
   composeExitTicketPrompt,
   exitTicketFocusOption,
@@ -138,7 +139,7 @@ describe('parseExitTicketConfigInput with a reflection prompt', () => {
 });
 
 describe('composeExitTicketPrompt for reflections', () => {
-  test('a suggested prompt, with the elaboration note after it', () => {
+  test('a question prompt, with only the polish note after it (no length push)', () => {
     const wondering = EXIT_TICKET_REFLECTION_PROMPT_OPTIONS.find(
       (option) => option.id === 'wondering'
     )!;
@@ -148,17 +149,30 @@ describe('composeExitTicketPrompt for reflections', () => {
         mode: 'basic',
         reflectionPrompt: { id: 'wondering' },
       })
-    ).toBe(`${wondering.prompt}\n\n${EXIT_TICKET_ELABORATION_NOTE}`);
+    ).toBe(`${wondering.prompt}\n\n${EXIT_TICKET_POLISH_NOTE}`);
   });
 
-  test("the teacher's own words, with the elaboration note after them", () => {
+  test("the teacher's own words, with only the polish note after them", () => {
     expect(
       composeExitTicketPrompt({
         schemaVersion: 1,
         mode: 'basic',
         reflectionPrompt: { id: 'custom', text: 'What surprised you?' },
       })
-    ).toBe(`What surprised you?\n\n${EXIT_TICKET_ELABORATION_NOTE}`);
+    ).toBe(`What surprised you?\n\n${EXIT_TICKET_POLISH_NOTE}`);
+  });
+
+  test('a suggested explain-it prompt keeps the elaboration note', () => {
+    const interesting = EXIT_TICKET_REFLECTION_PROMPT_OPTIONS.find(
+      (option) => option.id === 'interesting'
+    )!;
+    expect(
+      composeExitTicketPrompt({
+        schemaVersion: 1,
+        mode: 'basic',
+        reflectionPrompt: { id: 'interesting' },
+      })
+    ).toBe(`${interesting.prompt}\n\n${EXIT_TICKET_ELABORATION_NOTE}`);
   });
 
   test('no reflection prompt is the original basic prompt', () => {

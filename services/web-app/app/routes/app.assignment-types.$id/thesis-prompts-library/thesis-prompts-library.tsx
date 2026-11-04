@@ -18,6 +18,7 @@ import {
   SheetTrigger,
 } from '~/components/ui/sheet';
 import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
+import { RichText } from '../landing-copy/assignment-type-landing';
 import {
   CATEGORY_LABEL,
   COGNITIVE_MOVE_LABEL,
@@ -40,6 +41,11 @@ type Props = {
   totalCount: number;
   onSelectPrompt: (prompt: string) => void;
   assignmentCreationLocked?: boolean;
+  /**
+   * A note shown at the top of the library itself, inside it rather than
+   * above it (Brian's landing page copy). Absent: nothing changes.
+   */
+  topNote?: string | null;
 };
 
 type FacetSpec = {
@@ -94,6 +100,7 @@ export function ThesisPromptsLibrary({
   optionCounts,
   totalCount,
   onSelectPrompt,
+  topNote,
   assignmentCreationLocked = false,
 }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -206,6 +213,14 @@ export function ThesisPromptsLibrary({
           Prompt Library
         </AccordionTrigger>
         <AccordionContent>
+          {topNote ? (
+            <p
+              className="mb-4 mt-2 rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground"
+              data-testid="prompt-library-note"
+            >
+              <RichText text={topNote} />
+            </p>
+          ) : null}
           <div className="flex flex-col gap-6 pt-2 lg:flex-row">
             <aside className="hidden lg:block lg:w-[240px] lg:shrink-0">
               {filterPanel}

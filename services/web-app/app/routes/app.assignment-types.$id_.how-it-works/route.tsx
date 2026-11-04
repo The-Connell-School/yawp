@@ -34,6 +34,7 @@ import { isAssignmentTypeAvailableForAnyScope } from '~/utils/assignment-type-ac
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { TransferChart } from './transfer-chart';
+import { THESIS_ESSAY_COURSE } from '../app.assignment-types.$id/landing-copy/thesis-essay-course';
 
 const MEDIA = '/img/thesis-essay-guide';
 
@@ -110,18 +111,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 const COURSE_TITLE = 'The Thesis-Driven Essay';
 
-// The course's lessons, in order, with the materials each one comes with.
-// The Tutor's steps follow the same order.
-const LESSONS = [
-  { title: 'Introduce students to Yawp!', plan: true, deck: true },
-  { title: 'Pre-writing', plan: true, deck: true },
-  { title: 'Developing a thesis statement', plan: true, deck: true },
-  { title: 'Introduction paragraph', plan: true, deck: true },
-  { title: 'Body paragraphs', plan: true, deck: true },
-  { title: 'The conclusion', plan: true, deck: true },
-  { title: 'Titling your essay', plan: false, deck: true },
-  { title: 'Review my essay', plan: false, deck: false },
-];
+// The course's lessons, in order, with the materials each one comes with:
+// the same course the Thesis-Driven Essay page links to. The Tutor's steps
+// follow the same order.
+const LESSONS = THESIS_ESSAY_COURSE.map((lesson) => ({
+  title: lesson.title,
+  plan: lesson.lessonPlan !== null,
+  deck: lesson.decks.length > 0,
+}));
 
 const TUTOR_POINTS = [
   {
