@@ -1,22 +1,22 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  celebrationLeadSentence,
-  type FirstAssignmentCelebrationPreview,
+  FIRST_ASSIGNMENT_OVERLAY_BODY_P1,
+  FIRST_ASSIGNMENT_OVERLAY_BODY_P2,
+  FIRST_ASSIGNMENT_OVERLAY_BODY_P3,
+  FIRST_ASSIGNMENT_OVERLAY_HEADING,
 } from './first-assignment-congratulations-dialog';
 
-const preview: FirstAssignmentCelebrationPreview = {
-  assignmentId: 'assignment-1',
-  classId: 'class-1',
-  title: 'Argumentative essay: should school start later?',
-  assignmentTypeId: 'type-1',
-  dueAt: '2026-11-06T00:00:00.000Z',
-  classDisplayName: 'English 10, period 3',
-};
-
-describe('first assignment congratulations callout', () => {
-  test('uses Design lead sentence pattern', () => {
-    expect(celebrationLeadSentence(preview)).toBe(
-      'The argumentative essay: should school start later? is live for English 10, period 3. Two things to do next:'
+describe('first assignment congratulations callout copy', () => {
+  test('matches Brian first-assignment overlay', () => {
+    expect(FIRST_ASSIGNMENT_OVERLAY_HEADING).toBe('Start with a Class Starter');
+    expect(FIRST_ASSIGNMENT_OVERLAY_BODY_P1).toBe(
+      "A five-minute Class Starter is the easiest way to begin. When your students join your class, they'll see the assignment, write their response, and get their first feedback from the Yawp! tutor. It's low-stakes and fun, and it gets everyone comfortable on the platform before the bigger writing starts."
+    );
+    expect(FIRST_ASSIGNMENT_OVERLAY_BODY_P2).toBe(
+      "When they're done, they'll submit their assignments. You'll be able to read their writing and their conversations with the tutor, comment on their documents, and use the Grading Assistant to grade it. (Don't worry, we'll walk you through that part too!)"
+    );
+    expect(FIRST_ASSIGNMENT_OVERLAY_BODY_P3).toBe(
+      "We've written the first prompt for you. Use it as is, or make it your own."
     );
   });
 });

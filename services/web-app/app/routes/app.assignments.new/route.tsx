@@ -50,14 +50,16 @@ import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.se
 import { resolveAssignmentPrompt } from '~/utils/assignment-exit-ticket.server';
 import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import { FREE_TIER_UNLIMITED_TILE_LABEL } from '~/domain/free-tier/locked-dashboard-copy';
+import { CLASS_STARTER_DEFAULT_POINT_VALUE } from '~/domain/assignments/new-assignment-defaults';
 import { cn } from '~/utils/misc';
 
 export const FIRST_ASSIGNMENT_PAGE_TITLE = 'Create your first assignment';
 export const FIRST_ASSIGNMENT_INTRO =
   "You're approved. We set up a Class Starter for you: a short, low-stakes write that gets every student into Yawp! on day one.";
-export const FIRST_ASSIGNMENT_DEFAULT_TITLE = 'Welcome to Yawp! Class Starter';
+export const FIRST_ASSIGNMENT_DEFAULT_TITLE = 'Something I Love';
 export const FIRST_ASSIGNMENT_DEFAULT_PROMPT =
-  'Introduce yourself as a writer. What is one thing you like to write, or would like to get better at writing this year? Write five or more sentences.';
+  'Tell me about a movie, TV show, book, or musical artist you love. What is it, and what makes it so great? Convince me to check it out.';
+export const FIRST_ASSIGNMENT_DEFAULT_POINT_VALUE = CLASS_STARTER_DEFAULT_POINT_VALUE;
 const inputFieldClassName = 'bg-input-background';
 
 async function assertFreeTierNewAssignmentRoute() {
@@ -201,6 +203,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       prompt: isFirstAssignment
         ? FIRST_ASSIGNMENT_DEFAULT_PROMPT
         : queryPrompt,
+      pointValue: isFirstAssignment
+        ? String(FIRST_ASSIGNMENT_DEFAULT_POINT_VALUE)
+        : '',
     },
   };
 }
@@ -382,6 +387,7 @@ type FormValues = {
   title: string;
   classId: string;
   prompt: string;
+  pointValue: string;
   dueAt: string;
 };
 
@@ -400,6 +406,7 @@ function readFormValues(
     title: one('title', defaults.title),
     classId: one('classId', defaults.classId),
     prompt: one('prompt', defaults.prompt),
+    pointValue: one('pointValue', defaults.pointValue),
     dueAt: one('dueAt', defaults.dueAt),
   };
 }
@@ -429,6 +436,7 @@ export default function NewAssignmentPage() {
       title: defaults.title,
       classId: defaults.classId || classes[0]?.id || '',
       prompt: defaults.prompt,
+      pointValue: defaults.pointValue,
       dueAt: '',
     }
   );
@@ -571,6 +579,29 @@ export default function NewAssignmentPage() {
             </p>
           ) : null}
         </div>
+
+        {isFirstAssignment ? (
+          <div className="space-y-2">
+            <Label htmlFor="pointValue">Points</Label>
+            <div className="flex items-center gap-2">
+              <div className="w-24">
+                <Input
+                  id="pointValue"
+                  name="pointValue"
+                  type="number"
+                  min={1}
+                  max={1000}
+                  step={1}
+                  inputMode="numeric"
+                  required
+                  defaultValue={values.pointValue}
+                  className={cn('tabular-nums', inputFieldClassName)}
+                />
+              </div>
+              <span className="text-sm text-muted-foreground">points</span>
+            </div>
+          </div>
+        ) : null}
 
         {!isFirstAssignment ? (
           <>

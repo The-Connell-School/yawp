@@ -114,7 +114,7 @@ mock.module('~/utils/db.server', () => ({
   },
 }));
 
-const { loader, action, FIRST_ASSIGNMENT_DEFAULT_PROMPT, FIRST_ASSIGNMENT_DEFAULT_TITLE } =
+const { loader, action, FIRST_ASSIGNMENT_DEFAULT_POINT_VALUE, FIRST_ASSIGNMENT_DEFAULT_PROMPT, FIRST_ASSIGNMENT_DEFAULT_TITLE } =
   await import('./route');
 
 describe('app.assignments.new route gate', () => {
@@ -169,6 +169,7 @@ describe('app.assignments.new route gate', () => {
     expect(result.defaults.classId).toBe('class-1');
     expect(result.defaults.title).toBe(FIRST_ASSIGNMENT_DEFAULT_TITLE);
     expect(result.defaults.prompt).toBe(FIRST_ASSIGNMENT_DEFAULT_PROMPT);
+    expect(result.defaults.pointValue).toBe(String(FIRST_ASSIGNMENT_DEFAULT_POINT_VALUE));
   });
 
   test('prompt query pre-fills the assignment prompt when not first assignment', async () => {
@@ -209,6 +210,7 @@ describe('app.assignments.new route gate', () => {
     form.set('classId', 'class-1');
     form.set('title', FIRST_ASSIGNMENT_DEFAULT_TITLE);
     form.set('prompt', FIRST_ASSIGNMENT_DEFAULT_PROMPT);
+    form.set('pointValue', String(FIRST_ASSIGNMENT_DEFAULT_POINT_VALUE));
     form.set('submitForGrade', 'true');
     form.set('gradingAssistantStrictnessLevel', 'beginner');
     form.set('tutorEnabled', 'true');
@@ -234,6 +236,7 @@ describe('app.assignments.new route gate', () => {
         data: expect.objectContaining({
           assignmentTypeId: 'type-class-starter',
           prompt: FIRST_ASSIGNMENT_DEFAULT_PROMPT,
+          pointValue: FIRST_ASSIGNMENT_DEFAULT_POINT_VALUE,
         }),
       })
     );
@@ -247,6 +250,7 @@ describe('app.assignments.new route gate', () => {
     form.set('classId', 'class-1');
     form.set('title', FIRST_ASSIGNMENT_DEFAULT_TITLE);
     form.set('prompt', FIRST_ASSIGNMENT_DEFAULT_PROMPT);
+    form.set('pointValue', String(FIRST_ASSIGNMENT_DEFAULT_POINT_VALUE));
     form.set('submitForGrade', 'true');
     form.set('gradingAssistantStrictnessLevel', 'beginner');
     form.set('tutorEnabled', 'true');

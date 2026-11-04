@@ -8,9 +8,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
-import { Link } from 'react-router';
 import { X } from 'lucide-react';
-import { buildAssignmentTryItHref } from '~/components/assignments/assignment-try-it-pill';
 import { Button } from '~/components/ui/button';
 import {
   acknowledgeFirstAssignmentCelebration,
@@ -38,36 +36,28 @@ function formatCelebrationDueLabel(iso: string) {
   }).format(new Date(iso));
 }
 
-export function celebrationLeadSentence(preview: FirstAssignmentCelebrationPreview) {
-  const rawTitle = preview.title.trim() || 'assignment';
-  const title =
-    rawTitle.charAt(0).toLowerCase() + rawTitle.slice(1);
-  return `The ${title} is live for ${preview.classDisplayName}. Two things to do next:`;
-}
+export const FIRST_ASSIGNMENT_OVERLAY_HEADING = 'Start with a Class Starter';
+
+export const FIRST_ASSIGNMENT_OVERLAY_BODY_P1 =
+  "A five-minute Class Starter is the easiest way to begin. When your students join your class, they'll see the assignment, write their response, and get their first feedback from the Yawp! tutor. It's low-stakes and fun, and it gets everyone comfortable on the platform before the bigger writing starts.";
+
+export const FIRST_ASSIGNMENT_OVERLAY_BODY_P2 =
+  "When they're done, they'll submit their assignments. You'll be able to read their writing and their conversations with the tutor, comment on their documents, and use the Grading Assistant to grade it. (Don't worry, we'll walk you through that part too!)";
+
+export const FIRST_ASSIGNMENT_OVERLAY_BODY_P3 =
+  "We've written the first prompt for you. Use it as is, or make it your own.";
 
 function FirstAssignmentCongratulationsCallout({
-  preview,
   compact,
   onDismiss,
   headingId,
   headingRef,
 }: {
-  preview: FirstAssignmentCelebrationPreview;
   compact: boolean;
   onDismiss: () => void;
   headingId: string;
   headingRef: RefObject<HTMLHeadingElement | null>;
 }) {
-  const inviteStudentsHref = `/app/my-classes/${preview.classId}?tab=students`;
-  const tryItHref = buildAssignmentTryItHref({
-    id: preview.assignmentId,
-    assignmentTypeId: preview.assignmentTypeId,
-  });
-
-  const dismissAndNavigate = () => {
-    onDismiss();
-  };
-
   return (
     <div
       role="dialog"
@@ -94,55 +84,17 @@ function FirstAssignmentCongratulationsCallout({
         tabIndex={-1}
         className="pr-8 text-lg font-bold leading-7 text-foreground outline-none"
       >
-        Your first assignment is ready
+        {FIRST_ASSIGNMENT_OVERLAY_HEADING}
       </h2>
-      <p className="mt-1.5 text-sm leading-5">
-        {celebrationLeadSentence(preview)}
+      <p className="mt-1.5 text-sm leading-5 text-foreground">
+        {FIRST_ASSIGNMENT_OVERLAY_BODY_P1}
       </p>
-      <ol className="mt-3 flex list-none flex-col gap-3 p-0 [counter-reset:step]">
-        <li className="relative flex flex-col items-start gap-1 pl-[34px] text-sm leading-5 before:absolute before:left-0 before:top-0 before:flex before:h-6 before:w-6 before:items-center before:justify-center before:rounded-full before:bg-secondary before:text-xs before:font-semibold before:text-secondary-foreground before:content-['1']">
-          <b className="font-bold text-foreground">Invite students</b>
-          <span className="text-foreground">
-            Share the class code or a join link.
-          </span>
-          <Button size="sm" className="mt-1" asChild>
-            <Link to={inviteStudentsHref} onClick={dismissAndNavigate}>
-              Invite students
-            </Link>
-          </Button>
-        </li>
-        <li className="relative flex flex-col items-start gap-1 pl-[34px] text-sm leading-5 before:absolute before:left-0 before:top-0 before:flex before:h-6 before:w-6 before:items-center before:justify-center before:rounded-full before:bg-secondary before:text-xs before:font-semibold before:text-secondary-foreground before:content-['2']">
-          <b className="font-bold text-foreground">Try the assignment</b>
-          <span className="text-foreground">
-            See it as your students will, Yawp! tutor included.
-          </span>
-          {tryItHref ? (
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-1"
-              asChild
-            >
-              <Link to={tryItHref} onClick={dismissAndNavigate}>
-                Try it as a student
-              </Link>
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-1"
-              type="button"
-              disabled
-              title="Student preview coming soon"
-              data-testid="first-assignment-try-it-stub"
-              onClick={dismissAndNavigate}
-            >
-              Try it as a student
-            </Button>
-          )}
-        </li>
-      </ol>
+      <p className="mt-3 text-sm leading-5 text-foreground">
+        {FIRST_ASSIGNMENT_OVERLAY_BODY_P2}
+      </p>
+      <p className="mt-3 text-sm leading-5 text-foreground">
+        {FIRST_ASSIGNMENT_OVERLAY_BODY_P3}
+      </p>
       <div className="mt-3 flex justify-end">
         <Button variant="ghost" size="sm" type="button" onClick={onDismiss}>
           Got it
@@ -229,7 +181,6 @@ export function FirstAssignmentCelebrationAnchor({
         }
       >
         <FirstAssignmentCongratulationsCallout
-          preview={preview}
           compact={compact}
           onDismiss={onDismiss}
           headingId={headingId}
