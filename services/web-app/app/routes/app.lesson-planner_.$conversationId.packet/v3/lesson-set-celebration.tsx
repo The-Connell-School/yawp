@@ -1,5 +1,5 @@
 /**
- * "This lesson is set" (Brian's round 4, item 4): confetti bursts from the
+ * "Set this lesson" (Brian's round 4, item 4): confetti bursts from the
  * middle of the screen, one Yawp! logo rises through it, and Brian's
  * "Yaaawp!" plays. It never takes a click, and it's gone in about three
  * seconds. With reduced motion there's no confetti: the logo fades in and out.

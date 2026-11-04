@@ -152,7 +152,7 @@ export function FinishLine({
           onClick={onSet}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--sv-ink)] py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
         >
-          <Check size={16} /> This lesson is set
+          <Check size={16} /> Set this lesson
         </button>
       </section>
     );

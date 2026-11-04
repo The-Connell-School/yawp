@@ -1665,7 +1665,7 @@ model LessonPlanConversation {
   /// per stack and reused until the stack changes (planSummaryKey).
   planSummary             Json?
   planSummaryKey          String?
-  /// When the teacher said "This lesson is set" (stack page redesign); null
+  /// When the teacher tapped "Set this lesson" (stack page redesign); null
   /// while it is still being worked on. Built-in time was setAt − createdAt;
   /// with lesson_planner_active_time it is the working time below (Nov 3).
   setAt                   DateTime?                  @db.Timestamptz(6)
