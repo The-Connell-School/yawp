@@ -69,6 +69,7 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
           stepType: true,
           label: true,
           hasHandout: true,
+          writing: true,
           yawpAssignmentId: true,
           yawpCreatedAt: true,
           studentVersion: true,
@@ -115,6 +116,7 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
           hasHandout: m.hasHandout,
           yawpAssignmentId: m.yawpAssignmentId,
           yawpCreated: Boolean(m.yawpCreatedAt),
+          writing: m.writing,
         },
       ])
     ),

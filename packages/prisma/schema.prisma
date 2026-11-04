@@ -1784,6 +1784,12 @@ model LessonPlanMaterial {
   label             String?
   /// Null: derived (student-facing or writing steps have a handout).
   hasHandout        Boolean?
+  /// The teacher's call on whether this step is writing time (Nov 4
+  /// follow-up): false takes a lecture about pre-writing out of the writing
+  /// tally, true counts a step the rule missed. Null: Yawp! decides from the
+  /// step (step-types.ts), as before. Written only with
+  /// lesson_planner_writing_override.
+  writing           Boolean?
   /// The Yawp! assignment created from this step ("Created in Yawp! · Open").
   yawpAssignmentId  String?
   yawpHref          String?
