@@ -72,6 +72,14 @@ export const LESSON_PLANNER_REVIEW_FLAG_SETTINGS = [
   // Brian's handoff (docs/plans/2026-10-24-stack-v2-and-library-redesign.md).
   'feature_flag.lesson_planner_teach_notes',
   'feature_flag.lesson_planner_library_v2',
+  // The teacher's own decks: kept whole, taught as is, or refreshed (Nov 1).
+  'feature_flag.lesson_planner_upload_pictures',
+  'feature_flag.lesson_planner_teach_my_slides',
+  'feature_flag.lesson_planner_refresh_my_deck',
+  // "Planned in" is the time the teacher was working (Nov 3).
+  'feature_flag.lesson_planner_active_time',
+  // The teacher decides what counts as writing (Nov 4 follow-up).
+  'feature_flag.lesson_planner_writing_override',
 ] as const;
 
 /**

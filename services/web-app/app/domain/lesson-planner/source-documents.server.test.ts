@@ -37,6 +37,37 @@ describe('readSourceDocument: the text of a teacher’s own document', () => {
     expect(pptx.text.length).toBeGreaterThan(20);
   });
 
+  test('a deck kept whole: numbered slides, picture markers, the file and its pictures', async () => {
+    const bytes = new Uint8Array(readFixture('deck-pictures.pptx'));
+    const pptx = await readSourceDocument(file('elephant.pptx', bytes), { keepDeck: true });
+    expect(pptx.kind).toBe('pptx');
+    expect(pptx.text).toContain('Slide 1\nObserve and analyze');
+    expect(pptx.text).toContain('[Picture 1: An elephant in a city street & its crowd]');
+    expect(pptx.deck?.file.byteLength).toBe(bytes.byteLength);
+    expect(pptx.deck?.pictures.map((picture) => picture.position)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  test('without keepDeck a deck is read as before, and nothing but text is kept', async () => {
+    const pptx = await readSourceDocument(file('elephant.pptx', new Uint8Array(readFixture('deck-pictures.pptx'))));
+    expect(pptx.deck).toBeNull();
+    expect(pptx.text).not.toContain('[Picture');
+  });
+
+  test('a deck of pictures alone is readable once its pictures are kept', async () => {
+    const bytes = new Uint8Array(readFixture('deck-images-only.pptx'));
+    await expect(readSourceDocument(file('pictures.pptx', bytes))).rejects.toBeInstanceOf(SourceDocumentError);
+    await expect(readSourceDocument(file('pictures.pptx', bytes), { keepDeck: true })).rejects.toBeInstanceOf(
+      SourceDocumentError
+    );
+  });
+
+  test('keepDeck never keeps anything but a deck', async () => {
+    const docx = await readSourceDocument(file('handout.docx', new Uint8Array(readFixture('handout.docx'))), {
+      keepDeck: true,
+    });
+    expect(docx.deck).toBeNull();
+  });
+
   test('plain text and Markdown, as written', async () => {
     const read = await readSourceDocument(file('notes.md', '# My notes\n\nStart with the letters.'));
     expect(read).toMatchObject({ kind: 'text', text: '# My notes\n\nStart with the letters.' });

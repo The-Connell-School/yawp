@@ -27,6 +27,9 @@ export const CLASSIC_SLIDE_LAYOUTS = [
   'steps',
   'quote',
   'closing',
+  // The teacher's own picture, whole, beside its question (Nov 1). Drawn as
+  // itself by every renderer, never mapped to another layout.
+  'picture',
 ] as const;
 
 /**
@@ -68,6 +71,8 @@ const MAX_BULLETS = 7;
 const MAX_SLIDES = 40;
 
 const line = z.string().trim().min(1).max(MAX_LINE_CHARS);
+/** A stored picture's id: a cuid, letters and digits only. */
+const PICTURE_ID = /^[a-z0-9]{8,40}$/i;
 // Not .strict(): a stray key in one column should not cost the whole deck.
 const column = z.object({
   label: z.string().trim().min(1).max(40),
@@ -147,6 +152,9 @@ const slideSchema = z
     // Which stack step this slide belongs to, by its number in the stack
     // (Brian's run 3): Run the show moves the projector with the teacher.
     step: z.coerce.number().int().min(1).max(MAX_SLIDES).optional(),
+    // A picture from the teacher's own deck, by its id (Nov 1). Only an id:
+    // it goes into a URL, so anything else is dropped before validation.
+    image: z.string().regex(PICTURE_ID).optional(),
   })
   // Deliberately not .strict(): one stray key should not cost the teacher the
   // whole deck. Unknown fields are dropped, required ones still enforced.
@@ -177,6 +185,7 @@ const slideSchema = z
     if (slide.layout === 'read') {
       needs('tasks', 'tasks', Boolean(slide.tasks?.length || slide.bullets?.length));
     }
+    if (slide.layout === 'picture') needs('image', 'the id of one of the teacher’s pictures', Boolean(slide.image));
     if (slide.layout === 'compare' && (!slide.left || !slide.right)) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
@@ -235,6 +244,10 @@ const FIELD_ALIASES: Record<string, string> = {
   points: 'bullets',
   time: 'minutes',
   duration: 'minutes',
+  picture: 'image',
+  pictureId: 'image',
+  imageId: 'image',
+  photo: 'image',
 };
 
 /** The same forgiveness, one level down, for a compare slide's two columns. */
@@ -274,6 +287,9 @@ const LAYOUT_ALIASES: Record<string, SlideLayout> = {
   'big-idea': 'statement',
   objective: 'statement',
   passage: 'quote',
+  photo: 'picture',
+  photograph: 'picture',
+  image: 'picture',
   cover: 'title',
   opening: 'title',
   section: 'title',
@@ -390,6 +406,11 @@ function normalizeSlide(raw: unknown): unknown {
     slide.minutes = normalizeMinutes(slide.minutes);
   }
   slide.layout = normalizeLayout(slide);
+  if (slide.image !== undefined && !(typeof slide.image === 'string' && PICTURE_ID.test(slide.image.trim()))) {
+    delete slide.image;
+  } else if (typeof slide.image === 'string') {
+    slide.image = slide.image.trim();
+  }
 
   return slide;
 }
@@ -688,3 +709,9 @@ export function classicSlide(slide: Slide): ClassicSlide {
       return as('statement');
   }
 }
+
+/** The teacher's pictures a deck shows, once each, in order (Nov 1). */
+export function deckPictureIds(deck: Pick<SlideDeck, 'slides'>): string[] {
+  return [...new Set(deck.slides.flatMap((slide) => (slide.image ? [slide.image] : [])))];
+}
+

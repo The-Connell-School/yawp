@@ -15,6 +15,8 @@
  */
 import PptxGenJS from 'pptxgenjs';
 import { classicSlide, type Slide, type SlideDeck } from './slide-deck';
+import { pictureSlideText } from './deck-pictures';
+import { addPptxPicture, type DeckPictureFiles } from './deck-pictures.server';
 
 /** Yawp!'s print colour and ink, matched to the packet and the PDF. */
 const BRAND = 'C05A3E';
@@ -255,7 +257,26 @@ function addClosingSlide(slide: PptxSlide, spec: Slide): void {
   }
 }
 
-function addSlide(deck: PptxGenJS, raw: Slide): void {
+/** The teacher's own picture, whole, with its question beside it (Nov 1). */
+function addPictureSlide(slide: PptxSlide, spec: Slide, pictures: DeckPictureFiles): void {
+  addSlideTitle(slide, spec.title);
+  const words = pictureSlideText(spec);
+  const pictureWidth = words ? CONTENT_WIDTH * 0.58 : CONTENT_WIDTH;
+  addPptxPicture(slide as never, spec.image ? pictures.get(spec.image) : undefined, { x: MARGIN, y: BODY_TOP, w: pictureWidth, h: BODY_HEIGHT }, { rule: MUTED, muted: MUTED });
+  if (words) {
+    slide.addText(words, {
+      x: MARGIN + CONTENT_WIDTH * 0.62,
+      y: BODY_TOP,
+      w: CONTENT_WIDTH * 0.38,
+      h: BODY_HEIGHT,
+      fontSize: 24,
+      color: INK,
+      valign: 'middle',
+    });
+  }
+}
+
+function addSlide(deck: PptxGenJS, raw: Slide, pictures: DeckPictureFiles): void {
   const spec = classicSlide(raw);
   const slide = deck.addSlide();
   slide.background = { color: PAPER };
@@ -283,6 +304,9 @@ function addSlide(deck: PptxGenJS, raw: Slide): void {
     case 'statement':
       addStatementSlide(slide, spec);
       break;
+    case 'picture':
+      addPictureSlide(slide, spec, pictures);
+      break;
   }
 
   // The reason this export exists rather than a screenshot: PowerPoint has a
@@ -290,7 +314,10 @@ function addSlide(deck: PptxGenJS, raw: Slide): void {
   slide.addNotes(spec.speakerNotes);
 }
 
-export async function renderDeckPptx(deck: SlideDeck): Promise<Uint8Array> {
+export async function renderDeckPptx(
+  deck: SlideDeck,
+  { pictures = new Map() }: { pictures?: DeckPictureFiles } = {}
+): Promise<Uint8Array> {
   const pptx = new PptxGenJS();
   pptx.defineLayout(LAYOUT);
   pptx.layout = LAYOUT.name;
@@ -301,7 +328,7 @@ export async function renderDeckPptx(deck: SlideDeck): Promise<Uint8Array> {
   if (deck.subtitle) pptx.subject = deck.subtitle;
   pptx.company = 'Yawp!';
 
-  for (const slide of deck.slides) addSlide(pptx, slide);
+  for (const slide of deck.slides) addSlide(pptx, slide, pictures);
 
   const written = await pptx.write({ outputType: 'nodebuffer' });
   return new Uint8Array(written as Buffer);

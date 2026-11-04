@@ -202,3 +202,22 @@ describe('the deck around the slides', () => {
     expect(deckArt(undefined)).toBeNull();
   });
 });
+
+describe('the teacher’s own picture in the gallery (Nov 1)', () => {
+  test('a picture slide is its own template, on paper, under “Look.”', () => {
+    const [plan] = planGalleryDeck(
+      deckOf([slide('picture', { image: 'cmh0elephant0000abcd', question: 'What is happening here?' })])
+    );
+    expect(plan).toMatchObject({ template: 'picture', ground: 'paper', mode: 'Look.', showArt: false });
+  });
+
+  test('it never takes one of the painting’s three large appearances', () => {
+    const plans = planGalleryDeck(
+      deckOf(
+        [slide('title'), slide('picture', { image: 'cmh0elephant0000abcd' }), slide('look', { question: 'What do you see?' })],
+        { art: 'hokusai-great-wave' }
+      )
+    );
+    expect(plans.map((plan) => plan.showArt)).toEqual([true, false, true]);
+  });
+});

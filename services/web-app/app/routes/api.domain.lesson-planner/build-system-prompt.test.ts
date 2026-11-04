@@ -1868,6 +1868,22 @@ describe('planner prompt — the teacher’s own documents (Oct 21)', () => {
     expect(blocks[0]!.text).toBe(plain[0]!.text);
     expect(plain.at(-1)!.text).not.toContain('<document');
   });
+
+  test('the teacher’s choice for their own deck reaches the uncached tail (Nov 1)', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'School',
+      sources: [{ id: 'd1', name: 'Thesis.pptx', text: 'Slide 1', truncated: false, keptDeck: true, mode: 'teach' }],
+      deckChoices: { teach: true, refresh: true },
+    });
+    expect(blocks.at(-1)!.text).toContain('chose to keep "Thesis.pptx" as is');
+    const off = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'School',
+      sources: [{ id: 'd1', name: 'Thesis.pptx', text: 'Slide 1', truncated: false, keptDeck: true, mode: 'teach' }],
+    });
+    expect(off.at(-1)!.text).not.toContain('chose to keep');
+  });
 });
 
 describe('planner prompt — the painting is chosen, not reused (Kevin, Oct 22)', () => {
