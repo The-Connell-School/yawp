@@ -42,7 +42,7 @@ describe('getClassCodeAvailability', () => {
   test('marks a taken code unavailable', async () => {
     prisma.class.findMany.mockResolvedValue([
       { id: 'class-1', code: 'taken1' },
-    ]);
+    ] as { id: string; code: string }[]);
     const result = await getClassCodeAvailability(prisma as any, 'taken1');
     expect(result).toEqual({
       enforcementEnabled: true,
@@ -54,7 +54,7 @@ describe('getClassCodeAvailability', () => {
   test('allows the current class to keep its own code when editing', async () => {
     prisma.class.findMany.mockResolvedValue([
       { id: 'class-1', code: 'mine12' },
-    ]);
+    ] as { id: string; code: string }[]);
     const result = await getClassCodeAvailability(prisma as any, 'mine12', {
       excludeClassId: 'class-1',
     });

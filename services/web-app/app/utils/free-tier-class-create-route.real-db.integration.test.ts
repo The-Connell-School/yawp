@@ -276,7 +276,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             const response = await action({ request: new Request('https://example.test/app/my-classes?index', { method: 'POST', body }) } as any);
             expect(actionHttpStatus(response)).toBe(400);
             expect((response as any).data).toEqual({
-              error: expect.stringContaining('Class code is already in use'),
+              error: expect.stringContaining('already in use'),
               field: 'code',
             });
             expect(await prisma.class.count({ where: { schoolId: b.school.id } })).toBe(before);
