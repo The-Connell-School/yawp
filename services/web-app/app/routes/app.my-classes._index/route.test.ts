@@ -1,4 +1,6 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { CLASS_CODE_COLLISION_MESSAGE } from '~/utils/class-code-messages';
+import { LEGACY_CLASS_PERIOD_UNIQUE_TEACHER_MESSAGE } from '~/utils/class-manage-action-errors.server';
 
 const assertCanCreateClassInTransaction = mock(async () => {});
 
@@ -15,7 +17,7 @@ const prisma = {
 };
 
 mock.module('~/utils/assignment-quota.server', () => ({
-  assertCanCreateClassInTransaction,
+  assertCanCreateClassForOrganizationPlan: assertCanCreateClassInTransaction,
 }));
 
 const requireUserId = mock();
@@ -265,6 +267,57 @@ describe('my classes route (teacher create/edit)', () => {
         data: expect.objectContaining({ grade: null }),
       })
     );
+  });
+
+  test('create-class maps duplicate class codes to actionable copy', async () => {
+    prisma.$transaction.mockRejectedValueOnce({
+      code: 'P2002',
+      meta: { target: ['schoolId', 'code'] },
+    });
+
+    const body = new URLSearchParams();
+    body.set('intent', 'create-class');
+    body.set('schoolId', 'school-1');
+    body.set('schoolYear', '2025-2026');
+    body.set('code', 'ABC123');
+
+    const response = (await action({
+      request: new Request('https://example.test/app/my-classes?index', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      }),
+    } as any)) as {
+      init?: { status: number };
+      data?: { error: string; field?: string };
+    };
+
+    expect(response.init?.status).toBe(400);
+    expect(response.data?.error).toBe(CLASS_CODE_COLLISION_MESSAGE);
+    expect(response.data?.field).toBe('code');
+  });
+
+  test('create-class maps legacy period-grade uniques to migration guidance', async () => {
+    prisma.$transaction.mockRejectedValueOnce({
+      code: 'P2002',
+      meta: { target: 'Class_schoolId_period_grade_key' },
+    });
+
+    const body = new URLSearchParams();
+    body.set('intent', 'create-class');
+    body.set('schoolId', 'school-1');
+    body.set('schoolYear', '2025-2026');
+    body.set('code', 'ABC123');
+
+    const response = (await action({
+      request: new Request('https://example.test/app/my-classes?index', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      }),
+    } as any)) as { data?: { error: string } };
+
+    expect(response.data?.error).toBe(LEGACY_CLASS_PERIOD_UNIQUE_TEACHER_MESSAGE);
   });
 
   test('create-class redacts sensitive substrings in free-tier quota errors', async () => {

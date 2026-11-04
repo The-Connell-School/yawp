@@ -275,7 +275,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
             const before = await prisma.class.count({ where: { schoolId: b.school.id } });
             const response = await action({ request: new Request('https://example.test/app/my-classes?index', { method: 'POST', body }) } as any);
             expect(actionHttpStatus(response)).toBe(400);
-            expect((response as any).data).toEqual({ error: 'Class code already in use. Choose a different code.', field: 'code' });
+            expect((response as any).data).toEqual({
+              error: expect.stringContaining('Class code is already in use'),
+              field: 'code',
+            });
             expect(await prisma.class.count({ where: { schoolId: b.school.id } })).toBe(before);
             expect((await prisma.class.findUniqueOrThrow({ where: { id: own.id } })).code).toBe(ownCode);
           }
