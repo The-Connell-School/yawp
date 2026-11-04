@@ -100,6 +100,7 @@ jobs:
               - 'qa/**'
               - 'granola/**'
               - 'state/**'
+              - '!state/SHIP_REVIEW_*.md'
               - 'Dockerfile*'
               - 'bun.lock'
               - 'bun.lockb'
