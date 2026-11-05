@@ -9,7 +9,11 @@ import {
   PREVIEW_AUTHORIZED_ACTIVITY_HEADER,
   clearPreviewMasterSelectionCookie,
   clearPreviewAccessCookie,
+  clearDevPanelUnlockCookie,
+  createDevPanelUnlockCookie,
   createPreviewAccessCookie,
+  getDevPanelUnlockSeatLabel,
+  grantDevPanelUnlockCookie,
   createPreviewAccessMiddleware,
   findPreviewAccessCredentialByCode,
   findPreviewAccessSeatByCode,
@@ -689,6 +693,39 @@ describe('preview access gate', () => {
     expect(serialized).toContain('HttpOnly');
   });
 
+  test('dev panel unlock cookie is separate from site preview access', async () => {
+    process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Master seat',
+      },
+    ]);
+    const accessCookie = (
+      await grantPreviewAccessCookie({
+        organizationId: 'local-dev-org',
+        label: 'Master seat',
+      })
+    ).split(';', 1)[0];
+    const unlockCookie = (
+      await grantDevPanelUnlockCookie({ label: 'Master seat' })
+    ).split(';', 1)[0];
+
+    expect(
+      await getDevPanelUnlockSeatLabel(
+        request('/app', { headers: { cookie: accessCookie } })
+      )
+    ).toBeNull();
+    expect(
+      await getDevPanelUnlockSeatLabel(
+        request('/app', { headers: { cookie: `${accessCookie}; ${unlockCookie}` } })
+      )
+    ).toBe('Master seat');
+    expect(await clearDevPanelUnlockCookie()).toContain('Max-Age=0');
+    expect(createDevPanelUnlockCookie()).toBeTruthy();
+  });
+
   test('does not gate local development unless explicitly enabled', async () => {
     delete process.env.PREVIEW_ACCESS_GATE;
     const next = mock(async () => new Response('local'));
@@ -733,15 +770,21 @@ describe('preview access gate', () => {
 
       expect(response.status).toBe(303);
       expect(response.headers.get('location')).toBe('/app/classes?tab=roster');
-      expect(response.headers.get('set-cookie')).toContain(
-        `${PREVIEW_ACCESS_COOKIE_NAME}=`
-      );
+      const setCookies = response.headers.getSetCookie?.() ?? [
+        response.headers.get('set-cookie') ?? '',
+      ];
+      expect(setCookies.join(';')).toContain(`${PREVIEW_ACCESS_COOKIE_NAME}=`);
       expect(next).not.toHaveBeenCalled();
+
+      const accessCookie = setCookies
+        .map((value) => value.split(';', 1)[0])
+        .find((pair) => pair.startsWith(`${PREVIEW_ACCESS_COOKIE_NAME}=`));
+      expect(accessCookie).toBeTruthy();
 
       const seat = await getPreviewAccessSeat(
         request('/app', {
           headers: {
-            cookie: response.headers.get('set-cookie')!.split(';', 1)[0],
+            cookie: accessCookie!,
           },
         })
       );

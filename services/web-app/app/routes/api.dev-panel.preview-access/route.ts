@@ -3,6 +3,7 @@ import { assertDevPanelUnlockRoute } from '~/dev-panel/dev-panel-route-guard.ser
 import {
   findPreviewAccessCredentialByCode,
   getPreviewMasterPanelSeat,
+  grantDevPanelUnlockCookie,
   grantPreviewAccessCookie,
   isPreviewAccessConfigured,
 } from '~/utils/preview-access.server';
@@ -53,14 +54,10 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
   clearFailedPreviewAccessAttempts(request);
-  const cookie = await grantPreviewAccessCookie(seat);
-  return Response.json(
-    { ok: true, seatLabel: seat.label },
-    {
-      headers: {
-        'cache-control': 'no-store',
-        'set-cookie': cookie,
-      },
-    }
-  );
+  const accessCookie = await grantPreviewAccessCookie(seat);
+  const unlockCookie = await grantDevPanelUnlockCookie(seat);
+  const headers = new Headers({ 'cache-control': 'no-store' });
+  headers.append('Set-Cookie', accessCookie);
+  headers.append('Set-Cookie', unlockCookie);
+  return Response.json({ ok: true, seatLabel: seat.label }, { headers });
 }

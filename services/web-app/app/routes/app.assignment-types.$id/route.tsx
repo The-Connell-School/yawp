@@ -5,7 +5,7 @@ import {
   type ActionFunctionArgs,
   Form,
 } from 'react-router';
-import { Link, useFetcher, useLoaderData, useNavigation, useSearchParams } from 'react-router';
+import { Link, useFetcher, useLoaderData, useNavigate, useNavigation, useSearchParams } from 'react-router';
 import { ChevronDownIcon } from 'lucide-react';
 import { DocumentLink } from '~/components/document-link.js';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -59,6 +59,10 @@ import {
 import type { ApHistorySourceCardData } from '~/components/ap-history/source-card';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { DailyPagesPromptGenerator } from './prompts-library/daily-pages-prompt-generator';
+import { ShortFormPromptGenerator } from './short-form-prompts-library/short-form-prompt-generator';
+import { ExitTicketPromptGenerator } from './exit-ticket-prompt-generator/exit-ticket-prompt-generator';
+import type { GeneratedExitTicketOption } from './exit-ticket-prompt-generator/prompt-generator';
+import { isTeacherPromptGeneratorEnabled } from '~/domain/teacher-prompt-generator/gate.server';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
 import { AboutExitTicket } from './about-exit-ticket/about-exit-ticket';
@@ -97,7 +101,7 @@ import {
 } from './prompts-library/data';
 import promptsRaw from './prompts-library/prompts.json';
 import { FROM_LESSON_PARAM } from '~/domain/lesson-planner/daily-pages-block';
-import { BACK_PARAM, FROM_PIECE_PARAM, lessonBackHref } from '~/domain/lesson-planner/stack-create-link';
+import { BACK_PARAM, FROM_PIECE_PARAM, lessonBackHref, lessonMadeHref } from '~/domain/lesson-planner/stack-create-link';
 import {
   EXIT_TICKET_PARAMS,
   readExitTicketPrefill,
@@ -604,6 +608,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ])).get(assignmentType.id) ?? {}
     : {};
 
+  const teacherPromptGeneratorEnabled =
+    isTeacher
+      ? await isTeacherPromptGeneratorEnabled(profile.organization.id)
+      : false;
+
   return dataResponse({
     assignmentType,
     assignmentCreationAvailability,
@@ -624,6 +633,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     showAboutExitTicket:
       profile.role === 'TEACHER' &&
       isExitTicketAssignmentType(assignmentType),
+    teacherPromptGeneratorEnabled,
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -784,6 +794,20 @@ export default function AppAssignmentTypesIdRoute() {
     sources?: ApHistorySourceCardData[];
   } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
+  const isExitTicketType = isExitTicketAssignmentType(data.assignmentType);
+  const showClassStarterPromptGenerator =
+    data.teacherPromptGeneratorEnabled && showPromptsLibrary;
+  const showShortFormPromptGenerator =
+    data.teacherPromptGeneratorEnabled && data.shortFormPromptLibrary != null;
+  const showThesisPromptGenerator =
+    data.teacherPromptGeneratorEnabled && data.thesisPromptLibrary != null;
+  const showExitTicketPromptGenerator =
+    data.teacherPromptGeneratorEnabled && isTeacher && isExitTicketType;
+  const showAnyPromptGenerator =
+    showClassStarterPromptGenerator ||
+    showShortFormPromptGenerator ||
+    showThesisPromptGenerator ||
+    showExitTicketPromptGenerator;
 
   // The Lesson Planner sends a teacher here with a warm-up it wrote, to be
   // assigned rather than retyped. Open the sheet on it once, then drop the
@@ -797,20 +821,33 @@ export default function AppAssignmentTypesIdRoute() {
   // Which piece of that lesson this came from, so the lesson can say
   // "Created in Yawp! · Open" once it exists (Brian's run 3, item 4).
   const fromPiece = searchParams.get(FROM_PIECE_PARAM);
-  const lessonFetcher = useFetcher();
-  const tellLessonCreated = useCallback(() => {
-    if (!fromLesson || !fromPiece?.startsWith('m:')) return;
+  const lessonFetcher = useFetcher<{ backToLesson?: boolean }>();
+  // Made from a lesson, the teacher goes straight back to it (Kevin's note 6b),
+  // unless the sheet has another page to show first.
+  const returnAfterMade = useRef(false);
+  const tellLessonCreated = useCallback(({ nextStep }: { nextStep: boolean }) => {
+    // From the chat ("b:") or the stack ("m:"): one record either way (Oct 24 handoff, task 1).
+    if (!fromLesson || !(fromPiece?.startsWith('m:') || fromPiece?.startsWith('b:'))) return;
+    returnAfterMade.current = !nextStep;
     lessonFetcher.submit(
       {
         intent: 'mark-created',
         conversationId: fromLesson,
-        materialId: fromPiece.slice(2),
+        piece: fromPiece,
         yawpHref: `/app/assignment-types/${data.assignmentType.id}`,
       },
       { method: 'post', action: '/api/domain/lesson-planner/packet' }
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromLesson, fromPiece, data.assignmentType.id]);
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (lessonFetcher.state !== 'idle' || !lessonFetcher.data?.backToLesson) return;
+    if (!returnAfterMade.current || !fromLesson) return;
+    returnAfterMade.current = false;
+    navigate(lessonMadeHref(fromLesson, searchParams.get(BACK_PARAM)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lessonFetcher.state, lessonFetcher.data]);
   useEffect(() => {
     if (!incomingPrompt || teachingLockedPreview) return;
     setLibraryPrompt(incomingPrompt);
@@ -956,9 +993,8 @@ export default function AppAssignmentTypesIdRoute() {
                         >
                           Assignment
                         </DropdownMenuItem>
-                        {showThesisLibrary || showPromptsLibrary ? (
+                        {showAnyPromptGenerator ? (
                           <DropdownMenuItem
-                            disabled={data.teacherClasses.length === 0}
                             onSelect={() => setIsPromptGeneratorOpen(true)}
                           >
                             Generate a prompt
@@ -1026,7 +1062,7 @@ export default function AppAssignmentTypesIdRoute() {
                 teachingLocked={teachingLockedPreview}
                 onCreated={tellLessonCreated}
               />
-              {showThesisLibrary ? (
+              {showThesisPromptGenerator ? (
                 <ThesisPromptGenerator
                   open={isPromptGeneratorOpen}
                   onOpenChange={setIsPromptGeneratorOpen}
@@ -1034,12 +1070,27 @@ export default function AppAssignmentTypesIdRoute() {
                   onUsePrompt={(promptBody) => {
                     if (teachingLockedPreview) return;
                     setApHistoryEntry(null);
+                    setPlannedExitTicket(null);
                     setLibraryPrompt(promptBody);
                     setIsPromptGeneratorOpen(false);
                     beginAssignmentCreation();
                   }}
                 />
-              ) : showPromptsLibrary ? (
+              ) : showShortFormPromptGenerator ? (
+                <ShortFormPromptGenerator
+                  open={isPromptGeneratorOpen}
+                  onOpenChange={setIsPromptGeneratorOpen}
+                  assignmentTypeId={data.assignmentType.id}
+                  onUsePrompt={(prompt) => {
+                    if (teachingLockedPreview) return;
+                    setApHistoryEntry(null);
+                    setPlannedExitTicket(null);
+                    setLibraryPrompt(prompt);
+                    setIsPromptGeneratorOpen(false);
+                    beginAssignmentCreation();
+                  }}
+                />
+              ) : showClassStarterPromptGenerator ? (
                 <DailyPagesPromptGenerator
                   open={isPromptGeneratorOpen}
                   onOpenChange={setIsPromptGeneratorOpen}
@@ -1047,7 +1098,31 @@ export default function AppAssignmentTypesIdRoute() {
                   onUsePrompt={(prompt) => {
                     if (teachingLockedPreview) return;
                     setApHistoryEntry(null);
+                    setPlannedExitTicket(null);
                     setLibraryPrompt(prompt);
+                    setIsPromptGeneratorOpen(false);
+                    beginAssignmentCreation();
+                  }}
+                />
+              ) : showExitTicketPromptGenerator ? (
+                <ExitTicketPromptGenerator
+                  open={isPromptGeneratorOpen}
+                  onOpenChange={setIsPromptGeneratorOpen}
+                  onUsePrompt={(option: GeneratedExitTicketOption) => {
+                    if (teachingLockedPreview) return;
+                    setApHistoryEntry(null);
+                    setLibraryPrompt('');
+                    setPlannedExitTicket({
+                      mode: 'specific',
+                      focus: option.focusHint ?? 'understand-text',
+                      topic: option.prompt,
+                      answerType: null,
+                      lessonNotes: null,
+                      reflectionPrompt: null,
+                      graded: false,
+                      pointValue: null,
+                      grading: null,
+                    });
                     setIsPromptGeneratorOpen(false);
                     beginAssignmentCreation();
                   }}

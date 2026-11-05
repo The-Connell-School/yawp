@@ -26,8 +26,19 @@ const requireUserId = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({ requireAdmin, requireUserId }));
+mock.module('~/utils/platform-admin-actor.server', () => ({
+  resolvePlatformAdminActorEmail: mock(async () => 'admin@test.local'),
+}));
 
 const { action } = await import('./route');
+
+const platformAdminEditStamp = {
+  _lastAdminEdit: {
+    source: 'platform',
+    updatedBy: 'admin@test.local',
+    updatedAt: expect.any(String),
+  },
+};
 
 describe('admin assignment type new action', () => {
   beforeEach(() => {
@@ -120,8 +131,11 @@ describe('admin assignment type new action', () => {
     await action({ request: new Request('https://example.test/new', { method: 'POST', body: form }), params: {}, context: {} } as never);
     expect(prisma.rubric.findFirst).toHaveBeenCalled();
     expect(prisma.assignmentType.create).toHaveBeenCalledWith({ data: {
-      title: 'Daily journal', kind: null, description: null, tutorInstructions: null, position: 4,
-      rubricId: 'daily-pages', gradingPromptConfigJson: { gradingInstructionsOverride: 'Focus on reflection.' },
+      title: 'Daily journal', kind: null, description: null, position: 4,
+      rubricId: 'daily-pages', gradingPromptConfigJson: {
+        gradingInstructionsOverride: 'Focus on reflection.',
+        ...platformAdminEditStamp,
+      },
     } });
   });
 
@@ -178,7 +192,6 @@ describe('admin assignment type new action', () => {
         title: 'ACT Writing',
         kind: null,
         description: 'ACT writing assignment type',
-        tutorInstructions: null,
         position: 4,
         scoringScaleJson: {
           type: 'act_writing_2_12',
@@ -198,6 +211,7 @@ describe('admin assignment type new action', () => {
         },
         gradingPromptConfigJson: {
           gradingInstructions: 'Grade this as ACT Writing.',
+          ...platformAdminEditStamp,
         },
         gradingOutputSchemaJson: {
           schemaVersion: 1,
@@ -232,7 +246,6 @@ describe('admin assignment type new action', () => {
         title: 'New assignment type',
         kind: null,
         description: 'Choose its database rubric after saving.',
-        tutorInstructions: null,
         position: 4,
       },
     });
@@ -258,7 +271,6 @@ describe('admin assignment type new action', () => {
         title: 'Daily reflection',
         kind: null,
         description: null,
-        tutorInstructions: null,
         position: 4,
         rubricId: 'rubric-daily-pages',
       },

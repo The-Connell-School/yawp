@@ -13,7 +13,7 @@ import {
 
 describe('rubric catalog with production rubric content', () => {
   test('production library content opens unchanged and publication requires a known scoring type', () => {
-    expect(fixture.libraryRubrics.length).toBe(10);
+    expect(fixture.libraryRubrics.length).toBe(12);
     for (const rubric of fixture.libraryRubrics) {
       const { editable, preservedTopLevelKeys } = toEditable(rubric.schemaJson as any, rubric.name);
       expect(preservedTopLevelKeys).toEqual(

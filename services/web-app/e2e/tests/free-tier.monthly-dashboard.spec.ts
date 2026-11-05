@@ -84,20 +84,13 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
       page.getByText('Your class, assignments, and grading in one place.')
     ).toBeVisible();
     const rail = page.getByTestId('free-account-rail');
-    await expect(rail.locator('section').last()).toContainText(
-      "Loving what Yawp! is doing for your students' writing?"
+    await expect(rail.getByTestId('free-account-checklist')).toContainText(
+      '2 of 4'
     );
-    expect(
-      await rail
-        .getByTestId('free-account-checklist')
-        .evaluate((el) =>
-          Boolean(
-            el.nextElementSibling?.textContent?.includes(
-              'Get the Advocate Pack'
-            )
-          )
-        )
-    ).toBe(true);
+    await expect(rail.getByText('Your class is ready')).toBeVisible();
+    await expect(
+      rail.getByRole('link', { name: 'Get the Advocate Pack' })
+    ).toHaveCount(0);
     await expect(page.getByTestId('class-code').first()).toBeInViewport();
     const opener = page
       .getByRole('button', {
@@ -187,6 +180,24 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
   );
   await shot(page, 'monthly-usage');
   await page.keyboard.press('Escape');
+  const studentMembership = await db.orgMembership.findFirstOrThrow({
+    where: {
+      organizationId: org,
+      role: 'STUDENT',
+      user: { email: 'dev.student.free@yawp.local' },
+    },
+  });
+  const enrolledClass = await db.class.findFirstOrThrow({
+    where: { school: { organizationId: org }, isArchived: false },
+  });
+  await db.class.update({
+    where: { id: enrolledClass.id },
+    data: { students: { connect: { id: studentMembership.id } } },
+  });
+  await page.goto('/app');
+  await expect(
+    page.getByRole('link', { name: 'Get the Advocate Pack' })
+  ).toBeVisible();
   await page.getByRole('link', { name: 'Get the Advocate Pack' }).click();
   await expect(
     page.getByRole('heading', { name: 'Advocate Pack' })
@@ -199,6 +210,10 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
     page.getByRole('main').getByRole('link', { name: 'Need more? Talk to us' })
   ).toHaveAttribute('href', /mailto:hello@yawp.school\?subject=/);
   await shot(page, 'advocate-pack');
+  await db.class.update({
+    where: { id: enrolledClass.id },
+    data: { students: { set: [] } },
+  });
 });
 for (const control of ['flag-off', 'untargeted', 'paid', 'pending'] as const)
   test(`compatibility ${control}`, async ({ page }) => {

@@ -4,6 +4,7 @@ import {
   beforeEach,
   describe,
   expect,
+  setSystemTime,
   test,
 } from 'bun:test';
 import { prisma as db } from '~/utils/db.server';
@@ -51,6 +52,7 @@ describe.skipIf(!enabled)(
     let memberId: string;
     let userId: string;
     beforeAll(async () => {
+      setSystemTime(now);
       await db.organization.create({
         data: {
           id: org,
@@ -76,6 +78,7 @@ describe.skipIf(!enabled)(
       });
     });
     afterAll(async () => {
+      setSystemTime();
       await db.setting.deleteMany({
         where: { name: { startsWith: `free_tier.monthly.v1:${org}:` } },
       });
@@ -121,9 +124,14 @@ describe.skipIf(!enabled)(
             createdAt: now,
           },
         });
-        await finishMonthlyOperation(tx, op, {
-          conversationId: conversation.id,
-        });
+        await finishMonthlyOperation(
+          tx,
+          op,
+          {
+            conversationId: conversation.id,
+          },
+          now
+        );
         return conversation;
       });
       expect(await readMonthlyUsage(org, 'lesson-planner', now)).toBe(2);
@@ -140,6 +148,17 @@ describe.skipIf(!enabled)(
           })
         ).kind
       ).toBe('exhausted');
+    });
+    test('finish honors operation now when wall clock is in a later month (CI month rollover)', async () => {
+      const reservedAt = new Date('2026-10-15T12:00:00.000Z');
+      const op = await begin('month-boundary-regression', { now: reservedAt });
+      if (op.kind !== 'reserved') throw new Error('missing reservation');
+      setSystemTime(new Date('2026-11-15T12:00:00.000Z'));
+      await db.$transaction((tx) =>
+        finishMonthlyOperation(tx, op, { reply: 'ok' }, reservedAt)
+      );
+      setSystemTime(now);
+      expect(await readMonthlyUsage(org, 'reporter', reservedAt)).toBe(1);
     });
     test('UTC calendar boundaries are inclusive/exclusive including year rollover', () => {
       expect(lessonPlanMonthWindow(now)).toEqual({
@@ -164,10 +183,15 @@ describe.skipIf(!enabled)(
       expect((await begin('repeat')).kind).toBe('pending');
       if (first.kind !== 'reserved') throw new Error('missing reservation');
       await db.$transaction((tx) =>
-        finishMonthlyOperation(tx, first, {
-          conversationId: 'report',
-          reply: 'Saved reply',
-        })
+        finishMonthlyOperation(
+          tx,
+          first,
+          {
+            conversationId: 'report',
+            reply: 'Saved reply',
+          },
+          now
+        )
       );
       expect(
         await begin('repeat', { cap: 0, now: new Date('2026-11-01T00:00:00Z') })
@@ -196,7 +220,7 @@ describe.skipIf(!enabled)(
       expect(retry.kind).toBe('reserved');
       if (retry.kind !== 'reserved') throw new Error('missing retry');
       await db.$transaction((tx) =>
-        finishMonthlyOperation(tx, retry, { reply: 'Success' })
+        finishMonthlyOperation(tx, retry, { reply: 'Success' }, now)
       );
       expect(await readMonthlyUsage(org, 'reporter', now)).toBe(1);
       expect((await begin('next', { cap: 1 })).kind).toBe('exhausted');
@@ -225,15 +249,25 @@ describe.skipIf(!enabled)(
       if (first.kind !== 'reserved') throw new Error('missing reservation');
       await expect(
         db.$transaction(async (tx) => {
-          await finishMonthlyOperation(tx, first, {
-            conversationId: 'deleted-later',
-          });
+          await finishMonthlyOperation(
+            tx,
+            first,
+            {
+              conversationId: 'deleted-later',
+            },
+            now
+          );
           throw new Error('rollback');
         })
       ).rejects.toThrow('rollback');
       expect((await begin('durable')).kind).toBe('pending');
       await db.$transaction((tx) =>
-        finishMonthlyOperation(tx, first, { conversationId: 'deleted-later' })
+        finishMonthlyOperation(
+          tx,
+          first,
+          { conversationId: 'deleted-later' },
+          now
+        )
       );
       expect(await readMonthlyUsage(org, 'reporter', now)).toBe(1);
     });

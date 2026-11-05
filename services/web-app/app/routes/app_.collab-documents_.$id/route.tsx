@@ -120,6 +120,7 @@ const moduleSessionInclude = {
       assignmentType: {
         select: {
           assignmentModules: {
+            where: { deletedAt: null },
             select: { id: true, position: true },
             orderBy: { position: 'asc' as const },
           },

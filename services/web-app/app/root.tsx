@@ -59,6 +59,7 @@ import {
   shouldEnableLocalDevQuickLogin,
 } from './utils/environment-banner.server.ts';
 import {
+  getDevPanelUnlockSeatLabel,
   getPreviewAccessSeat,
   isIsolatedPreviewSeatMode,
   isPreviewDevLoginAccessCodeRequired,
@@ -119,6 +120,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (publicLandingPage && !internal) {
     const previewAccessSeat = isPreviewDevLoginAccessCodeRequired()
       ? await getPreviewAccessSeat(request)
+      : null;
+    const devPanelUnlockSeatLabel = isPreviewDevLoginAccessCodeRequired()
+      ? await getDevPanelUnlockSeatLabel(request)
       : null;
     const devPanelEnabled = isDevPanelRuntimeEnabled();
     let user = null;
@@ -205,6 +209,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         previewAccessGateEnabled: isPreviewDevLoginAccessCodeRequired(),
         previewAccessSeat,
+        devPanelUnlockSeatLabel,
         blackboardLtiMockEnabled: isBlackboardLtiMockUiEnabled(),
         devPanelEnabled,
         devPanelEnvBadge: devPanelEnvBadge(),
@@ -231,6 +236,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const { prisma } = await import('./utils/db.server.ts');
   const previewAccessSeat = isPreviewDevLoginAccessCodeRequired()
     ? await getPreviewAccessSeat(request)
+    : null;
+  const devPanelUnlockSeatLabel = isPreviewDevLoginAccessCodeRequired()
+    ? await getDevPanelUnlockSeatLabel(request)
     : null;
   const membershipWhere = userId
     ? await getRootMembershipWhere({
@@ -340,6 +348,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
       previewAccessGateEnabled: isPreviewDevLoginAccessCodeRequired(),
       previewAccessSeat,
+      devPanelUnlockSeatLabel,
       blackboardLtiMockEnabled: isBlackboardLtiMockUiEnabled(),
       devPanelEnabled: isDevPanelRuntimeEnabled(),
       devPanelEnvBadge: devPanelEnvBadge(),
@@ -524,7 +533,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         <DevPanelMount
           envBadge={data.devPanelEnvBadge}
           previewAccessGateEnabled={data.previewAccessGateEnabled}
-          previewAccessSeatLabel={data.previewAccessSeat?.label ?? null}
+          previewAccessSeatLabel={data.devPanelUnlockSeatLabel ?? null}
         />
       ) : data.bannerWarning && !data.internalImpersonation ? (
         <LocalDevEnvironmentBar

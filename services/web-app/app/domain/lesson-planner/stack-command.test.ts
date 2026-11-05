@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   checkOps,
+  deckRequest,
   fencePiece,
   findStep,
   quickCommand,
@@ -123,5 +124,46 @@ describe("writing from the stack chat is a Yawp! assignment (Brian's run 5, item
   test('the stack chat is told so, and never to use sticky notes or scrap paper', () => {
     expect(STACK_COMMAND_SYSTEM).toContain('created as a Yawp! assignment');
     expect(STACK_COMMAND_SYSTEM).toContain('Never set students writing on a sticky note');
+  });
+});
+
+describe("a deck asked for on the stack (Brian's run 6, item 2)", () => {
+  test('asking for slides or a deck builds one, in the stack', () => {
+    for (const line of [
+      'Build the slide deck',
+      'make me slides for this lesson',
+      'Can you create a deck?',
+      'I need a PowerPoint for this',
+      'put together a presentation for tomorrow',
+      'slides please',
+    ]) {
+      expect(deckRequest(line, { hasDeck: false })).toBe('Build the slide deck from my stack');
+    }
+  });
+
+  test('with a deck in the stack, it is rebuilt in its place', () => {
+    expect(deckRequest('redo the slides', { hasDeck: true })).toBe(
+      'Rebuild the slide deck from my stack, replacing the one in it'
+    );
+    expect(deckRequest('make the deck', { hasDeck: true })).toBe(
+      'Rebuild the slide deck from my stack, replacing the one in it'
+    );
+  });
+
+  test('what the teacher said about the deck goes with it', () => {
+    expect(deckRequest('make slides with big images, few words', { hasDeck: false })).toBe(
+      'Build the slide deck from my stack. The teacher asked: "make slides with big images, few words"'
+    );
+  });
+
+  test('a change to a step is not a deck', () => {
+    for (const line of [
+      'shorten the hook to 10 minutes',
+      'one more activity after the closing',
+      'add a slide-show style gallery walk activity',
+      'remove the read aloud',
+    ]) {
+      expect(deckRequest(line, { hasDeck: false })).toBeNull();
+    }
   });
 });

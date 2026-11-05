@@ -86,15 +86,18 @@ type MembershipRow = {
   isActive: boolean;
 };
 
+/** Prisma lookup shape for deciding preferred vs fallback intern QA email. */
+export type InternQaPreferredUserForEmail = {
+  simulatedForClassId?: string | null;
+  memberships?: MembershipRow[];
+};
+
 export function canUsePreferredEmailForInternQa(
-  user: {
-    simulatedForClassId: string | null;
-    memberships: MembershipRow[];
-  } | null
+  user: InternQaPreferredUserForEmail | null
 ): boolean {
   if (!user) return false;
   if (user.simulatedForClassId) return false;
-  const localMembership = user.memberships.find(
+  const localMembership = (user.memberships ?? []).find(
     (membership) =>
       membership.organizationId === LOCAL_DEV_ORG_ID && membership.isActive
   );
@@ -106,12 +109,8 @@ export function canUsePreferredEmailForInternQa(
 
 export function resolveInternQaTeacherEmail(
   spec: InternQaTeacherSpec,
-  preferredUser: {
-    email: string;
-    simulatedForClassId?: string | null;
-    memberships?: MembershipRow[];
-  } | null,
-  _fallbackUser: { email: string } | null
+  preferredUser: InternQaPreferredUserForEmail | null,
+  _fallbackUser: { email?: string | null } | null
 ): { email: string; emailSource: 'preferred' | 'fallback' } {
   if (preferredUser && canUsePreferredEmailForInternQa(preferredUser)) {
     return { email: spec.preferredEmail, emailSource: 'preferred' };

@@ -45,6 +45,11 @@ export function parseDevPanelState(raw: unknown): DevPanelPersistedState | null 
           raw.forms.selectedStateId === null
             ? raw.forms.selectedStateId
             : undefined,
+        activeStateId:
+          typeof raw.forms.activeStateId === 'string' ||
+          raw.forms.activeStateId === null
+            ? raw.forms.activeStateId
+            : undefined,
         blackboardRole:
           raw.forms.blackboardRole === 'teacher' ||
           raw.forms.blackboardRole === 'student'

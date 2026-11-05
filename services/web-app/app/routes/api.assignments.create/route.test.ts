@@ -228,7 +228,7 @@ describe('api.assignments.create', () => {
         prompt: 'Write the essay.',
         submitForGrade: true,
         pointValue: 100,
-        gradingAssistantStrictnessLevel: 'intermediate',
+        gradingAssistantStrictnessLevel: 'beginner',
       }),
       classIds: ['class-1', 'class-2'],
       deployment: { postAt: null, dueAt: null },
@@ -298,7 +298,7 @@ describe('api.assignments.create', () => {
     });
   });
 
-  test('defaults assignment grading assistant strictness to intermediate', async () => {
+  test('defaults assignment grading assistant strictness to beginner', async () => {
     const response = await action({
       request: requestFor({
         intent: 'create-assignment',
@@ -314,7 +314,7 @@ describe('api.assignments.create', () => {
     expect(body.success).toBe(true);
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        gradingAssistantStrictnessLevel: 'intermediate',
+        gradingAssistantStrictnessLevel: 'beginner',
       }),
       classIds: ['class-1', 'class-2'],
       deployment: { postAt: null, dueAt: null },
@@ -673,7 +673,7 @@ describe('api.assignments.create', () => {
             }),
           ],
         }),
-        gradingAssistantStrictnessLevel: 'intermediate',
+        gradingAssistantStrictnessLevel: 'beginner',
       }),
       classIds: ['class-1', 'class-2'],
       deployment: { postAt: null, dueAt: null },
@@ -936,7 +936,7 @@ describe('api.assignments.create', () => {
       prompt: 'Write the essay.',
       submitForGrade: true,
       pointValue: 50,
-      gradingAssistantStrictnessLevel: 'intermediate',
+      gradingAssistantStrictnessLevel: 'beginner',
       tutorEnabled: false,
       // Saved alongside the rest of the configuration so reusing this assignment
       // preserves the setting. Solo here because the fixture organization is not

@@ -11,6 +11,7 @@ import {
   deckDurationMinutes,
   type SlideDeck,
 } from '~/domain/lesson-planner/slide-deck';
+import { GallerySlideThumbnail } from '~/routes/present.$conversationId.$messageId/gallery-slide-canvas';
 
 export function SlideDeckCard({
   deck,
@@ -23,6 +24,8 @@ export function SlideDeckCard({
   edited = false,
   periodMinutes = null,
   onFit = null,
+  /** Lesson Deck Kit: preview slides from the gallery renderer and art store. */
+  deckGallery = false,
 }: {
   deck: SlideDeck;
   /** Absent while the reply is still unsaved and has no id to present by. */
@@ -49,9 +52,11 @@ export function SlideDeckCard({
   periodMinutes?: number | null;
   /** Ask the planner to fit the deck to the period. */
   onFit?: (() => void) | null;
+  deckGallery?: boolean;
 }) {
   const minutes = deckDurationMinutes(deck);
   const preview = deck.slides.slice(0, 4);
+  const thumbWidth = 128;
 
   return (
     <div
@@ -123,7 +128,7 @@ export function SlideDeckCard({
             )}
           >
             {added ? <Check size={14} /> : <Plus size={14} />}
-            {added ? 'In the stack' : 'Add to stack'}
+            {added ? 'In your lesson' : 'Add to lesson'}
           </button>
         ) : null}
         {downloadHref ? (
@@ -157,7 +162,7 @@ export function SlideDeckCard({
           </Link>
         ) : (
           <span className="shrink-0 text-xs text-muted-foreground">
-            Add this to the stack to present it
+            Add this to the lesson to present it
           </span>
         )}
       </div>
@@ -167,20 +172,30 @@ export function SlideDeckCard({
         {preview.map((slide, index) => (
           <li
             key={index}
-            className="flex aspect-[16/9] w-32 shrink-0 flex-col justify-center gap-1 rounded-md border bg-background px-2 py-1.5"
+            className={
+              deckGallery
+                ? 'aspect-[16/9] w-32 shrink-0 overflow-hidden rounded-md border bg-background'
+                : 'flex aspect-[16/9] w-32 shrink-0 flex-col justify-center gap-1 rounded-md border bg-background px-2 py-1.5'
+            }
           >
-            <p className="line-clamp-2 text-[10px] font-semibold leading-tight">
-              {slide.title}
-            </p>
-            {slide.bullets?.length ? (
-              <p className="line-clamp-2 text-[9px] leading-tight text-muted-foreground">
-                {slide.bullets[0]}
-              </p>
-            ) : slide.body ? (
-              <p className="line-clamp-2 text-[9px] leading-tight text-muted-foreground">
-                {slide.body}
-              </p>
-            ) : null}
+            {deckGallery ? (
+              <GallerySlideThumbnail deck={deck} index={index} width={thumbWidth} />
+            ) : (
+              <>
+                <p className="line-clamp-2 text-[10px] font-semibold leading-tight">
+                  {slide.title}
+                </p>
+                {slide.bullets?.length ? (
+                  <p className="line-clamp-2 text-[9px] leading-tight text-muted-foreground">
+                    {slide.bullets[0]}
+                  </p>
+                ) : slide.body ? (
+                  <p className="line-clamp-2 text-[9px] leading-tight text-muted-foreground">
+                    {slide.body}
+                  </p>
+                ) : null}
+              </>
+            )}
           </li>
         ))}
         {deck.slides.length > preview.length ? (

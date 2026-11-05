@@ -2,11 +2,16 @@ import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
-import { openDevToolsPanel } from '../helpers/dev-panel-feedback';
+import {
+  devPanelFreeTierGroupTrigger,
+  devPanelFreeTierStateOption,
+  openDevToolsPanel,
+} from '../helpers/dev-panel-feedback';
 import {
   listCatalogFreeTierJumpExpectations,
   type FreeTierJumpExpectation,
 } from '../../app/dev-panel/free-tier-jump-expectations';
+import { findFreeTierState } from '../../app/dev-panel/free-tier-states.catalog';
 
 const prisma = createE2EPrismaClient();
 
@@ -47,13 +52,20 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
   await expect(stateSheet).toBeVisible({ timeout: 15_000 });
 
   await stateSheet
-    .getByRole('checkbox', { name: 'Use a throwaway test account' })
+    .getByRole('switch', { name: 'Use a throwaway test account' })
     .setChecked(true);
-  await stateSheet
-    .locator('label')
-    .filter({ hasText: entry.label })
-    .getByRole('radio')
-    .check({ force: true });
+
+  const catalogEntry = findFreeTierState(entry.stateId);
+  if (catalogEntry) {
+    const groupTrigger = devPanelFreeTierGroupTrigger(
+      stateSheet,
+      catalogEntry.group.title
+    );
+    if ((await groupTrigger.getAttribute('aria-expanded')) !== 'true') {
+      await groupTrigger.click();
+    }
+  }
+  await devPanelFreeTierStateOption(stateSheet, entry.label).click();
 
   const jumpResponse = page.waitForResponse(
     (response) =>

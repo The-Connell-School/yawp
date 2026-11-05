@@ -232,14 +232,21 @@ export function buildGradingPromptShape({
     ...grammarHighlightPromptRules(categories, resolvedDisplay),
     ...grammarHighlightHolisticCapInstructions(resolvedDisplay),
     ...(scoringMode === 'holistic_tier'
-      ? [
-          // Holistic scoring instructions reflect the GA specification.
-          'Set the overall grade holistically by choosing a tier and points out of the assignment total.',
-          'Tiers: excellent (90–100%), good (80–89%), needs_more (70–79%), not_present (0–69%).',
-          'Pick the tier based only on the assignment\'s required elements and depth of analysis. Categories explain the decision; they do not move the paper across tiers.',
-          'Points must be a whole number inside the chosen tier\'s band. Compute the tier bands from the assignment\'s total as: lower = round(pct × total), upper = (next tier\'s lower) − 1; excellent upper is total.',
-          'Report points only; do not report a percentage.',
-        ]
+      ? bandScored
+        ? [
+            'Score every category on its band scale first. The platform derives the overall tier and points from those category scores and the assignment total.',
+            'You may omit overallTier and overallPoints when category scores and overallComment are complete.',
+            'When you do include overallTier and overallPoints, they must agree with the category scores.',
+            'Tiers for reference: excellent (90–100%), good (80–89%), needs_more (70–79%), not_present (0–69%). Report points out of the assignment total, not a percentage.',
+          ]
+        : [
+            // Holistic scoring instructions reflect the GA specification.
+            'Set the overall grade holistically by choosing a tier and points out of the assignment total.',
+            'Tiers: excellent (90–100%), good (80–89%), needs_more (70–79%), not_present (0–69%).',
+            'Pick the tier based only on the assignment\'s required elements and depth of analysis. Categories explain the decision; they do not move the paper across tiers.',
+            'Points must be a whole number inside the chosen tier\'s band. Compute the tier bands from the assignment\'s total as: lower = round(pct × total), upper = (next tier\'s lower) − 1; excellent upper is total.',
+            'Report points only; do not report a percentage.',
+          ]
       : []),
     ...(teacherNotesEnabled ? [
       TEACHER_NOTES_EVIDENCE_RULE,

@@ -9,9 +9,50 @@ on:
       - 'scripts/preview/prisma-migrate-deploy-with-summary.sh'
       - '.github/workflows/migration-integration.yml'
       - 'services/web-app/**'
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+
+# Cancel superseded runs on the same PR (PR-only workflow; never main or deploy).
+concurrency:
+  group: migration-integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
+  classify:
+    name: Classify run
+    runs-on: ubuntu-24.04
+    outputs:
+      run_integration: ${{ steps.decide.outputs.run }}
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: 🔍 Migration paths
+        id: paths
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
+        with:
+          filters: |
+            prisma_migrations:
+              - 'packages/prisma/migrations/**'
+      - name: 🏭 Factory L0 gate
+        id: decide
+        env:
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'factory-l0') }}
+          PRISMA_MIGRATIONS: ${{ steps.paths.outputs.prisma_migrations == 'true' }}
+        run: |
+          set -euo pipefail
+          run=true
+          if [ "${HAS_LABEL}" = "true" ] && [ "${PRISMA_MIGRATIONS}" != "true" ]; then
+            run=false
+            echo "factory-l0: skipping Migration Integration (no migration files in diff)."
+          fi
+          echo "run=${run}" >> "$GITHUB_OUTPUT"
+
   migration-integration:
+    needs: [classify]
+    if: ${{ needs.classify.outputs.run_integration == 'true' }}
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -55,3 +96,11 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_integration
 
+  migration-integration-factory-l0-skip:
+    needs: [classify]
+    if: ${{ needs.classify.outputs.run_integration != 'true' }}
+    name: Migration Integration
+    runs-on: ubuntu-24.04
+    steps:
+      - name: ⏭️ Factory L0 fast path
+        run: echo "Migration Integration skipped for eligible factory-l0 PR (.github/FACTORY-L0.md)."

@@ -345,6 +345,58 @@ describe('api.domain.submit-document', () => {
     });
   });
 
+  test('backfills an empty document title from the submit prompt title', async () => {
+    prisma.document.findFirst.mockResolvedValue({
+      id: 'doc-1',
+      html: '<p>Draft</p>',
+      text: 'Draft',
+      title: '',
+      submissions: [],
+      revision: 4,
+      updatedAt: new Date('2026-08-20T11:59:00.000Z'),
+      classAssignment: null,
+      membership: {
+        organizationId: 'org-1',
+        organization: { plan: 'SCHOOL' },
+        classesAsStudent: [
+          {
+            id: 'class-1',
+            schoolId: 'school-1',
+            school: { organizationId: 'org-1' },
+            teachers: [{ id: 'teacher-1' }],
+          },
+        ],
+      },
+    });
+    prisma.submission.create.mockResolvedValue({
+      id: 'sub-1',
+      title: 'My essay title',
+      submittedAt: new Date('2026-08-20T12:00:00.000Z'),
+    });
+    prisma.document.findUniqueOrThrow.mockResolvedValue({
+      id: 'doc-1',
+      revision: 4,
+      title: 'My essay title',
+    });
+    const form = new FormData();
+    form.append('documentId', 'doc-1');
+    form.append('title', 'My essay title');
+
+    await action({
+      request: new Request('https://example.com/api/domain/submit-document', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect(prisma.document.updateMany.mock.calls[0]?.[0].data).toMatchObject({
+      title: 'My essay title',
+    });
+    expect(prisma.submission.create.mock.calls[0]?.[0].data.title).toBe(
+      'My essay title'
+    );
+  });
+
   test('uses updatedAt as the active-submission concurrency token', async () => {
     const form = new FormData();
     form.append('documentId', 'doc-1');
