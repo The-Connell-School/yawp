@@ -27,6 +27,15 @@ async function flag(enabled: boolean) {
   });
 }
 
+async function lessonPlannerFlag(enabled: boolean) {
+  const name = 'feature_flag.lesson_planner';
+  await prisma.setting.upsert({
+    where: { name },
+    create: { name, value: String(enabled), valueType: 'boolean' },
+    update: { value: String(enabled) },
+  });
+}
+
 async function demoFeedbackFlag(enabled: boolean) {
   const name = 'feature_flag.demo-feedback-widget';
   await prisma.setting.upsert({
@@ -413,10 +422,15 @@ for (const width of [390, 1440]) {
     if (width === 1440) {
       await capture(page, 'locked-reporter-unlocks-card-1440');
     }
-    await page.goto('/app/lesson-planner');
-    await expect(
-      page.getByRole('textbox', { name: 'Message the Lesson Planner' })
-    ).toBeVisible();
+    await lessonPlannerFlag(true);
+    try {
+      await page.goto('/app/lesson-planner');
+      await expect(
+        page.getByRole('textbox', { name: 'Message the Lesson Planner' })
+      ).toBeVisible();
+    } finally {
+      await lessonPlannerFlag(false);
+    }
     if (width === 1440) {
       await capture(page, 'locked-lesson-planner-pending-1440');
     }

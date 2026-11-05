@@ -34,11 +34,17 @@ describe('assignmentTypeHasHowItWorksGuide', () => {
     ).toBe(true);
   });
 
-  test('excludes types without a guide', () => {
+  test('excludes types without a rendered guide', () => {
     expect(
       assignmentTypeHasHowItWorksGuide({
         title: 'Exit Ticket',
         kind: 'exit_ticket',
+      })
+    ).toBe(false);
+    expect(
+      assignmentTypeHasHowItWorksGuide({
+        title: 'Daily Pages',
+        kind: 'daily_pages',
       })
     ).toBe(false);
   });

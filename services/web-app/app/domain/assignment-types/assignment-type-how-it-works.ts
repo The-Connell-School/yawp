@@ -10,5 +10,9 @@ export function assignmentTypeHasHowItWorksGuide(assignmentType: {
   kind: string | null;
 }): boolean {
   if (isWritingStepKind(assignmentType.kind)) return true;
-  return howItWorksGuideFor(assignmentType.title) !== null;
+  const guide = howItWorksGuideFor(assignmentType.title);
+  // Daily Pages is named in howItWorksGuideFor, but this route only renders
+  // Class Starter, the thesis essay, and the writing-step guides. A button
+  // for Daily Pages would open a page that redirects home.
+  return guide === 'class-starter' || guide === 'thesis-essay';
 }

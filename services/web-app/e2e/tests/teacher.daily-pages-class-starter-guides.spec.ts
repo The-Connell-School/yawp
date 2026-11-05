@@ -6,17 +6,6 @@ const STUDENT_PASSWORD = 'johndoe';
 
 const GUIDES = [
   {
-    name: 'Daily Pages',
-    typeId: (ctx: E2EContext) => ctx.dailyPagesAssignmentTypeId,
-    heading: /short paragraphs that build real thinking/i,
-    media: /^\/img\/daily-pages-guide\/.+\.mp4$/,
-    wont: [
-      /send student names to the tutor/i,
-      /grade an entry until you ask it to/i,
-      /grade grammar when you turn grammar grading off/i,
-    ],
-  },
-  {
     name: 'Class Starter',
     typeId: (ctx: E2EContext) => ctx.classStarterAssignmentTypeId,
     heading: /get every student writing/i,
