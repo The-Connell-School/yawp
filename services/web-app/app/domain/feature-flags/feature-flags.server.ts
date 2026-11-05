@@ -1,3 +1,4 @@
+import { writeAdminConfigAudit } from '~/domain/admin-config/admin-config-audit.server';
 import { prisma } from '~/utils/db.server';
 import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import {
@@ -405,7 +406,12 @@ export async function findUnknownOrganizationIds(
 export async function setFeatureFlag(
   key: FeatureFlagKey,
   next: FeatureFlagValueInput,
-  operatorEmail: string
+  operatorEmail: string,
+  audit: {
+    source?: 'web_admin' | 'internal_api';
+    actorUserId?: string | null;
+    reason?: string | null;
+  } = {}
 ): Promise<{
   flag: FeatureFlagState;
   previous: FeatureFlagValue;
@@ -426,10 +432,22 @@ export async function setFeatureFlag(
     update: { value, valueType: 'json', description, updatedAt: new Date() },
     select: { name: true, value: true, description: true, updatedAt: true },
   });
+  const changed = !sameFeatureFlagValue(previous, normalized);
+  await writeAdminConfigAudit({
+    actorUserId: audit.actorUserId,
+    actorEmail: operatorEmail,
+    source: audit.source ?? 'internal_api',
+    entityType: 'feature_flag',
+    entityKey: key,
+    action: 'set',
+    before: previous,
+    after: normalized,
+    reason: audit.reason,
+  });
   return {
     flag: stateFor(key, row),
     previous,
-    changed: !sameFeatureFlagValue(previous, normalized),
+    changed,
   };
 }
 

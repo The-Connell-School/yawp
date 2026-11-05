@@ -38,12 +38,16 @@ import { redirectIfTeacherLoungeTemporarilyDisabled } from '~/domain/teacher-lou
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
+  const profile = await requireMembership(request, userId);
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { email: true },
   });
-  redirectIfTeacherLoungeTemporarilyDisabled({ email: user?.email ?? null });
-  const profile = await requireMembership(request, userId);
+  await redirectIfTeacherLoungeTemporarilyDisabled({
+    userId,
+    email: user?.email ?? null,
+    orgId: profile.organization.id,
+  });
 
   if (profile.role !== "TEACHER") {
     throw new Response('Teacher profile required', { status: 403 });
@@ -137,12 +141,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
+  const profile = await requireMembership(request, userId);
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { email: true },
   });
-  redirectIfTeacherLoungeTemporarilyDisabled({ email: user?.email ?? null });
-  const profile = await requireMembership(request, userId);
+  await redirectIfTeacherLoungeTemporarilyDisabled({
+    userId,
+    email: user?.email ?? null,
+    orgId: profile.organization.id,
+  });
   const formData = await request.formData();
   const intent = formData.get('intent');
 

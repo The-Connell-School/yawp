@@ -1,15 +1,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { featureFlagPrismaTables } from '~/domain/feature-flags/feature-flags.server.test-support';
 
 const auditCreate = mock(async () => ({}));
 const prisma = {
-  setting: {
-    findUnique: mock(),
-    findMany: mock(),
-    upsert: mock(),
-  },
-  organization: {
-    findMany: mock(),
-  },
+  ...featureFlagPrismaTables(),
   internalPlatformApiAudit: {
     create: auditCreate,
   },
@@ -55,6 +49,7 @@ describe('internal feature-flag endpoints', () => {
     oldYawpEnvironment = process.env.YAWP_ENVIRONMENT;
     process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
     delete process.env.YAWP_ENVIRONMENT;
+    prisma.adminConfigAudit.create.mockReset().mockResolvedValue({ id: 'audit-1' });
     prisma.setting.findUnique.mockReset().mockResolvedValue(null);
     prisma.setting.findMany.mockReset().mockResolvedValue([]);
     prisma.setting.upsert.mockReset().mockImplementation(
@@ -137,6 +132,7 @@ describe('internal feature-flag endpoints', () => {
       'demo-feedback-widget',
       'guided-tours',
       'teacher-prompt-generator',
+      'teacher-lounge',
     ]);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
@@ -235,6 +231,7 @@ describe('internal feature-flag endpoints', () => {
       'demo-feedback-widget',
       'guided-tours',
       'teacher-prompt-generator',
+      'teacher-lounge',
     ]);
   });
 
