@@ -1,0 +1,31 @@
+# Proposed Terraform — NOT APPLIED (copy into infra/ when approved)
+
+```hcl
+resource "aws_dynamodb_table" "promotion_control" {
+  name         = "${local.name_prefix}-promotion-control"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  point_in_time_recovery { enabled = true }
+
+  tags = {
+    Purpose = "scoped-holds-and-promotion-grants"
+  }
+}
+
+# pk = SCOPE#<main_merge|prod_deploy|prod_flags>, sk = META | GRANT#<uuid> | AUDIT#<ulid>
+# Conditional updates on generation + hold.active + grant.consume absent
+```
+
+IAM for **promotion broker** role only: `dynamodb:UpdateItem`, `GetItem`, `PutItem` on this table.  
+GitHub Actions **deploy role must not** receive PutItem on grants; it calls broker `ConsumeGrant` with OIDC.
