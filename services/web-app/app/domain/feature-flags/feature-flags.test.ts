@@ -26,6 +26,7 @@ import {
   TEACHER_PROMPT_GENERATOR_FLAG,
   ASSIGNMENT_TYPE_LANDING_V2_FLAG,
   ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG,
+  ASSIGNMENT_TYPE_LESSON_PLANS_FLAG,
   FOLDED_FREE_TIER_LEGACY_SETTINGS,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
@@ -52,6 +53,16 @@ describe('feature flag registry', () => {
     expect(
       FEATURE_FLAGS[ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG].description
     ).toContain('landing page');
+  });
+
+  test('registers the How to Teach It lesson plans flag', () => {
+    expect(ASSIGNMENT_TYPE_LESSON_PLANS_FLAG).toBe('assignment-type-lesson-plans');
+    expect(featureFlagSettingName(ASSIGNMENT_TYPE_LESSON_PLANS_FLAG)).toBe(
+      'feature_flag.assignment-type-lesson-plans'
+    );
+    expect(FEATURE_FLAGS[ASSIGNMENT_TYPE_LESSON_PLANS_FLAG].description).toContain(
+      'Lesson Planner'
+    );
   });
 
   test('no longer has the removed Daily Pages writing-conditions flag', () => {
@@ -85,6 +96,7 @@ describe('feature flag registry', () => {
       TEACHER_PROMPT_GENERATOR_FLAG,
       ASSIGNMENT_TYPE_LANDING_V2_FLAG,
       ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG,
+      ASSIGNMENT_TYPE_LESSON_PLANS_FLAG,
     ]);
   });
 

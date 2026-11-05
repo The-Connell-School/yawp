@@ -125,6 +125,7 @@ describe('feature flags (server)', () => {
       for (const key of [
         'assignment-type-landing-v2',
         'assignment-type-landing-thesis-essay',
+        'assignment-type-lesson-plans',
       ] as const) {
         for (const environment of ['demo', 'preview']) {
           process.env.YAWP_ENVIRONMENT = environment;
@@ -338,6 +339,7 @@ describe('feature flags (server)', () => {
       TEACHER_PROMPT_GENERATOR_FLAG,
       'assignment-type-landing-v2',
       'assignment-type-landing-thesis-essay',
+      'assignment-type-lesson-plans',
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -381,6 +383,7 @@ describe('feature flags (server)', () => {
       TEACHER_PROMPT_GENERATOR_FLAG,
       'assignment-type-landing-v2',
       'assignment-type-landing-thesis-essay',
+      'assignment-type-lesson-plans',
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;

@@ -10,6 +10,7 @@ const { getAssignmentTypeLandingFlags } = await import(
 
 const V2 = 'feature_flag.assignment-type-landing-v2';
 const THESIS = 'feature_flag.assignment-type-landing-thesis-essay';
+const LESSON_PLANS = 'feature_flag.assignment-type-lesson-plans';
 const EVERYONE = '{"mode":"everyone","orgIds":[]}';
 
 function stored(values: Record<string, string>) {
@@ -33,6 +34,7 @@ describe('assignment-type landing page gate', () => {
     expect(await getAssignmentTypeLandingFlags('org-1')).toEqual({
       v2: false,
       thesisEssay: false,
+      lessonPlans: false,
     });
   });
 
@@ -41,16 +43,30 @@ describe('assignment-type landing page gate', () => {
     expect(await getAssignmentTypeLandingFlags('org-1')).toEqual({
       v2: false,
       thesisEssay: false,
+      lessonPlans: false,
     });
     stored({ [V2]: EVERYONE });
     expect(await getAssignmentTypeLandingFlags('org-1')).toEqual({
       v2: true,
       thesisEssay: false,
+      lessonPlans: false,
     });
     stored({ [V2]: EVERYONE, [THESIS]: EVERYONE });
     expect(await getAssignmentTypeLandingFlags('org-1')).toEqual({
       v2: true,
       thesisEssay: true,
+      lessonPlans: false,
+    });
+  });
+
+  test('the lesson plans need the v2 pages: there is no How to Teach It without them', async () => {
+    stored({ [LESSON_PLANS]: EVERYONE });
+    expect((await getAssignmentTypeLandingFlags('org-1')).lessonPlans).toBe(false);
+    stored({ [V2]: EVERYONE, [LESSON_PLANS]: EVERYONE });
+    expect(await getAssignmentTypeLandingFlags('org-1')).toEqual({
+      v2: true,
+      thesisEssay: false,
+      lessonPlans: true,
     });
   });
 
@@ -60,6 +76,7 @@ describe('assignment-type landing page gate', () => {
     expect(await getAssignmentTypeLandingFlags('org-1')).toEqual({
       v2: true,
       thesisEssay: true,
+      lessonPlans: true,
     });
     if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
     else process.env.YAWP_ENVIRONMENT = previous;

@@ -140,6 +140,17 @@ export const ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG =
   'assignment-type-landing-thesis-essay' as const;
 
 /**
+ * How to Teach It → ready-built lesson plans (Kevin, Nov 5). On the new
+ * landing pages, a lesson's "Lesson plan" opens Brian's lesson in the
+ * teacher's own Lesson Planner, on the stack page, built from the Yawp!
+ * lesson catalog (`/app/lesson-planner/yawp/<slug>`). Off: the row is the
+ * lesson plan PDF and the route is a 404. Needs
+ * {@link ASSIGNMENT_TYPE_LANDING_V2_FLAG} and the school's Lesson Planner.
+ * Default off on production; on by default on demo and PR previews.
+ */
+export const ASSIGNMENT_TYPE_LESSON_PLANS_FLAG = 'assignment-type-lesson-plans' as const;
+
+/**
  * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
  * reads only `feature_flag.free_tier`; these rows are not OR-merged.
  */
@@ -271,6 +282,11 @@ export const FEATURE_FLAGS = {
     label: 'Assignment type pages: Thesis-Driven Essay',
     description:
       'The new Thesis-Driven Essay landing page, with How to Teach It (lesson stack and tutorial video per step). Needs the teacher-facing copy flag. Turn on in production once the stacks and videos exist. Default off on production; on by default on demo and PR previews.',
+  },
+  [ASSIGNMENT_TYPE_LESSON_PLANS_FLAG]: {
+    label: 'Assignment type pages: lesson plans in the Lesson Planner',
+    description:
+      "How to Teach It's \"Lesson plan\" links open Brian's Thesis-Driven Essay lessons as ready-built stacks in the teacher's own Lesson Planner (one copy per teacher per lesson). Off: the links are the lesson plan PDFs. Needs the teacher-facing copy flag and the Lesson Planner. Default off on production; on by default on demo and PR previews.",
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 
