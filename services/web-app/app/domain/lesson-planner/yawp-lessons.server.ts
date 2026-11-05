@@ -37,7 +37,9 @@ export async function findYawpLessonCopy(
 
 export async function openYawpLesson(
   scope: YawpLessonScope,
-  lesson: YawpLesson
+  lesson: YawpLesson,
+  /** Stores Brian's deck for the copy; replaceable in tests. */
+  storeDeck: typeof storeYawpLessonDeck = storeYawpLessonDeck
 ): Promise<{ conversationId: string; created: boolean }> {
   const existing = await findYawpLessonCopy(scope, lesson.slug);
   if (existing) return { conversationId: existing, created: false };
@@ -61,7 +63,7 @@ export async function openYawpLesson(
       // Brian's deck, slide for slide, in the same reply as the plan, the way
       // "Keep it as is" adds a deck to the reply that answers it. Its pictures
       // are the copy's own. With no deck to read, the plan goes in alone.
-      const deckBlock = await storeYawpLessonDeck(tx, {
+      const deckBlock = await storeDeck(tx, {
         lesson,
         conversationId: conversation.id,
         membershipId: scope.membershipId,

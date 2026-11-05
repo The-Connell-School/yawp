@@ -11,7 +11,6 @@ const DECK_BLOCK = '```yawp-slides\n{"title":"Pre-writing","slides":[{"layout":"
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/domain/lesson-planner/file-reply-pieces.server', () => ({ fileReplyPieces }));
-mock.module('~/domain/lesson-planner/yawp-lesson-deck.server', () => ({ storeYawpLessonDeck }));
 
 const { findYawpLessonCopy, openYawpLesson } = await import('./yawp-lessons.server');
 const { YAWP_LESSONS } = await import('./yawp-lessons');
@@ -50,14 +49,14 @@ describe('opening a Yawp! lesson', () => {
 
   test('opens the existing copy rather than making a second one', async () => {
     prisma.lessonPlanConversation.findFirst.mockResolvedValue({ id: 'conv-1' });
-    expect(await openYawpLesson(scope, lesson)).toEqual({ conversationId: 'conv-1', created: false });
+    expect(await openYawpLesson(scope, lesson, storeYawpLessonDeck as never)).toEqual({ conversationId: 'conv-1', created: false });
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(fileReplyPieces).not.toHaveBeenCalled();
   });
 
   test('the first time, makes the lesson with the request, the plan, and the plan filed as the stack', async () => {
     prisma.lessonPlanConversation.findFirst.mockResolvedValue(null);
-    expect(await openYawpLesson(scope, lesson)).toEqual({ conversationId: 'conv-new', created: true });
+    expect(await openYawpLesson(scope, lesson, storeYawpLessonDeck as never)).toEqual({ conversationId: 'conv-new', created: true });
 
     expect(prisma.lessonPlanConversation.create.mock.calls[0][0].data).toEqual({
       membershipId: 'teacher-1',
@@ -96,7 +95,7 @@ describe('opening a Yawp! lesson', () => {
   test('with no deck to read, the plan goes in alone', async () => {
     prisma.lessonPlanConversation.findFirst.mockResolvedValue(null);
     storeYawpLessonDeck.mockResolvedValue(null);
-    await openYawpLesson(scope, lesson);
+    await openYawpLesson(scope, lesson, storeYawpLessonDeck as never);
     const reply = prisma.lessonPlanMessage.create.mock.calls[1]![0].data;
     expect(reply.content).toBe(lesson.plan);
   });

@@ -5,18 +5,15 @@ import { readYawpDeckFile, storeYawpLessonDeck } from './yawp-lesson-deck.server
 
 const lesson = YAWP_LESSONS['pre-writing'];
 const created: Array<Record<string, unknown>> = [];
-const tx = {
-  lessonPlanUploadPicture: {
-    create: mock(async ({ data }: { data: Record<string, unknown> }) => {
-      created.push(data);
-      return { id: `pic${String(created.length).padStart(8, '0')}` };
-    }),
-  },
-};
+const create = mock(async ({ data }: { data: Record<string, unknown> }) => {
+  created.push(data);
+  return { id: `pic${String(created.length).padStart(8, '0')}` };
+});
+const tx = { lessonPlanUploadPicture: { create } } as unknown as Parameters<typeof storeYawpLessonDeck>[0];
 
 beforeEach(() => {
   created.length = 0;
-  tx.lessonPlanUploadPicture.create.mockClear();
+  create.mockClear();
 });
 
 describe('storing Brian’s deck for a teacher’s copy', () => {
@@ -54,13 +51,13 @@ describe('storing Brian’s deck for a teacher’s copy', () => {
 
   test('no file, no deck: the lesson still opens with its plan', async () => {
     expect(await storeYawpLessonDeck(tx, { lesson, conversationId: 'conv-1', membershipId: 'teacher-1', file: null })).toBeNull();
-    expect(tx.lessonPlanUploadPicture.create).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
   });
 
   test('a file that is not a deck stores nothing', async () => {
     expect(
       await storeYawpLessonDeck(tx, { lesson, conversationId: 'conv-1', membershipId: 'teacher-1', file: new Uint8Array([1, 2, 3]) })
     ).toBeNull();
-    expect(tx.lessonPlanUploadPicture.create).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
   });
 });

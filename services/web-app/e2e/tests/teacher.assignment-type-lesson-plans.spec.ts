@@ -4,8 +4,9 @@ import { setFeatureFlag, setLessonPlannerReviewFlag } from '../feature-flags';
 
 // How to Teach It → ready-built lesson plans (Kevin, Nov 5): the course card's
 // "Lesson plan" opens Brian's lesson in the teacher's own Lesson Planner, on
-// the stack page, behind `assignment-type-lesson-plans`. With it off, the row
-// is the PDF, as #893 ships it.
+// the stack page, with Brian's slide deck already in it (part 2), behind
+// `assignment-type-lesson-plans`. With it off, the row is the PDF, as #893
+// ships it.
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 const OPEN_PRE_WRITING = '/app/lesson-planner/yawp/pre-writing';
@@ -57,6 +58,7 @@ test.describe.serial('How to Teach It: lesson plans in the Lesson Planner', () =
     void testInfo;
     await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
     await setLessonPlannerReviewFlag('lesson_planner_stack_v3', true);
+    await setLessonPlannerReviewFlag('lesson_planner_deck_v2', true);
   });
 
   test.afterAll(async () => {
@@ -64,6 +66,7 @@ test.describe.serial('How to Teach It: lesson plans in the Lesson Planner', () =
     await setFeatureFlag('assignment-type-lesson-plans', false);
     await setLessonPlannerReviewFlag('lesson_planner_stack_v2', false);
     await setLessonPlannerReviewFlag('lesson_planner_stack_v3', false);
+    await setLessonPlannerReviewFlag('lesson_planner_deck_v2', false);
   });
 
   test('the course card opens Brian’s lesson as a stack in the teacher’s planner, once', async ({
@@ -103,6 +106,13 @@ test.describe.serial('How to Teach It: lesson plans in the Lesson Planner', () =
     await expect(titles.first()).toContainText('What’s happening in this picture?');
     await expect(page.getByTestId('writing-badge').first()).toBeVisible();
 
+    // Brian's deck is the lesson's deck: nothing to build (part 2).
+    const printBox = page.getByTestId('print-for-class');
+    await expect(printBox).toContainText('Slide deck');
+    await expect(printBox).not.toContainText('No deck yet');
+    await expect(printBox.getByTestId('build-deck')).toHaveCount(0);
+    await expect(page.getByTestId('before-class-item').filter({ hasText: 'Slides' })).toHaveAttribute('data-done', 'true');
+
     // Clicking again opens the same copy rather than a second one.
     await page.goto(OPEN_PRE_WRITING);
     await page.waitForURL(/\/app\/lesson-planner\/[\w-]+\/packet/);
@@ -117,7 +127,28 @@ test.describe.serial('How to Teach It: lesson plans in the Lesson Planner', () =
       });
       expect(copies).toHaveLength(1);
       expect(copies[0]!.title).toBe('Pre-writing');
-      expect(copies[0]!.materials.length).toBeGreaterThanOrEqual(5);
+      expect(copies[0]!.materials.length).toBeGreaterThanOrEqual(6);
+      // The deck is filed in the deck slot, built from Brian's PowerPoint:
+      // 22 slides, and its pictures are the copy's own.
+      const deck = await prisma.lessonPlanMaterial.findFirst({
+        where: { conversationId: copies[0]!.id, slot: 'deck' },
+        select: { sourceMessageId: true, content: true },
+      });
+      expect(deck).not.toBeNull();
+      expect(deck!.content).toContain('"title": "Pre-writing"');
+      expect((deck!.content.match(/"layout": "picture"/g) ?? []).length).toBe(8);
+      const pictures = await prisma.lessonPlanUploadPicture.count({
+        where: { conversationId: copies[0]!.id, membershipId: e2eContext.teacherMembershipId },
+      });
+      expect(pictures).toBe(8);
+
+      // Present shows Brian's slides with their pictures, loaded for this teacher.
+      await page.goto(`/present/${copies[0]!.id}/${deck!.sourceMessageId}`);
+      await page.waitForLoadState('networkidle');
+      const picture = page.getByTestId('slide-picture').locator('img').filter({ visible: true }).first();
+      await expect(picture).toBeVisible();
+      await expect(picture).toHaveAttribute('src', /^\/api\/image\/lesson-picture\//);
+      await expect.poll(() => picture.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
     } finally {
       await prisma.$disconnect();
     }
