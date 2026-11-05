@@ -11,7 +11,7 @@ premade lesson in their own Lesson Planner, not a PDF.
 | --- | --- | --- |
 | #893 `claude/affectionate-ramanujan-54ym9s` | Brian's landing pages (v2) with the Thesis-Driven Essay course card: lesson plan PDFs and slide decks | open, clean against `main` |
 | #905 `claude/fervent-carson-vrwvlm` | How to Teach It on the **old** page: one row per module with admin-pasted lesson and tutorial-video URLs | open, clean against `main`, conflicts with #893 in 7 files |
-| #892 `claude/sleepy-allen-5mjnpq-restore-723` | Lesson Planner run 6: teachers' own decks, working time, writing override | open, independent |
+| #892 `claude/sleepy-allen-5mjnpq-restore-723` | Lesson Planner run 6: teachers' own decks (PPTX → planner deck with pictures), working time, writing override | open, merged into this branch for Part 2 |
 | `main` | already has the stack page redesign (#723) and its guide (#886) | |
 
 The new pages only exist on #893, so this branch is `main` with #893 merged
@@ -112,12 +112,67 @@ enabled for the school` to the page, so a link is only shown where it works.
   defaults, the gate, content, the component, the landing loader.
 - CI: the new unit test files join the lists in `ci.yml`.
 
+## Part 2: Brian's slides inside the stack (Kevin, Nov 5, after the preview)
+
+Kevin opened a lesson on the preview and the stack said the slides were not
+built yet, while Brian's deck sat one click away as a PowerPoint download.
+The stack's deck is the planner's own format, and on `main` the planner can
+read a PowerPoint's words but not its pictures. Brian's decks are built around
+pictures (Bruegel, Hokusai, a Meyerowitz photograph), so a text-only deck was
+not worth shipping. #892 has the missing piece: "Keep it as is" turns a
+teacher's PPTX into a planner deck slide for slide, pictures included, with a
+picture slide layout every renderer draws.
+
+### Decision
+
+Stack this branch on #892 as well as #893 (#892 merges cleanly), and build
+Brian's deck into every copy of a Yawp! lesson when it is made. This PR then
+waits on two PRs instead of one.
+
+### How it is built
+
+- **Pictures.** `readPptxDeck` (#892) reads the deck's slides and the pictures
+  it kept (PNG/JPEG/GIF/WebP under the caps). Each kept picture becomes a
+  `LessonPlanUploadPicture` row for the teacher's copy: `conversationId` set,
+  `uploadId` null, exactly as a picture added in the slide editor is stored.
+  A picture is served only to its owner (`/api/image/lesson-picture/:id`), so
+  each teacher's copy carries its own rows: 0.5–2.7 MB a lesson. Deleting the
+  copy deletes them (cascade).
+- **The deck.** `deckFromUpload` (#892) makes the planner deck from Brian's
+  file and the stored pictures: a `picture` slide where a slide has one, else
+  title / statement / bullets, speaker notes kept, words a slide cannot hold
+  spilled into its notes. The deck's title is the lesson's title rather than
+  Brian's "THE CRITICAL ESSAY" banner.
+- **Filing.** The deck goes into the same planner reply as the plan, the way
+  "Keep it as is" adds a deck to the reply that answers it
+  (`withKeptDeck`), so one `fileReplyPieces` call files the steps and the deck
+  into the `deck` slot. The stack page then shows the deck in Print for class,
+  Teach it opens Present with the pictures, the PowerPoint download carries
+  them, and the chat shows the plan with its deck card.
+- **The file.** Read from `build/client` or `public` under `process.cwd()`,
+  the way the kit fonts and the gallery art are found. Body paragraphs has two
+  decks; the stack takes the first (the paragraphs), and Supporting quotes
+  stays a download on the landing row.
+- **Flags.** No new flag, and none of #892's: the deck is part of the lesson
+  the `assignment-type-lesson-plans` flag opens. #892's flags gate the
+  teacher-upload flow, which this does not use. If the file cannot be read,
+  the lesson still opens with its plan and no deck, as before.
+
+### Tests
+
+- Pure: every lesson's deck builds from the real PPTX: the slide count, the
+  title, at least one picture slide, every picture slide pointing at a stored
+  picture, and a valid deck.
+- Server: `openYawpLesson` stores the pictures for the copy and files the
+  reply with the deck fence; a deck that cannot be read leaves the plan alone.
+- e2e: opening a lesson lands on a stack with a deck (no "No deck yet"), and
+  Present shows a picture that loads for the teacher.
+
 ## Not in this pass
 
 - Tutorial videos: the rows have no video link yet. The lesson block has room
   for one when the clips exist.
 - Lessons 7 and 8 (Titling, Review my essay) have no Brian lesson plan; their
   rows keep the deck only.
-- A slide deck inside the stack: the planner's deck is its own JSON format, and
-  turning Brian's PPTX into one is #892's "Keep it as is" work. For now the
-  stack links to the PPTX.
+- Supporting quotes (Body paragraphs' second deck) is a download, not a second
+  stack deck: a lesson has one deck slot.
