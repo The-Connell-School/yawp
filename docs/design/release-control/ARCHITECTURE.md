@@ -1,75 +1,71 @@
 # Release control — scoped holds and artifact-bound promotion grants
 
-**Status:** PREPARE-ONLY prototype (Nov 2026). Production deployments remain **paused**; USO off; auto-deploy off. **Not enforced** in GitHub or AWS until Bryant re-authorizes apply + demo.
+**Status:** PREPARE-ONLY prototype (Nov 2026). Production deployments remain **paused**; USO off; auto-deploy off. **Not enforced** in GitHub or AWS until a local contract review passes and Bryant authorizes integration separately.
 
 ## Problem
 
 Prose HOLD comments and draft PR instructions did not stop an automated cleanup worker from merging. Required checks and worker prompts are not a linearizable promotion boundary.
 
-## Current delivery architecture (yawp)
+## Enforcement modes (no fail-open)
 
-| Stage | Mechanism | Enforcement today |
-| --- | --- | --- |
-| PR merge to `main` | GitHub PR merge / merge queue, `factory-l0` fast path in CI | Required checks; no artifact-bound grant |
-| Production deploy | `.github/workflows/deploy.yml` on `push` to `main` + `workflow_dispatch` | GitHub Environment `production`, AWS keys in secrets |
-| Runtime / flags | App DB + host env | Admin / Internal API / SSH (out of band) |
+| Mode | Behavior |
+| --- | --- |
+| `prepare_only` (default) | All promotion mutate paths deny with `fail_closed_unconfigured`. Safe for draft development. |
+| `live` | Fail closed on missing/malformed/unreachable state, holds, bad grants. Never skips gates because "disabled". |
 
-See `scripts/release-control/delivery-routes.ts` for route inventory and which paths bypass required checks.
+Switching to `live` without initialized scope rows still **denies** — not allow.
 
-## Smallest robust shape (prototype)
+## Holds (deployment pause)
 
-1. **Per-scope state** (`main_merge`, `prod_deploy`, `prod_flags`) in DynamoDB (proposed), each with:
-   - monotonic **`generation`** — bumped on hold set/clear; invalidates outstanding grants
-   - optional **`hold`** (temporary or permanent)
-2. **Grants** — single-use (with idempotent replay), expiring, bound to exact **`commitSha`** and optional **`imageDigest`**, issued only at a **`issuedAtGeneration`** matching the scope.
-3. **Fail closed** — missing, malformed, or unreachable store → deny (library default `enforcementEnabled: false` until bootstrap).
-4. **Promotion-time gate** — cheap read/consume immediately before external mutation (deploy job, brokered merge), not a fat L0 CI gate.
+- Human holds are **`indefiniteUntilExplicitRelease`** — they do **not** auto-expire when wall clock advances.
+- Releasing a pause requires explicit `clearHold` by an authorized subject (trusted boundary TBD for production).
+- There is no timed "resume deploy" in this library.
 
-Implementation: `scripts/release-control/` (in-memory conditional store for tests; DynamoDB adapter not provisioned).
+## Grants
 
-## Trusted boundary (no worker release-writer authority)
+- Bound to **`environment` + `repository` + `operation` (scope) + `commitSha` + `imageDigest`** (digest **mandatory** for `prod_deploy`).
+- **`generation`** in signed approval must match scope generation at issue time.
+- **Single provider mutation:** first consume sets `providerMutationPermitted: true`; idempotent replay returns status only (`providerMutationPermitted: false`).
+- Replay while a hold is active → `hold_blocks_replay` (no status shortcut that re-opens mutate).
+- Grant **TTL** may expire; holds do not.
 
-| Component | Holds signing secret / AWS release writer? | Role |
-| --- | --- | --- |
-| Human + GitHub Environment approval | No (approves broker action) | Consent |
-| **Promotion broker** (proposed Lambda/API) | Holds **issuer HMAC** or OIDC trust only | Verify consent, write holds/grants, audit |
-| GitHub Actions workers / cloud agents | **Must not** | Call broker or read-only gate; pass signed token from broker |
-| `approval_ref` string from worker | Untrusted hint | Rejected by `issueGrantFromWorkerApprovalRef` |
+## HMAC test issuer (not human approval)
 
-Workers cannot mint grants. Prototype uses HMAC test issuer (`approval-verifier.ts`); production should prefer GitHub OIDC + environment attestation feeding the broker.
+`approval-verifier.ts` uses a **fixture HMAC secret** for unit tests. It proves payload shape and signature checking only. It does **not** integrate GitHub Environment approval, OIDC, or identity of a human. See `HMAC_FIXTURE_ISSUER_DISCLAIMER`.
 
-## Correctness issues — honest semantics
+## Sandbox vs live providers
 
-### (1) Stale `merge_group` / green check
+`sandbox-broker.test.ts` + `FakePromotionProvider` prove **ordering** in-process. They do **not** prove AWS ECR/SSM or GitHub merge enforcement.
 
-A passing required check at time *T* does **not** atomically block merge if a hold is placed at *T+ε*. The check is stale relative to hold state. **UNSOLVED for forge enforcement** until a merge-time gate re-reads scope state (broker API or required check backed by live store). Prototype: `evaluateMergeGateStaleCheck`.
+### Provider failure recovery (honest uncertainty)
 
-### (2) TOCTOU after grant consume
+If consume permitted mutation but provider fails before completing:
 
-`consumeGrant` linearizes **authorization to start** a promotion, not completion of AWS/GitHub mutations. If a hold is placed after consume but before push/deploy finishes, **in-flight operations may still complete**. Prototype documents via `describeConsumeThenHoldRace`. **UNSOLVED:** true revocation requires broker-held credentials and short-lived leases tied to mutate calls, or post-hoc reconciliation.
+- Replay with same idempotency key is **status-only** — will not permit a second mutate.
+- Out-of-band reconciliation of provider state is required before issuing a **new** grant.
+- If consume succeeded and provider completed, later hold does not undo completed work (TOCTOU).
 
-### (3) `approval_ref` is not consent
+## Memory store limitations
 
-Only verified signed approvals (broker) count. Tests reject worker forgery.
+`MEMORY_STORE_CAS_LIMITATION`: in-process mutex only; no cross-process CAS. Production needs DynamoDB conditional updates.
 
-### (4) Direct API / admin bypass
+## CI / workflow scope (draft PR)
 
-Branch protection does not constrain org admins, bypass allowances, PAT scopes, or direct AWS IAM. **Not changed in this PR.** Full enforcement requires narrowing credentials and routing all mutating paths through the broker (see delivery route inventory).
+- **Reverted** direct `ci.yml` test list changes from earlier draft — `main` workflow behavior unchanged until merge.
+- Release-control tests run via `deployment-contract.test.ts` subprocess hook in this branch only after merge would activate that path.
+- No active workflow credentials, environments, or deploy steps modified.
 
-### (5) Retries and idempotency
+## Correctness — still UNSOLVED for forge/AWS
 
-Consume accepts duplicate **`idempotencyKey`** (workflow run + attempt) as replay-safe success. Audit append is best-effort in prototype; production needs durable audit with conditional writes.
+1. Stale `merge_group` check after hold  
+2. TOCTOU: in-flight mutate after consume  
+3. Admin / IAM bypass paths (`delivery-routes.ts`)  
+4. DynamoDB adapter + durable audit  
+5. Real human approval → broker attestation (replace HMAC fixture)
 
-## What this PR does **not** do
+## Local contract gate (before integration approval)
 
-- No DynamoDB table, Lambda, IAM, or Secrets Manager apply
-- No edits to branch protection, required checks, or workflow credentials
-- No deploy workflow behavior change (proposed diff only)
-- No touch to PR #917 auth fix branch/work
-
-## Next approval needed (Bryant)
-
-1. Approve **infra apply** for DynamoDB + broker Lambda + issuer secret rotation model
-2. Approve **workflow integration** (deploy.yml consume step; optional merge gate check)
-3. **Authorized demo** on staging: hold blocks deploy; grant with matching SHA succeeds once
-4. Re-enable production deployments only after the above
+1. All tests in `scripts/release-control/*.test.ts` green  
+2. Ship Review r2 signed on head  
+3. Explicit decision on broker credential boundary + provider reconciliation  
+4. Only then: propose workflow/infra apply (separate approval)
