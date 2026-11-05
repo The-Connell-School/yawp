@@ -5,7 +5,6 @@ import {
   shouldConfirmEveryoneFromTargeted,
   runtimeOverrideCopy,
 } from './admin-access-flags.presentation';
-import type { FeatureFlagState } from '~/domain/feature-flags/feature-flags.server';
 import { TEACHER_LOUNGE_FLAG } from '~/domain/feature-flags/feature-flags';
 
 describe('formatFlagModeLabel', () => {
@@ -55,17 +54,10 @@ describe('runtimeOverrideCopy', () => {
   test('describes non-production default on', () => {
     const flag = {
       key: TEACHER_LOUNGE_FLAG,
-      label: "Teacher's Lounge",
-      description: '',
-      mode: 'off',
-      orgIds: [],
-      persisted: { mode: 'off', orgIds: [] },
-      effective: { mode: 'everyone', orgIds: [] },
-      runtimeOverride: 'non_production_default',
-      enabled: false,
-      updatedAt: null,
-      lastChangedBy: null,
-    } satisfies FeatureFlagState;
+      persisted: { mode: 'off' as const, orgIds: [] },
+      effective: { mode: 'everyone' as const, orgIds: [] },
+      runtimeOverride: 'non_production_default' as const,
+    };
     const copy = runtimeOverrideCopy(flag, {
       YAWP_ENVIRONMENT: 'demo',
     });

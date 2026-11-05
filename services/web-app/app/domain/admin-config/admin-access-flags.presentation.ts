@@ -1,14 +1,12 @@
-import type { FeatureFlagMode, FeatureFlagValue } from '~/domain/feature-flags/feature-flags';
+import type { FeatureFlagKey, FeatureFlagMode, FeatureFlagValue } from '~/domain/feature-flags/feature-flags';
 import {
   FEATURE_FLAGS,
-  type FeatureFlagKey,
   sameFeatureFlagValue,
 } from '~/domain/feature-flags/feature-flags';
-import type { FeatureFlagState } from '~/domain/feature-flags/feature-flags.server';
 import {
   isDemoDeployment,
   isPreviewDeployment,
-} from '~/domain/feature-flags/feature-flags.server';
+} from '~/domain/feature-flags/feature-flags.deployment';
 import { TEACHER_LOUNGE_ACCESS_LIST_KEY } from '~/domain/access-lists/access-lists';
 
 export type AdminFlagModeBadge = 'off' | 'everyone' | 'targeted';
@@ -70,8 +68,15 @@ export type RuntimeOverrideCopy = {
   text: string;
 } | null;
 
+type FlagRuntimeOverrideInput = {
+  key: FeatureFlagKey;
+  persisted: FeatureFlagValue;
+  effective: FeatureFlagValue;
+  runtimeOverride: 'non_production_default' | null;
+};
+
 export function runtimeOverrideCopy(
-  flag: FeatureFlagState,
+  flag: FlagRuntimeOverrideInput,
   env: Record<string, string | undefined> = process.env
 ): RuntimeOverrideCopy {
   if (flag.runtimeOverride === 'non_production_default') {

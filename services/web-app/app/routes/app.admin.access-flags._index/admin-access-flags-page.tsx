@@ -17,25 +17,17 @@ import {
   SheetTitle,
 } from '~/components/ui/sheet';
 import { cn } from '~/utils/misc';
-import type { loader } from './route.server';
-import {
-  classifyAuditEntry,
-  formatAuditChangeSummary,
-  auditItemLabel,
-  isRestorableFeatureFlagAudit,
-  type AdminConfigAuditRow,
-} from '~/domain/admin-config/admin-config-audit-query.server';
+import type { Route } from './+types/route';
 import {
   formatAdminTimestamp,
   formatFlagModeLabel,
-  runtimeOverrideCopy,
-  entityDisplayLabel,
 } from '~/domain/admin-config/admin-access-flags.presentation';
 import { TEACHER_LOUNGE_ACCESS_LIST_KEY } from '~/domain/access-lists/access-lists';
 import type { FeatureFlagKey } from '~/domain/feature-flags/feature-flags';
-import type { FeatureFlagState } from '~/domain/feature-flags/feature-flags.server';
 
-type SerializedAudit = Omit<AdminConfigAuditRow, 'createdAt'> & { createdAt: string };
+type LoaderData = Route.ComponentProps['loaderData'];
+type AdminFlagRow = LoaderData['flags'][number];
+type AuditEntryRow = LoaderData['auditEntries'][number];
 
 function ModeBadge({ mode, orgCount }: { mode: string; orgCount: number }) {
   const label =
@@ -94,11 +86,11 @@ function PanelHeader({ children }: { children: React.ReactNode }) {
 }
 
 export default function AdminAccessFlagsPage() {
-  const data = useLoaderData<typeof loader>();
+  const data = useLoaderData<LoaderData>();
   const navigation = useNavigation();
   const fetcher = useFetcher<typeof import('./route.server').action>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [editingFlag, setEditingFlag] = useState<FeatureFlagState | null>(null);
+  const [editingFlag, setEditingFlag] = useState<AdminFlagRow | null>(null);
   const [historyScope, setHistoryScope] = useState<
     { type: 'flag'; key: FeatureFlagKey } | { type: 'access' } | null
   >(null);
@@ -115,7 +107,7 @@ export default function AdminAccessFlagsPage() {
     | { ok?: boolean; error?: string; key?: string; unknownOrgIds?: string[] }
     | undefined;
 
-  const openEditor = useCallback((flag: FeatureFlagState) => {
+  const openEditor = useCallback((flag: AdminFlagRow) => {
     setEditingFlag(flag);
     setEditorMode(flag.persisted.mode);
     setEditorOrgIds([...flag.persisted.orgIds]);
@@ -124,7 +116,7 @@ export default function AdminAccessFlagsPage() {
   }, []);
 
   const filteredHistory = useMemo(() => {
-    if (!historyScope) return [] as SerializedAudit[];
+    if (!historyScope) return [] as AuditEntryRow[];
     return data.auditEntries.filter((row) => {
       if (historyScope.type === 'access') {
         return row.entityType === 'access_list';
@@ -278,7 +270,7 @@ export default function AdminAccessFlagsPage() {
         </div>
         {data.flags.map((flag) => {
           const when = formatAdminTimestamp(flag.updatedAt);
-          const override = runtimeOverrideCopy(flag);
+          const override = flag.runtimeOverride;
           const rowError = flagErrors[flag.key];
           return (
             <div
@@ -578,31 +570,27 @@ export default function AdminAccessFlagsPage() {
           <div className="px-3.5 py-2">Change</div>
           <div className="px-3.5 py-2">Reason</div>
         </div>
-        {data.auditEntries.map((row) => {
-          const typed = { ...row, createdAt: new Date(row.createdAt) } as AdminConfigAuditRow;
-          const { actionLabel } = classifyAuditEntry(typed);
-          const change = formatAuditChangeSummary(typed);
-          const when = formatAdminTimestamp(row.createdAt);
-          return (
+        {data.auditEntries.map((row) => (
             <div
               key={row.id}
               className="grid min-h-[42px] grid-cols-[140px_130px_150px_200px_minmax(0,1fr)_260px] border-b border-border/60"
             >
-              <div className="px-3.5 py-3 font-mono text-xs text-stone-900">{when.secondary ?? when.primary}</div>
+              <div className="px-3.5 py-3 font-mono text-xs text-stone-900">
+                {row.whenSecondary ?? row.whenPrimary}
+              </div>
               <div className="px-3.5 py-3">{row.actorEmail}</div>
               <div className="px-3.5 py-3">
-                <ActionBadge label={actionLabel} />
+                <ActionBadge label={row.actionLabel} />
               </div>
-              <div className="px-3.5 py-3 font-semibold text-stone-900">{auditItemLabel(typed)}</div>
+              <div className="px-3.5 py-3 font-semibold text-stone-900">{row.itemLabel}</div>
               <div className="px-3.5 py-3">
-                <span className="text-red-800 line-through">{change.from}</span>
+                <span className="text-red-800 line-through">{row.changeFrom}</span>
                 <span className="text-muted-foreground"> → </span>
-                <span className="text-stone-900">{change.to}</span>
+                <span className="text-stone-900">{row.changeTo}</span>
               </div>
               <div className="px-3.5 py-3 text-xs text-muted-foreground">{row.reason ?? '—'}</div>
             </div>
-          );
-        })}
+          ))}
       </Panel>
 
       <Sheet open={Boolean(editingFlag)} onOpenChange={(open) => !open && setEditingFlag(null)}>
@@ -780,33 +768,28 @@ export default function AdminAccessFlagsPage() {
               {historyScope?.type === 'access'
                 ? "Teacher's Lounge access"
                 : historyScope?.type === 'flag'
-                  ? entityDisplayLabel('feature_flag', historyScope.key)
+                  ? (data.flags.find((f) => f.key === historyScope.key)?.label ?? historyScope.key)
                   : 'History'}
             </SheetTitle>
           </SheetHeader>
           <ol className="flex-1 list-none overflow-y-auto p-0">
-            {filteredHistory.map((row) => {
-              const typed = { ...row, createdAt: new Date(row.createdAt) } as AdminConfigAuditRow;
-              const { actionLabel } = classifyAuditEntry(typed);
-              const change = formatAuditChangeSummary(typed);
-              const restorable = isRestorableFeatureFlagAudit(typed);
-              return (
+            {filteredHistory.map((row) => (
                 <li key={row.id} className="border-b px-5 py-3.5">
                   <div className="mb-2 flex items-center gap-2">
-                    <ActionBadge label={actionLabel} />
+                    <ActionBadge label={row.actionLabel} />
                     <span className="font-semibold">{row.actorEmail}</span>
                     <span className="ml-auto font-mono text-xs text-muted-foreground">
-                      {formatAdminTimestamp(row.createdAt).secondary}
+                      {row.whenSecondary ?? row.whenPrimary}
                     </span>
                   </div>
                   <div className="text-sm">
-                    <span className="text-red-800 line-through">{change.from}</span>
+                    <span className="text-red-800 line-through">{row.changeFrom}</span>
                     <span className="text-muted-foreground"> → </span>
-                    <span>{change.to}</span>
+                    <span>{row.changeTo}</span>
                   </div>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="flex-1 text-xs text-muted-foreground">{row.reason ?? 'No reason given'}</span>
-                    {restorable && data.viewer.canEdit ? (
+                    {row.restorable && data.viewer.canEdit ? (
                       <fetcher.Form method="post">
                         <input type="hidden" name="intent" value="restore-audit" />
                         <input type="hidden" name="auditId" value={row.id} />
@@ -817,8 +800,7 @@ export default function AdminAccessFlagsPage() {
                     ) : null}
                   </div>
                 </li>
-              );
-            })}
+              ))}
           </ol>
           <div className="border-t px-5 py-3 text-xs text-muted-foreground">
             Showing {filteredHistory.length} entries ·{' '}

@@ -29,3 +29,4 @@
 - Super admins edit; admins read-only (matches design frame 06).
 - Any active impersonation session disables mutations (frame 07); read-only impersonation also blocked server-side via `requireMutableRequest`.
 - Restore applies stored `before` JSON from a feature-flag audit row via `setFeatureFlag`.
+- Client UI must not import `*.server` modules: audit display fields and runtime override copy are computed in `route.server.ts` loader; shared audit helpers live in `admin-config-audit.shared.ts`.

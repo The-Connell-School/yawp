@@ -16,6 +16,10 @@ import {
   type AdminConfigAuditRow,
 } from '~/domain/admin-config/admin-config-audit-query.server';
 import {
+  formatAdminTimestamp,
+  runtimeOverrideCopy,
+} from '~/domain/admin-config/admin-access-flags.presentation';
+import {
   FEATURE_FLAG_MODES,
   isFeatureFlagKey,
   normalizeFeatureFlagValue,
@@ -262,7 +266,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return dataResponse({
     viewer,
-    flags,
+    flags: flags.map((flag) => ({
+      ...flag,
+      runtimeOverride: runtimeOverrideCopy(flag),
+    })),
     unknownByFlag,
     accessList,
     auditEntries: auditEntries.map(serializeAuditRow),
@@ -275,9 +282,23 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 function serializeAuditRow(row: AdminConfigAuditRow) {
+  const { actionLabel } = classifyAuditEntry(row);
+  const change = formatAuditChangeSummary(row);
+  const when = formatAdminTimestamp(row.createdAt.toISOString());
   return {
-    ...row,
+    id: row.id,
     createdAt: row.createdAt.toISOString(),
+    actorEmail: row.actorEmail,
+    entityType: row.entityType,
+    entityKey: row.entityKey,
+    reason: row.reason,
+    actionLabel,
+    itemLabel: auditItemLabel(row),
+    changeFrom: change.from,
+    changeTo: change.to,
+    whenPrimary: when.primary,
+    whenSecondary: when.secondary,
+    restorable: isRestorableFeatureFlagAudit(row),
   };
 }
 
