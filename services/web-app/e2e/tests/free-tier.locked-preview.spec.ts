@@ -434,7 +434,8 @@ for (const width of [390, 1440]) {
     if (width === 1440) {
       await capture(page, 'locked-lesson-planner-pending-1440');
     }
-    await page.getByRole('link', { name: /Back to dashboard/i }).click();
+    // The planner page has no "Back to dashboard" link. Return home directly.
+    await page.goto('/app');
     await expectLockedAppHome(page);
     await expect(page.getByTestId('preview-assignment-creation-disabled')).toHaveCount(
       0
