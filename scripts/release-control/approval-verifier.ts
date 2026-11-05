@@ -1,27 +1,55 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { ArtifactBinding, PromotionScope, VerifiedApproval } from './types';
 import { parseArtifactBinding } from './artifact';
+import {
+  artifactMeetsOperationRequirements,
+  normalizeRepository,
+  type GrantBinding,
+} from './grant-binding';
+import { PROMOTION_SCOPES } from './types';
 
-/** Wire format: base64url(jsonPayload).base64url(hmac-sha256). */
+/**
+ * HMAC test fixture issuer — simulates signature shape only.
+ * NOT human approval: no GitHub Environment, no OIDC, no audit trail to a person.
+ * Production must replace with broker-fed attestation (see ARCHITECTURE.md).
+ */
 export type ApprovalIssuer = {
-  /** Returns null when issuer is not configured — consumers must fail closed. */
   signingSecret: () => string | null;
-  /** Expected issuer label embedded in payload. */
   issuerId: string;
 };
 
 export type ApprovalVerifyResult =
   | { ok: true; approval: VerifiedApproval }
-  | { ok: false; reason: 'unconfigured' | 'malformed' | 'bad_signature' | 'expired' };
+  | {
+      ok: false;
+      reason:
+        | 'unconfigured'
+        | 'malformed'
+        | 'bad_signature'
+        | 'expired'
+        | 'scope_mismatch'
+        | 'binding_mismatch'
+        | 'generation_mismatch'
+        | 'digest_required';
+    };
 
 type ApprovalPayload = {
   iss: string;
   sub: string;
   scope: PromotionScope;
+  env: GrantBinding['environment'];
+  repo: string;
+  gen: number;
   commitSha: string;
   imageDigest?: string;
   exp: number;
   jti: string;
+};
+
+export type ApprovalVerifyConstraints = {
+  brokerBinding: GrantBinding;
+  /** When set, approval.gen must equal this (fail closed on drift). */
+  expectedGeneration?: number;
 };
 
 function b64urlEncode(data: string | Buffer): string {
@@ -46,8 +74,9 @@ export function signApproval(
   issuer: ApprovalIssuer,
   input: {
     subject: string;
-    scope: PromotionScope;
+    binding: GrantBinding;
     artifact: ArtifactBinding;
+    generation: number;
     expiresAtMs: number;
     jti: string;
   }
@@ -57,7 +86,10 @@ export function signApproval(
   const payload: ApprovalPayload = {
     iss: issuer.issuerId,
     sub: input.subject,
-    scope: input.scope,
+    scope: input.binding.operation,
+    env: input.binding.environment,
+    repo: input.binding.repository,
+    gen: input.generation,
     commitSha: input.artifact.commitSha,
     imageDigest: input.artifact.imageDigest,
     exp: input.expiresAtMs,
@@ -71,7 +103,8 @@ export function signApproval(
 export function verifyApprovalToken(
   issuer: ApprovalIssuer,
   token: string,
-  nowMs: number
+  nowMs: number,
+  constraints?: ApprovalVerifyConstraints
 ): ApprovalVerifyResult {
   const secret = issuer.signingSecret();
   if (!secret) return { ok: false, reason: 'unconfigured' };
@@ -102,11 +135,42 @@ export function verifyApprovalToken(
   if (typeof parsed.sub !== 'string' || !parsed.sub) {
     return { ok: false, reason: 'malformed' };
   }
+  if (!(PROMOTION_SCOPES as readonly string[]).includes(parsed.scope)) {
+    return { ok: false, reason: 'scope_mismatch' };
+  }
   if (typeof parsed.exp !== 'number' || parsed.exp <= nowMs) {
     return { ok: false, reason: 'expired' };
   }
   if (typeof parsed.jti !== 'string' || !parsed.jti) {
     return { ok: false, reason: 'malformed' };
+  }
+  if (typeof parsed.gen !== 'number' || parsed.gen < 0) {
+    return { ok: false, reason: 'malformed' };
+  }
+
+  const repo = normalizeRepository(parsed.repo);
+  if (repo === 'malformed') return { ok: false, reason: 'malformed' };
+
+  const binding: GrantBinding = {
+    environment: parsed.env,
+    repository: repo,
+    operation: parsed.scope,
+  };
+
+  if (constraints) {
+    if (
+      binding.environment !== constraints.brokerBinding.environment ||
+      binding.repository !== constraints.brokerBinding.repository ||
+      binding.operation !== constraints.brokerBinding.operation
+    ) {
+      return { ok: false, reason: 'binding_mismatch' };
+    }
+    if (
+      constraints.expectedGeneration !== undefined &&
+      parsed.gen !== constraints.expectedGeneration
+    ) {
+      return { ok: false, reason: 'generation_mismatch' };
+    }
   }
 
   const artifact = parseArtifactBinding({
@@ -114,24 +178,27 @@ export function verifyApprovalToken(
     imageDigest: parsed.imageDigest,
   });
   if (artifact === 'malformed') return { ok: false, reason: 'malformed' };
+  if (!artifactMeetsOperationRequirements(parsed.scope, artifact)) {
+    return { ok: false, reason: 'digest_required' };
+  }
 
   return {
     ok: true,
     approval: {
       subject: parsed.sub,
       scope: parsed.scope,
+      binding,
       artifact,
+      generation: parsed.gen,
       expiresAtMs: parsed.exp,
       jti: parsed.jti,
     },
   };
 }
 
-/**
- * Workers may pass arbitrary approval_ref strings; they are not evidence until
- * verified through this issuer boundary (HMAC today; GitHub environment
- * attestation / OIDC in proposed production wiring).
- */
 export function approvalRefIsUntrustedWorkerHint(_approvalRef: string): true {
   return true;
 }
+
+export const HMAC_FIXTURE_ISSUER_DISCLAIMER =
+  'Test HMAC issuer is a cryptographic fixture only; it does not record human consent or GitHub Environment approval.';

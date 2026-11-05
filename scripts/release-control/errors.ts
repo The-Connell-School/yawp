@@ -10,8 +10,11 @@ export type PromotionDenyReason =
   | 'artifact_mismatch'
   | 'approval_invalid'
   | 'approval_unconfigured'
-  | 'hold_permanent'
-  | 'generation_conflict';
+  | 'binding_mismatch'
+  | 'digest_required'
+  | 'generation_conflict'
+  | 'replay_status_only'
+  | 'hold_blocks_replay';
 
 export class PromotionDeniedError extends Error {
   readonly reason: PromotionDenyReason;

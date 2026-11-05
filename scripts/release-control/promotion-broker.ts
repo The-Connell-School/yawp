@@ -1,17 +1,17 @@
 import type { ApprovalIssuer } from './approval-verifier';
 import { PromotionControl } from './promotion-control';
 import type { PromotionStore } from './store';
+import type { GrantBinding } from './grant-binding';
+import type { EnforcementMode } from './enforcement-mode';
 
 /**
- * Prototype promotion broker — the only component that should mint grants after
- * verifying human/environment consent. Workers receive read/consume instructions
- * but must not hold the approval signing secret or AWS release-writer keys.
- *
- * NOT DEPLOYED: no Lambda, no IAM, no table provisioning in this PR.
+ * Prototype promotion broker — NOT DEPLOYED.
  */
 export type PromotionBrokerConfig = {
   store: PromotionStore;
   approvalIssuer: ApprovalIssuer;
+  brokerBinding: GrantBinding;
+  enforcementMode?: EnforcementMode;
 };
 
 export class PromotionBroker {
@@ -21,7 +21,8 @@ export class PromotionBroker {
     this.#control = new PromotionControl({
       store: config.store,
       approvalIssuer: config.approvalIssuer,
-      enforcementEnabled: true,
+      brokerBinding: config.brokerBinding,
+      enforcementMode: config.enforcementMode ?? 'live',
     });
   }
 
@@ -30,18 +31,10 @@ export class PromotionBroker {
   }
 }
 
-export type WorkerPromotionClientConfig = {
-  /** Workers only talk to broker HTTP API in production; tests use PromotionControl directly. */
-  brokerEndpoint?: string;
-};
-
-/**
- * Worker-side stub — documents that workers must not embed issuer secrets.
- */
 export class WorkerPromotionClient {
   readonly #endpoint: string | undefined;
 
-  constructor(config: WorkerPromotionClientConfig) {
+  constructor(config: { brokerEndpoint?: string }) {
     this.#endpoint = config.brokerEndpoint;
   }
 

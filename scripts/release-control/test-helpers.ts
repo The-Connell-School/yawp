@@ -1,6 +1,7 @@
 import type { ApprovalIssuer } from './approval-verifier';
 import { signApproval } from './approval-verifier';
 import type { ArtifactBinding, PromotionScope } from './types';
+import type { GrantBinding } from './grant-binding';
 
 export const TEST_ISSUER: ApprovalIssuer = {
   issuerId: 'yawp-promotion-issuer-test',
@@ -8,6 +9,18 @@ export const TEST_ISSUER: ApprovalIssuer = {
 };
 
 export const WORKER_FORGED_SECRET = 'worker-stolen-secret';
+
+export const TEST_BROKER_BINDING: GrantBinding = {
+  environment: 'production',
+  repository: 'The-Connell-School/yawp',
+  operation: 'prod_deploy',
+};
+
+export const TEST_MAIN_MERGE_BINDING: GrantBinding = {
+  environment: 'production',
+  repository: 'The-Connell-School/yawp',
+  operation: 'main_merge',
+};
 
 export function seedAllScopes(store: import('./memory-store').MemoryPromotionStore, nowMs = 0) {
   const scopes = ['main_merge', 'prod_deploy', 'prod_flags'] as const;
@@ -30,19 +43,38 @@ export function sampleArtifact(shaSuffix = 'a'.repeat(40)): ArtifactBinding {
 
 export function signTestApproval(input: {
   subject: string;
-  scope: PromotionScope;
+  binding: GrantBinding;
   artifact: ArtifactBinding;
+  generation?: number;
   nowMs: number;
   ttlMs?: number;
   jti?: string;
 }): string {
   const token = signApproval(TEST_ISSUER, {
     subject: input.subject,
-    scope: input.scope,
+    binding: input.binding,
     artifact: input.artifact,
+    generation: input.generation ?? 0,
     expiresAtMs: input.nowMs + (input.ttlMs ?? 60_000),
     jti: input.jti ?? `jti-${input.nowMs}`,
   });
   if (!token) throw new Error('sign failed');
   return token;
+}
+
+/** Legacy helper — prefer explicit binding in tests. */
+export function signTestApprovalForScope(input: {
+  subject: string;
+  scope: PromotionScope;
+  artifact: ArtifactBinding;
+  generation?: number;
+  nowMs: number;
+  ttlMs?: number;
+}): string {
+  const binding: GrantBinding = {
+    environment: 'production',
+    repository: 'The-Connell-School/yawp',
+    operation: input.scope,
+  };
+  return signTestApproval({ ...input, binding });
 }

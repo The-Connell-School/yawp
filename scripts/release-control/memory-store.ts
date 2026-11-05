@@ -9,6 +9,7 @@ import type {
   SetHoldInput,
 } from './store';
 import { artifactsMatch } from './artifact';
+import { grantBindingsMatch } from './grant-binding';
 
 type StoreMode = 'healthy' | 'unreachable';
 
@@ -20,6 +21,10 @@ function defaultScope(scope: PromotionScope, nowMs: number): ScopeRecord {
     updatedAtMs: nowMs,
   };
 }
+
+/** Documented limitation for reviewers — not multi-process safe. */
+export const MEMORY_STORE_CAS_LIMITATION =
+  'single-process mutex only; no CAS across workers/processes';
 
 /**
  * In-process store with mutex — simulates conditional DynamoDB updates for tests.
@@ -43,7 +48,6 @@ export class MemoryPromotionStore implements PromotionStore {
     }
   }
 
-  /** Test helper — production table bootstrap creates scope rows explicitly. */
   seedScope(scope: PromotionScope, record: ScopeRecord): void {
     this.#scopes.set(scope, record);
   }
@@ -84,7 +88,7 @@ export class MemoryPromotionStore implements PromotionStore {
     if (this.#mode === 'unreachable') return 'unreachable';
     const grant = this.#grants.get(grantId);
     if (!grant) return 'missing';
-    if (!grant.grantId || !grant.scope) return 'malformed';
+    if (!grant.grantId || !grant.scope || !grant.binding) return 'malformed';
     return grant;
   }
 
@@ -100,7 +104,7 @@ export class MemoryPromotionStore implements PromotionStore {
         generation: nextGeneration,
         hold: {
           active: true,
-          permanent: input.permanent,
+          indefiniteUntilExplicitRelease: true,
           reason: input.reason,
           setAtMs: input.nowMs,
           setBySubject: input.setBySubject,
@@ -122,9 +126,6 @@ export class MemoryPromotionStore implements PromotionStore {
       if (!current?.hold) {
         return { ok: false as const, reason: 'no_hold' as const };
       }
-      if (current.hold.permanent && !input.forceClearPermanent) {
-        return { ok: false as const, reason: 'hold_permanent' as const };
-      }
       const nextGeneration = current.generation + 1;
       this.#scopes.set(input.scope, {
         ...current,
@@ -141,6 +142,9 @@ export class MemoryPromotionStore implements PromotionStore {
       if (this.#mode === 'unreachable') {
         return { ok: false as const, reason: 'unreachable' as const };
       }
+      if (input.binding.operation !== input.scope) {
+        return { ok: false as const, reason: 'malformed' as const };
+      }
       if (this.#grants.has(input.grantId)) {
         return { ok: false as const, reason: 'duplicate_grant' as const };
       }
@@ -152,6 +156,7 @@ export class MemoryPromotionStore implements PromotionStore {
       const grant: GrantRecord = {
         grantId: input.grantId,
         scope: input.scope,
+        binding: input.binding,
         artifact: input.artifact,
         issuedAtGeneration,
         expiresAtMs: input.expiresAtMs,
@@ -170,27 +175,34 @@ export class MemoryPromotionStore implements PromotionStore {
       }
       const scopeRec =
         this.#scopes.get(input.scope) ?? defaultScope(input.scope, input.nowMs);
-      if (scopeRec.hold?.active) {
-        return { ok: false, reason: 'hold_active' };
-      }
       const grant = this.#grants.get(input.grantId);
       if (!grant) return { ok: false, reason: 'missing' };
       if (grant.scope !== input.scope) {
         return { ok: false, reason: 'scope_mismatch' };
       }
+      if (!grantBindingsMatch(grant.binding, input.binding)) {
+        return { ok: false, reason: 'binding_mismatch' };
+      }
       if (grant.expiresAtMs <= input.nowMs) {
         return { ok: false, reason: 'expired' };
       }
       if (grant.consume) {
-        if (grant.consume.idempotencyKey === input.idempotencyKey) {
-          return {
-            ok: true,
-            replay: true,
-            consumedAtMs: grant.consume.consumedAtMs,
-            generationAtConsume: grant.issuedAtGeneration,
-          };
+        if (grant.consume.idempotencyKey !== input.idempotencyKey) {
+          return { ok: false, reason: 'already_consumed' };
         }
-        return { ok: false, reason: 'already_consumed' };
+        if (scopeRec.hold?.active) {
+          return { ok: false, reason: 'hold_blocks_replay' };
+        }
+        return {
+          ok: true,
+          replay: true,
+          consumedAtMs: grant.consume.consumedAtMs,
+          generationAtConsume: grant.consume.generationAtConsume,
+          providerMutationPermitted: false,
+        };
+      }
+      if (scopeRec.hold?.active) {
+        return { ok: false, reason: 'hold_active' };
       }
       if (grant.issuedAtGeneration !== scopeRec.generation) {
         return { ok: false, reason: 'stale_generation' };
@@ -201,6 +213,7 @@ export class MemoryPromotionStore implements PromotionStore {
       grant.consume = {
         consumedAtMs: input.nowMs,
         idempotencyKey: input.idempotencyKey,
+        generationAtConsume: scopeRec.generation,
       };
       this.#grants.set(input.grantId, grant);
       return {
@@ -208,8 +221,18 @@ export class MemoryPromotionStore implements PromotionStore {
         replay: false,
         consumedAtMs: input.nowMs,
         generationAtConsume: scopeRec.generation,
+        providerMutationPermitted: true,
       };
     });
+  }
+
+  /** Sandbox helper: mark provider mutation completed for recovery tests. */
+  recordProviderMutation(grantId: string): void {
+    const grant = this.#grants.get(grantId);
+    if (grant?.consume) {
+      grant.consume.providerMutationRecorded = true;
+      this.#grants.set(grantId, grant);
+    }
   }
 
   async appendAudit(event: import('./types').AuditEvent) {

@@ -5,22 +5,26 @@ import {
   approvalRefIsUntrustedWorkerHint,
 } from './approval-verifier';
 import { PromotionDeniedError, type PromotionDenyReason } from './errors';
+import type { EnforcementMode } from './enforcement-mode';
+import { promotionPathAllowed } from './enforcement-mode';
+import {
+  artifactMeetsOperationRequirements,
+  grantBindingsMatch,
+  type GrantBinding,
+} from './grant-binding';
 import type { ArtifactBinding, PromotionScope } from './types';
 import type { PromotionStore } from './store';
 
 export type PromotionControlOptions = {
   store: PromotionStore;
   approvalIssuer: ApprovalIssuer;
-  /** When false, every path fails closed (prepare-only default). */
-  enforcementEnabled?: boolean;
+  brokerBinding: GrantBinding;
+  enforcementMode?: EnforcementMode;
 };
 
 export type MergeGateObservation = {
-  /** Simulated required-check completion time. */
   checkPassedAtMs: number;
-  /** When a hold was placed after the check, the check is stale for merge. */
   staleRelativeToHold: boolean;
-  /** Library opinion: merge_group success alone does not linearize with hold state. */
   mergeAllowedByHoldState: boolean;
 };
 
@@ -28,11 +32,13 @@ export type ConsumeThenHoldRaceNote = {
   grantConsumed: true;
   holdPlacedAfterConsumeMs: number;
   externalMutationStartedAfterConsume: true;
-  /**
-   * Honest semantics: consume only prevents *new* promotions that re-read state;
-   * it does not revoke in-flight provider operations already past the gate.
-   */
   inFlightOperationMayStillComplete: true;
+};
+
+export type PromotionAuthorizationResult = {
+  consumedAtMs: number;
+  replayStatusOnly: boolean;
+  providerMutationPermitted: boolean;
 };
 
 function deny(reason: PromotionDenyReason, detail?: string): never {
@@ -42,18 +48,28 @@ function deny(reason: PromotionDenyReason, detail?: string): never {
 export class PromotionControl {
   readonly #store: PromotionStore;
   readonly #issuer: ApprovalIssuer;
-  readonly #enforcementEnabled: boolean;
+  readonly #brokerBinding: GrantBinding;
+  readonly #mode: EnforcementMode;
 
   constructor(options: PromotionControlOptions) {
     this.#store = options.store;
     this.#issuer = options.approvalIssuer;
-    this.#enforcementEnabled = options.enforcementEnabled ?? false;
+    this.#brokerBinding = options.brokerBinding;
+    this.#mode = options.enforcementMode ?? 'prepare_only';
+  }
+
+  get enforcementMode(): EnforcementMode {
+    return this.#mode;
+  }
+
+  #assertLivePath(): void {
+    if (!promotionPathAllowed(this.#mode)) {
+      deny('fail_closed_unconfigured', 'prepare_only — promotion paths disabled');
+    }
   }
 
   async assertScopeReadable(scope: PromotionScope): Promise<number> {
-    if (!this.#enforcementEnabled) {
-      deny('fail_closed_unconfigured', 'enforcement disabled (prepare-only)');
-    }
+    this.#assertLivePath();
     const loaded = await this.#store.loadScope(scope);
     if (!loaded.ok) {
       const map: Record<string, PromotionDenyReason> = {
@@ -67,20 +83,19 @@ export class PromotionControl {
   }
 
   async assertNoActiveHold(scope: PromotionScope): Promise<void> {
-    const generation = await this.assertScopeReadable(scope);
+    await this.assertScopeReadable(scope);
     const loaded = await this.#store.loadScope(scope);
     if (!loaded.ok) deny('fail_closed_unreachable');
     if (loaded.record.hold?.active) deny('hold_active');
-    void generation;
   }
 
   async setHold(input: {
     scope: PromotionScope;
-    permanent: boolean;
     reason: string;
     setBySubject: string;
     nowMs: number;
   }): Promise<number> {
+    this.#assertLivePath();
     const result = await this.#store.setHold(input);
     if (!result.ok) deny('fail_closed_unreachable', result.reason);
     await this.#store.appendAudit({
@@ -89,9 +104,9 @@ export class PromotionControl {
       kind: 'hold.set',
       scope: input.scope,
       detail: {
-        permanent: input.permanent,
         reason: input.reason,
         generation: result.generation,
+        indefiniteUntilExplicitRelease: true,
       },
     });
     return result.generation;
@@ -101,36 +116,55 @@ export class PromotionControl {
     scope: PromotionScope;
     clearedBySubject: string;
     nowMs: number;
-    forceClearPermanent?: boolean;
   }): Promise<number> {
+    this.#assertLivePath();
     const result = await this.#store.clearHold(input);
     if (!result.ok) {
-      if (result.reason === 'hold_permanent') deny('hold_permanent');
       if (result.reason === 'unreachable') deny('fail_closed_unreachable');
       deny('fail_closed_malformed', result.reason);
     }
     return result.generation;
   }
 
-  /**
-   * Issue grant only with a verified signed approval — never a raw approval_ref.
-   */
   async issueGrantFromSignedApproval(input: {
     grantId: string;
     signedApprovalToken: string;
     nowMs: number;
     grantTtlMs: number;
   }): Promise<{ issuedAtGeneration: number }> {
-    const verified = verifyApprovalToken(this.#issuer, input.signedApprovalToken, input.nowMs);
+    this.#assertLivePath();
+    const verified = verifyApprovalToken(
+      this.#issuer,
+      input.signedApprovalToken,
+      input.nowMs,
+      { brokerBinding: this.#brokerBinding }
+    );
     if (!verified.ok) {
       if (verified.reason === 'unconfigured') deny('approval_unconfigured');
+      if (verified.reason === 'digest_required') deny('digest_required');
+      if (verified.reason === 'binding_mismatch') deny('binding_mismatch');
+      if (verified.reason === 'generation_mismatch') deny('generation_conflict');
       deny('approval_invalid', verified.reason);
     }
     const { approval } = verified;
+    if (!grantBindingsMatch(approval.binding, this.#brokerBinding)) {
+      deny('binding_mismatch');
+    }
+    if (!artifactMeetsOperationRequirements(approval.scope, approval.artifact)) {
+      deny('digest_required');
+    }
+
+    const scopeState = await this.#store.loadScope(approval.scope);
+    if (!scopeState.ok) deny('fail_closed_malformed', scopeState.reason);
+    if (approval.generation !== scopeState.record.generation) {
+      deny('generation_conflict', 'approval generation stale vs scope');
+    }
+
     const expiresAtMs = Math.min(approval.expiresAtMs, input.nowMs + input.grantTtlMs);
     const result = await this.#store.issueGrant({
       grantId: input.grantId,
       scope: approval.scope,
+      binding: approval.binding,
       artifact: approval.artifact,
       approvalSubject: approval.subject,
       expiresAtMs,
@@ -151,7 +185,6 @@ export class PromotionControl {
     return { issuedAtGeneration: result.issuedAtGeneration };
   }
 
-  /** Workers calling with approval_ref alone — always rejected. */
   async issueGrantFromWorkerApprovalRef(_input: {
     grantId: string;
     approvalRef: string;
@@ -166,12 +199,20 @@ export class PromotionControl {
   async consumeGrant(input: {
     grantId: string;
     scope: PromotionScope;
+    binding: GrantBinding;
     artifact: ArtifactBinding;
     idempotencyKey: string;
     nowMs: number;
-  }) {
+  }): Promise<PromotionAuthorizationResult> {
+    this.#assertLivePath();
+    if (!grantBindingsMatch(input.binding, this.#brokerBinding)) {
+      deny('binding_mismatch');
+    }
     const parsed = parseArtifactBinding(input.artifact);
     if (parsed === 'malformed') deny('fail_closed_malformed', 'artifact');
+    if (!artifactMeetsOperationRequirements(input.scope, parsed)) {
+      deny('digest_required');
+    }
     const result = await this.#store.consumeGrant({
       ...input,
       artifact: parsed,
@@ -179,11 +220,13 @@ export class PromotionControl {
     if (!result.ok) {
       const reasonMap: Record<string, PromotionDenyReason> = {
         hold_active: 'hold_active',
+        hold_blocks_replay: 'hold_blocks_replay',
         expired: 'grant_expired',
         missing: 'grant_missing',
         already_consumed: 'grant_already_consumed',
         stale_generation: 'grant_stale_generation',
         artifact_mismatch: 'artifact_mismatch',
+        binding_mismatch: 'binding_mismatch',
         unreachable: 'fail_closed_unreachable',
         malformed: 'fail_closed_malformed',
         scope_mismatch: 'artifact_mismatch',
@@ -199,36 +242,30 @@ export class PromotionControl {
         detail: {
           grantId: input.grantId,
           idempotencyKey: input.idempotencyKey,
+          providerMutationPermitted: result.providerMutationPermitted,
         },
       });
     }
-    return result;
+    return {
+      consumedAtMs: result.consumedAtMs,
+      replayStatusOnly: result.replay,
+      providerMutationPermitted: result.providerMutationPermitted,
+    };
   }
 
-  /**
-   * Promotion-time gate: re-read hold + optional grant consume in one logical step
-   * before calling AWS/GitHub mutators.
-   */
   async authorizePromotionAttempt(input: {
     scope: PromotionScope;
+    binding: GrantBinding;
     artifact: ArtifactBinding;
     grantId: string;
     idempotencyKey: string;
     nowMs: number;
-  }) {
+  }): Promise<PromotionAuthorizationResult> {
     await this.assertNoActiveHold(input.scope);
     return this.consumeGrant(input);
   }
 
-  evaluateMergeGateStaleCheck(input: {
-    scope: PromotionScope;
-    mergeGroupCheckPassedAtMs: number;
-    nowMs: number;
-  }): Promise<MergeGateObservation> {
-    return this.#evaluateMergeGateStaleCheck(input);
-  }
-
-  async #evaluateMergeGateStaleCheck(input: {
+  async evaluateMergeGateStaleCheck(input: {
     scope: PromotionScope;
     mergeGroupCheckPassedAtMs: number;
     nowMs: number;
@@ -255,6 +292,17 @@ export class PromotionControl {
       externalMutationStartedAfterConsume: true,
       inFlightOperationMayStillComplete: true,
     };
+  }
+
+  /** Holds do not auto-expire when wall clock advances. */
+  async holdStillActiveAfterTimeAdvance(input: {
+    scope: PromotionScope;
+    holdSetAtMs: number;
+    nowMs: number;
+  }): Promise<boolean> {
+    const loaded = await this.#store.loadScope(input.scope);
+    if (!loaded.ok) return false;
+    return loaded.record.hold?.active === true && input.nowMs > input.holdSetAtMs;
   }
 }
 

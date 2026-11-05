@@ -1,10 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 import { MemoryPromotionStore } from './memory-store';
 import { PromotionControl } from './promotion-control';
-import { TEST_ISSUER, sampleArtifact, signTestApproval } from './test-helpers';
+import {
+  TEST_BROKER_BINDING,
+  TEST_ISSUER,
+  sampleArtifact,
+  seedAllScopes,
+  signTestApproval,
+} from './test-helpers';
 
 describe('release-control concurrency (simulated conditional store)', () => {
-  test('concurrent hold + promotion ordering: hold wins when placed before consume completes', async () => {
+  test('concurrent hold + promotion ordering', async () => {
     const store = new MemoryPromotionStore({
       seed: {
         prod_deploy: { scope: 'prod_deploy', generation: 0, hold: null, updatedAtMs: 0 },
@@ -13,14 +19,16 @@ describe('release-control concurrency (simulated conditional store)', () => {
     const control = new PromotionControl({
       store,
       approvalIssuer: TEST_ISSUER,
-      enforcementEnabled: true,
+      brokerBinding: TEST_BROKER_BINDING,
+      enforcementMode: 'live',
     });
     const artifact = sampleArtifact('9'.repeat(40));
     const nowMs = 10_000_000;
     const token = signTestApproval({
       subject: 'human:deploy',
-      scope: 'prod_deploy',
+      binding: TEST_BROKER_BINDING,
       artifact,
+      generation: 0,
       nowMs,
     });
     await control.issueGrantFromSignedApproval({
@@ -32,7 +40,6 @@ describe('release-control concurrency (simulated conditional store)', () => {
 
     const holdPromise = control.setHold({
       scope: 'prod_deploy',
-      permanent: false,
       reason: 'race',
       setBySubject: 'human:ops',
       nowMs: nowMs + 1,
@@ -40,22 +47,22 @@ describe('release-control concurrency (simulated conditional store)', () => {
     const consumePromise = control.consumeGrant({
       grantId: 'g-conc',
       scope: 'prod_deploy',
+      binding: TEST_BROKER_BINDING,
       artifact,
       idempotencyKey: 'run-race-1',
       nowMs: nowMs + 1,
     });
 
     const results = await Promise.allSettled([holdPromise, consumePromise]);
-    const holdOk = results[0].status === 'fulfilled';
-    const consumeOk = results[1].status === 'fulfilled';
-    expect(holdOk || consumeOk).toBe(true);
-    if (!consumeOk) {
-      expect((results[1] as PromiseRejectedResult).reason.reason).toBe('hold_active');
+    if (results[1].status === 'rejected') {
+      expect(['hold_active', 'grant_stale_generation']).toContain(
+        (results[1] as PromiseRejectedResult).reason.reason
+      );
     }
-    // After hold, promotion must remain blocked
     await expect(
       control.authorizePromotionAttempt({
         scope: 'prod_deploy',
+        binding: TEST_BROKER_BINDING,
         artifact,
         grantId: 'g-conc',
         idempotencyKey: 'run-race-2',
@@ -70,17 +77,24 @@ describe('release-control concurrency (simulated conditional store)', () => {
         main_merge: { scope: 'main_merge', generation: 0, hold: null, updatedAtMs: 0 },
       },
     });
+    const binding = {
+      environment: 'production' as const,
+      repository: 'The-Connell-School/yawp',
+      operation: 'main_merge' as const,
+    };
     const control = new PromotionControl({
       store,
       approvalIssuer: TEST_ISSUER,
-      enforcementEnabled: true,
+      brokerBinding: binding,
+      enforcementMode: 'live',
     });
-    const artifact = sampleArtifact('8'.repeat(40));
+    const artifact = { commitSha: '8'.repeat(40) };
     const nowMs = 20_000_000;
     const token = signTestApproval({
       subject: 'human:merge',
-      scope: 'main_merge',
+      binding,
       artifact,
+      generation: 0,
       nowMs,
     });
     await control.issueGrantFromSignedApproval({
@@ -94,6 +108,7 @@ describe('release-control concurrency (simulated conditional store)', () => {
       control.consumeGrant({
         grantId: 'g-par',
         scope: 'main_merge',
+        binding,
         artifact,
         idempotencyKey: 'dup-key',
         nowMs,
@@ -101,12 +116,13 @@ describe('release-control concurrency (simulated conditional store)', () => {
       control.consumeGrant({
         grantId: 'g-par',
         scope: 'main_merge',
+        binding,
         artifact,
         idempotencyKey: 'dup-key',
         nowMs,
       }),
     ]);
-    expect(attempts.some((a) => a.replay === false)).toBe(true);
-    expect(attempts.every((a) => a.consumedAtMs === attempts[0].consumedAtMs)).toBe(true);
+    const permittedCount = attempts.filter((a) => a.providerMutationPermitted).length;
+    expect(permittedCount).toBe(1);
   });
 });

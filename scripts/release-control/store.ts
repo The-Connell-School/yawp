@@ -5,6 +5,7 @@ import type {
   PromotionScope,
   ScopeRecord,
 } from './types';
+import type { GrantBinding } from './grant-binding';
 
 export type ScopeLoadResult =
   | { ok: true; record: ScopeRecord }
@@ -12,24 +13,21 @@ export type ScopeLoadResult =
 
 export type SetHoldInput = {
   scope: PromotionScope;
-  permanent: boolean;
   reason: string;
   setBySubject: string;
   nowMs: number;
-  /** When true, allows clearing a permanent hold (trusted admin only). */
-  forceClearPermanent?: boolean;
 };
 
 export type ClearHoldInput = {
   scope: PromotionScope;
   clearedBySubject: string;
   nowMs: number;
-  forceClearPermanent?: boolean;
 };
 
 export type IssueGrantInput = {
   grantId: string;
   scope: PromotionScope;
+  binding: GrantBinding;
   artifact: ArtifactBinding;
   approvalSubject: string;
   expiresAtMs: number;
@@ -39,6 +37,7 @@ export type IssueGrantInput = {
 export type ConsumeGrantInput = {
   grantId: string;
   scope: PromotionScope;
+  binding: GrantBinding;
   artifact: ArtifactBinding;
   idempotencyKey: string;
   nowMs: number;
@@ -49,8 +48,12 @@ export type ConsumeGrantResult =
       ok: true;
       replay: boolean;
       consumedAtMs: number;
-      /** Scope generation observed at consume — grants must match this. */
       generationAtConsume: number;
+      /**
+       * True only on first successful consume (not replay). Replay returns false
+       * so callers must not invoke provider mutation again.
+       */
+      providerMutationPermitted: boolean;
     }
   | {
       ok: false;
@@ -59,11 +62,13 @@ export type ConsumeGrantResult =
         | 'malformed'
         | 'missing'
         | 'hold_active'
+        | 'hold_blocks_replay'
         | 'expired'
         | 'already_consumed'
         | 'stale_generation'
         | 'artifact_mismatch'
-        | 'scope_mismatch';
+        | 'scope_mismatch'
+        | 'binding_mismatch';
     };
 
 export interface PromotionStore {
@@ -82,7 +87,6 @@ export interface PromotionStore {
         reason:
           | 'unreachable'
           | 'malformed'
-          | 'hold_permanent'
           | 'no_hold'
           | 'generation_conflict';
       }
