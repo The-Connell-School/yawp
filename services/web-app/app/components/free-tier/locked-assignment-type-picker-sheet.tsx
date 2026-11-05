@@ -80,9 +80,7 @@ export function LockedAssignmentTypePickerSheet({
       label: row.label,
       imageId: type.imageId,
       imageTitle: type.imageTitle,
-      included: usage.unlimitedFreeAssignmentTiles
-        ? 'Unlimited'
-        : `${row.total} included`,
+      included: 'Unlimited',
       selected: selectedId === type.id,
       onSelect: () => setSelectedId(type.id),
     })),
