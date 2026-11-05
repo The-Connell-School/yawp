@@ -26,7 +26,10 @@ import {
   ensureLessonPlannerEnabledForDemo,
   ensureLessonPlannerEnabledForPreview,
 } from './local-dev/seed-lesson-planner-feature-flag';
+import { ensureThesisEssayDecksEnabledForPreview } from './local-dev/seed-thesis-essay-decks-feature-flag';
 import { ensureFreeTierEnabledForPreview } from './local-dev/seed-free-tier-feature-flag';
+import { ensureLoungeCommunityEnabledForPreview } from './local-dev/seed-lounge-community-feature-flag';
+import { ensureLoungeLaunchContentForPreview } from './lounge-launch/preview';
 import { ensureDemoFeedbackEnabled } from './local-dev/seed-demo-feedback';
 import {
   seedPreviewTeacherNotesQa,
@@ -53,6 +56,16 @@ try {
   console.log(
     `Lesson Planner feature flags seed: ${JSON.stringify(lessonPlannerFlags)}`
   );
+  const loungeFlag = await ensureLoungeCommunityEnabledForPreview(prisma, databaseName);
+  console.log(`Teacher's Lounge community flag seed: ${JSON.stringify(loungeFlag)}`);
+  try {
+    const loungeLaunch = await ensureLoungeLaunchContentForPreview(prisma, databaseName);
+    console.log(`Faculty Lounge launch content seed: ${JSON.stringify(loungeLaunch)}`);
+  } catch (error) {
+    console.error('Faculty Lounge launch content seed: failed (non-fatal)', error);
+  }
+  const thesisEssayDecksFlag = await ensureThesisEssayDecksEnabledForPreview(prisma, databaseName);
+  console.log(`Thesis-Driven Essay decks flag seed: ${JSON.stringify(thesisEssayDecksFlag)}`);
   const results = await ensurePreviewSeats(prisma, seats);
   const includeFreeClassroomFixture =
     process.env.PREVIEW_SLUG !== 'demo' &&

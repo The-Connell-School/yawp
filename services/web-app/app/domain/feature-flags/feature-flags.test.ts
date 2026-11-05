@@ -5,6 +5,8 @@ import {
   CLASS_CODE_UNIQUE_FLAG,
   DEMO_FEEDBACK_FLAG,
   INTERNAL_RUBRICS_FLAG,
+  LOUNGE_COMMUNITY_FLAG,
+  THESIS_ESSAY_DECKS_FLAG,
   LESSON_PLANNER_FLAG,
   FREE_TIER_FLAG,
   FREE_TIER_FLAG_LEGACY_KEY,
@@ -64,10 +66,30 @@ describe('feature flag registry', () => {
       LESSON_PLANNER_LIBRARY_V2_FLAG,
       UNIFIED_SIGN_ON_FLAG,
       CLASS_CODE_UNIQUE_FLAG,
+      LOUNGE_COMMUNITY_FLAG,
+      THESIS_ESSAY_DECKS_FLAG,
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       TEACHER_PROMPT_GENERATOR_FLAG,
     ]);
+  });
+
+  test('has the Teacher\'s Lounge community flag, stored under its own row', () => {
+    expect(LOUNGE_COMMUNITY_FLAG).toBe('teacher_lounge_community');
+    expect(isFeatureFlagKey(LOUNGE_COMMUNITY_FLAG)).toBe(true);
+    expect(featureFlagSettingName(LOUNGE_COMMUNITY_FLAG)).toBe(
+      'feature_flag.teacher_lounge_community'
+    );
+    expect(FEATURE_FLAGS[LOUNGE_COMMUNITY_FLAG].label).toBe(
+      "Teacher's Lounge community"
+    );
+  });
+
+  test('has the Thesis-Driven Essay decks flag', () => {
+    expect(FEATURE_FLAG_KEYS).toContain(THESIS_ESSAY_DECKS_FLAG);
+    expect(featureFlagSettingName(THESIS_ESSAY_DECKS_FLAG)).toBe(
+      'feature_flag.thesis_essay_decks'
+    );
   });
 
   test('stores free tier under the legacy Setting row name', () => {
