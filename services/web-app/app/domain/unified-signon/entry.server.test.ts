@@ -40,12 +40,14 @@ beforeEach(() => {
   unifiedAction.mockReset();
 });
 
-const actionArgs = (body: URLSearchParams) =>
+const actionArgs = (body: URLSearchParams, request?: Request) =>
   ({
-    request: new Request('http://localhost/auth/login', {
-      method: 'POST',
-      body,
-    }),
+    request:
+      request ??
+      new Request('http://localhost/auth/login', {
+        method: 'POST',
+        body,
+      }),
     params: {},
     context: {},
   }) as Parameters<typeof dispatchUnifiedLogin>[0];
@@ -91,21 +93,22 @@ test('dispatchUnifiedLogin accepts the public HTTPS Origin on production HTTP in
   process.env.PRIMARY_APP_URL = 'https://yawp.school';
   unifiedAction.mockResolvedValue(Response.json({ state: { screen: 'entry' } }));
 
-  const response = (await dispatchUnifiedLogin({
-    request: new Request(
-      'http://abc123.us-east-1.awsapprunner.com/auth/login.data',
-      {
+  const response = (await dispatchUnifiedLogin(
+    actionArgs(
+      new URLSearchParams({
+        intent: 'resolve',
+        identifier: 'test@example.com',
+      }),
+      new Request('http://abc123.us-east-1.awsapprunner.com/auth/login.data', {
         method: 'POST',
         headers: { Origin: 'https://yawp.school' },
         body: new URLSearchParams({
           intent: 'resolve',
           identifier: 'test@example.com',
         }),
-      }
-    ),
-    params: {},
-    context: {},
-  })) as unknown as Response;
+      })
+    )
+  )) as unknown as Response;
 
   expect(response.status).toBe(200);
   expect(unifiedAction).toHaveBeenCalledTimes(1);
@@ -115,18 +118,22 @@ test('dispatchUnifiedLogin rejects a foreign Origin on production HTTP ingress',
   process.env.YAWP_ENVIRONMENT = 'production';
   process.env.PRIMARY_APP_URL = 'https://yawp.school';
 
-  const response = (await dispatchUnifiedLogin({
-    request: new Request('http://yawp.school/auth/login.data', {
-      method: 'POST',
-      headers: { Origin: 'https://evil.example' },
-      body: new URLSearchParams({
+  const response = (await dispatchUnifiedLogin(
+    actionArgs(
+      new URLSearchParams({
         intent: 'resolve',
         identifier: 'test@example.com',
       }),
-    }),
-    params: {},
-    context: {},
-  })) as unknown as Response;
+      new Request('http://yawp.school/auth/login.data', {
+        method: 'POST',
+        headers: { Origin: 'https://evil.example' },
+        body: new URLSearchParams({
+          intent: 'resolve',
+          identifier: 'test@example.com',
+        }),
+      })
+    )
+  )) as unknown as Response;
 
   expect(response.status).toBe(403);
   const json = await response.json();
