@@ -14,6 +14,14 @@ describe('free-tier states catalog', () => {
     ]);
   });
 
+  test('catalog size matches the CI free-tier jump log gate', () => {
+    const count = FREE_TIER_STATE_GROUPS.reduce(
+      (total, group) => total + group.states.length,
+      0
+    );
+    expect(count).toBe(18);
+  });
+
   test('Approved group lists seven designed jumper states', () => {
     const approved = FREE_TIER_STATE_GROUPS.find((g) => g.id === 'approved');
     expect(approved?.states.map((s) => s.id)).toEqual([
