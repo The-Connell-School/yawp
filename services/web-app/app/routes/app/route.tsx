@@ -115,6 +115,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
         guidedTours: null,
         teachingAccess: { variant: 'none' } satisfies TeachingAccessShellState,
+        teacherLoungeNavVisible: false,
       });
   }
   const userId = await requireUserId(request);
@@ -153,6 +154,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         guidedTours: null,
         teachingAccess: { variant: 'none' } satisfies TeachingAccessShellState,
+        teacherLoungeNavVisible: false,
       });
     }
   }
@@ -214,6 +216,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
         organizationId: profile.organization.id,
       })
     : ({ variant: 'none' } satisfies TeachingAccessShellState);
+  const { isTeacherLoungeTemporarilyDisabledForUser } =
+    await import('~/domain/teacher-lounge/teacher-lounge-temporary-disable.server');
+  const userEmail =
+    (
+      await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      })
+    )?.email ?? null;
+  const teacherLoungeNavVisible =
+    profile.role === 'TEACHER' &&
+    !(await isTeacherLoungeTemporarilyDisabledForUser({
+      userId,
+      email: userEmail,
+      orgId: profile.organization.id,
+    }));
   return data({
     mockAdminAvailable,
     freeAccountUsage: await readFreeAccountUsage(
@@ -228,6 +246,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
     guidedTours,
     teachingAccess,
+    teacherLoungeNavVisible,
   });
 }
 
@@ -259,6 +278,10 @@ export default function Route() {
   const shellData = useLoaderData<typeof loader>();
   const { schoolYearScope, guidedTours, mockAdminAvailable, teachingAccess } =
     shellData;
+  const teacherLoungeNavVisible =
+    'teacherLoungeNavVisible' in shellData
+      ? shellData.teacherLoungeNavVisible
+      : false;
   const freeAccountUsage =
     'freeAccountUsage' in shellData ? shellData.freeAccountUsage : null;
   const usageNavLoading =
@@ -434,6 +457,7 @@ export default function Route() {
                 : FLAT_SIDEBAR_SECTIONS
             }
             user={user}
+            teacherLoungeNavVisible={teacherLoungeNavVisible}
             navExpanded={navExpanded}
             pathname={location.pathname}
             isAppNavLinkActive={isAppNavLinkActive}

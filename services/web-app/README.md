@@ -102,6 +102,19 @@ secure environment, then preview:
 bun scripts/demo/create-intern-testers.ts --dry-run
 ```
 
+### Demo database cleanup (PKG-02)
+
+Demo-only script to inventory and remove junk orgs / simulated students while keeping Riley, Sam, Taylor, Brian/Jordan demo teachers, and intern QA accounts. **Never run against production.** Does not use `reset_data`.
+
+```bash
+bun scripts/demo/demo-db-cleanup.ts --inventory --output=../../granola/2026-10-26-brian-walkthrough/PKG-02-inventory.md
+bun scripts/demo/demo-db-cleanup.ts --dry-run
+# After snapshot + review:
+DEMO_CLEANUP_CONFIRMATION='APPLY yawp_demo' bun scripts/demo/demo-db-cleanup.ts --apply
+```
+
+Requires `APP_ENV=demo` or `DEPLOY=demo`, `DATABASE_URL` pointing at a demo host and the `yawp_demo` database, and (for `--apply`) `DEMO_CLEANUP_CONFIRMATION=APPLY yawp_demo`.
+
 Dry-run validates the demo guard, all four `INTERN_PASSWORD_*` variables, and
 the generated Prisma metadata, then prints the planned account emails and
 supported tester markers. It does not open a database connection.

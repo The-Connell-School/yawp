@@ -535,7 +535,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    const gradingIntent = parseAssignmentGradingIntent(formData);
+    const gradingIntent = parseAssignmentGradingIntent(formData, {
+      kind: selectedAssignmentType?.kind ?? null,
+    });
     if (!gradingIntent.success) {
       return dataResponse(
         { success: false, message: gradingIntent.message },

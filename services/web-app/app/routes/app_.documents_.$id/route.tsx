@@ -205,6 +205,7 @@ const assignmentModuleSessionsInclude = {
       assignmentType: {
         select: {
           assignmentModules: {
+            where: { deletedAt: null },
             select: { id: true, position: true },
             orderBy: { position: 'asc' as const },
           },
@@ -469,7 +470,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       moduleSessionsByModuleId.set(session.assignmentModuleId, session);
     }
   }
-  const orderedModuleSessions = Array.from(moduleSessionsByModuleId.values());
+  const orderedModuleSessions = Array.from(
+    moduleSessionsByModuleId.values()
+  ).filter((session) => session.assignmentModule.deletedAt == null);
 
   const { currentCms, currentCmsIdx } = resolveCurrentAssignmentModuleSession(
     orderedModuleSessions,
@@ -809,6 +812,9 @@ export default function Route() {
     onSubmitted: (newSubmission) => {
       setIsFinalizeDialogOpen(false);
       setSubmissionTitle('');
+      if (titleInputRef.current && newSubmission.title.trim()) {
+        titleInputRef.current.value = newSubmission.title;
+      }
       setLocalSubmissions((prev) => [
         {
           ...newSubmission,

@@ -13,6 +13,7 @@ import {
   sanitizeCliFailure,
   sanitizeJsonFailure,
 } from './preserve-demo-tester-feedback-lib.mjs';
+import { logScriptError } from './log-script-error.mjs';
 
 function usage() {
   process.stderr.write(
@@ -290,6 +291,6 @@ try {
     usage();
   }
 } catch (error) {
-  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+  logScriptError(error);
   process.exit(1);
 }

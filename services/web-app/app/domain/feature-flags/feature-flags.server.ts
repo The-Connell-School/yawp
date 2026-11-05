@@ -1,3 +1,4 @@
+import { writeAdminConfigAudit } from '~/domain/admin-config/admin-config-audit.server';
 import { prisma } from '~/utils/db.server';
 import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import {
@@ -11,10 +12,13 @@ import {
   LESSON_PLANNER_TEMPLATES_FLAG,
   LESSON_PLANNER_DECK_GALLERY_FLAG,
   LESSON_PLANNER_UPLOADS_FLAG,
+  LESSON_PLANNER_TEACH_NOTES_FLAG,
+  LESSON_PLANNER_LIBRARY_V2_FLAG,
   LESSON_PLANNER_STACK_PANEL_FLAG,
   FREE_TIER_FLAG,
   LESSON_PLANNER_FLAG,
   UNIFIED_SIGN_ON_FLAG,
+  TEACHER_PROMPT_GENERATOR_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
   type FeatureFlagKey,
@@ -54,32 +58,24 @@ export type FeatureFlagState = {
 const LAST_CHANGED_BY_PREFIX = 'Last changed by ';
 const EVERYONE: FeatureFlagValue = { mode: 'everyone', orgIds: [] };
 
-export function isDemoDeployment(env: Record<string, string | undefined>) {
-  return (
-    env.PREVIEW_SLUG?.trim().toLowerCase() === 'demo' ||
-    env.YAWP_ENVIRONMENT?.trim().toLowerCase() === 'demo'
-  );
-}
-
-export function isPreviewDeployment(env: Record<string, string | undefined>) {
-  return env.YAWP_ENVIRONMENT?.trim().toLowerCase() === 'preview';
-}
-
-/**
- * Demo and PR previews ship with free tier and unified sign-on on without Internal
- * changes. This replaces a separate demo-only route gate (`isDemoFreeTierRouteOpen`);
- * Internal may have surfaced that as a synthetic `demo_free_tier` override — runtime
- * and the management API use `free-tier` persisted/effective only.
- */
-export function isNonProductionDefaultOnDeployment(
-  env: Record<string, string | undefined>
-) {
-  return isDemoDeployment(env) || isPreviewDeployment(env);
-}
+export {
+  isDemoDeployment,
+  isPreviewDeployment,
+  isNonProductionDefaultOnDeployment,
+} from './feature-flags.deployment';
+import {
+  isDemoDeployment,
+  isPreviewDeployment,
+  isNonProductionDefaultOnDeployment,
+} from './feature-flags.deployment';
 
 function runtimeDefaultOn(key: FeatureFlagKey, env: Record<string, string | undefined>) {
   if (!isNonProductionDefaultOnDeployment(env)) return false;
-  return key === FREE_TIER_FLAG || key === UNIFIED_SIGN_ON_FLAG;
+  return (
+    key === FREE_TIER_FLAG ||
+    key === UNIFIED_SIGN_ON_FLAG ||
+    key === TEACHER_PROMPT_GENERATOR_FLAG
+  );
 }
 
 async function readSettingValue(name: string): Promise<string | null | undefined> {
@@ -221,6 +217,22 @@ export async function isFeatureFlagEnabled(
       return false;
     }
   }
+  if (key === TEACHER_PROMPT_GENERATOR_FLAG) {
+    if (isNonProductionDefaultOnDeployment(process.env)) return true;
+    try {
+      const row = await prisma.setting.findUnique({
+        where: { name: featureFlagSettingName(TEACHER_PROMPT_GENERATOR_FLAG) },
+        select: { value: true },
+      });
+      return evaluateFeatureFlag(parseFeatureFlagValue(row?.value), orgId);
+    } catch (error) {
+      console.error('feature_flag_read_failed', {
+        key: TEACHER_PROMPT_GENERATOR_FLAG,
+        error: buildSafeErrorForLog(error),
+      });
+      return false;
+    }
+  }
   try {
     const row = await prisma.setting.findUnique({
       where: { name: featureFlagSettingName(key) },
@@ -252,6 +264,8 @@ export async function getLessonPlannerReviewFlags(
     templates,
     deckGallery,
     uploads,
+    teachNotes,
+    libraryV2,
   ] = await Promise.all([
     isFeatureFlagEnabled(LESSON_PLANNER_INTAKE_V2_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_STACK_V2_FLAG, orgId),
@@ -264,6 +278,8 @@ export async function getLessonPlannerReviewFlags(
     isFeatureFlagEnabled(LESSON_PLANNER_TEMPLATES_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_DECK_GALLERY_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_UPLOADS_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_TEACH_NOTES_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_LIBRARY_V2_FLAG, orgId),
   ]);
   // The panel shows the stack v2 list; without stack v2 it has nothing to show.
   // The run 3 page builds on stack v2, and the rest build on the run 3 page.
@@ -280,6 +296,8 @@ export async function getLessonPlannerReviewFlags(
     templates: templates && v3,
     deckGallery: deckGallery && deckV2,
     uploads,
+    teachNotes: teachNotes && v3,
+    libraryV2: libraryV2 && v3,
   };
 }
 
@@ -303,13 +321,16 @@ export type LessonPlannerReviewFlags = {
   deckGallery: boolean;
   /** The teacher's own documents as source material (Oct 21). */
   uploads: boolean;
+  /** Stack page v2 (Oct 24 handoff, Part 1); needs stack v3. */
+  teachNotes: boolean;
+  /** The library redesign (Oct 24 handoff, Part 2); needs stack v3. */
+  libraryV2: boolean;
 };
 
 /** Yawp! Lesson Planner for teachers at the given school. */
 export async function isLessonPlannerEnabled(
   orgId: string | null | undefined
 ): Promise<boolean> {
-  if (!(await isFreeTierCapabilityEnabled(orgId))) return false;
   return isFeatureFlagEnabled(LESSON_PLANNER_FLAG, orgId);
 }
 
@@ -373,7 +394,12 @@ export async function findUnknownOrganizationIds(
 export async function setFeatureFlag(
   key: FeatureFlagKey,
   next: FeatureFlagValueInput,
-  operatorEmail: string
+  operatorEmail: string,
+  audit: {
+    source?: 'web_admin' | 'internal_api';
+    actorUserId?: string | null;
+    reason?: string | null;
+  } = {}
 ): Promise<{
   flag: FeatureFlagState;
   previous: FeatureFlagValue;
@@ -394,10 +420,22 @@ export async function setFeatureFlag(
     update: { value, valueType: 'json', description, updatedAt: new Date() },
     select: { name: true, value: true, description: true, updatedAt: true },
   });
+  const changed = !sameFeatureFlagValue(previous, normalized);
+  await writeAdminConfigAudit({
+    actorUserId: audit.actorUserId,
+    actorEmail: operatorEmail,
+    source: audit.source ?? 'internal_api',
+    entityType: 'feature_flag',
+    entityKey: key,
+    action: 'set',
+    before: previous,
+    after: normalized,
+    reason: audit.reason,
+  });
   return {
     flag: stateFor(key, row),
     previous,
-    changed: !sameFeatureFlagValue(previous, normalized),
+    changed,
   };
 }
 

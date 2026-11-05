@@ -197,13 +197,6 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const gradingIntent = parseAssignmentGradingIntent(formData);
-  if (gradingIntent && !gradingIntent.success) {
-    return dataResponse(
-      { success: false, message: gradingIntent.message },
-      { status: 400 }
-    );
-  }
   const rubricOverrides = parseAssignmentRubricOverrides(formData);
   if (!rubricOverrides.success) {
     return dataResponse(
@@ -241,6 +234,17 @@ export async function action({ request }: ActionFunctionArgs) {
         success: false,
         message: 'Selected assignment type is not available.',
       },
+      { status: 400 }
+    );
+  }
+
+  const gradingIntent = parseAssignmentGradingIntent(formData, {
+    kind: assignmentType.kind,
+    rubricName: assignmentType.rubric?.name ?? null,
+  });
+  if (!gradingIntent.success) {
+    return dataResponse(
+      { success: false, message: gradingIntent.message },
       { status: 400 }
     );
   }

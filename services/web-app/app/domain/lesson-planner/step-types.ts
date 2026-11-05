@@ -95,10 +95,19 @@ export function stepTypeFor({
   return 'activity';
 }
 
+/** A title that names a Yawp! assignment type (Brian's round 3, 1.3). */
+const ASSIGNMENT_TITLE =
+  /\b(?:class starter|daily pages|exit (?:ticket|slip)s?|thesis|five[- ]paragraph essay|ap (?:essay|writing)|act writing)\b/i;
+const EXIT_TICKET = /\bexit (?:ticket|slip)s?\b/i;
+
 /**
- * A step counts as writing when it is tied to a Yawp! writing assignment: by
- * its kind (class starter, Daily Pages, exit ticket, Thesis Essay module), or
- * because one was created from it. Never set by the teacher.
+ * A step counts as writing only when it is real writing (Brian's round 3,
+ * 1.3): tied to a Yawp! assignment type by its kind, its tag, an assignment
+ * made from it, or a title that names the type (Class Starter, Daily Pages,
+ * Exit Ticket, Thesis-Driven Essay, Five-Paragraph Essay, AP essay practice,
+ * ACT writing practice); a closing that is an exit ticket; or a handout made
+ * for students to fill in. A discussion that mentions writing, or a pair talk
+ * with a handout, is not. Never set by the teacher.
  */
 export function isWritingStep({
   kind,
@@ -110,19 +119,16 @@ export function isWritingStep({
   kind: string;
   yawpAssignmentId?: string | null;
   stepType?: StepType | null;
-  /** A step's own words: students writing on paper is writing too. */
   title?: string;
   content?: string;
 }): boolean {
   if (WRITING_KINDS.has(kind)) return true;
   if (yawpAssignmentId) return true;
-  // A quick write the planner tagged as Daily Pages or a Thesis Essay module
-  // is a Yawp! writing assignment in waiting, and a class starter is writing
-  // wherever it is filed.
   if (stepType === 'daily_pages' || stepType === 'thesis_essay' || stepType === 'class_starter') return true;
-  // Brian's run 4, item 6: an exit ticket or a reflection written on paper
-  // counts as much as one made in Yawp!.
-  return PROSE_WRITING.test(title) || PROSE_WRITING.test(content);
+  // A reading or a background sheet is something students hold, not write on.
+  if (kind === 'handout') return stepType !== 'read_aloud' && stepType !== 'context';
+  if (ASSIGNMENT_TITLE.test(title)) return true;
+  return stepType === 'closing' && EXIT_TICKET.test(content);
 }
 
 /**
@@ -145,16 +151,15 @@ export function writingName({
   if (kind === 'daily-pages' || stepType === 'daily_pages') return 'Daily Pages';
   if (kind === 'thesis-module' || stepType === 'thesis_essay') return 'Thesis Essay';
   if (kind === 'exit-ticket' || /\bexit (?:ticket|slip)/i.test(text)) return 'Exit Ticket';
+  if (/\bfive[- ]paragraph essay/i.test(text)) return 'Five-Paragraph Essay';
+  if (/\bap (?:essay|writing)/i.test(text)) return 'AP Essay Practice';
+  if (/\bact writing/i.test(text)) return 'ACT Writing Practice';
   if (/\bquick[- ]?write/i.test(text)) return 'Quick Write';
   if (/\bfree[- ]?write/i.test(text)) return 'Free Write';
   if (/\bjournal/i.test(text)) return 'Journal';
   if (/\breflection/i.test(text)) return 'Reflection';
   return STEP_TYPE_LABELS[stepType];
 }
-
-/** Students writing, said in a step's words. */
-const PROSE_WRITING =
-  /\b(?:exit (?:ticket|slip)s?|class starter|daily pages|thesis|quick[- ]?writes?|free[- ]?writes?|journal(?:s|ing)?|(?:written|writing a) reflection|reflection (?:writing|paragraph)|students write|write (?:a|one|two|three) (?:sentence|paragraph|line)s?|written answer|(?:one|a)[- ]sentence (?:written )?answer|in (?:their|your) (?:notes|notebooks?)|\d+\s*(?:seconds?|minutes?|min) of writing|write for (?:\d+|one|two|three|four|five|a few) min)/i;
 
 /** The chip's text: the type, and its label when it has one. */
 export function stepChipText(type: StepType, label?: string | null): string {

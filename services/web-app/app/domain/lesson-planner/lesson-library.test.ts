@@ -67,7 +67,22 @@ describe('buildLessonLibrary', () => {
     expect(buildLessonLibrary([lesson()])[0]).toMatchObject({
       sectionCount: 2,
       handoutCount: 1,
+      deckArtSwatch: null,
     });
+  });
+
+  test('reads the deck painting swatch from the stack slides material', () => {
+    const deckBlock = `\`\`\`yawp-slides\n${JSON.stringify({
+      title: 'Weight',
+      art: 'turner-temeraire',
+      slides: [{ layout: 'title', title: 'Weight', speakerNotes: 'Open.', minutes: 1 }],
+    })}\n\`\`\``;
+    const [row] = buildLessonLibrary([
+      lesson({
+        materials: [{ kind: 'slides', audience: 'teacher', content: deckBlock }],
+      }),
+    ]);
+    expect(row!.deckArtSwatch).toBe('/lesson-planner/art/turner-temeraire--swatch.jpg');
   });
 
   test('carries the class and assignment it was planned for', () => {

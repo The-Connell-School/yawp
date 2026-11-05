@@ -185,6 +185,31 @@ describe('computeWeightedBandPercentage', () => {
     ).toBeNull();
   });
 
+  test('does not treat unscored band sentinels as a zero-percent grade', () => {
+    const hornbuckleCategories = [
+      {
+        key: 'thesis_and_purpose',
+        weight: 0.2,
+        bands: [{ min: 1, max: 4, label: 'Band', description: '' }],
+      },
+      {
+        key: 'evidence',
+        weight: 0.2,
+        bands: [{ min: 1, max: 4, label: 'Band', description: '' }],
+      },
+    ];
+
+    expect(
+      computeWeightedBandPercentage(
+        {
+          thesis_and_purpose: { score: 0, comment: '' },
+          evidence: { score: 0, comment: '' },
+        },
+        hornbuckleCategories
+      )
+    ).toBeNull();
+  });
+
   test('normalizes mixed raw-point category ranges before weighting', () => {
     const rawPointCategories = [
       {

@@ -8,10 +8,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { prisma } from '~/utils/db.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { redirectIfTeacherLoungeTemporarilyDisabled } from '~/domain/teacher-lounge/teacher-lounge-temporary-disable.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+  await redirectIfTeacherLoungeTemporarilyDisabled({
+    userId,
+    email: user?.email ?? null,
+    orgId: profile.organization.id,
+  });
 
   if (profile.role !== "TEACHER") {
     throw new Response('Teacher profile required', { status: 403 });

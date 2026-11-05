@@ -4,6 +4,7 @@ import {
   enterPreviewAccess,
   isDemoEnvironment,
   isPreviewAccessGateEnabled,
+  logPreviewLoginSmokeFailure,
   runDevLoginSmoke,
   runLoginSmoke,
   shouldUseDevLogin,
@@ -616,6 +617,28 @@ describe('runDevLoginSmoke', () => {
     expect(seen.app.headers.cookie).toContain('__yawp_preview_access=');
     expect(seen.app.headers.authorization).toBeUndefined();
     expect(seen.app.headers.cookie).toContain('auth_session=preview-dev-ok');
+  });
+});
+
+describe('logPreviewLoginSmokeFailure', () => {
+  test('redacts token-like substrings from deploy failure logs', () => {
+    const lines = [];
+    const original = console.error;
+    console.error = (...args) => {
+      lines.push(args);
+    };
+    try {
+      logPreviewLoginSmokeFailure(
+        new Error('login failed password=super-secret-token')
+      );
+    } finally {
+      console.error = original;
+    }
+
+    const serialized = JSON.stringify(lines);
+    expect(serialized).not.toContain('super-secret-token');
+    expect(serialized).toContain('[redacted-token]');
+    expect(lines[0]?.[0]).toBe('Preview login smoke failed:');
   });
 });
 

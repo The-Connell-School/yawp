@@ -4,7 +4,7 @@ on:
   pull_request:
     branches:
       - main
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
   push:
     branches:
       - main
@@ -26,6 +26,13 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       preview_tooling: ${{ steps.filter.outputs.preview_tooling }}
       prisma: ${{ steps.filter.outputs.prisma }}
+      factory_l0_active: ${{ steps.factory_l0.outputs.active }}
+      # Draft PRs and factory-l0 fast path skip Playwright and other heavy jobs.
+      pr_run_heavy_jobs: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && steps.factory_l0.outputs.active != 'true') }}
+      # Browser E2E runs whenever `code` changed, except on a pull request
+      # whose every changed file is documentation (docs/** or *.md outside
+      # services/web-app/app/**). main pushes always keep `e2e == code`.
+      e2e: ${{ (steps.filter.outputs.code == 'true' && !(github.event_name == 'pull_request' && steps.docs_only.outputs.non_docs == 'false' && steps.docs_only.outputs.app_markdown == 'false')) && 'true' || 'false' }}
     steps:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,6 +66,76 @@ jobs:
               - 'scripts/preview/**'
             prisma:
               - 'packages/prisma/**'
+      # PR-only docs detector. With predicate-quantifier 'every', a file counts
+      # toward `non_docs` only when it matches every pattern, i.e. it is neither
+      # under docs/ nor a .md file. Markdown under services/web-app/app/** is
+      # treated as code because app code could load it at runtime.
+      - name: 📝 Docs-only detector (PR only)
+        id: docs_only
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            non_docs:
+              - '**'
+              - '!docs/**'
+              - '!**/*.md'
+            app_markdown:
+              - 'services/web-app/app/**/*.md'
+      # Factory L0: fail closed if the PR diff leaves copy-only web-app scope (see FACTORY-L0.md).
+      - name: 🏭 Factory L0 scope detector (PR only)
+        id: factory_l0_scope
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
+        with:
+          filters: |
+            factory_l0_scope_violation:
+              - 'packages/**'
+              - 'scripts/**'
+              - '.github/**'
+              - 'bin/**'
+              - 'infra/**'
+              - 'design/**'
+              - 'qa/**'
+              - 'granola/**'
+              - 'state/**'
+              - '!state/SHIP_REVIEW_*.md'
+              - 'Dockerfile*'
+              - 'bun.lock'
+              - 'bun.lockb'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'yarn.lock'
+              - 'package-lock.json'
+              - 'tsconfig*'
+              - 'bunfig.toml'
+              - 'playwright.config.*'
+            prisma_migrations:
+              - 'packages/prisma/migrations/**'
+      - name: 🏭 Factory L0 eligibility
+        id: factory_l0
+        env:
+          HAS_LABEL: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'factory-l0') }}
+          SCOPE_VIOLATION: ${{ steps.factory_l0_scope.outputs.factory_l0_scope_violation == 'true' }}
+          PRISMA_MIGRATIONS: ${{ steps.factory_l0_scope.outputs.prisma_migrations == 'true' }}
+        run: |
+          set -euo pipefail
+          active=false
+          if [ "${HAS_LABEL}" = "true" ] && [ "${SCOPE_VIOLATION}" != "true" ] && [ "${PRISMA_MIGRATIONS}" != "true" ]; then
+            active=true
+          fi
+          echo "active=${active}" >> "$GITHUB_OUTPUT"
+          if [ "${HAS_LABEL}" = "true" ] && [ "${active}" != "true" ]; then
+            if [ "${PRISMA_MIGRATIONS}" = "true" ]; then
+              echo "::warning::factory-l0 label ignored: PR touches packages/prisma/migrations. Full CI runs (fail closed)."
+            else
+              echo "::warning::factory-l0 label ignored: diff outside L0 scope (services/web-app, docs, or markdown only). Full CI runs (fail closed)."
+            fi
+          fi
+          if [ "${active}" = "true" ]; then
+            echo "Factory L0 fast path active — heavy PR CI gates skipped; run PR preview smoke before merge (.github/FACTORY-L0.md)."
+          fi
   # CI names every test file it runs, so a test file that is merely present never executes.
   # scripts/preview/*.test.js sat unrun for exactly that reason. It matters most here:
   # enforce-cap.sh removes trees as root before every deploy, and the ownership case it
@@ -110,8 +187,20 @@ jobs:
           PREVIEW_DATABASE_ROLE_INTEGRATION: '1'
         run: bun test ./scripts/preview/ --timeout 180000
 
+  validate-prisma-migrations-factory-l0:
+    needs: [paths]
+    if: ${{ needs.paths.outputs.factory_l0_active == 'true' }}
+    name: Prisma migrations
+    runs-on: ubuntu-24.04
+    steps:
+      - name: ⏭️ Factory L0 fast path
+        run: |
+          echo "factory-l0: skipping Prisma migration CI gate (see .github/FACTORY-L0.md)."
+          echo "Merge still requires PR preview smoke and model self-check outside Actions."
+
   validate-prisma-migrations:
     needs: [paths]
+    if: ${{ needs.paths.outputs.factory_l0_active != 'true' }}
     name: Prisma migrations
     runs-on: ubuntu-22.04
     services:
@@ -166,7 +255,7 @@ jobs:
 
       - name: 🧪 Validate deployment contract
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts ./scripts/ci/release-docker-host-port.test.ts ./scripts/ci/bun-install-frozen.test.ts ./scripts/preview/deploy-log-secrets.test.js ./scripts/preview/redact-deploy-logs.test.js --max-concurrency=2
+        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts ./scripts/ci/release-docker-host-port.test.ts ./scripts/ci/bun-install-frozen.test.ts ./scripts/ci/install-playwright-chromium.test.ts ./scripts/preview/deploy-log-secrets.test.js ./scripts/ci/check-ci-test-list.test.ts ./scripts/preview/redact-deploy-logs.test.js --max-concurrency=2
 
       - name: 🧪 Validate Blackboard LTI mock
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -343,7 +432,7 @@ jobs:
           ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
           ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
           ./services/web-app/app/utils/mock-admin-environment.test.ts
-          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name 'inapp-usage.server.test.ts' ! -name 'monthly-policy.test.ts' ! -name 'locked-preview.server.test.ts' ! -name 'teaching-access-shell.server.test.ts' ! -name 'email.server.test.ts' ! -name 'demo-signup-admin-email.test.ts' ! -name 'admin-link-gate.server.test.ts' ! -name 'admin-approval-email-facts.test.ts' ! -name 'approval-flow-pass1-send.test.ts' ! -name 'approval-flow.suppress-email.server.test.ts' ! -name 'application-id-opaque-hash-verified.test.ts' ! -name 'admin-token-s9a-actions.test.ts' ! -name 'service.create-token-idempotency.test.ts' ! -name 'posthog-*.test.ts' ! -name 'service.analytics.server.test.ts' ! -name 'public-onboarding.route.test.ts' ! -name 'provision.analytics.server.test.ts' ! -name '*.integration.test.ts')
+          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name 'inapp-usage.server.test.ts' ! -name 'monthly-policy.test.ts' ! -name 'locked-preview.server.test.ts' ! -name 'locked-preview-class-seed.defaults.test.ts' ! -name 'teaching-access-shell.server.test.ts' ! -name 'email.server.test.ts' ! -name 'demo-signup-admin-email.test.ts' ! -name 'admin-link-gate.server.test.ts' ! -name 'admin-approval-email-facts.test.ts' ! -name 'approval-flow-pass1-send.test.ts' ! -name 'approval-flow.suppress-email.server.test.ts' ! -name 'application-id-opaque-hash-verified.test.ts' ! -name 'admin-token-s9a-actions.test.ts' ! -name 'service.create-token-idempotency.test.ts' ! -name 'posthog-*.test.ts' ! -name 'service.analytics.server.test.ts' ! -name 'public-onboarding.route.test.ts' ! -name 'provision.analytics.server.test.ts' ! -name '*.integration.test.ts')
           ./services/web-app/app/routes/app/sidebar-nav.reporter.test.ts
           ./packages/prisma/preview-access-code.free-classroom.test.ts
           ./packages/prisma/scripts/preview-seats.test.ts
@@ -368,6 +457,12 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./services/web-app/app/domain/free-tier/locked-preview.server.test.ts
+
+      - name: Locked preview sample grading defaults (isolated mocks)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/locked-preview-class-seed.defaults.test.ts
 
       - name: Teaching access shell (isolated mocks)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -797,8 +892,20 @@ jobs:
             CI=1 bun test --max-concurrency=2 "$file"
           done
 
+  typecheck-web-app-factory-l0:
+    needs: [paths]
+    if: ${{ needs.paths.outputs.factory_l0_active == 'true' }}
+    name: ʦ TypeScript
+    runs-on: ubuntu-24.04
+    steps:
+      - name: ⏭️ Factory L0 fast path
+        run: |
+          echo "factory-l0: skipping full TypeScript/unit CI gate (see .github/FACTORY-L0.md)."
+          echo "Factory L0 smoke job runs web-app typecheck instead."
+
   typecheck-web-app:
     needs: [paths]
+    if: ${{ needs.paths.outputs.factory_l0_active != 'true' }}
     name: ʦ TypeScript
     runs-on: ubuntu-22.04
     env:
@@ -1068,6 +1175,25 @@ jobs:
             app/domain/brand.test.ts \
             app/domain/lesson-planner/plan-days.test.ts \
             app/domain/lesson-planner/planner-history.test.ts \
+            app/domain/lesson-planner/lesson-return.test.ts \
+            app/domain/lesson-planner/assignment-links.test.ts \
+            app/domain/lesson-planner/one-packet.test.ts \
+            app/domain/lesson-planner/teacher-notes.test.ts \
+            app/domain/lesson-planner/write-teacher-notes.server.test.ts \
+            app/domain/lesson-planner/google-drive.server.test.ts \
+            app/domain/lesson-planner/google-doc.server.test.ts \
+            app/domain/lesson-planner/library-v2.test.ts \
+            app/components/lesson-planner/download-link.test.ts \
+            app/domain/lesson-planner/plain-preview.test.ts \
+            app/domain/lesson-planner/deck-freshness.test.ts \
+            app/domain/lesson-planner/deck-agenda.test.ts \
+            app/domain/lesson-planner/celebration.test.ts \
+            app/domain/lesson-planner/library-course.test.ts \
+            app/domain/lesson-planner/lesson-name.test.ts \
+            app/domain/lesson-planner/extensions.test.ts \
+            app/domain/lesson-planner/before-class.test.ts \
+            app/domain/lesson-planner/lesson-rename.test.ts \
+            app/domain/lesson-planner/handout-docx.server.test.ts \
             app/domain/lesson-planner/lesson-library.test.ts \
             app/domain/lesson-planner/run-show.test.ts \
             app/domain/lesson-planner/slide-deck-gallery.test.ts \
@@ -1086,7 +1212,38 @@ jobs:
             app/domain/lesson-planner/option-groups.test.ts \
             app/domain/lesson-planner/lesson-templates.test.ts \
             app/domain/lesson-planner/yawp-catalog.server.test.ts \
-            app/routes/api.domain.lesson-planner.stack/route.test.ts
+            app/routes/api.domain.lesson-planner.stack/route.test.ts \
+            app/routes/api.domain.lesson-planner.library/route.test.ts \
+            app/domain/lesson-planner/deck-art.test.ts \
+            app/domain/lesson-planner/deck-edit.test.ts \
+            app/domain/lesson-planner/exit-ticket-block-quick.test.ts \
+            app/domain/lesson-planner/exit-ticket-block.test.ts \
+            app/domain/lesson-planner/lesson-ask.test.ts \
+            app/domain/lesson-planner/lesson-links.test.ts \
+            app/domain/lesson-planner/lesson-material.test.ts \
+            app/domain/lesson-planner/lesson-planner-pending-reporter-delegation.server.test.ts \
+            app/domain/lesson-planner/lesson-planner-tools.server.test.ts \
+            app/domain/lesson-planner/lesson-pptx.server.test.ts \
+            app/domain/lesson-planner/lesson-resource.test.ts \
+            app/domain/lesson-planner/lesson-seed.server.test.ts \
+            app/domain/lesson-planner/lesson-unit.server.test.ts \
+            app/domain/lesson-planner/markdown-blocks.test.ts \
+            app/domain/lesson-planner/material-richtext.test.ts \
+            app/domain/lesson-planner/my-lessons.server.test.ts \
+            app/domain/lesson-planner/planning-progress.test.ts \
+            app/domain/lesson-planner/practice-block.test.ts \
+            app/domain/lesson-planner/repair-slide-deck.server.test.ts \
+            app/domain/lesson-planner/slide-deck.test.ts \
+            app/domain/lesson-planner/student-handout.test.ts \
+            app/domain/lesson-planner/unit-plan.test.ts \
+            app/domain/lesson-planner/yawp-catalog.test.ts \
+            app/routes/api.domain.lesson-planner.class-length/route.test.ts \
+            app/routes/app.lesson-planner/lesson-rail.test.ts \
+            app/routes/app.lesson-planner/prompt-tiles.test.ts \
+            app/routes/app.lesson-planner/rotating-placeholder.test.ts \
+            'app/routes/app.lesson-planner_.$conversationId.packet/resource-index.test.ts' \
+            app/domain/feature-flags/lesson-planner-seed-parity.test.ts \
+            app/domain/feature-flags/production-dark-by-default.server.test.ts
           do
             bun test "$f"
           done
@@ -1096,7 +1253,7 @@ jobs:
   # like teacher.lesson-planner.spec.ts do not skew Playwright test-level sharding.
   e2e-smoke:
     needs: [paths]
-    if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    if: ${{ needs.paths.outputs.e2e == 'true' && needs.paths.outputs.pr_run_heavy_jobs == 'true' }}
     name: 🧪 E2E smoke (shard ${{ matrix.shard }})
     runs-on: ubuntu-22.04
     timeout-minutes: 45
@@ -1171,12 +1328,22 @@ jobs:
           PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
         run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
 
+      - name: 🧹 Prune Playwright browsers cache
+        if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' && matrix.shard == 1 }}
+        run: bash ../../scripts/ci/prune-playwright-browser-cache.sh
+
       - name: 💾 Save Playwright browsers cache
         if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' && matrix.shard == 1 }}
+        continue-on-error: true
+        id: playwright-cache-save
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
+
+      - name: Playwright cache save warning
+        if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' && matrix.shard == 1 && steps.playwright-cache-save.outcome == 'failure' }}
+        run: echo "::warning::Playwright browsers cache save failed (often cache service HTTP 400); E2E continues with a fresh install on the next run"
 
       - name: 🧪 Run Playwright tests
         working-directory: services/web-app
@@ -1221,7 +1388,7 @@ jobs:
 
   e2e-locked-preview:
     needs: [paths]
-    if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    if: ${{ needs.paths.outputs.e2e == 'true' && needs.paths.outputs.pr_run_heavy_jobs == 'true' }}
     name: 🧪 Free-tier locked preview browser
     runs-on: ubuntu-22.04
     timeout-minutes: 45
@@ -1333,7 +1500,7 @@ jobs:
 
   e2e-signon:
     needs: [paths]
-    if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    if: ${{ needs.paths.outputs.e2e == 'true' && needs.paths.outputs.pr_run_heavy_jobs == 'true' }}
     name: 🔐 Sign-on browser flows
     runs-on: ubuntu-22.04
     timeout-minutes: 45
@@ -1523,7 +1690,7 @@ jobs:
 
   e2e-browser-checks:
     needs: [paths]
-    if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    if: ${{ needs.paths.outputs.e2e == 'true' && needs.paths.outputs.pr_run_heavy_jobs == 'true' }}
     name: 🧪 Demo feedback + preview access browser checks
     runs-on: ubuntu-22.04
     timeout-minutes: 45
@@ -1787,19 +1954,53 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  factory-l0-smoke:
+    needs: [paths]
+    if: ${{ needs.paths.outputs.factory_l0_active == 'true' }}
+    name: Factory L0 smoke
+    runs-on: ubuntu-22.04
+    env:
+      YAWP_CI_TYPECHECK_NO_DATABASE: '1'
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: ⎔ Setup node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.4
+      - name: 📥 Setup Bun
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
+        with:
+          bun-version: '1.4.4'
+      - name: 💾 Cache bun install
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
+      - name: 📦 Install dependencies
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
+      - name: ⚙️ Generate Prisma Client
+        run: bun prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_factory_l0_smoke
+      - name: 🔎 Type check (L0 smoke)
+        run: bun web-app:typecheck
+
   # Keeps the original check name. Passes when every E2E job passed, or when
-  # they were skipped on purpose (draft PR or no code changes).
+  # they were skipped on purpose (draft PR, factory-l0 fast path, or no code changes).
   e2e-web-app:
-    needs: [paths, e2e-smoke, e2e-signon, e2e-browser-checks]
+    needs: [paths, e2e-smoke, e2e-signon, e2e-browser-checks, e2e-locked-preview]
     if: ${{ always() }}
     name: 🧪 E2E Tests (Playwright)
     runs-on: ubuntu-24.04
     steps:
       - name: ✅ Check E2E results
         env:
-          RESULTS: ${{ needs.paths.result }} ${{ needs.e2e-smoke.result }} ${{ needs.e2e-signon.result }} ${{ needs.e2e-browser-checks.result }}
+          RESULTS: ${{ needs.paths.result }} ${{ needs.e2e-smoke.result }} ${{ needs.e2e-signon.result }} ${{ needs.e2e-browser-checks.result }} ${{ needs.e2e-locked-preview.result }}
         run: |
-          echo "paths, smoke, sign-on, browser checks: $RESULTS"
+          echo "paths, smoke, sign-on, browser checks, locked preview: $RESULTS"
           for r in $RESULTS; do
             case "$r" in
               success|skipped) ;;

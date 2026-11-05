@@ -13,8 +13,12 @@ export async function classCodeUniquenessEnabled(client: Pick<CodeClient, 'setti
   return parseFeatureFlagValue(row?.value).mode === 'everyone';
 }
 
+import { CLASS_CODE_COLLISION_MESSAGE } from '~/utils/class-code-messages';
+
 export class ClassCodeCollisionError extends Error {
-  constructor() { super('Class code already in use. Choose a different code.'); }
+  constructor() {
+    super(CLASS_CODE_COLLISION_MESSAGE);
+  }
 }
 
 /**

@@ -4,22 +4,15 @@
  * steps, in stack order; `inline=1` opens it to print rather than download.
  */
 import type { LoaderFunctionArgs } from 'react-router';
-import { loadStepHandouts } from '~/domain/lesson-planner/load-step-handouts.server';
+import { loadHandoutParts } from '~/domain/lesson-planner/load-step-handouts.server';
 import { pdfFilename, renderStepHandoutPdf } from '~/domain/lesson-planner/lesson-pdf.server';
 
-const MAX_IDS = 200;
-
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  const handouts = await loadStepHandouts({ request, conversationId: params.conversationId });
   const url = new URL(request.url);
-  const asked = url.searchParams.get('ids');
-  const wanted = asked
-    ? new Set(asked.split(',').map((id) => id.trim()).filter(Boolean).slice(0, MAX_IDS))
-    : null;
-  const parts = handouts.steps
-    .filter((step) => (wanted ? wanted.has(step.id) : step.included) && step.content)
-    .map((step) => ({ id: step.id, title: step.title, content: step.content!, lines: step.lines }));
-  if (wanted && wanted.size === 1 && !parts.length) throw new Response('Not Found', { status: 404 });
+  const { handouts, parts, wantedOne } = await loadHandoutParts({ request, conversationId: params.conversationId });
+  if (wantedOne && !parts.length) throw new Response('Not Found', { status: 404 });
+  // Nothing to print is said, not saved as an empty PDF (Kevin, Oct 25, note 11).
+  if (!parts.length) return nothingToPrint();
 
   const pdf = await renderStepHandoutPdf({
     title: handouts.title,
@@ -36,5 +29,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       'Content-Length': String(pdf.byteLength),
       'Cache-Control': 'private, no-store',
     },
+  });
+}
+
+function nothingToPrint() {
+  return new Response('Pick the steps that go in the handout first.', {
+    status: 409,
+    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
   });
 }

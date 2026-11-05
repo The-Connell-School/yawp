@@ -13,8 +13,47 @@ const detachedSh = readFileSync(
   new URL('./run-host-deploy-detached.sh', import.meta.url),
   'utf8'
 );
+const smokeLoginMjs = readFileSync(
+  new URL('./smoke-login.mjs', import.meta.url),
+  'utf8'
+);
+const certificateManagerMjs = readFileSync(
+  new URL('./certificate-manager.mjs', import.meta.url),
+  'utf8'
+);
+const preserveDemoTesterFeedbackMjs = readFileSync(
+  new URL('./preserve-demo-tester-feedback.mjs', import.meta.url),
+  'utf8'
+);
 
 describe('preview deploy logs must not emit access secrets', () => {
+  test('smoke-login CLI uses safe error logging instead of raw error.message', () => {
+    expect(smokeLoginMjs).toContain('logPreviewLoginSmokeFailure');
+    expect(smokeLoginMjs).toContain("from './log-script-error.mjs'");
+    expect(smokeLoginMjs).not.toMatch(
+      /Preview login smoke failed: \$\{error\.message/
+    );
+  });
+
+  test('certificate-manager CLI logs maintenance failures through buildSafeErrorForLog', () => {
+    expect(certificateManagerMjs).toContain("from './log-script-error.mjs'");
+    expect(certificateManagerMjs).toContain('buildSafeErrorForLog(failure.error)');
+    expect(certificateManagerMjs).not.toMatch(
+      /\$\{failure\.error\.message\}/
+    );
+    expect(certificateManagerMjs).not.toMatch(
+      /remove ACME DNS challenge \$\{recordName\}: \$\{error\.message\}/
+    );
+  });
+
+  test('preserve-demo-tester-feedback CLI uses logScriptError on failure', () => {
+    expect(preserveDemoTesterFeedbackMjs).toContain("from './log-script-error.mjs'");
+    expect(preserveDemoTesterFeedbackMjs).toContain('logScriptError(error)');
+    expect(preserveDemoTesterFeedbackMjs).not.toMatch(
+      /error instanceof Error \? error\.message : String\(error\)/
+    );
+  });
+
   test('deploy.sh success output references seat file paths, not code values', () => {
     expect(deploySh).toContain('PREVIEW_ACCESS_SEATS_FILE=$ACCESS_SEATS_FILE');
     expect(deploySh).not.toMatch(/echo\s+"PREVIEW_ACCESS_CODE=\$/);

@@ -658,4 +658,16 @@ describe('parseSlideDeck — forgiving about how the model writes it', () => {
     );
     expect(parsed?.deck.slides[0]!.minutes).toBe(5);
   });
+
+  test('drops art ids that are not in the shipped deck-art registry', () => {
+    const json = JSON.stringify({
+      title: 'Deck',
+      art: 'klee-castle-sun',
+      slides: [{ layout: 'title', title: 'Day', speakerNotes: 'Open.', minutes: 1 }],
+    });
+    const validated = validateSlideDeck(json);
+    expect(validated.ok).toBe(true);
+    if (!validated.ok) throw new Error('expected valid deck');
+    expect(validated.deck.art).toBeUndefined();
+  });
 });

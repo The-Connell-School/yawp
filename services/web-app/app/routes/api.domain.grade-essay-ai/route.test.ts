@@ -355,7 +355,7 @@ describe('api.domain.grade-essay-ai', () => {
       assignmentTypeRubricSource: 'thesis-default',
       assignmentTypeGradingVersion: 1,
       assignmentTypeGradingLabel: 'Thesis-driven essay grading assistant',
-      gradingAssistantStrictnessLevel: 'intermediate',
+      gradingAssistantStrictnessLevel: 'beginner',
       assignmentTypeId: 'assignment-type-legacy',
       assignmentTypeKind: null,
       rubricCategoryKeys: rubricKeys,
@@ -382,7 +382,7 @@ describe('api.domain.grade-essay-ai', () => {
       metadata: {
         assignmentTypeGradingLabel: 'Thesis-driven essay grading assistant',
         assignmentTypeRubricSource: 'thesis-default',
-        gradingAssistantStrictnessLevel: 'intermediate',
+        gradingAssistantStrictnessLevel: 'beginner',
         rubricCategoryKeys: rubricKeys,
         documentContext: {
           documentSource: 'submission-snapshot',
@@ -567,6 +567,13 @@ describe('api.domain.grade-essay-ai', () => {
         letterGrade: 'C',
         score: '79% (C)',
         grammarIssues: { version: 1, issues: [] },
+        document: {
+          ...mockSubmission().document,
+          assignment: {
+            id: 'assignment-daily-habit-unchanged',
+            gradingAssistantStrictnessLevel: 'intermediate',
+          },
+        },
       })
     );
 
@@ -1350,9 +1357,9 @@ describe('api.domain.grade-essay-ai', () => {
     } as any);
     const payload = (response as { data: Record<string, unknown> }).data;
 
-    expect(payload.numericPercentage).toBe(77);
-    expect(payload.letterGrade).toBe('C');
-    expect(payload.score).toBe('77% (C)');
+    expect(payload.numericPercentage).toBe(82);
+    expect(payload.letterGrade).toBe('B');
+    expect(payload.score).toBe('82% (B)');
   });
 
   test('grades AP History DBQ submissions with AP rubric points and skips grammar pass', async () => {
@@ -2461,9 +2468,9 @@ describe('api.domain.grade-essay-ai', () => {
     } as any);
 
     const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
-    expect(stored.numericPercentage).toBe(86);
+    expect(stored.numericPercentage).toBe(91);
     expect(stored.overallScore).toBe(86);
-    expect(stored.score).toBe('86% (B)');
+    expect(stored.score).toBe('91% (A)');
     expect(stored.rubricScores.introduction.score).toBe(5);
     expect(stored.rubricScores.country_1.score).toBe(18);
   });
@@ -2521,10 +2528,10 @@ describe('api.domain.grade-essay-ai', () => {
     } as any);
 
     const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
-    // Weighted percent: (16/20*50 + 18/20*50) = 85 -> rounds to 85
-    expect(stored.numericPercentage).toBe(85);
-    expect(stored.letterGrade).toBe('B');
-    expect(stored.score).toBe('85% (B)');
+    // Weighted percent: (16/20*50 + 18/20*50) = 85, plus beginner +5% -> 90
+    expect(stored.numericPercentage).toBe(90);
+    expect(stored.letterGrade).toBe('A');
+    expect(stored.score).toBe('90% (A)');
     // No holistic meta should be recorded.
     expect(stored.aiMeta.holistic).toBeUndefined();
     expect(stored.aiMeta.scoringMode).toBe('weighted_categories');
@@ -3149,6 +3156,78 @@ describe('api.domain.grade-essay-ai', () => {
       });
       const repairCall = getLLMCompletion.mock.calls[1][0];
       expect(repairCall.metadata.kind).toBe('rubric-schema-repair');
+    });
+
+    test('infers holistic points from Cristo Rey band scores when overallTier is omitted', async () => {
+      const cristoRey = await import(
+        '~/domain/rubrics/library/cristo-rey-hornbuckle-five-paragraph-essay.json'
+      ).then((module) => module.default ?? module);
+
+      prisma.assignmentType.findUnique.mockResolvedValue(
+        mockAssignmentType({
+          id: 'assignment-type-hornbuckle',
+          title: 'In-class Essay/Analysis (Cristo Rey)',
+          scoringScaleJson: cristoRey.scoringScale,
+          rubricJson: cristoRey.rubric,
+          gradingPromptConfigJson: cristoRey.promptConfig,
+          gradingOutputSchemaJson: {
+            ...cristoRey.outputSchema,
+            scoringMode: 'holistic_tier',
+          },
+        })
+      );
+      prisma.submission.findFirst.mockResolvedValue(
+        mockHolisticAssignment({
+          document: {
+            ...mockHolisticAssignment().document,
+            assignmentTypeId: 'assignment-type-hornbuckle',
+            assignmentType: {
+              id: 'assignment-type-hornbuckle',
+              kind: null,
+              title: 'In-class Essay/Analysis (Cristo Rey)',
+            },
+          },
+        })
+      );
+
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: {
+              thesis_and_purpose: { score: 'Proficient', comment: 'Clear thesis.' },
+              evidence: { score: 3, comment: 'Two quotes.' },
+              reasoning_or_analysis: { score: 3, comment: 'Explains links.' },
+              organization: { score: 3, comment: 'Logical order.' },
+              style_and_conventions: { score: 3, comment: 'Clean surface.' },
+              assignment_requirements: { score: 3, comment: 'Meets length.' },
+            },
+            overallComment:
+              'Jordan, your thesis and evidence work together clearly.',
+          })
+        )
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+      const form = new FormData();
+      form.append('submissionId', 'sub-holistic');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+
+      const payload = (response as { data: Record<string, unknown> }).data;
+      expect(payload.success).toBe(true);
+      expect(payload.score).toMatch(/^\d+\/20$/);
+      expect(getLLMCompletion.mock.calls.filter(
+        (call: any[]) => call[0]?.metadata?.retry === 'holistic-retry'
+      )).toHaveLength(0);
+      const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(stored.aiMeta.holistic).toMatchObject({
+        tier: 'needs_more',
+        totalPoints: 20,
+      });
     });
 
     test('retries once on invalid holistic fields then falls back to weighted with meta', async () => {

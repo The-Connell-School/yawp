@@ -13,14 +13,28 @@ export function isDevPanelBuildEnabled(
   );
 }
 
+/** Deployed PR preview (compose sets PREVIEW_SLUG=pr-N; excludes preview-gate E2E slug). */
+function isPrPreviewProductionHost(env: NodeJS.ProcessEnv) {
+  if (String(env.YAWP_ENVIRONMENT ?? '').trim().toLowerCase() !== 'preview') {
+    return false;
+  }
+  const slug = String(env.PREVIEW_SLUG ?? '').trim();
+  if (slug === 'pr-e2e-gate') return false;
+  if (Boolean(String(env.PR_NUMBER ?? '').trim())) return true;
+  return /^pr-\d+$/i.test(slug);
+}
+
 /** Runtime gate for HTTP handlers and root loader data. */
 export function isDevPanelRuntimeEnabled(
   env: NodeJS.ProcessEnv = process.env
 ): boolean {
-  if (!isDevPanelBuildEnabled(env)) return false;
+  if (!isDevPanelBuildEnabled(env) && !isPrPreviewProductionHost(env)) {
+    return false;
+  }
   const yawp = String(env.YAWP_ENVIRONMENT ?? '').trim().toLowerCase();
   if (yawp === 'demo' || isDevPanelDemoHost(env)) return true;
-  // PR preview hosts keep the legacy environment beaker and dev-login menu.
+  if (isPrPreviewProductionHost(env)) return true;
+  // Local preview-gate E2E keeps the legacy environment beaker (see runtime tests).
   if (yawp === 'preview') return false;
   return isLocalDevPanelEnvironment(env);
 }

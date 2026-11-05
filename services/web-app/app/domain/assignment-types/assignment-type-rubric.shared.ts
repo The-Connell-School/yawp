@@ -129,14 +129,17 @@ export function prepareRubricForSave(rubric: RubricData): RubricData {
 
 export function parseScoringScale(raw: unknown): ScoringScaleData {
   const d = raw as Partial<ScoringScaleData> | null;
-  return {
+  const scale: ScoringScaleData = {
     type: d?.type ?? 'weighted_1_5',
     minScore: d?.minScore ?? 1,
     maxScore: d?.maxScore ?? 5,
-    step: normalizeScoreStep(d?.step),
     compositeMin: d?.compositeMin,
     compositeMax: d?.compositeMax,
   };
+  if (d?.step !== undefined && d?.step !== null) {
+    scale.step = normalizeScoreStep(d.step);
+  }
+  return scale;
 }
 
 export function parseRubric(raw: unknown): RubricData {

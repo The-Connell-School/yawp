@@ -8,6 +8,7 @@ import { type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
 import { safeRedirect } from 'remix-utils/safe-redirect';
 import {
   PREVIEW_ACCESS_PATH,
+  clearDevPanelUnlockCookie,
   clearPreviewAccessCookie,
   clearPreviewMasterSelectionCookie,
   findPreviewAccessCredentialByCode,
@@ -43,6 +44,7 @@ type PreviewAccessRouteDependencies = {
   clearMasterSelection?: () => Promise<string>;
   grantAccess?: (seat: PreviewAccessSeat) => Promise<string>;
   clearAccess?: () => Promise<string>;
+  clearDevPanelUnlock?: () => Promise<string>;
   findOrganization?: (id: string) => Promise<PreviewOrganization | null>;
   listOrganizations?: () => Promise<PreviewOrganization[]>;
   checkAttemptAllowed?: (request: Request) => {
@@ -118,6 +120,8 @@ export function createPreviewAccessAction(
     dependencies.clearMasterSelection ?? clearPreviewMasterSelectionCookie;
   const grantAccess = dependencies.grantAccess ?? grantPreviewAccessCookie;
   const clearAccess = dependencies.clearAccess ?? clearPreviewAccessCookie;
+  const clearDevPanelUnlock =
+    dependencies.clearDevPanelUnlock ?? clearDevPanelUnlockCookie;
   const findOrganization =
     dependencies.findOrganization ?? databaseFindOrganization;
   const checkAttemptAllowed =
@@ -146,6 +150,7 @@ export function createPreviewAccessAction(
           headers: cookieHeaders(
             await clearPreviewSignonQaContext(),
             await clearAccess(),
+            await clearDevPanelUnlock(),
             await clearMasterSelection()
           ),
         }
@@ -245,6 +250,7 @@ export function createPreviewAccessAction(
         {
           headers: cookieHeaders(
             await clearPreviewSignonQaContext(),
+            await clearDevPanelUnlock(),
             await grantAccess({
               organizationId: organization.id,
               label: organization.name,
@@ -289,7 +295,8 @@ export function createPreviewAccessAction(
           headers: cookieHeaders(
             await clearPreviewSignonQaContext(),
             await grantMasterSelection(),
-            await clearAccess()
+            await clearAccess(),
+            await clearDevPanelUnlock()
           ),
         }
       );
@@ -302,6 +309,7 @@ export function createPreviewAccessAction(
       {
         headers: cookieHeaders(
           await clearPreviewSignonQaContext(),
+          await clearDevPanelUnlock(),
           await grantAccess(credential.seat),
           await clearMasterSelection()
         ),

@@ -8,7 +8,7 @@
  * is credited.
  */
 import type { CSSProperties, ReactNode } from 'react';
-import { deckArt, type DeckArt } from '~/domain/lesson-planner/deck-art';
+import { resolveDeckArt, type DeckArt } from '~/domain/lesson-planner/deck-art';
 import { splitColorMarks } from '~/domain/lesson-planner/deck-colors';
 import {
   GALLERY_COLORS as C,
@@ -72,7 +72,7 @@ export function GallerySlideCanvas({ deck, index }: { deck: SlideDeck; index: nu
   if (!plan) return null;
   const colors = galleryColors(deck);
   const tone = toneFor(plan);
-  const art = deckArt(deck.art);
+  const art = resolveDeckArt(deck.art);
   return (
     <div
       className="@container relative h-full w-full overflow-hidden"

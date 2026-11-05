@@ -163,11 +163,13 @@ export function capabilities() {
       dev: "./bin/project dev start --json",
       fixture: "./bin/project fixture apply local-dev --json",
       test: "./bin/project test --profile changed --json",
+      verify: "./bin/project verify --profile prepush --json",
       qa: "./bin/project qa prepare --json",
     },
     fixtures: ["local-dev"],
     proofProfiles: ["signon-teacher-prompts-unit", "signon-teacher-prompts-browser", "free-tier-approval-migration", "free-tier-approval-unit", "free-tier-approval-browser", "demo-feedback-unit", "demo-feedback-browser", "signon-classcode", "classcode-unit", "classcode-db", "classcode-browser", "classcode-enter-code", "classcode-report", "unified-signon-preview-fixtures", "unified-signon-preview-otp", "free-tier-monthly-unit", "free-tier-monthly-db", "free-tier-monthly-browser", "free-tier-inapp-unit", "free-tier-inapp-browser", "internal-preview-auth", "internal-grade-declines", "internal-grade-declines-integration", "internal-free-tier-limits", "internal-free-tier-limits-integration", "internal-class-code-duplicates", "internal-class-code-duplicates-integration", "internal-approvals", "internal-approvals-integration", "internal-scenario-browser", "internal-scenario-container", "internal-scenario-integration", "internal-fresh-migrations", "internal-content-pair", "internal-rubrics-http", "internal-rubrics-integration", "internal-content-validation", "internal-qa-http", "internal-qa-integration", "internal-audit", "internal-impersonation-browser", "internal-impersonation-http", "internal-impersonation-writes", "internal-impersonation", "internal-impersonation-integration", "internal-management", "internal-teacher-trainings", "internal-teacher-trainings-integration", "internal-assignment-type-writes", "internal-assignment-type-writes-integration", "internal-directory-integration", "project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "assignment-create", "grading-queue", "grading-queue-unit", "grading-points", "grading-points-unit", "assignment-rubric-unit", "assignment-prompt-unit", "teacher-paste-unit", "teacher-paste-browser", "private-notes-unit", "private-notes-browser", "daily-pages-scaling-unit", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
     nextCommands: [
+      "./bin/project verify --profile prepush --json",
       "./bin/project doctor --json",
       "./bin/project fixture verify local-dev --json",
       "./bin/project dev start --json",
@@ -349,6 +351,33 @@ function devStop() {
   return { ...status, status: "stopped" };
 }
 
+const PROJECT_CLI_PATHS = new Set([
+  "bin/project",
+  "scripts/project-agent.mjs",
+  "scripts/project-agent.test.js",
+  "scripts/worktree-local-setup.sh",
+  "package.json",
+]);
+
+function isDocsPath(entry) {
+  return entry.endsWith(".md") || entry.startsWith("docs/");
+}
+
+function touchesPrismaClientInputs(paths) {
+  return paths.some((entry) => entry.startsWith("packages/prisma/schema.prisma") || entry.startsWith("packages/prisma/migrations/"));
+}
+
+export function prepushStepPlan(paths) {
+  if (!paths.length) return { kind: "none", steps: [] };
+  if (paths.every(isDocsPath)) return { kind: "docs", steps: ["diff-check"] };
+  if (paths.every((entry) => PROJECT_CLI_PATHS.has(entry))) return { kind: "project-cli", steps: ["project-cli"] };
+  const steps = [];
+  if (touchesPrismaClientInputs(paths)) steps.push("prisma-generate");
+  steps.push("typecheck");
+  if (paths.some((entry) => PROJECT_CLI_PATHS.has(entry))) steps.push("project-cli");
+  return { kind: "code", steps };
+}
+
 function changedPaths() {
   const base = process.env.RECORD_PROOF_BASE_SHA || process.env.RECORD_BASE_SHA || "origin/main";
   const commands = [
@@ -365,6 +394,92 @@ function changedPaths() {
   return unique(paths).sort();
 }
 
+const PREPUSH_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:5432/yop_typecheck";
+
+function withTypecheckHeap(env) {
+  const heapFlag = "--max-old-space-size=4096";
+  if (!env.NODE_OPTIONS) return { ...env, NODE_OPTIONS: heapFlag };
+  if (env.NODE_OPTIONS.includes("max-old-space-size")) return env;
+  return { ...env, NODE_OPTIONS: `${env.NODE_OPTIONS} ${heapFlag}`.trim() };
+}
+
+function runPrepushStep(step, { selected, json, results }) {
+  const executeBun = (args, timeout = 15 * 60 * 1000) => execute(selected.bun, args, { json, env: selected.env, timeout });
+  const started = Date.now();
+  if (step === "diff-check") {
+    const base = process.env.RECORD_PROOF_BASE_SHA ? `${process.env.RECORD_PROOF_BASE_SHA}..HEAD` : "HEAD";
+    results.push({ id: step, ...execute("git", ["diff", "--check", base], { json, env: selected.env, timeout: 30000 }), durationMs: Date.now() - started });
+    return;
+  }
+  if (step === "project-cli") {
+    results.push({
+      id: step,
+      ...executeBun(
+        [
+          "test",
+          "--max-concurrency=2",
+          "./scripts/project-agent.test.js",
+          "--test-name-pattern",
+          "prepush verify plan|advertises stable commands|extensionless bin entrypoint|rejects unknown flags|command families expose help",
+        ],
+        120000,
+      ),
+      durationMs: Date.now() - started,
+    });
+    return;
+  }
+  if (step === "prisma-generate") {
+    results.push({
+      id: step,
+      ...execute(selected.bun, ["prisma", "generate"], {
+        json,
+        env: { ...selected.env, DATABASE_URL: PREPUSH_DATABASE_URL },
+        timeout: 120000,
+      }),
+      durationMs: Date.now() - started,
+    });
+    return;
+  }
+  if (step === "typecheck") {
+    results.push({
+      id: step,
+      ...execute(selected.bun, ["run", "web-app:typecheck"], {
+        json,
+        env: withTypecheckHeap(selected.env),
+        timeout: 120000,
+      }),
+      durationMs: Date.now() - started,
+    });
+    return;
+  }
+  throw Object.assign(new Error(`unknown prepush step: ${step}`), { code: "unknown_prepush_step" });
+}
+
+function runVerifyProfile(profile, { json }) {
+  if (profile !== "prepush") throw Object.assign(new Error(`unknown verify profile: ${profile}`), { code: "unknown_profile" });
+  const selected = runtime();
+  if (!selected.bun) throw Object.assign(new Error("Bun not found"), { code: "project_command_failed" });
+  const started = Date.now();
+  const paths = changedPaths();
+  const plan = prepushStepPlan(paths);
+  const results = [];
+  for (const step of plan.steps) runPrepushStep(step, { selected, json, results });
+  return {
+    schemaVersion: "project.verify/v1",
+    status: "passed",
+    requestedProfile: profile,
+    selectedPlan: plan.kind,
+    changedPaths: paths,
+    durationMs: Date.now() - started,
+    steps: results.map((result) => ({
+      id: result.id,
+      exitCode: result.exitCode,
+      durationMs: result.durationMs,
+      transcriptTail: json ? bounded(`${result.stdout || ""}\n${result.stderr || ""}`).slice(-4096) : undefined,
+    })),
+  };
+}
+
 function runTestProfile(profile, { json }) {
   const selected = runtime();
   const executeBun = (args, timeout = 15 * 60 * 1000) => execute(selected.bun, args, { json, env: selected.env, timeout });
@@ -378,7 +493,7 @@ function runTestProfile(profile, { json }) {
   if (profile === "changed") {
     paths = changedPaths();
     if (paths.length && paths.every((entry) => entry.endsWith(".md") || entry.startsWith("docs/"))) chosen = "docs";
-    else if (paths.length && paths.every((entry) => ["bin/project", "scripts/project-agent.mjs", "scripts/project-agent.test.js", "scripts/worktree-local-setup.sh", "package.json"].includes(entry))) chosen = "project-cli";
+    else if (paths.length && paths.every((entry) => PROJECT_CLI_PATHS.has(entry))) chosen = "project-cli";
     else chosen = "backend";
   }
   if (chosen === "docs") {
@@ -976,11 +1091,12 @@ async function qaPrepare({ json, routes }) {
 
 function help(topic = "root") {
   const pages = {
-    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project internal-integration-config INPUT_JSON --json\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <demo-feedback-unit|demo-feedback-browser|signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-approval-migration|free-tier-approval-unit|free-tier-approval-browser|free-tier-monthly-unit|free-tier-monthly-db|free-tier-monthly-browser|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-grade-declines|internal-grade-declines-integration|internal-free-tier-limits|internal-free-tier-limits-integration|internal-class-code-duplicates|internal-class-code-duplicates-integration|internal-approvals|internal-approvals-integration|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-teacher-trainings|internal-teacher-trainings-integration|internal-assignment-type-writes|internal-assignment-type-writes-integration|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
+    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project internal-integration-config INPUT_JSON --json\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project verify --profile prepush [--json]\n  ./bin/project test --profile <demo-feedback-unit|demo-feedback-browser|signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-approval-migration|free-tier-approval-unit|free-tier-approval-browser|free-tier-monthly-unit|free-tier-monthly-db|free-tier-monthly-browser|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-grade-declines|internal-grade-declines-integration|internal-free-tier-limits|internal-free-tier-limits-integration|internal-class-code-duplicates|internal-class-code-duplicates-integration|internal-approvals|internal-approvals-integration|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-teacher-trainings|internal-teacher-trainings-integration|internal-assignment-type-writes|internal-assignment-type-writes-integration|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
     fixture: "Usage: ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n",
     dev: "Usage: ./bin/project dev <start|status|stop> [--json]\n",
     test: "Usage: ./bin/project test --profile <demo-feedback-unit|demo-feedback-browser|signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-approval-migration|free-tier-approval-unit|free-tier-approval-browser|free-tier-monthly-unit|free-tier-monthly-db|free-tier-monthly-browser|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-grade-declines|internal-grade-declines-integration|internal-free-tier-limits|internal-free-tier-limits-integration|internal-class-code-duplicates|internal-class-code-duplicates-integration|internal-approvals|internal-approvals-integration|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-teacher-trainings|internal-teacher-trainings-integration|internal-assignment-type-writes|internal-assignment-type-writes-integration|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
+    verify: "Usage: ./bin/project verify --profile prepush [--json]\n\nFast local gate before git push: Prisma client generation when schema/migrations changed, the same web-app typecheck CI runs in the ʦ TypeScript job, and focused project-agent contract tests when agent CLI files changed. Use ./bin/project test --profile project-cli for the full CLI suite.\n",
   };
   const classStepHelp = "\nAdditional test profiles: free-tier-locked-preview-unit|free-tier-locked-preview-db|free-tier-locked-preview-browser|free-tier-class-step-unit|free-tier-class-step-browser|free-tier-welcome-unit|free-tier-welcome-browser|free-tier-welcome-live-browser|free-tier-welcome-db\n";
   pages.root += classStepHelp;
@@ -1012,7 +1128,7 @@ function validateOptions(options, allowed) {
 }
 
 function validatePositionals(command, operation, positional) {
-  const exact = { capabilities: 1, doctor: 1, bootstrap: 1, test: 1 };
+  const exact = { capabilities: 1, doctor: 1, bootstrap: 1, test: 1, verify: 1 };
   if (exact[command] && positional.length !== exact[command]) throw Object.assign(new Error(`unexpected arguments for ${command}`), { code: 'unexpected_argument' });
   if (command === 'fixture' && (!['apply', 'reset', 'verify', 'list'].includes(operation) || positional.length > 3)) {
     throw Object.assign(new Error(`invalid fixture command: ${positional.join(' ')}`), { code: 'unknown_command' });
@@ -1039,7 +1155,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (command === "help" || parsed.options.help === true) return output(help(command === "help" ? operation || "root" : command), false);
   const allowedByCommand = {
     capabilities: ['json'], doctor: ['json'], bootstrap: ['json', 'fresh'], fixture: ['json'],
-    dev: ['json'], test: ['json', 'profile'], qa: ['json', 'routes']
+    dev: ['json'], test: ['json', 'profile'], verify: ['json', 'profile'], qa: ['json', 'routes']
   };
   validateOptions(parsed.options, allowedByCommand[command] || ['json']);
   validatePositionals(command, operation, parsed.positional);
@@ -1080,6 +1196,10 @@ export async function main(argv = process.argv.slice(2)) {
     return output(integrationSettings(JSON.parse(fs.readFileSync(operation, 'utf8'))), json);
   }
   if (command === "test") return output(runTestProfile(parsed.options.profile || "changed", { json }), json);
+  if (command === "verify") {
+    if (!parsed.options.profile) throw Object.assign(new Error("verify requires --profile prepush"), { code: "missing_option" });
+    return output(runVerifyProfile(parsed.options.profile, { json }), json);
+  }
   if (command === "qa" && operation === "prepare") return output(await qaPrepare({ json, routes: parsed.options.routes }), json);
   throw Object.assign(new Error(`unknown command: ${parsed.positional.join(" ")}`), { code: "unknown_command" });
 }

@@ -1,6 +1,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import { fileURLToPath } from 'node:url';
+import { logPrefixedScriptError } from './log-script-error.mjs';
 
 function request(url, { method = 'GET', body, headers = {} } = {}) {
   const target = new URL(url);
@@ -397,6 +398,11 @@ export function shouldUseDevLogin({ dataMode, runtime } = {}) {
   );
 }
 
+/** CLI failure logging for deploy smoke (never print raw exception strings). */
+export function logPreviewLoginSmokeFailure(error) {
+  logPrefixedScriptError('Preview login smoke failed:', error);
+}
+
 async function main() {
   const baseUrl = (process.env.PREVIEW_BASE_URL || '').replace(/\/$/, '');
   const dataMode = process.env.PREVIEW_DATA_MODE || 'seed';
@@ -432,7 +438,7 @@ async function main() {
       console.log(`OK preview login smoke: ${email} -> /app`);
     }
   } catch (error) {
-    console.error(`Preview login smoke failed: ${error.message || error}`);
+    logPreviewLoginSmokeFailure(error);
     process.exitCode = 1;
   }
 }

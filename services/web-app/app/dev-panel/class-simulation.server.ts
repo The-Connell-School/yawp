@@ -8,14 +8,13 @@ import {
 import {
   buildAssignmentModuleSessionCreateData,
 } from '~/domain/documents.server';
+import { buildSimulationDocumentContent } from './class-simulation-content';
 import {
   classSimulationAssignmentState,
   classSimulationShouldIncludeTutorChat,
   parseSimulatedStudentIndex,
   simulatedStudentDisplayName,
   simulatedStudentEmail,
-  SIMULATION_PARTIAL_TEXT,
-  SIMULATION_SUBMITTED_TEXT,
   SIMULATION_TUTOR_TRANSCRIPT,
   type ClassSimulationAssignmentState,
   CLASS_SIMULATION_MAX_STUDENTS,
@@ -140,6 +139,7 @@ async function loadClassAssignments(tx: Prisma.TransactionClient, classId: strin
         select: {
           assignmentTypeId: true,
           title: true,
+          assignmentType: { select: { kind: true } },
         },
       },
     },
@@ -314,8 +314,13 @@ async function applyAssignmentState(
     params.counts.documentsCreated += 1;
   }
 
-  const partialHtml = `<p>${SIMULATION_PARTIAL_TEXT}</p>`;
-  const submittedHtml = `<p>${SIMULATION_SUBMITTED_TEXT}</p>`;
+  const assignmentTypeKind = classAssignment.assignment.assignmentType?.kind ?? null;
+  const documentContent = buildSimulationDocumentContent({
+    assignmentTypeKind,
+    state: params.state,
+    studentIndex: params.studentIndex,
+    assignmentIndex: params.assignmentIndex,
+  });
 
   if (params.state === 'joined') {
     await tx.document.update({
@@ -345,8 +350,8 @@ async function applyAssignmentState(
     await tx.document.update({
       where: { id: documentId },
       data: {
-        text: SIMULATION_PARTIAL_TEXT,
-        html: partialHtml,
+        text: documentContent.text,
+        html: documentContent.html,
         title: classAssignment.assignment.title || 'Untitled',
       },
     });
@@ -373,8 +378,8 @@ async function applyAssignmentState(
     await tx.document.update({
       where: { id: documentId },
       data: {
-        text: SIMULATION_SUBMITTED_TEXT,
-        html: submittedHtml,
+        text: documentContent.text,
+        html: documentContent.html,
         title: classAssignment.assignment.title || 'Untitled',
       },
     });
@@ -385,8 +390,8 @@ async function applyAssignmentState(
         data: {
           documentId,
           title: classAssignment.assignment.title || 'Untitled',
-          text: SIMULATION_SUBMITTED_TEXT,
-          html: submittedHtml,
+          text: documentContent.text,
+          html: documentContent.html,
           submittedAt: new Date(),
         },
       });
@@ -395,8 +400,8 @@ async function applyAssignmentState(
       await tx.submission.update({
         where: { id: existing!.submissions[0]!.id },
         data: {
-          text: SIMULATION_SUBMITTED_TEXT,
-          html: submittedHtml,
+          text: documentContent.text,
+          html: documentContent.html,
           title: classAssignment.assignment.title || 'Untitled',
           unsubmittedAt: null,
           archivedAt: null,
@@ -405,7 +410,10 @@ async function applyAssignmentState(
     }
   }
 
-  if (classSimulationShouldIncludeTutorChat(params.studentIndex)) {
+  if (
+    params.state === 'in_progress' &&
+    classSimulationShouldIncludeTutorChat(params.studentIndex)
+  ) {
     const sessions = await tx.assignmentModuleSession.findMany({
       where: { documentId },
       include: {
@@ -609,4 +617,86 @@ export async function clearDevPanelClassSimulation(params: {
   );
 
   return { ok: true as const, removedStudents: removed };
+}
+
+/** When a teacher sends a new assignment to a class that already has sim students. */
+export async function applyDevPanelSimulationForNewClassAssignments(params: {
+  classIds: string[];
+  assignmentId: string;
+}) {
+  const uniqueClassIds = [...new Set(params.classIds)];
+  if (uniqueClassIds.length === 0) return;
+
+  for (const classId of uniqueClassIds) {
+    const simUsers = await prisma.user.findMany({
+      where: { simulatedForClassId: classId },
+      select: {
+        id: true,
+        email: true,
+        memberships: { select: { id: true } },
+      },
+    });
+    if (simUsers.length === 0) continue;
+
+    const classAssignment = await prisma.classAssignment.findFirst({
+      where: { classId, assignmentId: params.assignmentId },
+      select: {
+        id: true,
+        assignmentId: true,
+        assignment: {
+          select: {
+            assignmentTypeId: true,
+            title: true,
+            assignmentType: { select: { kind: true } },
+          },
+        },
+      },
+    });
+    if (!classAssignment) continue;
+
+    const orderedAssignments = await prisma.classAssignment.findMany({
+      where: { classId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    const assignmentIndexResolved = orderedAssignments.findIndex(
+      (entry) => entry.id === classAssignment.id
+    );
+
+    const typeId = classAssignment.assignment.assignmentTypeId;
+    const assignmentModules = await loadAssignmentModules(prisma, typeId);
+
+    await prisma.$transaction(
+      async (tx) => {
+        for (const user of simUsers) {
+          const studentIndex = parseSimulatedStudentIndex(user.email, classId);
+          if (studentIndex == null) continue;
+          const membershipId = user.memberships[0]?.id;
+          if (!membershipId) continue;
+          const state = classSimulationAssignmentState(
+            studentIndex,
+            assignmentIndexResolved >= 0 ? assignmentIndexResolved : 0
+          );
+          const counts: ClassSimulationCounts = {
+            students: 0,
+            assignments: 0,
+            documentsCreated: 0,
+            documentsUpdated: 0,
+            submissionsCreated: 0,
+            tutorSessionsUpdated: 0,
+          };
+          await applyAssignmentState(tx, {
+            state,
+            membershipId,
+            studentIndex,
+            assignmentIndex: assignmentIndexResolved >= 0 ? assignmentIndexResolved : 0,
+            classAssignment,
+            assignmentModules,
+            counts,
+          });
+        }
+      },
+      { timeout: CLASS_SIMULATION_TRANSACTION_MS, maxWait: 10_000 }
+    );
+  }
 }

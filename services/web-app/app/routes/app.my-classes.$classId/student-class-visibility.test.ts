@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   class: { findFirst: mock() },
   classAssignment: { findMany: mock() },
+  classAssignmentStudentFirstOpen: { findMany: mock() },
   document: { findMany: mock() },
   submission: { findMany: mock() },
 };
@@ -23,6 +24,7 @@ describe('student class detail visibility', () => {
   beforeEach(() => {
     prisma.class.findFirst.mockReset();
     prisma.classAssignment.findMany.mockReset();
+    prisma.classAssignmentStudentFirstOpen.findMany.mockReset();
     prisma.document.findMany.mockReset();
     prisma.submission.findMany.mockReset();
     getAvailableAssignmentTypesForScopes.mockReset();
@@ -38,6 +40,7 @@ describe('student class detail visibility', () => {
       teachers: [{ id: 'teacher-1', user: { name: 'T' } }],
     });
     prisma.classAssignment.findMany.mockResolvedValue([]);
+    prisma.classAssignmentStudentFirstOpen.findMany.mockResolvedValue([]);
     prisma.document.findMany.mockResolvedValue([]);
     prisma.submission.findMany.mockResolvedValue([]);
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);

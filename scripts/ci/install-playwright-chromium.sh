@@ -18,6 +18,27 @@ if [[ -z "$version" ]]; then
   exit 1
 fi
 
+playwright_browsers_root() {
+  echo "${PLAYWRIGHT_BROWSERS_PATH:-${HOME}/.cache/ms-playwright}"
+}
+
+cached_chromium_present() {
+  local root
+  root="$(playwright_browsers_root)"
+  if [[ ! -d "$root" ]]; then
+    return 1
+  fi
+  shopt -s nullglob
+  local -a dirs=("$root"/chromium-*)
+  shopt -u nullglob
+  ((${#dirs[@]} > 0))
+}
+
+if [[ "$cache_hit" == "true" ]] && ! cached_chromium_present; then
+  echo "::warning::Playwright cache restore reported cache-hit=true but no chromium-* directory under $(playwright_browsers_root); treating as cache miss"
+  cache_hit=false
+fi
+
 pw() {
   bunx --package "@playwright/test@${version}" playwright "$@"
 }

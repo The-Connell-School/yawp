@@ -11,10 +11,8 @@ export function classSimulationAssignmentState(
   studentIndex: number,
   assignmentIndex: number
 ): ClassSimulationAssignmentState {
-  const bucket = (studentIndex * 7 + assignmentIndex * 13) % 10;
-  if (bucket <= 1) return 'not_joined';
-  if (bucket <= 3) return 'joined';
-  if (bucket <= 6) return 'in_progress';
+  const roll = (studentIndex * 11 + assignmentIndex * 17) % 20;
+  if (roll < 8) return 'in_progress';
   return 'submitted';
 }
 
@@ -105,12 +103,6 @@ export function simulatedStudentDisplayName(studentIndex: number) {
   const names = SIMULATED_STUDENT_NAMES;
   return names[(studentIndex - 1) % names.length] ?? `Student ${studentIndex}`;
 }
-
-export const SIMULATION_PARTIAL_TEXT =
-  'My claim is that the author builds tension through contrast. I still need to tie the second paragraph back to the thesis.';
-
-export const SIMULATION_SUBMITTED_TEXT =
-  'The author uses vivid imagery and pacing to show how the protagonist changes. Specific lines from the middle section prove the theme about resilience.';
 
 export const SIMULATION_TUTOR_TRANSCRIPT: Array<{
   agent: 'assistant' | 'user';

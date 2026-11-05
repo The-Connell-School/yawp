@@ -285,6 +285,7 @@ export function composeIntakeReply({
   choice,
   activityIds,
   sameLesson = true,
+  severalDays = false,
 }: {
   /** Checked classes, or the one typed by hand; minutes null when not asked. */
   classes: Array<{ title: string; minutes: number | null }>;
@@ -292,11 +293,13 @@ export function composeIntakeReply({
   activityIds: string[];
   /** Two or more classes: one lesson for all of them, or a version each. */
   sameLesson?: boolean;
+  /** A unit: the minutes are each class period's (note 1). */
+  severalDays?: boolean;
 }): string {
   const parts: string[] = classes.map((klass) =>
     klass.minutes === null
       ? `For ${klass.title}.`
-      : `For ${klass.title}, ${klass.minutes} minutes.`
+      : `For ${klass.title}, ${klass.minutes} minutes${severalDays ? ' each class period' : ''}.`
   );
   // Said once, so the planner never asks again (Brian's run 4).
   if (classes.length > 1) {
@@ -311,4 +314,18 @@ export function composeIntakeReply({
   const activities = composeAskReply({ minutes: null, activityIds });
   if (activities) parts.push(activities);
   return parts.join(' ');
+}
+
+/**
+ * Whether the teacher is planning several days, not one lesson (Kevin, Oct 25,
+ * note 1): "a unit", "a week", "five days", "8 periods". The length question
+ * then asks about each class period.
+ */
+const WORD_NUMBERS = 'two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|several|a few|multiple|many';
+const SEVERAL_DAYS = new RegExp(
+  String.raw`\b(?:units?|week|weeks|multi-?day|(?:\d+|${WORD_NUMBERS})[\s-]+(?:days?|periods?|lessons?|class(?:es| periods?)|sessions?))\b`,
+  'i'
+);
+export function plansSeveralDays(request: string | null | undefined): boolean {
+  return Boolean(request && SEVERAL_DAYS.test(request));
 }

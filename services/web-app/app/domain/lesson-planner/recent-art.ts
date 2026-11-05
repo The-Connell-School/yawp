@@ -3,7 +3,7 @@
  * does not hang the same one on every lesson: Brian's Turner was an example
  * in the kit, not a house painting.
  */
-import { deckArt } from './deck-art';
+import { resolveDeckArt } from './deck-art';
 import { readSlideDeck } from './slide-deck';
 
 /** A painting a teacher used on a recent deck. */
@@ -16,7 +16,7 @@ export function recentArtFrom(replies: string[]): RecentArt[] {
     const outcome = readSlideDeck(reply);
     if (outcome.kind !== 'deck') continue;
     const { art, title, unit } = outcome.deck;
-    if (!art || seen.has(art) || !deckArt(art)) continue;
+    if (!art || seen.has(art) || !resolveDeckArt(art)) continue;
     seen.set(art, { art, lesson: title, unit: unit ?? null });
   }
   return [...seen.values()];

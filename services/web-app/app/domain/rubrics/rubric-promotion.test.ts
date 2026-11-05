@@ -42,7 +42,11 @@ describe('promotion rubric validation', () => {
     const { scoringScale, ...raw } = valid();
     const result = validateRubricPromotion(raw);
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.schema.scoringScale).toEqual({ type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 });
+    if (result.ok) {
+      // parseScoringScale applies type/min/max defaults but does not inject step on stored JSON.
+      expect(result.schema.scoringScale).toMatchObject({ type: 'weighted_1_5', minScore: 1, maxScore: 5 });
+      expect('step' in result.schema.scoringScale).toBe(false);
+    }
     const { type, ...withoutType } = scoringScale;
     expect(validateRubricPromotion({ ...raw, scoringScale: withoutType }))
       .toMatchObject({ ok: true, schema: { scoringScale: { ...withoutType, type: 'weighted_1_5' } } });
