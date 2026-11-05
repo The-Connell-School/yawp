@@ -1680,6 +1680,10 @@ model LessonPlanConversation {
   deckStackKey            String?
   /// Steps moved to "If you have extra time", out of the timed lesson (note 8c).
   extensionStepIds        Json?
+  /// The Yawp! lesson this is the teacher's copy of (How to Teach It → lesson
+  /// plans, Kevin, Nov 5), e.g. "pre-writing". One copy per teacher per slug:
+  /// opening the lesson again opens this one. Null: the teacher's own lesson.
+  yawpLessonSlug          String?
   messages                LessonPlanMessage[]
   materials               LessonPlanMaterial[]
   shareLinks              LessonShareLink[]
@@ -1692,6 +1696,7 @@ model LessonPlanConversation {
   @@index([organizationId])
   @@index([originClassAssignmentId])
   @@index([unitId, unitDay])
+  @@index([membershipId, yawpLessonSlug])
 }
 
 /// A single turn in a Lesson Planner conversation. `role` is 'user' or
