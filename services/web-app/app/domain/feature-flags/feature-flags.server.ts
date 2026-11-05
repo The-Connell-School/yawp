@@ -18,6 +18,8 @@ import {
   LESSON_PLANNER_FLAG,
   UNIFIED_SIGN_ON_FLAG,
   TEACHER_PROMPT_GENERATOR_FLAG,
+  ASSIGNMENT_TYPE_LANDING_V2_FLAG,
+  ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
   type FeatureFlagKey,
@@ -85,7 +87,9 @@ function runtimeDefaultOn(key: FeatureFlagKey, env: Record<string, string | unde
   return (
     key === FREE_TIER_FLAG ||
     key === UNIFIED_SIGN_ON_FLAG ||
-    key === TEACHER_PROMPT_GENERATOR_FLAG
+    key === TEACHER_PROMPT_GENERATOR_FLAG ||
+    key === ASSIGNMENT_TYPE_LANDING_V2_FLAG ||
+    key === ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG
   );
 }
 
@@ -228,8 +232,8 @@ export async function isFeatureFlagEnabled(
       return false;
     }
   }
+  if (runtimeDefaultOn(key, process.env)) return true;
   if (key === TEACHER_PROMPT_GENERATOR_FLAG) {
-    if (isNonProductionDefaultOnDeployment(process.env)) return true;
     try {
       const row = await prisma.setting.findUnique({
         where: { name: featureFlagSettingName(TEACHER_PROMPT_GENERATOR_FLAG) },

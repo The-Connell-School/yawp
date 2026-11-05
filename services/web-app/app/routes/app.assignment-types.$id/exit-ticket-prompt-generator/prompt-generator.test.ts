@@ -12,6 +12,14 @@ describe('exit ticket prompt generator', () => {
     expect(system).toContain(String(GENERATOR_OPTION_COUNT));
   });
 
+  test("follows Brian's wording rule: no closing line, no missed-class framing", () => {
+    const system = buildExitTicketGeneratorSystemPrompt();
+    expect(system).toContain('someone who missed class');
+    expect(system).toContain('not the definition you were given');
+    expect(system).toContain('Do not add a closing line');
+    expect(system).toContain('do not ask for more length');
+  });
+
   test('parses structured options', () => {
     const parsed = ExitTicketGeneratorResponseSchema.parse({
       reply: 'Here are three checks.',
