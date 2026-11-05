@@ -1,4 +1,4 @@
-import { useNavigate, useSearchParams } from 'react-router';
+import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -22,6 +22,11 @@ import {
   getPreviousAssignmentModuleId,
 } from './assignment-module-navigation';
 import { postTutorResponseWithFallbackRetry } from './tutor-response-retry';
+import {
+  captureAppErrorPresentedClient,
+  captureAppRateLimitHitClient,
+} from '~/utils/app-error-presented.client';
+import { classifyTutorApiError } from '~/utils/app-error-presented.shared';
 
 type Props = {
   className?: string;
@@ -90,6 +95,7 @@ export const Tutor = ({
   } | null>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const urlCmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
   const cmsIdx = resolvedCmsIdx ?? urlCmsIdx;
@@ -191,11 +197,34 @@ export const Tutor = ({
             onRetry: () => setIsTutorRetrying(true),
           });
         if (!res.ok || json.error) {
-          setTutorError(
+          const message =
             typeof json.error === 'string'
               ? json.error
-              : (json.error?.message ?? json.message ?? 'An error occurred.')
-          );
+              : (json.error?.message ?? json.message ?? 'An error occurred.');
+          setTutorError(message);
+          const classified = classifyTutorApiError({
+            status: res.status,
+            message: json.message,
+            error: json.error,
+          });
+          captureAppErrorPresentedClient({
+            severity: classified.severity,
+            surface: 'banner',
+            error_code: classified.error_code,
+            http_status: classified.http_status,
+            message_template: classified.message_template,
+            route_template: location.pathname,
+            is_expected: classified.is_expected,
+            product_area: 'tutor',
+          });
+          if (classified.rate_limit) {
+            captureAppRateLimitHitClient({
+              feature: classified.rate_limit.feature,
+              scope: classified.rate_limit.scope,
+              limit_window: classified.rate_limit.limit_window,
+              route_template: location.pathname,
+            });
+          }
           setOptimisticMessage(null);
         } else {
           setOptimisticMessage(null);
@@ -206,9 +235,19 @@ export const Tutor = ({
           return;
         }
       } catch {
-        setTutorError(
-          'Failed to get a response from the tutor. Please try again.'
-        );
+        const message =
+          'Failed to get a response from the tutor. Please try again.';
+        setTutorError(message);
+        captureAppErrorPresentedClient({
+          severity: 'user_blocking',
+          surface: 'banner',
+          error_code: 'TUTOR_FAILED',
+          http_status: null,
+          message_template: message,
+          route_template: location.pathname,
+          is_expected: false,
+          product_area: 'tutor',
+        });
         setOptimisticMessage(null);
       } finally {
         setIsTutorResponding(false);
@@ -220,6 +259,7 @@ export const Tutor = ({
       beforeRespond,
       cms.id,
       getCurrentDocumentText,
+      location.pathname,
       onCmsUpdate,
     ]
   );
