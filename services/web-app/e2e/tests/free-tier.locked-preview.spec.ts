@@ -328,7 +328,9 @@ for (const width of [390, 1440]) {
     await expect(page).toHaveURL(/\/app\/free-tier\/pending$/);
     await expect(page.getByText(/Sent to Dr\. Patel on/)).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'Not the right person?' })
+      page.getByRole('link', {
+        name: 'Not the right person? / Send to an additional administrator',
+      })
     ).toBeVisible();
     await capture(page, `waiting-${width}`);
     const exploreLink = page.getByRole('link', { name: 'Explore my classroom' });
