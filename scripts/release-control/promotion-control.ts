@@ -1,4 +1,4 @@
-import { parseArtifactBinding, artifactsMatch } from './artifact';
+import { artifactsMatch } from './artifact';
 import {
   verifyApprovalToken,
   type ApprovalIssuer,
@@ -13,10 +13,10 @@ import {
   type GrantBinding,
 } from './grant-binding';
 import type { ArtifactBinding, PromotionScope } from './types';
-import type { PromotionStore } from './store';
+import type { PromotionGrantStore } from './grant-store';
 
 export type PromotionControlOptions = {
-  store: PromotionStore;
+  store: PromotionGrantStore;
   approvalIssuer: ApprovalIssuer;
   brokerBinding: GrantBinding;
   enforcementMode?: EnforcementMode;
@@ -35,18 +35,12 @@ export type ConsumeThenHoldRaceNote = {
   inFlightOperationMayStillComplete: true;
 };
 
-export type PromotionAuthorizationResult = {
-  consumedAtMs: number;
-  replayStatusOnly: boolean;
-  providerMutationPermitted: boolean;
-};
-
 function deny(reason: PromotionDenyReason, detail?: string): never {
   throw new PromotionDeniedError(reason, detail);
 }
 
 export class PromotionControl {
-  readonly #store: PromotionStore;
+  readonly #store: PromotionGrantStore;
   readonly #issuer: ApprovalIssuer;
   readonly #brokerBinding: GrantBinding;
   readonly #mode: EnforcementMode;
@@ -194,75 +188,6 @@ export class PromotionControl {
   }): Promise<never> {
     approvalRefIsUntrustedWorkerHint(_input.approvalRef);
     deny('approval_invalid', 'worker-supplied approval_ref is not proof of consent');
-  }
-
-  async consumeGrant(input: {
-    grantId: string;
-    scope: PromotionScope;
-    binding: GrantBinding;
-    artifact: ArtifactBinding;
-    idempotencyKey: string;
-    nowMs: number;
-  }): Promise<PromotionAuthorizationResult> {
-    this.#assertLivePath();
-    if (!grantBindingsMatch(input.binding, this.#brokerBinding)) {
-      deny('binding_mismatch');
-    }
-    const parsed = parseArtifactBinding(input.artifact);
-    if (parsed === 'malformed') deny('fail_closed_malformed', 'artifact');
-    if (!artifactMeetsOperationRequirements(input.scope, parsed)) {
-      deny('digest_required');
-    }
-    const result = await this.#store.consumeGrant({
-      ...input,
-      artifact: parsed,
-    });
-    if (!result.ok) {
-      const reasonMap: Record<string, PromotionDenyReason> = {
-        hold_active: 'hold_active',
-        hold_blocks_replay: 'hold_blocks_replay',
-        expired: 'grant_expired',
-        missing: 'grant_missing',
-        already_consumed: 'grant_already_consumed',
-        stale_generation: 'grant_stale_generation',
-        artifact_mismatch: 'artifact_mismatch',
-        binding_mismatch: 'binding_mismatch',
-        unreachable: 'fail_closed_unreachable',
-        malformed: 'fail_closed_malformed',
-        scope_mismatch: 'artifact_mismatch',
-      };
-      deny(reasonMap[result.reason] ?? 'fail_closed_malformed', result.reason);
-    }
-    if (!result.replay) {
-      await this.#store.appendAudit({
-        eventId: `grant-consume-${input.grantId}-${input.idempotencyKey}`,
-        atMs: input.nowMs,
-        kind: 'grant.consume',
-        scope: input.scope,
-        detail: {
-          grantId: input.grantId,
-          idempotencyKey: input.idempotencyKey,
-          providerMutationPermitted: result.providerMutationPermitted,
-        },
-      });
-    }
-    return {
-      consumedAtMs: result.consumedAtMs,
-      replayStatusOnly: result.replay,
-      providerMutationPermitted: result.providerMutationPermitted,
-    };
-  }
-
-  async authorizePromotionAttempt(input: {
-    scope: PromotionScope;
-    binding: GrantBinding;
-    artifact: ArtifactBinding;
-    grantId: string;
-    idempotencyKey: string;
-    nowMs: number;
-  }): Promise<PromotionAuthorizationResult> {
-    await this.assertNoActiveHold(input.scope);
-    return this.consumeGrant(input);
   }
 
   async evaluateMergeGateStaleCheck(input: {

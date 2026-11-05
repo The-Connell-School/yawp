@@ -2,6 +2,8 @@ import type { ApprovalIssuer } from './approval-verifier';
 import { signApproval } from './approval-verifier';
 import type { ArtifactBinding, PromotionScope } from './types';
 import type { GrantBinding } from './grant-binding';
+import { MemoryPromotionCasStore } from './memory-cas-store';
+import { ReconciliationBroker } from './reconciliation-broker';
 
 export const TEST_ISSUER: ApprovalIssuer = {
   issuerId: 'yawp-promotion-issuer-test',
@@ -22,15 +24,9 @@ export const TEST_MAIN_MERGE_BINDING: GrantBinding = {
   operation: 'main_merge',
 };
 
-export function seedAllScopes(store: import('./memory-store').MemoryPromotionStore, nowMs = 0) {
-  const scopes = ['main_merge', 'prod_deploy', 'prod_flags'] as const;
-  for (const scope of scopes) {
-    store.seedScope(scope, {
-      scope,
-      generation: 0,
-      hold: null,
-      updatedAtMs: nowMs,
-    });
+export function seedAllScopes(store: MemoryPromotionCasStore, nowMs = 0) {
+  for (const scope of ['main_merge', 'prod_deploy', 'prod_flags'] as const) {
+    store.seedScope(scope, { scope, generation: 0, hold: null, updatedAtMs: nowMs });
   }
 }
 
@@ -62,19 +58,38 @@ export function signTestApproval(input: {
   return token;
 }
 
-/** Legacy helper — prefer explicit binding in tests. */
-export function signTestApprovalForScope(input: {
-  subject: string;
-  scope: PromotionScope;
-  artifact: ArtifactBinding;
-  generation?: number;
-  nowMs: number;
-  ttlMs?: number;
-}): string {
-  const binding: GrantBinding = {
-    environment: 'production',
-    repository: 'The-Connell-School/yawp',
-    operation: input.scope,
-  };
-  return signTestApproval({ ...input, binding });
+export function liveBroker(nowMs = 0) {
+  const store = new MemoryPromotionCasStore();
+  seedAllScopes(store, nowMs);
+  const broker = new ReconciliationBroker({
+    store,
+    approvalIssuer: TEST_ISSUER,
+    brokerBinding: TEST_BROKER_BINDING,
+    enforcementMode: 'live',
+  });
+  return { store, broker, nowMs };
+}
+
+export async function issueTestGrant(
+  broker: ReconciliationBroker,
+  input: {
+    grantId: string;
+    artifact: ArtifactBinding;
+    nowMs: number;
+    generation?: number;
+  }
+) {
+  const token = signTestApproval({
+    subject: 'human:release',
+    binding: TEST_BROKER_BINDING,
+    artifact: input.artifact,
+    generation: input.generation ?? 0,
+    nowMs: input.nowMs,
+  });
+  await broker.promotion.issueGrantFromSignedApproval({
+    grantId: input.grantId,
+    signedApprovalToken: token,
+    nowMs: input.nowMs,
+    grantTtlMs: 120_000,
+  });
 }

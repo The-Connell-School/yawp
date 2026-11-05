@@ -1,43 +1,49 @@
 /**
- * Sandbox fake provider — simulates external mutate (AWS/GitHub) for ordering tests.
- * Does NOT prove live provider enforcement.
+ * Sandbox fake provider — NOT AWS/GitHub.
+ * Supports accept/reject-before-accept, timeout-after-accept, and readback.
  */
-export type ProviderMutationRecord = {
-  idempotencyKey: string;
-  atMs: number;
-  artifactCommit: string;
-};
+export type ProviderReadback =
+  | { outcome: 'succeeded' }
+  | { outcome: 'failed' }
+  | { outcome: 'pending' };
+
+export type ProviderSubmitResult =
+  | { kind: 'rejected_before_acceptance' }
+  | { kind: 'accepted'; providerToken: string }
+  | { kind: 'timeout_after_acceptance'; providerToken: string };
 
 export class FakePromotionProvider {
-  readonly mutations: ProviderMutationRecord[] = [];
-  #failNext = false;
+  readonly submitCalls: string[] = [];
+  readonly readbackCalls: string[] = [];
+  #queue: ProviderSubmitResult[] = [];
+  readonly #accepted = new Map<string, ProviderReadback>();
 
-  queueFailureOnce(): void {
-    this.#failNext = true;
+  queueResults(...results: ProviderSubmitResult[]): void {
+    this.#queue.push(...results);
   }
 
-  async mutate(input: {
-    idempotencyKey: string;
-    atMs: number;
-    artifactCommit: string;
-    permitted: boolean;
-  }): Promise<{ ok: true } | { ok: false; error: 'not_permitted' | 'provider_error' }> {
-    if (!input.permitted) {
-      return { ok: false, error: 'not_permitted' };
-    }
-    if (this.#failNext) {
-      this.#failNext = false;
-      return { ok: false, error: 'provider_error' };
-    }
-    this.mutations.push({
-      idempotencyKey: input.idempotencyKey,
-      atMs: input.atMs,
-      artifactCommit: input.artifactCommit,
-    });
-    return { ok: true };
+  setReadback(providerToken: string, readback: ProviderReadback): void {
+    this.#accepted.set(providerToken, readback);
   }
 
-  mutationCountForKey(idempotencyKey: string): number {
-    return this.mutations.filter((m) => m.idempotencyKey === idempotencyKey).length;
+  async submit(operationId: string): Promise<ProviderSubmitResult> {
+    this.submitCalls.push(operationId);
+    if (this.#queue.length === 0) {
+      return { kind: 'accepted', providerToken: `tok-${operationId}` };
+    }
+    const next = this.#queue.shift()!;
+    if (next.kind === 'accepted' || next.kind === 'timeout_after_acceptance') {
+      this.#accepted.set(next.providerToken, { outcome: 'pending' });
+    }
+    return next;
+  }
+
+  async readback(providerToken: string): Promise<ProviderReadback> {
+    this.readbackCalls.push(providerToken);
+    return this.#accepted.get(providerToken) ?? { outcome: 'pending' };
+  }
+
+  submitCount(operationId: string): number {
+    return this.submitCalls.filter((id) => id === operationId).length;
   }
 }

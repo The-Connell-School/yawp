@@ -1,14 +1,8 @@
-import type {
-  ArtifactBinding,
-  AuditEvent,
-  GrantRecord,
-  PromotionScope,
-  ScopeRecord,
-} from './types';
+import type { ArtifactBinding, AuditEvent, GrantRecord, PromotionScope } from './types';
 import type { GrantBinding } from './grant-binding';
 
 export type ScopeLoadResult =
-  | { ok: true; record: ScopeRecord }
+  | { ok: true; record: import('./types').ScopeRecord }
   | { ok: false; reason: 'missing' | 'malformed' | 'unreachable' };
 
 export type SetHoldInput = {
@@ -49,10 +43,6 @@ export type ConsumeGrantResult =
       replay: boolean;
       consumedAtMs: number;
       generationAtConsume: number;
-      /**
-       * True only on first successful consume (not replay). Replay returns false
-       * so callers must not invoke provider mutation again.
-       */
       providerMutationPermitted: boolean;
     }
   | {
@@ -68,44 +58,10 @@ export type ConsumeGrantResult =
         | 'stale_generation'
         | 'artifact_mismatch'
         | 'scope_mismatch'
-        | 'binding_mismatch';
+        | 'binding_mismatch'
+        | 'unresolved_operation'
+        | 'operation_duplicate'
+        | 'audit_not_durable';
     };
 
-export interface PromotionStore {
-  loadScope(scope: PromotionScope): Promise<ScopeLoadResult>;
-  loadGrant(grantId: string): Promise<GrantRecord | 'missing' | 'malformed' | 'unreachable'>;
-
-  setHold(input: SetHoldInput): Promise<
-    | { ok: true; generation: number }
-    | { ok: false; reason: 'unreachable' | 'malformed' | 'generation_conflict' }
-  >;
-
-  clearHold(input: ClearHoldInput): Promise<
-    | { ok: true; generation: number }
-    | {
-        ok: false;
-        reason:
-          | 'unreachable'
-          | 'malformed'
-          | 'no_hold'
-          | 'generation_conflict';
-      }
-  >;
-
-  issueGrant(input: IssueGrantInput): Promise<
-    | { ok: true; issuedAtGeneration: number }
-    | {
-        ok: false;
-        reason:
-          | 'unreachable'
-          | 'malformed'
-          | 'hold_active'
-          | 'generation_conflict'
-          | 'duplicate_grant';
-      }
-  >;
-
-  consumeGrant(input: ConsumeGrantInput): Promise<ConsumeGrantResult>;
-
-  appendAudit(event: AuditEvent): Promise<'ok' | 'unreachable'>;
-}
+export type { AuditEvent, GrantRecord };

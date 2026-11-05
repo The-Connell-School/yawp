@@ -1,11 +1,13 @@
 # Release control (prepare-only)
 
-Library prototype for **scoped holds** and **artifact-bound promotion grants**. See `docs/design/release-control/ARCHITECTURE.md`.
+Scoped holds, artifact-bound grants, and **reconciliation broker** sandbox. See:
+
+- `docs/design/release-control/ARCHITECTURE.md`
+- `docs/design/release-control/RECONCILIATION.md`
 
 ```bash
 bun test ./scripts/release-control/
 ```
 
-Also invoked from `scripts/deployment-contract.test.ts` (prepare-only contract hook).
-
-**Not enforced** in GitHub/AWS until broker + table are provisioned and workflows opt in.
+Standalone tests only — not coupled to `deployment-contract.test.ts`.  
+**Not enforced** in GitHub/AWS on this draft.

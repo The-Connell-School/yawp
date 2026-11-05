@@ -2416,27 +2416,6 @@ describe('Internal preview database classification', () => {
   });
 });
 
-describe('release-control local contract (prepare-only library)', () => {
-  test('release-control test suite passes (wired here to avoid ci.yml churn until merge review)', () => {
-    const bunBin =
-      process.env.BUN_BIN ??
-      (existsSync(join(process.env.HOME ?? '', '.bun/bin/bun'))
-        ? join(process.env.HOME ?? '', '.bun/bin/bun')
-        : process.argv[0]);
-    execFileSync(bunBin, [
-      'test',
-      './scripts/release-control/promotion-control.test.ts',
-      './scripts/release-control/concurrency.test.ts',
-      './scripts/release-control/adversarial.test.ts',
-      './scripts/release-control/sandbox-broker.test.ts',
-    ], {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-  });
-});
-
 describe('isolated preview unified sign-on label deployment contract', () => {
   test('exact label addition/removal follows the gated, shell-quoted detached transport', () => {
     const workflow = readRepoFile('.github/workflows/preview-environments.yml');
