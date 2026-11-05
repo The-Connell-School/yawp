@@ -1129,6 +1129,9 @@ jobs:
             'app/routes/app.assignment-types.$id/landing-copy/assignment-type-landing.test.tsx' \
             'app/routes/app.assignment-types.$id/landing-copy/thesis-essay-course.test.ts' \
             app/domain/assignment-types/landing-page-gate.server.test.ts \
+            app/domain/lesson-planner/yawp-lessons.test.ts \
+            app/domain/lesson-planner/yawp-lessons.server.test.ts \
+            'app/routes/app.lesson-planner_.yawp.$slug/route.test.ts' \
             app/domain/assignment-types/exit-ticket.test.ts \
             app/domain/assignment-types/exit-ticket-reflection-prompts.test.ts \
             'app/routes/app.assignment-types.$id/exit-ticket-prompt-generator/prompt-generator.test.ts' \

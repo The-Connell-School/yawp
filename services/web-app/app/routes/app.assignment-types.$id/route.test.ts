@@ -45,6 +45,7 @@ const isTeacherPromptGeneratorEnabled = mock(async () => true);
 const getAssignmentTypeLandingFlags = mock(async () => ({
   v2: false,
   thesisEssay: false,
+  lessonPlans: false,
 }));
 
 // bun's module mocks are global to the test run and mock.restore() does not
@@ -934,14 +935,14 @@ describe('app.assignment-types.$id loader landing page', () => {
   }
 
   test('keeps the old page while the flag is off', async () => {
-    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: false, thesisEssay: false });
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: false, thesisEssay: false, lessonPlans: false });
     const response = await load({ title: 'Class Starter' });
     expect(response.data.landingPageKey).toBeNull();
     expect(getAssignmentTypeLandingFlags).toHaveBeenCalledWith('org-1');
   });
 
   test("gives teachers Brian's page when the flag is on", async () => {
-    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: false });
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: false, lessonPlans: false });
     expect((await load({ title: 'Class Starter' })).data.landingPageKey).toBe(
       'class-starter'
     );
@@ -951,18 +952,18 @@ describe('app.assignment-types.$id loader landing page', () => {
   });
 
   test('keeps the old Thesis-Driven Essay page until its own flag is on', async () => {
-    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: false });
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: false, lessonPlans: false });
     expect(
       (await load({ title: 'The Thesis-Driven Essay' })).data.landingPageKey
     ).toBeNull();
-    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: true });
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: true, lessonPlans: false });
     expect(
       (await load({ title: 'The Thesis-Driven Essay' })).data.landingPageKey
     ).toBe('thesis-driven-essay');
   });
 
   test('students and school-authored types keep the old page', async () => {
-    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: true });
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: true, lessonPlans: false });
     expect(
       (await load({ title: "GBA 300: Int'l Expansion Plan" })).data.landingPageKey
     ).toBeNull();
@@ -973,11 +974,11 @@ describe('app.assignment-types.$id loader landing page', () => {
   });
 
   test('Pre-Writing reuses the Thesis-Driven Essay library on the new page only', async () => {
-    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: false, thesisEssay: false });
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: false, thesisEssay: false, lessonPlans: false });
     const before = await load({ title: 'Prewriting', kind: 'prewriting' });
     expect(before.data.thesisPromptLibrary).toBeNull();
 
-    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: false });
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: false, lessonPlans: false });
     const after = await load({ title: 'Prewriting', kind: 'prewriting' });
     expect(after.data.landingPageKey).toBe('prewriting');
     expect(after.data.thesisPromptLibrary.totalCount).toBeGreaterThanOrEqual(100);
@@ -999,7 +1000,7 @@ describe('app.assignment-types.$id loader landing page', () => {
   });
 
   test('Thesis Statement gets no library', async () => {
-    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: false });
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: false, lessonPlans: false });
     const response = await load({ title: 'Thesis Statement', kind: 'thesis_statement' });
     expect(response.data.landingPageKey).toBe('thesis-statement');
     expect(response.data.thesisPromptLibrary).toBeNull();
