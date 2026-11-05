@@ -6,9 +6,12 @@ const prisma = {
   $transaction: mock(),
 };
 const fileReplyPieces = mock();
+const storeYawpLessonDeck = mock();
+const DECK_BLOCK = '```yawp-slides\n{"title":"Pre-writing","slides":[{"layout":"title","title":"Pre-writing","speakerNotes":"x"}]}\n```';
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/domain/lesson-planner/file-reply-pieces.server', () => ({ fileReplyPieces }));
+mock.module('~/domain/lesson-planner/yawp-lesson-deck.server', () => ({ storeYawpLessonDeck }));
 
 const { findYawpLessonCopy, openYawpLesson } = await import('./yawp-lessons.server');
 const { YAWP_LESSONS } = await import('./yawp-lessons');
@@ -31,6 +34,7 @@ beforeEach(() => {
   }));
   prisma.$transaction.mockReset().mockImplementation(async (run: (tx: typeof prisma) => unknown) => run(prisma));
   fileReplyPieces.mockReset().mockResolvedValue({ added: ['a'], skipped: [] });
+  storeYawpLessonDeck.mockReset().mockResolvedValue(DECK_BLOCK);
 });
 
 describe('opening a Yawp! lesson', () => {
@@ -69,14 +73,31 @@ describe('opening a Yawp! lesson', () => {
       role: 'user',
       content: 'Open the Yawp! lesson “Pre-writing” (Lesson 2 of The Thesis-Driven Essay course).',
     });
-    expect(reply).toMatchObject({ conversationId: 'conv-new', role: 'assistant', content: lesson.plan });
+    // The reply is the plan with Brian's deck after it, as "Keep it as is" does.
+    expect(reply).toMatchObject({ conversationId: 'conv-new', role: 'assistant' });
+    expect(reply.content).toBe(`${lesson.plan}\n\n${DECK_BLOCK}`);
+    // The deck's pictures were stored for this copy before the reply was written.
+    expect(storeYawpLessonDeck).toHaveBeenCalledTimes(1);
+    expect(storeYawpLessonDeck.mock.calls[0][1]).toEqual({
+      lesson,
+      conversationId: 'conv-new',
+      membershipId: 'teacher-1',
+    });
     // The reply sorts after the request however the rows are read.
     expect(reply.createdAt.getTime() - request.createdAt.getTime()).toBe(1_000);
 
     expect(fileReplyPieces).toHaveBeenCalledTimes(1);
     expect(fileReplyPieces.mock.calls[0][0]).toEqual({
       conversationId: 'conv-new',
-      message: { id: 'msg-2', createdAt: reply.createdAt, content: lesson.plan },
+      message: { id: 'msg-2', createdAt: reply.createdAt, content: reply.content },
     });
+  });
+
+  test('with no deck to read, the plan goes in alone', async () => {
+    prisma.lessonPlanConversation.findFirst.mockResolvedValue(null);
+    storeYawpLessonDeck.mockResolvedValue(null);
+    await openYawpLesson(scope, lesson);
+    const reply = prisma.lessonPlanMessage.create.mock.calls[1]![0].data;
+    expect(reply.content).toBe(lesson.plan);
   });
 });
