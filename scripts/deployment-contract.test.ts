@@ -2418,7 +2418,12 @@ describe('Internal preview database classification', () => {
 
 describe('release-control local contract (prepare-only library)', () => {
   test('release-control test suite passes (wired here to avoid ci.yml churn until merge review)', () => {
-    execFileSync('bun', [
+    const bunBin =
+      process.env.BUN_BIN ??
+      (existsSync(join(process.env.HOME ?? '', '.bun/bin/bun'))
+        ? join(process.env.HOME ?? '', '.bun/bin/bun')
+        : process.argv[0]);
+    execFileSync(bunBin, [
       'test',
       './scripts/release-control/promotion-control.test.ts',
       './scripts/release-control/concurrency.test.ts',
