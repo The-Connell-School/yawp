@@ -6,6 +6,7 @@ import {
   THESIS_ESSAY_COURSE,
   THESIS_ESSAY_COURSE_TITLE,
 } from './thesis-essay-course';
+import { YAWP_LESSONS, YAWP_LESSON_SLUGS } from '~/domain/lesson-planner/yawp-lessons';
 
 const PUBLIC_DIR = join(import.meta.dir, '../../../../public');
 
@@ -78,6 +79,23 @@ describe('The Thesis-Driven Essay course', () => {
       const path = publicFile(plan.href);
       expect(plan.href.endsWith('.pdf')).toBe(true);
       expect(readFileSync(path).subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    }
+  });
+
+  test('lessons 1–6 are in the Yawp! lesson catalog, with the same deck and PDF; 7 and 8 are not', () => {
+    expect(THESIS_ESSAY_COURSE.map((lesson) => lesson.yawpLesson)).toEqual([
+      ...YAWP_LESSON_SLUGS,
+      null,
+      null,
+    ]);
+    for (const lesson of THESIS_ESSAY_COURSE) {
+      if (!lesson.yawpLesson) continue;
+      const catalog = YAWP_LESSONS[lesson.yawpLesson];
+      expect(catalog.title).toBe(lesson.title);
+      expect(catalog.deck.href).toBe(lesson.decks[0]!.href);
+      expect(catalog.deck.fileName).toBe(lesson.decks[0]!.fileName);
+      expect(catalog.lessonPlanPdf.href).toBe(lesson.lessonPlan!.href);
+      expect(catalog.lessonPlanPdf.fileName).toBe(lesson.lessonPlan!.fileName);
     }
   });
 

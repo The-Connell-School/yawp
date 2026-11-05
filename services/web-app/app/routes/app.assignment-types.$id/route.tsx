@@ -485,12 +485,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const isThesisEssay = isThesisDrivenEssayTitle(assignmentType.title);
   // Brian's teacher-facing landing page, behind its flags. Null keeps the old
   // page: students, school-authored types, and every type while it is off.
-  const landingPageKey = isTeacher
-    ? enabledLandingPageKey(
-        resolveLandingPageKey(assignmentType),
-        await getAssignmentTypeLandingFlags(profile.organization.id)
-      )
+  const landingFlags = isTeacher
+    ? await getAssignmentTypeLandingFlags(profile.organization.id)
     : null;
+  const landingPageKey = landingFlags
+    ? enabledLandingPageKey(resolveLandingPageKey(assignmentType), landingFlags)
+    : null;
+  // How to Teach It's "Lesson plan" opens a ready-built stack in the
+  // teacher's Lesson Planner (Kevin, Nov 5). The page also needs the planner
+  // itself on for the school, which the root loader already knows.
+  const landingLessonPlans = landingPageKey !== null && Boolean(landingFlags?.lessonPlans);
   // Pre-Writing reuses the Thesis-Driven Essay library on its new page: the
   // same prompt carries students through Pre-Writing and then Thesis Statement.
   const showsThesisLibrary =
@@ -659,6 +663,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       isExitTicketAssignmentType(assignmentType),
     teacherPromptGeneratorEnabled,
     landingPageKey,
+    landingLessonPlans,
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -1200,6 +1205,7 @@ export default function AppAssignmentTypesIdRoute() {
           <LandingSections
             page={landingPage}
             modules={data.assignmentType.assignmentModules}
+            yawpLessons={data.landingLessonPlans && lessonPlannerEnabled}
           />
         ) : null}
         {/* Brian's landing page replaces every block from here to the

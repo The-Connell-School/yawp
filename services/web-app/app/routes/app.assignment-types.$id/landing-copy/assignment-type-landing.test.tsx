@@ -413,3 +413,121 @@ describe('LandingSections', () => {
     expect(root.textContent).not.toContain('Teach these steps in order.');
   });
 });
+
+describe('Lesson plans in the Lesson Planner (Kevin, Nov 5)', () => {
+  const links = (row: Element) =>
+    [...row.querySelectorAll('a')].map((a) => ({
+      text: a.textContent,
+      href: a.getAttribute('href'),
+      target: a.getAttribute('target'),
+      label: a.getAttribute('aria-label'),
+    }));
+
+  it('with lesson plans on, a course row’s Lesson plan opens the lesson in the planner, in this tab', () => {
+    const root = render(
+      <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} yawpLessons />
+    );
+    const rows = [...root.querySelectorAll('[data-testid="course-lesson"]')];
+    expect(links(rows[1]!)).toEqual([
+      {
+        text: 'Lesson plan',
+        href: '/app/lesson-planner/yawp/pre-writing',
+        target: null,
+        label: 'Pre-writing: lesson plan (opens in your Lesson Planner)',
+      },
+      {
+        text: 'Slide deck',
+        href: '/courses/thesis-driven-essay/02-pre-writing.pptx',
+        target: null,
+        label: 'Pre-writing: slide deck (PowerPoint)',
+      },
+    ]);
+    expect(rows.slice(0, 6).map((row) => links(row)[0]!.href)).toEqual([
+      '/app/lesson-planner/yawp/introduce-students-to-yawp',
+      '/app/lesson-planner/yawp/pre-writing',
+      '/app/lesson-planner/yawp/thesis-statement',
+      '/app/lesson-planner/yawp/introduction-paragraph',
+      '/app/lesson-planner/yawp/body-paragraphs',
+      '/app/lesson-planner/yawp/conclusion-paragraph',
+    ]);
+    // Titling and Review have no lesson in the catalog, so nothing changes for them.
+    expect(links(rows[6]!).map((a) => a.text)).toEqual(['Slide deck']);
+    expect(links(rows[7]!)).toEqual([]);
+    // The PDF link is gone from the rows; the planner has the plan.
+    expect(root.querySelectorAll('a[href$=".pdf"]')).toHaveLength(0);
+  });
+
+  it('with lesson plans off (the default), the rows are Brian’s PDFs', () => {
+    const root = render(
+      <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} />
+    );
+    const rows = [...root.querySelectorAll('[data-testid="course-lesson"]')];
+    expect(links(rows[1]!)[0]).toEqual({
+      text: 'Lesson plan',
+      href: '/courses/thesis-driven-essay/02-lesson-plan-pre-writing.pdf',
+      target: '_blank',
+      label: 'Pre-writing: lesson plan (PDF)',
+    });
+    expect(root.querySelectorAll('[data-testid="lesson-plan-planner"]')).toHaveLength(0);
+  });
+
+  it.each([
+    ['prewriting', 'Pre-writing', 'pre-writing', '02-pre-writing.pptx', '02-lesson-plan-pre-writing.pdf'],
+    [
+      'thesis-statement',
+      'Developing a thesis statement',
+      'thesis-statement',
+      '03-develop-your-thesis-statement.pptx',
+      '03-lesson-plan-thesis-statement.pdf',
+    ],
+  ] as const)('%s shows How to Teach It first, with its one lesson row', (key, title, slug, deck, pdf) => {
+    const on = render(<LandingSections page={LANDING_PAGES[key]} modules={[]} yawpLessons />);
+    expect(headings(on)[0]).toBe('How to Teach It');
+    const box = on.querySelector('[data-testid="how-to-teach-spotlight"]')!;
+    expect(box.textContent).toContain('ready to teach');
+    const lesson = box.querySelector('[data-testid="yawp-lesson"]')!;
+    expect(lesson).not.toBeNull();
+    const rows = [...lesson.querySelectorAll('[data-testid="course-lesson"]')];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.querySelector('[data-lesson-title]')?.textContent).toBe(title);
+    expect(links(rows[0]!)).toEqual([
+      {
+        text: 'Lesson plan',
+        href: `/app/lesson-planner/yawp/${slug}`,
+        target: null,
+        label: `${title}: lesson plan (opens in your Lesson Planner)`,
+      },
+      {
+        text: 'Slide deck',
+        href: `/courses/thesis-driven-essay/${deck}`,
+        target: null,
+        label: `${title}: slide deck (PowerPoint)`,
+      },
+    ]);
+    // Brian's sections are still there, after it.
+    expect(toggle(on, 'How it works')).toBeDefined();
+    expect(toggle(on, 'When to use it')).toBeDefined();
+    act(() => activeRoot?.unmount());
+    activeRoot = null;
+
+    // Off: the same row, with the PDF.
+    const off = render(<LandingSections page={LANDING_PAGES[key]} modules={[]} />);
+    const row = off.querySelector('[data-testid="yawp-lesson"] [data-testid="course-lesson"]')!;
+    expect(links(row)[0]).toMatchObject({
+      href: `/courses/thesis-driven-essay/${pdf}`,
+      target: '_blank',
+      label: `${title}: lesson plan (PDF)`,
+    });
+  });
+
+  it('How to Teach It on a step page collapses to its lead like the course does', () => {
+    const root = render(<LandingSections page={LANDING_PAGES.prewriting} modules={[]} yawpLessons />);
+    const hide = root.querySelector<HTMLButtonElement>('button[aria-label="Hide How to Teach It"]')!;
+    open(hide);
+    expect(root.querySelector('[data-testid="yawp-lesson"]')).toBeNull();
+    expect(root.querySelector('[data-testid="how-to-teach-preview"]')?.textContent).toContain(
+      'Lesson 2 of the Thesis-Driven Essay course'
+    );
+  });
+});
+

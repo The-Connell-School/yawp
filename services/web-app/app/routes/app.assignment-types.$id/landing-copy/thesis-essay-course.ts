@@ -11,6 +11,8 @@
 // Body paragraphs takes two class periods: the body paragraphs deck, then the
 // supporting quotes deck ("Step four, continued").
 
+import type { YawpLessonSlug } from '~/domain/lesson-planner/yawp-lessons';
+
 export const THESIS_ESSAY_COURSE_TITLE = 'The Thesis-Driven Essay course';
 
 const DIR = '/courses/thesis-driven-essay';
@@ -31,6 +33,12 @@ export type CourseLesson = {
   title: string;
   lessonPlan: CourseFile | null;
   decks: CourseDeck[];
+  /**
+   * The same lesson in the Yawp! lesson catalog (yawp-lessons.ts), ready to
+   * open as a stack in the teacher's Lesson Planner. With the lesson plans
+   * flag on, "Lesson plan" opens this instead of the PDF. Null: PDF only.
+   */
+  yawpLesson: YawpLessonSlug | null;
 };
 
 const plan = (file: string, fileName: string): CourseFile => ({
@@ -52,11 +60,13 @@ export const THESIS_ESSAY_COURSE: CourseLesson[] = [
       'Lesson Plan - Introduce Students to Yawp!.pdf'
     ),
     decks: [deck('01-introduction-to-yawp.pptx', 'Introduction to Yawp!.pptx')],
+    yawpLesson: 'introduce-students-to-yawp',
   },
   {
     title: 'Pre-writing',
     lessonPlan: plan('02-lesson-plan-pre-writing.pdf', 'Lesson Plan - Pre-writing.pdf'),
     decks: [deck('02-pre-writing.pptx', 'Pre-Writing.pptx')],
+    yawpLesson: 'pre-writing',
   },
   {
     title: 'Developing a thesis statement',
@@ -67,6 +77,7 @@ export const THESIS_ESSAY_COURSE: CourseLesson[] = [
     decks: [
       deck('03-develop-your-thesis-statement.pptx', 'Develop Your Thesis Statement.pptx'),
     ],
+    yawpLesson: 'thesis-statement',
   },
   {
     title: 'Introduction paragraph',
@@ -75,6 +86,7 @@ export const THESIS_ESSAY_COURSE: CourseLesson[] = [
       'Lesson Plan - Introduction Paragraph.pdf'
     ),
     decks: [deck('04-introduction-paragraph.pptx', 'Introduction Paragraph.pptx')],
+    yawpLesson: 'introduction-paragraph',
   },
   {
     title: 'Body paragraphs',
@@ -86,6 +98,7 @@ export const THESIS_ESSAY_COURSE: CourseLesson[] = [
       deck('05-body-paragraphs.pptx', 'Body Paragraphs.pptx'),
       deck('05-supporting-quotes.pptx', 'Supporting Quotes.pptx', 'Supporting quotes'),
     ],
+    yawpLesson: 'body-paragraphs',
   },
   {
     title: 'The conclusion',
@@ -94,15 +107,18 @@ export const THESIS_ESSAY_COURSE: CourseLesson[] = [
       'Lesson Plan - Conclusion Paragraph.pdf'
     ),
     decks: [deck('06-conclusion-paragraph.pptx', 'Conclusion Paragraph.pptx')],
+    yawpLesson: 'conclusion-paragraph',
   },
   {
     title: 'Titling your essay',
     lessonPlan: null,
     decks: [deck('07-titles-and-formatting.pptx', 'Titles and Formatting.pptx')],
+    yawpLesson: null,
   },
   {
     title: 'Review my essay',
     lessonPlan: null,
     decks: [],
+    yawpLesson: null,
   },
 ];

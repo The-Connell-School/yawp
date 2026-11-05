@@ -20,6 +20,7 @@
 
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
+import type { YawpLessonSlug } from '~/domain/lesson-planner/yawp-lessons';
 
 export type LandingPageKey =
   | 'thesis-driven-essay'
@@ -45,7 +46,13 @@ export type LandingBlock =
    * The Thesis-Driven Essay course: each lesson with its lesson plan and
    * slide deck (see thesis-essay-course.ts). `lead` sits directly above it.
    */
-  | { type: 'course'; lead?: string };
+  | { type: 'course'; lead?: string }
+  /**
+   * One lesson of the course on its own, for the page of the step it teaches
+   * (Pre-Writing, Thesis Statement): its lesson plan, which opens in the
+   * teacher's Lesson Planner, and its slide deck. `lead` sits above it.
+   */
+  | { type: 'lesson'; slug: YawpLessonSlug; lead?: string };
 
 export type LandingSectionId =
   | 'how-to-teach-it'
@@ -200,6 +207,17 @@ const PREWRITING: LandingPage = {
     ),
   ],
   sections: [
+    // Not Brian's copy: the lead for the ready-built lesson (Kevin, Nov 5).
+    {
+      id: 'how-to-teach-it',
+      heading: 'How to Teach It',
+      blocks: [
+        p(
+          'Pre-writing is Lesson 2 of the Thesis-Driven Essay course, and the lesson is ready to teach. Open the lesson plan in your Lesson Planner to teach it as is or make it your own, and download the slide deck that goes with it.'
+        ),
+        { type: 'lesson', slug: 'pre-writing' },
+      ],
+    },
     {
       id: 'when-to-use-it',
       heading: 'When to use it',
@@ -260,6 +278,17 @@ const THESIS_STATEMENT: LandingPage = {
     ),
   ],
   sections: [
+    // Not Brian's copy: the lead for the ready-built lesson (Kevin, Nov 5).
+    {
+      id: 'how-to-teach-it',
+      heading: 'How to Teach It',
+      blocks: [
+        p(
+          'Developing a thesis statement is Lesson 3 of the Thesis-Driven Essay course, and the lesson is ready to teach. Open the lesson plan in your Lesson Planner to teach it as is or make it your own, and download the slide deck that goes with it.'
+        ),
+        { type: 'lesson', slug: 'thesis-statement' },
+      ],
+    },
     {
       id: 'when-to-use-it',
       heading: 'When to use it',

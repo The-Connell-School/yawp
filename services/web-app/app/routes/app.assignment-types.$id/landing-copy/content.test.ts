@@ -268,6 +268,34 @@ describe('every page', () => {
     expect(keys.filter((key) => blockTypes(key).includes('course'))).toEqual([
       'thesis-driven-essay',
     ]);
+    // The two steps with a lesson of their own show that one lesson.
+    expect(keys.filter((key) => blockTypes(key).includes('lesson')).sort()).toEqual([
+      'prewriting',
+      'thesis-statement',
+    ]);
+  });
+
+  describe('How to Teach It on the step pages (Kevin, Nov 5; not Brian’s copy)', () => {
+    test.each([
+      ['prewriting', 'pre-writing', 'Pre-writing is Lesson 2 of the Thesis-Driven Essay course'],
+      ['thesis-statement', 'thesis-statement', 'Developing a thesis statement is Lesson 3 of the Thesis-Driven Essay course'],
+    ] as const)('%s opens with How to Teach It and its lesson', (key, slug, lead) => {
+      const sections = page(key).sections;
+      expect(sections[0]!.id).toBe('how-to-teach-it');
+      expect(sections[0]!.heading).toBe('How to Teach It');
+      const [intro, lesson] = sections[0]!.blocks;
+      expect(intro!.type).toBe('paragraph');
+      expect(paragraphs([intro!])[0]).toContain(lead);
+      expect(paragraphs([intro!])[0]).toContain('Open the lesson plan in your Lesson Planner');
+      expect(lesson).toEqual({ type: 'lesson', slug });
+      // Brian's sections follow, in his order.
+      expect(sections.slice(1).map((s) => s.id)).toEqual(
+        key === 'prewriting'
+          ? ['when-to-use-it', 'how-it-works', 'prompt-library']
+          : ['when-to-use-it', 'how-it-works', 'what-makes-a-strong-thesis']
+      );
+      expect(landingPagePlainText(page(key))).toContain(lead);
+    });
   });
 
   test('a page with a library has a Prompt Library section, and one without does not', () => {

@@ -983,6 +983,21 @@ describe('app.assignment-types.$id loader landing page', () => {
     expect(after.data.thesisPromptLibrary.totalCount).toBeGreaterThanOrEqual(100);
   });
 
+  test('says when How to Teach It should open lesson plans in the planner', async () => {
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: true, lessonPlans: true });
+    expect((await load({ title: 'The Thesis-Driven Essay' })).data.landingLessonPlans).toBe(true);
+    expect((await load({ title: 'Prewriting', kind: 'prewriting' })).data.landingLessonPlans).toBe(true);
+    // No new page, no planner link: a school-authored type keeps the old page.
+    expect(
+      (await load({ title: "GBA 300: Int'l Expansion Plan" })).data.landingLessonPlans
+    ).toBe(false);
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: true, lessonPlans: false });
+    expect((await load({ title: 'The Thesis-Driven Essay' })).data.landingLessonPlans).toBe(false);
+    requireMembership.mockResolvedValue({ ...teacher, role: 'STUDENT' });
+    prisma.class.findMany.mockResolvedValue([]);
+    expect((await load({ title: 'Prewriting', kind: 'prewriting' })).data.landingLessonPlans).toBe(false);
+  });
+
   test('Thesis Statement gets no library', async () => {
     getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: false });
     const response = await load({ title: 'Thesis Statement', kind: 'thesis_statement' });

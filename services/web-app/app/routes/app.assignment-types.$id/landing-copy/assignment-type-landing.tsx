@@ -1,6 +1,6 @@
 import { Fragment, useId, useState } from 'react';
 import * as AccordionPrimitive from '@radix-ui/react-accordion';
-import { ChevronDown, FileText, Presentation } from 'lucide-react';
+import { BookOpen, ChevronDown, FileText, Presentation } from 'lucide-react';
 
 import { cn } from '~/utils/misc';
 
@@ -13,7 +13,21 @@ import type {
 import {
   THESIS_ESSAY_COURSE,
   THESIS_ESSAY_COURSE_TITLE,
+  type CourseDeck,
+  type CourseFile,
 } from './thesis-essay-course';
+import {
+  YAWP_LESSONS,
+  yawpLessonHref,
+  type YawpLessonSlug,
+} from '~/domain/lesson-planner/yawp-lessons';
+
+/**
+ * Whether "Lesson plan" opens the lesson in the teacher's Lesson Planner
+ * (How to Teach It → lesson plans, Kevin, Nov 5): the flag is on and the
+ * school has the planner. Off, it is Brian's PDF, as before.
+ */
+type LessonLinks = { yawpLessons: boolean };
 
 /**
  * Inline markup used by the landing copy: **bold** and *italic*. Nothing else
@@ -82,16 +96,99 @@ const COURSE_LINK_CLASS =
   'inline-flex items-center gap-1.5 whitespace-nowrap rounded-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 /**
+ * One lesson's row, as Brian drew it: its number and title, then two fixed
+ * columns, the lesson plan and the slide deck(s), so links line up down the
+ * card. The lesson plan opens in the teacher's Lesson Planner where that is
+ * on, else as a PDF in a new tab. Lessons without one simply have no link.
+ */
+function CourseLessonRow({
+  index,
+  title,
+  lessonPlan,
+  yawpLesson,
+  decks,
+  yawpLessons,
+}: {
+  index: number | null;
+  title: string;
+  lessonPlan: CourseFile | null;
+  yawpLesson: YawpLessonSlug | null;
+  decks: CourseDeck[];
+} & LessonLinks) {
+  const inPlanner = yawpLessons && yawpLesson !== null;
+  return (
+    <li
+      data-testid="course-lesson"
+      className="flex flex-col gap-1.5 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+    >
+      <span className="flex items-baseline gap-3 text-base">
+        {index !== null ? (
+          <span className="w-4 shrink-0 tabular-nums text-muted-foreground">{index}</span>
+        ) : null}
+        <span data-lesson-title>{title}</span>
+      </span>
+      {/* Two fixed-width columns on every row, empty or not, so each
+          "Lesson plan" and each "Slide deck" starts at the same spot
+          down the card. A lesson's second deck sits under its first. */}
+      <span
+        className={cn(
+          'flex shrink-0 gap-6 text-sm sm:pl-0 sm:pt-0.5',
+          index !== null ? 'pl-7' : 'pl-0'
+        )}
+      >
+        <span data-course-column="lesson-plan" className="flex w-28 flex-col">
+          {inPlanner ? (
+            <a
+              href={yawpLessonHref(yawpLesson)}
+              data-testid="lesson-plan-planner"
+              aria-label={`${title}: lesson plan (opens in your Lesson Planner)`}
+              className={COURSE_LINK_CLASS}
+            >
+              <BookOpen className="h-4 w-4" aria-hidden />
+              Lesson plan
+            </a>
+          ) : lessonPlan ? (
+            <a
+              href={lessonPlan.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`${title}: lesson plan (PDF)`}
+              className={COURSE_LINK_CLASS}
+            >
+              <FileText className="h-4 w-4" aria-hidden />
+              Lesson plan
+            </a>
+          ) : null}
+        </span>
+        <span data-course-column="slide-deck" className="flex w-40 flex-col gap-1.5">
+          {decks.map((deck) => (
+            <a
+              key={deck.href}
+              href={deck.href}
+              download={deck.fileName}
+              aria-label={`${title}: ${deck.label.toLowerCase()}${deck.label === 'Slide deck' ? '' : ' slide deck'} (PowerPoint)`}
+              className={COURSE_LINK_CLASS}
+            >
+              <Presentation className="h-4 w-4" aria-hidden />
+              {deck.label}
+            </a>
+          ))}
+        </span>
+      </span>
+    </li>
+  );
+}
+
+/**
  * The Thesis-Driven Essay course, as Brian drew it: one row per lesson, in
- * order, each with its lesson plan (a PDF, opened in a new tab) and slide
- * deck (a PowerPoint file, downloaded). Lessons without one simply have no
- * link for it.
+ * order, each with its lesson plan and slide deck.
  */
 function ThesisEssayCourse({
   block,
+  yawpLessons,
 }: {
   block: Extract<LandingBlock, { type: 'course' }>;
-}) {
+} & LessonLinks) {
   return (
     <div className="space-y-3">
       {block.lead ? (
@@ -111,53 +208,58 @@ function ThesisEssayCourse({
         </h3>
         <ol className="flex flex-col divide-y">
           {THESIS_ESSAY_COURSE.map((lesson, index) => (
-            <li
+            <CourseLessonRow
               key={lesson.title}
-              data-testid="course-lesson"
-              className="flex flex-col gap-1.5 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
-            >
-              <span className="flex items-baseline gap-3 text-base">
-                <span className="w-4 shrink-0 tabular-nums text-muted-foreground">
-                  {index + 1}
-                </span>
-                <span data-lesson-title>{lesson.title}</span>
-              </span>
-              {/* Two fixed-width columns on every row, empty or not, so each
-                  "Lesson plan" and each "Slide deck" starts at the same spot
-                  down the card. A lesson's second deck sits under its first. */}
-              <span className="flex shrink-0 gap-6 pl-7 text-sm sm:pl-0 sm:pt-0.5">
-                <span data-course-column="lesson-plan" className="flex w-28 flex-col">
-                  {lesson.lessonPlan ? (
-                    <a
-                      href={lesson.lessonPlan.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`${lesson.title}: lesson plan (PDF)`}
-                      className={COURSE_LINK_CLASS}
-                    >
-                      <FileText className="h-4 w-4" aria-hidden />
-                      Lesson plan
-                    </a>
-                  ) : null}
-                </span>
-                <span data-course-column="slide-deck" className="flex w-40 flex-col gap-1.5">
-                  {lesson.decks.map((deck) => (
-                    <a
-                      key={deck.href}
-                      href={deck.href}
-                      download={deck.fileName}
-                      aria-label={`${lesson.title}: ${deck.label.toLowerCase()}${deck.label === 'Slide deck' ? '' : ' slide deck'} (PowerPoint)`}
-                      className={COURSE_LINK_CLASS}
-                    >
-                      <Presentation className="h-4 w-4" aria-hidden />
-                      {deck.label}
-                    </a>
-                  ))}
-                </span>
-              </span>
-            </li>
+              index={index + 1}
+              title={lesson.title}
+              lessonPlan={lesson.lessonPlan}
+              yawpLesson={lesson.yawpLesson}
+              decks={lesson.decks}
+              yawpLessons={yawpLessons}
+            />
           ))}
         </ol>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One lesson of the course, on the page of the step it teaches (Pre-Writing,
+ * Thesis Statement): the same row the course card shows for it.
+ */
+function YawpLessonBlock({
+  block,
+  yawpLessons,
+}: {
+  block: Extract<LandingBlock, { type: 'lesson' }>;
+} & LessonLinks) {
+  const lesson = YAWP_LESSONS[block.slug];
+  const inCourse = THESIS_ESSAY_COURSE.find((row) => row.yawpLesson === block.slug);
+  return (
+    <div className="space-y-3">
+      {block.lead ? (
+        <p className="text-sm text-foreground">
+          <RichText text={block.lead} />
+        </p>
+      ) : null}
+      <div
+        className="mt-2 border-t border-[#E4DCCF] pt-2 dark:border-border"
+        data-testid="yawp-lesson"
+        data-tour="type-modules"
+      >
+        <ul className="flex flex-col">
+          <CourseLessonRow
+            index={null}
+            title={lesson.title}
+            lessonPlan={inCourse?.lessonPlan ?? lesson.lessonPlanPdf}
+            yawpLesson={block.slug}
+            decks={
+              inCourse?.decks ?? [{ ...lesson.deck, label: 'Slide deck' }]
+            }
+            yawpLessons={yawpLessons}
+          />
+        </ul>
       </div>
     </div>
   );
@@ -179,11 +281,12 @@ function Block({
   block,
   modules,
   tone,
+  yawpLessons,
 }: {
   block: LandingBlock;
   modules: LandingModule[];
   tone: Tone;
-}) {
+} & LessonLinks) {
   if (block.type === 'paragraph') {
     return (
       <p className={cn('text-sm sm:text-base', TONE_CLASS[tone])}>
@@ -202,7 +305,12 @@ function Block({
       </ul>
     );
   }
-  if (block.type === 'course') return <ThesisEssayCourse block={block} />;
+  if (block.type === 'course') {
+    return <ThesisEssayCourse block={block} yawpLessons={yawpLessons} />;
+  }
+  if (block.type === 'lesson') {
+    return <YawpLessonBlock block={block} yawpLessons={yawpLessons} />;
+  }
   return <Steps block={block} modules={modules} />;
 }
 
@@ -216,7 +324,7 @@ export function LandingDescription({ page }: { page: LandingPage }) {
   return (
     <div className="flex flex-col gap-3" data-testid="landing-description">
       {page.description.map((block, index) => (
-        <Block key={index} block={block} modules={[]} tone="page" />
+        <Block key={index} block={block} modules={[]} tone="page" yawpLessons={false} />
       ))}
     </div>
   );
@@ -239,10 +347,11 @@ export const COLLAPSED_SECTIONS: ReadonlySet<LandingSectionId> = new Set([
 function CollapsibleSection({
   section,
   modules,
+  yawpLessons,
 }: {
   section: LandingSection;
   modules: LandingModule[];
-}) {
+} & LessonLinks) {
   const headingId = `landing-${section.id}`;
   return (
     <section
@@ -274,7 +383,13 @@ function CollapsibleSection({
                 className={cn(SPOTLIGHT_BOX, 'flex flex-col gap-3')}
               >
                 {section.blocks.map((block, index) => (
-                  <Block key={index} block={block} modules={modules} tone="box" />
+                  <Block
+                    key={index}
+                    block={block}
+                    modules={modules}
+                    tone="box"
+                    yawpLessons={yawpLessons}
+                  />
                 ))}
               </div>
             </div>
@@ -313,10 +428,11 @@ export const SPOTLIGHT_BOX = [
 function HowToTeachSection({
   section,
   modules,
+  yawpLessons,
 }: {
   section: LandingSection;
   modules: LandingModule[];
-}) {
+} & LessonLinks) {
   const [expanded, setExpanded] = useState(true);
   const bodyId = useId();
   const headingId = `landing-${section.id}`;
@@ -360,7 +476,13 @@ function HowToTeachSection({
       {expanded ? (
         <div id={bodyId} className="mt-3 flex flex-col gap-3">
           {section.blocks.map((block, index) => (
-            <Block key={index} block={block} modules={modules} tone="box" />
+            <Block
+              key={index}
+              block={block}
+              modules={modules}
+              tone="box"
+              yawpLessons={yawpLessons}
+            />
           ))}
         </div>
       ) : preview ? (
@@ -378,26 +500,28 @@ function HowToTeachSection({
 function Section({
   section,
   modules,
+  yawpLessons,
 }: {
   section: LandingSection;
   modules: LandingModule[];
-}) {
+} & LessonLinks) {
   if (COLLAPSED_SECTIONS.has(section.id)) {
-    return <CollapsibleSection section={section} modules={modules} />;
+    return <CollapsibleSection section={section} modules={modules} yawpLessons={yawpLessons} />;
   }
   if (section.id === 'how-to-teach-it') {
-    return <HowToTeachSection section={section} modules={modules} />;
+    return <HowToTeachSection section={section} modules={modules} yawpLessons={yawpLessons} />;
   }
-  return <OpenSection section={section} modules={modules} />;
+  return <OpenSection section={section} modules={modules} yawpLessons={yawpLessons} />;
 }
 
 function OpenSection({
   section,
   modules,
+  yawpLessons,
 }: {
   section: LandingSection;
   modules: LandingModule[];
-}) {
+} & LessonLinks) {
   const headingId = `landing-${section.id}`;
   // The library right below the intro is labelled "Prompt Library" already;
   // a second visible heading saying the same thing would only stack up.
@@ -416,7 +540,13 @@ function OpenSection({
         {section.heading}
       </h2>
       {section.blocks.map((block, index) => (
-        <Block key={index} block={block} modules={modules} tone="page" />
+        <Block
+          key={index}
+          block={block}
+          modules={modules}
+          tone="page"
+          yawpLessons={yawpLessons}
+        />
       ))}
     </section>
   );
@@ -431,9 +561,12 @@ function OpenSection({
 export function LandingSections({
   page,
   modules,
+  yawpLessons = false,
 }: {
   page: LandingPage;
   modules: LandingModule[];
+  /** "Lesson plan" opens the lesson in the teacher's Lesson Planner. */
+  yawpLessons?: boolean;
 }) {
   // Back-to-back drop-downs stack as one list, like the library's own row;
   // open sections keep their breathing room around them.
@@ -455,7 +588,12 @@ export function LandingSections({
       {groups.map((group) => (
         <div key={group[0]!.id} className="flex flex-col">
           {group.map((section) => (
-            <Section key={section.id} section={section} modules={modules} />
+            <Section
+              key={section.id}
+              section={section}
+              modules={modules}
+              yawpLessons={yawpLessons}
+            />
           ))}
         </div>
       ))}
