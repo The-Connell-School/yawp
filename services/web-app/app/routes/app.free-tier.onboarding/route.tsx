@@ -245,6 +245,16 @@ export async function action({ request }: ActionFunctionArgs) {
         return data(result, { status: 400 });
       if (result.reason === 'class_required')
         return redirect('/app/free-tier/onboarding');
+      // submitAdminDetails' failure union widens to `{ reason: string }` and
+      // drops `error`. Keep the email failure code on the action result so
+      // callers can tell a delivery failure from other non-ok results.
+      if (result.reason === 'email_failed') {
+        const error =
+          'error' in result && typeof result.error === 'string'
+            ? result.error
+            : 'unknown';
+        return { ok: false as const, reason: 'email_failed' as const, error };
+      }
       return result;
     }
     const { ensureLockedPreviewClassroomForUser } =
