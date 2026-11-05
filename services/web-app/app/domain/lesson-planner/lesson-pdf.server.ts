@@ -20,6 +20,8 @@ import { classicSlide, deckDurationMinutes, type Slide, type SlideDeck } from '.
 import { deckColors, withoutColorMarks } from './deck-colors';
 import { GALLERY_COLORS, galleryAccent, galleryRunningHead, planGalleryDeck, type GallerySlidePlan } from './deck-gallery';
 import { deckArt } from './deck-art';
+import { PICTURE_PLACEHOLDER } from './deck-pictures';
+import type { DeckPictureFiles } from './deck-pictures.server';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { registerKitFonts } from './kit-fonts.server';
@@ -343,7 +345,8 @@ function drawSlideFace(
   deck: SlideDeck,
   plan: GallerySlidePlan,
   art: { path: string } | null,
-  box: { x: number; y: number; w: number; h: number }
+  box: { x: number; y: number; w: number; h: number },
+  pictures: DeckPictureFiles = new Map()
 ): void {
   const primary = galleryAccent(deck);
   const light = plan.dark || plan.ground === 'accent';
@@ -379,6 +382,33 @@ function drawSlideFace(
       // An image PDFKit cannot read: the slide is drawn without it.
       doc.restore();
     }
+  }
+
+  // The teacher's own picture (Nov 1), whole, on the right where the painting
+  // would hang. PDFKit prints PNG and JPEG; anything else, or a picture this
+  // file may not carry, prints as a placeholder that says so.
+  if (slide.image) {
+    const width = box.w * 0.46;
+    const frame = { x: box.x + box.w - width - pad * 0.5, y: box.y + pad * 0.5, w: width, h: box.h - pad };
+    const file = pictures.get(slide.image);
+    let printed = false;
+    if (file && (file.contentType === 'image/png' || file.contentType === 'image/jpeg')) {
+      try {
+        doc.image(file.data, frame.x, frame.y, { fit: [frame.w, frame.h], align: 'center', valign: 'center' });
+        printed = true;
+      } catch {
+        printed = false;
+      }
+    }
+    if (!printed) {
+      doc.save().lineWidth(0.6).dash(3, { space: 2 }).strokeColor(muted).rect(frame.x, frame.y, frame.w, frame.h).stroke().undash().restore();
+      doc
+        .font(styleOf(doc).fonts.body)
+        .fontSize(7)
+        .fillColor(muted)
+        .text(PICTURE_PLACEHOLDER, frame.x + 6, frame.y + frame.h / 2 - 10, { width: frame.w - 12, align: 'center' });
+    }
+    textWidth = box.w - width - pad * 2;
   }
 
   let y = box.y + pad * 0.8;
@@ -452,7 +482,7 @@ function drawSlideFace(
  * page; a slide never splits from its notes. Notes are set as a quote so the
  * bar down the margin tells them apart from what students see.
  */
-function drawSlideDeck(doc: Doc, deck: SlideDeck): void {
+function drawSlideDeck(doc: Doc, deck: SlideDeck, pictures: DeckPictureFiles = new Map()): void {
   const minutes = deckDurationMinutes(deck);
   const summary = [
     `${deck.slides.length} slide${deck.slides.length === 1 ? '' : 's'}`,
@@ -479,7 +509,7 @@ function drawSlideDeck(doc: Doc, deck: SlideDeck): void {
     // The picture, its caption and the start of its notes stay together.
     ensureRoom(doc, SLIDE_HEIGHT + 64);
     const top = doc.y + 4;
-    drawSlideFace(doc, deck, plan, art ? { path: art } : null, { x: left, y: top, w: SLIDE_WIDTH, h: SLIDE_HEIGHT });
+    drawSlideFace(doc, deck, plan, art ? { path: art } : null, { x: left, y: top, w: SLIDE_WIDTH, h: SLIDE_HEIGHT }, pictures);
     doc.x = left;
     doc.y = top + SLIDE_HEIGHT + 6;
     const blocks: Block[] = [
@@ -584,7 +614,8 @@ function packetSubtitle(packet: LessonPacket): string | null {
  * material kept inside a reply printed alongside it.
  */
 export async function renderPacketPdf(
-  packet: LessonPacket
+  packet: LessonPacket,
+  { pictures }: { pictures?: DeckPictureFiles } = {}
 ): Promise<Uint8Array> {
   const doc = newDocument(packet.title);
   drawTitle(doc, { title: packet.title, subtitle: packetSubtitle(packet) });
@@ -597,7 +628,7 @@ export async function renderPacketPdf(
       runs: [{ text: section.title, bold: true }],
     });
     drawMarkdown(doc, section.content);
-    if (section.deck) drawSlideDeck(doc, section.deck);
+    if (section.deck) drawSlideDeck(doc, section.deck, pictures);
 
     for (const material of section.materials) {
       drawBlock(doc, {
@@ -619,13 +650,16 @@ export async function renderPacketPdf(
 export async function renderSlidesPdf({
   lessonTitle,
   deck,
+  pictures,
 }: {
   lessonTitle: string;
   deck: SlideDeck;
+  /** The teacher's own pictures this file may carry (Nov 1). */
+  pictures?: DeckPictureFiles;
 }): Promise<Uint8Array> {
   const doc = newDocument(deck.title);
   drawTitle(doc, { title: deck.title, subtitle: lessonTitle });
-  drawSlideDeck(doc, deck);
+  drawSlideDeck(doc, deck, pictures);
   return finish(doc);
 }
 

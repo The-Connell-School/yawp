@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useActiveTime } from '~/components/lesson-planner/use-active-time';
 import {
   Link,
   useFetcher,
@@ -64,6 +65,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export default function LessonPacketRoute() {
   const data = useLoaderData<typeof loader>();
+  // "Planned in" is working time (Nov 3): the stack page counts it too.
+  // A set lesson's clock has stopped, so its page has nothing to report.
+  useActiveTime({ conversationId: data.conversationId, enabled: data.reviewFlags.activeTime && !data.v3?.setAt });
   if (data.v3) return <StackPageV3 data={data as StackPageV3Data} />;
   return <LessonPacketRouteV2 />;
 }

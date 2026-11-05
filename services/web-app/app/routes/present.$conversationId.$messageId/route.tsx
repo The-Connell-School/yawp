@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { DeckPicturesProvider } from '~/components/lesson-planner/slide-picture';
+import { viewerDeckPictures } from '~/domain/lesson-planner/deck-pictures.server';
 import {
   Link,
   redirect,
@@ -49,10 +51,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     tileTemplate: deckV2,
     // The Lesson Deck Kit, behind its own flag.
     galleryTemplate: deckGallery,
+    // The teacher's own pictures on its slides (Nov 1).
+    pictures: await viewerDeckPictures(request, [deck]),
   };
 }
 
 export default function PresentRoute() {
+  const { pictures } = useLoaderData<typeof loader>();
+  return (
+    <DeckPicturesProvider pictures={pictures}>
+      <PresentDeck />
+    </DeckPicturesProvider>
+  );
+}
+
+function PresentDeck() {
   const { conversationId, lessonTitle, deck, durationMinutes, tileTemplate, galleryTemplate } =
     useLoaderData<typeof loader>();
   const location = useLocation();

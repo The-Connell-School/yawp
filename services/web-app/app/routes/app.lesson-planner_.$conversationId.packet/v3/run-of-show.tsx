@@ -213,6 +213,7 @@ export function RunOfShow({
   onLectureSlides = null,
   missingIds = new Set(),
   flaggedId = null,
+  onWriting = null,
 }: {
   conversationId: string;
   steps: StackStep[];
@@ -239,6 +240,8 @@ export function RunOfShow({
   missingIds?: ReadonlySet<string>;
   /** The step suggested for extra time while the lesson runs over (Kevin's note 8b). */
   flaggedId?: string | null;
+  /** Count a step as writing, or not (Nov 4 follow-up). Absent: Yawp! decides. */
+  onWriting?: ((step: StackStep, writing: boolean) => void) | null;
 }) {
   const [dragKey, setDragKey] = useState<string | null>(null);
   const byId = new Map(blocks.map((block) => [block.id, block]));
@@ -459,6 +462,31 @@ export function RunOfShow({
                       >
                         Edit this step
                       </button>
+                    ) : null}
+                    {editable && onWriting ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          data-testid="step-writing-toggle"
+                          disabled={busy}
+                          onClick={() => onWriting(step, !step.isWriting)}
+                          title={
+                            step.isWriting
+                              ? 'Take this step’s minutes out of the writing time'
+                              : 'Count this step’s minutes as writing time'
+                          }
+                          className="inline-flex items-center gap-1 font-semibold underline underline-offset-2 disabled:opacity-50"
+                          style={{ color: 'var(--sv-writing)' }}
+                        >
+                          <PenLine size={12} />
+                          {step.isWriting ? 'Don’t count as writing' : 'Count as writing'}
+                        </button>
+                        {step.writingByTeacher ? (
+                          <span data-testid="step-writing-your-call" className="text-[var(--sv-muted)]">
+                            (your call)
+                          </span>
+                        ) : null}
+                      </span>
                     ) : null}
                     <Link
                       to={`/app/lesson-planner?c=${conversationId}&rework=${encodeURIComponent(step.title)}`}

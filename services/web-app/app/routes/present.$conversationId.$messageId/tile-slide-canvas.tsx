@@ -13,6 +13,7 @@
  */
 import { useLayoutEffect, useRef } from 'react';
 import { classicSlide, type Slide } from '~/domain/lesson-planner/slide-deck';
+import { SlidePicture } from '~/components/lesson-planner/slide-picture';
 import {
   css,
   DEFAULT_TILE_FOOTER_MARK,
@@ -288,6 +289,34 @@ function TileBody({ slide, onEdit }: { slide: Slide; onEdit: Edit }) {
           </div>
         </>
       );
+
+    case 'picture': {
+      // The teacher's own picture, whole, with its question beside it (Nov 1).
+      const field = slide.question !== undefined ? 'question' : 'body';
+      const words = slide[field];
+      return (
+        <>
+          <Heading slide={slide} onEdit={onEdit} />
+          <div className={words || onEdit ? 'grid min-h-0 flex-1 grid-cols-[3fr_2fr] gap-[3%]' : 'flex min-h-0 flex-1'}>
+            <div data-testid="tile-card" className="flex min-h-0 items-center justify-center overflow-hidden p-[3%]" style={CARD_STYLE}>
+              <SlidePicture id={slide.image} />
+            </div>
+            {words || onEdit ? (
+              <div className="flex items-center">
+                <Words
+                  as="p"
+                  label="Slide text"
+                  value={words ?? ''}
+                  onChange={onEdit ? (next) => onEdit(field === 'question' ? { question: next } : { body: next }) : undefined}
+                  className="leading-[1.25]"
+                  style={{ fontFamily: SERIF, fontSize: BODY_TYPE, color: css('ink') }}
+                />
+              </div>
+            ) : null}
+          </div>
+        </>
+      );
+    }
 
     case 'compare': {
       const longest = Math.max(slide.left?.text.length ?? 0, slide.right?.text.length ?? 0);

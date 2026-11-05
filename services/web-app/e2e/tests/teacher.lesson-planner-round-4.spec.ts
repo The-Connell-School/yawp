@@ -180,7 +180,7 @@ test.describe("Brian's round 4 (Oct 28)", () => {
     await expect(page).toHaveURL(new RegExp(`/app/lesson-planner/${conversationId}/packet$`));
   });
 
-  test('4: This lesson is set throws confetti, raises the Yawp! logo and plays Brian’s "Yaaawp!"', async ({ page, signIn, e2eContext }) => {
+  test('4: Set this lesson throws confetti, raises the Yawp! logo and plays Brian’s "Yaaawp!"', async ({ page, signIn, e2eContext }) => {
     // The sound, stubbed so the test can hear which clip plays.
     await page.addInitScript(() => {
       const played: string[] = [];

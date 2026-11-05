@@ -24,6 +24,10 @@ export type StackStep = TimedStep & {
   create: StackCreateLink | null;
   /** The chat card this came from, "<messageId>:<blockKey>". */
   token: string | null;
+  /** What the rule in step-types says, before the teacher's call. */
+  writingAuto: boolean;
+  /** The teacher made the call on writing (Nov 4 follow-up). */
+  writingByTeacher: boolean;
 };
 
 type Meta = {
@@ -33,6 +37,11 @@ type Meta = {
   hasHandout: boolean | null;
   yawpAssignmentId: string | null;
   yawpCreated: boolean;
+  /**
+   * The teacher's call on writing (Nov 4 follow-up). Null or absent: the rule
+   * decides. Optional so a caller from before the override reads as before.
+   */
+  writing?: boolean | null;
 };
 
 const STUDENT_KINDS = new Set(['class-starter', 'daily-pages', 'exit-ticket', 'handout', 'sample']);
@@ -69,13 +78,20 @@ export function stackSteps({
     const entry = outline.get(section.anchor);
     // Planned minutes only; a suggested time is the timing's to fill in.
     const minutes = meta?.minutes ?? (entry && !entry.suggested ? entry.minutes : null);
-    const isWriting = isWritingStep({
+    const writingAuto = isWritingStep({
       kind,
       stepType: type,
       title,
       content: section.content,
       yawpAssignmentId: meta?.yawpAssignmentId ?? (meta?.yawpCreated ? 'created' : null),
     });
+    // The teacher's call wins (Nov 4 follow-up): a lecture that introduces
+    // pre-writing is not writing because the teacher says so.
+    const teacherCall = typeof meta?.writing === 'boolean' ? meta.writing : null;
+    const isWriting = teacherCall ?? writingAuto;
+    // Not writing, no "Create … in Yawp!" either, so the badge and the button
+    // never disagree. An assignment already made still says so.
+    const create = stackDetails[section.id]?.create ?? null;
     return [
       {
         key: stackEntryKey(section),
@@ -92,14 +108,39 @@ export function stackSteps({
           meta?.hasHandout ?? (STUDENT_KINDS.has(kind) || section.audience === 'student' || isWriting),
         excerpt: excerptOf(section.content),
         content: section.content,
-        create: stackDetails[section.id]?.create ?? null,
+        create: teacherCall === false && !create?.created ? null : create,
         token: materialTokens[section.id] ?? null,
+        writingAuto,
+        writingByTeacher: teacherCall !== null,
       },
     ];
   });
 }
 
 export type { StepType };
+
+/**
+ * A step with the teacher's call on writing applied (Nov 4 follow-up): true
+ * or false, or null for the rule's own answer. The same rule stackSteps
+ * applies, for the page to show a call at once, before the stack is read again.
+ */
+export function withWritingCall<T extends StackStep>(step: T, call: boolean | null): T {
+  const isWriting = call ?? step.writingAuto;
+  return {
+    ...step,
+    isWriting,
+    writingByTeacher: call !== null,
+    writingName: isWriting
+      ? (step.writingName ?? writingName({ kind: step.kind, stepType: step.type, title: step.title, content: step.content }))
+      : undefined,
+    create: call === false && !step.create?.created ? null : step.create,
+  };
+}
+
+/** What a writing toggle sends: the call, or "auto" when it is the rule's own answer. */
+export function writingCallFor(step: Pick<StackStep, 'writingAuto'>, writing: boolean): boolean | null {
+  return writing === step.writingAuto ? null : writing;
+}
 
 /**
  * The writing steps whose Yawp! assignment has not been made yet, in order,
