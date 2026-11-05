@@ -2,6 +2,18 @@ import { describe, expect, test } from 'bun:test';
 import { FREE_TIER_STATE_GROUPS } from './free-tier-states.catalog';
 
 describe('free-tier states catalog', () => {
+  test('Lifecycle group jumps rejected and expired applications to status', () => {
+    const lifecycle = FREE_TIER_STATE_GROUPS.find((g) => g.id === 'lifecycle');
+    expect(lifecycle?.states.map((s) => s.id)).toEqual([
+      'lifecycle.rejected',
+      'lifecycle.expired',
+    ]);
+    expect(lifecycle?.states.map((s) => s.label)).toEqual([
+      'Not approved',
+      'Invite expired',
+    ]);
+  });
+
   test('Approved group lists seven designed jumper states', () => {
     const approved = FREE_TIER_STATE_GROUPS.find((g) => g.id === 'approved');
     expect(approved?.states.map((s) => s.id)).toEqual([

@@ -598,6 +598,14 @@ export async function executeFreeTierStateJump(
         redirectTo = '/app/free-tier/pending';
         break;
       }
+      case 'lifecycle.rejected':
+        await upsertApplication(target.userId, target.email, 'REJECTED');
+        redirectTo = '/app/free-tier/status';
+        break;
+      case 'lifecycle.expired':
+        await upsertApplication(target.userId, target.email, 'EXPIRED');
+        redirectTo = '/app/free-tier/status';
+        break;
       case 'approved.first-time-toast':
       case 'approved.usage-plenty-left':
       case 'approved.usage-about-half-left':
