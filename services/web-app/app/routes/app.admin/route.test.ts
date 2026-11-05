@@ -45,4 +45,12 @@ describe('admin tabs', () => {
 
     expect(aiEvaluationsTab?.label).toBe('Grading Evaluations');
   });
+
+  test('links to the access and flags admin surface', () => {
+    const accessFlagsTab = adminTabs.find(
+      (tab) => tab.to === '/app/admin/access-flags'
+    );
+
+    expect(accessFlagsTab?.label).toBe('Access & flags');
+  });
 });

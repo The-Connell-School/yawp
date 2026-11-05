@@ -58,28 +58,16 @@ export type FeatureFlagState = {
 const LAST_CHANGED_BY_PREFIX = 'Last changed by ';
 const EVERYONE: FeatureFlagValue = { mode: 'everyone', orgIds: [] };
 
-export function isDemoDeployment(env: Record<string, string | undefined>) {
-  return (
-    env.PREVIEW_SLUG?.trim().toLowerCase() === 'demo' ||
-    env.YAWP_ENVIRONMENT?.trim().toLowerCase() === 'demo'
-  );
-}
-
-export function isPreviewDeployment(env: Record<string, string | undefined>) {
-  return env.YAWP_ENVIRONMENT?.trim().toLowerCase() === 'preview';
-}
-
-/**
- * Demo and PR previews ship with free tier and unified sign-on on without Internal
- * changes. This replaces a separate demo-only route gate (`isDemoFreeTierRouteOpen`);
- * Internal may have surfaced that as a synthetic `demo_free_tier` override — runtime
- * and the management API use `free-tier` persisted/effective only.
- */
-export function isNonProductionDefaultOnDeployment(
-  env: Record<string, string | undefined>
-) {
-  return isDemoDeployment(env) || isPreviewDeployment(env);
-}
+export {
+  isDemoDeployment,
+  isPreviewDeployment,
+  isNonProductionDefaultOnDeployment,
+} from './feature-flags.deployment';
+import {
+  isDemoDeployment,
+  isPreviewDeployment,
+  isNonProductionDefaultOnDeployment,
+} from './feature-flags.deployment';
 
 function runtimeDefaultOn(key: FeatureFlagKey, env: Record<string, string | undefined>) {
   if (!isNonProductionDefaultOnDeployment(env)) return false;
