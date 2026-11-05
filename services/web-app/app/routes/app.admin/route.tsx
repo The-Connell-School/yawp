@@ -18,6 +18,7 @@ import {
   Settings,
   FlaskConical,
   MessageSquare,
+  Flag,
 } from 'lucide-react';
 import { requireAdmin } from '~/utils/auth.server';
 import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
@@ -34,7 +35,7 @@ export const adminTabs = [
     icon: <Settings size={16} className="opacity-75 mr-1" />,
   },
   {
-    label: 'Organizations (read-only moved)',
+    label: 'Organizations',
     to: '/app/admin/organizations',
     icon: <User size={16} className="opacity-75 mr-1" />,
   },
@@ -62,6 +63,11 @@ export const adminTabs = [
     label: 'Free tier',
     to: '/app/admin/free-tier',
     icon: <User size={16} className="opacity-75 mr-1" />,
+  },
+  {
+    label: 'Access & flags',
+    to: '/app/admin/access-flags',
+    icon: <Flag size={16} className="opacity-75 mr-1" />,
   },
 ];
 

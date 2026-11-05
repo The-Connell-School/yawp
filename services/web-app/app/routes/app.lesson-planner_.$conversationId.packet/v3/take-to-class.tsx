@@ -9,7 +9,7 @@ import { FileText, MonitorPlay, Printer } from 'lucide-react';
 import { HEADING_FONT } from './theme';
 import { DeckArtImage } from '~/components/lesson-planner/deck-art-image';
 
-function Row({
+export function Row({
   icon,
   title,
   line,
@@ -36,7 +36,7 @@ function Row({
   );
 }
 
-const BUTTON =
+export const BUTTON =
   'flex-1 rounded-lg border border-white/20 px-3 py-2 text-center text-sm font-semibold transition hover:bg-white/10';
 
 export function TakeToClass({
@@ -46,6 +46,8 @@ export function TakeToClass({
   handoutCount,
   deck,
   deckV2,
+  onBuildDeck = null,
+  builtDeck = null,
   children,
 }: {
   conversationId: string;
@@ -54,6 +56,17 @@ export function TakeToClass({
   handoutCount: number;
   deck: { id: string; slides: number; title: string; artSwatch: string | null } | null;
   deckV2: boolean;
+  /**
+   * Build or rebuild the deck right here, in the stack's Ask the planner
+   * (Brian's run 6, item 2). Absent: the chat builds it.
+   */
+  onBuildDeck?: (() => void) | null;
+  /**
+   * A deck already built but not in the lesson (run 6, round 2; Kevin's note,
+   * Oct 24): present it, or add it, rather than build it again.
+   */
+  /** A deck built but not in the lesson. `editHref` is null without deck v2. */
+  builtDeck?: { presentHref: string; editHref: string | null; onStack: boolean; onAdd: () => void } | null;
   /** Post to your class sits inside, when sharing is on. */
   children?: React.ReactNode;
 }) {
@@ -112,7 +125,15 @@ export function TakeToClass({
       <Row
         icon={<MonitorPlay size={16} />}
         title="Slide deck"
-        line={deck ? `${deck.slides} slides from your stack` : `About one slide per step (${stepCount} steps)`}
+        line={
+          deck
+            ? `${deck.slides} slides from your stack`
+            : builtDeck
+              ? builtDeck.onStack
+                ? 'You built a deck here. It isn’t in the lesson yet'
+                : 'The planner already made a deck in your conversation'
+              : `About one slide per step (${stepCount} steps)`
+        }
       >
         {deck?.artSwatch ? (
           <DeckArtImage
@@ -124,7 +145,7 @@ export function TakeToClass({
         ) : null}
         {deck ? (
           <>
-            <Link to={`/present/${conversationId}/${deck.id}`} data-testid="deck-present" className={BUTTON}>
+            <Link to={`/present/${conversationId}/${deck.id}?from=stack`} data-testid="deck-present" className={BUTTON}>
               Present
             </Link>
             {deckV2 ? (
@@ -132,9 +153,36 @@ export function TakeToClass({
                 Edit
               </Link>
             ) : null}
-            <Link to={`/app/lesson-planner?c=${conversationId}&build=rebuild-deck`} className={BUTTON}>
-              Rebuild
-            </Link>
+            {onBuildDeck ? (
+              <button type="button" onClick={onBuildDeck} data-testid="rebuild-deck" className={BUTTON}>
+                Rebuild
+              </button>
+            ) : (
+              <Link to={`/app/lesson-planner?c=${conversationId}&build=rebuild-deck`} className={BUTTON}>
+                Rebuild
+              </Link>
+            )}
+          </>
+        ) : onBuildDeck ? (
+          <>
+            {builtDeck ? (
+              <>
+                <Link to={builtDeck.presentHref} data-testid="built-deck-present" className={BUTTON}>
+                  Present
+                </Link>
+                {builtDeck.editHref ? (
+                  <Link to={builtDeck.editHref} data-testid="built-deck-edit" className={BUTTON}>
+                    Edit
+                  </Link>
+                ) : null}
+                <button type="button" onClick={builtDeck.onAdd} data-testid="add-conversation-deck" className={BUTTON}>
+                  Add it
+                </button>
+              </>
+            ) : null}
+            <button type="button" onClick={onBuildDeck} data-testid="build-deck" className={BUTTON}>
+              {builtDeck ? 'Build a new one' : 'Build the deck'}
+            </button>
           </>
         ) : (
           <Link to={`/app/lesson-planner?c=${conversationId}&build=deck`} data-testid="build-deck" className={BUTTON}>
@@ -152,7 +200,7 @@ export function TakeToClass({
             : 'Choose which steps go in'
         }
       >
-        <Link to={`${base}/handouts`} data-testid="handouts-print" className={BUTTON}>
+        <Link to={`${base}/handouts?from=stack`} data-testid="handouts-print" className={BUTTON}>
           Print
         </Link>
         <a href={`${base}/handouts.pdf`} download data-testid="handouts-pdf" className={BUTTON}>

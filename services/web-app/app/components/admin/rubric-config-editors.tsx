@@ -1305,6 +1305,65 @@ function categoriesToRubric(categories: RubricCategoryRow[]): RubricData {
   return prepareRubricForSave({ categories });
 }
 
+/** Per-type built-in rubric only: toggle grammar highlighting without inline category editing. */
+export function RubricGrammarHighlightingControl({
+  initialRubric,
+  namePrefix = 'assignmentType',
+  onRubricChange,
+}: {
+  initialRubric: RubricData;
+  namePrefix?: string;
+  onRubricChange?: (rubric: RubricData) => void;
+}) {
+  const [categories, setCategories] = useState<RubricCategory[]>(
+    () => initialRubric.categories
+  );
+
+  useEffect(() => {
+    setCategories(initialRubric.categories);
+  }, [initialRubric]);
+
+  if (categories.length === 0) {
+    return null;
+  }
+
+  const rubricForSave = prepareRubricForSave({ categories });
+
+  return (
+    <>
+      <div className="flex items-start justify-between gap-3 border-t pt-4">
+        <div className="min-w-0">
+          <Label htmlFor={`${namePrefix}rubric-grammar-highlighting`}>
+            Grammar highlighting
+          </Label>
+          <p className="mt-1 text-sm text-muted-foreground text-pretty">
+            Produce grammar and syntax highlights on the student's essay. This
+            applies to the whole rubric, not one category.
+          </p>
+        </div>
+        <Switch
+          id={`${namePrefix}rubric-grammar-highlighting`}
+          data-testid="rubric-grammar-highlighting"
+          checked={resolveGrammarHighlightingEnabled(categories)}
+          onCheckedChange={(checked) => {
+            const next = categories.map((category) => ({
+              ...category,
+              grammarHighlighting: checked,
+            }));
+            setCategories(next);
+            onRubricChange?.(prepareRubricForSave({ categories: next }));
+          }}
+        />
+      </div>
+      <input
+        type="hidden"
+        name="rubricJson"
+        value={JSON.stringify(rubricForSave)}
+      />
+    </>
+  );
+}
+
 export function RubricConfigurationEditor({
   initialScoringScale = DEFAULT_SCORING_SCALE,
   initialRubric = { categories: [] },

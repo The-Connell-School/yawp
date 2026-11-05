@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'bun:test';
+import { UNIVERSAL_TUTOR_BLOCK } from '../../../../../packages/prisma/scripts/universal-tutor-block';
 import {
   buildModuleRubricGuidance,
   buildTutorSystemPrompt,
@@ -41,8 +42,27 @@ describe('buildTutorSystemPrompt', () => {
     });
     expect(result).toContain('behind-the-scenes information');
     expect(result).toContain('student_document_context');
-    expect(result.startsWith('\n')).toBe(false);
+    expect(result).toContain(UNIVERSAL_TUTOR_BLOCK);
+    expect(result.startsWith('WHO YOU ARE.')).toBe(true);
     expect(result.endsWith('\n')).toBe(false);
+  });
+
+  it('uses the built-in universal tutor block when general instructions are empty', () => {
+    const result = buildTutorSystemPrompt({
+      ...base,
+      generalTutorInstructions: '   ',
+    });
+    expect(result.startsWith(UNIVERSAL_TUTOR_BLOCK)).toBe(true);
+  });
+
+  it('prefers assignment-type general tutor instructions over the universal block', () => {
+    const custom = 'Custom assignment-type tutor persona.';
+    const result = buildTutorSystemPrompt({
+      ...base,
+      generalTutorInstructions: custom,
+    });
+    expect(result.startsWith(custom)).toBe(true);
+    expect(result).not.toContain(UNIVERSAL_TUTOR_BLOCK);
   });
 
   it('includes module rubric guidance and excludes not-applicable categories', () => {

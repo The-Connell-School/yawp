@@ -120,6 +120,10 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   const html = document.html ?? '';
   const text = document.text ?? '';
   const now = new Date();
+  const submittedTitle =
+    data.title?.trim() || (document.title?.trim() ?? '');
+  const backfillDocumentTitle =
+    Boolean(data.title?.trim()) && !document.title?.trim();
   const documentOrganizationId = document.membership.organizationId;
   const freeTierOrganizationId =
     document.membership.organization.plan === 'FREE_CLASSROOM'
@@ -165,7 +169,12 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
           html: document.html,
           text: document.text,
         },
-        data: { updatedAt: now },
+        data: {
+          updatedAt: now,
+          ...(backfillDocumentTitle
+            ? { title: submittedTitle }
+            : {}),
+        },
       });
       if (updatedDocument.count !== 1) {
         throw new SubmitDocumentConflictError();
@@ -174,7 +183,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       const submission = await tx.submission.create({
         data: {
           documentId: document.id,
-          title: data.title || (document.title ?? ''),
+          title: submittedTitle,
           html,
           text,
           submittedAt: now,

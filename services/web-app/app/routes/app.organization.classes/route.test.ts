@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { CLASS_CODE_COLLISION_MESSAGE } from '~/utils/class-code-messages';
+import { CLASS_MANAGE_UNKNOWN_UNIQUE_CREATE_MESSAGE } from '~/utils/class-manage-action-errors.server';
 
 const requireOwner = mock(async () => ({ id: 'user-1' }));
 const requireMembership = mock(async () => ({
@@ -54,7 +56,12 @@ describe('app.organization.classes action', () => {
     prisma.$transaction.mockReset();
 
     prisma.class.findMany.mockImplementation(
-      async ({ where }: { where: { id?: { in: string[] } } }) => {
+      async ({
+        where,
+      }: {
+        where: { id?: { in: string[] }; schoolYear?: string };
+      }) => {
+        if (where?.schoolYear) return [];
         const ids = where?.id?.in ?? [];
         return ids.map((id: string) => ({ id, schoolId: `${id}-school` }));
       }
@@ -211,7 +218,7 @@ describe('app.organization.classes action', () => {
 
     expect(result.init.status).toBe(400);
     expect(result.data.error).toBe(
-      'Class code already in use. Choose a different code.'
+      CLASS_CODE_COLLISION_MESSAGE
     );
   });
 
@@ -286,7 +293,7 @@ describe('app.organization.classes action', () => {
     expect(prisma.class.create).toHaveBeenCalledTimes(4);
     expect(result.init.status).toBe(400);
     expect(result.data.error).toBe(
-      'Class code already in use. Choose a different code.'
+      CLASS_CODE_COLLISION_MESSAGE
     );
   });
 
@@ -321,7 +328,7 @@ describe('app.organization.classes action', () => {
     };
 
     expect(result.init.status).toBe(400);
-    expect(result.data.error).toBe('Class could not be created.');
+    expect(result.data.error).toBe(CLASS_MANAGE_UNKNOWN_UNIQUE_CREATE_MESSAGE);
   });
 
   test('create-class keeps legacy Prisma code-collision metadata compatible', async () => {
@@ -347,7 +354,7 @@ describe('app.organization.classes action', () => {
     };
 
     expect(result.data.error).toBe(
-      'Class code already in use. Choose a different code.'
+      CLASS_CODE_COLLISION_MESSAGE
     );
   });
 
@@ -382,7 +389,7 @@ describe('app.organization.classes action', () => {
     };
 
     expect(result.data.error).toBe(
-      'Class code already in use. Choose a different code.'
+      CLASS_CODE_COLLISION_MESSAGE
     );
   });
 

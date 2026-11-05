@@ -34,10 +34,20 @@ import { cn } from '~/utils/misc';
 import { getTeacherTrainingProgressPercent } from '~/utils/teacher-training-progress';
 import { getTeacherTrainingMediaAccessibilityResources } from '~/utils/teacher-training-media-accessibility';
 import { getTeacherTrainingPlaybackUrl } from '~/utils/teacher-training-video-link.server';
+import { redirectIfTeacherLoungeTemporarilyDisabled } from '~/domain/teacher-lounge/teacher-lounge-temporary-disable.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+  await redirectIfTeacherLoungeTemporarilyDisabled({
+    userId,
+    email: user?.email ?? null,
+    orgId: profile.organization.id,
+  });
 
   if (profile.role !== "TEACHER") {
     throw new Response('Teacher profile required', { status: 403 });
@@ -132,6 +142,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+  await redirectIfTeacherLoungeTemporarilyDisabled({
+    userId,
+    email: user?.email ?? null,
+    orgId: profile.organization.id,
+  });
   const formData = await request.formData();
   const intent = formData.get('intent');
 

@@ -76,8 +76,22 @@ import {
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
 import { AlertTriangle, Loader2, TrendingUp } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '~/components/ui/dialog';
+import { GradingRubricSummaryCard } from '~/components/grading/grading-rubric-summary-card';
+import type { GradingRubricSummary } from '~/domain/assignment-types/grading-rubric-summary';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
+import { toast } from 'sonner';
+import {
+  getGradingAssistantFetcherErrorMessage,
+  gradingAssistantResponseHasVisibleContent,
+} from '~/domain/grading/grading-assistant-fetcher-result';
 import { useUpdateSubmission } from './use-update-submission';
 import { hasGradingDraftToReplace } from './has-grading-draft-to-replace';
 import { buildGradingFormSnapshot } from './grading-form-snapshot';
@@ -201,6 +215,7 @@ export function TeacherGradingPanel({
   initialGradingAssistantStrictnessLevel,
   hideHeader = false,
   onHeaderStateChange,
+  gradingRubricSummary = null,
 }: {
   documentId: string;
   submissionId: string | null;
@@ -242,6 +257,7 @@ export function TeacherGradingPanel({
   initialGradingAssistantStrictnessLevel?: string | null;
   hideHeader?: boolean;
   onHeaderStateChange?: (state: TeacherGradingPanelHeaderState) => void;
+  gradingRubricSummary?: GradingRubricSummary | null;
 }) {
   const aiFetcher = useFetcher();
   const targetSubmissionId = existingGrade?.id ?? submissionId;
@@ -347,10 +363,12 @@ export function TeacherGradingPanel({
         overallComment,
         numericPercentage,
         grammarIssues.length,
-        activeRubricConfig.minScore
+        activeRubricConfig.minScore,
+        hasManualPercentOverride
       ),
     [
       activeRubricConfig.minScore,
+      hasManualPercentOverride,
       rubricScores,
       overallComment,
       numericPercentage,
@@ -510,16 +528,34 @@ export function TeacherGradingPanel({
       return;
     }
 
+    const failureMessage = getGradingAssistantFetcherErrorMessage(aiFetcher.data);
+    if (failureMessage) {
+      toast.error(failureMessage);
+      pendingAiFormRef.current = null;
+      hasRetriedAiFormRef.current = false;
+      setIsAiRetrying(false);
+      return;
+    }
+
     if (!aiFetcher.data?.success) {
-      if (aiFetcher.data && !isLlmRetryResponse(aiFetcher.data)) {
-        pendingAiFormRef.current = null;
-        hasRetriedAiFormRef.current = false;
-        setIsAiRetrying(false);
-      }
       return;
     }
 
     const d = aiFetcher.data;
+    const responseMinScore =
+      typeof d.rubricConfig?.minScore === 'number'
+        ? d.rubricConfig.minScore
+        : activeRubricConfig.minScore;
+    if (!gradingAssistantResponseHasVisibleContent(d, responseMinScore)) {
+      toast.error(
+        'Grading Assistant finished without any suggestions. Please try again.'
+      );
+      pendingAiFormRef.current = null;
+      hasRetriedAiFormRef.current = false;
+      setIsAiRetrying(false);
+      return;
+    }
+
     setSessionSuggestion({
       rubricScores: d.rubricScores ?? null,
       overallComment:
@@ -595,7 +631,13 @@ export function TeacherGradingPanel({
     pendingAiFormRef.current = null;
     hasRetriedAiFormRef.current = false;
     setIsAiRetrying(false);
-  }, [aiFetcher.data, aiFetcher.state, onGrammarIssuesChange, pointValue]);
+  }, [
+    activeRubricConfig.minScore,
+    aiFetcher.data,
+    aiFetcher.state,
+    onGrammarIssuesChange,
+    pointValue,
+  ]);
 
   /**
    * Build the full grading payload from current state and persist it.
@@ -1213,7 +1255,30 @@ export function TeacherGradingPanel({
         </div>
 
         <div className="space-y-2 border-t pt-4">
-          <div className="text-sm font-medium">Rubric</div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-sm font-medium">Rubric</div>
+            {gradingRubricSummary ? (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    data-testid="grading-view-rubric"
+                  >
+                    View rubric
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Grading rubric</DialogTitle>
+                  </DialogHeader>
+                  <GradingRubricSummaryCard summary={gradingRubricSummary} />
+                </DialogContent>
+              </Dialog>
+            ) : null}
+          </div>
           {activeRubricConfig.rubricIncomplete ? (
             <div
               data-testid="teacher-grading-rubric-incomplete-warning"
@@ -1409,7 +1474,7 @@ export function TeacherGradingPanel({
                                 <p className="mt-1 text-sm italic">
                                   "{formatExcerpt(issue.excerpt)}"
                                 </p>
-                                <p className="mt-1 text-xs text-muted-foreground">
+                                <p className="mt-1 text-sm leading-snug text-foreground/90">
                                   {issue.message}
                                 </p>
                               </div>

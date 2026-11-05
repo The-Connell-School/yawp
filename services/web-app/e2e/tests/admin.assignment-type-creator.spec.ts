@@ -64,7 +64,7 @@ test.describe('Admin assignment type creator', () => {
       await expect(page.getByTestId('rubric-library-select')).toContainText('Built-in default for this assignment type');
       await expect(page.getByTestId('grading-assistant-instructions')).toHaveValue(instructions);
       expect((await prisma.assignmentType.findUniqueOrThrow({ where: { id: created.id } })).rubricId).toBeNull();
-      await expect(page.getByTestId('rubric-add-category')).toBeVisible();
+      await expect(page.getByTestId('rubric-add-category')).toHaveCount(0);
     } finally {
       const types = await prisma.assignmentType.findMany({ where: { title }, select: { id: true } });
       const ids = types.map((row) => row.id);
@@ -306,8 +306,8 @@ test.describe('Admin assignment type creator', () => {
       await page.goto(`/app/admin/assignment-types/${assignmentTypeId}`);
       await page.waitForLoadState('networkidle');
       await expect(page.getByTestId('rubric-library-select')).toBeVisible();
-      await expect(page.getByTestId('rubric-add-category')).toBeVisible();
-      await expect(page.getByTestId('rubric-paste-open')).toBeVisible();
+      await expect(page.getByTestId('rubric-add-category')).toHaveCount(0);
+      await expect(page.getByTestId('rubric-paste-open')).toHaveCount(0);
       await expect(page.getByText(OOPS)).toHaveCount(0);
 
       await page.locator('input[name="title"]').fill(`${title} Updated`);

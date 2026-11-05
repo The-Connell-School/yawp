@@ -35,8 +35,10 @@ describe('prod-shaped catalog acceptance', () => {
     expect(keys).not.toContain(perTypeKey(DAILY_PAGES_TYPE_ID));
     expect(keys).not.toContain(perTypeKey(GBA_ETIQUETTE_TYPE_ID));
     expect(keys).not.toContain(perTypeKey(ACT_WRITING_TYPE_ID));
-    expect(keys.filter((key) => !key.startsWith('assignment-type:'))).toHaveLength(8);
+    expect(keys.filter((key) => !key.startsWith('assignment-type:'))).toHaveLength(10);
     expect(keys.filter((key) => key.startsWith('assignment-type:'))).toHaveLength(6);
+    expect(keys).toContain('gals-claims');
+    expect(keys).toContain('strode-eng101-essay-2-autobiography');
   });
 
   test('GBA 300 etiquette dedupes when the type links the library rubric', () => {
@@ -54,9 +56,9 @@ describe('prod-shaped catalog acceptance', () => {
     ).toBe(true);
   });
 
-  test('production-shaped picker total is 14 (8 library + 6 per-type)', () => {
-    expect(PROD_SHAPED_ADMIN_PICKER_COUNT).toBe(14);
-    expect(prodShapedPickerKeysFromFixture()).toHaveLength(14);
+  test('production-shaped picker total is 16 (10 library + 6 per-type)', () => {
+    expect(PROD_SHAPED_ADMIN_PICKER_COUNT).toBe(16);
+    expect(prodShapedPickerKeysFromFixture()).toHaveLength(16);
     expect(prodShapedPickerKeysFromFixture().filter((key) => key.startsWith('assignment-type:'))).toHaveLength(6);
   });
 

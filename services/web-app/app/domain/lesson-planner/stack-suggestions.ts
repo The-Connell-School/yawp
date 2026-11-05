@@ -7,6 +7,7 @@
  */
 import { fileableMaterial } from './fileable-material';
 import { DECK_SLOT } from './lesson-material';
+import { plainPreview } from './plain-preview';
 import { pieceKeysInReply } from './reply-pieces';
 import { shortTitle } from './short-title';
 import { isWritingStep, stepTypeFor, type StepType } from './step-types';
@@ -29,12 +30,7 @@ export type SuggestedPiece = {
 const MINUTES_IN_TITLE = /\s*\(\s*\d+[^)]*min[^)]*\)\s*$/i;
 
 function firstSentence(text: string): string {
-  const plain = text
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
-    .replace(/[*_`>]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const plain = plainPreview(text);
   const sentence = /^.*?[.!?](?=\s|$)/.exec(plain)?.[0] ?? plain;
   return sentence.length > 140 ? `${shortTitle(sentence, 120)}…` : sentence;
 }

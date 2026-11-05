@@ -145,17 +145,17 @@ test.describe('Dev panel artboard evidence', () => {
       stateSheet.getByRole('button', { name: 'Jumping…' })
     ).toBeVisible();
     await shot(page, '21');
-    const postJumpNavigation = page
-      .waitForURL((url) => url.pathname === '/app' || url.pathname.startsWith('/app/'), {
-        timeout: 10_000,
-      })
-      .catch(() => null);
     await page
       .evaluate(() => {
         (window as unknown as { __restoreJumpAssign?: () => void }).__restoreJumpAssign?.();
       })
       .catch(() => undefined);
-    await postJumpNavigation;
+    // Client schedules location.assign 350ms after a successful jump; wait for
+    // that navigation before loading another route (avoids goto interruptions).
+    await page.waitForURL(
+      (url) => url.pathname === '/app' || url.pathname === '/app/',
+      { timeout: 10_000 }
+    );
     await page.waitForLoadState('domcontentloaded');
     await page.unroute('**/api/dev-panel/free-tier-jump');
     await page.request.post('/auth/dev-login', {

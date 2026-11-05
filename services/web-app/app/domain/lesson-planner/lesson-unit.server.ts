@@ -108,6 +108,8 @@ export async function createUnitDayConversation({
   unitId,
   day,
   title,
+  dayMinutes = null,
+  from = null,
 }: {
   db: Db;
   ctx: UnitScope;
@@ -115,6 +117,13 @@ export async function createUnitDayConversation({
   day: number;
   /** The day's own title from the map, so the lesson is named before it exists. */
   title: string;
+  /** The map's own minutes for this day, when it gives them. */
+  dayMinutes?: number | null;
+  /**
+   * The chat that planned the unit: a day is for the same class and period
+   * (Kevin, Oct 25, note 8a: a day that didn't know it was 60 minutes ran 75).
+   */
+  from?: { periodMinutes: number | null; lessonClassLabel: string | null; originClassAssignmentId: string | null } | null;
 }): Promise<{ id: string }> {
   return db.lessonPlanConversation.create({
     data: {
@@ -123,6 +132,9 @@ export async function createUnitDayConversation({
       title: `Day ${day} — ${title}`.slice(0, 120),
       unitId,
       unitDay: day,
+      periodMinutes: dayMinutes ?? from?.periodMinutes ?? null,
+      lessonClassLabel: from?.lessonClassLabel ?? null,
+      originClassAssignmentId: from?.originClassAssignmentId ?? null,
     },
     select: { id: true },
   });

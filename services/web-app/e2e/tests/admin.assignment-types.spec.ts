@@ -88,7 +88,7 @@ test.describe.serial('Admin assignment types', () => {
       await expect(
         page.getByRole('link', { name: 'Prompt', exact: true })
       ).toHaveCount(0);
-      await expect(page.getByTestId('rubric-add-category')).toBeVisible();
+      await expect(page.getByTestId('rubric-add-category')).toHaveCount(0);
 
       const created = await prisma.assignmentType.findUniqueOrThrow({
         where: { id: assignmentTypeId! },
