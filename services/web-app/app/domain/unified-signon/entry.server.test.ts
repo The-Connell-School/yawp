@@ -1,5 +1,10 @@
-import { afterAll, beforeEach, expect, mock, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import { FlowError } from './flow.server';
+
+const savedEnv = {
+  YAWP_ENVIRONMENT: process.env.YAWP_ENVIRONMENT,
+  PRIMARY_APP_URL: process.env.PRIMARY_APP_URL,
+};
 
 const unifiedAction = mock(
   async (_request: Request, _values: Record<string, string>) =>
@@ -22,6 +27,13 @@ const { dispatchUnifiedLogin } = await import('./entry.server');
 
 afterAll(() => {
   mock.restore();
+});
+
+afterEach(() => {
+  for (const [name, value] of Object.entries(savedEnv)) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
 });
 
 beforeEach(() => {
@@ -72,6 +84,54 @@ test('dispatchUnifiedLogin keeps intentional FlowError validation copy', async (
   expect(response.status).toBe(403);
   const json = await response.json();
   expect(json.error).toBe('Invalid request origin.');
+});
+
+test('dispatchUnifiedLogin accepts the public HTTPS Origin on production HTTP ingress', async () => {
+  process.env.YAWP_ENVIRONMENT = 'production';
+  process.env.PRIMARY_APP_URL = 'https://yawp.school';
+  unifiedAction.mockResolvedValue(Response.json({ state: { screen: 'entry' } }));
+
+  const response = (await dispatchUnifiedLogin({
+    request: new Request(
+      'http://abc123.us-east-1.awsapprunner.com/auth/login.data',
+      {
+        method: 'POST',
+        headers: { Origin: 'https://yawp.school' },
+        body: new URLSearchParams({
+          intent: 'resolve',
+          identifier: 'test@example.com',
+        }),
+      }
+    ),
+    params: {},
+    context: {},
+  })) as unknown as Response;
+
+  expect(response.status).toBe(200);
+  expect(unifiedAction).toHaveBeenCalledTimes(1);
+});
+
+test('dispatchUnifiedLogin rejects a foreign Origin on production HTTP ingress', async () => {
+  process.env.YAWP_ENVIRONMENT = 'production';
+  process.env.PRIMARY_APP_URL = 'https://yawp.school';
+
+  const response = (await dispatchUnifiedLogin({
+    request: new Request('http://yawp.school/auth/login.data', {
+      method: 'POST',
+      headers: { Origin: 'https://evil.example' },
+      body: new URLSearchParams({
+        intent: 'resolve',
+        identifier: 'test@example.com',
+      }),
+    }),
+    params: {},
+    context: {},
+  })) as unknown as Response;
+
+  expect(response.status).toBe(403);
+  const json = await response.json();
+  expect(json.error).toBe('Invalid request origin.');
+  expect(unifiedAction).not.toHaveBeenCalled();
 });
 
 test('dispatchUnifiedLogin leaves error empty when fieldErrors are present', async () => {
