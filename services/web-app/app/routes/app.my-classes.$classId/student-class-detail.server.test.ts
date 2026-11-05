@@ -57,7 +57,7 @@ function seedEnrolledClass() {
     },
   ]);
   prisma.assignmentType.findMany.mockResolvedValue([
-    { id: 'type-1', title: 'Thesis Builder' },
+    { id: 'type-1', title: 'Thesis Builder', image: null },
   ]);
 }
 
@@ -217,7 +217,7 @@ describe('loadStudentClassDetail', () => {
     });
 
     expect(result?.assignmentTypes).toEqual([
-      { id: 'type-1', title: 'Thesis Builder' },
+      { id: 'type-1', title: 'Thesis Builder', image: null },
     ]);
     expect(prisma.orgMembership.findMany.mock.calls[0][0].where).toEqual({
       id: { in: ['teacher-1'] },
