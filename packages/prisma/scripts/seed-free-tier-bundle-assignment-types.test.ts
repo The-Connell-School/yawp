@@ -1,9 +1,20 @@
 import { describe, expect, mock, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { PrismaClient } from '../generated/prisma';
+import { artworkMd5 } from './assignment-type-artwork';
 import {
+  BUNDLE_RETIRED_ARTWORK_MD5S,
+  BUNDLE_TILE_IMAGES,
+  ensureBundleTypeImage,
+  readBundleTileImage,
   seedFreeTierBundleAssignmentTypes,
 } from './seed-free-tier-bundle-assignment-types';
 import { buildPrismaPgPoolConfig } from './local-dev/connection';
+import { CLASS_STARTER_KIND } from './seed-class-starter-assignment-type';
+
+const PREWRITING_KIND = 'prewriting';
+const THESIS_STATEMENT_KIND = 'thesis_statement';
 
 describe('seed-free-tier-bundle-assignment-types connection', () => {
   test('uses TLS when running through the production migration tunnel', () => {
@@ -74,7 +85,10 @@ describe('seedFreeTierBundleAssignmentTypes', () => {
       },
       assignmentTypeImage: {
         upsert: mock(() => ({ id: 'image-id' })),
-        findUnique: mock(() => ({ id: 'image-id' })),
+        create: mock(() => ({ id: 'image-id' })),
+        update: mock(() => ({ id: 'image-id' })),
+        // A card somebody uploaded: not the seed's to replace.
+        findUnique: mock(() => ({ id: 'image-id', blob: Buffer.from('custom') })),
       },
       $executeRawUnsafe: mock(() => ({})),
     } as unknown as PrismaClient;
@@ -85,6 +99,171 @@ describe('seedFreeTierBundleAssignmentTypes', () => {
     expect(prisma.assignmentType.create).toHaveBeenCalledTimes(3);
     expect(prisma.assignmentModule.create).not.toHaveBeenCalled();
     expect(prisma.$executeRawUnsafe).toHaveBeenCalledTimes(7);
-    expect(prisma.assignmentTypeImage.upsert).toHaveBeenCalledTimes(3);
+    expect(prisma.assignmentTypeImage.upsert).not.toHaveBeenCalled();
+    expect(prisma.assignmentTypeImage.create).not.toHaveBeenCalled();
+    expect(prisma.assignmentTypeImage.update).not.toHaveBeenCalled();
+    // Once per type to decide, once per type in the parity check.
+    expect(prisma.assignmentTypeImage.findUnique).toHaveBeenCalledTimes(6);
+  });
+});
+
+function jpegDimensions(bytes: Buffer) {
+  expect(bytes[0]).toBe(0xff);
+  expect(bytes[1]).toBe(0xd8);
+  let offset = 2;
+  while (offset < bytes.length - 8) {
+    if (bytes[offset] !== 0xff) {
+      offset += 1;
+      continue;
+    }
+    const marker = bytes[offset + 1];
+    if (marker === 0xc0 || marker === 0xc1 || marker === 0xc2) {
+      return {
+        height: bytes.readUInt16BE(offset + 5),
+        width: bytes.readUInt16BE(offset + 7),
+      };
+    }
+    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      offset += 2;
+      continue;
+    }
+    offset += 2 + bytes.readUInt16BE(offset + 2);
+  }
+  return null;
+}
+
+function fakePrisma(existing: { blob: Uint8Array } | null) {
+  const calls: { create: unknown[]; update: unknown[] } = {
+    create: [],
+    update: [],
+  };
+  const prisma = {
+    assignmentTypeImage: {
+      findUnique: async () => (existing ? { id: 'image-1', ...existing } : null),
+      create: async (args: unknown) => {
+        calls.create.push(args);
+        return { id: 'image-1' };
+      },
+      update: async (args: unknown) => {
+        calls.update.push(args);
+        return { id: 'image-1' };
+      },
+    },
+  };
+  return { prisma, calls };
+}
+
+describe('the free tier bundle tile artwork', () => {
+  test.each([PREWRITING_KIND, THESIS_STATEMENT_KIND, CLASS_STARTER_KIND])(
+    '%s ships a 940x788 JPEG with a description of the drawing',
+    (kind) => {
+      const spec = BUNDLE_TILE_IMAGES[kind];
+      expect(spec).toBeDefined();
+
+      const image = readBundleTileImage(spec.file, spec.altText);
+      expect(image.contentType).toBe('image/jpeg');
+      expect(jpegDimensions(image.blob)).toEqual({ width: 940, height: 788 });
+      expect(image.altText.length).toBeGreaterThan(20);
+    }
+  );
+
+  test('the Pre-Writing and Thesis Statement cards are the redrawn dog-in-a-beret art', () => {
+    expect(BUNDLE_TILE_IMAGES[PREWRITING_KIND].altText).toMatch(/beret/);
+    expect(BUNDLE_TILE_IMAGES[PREWRITING_KIND].altText).toMatch(/Pre-Writing/);
+    expect(BUNDLE_TILE_IMAGES[THESIS_STATEMENT_KIND].altText).toMatch(/beret/);
+    expect(BUNDLE_TILE_IMAGES[THESIS_STATEMENT_KIND].altText).toMatch(
+      /Thesis Statement/
+    );
+  });
+
+  /**
+   * Every drawing the seed has ever shipped stays on the retired list, so a
+   * database still showing one of them gets the current card on the next run.
+   * The current card itself must not be there, or the seed would rewrite the
+   * same bytes on every deploy.
+   */
+  test('retires the previous drawings without retiring the current ones', () => {
+    for (const kind of [PREWRITING_KIND, THESIS_STATEMENT_KIND, CLASS_STARTER_KIND]) {
+      const retired = BUNDLE_RETIRED_ARTWORK_MD5S[kind];
+      expect(retired.length).toBeGreaterThan(0);
+      for (const md5 of retired) expect(md5).toMatch(/^[0-9a-f]{32}$/);
+
+      const spec = BUNDLE_TILE_IMAGES[kind];
+      const current = readFileSync(join(import.meta.dir, 'assets', spec.file));
+      expect(retired).not.toContain(artworkMd5(current));
+    }
+
+    // The first drawings, before the November 2026 redraw.
+    expect(BUNDLE_RETIRED_ARTWORK_MD5S[PREWRITING_KIND]).toContain(
+      '2e22d9bede4d3eee6d1ca26a446ef931'
+    );
+    expect(BUNDLE_RETIRED_ARTWORK_MD5S[THESIS_STATEMENT_KIND]).toContain(
+      'c024adc8c638fbec53ac10bb4cb86d18'
+    );
+    expect(BUNDLE_RETIRED_ARTWORK_MD5S[CLASS_STARTER_KIND]).toContain(
+      '429eac2e3a0b56f3140f6a8da4382101'
+    );
+  });
+});
+
+describe('ensureBundleTypeImage', () => {
+  test('attaches the card to a type that has none', async () => {
+    const { prisma, calls } = fakePrisma(null);
+
+    await ensureBundleTypeImage(prisma as never, 'type-1', PREWRITING_KIND);
+
+    expect(calls.create).toHaveLength(1);
+    const create = calls.create[0] as {
+      data: { assignmentTypeId: string; contentType: string; blob: Buffer; altText: string };
+    };
+    expect(create.data.assignmentTypeId).toBe('type-1');
+    expect(create.data.contentType).toBe('image/jpeg');
+    expect(create.data.blob.length).toBeGreaterThan(1000);
+    expect(create.data.altText).toBe(BUNDLE_TILE_IMAGES[PREWRITING_KIND].altText);
+    expect(calls.update).toHaveLength(0);
+  });
+
+  test('swaps a card the seed drew earlier for the current one', async () => {
+    const retiredBytes = Buffer.from('retired prewriting card');
+    BUNDLE_RETIRED_ARTWORK_MD5S[PREWRITING_KIND].push(artworkMd5(retiredBytes));
+    try {
+      const { prisma, calls } = fakePrisma({ blob: retiredBytes });
+
+      await ensureBundleTypeImage(prisma as never, 'type-1', PREWRITING_KIND);
+
+      expect(calls.create).toHaveLength(0);
+      expect(calls.update).toHaveLength(1);
+      const update = calls.update[0] as {
+        where: { assignmentTypeId: string };
+        data: { blob: Buffer; altText: string };
+      };
+      expect(update.where).toEqual({ assignmentTypeId: 'type-1' });
+      expect(update.data.altText).toBe(BUNDLE_TILE_IMAGES[PREWRITING_KIND].altText);
+      expect(
+        update.data.blob.equals(
+          readFileSync(join(import.meta.dir, 'assets', 'prewriting.jpg'))
+        )
+      ).toBe(true);
+    } finally {
+      BUNDLE_RETIRED_ARTWORK_MD5S[PREWRITING_KIND].pop();
+    }
+  });
+
+  test('keeps a card somebody uploaded themselves', async () => {
+    const { prisma, calls } = fakePrisma({ blob: Buffer.from('a school logo') });
+
+    await ensureBundleTypeImage(prisma as never, 'type-1', THESIS_STATEMENT_KIND);
+
+    expect(calls.create).toHaveLength(0);
+    expect(calls.update).toHaveLength(0);
+  });
+
+  test('ignores kinds that have no card', async () => {
+    const { prisma, calls } = fakePrisma(null);
+
+    await ensureBundleTypeImage(prisma as never, 'type-1', 'daily_pages');
+
+    expect(calls.create).toHaveLength(0);
+    expect(calls.update).toHaveLength(0);
   });
 });
