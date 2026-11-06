@@ -1716,6 +1716,7 @@ describe("planner prompt — Brian's run 3", () => {
     expect(prompt).toContain('`context` is the teacher talking');
     expect(prompt).toContain('A step where students write gets `class_starter`, `daily_pages`, `thesis_essay`, or `activity`');
     expect(prompt).toContain('counts the lesson\'s writing time from the steps where students write');
+    expect(prompt).toContain('carries a prompt line that starts with the act and a colon: `Pre-write: …`');
   });
 
   test('every step heading carries its minutes and a type tag', () => {

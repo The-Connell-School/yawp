@@ -145,7 +145,8 @@ function createLinkFor({
 }): StackCreateLink | null {
   // The teacher talking is not an assignment (Brian, Nov 4).
   if (kind === 'step' && isTeacherTalk(title)) return null;
-  if (kind === 'step' && (stepType === 'thesis_essay' || /\bthesis\b/i.test(title))) {
+  const talk = stepType === 'context' || stepType === 'read_aloud';
+  if (kind === 'step' && (stepType === 'thesis_essay' || (!talk && /\bthesis\b/i.test(title)))) {
     const prompt = hidePromptIds(content).trim();
     if (!typeIds.thesis || !prompt) return null;
     return {
