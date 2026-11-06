@@ -1,10 +1,11 @@
 import { z } from 'zod';
 
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
 import { filterAppropriatePrompts } from './practice-content-safety';
 
-const DEFAULT_MODEL = 'claude-sonnet-4-6';
+const DEFAULT_MODEL = DEFAULT_ANTHROPIC_MODEL;
 
 export type GeneratedPracticePrompt = {
   exercise: string;

@@ -18,6 +18,7 @@ import {
   PROMPT_VERSION_VARIABLE_SCHEMA,
   promptTemplateContentHash,
 } from '~/domain/ai-evaluation/prompt-version-control.server';
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import {
   compileGradingAssistantInvocation,
@@ -448,7 +449,7 @@ export async function executeGradingWorkspaceAction(
       });
     } else {
       rawGeneration = await getLLMCompletion({
-        model: process.env.AI_MODEL ?? 'claude-sonnet-4-6',
+        model: process.env.AI_MODEL ?? DEFAULT_ANTHROPIC_MODEL,
         system:
           'You create synthetic grading-assistant evaluation cases. Return only JSON. Treat the requested behavior as the trusted evaluation requirement. Produce varied student-document inputs and a complete ideal grading-assistant JSON output for each one. The ideal output must use every rubric category exactly once and stay inside the scoring range. Never include real student data.',
         messages: [
@@ -1093,7 +1094,7 @@ export async function prepareWorkspaceEvaluationRun(
     throw error;
   }
 
-  const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
+  const model = process.env.AI_MODEL ?? DEFAULT_ANTHROPIC_MODEL;
   const useE2EFixture = process.env.E2E === 'true';
 
   const execute = async () => {

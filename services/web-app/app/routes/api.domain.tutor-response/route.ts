@@ -1,6 +1,7 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 import crypto from 'node:crypto';
@@ -382,7 +383,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const forceFallback = data.llmRetry === 'fallback';
     try {
       completion = await getLLMCompletion({
-        model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
+        model: (process.env.AI_MODEL as any) ?? DEFAULT_ANTHROPIC_MODEL,
         messages,
         system,
         maxTokens: 500,

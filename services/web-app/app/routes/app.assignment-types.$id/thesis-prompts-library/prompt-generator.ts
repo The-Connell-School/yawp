@@ -10,6 +10,7 @@
 // This file is framework-free (no server-only imports) so it can be unit tested
 // and its types shared with the client. The route wires it to getLLMCompletion.
 
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { z } from 'zod';
 import {
   CATEGORY_LABEL,
@@ -82,7 +83,7 @@ export function resolveGeneratorModel(
   const configured = env.AI_MODEL?.trim();
   return configured && configured.includes('claude')
     ? configured
-    : 'claude-sonnet-4-6';
+    : DEFAULT_ANTHROPIC_MODEL;
 }
 
 /**

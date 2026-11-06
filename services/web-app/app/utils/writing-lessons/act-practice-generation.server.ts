@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
 import {
@@ -9,7 +10,7 @@ import {
 } from './act-practice.shared';
 import { filterAppropriateActQuestions } from './practice-content-safety';
 
-const DEFAULT_MODEL = 'claude-sonnet-4-6';
+const DEFAULT_MODEL = DEFAULT_ANTHROPIC_MODEL;
 
 const generationSchema = z.object({
   questions: z.array(generatedActQuestionSchema).min(1),
