@@ -357,14 +357,61 @@ test('configured origin cannot authorize another request host', async () => {
     ).status
   ).toBe(403);
 });
-for (const environment of ['production', 'development', '']) {
-  test(`no proxy correction outside preview: ${environment}`, async () => {
+test('production HTTP ingress accepts the configured public HTTPS Origin', async () => {
+  setUnifiedFlag('true');
+  process.env.YAWP_ENVIRONMENT = 'production';
+  process.env.PRIMARY_APP_URL = 'https://yawp.school';
+  const response = (await action(
+    args(
+      new Request('http://abc123.us-east-1.awsapprunner.com/auth/login.data', {
+        method: 'POST',
+        headers: {
+          host: 'abc123.us-east-1.awsapprunner.com',
+          Origin: 'https://yawp.school',
+        },
+        body: new URLSearchParams({
+          intent: 'resolve',
+          identifier: 'DEV-CLASS-101',
+        }),
+      })
+    )
+  )) as Response;
+  expect(response.status).toBe(200);
+  expect(unifiedAction).toHaveBeenCalled();
+});
+
+test('production HTTP ingress still rejects a foreign Origin', async () => {
+  setUnifiedFlag('true');
+  process.env.YAWP_ENVIRONMENT = 'production';
+  process.env.PRIMARY_APP_URL = 'https://yawp.school';
+  const response = (await action(
+    args(
+      new Request('http://yawp.school/auth/login.data', {
+        method: 'POST',
+        headers: { Origin: 'https://evil.example' },
+        body: new URLSearchParams({
+          intent: 'resolve',
+          identifier: 'DEV-CLASS-101',
+        }),
+      })
+    )
+  )) as Response;
+  expect(response.status).toBe(403);
+  expect(unifiedAction).not.toHaveBeenCalled();
+});
+
+for (const environment of ['development', '']) {
+  test(`non-preview preview-host proxy without preview env stays rejected: ${environment}`, async () => {
     setUnifiedFlag('true');
     process.env.YAWP_ENVIRONMENT = environment;
-    process.env.PRIMARY_APP_URL = publicOrigin;
-    expect((await action(args(proxyRequest()))) as Response).toMatchObject({
-      status: 403,
-    });
+    process.env.PRIMARY_APP_URL = 'https://yawp.school';
+    const response = (await action(
+      args(
+        proxyRequest('https://pr-565.preview.yawp.school', {}, 'pr-565.preview.yawp.school')
+      )
+    )) as Response;
+    expect(response.status).toBe(403);
+    expect(unifiedAction).not.toHaveBeenCalled();
   });
 }
 for (const configured of [
