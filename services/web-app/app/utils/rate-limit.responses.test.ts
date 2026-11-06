@@ -17,6 +17,15 @@ describe('configured limits clear the observed maxima', () => {
     expect(RATE_LIMITS.tutor.perDay).toBeGreaterThan(70);
   });
 
+  test('tutor ceilings block abuse rather than heavy legitimate use', () => {
+    expect(RATE_LIMITS.tutor.perMinute).toBe(30);
+    expect(RATE_LIMITS.tutor.perHour).toBe(300);
+    expect(RATE_LIMITS.tutor.perDay).toBe(1000);
+    expect(RATE_LIMITS.tutor.globalPerMinute).toBe(400);
+    // 10x the previous 270 platform-hour ceiling.
+    expect(RATE_LIMITS.tutor.globalPerHour).toBe(2700);
+  });
+
   test('grading windows pass a ~40 submission class batch and observed teacher maxima', () => {
     expect(RATE_LIMITS.grading.perTenMinutes).toBeGreaterThanOrEqual(40);
     expect(RATE_LIMITS.grading.perHour).toBeGreaterThan(31);

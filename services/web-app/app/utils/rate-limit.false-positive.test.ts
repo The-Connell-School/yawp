@@ -78,8 +78,8 @@ suite('normal use is never limited', () => {
 
   test('a long tutor conversation is not cut off below the longest observed session (102 turns)', async () => {
     const id = `fp-${run}-long`;
-    // 102 messages across a school day (the per-day budget is the limiter, not a session cap)
-    expect(await replayTutor(id, evenly(81, 8 * HOUR, t0 + 3 * 24 * HOUR))).toBe(0);
+    // 102 messages across a school day. The daily abuse ceiling is far above this.
+    expect(await replayTutor(id, evenly(102, 8 * HOUR, t0 + 3 * 24 * HOUR))).toBe(0);
   });
 
   test('grading teacher at p99.9: 17 in ten minutes, 29 in an hour, 68 in a day', async () => {
