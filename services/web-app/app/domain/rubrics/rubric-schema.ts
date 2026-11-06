@@ -47,6 +47,23 @@ function readString(value: unknown) {
 }
 
 /**
+ * Category rows for picker and catalog logic. Matches `parseRubricSchema`:
+ * nested `rubric.categories` or top-level `categories` when the nested object
+ * is absent (hand-written / builder exports sometimes omit the wrapper).
+ */
+export function rubricCategoriesArrayFromSchemaJson(
+  content: unknown
+): unknown[] {
+  if (!isRecord(content)) return [];
+  const nested = content.rubric;
+  if (isRecord(nested) && Array.isArray(nested.categories)) {
+    return nested.categories;
+  }
+  if (Array.isArray(content.categories)) return content.categories;
+  return [];
+}
+
+/**
  * A name suggested from the pasted JSON itself, so an admin pasting a rubric
  * that already names itself does not have to retype it. Falls back to a slug
  * of the title.
