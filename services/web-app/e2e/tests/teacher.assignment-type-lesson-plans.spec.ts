@@ -123,14 +123,19 @@ test.describe.serial('How to Teach It: slide decks, tutorial videos, and the unl
     const tutorial = course.getByRole('link', { name: 'Pre-writing: tutorial video' });
     await expect(tutorial).toHaveAttribute(
       'href',
-      `/app/teacher-trainings/${lounge.courseId}/modules/${lounge.modules[2]}`
+      `/app/assignment-types/${e2eContext.thesisEssayAssignmentTypeId}/tutorial/2`
     );
     // Lessons without a video module in the course have no video link.
     await expect(course.getByRole('link', { name: 'Body paragraphs: tutorial video' })).toHaveCount(0);
 
-    // The tutorial opens the lesson's module in the Lounge.
+    // The tutorial plays on the type's own page (the Lounge's pages are off
+    // for most teachers), named for the lesson. No S3 here, so the video
+    // itself is the "not available" note rather than a player.
     await tutorial.click();
-    await expect(page).toHaveURL(new RegExp(`/app/teacher-trainings/${lounge.courseId}/modules/${lounge.modules[2]}$`));
+    await expect(page).toHaveURL(new RegExp(`/app/assignment-types/${e2eContext.thesisEssayAssignmentTypeId}/tutorial/2$`));
+    await expect(page.getByRole('heading', { level: 1, name: 'Pre-writing' })).toBeVisible();
+    await expect(page.getByText(`Lesson 2 of The Thesis-Driven Essay course`)).toBeVisible();
+    expect(lounge.modules[2]).toBeTruthy();
   });
 
   test('Pre-Writing gets its own How to Teach It, with Lesson 2’s deck and video', async ({
@@ -151,8 +156,9 @@ test.describe.serial('How to Teach It: slide decks, tutorial videos, and the unl
     ).toHaveAttribute('href', '/courses/thesis-driven-essay/02-pre-writing.pptx');
     await expect(box.getByRole('link', { name: 'Pre-writing: tutorial video' })).toHaveAttribute(
       'href',
-      `/app/teacher-trainings/${lounge.courseId}/modules/${lounge.modules[2]}`
+      `/app/assignment-types/${prewritingTypeId}/tutorial/2`
     );
+    expect(lounge.modules[2]).toBeTruthy();
     await expect(box.getByRole('link', { name: /lesson plan/i })).toHaveCount(0);
     // Brian's own sections are still there, word for word.
     await expect(page.getByRole('button', { name: 'How it works' })).toBeVisible();

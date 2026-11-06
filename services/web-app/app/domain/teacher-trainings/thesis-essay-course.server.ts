@@ -6,16 +6,22 @@
  * Found by the same rule as the Teacher Training page: a teacher with
  * assigned courses sees only those; one with none sees every course. A
  * lesson's video is the module titled "Lesson N: …" that has a video.
+ *
+ * The Lounge's own pages are temporarily disabled for all but a few teachers
+ * (teacher-lounge-temporary-disable.ts), so a lesson's video is watched on
+ * the assignment type's own tutorial page, never by a link into the Lounge.
  */
 import { prisma } from '~/utils/db.server';
 
 export const THESIS_ESSAY_COURSE_TITLE = 'The Thesis-Driven Essay';
 
 export type ThesisEssayCourseLinks = {
-  /** The course page. */
+  /** The course's id. */
+  courseId: string;
+  /** The course page in the Lounge. */
   coursePath: string;
-  /** Each lesson's video module, by lesson number (from 1). */
-  videos: Record<number, string>;
+  /** Each lesson's video module id, by lesson number (from 1). */
+  videoModules: Record<number, string>;
 };
 
 const LESSON_NUMBER = /^\s*lesson\s+(\d{1,2})\b/i;
@@ -44,11 +50,26 @@ export async function findThesisEssayCourse(
     },
   });
   if (!course) return null;
-  const videos: Record<number, string> = {};
+  const videoModules: Record<number, string> = {};
   for (const module of course.teacherTrainingModules) {
     const number = Number(LESSON_NUMBER.exec(module.title)?.[1]);
     // The first module for a lesson number wins.
-    if (number && !videos[number]) videos[number] = `/app/teacher-trainings/${course.id}/modules/${module.id}`;
+    if (number && !videoModules[number]) videoModules[number] = module.id;
   }
-  return { coursePath: `/app/teacher-trainings/${course.id}`, videos };
+  return { courseId: course.id, coursePath: `/app/teacher-trainings/${course.id}`, videoModules };
+}
+
+/** Where a lesson's tutorial plays: the assignment type's own page for it. */
+export function tutorialHref(assignmentTypeId: string, lessonNumber: number): string {
+  return `/app/assignment-types/${encodeURIComponent(assignmentTypeId)}/tutorial/${lessonNumber}`;
+}
+
+/** The tutorial links for a type's How to Teach It rows, by lesson number. */
+export function tutorialHrefs(
+  assignmentTypeId: string,
+  course: ThesisEssayCourseLinks | null
+): Record<number, string> {
+  return Object.fromEntries(
+    Object.keys(course?.videoModules ?? {}).map((number) => [number, tutorialHref(assignmentTypeId, Number(number))])
+  );
 }

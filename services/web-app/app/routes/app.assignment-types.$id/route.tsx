@@ -126,7 +126,7 @@ import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { wrapPreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
 import { getAssignmentTypeLandingFlags } from '~/domain/assignment-types/landing-page-gate.server';
-import { findThesisEssayCourse } from '~/domain/teacher-trainings/thesis-essay-course.server';
+import { findThesisEssayCourse, tutorialHrefs } from '~/domain/teacher-trainings/thesis-essay-course.server';
 import {
   LandingDescription,
   LandingSections,
@@ -493,9 +493,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? enabledLandingPageKey(resolveLandingPageKey(assignmentType), landingFlags)
     : null;
   // How to Teach It's "Watch tutorial" links (Brian, Nov 6): each lesson's
-  // video module in the Teachers' Lounge course, where this teacher can open it.
+  // video from the Teachers' Lounge course, played on this type's own
+  // tutorial page, for the lessons whose module this teacher can reach.
   const landingVideos =
-    landingPageKey !== null ? ((await findThesisEssayCourse(profile.id))?.videos ?? {}) : {};
+    landingPageKey !== null
+      ? tutorialHrefs(assignmentType.id, await findThesisEssayCourse(profile.id))
+      : {};
   // Pre-Writing reuses the Thesis-Driven Essay library on its new page: the
   // same prompt carries students through Pre-Writing and then Thesis Statement.
   const showsThesisLibrary =

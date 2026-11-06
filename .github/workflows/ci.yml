@@ -1134,6 +1134,7 @@ jobs:
             app/domain/lesson-planner/yawp-lesson-deck.test.ts \
             app/domain/lesson-planner/yawp-lesson-deck.server.test.ts \
             app/domain/teacher-trainings/thesis-essay-course.server.test.ts \
+            'app/routes/app.assignment-types.$id_.tutorial.$lesson/route.test.ts' \
             app/components/how-it-works/guide.test.tsx \
             'app/routes/app.assignment-types.$id_.how-it-works/thesis-essay-guide.test.tsx' \
             'app/routes/app.lesson-planner_.yawp.$slug/route.test.ts' \

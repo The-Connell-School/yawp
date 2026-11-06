@@ -6,7 +6,7 @@ import { redirect, type LoaderFunctionArgs } from 'react-router';
 import { useLoaderData } from 'react-router';
 import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
 import { userHasPendingFreeTierTeachingLock } from '~/domain/free-tier/locked-preview.server';
-import { isAssignmentTypeAvailableForAnyScope } from '~/utils/assignment-type-access.server';
+import { assignmentTypeAvailableForTeacher } from '~/domain/assignment-types/available-for-teacher.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { findThesisEssayCourse } from '~/domain/teacher-trainings/thesis-essay-course.server';
@@ -20,28 +20,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const assignmentTypeId = params.id ?? '';
   const pagePath = `/app/assignment-types/${assignmentTypeId}`;
 
-  // The same access check as the assignment type page: the type has to be
-  // switched on for one of this teacher's schools.
-  const teacherClasses = await prisma.class.findMany({
-    where: { teachers: { some: { id: profile.id } }, isArchived: false },
-    select: { school: { select: { id: true, organizationId: true } } },
-  });
-  const scopes =
-    teacherClasses.length === 0
-      ? [
-          {
-            organizationId: profile.organization.id,
-            teacherProfileId: profile.id,
-          },
-        ]
-      : teacherClasses.map((klass) => ({
-          organizationId: klass.school.organizationId,
-          schoolId: klass.school.id,
-          teacherProfileId: profile.id,
-        }));
-  const available = await isAssignmentTypeAvailableForAnyScope({
+  // The same access check as the assignment type page.
+  const available = await assignmentTypeAvailableForTeacher({
     assignmentTypeId,
-    scopes,
+    membershipId: profile.id,
+    organizationId: profile.organization.id,
   });
   if (!available) throw redirect('/app');
 

@@ -6,7 +6,7 @@ const prisma = {
 };
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { findThesisEssayCourse } = await import('./thesis-essay-course.server');
+const { findThesisEssayCourse, tutorialHref, tutorialHrefs } = await import('./thesis-essay-course.server');
 
 afterAll(() => {
   mock.restore();
@@ -29,15 +29,21 @@ describe('the Thesis-Driven Essay course in the Teachers’ Lounge', () => {
         { id: 'm13', title: 'Lesson 8: Review my Essay (optional)' },
       ],
     });
-    expect(await findThesisEssayCourse('teacher-1')).toEqual({
+    const course = await findThesisEssayCourse('teacher-1');
+    expect(course).toEqual({
+      courseId: 'course-1',
       coursePath: '/app/teacher-trainings/course-1',
-      videos: {
-        1: '/app/teacher-trainings/course-1/modules/m6',
-        2: '/app/teacher-trainings/course-1/modules/m7',
-        3: '/app/teacher-trainings/course-1/modules/m8',
-        8: '/app/teacher-trainings/course-1/modules/m13',
-      },
+      videoModules: { 1: 'm6', 2: 'm7', 3: 'm8', 8: 'm13' },
     });
+    // The rows link to the type's own tutorial page, never into the Lounge.
+    expect(tutorialHrefs('at-1', course)).toEqual({
+      1: '/app/assignment-types/at-1/tutorial/1',
+      2: '/app/assignment-types/at-1/tutorial/2',
+      3: '/app/assignment-types/at-1/tutorial/3',
+      8: '/app/assignment-types/at-1/tutorial/8',
+    });
+    expect(tutorialHref('at-1', 2)).toBe('/app/assignment-types/at-1/tutorial/2');
+    expect(tutorialHrefs('at-1', null)).toEqual({});
     // Only modules with a video, in order, by the course's title.
     const args = prisma.teacherTraining.findFirst.mock.calls[0][0];
     expect(args.where.title).toEqual({ equals: 'The Thesis-Driven Essay', mode: 'insensitive' });

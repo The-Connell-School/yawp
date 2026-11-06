@@ -78,7 +78,7 @@ mock.module('~/domain/teacher-prompt-generator/gate.server', () => ({
 mock.module('~/domain/assignment-types/landing-page-gate.server', () => ({
   getAssignmentTypeLandingFlags,
 }));
-const findThesisEssayCourse = mock<() => Promise<{ coursePath: string; videos: Record<number, string> } | null>>(async () => null);
+const findThesisEssayCourse = mock<() => Promise<{ courseId: string; coursePath: string; videoModules: Record<number, string> } | null>>(async () => null);
 mock.module('~/domain/teacher-trainings/thesis-essay-course.server', () => ({
   findThesisEssayCourse,
 }));
@@ -991,11 +991,13 @@ describe('app.assignment-types.$id loader landing page', () => {
   test('hands the page each lesson’s tutorial video from the Lounge course (Brian, Nov 6)', async () => {
     getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: true, lessonPlans: false });
     findThesisEssayCourse.mockResolvedValue({
+      courseId: 'course-1',
       coursePath: '/app/teacher-trainings/course-1',
-      videos: { 2: '/app/teacher-trainings/course-1/modules/m7' },
+      videoModules: { 2: 'm7' },
     });
+    // Played on this type's own tutorial page, never a link into the Lounge.
     expect((await load({ title: 'The Thesis-Driven Essay' })).data.landingVideos).toEqual({
-      2: '/app/teacher-trainings/course-1/modules/m7',
+      2: '/app/assignment-types/at-1/tutorial/2',
     });
     expect(findThesisEssayCourse).toHaveBeenCalledWith('teacher-1');
     // No course this teacher can open: no video links, and the page still renders.
