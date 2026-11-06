@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import assignmentTypeImages from '../fixtures/prod-fidelity/assignment-type-images.json';
 
 export const EXIT_TICKET_FIXTURE_IMAGE_MD5 =
-  '12e8c7775d7c5ad1ebd01cdffe70f949';
+  '80baf4f9c4276a9d896028c021dcc592';
 
 const migrationSql = readFileSync(
   join(
