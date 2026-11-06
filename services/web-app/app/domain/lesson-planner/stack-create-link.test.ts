@@ -185,3 +185,21 @@ describe("lessonMadeHref (Kevin's note 6b)", () => {
     expect(lessonMadeHref('plan-1', null)).toBe('/app/lesson-planner?c=plan-1&made=1');
   });
 });
+
+describe("Kevin's lecture steps (Nov 6): a context step about writing gets no Create button", () => {
+  const typeIds = { dailyPages: 'dp', classStarter: 'cs', exitTicket: 'et', thesis: 'th' };
+  const link = (title: string, stepType: string, content: string) =>
+    stackCreateLink({ kind: 'step', title, stepType, content, blockKey: 'st', sourceContent: null, typeIds, conversationId: 'c1' });
+
+  test('tagged context, a step named for writing is the teacher talking', () => {
+    expect(link('The shape of a critical essay', 'context', 'Walk through the form on the slide.')).toBeNull();
+    expect(link('Pre-writing: what it is and why', 'context', 'Explain why we pre-write before we draft.')).toBeNull();
+  });
+
+  test('with a written prompt in it, a context step still gets the button', () => {
+    expect(link('Pre-writing slides', 'context', 'Pre-write: what do you already think about the prompt?')?.label).toBe(
+      'Create this quick write in Yawp!'
+    );
+  });
+});
+

@@ -104,10 +104,12 @@ const EXIT_TICKET = /\bexit (?:ticket|slip)s?\b/i;
  * Brian's rule of thumb (Nov 4): "if the teacher is talking, it's not an
  * assignment; if the students are writing, it is." A step led by the teacher
  * (explaining, modeling, a mini-lesson, "What pre-writing is and why") is
- * never writing, whatever it says about writing.
+ * never writing, whatever it says about writing. Kevin (Nov 6): a title that
+ * describes the thing ("Pre-writing: what it is and why", "The shape of a
+ * critical essay", an overview, an intro to, defining) is the teacher too.
  */
 const TEACHER_TALK =
-  /^\s*(?:what|why|how)\b|\b(?:mini[- ]?lesson|mini[- ]?lecture|lecture|explain\w*|explanation|introduc\w*|model(?:s|ing|ed)?|think[- ]?aloud|direct instruction|present(?:s|ing|ation)?|teacher[- ](?:talk|led)|walk(?:s|ing)? through|demonstrat\w*)\b/i;
+  /^\s*(?:what|why|how)\b|\b(?:mini[- ]?lesson|mini[- ]?lecture|lecture|explain\w*|explanation|introduc\w*|intro to|model(?:s|ing|ed)?|think[- ]?aloud|direct instruction|present(?:s|ing|ation)?|teacher[- ](?:talk|led)|walk(?:s|ing)? through|demonstrat\w*|overview|defin(?:e|es|ing|ition)|what (?:it|they|this|that) (?:is|are|means)|(?:and|or) why|the (?:shape|form|structure|anatomy|parts|elements|role) of)\b/i;
 /** A step named for what students write. */
 const WRITING_ACT =
   /\b(?:pre[- ]?writ(?:e|es|ing)|quick[- ]?writ(?:e|es|ing)|free[- ]?writ(?:e|es|ing)|journal(?:ing)?|class starter|daily pages|draft(?:s|ing)?|essay|reflection|writ(?:e|ing))\b/i;
@@ -138,13 +140,25 @@ function firstLine(text: string): string {
  */
 export function studentWritingTask(
   title: string,
-  content: string
+  content: string,
+  /**
+   * The planner's own type for the step (Kevin, Nov 6). Tagged `context` or
+   * `read_aloud`, the step is the teacher talking or the class reading: a
+   * writing act in its name is not enough, only a written prompt in its text.
+   */
+  stepType?: string | null
 ): { kind: 'exit-ticket' | 'quick-write'; prompt: string } | null {
   if (TEACHER_TALK.test(title)) return null;
   const text = plain(content);
   const ticket = /\bexit (?:ticket|slip)\b\s*[:—–-]\s*([^\n]+)/i.exec(text);
   if (ticket) return { kind: 'exit-ticket', prompt: ticket[1]!.trim() };
   const quoted = () => /["“]([^"”]{8,300})["”]/.exec(text)?.[1];
+  const type = parseStepType(stepType);
+  if (type === 'context' || type === 'read_aloud') {
+    const prompt = WRITTEN_PROMPT.exec(text);
+    if (prompt) return { kind: 'quick-write', prompt: (quoted() ?? firstLine(text.slice(prompt.index))).trim() };
+    return STUDENTS_WRITE.test(text) ? { kind: 'quick-write', prompt: (quoted() ?? firstLine(text)).trim() } : null;
+  }
   if (/\bexit (?:ticket|slip)s?\b/i.test(title)) return { kind: 'exit-ticket', prompt: firstLine(text) || title };
   if (WRITING_ACT.test(title)) return { kind: 'quick-write', prompt: (quoted() ?? (firstLine(text) || title)).trim() };
   if (TALK_TITLE.test(title)) {
@@ -189,7 +203,7 @@ export function isWritingStep({
   if (ASSIGNMENT_TITLE.test(title)) return true;
   if (stepType === 'closing' && EXIT_TICKET.test(content)) return true;
   // Students writing: the same steps that get "Create … in Yawp!" (Brian, Nov 4).
-  return kind === 'step' && studentWritingTask(title, content) !== null;
+  return kind === 'step' && studentWritingTask(title, content, stepType) !== null;
 }
 
 /**

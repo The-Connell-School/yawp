@@ -64,8 +64,8 @@ export function withPiece(href: string, pieceRef?: string | null): string {
 }
 
 /** What students write in a step written as prose: the one rule in step-types (Brian, Nov 4). */
-export function proseWritingTask(title: string, content: string) {
-  return studentWritingTask(title, hidePromptIds(content));
+export function proseWritingTask(title: string, content: string, stepType?: string | null) {
+  return studentWritingTask(title, hidePromptIds(content), stepType);
 }
 
 function firstLine(text: string): string {
@@ -154,7 +154,7 @@ function createLinkFor({
     };
   }
   if (kind === 'step') {
-    const task = proseWritingTask(title, content);
+    const task = proseWritingTask(title, content, stepType);
     if (task?.kind === 'exit-ticket' && typeIds.exitTicket) {
       const href = proseTicketHref(typeIds.exitTicket, task.prompt, conversationId);
       return href ? { label: 'Create this exit ticket in Yawp!', href } : null;

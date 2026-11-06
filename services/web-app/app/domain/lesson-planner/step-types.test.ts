@@ -142,6 +142,50 @@ describe("one rule for writing (Brian, Nov 4): if the teacher is talking, it's n
     }
   });
 
+  test("Kevin's lecture steps (Nov 6): a context step about writing is the teacher talking", async () => {
+    const { studentWritingTask } = await import('./step-types');
+    const kevin = [
+      { title: 'The shape of a critical essay', content: 'Walk through the critical essay form on the slide: intro, thesis as its last sentence, body paragraphs, conclusion.' },
+      { title: 'Pre-writing: what it is and why', content: 'Explain that pre-writing is where students find what they think. The three-friends-at-a-movie example. Students follow along on the slides.' },
+    ];
+    for (const step of kevin) {
+      // Tagged context by the planner: not writing, and no Create button, however the title reads.
+      expect({ title: step.title, writing: studentWritingTask(step.title, step.content, 'context') }).toEqual({ title: step.title, writing: null });
+      expect(isWritingStep({ kind: 'step', stepType: 'context', ...step })).toBe(false);
+      expect(isWritingStep({ kind: 'step', stepType: 'read_aloud', ...step })).toBe(false);
+      // The teacher-talk patterns catch them on their own too, whatever the tag.
+      expect(isWritingStep({ kind: 'step', stepType: 'activity', ...step })).toBe(false);
+    }
+    // A context step whose title is not the teacher talking still counts when
+    // students actually write in it; a title about the thing never does (Brian, Nov 4).
+    expect(
+      studentWritingTask('The critical essay form', 'Pre-write: what is the first thing you notice about the form?', 'context')?.kind
+    ).toBe('quick-write');
+    expect(isWritingStep({ kind: 'step', stepType: 'context', title: 'Pre-writing slides', content: 'Students write for 5 minutes on the prompt.' })).toBe(true);
+    expect(isWritingStep({ kind: 'step', stepType: 'context', title: 'Pre-writing slides', content: 'Go over the slides; students follow along.' })).toBe(false);
+    expect(isWritingStep({ kind: 'step', stepType: 'context', title: 'Pre-writing: what it is and why', content: 'Students write for 5 minutes on the prompt.' })).toBe(false);
+    // And the same words on an activity students do are writing, as before.
+    expect(isWritingStep({ kind: 'step', stepType: 'activity', title: 'Pre-write on the prompt', content: 'Students pre-write for 10 minutes.' })).toBe(true);
+  });
+
+  test('more ways a title says the teacher is talking (Nov 6)', async () => {
+    const { isTeacherTalk } = await import('./step-types');
+    for (const title of [
+      'Pre-writing: what it is and why',
+      'The shape of a critical essay',
+      'The structure of a body paragraph',
+      'Overview of the essay',
+      'Intro to the thesis statement',
+      'Defining the thesis',
+      'Essay drafting: what it is',
+    ]) {
+      expect({ title, talk: isTeacherTalk(title) }).toEqual({ title, talk: true });
+    }
+    for (const title of ['Pre-write', 'Draft the body paragraphs', 'Quick write (5 min)', 'Essay drafting']) {
+      expect({ title, talk: isTeacherTalk(title) }).toEqual({ title, talk: false });
+    }
+  });
+
   test('a discussion or a closing is only with a written prompt in it', async () => {
     const { studentWritingTask } = await import('./step-types');
     expect(studentWritingTask('Wrap-up', 'Exit ticket: what is your thesis, in one sentence?')?.kind).toBe('exit-ticket');

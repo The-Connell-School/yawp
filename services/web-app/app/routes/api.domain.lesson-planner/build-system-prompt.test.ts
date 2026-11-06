@@ -1701,6 +1701,12 @@ describe("buildLessonPlannerSystemPrompt — one heading per step (Brian's run 2
 describe("planner prompt — Brian's run 3", () => {
   const prompt = buildLessonPlannerSystemPrompt({} as any);
 
+  test('the type tag says who is doing the work: context is the teacher talking (Kevin, Nov 6)', () => {
+    expect(prompt).toContain('`context` is the teacher talking');
+    expect(prompt).toContain('A step where students write gets `class_starter`, `daily_pages`, `thesis_essay`, or `activity`');
+    expect(prompt).toContain('counts the lesson\'s writing time from the steps where students write');
+  });
+
   test('every step heading carries its minutes and a type tag', () => {
     expect(prompt).toContain('{type: read_aloud}');
     expect(prompt).toContain('including a framing note and a Daily Pages reflection');
