@@ -143,3 +143,75 @@ theme; the dark theme keeps its tokens, where the fixed grays would not read.
 Everything else stays, including the will/won't lists, captions and the
 "cardinal rule" line. The guide e2e that looked for "the refusal is the point"
 looks for the new heading.
+
+---
+
+# Round 2 (Kevin, Nov 6, after the preview came back)
+
+## 4. How to Teach It rows: slide deck and tutorial video only
+
+Brian's call, relayed by Kevin: no handouts, and no link into the stack. "It'll
+be overwhelming and confusing for most. So we'll just give 'em the
+downloadable slide deck and the video."
+
+- **Rows.** Each course row (and the single row on Pre-Writing and Thesis
+  Statement) shows **Slide deck** (the PowerPoint download, as now) and
+  **Watch tutorial**, which opens that lesson's module in the Teachers'
+  Lounge course "The Thesis-Driven Essay" (`/app/teacher-trainings/<course>/
+  modules/<module>`), where the video is. The module is found by its "Lesson
+  N:" title, by the same rule the How It Works page uses to find the course
+  (only when this teacher can open it). No lesson plan column: neither the
+  stack link nor the PDF.
+- **Copy.** Brian's lead said "a lesson stack (slides and handouts you can
+  teach as is or edit)"; with no handouts and no stack it now says "a slide
+  deck and a short tutorial video." Flagged for Brian. The two Pre-Writing /
+  Thesis Statement leads say the same in their own words.
+- **What stays.** The catalog, the deck builder and `/app/lesson-planner/yawp/
+  :slug` stay on the branch behind `assignment-type-lesson-plans`, unlinked:
+  Kevin still called the stack link "cool", and a URL is enough to show it.
+  Lessons 7 and 8 keep deck-only and nothing, as before.
+
+## 5. The teacher chooses the assignment type on Create
+
+Kevin: the automatic send to Class Starter is intuitive and should stay, but
+when the guess is wrong (a pre-write made into a Class Starter) the teacher
+is stuck, because the sheet it opens cannot change type.
+
+- **Defaults get smarter.** The writing types a school has now include
+  Pre-Writing and Thesis Statement where they exist. A pre-write step
+  defaults to Pre-Writing when the school has it, else Class Starter as now;
+  an exit ticket to Exit Ticket; a thesis step to Thesis Statement.
+- **Every create link carries its alternatives.** `StackCreateLink` gains
+  `options`: the same prompt into each writing type the school has. The
+  default keeps its label and href, so nothing that reads a link changes.
+- **The button becomes a split control.** "+ Create assignment" still goes
+  to the default type in one click (the existing tests and habit hold). A
+  small chevron beside it opens the other types, each a link to the same
+  prompt in that type. The finish line's "Not in Yawp! yet" list gets the
+  same menu.
+
+## 6. Writing time, round 2: "Deck: What Pre-Writing Is"
+
+The round-1 fix made a `context` step need evidence in its text. The evidence
+rule still counted the bare word "pre-write" anywhere in the text, and that
+step's text has it. The fix is to stop guessing from nouns:
+
+- **Text counts only when it says students write.** "Students (pre-)write",
+  "write for N minutes", "N minutes of writing", "a written response", or a
+  prompt line ("Pre-write: …", "Quick write: …", "Write: …", "Exit ticket:
+  …"). The bare words pre-write, quick write, free write and journal in
+  passing no longer count, for any step type.
+- **A title counts only when it is the act.** "Pre-write", "Quick write (5
+  min)", "Draft the body paragraphs", "Free write", "Journal", "Exit ticket".
+  A noun ("Pre-writing"), or a title about the thing ("Deck: What Pre-Writing
+  Is"), does not. A leading "Deck:" or "Slides:" is stripped before the
+  teacher-talk check, so "Deck: What Pre-Writing Is" reads as "What …" and is
+  the teacher talking.
+- **The planner says it outright.** Its instructions now require every step
+  where students write to carry a prompt line that starts with Write,
+  Pre-write, Quick write or Exit ticket, the line the Create button needs
+  anyway, and say that a step without one is not writing time.
+- **The backstop.** #892's "Don't count as writing" / "Count as writing" on
+  the stack page stays for whatever still slips, behind
+  `lesson_planner_writing_override`.
+- **Regression test** with the real titles from Kevin's preview lesson.
