@@ -136,16 +136,8 @@ test.describe.serial('Assignment type landing pages (v2)', () => {
     await page.getByRole('button', { name: 'Show How to Teach It' }).click();
     await expect(course.getByTestId('course-lesson')).toHaveCount(8);
 
-    // A lesson plan is a PDF that opens in a new tab.
-    const plan = course.getByRole('link', {
-      name: 'Developing a thesis statement: lesson plan (PDF)',
-    });
-    await expect(plan).toHaveAttribute('target', '_blank');
-    const planResponse = await page.request.get(
-      (await plan.getAttribute('href'))!
-    );
-    expect(planResponse.ok()).toBe(true);
-    expect((await planResponse.body()).subarray(0, 5).toString()).toBe('%PDF-');
+    // The rows are the slide deck and the tutorial video, nothing else (Brian, Nov 6).
+    await expect(course.getByRole('link', { name: /lesson plan/i })).toHaveCount(0);
 
     // A slide deck downloads as a PowerPoint file.
     const downloadPromise = page.waitForEvent('download');

@@ -43,14 +43,14 @@ export type LandingBlock =
    */
   | { type: 'steps'; lead?: string }
   /**
-   * The Thesis-Driven Essay course: each lesson with its lesson plan and
-   * slide deck (see thesis-essay-course.ts). `lead` sits directly above it.
+   * The Thesis-Driven Essay course: each lesson with its slide deck and its
+   * tutorial video (see thesis-essay-course.ts). `lead` sits directly above it.
    */
   | { type: 'course'; lead?: string }
   /**
    * One lesson of the course on its own, for the page of the step it teaches
-   * (Pre-Writing, Thesis Statement): its lesson plan, which opens in the
-   * teacher's Lesson Planner, and its slide deck. `lead` sits above it.
+   * (Pre-Writing, Thesis Statement): its slide deck and its tutorial video.
+   * `lead` sits above it.
    */
   | { type: 'lesson'; slug: YawpLessonSlug; lead?: string };
 
@@ -99,7 +99,7 @@ const THESIS_DRIVEN_ESSAY: LandingPage = {
       heading: 'How to Teach It',
       blocks: [
         p(
-          'The Yawp! process is what we wish someone had shown us in our first year teaching. Teach the steps below in order. Each has a lesson stack (slides and handouts you can teach as is or edit) and a short tutorial video. Whether this is your first year or your twentieth, watch each video before you teach that lesson (at least the first time through). This is a step-by-step process, and going in order makes the difference: how students find a focus, develop a thesis, and build body paragraphs that actually prove it.'
+          'The Yawp! process is what we wish someone had shown us in our first year teaching. Teach the steps below in order. Each has a slide deck and a short tutorial video. Whether this is your first year or your twentieth, watch each video before you teach that lesson (at least the first time through). This is a step-by-step process, and going in order makes the difference: how students find a focus, develop a thesis, and build body paragraphs that actually prove it.'
         ),
         {
           type: 'course',
@@ -213,7 +213,7 @@ const PREWRITING: LandingPage = {
       heading: 'How to Teach It',
       blocks: [
         p(
-          'Pre-writing is Lesson 2 of the Thesis-Driven Essay course, and the lesson is ready to teach. Open the lesson plan in your Lesson Planner to teach it as is or make it your own, and download the slide deck that goes with it.'
+          'Pre-writing is Lesson 2 of the Thesis-Driven Essay course. Download the slide deck, and watch the short tutorial video before you teach it.'
         ),
         { type: 'lesson', slug: 'pre-writing' },
       ],
@@ -284,7 +284,7 @@ const THESIS_STATEMENT: LandingPage = {
       heading: 'How to Teach It',
       blocks: [
         p(
-          'Developing a thesis statement is Lesson 3 of the Thesis-Driven Essay course, and the lesson is ready to teach. Open the lesson plan in your Lesson Planner to teach it as is or make it your own, and download the slide deck that goes with it.'
+          'Developing a thesis statement is Lesson 3 of the Thesis-Driven Essay course. Download the slide deck, and watch the short tutorial video before you teach it.'
         ),
         { type: 'lesson', slug: 'thesis-statement' },
       ],

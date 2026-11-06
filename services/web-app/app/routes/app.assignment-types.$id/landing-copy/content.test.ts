@@ -84,7 +84,7 @@ describe("Brian's pages, word for word", () => {
     const howToTeach = section('thesis-driven-essay', 'how-to-teach-it');
     expect(howToTeach.heading).toBe('How to Teach It');
     expect(paragraphs(howToTeach.blocks)).toEqual([
-      'The Yawp! process is what we wish someone had shown us in our first year teaching. Teach the steps below in order. Each has a lesson stack (slides and handouts you can teach as is or edit) and a short tutorial video. Whether this is your first year or your twentieth, watch each video before you teach that lesson (at least the first time through). This is a step-by-step process, and going in order makes the difference: how students find a focus, develop a thesis, and build body paragraphs that actually prove it.',
+      'The Yawp! process is what we wish someone had shown us in our first year teaching. Teach the steps below in order. Each has a slide deck and a short tutorial video. Whether this is your first year or your twentieth, watch each video before you teach that lesson (at least the first time through). This is a step-by-step process, and going in order makes the difference: how students find a focus, develop a thesis, and build body paragraphs that actually prove it.',
     ]);
     // The course card: each lesson with its lesson plan and slide deck.
     expect(howToTeach.blocks).toContainEqual({
@@ -286,7 +286,7 @@ describe('every page', () => {
       const [intro, lesson] = sections[0]!.blocks;
       expect(intro!.type).toBe('paragraph');
       expect(paragraphs([intro!])[0]).toContain(lead);
-      expect(paragraphs([intro!])[0]).toContain('Open the lesson plan in your Lesson Planner');
+      expect(paragraphs([intro!])[0]).toContain('watch the short tutorial video before you teach it');
       expect(lesson).toEqual({ type: 'lesson', slug });
       // Brian's sections follow, in his order.
       expect(sections.slice(1).map((s) => s.id)).toEqual(

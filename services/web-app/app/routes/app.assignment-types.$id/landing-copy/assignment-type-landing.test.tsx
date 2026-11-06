@@ -335,62 +335,71 @@ describe('LandingSections', () => {
     expect(root.querySelectorAll('[data-testid="how-to-teach-step"]')).toHaveLength(0);
   });
 
-  it('opens a lesson plan in a new tab and downloads a slide deck', () => {
+  it('downloads a slide deck, and watches the tutorial where the teacher can open the course (Brian, Nov 6)', () => {
     const root = render(
-      <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} />
+      <LandingSections
+        page={LANDING_PAGES['thesis-driven-essay']}
+        modules={[]}
+        lessonVideos={{ 2: '/app/teacher-trainings/c1/modules/m7', 5: '/app/teacher-trainings/c1/modules/m10' }}
+      />
     );
     const rows = [...root.querySelectorAll('[data-testid="course-lesson"]')];
     const prewriting = rows[1]!;
-    const plan = [...prewriting.querySelectorAll('a')].find(
-      (a) => a.textContent === 'Lesson plan'
-    )!;
-    expect(plan.getAttribute('href')).toBe(
-      '/courses/thesis-driven-essay/02-lesson-plan-pre-writing.pdf'
-    );
-    expect(plan.getAttribute('target')).toBe('_blank');
-    expect(plan.getAttribute('rel')).toContain('noopener');
-    expect(plan.getAttribute('aria-label')).toBe('Pre-writing: lesson plan (PDF)');
-
-    const slides = [...prewriting.querySelectorAll('a')].find(
-      (a) => a.textContent === 'Slide deck'
-    )!;
-    expect(slides.getAttribute('href')).toBe(
-      '/courses/thesis-driven-essay/02-pre-writing.pptx'
-    );
+    const slides = [...prewriting.querySelectorAll('a')].find((a) => a.textContent === 'Slide deck')!;
+    expect(slides.getAttribute('href')).toBe('/courses/thesis-driven-essay/02-pre-writing.pptx');
     expect(slides.getAttribute('download')).toBe('Pre-Writing.pptx');
     expect(slides.getAttribute('aria-label')).toBe('Pre-writing: slide deck (PowerPoint)');
+    const video = [...prewriting.querySelectorAll('a')].find((a) => a.textContent === 'Watch tutorial')!;
+    expect(video.getAttribute('href')).toBe('/app/teacher-trainings/c1/modules/m7');
+    expect(video.getAttribute('aria-label')).toBe('Pre-writing: tutorial video');
+    // No lesson plan link of any kind: not the PDF, not the planner.
+    expect([...root.querySelectorAll('a')].filter((a) => /lesson plan/i.test(a.textContent ?? ''))).toHaveLength(0);
+    expect(root.querySelectorAll('a[href$=".pdf"]')).toHaveLength(0);
+    expect(root.querySelectorAll('a[href^="/app/lesson-planner/yawp/"]')).toHaveLength(0);
 
-    // Body paragraphs has both of its decks.
-    expect(
-      [...rows[4]!.querySelectorAll('a')].map((a) => a.textContent)
-    ).toEqual(['Lesson plan', 'Slide deck', 'Supporting quotes']);
-    // Titling has a deck only; Review my essay has nothing to open.
-    expect([...rows[6]!.querySelectorAll('a')].map((a) => a.textContent)).toEqual([
+    // Body paragraphs has both of its decks, and its video.
+    expect([...rows[4]!.querySelectorAll('a')].map((a) => a.textContent)).toEqual([
       'Slide deck',
+      'Supporting quotes',
+      'Watch tutorial',
     ]);
+    // A lesson with no video module has the deck only; Review my essay has nothing.
+    expect([...rows[6]!.querySelectorAll('a')].map((a) => a.textContent)).toEqual(['Slide deck']);
     expect(rows[7]!.querySelectorAll('a')).toHaveLength(0);
+  });
+
+  it('shows no video links at all when the teacher cannot open the course', () => {
+    const root = render(
+      <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} />
+    );
+    expect([...root.querySelectorAll('a')].map((a) => a.textContent)).not.toContain('Watch tutorial');
+    expect(root.querySelectorAll('[data-course-column="slide-deck"] a').length).toBeGreaterThanOrEqual(7);
   });
 
   it('lines the links up in the same two columns on every row', () => {
     const root = render(
-      <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} />
+      <LandingSections
+        page={LANDING_PAGES['thesis-driven-essay']}
+        modules={[]}
+        lessonVideos={{ 5: '/app/teacher-trainings/c1/modules/m10' }}
+      />
     );
     const rows = [...root.querySelectorAll('[data-testid="course-lesson"]')];
     for (const row of rows) {
       // Every row has both columns, empty or not, so links never shift.
-      expect(row.querySelectorAll('[data-course-column="lesson-plan"]')).toHaveLength(1);
       expect(row.querySelectorAll('[data-course-column="slide-deck"]')).toHaveLength(1);
+      expect(row.querySelectorAll('[data-course-column="tutorial"]')).toHaveLength(1);
     }
     const column = (row: Element, name: string) =>
       [...row.querySelector(`[data-course-column="${name}"]`)!.querySelectorAll('a')].map(
         (a) => a.textContent
       );
     // Body paragraphs' second deck sits under its first, in the deck column.
-    expect(column(rows[4]!, 'lesson-plan')).toEqual(['Lesson plan']);
     expect(column(rows[4]!, 'slide-deck')).toEqual(['Slide deck', 'Supporting quotes']);
-    // Titling has no lesson plan, so its deck stays in the deck column.
-    expect(column(rows[6]!, 'lesson-plan')).toEqual([]);
+    expect(column(rows[4]!, 'tutorial')).toEqual(['Watch tutorial']);
+    // Titling has no video module here, so its tutorial column is empty.
     expect(column(rows[6]!, 'slide-deck')).toEqual(['Slide deck']);
+    expect(column(rows[6]!, 'tutorial')).toEqual([]);
   });
 
   it('lists the 5-Paragraph Essay steps from its modules', () => {
@@ -414,114 +423,40 @@ describe('LandingSections', () => {
   });
 });
 
-describe('Lesson plans in the Lesson Planner (Kevin, Nov 5)', () => {
+describe('The step pages’ own lesson row (Kevin, Nov 5; Brian, Nov 6: deck and video)', () => {
   const links = (row: Element) =>
-    [...row.querySelectorAll('a')].map((a) => ({
-      text: a.textContent,
-      href: a.getAttribute('href'),
-      target: a.getAttribute('target'),
-      label: a.getAttribute('aria-label'),
-    }));
-
-  it('with lesson plans on, a course row’s Lesson plan opens the lesson in the planner, in this tab', () => {
-    const root = render(
-      <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} yawpLessons />
-    );
-    const rows = [...root.querySelectorAll('[data-testid="course-lesson"]')];
-    expect(links(rows[1]!)).toEqual([
-      {
-        text: 'Lesson plan',
-        href: '/app/lesson-planner/yawp/pre-writing',
-        target: null,
-        label: 'Pre-writing: lesson plan (opens in your Lesson Planner)',
-      },
-      {
-        text: 'Slide deck',
-        href: '/courses/thesis-driven-essay/02-pre-writing.pptx',
-        target: null,
-        label: 'Pre-writing: slide deck (PowerPoint)',
-      },
-    ]);
-    expect(rows.slice(0, 6).map((row) => links(row)[0]!.href)).toEqual([
-      '/app/lesson-planner/yawp/introduce-students-to-yawp',
-      '/app/lesson-planner/yawp/pre-writing',
-      '/app/lesson-planner/yawp/thesis-statement',
-      '/app/lesson-planner/yawp/introduction-paragraph',
-      '/app/lesson-planner/yawp/body-paragraphs',
-      '/app/lesson-planner/yawp/conclusion-paragraph',
-    ]);
-    // Titling and Review have no lesson in the catalog, so nothing changes for them.
-    expect(links(rows[6]!).map((a) => a.text)).toEqual(['Slide deck']);
-    expect(links(rows[7]!)).toEqual([]);
-    // The PDF link is gone from the rows; the planner has the plan.
-    expect(root.querySelectorAll('a[href$=".pdf"]')).toHaveLength(0);
-  });
-
-  it('with lesson plans off (the default), the rows are Brian’s PDFs', () => {
-    const root = render(
-      <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} />
-    );
-    const rows = [...root.querySelectorAll('[data-testid="course-lesson"]')];
-    expect(links(rows[1]!)[0]).toEqual({
-      text: 'Lesson plan',
-      href: '/courses/thesis-driven-essay/02-lesson-plan-pre-writing.pdf',
-      target: '_blank',
-      label: 'Pre-writing: lesson plan (PDF)',
-    });
-    expect(root.querySelectorAll('[data-testid="lesson-plan-planner"]')).toHaveLength(0);
-  });
+    [...row.querySelectorAll('a')].map((a) => ({ text: a.textContent, href: a.getAttribute('href'), label: a.getAttribute('aria-label') }));
 
   it.each([
-    ['prewriting', 'Pre-writing', 'pre-writing', '02-pre-writing.pptx', '02-lesson-plan-pre-writing.pdf'],
-    [
-      'thesis-statement',
-      'Developing a thesis statement',
-      'thesis-statement',
-      '03-develop-your-thesis-statement.pptx',
-      '03-lesson-plan-thesis-statement.pdf',
-    ],
-  ] as const)('%s shows How to Teach It first, with its one lesson row', (key, title, slug, deck, pdf) => {
-    const on = render(<LandingSections page={LANDING_PAGES[key]} modules={[]} yawpLessons />);
-    expect(headings(on)[0]).toBe('How to Teach It');
-    const box = on.querySelector('[data-testid="how-to-teach-spotlight"]')!;
-    expect(box.textContent).toContain('ready to teach');
-    const lesson = box.querySelector('[data-testid="yawp-lesson"]')!;
-    expect(lesson).not.toBeNull();
-    const rows = [...lesson.querySelectorAll('[data-testid="course-lesson"]')];
+    ['prewriting', 'Pre-writing', 2, '02-pre-writing.pptx'],
+    ['thesis-statement', 'Developing a thesis statement', 3, '03-develop-your-thesis-statement.pptx'],
+  ] as const)('%s shows How to Teach It first, with its one lesson row', (key, title, number, deck) => {
+    const videos = { [number]: `/app/teacher-trainings/c1/modules/m${number}` };
+    const root = render(<LandingSections page={LANDING_PAGES[key]} modules={[]} lessonVideos={videos} />);
+    expect(headings(root)[0]).toBe('How to Teach It');
+    const box = root.querySelector('[data-testid="how-to-teach-spotlight"]')!;
+    expect(box.textContent).toContain('watch the short tutorial video before you teach it');
+    const rows = [...box.querySelectorAll('[data-testid="yawp-lesson"] [data-testid="course-lesson"]')];
     expect(rows).toHaveLength(1);
     expect(rows[0]!.querySelector('[data-lesson-title]')?.textContent).toBe(title);
     expect(links(rows[0]!)).toEqual([
-      {
-        text: 'Lesson plan',
-        href: `/app/lesson-planner/yawp/${slug}`,
-        target: null,
-        label: `${title}: lesson plan (opens in your Lesson Planner)`,
-      },
-      {
-        text: 'Slide deck',
-        href: `/courses/thesis-driven-essay/${deck}`,
-        target: null,
-        label: `${title}: slide deck (PowerPoint)`,
-      },
+      { text: 'Slide deck', href: `/courses/thesis-driven-essay/${deck}`, label: `${title}: slide deck (PowerPoint)` },
+      { text: 'Watch tutorial', href: `/app/teacher-trainings/c1/modules/m${number}`, label: `${title}: tutorial video` },
     ]);
     // Brian's sections are still there, after it.
-    expect(toggle(on, 'How it works')).toBeDefined();
-    expect(toggle(on, 'When to use it')).toBeDefined();
+    expect(toggle(root, 'How it works')).toBeDefined();
+    expect(toggle(root, 'When to use it')).toBeDefined();
     act(() => activeRoot?.unmount());
     activeRoot = null;
 
-    // Off: the same row, with the PDF.
-    const off = render(<LandingSections page={LANDING_PAGES[key]} modules={[]} />);
-    const row = off.querySelector('[data-testid="yawp-lesson"] [data-testid="course-lesson"]')!;
-    expect(links(row)[0]).toMatchObject({
-      href: `/courses/thesis-driven-essay/${pdf}`,
-      target: '_blank',
-      label: `${title}: lesson plan (PDF)`,
-    });
+    // Without the course: the deck alone.
+    const alone = render(<LandingSections page={LANDING_PAGES[key]} modules={[]} />);
+    const row = alone.querySelector('[data-testid="yawp-lesson"] [data-testid="course-lesson"]')!;
+    expect(links(row).map((a) => a.text)).toEqual(['Slide deck']);
   });
 
   it('How to Teach It on a step page collapses to its lead like the course does', () => {
-    const root = render(<LandingSections page={LANDING_PAGES.prewriting} modules={[]} yawpLessons />);
+    const root = render(<LandingSections page={LANDING_PAGES.prewriting} modules={[]} />);
     const hide = root.querySelector<HTMLButtonElement>('button[aria-label="Hide How to Teach It"]')!;
     open(hide);
     expect(root.querySelector('[data-testid="yawp-lesson"]')).toBeNull();
@@ -530,4 +465,3 @@ describe('Lesson plans in the Lesson Planner (Kevin, Nov 5)', () => {
     );
   });
 });
-

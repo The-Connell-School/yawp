@@ -9,6 +9,7 @@ import { userHasPendingFreeTierTeachingLock } from '~/domain/free-tier/locked-pr
 import { isAssignmentTypeAvailableForAnyScope } from '~/utils/assignment-type-access.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { findThesisEssayCourse } from '~/domain/teacher-trainings/thesis-essay-course.server';
 import { ThesisEssayGuide } from './thesis-essay-guide';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -60,29 +61,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw redirect(pagePath);
   }
 
-  // The course that teaches teachers the process. It is linked only when this
+  // The course that teaches teachers the process, linked only when this
   // teacher can open it, by the same rule as the Teacher Training page.
-  const assigned = await prisma.orgMembership.findUnique({
-    where: { id: profile.id, role: 'TEACHER' },
-    select: { _count: { select: { assignedTeacherTrainings: true } } },
-  });
-  const course = await prisma.teacherTraining.findFirst({
-    where: {
-      title: { equals: COURSE_TITLE, mode: 'insensitive' },
-      ...((assigned?._count.assignedTeacherTrainings ?? 0) > 0
-        ? { assignedTeachers: { some: { id: profile.id } } }
-        : {}),
-    },
-    select: { id: true },
-  });
+  const course = await findThesisEssayCourse(profile.id);
 
   return {
     pagePath,
-    coursePath: course ? `/app/teacher-trainings/${course.id}` : null,
+    coursePath: course?.coursePath ?? null,
   };
 }
-
-const COURSE_TITLE = 'The Thesis-Driven Essay';
 
 export default function ThesisEssayHowItWorksRoute() {
   const { pagePath, coursePath } = useLoaderData<typeof loader>();

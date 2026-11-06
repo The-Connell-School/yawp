@@ -126,6 +126,7 @@ import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { wrapPreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
 import { getAssignmentTypeLandingFlags } from '~/domain/assignment-types/landing-page-gate.server';
+import { findThesisEssayCourse } from '~/domain/teacher-trainings/thesis-essay-course.server';
 import {
   LandingDescription,
   LandingSections,
@@ -491,10 +492,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const landingPageKey = landingFlags
     ? enabledLandingPageKey(resolveLandingPageKey(assignmentType), landingFlags)
     : null;
-  // How to Teach It's "Lesson plan" opens a ready-built stack in the
-  // teacher's Lesson Planner (Kevin, Nov 5). The page also needs the planner
-  // itself on for the school, which the root loader already knows.
-  const landingLessonPlans = landingPageKey !== null && Boolean(landingFlags?.lessonPlans);
+  // How to Teach It's "Watch tutorial" links (Brian, Nov 6): each lesson's
+  // video module in the Teachers' Lounge course, where this teacher can open it.
+  const landingVideos =
+    landingPageKey !== null ? ((await findThesisEssayCourse(profile.id))?.videos ?? {}) : {};
   // Pre-Writing reuses the Thesis-Driven Essay library on its new page: the
   // same prompt carries students through Pre-Writing and then Thesis Statement.
   const showsThesisLibrary =
@@ -663,7 +664,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       isExitTicketAssignmentType(assignmentType),
     teacherPromptGeneratorEnabled,
     landingPageKey,
-    landingLessonPlans,
+    landingVideos,
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -1205,7 +1206,7 @@ export default function AppAssignmentTypesIdRoute() {
           <LandingSections
             page={landingPage}
             modules={data.assignmentType.assignmentModules}
-            yawpLessons={data.landingLessonPlans && lessonPlannerEnabled}
+            lessonVideos={data.landingVideos}
           />
         ) : null}
         {/* Brian's landing page replaces every block from here to the
