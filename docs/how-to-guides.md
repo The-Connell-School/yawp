@@ -44,7 +44,8 @@ Skip a "Where it lives" section. A teacher reads the guide after opening the fea
 ## Where it lives in the app
 
 - Route: `/app/<feature>/how-it-works`, behind the same access check as the feature.
-- Build it from `app/components/how-it-works/guide.tsx` (`GuidePage`, `GuideHero`, `GuideRow`, `GuideClip`, `GuideImage`, `GuideList`, `WillWont`, `GuideFooter`, `SeeHowItWorksLink`). Reporter's guide is the example: `app/routes/app.reporter_.how-it-works/route.tsx`.
+- Build it from `app/components/how-it-works/guide.tsx` (`GuidePage`, `GuideHero`, `GuideRow`, `GuideClip`, `GuideImage`, `GuideList`, `GuidePanel`, `GuideCard`, `WillWont`, `GuideFooter`, `SeeHowItWorksLink`). Reporter's guide is the example: `app/routes/app.reporter_.how-it-works/route.tsx`.
+- **Look (Brian, Nov 5):** an assignment type's guide gives `GuidePage` one accent color from `guide-accents.ts` (six colors, one per page, spread so neighbours differ). With an accent there are no eyebrow labels, headlines are one color, body text is darker, and the accent goes on the buttons, the step circles and the feature panels (`GuidePanel`, white heading, white `GuideCard`s inside). No "this isn't X, it's Y" and no punchy one-liners. The Thesis-Driven Essay guide is the example: `app/routes/app.assignment-types.$id_.how-it-works/thesis-essay-guide.tsx`.
 - Media: `public/img/<feature>-guide/`.
 - Button: **See how it works**, in the feature's page header. Icon only on a phone, with an `aria-label`.
 - Test: an E2E test that opens the guide from the button, checks the "won't" section and checks phone width.
