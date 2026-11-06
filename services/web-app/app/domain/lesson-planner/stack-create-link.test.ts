@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { lessonBackHref, lessonMadeHref, stackCreateLink } from './stack-create-link';
+import { lessonBackHref, lessonMadeHref, stackCreateLink, type WritingTypeIds } from './stack-create-link';
 
 const typeIds = { dailyPages: 'dp-type', classStarter: 'cs-type', exitTicket: 'et-type' };
 
@@ -204,8 +204,8 @@ describe("Kevin's lecture steps (Nov 6): a context step about writing gets no Cr
 });
 
 describe("the teacher's say on the type (Kevin, Nov 6): a smart default, and every other type one click away", () => {
-  const all = { dailyPages: 'dp', classStarter: 'cs', exitTicket: 'et', thesis: 'ts', prewriting: 'pw' };
-  const step = (title: string, content: string, typeIds = all) =>
+  const all: WritingTypeIds = { dailyPages: 'dp', classStarter: 'cs', exitTicket: 'et', thesis: 'ts', prewriting: 'pw' };
+  const step = (title: string, content: string, typeIds: WritingTypeIds = all) =>
     stackCreateLink({ kind: 'step', title, stepType: 'activity', content, blockKey: 'st', sourceContent: null, typeIds, conversationId: 'c1', materialId: 'm1' });
 
   test('a pre-write goes to Pre-Writing when the school has it, with the same prompt', () => {

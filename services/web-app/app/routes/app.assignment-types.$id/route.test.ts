@@ -78,7 +78,7 @@ mock.module('~/domain/teacher-prompt-generator/gate.server', () => ({
 mock.module('~/domain/assignment-types/landing-page-gate.server', () => ({
   getAssignmentTypeLandingFlags,
 }));
-const findThesisEssayCourse = mock(async () => null);
+const findThesisEssayCourse = mock<() => Promise<{ coursePath: string; videos: Record<number, string> } | null>>(async () => null);
 mock.module('~/domain/teacher-trainings/thesis-essay-course.server', () => ({
   findThesisEssayCourse,
 }));
