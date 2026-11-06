@@ -1083,6 +1083,26 @@ describe('PR preview deployment contract', () => {
   });
 
   /**
+   * The free tier bundle seed draws the Prewriting and Thesis Statement cards
+   * from the same assets folder, so a redrawn card has to change the
+   * fingerprint for the same reason the Class Starter one does.
+   */
+  test('the free tier bundle artwork is in the tooling fingerprint', () => {
+    const deployScript = readRepoFile('scripts/preview/deploy.sh');
+    const fingerprintFunction = deployScript.slice(
+      deployScript.indexOf('compute_tooling_fingerprint()'),
+      deployScript.indexOf('run_tooling_if_needed()')
+    );
+
+    expect(fingerprintFunction).toContain(
+      'packages/prisma/scripts/assets/prewriting.jpg'
+    );
+    expect(fingerprintFunction).toContain(
+      'packages/prisma/scripts/assets/thesis-statement.jpg'
+    );
+  });
+
+  /**
    * The graded Daily Pages class set is what makes the split visible in a
    * preview. Both of its files are outside the paths the fingerprint already
    * covered, so without this a preview with an existing database would keep
