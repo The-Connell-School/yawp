@@ -1,6 +1,12 @@
 import { buildTemplateSection, type LessonTemplate } from '~/domain/lesson-planner/lesson-templates';
 import type { RecentArt } from '~/domain/lesson-planner/recent-art';
-import { buildSourcesSection, type DeckChoices, type LessonUpload } from '~/domain/lesson-planner/lesson-uploads';
+import {
+  buildLessonPicturesSection,
+  buildSourcesSection,
+  type DeckChoices,
+  type LessonUpload,
+  type UploadPictureRef,
+} from '~/domain/lesson-planner/lesson-uploads';
 import { selectableDeckArt } from '~/domain/lesson-planner/deck-art';
 import { rubricCategories } from '~/domain/grading/rubric';
 import type { CacheableSystemBlock } from '~/utils/getLLMCompletion/getLLMCompletion';
@@ -802,6 +808,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   template = null,
   deckGallery = false,
   sources = [],
+  lessonPictures = [],
   deckChoices,
   recentArt = [],
   weekContext = [],
@@ -829,6 +836,8 @@ export function buildLessonPlannerSystemPromptBlocks({
   deckGallery?: boolean;
   /** The teacher's own documents for this lesson (Oct 21). */
   sources?: LessonUpload[];
+  /** The lesson's own pictures, from its deck or the slide editor (Kevin, Nov 6). */
+  lessonPictures?: UploadPictureRef[];
   /** Which of "teach with my slides" and "refresh my deck" are on (Nov 1). */
   deckChoices?: DeckChoices;
   /** Paintings on this teacher's recent decks, with the gallery deck on. */
@@ -851,6 +860,7 @@ export function buildLessonPlannerSystemPromptBlocks({
     ...buildTemplateSection(template),
     ...buildDeckGallerySection(deckGallery, recentArt),
     ...buildSourcesSection(sources, deckChoices, { onStack }),
+    ...buildLessonPicturesSection(lessonPictures),
   ].join('\n');
   const variable = tail ? `${intro}\n${tail}` : intro;
 

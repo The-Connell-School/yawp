@@ -80,6 +80,7 @@ const prisma = {
   class: {
     findMany: mock(),
   },
+  lessonPlanUploadPicture: { findMany: mock(async () => []) },
   $transaction: mock(),
 };
 
