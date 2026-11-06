@@ -203,3 +203,59 @@ describe("Kevin's lecture steps (Nov 6): a context step about writing gets no Cr
   });
 });
 
+describe("the teacher's say on the type (Kevin, Nov 6): a smart default, and every other type one click away", () => {
+  const all = { dailyPages: 'dp', classStarter: 'cs', exitTicket: 'et', thesis: 'ts', prewriting: 'pw' };
+  const step = (title: string, content: string, typeIds = all) =>
+    stackCreateLink({ kind: 'step', title, stepType: 'activity', content, blockKey: 'st', sourceContent: null, typeIds, conversationId: 'c1', materialId: 'm1' });
+
+  test('a pre-write goes to Pre-Writing when the school has it, with the same prompt', () => {
+    const link = step('Pre-write', 'Students pre-write for 15 minutes on the prompt from the slide.')!;
+    expect(link.label).toBe('Create this pre-write in Yawp!');
+    expect(link.href).toMatch(/^\/app\/assignment-types\/pw\?/);
+    expect(link.href).toContain('fromPiece=m%3Am1');
+    expect(link.href).toContain('back=stack');
+    // The alternatives: every other prompt type, the same prompt, the same way back.
+    expect(link.options!.map((option) => [option.type, option.name])).toEqual([
+      ['class-starter', 'Class Starter'],
+      ['daily-pages', 'Daily Pages'],
+      ['thesis-statement', 'Thesis Statement'],
+    ]);
+    for (const option of link.options!) {
+      expect(option.href).toContain('newPrompt=Students+pre-write+for+15+minutes');
+      expect(option.href).toContain('back=stack');
+      expect(option.href).toContain('fromPiece=m%3Am1');
+    }
+    expect(link.options!.find((option) => option.type === 'daily-pages')!.href).toMatch(/^\/app\/assignment-types\/dp\?/);
+  });
+
+  test('without a Pre-Writing type, a pre-write is a Class Starter as before, and Pre-Writing is not offered', () => {
+    const link = step('Pre-write', 'Students pre-write for 15 minutes.', { ...all, prewriting: null })!;
+    expect(link.label).toBe('Create this quick write in Yawp!');
+    expect(link.href).toMatch(/^\/app\/assignment-types\/cs\?/);
+    expect(link.options!.map((option) => option.type)).toEqual(['daily-pages', 'thesis-statement']);
+  });
+
+  test('a quick write defaults to Class Starter, with Pre-Writing among the alternatives', () => {
+    const link = step('Quick write (5 min)', 'Quick write: one thing you noticed.')!;
+    expect(link.href).toMatch(/^\/app\/assignment-types\/cs\?/);
+    expect(link.options!.map((option) => option.type)).toEqual(['daily-pages', 'prewriting', 'thesis-statement']);
+  });
+
+  test('an exit ticket keeps its own sheet and offers the prompt types too', () => {
+    const link = step('Closing', 'Exit ticket: what is your thesis, in one sentence?')!;
+    expect(link.label).toBe('Create this exit ticket in Yawp!');
+    expect(link.options!.map((option) => option.type)).toEqual(['class-starter', 'daily-pages', 'prewriting', 'thesis-statement']);
+  });
+
+  test('a school with one writing type gets no chooser', () => {
+    const link = step('Quick write', 'Quick write: one thing.', { dailyPages: null, classStarter: 'cs', exitTicket: null, thesis: null, prewriting: null })!;
+    expect(link.options).toBeUndefined();
+  });
+
+  test('an assignment already made offers nothing to re-create', () => {
+    const link = stackCreateLink({ kind: 'step', title: 'Pre-write', stepType: 'activity', content: 'Students pre-write.', blockKey: 'st', sourceContent: null, typeIds: all, conversationId: 'c1', created: { href: '/app/assignment-types/pw' } })!;
+    expect(link.created).toBe(true);
+    expect(link.options).toBeUndefined();
+  });
+});
+

@@ -24,6 +24,7 @@ import { isLectureStep, stepChipText } from '~/domain/lesson-planner/step-types'
 import { movedToSlot } from '~/domain/lesson-planner/stack-order';
 import { cn } from '~/utils/misc';
 import { typeChipStyle } from './theme';
+import { CreateAssignmentChooser } from '~/components/lesson-planner/create-assignment-chooser';
 
 export const PIECE_DRAG_TYPE = 'application/x-yawp-piece';
 const STEP_DRAG_TYPE = 'application/x-yawp-step';
@@ -378,14 +379,17 @@ export function RunOfShow({
                       ) : null}
                     </span>
                   ) : step.create && missingIds.has(step.id) ? (
-                    <Link
-                      to={step.create.href}
-                      data-testid="not-in-yawp"
-                      className="inline-flex items-center gap-1 rounded-full border border-dashed px-2 py-0.5 text-[11px] font-semibold"
-                      style={{ borderColor: 'var(--sv-writing)', color: 'var(--sv-writing)' }}
-                    >
-                      <Plus size={11} /> Create assignment
-                    </Link>
+                    <span className="inline-flex items-center gap-1">
+                      <Link
+                        to={step.create.href}
+                        data-testid="not-in-yawp"
+                        className="inline-flex items-center gap-1 rounded-full border border-dashed px-2 py-0.5 text-[11px] font-semibold"
+                        style={{ borderColor: 'var(--sv-writing)', color: 'var(--sv-writing)' }}
+                      >
+                        <Plus size={11} /> Create assignment
+                      </Link>
+                      <CreateAssignmentChooser options={step.create.options} />
+                    </span>
                   ) : null}
                   <div className="ml-auto flex shrink-0 items-center gap-1.5">
                     <button
@@ -513,15 +517,18 @@ export function RunOfShow({
                       </Link>
                     ) : null}
                     {step.create ? (
-                      <Link
-                        to={step.create.href}
-                        data-testid="stack-create-assignment"
-                        className="inline-flex items-center gap-1 rounded-md bg-[var(--sv-writing-strip)] px-2 py-1 font-semibold"
-                        style={{ color: 'var(--sv-writing)' }}
-                      >
-                        {step.create.created ? <Check size={12} /> : <PenLine size={12} />}
-                        {step.create.label}
-                      </Link>
+                      <span className="inline-flex items-center gap-1.5">
+                        <Link
+                          to={step.create.href}
+                          data-testid="stack-create-assignment"
+                          className="inline-flex items-center gap-1 rounded-md bg-[var(--sv-writing-strip)] px-2 py-1 font-semibold"
+                          style={{ color: 'var(--sv-writing)' }}
+                        >
+                          {step.create.created ? <Check size={12} /> : <PenLine size={12} />}
+                          {step.create.label}
+                        </Link>
+                        {step.create.created ? null : <CreateAssignmentChooser options={step.create.options} />}
+                      </span>
                     ) : null}
                   </div>
                 </div>
