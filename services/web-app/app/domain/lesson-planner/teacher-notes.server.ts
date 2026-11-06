@@ -3,6 +3,7 @@
  * show opens, the planner writes notes for every step that has none, in one
  * call, and they are kept; after that the notes are the teacher's.
  */
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { buildLessonPlannerAdmissionPolicy } from '~/utils/lesson-planner/lesson-planner-admission.server';
@@ -70,7 +71,7 @@ export async function teacherNotesFor({
         units: 1,
       });
       return getLLMCompletion({
-        model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
+        model: (process.env.AI_MODEL as any) ?? DEFAULT_ANTHROPIC_MODEL,
         system: TEACHER_NOTES_SYSTEM,
         messages: [{ role: AgentType.User, content: user }],
         maxTokens: NOTES_MAX_TOKENS,

@@ -1,3 +1,4 @@
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import crypto from 'node:crypto';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
@@ -10,7 +11,7 @@ import {
   type PracticeFeedbackResult,
 } from './practice-feedback.shared';
 
-const DEFAULT_MODEL = 'claude-sonnet-4-6';
+const DEFAULT_MODEL = DEFAULT_ANTHROPIC_MODEL;
 
 const SYSTEM_PROMPT = [
   'You are a warm, sharp writing tutor for the Yawp! writing program.',

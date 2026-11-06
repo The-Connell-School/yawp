@@ -34,7 +34,7 @@ describe('LlmLog de-identification backfill', () => {
         findMany: mock(async () => [
           {
             id: 'log-1',
-            model: 'claude-sonnet-4-6',
+            model: 'claude-sonnet-5-5',
             provider: 'anthropic',
             systemPrompt:
               'Help Jane Student for membership mem-1 and organization org-1.',
@@ -57,7 +57,7 @@ describe('LlmLog de-identification backfill', () => {
           },
           {
             id: 'log-2',
-            model: 'claude-sonnet-4-6',
+            model: 'claude-sonnet-5-5',
             provider: 'anthropic',
             systemPrompt: 'Extract text from the uploaded file.',
             messages: [
@@ -124,7 +124,7 @@ describe('LlmLog de-identification backfill', () => {
         findMany: mock(async () => [
           {
             id: 'log-ip-hash',
-            model: 'claude-sonnet-4-6',
+            model: 'claude-sonnet-5-5',
             provider: 'anthropic',
             systemPrompt: `Use attribution ${ipHash}.`,
             messages: [{ role: 'user', content: `Request hash ${ipHash}` }],
@@ -173,7 +173,7 @@ describe('LlmLog de-identification backfill', () => {
         findMany: mock(async () => [
           {
             id: 'log-contextual-name',
-            model: 'claude-sonnet-4-6',
+            model: 'claude-sonnet-5-5',
             provider: 'anthropic',
             systemPrompt:
               'Generate a thesis prompt for Brian Connell at Holy Family School.',
@@ -232,7 +232,7 @@ describe('LlmLog de-identification backfill', () => {
         findMany: mock(async () => [
           {
             id: 'log-writing-practice-topic',
-            model: 'claude-sonnet-4-6',
+            model: 'claude-sonnet-5-5',
             provider: 'anthropic',
             systemPrompt: 'You author short writing-practice items.',
             messages: [
