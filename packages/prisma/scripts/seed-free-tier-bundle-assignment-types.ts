@@ -11,9 +11,11 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 
 import type { PrismaClient } from '../generated/prisma';
+import { syncSeedArtwork, type SeedArtwork } from './assignment-type-artwork';
 import { createPrismaClient } from './local-dev/connection';
 import {
   CLASS_STARTER_KIND,
+  CLASS_STARTER_RETIRED_ARTWORK_MD5S,
   readClassStarterImage,
 } from './seed-class-starter-assignment-type';
 import { DEFAULT_OUTPUT_SCHEMA_JSON } from '../../../services/web-app/app/domain/assignment-types/assignment-type-rubric.shared';
@@ -194,7 +196,10 @@ async function applyBundleRubricDefaults(
   });
 }
 
-function readBundleTileImage(filename: string, altText: string) {
+export function readBundleTileImage(
+  filename: string,
+  altText: string
+): SeedArtwork {
   return {
     blob: readFileSync(join(import.meta.dir, 'assets', filename)),
     contentType: 'image/jpeg',
@@ -202,7 +207,15 @@ function readBundleTileImage(filename: string, altText: string) {
   };
 }
 
-const BUNDLE_TILE_IMAGES: Record<string, { file: string; altText: string }> = {
+/**
+ * The card artwork for each bundle type: a 940x788 JPEG in ./assets with the
+ * same torn paper edge, scratchy ink and Didone wordmark as the Daily Pages
+ * card. Authored art, so it lives in the repo rather than a fixture bundle.
+ */
+export const BUNDLE_TILE_IMAGES: Record<
+  string,
+  { file: string; altText: string }
+> = {
   [CLASS_STARTER_KIND]: {
     file: 'class-starter.jpg',
     altText: readClassStarterImage().altText,
@@ -210,30 +223,46 @@ const BUNDLE_TILE_IMAGES: Record<string, { file: string; altText: string }> = {
   [PREWRITING_KIND]: {
     file: 'prewriting.jpg',
     altText:
-      'A scratchy ink drawing of brainstorming notes and a pencil on torn white paper, with the words Prewriting.',
+      'A scratchy ink drawing of a dog in a beret and striped shirt with a lightbulb over its head, above the words Pre-Writing, on torn white paper.',
   },
   [THESIS_STATEMENT_KIND]: {
     file: 'thesis-statement.jpg',
     altText:
-      'A scratchy ink drawing of a quill writing an underlined thesis sentence on torn white paper.',
+      'A scratchy ink drawing of a dog in a beret and striped shirt saying yawp! in a speech bubble, above the words Thesis Statement, on torn white paper.',
   },
 };
 
-async function ensureBundleTypeImage(
-  prisma: PrismaClient,
+/**
+ * md5 of every card this seed has shipped before the current one, by kind. A
+ * database still showing one of these gets the current card on the next run
+ * (this seed runs on every preview deploy); a card somebody uploaded
+ * themselves is never touched.
+ */
+export const BUNDLE_RETIRED_ARTWORK_MD5S: Record<string, string[]> = {
+  [CLASS_STARTER_KIND]: CLASS_STARTER_RETIRED_ARTWORK_MD5S,
+  [PREWRITING_KIND]: [
+    // Brainstorming notes and a pencil, the first card (October 2026).
+    '2e22d9bede4d3eee6d1ca26a446ef931',
+  ],
+  [THESIS_STATEMENT_KIND]: [
+    // A quill writing an underlined thesis sentence, the first card (October 2026).
+    'c024adc8c638fbec53ac10bb4cb86d18',
+  ],
+};
+
+export async function ensureBundleTypeImage(
+  prisma: Pick<PrismaClient, 'assignmentTypeImage'>,
   assignmentTypeId: string,
   kind: string
 ) {
   const spec = BUNDLE_TILE_IMAGES[kind];
   if (!spec) return;
-  await prisma.assignmentTypeImage.upsert({
-    where: { assignmentTypeId },
-    create: {
-      assignmentTypeId,
-      ...readBundleTileImage(spec.file, spec.altText),
-    },
-    update: {},
-  });
+  await syncSeedArtwork(
+    prisma,
+    assignmentTypeId,
+    readBundleTileImage(spec.file, spec.altText),
+    BUNDLE_RETIRED_ARTWORK_MD5S[kind] ?? []
+  );
 }
 
 export async function assertFreeTierBundleAssignmentTypeParity(
