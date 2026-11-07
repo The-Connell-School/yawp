@@ -1137,6 +1137,7 @@ jobs:
             'app/routes/app.assignment-types.$id_.tutorial.$lesson/route.test.ts' \
             app/components/how-it-works/guide.test.tsx \
             'app/routes/app.assignment-types.$id_.how-it-works/thesis-essay-guide.test.tsx' \
+            app/routes/app.reporter_.how-it-works/reporter-guide.test.tsx \
             'app/routes/app.lesson-planner_.yawp.$slug/route.test.ts' \
             app/domain/assignment-types/exit-ticket.test.ts \
             app/domain/assignment-types/exit-ticket-reflection-prompts.test.ts \

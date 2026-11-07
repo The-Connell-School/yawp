@@ -78,10 +78,11 @@ function page(accent: string | undefined) {
 }
 
 describe('the guide accents (Brian, Nov 5)', () => {
-  it('is six colors, and the Thesis-Driven Essay page gets forest green, Class Starter maroon', () => {
+  it('is six colors, and the Thesis-Driven Essay page gets forest green, Class Starter maroon, Reporter charcoal', () => {
     expect(Object.keys(GUIDE_ACCENTS).sort()).toEqual(['charcoal', 'forest', 'ink', 'maroon', 'navy', 'petrol']);
     expect(guideAccentFor('thesis-driven-essay')).toBe(FOREST);
     expect(guideAccentFor('class-starter')).toBe('#6E1A26');
+    expect(guideAccentFor('reporter')).toBe('#2B2B2B');
     expect(guideAccentFor('daily-pages')).toBeNull();
   });
 });
@@ -163,7 +164,7 @@ describe('a guide with a page accent (Brian, Nov 5)', () => {
   });
 });
 
-describe('a guide without an accent keeps the classic look (Reporter)', () => {
+describe('a guide without an accent keeps the classic look', () => {
   it('still shows the eyebrows and the two-color headline', () => {
     const root = render(page(undefined));
     expect(root.querySelector('[data-guide-accent]')).toBeNull();

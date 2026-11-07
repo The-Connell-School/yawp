@@ -215,3 +215,28 @@ step's text has it. The fix is to stop guessing from nouns:
   the stack page stays for whatever still slips, behind
   `lesson_planner_writing_override`.
 - **Regression test** with the real titles from Kevin's preview lesson.
+
+## Round 3 (Nov 7): the other How It Works pages
+
+Brian's brief covers every How It Works page. When piece 3 was done only the
+Thesis-Driven Essay and Reporter guides were on this branch; main's #851 then
+added the Class Starter guide and the writing-step guide (Prewriting, Thesis
+Statement), which the Nov 7 merge brought in with their accents (maroon,
+navy, petrol) but without the copy pass. Kevin (Nov 7): do all four.
+
+- **Class Starter**: read for items 8 and 9. Every line is already a plain,
+  complete sentence; the headings and lists stay by item 10. No edits.
+- **Prewriting and Thesis Statement**: the guide's own lines are plain. The
+  lede, steps, Tutor and scoring lines come from
+  `about-writing-step/content.ts`, shared with the free-tier landing pages,
+  so they are out of this round ("Only change the How It Works pages this
+  round"). No edits; the one candidate, "It is supposed to be messy.", is
+  flagged for Brian.
+- **Reporter**: charcoal (#2B2B2B), the fifth color; ink stays free. The page
+  moves into `reporter-guide.tsx` so it can be rendered in a unit test the way
+  the Thesis-Driven Essay guide is. Copy: two fragments become sentences
+  ("Every student’s average, and who is trending down." → "It shows every
+  student’s average and who is trending down."; "Scores over time, what your
+  feedback keeps saying, and suggested next steps." → "The report shows
+  scores over time, what your feedback keeps saying, and suggested next
+  steps."). Lists, headings and the will/won't stay.
