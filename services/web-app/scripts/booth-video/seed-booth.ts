@@ -36,6 +36,12 @@ const PLANNER_FLAGS = [
   'lesson_planner_deck_v2',
   'lesson_planner_deck_gallery',
   'lesson_planner_plan_export_v2',
+  // Stack page v2 and the library redesign (#723), and the teacher's uploads.
+  'lesson_planner_teach_notes',
+  'lesson_planner_library_v2',
+  'lesson_planner_uploads',
+  // New → Generate a prompt (off by default on production, on for demo).
+  'teacher-prompt-generator',
 ];
 
 const SHORT_COMMENTS: Record<(typeof RUBRIC_KEYS)[number], string[]> = {
@@ -109,13 +115,12 @@ async function seedBase(prisma: PrismaClient) {
   });
   await prisma.setting.upsert({
     where: { name: 'feature_flag.lesson_planner' },
-    create: { id: 'booth-lesson-planner', name: 'feature_flag.lesson_planner', value: 'true', valueType: 'boolean' },
-    update: { value: 'true' },
+    create: { id: 'booth-lesson-planner', name: 'feature_flag.lesson_planner', value: EVERYONE, valueType: 'json' },
+    update: { value: EVERYONE, valueType: 'json' },
   });
-  // The new stack (run of show), sharing and the Lesson Deck Kit, from the
-  // Lesson Planner branch (The-Connell-School/yawp#437). On a checkout without
-  // them these rows are unused. Intake v2 stays off: the video starts the plan
-  // from the Class Summary's seeded message.
+  // The Lesson Planner's review flags, as PR previews have them, and the
+  // prompt generator. Intake v2 stays off: the video starts the plan from the
+  // Class Summary's seeded message.
   for (const flag of PLANNER_FLAGS) {
     const name = `feature_flag.${flag}`;
     await prisma.setting.upsert({
