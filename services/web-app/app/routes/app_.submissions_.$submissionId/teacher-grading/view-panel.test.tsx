@@ -280,6 +280,23 @@ describe('ViewPanel where the rubric scores one banded category', () => {
     expect(text()).toContain('Understanding');
   });
 
+  it('uses foreground contrast tokens for per-category feedback text', () => {
+    render(
+      <ViewPanel
+        submission={{
+          ...bandedExitTicket,
+          rubricScores: {
+            understanding: { score: 79, comment: 'Cite the line next time.' },
+          },
+        }}
+      />
+    );
+
+    const commentEl = document.querySelector('[class*="text-foreground/90"]');
+    expect(commentEl).not.toBeNull();
+    expect(commentEl?.textContent).toContain('Cite the line next time.');
+  });
+
   it('keeps the rubric section when there is more than one category', () => {
     render(
       <ViewPanel

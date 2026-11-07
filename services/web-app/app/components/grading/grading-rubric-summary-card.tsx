@@ -19,7 +19,7 @@ export function GradingRubricSummaryCard({
           {summary.sourceText}
         </p>
         <p
-          className="text-sm text-muted-foreground"
+          className="text-sm text-foreground/90"
           data-testid="grading-rubric-scale"
         >
           {summary.scaleText}
