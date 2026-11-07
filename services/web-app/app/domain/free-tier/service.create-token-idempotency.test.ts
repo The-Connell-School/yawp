@@ -70,6 +70,16 @@ mock.module('~/utils/db.server', () => ({ prisma }));
 process.env.PRIMARY_APP_URL = 'https://demo.yawp.school';
 const { createAcquisitionTokens } = await import('./service.server');
 
+function advisoryLockSqlFromExecuteRawCall(call: unknown[]) {
+  const strings = call[0] as TemplateStringsArray;
+  let sql = '';
+  for (let i = 0; i < strings.length; i++) {
+    sql += strings[i];
+    if (i < call.length - 1) sql += `$${i + 1}`;
+  }
+  return sql;
+}
+
 describe('createAcquisitionTokens idempotency', () => {
   beforeEach(() => {
     rows.length = 0;
@@ -77,6 +87,14 @@ describe('createAcquisitionTokens idempotency', () => {
     findUnique.mockClear();
     findFirst.mockClear();
     create.mockClear();
+  });
+
+  test('acquires the create lock with void-safe SQL (not FROM pg_advisory_xact_lock)', async () => {
+    await createAcquisitionTokens({ label: 'NCTE booth', count: 1 });
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+    const sql = advisoryLockSqlFromExecuteRawCall(executeRaw.mock.calls[0]!);
+    expect(sql).toMatch(/SELECT\s+pg_advisory_xact_lock\s*\(\s*hashtextextended/i);
+    expect(sql).not.toMatch(/\bFROM\s+pg_advisory_xact_lock/i);
   });
 
   test('replays a recent matching create instead of minting a duplicate token', async () => {

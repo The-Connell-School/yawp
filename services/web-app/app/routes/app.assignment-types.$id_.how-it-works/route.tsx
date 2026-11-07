@@ -1,16 +1,25 @@
 /**
- * "See how it works" for The Thesis-Driven Essay: the access check and the
- * two paths the page needs. The page itself is thesis-essay-guide.tsx.
+ * "See how it works" for The Thesis-Driven Essay, and for Prewriting, Thesis
+ * Statement and Class Starter (their own shorter guides): the access check
+ * and what each page needs. The pages are thesis-essay-guide.tsx,
+ * writing-step-guide.tsx and class-starter-guide.tsx.
  */
 import { redirect, type LoaderFunctionArgs } from 'react-router';
 import { useLoaderData } from 'react-router';
-import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
-import { userHasPendingFreeTierTeachingLock } from '~/domain/free-tier/locked-preview.server';
 import { assignmentTypeAvailableForTeacher } from '~/domain/assignment-types/available-for-teacher.server';
+import { howItWorksGuideFor } from '~/domain/assignment-types/how-it-works-guide';
+import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
+import { findThesisEssayCourse } from '~/domain/teacher-trainings/thesis-essay-course.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { findThesisEssayCourse } from '~/domain/teacher-trainings/thesis-essay-course.server';
+import { getLessonMaterialsForAssignmentType } from '~/domain/assignment-types/lesson-materials.server';
+import {
+  isWritingStepKind,
+  WRITING_STEP_COPY,
+} from '../app.assignment-types.$id/about-writing-step/content';
+import { ClassStarterGuide } from './class-starter-guide';
 import { ThesisEssayGuide } from './thesis-essay-guide';
+import { WritingStepGuide } from './writing-step-guide';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -32,15 +41,27 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     where: { id: assignmentTypeId, archivedAt: null },
     select: { id: true, title: true, kind: true },
   });
-  const lockedPreviewThesisStatementGuide =
-    assignmentType?.kind === 'thesis_statement' &&
-    (await userHasPendingFreeTierTeachingLock(userId));
-  // Only The Thesis-Driven Essay has a guide so far, plus Thesis Statement in locked preview.
-  if (
-    !assignmentType ||
-    (!isThesisDrivenEssayTitle(assignmentType.title) &&
-      !lockedPreviewThesisStatementGuide)
-  ) {
+  // Prewriting and Thesis Statement, single steps of the essay, have their own
+  // shorter guide.
+  if (assignmentType && isWritingStepKind(assignmentType.kind)) {
+    return {
+      guide: 'writing-step' as const,
+      kind: assignmentType.kind,
+      pagePath,
+      lesson: await getLessonMaterialsForAssignmentType(
+        assignmentType.kind,
+        profile.id
+      ),
+    };
+  }
+  const titleGuide = assignmentType
+    ? howItWorksGuideFor(assignmentType.title)
+    : null;
+  if (titleGuide === 'class-starter') {
+    return { guide: 'class-starter' as const, pagePath };
+  }
+  // Otherwise only The Thesis-Driven Essay has a guide so far.
+  if (!assignmentType || !isThesisDrivenEssayTitle(assignmentType.title)) {
     throw redirect(pagePath);
   }
 
@@ -49,12 +70,28 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const course = await findThesisEssayCourse(profile.id);
 
   return {
+    guide: 'thesis-essay' as const,
     pagePath,
     coursePath: course?.coursePath ?? null,
   };
 }
 
-export default function ThesisEssayHowItWorksRoute() {
-  const { pagePath, coursePath } = useLoaderData<typeof loader>();
-  return <ThesisEssayGuide pagePath={pagePath} coursePath={coursePath} />;
+export default function HowItWorksRoute() {
+  const data = useLoaderData<typeof loader>();
+  if (data.guide === 'writing-step') {
+    return (
+      <WritingStepGuide
+        kind={data.kind}
+        copy={WRITING_STEP_COPY[data.kind]}
+        pagePath={data.pagePath}
+        lesson={data.lesson}
+      />
+    );
+  }
+  if (data.guide === 'class-starter') {
+    return <ClassStarterGuide pagePath={data.pagePath} />;
+  }
+  return (
+    <ThesisEssayGuide pagePath={data.pagePath} coursePath={data.coursePath} />
+  );
 }

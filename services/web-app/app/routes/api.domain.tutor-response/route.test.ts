@@ -700,6 +700,14 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect(payload.init?.status).toBe(202);
     expect(payload.data.retrying).toBe(true);
     expect(prisma.assignmentModuleSession.update).not.toHaveBeenCalled();
+    // One user-visible turn should not consume two per-minute debits: enforceTutorLimits
+    // ran at entry, then refundTutorLimits restores the buckets before the 202 response.
+    const refundUpdates = prisma.$queryRawUnsafe.mock.calls.filter(
+      (call) =>
+        typeof call[0] === 'string' &&
+        (call[0] as string).includes('LEAST("capacity", "tokens" +')
+    );
+    expect(refundUpdates.length).toBe(5);
   });
 
   test('forces fallback model on retry and persists one user and one tutor message', async () => {

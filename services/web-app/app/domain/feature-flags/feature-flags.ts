@@ -180,6 +180,14 @@ export const ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG =
 export const ASSIGNMENT_TYPE_LESSON_PLANS_FLAG = 'assignment-type-lesson-plans' as const;
 
 /**
+ * Teacher's Lounge (`/app/teacher-trainings`). Off: hidden and redirected except
+ * for emails on the `teacher_lounge` access list. Everyone: on for all teachers
+ * (role checks unchanged). Targeted: on for listed schools only, with the same
+ * access-list bypass when off for a school.
+ */
+export const TEACHER_LOUNGE_FLAG = 'teacher-lounge' as const;
+
+/**
  * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
  * reads only `feature_flag.free_tier`; these rows are not OR-merged.
  */
@@ -341,6 +349,11 @@ export const FEATURE_FLAGS = {
     label: 'Assignment type pages: lesson plans in the Lesson Planner',
     description:
       "How to Teach It's \"Lesson plan\" links open Brian's Thesis-Driven Essay lessons as ready-built stacks in the teacher's own Lesson Planner (one copy per teacher per lesson). Off: the links are the lesson plan PDFs. Needs the teacher-facing copy flag and the Lesson Planner. Default off on production; on by default on demo and PR previews.",
+  },
+  [TEACHER_LOUNGE_FLAG]: {
+    label: "Teacher's Lounge",
+    description:
+      "Controls Teacher's Lounge nav and `/app/teacher-trainings` access. Off: hidden for all teachers except the runtime access list. Everyone: on for all teachers. Targeted: on for listed schools only.",
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

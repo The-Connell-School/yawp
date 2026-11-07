@@ -13,13 +13,19 @@ Download and decrypt that secret for `terraform plan` / `apply` against producti
 
 See `envs/production.tfvars.example` for the shape of non-secret keys only (placeholders, no live values).
 
-## Optional Google OAuth credential wiring
+Production should set `primary_app_url` to `https://yawp.school` so Terraform
+persists `PRIMARY_APP_URL` on App Runner (free-tier signed links and unified
+sign-on). Without it, a routine apply can drop the variable even when it was
+set manually on the service.
 
-`google_oauth_credentials_configured` defaults to `false`: no Google secret
-metadata is adopted and App Runner receives no additional secret ARNs or IAM
-permissions. An approved future opt-in also requires `google_oauth_secret_arns`
-with `client_id` and `client_secret` set to the full existing ARNs, including
-their AWS suffixes. Validation restricts these to
+## Google OAuth credential wiring (production)
+
+`google_oauth_credentials_configured` defaults to `false` in Terraform so plans
+without production tfvars stay unchanged. Production tfvars should set it to
+`true` with `google_oauth_secret_arns` (full ARNs including AWS suffixes) so App
+Runner receives `GOOGLE_OAUTH_CLIENT_*` and the instance role gets
+`secretsmanager:GetSecretValue` on those secrets before the secrets attach.
+Applying App Runner secrets without IAM causes rollback. Validation restricts ARNs to
 `yawp-production-google-oauth-client-id` and
 `yawp-production-google-oauth-client-secret` in account `422348803522`,
 region `us-east-1`, and the production environment.

@@ -18,13 +18,15 @@ export const GUIDE_ACCENTS = {
 export type GuideAccentName = keyof typeof GUIDE_ACCENTS;
 
 /**
- * Which color each assignment type's guide gets, by its landing page key.
- * Only The Thesis-Driven Essay has a guide today; Class Starter's color is
- * reserved for when it gets one. Add the next page here with the next color.
+ * Which color each assignment type's guide gets, by its landing page key:
+ * The Thesis-Driven Essay, Class Starter, and the two writing-step guides
+ * (Prewriting, Thesis Statement). Add the next page here with the next color.
  */
 export const GUIDE_PAGE_ACCENTS: Partial<Record<LandingPageKey, GuideAccentName>> = {
   'thesis-driven-essay': 'forest',
   'class-starter': 'maroon',
+  prewriting: 'navy',
+  'thesis-statement': 'petrol',
 };
 
 export function guideAccentFor(key: LandingPageKey | null | undefined): string | null {

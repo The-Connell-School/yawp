@@ -13,6 +13,7 @@ const limitsBefore = JSON.stringify({
   updatedByEmail: 'ops@example.test',
 });
 let limitsRow = limitsBefore;
+const applicationUpsertStatuses: string[] = [];
 
 mock.module('~/utils/db.server', () => ({
   prisma: {
@@ -33,7 +34,11 @@ mock.module('~/utils/db.server', () => ({
       }),
     },
     freeTierApplication: {
-      upsert: async () => ({ id: 'app-1', status: 'APPROVED' }),
+      upsert: async (args: { create?: { status?: string } }) => {
+        const status = args.create?.status ?? 'APPROVED';
+        applicationUpsertStatuses.push(status);
+        return { id: 'app-1', status };
+      },
       findUniqueOrThrow: async () => ({ organizationId: 'org-1' }),
       update: async () => ({}),
     },
@@ -110,6 +115,29 @@ describe('executeFreeTierStateJump throwaway guards', () => {
       ok: false,
       error: APPROVED_ADMIN_STATES_NEED_THROWAWAY,
     });
+  });
+});
+
+describe('executeFreeTierStateJump lifecycle', () => {
+  test('rejected and expired land on the status page', async () => {
+    for (const [stateId, status] of [
+      ['lifecycle.rejected', 'REJECTED'],
+      ['lifecycle.expired', 'EXPIRED'],
+    ] as const) {
+      applicationUpsertStatuses.length = 0;
+      const result = await executeFreeTierStateJump({
+        request: new Request('http://localhost/'),
+        stateId,
+        throwaway: true,
+        currentUserId: null,
+        organizationId: 'org-1',
+      });
+      expect(result).toMatchObject({
+        ok: true,
+        redirectTo: '/app/free-tier/status',
+      });
+      expect(applicationUpsertStatuses).toEqual([status]);
+    }
   });
 });
 

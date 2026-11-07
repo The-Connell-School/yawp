@@ -10,7 +10,7 @@ const prisma = { teacherTrainingModule: { findFirst: mock() } };
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/domain/assignment-types/available-for-teacher.server', () => ({ assignmentTypeAvailableForTeacher }));
-mock.module('~/domain/teacher-trainings/thesis-essay-course.server', () => ({ findThesisEssayCourse }));
+mock.module('~/domain/teacher-trainings/thesis-essay-course.server', () => ({ findThesisEssayCourse, tutorialHrefs: () => ({}), tutorialHref: () => '' }));
 mock.module('~/utils/teacher-training-video-link.server', () => ({ getTeacherTrainingPlaybackUrl }));
 
 const { loader } = await import('./route');

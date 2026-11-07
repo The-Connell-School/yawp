@@ -1,3 +1,4 @@
+import { writeAdminConfigAudit } from '~/domain/admin-config/admin-config-audit.server';
 import { prisma } from '~/utils/db.server';
 import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import {
@@ -66,28 +67,16 @@ export type FeatureFlagState = {
 const LAST_CHANGED_BY_PREFIX = 'Last changed by ';
 const EVERYONE: FeatureFlagValue = { mode: 'everyone', orgIds: [] };
 
-export function isDemoDeployment(env: Record<string, string | undefined>) {
-  return (
-    env.PREVIEW_SLUG?.trim().toLowerCase() === 'demo' ||
-    env.YAWP_ENVIRONMENT?.trim().toLowerCase() === 'demo'
-  );
-}
-
-export function isPreviewDeployment(env: Record<string, string | undefined>) {
-  return env.YAWP_ENVIRONMENT?.trim().toLowerCase() === 'preview';
-}
-
-/**
- * Demo and PR previews ship with free tier and unified sign-on on without Internal
- * changes. This replaces a separate demo-only route gate (`isDemoFreeTierRouteOpen`);
- * Internal may have surfaced that as a synthetic `demo_free_tier` override — runtime
- * and the management API use `free-tier` persisted/effective only.
- */
-export function isNonProductionDefaultOnDeployment(
-  env: Record<string, string | undefined>
-) {
-  return isDemoDeployment(env) || isPreviewDeployment(env);
-}
+export {
+  isDemoDeployment,
+  isPreviewDeployment,
+  isNonProductionDefaultOnDeployment,
+} from './feature-flags.deployment';
+import {
+  isDemoDeployment,
+  isPreviewDeployment,
+  isNonProductionDefaultOnDeployment,
+} from './feature-flags.deployment';
 
 function runtimeDefaultOn(key: FeatureFlagKey, env: Record<string, string | undefined>) {
   if (!isNonProductionDefaultOnDeployment(env)) return false;
@@ -441,7 +430,12 @@ export async function findUnknownOrganizationIds(
 export async function setFeatureFlag(
   key: FeatureFlagKey,
   next: FeatureFlagValueInput,
-  operatorEmail: string
+  operatorEmail: string,
+  audit: {
+    source?: 'web_admin' | 'internal_api';
+    actorUserId?: string | null;
+    reason?: string | null;
+  } = {}
 ): Promise<{
   flag: FeatureFlagState;
   previous: FeatureFlagValue;
@@ -462,10 +456,22 @@ export async function setFeatureFlag(
     update: { value, valueType: 'json', description, updatedAt: new Date() },
     select: { name: true, value: true, description: true, updatedAt: true },
   });
+  const changed = !sameFeatureFlagValue(previous, normalized);
+  await writeAdminConfigAudit({
+    actorUserId: audit.actorUserId,
+    actorEmail: operatorEmail,
+    source: audit.source ?? 'internal_api',
+    entityType: 'feature_flag',
+    entityKey: key,
+    action: 'set',
+    before: previous,
+    after: normalized,
+    reason: audit.reason,
+  });
   return {
     flag: stateFor(key, row),
     previous,
-    changed: !sameFeatureFlagValue(previous, normalized),
+    changed,
   };
 }
 

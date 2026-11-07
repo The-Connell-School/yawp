@@ -59,6 +59,14 @@ const EXPECTATIONS: Record<string, FreeTierJumpExpectation> = {
     toastLabel: 'Reporter limit screen',
     pageTestId: 'free-reporter-monthly-limit',
   },
+  'lifecycle.rejected': {
+    redirectPath: '/app/free-tier/status',
+    toastLabel: 'Not approved',
+  },
+  'lifecycle.expired': {
+    redirectPath: '/app/free-tier/status',
+    toastLabel: 'Invite expired',
+  },
   'admin.approve-from-email': {
     redirectPath: '/free/admin/approve',
     adminSide: true,

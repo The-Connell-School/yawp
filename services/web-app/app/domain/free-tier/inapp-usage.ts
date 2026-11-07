@@ -123,3 +123,21 @@ export function isLessonPlannerMonthlyExhausted(
   }
   return !usage.monthly && usage.lessonPlans.remaining === 0;
 }
+
+/** Tile / picker copy for Class Starter, Prewriting, and Thesis (no N-of-N counters). */
+export function freeAssignmentKindUsageMeta(
+  usage: Pick<FreeAccountUsage, 'monthly' | 'unlimitedFreeAssignmentTiles'>,
+  row: UsageCount
+): string {
+  const unlimited =
+    usage.monthly ||
+    usage.unlimitedFreeAssignmentTiles ||
+    row.total <= 0;
+  if (unlimited) {
+    return 'Unlimited';
+  }
+  if (row.remaining === 0) {
+    return 'None left';
+  }
+  return 'Unlimited';
+}
