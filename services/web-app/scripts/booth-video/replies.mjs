@@ -109,7 +109,7 @@ export const rules = [
   {
     // Reporter: one real tool call, then Maya's growth report.
     name: 'reporter',
-    when: (r) => r.system.includes('You are Yawp! Reporter'),
+    when: (r) => /You are Yawp!? Reporter/.test(r.system),
     reply: (r) => {
       if (!r.lastMessageIsToolResult) return { tool: 'get_student_growth', input: { student: STUDENT.name } };
       return reporterReport(latestGrade(r.lastUser));
