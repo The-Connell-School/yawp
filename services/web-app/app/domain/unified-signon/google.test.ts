@@ -131,6 +131,39 @@ test('missing or partial configuration disables Google', () => {
   process.env.GOOGLE_OAUTH_CLIENT_SECRET = 'local-secret';
 });
 
+test('Google OAuth start uses the configured HTTPS production origin over the HTTP adapter', () => {
+  const previous = {
+    YAWP_ENVIRONMENT: process.env.YAWP_ENVIRONMENT,
+    PRIMARY_APP_URL: process.env.PRIMARY_APP_URL,
+  };
+  try {
+    process.env.YAWP_ENVIRONMENT = 'production';
+    process.env.PRIMARY_APP_URL = 'https://yawp.school';
+    const context = flow();
+    const result = beginGoogle(
+      context,
+      new Request('http://abc123.us-east-1.awsapprunner.com/auth/login', {
+        headers: {
+          host: 'abc123.us-east-1.awsapprunner.com',
+          'x-forwarded-proto': 'https',
+          'x-forwarded-host': 'yawp.school',
+        },
+      })
+    );
+    expect(new URL(result.redirectTo).searchParams.get('redirect_uri')).toBe(
+      'https://yawp.school/auth/unified/google/callback'
+    );
+    expect(context.data.google!.callback).toBe(
+      'https://yawp.school/auth/unified/google/callback'
+    );
+  } finally {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});
+
 test('Google callback uses the configured HTTPS preview origin over the HTTP adapter', () => {
   const previous = {
     YAWP_ENVIRONMENT: process.env.YAWP_ENVIRONMENT,
