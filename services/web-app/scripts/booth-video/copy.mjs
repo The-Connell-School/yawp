@@ -563,7 +563,7 @@ export const VO = {
     otherStarts: { title: 'Or start somewhere else', body: 'Plan from a skill, a standard, or a writing fundamental. Teachers start where they are.' },
     chat: 'A short conversation, and the plan comes back built from Yawp! materials.',
     steps: { title: 'A plan, step by step', body: 'Every step is timed and built from Yawp! materials.' },
-    stack: 'Add it all to the stack: the run of show for tomorrow.',
+    stack: 'Add it all to the lesson. The stack becomes tomorrow\'s run of show.',
     runOfShow: { title: 'The run of show', body: 'Every step timed against your 50-minute period, with writing time marked in purple.' },
     control: { title: 'You stay in control', body: 'Drag steps into a new order, retime them, or cut one. Undo is a click away.' },
     create: { title: 'Writing steps become Yawp! assignments', body: 'One click creates the exit ticket for the class.' },

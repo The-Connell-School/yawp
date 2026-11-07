@@ -417,7 +417,7 @@ segments.planner = async () => {
   await s.clearCallout();
 
   await s.caption(VO.planner.stack, { hold: false });
-  const addEverything = page.getByRole('button', { name: /Add everything to the stack/ }).first();
+  const addEverything = page.getByRole('button', { name: /Add everything to the (stack|lesson)/ }).first();
   await s.scrollTo(addEverything, { ms: 900 });
   await s.click(addEverything, { after: 800 });
   await s.click(page.locator('[data-testid="lesson-packet-bar"]').getByRole('link', { name: /Open the stack/ }), { after: 0 });
@@ -471,10 +471,16 @@ segments.planner = async () => {
   await page.getByRole('button', { name: 'Create Assignment' }).waitFor({ timeout: 30000 });
   await sleep(600);
   await s.click(page.locator('label[for^="assignment-create-class-"]', { hasText: copy.CLASS.title }), { after: 400 });
-  await s.click(page.getByRole('button', { name: 'Create Assignment' }), { after: 1100 });
-  await s.click('[data-testid="back-to-lesson"]', { after: 0 });
+  await s.click(page.getByRole('button', { name: 'Create Assignment' }), { after: 0 });
+  // The app now returns to the lesson by itself ("Created in Yawp! and added
+  // to your lesson."); older builds stop on the assignment with a back link.
+  const back = page.locator('[data-testid="back-to-lesson"]');
+  const landed = page.getByText(/Created in Yawp!/).first();
+  const returned = await landed.waitFor({ timeout: 12000 }).then(() => true, () => false);
+  if (!returned) await s.click(back, { after: 0 });
   await page.locator('[data-testid="stack-v3"]').waitFor({ timeout: 30000 });
   await page.waitForLoadState('networkidle');
+  if (await landed.isVisible()) await sleep(1800);
   const created = page.locator('[data-testid="in-yawp"]').first();
   await s.scrollTo(created, { ms: 900 });
   await s.moveTo(created, 600);
