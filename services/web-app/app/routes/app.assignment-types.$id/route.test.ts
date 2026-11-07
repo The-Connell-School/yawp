@@ -42,6 +42,11 @@ const redirectWithToast = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 const isAssignmentTypeAvailableForAnyScope = mock();
 const isTeacherPromptGeneratorEnabled = mock(async () => true);
+const getAssignmentTypeLandingFlags = mock(async () => ({
+  v2: false,
+  thesisEssay: false,
+  lessonPlans: false,
+}));
 
 // bun's module mocks are global to the test run and mock.restore() does not
 // undo mock.module — restore from the pristine copy test-preload.ts captured
@@ -69,6 +74,18 @@ mock.module('~/utils/assignment-type-access.server', () => ({
 }));
 mock.module('~/domain/teacher-prompt-generator/gate.server', () => ({
   isTeacherPromptGeneratorEnabled,
+}));
+mock.module('~/domain/assignment-types/landing-page-gate.server', () => ({
+  getAssignmentTypeLandingFlags,
+}));
+const findThesisEssayCourse = mock<() => Promise<{ courseId: string; coursePath: string; videoModules: Record<number, string> } | null>>(async () => null);
+mock.module('~/domain/teacher-trainings/thesis-essay-course.server', () => ({
+  findThesisEssayCourse,
+  // The real helper, as bun's module mock replaces the whole module.
+  tutorialHrefs: (assignmentTypeId: string, course: { videoModules: Record<number, string> } | null) =>
+    Object.fromEntries(
+      Object.keys(course?.videoModules ?? {}).map((n) => [n, `/app/assignment-types/${assignmentTypeId}/tutorial/${n}`])
+    ),
 }));
 const redirectLockedPreviewAssignmentTypeHomeToGuide = mock(async () => {});
 mock.module(
@@ -897,5 +914,124 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     expect(submissions[1].overallScore).toBe(20);
     expect(JSON.stringify(response.data)).not.toContain('80% (B)');
     expect(JSON.stringify(response.data)).not.toMatch(/overallScore["\\]*,85\b/);
+  });
+});
+
+describe('app.assignment-types.$id loader landing page', () => {
+  const teacher = {
+    id: 'teacher-1',
+    role: 'TEACHER',
+    organization: { id: 'org-1', name: 'Org' },
+  };
+
+  beforeEach(() => {
+    prisma.assignmentType.findMany.mockReset().mockResolvedValue([]);
+    prisma.assignmentType.findUnique.mockReset().mockResolvedValue(null);
+    prisma.document.findMany.mockReset().mockResolvedValue([]);
+    prisma.class.findMany.mockReset().mockResolvedValue([
+      {
+        id: 'class-1',
+        grade: '9th',
+        period: '1st',
+        title: null,
+        school: { id: 'school-1', organizationId: 'org-1' },
+        teachers: [{ id: 'teacher-1' }],
+      },
+    ]);
+    prisma.savedThesisPrompt.findMany.mockReset().mockResolvedValue([]);
+    prisma.savedDailyPagesPrompt.findMany.mockReset().mockResolvedValue([]);
+    requireUserId.mockReset().mockResolvedValue('user-1');
+    requireMembership.mockReset().mockResolvedValue(teacher);
+    getAssignmentTypeLandingFlags.mockReset();
+    getAvailableAssignmentTypesForScopes.mockReset();
+  });
+
+  async function load(type: Record<string, unknown>) {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      withOrganizationAssignment(makeAssignmentType(type)),
+    ]);
+    return (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+  }
+
+  test('keeps the old page while the flag is off', async () => {
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: false, thesisEssay: false, lessonPlans: false });
+    const response = await load({ title: 'Class Starter' });
+    expect(response.data.landingPageKey).toBeNull();
+    expect(getAssignmentTypeLandingFlags).toHaveBeenCalledWith('org-1');
+  });
+
+  test("gives teachers Brian's page when the flag is on", async () => {
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: false, lessonPlans: false });
+    expect((await load({ title: 'Class Starter' })).data.landingPageKey).toBe(
+      'class-starter'
+    );
+    expect(
+      (await load({ title: 'Exit Ticket', kind: 'exit_ticket' })).data.landingPageKey
+    ).toBe('exit-ticket');
+  });
+
+  test('keeps the old Thesis-Driven Essay page until its own flag is on', async () => {
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: false, lessonPlans: false });
+    expect(
+      (await load({ title: 'The Thesis-Driven Essay' })).data.landingPageKey
+    ).toBeNull();
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: true, lessonPlans: false });
+    expect(
+      (await load({ title: 'The Thesis-Driven Essay' })).data.landingPageKey
+    ).toBe('thesis-driven-essay');
+  });
+
+  test('students and school-authored types keep the old page', async () => {
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: true, lessonPlans: false });
+    expect(
+      (await load({ title: "GBA 300: Int'l Expansion Plan" })).data.landingPageKey
+    ).toBeNull();
+    requireMembership.mockResolvedValue({ ...teacher, role: 'STUDENT' });
+    prisma.class.findMany.mockResolvedValue([]);
+    expect((await load({ title: 'Class Starter' })).data.landingPageKey).toBeNull();
+    expect(getAssignmentTypeLandingFlags).toHaveBeenCalledTimes(1);
+  });
+
+  test('Pre-Writing reuses the Thesis-Driven Essay library on the new page only', async () => {
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: false, thesisEssay: false, lessonPlans: false });
+    const before = await load({ title: 'Prewriting', kind: 'prewriting' });
+    expect(before.data.thesisPromptLibrary).toBeNull();
+
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: false, lessonPlans: false });
+    const after = await load({ title: 'Prewriting', kind: 'prewriting' });
+    expect(after.data.landingPageKey).toBe('prewriting');
+    expect(after.data.thesisPromptLibrary.totalCount).toBeGreaterThanOrEqual(100);
+  });
+
+  test('hands the page each lesson’s tutorial video from the Lounge course (Brian, Nov 6)', async () => {
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: true, lessonPlans: false });
+    findThesisEssayCourse.mockResolvedValue({
+      courseId: 'course-1',
+      coursePath: '/app/teacher-trainings/course-1',
+      videoModules: { 2: 'm7' },
+    });
+    // Played on this type's own tutorial page, never a link into the Lounge.
+    expect((await load({ title: 'The Thesis-Driven Essay' })).data.landingVideos).toEqual({
+      2: '/app/assignment-types/at-1/tutorial/2',
+    });
+    expect(findThesisEssayCourse).toHaveBeenCalledWith('teacher-1');
+    // No course this teacher can open: no video links, and the page still renders.
+    findThesisEssayCourse.mockResolvedValue(null);
+    expect((await load({ title: 'Prewriting', kind: 'prewriting' })).data.landingVideos).toEqual({});
+    // The old page never looks.
+    findThesisEssayCourse.mockClear();
+    expect((await load({ title: "GBA 300: Int'l Expansion Plan" })).data.landingVideos).toEqual({});
+    expect(findThesisEssayCourse).not.toHaveBeenCalled();
+  });
+
+  test('Thesis Statement gets no library', async () => {
+    getAssignmentTypeLandingFlags.mockResolvedValue({ v2: true, thesisEssay: false, lessonPlans: false });
+    const response = await load({ title: 'Thesis Statement', kind: 'thesis_statement' });
+    expect(response.data.landingPageKey).toBe('thesis-statement');
+    expect(response.data.thesisPromptLibrary).toBeNull();
+    expect(response.data.promptLibrary).toBeNull();
   });
 });

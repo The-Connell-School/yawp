@@ -756,6 +756,9 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/seed-preview-teacher-notes-qa.ts \
         packages/prisma/scripts/local-dev/preview-teacher-notes-qa.ts \
         packages/prisma/scripts/assets/class-starter.jpg \
+        packages/prisma/scripts/assets/prewriting.jpg \
+        packages/prisma/scripts/assets/thesis-statement.jpg \
+        packages/prisma/scripts/seed-free-tier-bundle-assignment-types.ts \
         packages/prisma/scripts/sync-prod-fidelity-fixtures.ts \
         packages/prisma/scripts/preview-seats.ts \
         packages/prisma/scripts/seed-preview-seats.ts \

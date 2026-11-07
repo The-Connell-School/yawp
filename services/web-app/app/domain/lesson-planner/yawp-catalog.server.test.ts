@@ -284,6 +284,7 @@ describe('findWritingExerciseTypeIds', () => {
       classStarter: 'at-2',
       exitTicket: 'at-4',
       thesis: null,
+      prewriting: null,
     });
   });
 
@@ -315,6 +316,7 @@ describe('findWritingExerciseTypeIds', () => {
       classStarter: 'at-2',
       exitTicket: 'at-3',
       thesis: null,
+      prewriting: null,
     });
   });
 
@@ -334,6 +336,7 @@ describe('findWritingExerciseTypeIds', () => {
       classStarter: 'at-2',
       exitTicket: null,
       thesis: null,
+      prewriting: null,
     });
   });
 
@@ -373,6 +376,7 @@ describe('findWritingExerciseTypeIds', () => {
       classStarter: null,
       exitTicket: null,
       thesis: null,
+      prewriting: null,
     });
   });
 

@@ -16,6 +16,7 @@ import {
   GuideStep,
   WillWont,
 } from '~/components/how-it-works/guide';
+import { guideAccentFor } from '~/components/how-it-works/guide-accents';
 import { LessonMaterialsCard } from '~/components/lesson-materials-card';
 import type { LessonMaterials } from '~/domain/assignment-types/lesson-materials.server';
 import {
@@ -23,19 +24,28 @@ import {
   WRITING_STEP_WILL,
   WRITING_STEP_WONT,
   type WritingStepCopy,
+  type WritingStepKind,
 } from '../app.assignment-types.$id/about-writing-step/content';
+import { PREWRITING_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/prewriting-assignment-type';
 
 export function WritingStepGuide({
+  kind,
   copy,
   pagePath,
   lesson,
 }: {
+  /** Which step: picks the page's accent (Brian, Nov 5). */
+  kind: WritingStepKind;
   copy: WritingStepCopy;
   pagePath: string;
   lesson: LessonMaterials | null;
 }) {
   return (
-    <GuidePage backTo={pagePath} backLabel={`Back to ${copy.title}`}>
+    <GuidePage
+      backTo={pagePath}
+      backLabel={`Back to ${copy.title}`}
+      accent={guideAccentFor(kind === PREWRITING_ASSIGNMENT_TYPE_KIND ? 'prewriting' : 'thesis-statement')}
+    >
       <GuideHero
         title={`Teach ${copy.title}`}
         highlight={copy.guideHighlight}

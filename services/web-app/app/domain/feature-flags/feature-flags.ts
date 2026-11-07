@@ -100,6 +100,35 @@ export const LESSON_PLANNER_TEACH_NOTES_FLAG = 'lesson_planner_teach_notes' as c
 /** The library redesign (Oct 24 handoff, Part 2): courses, units, groups. Needs stack v3. */
 export const LESSON_PLANNER_LIBRARY_V2_FLAG = 'lesson_planner_library_v2' as const;
 
+/** An uploaded deck is kept whole, with its pictures and their alt text (Nov 1). Needs uploads. */
+export const LESSON_PLANNER_UPLOAD_PICTURES_FLAG = 'lesson_planner_upload_pictures' as const;
+
+/** "Teach with these slides": the planner builds around the teacher's own deck (Nov 1). Needs upload pictures. */
+export const LESSON_PLANNER_TEACH_MY_SLIDES_FLAG = 'lesson_planner_teach_my_slides' as const;
+
+/** "Refresh into a Yawp! deck": the teacher's pictures on Yawp! slides (Nov 1). Needs upload pictures. */
+export const LESSON_PLANNER_REFRESH_MY_DECK_FLAG = 'lesson_planner_refresh_my_deck' as const;
+
+/** "Planned in" counts the time the teacher was actually working on the lesson (Nov 3). */
+export const LESSON_PLANNER_ACTIVE_TIME_FLAG = 'lesson_planner_active_time' as const;
+
+/** The teacher's call on whether a stack step is writing time (Nov 4 follow-up). Needs the stack page redesign. */
+export const LESSON_PLANNER_WRITING_OVERRIDE_FLAG = 'lesson_planner_writing_override' as const;
+
+/**
+ * The teacher's own deck flags as they apply (Nov 1): keeping the deck needs
+ * uploads, and both choices work from the kept deck.
+ */
+export function deckUploadFlags(raw: {
+  uploads: boolean;
+  uploadPictures: boolean;
+  teachMySlides: boolean;
+  refreshMyDeck: boolean;
+}): { uploadPictures: boolean; teachMySlides: boolean; refreshMyDeck: boolean } {
+  const kept = raw.uploadPictures && raw.uploads;
+  return { uploadPictures: kept, teachMySlides: raw.teachMySlides && kept, refreshMyDeck: raw.refreshMyDeck && kept };
+}
+
 /** @deprecated Registry key `free_tier` — use {@link FREE_TIER_FLAG}. */
 export const FREE_TIER_FLAG_LEGACY_KEY = 'free_tier' as const;
 
@@ -120,6 +149,35 @@ export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
  * Default off on production; on by default on demo and PR previews.
  */
 export const TEACHER_PROMPT_GENERATOR_FLAG = 'teacher-prompt-generator' as const;
+
+/**
+ * Brian's teacher-facing assignment-type landing pages (Oct 31 copy edits):
+ * a short Description, How it works, and the Prompt Library intro in a mentor
+ * teacher's voice, with the one-step types' Modules block removed. Off: every
+ * assignment type page as before. Default off on production; on by default on
+ * demo and PR previews. The Thesis-Driven Essay page has its own flag below.
+ */
+export const ASSIGNMENT_TYPE_LANDING_V2_FLAG = 'assignment-type-landing-v2' as const;
+
+/**
+ * The new Thesis-Driven Essay landing page, with How to Teach It (a lesson
+ * stack and tutorial video per step). Demo only until the stacks and videos
+ * exist; turning this on in production is how it goes live. Needs
+ * {@link ASSIGNMENT_TYPE_LANDING_V2_FLAG}.
+ */
+export const ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG =
+  'assignment-type-landing-thesis-essay' as const;
+
+/**
+ * How to Teach It → ready-built lesson plans (Kevin, Nov 5). On the new
+ * landing pages, a lesson's "Lesson plan" opens Brian's lesson in the
+ * teacher's own Lesson Planner, on the stack page, built from the Yawp!
+ * lesson catalog (`/app/lesson-planner/yawp/<slug>`). Off: the row is the
+ * lesson plan PDF and the route is a 404. Needs
+ * {@link ASSIGNMENT_TYPE_LANDING_V2_FLAG} and the school's Lesson Planner.
+ * Default off on production; on by default on demo and PR previews.
+ */
+export const ASSIGNMENT_TYPE_LESSON_PLANS_FLAG = 'assignment-type-lesson-plans' as const;
 
 /**
  * Teacher's Lounge (`/app/teacher-trainings`). Off: hidden and redirected except
@@ -227,6 +285,31 @@ export const FEATURE_FLAGS = {
     description:
       'Brian’s library redesign: course tabs, units as tiles in groups with a writing meter, a page for each unit with day tabs and a lesson preview, Lessons on their own, and Plan a lesson. Needs the stack page redesign. Off: the folder list.',
   },
+  [LESSON_PLANNER_UPLOAD_PICTURES_FLAG]: {
+    label: 'Lesson Planner: keep uploaded decks and their pictures',
+    description:
+      'An uploaded PowerPoint is kept whole while it is attached to a lesson, its pictures are saved with their alt text, and the planner reads the deck slide by slide with a note where each picture sits. Removing the document deletes the file and its pictures. Needs your own documents. Off: only the text is kept, as before.',
+  },
+  [LESSON_PLANNER_TEACH_MY_SLIDES_FLAG]: {
+    label: 'Lesson Planner: teach with my slides',
+    description:
+      'An attached PowerPoint can be marked “Teach with these slides”: the planner builds the lesson around the teacher’s own slide numbers instead of writing a new deck, and the original deck is in the lesson to download. Needs keep uploaded decks. Off: no choice on the document.',
+  },
+  [LESSON_PLANNER_REFRESH_MY_DECK_FLAG]: {
+    label: 'Lesson Planner: refresh my deck',
+    description:
+      'An attached PowerPoint can be marked “Refresh into a Yawp! deck”: the planner rebuilds it as a Yawp! deck and keeps the teacher’s own pictures on picture slides, in Present, PowerPoint and PDF. A shared lesson shows a placeholder in place of the teacher’s pictures. Needs keep uploaded decks. Off: no refresh choice; decks already made still show their pictures.',
+  },
+  [LESSON_PLANNER_ACTIVE_TIME_FLAG]: {
+    label: 'Lesson Planner: planning time is working time',
+    description:
+      'The planner pages count the time a teacher is actually working on a lesson (the page in front of them and in use, or waiting on the planner), and “Planned in” on a set lesson shows that instead of the clock time since the lesson was started. Lessons from before are estimated from their activity, with breaks left out. Off: “Planned in” is the time from the first message to set, and nothing is counted.',
+  },
+  [LESSON_PLANNER_WRITING_OVERRIDE_FLAG]: {
+    label: 'Lesson Planner: teacher decides what counts as writing',
+    description:
+      'On the stack page, an opened step offers “Don’t count as writing” or “Count as writing”, with Undo: a lecture that introduces pre-writing can be taken out of the writing tally, and a step the rule missed can be counted. The teacher’s call drives the Writing badge, the writing minutes and percent, and Create in Yawp!. Needs the stack page redesign. Off: Yawp! decides, as before.',
+  },
   [UNIFIED_SIGN_ON_FLAG]: {
     label: 'Unified sign-on',
     description:
@@ -251,6 +334,21 @@ export const FEATURE_FLAGS = {
     label: 'Teacher prompt generator',
     description:
       'Shows New → Generate a prompt and the LLM drafting sheet on assignment types that support it (Class Starter, Daily Pages, Exit Ticket, Thesis-Driven Essay). Default off on production; on by default on demo and PR previews.',
+  },
+  [ASSIGNMENT_TYPE_LANDING_V2_FLAG]: {
+    label: 'Assignment type pages: teacher-facing copy',
+    description:
+      "Brian's new landing page for each assignment type (Class Starter, Exit Ticket, Pre-Writing, Thesis Statement, Daily Pages, AP History, and the other built-in types): a short description, How it works, and the Prompt Library intro, with no Modules block on one-step types. Off: the old pages. Default off on production; on by default on demo and PR previews.",
+  },
+  [ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG]: {
+    label: 'Assignment type pages: Thesis-Driven Essay',
+    description:
+      'The new Thesis-Driven Essay landing page, with How to Teach It (lesson stack and tutorial video per step). Needs the teacher-facing copy flag. Turn on in production once the stacks and videos exist. Default off on production; on by default on demo and PR previews.',
+  },
+  [ASSIGNMENT_TYPE_LESSON_PLANS_FLAG]: {
+    label: 'Assignment type pages: lesson plans in the Lesson Planner',
+    description:
+      "How to Teach It's \"Lesson plan\" links open Brian's Thesis-Driven Essay lessons as ready-built stacks in the teacher's own Lesson Planner (one copy per teacher per lesson). Off: the links are the lesson plan PDFs. Needs the teacher-facing copy flag and the Lesson Planner. Default off on production; on by default on demo and PR previews.",
   },
   [TEACHER_LOUNGE_FLAG]: {
     label: "Teacher's Lounge",

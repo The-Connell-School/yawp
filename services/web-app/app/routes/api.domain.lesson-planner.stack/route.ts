@@ -17,6 +17,7 @@ import {
   moveStepToTomorrow,
   restoreStackSnapshot,
   setStepMinutes,
+  setStepWriting,
   type StackSnapshot,
 } from '~/domain/lesson-planner/stack-actions.server';
 import { runStackCommand } from '~/domain/lesson-planner/stack-command.server';
@@ -74,6 +75,8 @@ const POST = z
       'set-extension',
       // The slides stay as they are though the lesson changed (note 9).
       'keep-deck',
+      // The teacher's call on whether a step is writing (Nov 4 follow-up).
+      'set-writing',
     ]),
     conversationId: z.string().min(1),
     materialId: z.string().min(1).optional(),
@@ -108,6 +111,8 @@ const POST = z
     notes: z.string().max(MAX_NOTES).optional(),
     /** `set-extension`: into the extensions, or back into the lesson. */
     extension: z.enum(['true', 'false']).optional(),
+    /** `set-writing`: writing, not writing, or back to Yawp!'s own answer. */
+    writing: z.enum(['true', 'false', 'auto']).optional(),
   })
   .strict();
 
@@ -197,6 +202,14 @@ export async function action({ request }: ActionFunctionArgs) {
       if (!data.materialId || !data.minutes) return bad('A step and its minutes are required.');
       const undo = await setStepMinutes(conversation.id, data.materialId, data.minutes);
       return undo ? dataResponse({ ok: true, undo }) : bad('That step is not in this lesson.', 404);
+    }
+
+    case 'set-writing': {
+      if (!flags.writingOverride) return bad('Not found.', 404);
+      if (!data.materialId || !data.writing) return bad('A step and the call are required.');
+      const writing = data.writing === 'auto' ? null : data.writing === 'true';
+      const undo = await setStepWriting(conversation.id, data.materialId, writing);
+      return undo ? dataResponse({ ok: true, undo, writing }) : bad('That step is not in this lesson.', 404);
     }
 
     case 'apply-fix': {

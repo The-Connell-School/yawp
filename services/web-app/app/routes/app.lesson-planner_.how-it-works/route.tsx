@@ -682,7 +682,7 @@ export default function LessonPlannerHowItWorksRoute() {
                     list ticks itself off as you go: it fits the period, the slides
                     are built and up to date, the writing is made in Yawp! or on
                     paper, and the day is picked. When it looks right, tap{' '}
-                    <strong className="text-foreground">This lesson is set</strong>.
+                    <strong className="text-foreground">Set this lesson</strong>.
                   </Copy>
                   <Ticks
                     items={[
@@ -708,7 +708,7 @@ export default function LessonPlannerHowItWorksRoute() {
                 <H3>Set it, and take it to class</H3>
                 <Copy>
                   When it looks right, tap{' '}
-                  <strong className="text-foreground">This lesson is set</strong>.
+                  <strong className="text-foreground">Set this lesson</strong>.
                   Everything you need follows your order:
                 </Copy>
                 <Ticks
@@ -765,7 +765,7 @@ export default function LessonPlannerHowItWorksRoute() {
                   media={
                     <Clip
                       name="teach-it"
-                      label="Tapping This lesson is set: confetti, the Yawp! logo and Yaaawp!, then the Before class list and Teach it. Run of show with teacher notes opens each step with its slide and notes, and Next step moves on."
+                      label="Tapping Set this lesson: confetti, the Yawp! logo and Yaaawp!, then the Before class list and Teach it. Run of show with teacher notes opens each step with its slide and notes, and Next step moves on."
                     />
                   }
                 >

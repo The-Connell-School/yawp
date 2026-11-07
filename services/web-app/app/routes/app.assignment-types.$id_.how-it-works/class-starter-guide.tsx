@@ -20,6 +20,7 @@ import {
   GuideStep,
   WillWont,
 } from '~/components/how-it-works/guide';
+import { guideAccentFor } from '~/components/how-it-works/guide-accents';
 
 const MEDIA = '/img/class-starter-guide';
 
@@ -54,7 +55,7 @@ export function ClassStarterGuide({ pagePath }: { pagePath: string }) {
   );
 
   return (
-    <GuidePage backTo={pagePath} backLabel="Back to Class Starter">
+    <GuidePage backTo={pagePath} backLabel="Back to Class Starter" accent={guideAccentFor('class-starter')}>
       <GuideHero
         title="Get every student writing"
         highlight="at the start of class."

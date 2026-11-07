@@ -1125,6 +1125,22 @@ jobs:
             app/routes/api.domain.assignment-type-evaluations/route.test.ts \
             'app/routes/app_.submissions_.$submissionId/route.loader.test.ts' \
             'app/routes/app.assignment-types.$id/prompts-library/library-variant.test.ts' \
+            'app/routes/app.assignment-types.$id/landing-copy/content.test.ts' \
+            'app/routes/app.assignment-types.$id/landing-copy/assignment-type-landing.test.tsx' \
+            'app/routes/app.assignment-types.$id/landing-copy/thesis-essay-course.test.ts' \
+            app/domain/assignment-types/landing-page-gate.server.test.ts \
+            app/domain/lesson-planner/yawp-lessons.test.ts \
+            app/domain/lesson-planner/yawp-lessons.server.test.ts \
+            app/domain/lesson-planner/yawp-lesson-deck.test.ts \
+            app/domain/lesson-planner/yawp-lesson-deck.server.test.ts \
+            app/domain/teacher-trainings/thesis-essay-course.server.test.ts \
+            'app/routes/app.assignment-types.$id_.tutorial.$lesson/route.test.ts' \
+            app/components/how-it-works/guide.test.tsx \
+            'app/routes/app.assignment-types.$id_.how-it-works/thesis-essay-guide.test.tsx' \
+            'app/routes/app.lesson-planner_.yawp.$slug/route.test.ts' \
+            app/domain/assignment-types/exit-ticket.test.ts \
+            app/domain/assignment-types/exit-ticket-reflection-prompts.test.ts \
+            'app/routes/app.assignment-types.$id/exit-ticket-prompt-generator/prompt-generator.test.ts' \
             app/routes/api.domain.lesson-planner/route.test.ts \
             app/routes/api.domain.lesson-planner.packet/route.test.ts \
             app/domain/lesson-planner/artifact-from-reply.test.ts \
@@ -1207,6 +1223,20 @@ jobs:
             app/domain/lesson-planner/source-documents.server.test.ts \
             app/utils/bounded-body.server.test.ts \
             app/routes/api.domain.lesson-planner.uploads/route.test.ts \
+            app/domain/office/pptx-pictures.test.ts \
+            app/domain/office/image-dimensions.test.ts \
+            app/domain/lesson-planner/deck-pictures.test.ts \
+            app/domain/lesson-planner/deck-pictures.server.test.ts \
+            app/domain/lesson-planner/deck-pictures-pptx.server.test.ts \
+            app/domain/lesson-planner/lesson-pdf-pictures.server.test.ts \
+            'app/routes/api.image.lesson-picture.$id/route.test.ts' \
+            'app/routes/api.lesson-planner-deck.$uploadId/route.test.ts' \
+            app/domain/lesson-planner/active-time.test.ts \
+            app/routes/api.domain.lesson-planner.active-time/route.test.ts \
+            app/domain/lesson-planner/deck-choice.test.ts \
+            app/domain/lesson-planner/deck-from-upload.test.ts \
+            app/domain/lesson-planner/uploaded-deck.server.test.ts \
+            app/routes/api.domain.lesson-planner.slide-picture/route.test.ts \
             app/domain/lesson-planner/kit-plan-render.server.test.ts \
             app/domain/lesson-planner/lesson-pptx-gallery.server.test.ts \
             app/domain/lesson-planner/option-groups.test.ts \

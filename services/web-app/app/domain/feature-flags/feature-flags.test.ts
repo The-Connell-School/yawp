@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  deckUploadFlags,
   FEATURE_FLAGS,
   GUIDED_TOURS_FLAG,
   CLASS_CODE_UNIQUE_FLAG,
@@ -22,8 +23,16 @@ import {
   LESSON_PLANNER_UPLOADS_FLAG,
   LESSON_PLANNER_TEACH_NOTES_FLAG,
   LESSON_PLANNER_LIBRARY_V2_FLAG,
+  LESSON_PLANNER_UPLOAD_PICTURES_FLAG,
+  LESSON_PLANNER_TEACH_MY_SLIDES_FLAG,
+  LESSON_PLANNER_REFRESH_MY_DECK_FLAG,
+  LESSON_PLANNER_ACTIVE_TIME_FLAG,
+  LESSON_PLANNER_WRITING_OVERRIDE_FLAG,
   LESSON_PLANNER_STACK_PANEL_FLAG,
   TEACHER_PROMPT_GENERATOR_FLAG,
+  ASSIGNMENT_TYPE_LANDING_V2_FLAG,
+  ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG,
+  ASSIGNMENT_TYPE_LESSON_PLANS_FLAG,
   TEACHER_LOUNGE_FLAG,
   FOLDED_FREE_TIER_LEGACY_SETTINGS,
   isFreeTierGloballyEnabled,
@@ -39,6 +48,30 @@ import {
 } from './feature-flags';
 
 describe('feature flag registry', () => {
+  test('registers the assignment-type landing page flags', () => {
+    expect(ASSIGNMENT_TYPE_LANDING_V2_FLAG).toBe('assignment-type-landing-v2');
+    expect(ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG).toBe(
+      'assignment-type-landing-thesis-essay'
+    );
+    expect(featureFlagSettingName(ASSIGNMENT_TYPE_LANDING_V2_FLAG)).toBe(
+      'feature_flag.assignment-type-landing-v2'
+    );
+    expect(FEATURE_FLAGS[ASSIGNMENT_TYPE_LANDING_V2_FLAG].label.length).toBeGreaterThan(0);
+    expect(
+      FEATURE_FLAGS[ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG].description
+    ).toContain('landing page');
+  });
+
+  test('registers the How to Teach It lesson plans flag', () => {
+    expect(ASSIGNMENT_TYPE_LESSON_PLANS_FLAG).toBe('assignment-type-lesson-plans');
+    expect(featureFlagSettingName(ASSIGNMENT_TYPE_LESSON_PLANS_FLAG)).toBe(
+      'feature_flag.assignment-type-lesson-plans'
+    );
+    expect(FEATURE_FLAGS[ASSIGNMENT_TYPE_LESSON_PLANS_FLAG].description).toContain(
+      'Lesson Planner'
+    );
+  });
+
   test('no longer has the removed Daily Pages writing-conditions flag', () => {
     const removed = 'daily_pages_paragraph_type_and_writing_time';
     expect(FEATURE_FLAG_KEYS as readonly string[]).not.toContain(removed);
@@ -63,11 +96,19 @@ describe('feature flag registry', () => {
       LESSON_PLANNER_UPLOADS_FLAG,
       LESSON_PLANNER_TEACH_NOTES_FLAG,
       LESSON_PLANNER_LIBRARY_V2_FLAG,
+      LESSON_PLANNER_UPLOAD_PICTURES_FLAG,
+      LESSON_PLANNER_TEACH_MY_SLIDES_FLAG,
+      LESSON_PLANNER_REFRESH_MY_DECK_FLAG,
+      LESSON_PLANNER_ACTIVE_TIME_FLAG,
+      LESSON_PLANNER_WRITING_OVERRIDE_FLAG,
       UNIFIED_SIGN_ON_FLAG,
       CLASS_CODE_UNIQUE_FLAG,
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       TEACHER_PROMPT_GENERATOR_FLAG,
+      ASSIGNMENT_TYPE_LANDING_V2_FLAG,
+      ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG,
+      ASSIGNMENT_TYPE_LESSON_PLANS_FLAG,
       TEACHER_LOUNGE_FLAG,
     ]);
   });
@@ -245,3 +286,26 @@ describe('evaluateFeatureFlag', () => {
     expect(isFreeTierGloballyEnabled({ mode: 'off', orgIds: [] })).toBe(false);
   });
 });
+
+describe('the teacher’s own deck flags (Nov 1)', () => {
+  const all = { uploads: true, uploadPictures: true, teachMySlides: true, refreshMyDeck: true };
+
+  test('keeping the deck and its pictures needs uploads on', () => {
+    expect(deckUploadFlags({ ...all, uploads: false })).toEqual({ uploadPictures: false, teachMySlides: false, refreshMyDeck: false });
+    expect(deckUploadFlags(all)).toEqual({ uploadPictures: true, teachMySlides: true, refreshMyDeck: true });
+  });
+
+  test('teach-with-my-slides and refresh both need the kept deck', () => {
+    expect(deckUploadFlags({ ...all, uploadPictures: false })).toEqual({
+      uploadPictures: false,
+      teachMySlides: false,
+      refreshMyDeck: false,
+    });
+    expect(deckUploadFlags({ ...all, refreshMyDeck: false })).toEqual({
+      uploadPictures: true,
+      teachMySlides: true,
+      refreshMyDeck: false,
+    });
+  });
+});
+

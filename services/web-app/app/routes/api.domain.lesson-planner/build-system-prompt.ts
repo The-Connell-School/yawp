@@ -1,6 +1,12 @@
 import { buildTemplateSection, type LessonTemplate } from '~/domain/lesson-planner/lesson-templates';
 import type { RecentArt } from '~/domain/lesson-planner/recent-art';
-import { buildSourcesSection, type LessonUpload } from '~/domain/lesson-planner/lesson-uploads';
+import {
+  buildLessonPicturesSection,
+  buildSourcesSection,
+  type DeckChoices,
+  type LessonUpload,
+  type UploadPictureRef,
+} from '~/domain/lesson-planner/lesson-uploads';
 import { selectableDeckArt } from '~/domain/lesson-planner/deck-art';
 import { rubricCategories } from '~/domain/grading/rubric';
 import type { CacheableSystemBlock } from '~/utils/getLLMCompletion/getLLMCompletion';
@@ -412,6 +418,8 @@ export function buildLessonPlannerSystemPrompt({
     'The period is a budget, not a suggestion (this is how a plan stops being usable):',
     'The teacher tells you how many minutes they have. Every step you write spends some of them, and a plan whose steps add up to more than the period is not a plan — it is a lesson the teacher will be cut off in the middle of, in front of thirty kids, with the closing they needed still on the page.',
     '- Give every step of a plan its own `##` heading with its minutes and its type, e.g. `## Read aloud (12 min) {type: read_aloud}`: one step, one heading. The type is one of class_starter, activity, context, read_aloud, daily_pages, thesis_essay, closing. The teacher can put each step in their stack on its own, and the app reads the steps, their minutes and their types from those headings (it never shows the tag).',
+    '- The type says who is doing the work. `context` is the teacher talking (explaining what pre-writing is and why, the shape of a critical essay, a mini-lesson, background) and `read_aloud` is the class reading, however much either says about writing. A step where students write gets `class_starter`, `daily_pages`, `thesis_essay`, or `activity`, and says what they write. Yawp! counts the lesson\'s writing time from the steps where students write and puts a "Create … in Yawp!" button under them, so a lecture about writing tagged as an activity shows the teacher a writing badge and a button that are both wrong.',
+    '- Every step where students write carries a prompt line that starts with the act and a colon: `Pre-write: …`, `Quick write: …`, `Write: …`, `Exit ticket: …`, with what they write after it. That line is what Yawp! reads to count the writing and to fill in the assignment. A step with no such line, and no sentence saying students write, is not writing time, however much it talks about writing.',
     '- A plan of several days in one reply (a week, a 4-day flow): give each day a `# Day N: title (50 min)` heading, and under it that day\'s steps as `##` headings with their minutes and types, exactly as a single lesson. Each day must add up to its period on its own. Yawp! makes each day its own lesson, with its own stack, so never write one day\'s steps under another day\'s heading.',
     '- Every step has minutes, including a framing note and a Daily Pages reflection: a step with no time cannot be planned around.',
     '- Give every step its minutes, and make the minutes ADD UP to the period you were given. Do the arithmetic yourself, but do not write the sum out: the app shows the total from what the teacher keeps. If the steps come to 58 minutes of a 50-minute period, the plan is wrong — fix it before you hand it over, and never hand over a plan whose numbers you have not added.',
@@ -801,6 +809,8 @@ export function buildLessonPlannerSystemPromptBlocks({
   template = null,
   deckGallery = false,
   sources = [],
+  lessonPictures = [],
+  deckChoices,
   recentArt = [],
   weekContext = [],
   onStack = false,
@@ -827,6 +837,10 @@ export function buildLessonPlannerSystemPromptBlocks({
   deckGallery?: boolean;
   /** The teacher's own documents for this lesson (Oct 21). */
   sources?: LessonUpload[];
+  /** The lesson's own pictures, from its deck or the slide editor (Kevin, Nov 6). */
+  lessonPictures?: UploadPictureRef[];
+  /** Which of "teach with my slides" and "refresh my deck" are on (Nov 1). */
+  deckChoices?: DeckChoices;
   /** Paintings on this teacher's recent decks, with the gallery deck on. */
   recentArt?: RecentArt[];
 }): CacheableSystemBlock[] {
@@ -846,7 +860,8 @@ export function buildLessonPlannerSystemPromptBlocks({
       : []),
     ...buildTemplateSection(template),
     ...buildDeckGallerySection(deckGallery, recentArt),
-    ...buildSourcesSection(sources),
+    ...buildSourcesSection(sources, deckChoices, { onStack }),
+    ...buildLessonPicturesSection(lessonPictures),
   ].join('\n');
   const variable = tail ? `${intro}\n${tail}` : intro;
 

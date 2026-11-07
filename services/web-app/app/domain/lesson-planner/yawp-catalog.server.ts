@@ -16,6 +16,7 @@ import {
 import { isExitTicketAssignmentType } from '~/domain/assignment-types/exit-ticket';
 import { DAILY_PAGES_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/daily-pages-rubric';
 import { THESIS_STATEMENT_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/thesis-statement-assignment-type';
+import { PREWRITING_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/prewriting-assignment-type';
 import { CLASS_STARTER_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/class-starter-rubric';
 import { readDocxText } from '~/domain/office/docx';
 import {
@@ -300,6 +301,8 @@ export type WritingExerciseTypeIds = {
   exitTicket: string | null;
   /** The thesis statement type, for a Thesis Essay module (Brian's run 3). */
   thesis?: string | null;
+  /** The Pre-Writing type, for a pre-write step (Kevin, Nov 6). */
+  prewriting?: string | null;
 };
 
 /**
@@ -346,5 +349,6 @@ export async function findWritingExerciseTypeIds(
       null,
     exitTicket: types.find((type) => isExitTicketAssignmentType(type))?.id ?? null,
     thesis: byKind(THESIS_STATEMENT_ASSIGNMENT_TYPE_KIND),
+    prewriting: byKind(PREWRITING_ASSIGNMENT_TYPE_KIND),
   };
 }
