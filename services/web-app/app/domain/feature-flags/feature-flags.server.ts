@@ -298,7 +298,7 @@ async function lessonPlannerReviewFlagsFromLegacySlices(): Promise<LessonPlanner
   return flags;
 }
 
-/** Lesson Planner capabilities for this school (gated only by `lesson_planner`). */
+/** Lesson Planner capabilities for this school (master `lesson_planner`; optional slice honor in e2e). */
 export async function getLessonPlannerReviewFlags(
   orgId: string | null | undefined
 ): Promise<LessonPlannerReviewFlags> {
