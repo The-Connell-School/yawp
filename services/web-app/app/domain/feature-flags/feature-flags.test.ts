@@ -1,30 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import {
   FEATURE_FLAGS,
-  GUIDED_TOURS_FLAG,
-  CLASS_CODE_UNIQUE_FLAG,
-  DEMO_FEEDBACK_FLAG,
-  INTERNAL_RUBRICS_FLAG,
   LESSON_PLANNER_FLAG,
   FREE_TIER_FLAG,
   FREE_TIER_FLAG_LEGACY_KEY,
   UNIFIED_SIGN_ON_FLAG,
   FEATURE_FLAG_KEYS,
-  LESSON_PLANNER_INTAKE_V2_FLAG,
-  LESSON_PLANNER_STACK_V2_FLAG,
-  LESSON_PLANNER_DECK_V2_FLAG,
-  LESSON_PLANNER_PLAN_EXPORT_V2_FLAG,
-  LESSON_PLANNER_STACK_V3_FLAG,
-  LESSON_PLANNER_SHARE_FLAG,
-  LESSON_PLANNER_RUN_SHOW_FLAG,
-  LESSON_PLANNER_TEMPLATES_FLAG,
-  LESSON_PLANNER_DECK_GALLERY_FLAG,
-  LESSON_PLANNER_UPLOADS_FLAG,
-  LESSON_PLANNER_TEACH_NOTES_FLAG,
-  LESSON_PLANNER_LIBRARY_V2_FLAG,
-  LESSON_PLANNER_STACK_PANEL_FLAG,
-  TEACHER_PROMPT_GENERATOR_FLAG,
-  TEACHER_LOUNGE_FLAG,
   FOLDED_FREE_TIER_LEGACY_SETTINGS,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
@@ -37,6 +18,7 @@ import {
   serializeFeatureFlagValue,
   type FeatureFlagValue,
 } from './feature-flags';
+import { FOLDED_LESSON_PLANNER_REVIEW_FLAG_SETTINGS } from './lesson-planner-review-flags';
 
 describe('feature flag registry', () => {
   test('no longer has the removed Daily Pages writing-conditions flag', () => {
@@ -45,31 +27,13 @@ describe('feature flag registry', () => {
     expect(isFeatureFlagKey(removed)).toBe(false);
   });
 
-  test('registers only the collapsed rollout flags plus unrelated product flags', () => {
+  test('registers only lesson_planner, free-tier, and unified-sign-on', () => {
     expect(FEATURE_FLAG_KEYS).toEqual([
       LESSON_PLANNER_FLAG,
-      INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
-      LESSON_PLANNER_INTAKE_V2_FLAG,
-      LESSON_PLANNER_STACK_V2_FLAG,
-      LESSON_PLANNER_DECK_V2_FLAG,
-      LESSON_PLANNER_STACK_PANEL_FLAG,
-      LESSON_PLANNER_PLAN_EXPORT_V2_FLAG,
-      LESSON_PLANNER_STACK_V3_FLAG,
-      LESSON_PLANNER_SHARE_FLAG,
-      LESSON_PLANNER_RUN_SHOW_FLAG,
-      LESSON_PLANNER_TEMPLATES_FLAG,
-      LESSON_PLANNER_DECK_GALLERY_FLAG,
-      LESSON_PLANNER_UPLOADS_FLAG,
-      LESSON_PLANNER_TEACH_NOTES_FLAG,
-      LESSON_PLANNER_LIBRARY_V2_FLAG,
       UNIFIED_SIGN_ON_FLAG,
-      CLASS_CODE_UNIQUE_FLAG,
-      DEMO_FEEDBACK_FLAG,
-      GUIDED_TOURS_FLAG,
-      TEACHER_PROMPT_GENERATOR_FLAG,
-      TEACHER_LOUNGE_FLAG,
     ]);
+    expect(Object.keys(FEATURE_FLAGS)).toEqual(FEATURE_FLAG_KEYS);
   });
 
   test('stores free tier under the legacy Setting row name', () => {
@@ -84,6 +48,8 @@ describe('feature flag registry', () => {
     expect(resolveFeatureFlagKey('signon-teacher-prompts')).toBe(UNIFIED_SIGN_ON_FLAG);
     expect(isFeatureFlagKey('free_tier')).toBe(true);
     expect(isFeatureFlagKey('free-tier-onboarding-v2')).toBe(true);
+    expect(isFeatureFlagKey('internal_rubrics')).toBe(false);
+    expect(isFeatureFlagKey('guided-tours')).toBe(false);
   });
 
   test('documents folded legacy settings for migration', () => {
@@ -91,32 +57,7 @@ describe('feature flag registry', () => {
       'feature_flag.free-tier-onboarding-v2',
       'feature_flag.free-tier-inapp-v2',
     ]);
-  });
-
-  test('has the lesson planner review flags, each with a setting name', () => {
-    expect(featureFlagSettingName(LESSON_PLANNER_INTAKE_V2_FLAG)).toBe(
-      'feature_flag.lesson_planner_intake_v2'
-    );
-    expect(featureFlagSettingName(LESSON_PLANNER_STACK_V2_FLAG)).toBe(
-      'feature_flag.lesson_planner_stack_v2'
-    );
-    expect(featureFlagSettingName(LESSON_PLANNER_DECK_V2_FLAG)).toBe(
-      'feature_flag.lesson_planner_deck_v2'
-    );
-    expect(featureFlagSettingName(LESSON_PLANNER_STACK_PANEL_FLAG)).toBe(
-      'feature_flag.lesson_planner_stack_panel'
-    );
-    expect(featureFlagSettingName(LESSON_PLANNER_PLAN_EXPORT_V2_FLAG)).toBe(
-      'feature_flag.lesson_planner_plan_export_v2'
-    );
-    expect(featureFlagSettingName(LESSON_PLANNER_STACK_V3_FLAG)).toBe(
-      'feature_flag.lesson_planner_stack_v3'
-    );
-    expect(featureFlagSettingName(LESSON_PLANNER_SHARE_FLAG)).toBe('feature_flag.lesson_planner_share');
-    expect(featureFlagSettingName(LESSON_PLANNER_RUN_SHOW_FLAG)).toBe('feature_flag.lesson_planner_run_show');
-    expect(featureFlagSettingName(LESSON_PLANNER_TEMPLATES_FLAG)).toBe('feature_flag.lesson_planner_templates');
-    expect(featureFlagSettingName(LESSON_PLANNER_DECK_GALLERY_FLAG)).toBe('feature_flag.lesson_planner_deck_gallery');
-    expect(featureFlagSettingName(LESSON_PLANNER_UPLOADS_FLAG)).toBe('feature_flag.lesson_planner_uploads');
+    expect(FOLDED_LESSON_PLANNER_REVIEW_FLAG_SETTINGS.length).toBe(13);
   });
 
   test('rejects anything that is not a registered flag', () => {
@@ -125,16 +66,6 @@ describe('feature flag registry', () => {
     expect(isFeatureFlagKey(undefined)).toBe(false);
     expect(isFeatureFlagKey('__proto__')).toBe(false);
     expect(isFeatureFlagKey('toString')).toBe(false);
-  });
-
-  test('has the Rubrics from Yawp Internal flag, stored under its own row', () => {
-    expect(INTERNAL_RUBRICS_FLAG).toBe('internal_rubrics');
-    expect(featureFlagSettingName(INTERNAL_RUBRICS_FLAG)).toBe(
-      'feature_flag.internal_rubrics'
-    );
-    expect(FEATURE_FLAGS[INTERNAL_RUBRICS_FLAG].label).toBe(
-      'Rubrics from Yawp Internal'
-    );
   });
 });
 

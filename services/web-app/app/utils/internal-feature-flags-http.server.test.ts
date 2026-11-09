@@ -112,54 +112,17 @@ describe('internal feature-flag endpoints', () => {
     const body = await response.json();
     expect(body.flags.map((flag: { key: string }) => flag.key)).toEqual([
       FLAG,
-      'internal_rubrics',
       'free-tier',
-      'lesson_planner_intake_v2',
-      'lesson_planner_stack_v2',
-      'lesson_planner_deck_v2',
-      'lesson_planner_stack_panel',
-      'lesson_planner_plan_export_v2',
-      'lesson_planner_stack_v3',
-      'lesson_planner_share',
-      'lesson_planner_run_show',
-      'lesson_planner_templates',
-      'lesson_planner_deck_gallery',
-      'lesson_planner_uploads',
-      'lesson_planner_teach_notes',
-      'lesson_planner_library_v2',
       'unified-sign-on',
-      'classcode-unique',
-      'demo-feedback-widget',
-      'guided-tours',
-      'teacher-prompt-generator',
-      'teacher-lounge',
     ]);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
-    expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
-    expect(body.flags[2]).toMatchObject({ key: 'free-tier', label: 'Free tier', mode: 'off', orgIds: [], enabled: false });
+    expect(body.flags[1]).toMatchObject({ key: 'free-tier', label: 'Free tier', mode: 'off', orgIds: [], enabled: false });
     expect(body.flags.find((flag: { key: string }) => flag.key === 'unified-sign-on')).toMatchObject({
       key: 'unified-sign-on', mode: 'off', orgIds: [], enabled: false,
       persisted: { mode: 'off', orgIds: [] },
       effective: { mode: 'off', orgIds: [] }, runtimeOverride: null,
     });
   });
-
-  for (const environment of ['development', 'demo', 'production', 'preview']) {
-    test(`guided tours stay off without a setting: ${environment}`, async () => {
-      process.env.YAWP_ENVIRONMENT = environment;
-      const response = await featureFlagsList(
-        new Request(BASE, { headers: { authorization: `Bearer ${key}` } })
-      );
-      expect(response.status).toBe(200);
-      const { flags } = await response.json();
-      expect(flags.find((flag: { key: string }) => flag.key === 'guided-tours')).toMatchObject({
-        key: 'guided-tours', mode: 'off', orgIds: [], enabled: false,
-        persisted: { mode: 'off', orgIds: [] },
-        effective: { mode: 'off', orgIds: [] }, runtimeOverride: null,
-      });
-      expect(prisma.setting.upsert).not.toHaveBeenCalled();
-    });
-  }
 
   test('lists free tier as open on demo even when the stored flag is off', async () => {
     process.env.YAWP_ENVIRONMENT = 'demo';
@@ -211,27 +174,8 @@ describe('internal feature-flag endpoints', () => {
     const body = await response.json();
     expect(body.flags.map((flag: { key: string }) => flag.key)).toEqual([
       FLAG,
-      'internal_rubrics',
       'free-tier',
-      'lesson_planner_intake_v2',
-      'lesson_planner_stack_v2',
-      'lesson_planner_deck_v2',
-      'lesson_planner_stack_panel',
-      'lesson_planner_plan_export_v2',
-      'lesson_planner_stack_v3',
-      'lesson_planner_share',
-      'lesson_planner_run_show',
-      'lesson_planner_templates',
-      'lesson_planner_deck_gallery',
-      'lesson_planner_uploads',
-      'lesson_planner_teach_notes',
-      'lesson_planner_library_v2',
       'unified-sign-on',
-      'classcode-unique',
-      'demo-feedback-widget',
-      'guided-tours',
-      'teacher-prompt-generator',
-      'teacher-lounge',
     ]);
   });
 

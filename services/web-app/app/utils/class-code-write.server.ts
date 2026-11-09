@@ -1,16 +1,12 @@
 import type { Prisma, PrismaClient } from '@app/prisma';
 import { generateClassCode, normalizeClassCode } from './class';
-import { CLASS_CODE_UNIQUE_FLAG, featureFlagSettingName, parseFeatureFlagValue } from '~/domain/feature-flags/feature-flags';
-
 type CodeClient = Pick<Prisma.TransactionClient, 'setting' | 'class' | '$executeRaw'>;
 
-/** Global invariant: targeted mode deliberately stays off for all writers. */
-export async function classCodeUniquenessEnabled(client: Pick<CodeClient, 'setting'>) {
-  const row = await client.setting.findUnique({
-    where: { name: featureFlagSettingName(CLASS_CODE_UNIQUE_FLAG) },
-    select: { value: true },
-  });
-  return parseFeatureFlagValue(row?.value).mode === 'everyone';
+/** Global class-code uniqueness is always on (legacy `classcode-unique` flag removed). */
+export async function classCodeUniquenessEnabled(
+  _client?: Pick<CodeClient, 'setting'>
+) {
+  return true;
 }
 
 import { CLASS_CODE_COLLISION_MESSAGE } from '~/utils/class-code-messages';

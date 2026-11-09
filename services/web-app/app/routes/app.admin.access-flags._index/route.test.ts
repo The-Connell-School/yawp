@@ -103,9 +103,9 @@ describe('access flags admin route', () => {
     prisma.user.findMany.mockResolvedValue([]);
     listFeatureFlags.mockResolvedValue([
       {
-        key: 'teacher-lounge',
-        label: "Teacher's Lounge",
-        description: 'Lounge',
+        key: 'lesson_planner',
+        label: 'Lesson Planner',
+        description: 'Planner',
         mode: 'off',
         orgIds: [],
         persisted: { mode: 'off', orgIds: [] },
@@ -141,7 +141,7 @@ describe('access flags admin route', () => {
     findUnknownOrganizationIds.mockResolvedValue(['org-missing']);
     const response = await actionRequest({
       intent: 'set-feature-flag',
-      key: 'teacher-lounge',
+      key: 'lesson_planner',
       mode: 'targeted',
       orgIds: 'org-missing',
     });
@@ -151,13 +151,13 @@ describe('access flags admin route', () => {
   test('set-feature-flag requires confirm when switching targeted to everyone', async () => {
     listFeatureFlags.mockResolvedValue([
       {
-        key: 'teacher-lounge',
+        key: 'lesson_planner',
         persisted: { mode: 'targeted', orgIds: ['org-1'] },
       },
     ]);
     const response = await actionRequest({
       intent: 'set-feature-flag',
-      key: 'teacher-lounge',
+      key: 'lesson_planner',
       mode: 'everyone',
     });
     expect((response as { data: { error: string } }).data.error).toBe('confirm_everyone');

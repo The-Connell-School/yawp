@@ -1,4 +1,5 @@
 import type { FeatureFlagKey } from '../app/domain/feature-flags/feature-flags';
+import type { LessonPlannerReviewFlagKey } from '../app/domain/feature-flags/lesson-planner-review-flags';
 import {
   featureFlagSettingName,
   serializeFeatureFlagValue,
@@ -100,27 +101,12 @@ export async function setFeatureFlag(
   }
 }
 
-/** Lesson Planner review flags (intake v2, stack v2, deck v2, run 2). */
-export type LessonPlannerReviewFlag = Extract<
-  FeatureFlagKey,
-  | 'lesson_planner_intake_v2'
-  | 'lesson_planner_stack_v2'
-  | 'lesson_planner_deck_v2'
-  | 'lesson_planner_stack_panel'
-  | 'lesson_planner_plan_export_v2'
-  | 'lesson_planner_stack_v3'
-  | 'lesson_planner_share'
-  | 'lesson_planner_run_show'
-  | 'lesson_planner_templates'
-  | 'lesson_planner_deck_gallery'
-  | 'lesson_planner_uploads'
-  | 'lesson_planner_teach_notes'
-  | 'lesson_planner_library_v2'
->;
+/** @deprecated Review slices collapse into `lesson_planner`; toggling enables the master flag. */
+export type LessonPlannerReviewFlag = LessonPlannerReviewFlagKey;
 
 export async function setLessonPlannerReviewFlag(
-  flag: LessonPlannerReviewFlag,
+  _flag: LessonPlannerReviewFlag,
   enabled: boolean
 ) {
-  await setFeatureFlag(flag, enabled);
+  if (enabled) await setLessonPlannerFlag(true);
 }

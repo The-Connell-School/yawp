@@ -38,15 +38,13 @@ describe('production is dark by default (no Setting rows)', () => {
     }
   });
 
-  test('there are 14 lesson_planner* flags registered', () => {
-    expect(lpKeys.length).toBe(14);
+  test('lesson_planner is the only registered Lesson Planner flag', () => {
+    expect(lpKeys).toEqual(['lesson_planner']);
   });
 
-  test('every lesson_planner* flag is off for every org', async () => {
-    for (const key of lpKeys) {
-      for (const orgId of ORG_IDS) {
-        expect({ key, orgId, on: await isFeatureFlagEnabled(key, orgId) }).toEqual({ key, orgId, on: false });
-      }
+  test('lesson_planner is off for every org without a row', async () => {
+    for (const orgId of ORG_IDS) {
+      expect(await isFeatureFlagEnabled('lesson_planner', orgId)).toBe(false);
     }
   });
 

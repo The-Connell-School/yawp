@@ -37,8 +37,8 @@ function request(body: unknown = input, extra: RequestInit = {}) {
   });
 }
 describe('demo feedback endpoint', () => {
-  test('flag is registered and absent values default off', () => {
-    expect(FEATURE_FLAGS).toHaveProperty('demo-feedback-widget');
+  test('demo feedback no longer uses a product feature flag', () => {
+    expect(FEATURE_FLAGS).not.toHaveProperty('demo-feedback-widget');
     expect(parseFeatureFlagValue(undefined).mode).toBe('off');
   });
   test('local dev panel still respects the demo feedback flag', async () => {

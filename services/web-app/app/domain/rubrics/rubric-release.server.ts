@@ -1,10 +1,10 @@
 import type { Prisma } from '@app/prisma';
-import { INTERNAL_RUBRICS_FLAG, type FeatureFlagKey } from '~/domain/feature-flags/feature-flags';
+import type { FeatureFlagKey } from '~/domain/feature-flags/feature-flags';
 import { perTypeKey } from './rubric-catalog.server';
 import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 
 /**
- * Rollout of rubrics managed in Yawp Internal (feature flag `internal_rubrics`).
+ * Rollout of rubrics managed in Yawp Internal (always on; legacy `internal_rubrics` flag removed).
  *
  * Yawp Internal releases a rubric version through the rubric catalog `stage`
  * endpoint, which appends an immutable `RubricRevision` and records it in
@@ -53,7 +53,7 @@ export async function shouldUseInternalRubricRelease(
   try {
     const orgId = await singleOrganizationId(deps.db, classIds);
     if (!orgId) return false;
-    return await deps.isEnabled(INTERNAL_RUBRICS_FLAG, orgId);
+    return true;
   } catch (error) {
     console.warn('internal_rubric_release_flag_failed', {
       error: buildSafeErrorForLog(error),

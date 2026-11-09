@@ -22,20 +22,11 @@ describe('ensureInternalRubricsEnabledForDemo', () => {
     };
   };
 
-  test('demo starts the flag at everyone without overwriting a later change', async () => {
+  test('is a no-op after internal_rubrics flag removal', async () => {
     const { ensureInternalRubricsEnabledForDemo } = await import('./seed-lesson-planner-feature-flag');
     const { prisma, calls } = fakePrisma();
-    expect(await ensureInternalRubricsEnabledForDemo(prisma, { PREVIEW_SLUG: 'demo' })).toEqual({ enabled: true });
-    expect(calls).toEqual([{
-      where: { name: 'feature_flag.internal_rubrics' },
-      create: {
-        name: 'feature_flag.internal_rubrics',
-        value: '{"mode":"everyone","orgIds":[]}',
-        valueType: 'json',
-        description: 'Started on for everyone on demo.yawp.school',
-      },
-      update: {},
-    }]);
+    expect(await ensureInternalRubricsEnabledForDemo(prisma, { PREVIEW_SLUG: 'demo' })).toEqual({ skipped: true });
+    expect(calls).toHaveLength(0);
   });
 
   test('anywhere else (production, previews, local) the flag is left off', async () => {
@@ -60,31 +51,13 @@ describe('ensureLessonPlannerEnabledForPreview', () => {
     };
   };
 
-  test('turns the planner and the review flags on in a PR preview database', async () => {
+  test('turns the master planner flag on in a PR preview database', async () => {
     const { ensureLessonPlannerEnabledForPreview } = await import('./seed-lesson-planner-feature-flag');
     const { prisma, calls } = fakePrisma();
     expect(await ensureLessonPlannerEnabledForPreview(prisma, 'yawp_pr_437')).toEqual({ enabled: true });
-    expect(calls.map((call) => call.where.name)).toEqual([
-      'feature_flag.lesson_planner',
-      'feature_flag.lesson_planner_intake_v2',
-      'feature_flag.lesson_planner_stack_v2',
-      'feature_flag.lesson_planner_deck_v2',
-      'feature_flag.lesson_planner_stack_panel',
-      'feature_flag.lesson_planner_plan_export_v2',
-      'feature_flag.lesson_planner_stack_v3',
-      'feature_flag.lesson_planner_share',
-      'feature_flag.lesson_planner_run_show',
-      'feature_flag.lesson_planner_templates',
-      'feature_flag.lesson_planner_deck_gallery',
-      'feature_flag.lesson_planner_uploads',
-      'feature_flag.lesson_planner_teach_notes',
-      'feature_flag.lesson_planner_library_v2',
-    ]);
-    for (const call of calls) expect(call.create.value).toBe('{"mode":"everyone","orgIds":[]}');
-    // The planner is forced on, like free tier; the review flags are
-    // create-only, so a tester can switch one off to compare.
+    expect(calls.map((call) => call.where.name)).toEqual(['feature_flag.lesson_planner']);
+    expect(calls[0].create.value).toBe('{"mode":"everyone","orgIds":[]}');
     expect(calls[0].update).toMatchObject({ value: '{"mode":"everyone","orgIds":[]}' });
-    for (const call of calls.slice(1)) expect(call.update).toEqual({});
   });
 
   test('never touches the demo, production, or any shared database', async () => {

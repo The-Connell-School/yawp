@@ -10,6 +10,7 @@ The supported signed platform API families are:
 | --- | --- | --- |
 | `/api/internal/v1/rubric-catalog*` and `/api/internal/v1/rubrics*` | `GET` reads, mutating writes | `rubrics:read` or `rubrics:write` |
 | `/api/internal/v1/feature-flags*` | `GET` reads, mutating writes | `flags:read` or `flags:write` |
+| `/api/internal/v1/organizations/:orgId/feature-flags/:key` | `POST` (`enable`, `disable`, `release_everyone`) | `flags:write` |
 | `/api/internal/v1/stats/grading` | `GET` | `stats:read` |
 | `/api/internal/v1/audit` | `GET` | `audit:read` |
 | `/api/internal/v1/tester-feedback` and `/api/internal/v1/tester-feedback/:id/screenshot` | `GET` | `management:read` |
