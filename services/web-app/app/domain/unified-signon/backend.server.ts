@@ -44,7 +44,13 @@ import {
   withFlow,
   type Flow,
 } from './flow.server';
-import { chooseClass, resolveClasses, selectedClass } from './classes.server';
+import {
+  chooseClass,
+  resolveClasses,
+  resolveClassesForExistingStudent,
+  selectedClass,
+  teacherPromptStudentOrganizationId,
+} from './classes.server';
 import { deliverCode } from './mail.server';
 import { assertResendMailAvailable } from './resend-mail.server';
 import { finishAuthentication } from './authentication.server';
@@ -593,7 +599,29 @@ async function operate(
     flow.data.classCandidates = undefined;
     flow.data.studentChoice = undefined;
     flow.data.studentEmailSignup = undefined;
-    const result = await resolveClasses(tx, flow, values.classCode || '');
+    const code = values.classCode || '';
+    let result;
+    if (
+      flow.data.teacherPromptEntry &&
+      authenticatedUserId &&
+      authenticatedUserId === flow.data.userId
+    ) {
+      const organizationId = await teacherPromptStudentOrganizationId(
+        tx,
+        request,
+        authenticatedUserId
+      );
+      result = organizationId
+        ? await resolveClassesForExistingStudent(
+            tx,
+            flow,
+            code,
+            organizationId
+          )
+        : await resolveClasses(tx, flow, code);
+    } else {
+      result = await resolveClasses(tx, flow, code);
+    }
     flow.data.otp = undefined; // A new class context requires a new challenge.
     if (
       authenticatedUserId &&
