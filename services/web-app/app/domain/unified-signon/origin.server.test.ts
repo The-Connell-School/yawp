@@ -84,6 +84,56 @@ describe('signonRequestOrigin', () => {
       'https://pr-848.preview.yawp.school'
     );
   });
+
+  test('recovers HTTPS from PRIMARY_APP_URL for production HTTP ingress on the public host', () => {
+    process.env.YAWP_ENVIRONMENT = 'production';
+    process.env.PRIMARY_APP_URL = 'https://yawp.school';
+    const request = new Request('http://yawp.school/auth/login.data', {
+      method: 'POST',
+      headers: { Origin: 'https://yawp.school' },
+    });
+    expect(signonRequestOrigin(request)).toBe('https://yawp.school');
+  });
+
+  test('recovers configured HTTPS origin for production HTTP on an internal App Runner host', () => {
+    process.env.YAWP_ENVIRONMENT = 'production';
+    process.env.PRIMARY_APP_URL = 'https://yawp.school';
+    const request = new Request(
+      'http://abc123.us-east-1.awsapprunner.com/auth/login.data',
+      {
+        method: 'POST',
+        headers: {
+          host: 'abc123.us-east-1.awsapprunner.com',
+          Origin: 'https://yawp.school',
+        },
+      }
+    );
+    expect(signonRequestOrigin(request)).toBe('https://yawp.school');
+  });
+
+  test('does not trust forwarded headers to expand the public origin', () => {
+    process.env.YAWP_ENVIRONMENT = 'production';
+    process.env.PRIMARY_APP_URL = 'https://yawp.school';
+    const request = new Request('http://yawp.school/auth/login.data', {
+      method: 'POST',
+      headers: {
+        Origin: 'https://yawp.school',
+        'x-forwarded-proto': 'https',
+        'x-forwarded-host': 'evil.example',
+      },
+    });
+    expect(signonRequestOrigin(request)).toBe('https://yawp.school');
+  });
+
+  test('keeps the adapter origin for production HTTPS requests without a configured match', () => {
+    process.env.YAWP_ENVIRONMENT = 'production';
+    process.env.PRIMARY_APP_URL = 'https://yawp.school';
+    const request = new Request('https://demo.yawp.school/auth/login.data', {
+      method: 'POST',
+      headers: { Origin: 'https://demo.yawp.school' },
+    });
+    expect(signonRequestOrigin(request)).toBe('https://demo.yawp.school');
+  });
 });
 
 describe('adaptPreviewIngressRequest', () => {

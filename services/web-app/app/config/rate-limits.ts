@@ -1,20 +1,22 @@
 // Centralized numeric limits for AI endpoints and abuse controls.
-// All values derive from measured distributions (compute_limits_min_n20_2a43.md and compute_limits_output_332b.md).
-// Policy: max(2x p99, 1.25x p99.9).
+// Non-tutor values derive from measured distributions
+// (compute_limits_min_n20_2a43.md and compute_limits_output_332b.md).
+// Default policy: max(2x p99, 1.25x p99.9).
+// Tutor ceilings are higher on purpose: they stop abuse, not heavy legitimate use.
 // Keep numbers documented here and only here.
 
 export const RATE_LIMITS = {
-  // Student tutor
+  // Student tutor. Abuse ceilings, not heavy-usage throttles.
   tutor: {
     // Per-student
-    perMinute: 6, // B1_tutor_per_student user_per_minute
-    perHour: 42, // B1_tutor_per_student user_per_hour
-    perDay: 81, // B1_tutor_per_student user_per_day
+    perMinute: 30,
+    perHour: 300,
+    perDay: 1000,
     maxSessionTurns: 130, // measured max 102 (p99.9 65); above every observed session
     maxMessageChars: 7202, // B1_tutor_per_student user_msg_chars
     // Global ceilings across the platform
-    globalPerMinute: 40, // measured max 27/min (p99.9 20); ceiling must clear the observed peak
-    globalPerHour: 270, // A2_llmlog_global_peaks per_hour
+    globalPerMinute: 400,
+    globalPerHour: 2700, // 10x the previous 270 platform ceiling
     // Chat-history budget sent to the model (approximate); newest turns win
     transcriptCharBudget: 20000,
     // The document the tutor reads is clamped, never rejected

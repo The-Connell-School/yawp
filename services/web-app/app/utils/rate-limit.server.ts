@@ -501,6 +501,21 @@ async function peekConsumeAll(buckets: WindowSpec[]): Promise<LimitResult> {
   return { allowed: true };
 }
 
+function tutorLimitWindowSpecs(membershipId: string, route: string, nowMs?: number): WindowSpec[] {
+  const limits = RATE_LIMITS.tutor;
+  const userKeyBase = `user:tutor:${membershipId}`;
+  const base = { route, feature: 'tutor', nowMs };
+  // Per-student buckets first, shared platform buckets last, so a student who is
+  // already over their own limit never touches platform-wide capacity.
+  return [
+    { ...base, key: `${userKeyBase}:m`, limit: limits.perMinute, windowMs: MINUTE_MS, scope: 'user', subjectKey: userKeyBase },
+    { ...base, key: `${userKeyBase}:h`, limit: limits.perHour, windowMs: HOUR_MS, scope: 'user', subjectKey: userKeyBase },
+    { ...base, key: `${userKeyBase}:d`, limit: limits.perDay, windowMs: DAY_MS, scope: 'user', subjectKey: userKeyBase },
+    { ...base, key: 'global:tutor:m', limit: limits.globalPerMinute, windowMs: MINUTE_MS, scope: 'global', subjectKey: 'global:tutor' },
+    { ...base, key: 'global:tutor:h', limit: limits.globalPerHour, windowMs: HOUR_MS, scope: 'global', subjectKey: 'global:tutor' },
+  ];
+}
+
 export async function enforceTutorLimits(params: {
   request: Request;
   membershipId: string;
@@ -508,18 +523,31 @@ export async function enforceTutorLimits(params: {
   nowMs?: number;
 }): Promise<LimitResult> {
   const { membershipId, route, nowMs } = params;
-  const limits = RATE_LIMITS.tutor;
-  const userKeyBase = `user:tutor:${membershipId}`;
-  const base = { route, feature: 'tutor', nowMs };
-  // Per-student buckets first, shared platform buckets last, so a student who is
-  // already over their own limit never touches platform-wide capacity.
-  return consumeAll([
-    windowBucket({ ...base, key: `${userKeyBase}:m`, limit: limits.perMinute, windowMs: MINUTE_MS, scope: 'user', subjectKey: userKeyBase }),
-    windowBucket({ ...base, key: `${userKeyBase}:h`, limit: limits.perHour, windowMs: HOUR_MS, scope: 'user', subjectKey: userKeyBase }),
-    windowBucket({ ...base, key: `${userKeyBase}:d`, limit: limits.perDay, windowMs: DAY_MS, scope: 'user', subjectKey: userKeyBase }),
-    windowBucket({ ...base, key: 'global:tutor:m', limit: limits.globalPerMinute, windowMs: MINUTE_MS, scope: 'global', subjectKey: 'global:tutor' }),
-    windowBucket({ ...base, key: 'global:tutor:h', limit: limits.globalPerHour, windowMs: HOUR_MS, scope: 'global', subjectKey: 'global:tutor' }),
-  ]);
+  return consumeAll(tutorLimitWindowSpecs(membershipId, route, nowMs).map((spec) => windowBucket(spec)));
+}
+
+/**
+ * Return one "charge" from each tutor limit bucket for this membership/route.
+ * Use when a request already passed `enforceTutorLimits` but will not complete a
+ * billed tutor turn (e.g. 202 provider-failover handshake) so the follow-up retry
+ * does not double-count against per-minute limits.
+ */
+export async function refundTutorLimits(params: {
+  membershipId: string;
+  route: string;
+  nowMs?: number;
+}) {
+  const { membershipId, route, nowMs } = params;
+  for (const spec of tutorLimitWindowSpecs(membershipId, route, nowMs)) {
+    const bucket = windowBucket(spec);
+    await refundTokens({
+      key: bucket.key,
+      capacity: bucket.capacity,
+      refillPerMs: bucket.refillPerMs,
+      cost: bucket.cost,
+      nowMs: bucket.nowMs,
+    }).catch(() => {});
+  }
 }
 
 export async function enforceGradingLimits(params: {

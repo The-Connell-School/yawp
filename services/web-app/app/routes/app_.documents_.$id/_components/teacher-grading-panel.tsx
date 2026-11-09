@@ -702,7 +702,7 @@ export function TeacherGradingPanel({
                                   <p className="mt-1 text-sm italic">
                                     "{formatExcerpt(issue.excerpt)}"
                                   </p>
-                                  <p className="mt-1 text-xs text-muted-foreground">
+                                  <p className="mt-1 text-sm leading-snug text-foreground/90">
                                     {issue.message}
                                   </p>
                                 </div>

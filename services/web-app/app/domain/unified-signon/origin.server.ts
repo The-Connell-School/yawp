@@ -1,33 +1,51 @@
-/** Preview ingress terminates TLS, preserves Host and overwrites forwarding
- * headers. The fast Vite/node-fetch-server adapter still uses the HTTP socket
- * protocol. Recover HTTPS only from deployment configuration for that exact
- * request host; never authorize an Origin from client-supplied proxy headers.
+/** TLS-terminating ingress (CloudFront, preview proxy) preserves the public Host
+ * while the Node adapter often builds `request.url` from the HTTP socket and an
+ * internal host. Recover the deployment-configured public HTTPS origin from
+ * PRIMARY_APP_URL only; never authorize an Origin from client-supplied proxy
+ * headers.
+ *
+ * Preview requires the request Host to match PRIMARY_APP_URL (per-preview host).
+ * Production and other non-preview deployments accept the configured public
+ * origin for HTTP adapter URLs even when the Host is an internal App Runner
+ * name, so browser Origins like https://yawp.school align with sign-on checks
+ * and Google redirect_uri construction.
  */
-function previewConfiguredPublicOrigin(request: Request): URL | null {
+function configuredPublicOrigin(request: Request): URL | null {
   const url = new URL(request.url);
-  if (
-    process.env.YAWP_ENVIRONMENT !== 'preview' ||
-    url.protocol !== 'http:' ||
-    !process.env.PRIMARY_APP_URL
-  )
-    return null;
+  if (!process.env.PRIMARY_APP_URL) return null;
   try {
     const configured = new URL(process.env.PRIMARY_APP_URL);
     if (
       configured.protocol !== 'https:' ||
       configured.username ||
-      configured.password ||
-      configured.host !== url.host
+      configured.password
     )
       return null;
-    return configured;
+
+    const isPreview =
+      process.env.YAWP_ENVIRONMENT?.trim().toLowerCase() === 'preview';
+
+    if (isPreview) {
+      if (url.protocol !== 'http:' || configured.host !== url.host) return null;
+      return configured;
+    }
+
+    if (url.protocol === 'http:') return configured;
+    if (url.origin === configured.origin) return configured;
+    return null;
   } catch {
     return null;
   }
 }
 
 export function signonRequestOrigin(request: Request): string {
-  return previewConfiguredPublicOrigin(request)?.origin ?? new URL(request.url).origin;
+  return configuredPublicOrigin(request)?.origin ?? new URL(request.url).origin;
+}
+
+function previewConfiguredPublicOrigin(request: Request): URL | null {
+  if (process.env.YAWP_ENVIRONMENT?.trim().toLowerCase() !== 'preview')
+    return null;
+  return configuredPublicOrigin(request);
 }
 
 /** Align `request.url` with the configured public HTTPS origin before React Router CSRF checks. */

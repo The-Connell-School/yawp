@@ -40,7 +40,14 @@ import {
 const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.';
 
 import { RATE_LIMITS } from '~/config/rate-limits';
-import { clampTutorMessage, enforceTutorLimits, rateLimitedJson, sessionTurnLimitJson, trimChatHistoryToBudget } from '~/utils/rate-limit.server';
+import {
+  clampTutorMessage,
+  enforceTutorLimits,
+  rateLimitedJson,
+  refundTutorLimits,
+  sessionTurnLimitJson,
+  trimChatHistoryToBudget,
+} from '~/utils/rate-limit.server';
 import { captureAppRateLimitHitServer } from '~/utils/app-error-presented.server';
 import {
   classifyTutorApiError,
@@ -436,6 +443,13 @@ export async function action({ request }: ActionFunctionArgs) {
       });
     } catch (error) {
       if (isLlmFallbackRetrySignal(error)) {
+        // Primary model failed before a completion; the client will POST again with
+        // llmRetry=fallback. Refund this request's rate-limit debit so one feedback
+        // action does not consume two per-minute tokens (see enforceTutorLimits).
+        await refundTutorLimits({
+          membershipId: profile.id,
+          route: '/api/domain/tutor-response',
+        });
         return dataResponse({ retrying: true }, { status: 202 });
       }
       return errorResponse();
