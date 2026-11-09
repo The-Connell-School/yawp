@@ -44,13 +44,7 @@ import {
   withFlow,
   type Flow,
 } from './flow.server';
-import {
-  chooseClass,
-  resolveClasses,
-  resolveClassesForExistingStudent,
-  selectedClass,
-} from './classes.server';
-import { getMembershipId } from '~/cookies/membership-id.server';
+import { chooseClass, resolveClasses, selectedClass } from './classes.server';
 import { deliverCode } from './mail.server';
 import { assertResendMailAvailable } from './resend-mail.server';
 import { finishAuthentication } from './authentication.server';
@@ -642,35 +636,7 @@ async function operate(
     flow.data.classCandidates = undefined;
     flow.data.studentChoice = undefined;
     flow.data.studentEmailSignup = undefined;
-    const code = values.classCode || '';
-    let result;
-    if (
-      flow.data.teacherPromptEntry &&
-      authenticatedUserId &&
-      authenticatedUserId === flow.data.userId
-    ) {
-      const membershipId = await getMembershipId(request);
-      const membership = await tx.orgMembership.findFirst({
-        where: {
-          userId: authenticatedUserId,
-          role: 'STUDENT',
-          isActive: true,
-          ...(membershipId ? { id: membershipId } : {}),
-        },
-        select: { organizationId: true },
-        orderBy: { id: 'asc' },
-      });
-      result = membership
-        ? await resolveClassesForExistingStudent(
-            tx,
-            flow,
-            code,
-            membership.organizationId
-          )
-        : await resolveClasses(tx, flow, code);
-    } else {
-      result = await resolveClasses(tx, flow, code);
-    }
+    const result = await resolveClasses(tx, flow, values.classCode || '');
     flow.data.otp = undefined; // A new class context requires a new challenge.
     if (
       authenticatedUserId &&

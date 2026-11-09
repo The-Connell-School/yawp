@@ -129,35 +129,3 @@ export async function resolveClasses(
     classes: classes.map(classSummary),
   });
 }
-
-/** Match `/enter-code` enrollment: org-scoped resolution with foreign fail-closed. */
-export async function resolveClassesForExistingStudent(
-  tx: Prisma.TransactionClient,
-  flow: Flow,
-  code: string,
-  organizationId: string
-) {
-  const { resolveStudentClassCode } = await import(
-    '~/domain/free-tier/existing-student-enrollment.server'
-  );
-  const allowed = await resolveStudentClassCode(tx, organizationId, code);
-  if (!allowed.length) throw invalidClassCodeError();
-  const classes = await tx.class.findMany({
-    where: {
-      id: { in: allowed.map((k) => k.id) },
-      isArchived: false,
-    },
-    select,
-    orderBy: { id: 'asc' },
-  });
-  if (!classes.length) throw invalidClassCodeError();
-  flow.data.classCode = code.trim();
-  flow.data.classCandidates = classes.map((k) => k.id);
-  if (classes.length === 1) return chooseClass(tx, flow, classes[0].id);
-  return stateFor(flow, {
-    screen: 'class-found',
-    variant: 'multiple',
-    identifier: flow.data.identifier,
-    classes: classes.map(classSummary),
-  });
-}
