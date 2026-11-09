@@ -107,6 +107,35 @@ describe('feature flags (server)', () => {
     });
   });
 
+  test('e2e honor mode reads legacy slice rows when master is on', async () => {
+    const previous = process.env.HONOR_LESSON_PLANNER_SLICE_FLAGS;
+    process.env.HONOR_LESSON_PLANNER_SLICE_FLAGS = 'true';
+    try {
+      mockLessonPlannerRollout('{"mode":"everyone","orgIds":[]}');
+      prisma.setting.findMany.mockImplementation(
+        ({ where }: { where: { name: { in: string[] } } }) =>
+          Promise.resolve(
+            where.name.in.map((name) => {
+              if (name === 'feature_flag.lesson_planner_stack_v2') {
+                return { name, value: 'true' };
+              }
+              if (name === 'feature_flag.lesson_planner_stack_v3') {
+                return { name, value: 'false' };
+              }
+              return { name, value: 'false' };
+            })
+          )
+      );
+      const flags = await getLessonPlannerReviewFlags('org-1');
+      expect(flags.stackV2).toBe(true);
+      expect(flags.stackV3).toBe(false);
+      expect(flags.deckV2).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.HONOR_LESSON_PLANNER_SLICE_FLAGS;
+      else process.env.HONOR_LESSON_PLANNER_SLICE_FLAGS = previous;
+    }
+  });
+
   test('defaults off when no row exists', async () => {
     prisma.setting.findUnique.mockResolvedValue(null);
     expect(await isFeatureFlagEnabled(LESSON_PLANNER_FLAG)).toBe(false);

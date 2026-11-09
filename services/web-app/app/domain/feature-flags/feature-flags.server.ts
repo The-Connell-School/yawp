@@ -19,6 +19,22 @@ import {
   sameFeatureFlagValue,
   serializeFeatureFlagValue,
 } from './feature-flags';
+import {
+  LESSON_PLANNER_DECK_GALLERY_FLAG,
+  LESSON_PLANNER_DECK_V2_FLAG,
+  LESSON_PLANNER_INTAKE_V2_FLAG,
+  LESSON_PLANNER_LIBRARY_V2_FLAG,
+  LESSON_PLANNER_PLAN_EXPORT_V2_FLAG,
+  LESSON_PLANNER_RUN_SHOW_FLAG,
+  LESSON_PLANNER_SHARE_FLAG,
+  LESSON_PLANNER_STACK_PANEL_FLAG,
+  LESSON_PLANNER_STACK_V2_FLAG,
+  LESSON_PLANNER_STACK_V3_FLAG,
+  LESSON_PLANNER_TEMPLATES_FLAG,
+  LESSON_PLANNER_TEACH_NOTES_FLAG,
+  LESSON_PLANNER_UPLOADS_FLAG,
+  FOLDED_LESSON_PLANNER_REVIEW_FLAG_SETTINGS,
+} from './lesson-planner-review-flags';
 
 export type FeatureFlagState = {
   key: FeatureFlagKey;
@@ -246,11 +262,50 @@ const LESSON_PLANNER_CAPABILITIES_ON: LessonPlannerReviewFlags = {
   libraryV2: true,
 };
 
+const LEGACY_SLICE_TO_CAPABILITY: Record<string, keyof LessonPlannerReviewFlags> = {
+  [LESSON_PLANNER_INTAKE_V2_FLAG]: 'intakeV2',
+  [LESSON_PLANNER_STACK_V2_FLAG]: 'stackV2',
+  [LESSON_PLANNER_DECK_V2_FLAG]: 'deckV2',
+  [LESSON_PLANNER_STACK_PANEL_FLAG]: 'stackPanel',
+  [LESSON_PLANNER_PLAN_EXPORT_V2_FLAG]: 'planExportV2',
+  [LESSON_PLANNER_STACK_V3_FLAG]: 'stackV3',
+  [LESSON_PLANNER_SHARE_FLAG]: 'share',
+  [LESSON_PLANNER_RUN_SHOW_FLAG]: 'runShow',
+  [LESSON_PLANNER_TEMPLATES_FLAG]: 'templates',
+  [LESSON_PLANNER_DECK_GALLERY_FLAG]: 'deckGallery',
+  [LESSON_PLANNER_UPLOADS_FLAG]: 'uploads',
+  [LESSON_PLANNER_TEACH_NOTES_FLAG]: 'teachNotes',
+  [LESSON_PLANNER_LIBRARY_V2_FLAG]: 'libraryV2',
+};
+
+function honorLessonPlannerSliceFlags(): boolean {
+  return process.env.HONOR_LESSON_PLANNER_SLICE_FLAGS === 'true';
+}
+
+async function lessonPlannerReviewFlagsFromLegacySlices(): Promise<LessonPlannerReviewFlags> {
+  const rows = await prisma.setting.findMany({
+    where: { name: { in: [...FOLDED_LESSON_PLANNER_REVIEW_FLAG_SETTINGS] } },
+    select: { name: true, value: true },
+  });
+  const byName = new Map(rows.map((row) => [row.name, row.value]));
+  const flags = { ...LESSON_PLANNER_CAPABILITIES_OFF };
+  for (const settingName of FOLDED_LESSON_PLANNER_REVIEW_FLAG_SETTINGS) {
+    const flagKey = settingName.replace(/^feature_flag\./, '');
+    const field = LEGACY_SLICE_TO_CAPABILITY[flagKey];
+    if (!field) continue;
+    flags[field] = byName.get(settingName) === 'true';
+  }
+  return flags;
+}
+
 /** Lesson Planner capabilities for this school (gated only by `lesson_planner`). */
 export async function getLessonPlannerReviewFlags(
   orgId: string | null | undefined
 ): Promise<LessonPlannerReviewFlags> {
   if (!(await isLessonPlannerEnabled(orgId))) return { ...LESSON_PLANNER_CAPABILITIES_OFF };
+  if (honorLessonPlannerSliceFlags()) {
+    return lessonPlannerReviewFlagsFromLegacySlices();
+  }
   return { ...LESSON_PLANNER_CAPABILITIES_ON };
 }
 

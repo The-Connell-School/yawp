@@ -74,7 +74,7 @@ export async function setLessonPlannerFlag(enabled: boolean) {
         valueType: 'json',
         description: 'Set by e2e',
       },
-      update: { value, updatedAt: new Date() },
+      update: { value, valueType: 'json', updatedAt: new Date() },
     });
   } finally {
     await prisma.$disconnect();
@@ -108,12 +108,29 @@ export async function setFeatureFlag(
   }
 }
 
-/** @deprecated Review slices collapse into `lesson_planner`; toggling enables the master flag. */
+/** @deprecated Review slices collapse into `lesson_planner` in production; e2e can still set legacy rows. */
 export type LessonPlannerReviewFlag = LessonPlannerReviewFlagKey;
 
 export async function setLessonPlannerReviewFlag(
-  _flag: LessonPlannerReviewFlag,
+  flag: LessonPlannerReviewFlag,
   enabled: boolean
 ) {
-  await setLessonPlannerFlag(enabled);
+  await setLessonPlannerFlag(true);
+  const prisma = createE2EPrismaClient();
+  try {
+    const name = `feature_flag.${flag}`;
+    const value = String(enabled);
+    await prisma.setting.upsert({
+      where: { name },
+      create: {
+        name,
+        value,
+        valueType: 'boolean',
+        description: 'Set by e2e',
+      },
+      update: { value, updatedAt: new Date() },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
 }
