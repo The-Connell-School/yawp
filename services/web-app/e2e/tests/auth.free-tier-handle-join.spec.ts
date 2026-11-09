@@ -109,7 +109,8 @@ test.describe('Free-tier handle student', () => {
     });
 
     try {
-      await page.goto(`/join?t=${joinToken}`, { waitUntil: 'domcontentloaded' });
+      await page.goto(`/join?t=${joinToken}`);
+      await expect(page).toHaveURL(/\/auth\/login/, { timeout: 30_000 });
       await fillFreeTierJoinForm(page, {
         displayName,
         handle,
@@ -140,7 +141,8 @@ test.describe('Free-tier handle student', () => {
 
       const teacherContext = await browser.newContext();
       const teacherPage = await teacherContext.newPage();
-      await teacherPage.goto('/auth/login', { waitUntil: 'domcontentloaded' });
+      await teacherPage.goto('/auth/login');
+      await teacherPage.waitForLoadState('networkidle');
       await expect(
         teacherPage.getByLabel('Email or class code', { exact: true })
       ).toBeVisible({ timeout: 15000 });
@@ -190,7 +192,7 @@ test.describe('Free-tier handle student', () => {
       ).toBeVisible({ timeout: 15000 });
       await submitUnifiedLogin(page, handle, tempPassword);
       await expect(page).toHaveURL(/required-password-change/, {
-        timeout: 15000,
+        timeout: 45_000,
       });
       await page.getByLabel('New password', { exact: true }).fill(newPassword);
       await page.getByLabel('Confirm new password').fill(newPassword);

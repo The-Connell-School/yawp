@@ -54,10 +54,12 @@ test('existing student joins a separate free classroom and retains access after 
     );
   };
   try {
-    const source = await db.organization.create({ data: { name: tag } });
+    const source = await db.organization.create({
+      data: { name: `${tag} Prior Org` },
+    });
     orgs.push(source.id);
     const target = await db.organization.create({
-      data: { name: tag, plan: 'FREE_CLASSROOM' },
+      data: { name: `${tag} Free Classroom`, plan: 'FREE_CLASSROOM' },
     });
     orgs.push(target.id);
     const student = await db.user.create({
@@ -197,7 +199,9 @@ test('existing student joins a separate free classroom and retains access after 
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto('/enter-code');
     await page.waitForLoadState('networkidle');
-    await submitSignedInEnterClassCode(page, klass.code);
+    await submitSignedInEnterClassCode(page, klass.code, {
+      membershipOrganization: 'Free Classroom',
+    });
     if (process.env.CAPTURE_REJECTION === '1') {
       await expect(
         page.getByText('Invalid code.', { exact: true }).or(page.getByRole('alert'))

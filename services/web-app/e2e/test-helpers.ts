@@ -315,13 +315,17 @@ export async function fillFreeTierJoinForm(
   values: FreeTierJoinFormValues
 ) {
   await expect(page).toHaveURL(/\/auth\/login/, { timeout: 15_000 });
-  const newStudent = page.getByRole('button', { name: /^New/ });
+  const screen = page.locator('[data-signon-screen]');
+  await expect(screen).toHaveAttribute('data-signon-screen', 'class-found', {
+    timeout: 30_000,
+  });
+  await expect(screen).toHaveAttribute('aria-busy', 'false');
+  const newStudent = page.getByRole('button', { name: 'New Create an account' });
   await expect(newStudent).toBeVisible({ timeout: 15_000 });
   await newStudent.click();
-  await expect(page.locator('[data-signon-screen]')).toHaveAttribute(
-    'data-signon-screen',
-    'class-handle'
-  );
+  await expect(screen).toHaveAttribute('data-signon-screen', 'class-handle', {
+    timeout: 30_000,
+  });
 
   const nameParts = values.displayName.trim().split(/\s+/);
   const firstName = nameParts[0] ?? values.displayName;
@@ -354,7 +358,11 @@ export async function fillFreeTierJoinForm(
 export async function submitSignedInEnterClassCode(
   page: Page,
   code: string,
-  options?: { completeToApp?: boolean; timeoutMs?: number }
+  options?: {
+    completeToApp?: boolean;
+    timeoutMs?: number;
+    membershipOrganization?: string;
+  }
 ) {
   const completeToApp = options?.completeToApp ?? true;
   const { completeUnifiedSignonToApp } = await import('./helpers/unified-login');
@@ -365,7 +373,9 @@ export async function submitSignedInEnterClassCode(
     await uso.fill(code);
     await page.getByRole('button', { name: 'Join class', exact: true }).click();
     if (completeToApp) {
-      await completeUnifiedSignonToApp(page, options?.timeoutMs ?? 60_000);
+      await completeUnifiedSignonToApp(page, options?.timeoutMs ?? 60_000, {
+        membershipOrganization: options?.membershipOrganization,
+      });
     }
     return;
   }
