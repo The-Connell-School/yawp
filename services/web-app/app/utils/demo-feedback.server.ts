@@ -2,6 +2,10 @@ import { z } from 'zod';
 import { readBoundedText } from './bounded-body.server';
 import { FEEDBACK_CAPTURE_EVENTS, feedbackPath } from './demo-feedback-context';
 import { isDevPanelRuntimeEnabled } from '~/dev-panel/dev-panel-runtime.server';
+import {
+  isDemoDeployment,
+  isPreviewDeployment,
+} from '~/domain/feature-flags/feature-flags.deployment';
 import { DEMO_FEEDBACK_NOTE_LIMIT } from './demo-feedback-limits';
 import { severitySchema, type FeedbackInput } from './tester-feedback.server';
 
@@ -18,9 +22,14 @@ export interface DemoFeedbackDependencies {
 export async function demoFeedbackAvailable(
   deps: Pick<DemoFeedbackDependencies, 'environment' | 'flagEnabled'>
 ) {
-  const onDemo = deps.environment() === 'demo';
+  const slugOrEnv = deps.environment();
+  const onDemoLike =
+    slugOrEnv === 'demo' ||
+    slugOrEnv === 'preview' ||
+    isDemoDeployment(process.env) ||
+    isPreviewDeployment(process.env);
   const onDevPanel = isDevPanelRuntimeEnabled();
-  if (!onDemo && !onDevPanel) return false;
+  if (!onDemoLike && !onDevPanel) return false;
   try {
     return await deps.flagEnabled();
   } catch {

@@ -58,7 +58,7 @@ describe('demo feedback endpoint', () => {
       process.env = previous;
     }
   });
-  test('requires demo runtime and a successful flag read for rendering and submission', async () => {
+  test('requires demo or preview runtime and a successful flag read for rendering and submission', async () => {
     for (const environment of ['production', 'development', 'pr-123', 'test']) {
       const { deps, save } = setup({ environment: () => environment });
       expect(await demoFeedbackAvailable(deps)).toBe(false);
@@ -77,6 +77,18 @@ describe('demo feedback endpoint', () => {
       expect(save).not.toHaveBeenCalled();
     }
     expect(await demoFeedbackAvailable(setup().deps)).toBe(true);
+    const previous = { ...process.env };
+  Object.assign(process.env, { YAWP_ENVIRONMENT: 'preview', PREVIEW_SLUG: '' });
+    try {
+      expect(
+        await demoFeedbackAvailable({
+          environment: () => 'preview',
+          flagEnabled: async () => true,
+        })
+      ).toBe(true);
+    } finally {
+      process.env = previous;
+    }
   });
   test('requires authentication and same-origin POST', async () => {
     expect(
