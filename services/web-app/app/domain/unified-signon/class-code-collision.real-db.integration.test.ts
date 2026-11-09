@@ -81,9 +81,17 @@ async function teacherPromptFlow(userId: string, screen: 'class-code' | 'inactiv
     screen
   );
   expect(loaded).not.toBeNull();
-  const body = loaded as { data: { teacherPromptEntry: { initialState: { flowToken: string } } } };
+  const body = loaded as {
+    data: { teacherPromptEntry: { initialState: { flowToken: string } } };
+    init?: { headers?: HeadersInit };
+  };
   flowToken = body.data.teacherPromptEntry.initialState.flowToken;
-  cookie = sessionCookie;
+  const headers = new Headers(body.init?.headers);
+  const signon = headers
+    .getSetCookie()
+    .map((entry) => entry.split(';')[0])
+    .find((entry) => entry.startsWith('yawp_signon='));
+  cookie = signon ? `${sessionCookie}; ${signon}` : sessionCookie;
 }
 
 beforeAll(async () => {
@@ -103,9 +111,21 @@ beforeAll(async () => {
       valueType: 'boolean',
     },
   });
-  for (const id of [homeOrgId, foreignOrgId]) {
+  await prisma.setting.upsert({
+    where: { name: 'feature_flag.free_tier' },
+    update: { value: 'true' },
+    create: {
+      name: 'feature_flag.free_tier',
+      value: 'true',
+      valueType: 'boolean',
+    },
+  });
+  for (const [id, plan] of [
+    [homeOrgId, 'SCHOOL'],
+    [foreignOrgId, 'FREE_CLASSROOM'],
+  ] as const) {
     await prisma.organization.create({
-      data: { id, name: id, plan: 'SCHOOL' },
+      data: { id, name: id, plan },
     });
     await prisma.school.create({
       data: {
@@ -137,6 +157,7 @@ beforeAll(async () => {
       code: collisionCode,
       title: 'Foreign collision class',
       schoolId: `${foreignOrgId}-school`,
+      studentJoinToken: `${tag}-foreign-join`,
       teachers: {
         create: {
           userId: foreignTeacher.id,
@@ -145,6 +166,17 @@ beforeAll(async () => {
           isOrgOwner: true,
         },
       },
+    },
+  });
+  await prisma.freeTierApplication.create({
+    data: {
+      name: tag,
+      email: `${tag}@yawp.local`,
+      schoolName: foreignSchoolName,
+      location: 'Local',
+      gradeLevel: '10',
+      organizationId: foreignOrgId,
+      status: 'APPROVED',
     },
   });
   await prisma.user.create({
@@ -187,10 +219,15 @@ afterAll(async () => {
   await prisma.session.deleteMany({
     where: { userId: { in: [activeStudentId, inactiveStudentId] } },
   });
+  await prisma.freeTierApplication.deleteMany({
+    where: { organizationId: foreignOrgId },
+  });
   await prisma.orgMembership.deleteMany({
     where: { organizationId: { in: [homeOrgId, foreignOrgId] } },
   });
-  await prisma.class.deleteMany({ where: { id: { in: [homeClassId, foreignClassId] } } });
+  await prisma.class.deleteMany({
+    where: { id: { startsWith: tag } },
+  });
   await prisma.user.deleteMany({
     where: { id: { startsWith: tag } },
   });
@@ -231,12 +268,14 @@ suite(
     expect(JSON.stringify(resolved.data)).not.toContain(foreignTeacherName);
     expect(JSON.stringify(resolved.data)).not.toContain('Foreign collision');
     expect(resolved.data.state?.variant).not.toBe('multiple');
-    expect(JSON.stringify(resolved.data)).toContain('Home collision');
+    expect(
+      resolved.data.state?.classInfo?.name ?? resolved.data.state?.classInfo
+    ).toMatch(/Home collision/i);
   }
 );
 
 suite(
-  '/no-membership inactive student teacher prompt org-scopes class-code resolution',
+  '/no-membership inactive student can join a unique home-org class without foreign leakage',
   async () => {
     await teacherPromptFlow(inactiveStudentId, 'inactive');
     const resolved = await post('resolve-class', { classCode: collisionCode });

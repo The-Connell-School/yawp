@@ -2,7 +2,6 @@ import { test, expect, type Page } from '@playwright/test';
 import { createCookieSessionStorage } from 'react-router';
 import { createE2EPrismaClient } from '../prisma-client';
 import bcrypt from 'bcryptjs';
-import fs from 'node:fs';
 
 test.skip(
   process.env.SIGNON_LOCAL_TEST !== '1',
@@ -38,28 +37,33 @@ async function authenticate(page: Page, userId: string) {
   });
   const cookie = await storage.getSession();
   cookie.set('sessionId', session.id);
-  const value = (await storage.commitSession(cookie)).split(';')[0];
+  const value = (await storage.commitSession(cookie))
+    .split(';')[0]
+    .slice('en_session='.length);
   await page.context().addCookies([
-  {
-    name: 'en_session',
-    value: value.split('=')[1],
-    domain: '127.0.0.1',
-    path: '/',
-    httpOnly: true,
-    sameSite: 'Lax',
-  },
+    {
+      name: 'en_session',
+      value: decodeURIComponent(value),
+      url: test.info().project.use.baseURL!,
+    },
   ]);
 }
 
-function denyForeignMetadata(page: Page) {
-  return async () => {
-    await expect(page.getByText(foreignSchoolName)).toHaveCount(0);
-    await expect(page.getByText(foreignTeacherName)).toHaveCount(0);
-    await expect(page.getByText(foreignClassTitle)).toHaveCount(0);
-    await expect(
-      page.getByRole('heading', { name: 'Which class is yours?' })
-    ).toHaveCount(0);
-  };
+async function assertNoForeignMetadata(page: Page) {
+  await expect(page.getByText(foreignSchoolName)).toHaveCount(0);
+  await expect(page.getByText(foreignTeacherName)).toHaveCount(0);
+  await expect(page.getByText(foreignClassTitle)).toHaveCount(0);
+  await expect(
+    page.getByRole('heading', { name: 'Which class is yours?' })
+  ).toHaveCount(0);
+}
+
+async function enableUnifiedSignOn() {
+  await db.setting.upsert({
+    where: { name: flag },
+    update: { value: 'true' },
+    create: { name: flag, value: 'true', valueType: 'boolean' },
+  });
 }
 
 test.beforeAll(async () => {
@@ -69,17 +73,7 @@ test.beforeAll(async () => {
     )
   )
     throw new Error('Local DB required');
-  if (process.env.SIGNON_TEACHER_PROMPTS_MOCK_STATE) {
-    fs.writeFileSync(
-      process.env.SIGNON_TEACHER_PROMPTS_MOCK_STATE,
-      JSON.stringify({ teacherPrompts: true })
-    );
-  }
-  await db.setting.upsert({
-    where: { name: flag },
-    update: { value: 'true' },
-    create: { name: flag, value: 'true', valueType: 'boolean' },
-  });
+  await enableUnifiedSignOn();
   for (const orgId of [homeOrgId, foreignOrgId]) {
     await db.organization.create({
       data: { id: orgId, name: orgId, plan: 'SCHOOL' },
@@ -182,7 +176,6 @@ test.afterAll(async () => {
 test('logged-out /auth/login denies cross-tenant class-code collisions', async ({
   page,
 }) => {
-  const assertNoForeign = denyForeignMetadata(page);
   await page.goto('/auth/login');
   await page.getByLabel('Email or class code', { exact: true }).fill(collisionCode);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
@@ -191,24 +184,22 @@ test('logged-out /auth/login denies cross-tenant class-code collisions', async (
       .getByText(/couldn't find that class/i)
       .or(page.getByText(/couldn't find a class/i))
   ).toBeVisible();
-  await assertNoForeign();
+  await assertNoForeignMetadata(page);
 });
 
 test('signed-in /enter-code never surfaces foreign class metadata for collisions', async ({
   page,
 }) => {
-  const assertNoForeign = denyForeignMetadata(page);
   await authenticate(page, `${prefix}-active`);
   await page.goto('/enter-code');
   await page.getByLabel('Class code', { exact: true }).fill(collisionCode);
   await page.getByRole('button', { name: 'Join class', exact: true }).click();
-  await assertNoForeign();
+  await assertNoForeignMetadata(page);
 });
 
 test('/no-membership inactive student never surfaces foreign class metadata', async ({
   page,
 }) => {
-  const assertNoForeign = denyForeignMetadata(page);
   await authenticate(page, `${prefix}-inactive`);
   await page.goto('/no-membership');
   await page
@@ -216,5 +207,5 @@ test('/no-membership inactive student never surfaces foreign class metadata', as
     .click();
   await page.getByLabel('Class code', { exact: true }).fill(collisionCode);
   await page.getByRole('button', { name: 'Join class', exact: true }).click();
-  await assertNoForeign();
+  await assertNoForeignMetadata(page);
 });

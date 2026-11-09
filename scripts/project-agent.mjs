@@ -526,7 +526,10 @@ function runTestProfile(profile, { json }) {
     for (const file of ["app/routes/enter-code/teacher-prompts-compat.test.ts", "app/routes/enter-code/authz.test.ts", "app/routes/enter-code/selection-screen.test.tsx", "app/utils/auth.server.test.ts", "app/domain/unified-signon/teacher-prompts.test.ts", "app/routes/auth.logout/route.test.ts", "app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/utils/internal-feature-flags-http.server.test.ts", "app/routes/auth.login/unified-dispatch.test.ts"])
       runWebApp(file, ["test", "--max-concurrency=2", file]);
   }
-  else if (chosen === "signon-teacher-prompts-browser") runWebApp("teacher-prompts-browser", ["x", "playwright", "test", "--config", "playwright.teacher-prompts.config.ts", "--workers=1"]);
+  else if (chosen === "signon-teacher-prompts-browser") {
+    runWebApp("teacher-prompts-browser", ["x", "playwright", "test", "--config", "playwright.teacher-prompts.config.ts", "--workers=1"]);
+    if (process.env.SIGNON_LOCAL_TEST === "1") runWebApp("uso-cross-tenant-browser", ["x", "playwright", "test", "--config", "playwright.uso-cross-tenant.config.ts", "--workers=1"]);
+  }
   else if (chosen === "signon-classcode") {
     run("read-only-route-contract", ["test", "./scripts/read-only-impersonation-contract.test.ts"]);
     runWebApp("login-rate-limit-target", ["test", "app/utils/login-rate-limit-target.test.ts"]);
@@ -535,13 +538,16 @@ function runTestProfile(profile, { json }) {
     runWebApp("signon-policy", ["test", "app/domain/unified-signon/policy.test.ts"]);
     runWebApp("signon-google", ["test", "app/domain/unified-signon/google.test.ts"]);
     runWebApp("signon-dispatch", ["test", "app/routes/auth.login/unified-dispatch.test.ts"]);
+    runWebApp("signon-classes-unit", ["test", "app/domain/unified-signon/classes.server.test.ts"]);
     if (process.env.SIGNON_LOCAL_TEST === "1") {
       runWebApp("class-student-real-database", ["test", "app/domain/unified-signon/class-student.real-db.integration.test.ts"]);
       runWebApp("signon-real-database", ["test", "app/domain/unified-signon/backend.real-db.integration.test.ts"]);
+      runWebApp("class-code-collision-real-database", ["test", "app/domain/unified-signon/class-code-collision.real-db.integration.test.ts"]);
       runWebApp("join-link-real-database", ["test", "app/routes/join/route.real-db.integration.test.ts"]);
     }
     if (process.env.SIGNON_BROWSER_TEST === "1") runWebApp("class-student-browser", ["x", "playwright", "test", "--config", "playwright.classcode.config.ts", "--workers=1"]);
     if (process.env.SIGNON_BROWSER_TEST === "1") runWebApp("join-link-browser", ["x", "playwright", "test", "--config", "playwright.join-link.config.ts", "--workers=1"]);
+    if (process.env.SIGNON_BROWSER_TEST === "1") runWebApp("uso-cross-tenant-browser", ["x", "playwright", "test", "--config", "playwright.uso-cross-tenant.config.ts", "--workers=1"]);
   }
   else if (chosen === "unified-signon-preview-otp") {
     runWebApp("preview-code", ["test", "app/domain/unified-signon/preview-code.server.test.ts"]);

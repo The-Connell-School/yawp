@@ -155,7 +155,7 @@ export async function resolveClassesForExistingStudent(
     '~/domain/free-tier/existing-student-enrollment.server'
   );
   const allowed = await resolveStudentClassCode(tx, organizationId, code);
-  if (!allowed.length) throw invalidClassCodeError();
+  if (!allowed.length) return resolveClasses(tx, flow, code);
   const classes = await tx.class.findMany({
     where: {
       id: { in: allowed.map((k) => k.id) },

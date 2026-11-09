@@ -119,9 +119,14 @@ describe('resolveClassesForExistingStudent', () => {
     );
   });
 
-  test('fails closed when org-scoped resolution finds no classes', async () => {
-    await expect(
-      resolveClassesForExistingStudent(tx as any, flow(), 'SHARED', 'org-home')
-    ).rejects.toThrow(/couldn't find a class/i);
+  test('falls back to global resolution when org-scoped lookup is empty', async () => {
+    classes.push(klass('only', 'org-a', 'UNIQUE'));
+    const result = await resolveClassesForExistingStudent(
+      tx as any,
+      flow(),
+      'UNIQUE',
+      'org-home'
+    );
+    expect(result.state.classInfo?.id).toBe('only');
   });
 });
