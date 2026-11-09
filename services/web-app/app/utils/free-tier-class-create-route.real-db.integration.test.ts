@@ -40,6 +40,12 @@ function actionHttpStatus(result: unknown) {
   return wrapped.init?.status ?? 200;
 }
 
+function actionErrorMessage(result: unknown): string | undefined {
+  if (result instanceof Response) return undefined;
+  const wrapped = result as { data?: { error?: string } };
+  return wrapped.data?.error;
+}
+
 describe.skipIf(!process.env.DATABASE_URL)(
   'free tier class create routes (real db)',
   () => {
@@ -127,7 +133,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       body.set('schoolId', schoolId);
       body.set('schoolYear', '2026-2027');
       body.set('code', `NEW-${Date.now()}`.slice(0, 12));
-      body.set('teacherIds', '');
       return body;
     }
 
@@ -233,7 +238,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       };
 
       const body = createClassForm(school.id);
-      body.delete('teacherIds');
+      body.set('grade', '10th');
+      body.set('period', '2nd');
       body.append('teacherIds', membership.id);
 
       const response = await orgClassesAction({
@@ -246,11 +252,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       } as any);
 
       const status = actionHttpStatus(response);
-      if (status !== 200 && response instanceof Response) {
-        const detail = await response.clone().text();
-        throw new Error(`Expected 200, got ${status}: ${detail}`);
-      }
-      expect(status).toBe(200);
+      const error = actionErrorMessage(response);
+      expect({ status, error }).toEqual({ status: 200, error: undefined });
       const after = await prisma.class.count({
         where: { isArchived: false, school: { organizationId: org.id } },
       });
