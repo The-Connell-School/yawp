@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import bcrypt from 'bcryptjs';
 import { createE2EPrismaClient } from '../prisma-client';
 import { loadE2eEnvFromFile } from '../test-setup';
+import { submitUnifiedLogin } from './unified-login';
 
 loadE2eEnvFromFile();
 export const db = createE2EPrismaClient();
@@ -88,8 +89,10 @@ export async function seedClassroomReportFixture() {
 export async function login(page: Page, key = 'teacher') {
   await page.goto('/auth/login');
   await page.waitForLoadState('networkidle');
-  await page.getByLabel('Email or handle').fill(`${prefix}${key.toLowerCase()}@yawp.invalid`);
-  await page.locator('input[type=password]').fill('yawp-dev');
-  await page.getByRole('button', { name: /Log in/i }).click();
+  await submitUnifiedLogin(
+    page,
+    `${prefix}${key.toLowerCase()}@yawp.invalid`,
+    'yawp-dev'
+  );
   await page.waitForURL('**/app**');
 }

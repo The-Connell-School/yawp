@@ -2,10 +2,8 @@ import {
   type MetaFunction,
   type LoaderFunctionArgs,
   type ActionFunctionArgs,
-  useSearchParams,
   useLoaderData,
 } from 'react-router';
-import { LoginForm } from '~/components/login-form';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
   unifiedEntry,
@@ -22,10 +20,8 @@ export async function action(args: ActionFunctionArgs) {
 }
 
 export default function LoginPage() {
-  const [searchParams] = useSearchParams();
   const entry = useLoaderData<typeof loader>();
-  if (entry?.unified) return <UnifiedLogin entry={entry} />;
-  return <LoginForm redirectTo={searchParams.get('redirectTo')} />;
+  return <UnifiedLogin entry={entry} />;
 }
 
 export const meta: MetaFunction = () => [{ title: 'Login to Yawp!' }];

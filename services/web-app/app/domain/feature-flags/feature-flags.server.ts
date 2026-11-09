@@ -17,7 +17,6 @@ import {
   LESSON_PLANNER_STACK_PANEL_FLAG,
   FREE_TIER_FLAG,
   LESSON_PLANNER_FLAG,
-  UNIFIED_SIGN_ON_FLAG,
   TEACHER_PROMPT_GENERATOR_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
@@ -73,7 +72,6 @@ function runtimeDefaultOn(key: FeatureFlagKey, env: Record<string, string | unde
   if (!isNonProductionDefaultOnDeployment(env)) return false;
   return (
     key === FREE_TIER_FLAG ||
-    key === UNIFIED_SIGN_ON_FLAG ||
     key === TEACHER_PROMPT_GENERATOR_FLAG
   );
 }
@@ -127,7 +125,7 @@ async function readParsedValues(
 }
 
 async function readPrimaryFlagValue(
-  key: typeof FREE_TIER_FLAG | typeof UNIFIED_SIGN_ON_FLAG,
+  key: typeof FREE_TIER_FLAG,
   client: SettingReader = prisma
 ): Promise<FeatureFlagValue> {
   const [value] = await readParsedValues([featureFlagSettingName(key)], client);
@@ -203,20 +201,6 @@ export async function isFeatureFlagEnabled(
   orgId?: string | null
 ): Promise<boolean> {
   if (key === FREE_TIER_FLAG) return isFreeTierCapabilityEnabled(orgId);
-  if (key === UNIFIED_SIGN_ON_FLAG) {
-    if (isNonProductionDefaultOnDeployment(process.env)) return true;
-    try {
-      const primary = await readPrimaryFlagValue(UNIFIED_SIGN_ON_FLAG);
-      if (primary.mode === 'everyone') return true;
-      return evaluateFeatureFlag(primary, orgId);
-    } catch (error) {
-      console.error('feature_flag_read_failed', {
-        key: UNIFIED_SIGN_ON_FLAG,
-        error: buildSafeErrorForLog(error),
-      });
-      return false;
-    }
-  }
   if (key === TEACHER_PROMPT_GENERATOR_FLAG) {
     if (isNonProductionDefaultOnDeployment(process.env)) return true;
     try {

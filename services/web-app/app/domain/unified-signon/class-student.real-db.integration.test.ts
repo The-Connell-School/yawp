@@ -5,7 +5,6 @@ import { prisma } from '~/utils/db.server';
 import { dispatchUnifiedLogin } from './entry.server';
 const suite = process.env.SIGNON_LOCAL_TEST === '1' ? test : test.skip;
 const id = `class-student-${Date.now()}`;
-const flag = 'feature_flag.unified-sign-on';
 const password = 'local-password';
 const details = {
   firstName: 'Brian',
@@ -53,11 +52,6 @@ beforeAll(async () => {
     )
   )
     throw Error('Local database required');
-  await prisma.setting.upsert({
-    where: { name: flag },
-    update: { value: 'true' },
-    create: { name: flag, value: 'true', valueType: 'boolean' },
-  });
   await prisma.organization.create({
     data: { id, name: 'Local student tests', plan: 'SCHOOL' },
   });
@@ -90,7 +84,6 @@ afterAll(async () => {
   await prisma.school.delete({ where: { id } });
   await prisma.organization.delete({ where: { id } });
   await prisma.signonFlow.deleteMany({});
-  await prisma.setting.deleteMany({ where: { name: flag } });
   await prisma.$disconnect();
 });
 suite(
@@ -426,9 +419,7 @@ suite(
     expect(status).toBe(429);
   }
 );
-suite(
-  'class links retain authoritative context when enabled and legacy behavior when off',
-  async () => {
+suite('class links retain authoritative unified context', async () => {
     const { loader } = await import('~/routes/join/route');
     await prisma.organization.update({
       where: { id },
@@ -461,16 +452,7 @@ suite(
       );
       expect(entry?.initialState?.screen).toBe('class-found');
       expect(entry?.initialState?.classInfo?.id).toBe(id);
-      await prisma.setting.update({
-        where: { name: flag },
-        data: { value: 'false' },
-      });
-      expect(((await loader({ request } as any)) as any).klass.id).toBe(id);
     } finally {
-      await prisma.setting.update({
-        where: { name: flag },
-        data: { value: 'true' },
-      });
       await prisma.organization.update({
         where: { id },
         data: { plan: 'SCHOOL' },
@@ -700,77 +682,25 @@ for (const budget of ['target', 'ip-handle'] as const)
     }
   );
 
-suite(
-  'join action blocks read-only mutations and still accepts anonymous flag-off enrollment',
-  async () => {
-    const { action } = await import('~/routes/join/route');
-    const { authSessionStorage } =
-      await import('~/cookie-session-storages/authentication.server');
-    const session = await authSessionStorage.getSession();
-    session.set('impersonationMode', 'read-only');
-    session.set('impersonatorUserId', 'local-operator');
-    const before = await prisma.user.count();
-    await expect(
-      action({
-        request: new Request('http://localhost/join', {
-          method: 'POST',
-          headers: { cookie: await authSessionStorage.commitSession(session) },
-          body: new URLSearchParams(),
-        }),
-      } as any)
-    ).rejects.toMatchObject({ status: 403 });
-    expect(await prisma.user.count()).toBe(before);
-    await prisma.setting.update({
-      where: { name: flag },
-      data: { value: 'false' },
-    });
-    await prisma.organization.update({
-      where: { id },
-      data: { plan: 'FREE_CLASSROOM' },
-    });
-    await prisma.class.update({
-      where: { id },
-      data: { studentJoinToken: id },
-    });
-    try {
-      const username = `anon${Date.now()}`;
-      const response = await action({
-        request: new Request('http://localhost/join', {
-          method: 'POST',
-          body: new URLSearchParams({
-            name: 'Anonymous Student',
-            username,
-            classId: id,
-            joinToken: id,
-            password,
-            confirmPassword: password,
-          }),
-        }),
-      } as any);
-      expect(response).toBeInstanceOf(Response);
-      expect((response as Response).status).toBe(302);
-      expect((response as Response).headers.get('location')).toBe('/app');
-      expect(
-        await prisma.orgMembership.count({
-          where: {
-            user: { username },
-            role: 'STUDENT',
-            classesAsStudent: { some: { id } },
-          },
-        })
-      ).toBe(1);
-    } finally {
-      await prisma.setting.update({
-        where: { name: flag },
-        data: { value: 'true' },
-      });
-      await prisma.organization.update({
-        where: { id },
-        data: { plan: 'SCHOOL' },
-      });
-    }
-  }
-);
+suite('join action blocks read-only mutations', async () => {
+  const { action } = await import('~/routes/join/route');
+  const { authSessionStorage } =
+    await import('~/cookie-session-storages/authentication.server');
+  const session = await authSessionStorage.getSession();
+  session.set('impersonationMode', 'read-only');
+  session.set('impersonatorUserId', 'local-operator');
+  const before = await prisma.user.count();
+  await expect(
+    action({
+      request: new Request('http://localhost/join', {
+        method: 'POST',
+        headers: { cookie: await authSessionStorage.commitSession(session) },
+        body: new URLSearchParams(),
+      }),
+    } as any)
+  ).rejects.toMatchObject({ status: 403 });
+  expect(await prisma.user.count()).toBe(before);
+});
 
 suite(
   'class handle audit triggers cover mutations, atomic rollback and truncation',

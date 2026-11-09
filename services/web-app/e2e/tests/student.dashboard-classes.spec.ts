@@ -1,5 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { submitUnifiedLogin } from '../helpers/unified-login';
 
 const STUDENT_EMAIL = 'jdoe@brock.software';
 const STUDENT_PASSWORD = 'johndoe';
@@ -10,9 +11,7 @@ test.describe.serial('Student dashboard: Classes, not Courses', () => {
     page,
   }) => {
     await page.goto('/auth/login');
-    await page.getByLabel('Email or handle').fill(STUDENT_EMAIL);
-    await page.locator('input[type="password"]').fill(STUDENT_PASSWORD);
-    await page.getByRole('button', { name: /log in/i }).click();
+    await submitUnifiedLogin(page, STUDENT_EMAIL, STUDENT_PASSWORD);
     await page.waitForURL('**/app**', { timeout: 15000 });
 
     await expect(page.getByText('Classes', { exact: true }).first()).toBeVisible();
@@ -34,9 +33,7 @@ test.describe.serial('Student dashboard: Classes, not Courses', () => {
     page,
   }) => {
     await page.goto('/auth/login');
-    await page.getByLabel('Email or handle').fill(STUDENT_EMAIL);
-    await page.locator('input[type="password"]').fill(STUDENT_PASSWORD);
-    await page.getByRole('button', { name: /log in/i }).click();
+    await submitUnifiedLogin(page, STUDENT_EMAIL, STUDENT_PASSWORD);
     await page.waitForURL('**/app**', { timeout: 15000 });
 
     await page.getByRole('link', { name: 'My Classes' }).click();
@@ -48,9 +45,7 @@ test.describe.serial('Student dashboard: Classes, not Courses', () => {
     page,
   }) => {
     await page.goto('/auth/login');
-    await page.getByLabel('Email or handle').fill(STUDENT_EMAIL);
-    await page.locator('input[type="password"]').fill(STUDENT_PASSWORD);
-    await page.getByRole('button', { name: /log in/i }).click();
+    await submitUnifiedLogin(page, STUDENT_EMAIL, STUDENT_PASSWORD);
     await page.waitForURL('**/app**', { timeout: 15000 });
 
     await page.getByRole('link', { name: 'My Documents' }).click();
@@ -62,9 +57,7 @@ test.describe.serial('Student dashboard: Classes, not Courses', () => {
     page,
   }) => {
     await page.goto('/auth/login');
-    await page.getByLabel('Email or handle').fill(STUDENT_EMAIL);
-    await page.locator('input[type="password"]').fill(STUDENT_PASSWORD);
-    await page.getByRole('button', { name: /log in/i }).click();
+    await submitUnifiedLogin(page, STUDENT_EMAIL, STUDENT_PASSWORD);
     await page.waitForURL('**/app**', { timeout: 15000 });
 
     await expect(page.getByRole('button', { name: 'Write something new' })).toHaveCount(
@@ -84,9 +77,7 @@ test.describe.serial('Student dashboard: Classes, not Courses', () => {
       });
 
       await page.goto('/auth/login');
-      await page.getByLabel('Email or handle').fill(STUDENT_EMAIL);
-      await page.locator('input[type="password"]').fill(STUDENT_PASSWORD);
-      await page.getByRole('button', { name: /log in/i }).click();
+      await submitUnifiedLogin(page, STUDENT_EMAIL, STUDENT_PASSWORD);
       await page.waitForURL('**/app**', { timeout: 15000 });
 
       await expect(

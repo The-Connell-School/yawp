@@ -273,9 +273,8 @@ test.describe('Free-tier event waitlist QA', () => {
 
       await page.context().clearCookies();
       await page.goto('/auth/login');
-      await page.getByLabel('Email or handle').fill(email);
-      await page.getByLabel('Password').fill(password);
-      await page.getByRole('button', { name: 'Log in' }).click();
+      const { submitUnifiedLogin } = await import('../helpers/unified-login');
+      await submitUnifiedLogin(page, email, password);
       await expect(page).toHaveURL(/\/app/, { timeout: 15_000 });
       await shot(page, '06-unique-login-success.png');
     } finally {
