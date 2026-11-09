@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { afterAll, describe, expect, mock, test } from 'bun:test';
 import { type OrganizationPlan, PrismaClient } from '@app/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -126,11 +127,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
         data: {
           schoolId: school.id,
           schoolYear: '2026-2027',
-          code: `EXIST-${Date.now()}`.slice(0, 12),
+          code: uniqueClassCode('E'),
           teachers: { connect: { id: membership.id } },
         },
       });
       return { org, school, user, membership };
+    }
+
+    function uniqueClassCode(prefix: string) {
+      return `${prefix}${randomBytes(4).toString('hex')}`.toUpperCase().slice(0, 12);
     }
 
     function createClassForm(schoolId: string) {
@@ -138,7 +143,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       body.set('intent', 'create-class');
       body.set('schoolId', schoolId);
       body.set('schoolYear', '2026-2027');
-      body.set('code', `NEW-${Date.now()}`.slice(0, 12));
+      body.set('code', uniqueClassCode('N'));
       return body;
     }
 
