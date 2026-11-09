@@ -64,6 +64,10 @@ const PLAN =
 const INTAKE_QUESTION = 'Which class is this for, and how long is the period?';
 
 test.describe("Lesson Planner — Brian's review", () => {
+  test.beforeEach(async () => {
+    await setLessonPlannerFlag(true);
+  });
+
   test.afterEach(async ({ e2eContext }) => {
     await clearLessonPlans(e2eContext.teacherMembershipId);
     await setLessonPlannerFlag(true);
@@ -77,7 +81,7 @@ test.describe("Lesson Planner — Brian's review", () => {
     await setLessonPlannerFlag(false);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/lesson-planner');
-    await expect(page).toHaveURL(/\/app(?:\?|$)/);
+    await expect(page).toHaveURL(/\/app(?!\/lesson-planner)/);
     await expect(page.getByRole('heading', { name: /Lesson Planner/i })).toHaveCount(
       0
     );

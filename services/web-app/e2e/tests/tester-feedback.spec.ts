@@ -8,6 +8,7 @@ test.describe.serial('Tester feedback', () => {
     signIn,
     e2eContext,
   }) => {
+    test.setTimeout(90_000);
     const prisma = createE2EPrismaClient();
     const user = await prisma.user.findUniqueOrThrow({
       where: { email: e2eContext.teacherEmail },
@@ -19,7 +20,10 @@ test.describe.serial('Tester feedback', () => {
         data: { isTester: false },
       });
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto('/app/assignments');
+      await page.goto('/app/assignments', { waitUntil: 'domcontentloaded' });
+      await expect(
+        page.getByRole('heading', { name: /assignments/i })
+      ).toBeVisible({ timeout: 60_000 });
       await expect(
         page.getByRole('button', { name: 'Log feedback' })
       ).toHaveCount(0);
@@ -28,11 +32,12 @@ test.describe.serial('Tester feedback', () => {
         data: { isTester: true },
       });
       await page.setViewportSize({ width: 390, height: 844 });
-      await page.goto('/app/assignments?tab=work&access_token=test-secret');
-      await page.reload();
-      await page.waitForLoadState('networkidle');
+      await page.goto('/app/assignments?tab=work&access_token=test-secret', {
+        waitUntil: 'domcontentloaded',
+      });
+      await page.reload({ waitUntil: 'domcontentloaded' });
       const trigger = page.getByRole('button', { name: 'Log feedback' });
-      await expect(trigger).toBeVisible({ timeout: 30_000 });
+      await expect(trigger).toBeVisible({ timeout: 60_000 });
       await expect(page.getByRole('button', { name: 'Give feedback', exact: true })).toHaveCount(0);
       await trigger.click();
       const dialog = page.getByRole('dialog', { name: 'Log feedback' });

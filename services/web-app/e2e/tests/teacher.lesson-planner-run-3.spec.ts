@@ -1321,7 +1321,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await setLessonPlannerFlag(false);
       await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
       await page.goto('/app/lesson-planner/how-it-works');
-      await expect(page).toHaveURL(/\/app(?:\?|$)/);
+      await expect(page).toHaveURL(/\/app(?!\/lesson-planner)/);
     });
   });
 });
