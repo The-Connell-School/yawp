@@ -119,11 +119,12 @@ export async function resolveIdentifier(
           undefined,
           { identifier: "We couldn't find that handle." }
         );
-      flow.data.identifier = `@${parsed.value}`;
+      const handle = user.username ?? parsed.value;
+      flow.data.identifier = `@${handle.replace(/^@/, '')}`;
       flow.data.userId = user.id;
       return stateFor(flow, {
         screen: 'password',
-        identifier: `@${parsed.value}`,
+        identifier: `@${handle.replace(/^@/, '')}`,
       });
     }
     try {
