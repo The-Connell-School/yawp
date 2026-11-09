@@ -19,7 +19,6 @@ const TEACHER_PASSWORD = 'teacher-e2e-password';
 
 const FLAGS: LessonPlannerReviewFlag[] = [
   'lesson_planner_stack_v2',
-  'lesson_planner_stack_v3',
   'lesson_planner_templates',
   'lesson_planner_library_v2',
 ];

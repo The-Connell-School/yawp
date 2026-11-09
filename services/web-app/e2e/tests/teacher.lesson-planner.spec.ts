@@ -8,7 +8,8 @@ import {
 } from '../test-helpers';
 import {
   clearLessonPlannerReviewFlags,
-  enableAllLessonPlannerReviewFlags,
+  setLessonPlannerFlag,
+  setLessonPlannerReviewFlag,
 } from '../feature-flags';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
@@ -20,7 +21,8 @@ const SELECT_ALL_SHORTCUT =
 
 test.beforeEach(async () => {
   await clearLessonPlannerReviewFlags();
-  await enableAllLessonPlannerReviewFlags();
+  await setLessonPlannerFlag(true);
+  await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
 });
 
 async function setWritingPracticeEnabled(
