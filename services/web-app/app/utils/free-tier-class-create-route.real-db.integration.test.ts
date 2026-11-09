@@ -233,6 +233,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       };
 
       const body = createClassForm(school.id);
+      body.set('teacherIds', membership.id);
 
       const response = await orgClassesAction({
         request: new Request('https://example.test/app/organization/classes', {
