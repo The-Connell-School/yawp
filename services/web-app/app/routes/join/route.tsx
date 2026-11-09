@@ -5,13 +5,9 @@ import {
   Link,
   redirect,
   useLoaderData,
-  useActionData,
-  useNavigation,
 } from 'react-router';
 import { z } from 'zod';
-import { parseFormData, useForm, validationError } from '@rvf/react-router';
-import { Button } from '~/components/ui/button';
-import { FormInput } from '~/components/rvf-forms/form-input';
+import { parseFormData, validationError } from '@rvf/react-router';
 import {
   requireAnonymous,
   requireMutableRequest,
@@ -171,24 +167,6 @@ export async function action({ request }: ActionFunctionArgs) {
 
 export default function JoinRoute() {
   const data = useLoaderData<typeof loader>();
-  const navigation = useNavigation();
-  const isLoading = navigation.state !== 'idle';
-
-  const joinForm = useForm({
-    schema: JoinSchema,
-    method: 'POST',
-    defaultValues: {
-      name: '',
-      username: '',
-      password: '',
-      confirmPassword: '',
-      joinToken: data.joinToken ?? '',
-      classId: data.klass?.id ?? '',
-    },
-  });
-
-  const actionData = useActionData<{ fieldErrors?: Record<string, string> }>();
-  const formLevelError = actionData?.fieldErrors?._form;
 
   if ('invalidLink' in data && data.invalidLink) {
     return (
@@ -204,9 +182,8 @@ export default function JoinRoute() {
     );
   }
 
-  if (!data.joinToken || !data.klass) {
-    return (
-      <AuthPageShell>
+  return (
+    <AuthPageShell>
       <div className="mx-auto w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
         <h1 className="text-lg font-semibold">Join your class</h1>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -220,49 +197,6 @@ export default function JoinRoute() {
           </Link>
         </p>
       </div>
-      </AuthPageShell>
-    );
-  }
-
-  const teacherName =
-    data.klass.teachers[0]?.user.name?.trim() || 'your teacher';
-
-  return (
-    <AuthPageShell>
-    <div className="mx-auto w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 max-sm:w-[calc(100%-2rem)] sm:p-7">
-      <h1 className="text-lg font-semibold">Create your student account</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Join {data.klass.school.name} ({data.klass.schoolYear}) with{' '}
-        {teacherName}. Pick a handle and password — no email required.
-      </p>
-      {formLevelError ? (
-        <p className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
-          {formLevelError}
-        </p>
-      ) : null}
-      <Form {...joinForm.getFormProps()} className="mt-6 flex flex-col gap-4">
-        <input type="hidden" name="joinToken" value={data.joinToken} />
-        <input type="hidden" name="classId" value={data.klass.id} />
-        <FormInput scope={joinForm.scope('name')} label="Display name" autoFocus />
-        <FormInput
-          scope={joinForm.scope('username')}
-          label="Handle"
-          autoComplete="username"
-        />
-        <p className="text-xs text-muted-foreground">
-          3–30 characters. Letters, numbers, dots, underscores, hyphens.
-        </p>
-        <FormInput scope={joinForm.scope('password')} type="password" label="Password" />
-        <FormInput
-          scope={joinForm.scope('confirmPassword')}
-          type="password"
-          label="Confirm password"
-        />
-        <Button type="submit" className="w-full" disabled={isLoading}>
-          {isLoading ? 'Creating account…' : 'Join class'}
-        </Button>
-      </Form>
-    </div>
     </AuthPageShell>
   );
 }
