@@ -72,32 +72,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
     );
   }
   const klass = await findFreeTierClassByJoinToken(token);
-  const { isUnifiedSignOnEnabled } =
-    await import('~/domain/unified-signon/gate.server');
-  if (await isUnifiedSignOnEnabled()) {
-    // A rejected token supplies no trusted class context and must not create a flow.
-    if (!klass) return { joinToken: null, klass: null, invalidLink: true };
+  // A rejected token supplies no trusted class context and must not create a flow.
+  if (!klass) return { joinToken: null, klass: null, invalidLink: true };
 
-    const { createFlow, saveNewFlow, flowCookie } =
-      await import('~/domain/unified-signon/flow.server');
-    const { chooseClass } =
-      await import('~/domain/unified-signon/classes.server');
-    const { prisma } = await import('~/utils/db.server');
-    const flow = await createFlow(request, '/app');
-    flow.data.classCode = klass.code;
-    flow.data.classCandidates = [klass.id];
-    await prisma.$transaction((tx) => chooseClass(tx, flow, klass.id));
-    await saveNewFlow(flow);
-    throw redirect('/auth/login?continue=1', {
-      headers: {
-        'set-cookie': await flowCookie.serialize({
-          browser: flow.browser,
-          token: flow.token,
-        }),
-      },
-    });
-  }
-  return { joinToken: token, klass };
+  const { createFlow, saveNewFlow, flowCookie } =
+    await import('~/domain/unified-signon/flow.server');
+  const { chooseClass } =
+    await import('~/domain/unified-signon/classes.server');
+  const { prisma } = await import('~/utils/db.server');
+  const flow = await createFlow(request, '/app');
+  flow.data.classCode = klass.code;
+  flow.data.classCandidates = [klass.id];
+  await prisma.$transaction((tx) => chooseClass(tx, flow, klass.id));
+  await saveNewFlow(flow);
+  throw redirect('/auth/login?continue=1', {
+    headers: {
+      'set-cookie': await flowCookie.serialize({
+        browser: flow.browser,
+        token: flow.token,
+      }),
+    },
+  });
 }
 
 export async function action({ request }: ActionFunctionArgs) {

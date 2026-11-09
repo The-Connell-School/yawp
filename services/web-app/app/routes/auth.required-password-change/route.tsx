@@ -20,7 +20,6 @@ import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { getSessionExpirationDateForUser } from '~/utils/auth.server';
 import { mayChangeRequiredPassword } from '~/domain/free-tier/required-password-change';
-import { isUnifiedSignOnEnabled } from '~/domain/unified-signon/gate.server';
 import { UnifiedSignon } from '~/components/unified-signon/unified-signon';
 
 const Schema = PasswordAndConfirmPasswordSchema;
@@ -34,10 +33,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (!user.mustChangePassword) {
     throw redirect('/app');
   }
-  if (await isUnifiedSignOnEnabled()) {
-    return { username: user.username, unified: true as const };
-  }
-  return { username: user.username };
+  return { username: user.username, unified: true as const };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -72,21 +68,19 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
-  if (await isUnifiedSignOnEnabled()) {
-    const { browserContext, withFlow } =
-      await import('~/domain/unified-signon/flow.server');
-    const context = await browserContext(request);
-    if (context) {
-      try {
-        const resume = await withFlow(
-          request,
-          context.token,
-          async (flow) => flow.data.userId === userId
-        );
-        if (resume) return redirect('/auth/login?continue=1');
-      } catch {
-        /* An expired flow retains the legacy destination. */
-      }
+  const { browserContext, withFlow } =
+    await import('~/domain/unified-signon/flow.server');
+  const context = await browserContext(request);
+  if (context) {
+    try {
+      const resume = await withFlow(
+        request,
+        context.token,
+        async (flow) => flow.data.userId === userId
+      );
+      if (resume) return redirect('/auth/login?continue=1');
+    } catch {
+      /* An expired flow sends the teacher back to /app. */
     }
   }
   return redirect('/app');

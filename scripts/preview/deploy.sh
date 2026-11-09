@@ -997,13 +997,6 @@ rollout_demo_web_without_downtime() {
   remove_legacy_project_postgres
 }
 
-apply_preview_signon_flag() {
-  # Named demo/production environments reuse this script but must never run this
-  # updater. The toolbox also enforces environment + strict URL isolation itself.
-  [[ "$SLUG" =~ ^pr-[1-9][0-9]*$ ]] || return 0
-  "${compose[@]}" run --rm toolbox bun /preview-control/unified-signon-flag.mjs
-}
-
 if [[ "${DEMO_TRAINING_MEDIA_ENABLED:-false}" == "true" ]]; then
   bash "$SCRIPT_DIR/install-demo-training-media.sh"
 fi
@@ -1040,8 +1033,6 @@ harden_preview_database
 run_tooling_if_needed
 restore_demo_tester_feedback_after_reset
 ensure_preview_seats
-# Outside run_tooling_if_needed: also apply OFF after label removal on its early-return path.
-apply_preview_signon_flag
 assert_no_master_code_collision
 install_demo_backup_tooling
 health_url="${PREVIEW_HEALTHCHECK_URL:-${URL}/api/healthcheck}"

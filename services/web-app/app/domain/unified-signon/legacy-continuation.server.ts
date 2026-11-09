@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { isUnifiedSignOnEnabled } from './gate.server';
 import {
   browserContext,
   withFlow,
@@ -19,7 +18,6 @@ export async function legacyTeacherContext(
   email: string,
   organizationId: string
 ) {
-  if (!(await isUnifiedSignOnEnabled())) return null;
   const context = await browserContext(request);
   if (!context) return null;
   try {

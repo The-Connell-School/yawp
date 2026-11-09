@@ -44,6 +44,13 @@ describe('feature flag registry', () => {
     expect(isFeatureFlagKey(removed)).toBe(false);
   });
 
+  test('no longer has the shipped unified sign-on flag', () => {
+    for (const removed of ['unified-sign-on', 'signon-teacher-prompts']) {
+      expect(FEATURE_FLAG_KEYS as readonly string[]).not.toContain(removed);
+      expect(isFeatureFlagKey(removed)).toBe(false);
+    }
+  });
+
   test('registers only the collapsed rollout flags plus unrelated product flags', () => {
     expect(FEATURE_FLAG_KEYS).toEqual([
       LESSON_PLANNER_FLAG,
