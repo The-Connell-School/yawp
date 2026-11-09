@@ -1259,13 +1259,12 @@ test.describe.serial('University of Alabama student onboarding', () => {
   }) => {
     await page.goto(`${UA_APP_ORIGIN}/ua`);
     await page.getByRole('link', { name: 'Log in' }).click();
-    await page.waitForURL(/\/auth\/login/, { timeout: 15_000 });
-    const { submitUnifiedLogin } = await import('../helpers/unified-login');
-    await submitUnifiedLogin(
-      page,
-      e2eContext.ua.teacher.email,
-      e2eContext.ua.teacher.password
-    );
+    await expect(page).toHaveURL(/\/ua\/sign-in/, { timeout: 15_000 });
+    await page.getByLabel('Email or handle').fill(e2eContext.ua.teacher.email);
+    await page
+      .getByLabel('Password', { exact: true })
+      .fill(e2eContext.ua.teacher.password);
+    await page.getByRole('button', { name: 'Log in', exact: true }).click();
     await page.waitForURL(/\/app\/?$/);
     await expect(page.getByTestId('app._index')).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);

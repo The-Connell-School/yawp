@@ -315,10 +315,9 @@ export async function fillFreeTierJoinForm(
   values: FreeTierJoinFormValues
 ) {
   await expect(page).toHaveURL(/\/auth\/login/, { timeout: 15_000 });
-  await expect(
-    page.getByRole('heading', { name: 'Join your class' })
-  ).toBeVisible({ timeout: 15_000 });
-  await page.getByRole('button', { name: /^New/ }).click();
+  const newStudent = page.getByRole('button', { name: /^New/ });
+  await expect(newStudent).toBeVisible({ timeout: 15_000 });
+  await newStudent.click();
   await expect(page.locator('[data-signon-screen]')).toHaveAttribute(
     'data-signon-screen',
     'class-handle'
@@ -353,16 +352,24 @@ export async function fillFreeTierJoinForm(
 
 /** Signed-in students on `/enter-code` use USO (Class code + Join class). */
 export async function submitSignedInEnterClassCode(page: Page, code: string) {
+  const { completeUnifiedSignonToApp } = await import('./helpers/unified-login');
   const uso = page.getByLabel('Class code', { exact: true });
   const legacy = page.getByLabel('Class Code', { exact: true });
   await expect(uso.or(legacy)).toBeVisible({ timeout: 15_000 });
   if (await uso.isVisible()) {
     await uso.fill(code);
     await page.getByRole('button', { name: 'Join class', exact: true }).click();
+    await completeUnifiedSignonToApp(page);
     return;
   }
   await legacy.fill(code);
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await Promise.all([
+    page.waitForURL(
+      (url) => url.pathname === '/app' || url.pathname.startsWith('/app/'),
+      { timeout: 15_000 }
+    ),
+    page.getByRole('button', { name: 'Continue', exact: true }).click(),
+  ]);
 }
 
 /** Submit join form and wait until the student lands in the authenticated app shell. */
@@ -377,12 +384,7 @@ export async function submitFreeTierJoinAndExpectApp(
   await expect(joinButton).toBeEnabled();
   await expect(joinButton).toHaveText('Join class');
 
-  await Promise.all([
-    page.waitForURL(
-      (url) => url.pathname === '/app' || url.pathname.startsWith('/app/'),
-      { timeout: timeoutMs }
-    ),
-    joinButton.click(),
-  ]);
-  await expect(page).toHaveURL(/\/app/, { timeout: 5_000 });
+  const { completeUnifiedSignonToApp } = await import('./helpers/unified-login');
+  await joinButton.click();
+  await completeUnifiedSignonToApp(page, timeoutMs);
 }
