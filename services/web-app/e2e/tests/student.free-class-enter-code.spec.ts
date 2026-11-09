@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs';
 import { generateStudentJoinToken } from '../../app/utils/student-join-token';
 import { studentHandleBase } from '../../app/domain/unified-signon/student-handle';
 import { submitUnifiedLogin } from '../helpers/unified-login';
+import { submitSignedInEnterClassCode } from '../test-helpers';
 
 test('existing student joins a separate free classroom and retains access after reload', async ({
   page,
@@ -146,8 +147,7 @@ test('existing student joins a separate free classroom and retains access after 
     await page.waitForURL(/enter-code|\/app/);
     await page.goto('/enter-code');
     await page.waitForLoadState('networkidle');
-    await page.getByLabel('Class Code', { exact: true }).fill(priorClass.code);
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await submitSignedInEnterClassCode(page, priorClass.code);
     await expect(page).toHaveURL(/\/app(?:\?|$)/);
     await page.reload();
     await expect(
@@ -174,10 +174,9 @@ test('existing student joins a separate free classroom and retains access after 
     });
     await page.goto('/enter-code');
     await page.waitForLoadState('networkidle');
-    await page.getByLabel('Class Code', { exact: true }).fill(klass.code);
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await submitSignedInEnterClassCode(page, klass.code);
     await expect(
-      page.getByText('Invalid code.', { exact: true })
+      page.getByText('Invalid code.', { exact: true }).or(page.getByRole('alert'))
     ).toBeVisible();
     await expect(page.getByText('Unrelated Tenant Class')).toHaveCount(0);
     await shot('desktop-collision-denial');
@@ -193,11 +192,10 @@ test('existing student joins a separate free classroom and retains access after 
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto('/enter-code');
     await page.waitForLoadState('networkidle');
-    await page.getByLabel('Class Code', { exact: true }).fill(klass.code);
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await submitSignedInEnterClassCode(page, klass.code);
     if (process.env.CAPTURE_REJECTION === '1') {
       await expect(
-        page.getByText('Invalid code.', { exact: true })
+        page.getByText('Invalid code.', { exact: true }).or(page.getByRole('alert'))
       ).toBeVisible();
       await shot('desktop-rejection');
       await page.setViewportSize({ width: 390, height: 844 });

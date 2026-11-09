@@ -1257,8 +1257,9 @@ test.describe.serial('University of Alabama student onboarding', () => {
     page,
     e2eContext,
   }) => {
-    await page.goto('/ua');
+    await page.goto(`${UA_APP_ORIGIN}/ua`);
     await page.getByRole('link', { name: 'Log in' }).click();
+    await page.waitForURL(/\/auth\/login/, { timeout: 15_000 });
     const { submitUnifiedLogin } = await import('../helpers/unified-login');
     await submitUnifiedLogin(
       page,

@@ -432,7 +432,11 @@ test.describe('Released grade editing and submission activity', () => {
 
     try {
       await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await expect(page.getByTestId('app._index')).toBeVisible({
+        timeout: 15_000,
+      });
       await page.goto(`/app/submissions/${submission.id}`);
+      await page.waitForLoadState('networkidle');
       const firstPanel = page.getByTestId('submission-lifecycle-panel');
       await firstPanel.getByTestId('submission-lifecycle-edit').click();
       await page.getByTestId('grading-overall-points').fill('82');

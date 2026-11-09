@@ -351,6 +351,20 @@ export async function fillFreeTierJoinForm(
   }
 }
 
+/** Signed-in students on `/enter-code` use USO (Class code + Join class). */
+export async function submitSignedInEnterClassCode(page: Page, code: string) {
+  const uso = page.getByLabel('Class code', { exact: true });
+  const legacy = page.getByLabel('Class Code', { exact: true });
+  await expect(uso.or(legacy)).toBeVisible({ timeout: 15_000 });
+  if (await uso.isVisible()) {
+    await uso.fill(code);
+    await page.getByRole('button', { name: 'Join class', exact: true }).click();
+    return;
+  }
+  await legacy.fill(code);
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+}
+
 /** Submit join form and wait until the student lands in the authenticated app shell. */
 export async function submitFreeTierJoinAndExpectApp(
   page: Page,

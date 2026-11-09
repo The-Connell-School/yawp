@@ -25,8 +25,8 @@ test.describe('Free-tier handle student', () => {
     const password = 'yawp-test-pass-1';
     const newPassword = 'yawp-test-pass-2';
     const tempPassword = 'temp-reset-1';
-    const displayName = 'E2E Handle Student';
-    const handle = studentHandleBase('E2E', 'Handle Student');
+    const displayName = 'Free Tier Student';
+    const handle = studentHandleBase('Free', 'Tier Student');
     const promptMarker = `Free tier prompt ${Date.now()}`;
 
     const org = await prisma.organization.create({
