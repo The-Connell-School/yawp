@@ -24,7 +24,7 @@ let currentProfile: TestProfile | null = null;
 mock.module('~/utils/auth.server.js', () => ({
   requireUserId: async () => currentUserId,
   requireMembership: async () => currentProfile,
-  requireOwner: async () => currentProfile,
+  requireOwner: async () => currentUserId,
 }));
 
 const { action: myClassesAction } = await import(
@@ -233,7 +233,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       };
 
       const body = createClassForm(school.id);
-      body.set('teacherIds', membership.id);
+      body.delete('teacherIds');
+      body.append('teacherIds', membership.id);
 
       const response = await orgClassesAction({
         request: new Request('https://example.test/app/organization/classes', {
@@ -244,7 +245,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         context: {} as never,
       } as any);
 
-      expect(actionHttpStatus(response)).toBe(200);
+      const status = actionHttpStatus(response);
+      if (status !== 200 && response instanceof Response) {
+        const detail = await response.clone().text();
+        throw new Error(`Expected 200, got ${status}: ${detail}`);
+      }
+      expect(status).toBe(200);
       const after = await prisma.class.count({
         where: { isArchived: false, school: { organizationId: org.id } },
       });

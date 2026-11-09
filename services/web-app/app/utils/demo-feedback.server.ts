@@ -22,6 +22,12 @@ export interface DemoFeedbackDependencies {
 export async function demoFeedbackAvailable(
   deps: Pick<DemoFeedbackDependencies, 'environment' | 'flagEnabled'>
 ) {
+  if (
+    process.env.E2E === 'true' &&
+    process.env.TESTER_FEEDBACK_ENABLED === 'true'
+  ) {
+    return false;
+  }
   const slugOrEnv = deps.environment();
   const onDemoLike =
     slugOrEnv === 'demo' ||

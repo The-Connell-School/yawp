@@ -1,5 +1,8 @@
 import type { FeatureFlagKey } from '../app/domain/feature-flags/feature-flags';
-import type { LessonPlannerReviewFlagKey } from '../app/domain/feature-flags/lesson-planner-review-flags';
+import {
+  LESSON_PLANNER_REVIEW_FLAG_KEYS,
+  type LessonPlannerReviewFlagKey,
+} from '../app/domain/feature-flags/lesson-planner-review-flags';
 import {
   featureFlagSettingName,
   serializeFeatureFlagValue,
@@ -110,6 +113,24 @@ export async function setFeatureFlag(
 
 /** @deprecated Review slices collapse into `lesson_planner` in production; e2e can still set legacy rows. */
 export type LessonPlannerReviewFlag = LessonPlannerReviewFlagKey;
+
+/** Clears legacy slice rows so honor-mode e2e starts from flags off. */
+export async function clearLessonPlannerReviewFlags() {
+  const prisma = createE2EPrismaClient();
+  try {
+    await prisma.setting.deleteMany({
+      where: {
+        name: {
+          in: LESSON_PLANNER_REVIEW_FLAG_KEYS.map(
+            (key) => `feature_flag.${key}`
+          ),
+        },
+      },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
 
 export async function setLessonPlannerReviewFlag(
   flag: LessonPlannerReviewFlag,

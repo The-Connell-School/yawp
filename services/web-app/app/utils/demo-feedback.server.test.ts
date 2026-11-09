@@ -58,6 +58,17 @@ describe('demo feedback endpoint', () => {
       process.env = previous;
     }
   });
+  test('stays off during Playwright tester-feedback runs', async () => {
+    const previous = { ...process.env };
+    process.env.E2E = 'true';
+    process.env.TESTER_FEEDBACK_ENABLED = 'true';
+    try {
+      expect(await demoFeedbackAvailable(setup().deps)).toBe(false);
+    } finally {
+      process.env = previous;
+    }
+  });
+
   test('requires demo or preview runtime and a successful flag read for rendering and submission', async () => {
     for (const environment of ['production', 'development', 'pr-123', 'test']) {
       const { deps, save } = setup({ environment: () => environment });

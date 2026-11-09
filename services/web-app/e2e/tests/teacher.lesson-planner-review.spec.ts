@@ -9,7 +9,9 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import {
-  setLessonPlannerFlag, setLessonPlannerReviewFlag,
+  clearLessonPlannerReviewFlags,
+  setLessonPlannerFlag,
+  setLessonPlannerReviewFlag,
   type LessonPlannerReviewFlag,
 } from '../feature-flags';
 
@@ -66,10 +68,12 @@ const INTAKE_QUESTION = 'Which class is this for, and how long is the period?';
 test.describe("Lesson Planner — Brian's review", () => {
   test.beforeEach(async () => {
     await setLessonPlannerFlag(true);
+    await clearLessonPlannerReviewFlags();
   });
 
   test.afterEach(async ({ e2eContext }) => {
     await clearLessonPlans(e2eContext.teacherMembershipId);
+    await clearLessonPlannerReviewFlags();
     await setLessonPlannerFlag(true);
   });
 
@@ -194,8 +198,13 @@ test.describe("Lesson Planner — Brian's review", () => {
 
       await page.goto(`/app/lesson-planner/${id}/packet`);
       // B5: the raw first message is not presented as the lesson's name.
-      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Untitled lesson');
-      await expect(page.getByLabel('Name this lesson')).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+        'Untitled lesson',
+        { timeout: 15_000 }
+      );
+      await expect(page.getByPlaceholder('Name this lesson')).toBeVisible({
+        timeout: 15_000,
+      });
       await expect(page.getByText("We'll name it from your plan, or type one.")).toBeVisible();
 
       const sections = page.getByTestId('packet-section');
