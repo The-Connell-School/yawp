@@ -35,6 +35,7 @@ export function captureAppErrorPresentedClient(args: {
   message_template: string;
   route_template: string;
   is_expected: boolean;
+  toast_title?: string | null;
   product_area?: AppErrorPresentedPayload['product_area'];
 }): AppErrorPresentedPayload | null {
   const payload = buildAppErrorPresentedPayload({
@@ -56,6 +57,7 @@ export function captureAppErrorPresentedClient(args: {
       surface: payload.surface,
       error_code: payload.error_code,
       message_template: payload.message_template,
+      toast_title: args.toast_title,
     })
   ) {
     return null;

@@ -53,6 +53,7 @@ function ShowToast({ toast }: { toast: Toast }) {
 				...presentation,
 				surface: 'toast',
 				route_template: location.pathname,
+				toast_title: title,
 			})
 		}
 	}, [closeButton, description, id, location.pathname, title, type])
