@@ -71,4 +71,18 @@ describe('organization feature-flag endpoint', () => {
     );
     expect(response.status).toBe(404);
   });
+
+  test('disable returns 409 when the flag is on for everyone', async () => {
+    prisma.setting.findUnique.mockResolvedValue({
+      value: '{"mode":"everyone","orgIds":[]}',
+    });
+    const response = await organizationFeatureFlagUpdate(
+      post({ action: 'disable' }),
+      'org-1',
+      'lesson_planner'
+    );
+    expect(response.status).toBe(409);
+    expect((await response.json()).error).toContain('everyone');
+    expect(prisma.setting.upsert).not.toHaveBeenCalled();
+  });
 });

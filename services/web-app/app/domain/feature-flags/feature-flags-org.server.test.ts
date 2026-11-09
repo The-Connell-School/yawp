@@ -5,6 +5,7 @@ const prisma = featureFlagPrismaTables();
 mock.module('~/utils/db.server', () => ({ prisma }));
 
 const {
+  OrganizationFeatureFlagConflictError,
   enableFeatureFlagForOrganization,
   disableFeatureFlagForOrganization,
   releaseFeatureFlagToEveryone,
@@ -55,6 +56,20 @@ describe('organization feature flag helpers', () => {
       mode: 'everyone',
       orgIds: [],
     });
+  });
+
+  test('disable refuses when the flag is on for everyone', async () => {
+    prisma.setting.findUnique.mockResolvedValue({
+      value: '{"mode":"everyone","orgIds":[]}',
+    });
+    await expect(
+      disableFeatureFlagForOrganization(
+        LESSON_PLANNER_FLAG,
+        'org-1',
+        'ops@yawp.school'
+      )
+    ).rejects.toBeInstanceOf(OrganizationFeatureFlagConflictError);
+    expect(prisma.setting.upsert).not.toHaveBeenCalled();
   });
 
   test('disable removes one school and turns off when empty', async () => {

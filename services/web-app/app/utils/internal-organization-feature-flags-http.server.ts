@@ -7,6 +7,7 @@ import {
 import { INTERNAL_API_HEADER_SIGNATURE } from '~/utils/internal-platform-auth.server';
 import { resolveFeatureFlagKey } from '~/domain/feature-flags/feature-flags';
 import {
+  OrganizationFeatureFlagConflictError,
   disableFeatureFlagForOrganization,
   enableFeatureFlagForOrganization,
   releaseFeatureFlagToEveryone,
@@ -111,6 +112,9 @@ export async function organizationFeatureFlagUpdate(
       previousEnabled: result.previous.mode === 'everyone',
     });
   } catch (error) {
+    if (error instanceof OrganizationFeatureFlagConflictError) {
+      return response({ error: error.message }, 409);
+    }
     console.error('organization_feature_flag_set_failed', {
       organizationId: orgId,
       key: flagKeyParam,

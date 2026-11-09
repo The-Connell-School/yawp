@@ -9,6 +9,13 @@ import {
 } from './feature-flags';
 import { setFeatureFlag } from './feature-flags.server';
 
+export class OrganizationFeatureFlagConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OrganizationFeatureFlagConflictError';
+  }
+}
+
 async function readFeatureFlagValue(
   key: FeatureFlagKey
 ): Promise<FeatureFlagValue> {
@@ -61,6 +68,11 @@ export async function disableFeatureFlagForOrganization(
   audit: Parameters<typeof setFeatureFlag>[3] = {}
 ) {
   const previous = await readFeatureFlagValue(key);
+  if (previous.mode === 'everyone') {
+    throw new OrganizationFeatureFlagConflictError(
+      'This flag is on for everyone; disable global rollout before removing one school.'
+    );
+  }
   if (previous.mode !== 'targeted') {
     return setFeatureFlag(
       key,
