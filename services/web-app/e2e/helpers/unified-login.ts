@@ -37,15 +37,20 @@ export async function completeUnifiedSignonToApp(
       const memberships = page
         .getByRole('group', { name: 'Choose organization and role' })
         .getByRole('button');
-      const pick =
-        options?.membershipOrganization &&
-        (await page
-          .getByRole('button', { name: new RegExp(options.membershipOrganization) })
-          .count())
-          ? page.getByRole('button', {
-              name: new RegExp(options.membershipOrganization),
-            })
-          : memberships.last();
+      const orgHint = options?.membershipOrganization?.trim();
+      let pick = memberships.last();
+      if (orgHint) {
+        const matching = page.getByRole('button', {
+          name: new RegExp(orgHint, 'i'),
+        });
+        if ((await matching.count()) === 0) {
+          const labels = await memberships.allTextContents();
+          throw new Error(
+            `USO membership picker: no organization matching ${JSON.stringify(orgHint)}. Visible options: ${labels.map((t) => t.trim()).filter(Boolean).join(' | ') || '(none)'}`
+          );
+        }
+        pick = matching;
+      }
       await pick.first().click();
       await page.waitForTimeout(200);
       continue;
