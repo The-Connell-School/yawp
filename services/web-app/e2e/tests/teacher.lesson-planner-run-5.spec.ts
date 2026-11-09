@@ -7,12 +7,22 @@
  */
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-import { setLessonPlannerFlag, setLessonPlannerReviewFlag, type LessonPlannerReviewFlag } from '../feature-flags';
+import {
+  clearLessonPlannerReviewFlags,
+  setLessonPlannerFlag,
+  setLessonPlannerReviewFlag,
+  type LessonPlannerReviewFlag,
+} from '../feature-flags';
 import { DAY_ONE_REPLY } from '../fixtures/lesson-planner/day-one-reply';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 
-const FLAGS: LessonPlannerReviewFlag[] = ['lesson_planner_stack_v2', 'lesson_planner_stack_v3', 'lesson_planner_templates'];
+const FLAGS: LessonPlannerReviewFlag[] = [
+  'lesson_planner_stack_v2',
+  'lesson_planner_stack_v3',
+  'lesson_planner_templates',
+  'lesson_planner_library_v2',
+];
 
 type Ctx = { teacherMembershipId: string; organizationId: string };
 type Turn = { role: 'user' | 'assistant'; content: string };
@@ -92,6 +102,11 @@ const WEEK = [
 ].join('\n');
 
 test.describe("Lesson Planner — Brian's fifth run", () => {
+  test.beforeEach(async () => {
+    await setLessonPlannerFlag(true);
+    await clearLessonPlannerReviewFlags();
+  });
+
   test.afterEach(async ({ e2eContext }) => {
     const prisma = createE2EPrismaClient();
     try {

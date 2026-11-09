@@ -7,7 +7,12 @@
  */
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-import { setLessonPlannerFlag, setLessonPlannerReviewFlag, type LessonPlannerReviewFlag } from '../feature-flags';
+import {
+  clearLessonPlannerReviewFlags,
+  setLessonPlannerFlag,
+  setLessonPlannerReviewFlag,
+  type LessonPlannerReviewFlag,
+} from '../feature-flags';
 import { DAY_ONE_REPLY } from '../fixtures/lesson-planner/day-one-reply';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
@@ -129,6 +134,11 @@ async function stubStackDeckTurn(page: import('@playwright/test').Page, conversa
 }
 
 test.describe("Lesson Planner — Brian's sixth run", () => {
+  test.beforeEach(async () => {
+    await setLessonPlannerFlag(true);
+    await clearLessonPlannerReviewFlags();
+  });
+
   test.afterEach(async ({ e2eContext }) => {
     const prisma = createE2EPrismaClient();
     try {
