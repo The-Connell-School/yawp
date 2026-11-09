@@ -79,7 +79,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
       }
     });
 
-    async function createTeacherFixture(plan: 'SCHOOL' | 'FREE_CLASSROOM') {
+    async function createTeacherFixture(
+      plan: 'SCHOOL' | 'FREE_CLASSROOM',
+      options: { linkMembershipToSchool?: boolean } = {}
+    ) {
+      const linkMembershipToSchool = options.linkMembershipToSchool ?? true;
       const org = await prisma.organization.create({
         data: {
           name: `Route Class Cap ${plan} ${Date.now()}`,
@@ -112,7 +116,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
           organizationId: org.id,
           role: 'TEACHER',
           isOrgOwner: true,
-          schools: { connect: { id: school.id } },
+          ...(linkMembershipToSchool
+            ? { schools: { connect: { id: school.id } } }
+            : {}),
         },
         select: { id: true },
       });
@@ -227,8 +233,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     test('POST /app/organization/classes allows SCHOOL org second class', async () => {
-      const { org, school, user, membership } =
-        await createTeacherFixture('SCHOOL');
+      const { org, school, user, membership } = await createTeacherFixture(
+        'SCHOOL',
+        { linkMembershipToSchool: false }
+      );
       currentUserId = user.id;
       currentProfile = {
         id: membership.id,
