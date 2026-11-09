@@ -7,41 +7,24 @@ import fixture from './__fixtures__/prod-rubric-catalog.json';
 //
 // Yawp Internal releases a rubric version through the catalog `stage`
 // endpoint, which records it in the platform's own `RubricRelease` table.
-// The `internal_rubrics` feature flag decides, per school, whether a new
-// assignment pins to that released version instead of the current one.
+// Internal rubric releases are always on for a single school (legacy flag removed).
 const enabled = process.env.RUBRIC_CATALOG_DB_TESTS === '1';
 const { basePrisma: db } = enabled ? await import('~/utils/db.server') : ({} as never);
 const run = test.skipIf(!enabled);
 
-const FLAG_SETTING = 'feature_flag.internal_rubrics';
 const LEGACY_ENV = 'INTERNAL_DEMO_RUBRICS_ENABLED';
 const suffix = randomUUID().slice(0, 8);
 const actor = 'staff@yawp.test';
 const cleanup: (() => Promise<unknown>)[] = [];
-let originalFlag: { value: string; valueType: string; description: string | null } | null = null;
 const originalLegacyEnv = process.env[LEGACY_ENV];
 
-beforeAll(async () => {
-  if (!enabled) return;
-  originalFlag = await db.setting.findUnique({ where: { name: FLAG_SETTING }, select: { value: true, valueType: true, description: true } });
-});
 afterAll(async () => {
   for (const step of cleanup.reverse()) await step().catch(() => undefined);
-  if (enabled) {
-    await db.setting.deleteMany({ where: { name: FLAG_SETTING } });
-    if (originalFlag) await db.setting.create({ data: { name: FLAG_SETTING, ...originalFlag } });
-  }
   if (originalLegacyEnv === undefined) delete process.env[LEGACY_ENV]; else process.env[LEGACY_ENV] = originalLegacyEnv;
 });
 beforeEach(async () => {
   delete process.env[LEGACY_ENV];
-  if (enabled) await db.setting.deleteMany({ where: { name: FLAG_SETTING } });
 });
-
-async function setFlag(mode: 'off' | 'everyone' | 'targeted', orgIds: string[] = []) {
-  const value = JSON.stringify({ mode, orgIds });
-  await db.setting.upsert({ where: { name: FLAG_SETTING }, create: { name: FLAG_SETTING, value, valueType: 'json' }, update: { value } });
-}
 
 const prodLibrary = (name: string) => fixture.libraryRubrics.find((rubric) => rubric.name === name)!;
 const source = () => ({ contentId: randomUUID(), version: 1, fingerprint: 'a'.repeat(64) });
@@ -106,21 +89,19 @@ run('stage releases the new revision for its key without moving the live rubric'
   expect((await db.rubric.findUniqueOrThrow({ where: { id: rubric.id } })).currentRevisionId).toBe(currentRevisionId);
 });
 
-run('flag off (no row): new assignments keep the current revision even when a release exists', async () => {
-  const { type, currentRevisionId } = await libraryRubric();
-  const school = await schoolWithClass('Flag off school');
-  expect((await create(type.id, [school.klass.id])).rubricRevisionId).toBe(currentRevisionId);
-  await setFlag('off');
-  expect((await create(type.id, [school.klass.id])).rubricRevisionId).toBe(currentRevisionId);
+run('new assignments pin to the released revision without a legacy flag row', async () => {
+  const { type, released } = await libraryRubric();
+  const school = await schoolWithClass('Default rollout school');
+  const assignment = await create(type.id, [school.klass.id]);
+  expect(assignment.rubricRevisionId).toBe(released!.revision.id);
   // The retired demo env var no longer pins anything on its own.
   process.env[LEGACY_ENV] = 'true';
-  expect((await create(type.id, [school.klass.id])).rubricRevisionId).toBe(currentRevisionId);
+  expect((await create(type.id, [school.klass.id])).rubricRevisionId).toBe(released!.revision.id);
 });
 
-run('flag on for everyone: new assignments pin to the released revision and grade with it, without the legacy env var', async () => {
+run('released revision is used for grading config, without the legacy env var', async () => {
   const { type, released } = await libraryRubric();
   const school = await schoolWithClass('Everyone school');
-  await setFlag('everyone');
   expect(process.env[LEGACY_ENV]).toBeUndefined();
   const assignment = await create(type.id, [school.klass.id]);
   expect(assignment.rubricRevisionId).toBe(released!.revision.id);
@@ -130,33 +111,30 @@ run('flag on for everyone: new assignments pin to the released revision and grad
   expect(config.calibrationNotes).toBe('Released from Internal');
 });
 
-run('flag on without a release keeps the current revision', async () => {
+run('without a release keeps the current revision', async () => {
   const { type, currentRevisionId } = await libraryRubric({ release: false });
   const school = await schoolWithClass('No release school');
-  await setFlag('everyone');
   expect((await create(type.id, [school.klass.id])).rubricRevisionId).toBe(currentRevisionId);
 });
 
-run('targeted: only the listed schools get the released revision', async () => {
-  const { type, currentRevisionId, released } = await libraryRubric();
-  const listed = await schoolWithClass('Targeted school');
-  const other = await schoolWithClass('Untargeted school');
-  await setFlag('targeted', [listed.organization.id]);
+run('every school gets the released revision when classes belong to one org each', async () => {
+  const { type, released } = await libraryRubric();
+  const listed = await schoolWithClass('First school');
+  const other = await schoolWithClass('Second school');
   expect((await create(type.id, [listed.klass.id])).rubricRevisionId).toBe(released!.revision.id);
-  expect((await create(type.id, [other.klass.id])).rubricRevisionId).toBe(currentRevisionId);
+  expect((await create(type.id, [other.klass.id])).rubricRevisionId).toBe(released!.revision.id);
 });
 
-run('several classes: one school uses its flag; classes from different schools are still refused before any pin', async () => {
+run('several classes: one school uses the release; classes from different schools are still refused before any pin', async () => {
   const { type, currentRevisionId, released } = await libraryRubric();
   const first = await schoolWithClass('Multi class school');
   const second = await anotherClass(first.school);
   const other = await schoolWithClass('Second school');
-  await setFlag('targeted', [first.organization.id]);
   expect((await create(type.id, [first.klass.id, second.id])).rubricRevisionId).toBe(released!.revision.id);
   // Deploying to classes of different schools is refused by the existing
   // quota guard; the release lookup falls back to the default pin for it.
   await expect(create(type.id, [first.klass.id, other.klass.id])).rejects.toThrow('assignment_deploy_classes_must_share_organization');
-  // No classes: no school to evaluate the flag for.
+  // No classes: no school context for the release rollout.
   expect((await create(type.id, [])).rubricRevisionId).toBe(currentRevisionId);
 });
 
@@ -164,7 +142,6 @@ run('a release that points at another rubric is ignored', async () => {
   const first = await libraryRubric({ release: false });
   const other = await libraryRubric();
   const school = await schoolWithClass('Mismatch school');
-  await setFlag('everyone');
   await db.rubricRelease.create({ data: { catalogKey: first.name, rubricRevisionId: other.released!.revision.id, releasedBy: actor, requestId: randomUUID() } });
   const assignment = await create(first.type.id, [school.klass.id]);
   expect(assignment.rubricRevisionId).toBe(first.currentRevisionId);
@@ -173,7 +150,6 @@ run('a release that points at another rubric is ignored', async () => {
 run('an explicit rubric revision on the create input is never replaced', async () => {
   const { type, currentRevisionId } = await libraryRubric();
   const school = await schoolWithClass('Explicit school');
-  await setFlag('everyone');
   expect((await create(type.id, [school.klass.id], { rubricRevisionId: currentRevisionId })).rubricRevisionId).toBe(currentRevisionId);
 });
 
@@ -213,7 +189,6 @@ run('internal_rubrics release: staged per-type GA publish clears override on the
   const live = await db.assignmentType.findUniqueOrThrow({ where: { id: type.id } });
   expect((live.gradingPromptConfigJson as any).gradingInstructionsOverride).toBe('10/5 pasted GA (live today).');
   const school = await schoolWithClass('Internal rubrics GA school');
-  await setFlag('everyone');
   const { resolveAssignmentTypeGradingConfig } = await import('../assignment-types/assignment-type-grading-config.server');
   const newAssignment = await create(type.id, [school.klass.id]);
   expect(newAssignment.rubricRevisionId).toBe(released.revision.id);
@@ -242,9 +217,8 @@ run('per-type rubrics are released under assignment-type:<id>', async () => {
   const baseline = await db.assignmentTypeRubricBaseline.findUniqueOrThrow({ where: { assignmentTypeId: type.id } });
   const on = await schoolWithClass('Per-type on');
   const off = await schoolWithClass('Per-type off');
-  await setFlag('targeted', [on.organization.id]);
   expect((await create(type.id, [on.klass.id])).rubricRevisionId).toBe(released.revision.id);
-  expect((await create(type.id, [off.klass.id])).rubricRevisionId).toBe(baseline.rubricRevisionId);
+  expect((await create(type.id, [off.klass.id])).rubricRevisionId).toBe(released.revision.id);
 });
 
 run('a later release replaces the earlier one; replaying a request never moves the release', async () => {
@@ -260,7 +234,6 @@ run('a later release replaces the earlier one; replaying a request never moves t
   expect((await db.rubricRelease.findUniqueOrThrow({ where: { catalogKey: name } })).rubricRevisionId).toBe(second.revision.id);
 
   const school = await schoolWithClass('Replaced release school');
-  await setFlag('everyone');
   expect((await create(type.id, [school.klass.id])).rubricRevisionId).toBe(second.revision.id);
   expect(released!.revision.id).not.toBe(second.revision.id);
 
@@ -292,7 +265,6 @@ run('list and item expose each rubric’s current release', async () => {
 run('clearing a release sends new assignments back to the current revision', async () => {
   const { name, type, currentRevisionId, released } = await libraryRubric();
   const school = await schoolWithClass('Cleared release school');
-  await setFlag('everyone');
   expect((await create(type.id, [school.klass.id])).rubricRevisionId).toBe(released!.revision.id);
   const c = await catalog();
   const cleared = await c.clearRelease({ key: name, actorEmail: actor, reason: 'Roll back release' });
