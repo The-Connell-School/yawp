@@ -33,6 +33,7 @@ const prisma = {
   studentProfile: {
     findMany: mock(),
   },
+  $executeRaw: mock(async () => 0),
   $transaction: mock(),
 };
 

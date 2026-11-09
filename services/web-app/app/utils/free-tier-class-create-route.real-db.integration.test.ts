@@ -262,10 +262,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await prisma.class.update({ where: { id: own.id }, data: { code: ownCode } });
       currentUserId = b.user.id;
       currentProfile = { id: b.membership.id, role: 'TEACHER', isOrgOwner: true, organization: b.org };
-      const name = 'feature_flag.classcode-unique';
-      const previous = await prisma.setting.findUnique({ where: { name } });
       try {
-        await prisma.setting.upsert({ where: { name }, create: { name, value: 'true', valueType: 'boolean' }, update: { value: 'true' } });
         for (const action of [myClassesAction, orgClassesAction]) {
           for (const intent of ['create-class', 'edit-class']) {
             const body = createClassForm(b.school.id);
@@ -301,8 +298,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         body.set('schoolId', a.school.id);
         expect(actionHttpStatus(await myClassesAction({ request: new Request('https://example.test/app/my-classes?index', { method: 'POST', body }) } as any))).toBe(400);
       } finally {
-        if (previous) await prisma.setting.update({ where: { name }, data: { value: previous.value } });
-        else await prisma.setting.deleteMany({ where: { name } });
+        // class-code uniqueness is always on; nothing to restore
       }
     });
   }
