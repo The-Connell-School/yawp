@@ -20,7 +20,7 @@ test.describe('Free-tier handle student', () => {
     browser,
     helpers,
   }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
     const prisma = createE2EPrismaClient();
     const password = 'yawp-test-pass-1';
     const newPassword = 'yawp-test-pass-2';

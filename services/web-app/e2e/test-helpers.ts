@@ -351,7 +351,12 @@ export async function fillFreeTierJoinForm(
 }
 
 /** Signed-in students on `/enter-code` use USO (Class code + Join class). */
-export async function submitSignedInEnterClassCode(page: Page, code: string) {
+export async function submitSignedInEnterClassCode(
+  page: Page,
+  code: string,
+  options?: { completeToApp?: boolean; timeoutMs?: number }
+) {
+  const completeToApp = options?.completeToApp ?? true;
   const { completeUnifiedSignonToApp } = await import('./helpers/unified-login');
   const uso = page.getByLabel('Class code', { exact: true });
   const legacy = page.getByLabel('Class Code', { exact: true });
@@ -359,7 +364,9 @@ export async function submitSignedInEnterClassCode(page: Page, code: string) {
   if (await uso.isVisible()) {
     await uso.fill(code);
     await page.getByRole('button', { name: 'Join class', exact: true }).click();
-    await completeUnifiedSignonToApp(page);
+    if (completeToApp) {
+      await completeUnifiedSignonToApp(page, options?.timeoutMs ?? 60_000);
+    }
     return;
   }
   await legacy.fill(code);

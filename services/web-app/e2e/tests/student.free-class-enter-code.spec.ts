@@ -174,7 +174,9 @@ test('existing student joins a separate free classroom and retains access after 
     });
     await page.goto('/enter-code');
     await page.waitForLoadState('networkidle');
-    await submitSignedInEnterClassCode(page, klass.code);
+    await submitSignedInEnterClassCode(page, klass.code, {
+      completeToApp: false,
+    });
     await expect(
       page.getByText('Invalid code.', { exact: true }).or(page.getByRole('alert'))
     ).toBeVisible();
