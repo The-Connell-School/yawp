@@ -9,7 +9,6 @@ import { UNIVERSAL_TUTOR_BLOCK } from '../../../packages/prisma/scripts/universa
 import bcrypt from 'bcryptjs';
 import { E2E_UA_ORGANIZATION_ID } from './constants';
 import cristoReyHornbuckleRubric from '../app/domain/rubrics/library/cristo-rey-hornbuckle-five-paragraph-essay.json' with { type: 'json' };
-import { FOLDED_LESSON_PLANNER_REVIEW_FLAG_SETTINGS } from '../app/domain/feature-flags/lesson-planner-review-flags';
 
 let prisma: E2EPrismaClient | null = null;
 
@@ -1306,19 +1305,6 @@ export async function seedE2E(): Promise<E2EContext> {
       updatedAt: new Date(),
     },
   });
-
-  for (const name of FOLDED_LESSON_PLANNER_REVIEW_FLAG_SETTINGS) {
-    await prisma.setting.upsert({
-      where: { name },
-      create: {
-        name,
-        value: 'true',
-        valueType: 'boolean',
-        description: 'E2E honor-mode slices (matches master-on production)',
-      },
-      update: { value: 'true', updatedAt: new Date() },
-    });
-  }
 
   await prisma.setting.upsert({
     where: { name: 'feature_flag.free_tier' },

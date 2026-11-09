@@ -3,6 +3,13 @@ import {
   LESSON_PLANNER_REVIEW_FLAG_KEYS,
   type LessonPlannerReviewFlagKey,
 } from '../app/domain/feature-flags/lesson-planner-review-flags';
+
+export async function enableAllLessonPlannerReviewFlags() {
+  await setLessonPlannerFlag(true);
+  for (const flag of LESSON_PLANNER_REVIEW_FLAG_KEYS) {
+    await setLessonPlannerReviewFlag(flag, true);
+  }
+}
 import {
   featureFlagSettingName,
   serializeFeatureFlagValue,

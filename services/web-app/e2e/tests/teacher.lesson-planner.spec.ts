@@ -6,6 +6,7 @@ import {
   EDITOR_SELECTOR,
   assertChatControlsInBoundsAtBreakpoints,
 } from '../test-helpers';
+import { enableAllLessonPlannerReviewFlags } from '../feature-flags';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 const STUDENT_PASSWORD = 'johndoe';
@@ -13,6 +14,10 @@ const SELECT_ALL_SHORTCUT =
   process.platform === 'darwin' ? 'Meta+A' : 'Control+A';
 
 /** Lesson Planner is gated by the global feature_flag.lesson_planner setting (on in E2E seed). */
+
+test.beforeEach(async () => {
+  await enableAllLessonPlannerReviewFlags();
+});
 
 async function setWritingPracticeEnabled(
   organizationId: string,
