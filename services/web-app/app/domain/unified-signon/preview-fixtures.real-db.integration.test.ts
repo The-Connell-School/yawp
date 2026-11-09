@@ -231,6 +231,13 @@ suite(
     fresh();
     const classes = await post('resolve', { identifier: QA_CODES.multiple });
     expect(classes.data.state.classes).toHaveLength(2);
+    fresh();
+    const denied = await post('resolve', { identifier: QA_CODES.crossTenant });
+    expect(denied.result.status).toBe(400);
+    expect(denied.data.fieldErrors?.identifier).toMatch(
+      /couldn't find that class/i
+    );
+    fresh();
     await prisma.class.update({
       where: { id: qaId('multiple-b') },
       data: { isArchived: true },

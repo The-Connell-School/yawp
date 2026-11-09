@@ -112,12 +112,58 @@ export function invalidClassCodeError() {
   return new FlowError(message, 400, undefined, { classCode: message });
 }
 
+export function crossTenantClassCodeCollisionError() {
+  const message =
+    "We couldn't find that class. Ask your teacher for your class code.";
+  return new FlowError(message, 400, undefined, { classCode: message });
+}
+
+function assertSingleOrganization(classes: readonly Klass[]) {
+  const organizationIds = new Set(
+    classes.map((klass) => klass.school.organizationId)
+  );
+  if (organizationIds.size > 1) throw crossTenantClassCodeCollisionError();
+}
+
 export async function resolveClasses(
   tx: Prisma.TransactionClient,
   flow: Flow,
   code: string
 ) {
   const classes = await lookupClasses(tx, code);
+  if (!classes.length) throw invalidClassCodeError();
+  assertSingleOrganization(classes);
+  flow.data.classCode = code.trim();
+  flow.data.classCandidates = classes.map((k) => k.id);
+  if (classes.length === 1) return chooseClass(tx, flow, classes[0].id);
+  return stateFor(flow, {
+    screen: 'class-found',
+    variant: 'multiple',
+    identifier: flow.data.identifier,
+    classes: classes.map(classSummary),
+  });
+}
+
+/** Match `/enter-code` enrollment: org-scoped resolution with foreign fail-closed. */
+export async function resolveClassesForExistingStudent(
+  tx: Prisma.TransactionClient,
+  flow: Flow,
+  code: string,
+  organizationId: string
+) {
+  const { resolveStudentClassCode } = await import(
+    '~/domain/free-tier/existing-student-enrollment.server'
+  );
+  const allowed = await resolveStudentClassCode(tx, organizationId, code);
+  if (!allowed.length) return resolveClasses(tx, flow, code);
+  const classes = await tx.class.findMany({
+    where: {
+      id: { in: allowed.map((k) => k.id) },
+      isArchived: false,
+    },
+    select,
+    orderBy: { id: 'asc' },
+  });
   if (!classes.length) throw invalidClassCodeError();
   flow.data.classCode = code.trim();
   flow.data.classCandidates = classes.map((k) => k.id);
@@ -128,4 +174,23 @@ export async function resolveClasses(
     identifier: flow.data.identifier,
     classes: classes.map(classSummary),
   });
+}
+
+export async function teacherPromptStudentOrganizationId(
+  tx: Prisma.TransactionClient,
+  request: Request,
+  userId: string
+) {
+  const { getMembershipId } = await import('~/cookies/membership-id.server');
+  const membershipId = await getMembershipId(request);
+  const membership = await tx.orgMembership.findFirst({
+    where: {
+      userId,
+      role: 'STUDENT',
+      ...(membershipId ? { id: membershipId } : {}),
+    },
+    select: { organizationId: true },
+    orderBy: [{ isActive: 'desc' }, { id: 'asc' }],
+  });
+  return membership?.organizationId;
 }
