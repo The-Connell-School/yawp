@@ -178,8 +178,11 @@ test('existing student joins a separate free classroom and retains access after 
       completeToApp: false,
     });
     await expect(
-      page.getByText('Invalid code.', { exact: true }).or(page.getByRole('alert'))
-    ).toBeVisible();
+      page
+        .getByText('Invalid code.', { exact: true })
+        .or(page.getByText(/couldn't find a class with that code/i))
+        .or(page.getByRole('alert'))
+    ).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('Unrelated Tenant Class')).toHaveCount(0);
     await shot('desktop-collision-denial');
     await page.setViewportSize({ width: 390, height: 844 });

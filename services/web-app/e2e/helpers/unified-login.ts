@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 /** After enrollment, USO often shows a confirmation screen before `/app`. */
 export async function completeUnifiedSignonToApp(
@@ -40,8 +40,12 @@ export async function submitUnifiedLogin(
   identifier: string,
   password: string
 ) {
-  await page.getByLabel('Email or class code', { exact: true }).fill(identifier);
+  const idField = page.getByLabel('Email or class code', { exact: true });
+  await idField.fill(identifier);
+  await expect(idField).toHaveValue(identifier);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
-  await page.getByLabel('Password', { exact: true }).fill(password);
+  const passwordField = page.getByLabel('Password', { exact: true });
+  await expect(passwordField).toBeVisible({ timeout: 30_000 });
+  await passwordField.fill(password);
   await page.getByRole('button', { name: 'Log In', exact: true }).click();
 }
