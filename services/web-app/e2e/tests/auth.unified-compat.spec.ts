@@ -2,8 +2,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { submitUnifiedLogin } from '../helpers/unified-login';
 
 test.describe.configure({ mode: 'serial' });
+
+async function continueWithPassword(
+  page: import('@playwright/test').Page,
+  password: string
+) {
+  await page.getByLabel('Password', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Log In', exact: true }).click();
+}
 
 test('password error, safe redirect, signed-in entry and forced password change', async ({
   page,
@@ -11,12 +20,13 @@ test('password error, safe redirect, signed-in entry and forced password change'
 }) => {
   test.setTimeout(90_000);
   await page.goto('/auth/login?redirectTo=https%3A%2F%2Fevil.example');
-  await page.getByLabel('Email, handle, or class code').fill(e2eContext.userEmail);
-  await page.getByLabel('Password', { exact: true }).fill('wrong-password');
-  await page.getByRole('button', { name: 'Log in', exact: true }).click();
+  await page.getByLabel('Email or class code', { exact: true }).fill(
+    e2eContext.userEmail
+  );
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await continueWithPassword(page, 'wrong-password');
   await expect(page.getByText('Invalid email or password')).toBeVisible();
-  await page.getByLabel('Password', { exact: true }).fill('johndoe');
-  await page.getByRole('button', { name: 'Log in', exact: true }).click();
+  await continueWithPassword(page, 'johndoe');
   await expect(page).toHaveURL(/\/app\/?$/);
   await page.goto('/auth/login');
   await expect(page).toHaveURL(/:\d+\/$/);
@@ -27,14 +37,8 @@ test('password error, safe redirect, signed-in entry and forced password change'
       where: { id: e2eContext.userId },
       data: { mustChangePassword: true },
     });
-    await page.goto('/auth/login');
-    await page.getByLabel('Email, handle, or class code').fill(e2eContext.userEmail);
-    await page.getByLabel('Password', { exact: true }).fill('johndoe');
-    await page.getByRole('button', { name: 'Log in', exact: true }).click();
+    await submitUnifiedLogin(page, e2eContext.userEmail, 'johndoe');
     await expect(page).toHaveURL(/\/auth\/required-password-change$/);
-    await expect(
-      page.getByRole('heading', { name: 'Choose a new password' })
-    ).toBeVisible();
     await page.goto('/auth/required-password-change');
     await expect(page.locator('[data-signon-screen]')).toHaveAttribute(
       'data-signon-screen',
@@ -69,7 +73,7 @@ test('local resolver does not authenticate or accept fixture selectors', async (
       page.getByRole('button', { name: 'Continue with Google' })
     ).toBeDisabled();
     await page
-      .getByLabel('Email, handle, or class code')
+      .getByLabel('Email or class code', { exact: true })
       .fill('new@example.com');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Welcome to Yawp!' })).toBeVisible();

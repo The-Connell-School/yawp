@@ -65,11 +65,10 @@ async function tourOutcome(tourId: string) {
 }
 
 async function logInAsFreeTeacher(page: Page) {
+  const { submitUnifiedLogin } = await import('../helpers/unified-login');
   await page.goto('/auth/login');
   await page.waitForLoadState('networkidle');
-  await page.getByLabel('Email or handle').fill(FREE_TEACHER_EMAIL);
-  await page.locator('input[type="password"]').fill(FREE_TEACHER_PASSWORD);
-  await page.getByRole('button', { name: /log in/i }).click();
+  await submitUnifiedLogin(page, FREE_TEACHER_EMAIL, FREE_TEACHER_PASSWORD);
   await page.waitForURL((url) => url.pathname.startsWith('/app'), {
     timeout: 15000,
   });

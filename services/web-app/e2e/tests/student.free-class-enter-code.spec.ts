@@ -5,6 +5,8 @@ import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
 import bcrypt from 'bcryptjs';
 import { generateStudentJoinToken } from '../../app/utils/student-join-token';
+import { studentHandleBase } from '../../app/domain/unified-signon/student-handle';
+import { submitUnifiedLogin } from '../helpers/unified-login';
 
 test('existing student joins a separate free classroom and retains access after reload', async ({
   page,
@@ -15,7 +17,7 @@ test('existing student joins a separate free classroom and retains access after 
   const tag = `enter-code-${Date.now()}`;
   const orgs: string[] = [],
     users: string[] = [];
-  const handle = `local${Date.now().toString(36)}`;
+  const handle = studentHandleBase('Local', 'New Student');
   const joinToken = generateStudentJoinToken();
   let assignmentId: string | undefined;
   const shots = process.env.QA_SCREENSHOT_DIR;
@@ -140,11 +142,7 @@ test('existing student joins a separate free classroom and retains access after 
     });
     await page.goto('/auth/login');
     await page.waitForLoadState('networkidle');
-    await page.getByLabel(/email or handle/i).fill(student.email!);
-    await page
-      .getByLabel('Password', { exact: true })
-      .fill('local-fixture-pass');
-    await page.getByRole('button', { name: /log in/i }).click();
+    await submitUnifiedLogin(page, student.email!, 'local-fixture-pass');
     await page.waitForURL(/enter-code|\/app/);
     await page.goto('/enter-code');
     await page.waitForLoadState('networkidle');
@@ -250,15 +248,14 @@ test('existing student joins a separate free classroom and retains access after 
       const signup = await newcomer.newPage();
       await signup.goto(`/join?t=${joinToken}`);
       await signup.waitForLoadState('networkidle');
-      await signup.getByLabel('Display name').fill('Local New Student');
-      await signup.getByLabel('Handle', { exact: true }).fill(handle);
-      await signup
-        .getByLabel('Password', { exact: true })
-        .fill('local-fixture-pass');
-      await signup.getByLabel('Confirm password').fill('local-fixture-pass');
-      await signup
-        .getByRole('button', { name: 'Join class', exact: true })
-        .click();
+      const { fillFreeTierJoinForm, submitFreeTierJoinAndExpectApp } =
+        await import('../test-helpers');
+      await fillFreeTierJoinForm(signup, {
+        displayName: 'Local New Student',
+        handle,
+        password: 'local-fixture-pass',
+      });
+      await submitFreeTierJoinAndExpectApp(signup);
       await expect(signup).toHaveURL(/\/app(?:\?|$)/);
       await signup.goto(`/app/my-classes/${klass.id}`);
       await signup.reload();

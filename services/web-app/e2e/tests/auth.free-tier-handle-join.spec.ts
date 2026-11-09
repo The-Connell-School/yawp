@@ -10,6 +10,8 @@ import {
 } from '../db-helpers';
 import { generateStudentJoinToken } from '../../app/utils/student-join-token';
 import bcrypt from 'bcryptjs';
+import { submitUnifiedLogin } from '../helpers/unified-login';
+import { studentHandleBase } from '../../app/domain/unified-signon/student-handle';
 
 test.describe('Free-tier handle student', () => {
   // Smoke: join link → submit → teacher reset → temp login → password change → re-login
@@ -20,11 +22,11 @@ test.describe('Free-tier handle student', () => {
   }) => {
     test.setTimeout(120_000);
     const prisma = createE2EPrismaClient();
-    const handle = `e2ehandle${Date.now()}`.slice(0, 20);
     const password = 'yawp-test-pass-1';
     const newPassword = 'yawp-test-pass-2';
     const tempPassword = 'temp-reset-1';
     const displayName = 'E2E Handle Student';
+    const handle = studentHandleBase('E2E', 'Handle Student');
     const promptMarker = `Free tier prompt ${Date.now()}`;
 
     const org = await prisma.organization.create({
@@ -139,12 +141,10 @@ test.describe('Free-tier handle student', () => {
       const teacherContext = await browser.newContext();
       const teacherPage = await teacherContext.newPage();
       await teacherPage.goto('/auth/login', { waitUntil: 'domcontentloaded' });
-      await expect(teacherPage.getByLabel('Email or handle')).toBeVisible({
-        timeout: 15000,
-      });
-      await teacherPage.getByLabel('Email or handle').fill(teacherEmail);
-      await teacherPage.getByLabel('Password').fill(teacherPassword);
-      await teacherPage.getByRole('button', { name: 'Log in' }).click();
+      await expect(
+        teacherPage.getByLabel('Email or class code', { exact: true })
+      ).toBeVisible({ timeout: 15000 });
+      await submitUnifiedLogin(teacherPage, teacherEmail, teacherPassword);
       await expect(teacherPage).toHaveURL(/\/app/);
       await teacherPage.goto(`/app/my-classes/${klass.id}?tab=students`);
       await expect(teacherPage.getByText(displayName)).toBeVisible();
@@ -185,28 +185,24 @@ test.describe('Free-tier handle student', () => {
 
       await page.request.post('/auth/logout');
       await page.goto('/auth/login', { waitUntil: 'domcontentloaded' });
-      await expect(page.getByLabel('Email or handle')).toBeVisible({
-        timeout: 15000,
-      });
-      await page.getByLabel('Email or handle').fill(handle);
-      await page.getByLabel('Password').fill(tempPassword);
-      await page.getByRole('button', { name: 'Log in' }).click();
+      await expect(
+        page.getByLabel('Email or class code', { exact: true })
+      ).toBeVisible({ timeout: 15000 });
+      await submitUnifiedLogin(page, handle, tempPassword);
       await expect(page).toHaveURL(/required-password-change/, {
         timeout: 15000,
       });
       await page.getByLabel('New password', { exact: true }).fill(newPassword);
       await page.getByLabel('Confirm new password').fill(newPassword);
-      await page.getByRole('button', { name: 'Save and continue' }).click();
+      await page.getByRole('button', { name: 'Save password', exact: true }).click();
       await expect(page).toHaveURL(/\/app/);
 
       await page.request.post('/auth/logout');
       await page.goto('/auth/login', { waitUntil: 'domcontentloaded' });
-      await expect(page.getByLabel('Email or handle')).toBeVisible({
-        timeout: 15000,
-      });
-      await page.getByLabel('Email or handle').fill(handle);
-      await page.getByLabel('Password').fill(newPassword);
-      await page.getByRole('button', { name: 'Log in' }).click();
+      await expect(
+        page.getByLabel('Email or class code', { exact: true })
+      ).toBeVisible({ timeout: 15000 });
+      await submitUnifiedLogin(page, handle, newPassword);
       await expect(page).toHaveURL(/\/app/);
     } finally {
       const student = await prisma.user.findFirst({

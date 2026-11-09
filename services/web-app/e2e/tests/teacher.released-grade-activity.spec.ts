@@ -3,6 +3,7 @@ import { createE2EPrismaClient } from '../prisma-client';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
+import { submitUnifiedLogin } from '../helpers/unified-login';
 import bcrypt from 'bcryptjs';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
@@ -32,9 +33,7 @@ async function lingerForQa(page: Page, milliseconds: number) {
 
 async function signInPage(page: Page, email: string, password: string) {
   await page.goto('/auth/login');
-  await page.getByLabel('Email or handle').fill(email);
-  await page.locator('input[type="password"]').fill(password);
-  await page.getByRole('button', { name: /log in/i }).click();
+  await submitUnifiedLogin(page, email, password);
   await page.waitForURL((url) => url.pathname.startsWith('/app'), {
     timeout: 15000,
   });

@@ -24,10 +24,9 @@ async function signIn(
   password: string,
   expectedPath: RegExp
 ) {
+  const { submitUnifiedLogin } = await import('../helpers/unified-login');
   await page.goto('/auth/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: 'Log in' }).click();
+  await submitUnifiedLogin(page, email, password);
   await page.waitForURL(expectedPath, { timeout: 30_000 });
 }
 
@@ -349,9 +348,8 @@ test.describe.serial('University of Alabama student onboarding', () => {
 
     await page.goto(`${APP_ORIGIN}/auth/login`);
     await expect(page.getByAltText('The University of Alabama')).toHaveCount(0);
-    await page.getByLabel('Email').fill(e2eContext.userEmail);
-    await page.getByLabel('Password').fill('johndoe');
-    await page.getByRole('button', { name: 'Log in' }).click();
+    const { submitUnifiedLogin } = await import('../helpers/unified-login');
+    await submitUnifiedLogin(page, e2eContext.userEmail, 'johndoe');
     await page.waitForURL(new RegExp(`${APP_ORIGIN}/app`));
 
     const authCookieDomains = (await page.context().cookies())
@@ -398,9 +396,8 @@ test.describe.serial('University of Alabama student onboarding', () => {
         0
       );
       await expect(yawpBrandLocator(page)).toBeVisible();
-      await page.getByLabel('Email').fill(e2eContext.userEmail);
-      await page.getByLabel('Password').fill('johndoe');
-      await page.getByRole('button', { name: 'Log in' }).click();
+      const { submitUnifiedLogin } = await import('../helpers/unified-login');
+      await submitUnifiedLogin(page, e2eContext.userEmail, 'johndoe');
 
       await page.waitForURL(`${UA_APP_ORIGIN}/`);
       await expect(
@@ -1262,18 +1259,22 @@ test.describe.serial('University of Alabama student onboarding', () => {
   }) => {
     await page.goto('/ua');
     await page.getByRole('link', { name: 'Log in' }).click();
-    await page.getByLabel('Email').fill(e2eContext.ua.teacher.email);
-    await page.getByLabel('Password').fill(e2eContext.ua.teacher.password);
-    await page.getByRole('button', { name: 'Log in' }).click();
+    const { submitUnifiedLogin } = await import('../helpers/unified-login');
+    await submitUnifiedLogin(
+      page,
+      e2eContext.ua.teacher.email,
+      e2eContext.ua.teacher.password
+    );
     await page.waitForURL(/\/app\/?$/);
     await expect(page.getByTestId('app._index')).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
 
     await page.context().clearCookies();
     await page.goto(`${APP_ORIGIN}/auth/login`);
-    await page.getByLabel('Email').fill(e2eContext.userEmail);
-    await page.getByLabel('Password').fill('johndoe');
-    await page.getByRole('button', { name: 'Log in' }).click();
+    const { submitUnifiedLogin: signInRegularYawp } = await import(
+      '../helpers/unified-login'
+    );
+    await signInRegularYawp(page, e2eContext.userEmail, 'johndoe');
     await page.waitForURL(new RegExp(`${APP_ORIGIN}/app`));
     await expect(page).toHaveURL(/\/app\/?$/);
     await page.goto(`${APP_ORIGIN}/billing/ua`);

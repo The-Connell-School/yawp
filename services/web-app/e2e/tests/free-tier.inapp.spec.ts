@@ -7,6 +7,7 @@ import {
   setLessonPlannerFlag,
 } from '../feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
+import { submitUnifiedLogin } from '../helpers/unified-login';
 
 const db = createE2EPrismaClient();
 const orgId = 'preview-free-classroom';
@@ -16,11 +17,11 @@ async function login(page: import('@playwright/test').Page, free = true) {
   await page.context().clearCookies();
   await page.goto('/auth/login');
   await page.waitForLoadState('networkidle');
-  await page
-    .getByLabel('Email or handle')
-    .fill(free ? 'dev.teacher.free@yawp.local' : 'dev.teacher@yawp.local');
-  await page.locator('input[type="password"]').fill('yawp-dev');
-  await page.getByRole('button', { name: /Log in/i }).click();
+  await submitUnifiedLogin(
+    page,
+    free ? 'dev.teacher.free@yawp.local' : 'dev.teacher@yawp.local',
+    'yawp-dev'
+  );
   await page.waitForURL((url) => url.pathname.replace(/\/$/, '') === '/app', {
     timeout: 15000,
   });

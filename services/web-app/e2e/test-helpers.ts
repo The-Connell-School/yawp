@@ -306,23 +306,31 @@ export type FreeTierJoinFormValues = {
 };
 
 /**
- * Fill the legacy `/join?t=` handle signup form. RVF/React can drop fills that
- * run before client hydration, so each field is retried until its value sticks.
+ * Complete unified-signon student signup after `/join?t=` redirects to login.
+ * RVF/React can drop fills that run before client hydration, so each field is
+ * retried until its value sticks.
  */
 export async function fillFreeTierJoinForm(
   page: Page,
   values: FreeTierJoinFormValues
 ) {
+  await expect(page).toHaveURL(/\/auth\/login/, { timeout: 15_000 });
   await expect(
-    page.getByRole('heading', { name: 'Create your student account' })
+    page.getByRole('heading', { name: 'Join your class' })
   ).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: /^New/ }).click();
+  await expect(page.locator('[data-signon-screen]')).toHaveAttribute(
+    'data-signon-screen',
+    'class-handle'
+  );
 
-  const fields: Array<{
-    locator: Locator;
-    value: string;
-  }> = [
-    { locator: page.getByLabel('Display name'), value: values.displayName },
-    { locator: page.getByLabel('Handle'), value: values.handle },
+  const nameParts = values.displayName.trim().split(/\s+/);
+  const firstName = nameParts[0] ?? values.displayName;
+  const lastName = nameParts.slice(1).join(' ') || 'Student';
+
+  const fields: Array<{ locator: Locator; value: string }> = [
+    { locator: page.getByLabel('First name', { exact: true }), value: firstName },
+    { locator: page.getByLabel('Last name', { exact: true }), value: lastName },
     {
       locator: page.getByLabel('Password', { exact: true }),
       value: values.password,

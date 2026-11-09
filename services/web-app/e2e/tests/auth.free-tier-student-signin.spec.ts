@@ -4,6 +4,12 @@ import bcrypt from 'bcryptjs';
 import { expect, loadE2eEnvFromFile, test } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { generateStudentJoinToken } from '../../app/utils/student-join-token';
+import { submitUnifiedLogin } from '../helpers/unified-login';
+import {
+  fillFreeTierJoinForm,
+  submitFreeTierJoinAndExpectApp,
+} from '../test-helpers';
+import { studentHandleBase } from '../../app/domain/unified-signon/student-handle';
 
 const PASSWORD = 'yawp-test-pass-1';
 const WRONG_PASSWORD = 'yawp-wrong-pass-1';
@@ -112,25 +118,21 @@ test.describe('Free-tier student handle sign-in', () => {
   }) => {
     test.setTimeout(120_000);
     const run = Date.now().toString(36);
-    const handle = `qastudentsign${run}`.slice(0, 30);
     const displayName = 'QA Handle Student';
+    const handle = studentHandleBase('QA', 'Handle Student');
     const fixture = await seedReleasedFreeTierClassroom(run);
     const { prisma, org, app, school, teacherUser, firstClass, secondClass } =
       fixture;
 
     try {
       await page.goto(`/join?t=${fixture.firstJoinToken}`);
-      await expect(
-        page.getByRole('heading', { name: 'Create your student account' })
-      ).toBeVisible();
       await shot(page, '01-join-setup-before-submit.png');
-
-      await page.getByLabel('Display name').fill(displayName);
-      await page.getByLabel('Handle').fill(handle);
-      await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-      await page.getByLabel('Confirm password').fill(PASSWORD);
-      await page.getByRole('button', { name: 'Join class' }).click();
-      await expect(page).toHaveURL(/\/app/, { timeout: 15_000 });
+      await fillFreeTierJoinForm(page, {
+        displayName,
+        handle,
+        password: PASSWORD,
+      });
+      await submitFreeTierJoinAndExpectApp(page);
 
       await page.goto(`/app/my-classes/${firstClass.id}`);
       await expect(page.getByTestId('student-class-detail')).toBeVisible({
@@ -175,29 +177,29 @@ test.describe('Free-tier student handle sign-in', () => {
 
       await logout(page);
       await page.goto('/auth/login');
-      await page.getByLabel('Email or handle').fill(handle);
-      await page.getByLabel('Password').fill(WRONG_PASSWORD);
-      await page.getByRole('button', { name: /log in/i }).click();
+      await page.getByLabel('Email or class code', { exact: true }).fill(handle);
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page.getByLabel('Password', { exact: true }).fill(WRONG_PASSWORD);
+      await page.getByRole('button', { name: 'Log In', exact: true }).click();
       await expect(page.getByText('Invalid email or password')).toBeVisible({
         timeout: 15_000,
       });
       await expect(page).toHaveURL(/\/auth\/login/);
       await shot(page, '03-wrong-password-denied.png');
 
-      await page.getByLabel('Email or handle').fill(handle);
-      await page.getByLabel('Password').fill(PASSWORD);
-      await page.getByRole('button', { name: /log in/i }).click();
+      await submitUnifiedLogin(page, handle, PASSWORD);
       await expect(page).toHaveURL(/\/app/, { timeout: 15_000 });
       await page.goto(`/app/my-classes/${firstClass.id}`);
       await expect(page.getByTestId('student-class-detail')).toBeVisible();
 
       await logout(page);
       await page.goto(`/join?t=${fixture.secondJoinToken}`);
-      await page.getByLabel('Display name').fill('QA Duplicate Student');
-      await page.getByLabel('Handle').fill(handle);
-      await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-      await page.getByLabel('Confirm password').fill(PASSWORD);
-      await page.getByRole('button', { name: 'Join class' }).click();
+      await fillFreeTierJoinForm(page, {
+        displayName,
+        handle,
+        password: PASSWORD,
+      });
+      await page.getByRole('button', { name: 'Join class', exact: true }).click();
       await expect(page.getByText(/This handle is already taken/i)).toBeVisible(
         {
           timeout: 15_000,
@@ -284,40 +286,41 @@ test.describe('Free-tier student handle sign-in', () => {
     const firstToken = process.env.QA_DEMO_STUDENT_JOIN_TOKEN_ONE!;
     const secondToken = process.env.QA_DEMO_STUDENT_JOIN_TOKEN_TWO!;
     const run = Date.now().toString(36);
-    const handle = `qademostudent${run}`.slice(0, 30);
+    const displayName = 'QA Demo Student';
+    const handle = studentHandleBase('QA', 'Demo Student');
 
     await page.goto(`${baseUrl}/join?t=${encodeURIComponent(firstToken)}`);
     await shot(page, 'demo-01-join-setup-before-submit.png');
-    await page.getByLabel('Display name').fill('QA Demo Student');
-    await page.getByLabel('Handle').fill(handle);
-    await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-    await page.getByLabel('Confirm password').fill(PASSWORD);
-    await page.getByRole('button', { name: 'Join class' }).click();
-    await expect(page).toHaveURL(/\/app/, { timeout: 30_000 });
+    await fillFreeTierJoinForm(page, {
+      displayName,
+      handle,
+      password: PASSWORD,
+    });
+    await submitFreeTierJoinAndExpectApp(page, { timeoutMs: 30_000 });
     await shot(page, 'demo-02-authenticated-student-surface.png');
 
     await logout(page, baseUrl);
     await page.goto(`${baseUrl}/auth/login`);
-    await page.getByLabel('Email or handle').fill(handle);
-    await page.getByLabel('Password').fill(WRONG_PASSWORD);
-    await page.getByRole('button', { name: /log in/i }).click();
+    await page.getByLabel('Email or class code', { exact: true }).fill(handle);
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByLabel('Password', { exact: true }).fill(WRONG_PASSWORD);
+    await page.getByRole('button', { name: 'Log In', exact: true }).click();
     await expect(page.getByText('Invalid email or password')).toBeVisible({
       timeout: 15_000,
     });
     await shot(page, 'demo-03-wrong-password-denied.png');
 
-    await page.getByLabel('Email or handle').fill(handle);
-    await page.getByLabel('Password').fill(PASSWORD);
-    await page.getByRole('button', { name: /log in/i }).click();
+    await submitUnifiedLogin(page, handle, PASSWORD);
     await expect(page).toHaveURL(/\/app/, { timeout: 30_000 });
 
     await logout(page, baseUrl);
     await page.goto(`${baseUrl}/join?t=${encodeURIComponent(secondToken)}`);
-    await page.getByLabel('Display name').fill('QA Demo Duplicate');
-    await page.getByLabel('Handle').fill(handle);
-    await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-    await page.getByLabel('Confirm password').fill(PASSWORD);
-    await page.getByRole('button', { name: 'Join class' }).click();
+    await fillFreeTierJoinForm(page, {
+      displayName,
+      handle,
+      password: PASSWORD,
+    });
+    await page.getByRole('button', { name: 'Join class', exact: true }).click();
     await expect(page.getByText(/This handle is already taken/i)).toBeVisible({
       timeout: 15_000,
     });
