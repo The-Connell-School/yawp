@@ -1,5 +1,4 @@
 import { expect, mock, test } from 'bun:test';
-let enabled = false;
 const logout = mock(async (options: { redirectTo: string }) => {
   throw new Response(null, {
     status: 302,
@@ -7,9 +6,6 @@ const logout = mock(async (options: { redirectTo: string }) => {
   });
 });
 mock.module('~/utils/auth.server.ts', () => ({ logout }));
-mock.module('~/domain/feature-flags/feature-flags.server', () => ({
-  isFeatureFlagEnabled: async () => enabled,
-}));
 const { action } = await import('./route');
 async function run(value?: string) {
   try {
@@ -28,13 +24,7 @@ async function run(value?: string) {
   }
 }
 
-test('flag off preserves the normal logout redirect including supplied /free', async () => {
-  enabled = false;
-  expect(await run('/free')).toBe('/auth/login');
-  expect(await run()).toBe('/auth/login');
-});
-test('flag on accepts only /free and always calls the normal logout', async () => {
-  enabled = true;
+test('accepts only /free as a post-logout destination', async () => {
   expect(await run('/free')).toBe('/free');
   for (const destination of [
     'https://evil.test',
@@ -45,5 +35,6 @@ test('flag on accepts only /free and always calls the normal logout', async () =
   ]) {
     expect(await run(destination)).toBe('/auth/login');
   }
+  expect(await run()).toBe('/auth/login');
   expect(logout).toHaveBeenCalled();
 });

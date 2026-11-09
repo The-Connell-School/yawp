@@ -4,7 +4,6 @@ import {
   LESSON_PLANNER_FLAG,
   FREE_TIER_FLAG,
   FREE_TIER_FLAG_LEGACY_KEY,
-  UNIFIED_SIGN_ON_FLAG,
   FEATURE_FLAG_KEYS,
   FOLDED_FREE_TIER_LEGACY_SETTINGS,
   isFreeTierGloballyEnabled,
@@ -27,12 +26,15 @@ describe('feature flag registry', () => {
     expect(isFeatureFlagKey(removed)).toBe(false);
   });
 
-  test('registers only lesson_planner, free-tier, and unified-sign-on', () => {
-    expect(FEATURE_FLAG_KEYS).toEqual([
-      LESSON_PLANNER_FLAG,
-      FREE_TIER_FLAG,
-      UNIFIED_SIGN_ON_FLAG,
-    ]);
+  test('no longer has the shipped unified sign-on flag', () => {
+    for (const removed of ['unified-sign-on', 'signon-teacher-prompts']) {
+      expect(FEATURE_FLAG_KEYS as readonly string[]).not.toContain(removed);
+      expect(isFeatureFlagKey(removed)).toBe(false);
+    }
+  });
+
+  test('registers only lesson_planner and free-tier', () => {
+    expect(FEATURE_FLAG_KEYS).toEqual([LESSON_PLANNER_FLAG, FREE_TIER_FLAG]);
     expect(Object.keys(FEATURE_FLAGS)).toEqual(FEATURE_FLAG_KEYS);
   });
 
@@ -45,7 +47,7 @@ describe('feature flag registry', () => {
     expect(resolveFeatureFlagKey(FREE_TIER_FLAG_LEGACY_KEY)).toBe(FREE_TIER_FLAG);
     expect(resolveFeatureFlagKey('free-tier-onboarding-v2')).toBe(FREE_TIER_FLAG);
     expect(resolveFeatureFlagKey('free-tier-inapp-v2')).toBe(FREE_TIER_FLAG);
-    expect(resolveFeatureFlagKey('signon-teacher-prompts')).toBe(UNIFIED_SIGN_ON_FLAG);
+    expect(resolveFeatureFlagKey('signon-teacher-prompts')).toBe(undefined);
     expect(isFeatureFlagKey('free_tier')).toBe(true);
     expect(isFeatureFlagKey('free-tier-onboarding-v2')).toBe(true);
     expect(isFeatureFlagKey('internal_rubrics')).toBe(false);

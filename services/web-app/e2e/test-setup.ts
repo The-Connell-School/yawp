@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { E2EContext } from './seed-e2e';
 import { TestHelpers } from './test-helpers';
+import { submitUnifiedLogin } from './helpers/unified-login';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,12 +47,7 @@ export const test = base.extend<TestFixtures>({
     const signInFn = async (email: string, password: string) => {
       await page.goto('/auth/login');
       await page.waitForLoadState('networkidle');
-      const emailInput = page.getByLabel('Email or handle');
-      const passwordInput = page.locator('input[type="password"]');
-      const submitButton = page.getByRole('button', { name: /log in/i });
-      await emailInput.fill(email);
-      await passwordInput.fill(password);
-      await submitButton.click();
+      await submitUnifiedLogin(page, email, password);
       await page.waitForURL(
         (url) => url.pathname.startsWith('/app') || url.pathname === '/enter-code',
         { timeout: 15000 }

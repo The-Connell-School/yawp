@@ -64,7 +64,7 @@ for (const width of [1280, 390]) {
         ).toBeVisible();
       } else if (!off) {
         await page
-          .getByLabel('Email, handle, or class code')
+          .getByLabel('Email or class code', { exact: true })
           .fill(`${account}@signon.preview.yawp.invalid`);
         await page
           .getByRole('button', { name: 'Continue', exact: true })

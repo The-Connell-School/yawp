@@ -10,8 +10,6 @@ import {
   isIsolatedPreviewSeatMode,
   isPreviewAccessConfigured,
 } from './preview-access.server';
-import { isUnifiedSignOnEnabled } from '~/domain/unified-signon/gate.server';
-
 export const PREVIEW_SIGNON_QA_COOKIE = '__yawp_preview_signon_qa';
 export const PREVIEW_SIGNON_QA_MAX_AGE = 600;
 export const PREVIEW_SIGNON_QA_ACCOUNTS = [
@@ -47,12 +45,7 @@ export const clearPreviewSignonQaContext = () =>
 export async function previewSignonQaAvailable(db: Client = prisma) {
   try {
     const target = assertPreviewSignonTarget()!;
-    if (
-      !isIsolatedPreviewSeatMode() ||
-      !isPreviewAccessConfigured() ||
-      !(await isUnifiedSignOnEnabled())
-    )
-      return false;
+    if (!isIsolatedPreviewSeatMode() || !isPreviewAccessConfigured()) return false;
     const [actual] = await db.$queryRaw<
       { database: string; role: string }[]
     >`SELECT current_database() AS database, current_user AS role`;

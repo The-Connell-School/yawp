@@ -2416,12 +2416,12 @@ describe('Internal preview database classification', () => {
   });
 });
 
-describe('isolated preview unified sign-on label deployment contract', () => {
-  test('exact label addition/removal follows the gated, shell-quoted detached transport', () => {
+describe('isolated preview deployment contract', () => {
+  test('preview policy uses the gated, shell-quoted detached transport', () => {
     const workflow = readRepoFile('.github/workflows/preview-environments.yml');
     expect(workflow).toContain('ready_for_review, labeled, unlabeled, closed]');
-    expect(workflow).toContain("PREVIEW_UNIFIED_SIGN_ON: ${{ needs.preview-policy.outputs.unified_sign_on }}");
-    expect(workflow).toContain('"PREVIEW_UNIFIED_SIGN_ON=$(shell_quote "$PREVIEW_UNIFIED_SIGN_ON")"');
+    expect(workflow).not.toContain('PREVIEW_UNIFIED_SIGN_ON');
+    expect(workflow).not.toContain('unified_sign_on');
     expect(workflow).toContain('REMOTE_COMMAND=');
     expect(workflow).toContain('REDACT_DEPLOY_LOGS_SCRIPT');
     expect(workflow).toContain('redact-deploy-logs.sh');
@@ -2442,16 +2442,16 @@ describe('isolated preview unified sign-on label deployment contract', () => {
     expect(workflow).toContain('bash scripts/preview/check-skip-preview.sh');
     expect(readRepoFile('.github/workflows/demo-environment.yml')).not.toContain('PREVIEW_UNIFIED_SIGN_ON');
   });
-  test('reviewed updater is available in both toolbox runtimes after all seeds and before traffic', () => {
+  test('reviewed control mount is available in both toolbox runtimes before traffic', () => {
     const compose = readRepoFile('scripts/preview/render-compose.mjs');
     const deploy = readRepoFile('scripts/preview/deploy.sh');
-    expect(compose).toContain('PREVIEW_UNIFIED_SIGN_ON:');
+    expect(compose).not.toContain('PREVIEW_UNIFIED_SIGN_ON');
     expect(compose).toContain('/preview-control:ro');
     expect(deploy).toContain('export PREVIEW_CONTROL_DIR="$SCRIPT_DIR"');
-    expect(deploy).toContain('bun /preview-control/unified-signon-flag.mjs');
+    expect(deploy).not.toContain('unified-signon-flag.mjs');
     const order = deploy.slice(deploy.indexOf('\nrun_tooling_if_needed\n'));
-    expect(order.indexOf('\napply_preview_signon_flag\n')).toBeGreaterThan(order.indexOf('\nensure_preview_seats\n'));
-    expect(order.indexOf('\napply_preview_signon_flag\n')).toBeLessThan(order.indexOf('\nstart_or_refresh_web\n'));
-    expect(deploy).toContain('[[ "$SLUG" =~ ^pr-[1-9][0-9]*$ ]] || return 0');
+    expect(order.indexOf('\nensure_preview_seats\n')).toBeLessThan(
+      order.indexOf('\nstart_or_refresh_web\n')
+    );
   });
 });

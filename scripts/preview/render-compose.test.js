@@ -584,26 +584,24 @@ test('mock admin is enabled only in demo compose configuration', () => {
   expect(preview.services.web.environment.MOCK_ADMIN_ENABLED).toBe('false');
 });
 
-describe('deployment-only unified sign-on control', () => {
+describe('deployment-only preview toolbox control mount', () => {
   for (const runtime of ['fast', 'production']) {
-    test(`forwards label boolean only to the isolated PR toolbox (${runtime})`, () => {
-      for (const enabled of ['true', 'false']) {
-        const parsed = Bun.YAML.parse(renderCompose({ runtime, unifiedSignOn: enabled, controlDir: '/reviewed/control' }));
-        expect(parsed.services.toolbox.environment.PREVIEW_UNIFIED_SIGN_ON).toBe(enabled);
-        expect(parsed.services.toolbox.environment.YAWP_ENVIRONMENT).toBe('preview');
-        expect(parsed.services.toolbox.volumes).toContain('/reviewed/control:/preview-control:ro');
-        expect(parsed.services.web.environment.PREVIEW_UNIFIED_SIGN_ON).toBeUndefined();
-        expect(parsed.services.web.environment.UNIFIED_SIGN_ON).toBeUndefined();
-        expect(parsed.services.web.environment.YAWP_INTERNAL_API_KEYS).toBeUndefined();
-        const demo = Bun.YAML.parse(renderCompose({ runtime, slug: 'demo', unifiedSignOn: enabled }));
-        expect(demo.services.toolbox.environment.PREVIEW_UNIFIED_SIGN_ON).toBeUndefined();
-        const demoHasControlMount =
-          demo.services.toolbox.volumes?.some(volume => volume.includes('/preview-control')) ?? false;
-        if (runtime === 'production') {
-          expect(demoHasControlMount).toBe(true);
-        } else {
-          expect(demoHasControlMount).toBe(false);
-        }
+    test(`mounts reviewed control scripts only for isolated PR previews (${runtime})`, () => {
+      const parsed = Bun.YAML.parse(
+        renderCompose({ runtime, controlDir: '/reviewed/control' })
+      );
+      expect(parsed.services.toolbox.environment.PREVIEW_UNIFIED_SIGN_ON).toBeUndefined();
+      expect(parsed.services.toolbox.environment.YAWP_ENVIRONMENT).toBe('preview');
+      expect(parsed.services.toolbox.volumes).toContain('/reviewed/control:/preview-control:ro');
+      const demo = Bun.YAML.parse(renderCompose({ runtime, slug: 'demo' }));
+      const demoHasControlMount =
+        demo.services.toolbox.volumes?.some((volume) =>
+          volume.includes('/preview-control')
+        ) ?? false;
+      if (runtime === 'production') {
+        expect(demoHasControlMount).toBe(true);
+      } else {
+        expect(demoHasControlMount).toBe(false);
       }
     });
   }
@@ -633,8 +631,5 @@ describe('deployment-only unified sign-on control', () => {
     for (const bad of ['http://pr-1.preview.yawp.school', 'https://pr-1.preview.yawp.school/path', 'pr-1.preview.yawp.school', 'https://a.test,"x: y"']) {
       expect(() => googleOriginAllowlist(bad)).toThrow('https origins');
     }
-  });
-  test('refuses malformed label transport boolean', () => {
-    expect(() => renderCompose({ unifiedSignOn: 'true; echo bad' })).toThrow('true or false');
   });
 });

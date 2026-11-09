@@ -10,7 +10,6 @@ test.skip(
 test.describe.configure({ mode: 'serial' });
 const db = createE2EPrismaClient();
 const id = `classcode-browser-${Date.now()}`;
-const flag = 'feature_flag.unified-sign-on';
 const evidence = process.env.SIGNON_EVIDENCE_DIR!;
 test.beforeAll(async () => {
   if (
@@ -44,7 +43,6 @@ test.afterAll(async () => {
   await db.class.delete({ where: { id } });
   await db.school.delete({ where: { id } });
   await db.organization.delete({ where: { id } });
-  await db.setting.deleteMany({ where: { name: flag } });
   await db.$disconnect();
 });
 for (const width of [1280, 390])
@@ -68,15 +66,6 @@ for (const width of [1280, 390])
       });
     };
     await page.setViewportSize({ width, height: width === 1280 ? 1006 : 844 });
-    await db.setting.deleteMany({ where: { name: flag } });
-    await page.goto('/auth/login');
-    await expect(page.getByRole('button', { name: /^log in$/i })).toBeVisible();
-    await shot('flag-off');
-    await db.setting.upsert({
-      where: { name: flag },
-      update: { value: 'true' },
-      create: { name: flag, value: 'true', valueType: 'boolean' },
-    });
     await page.goto('/auth/login');
     await page.waitForFunction(() =>
       Boolean((window as any).__reactRouterDataRouter)
@@ -177,11 +166,6 @@ for (const width of [1280, 390])
       process.env.SIGNON_MOCK_GOOGLE !== '1',
       'Local signed provider mock required'
     );
-    await db.setting.upsert({
-      where: { name: flag },
-      update: { value: 'true' },
-      create: { name: flag, value: 'true', valueType: 'boolean' },
-    });
     await page.setViewportSize({ width, height: width === 1280 ? 1006 : 844 });
     const email = `ignored${width}@yawp.local`;
     await page.route(

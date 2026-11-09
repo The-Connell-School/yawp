@@ -110,18 +110,9 @@ describe('internal feature-flag endpoints', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
     const body = await response.json();
-    expect(body.flags.map((flag: { key: string }) => flag.key)).toEqual([
-      FLAG,
-      'free-tier',
-      'unified-sign-on',
-    ]);
+    expect(body.flags.map((flag: { key: string }) => flag.key)).toEqual([FLAG, 'free-tier']);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[1]).toMatchObject({ key: 'free-tier', label: 'Free tier', mode: 'off', orgIds: [], enabled: false });
-    expect(body.flags.find((flag: { key: string }) => flag.key === 'unified-sign-on')).toMatchObject({
-      key: 'unified-sign-on', mode: 'off', orgIds: [], enabled: false,
-      persisted: { mode: 'off', orgIds: [] },
-      effective: { mode: 'off', orgIds: [] }, runtimeOverride: null,
-    });
   });
 
   test('lists free tier as open on demo even when the stored flag is off', async () => {
@@ -136,12 +127,6 @@ describe('internal feature-flag endpoints', () => {
       orgIds: [],
       persisted: { mode: 'off', orgIds: [] },
       effective: { mode: 'everyone', orgIds: [] },
-      runtimeOverride: 'non_production_default',
-      enabled: true,
-    });
-    expect(body.flags.find((flag: { key: string }) => flag.key === 'unified-sign-on')).toMatchObject({
-      key: 'unified-sign-on',
-      mode: 'everyone',
       runtimeOverride: 'non_production_default',
       enabled: true,
     });
@@ -172,11 +157,7 @@ describe('internal feature-flag endpoints', () => {
       new Request(BASE, { headers: { authorization: `Bearer ${key}` } })
     );
     const body = await response.json();
-    expect(body.flags.map((flag: { key: string }) => flag.key)).toEqual([
-      FLAG,
-      'free-tier',
-      'unified-sign-on',
-    ]);
+    expect(body.flags.map((flag: { key: string }) => flag.key)).toEqual([FLAG, 'free-tier']);
   });
 
   test('lists each flag with its mode, schools, and legacy enabled', async () => {
@@ -415,9 +396,6 @@ describe('internal feature-flag endpoints', () => {
       expect(flags.find((f: { key: string }) => f.key === 'free-tier')).toMatchObject({
         mode: 'everyone', persisted: { mode: 'off', orgIds: [] },
         effective: { mode: 'everyone', orgIds: [] }, runtimeOverride: 'non_production_default',
-      });
-      expect(flags.find((f: { key: string }) => f.key === 'unified-sign-on')).toMatchObject({
-        mode: 'everyone', runtimeOverride: 'non_production_default', enabled: true,
       });
       expect(prisma.setting.upsert).not.toHaveBeenCalled();
     } finally {

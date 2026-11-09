@@ -27,9 +27,6 @@ export const FREE_TIER_FLAG = 'free-tier' as const;
 /** @deprecated Registry key `free_tier` — use {@link FREE_TIER_FLAG}. */
 export const FREE_TIER_FLAG_LEGACY_KEY = 'free_tier' as const;
 
-/** Unified sign-on UI and signed-in teacher prompt flows. Default off. */
-export const UNIFIED_SIGN_ON_FLAG = 'unified-sign-on' as const;
-
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
@@ -41,11 +38,6 @@ export const FEATURE_FLAGS = {
     description:
       'Enables Free Tier teacher onboarding, school-admin approval, operator release tools, in-app limits, locked preview, create-class, and related UI. Off: those routes and release APIs return 404; waitlist/token APIs behave as on main until yawp-internal turns this on for everyone.',
   },
-  [UNIFIED_SIGN_ON_FLAG]: {
-    label: 'Unified sign-on',
-    description:
-      'Shows unified sign-on at /auth/login and signed-in teacher classroom entry prompts. Default off on production; on by default on demo and PR previews.',
-  },
 } as const satisfies Record<string, { label: string; description: string }>;
 
 export type FeatureFlagKey = keyof typeof FEATURE_FLAGS;
@@ -56,7 +48,6 @@ const REGISTERED_FLAG_ALIASES: Record<string, FeatureFlagKey> = {
   [FREE_TIER_FLAG_LEGACY_KEY]: FREE_TIER_FLAG,
   'free-tier-onboarding-v2': FREE_TIER_FLAG,
   'free-tier-inapp-v2': FREE_TIER_FLAG,
-  'signon-teacher-prompts': UNIFIED_SIGN_ON_FLAG,
 };
 
 /**
@@ -66,14 +57,6 @@ const REGISTERED_FLAG_ALIASES: Record<string, FeatureFlagKey> = {
 export const FOLDED_FREE_TIER_LEGACY_SETTINGS = [
   'feature_flag.free-tier-onboarding-v2',
   'feature_flag.free-tier-inapp-v2',
-] as const;
-
-/**
- * Legacy Setting name aliased to {@link UNIFIED_SIGN_ON_FLAG}. Runtime reads only
- * `feature_flag.unified-sign-on`.
- */
-export const FOLDED_UNIFIED_SIGNON_LEGACY_SETTINGS = [
-  'feature_flag.signon-teacher-prompts',
 ] as const;
 
 export function resolveFeatureFlagKey(

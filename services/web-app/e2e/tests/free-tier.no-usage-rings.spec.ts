@@ -1,13 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { setFreeTierFlag, setLessonPlannerFlag } from '../feature-flags';
+import { submitUnifiedLogin } from '../helpers/unified-login';
 
 async function login(page: import('@playwright/test').Page) {
   await page.context().clearCookies();
   await page.goto('/auth/login');
   await page.waitForLoadState('networkidle');
-  await page.getByLabel('Email or handle').fill('dev.teacher.free@yawp.local');
-  await page.locator('input[type="password"]').fill('yawp-dev');
-  await page.getByRole('button', { name: /Log in/i }).click();
+  await submitUnifiedLogin(page, 'dev.teacher.free@yawp.local', 'yawp-dev');
   await page.waitForURL((url) => url.pathname.replace(/\/$/, '') === '/app');
 }
 
