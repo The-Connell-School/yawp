@@ -9,7 +9,7 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import {
-  setLessonPlannerReviewFlag,
+  setLessonPlannerFlag, setLessonPlannerReviewFlag,
   type LessonPlannerReviewFlag,
 } from '../feature-flags';
 
@@ -66,29 +66,21 @@ const INTAKE_QUESTION = 'Which class is this for, and how long is the period?';
 test.describe("Lesson Planner — Brian's review", () => {
   test.afterEach(async ({ e2eContext }) => {
     await clearLessonPlans(e2eContext.teacherMembershipId);
-    for (const flag of REVIEW_FLAGS) {
-      await setLessonPlannerReviewFlag(flag, false);
-    }
+    await setLessonPlannerFlag(true);
+  });
+
+  test('master lesson_planner off returns 404 for teachers', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerFlag(false);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    const response = await page.goto('/app/lesson-planner');
+    expect(response?.status()).toBe(404);
   });
 
   test.describe('whole-reply stack controls (B4)', () => {
-    test('flag off: every reply keeps the original two buttons', async ({
-      page,
-      signIn,
-      e2eContext,
-    }) => {
-      const id = await seedConversation(e2eContext, [
-        { role: 'user', content: 'Plan a lesson on The Things They Carried.' },
-        { role: 'assistant', content: INTAKE_QUESTION },
-      ]);
-      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
-      await page.goto(`/app/lesson-planner?c=${id}`);
-
-      await expect(page.getByRole('button', { name: 'Add all of this' })).toBeVisible();
-      await expect(
-        page.getByRole('button', { name: 'Add all as a handout' })
-      ).toBeVisible();
-    });
 
     test('flag on: an intake question offers nothing to stack', async ({
       page,
@@ -158,21 +150,6 @@ test.describe("Lesson Planner — Brian's review", () => {
       '```yawp-daily-pages\nkind: class-starter\nWrite about something you carry every day.\n```\n\n' +
       '```yawp-daily-pages\nkind: class-starter\nWhat is the heaviest thing you have ever carried?\n```\n\n' +
       '## Reading (40 min)\n\nRead the first story together.';
-
-    test('flag off: a class starter has no stack button', async ({
-      page,
-      signIn,
-      e2eContext,
-    }) => {
-      const id = await seedConversation(e2eContext, [
-        { role: 'user', content: 'Plan day one of The Things They Carried.' },
-        { role: 'assistant', content: STARTERS },
-      ]);
-      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
-      await page.goto(`/app/lesson-planner?c=${id}`);
-      await expect(page.getByTestId('daily-pages-card')).toHaveCount(2);
-      await expect(page.getByTestId('daily-pages-stack-toggle')).toHaveCount(0);
-    });
 
     test('flag on: stack one starter, then remove it from the stack screen with Undo', async ({
       page,
@@ -451,18 +428,6 @@ test.describe("Lesson Planner — Brian's review", () => {
       await card.getByTestId('lesson-ask-next').click();
       await expect(card.getByTestId('intake-length-value').first()).toHaveText('45 min');
     });
-
-    test('flag off: the original slider card, unchanged', async ({
-      page,
-      signIn,
-      e2eContext,
-    }) => {
-      const id = await seedAsk(e2eContext);
-      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
-      await page.goto(`/app/lesson-planner?c=${id}`);
-      await expect(page.getByTestId('lesson-ask-card')).toBeVisible();
-      await expect(page.getByTestId('lesson-intake-card')).toHaveCount(0);
-    });
   });
 
   test.describe('decks: the Yawp! template and editing (E1, E2)', () => {
@@ -503,18 +468,6 @@ test.describe("Lesson Planner — Brian's review", () => {
         await prisma.$disconnect();
       }
     }
-
-    test('flag off: the original card and presenter', async ({ page, signIn, e2eContext }) => {
-      const { conversationId, messageId } = await seedDeck(e2eContext);
-      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
-      await page.goto(`/app/lesson-planner?c=${conversationId}`);
-      const card = page.getByTestId('slide-deck-card');
-      await expect(card.getByTestId('deck-download-pptx')).toHaveText('PowerPoint');
-      await expect(card.getByTestId('deck-edit')).toHaveCount(0);
-      await page.goto(`/present/${conversationId}/${messageId}`);
-      await expect(page.getByTestId('slide-stage')).toBeVisible();
-      await expect(page.locator('[data-theme="tile"]')).toHaveCount(0);
-    });
 
     test('flag on: Save to PowerPoint, Edit, Present; presented in the tile template', async ({
       page,
@@ -579,13 +532,6 @@ test.describe("Lesson Planner — Brian's review", () => {
       await page.keyboard.press('ArrowRight');
       await expect(page.getByTestId('slide-counter')).toHaveText('2 / 3');
       await expect(page.getByTestId('slide-stage')).toContainText('Warm-up: what you carry');
-    });
-
-    test('flag off: the editor is not there', async ({ page, signIn, e2eContext }) => {
-      const { conversationId, messageId } = await seedDeck(e2eContext);
-      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
-      const response = await page.goto(`/app/lesson-planner/${conversationId}/deck/${messageId}`);
-      expect(response?.status()).toBe(404);
     });
   });
 

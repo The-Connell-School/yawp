@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import {
-  setLessonPlannerReviewFlag,
+  setLessonPlannerFlag, setLessonPlannerReviewFlag,
   type LessonPlannerReviewFlag,
 } from '../feature-flags';
 import { DAY_ONE_REPLY } from '../fixtures/lesson-planner/day-one-reply';
@@ -107,9 +107,7 @@ async function seedDayOneStack(
 test.describe("Lesson Planner — Brian's third run", () => {
   test.afterEach(async ({ e2eContext }) => {
     await clearLessonPlans(e2eContext.teacherMembershipId);
-    for (const flag of REVIEW_FLAGS) {
-      await setLessonPlannerReviewFlag(flag, false);
-    }
+    await setLessonPlannerFlag(true);
   });
 
   test.describe('Phase 0: times and cards are right on the stack page', () => {
@@ -371,15 +369,6 @@ test.describe("Lesson Planner — Brian's third run", () => {
       'Write about something heavy you once carried, real or not.',
       '```',
     ].join('\n');
-
-    test('flag off: the stack v2 page, unchanged', async ({ page, signIn, e2eContext }) => {
-      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
-      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
-      const { conversationId } = await seedDayOneStack(page, e2eContext);
-      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
-      await expect(page.getByTestId('build-from-stack')).toBeVisible();
-      await expect(page.getByTestId('stack-v3')).toHaveCount(0);
-    });
 
     test('the time bar, the writing meter and the run of show add up', async ({ page, signIn, e2eContext }) => {
       await stackV3On();
@@ -1071,38 +1060,11 @@ test.describe("Lesson Planner — Brian's third run", () => {
       expect(response.ok()).toBe(true);
       expect((await response.body()).byteLength).toBeGreaterThan(50_000); // the painting is in it
     });
-
-    test('flag off: the same deck draws on the tile template', async ({ page, signIn, e2eContext }) => {
-      await setLessonPlannerReviewFlag('lesson_planner_deck_v2', true);
-      const { conversationId, assistantIds } = await seedConversation(e2eContext, [
-        { role: 'user', content: 'Build the slide deck for this lesson' },
-        { role: 'assistant', content: GALLERY_REPLY },
-      ]);
-      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
-      await page.goto(`/present/${conversationId}/${assistantIds[0]}`);
-      const stage = page.getByTestId('slide-stage');
-      await expect(stage.locator('[data-theme="tile"]')).toBeVisible();
-      await page.waitForLoadState('networkidle');
-      await page.keyboard.press('ArrowRight');
-      // The agenda reads as a notes slide, with its minutes.
-      await expect(stage).toContainText('What’s in your bag? (15 min)');
-    });
   });
 
   test.describe('Your own documents (Oct 21)', () => {
     const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../app/domain/lesson-planner/fixtures');
     const notes = { name: 'my-notes.md', mimeType: 'text/markdown', buffer: Buffer.from('# Chapter 1 notes\n\nStart with the letters from Martha.') };
-
-    test('flag off: no paperclip, and the API is not there', async ({ page, signIn, e2eContext }) => {
-      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
-      await page.goto('/app/lesson-planner');
-      await expect(page.getByLabel('Message the Lesson Planner')).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Add your own document' })).toHaveCount(0);
-      const response = await page.request.post('/api/domain/lesson-planner/uploads', {
-        multipart: { intent: 'upload', file: notes },
-      });
-      expect(response.status()).toBe(404);
-    });
 
     test('add documents to a new lesson; they go with its first message; the wrong file says why', async ({
       page,

@@ -7,7 +7,7 @@
  */
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-import { setLessonPlannerReviewFlag, type LessonPlannerReviewFlag } from '../feature-flags';
+import { setLessonPlannerFlag, setLessonPlannerReviewFlag, type LessonPlannerReviewFlag } from '../feature-flags';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 const FLAGS: LessonPlannerReviewFlag[] = [
@@ -142,7 +142,7 @@ test.describe("Kevin's unit-build feedback (Oct 25)", () => {
   });
   test.afterEach(async ({ e2eContext }) => {
     await clear(e2eContext);
-    for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, false);
+    await setLessonPlannerFlag(true);
   });
 
   test("note 8a: a unit's day knows its 60-minute period, so 75 minutes reads as over", async ({ page, signIn, e2eContext }) => {
@@ -285,7 +285,7 @@ test.describe("Kevin's unit-build feedback (Oct 25)", () => {
       await expect(page.getByTestId('lesson-intake-card')).toContainText('How long is each class period?');
       await expect(page.locator('main')).not.toContainText('How long is the lesson?');
     } finally {
-      await setLessonPlannerReviewFlag('lesson_planner_intake_v2', false);
+      await setLessonPlannerFlag(true);
     }
   });
 

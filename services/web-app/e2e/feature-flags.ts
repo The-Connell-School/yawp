@@ -38,14 +38,17 @@ export async function setFreeTierOnboardingV2(enabled: boolean) {
 export async function setFreeTierFlag(enabled: boolean) {
   const prisma = createE2EPrismaClient();
   try {
-    const value = enabled ? 'true' : 'false';
+    const value = serializeFeatureFlagValue({
+      mode: enabled ? 'everyone' : 'off',
+      orgIds: [],
+    });
     for (const name of [FREE_TIER_SETTING, ...FOLDED_FREE_TIER_SETTINGS]) {
       await prisma.setting.upsert({
         where: { name },
         create: {
           name,
           value,
-          valueType: 'boolean',
+          valueType: 'json',
           description: 'Set by e2e',
         },
         update: { value, updatedAt: new Date() },
@@ -59,15 +62,19 @@ export async function setFreeTierFlag(enabled: boolean) {
 export async function setLessonPlannerFlag(enabled: boolean) {
   const prisma = createE2EPrismaClient();
   try {
+    const value = serializeFeatureFlagValue({
+      mode: enabled ? 'everyone' : 'off',
+      orgIds: [],
+    });
     await prisma.setting.upsert({
       where: { name: LESSON_PLANNER_SETTING },
       create: {
         name: LESSON_PLANNER_SETTING,
-        value: enabled ? 'true' : 'false',
-        valueType: 'boolean',
+        value,
+        valueType: 'json',
         description: 'Set by e2e',
       },
-      update: { value: enabled ? 'true' : 'false', updatedAt: new Date() },
+      update: { value, updatedAt: new Date() },
     });
   } finally {
     await prisma.$disconnect();
@@ -108,5 +115,5 @@ export async function setLessonPlannerReviewFlag(
   _flag: LessonPlannerReviewFlag,
   enabled: boolean
 ) {
-  if (enabled) await setLessonPlannerFlag(true);
+  await setLessonPlannerFlag(enabled);
 }
