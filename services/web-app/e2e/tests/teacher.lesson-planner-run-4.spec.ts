@@ -90,6 +90,10 @@ async function seedDeck(conversationId: string, sourceMessageId: string) {
 }
 
 test.describe("Lesson Planner — Brian's fourth run", () => {
+  test.beforeEach(async () => {
+    await setLessonPlannerFlag(true);
+  });
+
   test.afterEach(async ({ e2eContext }) => {
     const prisma = createE2EPrismaClient();
     try {

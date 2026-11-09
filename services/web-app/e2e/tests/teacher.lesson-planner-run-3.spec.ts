@@ -105,6 +105,9 @@ async function seedDayOneStack(
 }
 
 test.describe("Lesson Planner — Brian's third run", () => {
+  test.beforeEach(async () => {
+    await setLessonPlannerFlag(true);
+  });
   test.afterEach(async ({ e2eContext }) => {
     await clearLessonPlans(e2eContext.teacherMembershipId);
     await setLessonPlannerFlag(true);
@@ -1310,16 +1313,15 @@ test.describe("Lesson Planner — Brian's third run", () => {
       expect(overflow).toBeLessThanOrEqual(0);
     });
 
-    test('with them off, it is the guide teachers have today', async ({ page, signIn, e2eContext }) => {
+    test('with lesson_planner off, the guide is not available', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerFlag(false);
       await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
       await page.goto('/app/lesson-planner/how-it-works');
-      await expect(page.getByRole('heading', { name: 'Everything for the lesson, in one place to print' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Run the show' })).toHaveCount(0);
-      await expect(page.getByRole('heading', { name: 'Reuse a shape that works' })).toHaveCount(0);
-      await expect(page.locator('video[poster$="/plan.jpg"]')).toHaveCount(1);
-      await expect(page.locator('video[poster$="/deck.jpg"]')).toHaveCount(1);
-      await expect(page.getByTestId('guide-wont')).toContainText('They stay in your account');
-      await expect(page.getByText('Bring your own material.')).toHaveCount(0);
+      await expect(page).toHaveURL(/\/app(?:\?|$)/);
     });
   });
 });

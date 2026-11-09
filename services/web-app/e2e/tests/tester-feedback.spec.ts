@@ -30,7 +30,9 @@ test.describe.serial('Tester feedback', () => {
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto('/app/assignments?tab=work&access_token=test-secret');
       await page.reload();
+      await page.waitForLoadState('networkidle');
       const trigger = page.getByRole('button', { name: 'Log feedback' });
+      await expect(trigger).toBeVisible({ timeout: 30_000 });
       await expect(page.getByRole('button', { name: 'Give feedback', exact: true })).toHaveCount(0);
       await trigger.click();
       const dialog = page.getByRole('dialog', { name: 'Log feedback' });

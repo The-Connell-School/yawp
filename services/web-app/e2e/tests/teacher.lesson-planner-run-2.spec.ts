@@ -142,6 +142,10 @@ async function seedStack(
 }
 
 test.describe("Lesson Planner — Brian's second run", () => {
+  test.beforeEach(async () => {
+    await setLessonPlannerFlag(true);
+  });
+
   test.afterEach(async ({ e2eContext }) => {
     await clearLessonPlans(e2eContext.teacherMembershipId);
     await setLessonPlannerFlag(true);

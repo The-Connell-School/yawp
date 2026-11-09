@@ -69,15 +69,18 @@ test.describe("Lesson Planner — Brian's review", () => {
     await setLessonPlannerFlag(true);
   });
 
-  test('master lesson_planner off returns 404 for teachers', async ({
+  test('master lesson_planner off keeps teachers off the planner', async ({
     page,
     signIn,
     e2eContext,
   }) => {
     await setLessonPlannerFlag(false);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
-    const response = await page.goto('/app/lesson-planner');
-    expect(response?.status()).toBe(404);
+    await page.goto('/app/lesson-planner');
+    await expect(page).toHaveURL(/\/app(?:\?|$)/);
+    await expect(page.getByRole('heading', { name: /Lesson Planner/i })).toHaveCount(
+      0
+    );
   });
 
   test.describe('whole-reply stack controls (B4)', () => {
@@ -188,10 +191,7 @@ test.describe("Lesson Planner — Brian's review", () => {
       await page.goto(`/app/lesson-planner/${id}/packet`);
       // B5: the raw first message is not presented as the lesson's name.
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Untitled lesson');
-      await expect(page.getByLabel('Lesson name')).toHaveAttribute(
-        'placeholder',
-        'Name this lesson'
-      );
+      await expect(page.getByLabel('Name this lesson')).toBeVisible();
       await expect(page.getByText("We'll name it from your plan, or type one.")).toBeVisible();
 
       const sections = page.getByTestId('packet-section');
