@@ -24,7 +24,6 @@ const fixtureEnv = {
   PREVIEW_SLUG: 'pr-999565',
   PREVIEW_DATA_MODE: 'seed',
 };
-const flag = 'feature_flag.unified-sign-on';
 let priorFlags: any[] = [];
 let cookie = '',
   token = '',
@@ -77,9 +76,8 @@ beforeAll(async () => {
   )
     throw new Error('Disposable lane database required');
   priorFlags = await prisma.setting.findMany({
-    where: { name: { in: [flag, 'feature_flag.free_tier'] } },
+    where: { name: 'feature_flag.free_tier' },
   });
-  await prisma.setting.deleteMany({ where: { name: flag } });
   await rm(capture, { recursive: true, force: true });
   await mkdir(capture, { recursive: true });
   process.env.SIGNON_LOCAL_TEST = '1';
@@ -88,14 +86,14 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!enabled) return;
   await prisma.setting.deleteMany({
-    where: { name: { in: [flag, 'feature_flag.free_tier'] } },
+    where: { name: 'feature_flag.free_tier' },
   });
   for (const row of priorFlags) await prisma.setting.create({ data: row });
   await rm(capture, { recursive: true, force: true });
   await prisma.$disconnect();
 });
 suite(
-  'fixture relationships, create-only reruns, existing personas and flag OFF remain intact',
+  'fixture relationships, create-only reruns, and existing personas remain intact',
   async () => {
     const existing = await prisma.user.findUniqueOrThrow({
       where: { email: 'dev.teacher@yawp.local' },
@@ -132,9 +130,6 @@ suite(
       })
     ).toEqual(existing);
     expect(
-      await prisma.setting.findUnique({ where: { name: flag } })
-    ).toBeNull();
-    expect(
       before.find((u) => u.id === qaId('passwordless'))?.password
     ).toBeNull();
     expect(
@@ -168,10 +163,7 @@ suite(
     ).not.toBeNull();
     expect(
       await unifiedEntry(new Request('http://localhost:5396/auth/login'))
-    ).toBeNull();
-    await prisma.setting.create({
-      data: { name: flag, value: 'true', valueType: 'boolean' },
-    });
+    ).toMatchObject({ unified: true });
   }
 );
 suite(
@@ -346,11 +338,6 @@ suite(
     });
     await prisma.password.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
-    await prisma.setting.upsert({
-      where: { name: flag },
-      update: { value: 'true' },
-      create: { name: flag, value: 'true', valueType: 'boolean' },
-    });
     fresh();
     expect(
       (await post('resolve', { identifier: QA_CODES.race })).data.state.variant

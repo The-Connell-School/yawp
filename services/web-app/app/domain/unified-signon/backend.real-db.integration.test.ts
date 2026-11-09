@@ -69,15 +69,6 @@ beforeAll(async () => {
     throw new Error('Local database required');
   process.env.SIGNON_MAIL_CAPTURE_DIR = capture;
   await mkdir(capture, { recursive: true });
-  await prisma.setting.upsert({
-    where: { name: 'feature_flag.unified-sign-on' },
-    update: { value: 'true' },
-    create: {
-      name: 'feature_flag.unified-sign-on',
-      value: 'true',
-      valueType: 'boolean',
-    },
-  });
   await prisma.organization.create({
     data: { id: prefix, name: 'Local signon test', plan: 'SCHOOL' },
   });
@@ -102,9 +93,6 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   if (!enabled) return;
-  await prisma.setting.deleteMany({
-    where: { name: 'feature_flag.unified-sign-on' },
-  });
   await prisma.signonFlow.deleteMany({
     where: { data: { path: ['identifier'], string_contains: prefix } },
   });
@@ -524,18 +512,6 @@ suite(
       new Request(url + '?continue=1', { headers: { cookie } })
     );
     expect(replay?.initialState?.error).toContain('connect to Google');
-    await prisma.setting.update({
-      where: { name: 'feature_flag.unified-sign-on' },
-      data: { value: 'false' },
-    });
-    expect(
-      (await googleCallback(new Request(callback, { headers: { cookie } })))
-        .status
-    ).toBe(404);
-    await prisma.setting.update({
-      where: { name: 'feature_flag.unified-sign-on' },
-      data: { value: 'true' },
-    });
     delete process.env.GOOGLE_OAUTH_CLIENT_ID;
     delete process.env.GOOGLE_OAUTH_CLIENT_SECRET;
   }
@@ -1746,85 +1722,6 @@ suite(
   }
 );
 
-suite(
-  'unified teacher handoff cannot fall back to legacy authorization after expiry or flag-off',
-  async () => {
-    cookie = '';
-    flowToken = '';
-    const email = `expired-handoff-${prefix}@example.test`;
-    const second = prefix + '-handoff';
-    await prisma.school.create({
-      data: {
-        id: second,
-        code: second,
-        name: 'Second campus',
-        organizationId: prefix,
-      },
-    });
-    try {
-      await prisma.invitation.create({
-        data: {
-          type: 'onboard-teacher',
-          target: email,
-          secret: 'legacy-secret',
-          algorithm: 'SHA-256',
-          digits: 6,
-          period: 600,
-          charSet: '0123456789',
-          expiresAt: new Date(Date.now() + 600000),
-          metadata: JSON.stringify({ organizationId: prefix }),
-        },
-      });
-      await post('resolve', { identifier: email });
-      await post('send-code');
-      await post('verify-code', { code: await code(email) });
-      await prisma.setting.update({
-        where: { name: 'feature_flag.unified-sign-on' },
-        data: { value: 'false' },
-      });
-      const { action } =
-        await import('~/routes/auth.inv.onboard-teacher/route');
-      try {
-        await action({
-          request: new Request(
-            'http://127.0.0.1:5396/auth/inv/onboard-teacher',
-            {
-              method: 'POST',
-              headers: { cookie },
-              body: new URLSearchParams({
-                name: 'Forbidden Teacher',
-                schoolId: second,
-                password: 'abcdef',
-                confirmPassword: 'abcdef',
-              }),
-            }
-          ),
-          params: {},
-          context: {},
-        } as any);
-        throw new Error('Expected rejection');
-      } catch (response) {
-        expect((response as Response).headers.get('location')).toBe(
-          '/auth/login'
-        );
-        expect(
-          (response as Response).headers
-            .getSetCookie()
-            .some(
-              (c) => c.startsWith('en_invitation=') && c.includes('Expires=')
-            )
-        ).toBe(true);
-      }
-      expect(await prisma.user.count({ where: { email } })).toBe(0);
-    } finally {
-      await prisma.setting.update({
-        where: { name: 'feature_flag.unified-sign-on' },
-        data: { value: 'true' },
-      });
-      await prisma.school.delete({ where: { id: second } });
-    }
-  }
-);
 suite(
   'reset proof cannot change credentials after email reassignment, and substituted class context invalidates a code',
   async () => {

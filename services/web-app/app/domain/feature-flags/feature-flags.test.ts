@@ -8,7 +8,6 @@ import {
   LESSON_PLANNER_FLAG,
   FREE_TIER_FLAG,
   FREE_TIER_FLAG_LEGACY_KEY,
-  UNIFIED_SIGN_ON_FLAG,
   FEATURE_FLAG_KEYS,
   LESSON_PLANNER_INTAKE_V2_FLAG,
   LESSON_PLANNER_STACK_V2_FLAG,
@@ -63,7 +62,6 @@ describe('feature flag registry', () => {
       LESSON_PLANNER_UPLOADS_FLAG,
       LESSON_PLANNER_TEACH_NOTES_FLAG,
       LESSON_PLANNER_LIBRARY_V2_FLAG,
-      UNIFIED_SIGN_ON_FLAG,
       CLASS_CODE_UNIQUE_FLAG,
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
@@ -81,7 +79,6 @@ describe('feature flag registry', () => {
     expect(resolveFeatureFlagKey(FREE_TIER_FLAG_LEGACY_KEY)).toBe(FREE_TIER_FLAG);
     expect(resolveFeatureFlagKey('free-tier-onboarding-v2')).toBe(FREE_TIER_FLAG);
     expect(resolveFeatureFlagKey('free-tier-inapp-v2')).toBe(FREE_TIER_FLAG);
-    expect(resolveFeatureFlagKey('signon-teacher-prompts')).toBe(UNIFIED_SIGN_ON_FLAG);
     expect(isFeatureFlagKey('free_tier')).toBe(true);
     expect(isFeatureFlagKey('free-tier-onboarding-v2')).toBe(true);
   });

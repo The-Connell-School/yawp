@@ -15,9 +15,6 @@ mock.module('~/utils/auth.server', () => ({
   requireAnonymous: async () => {},
   requireMutableRequest: async () => {},
 }));
-mock.module('./gate.server', () => ({
-  isUnifiedSignOnEnabled: async () => true,
-}));
 mock.module('~/routes/auth.login/login.server', () => ({
   loginAction: async () => new Response('legacy'),
 }));

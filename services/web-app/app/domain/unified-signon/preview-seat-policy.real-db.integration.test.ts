@@ -13,8 +13,6 @@ import { LOCAL_DEV_PASSWORD } from '../../../../../packages/prisma/scripts/local
 const enabled = process.env.SIGNON_PREVIEW_FIXTURE_TEST === '1';
 const suite = enabled ? test : test.skip;
 const priorEnv = { ...process.env };
-const flag = 'feature_flag.unified-sign-on';
-let previousFlag: any;
 let cookie = '',
   token = '',
   ip = 0;
@@ -138,18 +136,10 @@ beforeAll(async () => {
       },
     ]),
   });
-  previousFlag = await prisma.setting.findUnique({ where: { name: flag } });
-  await prisma.setting.upsert({
-    where: { name: flag },
-    update: { value: 'true' },
-    create: { name: flag, value: 'true', valueType: 'boolean' },
-  });
   await seedPreviewSignonQa(prisma);
 });
 afterAll(async () => {
   if (!enabled) return;
-  await prisma.setting.deleteMany({ where: { name: flag } });
-  if (previousFlag) await prisma.setting.create({ data: previousFlag });
   for (const k of Object.keys(process.env))
     if (!(k in priorEnv)) delete process.env[k];
   Object.assign(process.env, priorEnv);
@@ -335,32 +325,6 @@ suite(
     fresh();
     await master('inactive');
     expect((await login('orphan')).response.status).not.toBe(302);
-    fresh();
-    await master('multiple');
-    const savedPreview = {
-      YAWP_ENVIRONMENT: process.env.YAWP_ENVIRONMENT,
-      PREVIEW_SLUG: process.env.PREVIEW_SLUG,
-    };
-    delete process.env.YAWP_ENVIRONMENT;
-    delete process.env.PREVIEW_SLUG;
-    await prisma.setting.update({
-      where: { name: flag },
-      data: { value: 'false' },
-    });
-    try {
-      expect(await previewSignonQaAvailable()).toBe(false);
-    } finally {
-      await prisma.setting.update({
-        where: { name: flag },
-        data: { value: 'true' },
-      });
-      if (savedPreview.YAWP_ENVIRONMENT === undefined)
-        delete process.env.YAWP_ENVIRONMENT;
-      else process.env.YAWP_ENVIRONMENT = savedPreview.YAWP_ENVIRONMENT;
-      if (savedPreview.PREVIEW_SLUG === undefined)
-        delete process.env.PREVIEW_SLUG;
-      else process.env.PREVIEW_SLUG = savedPreview.PREVIEW_SLUG;
-    }
   }
 );
 suite(
@@ -458,7 +422,7 @@ suite(
   }
 );
 suite(
-  'demo, production, flag OFF, non-preview targets and connection mismatches cannot use or issue QA context',
+  'demo, production, non-preview targets and connection mismatches cannot use or issue QA context',
   async () => {
     const { hasPreviewSignonQaContext, previewSignonQaAvailable } =
       await import('~/utils/preview-signon-qa.server');
@@ -509,43 +473,6 @@ suite(
       } finally {
         Object.assign(process.env, saved);
       }
-    }
-    fresh();
-    await master('inactive');
-    const savedPreview = {
-      YAWP_ENVIRONMENT: process.env.YAWP_ENVIRONMENT,
-      PREVIEW_SLUG: process.env.PREVIEW_SLUG,
-    };
-    delete process.env.YAWP_ENVIRONMENT;
-    delete process.env.PREVIEW_SLUG;
-    await prisma.setting.update({
-      where: { name: flag },
-      data: { value: 'false' },
-    });
-    try {
-      expect(
-        await hasPreviewSignonQaContext(
-          request('/auth/login'),
-          qaId('inactive')
-        )
-      ).toBe(false);
-      const result = await post('password', {
-        email: qaEmail('inactive'),
-        password: LOCAL_DEV_PASSWORD,
-      });
-      expect(result.response.status).not.toBe(302);
-      expect(await unifiedEntry(request('/auth/login'))).toBeNull();
-    } finally {
-      await prisma.setting.update({
-        where: { name: flag },
-        data: { value: 'true' },
-      });
-      if (savedPreview.YAWP_ENVIRONMENT === undefined)
-        delete process.env.YAWP_ENVIRONMENT;
-      else process.env.YAWP_ENVIRONMENT = savedPreview.YAWP_ENVIRONMENT;
-      if (savedPreview.PREVIEW_SLUG === undefined)
-        delete process.env.PREVIEW_SLUG;
-      else process.env.PREVIEW_SLUG = savedPreview.PREVIEW_SLUG;
     }
   }
 );
