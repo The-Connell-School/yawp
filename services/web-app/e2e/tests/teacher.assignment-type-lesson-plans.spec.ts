@@ -151,6 +151,8 @@ test.describe.serial('How to Teach It: slide decks, tutorial videos, and the unl
     signIn,
   }) => {
     await setFeatureFlag('assignment-type-lesson-plans', true);
+    // Print for class sits behind teach notes; previews turn every planner flag on.
+    await setLessonPlannerReviewFlag('lesson_planner_teach_notes', true);
     await clearYawpLessons(e2eContext.teacherMembershipId);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
