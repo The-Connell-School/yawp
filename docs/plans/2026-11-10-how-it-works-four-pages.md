@@ -7,7 +7,23 @@ Task (Kevin, due Wed Nov 11):
    a collapsible "How to Teach It" block). Review Kevin's PR #893 pages.
 2. Put each video at the top of its How It Works page.
 
-## Status on Nov 10: neither item is done
+## Outcome (Nov 10, same day)
+
+Kevin's call on decision 1: each video is a computer-generated overview of
+the page and feature, which Brian can replace with a recorded tutorial. The
+other decisions went with the recommendations: build on #912 (main merged
+in), and record the current Exit Ticket builder.
+
+Built on `claude/wizardly-einstein-t5hxo3`, behind `assignment-type-landing-v2`:
+
+- The four guides open with the overview video under the headline, then How
+  to Teach It (the landing page's collapsible block, on a white card).
+- A new Exit Ticket guide (ink), linked from its landing page.
+- Four overview videos in `public/img/<type>-guide/overview.mp4`, recorded
+  by `e2e/tools/record-how-it-works-overviews.ts`.
+- Unit tests, `teacher.how-it-works-four-pages.spec.ts`, and the CI lists.
+
+## Status on Nov 10 (morning): neither item is done
 
 | Piece | Where it stands |
 | --- | --- |

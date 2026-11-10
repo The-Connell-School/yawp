@@ -1,6 +1,7 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { setFeatureFlag, setLessonPlannerReviewFlag } from '../feature-flags';
+import { ensureWritingStepType } from '../fixtures/writing-step-types';
 
 // How to Teach It (Brian, Nov 6): each course row is the slide deck to
 // download and the tutorial video to watch, which opens that lesson's module
@@ -27,30 +28,9 @@ async function clearYawpLessons(teacherMembershipId: string) {
   }
 }
 
-/** A Pre-Writing type for this school, as the catalog ships it (`kind: prewriting`). */
-async function ensurePrewritingType(organizationId: string): Promise<string> {
-  const prisma = createE2EPrismaClient();
-  try {
-    const existing = await prisma.assignmentType.findFirst({
-      where: { kind: 'prewriting', ownerOrgId: organizationId },
-      select: { id: true },
-    });
-    if (existing) return existing.id;
-    const created = await prisma.assignmentType.create({
-      data: {
-        title: 'Pre-Writing',
-        kind: 'prewriting',
-        description: 'Pre-writing before the essay.',
-        position: 98001,
-        ownerOrgId: organizationId,
-        organizationAssignments: { create: { organizationId } },
-      },
-      select: { id: true },
-    });
-    return created.id;
-  } finally {
-    await prisma.$disconnect();
-  }
+/** The Pre-Writing type, switched on for this school (the seed may already have it). */
+function ensurePrewritingType(organizationId: string): Promise<string> {
+  return ensureWritingStepType(organizationId, 'prewriting');
 }
 
 /** The Lounge course with a video module per lesson, as production has it. */
