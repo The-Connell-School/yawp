@@ -12,30 +12,38 @@ import type { GuideHowToTeachKey } from './how-to-teach';
 
 const SIZE = { width: 1280, height: 800 };
 
-function overview(folder: string, label: string): GuideVideo {
+/** Said under the three videos that show the Grading Assistant. */
+const SCRIPTED_GRADING =
+  'A quick tour, recorded in Yawp! with demo classes. The Grading Assistant’s suggestion in it was scripted for the recording. No sound.';
+
+function overview(folder: string, label: string, note?: string): GuideVideo {
   return {
     src: `/img/${folder}/overview.mp4`,
     poster: `/img/${folder}/overview.jpg`,
     label,
     ...SIZE,
+    ...(note ? { note } : {}),
   };
 }
 
 export const GUIDE_OVERVIEW_VIDEOS: Record<GuideHowToTeachKey, GuideVideo> = {
   'class-starter': overview(
     'class-starter-guide',
-    'A tour of Class Starter with no sound. The teacher opens Class Starter, browses the Prompt Library, picks a prompt and makes it an assignment for a class. A student writes a response and submits it. The teacher opens it and asks the Grading Assistant for a suggested engagement score and comment.'
+    'A tour of Class Starter with no sound. The teacher opens Class Starter and its How it works, browses the Prompt Library, then clicks New, writes a prompt, picks a class and creates the assignment. A student writes about a promise they broke and submits it. The teacher opens it, and the Grading Assistant suggests an engagement level and a comment for the teacher to review and release.',
+    SCRIPTED_GRADING
   ),
   prewriting: overview(
     'prewriting-guide',
-    'A tour of Pre-Writing with no sound. The teacher opens Pre-Writing, finds the lesson’s slide deck and tutorial under How to Teach It, picks an essay prompt from the library and assigns it. A student writes freely about the prompt with the Tutor asking questions, labels a focus at the bottom of the page and submits it.'
+    'A tour of Pre-Writing with no sound. The teacher opens Pre-Writing, points to the lesson’s slide deck and tutorial under How to Teach It, browses the essay Prompt Library, and assigns a prompt to a class. A student writes nonstop about the prompt with the Tutor’s instructions beside the page, labels a focus at the bottom and submits it. The teacher opens it, and the Grading Assistant suggests a score and a comment on the focus.',
+    SCRIPTED_GRADING
   ),
   'thesis-statement': overview(
     'thesis-statement-guide',
-    'A tour of Thesis Statement with no sound. The teacher opens Thesis Statement, finds the lesson’s slide deck and tutorial under How to Teach It, and assigns the same prompt students pre-wrote on. A student drafts a one-sentence thesis with the Tutor’s feedback and submits it.'
+    'A tour of Thesis Statement with no sound. The teacher opens Thesis Statement, points to the lesson’s slide deck and tutorial under How to Teach It, and assigns the prompt students pre-wrote on. A student writes a one-sentence thesis with the Tutor beside the page and submits it. The teacher opens it, and the Grading Assistant suggests a score and a comment on the thesis.',
+    SCRIPTED_GRADING
   ),
   'exit-ticket': overview(
     'exit-ticket-guide',
-    'A tour of Exit Ticket with no sound. The teacher opens Exit Ticket, clicks New, chooses Check for understanding, names the idea to check and assigns it to a class. A student explains the idea in their own words and submits it. The teacher reads the class’s answers.'
+    'A tour of Exit Ticket with no sound. The teacher opens Exit Ticket, clicks New, chooses Check for understanding, names the idea (the difference between weathering and erosion), says there is a correct answer, and sees the question students will read. The Tutor starts off and the ticket ungraded. A student explains the idea in their own words and submits it, and the teacher reads the answer.'
   ),
 };

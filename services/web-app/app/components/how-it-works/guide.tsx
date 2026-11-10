@@ -95,6 +95,8 @@ export type GuideVideo = {
   label: string;
   width: number;
   height: number;
+  /** The line under it: how it was made. */
+  note?: string;
 };
 
 export function GuideHero({
@@ -258,7 +260,14 @@ export function GuideClip({
  * no sound, made from demo classes until Brian records his own. Unlike the
  * clips it never plays on its own: the teacher presses play.
  */
-export function GuideOverviewVideo({ src, poster, label, width, height }: GuideVideo) {
+export function GuideOverviewVideo({
+  src,
+  poster,
+  label,
+  width,
+  height,
+  note = 'A quick tour, recorded in Yawp! with demo classes. No sound.',
+}: GuideVideo) {
   const accent = useAccent();
   return (
     <figure data-testid="guide-overview-video" className="flex flex-col gap-2">
@@ -277,7 +286,7 @@ export function GuideOverviewVideo({ src, poster, label, width, height }: GuideV
         </video>
       </GuideCard>
       <figcaption className={cn('text-xs', accent ? BODY : 'text-muted-foreground')}>
-        A quick tour, recorded in Yawp! with demo classes. No sound.
+        {note}
       </figcaption>
     </figure>
   );
