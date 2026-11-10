@@ -9,7 +9,7 @@ function text(key: (typeof GUIDE_HOW_TO_TEACH_KEYS)[number]) {
 
 describe('How to Teach It on the four How It Works pages', () => {
   test('covers Class Starter, Pre-Writing, Thesis Statement and Exit Ticket', () => {
-    expect([...GUIDE_HOW_TO_TEACH_KEYS].sort()).toEqual(
+    expect<string[]>([...GUIDE_HOW_TO_TEACH_KEYS].sort()).toEqual(
       ['class-starter', 'exit-ticket', 'prewriting', 'thesis-statement'].sort()
     );
   });

@@ -31,6 +31,8 @@ export const GUIDE_PAGE_ACCENTS: Partial<Record<GuidePageKey, GuideAccentName>> 
   prewriting: 'navy',
   'thesis-statement': 'petrol',
   reporter: 'charcoal',
+  // The sixth color, unused until the Exit Ticket guide (Kevin, Nov 10).
+  'exit-ticket': 'ink',
 };
 
 export function guideAccentFor(key: GuidePageKey | null | undefined): string | null {

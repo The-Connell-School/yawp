@@ -7,6 +7,7 @@
  * teacher asks), and the release flow. See docs/how-to-guides.md.
  */
 import {
+  GuideCard,
   GuideClip,
   GuideCopy,
   GuideFooter,
@@ -21,6 +22,8 @@ import {
   WillWont,
 } from '~/components/how-it-works/guide';
 import { guideAccentFor } from '~/components/how-it-works/guide-accents';
+import { GuideHowToTeach } from './guide-how-to-teach';
+import { GUIDE_OVERVIEW_VIDEOS } from './overview-videos';
 
 const MEDIA = '/img/class-starter-guide';
 
@@ -49,13 +52,28 @@ function clip(name: string, label: string) {
   );
 }
 
-export function ClassStarterGuide({ pagePath }: { pagePath: string }) {
+export function ClassStarterGuide({
+  pagePath,
+  v2 = false,
+}: {
+  pagePath: string;
+  /**
+   * Brian's landing pages are on (`assignment-type-landing-v2`): the overview
+   * video goes at the top in place of the picture, then How to Teach It
+   * (Kevin, Nov 10). Off: the page as it was.
+   */
+  v2?: boolean;
+}) {
   const strong = (text: string) => (
     <strong className="text-foreground">{text}</strong>
   );
 
   return (
-    <GuidePage backTo={pagePath} backLabel="Back to Class Starter" accent={guideAccentFor('class-starter')}>
+    <GuidePage
+      backTo={pagePath}
+      backLabel="Back to Class Starter"
+      accent={guideAccentFor('class-starter')}
+    >
       <GuideHero
         title="Get every student writing"
         highlight="at the start of class."
@@ -67,7 +85,10 @@ export function ClassStarterGuide({ pagePath }: { pagePath: string }) {
           height: 560,
           caption: 'Drafting a Class Starter prompt',
         }}
+        video={v2 ? GUIDE_OVERVIEW_VIDEOS['class-starter'] : null}
       />
+
+      {v2 ? <GuideHowToTeach guideKey="class-starter" /> : null}
 
       <GuideSection
         id="guide-library"
@@ -157,7 +178,7 @@ export function ClassStarterGuide({ pagePath }: { pagePath: string }) {
           </GuideCopy>
         </GuideRow>
 
-        <div className="flex flex-col gap-3 rounded-xl border bg-background p-5 md:p-6">
+        <GuideCard className="md:p-6">
           <GuideH3>Where teachers use it</GuideH3>
           <GuideList
             testId="guide-uses"
@@ -180,7 +201,7 @@ export function ClassStarterGuide({ pagePath }: { pagePath: string }) {
               </>,
             ]}
           />
-        </div>
+        </GuideCard>
       </GuideSection>
 
       <GuideSection
