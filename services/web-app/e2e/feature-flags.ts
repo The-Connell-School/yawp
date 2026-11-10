@@ -1,8 +1,14 @@
 import type { FeatureFlagKey } from '../app/domain/feature-flags/feature-flags';
 import {
+  featureFlagSettingName,
+  serializeFeatureFlagValue,
+  type FeatureFlagValueInput,
+} from '../app/domain/feature-flags/feature-flags';
+import {
   LESSON_PLANNER_REVIEW_FLAG_KEYS,
   type LessonPlannerReviewFlagKey,
 } from '../app/domain/feature-flags/lesson-planner-review-flags';
+import { createE2EPrismaClient } from './prisma-client';
 
 export async function enableAllLessonPlannerReviewFlags() {
   await setLessonPlannerFlag(true);
@@ -10,12 +16,6 @@ export async function enableAllLessonPlannerReviewFlags() {
     await setLessonPlannerReviewFlag(flag, true);
   }
 }
-import {
-  featureFlagSettingName,
-  serializeFeatureFlagValue,
-  type FeatureFlagValueInput,
-} from '../app/domain/feature-flags/feature-flags';
-import { createE2EPrismaClient } from './prisma-client';
 
 const LESSON_PLANNER_SETTING = 'feature_flag.lesson_planner';
 const FREE_TIER_SETTING = 'feature_flag.free_tier';
