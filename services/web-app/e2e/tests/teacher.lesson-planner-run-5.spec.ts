@@ -21,7 +21,6 @@ const FLAGS: LessonPlannerReviewFlag[] = [
   'lesson_planner_stack_v2',
   'lesson_planner_stack_v3',
   'lesson_planner_templates',
-  'lesson_planner_library_v2',
 ];
 
 type Ctx = { teacherMembershipId: string; organizationId: string };
