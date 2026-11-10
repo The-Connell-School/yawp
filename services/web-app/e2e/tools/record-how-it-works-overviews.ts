@@ -143,11 +143,18 @@ async function titleCard(page: Page, accent: string, title: string) {
       Object.assign(sub.style, { font: '500 30px/1.3 Inter, ui-sans-serif, system-ui, sans-serif', color: '#3A3F4B' });
       card.append(bar, name, sub);
       document.body.appendChild(card);
+      // The card is the poster: no cursor on it.
+      const cursor = document.getElementById('__rec_cursor');
+      if (cursor) cursor.style.visibility = 'hidden';
     },
     [title, accent] as const
   );
   await pause(page, 2600);
-  await page.evaluate(() => document.getElementById('__rec_title')?.remove());
+  await page.evaluate(() => {
+    document.getElementById('__rec_title')?.remove();
+    const cursor = document.getElementById('__rec_cursor');
+    if (cursor) cursor.style.visibility = 'visible';
+  });
 }
 
 /** Move the drawn cursor to an element the way a person would, then click it. */
