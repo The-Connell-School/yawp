@@ -10,6 +10,7 @@ import {
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { prisma } from '~/utils/db.server';
 import crypto from 'node:crypto';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
@@ -268,7 +269,7 @@ export async function action({ request }: ActionFunctionArgs) {
     let reply: string;
     try {
       reply = await getLLMCompletion({
-        model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
+        model: (process.env.AI_MODEL as any) ?? DEFAULT_ANTHROPIC_MODEL,
         system,
         messages,
         maxTokens: 1500,

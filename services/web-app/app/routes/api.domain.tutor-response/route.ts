@@ -1,6 +1,7 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 import crypto from 'node:crypto';
@@ -48,6 +49,11 @@ import {
   sessionTurnLimitJson,
   trimChatHistoryToBudget,
 } from '~/utils/rate-limit.server';
+import { captureAppRateLimitHitServer } from '~/utils/app-error-presented.server';
+import {
+  classifyTutorApiError,
+  TUTOR_RATE_LIMIT_MESSAGE,
+} from '~/utils/app-error-presented.shared';
 
 const POST = z.object({
   response: z.string().min(1).max(RATE_LIMITS.tutor.maxMessageChars),
@@ -137,7 +143,30 @@ export async function action({ request }: ActionFunctionArgs) {
         route: '/api/domain/tutor-response',
       });
       if (!decision.allowed) {
-        return rateLimitedJson(decision.scope, decision.retryAfterSeconds, 'Give me a moment — try again soon.');
+        const scope = decision.scope === 'global' ? 'global' : 'user';
+        const classified = classifyTutorApiError({
+          status: 429,
+          error: {
+            code: 'RATE_LIMITED',
+            scope: decision.scope,
+            message: TUTOR_RATE_LIMIT_MESSAGE,
+            retryAfterSeconds: decision.retryAfterSeconds,
+          },
+        });
+        if (classified.rate_limit) {
+          captureAppRateLimitHitServer({
+            distinctId: userId,
+            feature: classified.rate_limit.feature,
+            scope: classified.rate_limit.scope,
+            limit_window: classified.rate_limit.limit_window,
+            route_template: '/api/domain/tutor-response',
+          });
+        }
+        return rateLimitedJson(
+          decision.scope,
+          decision.retryAfterSeconds,
+          TUTOR_RATE_LIMIT_MESSAGE
+        );
       }
     }
 
@@ -389,7 +418,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const forceFallback = data.llmRetry === 'fallback';
     try {
       completion = await getLLMCompletion({
-        model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
+        model: (process.env.AI_MODEL as any) ?? DEFAULT_ANTHROPIC_MODEL,
         messages,
         system,
         maxTokens: 500,

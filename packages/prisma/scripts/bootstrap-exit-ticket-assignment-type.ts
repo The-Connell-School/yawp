@@ -39,6 +39,9 @@ export const EXIT_TICKET_BOOTSTRAP_IMAGE_MD5 =
  */
 export const EXIT_TICKET_RETIRED_ARTWORK_MD5S: string[] = [
   EXIT_TICKET_BOOTSTRAP_IMAGE_MD5,
+  // The yellow ticket stub from PR #893 (Nov 6, previews only), superseded by
+  // Brian's Nov 5 card that main's #923 shipped to production.
+  '4894c384baab7aa9872a85fddc169155',
 ];
 
 export type BootstrapExitTicketOptions = {

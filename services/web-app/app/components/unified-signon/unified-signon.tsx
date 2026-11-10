@@ -125,6 +125,24 @@ export function UnifiedSignon({
     mounted.current = true;
   }, [screen]);
 
+  // Client hydration must not discard text typed before React attaches on the entry
+  // screen (controlled inputs otherwise render with empty React state).
+  useEffect(() => {
+    const fromDom: Record<string, string> = {};
+    const idEl = document.getElementById(
+      'signon-identifier'
+    ) as HTMLInputElement | null;
+    if (idEl?.value.trim()) fromDom.identifier = idEl.value;
+    if (!Object.keys(fromDom).length) return;
+    setValues((current) => {
+      const next = { ...current };
+      for (const [name, value] of Object.entries(fromDom)) {
+        if (!(current[name] ?? '').trim()) next[name] = value;
+      }
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     if (busy || !invalidFieldToFocus.current) return;
     // Inputs are disabled during submission. Focus only after the enabled DOM

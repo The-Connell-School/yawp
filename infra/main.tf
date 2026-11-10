@@ -596,7 +596,7 @@ resource "aws_apprunner_service" "web" {
         runtime_environment_variables = merge({
           NODE_ENV                    = var.env
           PORT                        = "8080"
-          AI_MODEL                    = "claude-sonnet-4-6"
+          AI_MODEL                    = "claude-sonnet-5-5"
           EMAIL_PROVIDER              = "ses"
           AWS_SES_REGION              = var.aws_region
           SES_FROM_EMAIL              = var.resend_from_email

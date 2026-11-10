@@ -9,6 +9,7 @@ import type { Prisma } from '@app/prisma';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import crypto from 'node:crypto';
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
@@ -1010,7 +1011,7 @@ export async function action({ request }: ActionFunctionArgs) {
           )
         );
 
-  const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
+  const model = process.env.AI_MODEL ?? DEFAULT_ANTHROPIC_MODEL;
   // llmRetry=fallback is the client half of the provider-failover handshake
   // (the server answers 202 {retrying:true}, the client re-posts with it). It
   // only selects the fallback model, and every request is rate limited above, so

@@ -1,7 +1,10 @@
 import { useEffect } from 'react'
+import { useLocation } from 'react-router'
 import { Toaster as SonnerToaster, toast as showToast } from 'sonner'
 import { type Toast } from '~/utils/toast.server.ts'
 import useBreakpoint from '~/hooks/useBreakpoint'
+import { captureAppErrorPresentedClient } from '~/utils/app-error-presented.client'
+import { inferToastErrorPresentation } from '~/utils/app-error-presented.shared'
 
 export function Toaster({ toast }: { toast?: Toast | null }) {
 	const breakpoint = useBreakpoint()
@@ -35,10 +38,24 @@ export function Toaster({ toast }: { toast?: Toast | null }) {
 
 function ShowToast({ toast }: { toast: Toast }) {
 	const { id, type, title, description, closeButton } = toast
+	const location = useLocation()
 	useEffect(() => {
 		setTimeout(() => {
 			showToast[type](title, { id, description, closeButton })
 		}, 0)
-	}, [description, id, title, type, closeButton])
+		if (type === 'error') {
+			const presentation = inferToastErrorPresentation({
+				title,
+				description,
+				route_template: location.pathname,
+			})
+			captureAppErrorPresentedClient({
+				...presentation,
+				surface: 'toast',
+				route_template: location.pathname,
+				toast_title: title,
+			})
+		}
+	}, [closeButton, description, id, location.pathname, title, type])
 	return null
 }

@@ -3,6 +3,7 @@
  * summarized once per version of the stack and kept, so a second download is
  * instant and costs nothing. Only with lesson_planner_plan_export_v2 on.
  */
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { redirect } from 'react-router';
 import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
@@ -78,7 +79,7 @@ export async function loadLessonPlan({
           units: 1,
         });
         return getLLMCompletion({
-          model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
+          model: (process.env.AI_MODEL as any) ?? DEFAULT_ANTHROPIC_MODEL,
           system: PLAN_SUMMARY_SYSTEM,
           messages: [{ role: AgentType.User, content: user }],
           maxTokens: SUMMARY_MAX_TOKENS,

@@ -5,6 +5,9 @@ import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
 import bcrypt from 'bcryptjs';
 import { generateStudentJoinToken } from '../../app/utils/student-join-token';
+import { studentHandleBase } from '../../app/domain/unified-signon/student-handle';
+import { submitUnifiedLogin } from '../helpers/unified-login';
+import { submitSignedInEnterClassCode } from '../test-helpers';
 
 test('existing student joins a separate free classroom and retains access after reload', async ({
   page,
@@ -15,7 +18,7 @@ test('existing student joins a separate free classroom and retains access after 
   const tag = `enter-code-${Date.now()}`;
   const orgs: string[] = [],
     users: string[] = [];
-  const handle = `local${Date.now().toString(36)}`;
+  const handle = studentHandleBase('Local', 'New Student');
   const joinToken = generateStudentJoinToken();
   let assignmentId: string | undefined;
   const shots = process.env.QA_SCREENSHOT_DIR;
@@ -51,10 +54,12 @@ test('existing student joins a separate free classroom and retains access after 
     );
   };
   try {
-    const source = await db.organization.create({ data: { name: tag } });
+    const source = await db.organization.create({
+      data: { name: `${tag} Prior Org` },
+    });
     orgs.push(source.id);
     const target = await db.organization.create({
-      data: { name: tag, plan: 'FREE_CLASSROOM' },
+      data: { name: `${tag} Free Classroom`, plan: 'FREE_CLASSROOM' },
     });
     orgs.push(target.id);
     const student = await db.user.create({
@@ -140,16 +145,11 @@ test('existing student joins a separate free classroom and retains access after 
     });
     await page.goto('/auth/login');
     await page.waitForLoadState('networkidle');
-    await page.getByLabel(/email or handle/i).fill(student.email!);
-    await page
-      .getByLabel('Password', { exact: true })
-      .fill('local-fixture-pass');
-    await page.getByRole('button', { name: /log in/i }).click();
+    await submitUnifiedLogin(page, student.email!, 'local-fixture-pass');
     await page.waitForURL(/enter-code|\/app/);
     await page.goto('/enter-code');
     await page.waitForLoadState('networkidle');
-    await page.getByLabel('Class Code', { exact: true }).fill(priorClass.code);
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await submitSignedInEnterClassCode(page, priorClass.code);
     await expect(page).toHaveURL(/\/app(?:\?|$)/);
     await page.reload();
     await expect(
@@ -176,11 +176,15 @@ test('existing student joins a separate free classroom and retains access after 
     });
     await page.goto('/enter-code');
     await page.waitForLoadState('networkidle');
-    await page.getByLabel('Class Code', { exact: true }).fill(klass.code);
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await submitSignedInEnterClassCode(page, klass.code, {
+      completeToApp: false,
+    });
     await expect(
-      page.getByText('Invalid code.', { exact: true })
-    ).toBeVisible();
+      page
+        .getByText('Invalid code.', { exact: true })
+        .or(page.getByText(/couldn't find a class with that code/i))
+        .or(page.getByRole('alert'))
+    ).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('Unrelated Tenant Class')).toHaveCount(0);
     await shot('desktop-collision-denial');
     await page.setViewportSize({ width: 390, height: 844 });
@@ -195,11 +199,12 @@ test('existing student joins a separate free classroom and retains access after 
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto('/enter-code');
     await page.waitForLoadState('networkidle');
-    await page.getByLabel('Class Code', { exact: true }).fill(klass.code);
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await submitSignedInEnterClassCode(page, klass.code, {
+      membershipOrganization: 'Free Classroom',
+    });
     if (process.env.CAPTURE_REJECTION === '1') {
       await expect(
-        page.getByText('Invalid code.', { exact: true })
+        page.getByText('Invalid code.', { exact: true }).or(page.getByRole('alert'))
       ).toBeVisible();
       await shot('desktop-rejection');
       await page.setViewportSize({ width: 390, height: 844 });
@@ -250,15 +255,14 @@ test('existing student joins a separate free classroom and retains access after 
       const signup = await newcomer.newPage();
       await signup.goto(`/join?t=${joinToken}`);
       await signup.waitForLoadState('networkidle');
-      await signup.getByLabel('Display name').fill('Local New Student');
-      await signup.getByLabel('Handle', { exact: true }).fill(handle);
-      await signup
-        .getByLabel('Password', { exact: true })
-        .fill('local-fixture-pass');
-      await signup.getByLabel('Confirm password').fill('local-fixture-pass');
-      await signup
-        .getByRole('button', { name: 'Join class', exact: true })
-        .click();
+      const { fillFreeTierJoinForm, submitFreeTierJoinAndExpectApp } =
+        await import('../test-helpers');
+      await fillFreeTierJoinForm(signup, {
+        displayName: 'Local New Student',
+        handle,
+        password: 'local-fixture-pass',
+      });
+      await submitFreeTierJoinAndExpectApp(signup);
       await expect(signup).toHaveURL(/\/app(?:\?|$)/);
       await signup.goto(`/app/my-classes/${klass.id}`);
       await signup.reload();

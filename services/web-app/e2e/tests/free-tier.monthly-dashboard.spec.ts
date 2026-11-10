@@ -3,6 +3,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createE2EPrismaClient } from '../prisma-client';
+import { submitUnifiedLogin } from '../helpers/unified-login';
 const db = createE2EPrismaClient();
 const org = 'preview-free-classroom';
 const baseline = process.env.FTO_LIMITS_BEFORE === '1';
@@ -17,11 +18,11 @@ async function login(page: Page, free = true) {
   await page.context().clearCookies();
   await page.goto('/auth/login');
   await page.waitForLoadState('networkidle');
-  await page
-    .getByLabel('Email or handle')
-    .fill(free ? 'dev.teacher.free@yawp.local' : 'dev.teacher@yawp.local');
-  await page.locator('input[type="password"]').fill('yawp-dev');
-  await page.getByRole('button', { name: /Log in/i }).click();
+  await submitUnifiedLogin(
+    page,
+    free ? 'dev.teacher.free@yawp.local' : 'dev.teacher@yawp.local',
+    'yawp-dev'
+  );
   await page.waitForURL((url) => url.pathname.replace(/\/$/, '') === '/app');
 }
 async function shot(page: Page, name: string) {
@@ -226,11 +227,7 @@ for (const control of ['flag-off', 'untargeted', 'paid', 'pending'] as const)
         await page.context().clearCookies();
         await page.goto('/auth/login');
         await page.waitForLoadState('networkidle');
-        await page
-          .getByLabel('Email or handle')
-          .fill('dev.teacher.free@yawp.local');
-        await page.locator('input[type="password"]').fill('yawp-dev');
-        await page.getByRole('button', { name: /Log in/i }).click();
+        await submitUnifiedLogin(page, 'dev.teacher.free@yawp.local', 'yawp-dev');
         await page.waitForURL(/\/app\/free-tier\/preview/);
       } else await login(page, control !== 'paid');
       await expect(

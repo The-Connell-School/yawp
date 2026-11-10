@@ -2,6 +2,7 @@ import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { z } from 'zod';
 import { anthropic } from '~/services/anthropic';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { prisma } from '~/utils/db.server';
 import crypto from 'node:crypto';
 import { computeIpHash, logAllowedUsage } from '~/utils/ai-usage-log.server';
@@ -157,7 +158,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const model =
     process.env.AI_MODEL && process.env.AI_MODEL.includes('claude')
       ? process.env.AI_MODEL
-      : 'claude-sonnet-4-6';
+      : DEFAULT_ANTHROPIC_MODEL;
 
   const system = [
     'You extract classroom writing assignments from PDFs.',

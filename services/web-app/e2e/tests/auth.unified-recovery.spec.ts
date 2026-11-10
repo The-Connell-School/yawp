@@ -18,7 +18,6 @@ test.skip(
 );
 test.describe.configure({ mode: 'serial' });
 const db = createE2EPrismaClient();
-const flag = 'feature_flag.unified-sign-on';
 const message =
   "We couldn't find a class with that code. Check it with your teacher.";
 const phase = process.env.SIGNON_RECOVERY_PHASE || 'after';
@@ -59,11 +58,6 @@ test.beforeEach(async ({ context }) => {
   const groups = randomBytes(12).toString('hex').match(/.{4}/g)!;
   await context.setExtraHTTPHeaders({
     'x-forwarded-for': `2001:db8:${groups.join(':')}`,
-  });
-  await db.setting.upsert({
-    where: { name: flag },
-    update: { value: 'true' },
-    create: { name: flag, value: 'true', valueType: 'boolean' },
   });
 });
 async function openQa(page: Page, account: string) {
@@ -313,43 +307,6 @@ for (const width of [1280, 390]) {
     } finally {
       await db.orgMembership.deleteMany({ where: { userId: qaId('orphan') } });
       await db.session.deleteMany({ where: { userId: qaId('orphan') } });
-    }
-  });
-  test(`flag OFF keeps legacy login signup join and free entry at ${width}`, async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
-    await db.setting.update({
-      where: { name: flag },
-      data: { value: 'false' },
-    });
-    // Ordinary seat access remains available when the QA picker is disabled.
-    await page.goto('/auth/preview-access');
-    await page.waitForFunction(() =>
-      Boolean((window as any).__reactRouterDataRouter)
-    );
-    await page
-      .getByLabel('Access code', { exact: true })
-      .fill('local-fixture-master-access');
-    await page
-      .getByRole('button', { name: 'Open preview', exact: true })
-      .click();
-    await page
-      .getByLabel('Organization', { exact: true })
-      .selectOption(qaId('school'));
-    await page
-      .getByRole('button', { name: 'Continue to organization', exact: true })
-      .click();
-    await expect(page).not.toHaveURL(/preview-access/);
-    for (const [route, name] of [
-      ['/auth/login', 'login'],
-      ['/auth/inv/signup', 'signup'],
-      ['/join?t=invalid-local-token', 'join'],
-      ['/free', 'free'],
-    ] as const) {
-      await page.goto(route);
-      await expect(page.locator('body')).toBeVisible();
-      await shot(page, `flag-off-${name}`, width);
     }
   });
 }

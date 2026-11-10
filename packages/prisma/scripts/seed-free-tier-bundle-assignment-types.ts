@@ -243,10 +243,16 @@ export const BUNDLE_RETIRED_ARTWORK_MD5S: Record<string, string[]> = {
   [PREWRITING_KIND]: [
     // Brainstorming notes and a pencil, the first card (October 2026).
     '2e22d9bede4d3eee6d1ca26a446ef931',
+    // The beret dog and lightbulb as PR #893 first encoded it (Nov 6, previews
+    // only); main's Nov 5 sync (#923) ships the same drawing re-encoded.
+    '0894136c31fa3eee303d703e72a3ba6c',
   ],
   [THESIS_STATEMENT_KIND]: [
     // A quill writing an underlined thesis sentence, the first card (October 2026).
     'c024adc8c638fbec53ac10bb4cb86d18',
+    // The beret dog saying yawp! as PR #893 first encoded it (Nov 6, previews
+    // only); main's Nov 5 sync (#923) ships the same drawing re-encoded.
+    '8124afc102fdb63532b6602643dc193d',
   ],
 };
 

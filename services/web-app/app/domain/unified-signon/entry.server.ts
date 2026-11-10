@@ -1,7 +1,6 @@
 import { signonRequestOrigin } from './origin.server';
 import { safeRedirect } from 'remix-utils/safe-redirect';
 import { getUserId, requireAnonymous } from '~/utils/auth.server';
-import { isUnifiedSignOnEnabled } from './gate.server';
 import type { ActionFunctionArgs } from 'react-router';
 import { redirect } from 'react-router';
 import { loginAction } from '~/routes/auth.login/login.server';
@@ -13,16 +12,10 @@ export async function unifiedEntry(request: Request) {
   try {
     await requireAnonymous(request);
   } catch (response) {
-    if (
-      !(response instanceof Response) ||
-      response.status !== 302 ||
-      response.headers.get('Location') !== '/' ||
-      !(await isUnifiedSignOnEnabled())
-    )
+    if (!(response instanceof Response) || response.status !== 302 || response.headers.get('Location') !== '/')
       throw response;
     authenticated = true;
   }
-  if (!(await isUnifiedSignOnEnabled())) return null;
   const { browserContext, withFlow } = await import('./flow.server');
   const { googleAvailableFor, googleVisibleFor } =
     await import('./google.server');
@@ -93,7 +86,6 @@ export async function unifiedEntry(request: Request) {
 }
 
 export async function dispatchUnifiedLogin(args: ActionFunctionArgs) {
-  if (!(await isUnifiedSignOnEnabled())) return loginAction(args);
   let form: FormData;
   try {
     form = await args.request.clone().formData();

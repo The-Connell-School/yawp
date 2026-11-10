@@ -246,15 +246,15 @@ export function ViewPanel({
                     </AccordionTrigger>
                     <AccordionContent>
                       {comment ? (
-                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                        <p className="text-sm leading-snug text-foreground/90 whitespace-pre-wrap">
                           {comment}
                         </p>
                       ) : band?.description ? (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-sm leading-snug text-foreground/90">
                           {band.description}
                         </p>
                       ) : (
-                        <p className="text-xs text-muted-foreground italic">
+                        <p className="text-sm text-foreground/70 italic">
                           No feedback for this category
                         </p>
                       )}
