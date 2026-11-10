@@ -13,6 +13,7 @@ const prisma = {
     findFirst: mock(),
   },
   orgMembership: { findUnique: mock() },
+  $executeRaw: mock(async () => 0),
   $transaction: mock(async (fn: (tx: typeof prisma) => unknown) => fn(prisma)),
 };
 

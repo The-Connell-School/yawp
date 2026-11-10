@@ -2,22 +2,8 @@ import { writeAdminConfigAudit } from '~/domain/admin-config/admin-config-audit.
 import { prisma } from '~/utils/db.server';
 import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import {
-  LESSON_PLANNER_INTAKE_V2_FLAG,
-  LESSON_PLANNER_STACK_V2_FLAG,
-  LESSON_PLANNER_DECK_V2_FLAG,
-  LESSON_PLANNER_PLAN_EXPORT_V2_FLAG,
-  LESSON_PLANNER_STACK_V3_FLAG,
-  LESSON_PLANNER_SHARE_FLAG,
-  LESSON_PLANNER_RUN_SHOW_FLAG,
-  LESSON_PLANNER_TEMPLATES_FLAG,
-  LESSON_PLANNER_DECK_GALLERY_FLAG,
-  LESSON_PLANNER_UPLOADS_FLAG,
-  LESSON_PLANNER_TEACH_NOTES_FLAG,
-  LESSON_PLANNER_LIBRARY_V2_FLAG,
-  LESSON_PLANNER_STACK_PANEL_FLAG,
   FREE_TIER_FLAG,
   LESSON_PLANNER_FLAG,
-  TEACHER_PROMPT_GENERATOR_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
   type FeatureFlagKey,
@@ -32,6 +18,22 @@ import {
   sameFeatureFlagValue,
   serializeFeatureFlagValue,
 } from './feature-flags';
+import {
+  LESSON_PLANNER_DECK_GALLERY_FLAG,
+  LESSON_PLANNER_DECK_V2_FLAG,
+  LESSON_PLANNER_INTAKE_V2_FLAG,
+  LESSON_PLANNER_LIBRARY_V2_FLAG,
+  LESSON_PLANNER_PLAN_EXPORT_V2_FLAG,
+  LESSON_PLANNER_RUN_SHOW_FLAG,
+  LESSON_PLANNER_SHARE_FLAG,
+  LESSON_PLANNER_STACK_PANEL_FLAG,
+  LESSON_PLANNER_STACK_V2_FLAG,
+  LESSON_PLANNER_STACK_V3_FLAG,
+  LESSON_PLANNER_TEMPLATES_FLAG,
+  LESSON_PLANNER_TEACH_NOTES_FLAG,
+  LESSON_PLANNER_UPLOADS_FLAG,
+  FOLDED_LESSON_PLANNER_REVIEW_FLAG_SETTINGS,
+} from './lesson-planner-review-flags';
 
 export type FeatureFlagState = {
   key: FeatureFlagKey;
@@ -70,10 +72,7 @@ import {
 
 function runtimeDefaultOn(key: FeatureFlagKey, env: Record<string, string | undefined>) {
   if (!isNonProductionDefaultOnDeployment(env)) return false;
-  return (
-    key === FREE_TIER_FLAG ||
-    key === TEACHER_PROMPT_GENERATOR_FLAG
-  );
+  return key === FREE_TIER_FLAG;
 }
 
 async function readSettingValue(name: string): Promise<string | null | undefined> {
@@ -201,22 +200,6 @@ export async function isFeatureFlagEnabled(
   orgId?: string | null
 ): Promise<boolean> {
   if (key === FREE_TIER_FLAG) return isFreeTierCapabilityEnabled(orgId);
-  if (key === TEACHER_PROMPT_GENERATOR_FLAG) {
-    if (isNonProductionDefaultOnDeployment(process.env)) return true;
-    try {
-      const row = await prisma.setting.findUnique({
-        where: { name: featureFlagSettingName(TEACHER_PROMPT_GENERATOR_FLAG) },
-        select: { value: true },
-      });
-      return evaluateFeatureFlag(parseFeatureFlagValue(row?.value), orgId);
-    } catch (error) {
-      console.error('feature_flag_read_failed', {
-        key: TEACHER_PROMPT_GENERATOR_FLAG,
-        error: buildSafeErrorForLog(error),
-      });
-      return false;
-    }
-  }
   try {
     const row = await prisma.setting.findUnique({
       where: { name: featureFlagSettingName(key) },
@@ -232,57 +215,83 @@ export async function isFeatureFlagEnabled(
   }
 }
 
-/** Which of the Lesson Planner review flags are on for this school. */
+const LESSON_PLANNER_CAPABILITIES_OFF: LessonPlannerReviewFlags = {
+  intakeV2: false,
+  stackV2: false,
+  deckV2: false,
+  stackPanel: false,
+  planExportV2: false,
+  stackV3: false,
+  share: false,
+  runShow: false,
+  templates: false,
+  deckGallery: false,
+  uploads: false,
+  teachNotes: false,
+  libraryV2: false,
+};
+
+const LESSON_PLANNER_CAPABILITIES_ON: LessonPlannerReviewFlags = {
+  intakeV2: true,
+  stackV2: true,
+  deckV2: true,
+  stackPanel: true,
+  planExportV2: true,
+  stackV3: true,
+  share: true,
+  runShow: true,
+  templates: true,
+  deckGallery: true,
+  uploads: true,
+  teachNotes: true,
+  libraryV2: true,
+};
+
+const LEGACY_SLICE_TO_CAPABILITY: Record<string, keyof LessonPlannerReviewFlags> = {
+  [LESSON_PLANNER_INTAKE_V2_FLAG]: 'intakeV2',
+  [LESSON_PLANNER_STACK_V2_FLAG]: 'stackV2',
+  [LESSON_PLANNER_DECK_V2_FLAG]: 'deckV2',
+  [LESSON_PLANNER_STACK_PANEL_FLAG]: 'stackPanel',
+  [LESSON_PLANNER_PLAN_EXPORT_V2_FLAG]: 'planExportV2',
+  [LESSON_PLANNER_STACK_V3_FLAG]: 'stackV3',
+  [LESSON_PLANNER_SHARE_FLAG]: 'share',
+  [LESSON_PLANNER_RUN_SHOW_FLAG]: 'runShow',
+  [LESSON_PLANNER_TEMPLATES_FLAG]: 'templates',
+  [LESSON_PLANNER_DECK_GALLERY_FLAG]: 'deckGallery',
+  [LESSON_PLANNER_UPLOADS_FLAG]: 'uploads',
+  [LESSON_PLANNER_TEACH_NOTES_FLAG]: 'teachNotes',
+  [LESSON_PLANNER_LIBRARY_V2_FLAG]: 'libraryV2',
+};
+
+function honorLessonPlannerSliceFlags(): boolean {
+  return process.env.HONOR_LESSON_PLANNER_SLICE_FLAGS === 'true';
+}
+
+async function lessonPlannerReviewFlagsFromLegacySlices(): Promise<LessonPlannerReviewFlags> {
+  const rows = await prisma.setting.findMany({
+    where: { name: { in: [...FOLDED_LESSON_PLANNER_REVIEW_FLAG_SETTINGS] } },
+    select: { name: true, value: true },
+  });
+  const byName = new Map(rows.map((row) => [row.name, row.value]));
+  const flags = { ...LESSON_PLANNER_CAPABILITIES_OFF };
+  for (const settingName of FOLDED_LESSON_PLANNER_REVIEW_FLAG_SETTINGS) {
+    const flagKey = settingName.replace(/^feature_flag\./, '');
+    const field = LEGACY_SLICE_TO_CAPABILITY[flagKey];
+    if (!field) continue;
+    flags[field] = byName.get(settingName) === 'true';
+  }
+  return flags;
+}
+
+/** Lesson Planner capabilities for this school (master `lesson_planner`; optional slice honor in e2e). */
 export async function getLessonPlannerReviewFlags(
   orgId: string | null | undefined
 ): Promise<LessonPlannerReviewFlags> {
-  const [
-    intakeV2,
-    stackV2,
-    deckV2,
-    stackPanel,
-    planExportV2,
-    stackV3,
-    share,
-    runShow,
-    templates,
-    deckGallery,
-    uploads,
-    teachNotes,
-    libraryV2,
-  ] = await Promise.all([
-    isFeatureFlagEnabled(LESSON_PLANNER_INTAKE_V2_FLAG, orgId),
-    isFeatureFlagEnabled(LESSON_PLANNER_STACK_V2_FLAG, orgId),
-    isFeatureFlagEnabled(LESSON_PLANNER_DECK_V2_FLAG, orgId),
-    isFeatureFlagEnabled(LESSON_PLANNER_STACK_PANEL_FLAG, orgId),
-    isFeatureFlagEnabled(LESSON_PLANNER_PLAN_EXPORT_V2_FLAG, orgId),
-    isFeatureFlagEnabled(LESSON_PLANNER_STACK_V3_FLAG, orgId),
-    isFeatureFlagEnabled(LESSON_PLANNER_SHARE_FLAG, orgId),
-    isFeatureFlagEnabled(LESSON_PLANNER_RUN_SHOW_FLAG, orgId),
-    isFeatureFlagEnabled(LESSON_PLANNER_TEMPLATES_FLAG, orgId),
-    isFeatureFlagEnabled(LESSON_PLANNER_DECK_GALLERY_FLAG, orgId),
-    isFeatureFlagEnabled(LESSON_PLANNER_UPLOADS_FLAG, orgId),
-    isFeatureFlagEnabled(LESSON_PLANNER_TEACH_NOTES_FLAG, orgId),
-    isFeatureFlagEnabled(LESSON_PLANNER_LIBRARY_V2_FLAG, orgId),
-  ]);
-  // The panel shows the stack v2 list; without stack v2 it has nothing to show.
-  // The run 3 page builds on stack v2, and the rest build on the run 3 page.
-  const v3 = stackV3 && stackV2;
-  return {
-    intakeV2,
-    stackV2,
-    deckV2,
-    stackPanel: stackPanel && stackV2,
-    planExportV2,
-    stackV3: v3,
-    share: share && v3,
-    runShow: runShow && v3,
-    templates: templates && v3,
-    deckGallery: deckGallery && deckV2,
-    uploads,
-    teachNotes: teachNotes && v3,
-    libraryV2: libraryV2 && v3,
-  };
+  if (!(await isLessonPlannerEnabled(orgId))) return { ...LESSON_PLANNER_CAPABILITIES_OFF };
+  if (honorLessonPlannerSliceFlags()) {
+    return lessonPlannerReviewFlagsFromLegacySlices();
+  }
+  return { ...LESSON_PLANNER_CAPABILITIES_ON };
 }
 
 export type LessonPlannerReviewFlags = {

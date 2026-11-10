@@ -1,11 +1,4 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import {
-  featureFlagSettingName,
-  serializeFeatureFlagValue,
-  TEACHER_LOUNGE_FLAG,
-} from '~/domain/feature-flags/feature-flags';
-
-const TEACHER_LOUNGE_SETTING = featureFlagSettingName(TEACHER_LOUNGE_FLAG);
 
 /** Seeded by migration `20261104120000_admin_config_access_lists`. */
 const SEEDED_ALLOWLIST_EMAILS = [
@@ -15,9 +8,6 @@ const SEEDED_ALLOWLIST_EMAILS = [
 ] as const;
 
 const prisma = {
-  setting: {
-    findUnique: mock(),
-  },
   accessListEntry: {
     findFirst: mock(),
     findUnique: mock(),
@@ -30,19 +20,6 @@ const {
   isTeacherLoungeTemporarilyDisabledForUser,
   redirectIfTeacherLoungeTemporarilyDisabled,
 } = await import('./teacher-lounge-temporary-disable.server');
-
-function mockLoungeOff() {
-  prisma.setting.findUnique.mockImplementation(
-    ({ where }: { where: { name: string } }) =>
-      Promise.resolve(
-        where.name === TEACHER_LOUNGE_SETTING
-          ? {
-              value: serializeFeatureFlagValue({ mode: 'off', orgIds: [] }),
-            }
-          : null
-      )
-  );
-}
 
 function mockAllowlistEmail(email: string) {
   prisma.accessListEntry.findFirst.mockResolvedValue(null);
@@ -63,10 +40,8 @@ function mockAllowlistEmail(email: string) {
 
 function resetMocks() {
   mock.module('~/utils/db.server', () => ({ prisma }));
-  prisma.setting.findUnique.mockReset();
   prisma.accessListEntry.findFirst.mockReset();
   prisma.accessListEntry.findUnique.mockReset();
-  mockLoungeOff();
   prisma.accessListEntry.findFirst.mockResolvedValue(null);
   prisma.accessListEntry.findUnique.mockResolvedValue(null);
 }
@@ -139,17 +114,6 @@ describe('isTeacherLoungeTemporarilyDisabledForUser', () => {
       })
     ).toBe(false);
     expect(prisma.accessListEntry.findUnique.mock.calls.length).toBe(0);
-  });
-
-  test('everyone mode enables Lounge for any teacher', async () => {
-    prisma.setting.findUnique.mockResolvedValue({
-      value: serializeFeatureFlagValue({ mode: 'everyone', orgIds: [] }),
-    });
-    expect(
-      await isTeacherLoungeTemporarilyDisabledForUser({
-        email: 'other.teacher@example.com',
-      })
-    ).toBe(false);
   });
 });
 

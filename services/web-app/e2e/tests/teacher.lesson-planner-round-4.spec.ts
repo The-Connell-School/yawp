@@ -5,7 +5,7 @@
  */
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-import { setLessonPlannerReviewFlag, type LessonPlannerReviewFlag } from '../feature-flags';
+import { setLessonPlannerFlag, setLessonPlannerReviewFlag, type LessonPlannerReviewFlag } from '../feature-flags';
 import { DAY_ONE_REPLY } from '../fixtures/lesson-planner/day-one-reply';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
@@ -142,7 +142,7 @@ test.describe("Brian's round 4 (Oct 28)", () => {
   });
   test.afterEach(async ({ e2eContext }) => {
     await clear(e2eContext);
-    for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, false);
+    await setLessonPlannerFlag(true);
   });
 
   test('2 and 3: a deck built on the stack can be edited, and Add it adds it with no panel', async ({ page, signIn, e2eContext }) => {

@@ -1,14 +1,5 @@
-import { createHash } from 'node:crypto';
-import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
-import { isFeatureFlagEnabled, isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { GUIDED_TOURS_FLAG } from '~/domain/feature-flags/feature-flags';
 import { prisma } from '~/utils/db.server';
-import {
-  guidedToursAvailable,
-  isTourId,
-  type TourId,
-  type TourStatus,
-} from './tours';
+import { isTourId, type TourId, type TourStatus } from './tours';
 
 /**
  * Tours the user has finished; their welcome cards stay closed for good. A
@@ -54,46 +45,19 @@ export async function resetTours(userId: string) {
  * teacher while the free tier is on, or null for everyone else.
  */
 export async function loadGuidedTours(
-  userId: string,
-  membership: { role: string; organization?: { id?: string; plan?: string | null } | null },
-  request: Request
+  _userId: string,
+  _membership: { role: string; organization?: { id?: string; plan?: string | null } | null },
+  _request: Request
 ): Promise<{ finishedTourIds: TourId[]; storageScope: string } | null> {
-  const plan = membership.organization?.plan;
-  // Only free classroom teachers can see tours; skip the flag read otherwise.
-  if (
-    !guidedToursAvailable({
-      freeTierEnabled: true,
-      role: membership.role,
-      plan,
-    })
-  ) {
-    return null;
-  }
-  if (!(await isFreeTierEnabled()) ||
-      !(await isFeatureFlagEnabled(GUIDED_TOURS_FLAG, membership.organization?.id))) return null;
-  const session = await authSessionStorage.getSession(request.headers.get('cookie'));
-  const sessionId = session.get('sessionId');
-  if (typeof sessionId !== 'string') return null;
-  const storageScope = createHash('sha256').update(`${userId}:${sessionId}`).digest('hex');
-  return { finishedTourIds: await loadFinishedTourIds(userId), storageScope };
+  return null;
 }
 
 
 /** The existing approval gate establishes teacher identity without provisioning a membership. */
 export async function loadWaitingPreviewTours(
-  userId: string,
-  application: { status: string; organizationId: string | null },
-  request: Request
+  _userId: string,
+  _application: { status: string; organizationId: string | null },
+  _request: Request
 ) {
-  if (!['SENT', 'MANUAL_REVIEW'].includes(application.status) ||
-      !(await isFreeTierEnabled()) ||
-      !(await isFeatureFlagEnabled(GUIDED_TOURS_FLAG, application.organizationId ?? undefined))) return null;
-  const session = await authSessionStorage.getSession(request.headers.get('cookie'));
-  if (session.get('impersonationMode') === 'read-only') return null;
-  const sessionId = session.get('sessionId');
-  if (typeof sessionId !== 'string') return null;
-  return {
-    finishedTourIds: (await loadFinishedTourIds(userId)).filter(id => id === 'waiting-preview'),
-    storageScope: createHash('sha256').update(`${userId}:${sessionId}`).digest('hex'),
-  };
+  return null;
 }

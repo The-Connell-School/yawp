@@ -37,8 +37,8 @@ function request(body: unknown = input, extra: RequestInit = {}) {
   });
 }
 describe('demo feedback endpoint', () => {
-  test('flag is registered and absent values default off', () => {
-    expect(FEATURE_FLAGS).toHaveProperty('demo-feedback-widget');
+  test('demo feedback no longer uses a product feature flag', () => {
+    expect(FEATURE_FLAGS).not.toHaveProperty('demo-feedback-widget');
     expect(parseFeatureFlagValue(undefined).mode).toBe('off');
   });
   test('local dev panel still respects the demo feedback flag', async () => {
@@ -58,7 +58,18 @@ describe('demo feedback endpoint', () => {
       process.env = previous;
     }
   });
-  test('requires demo runtime and a successful flag read for rendering and submission', async () => {
+  test('stays off during Playwright tester-feedback runs', async () => {
+    const previous = { ...process.env };
+    process.env.E2E = 'true';
+    process.env.TESTER_FEEDBACK_ENABLED = 'true';
+    try {
+      expect(await demoFeedbackAvailable(setup().deps)).toBe(false);
+    } finally {
+      process.env = previous;
+    }
+  });
+
+  test('requires demo or preview runtime and a successful flag read for rendering and submission', async () => {
     for (const environment of ['production', 'development', 'pr-123', 'test']) {
       const { deps, save } = setup({ environment: () => environment });
       expect(await demoFeedbackAvailable(deps)).toBe(false);
@@ -77,6 +88,18 @@ describe('demo feedback endpoint', () => {
       expect(save).not.toHaveBeenCalled();
     }
     expect(await demoFeedbackAvailable(setup().deps)).toBe(true);
+    const previous = { ...process.env };
+  Object.assign(process.env, { YAWP_ENVIRONMENT: 'preview', PREVIEW_SLUG: '' });
+    try {
+      expect(
+        await demoFeedbackAvailable({
+          environment: () => 'preview',
+          flagEnabled: async () => true,
+        })
+      ).toBe(true);
+    } finally {
+      process.env = previous;
+    }
   });
   test('requires authentication and same-origin POST', async () => {
     expect(

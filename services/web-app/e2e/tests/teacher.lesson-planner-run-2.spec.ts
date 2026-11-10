@@ -10,7 +10,7 @@ import { inflateRawSync } from 'node:zlib';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import {
-  setLessonPlannerReviewFlag,
+  setLessonPlannerFlag, setLessonPlannerReviewFlag,
   type LessonPlannerReviewFlag,
 } from '../feature-flags';
 
@@ -142,11 +142,13 @@ async function seedStack(
 }
 
 test.describe("Lesson Planner — Brian's second run", () => {
+  test.beforeEach(async () => {
+    await setLessonPlannerFlag(true);
+  });
+
   test.afterEach(async ({ e2eContext }) => {
     await clearLessonPlans(e2eContext.teacherMembershipId);
-    for (const flag of REVIEW_FLAGS) {
-      await setLessonPlannerReviewFlag(flag, false);
-    }
+    await setLessonPlannerFlag(true);
   });
 
   test.describe('S1: the deck in the stack', () => {
@@ -953,36 +955,12 @@ test.describe("Lesson Planner — Brian's second run", () => {
       expect(handout.ok()).toBe(true);
       expect((await handout.body()).toString('latin1')).toContain('Arimo');
     });
-
-    test('flag off: no Word download, and the route is not there', async ({ page, signIn, e2eContext }) => {
-      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
-      const { conversationId } = await seedStack(e2eContext, [{ title: 'Read aloud' }]);
-      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
-      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
-      await expect(page.getByRole('link', { name: 'Lesson plan for Word / Google Docs' })).toHaveCount(0);
-      const response = await page.request.get(`/app/lesson-planner/${conversationId}/plan.docx`);
-      expect(response.status()).toBe(404);
-    });
   });
 
   test.describe('A7: the stack takes shape beside the chat', () => {
     const TWO_STARTERS =
       '## Class starter (5 min)\n\n```yawp-daily-pages\nkind: class-starter\nWrite about something you carry every day.\n```\n\n' +
       '```yawp-daily-pages\nkind: class-starter\nWhat is the heaviest thing you have carried?\n```';
-
-    test('flag off: no panel', async ({ page, signIn, e2eContext }) => {
-      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
-      const { conversationId } = await seedConversation(e2eContext, [
-        { role: 'user', content: 'Plan Day 1.' },
-        { role: 'assistant', content: TWO_STARTERS },
-      ]);
-      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
-      await page.setViewportSize({ width: 1440, height: 900 });
-      await page.goto(`/app/lesson-planner?c=${conversationId}`);
-      await page.getByTestId('daily-pages-stack-toggle').first().click();
-      await expect(page.getByTestId('lesson-packet-bar')).toBeVisible();
-      await expect(page.getByTestId('stack-panel')).toHaveCount(0);
-    });
 
     test('pieces appear as they are added; remove and reorder right there', async ({
       page,

@@ -4,7 +4,18 @@ import {
   serializeFeatureFlagValue,
   type FeatureFlagValueInput,
 } from '../app/domain/feature-flags/feature-flags';
+import {
+  LESSON_PLANNER_REVIEW_FLAG_KEYS,
+  type LessonPlannerReviewFlagKey,
+} from '../app/domain/feature-flags/lesson-planner-review-flags';
 import { createE2EPrismaClient } from './prisma-client';
+
+export async function enableAllLessonPlannerReviewFlags() {
+  await setLessonPlannerFlag(true);
+  for (const flag of LESSON_PLANNER_REVIEW_FLAG_KEYS) {
+    await setLessonPlannerReviewFlag(flag, true);
+  }
+}
 
 const LESSON_PLANNER_SETTING = 'feature_flag.lesson_planner';
 const FREE_TIER_SETTING = 'feature_flag.free_tier';
@@ -37,14 +48,17 @@ export async function setFreeTierOnboardingV2(enabled: boolean) {
 export async function setFreeTierFlag(enabled: boolean) {
   const prisma = createE2EPrismaClient();
   try {
-    const value = enabled ? 'true' : 'false';
+    const value = serializeFeatureFlagValue({
+      mode: enabled ? 'everyone' : 'off',
+      orgIds: [],
+    });
     for (const name of [FREE_TIER_SETTING, ...FOLDED_FREE_TIER_SETTINGS]) {
       await prisma.setting.upsert({
         where: { name },
         create: {
           name,
           value,
-          valueType: 'boolean',
+          valueType: 'json',
           description: 'Set by e2e',
         },
         update: { value, updatedAt: new Date() },
@@ -58,15 +72,19 @@ export async function setFreeTierFlag(enabled: boolean) {
 export async function setLessonPlannerFlag(enabled: boolean) {
   const prisma = createE2EPrismaClient();
   try {
+    const value = serializeFeatureFlagValue({
+      mode: enabled ? 'everyone' : 'off',
+      orgIds: [],
+    });
     await prisma.setting.upsert({
       where: { name: LESSON_PLANNER_SETTING },
       create: {
         name: LESSON_PLANNER_SETTING,
-        value: enabled ? 'true' : 'false',
-        valueType: 'boolean',
+        value,
+        valueType: 'json',
         description: 'Set by e2e',
       },
-      update: { value: enabled ? 'true' : 'false', updatedAt: new Date() },
+      update: { value, valueType: 'json', updatedAt: new Date() },
     });
   } finally {
     await prisma.$disconnect();
@@ -100,27 +118,47 @@ export async function setFeatureFlag(
   }
 }
 
-/** Lesson Planner review flags (intake v2, stack v2, deck v2, run 2). */
-export type LessonPlannerReviewFlag = Extract<
-  FeatureFlagKey,
-  | 'lesson_planner_intake_v2'
-  | 'lesson_planner_stack_v2'
-  | 'lesson_planner_deck_v2'
-  | 'lesson_planner_stack_panel'
-  | 'lesson_planner_plan_export_v2'
-  | 'lesson_planner_stack_v3'
-  | 'lesson_planner_share'
-  | 'lesson_planner_run_show'
-  | 'lesson_planner_templates'
-  | 'lesson_planner_deck_gallery'
-  | 'lesson_planner_uploads'
-  | 'lesson_planner_teach_notes'
-  | 'lesson_planner_library_v2'
->;
+/** @deprecated Review slices collapse into `lesson_planner` in production; e2e can still set legacy rows. */
+export type LessonPlannerReviewFlag = LessonPlannerReviewFlagKey;
+
+/** Clears legacy slice rows so honor-mode e2e starts from flags off. */
+export async function clearLessonPlannerReviewFlags() {
+  const prisma = createE2EPrismaClient();
+  try {
+    await prisma.setting.deleteMany({
+      where: {
+        name: {
+          in: LESSON_PLANNER_REVIEW_FLAG_KEYS.map(
+            (key) => `feature_flag.${key}`
+          ),
+        },
+      },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
 
 export async function setLessonPlannerReviewFlag(
   flag: LessonPlannerReviewFlag,
   enabled: boolean
 ) {
-  await setFeatureFlag(flag, enabled);
+  await setLessonPlannerFlag(true);
+  const prisma = createE2EPrismaClient();
+  try {
+    const name = `feature_flag.${flag}`;
+    const value = String(enabled);
+    await prisma.setting.upsert({
+      where: { name },
+      create: {
+        name,
+        value,
+        valueType: 'boolean',
+        description: 'Set by e2e',
+      },
+      update: { value, updatedAt: new Date() },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
 }

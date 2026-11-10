@@ -6,7 +6,7 @@
  */
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-import { setLessonPlannerReviewFlag, type LessonPlannerReviewFlag } from '../feature-flags';
+import { setLessonPlannerFlag, setLessonPlannerReviewFlag, type LessonPlannerReviewFlag } from '../feature-flags';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 const FLAGS: LessonPlannerReviewFlag[] = [
@@ -127,7 +127,7 @@ test.describe("Brian's round 3 (Oct 25)", () => {
   });
   test.afterEach(async ({ e2eContext }) => {
     await clear(e2eContext);
-    for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, false);
+    await setLessonPlannerFlag(true);
   });
 
   test('the stack: a clean title, the period, a day to pick, only real writing, and no period to pick', async ({

@@ -6,7 +6,7 @@
  */
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-import { setLessonPlannerReviewFlag, type LessonPlannerReviewFlag } from '../feature-flags';
+import { setLessonPlannerFlag, setLessonPlannerReviewFlag, type LessonPlannerReviewFlag } from '../feature-flags';
 import { DAY_ONE_REPLY } from '../fixtures/lesson-planner/day-one-reply';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
@@ -89,7 +89,7 @@ test.describe("Library redesign (Brian's Oct 24 handoff, Part 2)", () => {
   // Leave nothing behind for the specs that run after this one.
   test.afterEach(async ({ e2eContext }) => {
     await clearLibrary(e2eContext);
-    for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, false);
+    await setLessonPlannerFlag(true);
   });
 
   test('L1: course tabs, kinds, units as tiles in groups, and lessons on their own', async ({ page, signIn, e2eContext }) => {

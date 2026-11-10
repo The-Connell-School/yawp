@@ -1296,11 +1296,14 @@ export async function seedE2E(): Promise<E2EContext> {
     where: { name: 'feature_flag.lesson_planner' },
     create: {
       name: 'feature_flag.lesson_planner',
-      value: 'true',
-      valueType: 'boolean',
+      value: '{"mode":"everyone","orgIds":[]}',
+      valueType: 'json',
       description: 'Enabled for E2E',
     },
-    update: { value: 'true', updatedAt: new Date() },
+    update: {
+      value: '{"mode":"everyone","orgIds":[]}',
+      updatedAt: new Date(),
+    },
   });
 
   await prisma.setting.upsert({

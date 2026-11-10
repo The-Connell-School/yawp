@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { afterAll, describe, expect, mock, test } from 'bun:test';
 import { type OrganizationPlan, PrismaClient } from '@app/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -24,7 +25,7 @@ let currentProfile: TestProfile | null = null;
 mock.module('~/utils/auth.server.js', () => ({
   requireUserId: async () => currentUserId,
   requireMembership: async () => currentProfile,
-  requireOwner: async () => currentProfile,
+  requireOwner: async () => currentUserId,
 }));
 
 const { action: myClassesAction } = await import(
@@ -38,6 +39,12 @@ function actionHttpStatus(result: unknown) {
   if (result instanceof Response) return result.status;
   const wrapped = result as { init?: ResponseInit };
   return wrapped.init?.status ?? 200;
+}
+
+function actionErrorMessage(result: unknown): string | undefined {
+  if (result instanceof Response) return undefined;
+  const wrapped = result as { data?: { error?: string } };
+  return wrapped.data?.error;
 }
 
 describe.skipIf(!process.env.DATABASE_URL)(
@@ -73,7 +80,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
       }
     });
 
-    async function createTeacherFixture(plan: 'SCHOOL' | 'FREE_CLASSROOM') {
+    async function createTeacherFixture(
+      plan: 'SCHOOL' | 'FREE_CLASSROOM',
+      options: { linkMembershipToSchool?: boolean } = {}
+    ) {
+      const linkMembershipToSchool = options.linkMembershipToSchool ?? true;
       const org = await prisma.organization.create({
         data: {
           name: `Route Class Cap ${plan} ${Date.now()}`,
@@ -106,7 +117,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
           organizationId: org.id,
           role: 'TEACHER',
           isOrgOwner: true,
-          schools: { connect: { id: school.id } },
+          ...(linkMembershipToSchool
+            ? { schools: { connect: { id: school.id } } }
+            : {}),
         },
         select: { id: true },
       });
@@ -114,11 +127,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
         data: {
           schoolId: school.id,
           schoolYear: '2026-2027',
-          code: `EXIST-${Date.now()}`.slice(0, 12),
+          code: uniqueClassCode('E'),
           teachers: { connect: { id: membership.id } },
         },
       });
       return { org, school, user, membership };
+    }
+
+    function uniqueClassCode(prefix: string) {
+      return `${prefix}${randomBytes(4).toString('hex')}`.toUpperCase().slice(0, 12);
     }
 
     function createClassForm(schoolId: string) {
@@ -126,8 +143,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       body.set('intent', 'create-class');
       body.set('schoolId', schoolId);
       body.set('schoolYear', '2026-2027');
-      body.set('code', `NEW-${Date.now()}`.slice(0, 12));
-      body.set('teacherIds', '');
+      body.set('code', uniqueClassCode('N'));
       return body;
     }
 
@@ -222,8 +238,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     test('POST /app/organization/classes allows SCHOOL org second class', async () => {
-      const { org, school, user, membership } =
-        await createTeacherFixture('SCHOOL');
+      const { org, school, user, membership } = await createTeacherFixture(
+        'SCHOOL',
+        { linkMembershipToSchool: false }
+      );
       currentUserId = user.id;
       currentProfile = {
         id: membership.id,
@@ -233,7 +251,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       };
 
       const body = createClassForm(school.id);
-      body.set('teacherIds', membership.id);
+      body.set('grade', '10th');
+      body.set('period', '2nd');
+      body.append('teacherIds', membership.id);
 
       const response = await orgClassesAction({
         request: new Request('https://example.test/app/organization/classes', {
@@ -244,7 +264,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
         context: {} as never,
       } as any);
 
-      expect(actionHttpStatus(response)).toBe(200);
+      const status = actionHttpStatus(response);
+      const error = actionErrorMessage(response);
+      expect({ status, error }).toEqual({ status: 200, error: undefined });
       const after = await prisma.class.count({
         where: { isArchived: false, school: { organizationId: org.id } },
       });
@@ -262,10 +284,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await prisma.class.update({ where: { id: own.id }, data: { code: ownCode } });
       currentUserId = b.user.id;
       currentProfile = { id: b.membership.id, role: 'TEACHER', isOrgOwner: true, organization: b.org };
-      const name = 'feature_flag.classcode-unique';
-      const previous = await prisma.setting.findUnique({ where: { name } });
       try {
-        await prisma.setting.upsert({ where: { name }, create: { name, value: 'true', valueType: 'boolean' }, update: { value: 'true' } });
         for (const action of [myClassesAction, orgClassesAction]) {
           for (const intent of ['create-class', 'edit-class']) {
             const body = createClassForm(b.school.id);
@@ -301,8 +320,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         body.set('schoolId', a.school.id);
         expect(actionHttpStatus(await myClassesAction({ request: new Request('https://example.test/app/my-classes?index', { method: 'POST', body }) } as any))).toBe(400);
       } finally {
-        if (previous) await prisma.setting.update({ where: { name }, data: { value: previous.value } });
-        else await prisma.setting.deleteMany({ where: { name } });
+        // class-code uniqueness is always on; nothing to restore
       }
     });
   }

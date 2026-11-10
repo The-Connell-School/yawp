@@ -17,8 +17,6 @@ const foreignOrgId = `${prefix}-foreign`;
 const foreignSchoolName = `${prefix} Foreign High`;
 const foreignClassTitle = `${prefix} Foreign English`;
 const foreignTeacherName = `${prefix} Foreign Teacher`;
-const flag = 'feature_flag.unified-sign-on';
-
 async function authenticate(page: Page, userId: string) {
   const session = await db.session.create({
     data: {
@@ -58,14 +56,6 @@ async function assertNoForeignMetadata(page: Page) {
   ).toHaveCount(0);
 }
 
-async function enableUnifiedSignOn() {
-  await db.setting.upsert({
-    where: { name: flag },
-    update: { value: 'true' },
-    create: { name: flag, value: 'true', valueType: 'boolean' },
-  });
-}
-
 test.beforeAll(async () => {
   if (
     !['localhost', '127.0.0.1'].includes(
@@ -73,7 +63,6 @@ test.beforeAll(async () => {
     )
   )
     throw new Error('Local DB required');
-  await enableUnifiedSignOn();
   for (const orgId of [homeOrgId, foreignOrgId]) {
     await db.organization.create({
       data: { id: orgId, name: orgId, plan: 'SCHOOL' },

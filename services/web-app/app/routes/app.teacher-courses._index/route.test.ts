@@ -1,9 +1,4 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import {
-  featureFlagSettingName,
-  serializeFeatureFlagValue,
-  TEACHER_LOUNGE_FLAG,
-} from '~/domain/feature-flags/feature-flags';
 
 const requireUserId = mock(async () => 'user-1');
 const requireMembership = mock(async () => ({
@@ -11,12 +6,10 @@ const requireMembership = mock(async () => ({
 }));
 const findUnique = mock(async () => ({ email: 'other.teacher@example.com' }));
 
-const TEACHER_LOUNGE_SETTING = featureFlagSettingName(TEACHER_LOUNGE_FLAG);
 const ALLOWLIST_EMAIL = 'zestlan.simmons@mps.k12.al.us';
 
 const prisma = {
   user: { findUnique },
-  setting: { findUnique: mock() },
   accessListEntry: {
     findFirst: mock(),
     findUnique: mock(),
@@ -33,16 +26,6 @@ mock.module('~/utils/db.server', () => ({ prisma }));
 const { loader } = await import('./route');
 
 function mockLoungeOff() {
-  prisma.setting.findUnique.mockImplementation(
-    ({ where }: { where: { name: string } }) =>
-      Promise.resolve(
-        where.name === TEACHER_LOUNGE_SETTING
-          ? {
-              value: serializeFeatureFlagValue({ mode: 'off', orgIds: [] }),
-            }
-          : null
-      )
-  );
   prisma.accessListEntry.findFirst.mockResolvedValue(null);
   prisma.accessListEntry.findUnique.mockResolvedValue(null);
 }

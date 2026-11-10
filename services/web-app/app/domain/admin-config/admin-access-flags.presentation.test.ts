@@ -5,7 +5,7 @@ import {
   shouldConfirmEveryoneFromTargeted,
   runtimeOverrideCopy,
 } from './admin-access-flags.presentation';
-import { TEACHER_LOUNGE_FLAG } from '~/domain/feature-flags/feature-flags';
+import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
 
 describe('formatFlagModeLabel', () => {
   test('formats targeted school counts', () => {
@@ -53,7 +53,7 @@ describe('shouldConfirmEveryoneFromTargeted', () => {
 describe('runtimeOverrideCopy', () => {
   test('describes non-production default on', () => {
     const flag = {
-      key: TEACHER_LOUNGE_FLAG,
+      key: FREE_TIER_FLAG,
       persisted: { mode: 'off' as const, orgIds: [] },
       effective: { mode: 'everyone' as const, orgIds: [] },
       runtimeOverride: 'non_production_default' as const,

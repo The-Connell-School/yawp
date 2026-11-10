@@ -14,13 +14,11 @@ const classes = (rows: { id: string; orgId: string | null }[]) => ({
 });
 
 describe('shouldUseInternalRubricRelease', () => {
-  test('one school: the internal_rubrics flag decides for that school', async () => {
-    const isEnabled = mock(async () => true);
+  test('one school: Yawp Internal rubric releases are always on', async () => {
+    const isEnabled = mock(async () => false);
     const db = classes([{ id: 'c1', orgId: 'org-1' }, { id: 'c2', orgId: 'org-1' }]);
     expect(await shouldUseInternalRubricRelease(['c1', 'c2'], { db: db as any, isEnabled })).toBe(true);
-    expect(isEnabled.mock.calls).toEqual([['internal_rubrics', 'org-1']] as any);
-    const off = mock(async () => false);
-    expect(await shouldUseInternalRubricRelease(['c1'], { db: db as any, isEnabled: off })).toBe(false);
+    expect(isEnabled).not.toHaveBeenCalled();
   });
 
   test('no classes, unknown classes or classes from several schools keep the default pin without reading the flag', async () => {
@@ -39,7 +37,7 @@ describe('shouldUseInternalRubricRelease', () => {
       const broken = { class: { findMany: mock(async () => { throw new Error('db down'); }) } };
       expect(await shouldUseInternalRubricRelease(['c1'], { db: broken as any, isEnabled: async () => true })).toBe(false);
       const db = classes([{ id: 'c1', orgId: 'org-1' }]);
-      expect(await shouldUseInternalRubricRelease(['c1'], { db: db as any, isEnabled: async () => { throw new Error('flag'); } })).toBe(false);
+      expect(await shouldUseInternalRubricRelease(['c1'], { db: db as any, isEnabled: async () => { throw new Error('flag'); } })).toBe(true);
     } finally {
       console.warn = warn;
     }

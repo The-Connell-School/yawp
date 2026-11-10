@@ -7,7 +7,7 @@
  */
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-import { setLessonPlannerReviewFlag, type LessonPlannerReviewFlag } from '../feature-flags';
+import { setLessonPlannerFlag, setLessonPlannerReviewFlag, type LessonPlannerReviewFlag } from '../feature-flags';
 import { DAY_ONE_REPLY } from '../fixtures/lesson-planner/day-one-reply';
 import { extractText, getDocumentProxy } from 'unpdf';
 
@@ -102,7 +102,7 @@ test.describe("Stack page v2 (Brian's Oct 24 handoff)", () => {
     } finally {
       await prisma.$disconnect();
     }
-    for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, false);
+    await setLessonPlannerFlag(true);
   });
 
   test('task 1: an exit ticket made in the planner chat shows as created on the stack, once', async ({

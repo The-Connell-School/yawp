@@ -7,12 +7,21 @@
  */
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-import { setLessonPlannerReviewFlag, type LessonPlannerReviewFlag } from '../feature-flags';
+import {
+  clearLessonPlannerReviewFlags,
+  setLessonPlannerFlag,
+  setLessonPlannerReviewFlag,
+  type LessonPlannerReviewFlag,
+} from '../feature-flags';
 import { DAY_ONE_REPLY } from '../fixtures/lesson-planner/day-one-reply';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 
-const FLAGS: LessonPlannerReviewFlag[] = ['lesson_planner_stack_v2', 'lesson_planner_stack_v3', 'lesson_planner_templates'];
+const FLAGS: LessonPlannerReviewFlag[] = [
+  'lesson_planner_stack_v2',
+  'lesson_planner_stack_v3',
+  'lesson_planner_templates',
+];
 
 type Ctx = { teacherMembershipId: string; organizationId: string };
 type Turn = { role: 'user' | 'assistant'; content: string };
@@ -92,6 +101,11 @@ const WEEK = [
 ].join('\n');
 
 test.describe("Lesson Planner — Brian's fifth run", () => {
+  test.beforeEach(async () => {
+    await setLessonPlannerFlag(true);
+    await clearLessonPlannerReviewFlags();
+  });
+
   test.afterEach(async ({ e2eContext }) => {
     const prisma = createE2EPrismaClient();
     try {
@@ -100,7 +114,7 @@ test.describe("Lesson Planner — Brian's fifth run", () => {
     } finally {
       await prisma.$disconnect();
     }
-    for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, false);
+    await setLessonPlannerFlag(true);
   });
 
   test('items 1 and 3: each day becomes its own lesson, with every timed step, in a unit folder', async ({

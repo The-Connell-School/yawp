@@ -103,15 +103,6 @@ beforeAll(async () => {
   )
     throw new Error('Local database required');
   await prisma.setting.upsert({
-    where: { name: 'feature_flag.unified-sign-on' },
-    update: { value: 'true' },
-    create: {
-      name: 'feature_flag.unified-sign-on',
-      value: 'true',
-      valueType: 'boolean',
-    },
-  });
-  await prisma.setting.upsert({
     where: { name: 'feature_flag.free_tier' },
     update: { value: 'true' },
     create: {

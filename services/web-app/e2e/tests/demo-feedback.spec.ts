@@ -19,7 +19,6 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
   await page.request.post('/auth/dev-login', {
     form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
   });
-  const flag = 'feature_flag.demo-feedback-widget';
   const screenshot = async (name: string) => {
     if (evidence) {
       await page.waitForTimeout(250);
@@ -30,7 +29,6 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       });
     }
   };
-  const oldFlag = await prisma.setting.findUnique({ where: { name: flag } });
   const teacher = await prisma.user.findUniqueOrThrow({
     where: { email: 'dev.teacher@yawp.local' },
   });
@@ -39,66 +37,10 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       where: { id: teacher.id },
       data: { isTester: true },
     });
-    await prisma.setting.upsert({
-      where: { name: flag },
-      create: { name: flag, value: 'false', valueType: 'boolean' },
-      update: { value: 'false' },
-    });
     await page.goto('/app/assignments');
     await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    if (!(await isDevPanelActive(page))) {
-      await expect(
-        page.getByRole('button', { name: 'Give feedback', exact: true })
-      ).toHaveCount(0);
-    }
-    const logFeedback = page.getByRole('button', {
-      name: 'Log feedback',
-      exact: true,
-    });
-    await expect(logFeedback).toBeVisible();
-    await screenshot('before-disabled');
-    await logFeedback.click();
-    const legacy = page.getByRole('dialog', { name: 'Log feedback' });
-    await legacy
-      .getByLabel('What I did')
-      .fill('Local legacy demo compatibility');
-    await legacy
-      .getByLabel('What happened')
-      .fill('Legacy note remains readable');
-    await legacy
-      .getByLabel('What I wish it did')
-      .fill('Legacy wish remains readable');
-    await legacy.getByLabel('Severity').selectOption('low');
-    await legacy.getByRole('button', { name: 'Save feedback' }).click();
-    await expect(legacy.getByRole('status')).toHaveText(
-      'Feedback saved. Thank you.'
-    );
-    const legacyEntry = await prisma.testerFeedback.findFirstOrThrow({
-      where: {
-        userId: teacher.id,
-        whatIDid: 'Local legacy demo compatibility',
-      },
-    });
-    expect(legacyEntry.actions).toBeNull();
-    expect(legacyEntry.severity).toBe('low');
-    expect(legacyEntry.whatHappened).toBe('Legacy note remains readable');
-    expect(legacyEntry.whatIWish).toBe('Legacy wish remains readable');
-    await page.keyboard.press('Escape');
-
-    expect(
-      (
-        await page.request.post('/api/demo-feedback', {
-          data: { note: 'blocked', url: '/app/assignments', actions: [] },
-          headers: { origin: new URL(page.url()).origin },
-        })
-      ).status()
-    ).toBe(404);
-    await prisma.setting.update({
-      where: { name: flag },
-      data: { value: 'true' },
-    });
     await page.goto('/app/assignments?token=qa-secret&search=private');
     await expect(
       page.getByRole('button', { name: 'Log feedback', exact: true })
@@ -202,23 +144,11 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await prisma.testerFeedback.deleteMany({
       where: {
         userId: teacher.id,
-        whatIDid: 'Local legacy demo compatibility',
-      },
-    });
-    await prisma.testerFeedback.deleteMany({
-      where: {
-        userId: teacher.id,
         whatHappened: {
           in: ['Local demo feedback E2E note', 'Retry keeps my note'],
         },
       },
     });
-    if (oldFlag)
-      await prisma.setting.update({
-        where: { name: flag },
-        data: { value: oldFlag.value },
-      });
-    else await prisma.setting.deleteMany({ where: { name: flag } });
   }
 });
 
@@ -227,8 +157,6 @@ test('local demo single trigger reserves mobile content space on landing, classe
 }) => {
   test.setTimeout(120_000);
   await page.addInitScript(() => localStorage.removeItem('yawp-dev-panel'));
-  const flag = 'feature_flag.demo-feedback-widget';
-  const oldFlag = await prisma.setting.findUnique({ where: { name: flag } });
   const teacher = await prisma.user.findUniqueOrThrow({
     where: { email: 'dev.teacher@yawp.local' },
   });
@@ -247,11 +175,6 @@ test('local demo single trigger reserves mobile content space on landing, classe
     await prisma.user.update({
       where: { id: teacher.id },
       data: { isTester: true },
-    });
-    await prisma.setting.upsert({
-      where: { name: flag },
-      create: { name: flag, value: 'true', valueType: 'boolean' },
-      update: { value: 'true' },
     });
     await page.request.post('/auth/dev-login', {
       form: { email: teacher.email!, redirectTo: '/app' },
@@ -343,11 +266,5 @@ test('local demo single trigger reserves mobile content space on landing, classe
       where: { id: teacher.id },
       data: { isTester: teacher.isTester },
     });
-    if (oldFlag)
-      await prisma.setting.update({
-        where: { name: flag },
-        data: { value: oldFlag.value },
-      });
-    else await prisma.setting.deleteMany({ where: { name: flag } });
   }
 });
