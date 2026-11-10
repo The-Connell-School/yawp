@@ -401,13 +401,19 @@ export const SPOTLIGHT_BOX = [
  * first paragraph (Brian's Nov 3 mock-up), and Show brings the rest back.
  * Nothing is remembered between visits, so it is open again next time.
  */
-function HowToTeachSection({
+export function HowToTeachSection({
   section,
-  modules,
+  modules = [],
   lessonVideos,
+  className,
 }: {
   section: LandingSection;
-  modules: LandingModule[];
+  modules?: LandingModule[];
+  /**
+   * The How It Works pages (Kevin, Nov 10) put the same block on a white
+   * card; the landing page keeps the spotlight box.
+   */
+  className?: string;
 } & LessonLinks) {
   const [expanded, setExpanded] = useState(true);
   const bodyId = useId();
@@ -421,7 +427,7 @@ function HowToTeachSection({
     <section
       aria-labelledby={headingId}
       data-testid="how-to-teach-spotlight"
-      className={SPOTLIGHT_BOX}
+      className={cn(SPOTLIGHT_BOX, className)}
     >
       <div className="flex items-center justify-between gap-4">
         <h2 id={headingId} className="text-lg font-semibold sm:text-xl">

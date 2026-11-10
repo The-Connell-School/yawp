@@ -15,6 +15,7 @@ import { MemoryRouter } from 'react-router';
 
 const {
   Eyebrow,
+  GuideOverviewVideo,
   GuideCard,
   GuideCopy,
   GuideFooter,
@@ -180,3 +181,71 @@ describe('a guide without an accent keeps the classic look', () => {
     expect(root.querySelector('[data-eyebrow]')?.textContent).toBe('At a glance');
   });
 });
+
+const VIDEO = {
+  src: '/img/exit-ticket-guide/overview.mp4',
+  poster: '/img/exit-ticket-guide/overview.jpg',
+  label: 'A tour of Exit Ticket.',
+  width: 1280,
+  height: 720,
+};
+
+describe('the overview video at the top of a guide (Kevin, Nov 10)', () => {
+  it('plays with controls when the teacher asks, never on its own', () => {
+    const root = render(<GuideOverviewVideo {...VIDEO} />);
+    const video = root.querySelector('video')!;
+    expect(video).not.toBeNull();
+    expect(video.hasAttribute('controls')).toBe(true);
+    expect(video.hasAttribute('autoplay')).toBe(false);
+    expect(video.hasAttribute('loop')).toBe(false);
+    expect(video.getAttribute('preload')).toBe('metadata');
+    expect(video.getAttribute('poster')).toBe(VIDEO.poster);
+    expect(video.getAttribute('aria-label')).toBe(VIDEO.label);
+    expect(root.querySelector('video source')?.getAttribute('src')).toBe(VIDEO.src);
+  });
+
+  it('sits in a white card with a soft shadow on an accented page', () => {
+    const root = render(
+      <GuidePage backTo="/app" backLabel="Back" accent={FOREST}>
+        <GuideOverviewVideo {...VIDEO} />
+      </GuidePage>
+    );
+    const card = root.querySelector('[data-testid="guide-overview-video"] [data-guide-card]');
+    expect(classes(card)).toContain('bg-white');
+  });
+
+  it('comes right after the headline when the hero has one, in place of the picture', () => {
+    const root = render(
+      <GuidePage backTo="/app" backLabel="Back" accent={FOREST}>
+        <GuideHero
+          title="Find out if today’s lesson"
+          highlight="landed."
+          lede="A lede."
+          image={{ src: '/x.jpg', alt: 'x', width: 10, height: 10, caption: 'cap' }}
+          video={VIDEO}
+        />
+      </GuidePage>
+    );
+    const header = root.querySelector('header')!;
+    expect(header.querySelector('[data-testid="guide-overview-video"]')).not.toBeNull();
+    expect(header.querySelector('img')).toBeNull();
+    const h1 = header.querySelector('h1')!;
+    const video = header.querySelector('video')!;
+    // The headline, then the video.
+    expect(h1.compareDocumentPosition(video) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('leaves the hero as it was without one', () => {
+    const root = render(
+      <GuideHero
+        title="Get every student writing"
+        highlight="at the start of class."
+        lede="A lede."
+        image={{ src: '/x.jpg', alt: 'x', width: 10, height: 10, caption: 'cap' }}
+      />
+    );
+    expect(root.querySelector('video')).toBeNull();
+    expect(root.querySelector('header img')?.getAttribute('src')).toBe('/x.jpg');
+  });
+});
+

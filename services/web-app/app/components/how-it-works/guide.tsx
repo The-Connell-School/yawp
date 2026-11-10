@@ -87,11 +87,22 @@ export function GuidePage({
   );
 }
 
+/** A guide's overview video: where it is, what it shows, and its size. */
+export type GuideVideo = {
+  src: string;
+  poster: string;
+  /** What the video shows, for anyone who can't watch it. It has no sound. */
+  label: string;
+  width: number;
+  height: number;
+};
+
 export function GuideHero({
   title,
   highlight,
   lede,
   image,
+  video,
 }: {
   title: string;
   /** The headline's second phrase: colored in the classic look, plain with an accent. */
@@ -105,8 +116,34 @@ export function GuideHero({
     height: number;
     caption: string;
   };
+  /**
+   * The page's overview video (Kevin, Nov 10: "put each video at the top of
+   * its How It Works page"). It goes right under the headline, full width,
+   * and takes the picture's place.
+   */
+  video?: GuideVideo | null;
 }) {
   const accent = useAccent();
+  if (video) {
+    return (
+      <header className="flex flex-col gap-8">
+        <div className="flex flex-col gap-4">
+          <Eyebrow>See how it works</Eyebrow>
+          <h1 className={cn('text-3xl font-bold leading-tight md:text-5xl', accent && HEADING)}>
+            {accent ? `${title} ${highlight}` : (
+              <>
+                {title} <span className="text-primary">{highlight}</span>
+              </>
+            )}
+          </h1>
+          <p className={cn('max-w-prose text-lg leading-relaxed', accent ? BODY : 'text-muted-foreground')}>
+            {lede}
+          </p>
+        </div>
+        <GuideOverviewVideo {...video} />
+      </header>
+    );
+  }
   return (
     <header
       className={cn(
@@ -213,6 +250,36 @@ export function GuideClip({
         {playing ? 'Pause' : 'Play'}
       </button>
     </div>
+  );
+}
+
+/**
+ * The overview video at the top of a guide: a short tour of the feature with
+ * no sound, made from demo classes until Brian records his own. Unlike the
+ * clips it never plays on its own: the teacher presses play.
+ */
+export function GuideOverviewVideo({ src, poster, label, width, height }: GuideVideo) {
+  const accent = useAccent();
+  return (
+    <figure data-testid="guide-overview-video" className="flex flex-col gap-2">
+      <GuideCard className={cn('p-2 md:p-3', !accent && 'shadow-lg')}>
+        <video
+          className="block h-auto w-full rounded-lg bg-black"
+          controls
+          playsInline
+          preload="metadata"
+          poster={poster}
+          width={width}
+          height={height}
+          aria-label={label}
+        >
+          <source src={src} type="video/mp4" />
+        </video>
+      </GuideCard>
+      <figcaption className={cn('text-xs', accent ? BODY : 'text-muted-foreground')}>
+        A quick tour, recorded in Yawp! with demo classes. No sound.
+      </figcaption>
+    </figure>
   );
 }
 

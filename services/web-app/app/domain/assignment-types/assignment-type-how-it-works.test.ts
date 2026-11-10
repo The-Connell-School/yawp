@@ -49,3 +49,29 @@ describe('assignmentTypeHasHowItWorksGuide', () => {
     ).toBe(false);
   });
 });
+
+describe('the Exit Ticket guide (behind assignment-type-landing-v2)', () => {
+  const exitTicket = { title: 'Exit Ticket', kind: 'exit_ticket' };
+
+  test('has a guide when the landing pages are on', () => {
+    expect(
+      assignmentTypeHasHowItWorksGuide(exitTicket, { exitTicketGuide: true })
+    ).toBe(true);
+  });
+
+  test('has none while they are off, as before', () => {
+    expect(assignmentTypeHasHowItWorksGuide(exitTicket)).toBe(false);
+    expect(
+      assignmentTypeHasHowItWorksGuide(exitTicket, { exitTicketGuide: false })
+    ).toBe(false);
+  });
+
+  test('the option opens no guide for any other type', () => {
+    expect(
+      assignmentTypeHasHowItWorksGuide(
+        { title: 'Daily Pages', kind: 'daily_pages' },
+        { exitTicketGuide: true }
+      )
+    ).toBe(false);
+  });
+});

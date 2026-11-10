@@ -999,10 +999,14 @@ export default function AppAssignmentTypesIdRoute() {
 
           {isTeacher ? (
             <div className="flex items-center gap-2">
-              {assignmentTypeHasHowItWorksGuide({
-                title: data.assignmentType.title,
-                kind: data.assignmentType.kind,
-              }) ? (
+              {assignmentTypeHasHowItWorksGuide(
+                {
+                  title: data.assignmentType.title,
+                  kind: data.assignmentType.kind,
+                },
+                // The Exit Ticket guide comes with Brian's landing page.
+                { exitTicketGuide: data.landingPageKey === 'exit-ticket' }
+              ) ? (
                 <SeeHowItWorksLink
                   to={`/app/assignment-types/${data.assignmentType.id}/how-it-works`}
                 />
