@@ -85,7 +85,7 @@ describe('getLLMCompletion', () => {
 
   test('logs the exact normalized Anthropic payload with audit metadata', async () => {
     const response = await getLLMCompletion({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       system: 'System\tprompt',
       messages: [
         { role: 'user', content: 'Hello\tstudent' },
@@ -117,7 +117,7 @@ describe('getLLMCompletion', () => {
     expect(llmLogCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         provider: 'anthropic',
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-5-5',
         systemPrompt: 'Systemprompt',
         messages: [
           { role: 'user', content: 'Hellostudent' },
@@ -160,7 +160,7 @@ describe('getLLMCompletion', () => {
   test('passes structured system blocks with cache_control straight through to Anthropic, tab-stripped', async () => {
     await getLLMCompletion({
       attribution: testAttribution,
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       system: [
         {
           type: 'text',
@@ -201,7 +201,7 @@ describe('getLLMCompletion', () => {
 
     await getLLMCompletion({
       attribution: testAttribution,
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       system: [
         {
           type: 'text',
@@ -227,7 +227,7 @@ describe('getLLMCompletion', () => {
 
     await getLLMCompletion({
       attribution: testAttribution,
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       system: [
         {
           type: 'text',
@@ -272,7 +272,7 @@ describe('getLLMCompletion', () => {
 
     await getLLMCompletion({
       attribution: testAttribution,
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       system: [
         {
           type: 'text',
@@ -316,7 +316,7 @@ describe('getLLMCompletion', () => {
       .mockResolvedValueOnce(anthropicTextResponse('Ada needs support.'));
 
     await getLLMCompletion({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       system: 'Analyze confidential student data.',
       messages: [{ role: 'user', content: 'Tell me about Ada Lovelace.' }],
       tools: [
@@ -371,7 +371,7 @@ describe('getLLMCompletion', () => {
     );
 
     await getLLMCompletion({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       system: `System for org-write-1 membership mem-write-1 request req-write-1 hash ${ipHash}.`,
       messages: [
         {
@@ -419,7 +419,7 @@ describe('getLLMCompletion', () => {
     );
 
     await getLLMCompletion({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       system:
         'Student first name: Jordan\nIn overallComment, start with "Jordan," and continue with feedback.',
       messages: [
@@ -469,7 +469,7 @@ describe('getLLMCompletion', () => {
     );
 
     await getLLMCompletion({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       system: 'You generate Daily Pages prompts.',
       messages: [
         {
@@ -509,7 +509,7 @@ describe('getLLMCompletion', () => {
     );
 
     await getLLMCompletion({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       system: 'You author short writing-practice items.',
       messages: [
         {
@@ -564,7 +564,7 @@ describe('getLLMCompletion', () => {
     openAiCreate.mockResolvedValueOnce(openAiTextResponse('Fallback reply.'));
 
     const result = await getLLMCompletion({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       messages: [{ role: 'user', content: 'Help with my thesis.' }],
       system: 'Be a writing tutor.',
       maxTokens: 100,
@@ -598,7 +598,7 @@ describe('getLLMCompletion', () => {
       fallbackTriggered: true,
       fallbackReason: 'status:529',
       fallbackModel: 'gpt-4o-mini',
-      primaryModel: 'claude-sonnet-4-6',
+      primaryModel: 'claude-sonnet-5-5',
       messageCount: 2,
       hasTools: false,
       toolRoundCount: 0,
@@ -618,7 +618,7 @@ describe('getLLMCompletion', () => {
     await expect(
       getLLMCompletion({
         attribution: testAttribution,
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-5-5',
         messages: [{ role: 'user', content: 'Analyze this student record.' }],
         allowFallbackProvider: false,
       })
@@ -631,7 +631,7 @@ describe('getLLMCompletion', () => {
   test('ignores a forced fallback request when fallback is forbidden', async () => {
     await getLLMCompletion({
       attribution: testAttribution,
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       messages: [{ role: 'user', content: 'Analyze this student record.' }],
       forceFallback: true,
       allowFallbackProvider: false,
@@ -650,7 +650,7 @@ describe('getLLMCompletion', () => {
 
     const result = await getLLMCompletion({
       attribution: testAttribution,
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       messages: [{ role: 'user', content: 'Can you review this?' }],
     });
 
@@ -676,7 +676,7 @@ describe('getLLMCompletion', () => {
     try {
       await getLLMCompletion({
         attribution: testAttribution,
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-5-5',
         messages: [{ role: 'user', content: 'Retry this.' }],
         signalFallbackRetry: true,
       });
@@ -727,7 +727,7 @@ describe('getLLMCompletion', () => {
     const handleToolCall = mock(async () => 'Current essay draft.');
 
     const result = await getLLMCompletion({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       messages: [{ role: 'user', content: 'Review my essay.' }],
       tools: [
         {
@@ -776,7 +776,7 @@ describe('getLLMCompletion', () => {
   test('swallows usage logging failures and still returns a response', async () => {
     usageLogCreate.mockRejectedValueOnce(new Error('db down'));
     const response = await getLLMCompletion({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       messages: [{ role: 'user', content: 'Hello' }],
       attribution: {
         organizationId: 'org-1',
@@ -795,7 +795,7 @@ describe('getLLMCompletion', () => {
       requestId: 'scratch-test',
     };
     const request = {
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       messages: [
         { role: 'user' as const, content: 'Synthetic scratch sample' },
       ],
@@ -815,7 +815,7 @@ describe('getLLMCompletion', () => {
     anthropicCreate.mockRejectedValue(new Error('Provider failed'));
     await expect(
       getLLMCompletion({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-5-5',
         messages: [{ role: 'user', content: 'Scratch sample' }],
         attribution: {
           organizationId: null,
@@ -850,7 +850,7 @@ describe('getLLMCompletion', () => {
     ]) {
       await expect(
         getLLMCompletion({
-          model: 'claude-sonnet-4-6',
+          model: 'claude-sonnet-5-5',
           messages: [{ role: 'user', content: 'Hello' }],
           attribution,
           logPayload: 'audit-only',
@@ -876,7 +876,7 @@ describe('getLLMCompletion', () => {
 
     await expect(
       getLLMCompletion({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-5-5',
         messages: [{ role: 'user', content: 'Hello' }],
         attribution: testAttribution,
         allowFallbackProvider: false,
@@ -909,7 +909,7 @@ describe('getLLMCompletion', () => {
 
     try {
       await getLLMCompletion({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-5-5',
         messages: [{ role: 'user', content: 'Hello' }],
         attribution: testAttribution,
       });

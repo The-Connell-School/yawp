@@ -7,7 +7,7 @@ const db = createE2EPrismaClient();
 const prefix = `resend-browser-${Date.now()}`;
 const capture = process.env.SIGNON_RESEND_CAPTURE_DIR!;
 const evidence = process.env.SIGNON_EVIDENCE_DIR;
-const flags = ['feature_flag.unified-sign-on', 'feature_flag.free_tier'];
+const flags = ['feature_flag.free_tier'];
 let oldFlags: any[];
 test.beforeAll(async () => {
   if (
@@ -202,41 +202,3 @@ for (const width of [1280, 390])
         })
       ).toBe(1);
     });
-for (const width of [1280, 390])
-  test(`preview fixture keeps unified sign-on when setting is false at ${width}`, async ({
-    page,
-  }) => {
-    await db.setting.update({
-      where: { name: flags[0] },
-      data: { value: 'false' },
-    });
-    await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
-    for (const [route, name] of [
-      ['/auth/login', 'login'],
-      ['/auth/inv/signup', 'signup'],
-      ['/free', 'free-trial'],
-    ]) {
-      await page.goto(route);
-      if (name === 'login') {
-        await expect(page.locator('[data-signon-screen]')).toBeVisible();
-        await expect(
-          page.getByRole('heading', { name: 'Welcome back!' })
-        ).toHaveCount(0);
-      }
-      if (name === 'free-trial')
-        await expect(
-          page.getByRole('button', { name: /waitlist|submit|continue|trial/i })
-        ).toBeVisible();
-      await page.evaluate(() => document.fonts.ready);
-      if (evidence)
-        await page.screenshot({
-          path: path.join(evidence, `flag-off-${name}-${width}-impl.png`),
-          fullPage: true,
-          mask: [page.locator('input')],
-        });
-    }
-    await db.setting.update({
-      where: { name: flags[0] },
-      data: { value: 'true' },
-    });
-  });

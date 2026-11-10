@@ -181,7 +181,7 @@ variable "yawp_app_origin" {
 
 variable "primary_app_url" {
   type        = string
-  description = "Canonical YAWP web origin for free-tier signed links and teacher emails (PRIMARY_APP_URL). Omit or leave null in production to match live (unset on App Runner)."
+  description = "Canonical YAWP web origin for free-tier signed links, teacher emails, and unified sign-on (PRIMARY_APP_URL). In production, set to https://yawp.school so App Runner keeps this env var across applies; omit or null only in non-production."
   default     = null
   nullable    = true
 }

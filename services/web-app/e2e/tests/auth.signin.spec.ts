@@ -1,6 +1,7 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { invalidateUserSessions } from '../db-helpers';
+import { submitUnifiedLogin } from '../helpers/unified-login';
 
 const TEST_USER = {
   email: 'jdoe@brock.software',
@@ -23,34 +24,31 @@ test.describe('Authentication - real sign in', () => {
       });
       try {
         await page.goto(`${origin}/auth/login`, { waitUntil: 'commit' });
-        const email = page.getByLabel('Email or handle');
-        const password = page.getByLabel('Password');
-        const submit = page.getByRole('button', {
-          name: 'Log in',
+        const identifier = page.getByLabel('Email or class code', {
           exact: true,
         });
-        await expect(email).toBeVisible();
-        await expect(email).toBeEnabled();
-        await expect(password).toBeEnabled();
-        await expect(submit).toBeEnabled();
+        await expect(identifier).toBeVisible();
+        await expect(identifier).toBeEnabled();
         const account = origin.includes('ua.localhost')
           ? e2eContext.ua.teacher
           : TEST_USER;
-        await email.fill(account.email);
-        await password.fill(account.password);
-        await expect(email).toHaveValue(account.email);
-        await expect(password).toHaveValue(account.password);
+        await identifier.fill(account.email);
+        await expect(identifier).toHaveValue(account.email);
 
         releaseHydration();
         await page.waitForLoadState('networkidle');
-        await expect(email).toHaveValue(account.email);
+        await expect(identifier).toHaveValue(account.email);
+
+        await page.getByRole('button', { name: 'Continue', exact: true }).click();
+        const password = page.getByLabel('Password', { exact: true });
+        await password.fill(account.password);
         await expect(password).toHaveValue(account.password);
         const submission = page.waitForRequest(
           (request) =>
             request.method() === 'POST' &&
             new URL(request.url()).pathname === '/auth/login.data'
         );
-        await submit.click();
+        await page.getByRole('button', { name: 'Log In', exact: true }).click();
         await submission;
         await expect(page).toHaveURL(`${origin}/app`);
         await expect(page.getByTestId('app._index')).toBeVisible();
@@ -59,39 +57,8 @@ test.describe('Authentication - real sign in', () => {
       }
     });
 
-    test(`signs in natively without JavaScript on ${origin}`, async ({
-      browser,
-      e2eContext,
-    }) => {
-      const context = await browser.newContext({ javaScriptEnabled: false });
-      try {
-        const page = await context.newPage();
-        await page.goto(`${origin}/auth/login`);
-        const account = origin.includes('ua.localhost')
-          ? e2eContext.ua.teacher
-          : TEST_USER;
-        await expect(page.getByLabel('Email or handle')).toBeEnabled();
-        await expect(page.getByLabel('Password')).toBeEnabled();
-        await expect(
-          page.getByRole('button', { name: 'Log in', exact: true })
-        ).toBeEnabled();
-        await page.getByLabel('Email or handle').fill(account.email);
-        await page.getByLabel('Password').fill(account.password);
-        const submission = page.waitForRequest(
-          (request) =>
-            request.method() === 'POST' &&
-            new URL(request.url()).pathname === '/auth/login' &&
-            request.isNavigationRequest()
-        );
-        await page.getByRole('button', { name: 'Log in', exact: true }).click();
-        await submission;
-        await expect(page).toHaveURL(`${origin}/app/`);
-        await expect(page.getByTestId('app._index')).toBeVisible();
-        await page.reload();
-        await expect(page).toHaveURL(`${origin}/app/`);
-      } finally {
-        await context.close();
-      }
+    test.skip(`signs in natively without JavaScript on ${origin}`, async () => {
+      // Unified sign-on resolve requires client-side navigation; legacy one-page login was removed.
     });
   }
 
@@ -132,9 +99,7 @@ test.describe('Authentication - real sign in', () => {
       });
 
       await page.goto('/auth/login');
-      await page.getByLabel('Email or handle').fill(TEST_USER.email);
-      await page.locator('input[type="password"]').fill(TEST_USER.password);
-      await page.getByRole('button', { name: /log in/i }).click();
+      await submitUnifiedLogin(page, TEST_USER.email, TEST_USER.password);
 
       await expect(page).toHaveURL(/\/app\/?$/);
       const classCodeDialog = page.getByRole('dialog');

@@ -11,6 +11,7 @@ import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image
 import {
   assignmentTypeTileCardClassName,
   assignmentTypeTileFooterClassName,
+  assignmentTypeTileGridClassName,
   assignmentTypeTileImageClassName,
   assignmentTypeTileImageWrapClassName,
   assignmentTypeTileMetaClassName,
@@ -79,9 +80,7 @@ export function LockedAssignmentTypePickerSheet({
       label: row.label,
       imageId: type.imageId,
       imageTitle: type.imageTitle,
-      included: usage.unlimitedFreeAssignmentTiles
-        ? 'Unlimited'
-        : `${row.total} included`,
+      included: 'Unlimited',
       selected: selectedId === type.id,
       onSelect: () => setSelectedId(type.id),
     })),
@@ -127,7 +126,7 @@ export function LockedAssignmentTypePickerSheet({
           <div
             role="listbox"
             aria-labelledby={titleId}
-            className="grid auto-rows-min grid-cols-2 content-start items-start gap-3 sm:grid-cols-3"
+            className={assignmentTypeTileGridClassName('content-start sm:grid-cols-3')}
             onKeyDown={(event) => {
             const focusable = tileRefs.current.filter(Boolean);
             const index = focusable.findIndex(

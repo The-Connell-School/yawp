@@ -22,6 +22,7 @@ import {
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 import { requireMutableRequest } from '~/utils/auth.server';
@@ -656,7 +657,7 @@ export async function action({ request }: ActionFunctionArgs) {
       let toolRound = 0;
       try {
         reply = await getLLMCompletion({
-          model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
+          model: (process.env.AI_MODEL as any) ?? DEFAULT_ANTHROPIC_MODEL,
           system,
           messages,
           maxTokens: PLANNER_MAX_TOKENS,
@@ -727,7 +728,7 @@ export async function action({ request }: ActionFunctionArgs) {
             throw new Error(PLANNER_FAILED);
           }
           return getLLMCompletion({
-            model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
+            model: (process.env.AI_MODEL as any) ?? DEFAULT_ANTHROPIC_MODEL,
             system: DECK_REPAIR_SYSTEM,
             messages: [{ role: AgentType.User, content: instruction }],
             maxTokens: DECK_REPAIR_MAX_TOKENS,

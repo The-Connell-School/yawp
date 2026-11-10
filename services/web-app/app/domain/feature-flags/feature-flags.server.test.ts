@@ -14,10 +14,9 @@ const {
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, UNIFIED_SIGN_ON_FLAG, TEACHER_PROMPT_GENERATOR_FLAG, FOLDED_FREE_TIER_LEGACY_SETTINGS, FOLDED_UNIFIED_SIGNON_LEGACY_SETTINGS } = await import(
+const { GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, TEACHER_PROMPT_GENERATOR_FLAG, TEACHER_LOUNGE_FLAG, FOLDED_FREE_TIER_LEGACY_SETTINGS } = await import(
   './feature-flags'
 );
-const { isUnifiedSignOnEnabled } = await import('../unified-signon/gate.server');
 
 const NAME = 'feature_flag.lesson_planner';
 const FREE_TIER_NAME = 'feature_flag.free_tier';
@@ -48,6 +47,10 @@ function mockLessonPlannerRollout(
 }
 
 describe('feature flags (server)', () => {
+  beforeEach(() => {
+    prisma.adminConfigAudit.create.mockReset();
+    prisma.adminConfigAudit.create.mockResolvedValue({ id: 'audit-1' });
+  });
   beforeEach(() => {
     // Other suites mock db.server in the same process; take it back.
     mock.module('~/utils/db.server', () => ({ prisma }));
@@ -101,22 +104,6 @@ describe('feature flags (server)', () => {
     expect(await isFeatureFlagEnabled(INTERNAL_RUBRICS_FLAG, null)).toBe(false);
     prisma.setting.findUnique.mockResolvedValue({ value: '{"mode":"everyone","orgIds":[]}' });
     expect(await isFeatureFlagEnabled(INTERNAL_RUBRICS_FLAG, 'org-2')).toBe(true);
-  });
-
-  test('unified sign-on defaults on for demo and preview without a row', async () => {
-    const previous = process.env.YAWP_ENVIRONMENT;
-    try {
-      for (const environment of ['demo', 'preview']) {
-        process.env.YAWP_ENVIRONMENT = environment;
-        prisma.setting.findUnique.mockResolvedValue(null);
-        expect(await isFeatureFlagEnabled(UNIFIED_SIGN_ON_FLAG)).toBe(true);
-      }
-      process.env.YAWP_ENVIRONMENT = 'production';
-      expect(await isFeatureFlagEnabled(UNIFIED_SIGN_ON_FLAG)).toBe(false);
-    } finally {
-      if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
-      else process.env.YAWP_ENVIRONMENT = previous;
-    }
   });
 
   test('teacher prompt generator defaults on for demo and preview without a row', async () => {
@@ -305,11 +292,11 @@ describe('feature flags (server)', () => {
       'lesson_planner_refresh_my_deck',
       'lesson_planner_active_time',
       'lesson_planner_writing_override',
-      UNIFIED_SIGN_ON_FLAG,
       'classcode-unique',
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       TEACHER_PROMPT_GENERATOR_FLAG,
+      TEACHER_LOUNGE_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -351,11 +338,11 @@ describe('feature flags (server)', () => {
       'lesson_planner_refresh_my_deck',
       'lesson_planner_active_time',
       'lesson_planner_writing_override',
-      UNIFIED_SIGN_ON_FLAG,
       'classcode-unique',
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       TEACHER_PROMPT_GENERATOR_FLAG,
+      TEACHER_LOUNGE_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;
@@ -487,6 +474,7 @@ describe('feature flags (server)', () => {
     );
     expect(result.changed).toBe(false);
     expect(result.flag.enabled).toBe(false);
+    expect(prisma.adminConfigAudit.create).toHaveBeenCalled();
     expect(result.flag.mode).toBe('off');
   });
 
@@ -510,32 +498,7 @@ describe('feature flags (server)', () => {
     expect(await isFreeTierEnabled()).toBe(false);
   });
 
-  test('unified sign-on ignores legacy teacher-prompts when primary is off', async () => {
-    prisma.setting.findUnique.mockImplementation(async (args: { where: { name: string } }) => {
-      if (args.where.name === 'feature_flag.unified-sign-on') {
-        return { value: '{"mode":"off","orgIds":[]}' };
-      }
-      if (args.where.name === FOLDED_UNIFIED_SIGNON_LEGACY_SETTINGS[0]) {
-        return { value: '{"mode":"everyone","orgIds":[]}' };
-      }
-      return null;
-    });
-    expect(await isFeatureFlagEnabled(UNIFIED_SIGN_ON_FLAG, 'org-1')).toBe(false);
-    expect(await isUnifiedSignOnEnabled()).toBe(false);
-  });
-
-  test('unified sign-on anonymous login stays off when only legacy prompts are everyone', async () => {
-    prisma.setting.findUnique.mockImplementation(async (args: { where: { name: string } }) => {
-      if (args.where.name === 'feature_flag.unified-sign-on') return null;
-      if (args.where.name === FOLDED_UNIFIED_SIGNON_LEGACY_SETTINGS[0]) {
-        return { value: 'true' };
-      }
-      return null;
-    });
-    expect(await isUnifiedSignOnEnabled()).toBe(false);
-  });
-
-  test('demo and preview default free tier and unified sign-on on without rows', async () => {
+  test('demo and preview default free tier on without rows', async () => {
     const previous = process.env.YAWP_ENVIRONMENT;
     try {
       for (const environment of ['demo', 'preview'] as const) {
@@ -544,8 +507,6 @@ describe('feature flags (server)', () => {
         prisma.setting.findMany.mockResolvedValue([]);
         expect(await isFreeTierCapabilityEnabled('org-1')).toBe(true);
         expect(await isFreeTierEnabled()).toBe(true);
-        expect(await isFeatureFlagEnabled(UNIFIED_SIGN_ON_FLAG)).toBe(true);
-        expect(await isUnifiedSignOnEnabled()).toBe(true);
       }
     } finally {
       if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
@@ -561,8 +522,6 @@ describe('feature flags (server)', () => {
     try {
       expect(await isFreeTierCapabilityEnabled('org-1')).toBe(false);
       expect(await isFreeTierEnabled()).toBe(false);
-      expect(await isFeatureFlagEnabled(UNIFIED_SIGN_ON_FLAG)).toBe(false);
-      expect(await isUnifiedSignOnEnabled()).toBe(false);
     } finally {
       if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
       else process.env.YAWP_ENVIRONMENT = previous;

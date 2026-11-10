@@ -191,7 +191,7 @@ function ResetToAssistantSuggestions({
       >
         Reset Grading Assistant suggestions
       </Button>
-      <p className="mt-0.5 text-xs text-muted-foreground">
+      <p className="mt-0.5 text-xs text-foreground/90">
         Use this if you&apos;ve made changes and want to revert to the original
         Grading Assistant suggestions. Nothing saves until you click Save.
       </p>
@@ -1434,11 +1434,11 @@ export function TeacherGradingPanel({
                     ) : null}
                     {isGrammarCategory ? (
                       <div className="space-y-2">
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-foreground/90">
                           Grammar issues: {grammarIssues.length}
                         </p>
                         {grammarIssues.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-xs text-foreground/90">
                             No grammar/syntax issues yet. Generate suggestions
                             from Grading Assistant to populate this list.
                           </p>

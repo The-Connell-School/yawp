@@ -377,4 +377,77 @@ test.describe('School year scope', () => {
       await prisma.$disconnect();
     }
   });
+
+  test('teacher can recreate the same section in a new school year', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const suffix = Date.now().toString().slice(-8);
+    const priorYear = (() => {
+      const start = Number(currentSchoolYear().slice(0, 4)) - 1;
+      return `${start}-${start + 1}`;
+    })();
+    const currentYear = currentSchoolYear();
+
+    const priorClass = await prisma.class.create({
+      data: {
+        code: `TY${suffix}`.slice(0, 12),
+        schoolYear: priorYear,
+        period: '3',
+        grade: '11',
+        title: 'Theology III',
+        schoolId: e2eContext.schoolId,
+        teachers: { connect: { id: e2eContext.teacherMembershipId } },
+      },
+      select: { id: true },
+    });
+
+    try {
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto('/app/my-classes');
+
+      await page.getByRole('button', { name: 'Create Class' }).first().click();
+      await expect(page.getByTestId('class-school-year')).toContainText(
+        currentYear.replace('-', '–')
+      );
+
+      await page.getByRole('combobox').filter({ hasText: /Grade|No grade/ }).click();
+      await page.getByRole('option', { name: '11', exact: true }).click();
+      await page.getByRole('combobox').filter({ hasText: /Period|No period/ }).click();
+      await page.getByRole('option', { name: '3', exact: true }).click();
+      await page.getByPlaceholder('AP English 11').fill('Theology III');
+      await page.getByRole('button', { name: /^Create Class$/ }).click();
+
+      await expect(
+        page.getByRole('heading', { name: 'Theology III' })
+      ).toBeVisible({ timeout: 15_000 });
+
+      const created = await prisma.class.findMany({
+        where: {
+          schoolId: e2eContext.schoolId,
+          schoolYear: currentYear,
+          title: 'Theology III',
+          period: '3',
+          grade: '11',
+          teachers: { some: { id: e2eContext.teacherMembershipId } },
+        },
+        select: { id: true },
+      });
+      expect(created.length).toBe(1);
+    } finally {
+      await prisma.class.deleteMany({
+        where: {
+          schoolId: e2eContext.schoolId,
+          title: 'Theology III',
+          period: '3',
+          grade: '11',
+          schoolYear: currentYear,
+        },
+      });
+      await prisma.class.delete({ where: { id: priorClass.id } });
+      await prisma.$disconnect();
+    }
+  });
 });

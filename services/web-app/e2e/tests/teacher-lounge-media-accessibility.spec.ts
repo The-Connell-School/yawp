@@ -67,7 +67,7 @@ test('Teacher Lounge module keeps media accessibility links below primary resour
   signIn,
   e2eContext,
 }) => {
-  test.skip(teacherLoungeE2eSkipped, teacherLoungeE2eSkipReason);
+  test.skip(await teacherLoungeE2eSkipped(), teacherLoungeE2eSkipReason);
 
   const { moduleId } = await seedModuleResources({
     teacherTrainingId: e2eContext.teacherTrainingId,

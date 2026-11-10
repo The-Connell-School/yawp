@@ -219,6 +219,12 @@ export async function supersededApproveLinkReason(
   applicationId: string,
   linkId: string
 ): Promise<'superseded' | null> {
+  const owning = await prisma.freeTierAdminApproval.findFirst({
+    where: { applicationId, signedLinkId: linkId },
+    select: { status: true },
+  });
+  if (owning?.status === 'PENDING') return null;
+  if (owning) return 'superseded';
   const pending = await prisma.freeTierAdminApproval.findFirst({
     where: { applicationId, status: 'PENDING' },
     orderBy: { createdAt: 'desc' },

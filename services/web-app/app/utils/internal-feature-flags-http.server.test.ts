@@ -1,15 +1,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { featureFlagPrismaTables } from '~/domain/feature-flags/feature-flags.server.test-support';
 
 const auditCreate = mock(async () => ({}));
 const prisma = {
-  setting: {
-    findUnique: mock(),
-    findMany: mock(),
-    upsert: mock(),
-  },
-  organization: {
-    findMany: mock(),
-  },
+  ...featureFlagPrismaTables(),
   internalPlatformApiAudit: {
     create: auditCreate,
   },
@@ -55,6 +49,7 @@ describe('internal feature-flag endpoints', () => {
     oldYawpEnvironment = process.env.YAWP_ENVIRONMENT;
     process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
     delete process.env.YAWP_ENVIRONMENT;
+    prisma.adminConfigAudit.create.mockReset().mockResolvedValue({ id: 'audit-1' });
     prisma.setting.findUnique.mockReset().mockResolvedValue(null);
     prisma.setting.findMany.mockReset().mockResolvedValue([]);
     prisma.setting.upsert.mockReset().mockImplementation(
@@ -137,20 +132,15 @@ describe('internal feature-flag endpoints', () => {
       'lesson_planner_refresh_my_deck',
       'lesson_planner_active_time',
       'lesson_planner_writing_override',
-      'unified-sign-on',
       'classcode-unique',
       'demo-feedback-widget',
       'guided-tours',
       'teacher-prompt-generator',
+      'teacher-lounge',
     ]);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[2]).toMatchObject({ key: 'free-tier', label: 'Free tier', mode: 'off', orgIds: [], enabled: false });
-    expect(body.flags.find((flag: { key: string }) => flag.key === 'unified-sign-on')).toMatchObject({
-      key: 'unified-sign-on', mode: 'off', orgIds: [], enabled: false,
-      persisted: { mode: 'off', orgIds: [] },
-      effective: { mode: 'off', orgIds: [] }, runtimeOverride: null,
-    });
   });
 
   for (const environment of ['development', 'demo', 'production', 'preview']) {
@@ -182,12 +172,6 @@ describe('internal feature-flag endpoints', () => {
       orgIds: [],
       persisted: { mode: 'off', orgIds: [] },
       effective: { mode: 'everyone', orgIds: [] },
-      runtimeOverride: 'non_production_default',
-      enabled: true,
-    });
-    expect(body.flags.find((flag: { key: string }) => flag.key === 'unified-sign-on')).toMatchObject({
-      key: 'unified-sign-on',
-      mode: 'everyone',
       runtimeOverride: 'non_production_default',
       enabled: true,
     });
@@ -240,11 +224,11 @@ describe('internal feature-flag endpoints', () => {
       'lesson_planner_refresh_my_deck',
       'lesson_planner_active_time',
       'lesson_planner_writing_override',
-      'unified-sign-on',
       'classcode-unique',
       'demo-feedback-widget',
       'guided-tours',
       'teacher-prompt-generator',
+      'teacher-lounge',
     ]);
   });
 
@@ -484,9 +468,6 @@ describe('internal feature-flag endpoints', () => {
       expect(flags.find((f: { key: string }) => f.key === 'free-tier')).toMatchObject({
         mode: 'everyone', persisted: { mode: 'off', orgIds: [] },
         effective: { mode: 'everyone', orgIds: [] }, runtimeOverride: 'non_production_default',
-      });
-      expect(flags.find((f: { key: string }) => f.key === 'unified-sign-on')).toMatchObject({
-        mode: 'everyone', runtimeOverride: 'non_production_default', enabled: true,
       });
       expect(prisma.setting.upsert).not.toHaveBeenCalled();
     } finally {

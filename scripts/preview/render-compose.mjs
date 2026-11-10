@@ -57,7 +57,6 @@ export function renderPreviewCompose({
   enableTls = process.env.PREVIEW_TLS !== 'false',
   runtime = process.env.PREVIEW_RUNTIME || 'fast',
   dataMode = process.env.PREVIEW_DATA_MODE || 'seed',
-  unifiedSignOn = process.env.PREVIEW_UNIFIED_SIGN_ON ?? 'true',
   controlDir = process.env.PREVIEW_CONTROL_DIR || dirname(fileURLToPath(import.meta.url)),
   databaseUser = process.env.PREVIEW_DB_USER,
   databasePassword = process.env.PREVIEW_DB_PASSWORD,
@@ -74,9 +73,6 @@ export function renderPreviewCompose({
   demoWebImage = process.env.DEMO_WEB_IMAGE,
   demoToolboxImage = process.env.DEMO_TOOLBOX_IMAGE,
 } = {}) {
-  if (!['true', 'false'].includes(unifiedSignOn)) {
-    throw new Error('PREVIEW_UNIFIED_SIGN_ON must be true or false');
-  }
   const previewAccessSeats = requirePreviewAccessSeats(accessSeats);
   const previewMasterAccessCode = masterOrgGateEnabled
     ? requirePreviewMasterAccessCode(masterAccessCode)
@@ -232,7 +228,7 @@ ${env.slug === 'demo' ? '      EMAIL_PROVIDER: "resend"\n' : ''}      RESEND_FRO
       YAWP_PREVIEW_AI_MODE: ${q(aiMode)}
       CLASS_INSIGHT_MOCK_MODE: ${q(aiMode === 'disabled' ? 'fixture' : optionalEnv('PREVIEW_CLASS_INSIGHT_MOCK_MODE'))}
       ANTHROPIC_API_KEY: ${q(anthropicApiKey)}
-      AI_MODEL: ${q(optionalEnv('PREVIEW_AI_MODEL', 'claude-sonnet-4-6'))}
+      AI_MODEL: ${q(optionalEnv('PREVIEW_AI_MODEL', 'claude-sonnet-5-5'))}
       BLACKBOARD_LTI_MOCK_URL: "http://blackboard-lti-mock:9473"${marketingStudioEnvironment}`;
   // Only the demo deploy supplies this key (Yawp Internal publishes rubrics to
   // demo through the Rubric Catalog API). It goes to the web app alone; without
@@ -266,8 +262,6 @@ ${env.slug === 'demo' ? '      EMAIL_PROVIDER: "resend"\n' : ''}      RESEND_FRO
   const mountPreviewControl = Boolean(env.prNumber) || env.runtime === 'production';
   const toolboxControlVolume = mountPreviewControl
     ? `      - ${q(`${controlDir}:/preview-control:ro`)}` : '';
-  const toolboxFlagEnvironment = env.prNumber
-    ? `      PREVIEW_UNIFIED_SIGN_ON: ${q(unifiedSignOn)}` : '';
   const registryImagesConfigured = Boolean(demoWebImage && demoToolboxImage);
   if (demoWebImage && !demoToolboxImage) {
     throw new Error('DEMO_TOOLBOX_IMAGE is required when DEMO_WEB_IMAGE is set');
@@ -292,7 +286,6 @@ ${fastVolumes}
 ${toolboxControlVolume}
     environment:
 ${commonEnvironment}
-${toolboxFlagEnvironment}
     networks:
       - preview
 `
@@ -303,7 +296,6 @@ ${productionToolboxBuild}${toolboxControlVolume ? `    volumes:
 ${toolboxControlVolume}` : ''}
     environment:
 ${commonEnvironment}
-${toolboxFlagEnvironment}
     networks:
       - preview
 `;

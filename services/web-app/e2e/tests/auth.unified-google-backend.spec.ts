@@ -21,15 +21,6 @@ async function shot(page: any, name: string, width: number) {
   }
 }
 test.beforeAll(async () => {
-  await db.setting.upsert({
-    where: { name: 'feature_flag.unified-sign-on' },
-    create: {
-      name: 'feature_flag.unified-sign-on',
-      value: 'true',
-      valueType: 'boolean',
-    },
-    update: { value: 'true' },
-  });
   for (const [id, name] of [
     [prefix, 'Lincoln High'],
     [prefix + '-b', 'City Writing Program'],
@@ -37,9 +28,6 @@ test.beforeAll(async () => {
     await db.organization.create({ data: { id, name, plan: 'SCHOOL' } });
 });
 test.afterAll(async () => {
-  await db.setting.deleteMany({
-    where: { name: 'feature_flag.unified-sign-on' },
-  });
   const users = await db.user.findMany({
     where: { email: { in: ['maya1280@yawp.local', 'maya390@yawp.local'] } },
     select: { id: true },

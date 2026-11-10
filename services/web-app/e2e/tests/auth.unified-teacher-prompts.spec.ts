@@ -417,31 +417,6 @@ for (const width of [1280, 390]) {
   });
 }
 
-test('flag off preserves the legacy no-membership DOM', async ({ page }) => {
-  await flag(false);
-  try {
-    await authenticate(page, 'neutral');
-    await page.goto('/no-membership');
-    await expect(page.locator('h1')).toHaveText('No Membership');
-    await expect(
-      page.getByText(
-        "You don't have an organization membership yet. Please contact your administrator."
-      )
-    ).toBeVisible();
-    await expect(
-      page.getByRole('link', { name: 'Retry', exact: true })
-    ).toHaveAttribute('href', '/app');
-    await expect(
-      page.getByRole('button', { name: 'Log out', exact: true })
-    ).toBeVisible();
-    await expect(page.locator('.unified-signon')).toHaveCount(0);
-    await shot(page, 'flag-off-inactive', 1280);
-    await expect(page.getByText(/free classroom/)).toHaveCount(0);
-  } finally {
-    await flag(true);
-  }
-});
-
 test('password sign-in keeps neutral accounts on the neutral inactive screen', async ({
   page,
 }) => {
@@ -463,22 +438,3 @@ test('password sign-in keeps neutral accounts on the neutral inactive screen', a
   );
 });
 
-test('flag off preserves the unified inactive variant', async ({ page }) => {
-  await flag(false);
-  try {
-    await page.goto('/auth/login');
-    await page.getByLabel('Email or class code', { exact: true }).fill(email);
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await page
-      .getByLabel('Password', { exact: true })
-      .fill('local-prompt-password');
-    await page.getByRole('button', { name: 'Log In', exact: true }).click();
-    await expect(
-      page.getByText('You are not in any active classes.', { exact: true })
-    ).toBeVisible();
-    await expect(page.locator('.signon-identity')).toHaveCount(0);
-    await expect(page.getByText(/free classroom/)).toHaveCount(0);
-  } finally {
-    await flag(true);
-  }
-});

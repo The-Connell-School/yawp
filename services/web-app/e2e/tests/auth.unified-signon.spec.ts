@@ -200,7 +200,7 @@ for (const width of [1280, 390]) {
       ).toBe(true);
       await page.evaluate(() => document.fonts.ready);
       if (fixture.id === 'entry-focus')
-        await page.getByLabel('Email, handle, or class code').focus();
+        await page.getByLabel('Email or class code', { exact: true }).focus();
       if (evidence) {
         fs.mkdirSync(evidence, { recursive: true });
         const filename = `${fixture.artboard}-${fixture.id}-${width}-impl.png`;
@@ -223,7 +223,7 @@ test('entry validation, pending, back, safe redirect, Google unset, and handle a
   await page.goto(
     '/e2e/fixtures/unified-signon/index.html?state=entry&google=unset&redirectTo=%2Fapp%2Fmy-classes'
   );
-  const input = page.getByLabel('Email, handle, or class code');
+  const input = page.getByLabel('Email or class code', { exact: true });
   await expect(
     page.getByRole('button', { name: 'Continue with Google' })
   ).toBeDisabled();
@@ -251,7 +251,7 @@ test('entry validation, pending, back, safe redirect, Google unset, and handle a
   );
   await page.getByRole('button', { name: 'Use a different account' }).click();
   await expect(
-    page.getByLabel('Email or handle', { exact: true })
+    page.getByLabel('Email or class code', { exact: true })
   ).toBeVisible();
 });
 
