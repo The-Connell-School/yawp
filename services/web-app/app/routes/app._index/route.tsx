@@ -526,7 +526,7 @@ export default function AppRoute() {
             ) : null}
             {!locked &&
               (freeUsage?.gradingPause ? (
-                <div>
+                <div data-tour="dashboard-grading">
                   <h2 className="mb-4 text-lg font-bold">Grading</h2>
                   <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
                     <p className="font-medium">
