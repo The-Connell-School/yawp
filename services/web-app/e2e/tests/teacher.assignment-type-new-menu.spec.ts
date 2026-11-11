@@ -2,16 +2,40 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { test, expect } from '../test-setup';
 import { setFeatureFlag } from '../feature-flags';
-import { TEACHER_PROMPT_GENERATOR_FLAG } from '~/domain/feature-flags/feature-flags';
+import { createE2EPrismaClient } from '../prisma-client';
+import {
+  featureFlagSettingName,
+  TEACHER_PROMPT_GENERATOR_FLAG,
+} from '~/domain/feature-flags/feature-flags';
 
 // Set NEW_MENU_SHOTS to a directory to save the opened menu for review.
 const evidence = process.env.NEW_MENU_SHOTS;
 
 test.describe('Assignment-type New menu', () => {
   test.use({ deviceScaleFactor: evidence ? 2 : 1 });
-  // Show every item the menu can hold, including Generate a prompt.
-  test.beforeAll(() => setFeatureFlag(TEACHER_PROMPT_GENERATOR_FLAG, true));
-  test.afterAll(() => setFeatureFlag(TEACHER_PROMPT_GENERATOR_FLAG, false));
+  // Show every item the menu can hold, including Generate a prompt, then put
+  // the flag back exactly as it was.
+  const db = createE2EPrismaClient();
+  const flagName = featureFlagSettingName(TEACHER_PROMPT_GENERATOR_FLAG);
+  let previous: { value: string } | null = null;
+  test.beforeAll(async () => {
+    previous = await db.setting.findUnique({
+      where: { name: flagName },
+      select: { value: true },
+    });
+    await setFeatureFlag(TEACHER_PROMPT_GENERATOR_FLAG, true);
+  });
+  test.afterAll(async () => {
+    if (previous) {
+      await db.setting.update({
+        where: { name: flagName },
+        data: { value: previous.value },
+      });
+    } else {
+      await db.setting.deleteMany({ where: { name: flagName } });
+    }
+    await db.$disconnect();
+  });
 
   test('lists Assignment, Generate a prompt, then Sample document', async ({
     page,
