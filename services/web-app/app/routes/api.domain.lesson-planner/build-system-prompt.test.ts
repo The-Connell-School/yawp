@@ -2180,6 +2180,37 @@ describe('planner prompt — the Lesson Deck Kit, spec v4', () => {
     expect(v4).toContain('#2F5873, #1E3A5F');
   });
 
+  // The rest of the kit's rules (spec v4, Nov 6, as last edited Nov 9).
+  test('lets a steps slide carry its step as the label', () => {
+    expect(v4).toMatch(/- steps — "Do", or the step it is \("Step 2"\)/);
+  });
+
+  test('keeps Georgia upright and plain: no italics or bold for emphasis, no emoji or clip art', () => {
+    expect(v4).toContain('No italics or bold for emphasis');
+    expect(v4).toContain('no emoji or clip art');
+  });
+
+  test('keeps the web address and the motto as written', () => {
+    expect(v4).toContain('The web address stays yawp.school');
+    expect(v4).toContain('"find your yawp" stays lowercase');
+  });
+
+  test('checks deck colors together, and takes the unit’s painting before the house colors', () => {
+    expect(v4).toContain('must look good together');
+    expect(v4).toMatch(/the lesson’s painting, then the unit’s painting, then the house colors/);
+    expect(v4).toContain('Pine #1F3532, Indigo #2F5873, Olive #56602F, Plum #7A4560, Maroon #6E1A26');
+  });
+
+  test('color-codes more than three parts with hex marks, the conclusion’s five moves in the kit’s colors', () => {
+    expect(v4).toContain('`~~#294457|the first move~~`');
+    expect(v4).toContain('#294457, #6E1A26, #2F5F66, #5A5A5A, #5E3A5E');
+  });
+
+  test('the kit’s later rules stay out of the spec v3 section', () => {
+    expect(v3).not.toContain('The web address stays yawp.school');
+    expect(v3).not.toContain('#2F5F66');
+  });
+
   test('flag off: the spec v3 section, as before', () => {
     expect(v3).toContain('italic mode word');
     expect(v3).not.toContain('Lesson Deck Kit, spec v4');
