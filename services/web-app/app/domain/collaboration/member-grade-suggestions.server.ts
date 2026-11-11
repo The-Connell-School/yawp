@@ -1,3 +1,4 @@
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { getLLMCompletion } from '~/utils/getLLMCompletion/getLLMCompletion';
 import crypto from 'node:crypto';
 import type { ContributionBreakdown } from './contribution.server';
@@ -29,7 +30,7 @@ export async function suggestMemberGrades({
   breakdown,
   groupGrade,
   assignmentPrompt,
-  model = process.env.AI_MODEL ?? 'claude-sonnet-4-6',
+  model = process.env.AI_MODEL ?? DEFAULT_ANTHROPIC_MODEL,
   metadata,
   attribution,
 }: {

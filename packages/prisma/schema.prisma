@@ -2043,6 +2043,55 @@ model Setting {
   valueType   String   @default("string")
 }
 
+enum AdminConfigAuditSource {
+  web_admin
+  internal_api
+}
+
+enum AdminConfigAuditEntityType {
+  feature_flag
+  access_list
+}
+
+enum AdminConfigAuditAction {
+  set
+  add
+  remove
+}
+
+/// Runtime allowlist rows (e.g. Teacher's Lounge bypass while a flag is off).
+model AccessListEntry {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  listKey         String
+  userId          String?
+  user            User?    @relation("AccessListUser", fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  email           String
+  note            String?
+  createdByUserId String?
+  createdByUser   User?    @relation("AccessListCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@unique([listKey, email])
+  @@index([listKey, userId])
+}
+
+/// Append-only audit of runtime admin config changes (feature flags and access lists).
+model AdminConfigAudit {
+  id          String                   @id @default(cuid())
+  createdAt   DateTime                 @default(now()) @db.Timestamptz(6)
+  actorUserId String?
+  actorEmail  String
+  source      AdminConfigAuditSource
+  entityType  AdminConfigAuditEntityType
+  entityKey   String
+  action      AdminConfigAuditAction
+  before      Json?
+  after       Json?
+  reason      String?
+
+  @@index([entityType, entityKey, createdAt(sort: Desc)])
+}
+
 /// A teacher-authored writing-practice assignment. The lesson slugs remain
 /// separate from regular assignment types so this feature can roll out without
 /// changing the existing essay-assignment data model.
@@ -2102,6 +2151,8 @@ model User {
   /// Dev-panel-only simulated students scoped to one class for demo data.
   simulatedForClassId String?
   tours              UserTour[]
+  accessListEntries   AccessListEntry[] @relation("AccessListUser")
+  accessListEntriesCreated AccessListEntry[] @relation("AccessListCreatedBy")
 
   @@index([simulatedForClassId])
 }

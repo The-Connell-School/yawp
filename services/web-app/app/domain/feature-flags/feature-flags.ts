@@ -103,9 +103,6 @@ export const LESSON_PLANNER_LIBRARY_V2_FLAG = 'lesson_planner_library_v2' as con
 /** @deprecated Registry key `free_tier` — use {@link FREE_TIER_FLAG}. */
 export const FREE_TIER_FLAG_LEGACY_KEY = 'free_tier' as const;
 
-/** Unified sign-on UI and signed-in teacher prompt flows. Default off. */
-export const UNIFIED_SIGN_ON_FLAG = 'unified-sign-on' as const;
-
 /** Global class-code validation and Generate code controls. Default off. */
 export const CLASS_CODE_UNIQUE_FLAG = 'classcode-unique' as const;
 
@@ -120,6 +117,14 @@ export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
  * Default off on production; on by default on demo and PR previews.
  */
 export const TEACHER_PROMPT_GENERATOR_FLAG = 'teacher-prompt-generator' as const;
+
+/**
+ * Teacher's Lounge (`/app/teacher-trainings`). Off: hidden and redirected except
+ * for emails on the `teacher_lounge` access list. Everyone: on for all teachers
+ * (role checks unchanged). Targeted: on for listed schools only, with the same
+ * access-list bypass when off for a school.
+ */
+export const TEACHER_LOUNGE_FLAG = 'teacher-lounge' as const;
 
 /**
  * Exit ticket builder v3 (docs/plans/2026-11-02-exit-ticket-builder-v3.md):
@@ -146,14 +151,6 @@ export const EXIT_TICKET_CLASS_SUMMARY_FLAG = 'exit-ticket-class-summary' as con
 export const FOLDED_FREE_TIER_LEGACY_SETTINGS = [
   'feature_flag.free-tier-onboarding-v2',
   'feature_flag.free-tier-inapp-v2',
-] as const;
-
-/**
- * Legacy Setting name aliased to {@link UNIFIED_SIGN_ON_FLAG}. Runtime reads only
- * `feature_flag.unified-sign-on`.
- */
-export const FOLDED_UNIFIED_SIGNON_LEGACY_SETTINGS = [
-  'feature_flag.signon-teacher-prompts',
 ] as const;
 
 export const FEATURE_FLAGS = {
@@ -237,11 +234,6 @@ export const FEATURE_FLAGS = {
     description:
       'Brian’s library redesign: course tabs, units as tiles in groups with a writing meter, a page for each unit with day tabs and a lesson preview, Lessons on their own, and Plan a lesson. Needs the stack page redesign. Off: the folder list.',
   },
-  [UNIFIED_SIGN_ON_FLAG]: {
-    label: 'Unified sign-on',
-    description:
-      'Shows unified sign-on at /auth/login and signed-in teacher classroom entry prompts. Default off on production; on by default on demo and PR previews.',
-  },
   [CLASS_CODE_UNIQUE_FLAG]: {
     label: 'Unique class codes',
     description:
@@ -261,6 +253,11 @@ export const FEATURE_FLAGS = {
     label: 'Teacher prompt generator',
     description:
       'Shows New → Generate a prompt and the LLM drafting sheet on assignment types that support it (Class Starter, Daily Pages, Exit Ticket, Thesis-Driven Essay). Default off on production; on by default on demo and PR previews.',
+  },
+  [TEACHER_LOUNGE_FLAG]: {
+    label: "Teacher's Lounge",
+    description:
+      "Controls Teacher's Lounge nav and `/app/teacher-trainings` access. Off: hidden for all teachers except the runtime access list. Everyone: on for all teachers. Targeted: on for listed schools only.",
   },
   [EXIT_TICKET_BUILDER_V3_FLAG]: {
     label: 'Exit ticket builder v3',
@@ -282,7 +279,6 @@ const REGISTERED_FLAG_ALIASES: Record<string, FeatureFlagKey> = {
   [FREE_TIER_FLAG_LEGACY_KEY]: FREE_TIER_FLAG,
   'free-tier-onboarding-v2': FREE_TIER_FLAG,
   'free-tier-inapp-v2': FREE_TIER_FLAG,
-  'signon-teacher-prompts': UNIFIED_SIGN_ON_FLAG,
 };
 
 export function resolveFeatureFlagKey(

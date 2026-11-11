@@ -1,4 +1,5 @@
 import { test, expect } from '../test-setup';
+import { submitUnifiedLogin } from '../helpers/unified-login';
 
 const STUDENT_EMAIL = 'jdoe@brock.software';
 const STUDENT_PASSWORD = 'johndoe';
@@ -14,9 +15,7 @@ const UNASSIGNED_LABEL = 'Not tied to a class';
 
 async function signInAsStudent(page: import('@playwright/test').Page) {
   await page.goto('/auth/login');
-  await page.getByLabel('Email or handle').fill(STUDENT_EMAIL);
-  await page.locator('input[type="password"]').fill(STUDENT_PASSWORD);
-  await page.getByRole('button', { name: /log in/i }).click();
+  await submitUnifiedLogin(page, STUDENT_EMAIL, STUDENT_PASSWORD);
   await page.waitForURL('**/app**', { timeout: 15000 });
   await page.goto('/app/my-documents');
   await expect(page.getByTestId('app.my-documents._index')).toBeVisible();

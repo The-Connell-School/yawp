@@ -30,7 +30,7 @@ beforeEach(async () => {
 afterAll(async () => {
   if (!enabled) return;
   await prisma!.freeTierApplication.deleteMany({ where: { email: { contains: `ft-${run}-` } } });
-  await prisma!.acquisitionToken.deleteMany({ where: { label: `t-${run}` } });
+  await prisma!.acquisitionToken.deleteMany({ where: { OR: [{ label: `t-${run}` }, { label: `t-idem-${run}` }] } });
 });
 
 suite('waitlist', () => {
@@ -52,6 +52,23 @@ suite('waitlist', () => {
   test('honeypot stores nothing', async () => {
     await svc!.submitWaitlist({ ...person('c'), middleName: 'bot' });
     expect(await prisma!.freeTierApplication.count({ where: { email: `ft-${run}-c@school.example` } })).toBe(0);
+  });
+});
+
+suite('token create', () => {
+  test('persists createIdempotencyKey and replays a keyed create (requires migration 20261013110000)', async () => {
+    const input = { label: `t-idem-${run}`, count: 1, bypassWaitlist: false };
+    const idempotencyKey = `idem-${run}`;
+    const first = await svc!.createAcquisitionTokens(input, { idempotencyKey });
+    const second = await svc!.createAcquisitionTokens(input, { idempotencyKey });
+    expect(second).toEqual(first);
+    const row = await prisma!.acquisitionToken.findUnique({
+      where: { createIdempotencyKey: idempotencyKey },
+      select: { code: true, createIdempotencyKey: true },
+    });
+    expect(row?.createIdempotencyKey).toBe(idempotencyKey);
+    expect(row?.code).toBe(first[0]!.code);
+    expect(await prisma!.acquisitionToken.count({ where: { label: `t-idem-${run}` } })).toBe(1);
   });
 });
 

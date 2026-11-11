@@ -56,9 +56,8 @@ test.describe('Free classroom bundle quotas', () => {
 
     await page.goto('/auth/login');
     await page.waitForLoadState('networkidle');
-    await page.getByLabel('Email or handle').fill(email);
-    await page.locator('input[type="password"]').fill(FREE_CLASSROOM_PASSWORD);
-    await page.getByRole('button', { name: /log in/i }).click();
+    const { submitUnifiedLogin } = await import('../helpers/unified-login');
+    await submitUnifiedLogin(page, email, FREE_CLASSROOM_PASSWORD);
     await page.waitForURL(
       (url) =>
         url.pathname.startsWith('/app') || url.pathname === '/enter-code',

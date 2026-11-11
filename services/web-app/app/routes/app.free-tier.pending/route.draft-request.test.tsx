@@ -4,10 +4,11 @@ import {
   mockCardPageChromeForSsr,
   renderWithCardPageChrome,
 } from '~/components/card-page-chrome.ssr-test-setup';
+import { PENDING_ADDITIONAL_ADMINISTRATOR_COPY } from '../free-tier/PendingAdditionalAdministratorLink';
 
 afterAll(() => mock.restore());
 
-function mockPage(approvalEmail: string) {
+function mockPage() {
   mockCardPageChromeForSsr();
   mock.module('react-router', () => ({
     ...router,
@@ -19,20 +20,20 @@ function mockPage(approvalEmail: string) {
       },
       pending: {
         adminName: 'Dr. Patel',
-        adminEmail: approvalEmail,
+        adminEmail: 'patel@lincolnusd.org',
       },
       lastFailedEmail: null,
       showExploreClassroom: true,
-      approvalEmailFrom: 'hello@yawp.school',
       approvalV2: {
         enabled: true,
         approval: {
           id: 'current',
           adminName: 'Dr. Patel',
-          adminEmail: approvalEmail,
+          adminEmail: 'patel@lincolnusd.org',
         },
         firstSentAt: new Date('2026-10-14'),
       },
+      additionalSentAdmin: null,
     }),
     useActionData: () => undefined,
     useNavigation: () => ({ state: 'idle' }),
@@ -41,24 +42,17 @@ function mockPage(approvalEmail: string) {
   }));
 }
 
-test('hides draft request when administrator email is missing', async () => {
-  mockPage('');
+test('pending v2 shows additional administrator link under admin, not draft mailto', async () => {
+  mockPage();
   const { default: Page } = await import('./route');
   const html = renderWithCardPageChrome(<Page />);
   expect(html).toContain(
     'It may be a good idea to give Dr. Patel a quick heads-up'
   );
-  expect(html).not.toContain('data-testid="pending-draft-request"');
+  expect(html).toContain(PENDING_ADDITIONAL_ADMINISTRATOR_COPY);
+  expect(html).toContain('to="/app/free-tier/onboarding?additional=1"');
   expect(html).not.toContain('Draft a Request');
-});
-
-test('shows draft mailto with design body fields when admin email is present', async () => {
-  mockPage('patel@lincolnusd.org');
-  const { default: Page } = await import('./route');
-  const html = renderWithCardPageChrome(<Page />);
-  expect(html).toContain('data-testid="pending-draft-request"');
-  expect(html).toContain('mailto:patel%40lincolnusd.org?');
-  expect(html).toContain('Lincoln%20High%20School');
-  expect(html).toContain('hello%40yawp.school');
-  expect(html).toContain('Grace%20Okafor');
+  expect(html).not.toContain('pending-draft-request');
+  expect(html).not.toContain('pending-forward-disclosure');
+  expect(html).not.toContain('mailto:');
 });

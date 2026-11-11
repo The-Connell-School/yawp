@@ -11,6 +11,7 @@ import {
   ExtractedRubricSchema,
   normalizeExtractedRubric,
 } from '~/domain/assignment-types/rubric-extract.server';
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
 import { describeProviderError } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 
@@ -67,7 +68,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const model =
     process.env.AI_MODEL && process.env.AI_MODEL.includes('claude')
       ? process.env.AI_MODEL
-      : 'claude-sonnet-4-6';
+      : DEFAULT_ANTHROPIC_MODEL;
 
   const system = buildRubricExtractSystemPrompt();
   const startedAt = Date.now();

@@ -45,7 +45,7 @@ describe('admin audit loader', () => {
       {
         id: 'llm-1',
         createdAt: new Date('2026-06-23T12:00:00.000Z'),
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-5-5',
         provider: 'anthropic',
         inputTokens: 120,
         outputTokens: 80,

@@ -236,7 +236,7 @@ test.describe.serial('UA manual accessibility evidence automation', () => {
     );
     await collectTabStops(page, testInfo, 'teacher-grading', 8);
 
-    if (!teacherLoungeE2eSkipped) {
+    if (!(await teacherLoungeE2eSkipped())) {
       await page.goto(`/app/teacher-trainings/${e2eContext.teacherTrainingId}`);
       await expect(
         page.getByRole('heading', { name: 'E2E Teacher Lounge' })
@@ -332,7 +332,7 @@ test.describe.serial('UA manual accessibility evidence automation', () => {
       'teacher-grading-200-percent'
     );
 
-    if (!teacherLoungeE2eSkipped) {
+    if (!(await teacherLoungeE2eSkipped())) {
       await page.goto(
         `/app/teacher-trainings/${e2eContext.teacherTrainingId}/modules/${moduleId}`
       );

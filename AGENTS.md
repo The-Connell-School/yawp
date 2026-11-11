@@ -10,9 +10,12 @@ Codex, Claude Code, and Cursor:
 ./bin/project bootstrap --fresh --json
 ./bin/project fixture verify local-dev --json
 ./bin/project dev start --json
+./bin/project verify --profile prepush --json
 ./bin/project test --profile changed --json
 ./bin/project qa prepare --json
 ```
+
+Before any `git push`, run `./bin/project verify --profile prepush --json` and do not push while it fails. This catches Prisma client drift and the web-app type errors that otherwise burn full CI rounds on the ʦ TypeScript job.
 
 Do not install Playwright or switch Node/Bun versions manually. The CLI selects the pinned
 compatible runtimes and returns structured recovery commands. Record execution capsules

@@ -1,5 +1,6 @@
 import { expect, test } from '../test-setup';
 import type { Page } from '@playwright/test';
+import { submitUnifiedLogin } from '../helpers/unified-login';
 import type { E2EContext } from '../seed-e2e';
 
 /**
@@ -30,9 +31,7 @@ async function signInOn(
 ) {
   await page.goto('/auth/login');
   await page.waitForLoadState('networkidle');
-  await page.getByLabel('Email or handle').fill(email);
-  await page.locator('input[type="password"]').fill(password);
-  await page.getByRole('button', { name: /log in/i }).click();
+  await submitUnifiedLogin(page, email, password);
   await page.waitForURL(
     (url) => url.pathname.startsWith('/app') || url.pathname === '/enter-code',
     { timeout: 20000 }

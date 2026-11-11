@@ -2,6 +2,7 @@
 export const E2E_SMOKE_SPECS = [
   'e2e/tests/auth.signin.spec.ts',
   'e2e/tests/student.free-class-enter-code.spec.ts',
+  'e2e/tests/auth.uso-cross-tenant-class-code.spec.ts',
   'e2e/tests/auth.free-tier-handle-join.spec.ts',
   'e2e/tests/auth.signup.student.spec.ts',
   'e2e/tests/ua.student-onboarding.spec.ts',
@@ -116,6 +117,7 @@ export const E2E_SMOKE_SHARDS: Record<SmokeShard, readonly string[]> = {
     'e2e/tests/teacher.daily-pages-short-form-library.spec.ts',
     'e2e/tests/teacher.released-grade-activity.spec.ts',
     'e2e/tests/student.free-class-enter-code.spec.ts',
+    'e2e/tests/auth.uso-cross-tenant-class-code.spec.ts',
     'e2e/tests/auth.signup.student.spec.ts',
     'e2e/tests/document-editor-invariants.spec.ts',
     'e2e/tests/teacher.daily-pages-engagement-12pt.spec.ts',

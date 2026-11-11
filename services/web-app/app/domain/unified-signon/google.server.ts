@@ -4,7 +4,6 @@ import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from 'jose';
 import { redirect } from 'react-router';
 import { EmailSchema } from '~/utils/schemas/user';
 import { getUserId, getImpersonationState } from '~/utils/auth.server';
-import { isUnifiedSignOnEnabled } from './gate.server';
 import {
   browserContext,
   digest,
@@ -163,8 +162,6 @@ export function toCallbackRedirect(response: Response): Response {
   return new Response(null, { status: 302, headers });
 }
 export async function googleCallback(request: Request): Promise<Response> {
-  if (!(await isUnifiedSignOnEnabled()))
-    return new Response('Not found', { status: 404 });
   if (!googleAvailableFor(request))
     return Response.json(
       { error: 'Google sign-in is unavailable.' },

@@ -15,6 +15,7 @@ import { RETIRED_STARTER_RUBRIC_NAMES } from './starter-rubrics';
 import {
   formatRubricSchema,
   parseRubricSchema,
+  rubricCategoriesArrayFromSchemaJson,
 } from './rubric-schema';
 
 /** Value stored in the assignment-type editor `rubricId` field for a per-type catalog entry. */
@@ -146,11 +147,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
-const categoriesOf = (content: unknown): unknown[] => {
-  const rubric = isRecord(content) ? content.rubric : null;
-  return isRecord(rubric) && Array.isArray(rubric.categories) ? rubric.categories : [];
-};
-
 function formatCatalogContent(schemaJson: unknown): string | null {
   const parsed = parseRubricSchema(schemaJson);
   if (!parsed.ok) return null;
@@ -176,7 +172,7 @@ function columnsFromCatalogContent(
 }
 
 function libraryContentUsableForPicker(content: unknown): boolean {
-  if (!categoriesOf(content).length) return false;
+  if (!rubricCategoriesArrayFromSchemaJson(content).length) return false;
   return parseRubricSchema(content).ok;
 }
 
@@ -293,7 +289,8 @@ export async function listLiveRubricsForAdminPicker(
       const rubric = libraryByName.get(entry.name);
       if (!rubric) continue;
       const content = publishedLibrary.get(entry.name);
-      if (!content || !categoriesOf(content).length) continue;
+      if (!content || !rubricCategoriesArrayFromSchemaJson(content).length)
+        continue;
       const json = formatCatalogContent(content);
       if (!json) continue;
       options.push({
@@ -311,7 +308,8 @@ export async function listLiveRubricsForAdminPicker(
     const type = perTypeById.get(typeId);
     if (!type) continue;
     const content = publishedPerType.get(typeId);
-    if (!content || !categoriesOf(content).length) continue;
+    if (!content || !rubricCategoriesArrayFromSchemaJson(content).length)
+      continue;
     const json = formatCatalogContent(content);
     if (!json) continue;
     const parsed = parseRubricSchema(content);
@@ -358,7 +356,7 @@ export async function resolveAdminRubricPickerSelection(
     const content = rubric
       ? resolvePublishedLibraryContent(rubric)
       : fallbackBuiltinPublishedSchema(trimmed);
-    if (!categoriesOf(content).length) {
+    if (!rubricCategoriesArrayFromSchemaJson(content).length) {
       throw new Response('That rubric no longer exists. Choose another rubric.', {
         status: 400,
       });
@@ -408,7 +406,7 @@ export async function resolveAdminRubricPickerSelection(
     }
     const baseline = type.rubricBaseline?.rubricRevision?.schemaJson;
     const content = baseline ?? perTypeContent(type);
-    if (!categoriesOf(content).length) {
+    if (!rubricCategoriesArrayFromSchemaJson(content).length) {
       throw new Response('That rubric no longer exists. Choose another rubric.', {
         status: 400,
       });
@@ -439,7 +437,7 @@ export async function resolveAdminRubricPickerSelection(
     });
   }
   const content = resolvePublishedLibraryContent(rubric);
-  if (!categoriesOf(content).length) {
+  if (!rubricCategoriesArrayFromSchemaJson(content).length) {
     throw new Response('That rubric no longer exists. Choose another rubric.', {
       status: 400,
     });

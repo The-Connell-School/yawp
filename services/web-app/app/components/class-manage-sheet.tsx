@@ -135,7 +135,7 @@ export function ClassManageSheet({
           </SheetDescription>
         </SheetHeader>
 
-        {fetcher.data?.error && !(classCodeUniqueEnabled && fetcher.data?.field === 'code') ? (
+        {fetcher.data?.error ? (
           <div className="mt-4 rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
             {fetcher.data.error}
           </div>
@@ -172,12 +172,25 @@ export function ClassManageSheet({
           <div className="space-y-2">
             <Label htmlFor="managed-class-code">Class Code</Label>
             <ClassCodeInput
-              id="managed-class-code" value={code} onChange={setCode}
+              id="managed-class-code"
+              value={code}
+              onChange={setCode}
               enabled={classCodeUniqueEnabled}
-              error={fetcher.state === 'idle' && submittedCode === code && fetcher.data?.field === 'code' ? fetcher.data.error : null}
+              excludeClassId={editingClass?.id}
+              skipLiveAvailability={
+                !editingClass && Boolean(generatedCode) && code === generatedCode
+              }
+              error={
+                fetcher.state === 'idle' &&
+                submittedCode === code &&
+                fetcher.data?.field === 'code'
+                  ? fetcher.data.error
+                  : null
+              }
               onGenerate={() => {
                 const next = generateClassCode();
-                setCode(next); setGeneratedCode(next);
+                setCode(next);
+                setGeneratedCode(next);
               }}
             />
           </div>

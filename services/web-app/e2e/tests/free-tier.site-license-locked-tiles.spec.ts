@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
+import { submitUnifiedLogin } from '../helpers/unified-login';
 
 const db = createE2EPrismaClient();
 const org = 'preview-free-classroom';
@@ -16,9 +17,7 @@ async function loginFreeTeacher(page: Page) {
   await page.context().clearCookies();
   await page.goto('/auth/login');
   await page.waitForLoadState('networkidle');
-  await page.getByLabel('Email or handle').fill('dev.teacher.free@yawp.local');
-  await page.locator('input[type="password"]').fill('yawp-dev');
-  await page.getByRole('button', { name: /Log in/i }).click();
+  await submitUnifiedLogin(page, 'dev.teacher.free@yawp.local', 'yawp-dev');
   await page.waitForURL((url) => url.pathname.replace(/\/$/, '') === '/app');
 }
 
@@ -26,9 +25,7 @@ async function loginSchoolTeacher(page: Page) {
   await page.context().clearCookies();
   await page.goto('/auth/login');
   await page.waitForLoadState('networkidle');
-  await page.getByLabel('Email or handle').fill('dev.teacher@yawp.local');
-  await page.locator('input[type="password"]').fill('yawp-dev');
-  await page.getByRole('button', { name: /Log in/i }).click();
+  await submitUnifiedLogin(page, 'dev.teacher@yawp.local', 'yawp-dev');
   await page.waitForURL((url) => url.pathname.replace(/\/$/, '') === '/app');
 }
 

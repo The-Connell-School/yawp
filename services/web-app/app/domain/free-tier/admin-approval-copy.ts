@@ -82,7 +82,7 @@ export function adminApprovalEmailPreheader(args: {
   if (forwarder) {
     return pass1
       ? `${forwarder} forwarded ${args.teacherName}'s request at ${args.schoolName} to you.`
-      : `${forwarder} forwarded this to you. No Yawp! account needed.`;
+      : `${forwarder} forwarded this to you. You don't need a Yawp! account.`;
   }
   return pass1
     ? `${teacherAtSchool(args.teacherName, args.schoolName)} needs your OK. It takes a couple of minutes, and no Yawp! account is needed.`

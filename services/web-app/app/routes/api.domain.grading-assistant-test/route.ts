@@ -13,6 +13,7 @@ import {
   parseGradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
 import { requireAdmin } from '~/utils/auth.server';
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import crypto from 'node:crypto';
@@ -108,7 +109,7 @@ export async function action({ request }: ActionFunctionArgs) {
     assignmentTypeTitle: input.title,
     row: draftRow,
   });
-  const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
+  const model = process.env.AI_MODEL ?? DEFAULT_ANTHROPIC_MODEL;
   const useE2EFixture = process.env.E2E === 'true';
 
   try {

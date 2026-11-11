@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import {
   formatUsageRenewsLabel,
+  freeAssignmentKindUsageMeta,
   isLessonPlannerMonthlyExhausted,
 } from './inapp-usage';
 
@@ -42,4 +43,23 @@ test('isLessonPlannerMonthlyExhausted uses monthly metering when enabled', () =>
       lessonPlans: { used: 5, total: 5, remaining: 0 },
     })
   ).toBe(true);
+});
+
+test('freeAssignmentKindUsageMeta never shows N-of-N counters', () => {
+  const row = { used: 3, total: 12, remaining: 9 };
+  expect(
+    freeAssignmentKindUsageMeta(
+      { monthly: false, unlimitedFreeAssignmentTiles: false },
+      row
+    )
+  ).toBe('Unlimited');
+  expect(
+    freeAssignmentKindUsageMeta({ monthly: true, unlimitedFreeAssignmentTiles: false }, row)
+  ).toBe('Unlimited');
+  expect(
+    freeAssignmentKindUsageMeta(
+      { monthly: false, unlimitedFreeAssignmentTiles: false },
+      { used: 12, total: 12, remaining: 0 }
+    )
+  ).toBe('None left');
 });

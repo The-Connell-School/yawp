@@ -18,6 +18,7 @@ import {
 import { dailyPagesCalibrationV1 } from '../app/domain/ai-evaluation/daily-pages-calibration.v1';
 import { formatCalibrationReport } from '../app/domain/ai-evaluation/daily-pages-calibration-report';
 import { getLLMCompletion } from '../app/utils/getLLMCompletion';
+import { DEFAULT_ANTHROPIC_MODEL } from '../app/config/default-anthropic-model';
 import { logScriptError } from '../app/utils/log-script-error.server';
 
 function argValues(flag: string) {
@@ -31,7 +32,7 @@ function argValues(flag: string) {
 }
 
 async function main() {
-  const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
+  const model = process.env.AI_MODEL ?? DEFAULT_ANTHROPIC_MODEL;
   const caseIds = argValues('--case');
 
   const result = await runLiveGradingAssistantBenchmark({
