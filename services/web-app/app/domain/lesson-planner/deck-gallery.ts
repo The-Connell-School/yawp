@@ -8,6 +8,7 @@
 import type { Slide, SlideDeck } from './slide-deck';
 import { resolveDeckArt } from './deck-art';
 import { deckColors, slideColor } from './deck-colors';
+import { isKitV4, kitV4Colors } from './deck-kit-v4';
 
 /** The kit's twelve templates, plus compare for a classic two-column slide. */
 export type GalleryTemplate =
@@ -229,8 +230,12 @@ export function planGalleryDeck(deck: SlideDeck): GallerySlidePlan[] {
   return plan;
 }
 
-/** The deck's two or three colors; the first is the primary. */
+/**
+ * The deck's two or three colors; the first is the primary. A deck drawn in
+ * spec v4 takes the v4 colors, so its handouts and lesson plan match it.
+ */
 export function galleryColors(deck: SlideDeck): string[] {
+  if (isKitV4(deck)) return kitV4Colors(deck);
   return deckColors(deck, resolveDeckArt(deck.art));
 }
 

@@ -31,6 +31,7 @@ import {
   type GallerySlidePlan,
 } from './deck-gallery';
 import type { SlideDeck } from './slide-deck';
+import { isKitV4 } from './deck-kit-v4';
 import { notesWithMinutes } from './tile-theme';
 import { upperKeepingBrand } from '~/domain/brand';
 
@@ -54,7 +55,7 @@ type Box = { x: number; y: number; w: number; h: number };
 type Run = { text: string; options: PptxGenJS.TextPropsOptions };
 
 /** An image's bytes, from the built client or the source public folder. */
-function imageData(src: string): string | null {
+export function galleryImageData(src: string): string | null {
   for (const root of ['build/client', 'public']) {
     const path = join(process.cwd(), root, src);
     if (existsSync(path)) return `image/jpeg;base64,${readFileSync(path).toString('base64')}`;
@@ -502,6 +503,11 @@ export async function renderDeckPptxGallery(
   deck: SlideDeck,
   { pictures = new Map() }: { pictures?: DeckPictureFiles } = {}
 ): Promise<Uint8Array> {
+  // Spec v4 where the school has it (the deck is marked where it is loaded).
+  if (isKitV4(deck)) {
+    const { renderDeckPptxKitV4 } = await import('./lesson-pptx-kit-v4.server');
+    return renderDeckPptxKitV4(deck, { pictures });
+  }
   const pptx = new PptxGenJS();
   pptx.defineLayout(LAYOUT);
   pptx.layout = LAYOUT.name;
@@ -514,7 +520,7 @@ export async function renderDeckPptxGallery(
   const art = resolveDeckArt(deck.art);
   const cache = new Map<string, string | null>();
   const image = (src: string) => {
-    if (!cache.has(src)) cache.set(src, imageData(src));
+    if (!cache.has(src)) cache.set(src, galleryImageData(src));
     return cache.get(src)!;
   };
   for (const plan of planGalleryDeck(deck)) {

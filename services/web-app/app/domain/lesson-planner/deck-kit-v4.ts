@@ -434,11 +434,14 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
 
   switch (plan.template) {
     case 'title': {
-      const right = art ? 600 : W - MARGIN;
+      const right = art ? 640 : W - MARGIN;
+      // 92px for a short title; a long one, or one long word, at 80.
+      const longestWord = Math.max(...slide.title.split(/\s+/).map((word) => word.length));
+      const titleSize = slide.title.length > 24 || longestWord > 9 ? 80 : 92;
       elements.push(
         column({ x: MARGIN, y: 80, w: right - MARGIN, h: H - 160 }, [
           para([deck.unit ? sans(deck.unit, 24, color, true) : null], 28),
-          para([serif(slide.title, slide.title.length > 24 ? 80 : 92, KIT_V4.ink)], 20, 1.0),
+          para([serif(slide.title, titleSize, KIT_V4.ink)], 20, 1.0),
           para([slide.subtitle ? serif(slide.subtitle, 40, color) : null], 32),
           para([slide.course ? sans(slide.course, 20, KIT_V4.grey) : null]),
         ])
