@@ -16,8 +16,6 @@
  */
 import { readFileSync } from 'node:fs';
 
-import { syncSeedArtwork } from './assignment-type-artwork';
-
 import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { isLocalDatabaseUrl } from './seed-overlay-connection';
@@ -52,22 +50,12 @@ export const CLASS_STARTER_IMAGE_PATH = new URL(
   import.meta.url
 );
 
-/**
- * md5 of every Class Starter card this seed has shipped before the current
- * one. A database still showing one of these gets the current card on the
- * next run; a card somebody uploaded themselves is never touched.
- */
-export const CLASS_STARTER_RETIRED_ARTWORK_MD5S: string[] = [
-  // The rooster mid-crow, the first card (October 2026).
-  '429eac2e3a0b56f3140f6a8da4382101',
-];
-
 export function readClassStarterImage() {
   return {
     blob: readFileSync(CLASS_STARTER_IMAGE_PATH),
     contentType: 'image/jpeg',
     altText:
-      'A scratchy ink drawing of a smiling cat holding a mug of coffee above the words Class Starter, on torn white paper.',
+      'A scratchy ink drawing of a rooster mid-crow standing on the words Class Starter, on torn white paper.',
   };
 }
 
@@ -147,15 +135,17 @@ export async function seedClassStarterAssignmentType(prisma: SeedablePrisma) {
     update: {},
   });
 
-  // An admin who uploaded their own artwork keeps it: re-running this seed
-  // fills a gap or retires a card the seed itself drew earlier, it never
-  // reverts somebody's upload.
-  await syncSeedArtwork(
-    prisma,
-    assignmentType.id,
-    readClassStarterImage(),
-    CLASS_STARTER_RETIRED_ARTWORK_MD5S
-  );
+  // Create-only. An admin who uploaded their own artwork keeps it: re-running
+  // this seed fills a gap, it never reverts somebody's upload. To replace the
+  // image deliberately, delete the AssignmentTypeImage row and run this again.
+  await prisma.assignmentTypeImage.upsert({
+    where: { assignmentTypeId: assignmentType.id },
+    create: {
+      assignmentTypeId: assignmentType.id,
+      ...readClassStarterImage(),
+    },
+    update: {},
+  });
 
   return assignmentType;
 }

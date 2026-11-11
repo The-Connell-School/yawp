@@ -2,12 +2,10 @@ import { describe, expect, test } from 'bun:test';
 
 import { readFileSync } from 'node:fs';
 
-import { artworkMd5 } from './assignment-type-artwork';
 import {
   CLASS_STARTER_ASSIGNMENT_TYPE_DATA,
   CLASS_STARTER_IMAGE_PATH,
   CLASS_STARTER_KIND,
-  CLASS_STARTER_RETIRED_ARTWORK_MD5S,
   MissingOrganizationError,
   readClassStarterImage,
   seedClassStarterAssignmentType,
@@ -15,18 +13,11 @@ import {
 
 type Call = { args: unknown };
 
-function fakePrisma({
-  orgId = 'org-1',
-  existingImage = null,
-}: {
-  orgId?: string | null;
-  existingImage?: { blob: Uint8Array } | null;
-} = {}) {
+function fakePrisma({ orgId = 'org-1' }: { orgId?: string | null } = {}) {
   const calls: Record<string, Call[]> = {
     assignmentTypeUpsert: [],
     orgAssignmentTypeUpsert: [],
-    imageCreate: [],
-    imageUpdate: [],
+    imageUpsert: [],
   };
 
   const prisma = {
@@ -46,14 +37,8 @@ function fakePrisma({
       },
     },
     assignmentTypeImage: {
-      findUnique: async () =>
-        existingImage ? { id: 'image-1', ...existingImage } : null,
-      create: async (args: unknown) => {
-        calls.imageCreate.push({ args });
-        return { id: 'image-1' };
-      },
-      update: async (args: unknown) => {
-        calls.imageUpdate.push({ args });
+      upsert: async (args: unknown) => {
+        calls.imageUpsert.push({ args });
         return { id: 'image-1' };
       },
     },
@@ -190,93 +175,34 @@ describe('the Class Starter assignment type image', () => {
     expect(image.altText?.length).toBeGreaterThan(0);
   });
 
-  test('describes the drawing: a cat with a coffee above the words Class Starter', () => {
-    const image = readClassStarterImage();
-
-    expect(image.altText).toMatch(/cat/);
-    expect(image.altText).toMatch(/Class Starter/);
-  });
-
   test('attaches the image to the assignment type it just seeded', async () => {
     const { prisma, calls } = fakePrisma();
 
     await seedClassStarterAssignmentType(prisma as never);
 
-    expect(calls.imageCreate).toHaveLength(1);
-    const args = calls.imageCreate[0].args as {
-      data: { assignmentTypeId: string; contentType: string; blob: Buffer };
+    expect(calls.imageUpsert).toHaveLength(1);
+    const args = calls.imageUpsert[0].args as {
+      where: { assignmentTypeId: string };
+      create: { contentType: string; blob: Buffer };
     };
 
-    expect(args.data.assignmentTypeId).toBe('assignment-type-1');
-    expect(args.data.contentType).toBe('image/jpeg');
-    expect(args.data.blob.length).toBeGreaterThan(1000);
-    expect(calls.imageUpdate).toHaveLength(0);
+    expect(args.where).toEqual({ assignmentTypeId: 'assignment-type-1' });
+    expect(args.create.contentType).toBe('image/jpeg');
+    expect(args.create.blob.length).toBeGreaterThan(1000);
   });
 
   /**
    * An admin who uploads their own artwork should keep it. Re-running the seed
-   * is for filling a gap or retiring the seed's own drawing, never for
-   * reverting somebody's upload — same rule the assignment type's own update
-   * half follows.
+   * is for filling a gap, never for reverting somebody's upload — same rule the
+   * assignment type's own update half follows.
    */
-  test('never overwrites an image somebody uploaded themselves', async () => {
-    const { prisma, calls } = fakePrisma({
-      existingImage: { blob: Buffer.from('a school crest') },
-    });
+  test('never overwrites an image that is already there', async () => {
+    const { prisma, calls } = fakePrisma();
 
     await seedClassStarterAssignmentType(prisma as never);
 
-    expect(calls.imageCreate).toHaveLength(0);
-    expect(calls.imageUpdate).toHaveLength(0);
-  });
-
-  test('leaves the current drawing alone when it is already there', async () => {
-    const { prisma, calls } = fakePrisma({
-      existingImage: { blob: readFileSync(CLASS_STARTER_IMAGE_PATH) },
-    });
-
-    await seedClassStarterAssignmentType(prisma as never);
-
-    expect(calls.imageCreate).toHaveLength(0);
-    expect(calls.imageUpdate).toHaveLength(0);
-  });
-
-  /**
-   * The rooster was the seed's own drawing, so a database still showing it
-   * gets the redrawn card on the next deploy without anybody deleting rows.
-   */
-  test('replaces the rooster it drew earlier with the current card', async () => {
-    const rooster = Buffer.from('the original rooster card');
-    CLASS_STARTER_RETIRED_ARTWORK_MD5S.push(artworkMd5(rooster));
-    try {
-      const { prisma, calls } = fakePrisma({ existingImage: { blob: rooster } });
-
-      await seedClassStarterAssignmentType(prisma as never);
-
-      expect(calls.imageCreate).toHaveLength(0);
-      expect(calls.imageUpdate).toHaveLength(1);
-      const args = calls.imageUpdate[0].args as {
-        where: { assignmentTypeId: string };
-        data: { blob: Buffer; contentType: string; altText: string };
-      };
-      expect(args.where).toEqual({ assignmentTypeId: 'assignment-type-1' });
-      expect(args.data.contentType).toBe('image/jpeg');
-      expect(args.data.blob.equals(readFileSync(CLASS_STARTER_IMAGE_PATH))).toBe(
-        true
-      );
-      expect(args.data.altText).toBe(readClassStarterImage().altText);
-    } finally {
-      CLASS_STARTER_RETIRED_ARTWORK_MD5S.pop();
-    }
-  });
-
-  test('retires the rooster card and not the current one', () => {
-    expect(CLASS_STARTER_RETIRED_ARTWORK_MD5S).toContain(
-      '429eac2e3a0b56f3140f6a8da4382101'
-    );
-    expect(CLASS_STARTER_RETIRED_ARTWORK_MD5S).not.toContain(
-      artworkMd5(readFileSync(CLASS_STARTER_IMAGE_PATH))
-    );
+    const args = calls.imageUpsert[0].args as { update: Record<string, unknown> };
+    expect(args.update).toEqual({});
   });
 });
 

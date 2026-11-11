@@ -1,12 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { createHash } from 'node:crypto';
-import assignmentTypeImages from '../fixtures/prod-fidelity/assignment-type-images.json';
 import {
   bootstrapExitTicketAssignmentType,
-  EXIT_TICKET_BOOTSTRAP_IMAGE_MD5,
   EXIT_TICKET_INSTRUCTION_ID,
   EXIT_TICKET_MODULE_ID,
-  EXIT_TICKET_RETIRED_ARTWORK_MD5S,
 } from './bootstrap-exit-ticket-assignment-type';
 import {
   EXIT_TICKET_ASSIGNMENT_TYPE_ID,
@@ -98,10 +94,6 @@ function makePrisma(initial?: Partial<Store>) {
         store.image = data;
         return { id: 'image-1' };
       },
-      update: async ({ data }: { data: Record<string, unknown> }) => {
-        store.image = { ...store.image, ...data };
-        return { id: 'image-1' };
-      },
     },
   };
 
@@ -157,80 +149,5 @@ describe('bootstrapExitTicketAssignmentType', () => {
     expect(store.schoolGrants.size).toBe(0);
     expect(store.teacherGrants.size).toBe(0);
     expect(store.image).toMatchObject({ blob: 'x' });
-  });
-
-  test('attaches the fixture card when the type has none', async () => {
-    const { prisma, store } = makePrisma({
-      assignmentType: {
-        id: EXIT_TICKET_ASSIGNMENT_TYPE_ID,
-        kind: EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
-      },
-    });
-
-    await bootstrapExitTicketAssignmentType(prisma as never, {
-      organizationIds: ['org-1'],
-      attachImageIfMissing: true,
-    });
-
-    const fixture = assignmentTypeImages.find(
-      (row) => row.assignmentTypeId === EXIT_TICKET_ASSIGNMENT_TYPE_ID
-    )!;
-    expect(store.image).toMatchObject({
-      assignmentTypeId: EXIT_TICKET_ASSIGNMENT_TYPE_ID,
-      contentType: fixture.contentType,
-      altText: fixture.altText,
-    });
-    expect(
-      (store.image!.blob as Buffer).equals(
-        Buffer.from(fixture.blob.base64, 'base64')
-      )
-    ).toBe(true);
-  });
-
-  /**
-   * The migration drew the first card into production. That card is the
-   * repo's own, so when the fixture carries a new one the seed swaps it in;
-   * a card an admin uploaded (the test above) is never touched.
-   */
-  test('on rerun swaps the bootstrap card for the current fixture card', async () => {
-    const bootstrapCard = Buffer.from('bootstrap card bytes');
-    EXIT_TICKET_RETIRED_ARTWORK_MD5S.push(
-      createHash('md5').update(bootstrapCard).digest('hex')
-    );
-    try {
-      const { prisma, store } = makePrisma({
-        assignmentType: {
-          id: EXIT_TICKET_ASSIGNMENT_TYPE_ID,
-          kind: EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
-        },
-        image: {
-          assignmentTypeId: EXIT_TICKET_ASSIGNMENT_TYPE_ID,
-          blob: bootstrapCard,
-        },
-      });
-
-      await bootstrapExitTicketAssignmentType(prisma as never, {
-        organizationIds: ['org-1'],
-        attachImageIfMissing: true,
-      });
-
-      const fixture = assignmentTypeImages.find(
-        (row) => row.assignmentTypeId === EXIT_TICKET_ASSIGNMENT_TYPE_ID
-      )!;
-      expect(store.image).toMatchObject({ altText: fixture.altText });
-      expect(
-        (store.image!.blob as Buffer).equals(
-          Buffer.from(fixture.blob.base64, 'base64')
-        )
-      ).toBe(true);
-    } finally {
-      EXIT_TICKET_RETIRED_ARTWORK_MD5S.pop();
-    }
-  });
-
-  test('retires the card the migration shipped', () => {
-    expect(EXIT_TICKET_RETIRED_ARTWORK_MD5S).toContain(
-      EXIT_TICKET_BOOTSTRAP_IMAGE_MD5
-    );
   });
 });

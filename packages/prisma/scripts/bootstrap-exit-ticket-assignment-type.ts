@@ -3,14 +3,11 @@
  * only. Safe to call from preview tooling; production relies on migration
  * 20261008001100 for the same shape.
  *
- * Re-runs must not un-archive, overwrite title/description/position, replace
- * an image somebody uploaded, or inject the type into customized
- * school/teacher lists. The one image a re-run does replace is a card the
- * bootstrap itself shipped earlier (see EXIT_TICKET_RETIRED_ARTWORK_MD5S).
+ * Re-runs must not un-archive, overwrite title/description/position/image, or
+ * inject the type into customized school/teacher lists.
  */
 import type { PrismaClient } from '../generated/prisma';
 import assignmentTypeImages from '../fixtures/prod-fidelity/assignment-type-images.json';
-import { syncSeedArtwork } from './assignment-type-artwork';
 import {
   EXIT_TICKET_ASSIGNMENT_TYPE_DATA,
   EXIT_TICKET_ASSIGNMENT_TYPE_ID,
@@ -25,28 +22,9 @@ import {
 export const EXIT_TICKET_MODULE_ID = 'cexitticketmod00000000001';
 export const EXIT_TICKET_INSTRUCTION_ID = 'cexitticketins0000000001';
 
-/**
- * md5 of the card migration 20261008001100 inserted into production: the torn
- * ticket on ruled notebook paper, the ship-review checksum for that migration.
- */
-export const EXIT_TICKET_BOOTSTRAP_IMAGE_MD5 =
-  '12e8c7775d7c5ad1ebd01cdffe70f949';
-
-/**
- * md5 of every Exit Ticket card the repo has shipped before the one now in the
- * fixture. A database still showing one of these gets the fixture card on the
- * next run; a card somebody uploaded themselves is never touched.
- */
-export const EXIT_TICKET_RETIRED_ARTWORK_MD5S: string[] = [
-  EXIT_TICKET_BOOTSTRAP_IMAGE_MD5,
-];
-
 export type BootstrapExitTicketOptions = {
   organizationIds: string[];
-  /**
-   * When true, attach the fixture artwork if the type has no image yet, and
-   * swap it in where the type still shows a card the repo shipped earlier.
-   */
+  /** When true, attach fixture artwork only if the type has no image yet. */
   attachImageIfMissing?: boolean;
 };
 
@@ -126,20 +104,25 @@ export async function bootstrapExitTicketAssignmentType(
   }
 
   if (attachImageIfMissing) {
-    const imageFixture = assignmentTypeImages.find(
-      (row) => row.assignmentTypeId === EXIT_TICKET_ASSIGNMENT_TYPE_ID
-    );
-    if (imageFixture) {
-      await syncSeedArtwork(
-        prisma,
-        assignmentType.id,
-        {
-          blob: Buffer.from(imageFixture.blob.base64, 'base64'),
-          contentType: imageFixture.contentType,
-          altText: imageFixture.altText ?? '',
-        },
-        EXIT_TICKET_RETIRED_ARTWORK_MD5S
+    const existingImage = await prisma.assignmentTypeImage.findUnique({
+      where: { assignmentTypeId: assignmentType.id },
+      select: { id: true },
+    });
+    if (!existingImage) {
+      const imageFixture = assignmentTypeImages.find(
+        (row) => row.assignmentTypeId === EXIT_TICKET_ASSIGNMENT_TYPE_ID
       );
+      if (imageFixture) {
+        const blob = Buffer.from(imageFixture.blob.base64, 'base64');
+        await prisma.assignmentTypeImage.create({
+          data: {
+            assignmentTypeId: assignmentType.id,
+            contentType: imageFixture.contentType,
+            altText: imageFixture.altText,
+            blob,
+          },
+        });
+      }
     }
   }
 
