@@ -141,8 +141,8 @@ test.describe.serial('How to Teach It: slide decks, tutorial videos, and the unl
     expect(lounge.modules[2]).toBeTruthy();
     await expect(box.getByRole('link', { name: /lesson plan/i })).toHaveCount(0);
     // Brian's own sections are still there, word for word.
-    await expect(page.getByRole('button', { name: 'How it works' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'When to use it' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Show How it works' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Show When to use it' })).toBeVisible();
   });
 
   test('the ready-built stack still opens by URL, with Brian’s deck in it, once per teacher', async ({
