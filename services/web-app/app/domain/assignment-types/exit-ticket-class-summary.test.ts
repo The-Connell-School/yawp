@@ -105,6 +105,27 @@ describe('the prompt', () => {
     expect(system).toMatch(/different words or spelling/);
   });
 
+  test('names the activity in a few words', () => {
+    expect(user).toContain('What the students were asked to do: Answer a question');
+  });
+
+  test('carries what the teacher wants Yawp! to know on a v3 ticket', () => {
+    const withNote = buildExitTicketSummaryPrompt({
+      assignmentTitle: 'Exit ticket: Allie',
+      studentPrompt: 'Who is Allie?',
+      config: {
+        ...CONFIG,
+        lessonNotes: { ...CONFIG.lessonNotes!, mainPoints: 'We read chapters 1 to 3.' },
+      },
+      texts: ['His brother.', 'His brother who died.', 'D.B.'],
+      responseCount: 3,
+    }).user;
+    expect(withNote).toContain(
+      'What the teacher wants Yawp! to know: We read chapters 1 to 3.'
+    );
+    expect(withNote).toContain('Correct answer: His younger brother, who died.');
+  });
+
   test('carries the question, key points and mix-up, never a name', () => {
     expect(user).toContain('Who is Allie, and why does Holden');
     expect(user).toContain('His younger brother, who died.');

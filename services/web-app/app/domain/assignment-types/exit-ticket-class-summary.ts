@@ -151,9 +151,12 @@ export function buildExitTicketSummaryPrompt({
   ].join('\n');
 
   const activity = config?.activity
-    ? exitTicketActivityOption(config.activity)?.label
+    ? exitTicketActivityOption(config.activity)?.tag
     : null;
   const notes = config?.lessonNotes;
+  // A v3 form asks for the correct answer and one note for Yawp!; older
+  // forms asked for key points and the main points of the lesson.
+  const isV3 = Boolean(config?.activity);
   const user = [
     `Exit ticket: ${assignmentTitle?.trim() || 'Untitled'}`,
     ...(activity ? [`What the students were asked to do: ${activity}`] : []),
@@ -161,10 +164,16 @@ export function buildExitTicketSummaryPrompt({
     'What students were asked:',
     studentPrompt.trim(),
     ...(notes?.mustMention
-      ? ['', `Correct answer or key points: ${notes.mustMention}`]
+      ? [
+          '',
+          `${isV3 ? 'Correct answer' : 'Correct answer or key points'}: ${notes.mustMention}`,
+        ]
       : []),
     ...(notes?.mainPoints
-      ? ['', `Main points of the lesson: ${notes.mainPoints}`]
+      ? [
+          '',
+          `${isV3 ? 'What the teacher wants Yawp! to know' : 'Main points of the lesson'}: ${notes.mainPoints}`,
+        ]
       : []),
     ...(notes?.watchFor
       ? ['', `Mix-up the teacher was watching for: ${notes.watchFor}`]

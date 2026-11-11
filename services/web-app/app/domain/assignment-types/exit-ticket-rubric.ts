@@ -150,6 +150,7 @@ export const EXIT_TICKET_FLEXIBLE_ANSWER_GUIDANCE =
 /** What a lesson note is called in the v3 form, where it differs. */
 const V3_NOTE_LABELS: Partial<Record<keyof ExitTicketLessonNotes, string>> = {
   mustMention: 'The correct answer, with the teacher’s context',
+  mainPoints: 'What the teacher wants Yawp! to know',
 };
 
 /** The v3 half of the context: the activity, and how to read an answer. */
@@ -161,7 +162,7 @@ function v3ActivitySections(config: ExitTicketConfig): string[] {
   const isCheck = exitTicketActivityKind(option.value) === 'check';
   return [
     [
-      `What this ticket asks the students to do: ${option.label.toLowerCase()}.`,
+      `What this ticket asks the students to do: ${option.tag.toLowerCase()}.`,
       `The prompt: "${config.promptText ?? ''}"`,
       option.gradingCriteria,
     ].join('\n'),

@@ -288,6 +288,38 @@ describe('the grading context for a v3 ticket', () => {
     );
   });
 
+  test('names the activity by its short tag, not the form’s sentence', () => {
+    const context = buildExitTicketGradingContext(answerQuestion)!;
+    expect(context).toContain(
+      'What this ticket asks the students to do: answer a question.'
+    );
+    expect(context).not.toContain('a question you ask');
+  });
+
+  test('reads the correct answer on an ungraded ticket too', () => {
+    const ungraded = parseExitTicketConfigInputForTest({
+      activity: 'answer-question',
+      promptText: 'Who is Allie?',
+      answerType: 'objective',
+      lessonMustMention: 'Holden’s younger brother, who died.',
+    });
+    expect(ungraded.grading).toBeUndefined();
+    expect(buildExitTicketGradingContext(ungraded)).toContain(
+      '- The correct answer, with the teacher’s context: Holden’s younger brother, who died.'
+    );
+  });
+
+  test('reads what the teacher wants Yawp! to know', () => {
+    const withNote = parseExitTicketConfigInputForTest({
+      activity: 'reflect',
+      starter: 'learned',
+      lessonMainPoints: 'We read chapters 1 to 3 today.',
+    });
+    expect(buildExitTicketGradingContext(withNote)).toContain(
+      '- What the teacher wants Yawp! to know: We read chapters 1 to 3 today.'
+    );
+  });
+
   test('a check with no correct answer is read as having none', () => {
     const open = parseExitTicketConfigInputForTest({
       activity: 'engage-text',
