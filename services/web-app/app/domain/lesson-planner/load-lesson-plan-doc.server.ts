@@ -44,7 +44,7 @@ export async function loadLessonPlan({
 }): Promise<{ doc: LessonPlanDoc; kit: KitPlan | null }> {
   const access = await getLessonPlannerAccess(request);
   if (!access.allowed) throw redirect('/app');
-  const { planExportV2, deckGallery, teachNotes } = await getLessonPlannerReviewFlags(access.membership.organization.id);
+  const { planExportV2, deckGallery, deckKitV4, teachNotes } = await getLessonPlannerReviewFlags(access.membership.organization.id);
   if (!planExportV2) throw new Response('Not Found', { status: 404 });
 
   const loaded = await loadLessonPacket({ request, conversationId, withStackDetails: false });
@@ -122,7 +122,7 @@ export async function loadLessonPlan({
   });
   // The teacher's notes print under their steps (Oct 24 handoff, task 7).
   const doc = teachNotes ? withTeacherNotes(built, await storedTeacherNotes(loaded.conversationId)) : built;
-  return { doc, kit: deckGallery ? buildKitPlan({ doc, entries }) : null };
+  return { doc, kit: deckGallery ? buildKitPlan({ doc, entries, deckKitV4 }) : null };
 }
 
 export async function loadLessonPlanDoc(args: { request: Request; conversationId: string | undefined }): Promise<LessonPlanDoc> {

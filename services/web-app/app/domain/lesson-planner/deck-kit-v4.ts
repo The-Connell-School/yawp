@@ -137,6 +137,11 @@ export function kitV4Colors(deck: Pick<SlideDeck, 'colors' | 'accent' | 'art'>):
   return filled.slice(0, 3).map(kitV4Readable);
 }
 
+/** A painting's colors in spec v4: the kit's own, else its sampled colors without earth tones. */
+export function kitV4ArtColors(art: Pick<DeckArt, 'id' | 'colors'>): string[] {
+  return kitV4Colors({ art: art.id, colors: KIT_V4_ART_COLORS[art.id] ?? art.colors });
+}
+
 /** A light band of the deck color on cream, behind a quiz's right answer. */
 export function kitV4Band(color: string): string {
   const value = normalizedHex(color)!.slice(1);

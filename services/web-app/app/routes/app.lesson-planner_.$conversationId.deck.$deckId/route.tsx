@@ -6,6 +6,7 @@
  * Yawp! template as it changes, then save: the edit replaces the planner's
  * deck in the chat, in the stack, in Present and in PowerPoint.
  */
+import { withDeckKit } from '~/domain/lesson-planner/deck-kit-v4';
 import { useActiveTime } from '~/components/lesson-planner/use-active-time';
 import { DeckPicturesProvider, SlidePicture } from '~/components/lesson-planner/slide-picture';
 import type { DeckPicture, DeckPictures } from '~/domain/lesson-planner/deck-pictures';
@@ -80,15 +81,15 @@ export function deckEditorReturnTo(conversationId: string, url: string) {
 async function requireDeckEditor(request: Request) {
   const access = await getLessonPlannerAccess(request);
   if (!access.allowed) throw redirect('/app');
-  const { deckV2, deckGallery, activeTime, uploadPictures } = await getLessonPlannerReviewFlags(
+  const { deckV2, deckGallery, deckKitV4, activeTime, uploadPictures } = await getLessonPlannerReviewFlags(
     access.membership.organization.id
   );
   if (!deckV2) throw new Response('Not Found', { status: 404 });
-  return { access, deckGallery, activeTime, uploadPictures };
+  return { access, deckGallery, deckKitV4, activeTime, uploadPictures };
 }
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  const { deckGallery, activeTime, uploadPictures } = await requireDeckEditor(request);
+  const { deckGallery, deckKitV4, activeTime, uploadPictures } = await requireDeckEditor(request);
   const { conversationId, lessonTitle, deck } = await loadLessonDeck({
     request,
     conversationId: params.conversationId,
@@ -104,7 +105,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     conversationId,
     deckId: params.deckId!,
     lessonTitle,
-    deck,
+    // Drawn in spec v4 where the school has it; saving never stores the kit.
+    deck: withDeckKit(deck, { deckKitV4 }),
     periodMinutes: lesson?.periodMinutes ?? null,
     gallery: deckGallery,
     returnTo: deckEditorReturnTo(conversationId, request.url),

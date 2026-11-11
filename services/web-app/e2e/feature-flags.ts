@@ -121,6 +121,7 @@ export type LessonPlannerReviewFlag = Extract<
   | 'lesson_planner_refresh_my_deck'
   | 'lesson_planner_active_time'
   | 'lesson_planner_writing_override'
+  | 'lesson_planner_deck_kit_v4'
 >;
 
 export async function setLessonPlannerReviewFlag(

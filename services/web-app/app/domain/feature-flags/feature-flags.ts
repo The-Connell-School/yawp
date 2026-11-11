@@ -115,6 +115,9 @@ export const LESSON_PLANNER_ACTIVE_TIME_FLAG = 'lesson_planner_active_time' as c
 /** The teacher's call on whether a stack step is writing time (Nov 4 follow-up). Needs the stack page redesign. */
 export const LESSON_PLANNER_WRITING_OVERRIDE_FLAG = 'lesson_planner_writing_override' as const;
 
+/** The Lesson Deck Kit, spec v4 (Nov 6): cream slides, split panels, labels. Needs the Lesson Deck Kit. */
+export const LESSON_PLANNER_DECK_KIT_V4_FLAG = 'lesson_planner_deck_kit_v4' as const;
+
 /**
  * The teacher's own deck flags as they apply (Nov 1): keeping the deck needs
  * uploads, and both choices work from the kept deck.
@@ -287,6 +290,11 @@ export const FEATURE_FLAGS = {
     label: 'Lesson Planner: teacher decides what counts as writing',
     description:
       'On the stack page, an opened step offers “Don’t count as writing” or “Count as writing”, with Undo: a lecture that introduces pre-writing can be taken out of the writing tally, and a step the rule missed can be counted. The teacher’s call drives the Writing badge, the writing minutes and percent, and Create in Yawp!. Needs the stack page redesign. Off: Yawp! decides, as before.',
+  },
+  [LESSON_PLANNER_DECK_KIT_V4_FLAG]: {
+    label: 'Lesson Planner: Lesson Deck Kit v4',
+    description:
+      'The Lesson Deck Kit, spec v4 (Nov 6): every slide on cream, color only as a solid panel on split slides or as type, short Arial labels (Look, Talk, Hold this) instead of italic mode words, no rules, small caps, middle dots or roman numerals, a plain painting plate, a quiz template, and colors with no terracotta or brown. Applies to every gallery deck the school opens, in Present, Run the show, PowerPoint, the PDFs and shared links, and the planner writes to the v4 templates. Needs the Lesson Deck Kit. Off: spec v3, as before.',
   },
   [CLASS_CODE_UNIQUE_FLAG]: {
     label: 'Unique class codes',

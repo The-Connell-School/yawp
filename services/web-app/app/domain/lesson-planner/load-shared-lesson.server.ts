@@ -5,6 +5,7 @@
  * the slides, the writing prompt. Never the teacher's notes to themselves
  * (a sub's plan is the rewrite, made for them).
  */
+import { withDeckKit } from './deck-kit-v4';
 import { prisma } from '~/utils/db.server';
 import {
   getLessonPlannerReviewFlags,
@@ -159,9 +160,9 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
     : undefined;
   const deckOutcome = deckRow ? readSlideDeck(deckRow.content) : null;
   const timing = stackTiming(steps, conversation.periodMinutes);
-  const { deckV2, deckGallery } = deckOutcome?.kind === 'deck'
+  const { deckV2, deckGallery, deckKitV4 } = deckOutcome?.kind === 'deck'
     ? await getLessonPlannerReviewFlags(conversation.organizationId)
-    : { deckV2: false, deckGallery: false };
+    : { deckV2: false, deckGallery: false, deckKitV4: false };
   const audience = link.audience as ShareAudience;
 
   return {
@@ -174,7 +175,8 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
     handouts,
     prompts,
     // The agenda slide reads the stack's times (Brian's round 3, 1.4).
-    deck: deckOutcome?.kind === 'deck' ? syncAgendaToStack(deckOutcome.deck, timing.blocks) : null,
+    // In spec v4 where the lesson's school draws its decks that way.
+    deck: deckOutcome?.kind === 'deck' ? withDeckKit(syncAgendaToStack(deckOutcome.deck, timing.blocks), { deckKitV4 }) : null,
     withNotes: audience === 'sub',
     writing: includes.has('writing')
       ? { percent: timing.writingPercent, minutes: timing.writingMinutes, sources: timing.writingSources }

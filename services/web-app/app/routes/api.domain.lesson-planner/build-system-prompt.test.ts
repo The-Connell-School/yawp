@@ -2143,3 +2143,52 @@ describe('recommendedLessonPlannerPrompts', () => {
     }
   });
 });
+
+describe('planner prompt — the Lesson Deck Kit, spec v4', () => {
+  const textOf = (deckKitV4: boolean) =>
+    buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', deckGallery: true, deckKitV4 })
+      .map((block) => block.text)
+      .join('\n');
+  const v4 = textOf(true);
+  const v3 = textOf(false);
+
+  test('teaches labels, not italic mode words, and cream slides with split panels', () => {
+    expect(v4).toContain('Lesson Deck Kit, spec v4');
+    expect(v4).toContain('Labels, not mode words');
+    expect(v4).toContain('cream');
+    expect(v4).toContain('split');
+    expect(v4).not.toContain('italic mode word');
+    expect(v4).not.toContain('accent wall');
+    expect(v4).not.toContain('on pine');
+  });
+
+  test('teaches the quiz as a question slide and an answer slide', () => {
+    expect(v4).toContain('Question n of N');
+    expect(v4).toMatch(/repeat[^.]*with `answer`/);
+  });
+
+  test('carries the kit’s writing and color rules', () => {
+    expect(v4).toContain('No terracotta, clay, brick or brown');
+    expect(v4).toContain('numbers, never roman numerals');
+    expect(v4).toContain('no middle dots');
+    expect(v4).toContain('Don’t give the answer away in a prompt');
+    expect(v4).not.toContain('accentWord');
+  });
+
+  test('lists each painting with its v4 colors', () => {
+    expect(v4).toContain('`hokusai-great-wave`');
+    expect(v4).toContain('#2F5873, #1E3A5F');
+  });
+
+  test('flag off: the spec v3 section, as before', () => {
+    expect(v3).toContain('italic mode word');
+    expect(v3).not.toContain('Lesson Deck Kit, spec v4');
+  });
+
+  test('without the gallery deck, neither section', () => {
+    const none = buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', deckGallery: false, deckKitV4: true })
+      .map((block) => block.text)
+      .join('\n');
+    expect(none).not.toContain('Lesson Deck Kit, spec v4');
+  });
+});

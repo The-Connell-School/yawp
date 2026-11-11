@@ -1,3 +1,4 @@
+import { withDeckKit } from '~/domain/lesson-planner/deck-kit-v4';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DeckPicturesProvider } from '~/components/lesson-planner/slide-picture';
 import { viewerDeckPictures } from '~/domain/lesson-planner/deck-pictures.server';
@@ -38,14 +39,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 
   const access = await getLessonPlannerAccess(request);
-  const { deckV2, deckGallery } = access.allowed
+  const { deckV2, deckGallery, deckKitV4 } = access.allowed
     ? await getLessonPlannerReviewFlags(access.membership.organization.id)
-    : { deckV2: false, deckGallery: false };
+    : { deckV2: false, deckGallery: false, deckKitV4: false };
 
   return {
     conversationId,
     lessonTitle,
-    deck,
+    // Spec v4 where the school has it: every gallery slide below follows the deck.
+    deck: withDeckKit(deck, { deckKitV4 }),
     durationMinutes: deckDurationMinutes(deck),
     // Brian's review (E1): the Yawp! tile template, behind its flag.
     tileTemplate: deckV2,

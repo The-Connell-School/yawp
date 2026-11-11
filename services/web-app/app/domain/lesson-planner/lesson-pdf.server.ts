@@ -20,7 +20,7 @@ import { classicSlide, deckDurationMinutes, type Slide, type SlideDeck } from '.
 import { deckColors, withoutColorMarks } from './deck-colors';
 import { GALLERY_COLORS, galleryAccent, galleryRunningHead, planGalleryDeck, type GallerySlidePlan } from './deck-gallery';
 import { deckArt } from './deck-art';
-import { KIT_V4_WIDTH, isKitV4, layoutKitV4Slide, type KitV4Run } from './deck-kit-v4';
+import { KIT_V4_HOUSE_PALETTE, KIT_V4_WIDTH, isKitV4, layoutKitV4Slide, withDeckKit, type KitV4Run } from './deck-kit-v4';
 import { PICTURE_PLACEHOLDER } from './deck-pictures';
 import type { DeckPictureFiles } from './deck-pictures.server';
 import { existsSync } from 'node:fs';
@@ -79,10 +79,16 @@ const styleOf = (doc: Doc): PdfStyle => STYLES.get(doc) ?? CLASSIC_STYLE;
 export type HandoutKit = { color: string };
 
 /** The handout style for a lesson, from its deck's primary color; null with the kit off. */
-export function handoutKit(packet: LessonPacket, flags: { deckGallery: boolean }): HandoutKit | null {
+export function handoutKit(
+  packet: LessonPacket,
+  flags: { deckGallery: boolean; deckKitV4?: boolean }
+): HandoutKit | null {
   if (!flags.deckGallery) return null;
-  const deck = packet.sections.find((section) => section.deck)?.deck ?? null;
-  return { color: deck ? galleryAccent(deck) : deckColors({}, null)[0]! };
+  const found = packet.sections.find((section) => section.deck)?.deck ?? null;
+  // In spec v4, the deck's v4 primary; with no deck, the v4 house pine.
+  const deck = found ? withDeckKit(found, { deckKitV4: Boolean(flags.deckKitV4) }) : null;
+  if (deck) return { color: galleryAccent(deck) };
+  return { color: flags.deckKitV4 ? KIT_V4_HOUSE_PALETTE[0] : deckColors({}, null)[0]! };
 }
 
 function fontFor(doc: Doc, run: TextRun, serif = false): string {
@@ -516,7 +522,7 @@ function drawKitV4Face(
       try {
         doc.save();
         doc.rect(r.x, r.y, r.w, r.h).clip();
-        doc.image(path, r.x, r.y, element.fit === 'cover' ? { cover: [r.w, r.h], align: 'center', valign: 'center' } : { fit: [r.w, r.h], align: 'left', valign: 'center' });
+        doc.image(path, r.x, r.y, element.fit === 'cover' ? { cover: [r.w, r.h], align: 'center', valign: 'center' } : { fit: [r.w, r.h], valign: 'center' });
         doc.restore();
       } catch {
         // An image PDFKit cannot read: the slide is drawn without it.
@@ -529,7 +535,7 @@ function drawKitV4Face(
       let printed = false;
       if (file && (file.contentType === 'image/png' || file.contentType === 'image/jpeg')) {
         try {
-          doc.image(file.data, r.x, r.y, { fit: [r.w, r.h], align: 'left', valign: 'center' });
+          doc.image(file.data, r.x, r.y, { fit: [r.w, r.h], valign: 'center' });
           printed = true;
         } catch {
           printed = false;

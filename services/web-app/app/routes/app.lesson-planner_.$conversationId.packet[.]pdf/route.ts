@@ -6,6 +6,7 @@
  * teacher has to steer. Access, ordering and titles come from the same loader
  * the packet page uses, so the file always matches the page it came from.
  */
+import { withDeckKit } from '~/domain/lesson-planner/deck-kit-v4';
 import { viewerDeckPictureFiles } from '~/domain/lesson-planner/deck-pictures.server';
 import type { LoaderFunctionArgs } from 'react-router';
 import { loadLessonPacket } from '~/domain/lesson-planner/load-lesson-packet.server';
@@ -84,7 +85,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const chosen = {
     ...ordered,
     sections: ordered.sections.map((section) =>
-      section.deck ? { ...section, deck: syncAgendaToStack(section.deck, agendaSteps) } : section
+      section.deck ? { ...section, deck: withDeckKit(syncAgendaToStack(section.deck, agendaSteps), reviewFlags) } : section
     ),
   };
   const pdf = printsForStudents({
