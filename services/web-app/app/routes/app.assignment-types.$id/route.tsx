@@ -1286,6 +1286,7 @@ export default function AppAssignmentTypesIdRoute() {
         {data.promptLibrary ? (
           <div className="pb-6" data-tour="type-library">
             <PromptsLibrary
+              topNote={landingPage?.libraryNote ?? null}
               prompts={data.promptLibrary.prompts}
               facets={data.promptLibrary.facets}
               optionCounts={data.promptLibrary.optionCounts}

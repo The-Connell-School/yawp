@@ -9,6 +9,7 @@ import {
 } from '~/components/ui/accordion';
 import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
 import { Button } from '~/components/ui/button';
+import { RichText } from '../landing-copy/assignment-type-landing';
 import { Input } from '~/components/ui/input';
 import {
   Sheet,
@@ -39,6 +40,8 @@ type Props = {
   totalCount: number;
   onSelectPrompt: (prompt: string) => void;
   assignmentCreationLocked?: boolean;
+  /** The landing page's intro to the library, at its top (as the thesis library has it). */
+  topNote?: string | null;
 };
 
 type FacetSpec = {
@@ -94,6 +97,7 @@ export function PromptsLibrary({
   totalCount,
   onSelectPrompt,
   assignmentCreationLocked = false,
+  topNote,
 }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchInput, setSearchInput] = useState(
@@ -213,6 +217,14 @@ export function PromptsLibrary({
           Prompt Library
         </AccordionTrigger>
         <AccordionContent>
+          {topNote ? (
+            <p
+              className="mb-4 mt-2 rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground"
+              data-testid="prompt-library-note"
+            >
+              <RichText text={topNote} />
+            </p>
+          ) : null}
           <div className="flex flex-col gap-6 pt-2 lg:flex-row">
             <aside className="hidden lg:block lg:w-[240px] lg:shrink-0">
               {filterPanel}
