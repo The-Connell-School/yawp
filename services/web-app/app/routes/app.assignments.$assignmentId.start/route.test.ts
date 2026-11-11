@@ -6,26 +6,15 @@ const prisma = {
 
 const requireUserId = mock();
 const requireMembership = mock();
-const createDocumentForAssignmentType = mock();
-const findStudentGroupDocument = mock();
+const openClassAssignmentForStudent = mock();
 const redirectWithToast = mock();
-class DocumentCreationError extends Error {}
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
-mock.module('~/domain/documents.server', () => ({
-  createDocumentForAssignmentType,
-  DocumentCreationError,
-}));
-// Spread the pristine module: bun's mock.module is global to the test run, so
-// replacing it wholesale would strip arrangeGroups/openGroups for other files
-// (see the comment in test-preload.ts).
-const actualGroups = globalThis.__realModules[
-  '~/domain/collaboration/groups.server'
-];
-mock.module('~/domain/collaboration/groups.server', () => ({
-  ...actualGroups,
-  findStudentGroupDocument,
+const actualOpenClassAssignment =
+  globalThis.__realModules['~/domain/assignments/open-class-assignment.server'];
+mock.module('~/domain/assignments/open-class-assignment.server', () => ({
+  openClassAssignmentForStudent,
 }));
 mock.module('~/utils/toast.server', () => ({ redirectWithToast }));
 
@@ -33,7 +22,11 @@ const { action } = await import('./route');
 
 afterAll(() => {
   mock.restore();
-  mock.module('~/domain/collaboration/groups.server', () => actualGroups);
+  if (actualOpenClassAssignment) {
+    mock.module('~/domain/assignments/open-class-assignment.server', () =>
+      actualOpenClassAssignment
+    );
+  }
 });
 
 const call = () =>
@@ -45,17 +38,6 @@ const call = () =>
     params: { assignmentId: 'a-1' },
   } as any);
 
-const classAssignment = ({ collaborationEnabled = false } = {}) => ({
-  id: 'ca-1',
-  assignmentId: 'a-1',
-  assignment: { assignmentTypeId: 'at-1', collaborationEnabled },
-  class: {
-    id: 'class-1',
-    school: { id: 'school-1', organizationId: 'org-1' },
-    teachers: [{ id: 'teacher-1' }],
-  },
-});
-
 describe('assignment start', () => {
   beforeEach(() => {
     prisma.classAssignment.findFirst.mockReset();
@@ -64,73 +46,51 @@ describe('assignment start', () => {
       id: 'member-1',
       role: 'STUDENT',
     });
-    createDocumentForAssignmentType
+    openClassAssignmentForStudent
       .mockReset()
-      .mockResolvedValue({ documentId: 'doc-solo' });
-    findStudentGroupDocument.mockReset().mockResolvedValue(null);
+      .mockResolvedValue({ ok: true, url: '/app/documents/doc-solo?spa=1' });
     redirectWithToast
       .mockReset()
       .mockImplementation((to: string, options: any) => ({ to, options }));
   });
 
-  describe('solo assignments (existing behavior)', () => {
-    test('creates a personal document and opens the solo editor', async () => {
-      prisma.classAssignment.findFirst.mockResolvedValue(classAssignment());
+  test('delegates to openClassAssignmentForStudent for posted enrollments', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue({ id: 'ca-1' });
 
-      const result: any = await call();
+    const result: any = await call();
 
-      expect(createDocumentForAssignmentType).toHaveBeenCalledWith({
-        membershipId: 'member-1',
-        assignmentTypeId: 'at-1',
-        assignmentId: 'a-1',
-        classAssignmentId: 'ca-1',
-      });
-      expect(result.to).toContain('/app/documents/doc-solo');
+    expect(openClassAssignmentForStudent).toHaveBeenCalledWith({
+      classAssignmentId: 'ca-1',
+      membershipId: 'member-1',
     });
+    expect(result.to).toContain('/app/documents/doc-solo');
   });
 
-  describe('collaborative assignments', () => {
-    test('opens the group draft instead of creating a personal document', async () => {
-      // Without this branch a student reaching the assignment-scoped start route
-      // gets a personal solo draft for work their group already owns a document
-      // for — an orphan the class-assignment route exists to prevent.
-      prisma.classAssignment.findFirst.mockResolvedValue(
-        classAssignment({ collaborationEnabled: true })
-      );
-      findStudentGroupDocument.mockResolvedValue({ documentId: 'doc-group' });
-
-      const result: any = await call();
-
-      expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
-      expect(result.to).toContain('/app/collab-documents/doc-group');
+  test('opens the group draft when the shared helper returns a collab URL', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue({ id: 'ca-1' });
+    openClassAssignmentForStudent.mockResolvedValue({
+      ok: true,
+      url: '/app/collab-documents/doc-group?exitTo=%2Fapp%3Ftab%3Dassignments',
     });
 
-    test('looks up the group for this student and class assignment', async () => {
-      prisma.classAssignment.findFirst.mockResolvedValue(
-        classAssignment({ collaborationEnabled: true })
-      );
-      findStudentGroupDocument.mockResolvedValue({ documentId: 'doc-group' });
+    const result: any = await call();
 
-      await call();
+    expect(result.to).toContain('/app/collab-documents/doc-group');
+    expect(result.options.description).toBe('Opening your group document.');
+  });
 
-      expect(findStudentGroupDocument).toHaveBeenCalledWith({
-        classAssignmentId: 'ca-1',
-        membershipId: 'member-1',
-      });
+  test('surfaces groups-not-open errors from the shared helper', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue({ id: 'ca-1' });
+    openClassAssignmentForStudent.mockResolvedValue({
+      ok: false,
+      reason: 'groups-not-open',
+      message: 'Your teacher has not opened groups for this assignment yet.',
     });
 
-    test('creates nothing when the teacher has not opened groups yet', async () => {
-      prisma.classAssignment.findFirst.mockResolvedValue(
-        classAssignment({ collaborationEnabled: true })
-      );
-      findStudentGroupDocument.mockResolvedValue(null);
+    const result: any = await call();
 
-      const result: any = await call();
-
-      expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
-      expect(result.options.type).toBe('error');
-      expect(result.options.description).toMatch(/not opened groups/i);
-    });
+    expect(result.options.type).toBe('error');
+    expect(result.options.description).toMatch(/not opened groups/i);
   });
 
   test('non-students are turned away', async () => {
@@ -138,33 +98,24 @@ describe('assignment start', () => {
 
     const result: any = await call();
 
-    expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
+    expect(openClassAssignmentForStudent).not.toHaveBeenCalled();
     expect(result.options.type).toBe('error');
   });
 
-  test('does not surface internal DocumentCreationError text in the toast', async () => {
-    prisma.classAssignment.findFirst.mockResolvedValue(classAssignment());
-    createDocumentForAssignmentType.mockRejectedValue(
-      new DocumentCreationError(
-        'Assignment.assignmentTypeId (at-1) does not match input.assignmentTypeId (at-2)',
-      ),
+  test('findFirst applies postAt visibility gate', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue(null);
+
+    await call();
+
+    const where = prisma.classAssignment.findFirst.mock.calls[0][0].where;
+    expect(where).toEqual(
+      expect.objectContaining({
+        assignmentId: 'a-1',
+        OR: [
+          { postAt: null },
+          { postAt: expect.objectContaining({ lte: expect.any(Date) }) },
+        ],
+      })
     );
-
-    const result: any = await call();
-
-    expect(result.options.type).toBe('error');
-    expect(result.options.description).toBe('Could not start this assignment.');
-    expect(result.options.description).not.toContain('assignmentTypeId');
-  });
-
-  test('keeps user-safe DocumentCreationError copy in the toast', async () => {
-    prisma.classAssignment.findFirst.mockResolvedValue(classAssignment());
-    createDocumentForAssignmentType.mockRejectedValue(
-      new DocumentCreationError('AssignmentType is not available.'),
-    );
-
-    const result: any = await call();
-
-    expect(result.options.description).toBe('AssignmentType is not available.');
   });
 });

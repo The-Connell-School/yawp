@@ -68,6 +68,10 @@ import {
 } from '~/components/ui/sheet';
 import { Textarea } from '~/components/ui/textarea';
 import {
+  AssignmentCreatedSuccessPanel,
+  type AssignmentCreatedSuccessState,
+} from '~/components/assignments/assignment-created-success-panel';
+import {
   resolveNewAssignmentPointValue,
   type AssignmentTypeDefaultContext,
 } from '~/domain/assignments/new-assignment-defaults';
@@ -260,11 +264,13 @@ export type AssignmentCreationClassOption = {
   title?: string | null;
   grade?: string | null;
   period?: string | null;
+  studentCount?: number;
 };
 
 type CreateFetcherData = {
   success?: boolean;
   message?: string;
+  assignmentId?: string;
   /**
    * Where the teacher still has to go. Present only for collaborative
    * assignments, which are not finished at creation: students see nothing until
@@ -304,6 +310,10 @@ export type AssignmentCreationSheetProps = {
   fixedClassId?: string;
   /** Class ids to preselect on open when the class is not fixed (e.g. duplicate). */
   initialClassIds?: string[];
+  /** Restyles the assign-to list for Duplicate (presentation). */
+  assignToVariant?: 'default' | 'duplicate';
+  /** Optional teacher class list for Duplicate; falls back to teacherClasses. */
+  duplicateClasses?: AssignmentCreationClassOption[];
   /**
    * Present when this sheet is editing an existing assignment rather than
    * creating one. Same form either way — it swaps the intent, drops the
@@ -714,6 +724,8 @@ export function AssignmentCreationSheetContent({
   initialAssignmentTypeId,
   fixedClassId,
   initialClassIds: initialClassIdsProp,
+  assignToVariant = 'default',
+  duplicateClasses,
   editingAssignment,
   initialTitle = '',
   initialPrompt = '',
@@ -745,6 +757,9 @@ export function AssignmentCreationSheetContent({
   navigate = () => {},
   renderSheet = true,
 }: AssignmentCreationSheetContentProps) {
+  const classOptions = duplicateClasses ?? teacherClasses;
+  const [createdSuccess, setCreatedSuccess] =
+    useState<AssignmentCreatedSuccessState | null>(null);
   const [selectedAssignmentTypeId, setSelectedAssignmentTypeId] = useState(
     initialAssignmentTypeSelection(
       assignmentTypes,
@@ -754,7 +769,7 @@ export function AssignmentCreationSheetContent({
     )
   );
   const [selectedClassId, setSelectedClassId] = useState(
-    fixedClassId ?? teacherClasses[0]?.id ?? ''
+    fixedClassId ?? classOptions[0]?.id ?? ''
   );
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>(
     initialClassIds(fixedClassId, initialClassIdsProp)
@@ -1021,6 +1036,7 @@ export function AssignmentCreationSheetContent({
     usesDailyPagesEngagementRubric,
   ]);
   const hasFixedClass = Boolean(fixedClassId);
+  const isDuplicateSheet = assignToVariant === 'duplicate';
   // Every creation entry point uses the same server workflow. In particular,
   // the class page must not silently drop collaboration fields by posting to
   // its older local action. Editing stays on the owning route.
@@ -1078,6 +1094,7 @@ export function AssignmentCreationSheetContent({
     );
     setSelectedClassId(fixedClassId ?? teacherClasses[0]?.id ?? '');
     setSelectedClassIds(initialClassIds(fixedClassId, initialClassIdsProp));
+    setCreatedSuccess(null);
     setTitle(initialTitle);
     setPrompt(initialPrompt);
     const resetTypeId = initialAssignmentTypeSelection(
@@ -1180,22 +1197,63 @@ export function AssignmentCreationSheetContent({
     initialDueAt,
     open,
     teacherClasses,
+    initialClassIdsProp,
   ]);
 
   const toldCreated = useRef<unknown>(null);
   useEffect(() => {
     if (createFetcher.state !== 'idle' || !createFetcher.data?.success) return;
-    onOpenChange(false);
-    if (!editingAssignment && toldCreated.current !== createFetcher.data) {
-      toldCreated.current = createFetcher.data;
-      onCreated?.({ nextStep: Boolean(createFetcher.data.nextStep) });
+    if (editingAssignment) {
+      onOpenChange(false);
+      return;
     }
-    // Closing the sheet used to be the whole ending, which left a collaborative
-    // assignment looking done while its groups did not exist yet. `navigate` is
-    // injectable so this is testable without a router.
-    const nextStep = createFetcher.data.nextStep;
-    if (nextStep) navigate(nextStep.url);
-  }, [createFetcher.state, createFetcher.data, onOpenChange, navigate]);
+    if (toldCreated.current === createFetcher.data) return;
+    toldCreated.current = createFetcher.data;
+    onCreated?.({ nextStep: Boolean(createFetcher.data.nextStep) });
+
+    const assignmentId = createFetcher.data.assignmentId;
+    if (!assignmentId) {
+      onOpenChange(false);
+      const nextStep = createFetcher.data.nextStep;
+      if (nextStep) navigate(nextStep.url);
+      return;
+    }
+
+    const selectedType = assignmentTypes.find((t) => t.id === assignmentTypeId);
+    const classLabels = (hasFixedClass && fixedClassId
+      ? classOptions.filter((c) => c.id === fixedClassId)
+      : classOptions.filter((c) => selectedClassIds.includes(c.id))
+    ).map((c) => assignmentCreationClassLabel(c));
+
+    setCreatedSuccess({
+      assignmentId,
+      title:
+        title.trim() || initialTitle.trim() || 'Untitled Assignment',
+      assignmentTypeTitle: selectedType?.title ?? 'Assignment',
+      classLabels,
+      collaborationEnabled,
+      nextStep: createFetcher.data.nextStep ?? null,
+      saveForReuseWarning: createFetcher.data.message?.includes(
+        'could not be saved for reuse'
+      ),
+    });
+  }, [
+    assignmentTypes,
+    assignmentTypeId,
+    classOptions,
+    collaborationEnabled,
+    createFetcher.data,
+    createFetcher.state,
+    editingAssignment,
+    fixedClassId,
+    hasFixedClass,
+    navigate,
+    onCreated,
+    onOpenChange,
+    initialTitle,
+    selectedClassIds,
+    title,
+  ]);
 
   useEffect(() => {
     if (!extractFetcher.data?.success) return;
@@ -1478,36 +1536,95 @@ export function AssignmentCreationSheetContent({
 
         <div className={isEditing ? 'hidden' : 'space-y-2'}>
           <Label>Assign to</Label>
-          <div className="space-y-2.5 rounded-md border p-3">
-            {teacherClasses.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                {emptyClassesMessage}
+          {isDuplicateSheet ? (
+            <>
+              <p
+                className="text-sm font-medium text-foreground"
+                data-testid="duplicate-class-selection-count"
+              >
+                {selectedClassIds.length} of {classOptions.length} selected
               </p>
-            ) : (
-              teacherClasses.map((klass) => {
-                const checked = hasFixedClass
-                  ? klass.id === fixedClassId
-                  : selectedClassIds.includes(klass.id);
+              <div
+                className="max-h-[17.5rem] space-y-0 overflow-y-auto rounded-md border"
+                data-testid="duplicate-class-list"
+              >
+                {classOptions.length === 0 ? (
+                  <p className="p-3 text-sm text-muted-foreground">
+                    {emptyClassesMessage}
+                  </p>
+                ) : (
+                  classOptions.map((klass) => {
+                    const checked = hasFixedClass
+                      ? klass.id === fixedClassId
+                      : selectedClassIds.includes(klass.id);
+                    return (
+                      <div
+                        key={klass.id}
+                        className="flex items-start gap-2.5 border-b border-border px-3 py-3 last:border-b-0"
+                      >
+                        <Checkbox
+                          id={`assignment-create-class-${klass.id}`}
+                          checked={checked}
+                          onCheckedChange={() => toggleClass(klass.id)}
+                          disabled={isSaving || hasFixedClass}
+                          className="mt-0.5"
+                        />
+                        <Label
+                          htmlFor={`assignment-create-class-${klass.id}`}
+                          className="cursor-pointer font-normal leading-snug"
+                        >
+                          <span className="block">
+                            {assignmentCreationClassLabel(klass)}
+                          </span>
+                          {typeof klass.studentCount === 'number' ? (
+                            <span className="block text-sm text-muted-foreground">
+                              {klass.studentCount}{' '}
+                              {klass.studentCount === 1 ? 'student' : 'students'}
+                            </span>
+                          ) : null}
+                        </Label>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Pick one or more classes. Each gets its own copy with the same
+                prompt and settings.
+              </p>
+            </>
+          ) : (
+            <div className="space-y-2.5 rounded-md border p-3">
+              {classOptions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {emptyClassesMessage}
+                </p>
+              ) : (
+                classOptions.map((klass) => {
+                  const checked = hasFixedClass
+                    ? klass.id === fixedClassId
+                    : selectedClassIds.includes(klass.id);
 
-                return (
-                  <div key={klass.id} className="flex items-center gap-2.5">
-                    <Checkbox
-                      id={`assignment-create-class-${klass.id}`}
-                      checked={checked}
-                      onCheckedChange={() => toggleClass(klass.id)}
-                      disabled={isSaving || hasFixedClass}
-                    />
-                    <Label
-                      htmlFor={`assignment-create-class-${klass.id}`}
-                      className="cursor-pointer font-normal"
-                    >
-                      {assignmentCreationClassLabel(klass)}
-                    </Label>
-                  </div>
-                );
-              })
-            )}
-          </div>
+                  return (
+                    <div key={klass.id} className="flex items-center gap-2.5">
+                      <Checkbox
+                        id={`assignment-create-class-${klass.id}`}
+                        checked={checked}
+                        onCheckedChange={() => toggleClass(klass.id)}
+                        disabled={isSaving || hasFixedClass}
+                      />
+                      <Label
+                        htmlFor={`assignment-create-class-${klass.id}`}
+                        className="cursor-pointer font-normal"
+                      >
+                        {assignmentCreationClassLabel(klass)}
+                      </Label>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -2315,22 +2432,41 @@ export function AssignmentCreationSheetContent({
                 ? 'Saving...'
                 : 'Save Changes'
               : isSaving
-                ? 'Creating...'
-                : 'Create Assignment'}
+                ? isDuplicateSheet
+                  ? 'Duplicating...'
+                  : 'Creating...'
+                : isDuplicateSheet
+                  ? 'Duplicate'
+                  : 'Create Assignment'}
           </Button>
         </div>
       </CreateForm>
     </>
   );
 
+  const successView = createdSuccess ? (
+    <AssignmentCreatedSuccessPanel
+      state={createdSuccess}
+      onDone={() => {
+        onOpenChange(false);
+      }}
+      onSetUpGroups={() => {
+        const next = createdSuccess.nextStep;
+        if (next) navigate(next.url);
+      }}
+    />
+  ) : null;
+
+  const sheetBody = successView ?? form;
+
   if (!renderSheet) {
-    return <div>{form}</div>;
+    return <div>{sheetBody}</div>;
   }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
-        {form}
+      <SheetContent className="w-full overflow-y-auto sm:max-w-[520px]">
+        {sheetBody}
       </SheetContent>
     </Sheet>
   );
