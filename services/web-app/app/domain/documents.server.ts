@@ -197,36 +197,17 @@ export async function createDocumentForAssignmentType(
     const resolvedAssignmentId = input.assignmentId ?? assignment?.assignmentId ?? null;
     // Prefer exact class-assignment match if present.
     if (input.classAssignmentId) {
-      const existingByClassAssignment = await prisma.document.findFirst({
-        where: {
-          membershipId: input.membershipId,
-          classAssignmentId: input.classAssignmentId,
-          deletedAt: null,
-          archivedAt: null,
-        },
-        orderBy: { createdAt: 'asc' },
-        select: { id: true },
+      return findOrCreateClassAssignmentDocument({
+        membershipId: input.membershipId,
+        classAssignmentId: input.classAssignmentId,
+        resolvedAssignmentId,
+        assignmentTypeId: input.assignmentTypeId,
+        assignmentId: input.assignmentId,
+        apHistorySnapshot: input.apHistorySnapshot,
+        assignmentModules,
       });
-      if (existingByClassAssignment) {
-        return { documentId: existingByClassAssignment.id };
-      }
-      // Fallback: legacy documents may be linked only by assignmentId.
-      if (resolvedAssignmentId) {
-        const existingByAssignment = await prisma.document.findFirst({
-          where: {
-            membershipId: input.membershipId,
-            assignmentId: resolvedAssignmentId,
-            deletedAt: null,
-            archivedAt: null,
-          },
-          orderBy: { createdAt: 'asc' },
-          select: { id: true },
-        });
-        if (existingByAssignment) {
-          return { documentId: existingByAssignment.id };
-        }
-      }
-    } else if (resolvedAssignmentId) {
+    }
+    if (resolvedAssignmentId) {
       const existingByAssignment = await prisma.document.findFirst({
         where: {
           membershipId: input.membershipId,
@@ -267,4 +248,86 @@ export async function createDocumentForAssignmentType(
   });
 
   return { documentId: document.id };
+}
+
+type FindOrCreateClassAssignmentDocumentInput = {
+  membershipId: string;
+  classAssignmentId: string;
+  resolvedAssignmentId: string | null;
+  assignmentTypeId: string;
+  assignmentId?: string | null;
+  apHistorySnapshot?: unknown;
+  assignmentModules: AssignmentModuleForSessionCreate[];
+};
+
+async function findExistingClassAssignmentDocument(
+  db: Pick<typeof prisma, 'document'>,
+  input: Pick<
+    FindOrCreateClassAssignmentDocumentInput,
+  'membershipId' | 'classAssignmentId' | 'resolvedAssignmentId'
+  >
+) {
+  const existingByClassAssignment = await db.document.findFirst({
+    where: {
+      membershipId: input.membershipId,
+      classAssignmentId: input.classAssignmentId,
+      deletedAt: null,
+      archivedAt: null,
+    },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  if (existingByClassAssignment) {
+    return { documentId: existingByClassAssignment.id };
+  }
+  if (input.resolvedAssignmentId) {
+    const existingByAssignment = await db.document.findFirst({
+      where: {
+        membershipId: input.membershipId,
+        assignmentId: input.resolvedAssignmentId,
+        deletedAt: null,
+        archivedAt: null,
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (existingByAssignment) {
+      return { documentId: existingByAssignment.id };
+    }
+  }
+  return null;
+}
+
+async function findOrCreateClassAssignmentDocument(
+  input: FindOrCreateClassAssignmentDocumentInput
+): Promise<CreatedDocument> {
+  const lockKey = `${input.membershipId}:${input.classAssignmentId}`;
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+    const existing = await findExistingClassAssignmentDocument(tx, input);
+    if (existing) return existing;
+
+    const document = await tx.document.create({
+      data: {
+        membershipId: input.membershipId,
+        text: '',
+        html: '',
+        title: '',
+        assignmentTypeId: input.assignmentTypeId,
+        ...(input.assignmentId ? { assignmentId: input.assignmentId } : {}),
+        classAssignmentId: input.classAssignmentId,
+        ...(input.apHistorySnapshot
+          ? {
+              apHistorySnapshot: input.apHistorySnapshot as Prisma.InputJsonValue,
+            }
+          : {}),
+        assignmentModuleSessions: {
+          create: buildAssignmentModuleSessionCreateData(input.assignmentModules),
+        },
+      },
+      select: { id: true },
+    });
+
+    return { documentId: document.id };
+  });
 }

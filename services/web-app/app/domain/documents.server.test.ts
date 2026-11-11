@@ -18,6 +18,13 @@ const prisma = {
     create: mock(),
     update: mock(),
   },
+  $transaction: mock(async (fn: (tx: unknown) => unknown) => {
+    const tx = {
+      $executeRaw: mock(async () => undefined),
+      document: prisma.document,
+    };
+    return fn(tx);
+  }),
 };
 
 mock.module('~/utils/db.server', () => ({ prisma }));

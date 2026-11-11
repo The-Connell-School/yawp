@@ -3257,4 +3257,32 @@ for (const denial of ['inactive', 'unavailable'] as const) {
       }
     }
   );
+  suite(
+    'password sign-in preserves assignment open deep-link destination',
+    async () => {
+      cookie = '';
+      flowToken = '';
+      const destination = `/app/assignments/open-link-${prefix}/open`;
+      const email = `open-link-${prefix}@example.test`;
+      await prisma.user.create({
+        data: {
+          email,
+          password: { create: { hash: await getPasswordHash('abcdef') } },
+          memberships: { create: { organizationId: prefix, role: 'STUDENT' } },
+        },
+      });
+      await post('resolve', { identifier: email, redirectTo: destination });
+      await post('password', { password: 'abcdef' });
+      try {
+        await unifiedEntry(
+          new Request(url + '?continue=1', { headers: { cookie } })
+        );
+        throw new Error('Expected routing');
+      } catch (response) {
+        expect((response as Response).headers.get('location')).toBe(
+          destination
+        );
+      }
+    }
+  );
 }

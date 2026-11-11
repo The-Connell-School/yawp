@@ -265,6 +265,7 @@ export type AssignmentCreationClassOption = {
 type CreateFetcherData = {
   success?: boolean;
   message?: string;
+  assignmentId?: string;
   /**
    * Where the teacher still has to go. Present only for collaborative
    * assignments, which are not finished at creation: students see nothing until

@@ -199,6 +199,7 @@ describe('api.assignments.create', () => {
 
     const body = await readBody(response);
     expect(body.success).toBe(true);
+    expect(body.assignmentId).toBe('assignment-1');
     expect(prisma.class.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
