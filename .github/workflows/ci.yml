@@ -1080,6 +1080,9 @@ jobs:
             'app/routes/app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel.test.tsx' \
             'app/routes/app.assignments.$assignmentId._index/route.test.ts' \
             'app/routes/app.my-classes.$classId/route.test.ts' \
+            'app/routes/app.my-classes.$classId/class-assignments-tab.test.tsx' \
+            app/utils/group-by-assignment-type.test.ts \
+            app/components/collapsible-group-section.test.tsx \
             'app/routes/app.my-classes.$classId/class-student-enrollment.server.test.ts' \
             'app/utils/impersonation-read-only.server.test.ts' \
             'app/utils/internal-management.server.test.ts' \
