@@ -48,6 +48,20 @@ async function expectStandardizedAssignmentForm(page: Page) {
   ).toBeChecked();
 }
 
+async function expectAssignmentCreatedSuccessSheet(page: Page) {
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await expect(page.getByTestId('assignment-created-success')).toBeVisible();
+  await expect(dialog.getByText('Assignment created')).toBeVisible();
+  await expect(page.getByTestId('assignment-created-copy-link')).toBeVisible();
+  await expect(page.getByTestId('assignment-created-share-url')).toBeVisible();
+}
+
+async function dismissAssignmentCreatedSuccessSheet(page: Page) {
+  await page.getByTestId('assignment-created-done').click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+}
+
 async function expectCreatedAssignment(params: {
   classId: string;
   assignmentTypeId: string;
@@ -416,7 +430,8 @@ test.describe.serial('Teacher dashboard workspace', () => {
           (url.pathname === '/app' || url.pathname === '/app/') &&
           url.search === ''
       );
-      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expectAssignmentCreatedSuccessSheet(page);
+      await dismissAssignmentCreatedSuccessSheet(page);
       await expect(page.getByTestId('app._index')).toBeVisible();
       await expect(page.getByTestId('teacher-assignments-grid')).toBeVisible();
 
@@ -464,7 +479,8 @@ test.describe.serial('Teacher dashboard workspace', () => {
         fullPage: true,
       });
       await dialog.getByRole('button', { name: 'Create Assignment' }).click();
-      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expectAssignmentCreatedSuccessSheet(page);
+      await dismissAssignmentCreatedSuccessSheet(page);
 
       const prisma = createE2EPrismaClient();
       try {
@@ -535,7 +551,8 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await page.getByRole('button', { name: 'Change', exact: true }).click();
       await page.getByLabel('Point value', { exact: true }).fill('35');
       await page.getByRole('button', { name: 'Create Assignment' }).click();
-      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expectAssignmentCreatedSuccessSheet(page);
+      await dismissAssignmentCreatedSuccessSheet(page);
 
       await expectCreatedAssignmentsForClasses({
         classIds: [e2eContext.classId, secondClass.id],
@@ -574,7 +591,8 @@ test.describe.serial('Teacher dashboard workspace', () => {
     await page.getByRole('button', { name: 'Change', exact: true }).click();
     await page.getByLabel('Point value', { exact: true }).fill('40');
     await page.getByRole('button', { name: 'Create Assignment' }).click();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expectAssignmentCreatedSuccessSheet(page);
+    await dismissAssignmentCreatedSuccessSheet(page);
 
     await expectCreatedAssignment({
       classId: e2eContext.classId,
