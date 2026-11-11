@@ -1996,21 +1996,24 @@ describe('the Yawp exit ticket, v3 builder', () => {
     }
     expect(v3).toContain('activity: answer-question');
     expect(v3).toContain('promptText:');
+    expect(v3).toContain('topic:');
+    expect(v3).toContain('answer: yes');
     for (const starter of EXIT_TICKET_STARTER_OPTIONS) {
       expect(v3).toContain(`\`${starter.id}\``);
     }
   });
 
-  test('no longer teaches the fill-in-the-blank focus or the right-answer question', () => {
+  test('no longer teaches the fill-in-the-blank focus or grading', () => {
     expect(v3).not.toContain('focus: explain-concept');
-    expect(v3).not.toContain('answer: objective');
     expect(v3).not.toContain('`ask-question`');
+    expect(v3).toContain('Do not write `graded`');
+    expect(v3).not.toContain('basis: understanding');
   });
 
-  test('carries Brian’s wording rule, and leaves the closing line to Yawp!', () => {
+  test('carries the wording rule, and leaves the closing line to Yawp!', () => {
     expect(v3).toContain('someone who missed class');
     expect(v3).toContain('not the definition you were given');
-    expect(v3).toMatch(/Do not write the closing line/);
+    expect(v3).toMatch(/Yawp! adds any closing line itself/);
     // The printed ticket follows the same rule, closer included.
     expect(v3).toContain(EXIT_TICKET_EXPLAIN_CLOSER);
   });

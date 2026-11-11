@@ -229,47 +229,38 @@ function namedFields(fields: BlockFields) {
   };
 }
 
+/** "yes" / "no" as well as the stored words, for `answer:` on a v3 block. */
+function blockAnswerType(value: string | undefined): string | undefined {
+  const answer = value?.trim().toLowerCase();
+  if (!answer) return undefined;
+  if (YES.has(answer) || answer === 'objective') return 'objective';
+  if (answer === 'no' || answer === 'subjective') return 'subjective';
+  return answer;
+}
+
 /**
- * A v3 block: an activity and the question the planner wrote, plus the key
- * points. Graded without a basis means completion, the usual reason to grade
- * an exit ticket at all; a basis the parser refuses drops the grade, not the
- * ticket, as for legacy blocks.
+ * A v3 block: what students do, and what that needs (a fixed reflection, the
+ * concept, or the question). The v3 form does not grade, so neither does a v3
+ * block: a `graded:` line is ignored rather than refused.
  */
 function readV3Block(fields: BlockFields): PlannedExitTicket | null {
-  const base = {
+  const parsed = parseExitTicketConfigInput({
     activity: fields.activity,
-    promptText: fields.promptText,
+    promptText: fields.promptText ?? fields.prompt,
     starter: fields.starter,
+    topic: fields.topic,
+    answerType: blockAnswerType(fields.answer),
     lessonMainPoints: fields.mainPoints,
     lessonMustMention: fields.mustMention,
     lessonWatchFor: fields.watchFor,
-  };
-  const named = namedFields(fields);
-  if (YES.has(fields.graded?.trim().toLowerCase() ?? '')) {
-    const graded = parseExitTicketConfigInput({
-      ...base,
-      graded: true,
-      gradingBasis: blockBasis(fields.basis) ?? 'completion',
-    });
-    if (graded.success) {
-      return {
-        config: graded.config,
-        prompt: composeExitTicketPrompt(graded.config),
-        graded: true,
-        pointValue:
-          blockPoints(fields.points) ?? EXIT_TICKET_DEFAULT_POINT_VALUE,
-        ...named,
-      };
-    }
-  }
-  const parsed = parseExitTicketConfigInput(base);
+  });
   if (!parsed.success) return null;
   return {
     config: parsed.config,
     prompt: composeExitTicketPrompt(parsed.config),
     graded: false,
     pointValue: null,
-    ...named,
+    ...namedFields(fields),
   };
 }
 
@@ -431,21 +422,15 @@ export type ExitTicketPrefill = {
 function readPrefillV3Config(params: URLSearchParams): ExitTicketConfig | null {
   const activity = params.get(EXIT_TICKET_PARAMS.activity)?.trim();
   if (!activity) return null;
-  const graded = params.get(EXIT_TICKET_PARAMS.graded) === 'true';
   const parsed = parseExitTicketConfigInput({
     activity,
     promptText: params.get(EXIT_TICKET_PARAMS.promptText),
     starter: params.get(EXIT_TICKET_PARAMS.starter),
+    topic: params.get(EXIT_TICKET_PARAMS.topic),
+    answerType: params.get(EXIT_TICKET_PARAMS.answerType),
     lessonMainPoints: params.get(EXIT_TICKET_PARAMS.mainPoints),
     lessonMustMention: params.get(EXIT_TICKET_PARAMS.mustMention),
     lessonWatchFor: params.get(EXIT_TICKET_PARAMS.watchFor),
-    ...(graded
-      ? {
-          graded: true,
-          gradingBasis:
-            params.get(EXIT_TICKET_PARAMS.gradingBasis) ?? 'completion',
-        }
-      : {}),
   });
   return parsed.success ? parsed.config : null;
 }

@@ -158,75 +158,68 @@ function buildUnitContextSection(context: UnitContext | null): string[] {
 }
 
 /**
- * Brian's exit-ticket wording rule, shared by the Yawp! ticket and the printed
- * one: the explain closer verbatim, no length push on questions and quick
- * checks, and the retired phrasing named so it is not written again.
+ * The exit-ticket wording rule, shared by the Yawp! ticket and the printed
+ * one: plain questions, no instructions tacked on, and the retired phrasing
+ * named so it is not written again.
  */
 function exitTicketWordingRule(): string {
-  return `- Wording: an explain-it-in-your-own-words ticket ends with exactly "${EXIT_TICKET_EXPLAIN_CLOSER}" A question students still have, or a quick check that asks for a specific answer, just asks: no "write as much as you can". Never write "the way you would explain it to someone who missed class", "not the definition you were given", or ask for "the real" question.`;
+  return `- Wording: write the question the way a teacher would say it out loud, and stop. No instructions about length, polish, honesty or detail, and nothing like "the way you would explain it to someone who missed class", "not the definition you were given", or "ask the real question". An explain-it-in-your-own-words ticket may end with "${EXIT_TICKET_EXPLAIN_CLOSER}" and nothing longer.`;
 }
 
 /**
  * The v3 hand-off (flag `exit-ticket-builder-v3`): the planner names what the
- * students do and writes the question; Yawp! adds the closing line. Activities
- * and starters are read from the form's own module, so the planner can only
- * name what the form has.
+ * students do and supplies what that choice needs; Yawp! writes the rest.
+ * Activities and reflections are read from the form's own module, so the
+ * planner can only name what the form has.
  */
 function buildExitTicketSectionV3(): string[] {
   const activities = EXIT_TICKET_ACTIVITY_OPTIONS.map(
-    (option) =>
-      `  - \`${option.value}\` — ${option.label}. ${option.description}`
+    (option) => `  - \`${option.value}\` — ${option.label}.`
   );
   const starters = EXIT_TICKET_STARTER_OPTIONS.map(
     (option) => `  - \`${option.id}\` — ${option.label}: "${option.prompt}"`
   );
-  const wondering = EXIT_TICKET_STARTER_OPTIONS.find(
-    (option) => option.id === 'wondering'
-  )!;
-  const notes = EXIT_TICKET_LESSON_NOTE_FIELDS.map((field) =>
-    field.key === 'mustMention'
-      ? '  - `mustMention` — the correct answer or key points. Fill it in on every check that has one: responses are read against it, and a right answer in other words or spelling still counts.'
-      : `  - \`${field.key}\` — ${field.label}. ${field.helperText}`
-  );
+  const notes = EXIT_TICKET_LESSON_NOTE_FIELDS.filter(
+    (field) => field.key !== 'mustMention'
+  ).map((field) => `  - \`${field.key}\` — ${field.label}. ${field.helperText}`);
   return [
     '',
     `Handing over the check for understanding (\`${EXIT_TICKET_FENCE}\`) — this teacher's school has the Exit Ticket assignment type:`,
-    'An exit ticket in Yawp! is not a page to photocopy. It is an assignment students write into, and every response comes back read and given feedback on understanding against what you say the lesson was checking. So when the lesson closes on a written check, hand the whole thing over in a fenced block tagged `' +
+    'An exit ticket in Yawp! is an assignment students write into, and every response comes back read for understanding. When the lesson closes on a written check, hand it over in a fenced block tagged `' +
       EXIT_TICKET_FENCE +
-      '` and Yawp! puts a button under it that creates the assignment with every answer already filled in.',
-    'The default is an ungraded reflection — one click for the teacher:',
+      '` and Yawp! puts a button under it that creates the assignment with every answer filled in.',
+    'The default is a reflection, one click for the teacher:',
     '  ```' + EXIT_TICKET_FENCE,
     '  activity: reflect',
     '  starter: wondering',
-    `  promptText: ${wondering.prompt}`,
     '  ```',
-    'A check for understanding asks for one thing, in the words of this lesson:',
+    'A check for understanding asks for one thing from this lesson:',
     '  ```' + EXIT_TICKET_FENCE,
     '  activity: answer-question',
     '  promptText: Who is Allie in The Catcher in the Rye, and why does Holden keep thinking about him?',
-    '  mustMention: Allie is Holden’s younger brother, who died of leukemia; Holden holds on to him as the one person who never let him down.',
-    '  watchFor: Mixing Allie up with D.B. or Phoebe.',
+    '  answer: yes',
+    '  mustMention: Allie is Holden’s younger brother, who died of leukemia.',
     '  ```',
     '- `activity` is exactly one of:',
     ...activities,
-    '- `promptText` (required) is the question students answer, written to them, naming the passage, term or character this lesson used. Ask for one thing: three questions get three shallow answers. Ask them to explain, not recall: "point to one moment in chapter 4 that shows this" shows who understood; "define the term" shows who memorized a sentence. For `engage-text`, a few short numbered questions about one passage are fine.',
-    '- `starter` (reflection only, optional): when the reflection is one of these, write its words exactly as `promptText` and name it:',
+    '- `reflect`: name one of these as `starter`, and write nothing else:',
     ...starters,
-    '- Do not write the closing line. Yawp! adds it from the activity, so never end `promptText` with "write as much as you can", "don\'t worry about polish", or anything like it.',
+    '  Or leave out `starter` and write your own reflection question as `promptText`.',
+    '- `explain-concept`: give the concept as `topic`, e.g. `topic: how Edwards uses reason and emotion together`. Yawp! writes "In your own words, explain …". Do not write `promptText`.',
+    '- `answer-question` and `engage-text`: `promptText` (required) is the question or task, written to students, naming the passage, term or character this lesson used. Ask for one thing. For `engage-text`, a few short numbered questions about one passage are fine.',
+    '- For a check, say whether it has a correct answer: `answer: yes` or `answer: no`. With `yes`, put the answer and anything that helps read responses in `mustMention`. Students never see it, so never put the answer in `promptText`.',
     exitTicketWordingRule(),
-    '- The lesson notes are how the responses get read. Fill in every one you can — you wrote the objective a minute ago:',
+    '- Yawp! adds any closing line itself, so `promptText` never ends with one.',
+    '- Optional notes on the lesson, for whoever reads the responses:',
     ...notes,
-    '- Students never see the notes, so never put the answer in `promptText`.',
-    '- Grading is off unless you add `graded: yes`, and most exit tickets should stay ungraded. Grade one when the teacher asked for it, or for completion points that get tickets handed in:',
-    '  - `basis: completion` (full credit for any real attempt; the usual choice, and the default) or `basis: understanding` (scored on how well they show they understand it).',
-    '  - `points` — small: an exit ticket is never worth as much as real work. Omit it for the default of 10.',
+    '- Exit tickets here are not graded. Do not write `graded`, `points` or `basis`.',
     '- The check still has to check the WHOLE objective. A check examines one thing well; when the objective genuinely has three parts, either use a reflection and say in the plan what to look for, or close on the ticket plus one more piece of evidence, and say which part each one tells you about.',
     '- Put nothing else in the block: no heading, no minutes, no teacher notes, no quotation marks. Where it sits in the lesson and how long it gets belong in the plan above it.',
-    '- Do not also write the question anywhere else. The teacher sees exactly what students will get before anything is created, and a question reworded elsewhere would be a second, different ticket.',
+    '- Do not also write the question anywhere else. The teacher sees exactly what students will get before anything is created.',
     '- When the same lesson has a deck, its closing slide sends students to the exit ticket in Yawp! — "Exit ticket: open it in Yawp! before you go" — and does not restate the question.',
     '- When a full lesson closes on an exit ticket, offer three, each a different activity — a reflection, and the two checks that fit this lesson best — each in its own `' +
       EXIT_TICKET_FENCE +
-      '` block, so the teacher can pick or stack the one that fits. Name all three in the closing step in one line; do not rank them. For a single exit ticket the teacher asked for on its own, give one.',
+      '` block, so the teacher can pick the one that fits. Name all three in the closing step in one line; do not rank them. For a single exit ticket the teacher asked for on its own, give one.',
     '- One `' +
       EXIT_TICKET_FENCE +
       '` block per check. When a lesson genuinely needs a paper ticket as well, that stays a `yawp-material` `exit-ticket` block, and you say what each one is for.',
