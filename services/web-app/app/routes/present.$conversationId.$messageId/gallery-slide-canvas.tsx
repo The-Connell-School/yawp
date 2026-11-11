@@ -26,6 +26,8 @@ import {
 } from '~/domain/lesson-planner/deck-gallery';
 import type { SlideDeck } from '~/domain/lesson-planner/slide-deck';
 import { BrandSafe } from '~/components/brand/brand-safe';
+import { isKitV4 } from '~/domain/lesson-planner/deck-kit-v4';
+import { KitV4SlideCanvas } from './kit-v4-slide-canvas';
 
 /** Georgia and Arial first; these only stand in where a machine lacks them. */
 export const GALLERY_FONTS_HREF = GALLERY_FALLBACK_FONTS_HREF;
@@ -72,6 +74,8 @@ function band(color: string): string {
 }
 
 export function GallerySlideCanvas({ deck, index }: { deck: SlideDeck; index: number }) {
+  // Spec v4 where the school has it (the deck is marked where it is loaded).
+  if (isKitV4(deck)) return <KitV4SlideCanvas deck={deck} index={index} />;
   const plan = planGalleryDeck(deck)[index];
   if (!plan) return null;
   const colors = galleryColors(deck);

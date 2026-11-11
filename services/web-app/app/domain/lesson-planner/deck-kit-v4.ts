@@ -143,7 +143,7 @@ export function kitV4Band(color: string): string {
   const cream = [0xf3, 0xf0, 0xe8];
   const channels = [0, 2, 4].map((at, i) => {
     const channel = parseInt(value.slice(at, at + 2), 16);
-    return Math.round(cream[i]! + (channel - cream[i]!) * 0.16);
+    return Math.round(cream[i]! + (channel - cream[i]!) * 0.2);
   });
   return `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
 }
@@ -608,7 +608,8 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
       const isPicture = plan.template === 'picture';
       const question = isPicture ? pictureSlideText(slide) : slide.question ?? slide.body ?? slide.title;
       const large = isPicture ? Boolean(slide.image) : Boolean(art);
-      const timing = withoutDots([slide.seconds ? `${slide.seconds} seconds` : null, slide.routine].filter(Boolean).join(' · '));
+      const seconds = slide.seconds ? `${slide.seconds} seconds` : null;
+      const routine = slide.routine ? withoutDots(slide.routine) : null;
       if (large) {
         const box = { x: 40, y: 40, w: 900, h: 600 };
         if (isPicture) elements.push({ kind: 'picture', id: slide.image!, ...box });
@@ -620,7 +621,8 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
       elements.push(
         column({ x, y: 60, w: W - (large ? 64 : MARGIN) - x, h: H - 120 }, [
           para([labelRun(plan.label, color)], 16),
-          para([isPicture ? sans(slide.title, 20, KIT_V4.grey) : timing ? sans(timing, 20, KIT_V4.grey) : null], 16),
+          para([isPicture ? sans(slide.title, 20, KIT_V4.grey) : seconds ? sans(seconds, 20, KIT_V4.grey) : null], 4),
+          para([!isPicture && routine ? sans(routine, 20, KIT_V4.grey) : null], 16),
           para(question ? mark(question, (t, c) => serif(t, large ? 34 : kitV4PromptSize(question), c)) : [], 20, 1.2),
           para([slide.followUp ? serif(slide.followUp, large ? 26 : 32, color) : null], 0, 1.25),
         ])
@@ -679,10 +681,11 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
       [slide.left, slide.right].forEach((side, i) => {
         if (!side) return;
         elements.push(
-          column({ x: MARGIN + i * 580, y: 250, w: 520, h: H - 250 - 80 }, [
-            para([sans(side.label, 24, colors[i] ?? color, true)], 14),
-            para(mark(side.text, (t, c) => sans(t, 26, c)), 0, 1.4),
-          ])
+          column(
+            { x: MARGIN + i * 580, y: 260, w: 520, h: H - 260 - 80 },
+            [para([sans(side.label, 24, colors[i] ?? color, true)], 14), para(mark(side.text, (t, c) => sans(t, 26, c)), 0, 1.4)],
+            'top'
+          )
         );
       });
       return out();
