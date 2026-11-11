@@ -73,7 +73,7 @@ export const WRITING_STEP_COPY: Record<WritingStepKind, WritingStepCopy> = {
       {
         title: 'Assign a prompt',
         detail:
-          'New → Assignment gives your class a prompt to explore. New → Document lets you try it first, the way your students will.',
+          'New → Assignment gives your class a prompt to explore. New → Sample document lets you try it first, the way your students will.',
       },
       {
         title: 'Students write with the Tutor',
@@ -100,7 +100,7 @@ export const WRITING_STEP_COPY: Record<WritingStepKind, WritingStepCopy> = {
       {
         title: 'Assign a prompt',
         detail:
-          'New → Assignment gives your class a prompt to argue about. New → Document lets you try it first, the way your students will.',
+          'New → Assignment gives your class a prompt to argue about. New → Sample document lets you try it first, the way your students will.',
       },
       {
         title: 'Students build their thesis with the Tutor',
