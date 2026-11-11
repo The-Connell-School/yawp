@@ -377,7 +377,7 @@ test.describe.serial('Free tier guided tour', () => {
     await page.waitForURL(/\/app\/assignment-types\/[^/]+$/);
     await page.getByRole('button', { name: 'Skip' }).click();
     await page.getByRole('button', { name: /^New/ }).click();
-    await page.getByRole('menuitem', { name: 'Document' }).click();
+    await page.getByRole('menuitem', { name: 'Sample document' }).click();
     await page.waitForURL(/\/app\/documents\/[^/?]+/);
 
     const card = page.getByRole('dialog', {
