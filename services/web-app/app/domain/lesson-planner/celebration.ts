@@ -1,5 +1,5 @@
 /**
- * "This lesson is set" (Brian's round 4, item 4): a burst of confetti, one
+ * "Set this lesson" (Brian's round 4, item 4): a burst of confetti, one
  * Yawp! logo rising through it, and Brian's own "Yaaawp!". The pieces and
  * the sound are worked out here; the overlay draws them.
  */

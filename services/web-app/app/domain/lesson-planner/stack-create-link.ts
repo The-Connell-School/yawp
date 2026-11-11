@@ -10,6 +10,7 @@ import { EXIT_TICKET_BLOCK_KEY } from './lesson-material';
 import { createdWhere, materialRef, type CreatedFrom } from './assignment-links';
 import { lessonPlaceHref, readLessonPlace } from './lesson-return';
 import { hidePromptIds } from './prompt-ids';
+import { isTeacherTalk, studentWritingTask } from './step-types';
 
 export type WritingTypeIds = {
   dailyPages: string | null;
@@ -62,29 +63,9 @@ export function withPiece(href: string, pieceRef?: string | null): string {
   return `${url.pathname}?${url.searchParams}`;
 }
 
-/**
- * What students write in a step written as prose (Brian's run 3, item 4: "if
- * students write during a step, the step gets the button"): an exit ticket,
- * or a quick write. Null when nobody writes.
- */
-export function proseWritingTask(
-  title: string,
-  content: string
-): { kind: 'exit-ticket' | 'quick-write'; prompt: string } | null {
-  const text = hidePromptIds(content).replace(/\*\*|__/g, '');
-  const ticket = /\bexit (?:ticket|slip)\b\s*[:—–-]\s*([^\n]+)/i.exec(text);
-  if (ticket) return { kind: 'exit-ticket', prompt: ticket[1]!.trim() };
-  if (/\bexit (?:ticket|slip)\b/i.test(title) && text.trim()) {
-    return { kind: 'exit-ticket', prompt: firstLine(text) };
-  }
-  // Brian's run 5 (item 6): reflections and pre-writes are writing too.
-  const writes =
-    /\b(?:quick[- ]?write|free[- ]?write|pre[- ]?write|journal|(?:written|writing a) reflection|reflection (?:writing|paragraph|prompt)|written (?:response|answer)|(?:one|a)[- ]sentence (?:written )?(?:answer|response)|(?:write|jot)s?\b[^.\n]{0,40}\bin (?:their|your) (?:notes|notebooks?)|\d+\s*(?:seconds?|minutes?|min) of writing|students write|write for (?:\d+|one|two|three|four|five|a few) min)/i;
-  if (writes.test(title) || writes.test(text)) {
-    const quoted = /["“]([^"”]{8,300})["”]/.exec(text)?.[1];
-    return { kind: 'quick-write', prompt: (quoted ?? firstLine(text)).trim() };
-  }
-  return null;
+/** What students write in a step written as prose: the one rule in step-types (Brian, Nov 4). */
+export function proseWritingTask(title: string, content: string) {
+  return studentWritingTask(title, hidePromptIds(content));
 }
 
 function firstLine(text: string): string {
@@ -162,6 +143,8 @@ function createLinkFor({
   typeIds: WritingTypeIds;
   conversationId: string;
 }): StackCreateLink | null {
+  // The teacher talking is not an assignment (Brian, Nov 4).
+  if (kind === 'step' && isTeacherTalk(title)) return null;
   if (kind === 'step' && (stepType === 'thesis_essay' || /\bthesis\b/i.test(title))) {
     const prompt = hidePromptIds(content).trim();
     if (!typeIds.thesis || !prompt) return null;

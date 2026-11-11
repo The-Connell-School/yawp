@@ -7,6 +7,8 @@ import {
   readSlideDeck,
   slideSearchText,
   validateSlideDeck,
+  classicSlide,
+  deckPictureIds,
   SLIDE_DECK_FENCE,
   SLIDE_LAYOUTS,
 } from './slide-deck';
@@ -157,6 +159,7 @@ describe('parseSlideDeck', () => {
       if (layout === 'agenda') slide.agenda = [{ title: 'Hook', minutes: 10 }];
       if (layout === 'notes') slide.facts = ['One fact.'];
       if (layout === 'read') slide.tasks = [{ verb: 'Circle', text: 'names' }];
+      if (layout === 'picture') slide.image = 'cmh0elephant0000abcd';
       const parsed = parseSlideDeck(fenced({ title: 'Deck', slides: [slide] }));
       expect(parsed?.deck.slides[0]!.layout).toBe(layout);
     }
@@ -671,3 +674,51 @@ describe('parseSlideDeck — forgiving about how the model writes it', () => {
     expect(validated.deck.art).toBeUndefined();
   });
 });
+
+describe('picture slides: the teacher’s own pictures (Nov 1)', () => {
+  const pictureSlide = {
+    layout: 'picture',
+    title: 'Observe and analyze',
+    question: 'What is happening in this picture?',
+    image: 'cmh0elephant0000abcd',
+    speakerNotes: 'Two minutes of silent looking.',
+  };
+  const withPicture = { ...validDeck, slides: [...validDeck.slides, pictureSlide] };
+
+  test('a picture slide parses with its picture id', () => {
+    const parsed = parseSlideDeck(fenced(withPicture));
+    expect(parsed?.deck.slides[3]).toMatchObject({ layout: 'picture', image: 'cmh0elephant0000abcd' });
+    expect(SLIDE_LAYOUTS).toContain('picture');
+  });
+
+  test('a picture slide with no picture is refused, by name', () => {
+    const { image: _, ...noImage } = pictureSlide;
+    const outcome = readSlideDeck(fenced({ ...validDeck, slides: [noImage] }));
+    expect(outcome.kind).toBe('unreadable');
+    expect(outcome.kind === 'unreadable' ? outcome.reason : '').toContain('slides.0.image');
+  });
+
+  test('a picture id that is not an id is dropped, never put in a URL', () => {
+    const parsed = parseSlideDeck(
+      fenced({ ...validDeck, slides: [...validDeck.slides, { ...validDeck.slides[2], image: '../../etc/passwd' }] })
+    );
+    expect(parsed?.deck.slides[3]?.image).toBeUndefined();
+  });
+
+  test('the model’s other names for a picture slide and its picture are understood', () => {
+    const parsed = parseSlideDeck(
+      fenced({ ...validDeck, slides: [{ ...pictureSlide, layout: 'photo', image: undefined, picture: 'cmh0elephant0000abcd' }] })
+    );
+    expect(parsed?.deck.slides[0]).toMatchObject({ layout: 'picture', image: 'cmh0elephant0000abcd' });
+  });
+
+  test('every renderer draws it as itself: it is not mapped to another layout', () => {
+    expect(classicSlide(parseSlideDeck(fenced(withPicture))!.deck.slides[3]!).layout).toBe('picture');
+  });
+
+  test('the pictures a deck uses, once each', () => {
+    const deck = parseSlideDeck(fenced({ ...withPicture, slides: [...withPicture.slides, pictureSlide] }))!.deck;
+    expect(deckPictureIds(deck)).toEqual(['cmh0elephant0000abcd']);
+  });
+});
+

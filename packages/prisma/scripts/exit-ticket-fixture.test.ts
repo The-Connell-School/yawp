@@ -73,9 +73,11 @@ describe('the Exit Ticket prod-fidelity fixture', () => {
     expect(bytes.subarray(0, 8)).toEqual(
       Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
     );
-    // Square, matching the rest of the course art rather than an odd crop.
+    // The yellow ticket-stub card as production holds it (forward migration
+    // 20261107120000): a 1080-pixel square export.
     expect(bytes.readUInt32BE(16)).toBe(1080);
     expect(bytes.readUInt32BE(20)).toBe(1080);
+    expect(image!.altText).toMatch(/ticket/i);
   });
 
   test('the manifest counts the rows the bundle actually holds', () => {

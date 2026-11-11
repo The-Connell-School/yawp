@@ -59,7 +59,8 @@ describe('isWritingStep: set from Yawp!, never by the teacher', () => {
     ].join('\n');
     expect(isWritingStep({ kind: 'step', stepType: 'activity', title: 'Close Reading Discussion', content: closeReading })).toBe(false);
     expect(isWritingStep({ kind: 'step', stepType: 'activity', title: 'Wrap-up', content: 'Students write a short reflection on paper.' })).toBe(false);
-    expect(isWritingStep({ kind: 'step', stepType: 'activity', title: 'Quick write (5 min)' })).toBe(false);
+    // Brian, Nov 4: a step named for a writing act is writing (it gets Create assignment too).
+    expect(isWritingStep({ kind: 'step', stepType: 'activity', title: 'Quick write (5 min)' })).toBe(true);
     expect(isWritingStep({ kind: 'step', stepType: 'activity', title: 'Pair talk', content: 'Exit ticket ideas come later.' })).toBe(false);
   });
 
@@ -106,9 +107,46 @@ test("what a writing step's writing is called (Brian's run 4, item 6)", () => {
   expect(writingName({ kind: 'step', stepType: 'thesis_essay', title: 'Module 1' })).toBe('Thesis Essay');
 });
 
-test("a step's passing words about writing are not writing (Brian's round 3, 1.3, over run 5)", () => {
+test("students writing is writing, the same steps that get Create assignment (Brian, Nov 4, over round 3, 1.3)", () => {
   const step = (content: string) => isWritingStep({ kind: 'step', stepType: 'activity', title: 'Step', content });
-  expect(step('A one-sentence written answer.')).toBe(false);
-  expect(step('90 seconds of writing on the conch.')).toBe(false);
+  expect(step('A one-sentence written answer.')).toBe(true);
+  expect(step('90 seconds of writing on the conch.')).toBe(true);
+  // Passing words about notes are not.
   expect(step('One sentence in their notes.')).toBe(false);
+});
+
+describe("one rule for writing (Brian, Nov 4): if the teacher is talking, it's not an assignment; if the students are writing, it is", () => {
+  const brian = [
+    { title: 'What pre-writing is and why', content: 'Walk through slides 3–8: what pre-writing is, and why we do it before we draft. Students take notes as you go.' },
+    { title: 'Find the diamonds + close', content: 'Pairs trade pre-writes and circle the best idea in each. Close by sharing two out loud.' },
+    { title: 'Pre-write in Yawp!', content: 'Students pre-write for 20 minutes on the prompt from slide 9.' },
+  ];
+
+  test('Brian’s Pre-Writing lesson: only the pre-write is writing', async () => {
+    const { studentWritingTask } = await import('./step-types');
+    expect(brian.map((step) => Boolean(studentWritingTask(step.title, step.content)))).toEqual([false, false, true]);
+    expect(brian.map((step) => isWritingStep({ kind: 'step', stepType: 'activity', ...step }))).toEqual([false, false, true]);
+  });
+
+  test('a teacher-led step never is, whatever it says about writing', async () => {
+    const { studentWritingTask } = await import('./step-types');
+    for (const title of ['Mini-lesson: thesis statements', 'Model the quick write', 'Explain the prompt', 'How a thesis works', 'Introduce the essay']) {
+      expect({ title, writing: studentWritingTask(title, 'Students write a quick write after.') }).toEqual({ title, writing: null });
+    }
+  });
+
+  test('a step whose name is a writing act is', async () => {
+    const { studentWritingTask } = await import('./step-types');
+    for (const title of ['Pre-write', 'Quick write (5 min)', 'Free write', 'Journal', 'Exit ticket', 'Draft the body paragraphs', 'Essay drafting']) {
+      expect({ title, writing: Boolean(studentWritingTask(title, '')) }).toEqual({ title, writing: true });
+    }
+  });
+
+  test('a discussion or a closing is only with a written prompt in it', async () => {
+    const { studentWritingTask } = await import('./step-types');
+    expect(studentWritingTask('Wrap-up', 'Exit ticket: what is your thesis, in one sentence?')?.kind).toBe('exit-ticket');
+    expect(studentWritingTask('Wrap-up', 'Pre-write: who should lead the boys, and why?')?.kind).toBe('quick-write');
+    expect(studentWritingTask('Close Reading Discussion', 'Connect it to your class starter writing.')).toBeNull();
+    expect(studentWritingTask('Pair talk', 'Exit ticket ideas come later.')).toBeNull();
+  });
 });

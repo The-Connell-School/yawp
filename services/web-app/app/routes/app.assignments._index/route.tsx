@@ -29,6 +29,7 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
 // The flag is read by the component, so it has to come from the client-safe module.
 // Importing it through saved-assignments.server (which merely re-exports it) makes the
 // component depend on server-only code, and React Router can only strip server code from
@@ -224,6 +225,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return {
     assignments,
     savedAssignments,
+    exitTicketBuilderV3Enabled: await isExitTicketBuilderV3Enabled(
+      profile.organization.id
+    ),
     assignmentCreationClasses: teacherClasses.map((klass) => ({
       id: klass.id,
       name: formatClassLabel(klass),
@@ -490,6 +494,7 @@ export default function MyAssignmentsRoute() {
     assignmentCreationClasses,
     assignmentCreationTypes,
     siteLicenseLockedAssignmentTiles,
+    exitTicketBuilderV3Enabled,
   } = useLoaderData<typeof loader>();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -589,6 +594,7 @@ export default function MyAssignmentsRoute() {
             if (!open) setReusedAssignment(null);
           }}
           entryPoint="dashboard"
+          exitTicketBuilderV3Enabled={exitTicketBuilderV3Enabled}
           assignmentTypes={assignmentCreationTypes}
           siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
           teacherClasses={assignmentCreationClasses}
@@ -820,6 +826,7 @@ export default function MyAssignmentsRoute() {
         open={isCreateSheetOpen}
         onOpenChange={setIsCreateSheetOpen}
         entryPoint="dashboard"
+        exitTicketBuilderV3Enabled={exitTicketBuilderV3Enabled}
         assignmentTypes={assignmentCreationTypes}
         siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
         teacherClasses={assignmentCreationClasses}

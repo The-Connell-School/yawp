@@ -1165,8 +1165,18 @@ test.describe("Lesson Planner — Brian's third run", () => {
         multipart: { intent: 'upload', conversationId, file: notes },
       });
       expect(added.ok()).toBe(true);
+      const prisma = createE2EPrismaClient();
+      try {
+        const kept = await prisma.lessonPlanUpload.findMany({ where: { conversationId }, select: { name: true } });
+        expect(kept.map((upload) => upload.name)).toEqual(['my-notes.md']);
+      } finally {
+        await prisma.$disconnect();
+      }
+      // Kept in the lesson, but not pinned above the message bar: chips are only
+      // what goes with the next message (Brian, Nov 4).
       await page.goto(`/app/lesson-planner?c=${conversationId}`);
-      await expect(page.getByTestId('source-document')).toHaveText(/my-notes\.md/);
+      await expect(page.getByLabel('Message the Lesson Planner')).toBeVisible();
+      await expect(page.getByTestId('source-document')).toHaveCount(0);
 
       const elsewhere = await page.request.post('/api/domain/lesson-planner/uploads', {
         multipart: { intent: 'upload', conversationId: 'not-a-lesson-of-yours', file: notes },

@@ -15,6 +15,7 @@ export const TILE_SLIDE_EYEBROWS: Record<ClassicSlideLayout, string> = {
   steps: 'How it goes',
   quote: 'From the text',
   closing: 'Before you go',
+  picture: 'Look closely',
 };
 
 /**

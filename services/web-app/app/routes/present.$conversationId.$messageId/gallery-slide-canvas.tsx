@@ -10,8 +10,12 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { resolveDeckArt, type DeckArt } from '~/domain/lesson-planner/deck-art';
 import { splitColorMarks } from '~/domain/lesson-planner/deck-colors';
+import { SlidePicture } from '~/components/lesson-planner/slide-picture';
+import { pictureSlideText } from '~/domain/lesson-planner/deck-pictures';
 import {
   GALLERY_COLORS as C,
+  GALLERY_PICTURE_BOX,
+  GALLERY_PICTURE_TEXT_LEFT,
   GALLERY_FALLBACK_FONTS_HREF,
   GALLERY_FONTS,
   galleryColors,
@@ -22,6 +26,8 @@ import {
 } from '~/domain/lesson-planner/deck-gallery';
 import type { SlideDeck } from '~/domain/lesson-planner/slide-deck';
 import { BrandSafe } from '~/components/brand/brand-safe';
+import { isKitV4 } from '~/domain/lesson-planner/deck-kit-v4';
+import { KitV4SlideCanvas } from './kit-v4-slide-canvas';
 
 /** Georgia and Arial first; these only stand in where a machine lacks them. */
 export const GALLERY_FONTS_HREF = GALLERY_FALLBACK_FONTS_HREF;
@@ -68,6 +74,8 @@ function band(color: string): string {
 }
 
 export function GallerySlideCanvas({ deck, index }: { deck: SlideDeck; index: number }) {
+  // Spec v4 where the school has it (the deck is marked where it is loaded).
+  if (isKitV4(deck)) return <KitV4SlideCanvas deck={deck} index={index} />;
   const plan = planGalleryDeck(deck)[index];
   if (!plan) return null;
   const colors = galleryColors(deck);
@@ -521,6 +529,35 @@ function TemplateBody({ plan, deck, tone, art, colors }: { plan: GallerySlidePla
             {timing ? <p style={{ ...CAPS, fontSize: u(16), color: tone.muted }}>{timing}</p> : null}
             <p style={{ ...SERIF, fontSize: u(plan.showArt && art ? 38 : promptTypeSize(question)), lineHeight: 1.15 }}>{mark(question)}</p>
             {slide.followUp ? <p style={{ ...SERIF, fontStyle: 'italic', fontSize: u(30), lineHeight: 1.25, color: tone.muted }}>{slide.followUp}</p> : null}
+          </div>
+        </>
+      );
+    }
+
+    case 'picture': {
+      // The teacher's own picture, whole, where the Look slide hangs its painting (Nov 1).
+      const box = GALLERY_PICTURE_BOX;
+      const words = pictureSlideText(slide);
+      return (
+        <>
+          <div className="absolute" style={{ left: u(box.x), top: u(box.y), width: u(box.w), height: u(box.h) }}>
+            <SlidePicture id={slide.image} tone={plan.dark ? 'dark' : 'light'} />
+          </div>
+          {slide.attribution ? (
+            <p className="absolute" style={{ ...SANS, left: u(box.x), top: u(box.y + box.h + 12), width: u(box.w), fontSize: u(15), color: tone.muted }}>
+              {slide.attribution}
+            </p>
+          ) : null}
+          <div
+            className="absolute flex flex-col justify-center"
+            style={{ left: u(GALLERY_PICTURE_TEXT_LEFT), right: u(70), top: u(80), bottom: u(80), gap: u(22) }}
+          >
+            <Mode text={plan.mode} tone={tone} />
+            <p style={{ ...CAPS, fontSize: u(16), color: tone.muted }}>
+              <BrandSafe>{slide.title}</BrandSafe>
+            </p>
+            {words ? <p style={{ ...SERIF, fontSize: u(38), lineHeight: 1.15 }}>{mark(words)}</p> : null}
+            {slide.followUp ? <p style={{ ...SERIF, fontStyle: 'italic', fontSize: u(28), lineHeight: 1.25, color: tone.muted }}>{slide.followUp}</p> : null}
           </div>
         </>
       );

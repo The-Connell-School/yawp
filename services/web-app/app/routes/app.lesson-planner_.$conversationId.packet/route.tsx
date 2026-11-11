@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useActiveTime } from '~/components/lesson-planner/use-active-time';
 import {
   Link,
   useFetcher,
@@ -64,6 +65,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export default function LessonPacketRoute() {
   const data = useLoaderData<typeof loader>();
+  // "Planned in" is working time (Nov 3): the stack page counts it too.
+  // A set lesson's clock has stopped, so its page has nothing to report.
+  useActiveTime({ conversationId: data.conversationId, enabled: data.reviewFlags.activeTime && !data.v3?.setAt });
   if (data.v3) return <StackPageV3 data={data as StackPageV3Data} />;
   return <LessonPacketRouteV2 />;
 }
@@ -768,6 +772,7 @@ function LessonPacketRouteV2() {
                         conversationId={conversationId}
                         deckV2={reviewFlags.deckV2}
                         deckGallery={reviewFlags.deckGallery}
+                        deckKitV4={reviewFlags.deckKitV4}
                         periodMinutes={periodMinutes}
                       />
                     )}
@@ -792,6 +797,7 @@ function SectionContent({
   conversationId,
   deckV2 = false,
   deckGallery = false,
+  deckKitV4 = false,
   periodMinutes = null,
 }: {
   section: {
@@ -806,6 +812,7 @@ function SectionContent({
   conversationId: string;
   deckV2?: boolean;
   deckGallery?: boolean;
+  deckKitV4?: boolean;
   periodMinutes?: number | null;
 }) {
   // The packet already took the deck out of the prose and parsed it, so there
@@ -835,6 +842,7 @@ function SectionContent({
             edited={Boolean(section.edited)}
             periodMinutes={deckV2 ? periodMinutes : null}
             deckGallery={deckGallery}
+            deckKitV4={deckKitV4}
           />
         </div>
       ) : null}

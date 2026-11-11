@@ -33,6 +33,7 @@ const ROW = {
   stepType: true,
   label: true,
   hasHandout: true,
+  writing: true,
   yawpAssignmentId: true,
   yawpHref: true,
   yawpCreatedAt: true,
@@ -74,6 +75,24 @@ export async function setStepMinutes(
   await prisma.lessonPlanMaterial.updateMany({
     where: { id: materialId, conversationId },
     data: { minutes: clamped, title: titleWithMinutes(row.title, clamped) },
+  });
+  return before;
+}
+
+/**
+ * The teacher's call on whether a step is writing time (Nov 4 follow-up):
+ * true or false, or null to let Yawp! decide again. Hands back Undo.
+ */
+export async function setStepWriting(
+  conversationId: string,
+  materialId: string,
+  writing: boolean | null
+): Promise<StackSnapshot | null> {
+  const before = await snapshot(conversationId, [materialId]);
+  if (!before.rows[0]) return null;
+  await prisma.lessonPlanMaterial.updateMany({
+    where: { id: materialId, conversationId },
+    data: { writing },
   });
   return before;
 }

@@ -3,10 +3,15 @@
  * a handout, their notes, last year's unit. Only the text is kept, never the
  * file. PDF through pdf.js (`unpdf`); Word and PowerPoint through the app's
  * own readers; plain text and Markdown as written.
+ *
+ * A deck can be kept whole (Nov 1, `keepDeck`): the file itself and its
+ * pictures, and its text read slide by slide with a marker where each picture
+ * sits, so the planner can build around the teacher's own slides.
  */
 import { extractText, getDocumentProxy } from 'unpdf';
 import { readDocxText } from '~/domain/office/docx';
 import { pptxPlainText } from '~/domain/office/pptx';
+import { deckTextWithPictures, readPptxDeck, type PptxPicture } from '~/domain/office/pptx-pictures';
 
 export const MAX_SOURCE_BYTES = 10 * 1024 * 1024;
 /** About forty pages of prose: enough for a chapter or a unit packet. */
@@ -16,11 +21,16 @@ export const SOURCE_ACCEPT = '.pdf,.docx,.pptx,.txt,.md';
 
 export class SourceDocumentError extends Error {}
 
+/** A deck kept whole: the file as uploaded and the pictures read out of it. */
+export type KeptDeck = { file: Uint8Array; pictures: PptxPicture[] };
+
 export type SourceDocument = {
   kind: 'pdf' | 'docx' | 'pptx' | 'text';
   contentType: string;
   text: string;
   truncated: boolean;
+  /** Only for a PowerPoint read with `keepDeck`. */
+  deck: KeptDeck | null;
 };
 
 const CONTENT_TYPES: Record<SourceDocument['kind'], string> = {
@@ -88,21 +98,36 @@ async function pdfText(bytes: Uint8Array): Promise<string> {
   return text;
 }
 
-export async function readSourceDocument(file: File): Promise<SourceDocument> {
+function readKeptDeck(bytes: Uint8Array): { text: string; deck: KeptDeck } {
+  const read = readPptxDeck(bytes);
+  // A deck with nothing on its slides, no words and no pictures, has nothing to build from.
+  const readable = read.slides.some((slide) => slide.lines.length > 0) || read.pictures.length > 0;
+  return { text: readable ? deckTextWithPictures(read) : '', deck: { file: bytes, pictures: read.pictures } };
+}
+
+export async function readSourceDocument(
+  file: File,
+  { keepDeck = false }: { keepDeck?: boolean } = {}
+): Promise<SourceDocument> {
   const kind = kindOf(file.name);
   if (!kind) throw new SourceDocumentError('Yawp! can read PDF, Word, PowerPoint, text and Markdown files.');
   const bytes = await readFileBytesCapped(file, MAX_SOURCE_BYTES);
   if (bytes.byteLength <= 0) throw new SourceDocumentError(`"${file.name}" is empty.`);
   let raw: string;
+  let deck: KeptDeck | null = null;
   try {
-    raw =
-      kind === 'pdf'
-        ? await pdfText(bytes)
-        : kind === 'docx'
-          ? readDocxText(bytes)
-          : kind === 'pptx'
-            ? pptxPlainText(bytes)
-            : new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    if (kind === 'pptx' && keepDeck) {
+      ({ text: raw, deck } = readKeptDeck(bytes));
+    } else {
+      raw =
+        kind === 'pdf'
+          ? await pdfText(bytes)
+          : kind === 'docx'
+            ? readDocxText(bytes)
+            : kind === 'pptx'
+              ? pptxPlainText(bytes)
+              : new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    }
   } catch {
     throw new SourceDocumentError(`"${file.name}" could not be opened.`);
   }
@@ -120,5 +145,6 @@ export async function readSourceDocument(file: File): Promise<SourceDocument> {
     contentType: CONTENT_TYPES[kind],
     text: text.slice(0, MAX_SOURCE_CHARS),
     truncated: text.length > MAX_SOURCE_CHARS,
+    deck,
   };
 }
