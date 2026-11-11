@@ -73,7 +73,7 @@ export function FreeAssignmentTiles({
 }) {
   if (teachingLocked) {
     return (
-      <div data-testid="free-assignment-tiles">
+      <div data-testid="free-assignment-tiles" data-tour="dashboard-assignments">
         <h2 className="mb-4 text-lg font-bold">Assignments</h2>
         <div className={assignmentTypeTileGridClassName()}>
           {usage.assignments.map((row) => {
@@ -139,7 +139,7 @@ export function FreeAssignmentTiles({
     </button>
   );
   return (
-    <div data-testid="free-assignment-tiles">
+    <div data-testid="free-assignment-tiles" data-tour="dashboard-assignments">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-bold">Assignments</h2>
         {createButton}
