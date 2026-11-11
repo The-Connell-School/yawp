@@ -7,4 +7,10 @@ describe('assignmentStudentLink', () => {
       'https://yawp.example/app/assignments/asgn-1/open'
     );
   });
+
+  test('strips a trailing slash from the origin', () => {
+    expect(assignmentStudentLink('https://yawp.example/', 'asgn-1')).toBe(
+      'https://yawp.example/app/assignments/asgn-1/open'
+    );
+  });
 });

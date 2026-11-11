@@ -9,16 +9,23 @@ const prisma = {
 
 const requireUserId = mock();
 const requireMembership = mock();
+const getImpersonationState = mock();
 const openClassAssignmentForStudent = mock();
+const openExistingClassAssignmentForStudent = mock();
 const setMembershipId = mock();
 const redirectWithToast = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
+mock.module('~/utils/auth.server', () => ({
+  requireUserId,
+  requireMembership,
+  getImpersonationState,
+}));
 const actualOpenClassAssignment =
   globalThis.__realModules['~/domain/assignments/open-class-assignment.server'];
 mock.module('~/domain/assignments/open-class-assignment.server', () => ({
   openClassAssignmentForStudent,
+  openExistingClassAssignmentForStudent,
 }));
 mock.module('~/cookies/membership-id.server', () => ({ setMembershipId }));
 mock.module('~/utils/toast.server', () => ({ redirectWithToast }));
@@ -53,8 +60,25 @@ async function readLoader(result: unknown) {
 
 describe('assignment open loader', () => {
   beforeEach(() => {
-    prisma.assignment.findUnique.mockReset().mockResolvedValue({ id: 'a-1' });
-    prisma.classAssignment.findFirst.mockReset();
+    prisma.assignment.findUnique
+      .mockReset()
+      .mockResolvedValue({ id: 'a-1', title: 'Community Gardens — Thesis' });
+    prisma.classAssignment.findFirst.mockReset().mockImplementation(
+      (args: { where?: { class?: { teachers?: unknown } }; select?: { class?: unknown } }) => {
+        if (args?.where?.class?.teachers) return { id: 'ca-teacher' };
+        if (args?.select?.class) {
+          return {
+            class: {
+              grade: '10',
+              period: '3',
+              title: null,
+              school: { name: 'North Ridge High' },
+            },
+          };
+        }
+        return null;
+      }
+    );
     prisma.classAssignment.findMany.mockReset();
     prisma.orgMembership.findFirst.mockReset();
     requireUserId.mockReset().mockResolvedValue('user-1');
@@ -63,6 +87,10 @@ describe('assignment open loader', () => {
       role: 'STUDENT',
     });
     openClassAssignmentForStudent.mockReset();
+    openExistingClassAssignmentForStudent.mockReset();
+    getImpersonationState
+      .mockReset()
+      .mockResolvedValue({ isReadOnly: false, impersonatorUserId: null });
     setMembershipId.mockReset().mockResolvedValue('membership=alt');
     redirectWithToast.mockReset().mockImplementation((to: string) => redirect(to));
   });
@@ -122,6 +150,7 @@ describe('assignment open loader', () => {
     expect(data).toEqual({
       state: 'not-posted',
       opensAt: future.toISOString(),
+      assignmentTitle: 'Community Gardens — Thesis',
     });
     expect(openClassAssignmentForStudent).not.toHaveBeenCalled();
   });
@@ -132,7 +161,7 @@ describe('assignment open loader', () => {
 
     const data = await readLoader(await loader(args()));
 
-    expect(data).toEqual({ state: 'not-in-class' });
+    expect(data).toMatchObject({ state: 'not-in-class' });
   });
 
   test('renders groups-not-open for collaborative assignments', async () => {
@@ -147,7 +176,10 @@ describe('assignment open loader', () => {
 
     const data = await readLoader(await loader(args()));
 
-    expect(data).toEqual({ state: 'groups-not-open' });
+    expect(data).toEqual({
+      state: 'groups-not-open',
+      assignmentTitle: 'Community Gardens — Thesis',
+    });
   });
 
   test('redirects teachers who teach the assignment to the detail page', async () => {
@@ -165,6 +197,110 @@ describe('assignment open loader', () => {
         '/app/assignments/a-1'
       );
     }
+  });
+
+  test('returns unavailable when the student is only enrolled via archived classes', async () => {
+    prisma.classAssignment.findMany.mockResolvedValue([]);
+    prisma.orgMembership.findFirst.mockResolvedValue(null);
+    prisma.classAssignment.findFirst.mockImplementation(
+      (args: {
+        where?: {
+          class?: { isArchived?: boolean; students?: unknown; teachers?: unknown };
+        };
+        select?: { class?: unknown };
+      }) => {
+        if (args?.where?.class?.teachers) return { id: 'ca-teacher' };
+        if (args?.select?.class) {
+          return {
+            class: {
+              grade: '10',
+              period: '3',
+              title: null,
+              school: { name: 'North Ridge High' },
+            },
+          };
+        }
+        if (args?.where?.class?.isArchived === false) return null;
+        if (args?.where?.class?.isArchived === true) return { id: 'ca-archived' };
+        return null;
+      }
+    );
+
+    const data = await readLoader(await loader(args()));
+
+    expect(data).toEqual({ state: 'unavailable' });
+    expect(openClassAssignmentForStudent).not.toHaveBeenCalled();
+  });
+
+  test('read-only impersonation opens an existing document without creating one', async () => {
+    prisma.classAssignment.findMany.mockResolvedValue([
+      { id: 'ca-1', postAt: null },
+    ]);
+    getImpersonationState.mockResolvedValue({
+      isReadOnly: true,
+      impersonatorUserId: 'staff-1',
+    });
+    openExistingClassAssignmentForStudent.mockResolvedValue({
+      ok: true,
+      url: '/app/documents/doc-existing?spa=1',
+    });
+
+    await expect(loader(args())).rejects.toMatchObject({ status: 302 });
+    try {
+      await loader(args());
+    } catch (error) {
+      expect((error as Response).headers.get('Location')).toContain(
+        '/app/documents/doc-existing'
+      );
+    }
+    expect(openClassAssignmentForStudent).not.toHaveBeenCalled();
+    expect(openExistingClassAssignmentForStudent).toHaveBeenCalledWith({
+      classAssignmentId: 'ca-1',
+      membershipId: 'student-1',
+    });
+  });
+
+  test('read-only impersonation returns unavailable when no document exists yet', async () => {
+    prisma.classAssignment.findMany.mockResolvedValue([
+      { id: 'ca-1', postAt: null },
+    ]);
+    getImpersonationState.mockResolvedValue({
+      isReadOnly: true,
+      impersonatorUserId: 'staff-1',
+    });
+    openExistingClassAssignmentForStudent.mockResolvedValue({
+      ok: false,
+      reason: 'creation-failed',
+      message: 'Assignment not available.',
+    });
+
+    const data = await readLoader(await loader(args()));
+
+    expect(data).toEqual({ state: 'unavailable' });
+    expect(openClassAssignmentForStudent).not.toHaveBeenCalled();
+  });
+
+  test('a second visit redirects to the same document id', async () => {
+    prisma.classAssignment.findMany.mockResolvedValue([
+      { id: 'ca-1', postAt: null },
+    ]);
+    const docUrl =
+      '/app/documents/doc-stable?spa=1&exitTo=%2Fapp%3Ftab%3Dassignments';
+    openClassAssignmentForStudent.mockResolvedValue({
+      ok: true,
+      url: docUrl,
+    });
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await loader(args());
+      } catch (error) {
+        expect((error as Response).headers.get('Location')).toContain(
+          '/app/documents/doc-stable'
+        );
+      }
+    }
+    expect(openClassAssignmentForStudent).toHaveBeenCalledTimes(2);
   });
 
   test('switches membership when another active membership is enrolled', async () => {

@@ -1,3 +1,4 @@
 export function assignmentStudentLink(origin: string, assignmentId: string) {
-  return `${origin}/app/assignments/${assignmentId}/open`;
+  const base = origin.replace(/\/+$/, '');
+  return `${base}/app/assignments/${assignmentId}/open`;
 }

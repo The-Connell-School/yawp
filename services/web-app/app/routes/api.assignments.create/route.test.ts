@@ -635,6 +635,7 @@ describe('api.assignments.create', () => {
 
     const body = await readBody(response);
     expect(body.success).toBe(true);
+    expect(body.assignmentId).toBe('assignment-1');
     expect(prisma.apHistoryPromptLibraryEntry.findFirst).toHaveBeenCalledWith({
       where: {
         assignmentTypeId: 'ap-type-1',
@@ -807,6 +808,7 @@ describe('api.assignments.create', () => {
 
     const body = await readBody(response);
     expect(body.success).toBe(true);
+    expect(body.assignmentId).toBe('assignment-1');
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({
         assignmentTypeId: 'ap-type-1',

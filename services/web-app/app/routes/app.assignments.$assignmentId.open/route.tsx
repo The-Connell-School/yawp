@@ -1,27 +1,83 @@
+import { data, redirect, useLoaderData, type LoaderFunctionArgs } from 'react-router';
 import {
-  Link,
-  data,
-  redirect,
-  useLoaderData,
-  type LoaderFunctionArgs,
-} from 'react-router';
-import { openClassAssignmentForStudent } from '~/domain/assignments/open-class-assignment.server';
+  openClassAssignmentForStudent,
+  openExistingClassAssignmentForStudent,
+} from '~/domain/assignments/open-class-assignment.server';
+import { AssignmentOpenLandingPage } from '~/components/assignments/assignment-open-landing-page';
 import { setMembershipId } from '~/cookies/membership-id.server';
-import { requireMembership, requireUserId } from '~/utils/auth.server';
+import {
+  getImpersonationState,
+  requireMembership,
+  requireUserId,
+} from '~/utils/auth.server';
+import { formatClassLabel } from '~/utils/class-display';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 
 const NO_STORE = { 'Cache-Control': 'private, no-store' } as const;
 
 export type AssignmentOpenLoaderState =
-  | { state: 'not-in-class' }
-  | { state: 'not-posted'; opensAt: string }
-  | { state: 'groups-not-open' }
-  | { state: 'unavailable' }
-  | { state: 'creation-failed'; message: string };
+  | { state: 'not-in-class'; classLabel?: string | null }
+  | { state: 'not-posted'; opensAt: string; assignmentTitle: string }
+  | { state: 'groups-not-open'; assignmentTitle: string }
+  | { state: 'unavailable' };
 
 function isPosted(postAt: Date | null, now: Date) {
   return postAt === null || postAt <= now;
+}
+
+async function studentHasArchivedOnlyEnrollment(
+  assignmentId: string,
+  membershipId: string
+) {
+  const active = await prisma.classAssignment.findFirst({
+    where: {
+      assignmentId,
+      class: {
+        isArchived: false,
+        students: { some: { id: membershipId } },
+      },
+    },
+    select: { id: true },
+  });
+  if (active) return false;
+
+  const archived = await prisma.classAssignment.findFirst({
+    where: {
+      assignmentId,
+      class: {
+        isArchived: true,
+        students: { some: { id: membershipId } },
+      },
+    },
+    select: { id: true },
+  });
+  return Boolean(archived);
+}
+
+async function sampleClassLabelForAssignment(assignmentId: string) {
+  const row = await prisma.classAssignment.findFirst({
+    where: {
+      assignmentId,
+      class: { isArchived: false },
+    },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      class: {
+        select: { grade: true, period: true, title: true, school: { select: { name: true } } },
+      },
+    },
+  });
+  return row ? formatClassLabel(row.class) : null;
+}
+
+async function assignmentTitleForOpen(assignmentId: string) {
+  const row = await prisma.assignment.findUnique({
+    where: { id: assignmentId },
+    select: { title: true },
+  });
+  const title = row?.title?.trim();
+  return title || 'This assignment';
 }
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -76,11 +132,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
+  const assignmentTitle = await assignmentTitleForOpen(assignmentId);
+
   const resolveForMembership = async (membershipId: string) => {
     const deployments = await prisma.classAssignment.findMany({
       where: {
         assignmentId,
         class: {
+          isArchived: false,
           students: { some: { id: membershipId } },
         },
       },
@@ -111,7 +170,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return { kind: 'none' as const };
   };
 
-  let resolution = await resolveForMembership(profile.id);
+  const resolution = await resolveForMembership(profile.id);
 
   if (resolution.kind === 'none') {
     const alternateMembership = await prisma.orgMembership.findFirst({
@@ -121,6 +180,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         id: { not: profile.id },
         classesAsStudent: {
           some: {
+            isArchived: false,
             classAssignments: { some: { assignmentId } },
           },
         },
@@ -136,8 +196,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       });
     }
 
+    if (await studentHasArchivedOnlyEnrollment(assignmentId, profile.id)) {
+      return data(
+        { state: 'unavailable' } satisfies AssignmentOpenLoaderState,
+        { headers: NO_STORE }
+      );
+    }
+
     return data(
-      { state: 'not-in-class' } satisfies AssignmentOpenLoaderState,
+      {
+        state: 'not-in-class',
+        classLabel: await sampleClassLabelForAssignment(assignmentId),
+      } satisfies AssignmentOpenLoaderState,
       { headers: NO_STORE }
     );
   }
@@ -147,15 +217,22 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       {
         state: 'not-posted',
         opensAt: resolution.opensAt,
+        assignmentTitle,
       } satisfies AssignmentOpenLoaderState,
       { headers: NO_STORE }
     );
   }
 
-  const opened = await openClassAssignmentForStudent({
-    classAssignmentId: resolution.classAssignmentId,
-    membershipId: profile.id,
-  });
+  const impersonation = await getImpersonationState(request);
+  const opened = impersonation.isReadOnly
+    ? await openExistingClassAssignmentForStudent({
+        classAssignmentId: resolution.classAssignmentId,
+        membershipId: profile.id,
+      })
+    : await openClassAssignmentForStudent({
+        classAssignmentId: resolution.classAssignmentId,
+        membershipId: profile.id,
+      });
 
   if (opened.ok) {
     throw redirect(opened.url);
@@ -163,78 +240,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   if (opened.reason === 'groups-not-open') {
     return data(
-      { state: 'groups-not-open' } satisfies AssignmentOpenLoaderState,
+      {
+        state: 'groups-not-open',
+        assignmentTitle,
+      } satisfies AssignmentOpenLoaderState,
       { headers: NO_STORE }
     );
   }
 
   return data(
-    {
-      state: 'creation-failed',
-      message: opened.message,
-    } satisfies AssignmentOpenLoaderState,
+    { state: 'unavailable' } satisfies AssignmentOpenLoaderState,
     { headers: NO_STORE }
   );
 }
 
 export default function AssignmentOpenRoute() {
   const loaderData = useLoaderData<AssignmentOpenLoaderState>();
-
-  if (loaderData.state === 'not-in-class') {
-    return (
-      <main className="mx-auto flex max-w-lg flex-col gap-4 px-4 py-16 text-center">
-        <p data-testid="open-not-in-class">
-          You&apos;re not in this class yet. Ask your teacher for the class code.
-        </p>
-        <div className="flex flex-col items-center gap-2">
-          <Link to="/join" className="text-primary underline">
-            Join a class
-          </Link>
-          <Link to="/app" className="text-primary underline">
-            Back to Yawp!
-          </Link>
-        </div>
-      </main>
-    );
-  }
-
-  if (loaderData.state === 'not-posted') {
-    return (
-      <main className="mx-auto flex max-w-lg flex-col gap-4 px-4 py-16 text-center">
-        <p data-testid="open-not-posted">
-          Your teacher hasn&apos;t posted this yet (opens{' '}
-          {new Date(loaderData.opensAt).toLocaleString()}).
-        </p>
-        <Link to="/app" className="text-primary underline">
-          Back to Yawp!
-        </Link>
-      </main>
-    );
-  }
-
-  if (loaderData.state === 'groups-not-open') {
-    return (
-      <main className="mx-auto flex max-w-lg flex-col gap-4 px-4 py-16 text-center">
-        <p data-testid="open-groups-not-open">
-          Your teacher hasn&apos;t opened groups yet.
-        </p>
-        <Link to="/app" className="text-primary underline">
-          Back to Yawp!
-        </Link>
-      </main>
-    );
-  }
-
-  return (
-    <main className="mx-auto flex max-w-lg flex-col gap-4 px-4 py-16 text-center">
-      <p data-testid="open-unavailable">
-        {loaderData.state === 'creation-failed'
-          ? loaderData.message
-          : "This assignment isn't available."}
-      </p>
-      <Link to="/app" className="text-primary underline">
-        Back to Yawp!
-      </Link>
-    </main>
-  );
+  return <AssignmentOpenLandingPage data={loaderData} />;
 }
