@@ -1,0 +1,144 @@
+import {
+  isLoungePostKind,
+  isLoungeTopic,
+  type LoungePostKindKey,
+  type LoungeTopicKey,
+} from './topics';
+import { legacyLoungeColumns, parseLoungeTags, type LoungePostTags } from './tags';
+
+export const LOUNGE_TITLE_MIN = 5;
+export const LOUNGE_TITLE_MAX = 160;
+export const LOUNGE_BODY_MAX = 5000;
+
+type Input = Record<string, unknown>;
+type Errors = Record<string, string>;
+type Result<T> = { ok: true; value: T } | { ok: false; errors: Errors };
+
+export type LoungePostInput = {
+  kind: LoungePostKindKey;
+  topic: LoungeTopicKey;
+  title: string;
+  body: string;
+  askStaff: boolean;
+  askPrivately: boolean;
+  /** Every tag checked. `kind` and `topic` above are the first of them. */
+  tags: LoungePostTags;
+};
+
+export type LoungeReplyInput = { body: string; videoUrl: string | null };
+
+function text(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function checked(value: unknown): boolean {
+  return value === 'on' || value === 'true' || value === true;
+}
+
+function checkBody(body: string, errors: Errors) {
+  if (!body) errors.body = 'Write a few words.';
+  else if (body.length > LOUNGE_BODY_MAX) errors.body = 'Keep it under 5,000 characters.';
+}
+
+/** The single-choice form from before tags: one kind, one topic. */
+function isLegacyPostForm(input: Input): boolean {
+  const tagged = ['kinds', 'subjects', 'topics'].some((key) => key in input);
+  return !tagged && typeof input.kind === 'string';
+}
+
+export function parseLoungePostInput(input: Input): Result<LoungePostInput> {
+  const errors: Errors = {};
+  const title = text(input.title);
+  const body = text(input.body);
+  let columns: { kind: LoungePostKindKey; topic: LoungeTopicKey } | null = null;
+  let tags: LoungePostTags | null = null;
+  if (isLegacyPostForm(input)) {
+    const kind = text(input.kind);
+    const topic = text(input.topic);
+    if (!isLoungePostKind(kind)) errors.kind = 'Choose Question, Share, or Win.';
+    if (!isLoungeTopic(topic)) errors.topic = 'Choose a topic.';
+    if (isLoungePostKind(kind) && isLoungeTopic(topic)) {
+      columns = { kind, topic };
+      tags = { kinds: [kind], subjects: [], topics: topic === 'other' ? [] : [topic] };
+    }
+  } else {
+    const parsed = parseLoungeTags(input);
+    if (parsed.ok) {
+      tags = parsed.value;
+      columns = legacyLoungeColumns(tags);
+    } else Object.assign(errors, parsed.errors);
+  }
+  checkTitle(title, errors);
+  checkBody(body, errors);
+  if (Object.keys(errors).length > 0 || !columns || !tags) return { ok: false, errors };
+  const askPrivately = checked(input.askPrivately);
+  return {
+    ok: true,
+    value: {
+      ...columns,
+      title,
+      body,
+      askStaff: askPrivately || checked(input.askStaff),
+      askPrivately,
+      tags,
+    },
+  };
+}
+
+const VIDEO_HOSTS = new Set([
+  'loom.com',
+  'www.loom.com',
+  'youtube.com',
+  'www.youtube.com',
+  'youtu.be',
+  'vimeo.com',
+  'player.vimeo.com',
+]);
+
+export function isAllowedVideoUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && VIDEO_HOSTS.has(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+export function parseLoungeReplyInput(
+  input: Input,
+  { isStaff }: { isStaff: boolean }
+): Result<LoungeReplyInput> {
+  const errors: Errors = {};
+  const body = text(input.body);
+  checkBody(body, errors);
+  const rawVideo = isStaff ? text(input.videoUrl) : '';
+  if (rawVideo && !isAllowedVideoUrl(rawVideo)) {
+    errors.videoUrl = 'Use an https link from Loom, YouTube, or Vimeo.';
+  }
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return { ok: true, value: { body, videoUrl: rawVideo || null } };
+}
+
+function checkTitle(title: string, errors: Errors) {
+  if (title.length < LOUNGE_TITLE_MIN) errors.title = 'Give it a title of a few words.';
+  else if (title.length > LOUNGE_TITLE_MAX) errors.title = `Keep the title under ${LOUNGE_TITLE_MAX} characters.`;
+}
+
+/** Editing your own post. The body may be empty: some questions are all title. */
+export function parseLoungePostEdit(input: Input): Result<{ title: string; body: string }> {
+  const errors: Errors = {};
+  const title = text(input.title);
+  const body = text(input.body);
+  checkTitle(title, errors);
+  if (body.length > LOUNGE_BODY_MAX) errors.body = 'Keep it under 5,000 characters.';
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return { ok: true, value: { title, body } };
+}
+
+export function parseLoungeReplyEdit(input: Input): Result<{ body: string }> {
+  const errors: Errors = {};
+  const body = text(input.body);
+  checkBody(body, errors);
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return { ok: true, value: { body } };
+}

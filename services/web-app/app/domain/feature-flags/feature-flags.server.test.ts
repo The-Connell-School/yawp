@@ -10,11 +10,12 @@ const {
   isFreeTierCapabilityEnabled,
   isFreeTierEnabled,
   isLessonPlannerEnabled,
+  isLoungeCommunityEnabled,
   listFeatureFlags,
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, TEACHER_PROMPT_GENERATOR_FLAG, TEACHER_LOUNGE_FLAG, EXIT_TICKET_BUILDER_V3_FLAG, EXIT_TICKET_CLASS_SUMMARY_FLAG, FOLDED_FREE_TIER_LEGACY_SETTINGS } = await import(
+const { GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, TEACHER_PROMPT_GENERATOR_FLAG, TEACHER_LOUNGE_FLAG, EXIT_TICKET_BUILDER_V3_FLAG, EXIT_TICKET_CLASS_SUMMARY_FLAG, FOLDED_FREE_TIER_LEGACY_SETTINGS, LOUNGE_COMMUNITY_FLAG, THESIS_ESSAY_DECKS_FLAG } = await import(
   './feature-flags'
 );
 
@@ -165,6 +166,18 @@ describe('feature flags (server)', () => {
       if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
       else process.env.YAWP_ENVIRONMENT = previous;
     }
+  });
+
+  test("Teacher's Lounge community is off with no row and follows per-school targeting", async () => {
+    prisma.setting.findUnique.mockResolvedValue(null);
+    expect(await isLoungeCommunityEnabled('org-1')).toBe(false);
+    expect(prisma.setting.findUnique.mock.calls[0]?.[0]).toMatchObject({
+      where: { name: 'feature_flag.teacher_lounge_community' },
+    });
+    prisma.setting.findUnique.mockResolvedValue({ value: '{"mode":"targeted","orgIds":["org-1"]}' });
+    expect(await isLoungeCommunityEnabled('org-1')).toBe(true);
+    expect(await isLoungeCommunityEnabled('org-2')).toBe(false);
+    expect(await isLoungeCommunityEnabled(null)).toBe(false);
   });
 
   test('defaults off when no row exists', async () => {
@@ -323,6 +336,8 @@ describe('feature flags (server)', () => {
       'lesson_planner_writing_override',
       'lesson_planner_deck_kit_v4',
       'classcode-unique',
+      LOUNGE_COMMUNITY_FLAG,
+      THESIS_ESSAY_DECKS_FLAG,
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       TEACHER_PROMPT_GENERATOR_FLAG,
@@ -332,6 +347,7 @@ describe('feature flags (server)', () => {
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
+    expect(flags.find((flag) => flag.key === THESIS_ESSAY_DECKS_FLAG)).toMatchObject({ mode: 'off', enabled: false });
     expect(flags[0]).toMatchObject({
       key: LESSON_PLANNER_FLAG,
       mode: 'off',
@@ -372,6 +388,8 @@ describe('feature flags (server)', () => {
       'lesson_planner_writing_override',
       'lesson_planner_deck_kit_v4',
       'classcode-unique',
+      LOUNGE_COMMUNITY_FLAG,
+      THESIS_ESSAY_DECKS_FLAG,
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       TEACHER_PROMPT_GENERATOR_FLAG,

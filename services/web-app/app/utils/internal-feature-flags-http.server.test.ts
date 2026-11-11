@@ -134,6 +134,8 @@ describe('internal feature-flag endpoints', () => {
       'lesson_planner_writing_override',
       'lesson_planner_deck_kit_v4',
       'classcode-unique',
+      'teacher_lounge_community',
+      'thesis_essay_decks',
       'demo-feedback-widget',
       'guided-tours',
       'teacher-prompt-generator',
@@ -144,6 +146,7 @@ describe('internal feature-flag endpoints', () => {
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[2]).toMatchObject({ key: 'free-tier', label: 'Free tier', mode: 'off', orgIds: [], enabled: false });
+    expect(body.flags.find((flag: { key: string }) => flag.key === 'thesis_essay_decks')).toMatchObject({ label: 'Thesis-Driven Essay slide decks', mode: 'off', orgIds: [], enabled: false });
   });
 
   for (const environment of ['development', 'demo', 'production', 'preview']) {
@@ -229,6 +232,8 @@ describe('internal feature-flag endpoints', () => {
       'lesson_planner_writing_override',
       'lesson_planner_deck_kit_v4',
       'classcode-unique',
+      'teacher_lounge_community',
+      'thesis_essay_decks',
       'demo-feedback-widget',
       'guided-tours',
       'teacher-prompt-generator',
