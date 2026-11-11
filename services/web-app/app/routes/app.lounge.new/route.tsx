@@ -31,11 +31,10 @@ import { parseLoungeVideoInput } from '~/domain/lounge/video';
 import { decodeMentions } from '~/domain/lounge/mentions';
 import { sendLoungeNotifications } from '~/domain/lounge/notifications.server';
 import { findPrivacyConcerns, privacyConcernMessage } from '~/domain/lounge/privacy-nudge';
-import { LOUNGE_POST_KINDS, LOUNGE_TOPICS, type LoungePostKindKey } from '~/domain/lounge/topics';
+import { LOUNGE_FORM_KINDS, LOUNGE_FORM_TOPICS, LOUNGE_SUBJECTS } from '~/domain/lounge/tags';
 import { LOUNGE_TITLE_MAX, parseLoungePostInput } from '~/domain/lounge/validation';
 import { prisma } from '~/utils/db.server';
 import { getDomainUrl } from '~/utils/misc';
-import { cn } from '~/utils/misc';
 import { enforceAuthenticatedUserAndIp } from '~/utils/rate-limit.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -61,10 +60,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   const access = await requireLoungeMember(request);
   const { viewer } = access;
-  const form = Object.fromEntries(await request.formData());
+  const formData = await request.formData();
+  // Tags are checkboxes, so each can arrive more than once.
+  const tags = {
+    kinds: formData.getAll('kinds').map(String),
+    subjects: formData.getAll('subjects').map(String),
+    topics: formData.getAll('topics').map(String),
+  };
+  const form: Record<string, unknown> = { ...Object.fromEntries(formData), ...tags };
   const values = {
-    kind: String(form.kind ?? 'QUESTION'),
-    topic: String(form.topic ?? ''),
+    ...tags,
     title: String(form.title ?? ''),
     body: String(form.body ?? ''),
     askStaff: form.askStaff === 'on',
@@ -134,19 +139,15 @@ export default function LoungeNewPostRoute() {
   const values = actionData?.values;
   const errors: Record<string, string | undefined> = actionData?.errors ?? {};
   const initialBody = decodeMentions(values?.body ?? '');
-  const [kind, setKind] = useState<LoungePostKindKey>(
-    (values?.kind as LoungePostKindKey) ?? 'QUESTION'
-  );
   const [bodyText, setBodyText] = useState(initialBody.text);
   const [askPrivately, setAskPrivately] = useState(values?.askPrivately ?? false);
   const [publishMode, setPublishMode] = useState<PublishMode>(
     (PUBLISH_MODES.find((option) => option.key === values?.publishMode)?.key ?? 'now') as PublishMode
   );
   const nudge = privacyConcernMessage(findPrivacyConcerns(bodyText));
-  const titleLabel = LOUNGE_POST_KINDS.find((k) => k.key === kind)?.titleLabel ?? 'Title';
 
   return (
-    <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
+    <section data-lounge-page className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="mx-auto w-full max-w-2xl px-4 py-8">
         <Link
           to="/app/lounge"
@@ -158,31 +159,6 @@ export default function LoungeNewPostRoute() {
         <h1 className="lounge-serif mt-1 text-[38px] leading-tight text-foreground">New post</h1>
 
         <Form method="post" className="mt-6 flex flex-col gap-6">
-          <fieldset className="flex gap-6 border-b">
-            <legend className="sr-only">Post type</legend>
-            {LOUNGE_POST_KINDS.map((option) => (
-              <label
-                key={option.key}
-                className={cn(
-                  'relative -mb-px cursor-pointer border-b-2 pb-2 text-[15px] has-[:focus-visible]:outline has-[:focus-visible]:outline-2',
-                  kind === option.key
-                    ? 'border-foreground font-medium'
-                    : 'border-transparent text-muted-foreground'
-                )}
-              >
-                <input
-                  type="radio"
-                  name="kind"
-                  value={option.key}
-                  checked={kind === option.key}
-                  onChange={() => setKind(option.key)}
-                  className="absolute inset-0 m-0 cursor-pointer opacity-0"
-                />
-                {option.label}
-              </label>
-            ))}
-          </fieldset>
-
           <div className="flex flex-col gap-2">
             <label htmlFor="lounge-title" className="text-sm text-muted-foreground">
               Title
@@ -191,7 +167,7 @@ export default function LoungeNewPostRoute() {
               id="lounge-title"
               name="title"
               defaultValue={values?.title}
-              placeholder={titleLabel}
+              placeholder="Your question or headline"
               maxLength={LOUNGE_TITLE_MAX}
               aria-invalid={Boolean(errors.title)}
               aria-describedby={errors.title ? 'lounge-title-error' : undefined}
@@ -236,6 +212,8 @@ export default function LoungeNewPostRoute() {
             )}
           </div>
 
+          <PostTags values={values} error={errors.kinds} />
+
           {shareable.length > 0 ? (
             <AttachFromYawp
               assignments={shareable}
@@ -251,29 +229,6 @@ export default function LoungeNewPostRoute() {
               {errors.video ? <p className="text-sm text-destructive">{errors.video}</p> : null}
             </div>
           ) : null}
-
-          <div className="flex flex-col gap-2">
-            <label htmlFor="lounge-topic" className="text-sm text-muted-foreground">
-              Topic
-            </label>
-            <select
-              id="lounge-topic"
-              name="topic"
-              defaultValue={values?.topic ?? ''}
-              aria-invalid={Boolean(errors.topic)}
-              className="h-11 rounded-md border border-input bg-input-background px-3 text-[15px]"
-            >
-              <option value="" disabled>
-                Choose a topic
-              </option>
-              {LOUNGE_TOPICS.map((topic) => (
-                <option key={topic.key} value={topic.key}>
-                  {topic.label}
-                </option>
-              ))}
-            </select>
-            {errors.topic ? <p className="text-sm text-destructive">{errors.topic}</p> : null}
-          </div>
 
           <div className="flex flex-col gap-3">
             <label className="flex cursor-pointer items-start gap-3">
@@ -376,6 +331,80 @@ export default function LoungeNewPostRoute() {
 }
 
 /**
+ * The post's tags, under the details (Brian's review, Nov 11 2026): every
+ * post type, subject, and module or topic that applies. Post type needs at
+ * least one; the rest are optional.
+ */
+function PostTags({
+  values,
+  error,
+}: {
+  values?: { kinds: string[]; subjects: string[]; topics: string[] };
+  error?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-4 rounded-xl border bg-popover p-4 sm:p-5">
+      <div className="flex flex-col">
+        <h2 className="text-[15px] font-medium text-foreground">Tags</h2>
+        <p className="text-sm text-muted-foreground">Select all that apply.</p>
+      </div>
+      <TagGroup
+        legend="Post type"
+        name="kinds"
+        options={LOUNGE_FORM_KINDS}
+        checked={values?.kinds ?? []}
+        error={error}
+      />
+      <TagGroup legend="Subject" name="subjects" options={LOUNGE_SUBJECTS} checked={values?.subjects ?? []} />
+      <TagGroup legend="Module or topic" name="topics" options={LOUNGE_FORM_TOPICS} checked={values?.topics ?? []} />
+    </div>
+  );
+}
+
+function TagGroup({
+  legend,
+  name,
+  options,
+  checked,
+  error,
+}: {
+  legend: string;
+  name: string;
+  options: ReadonlyArray<{ key: string; label: string }>;
+  checked: string[];
+  error?: string;
+}) {
+  const errorId = error ? `lounge-${name}-error` : undefined;
+  return (
+    <fieldset className="flex flex-col gap-2" aria-describedby={errorId} aria-invalid={error ? true : undefined}>
+      <legend className="mb-1 text-sm text-muted-foreground">{legend}</legend>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => (
+          <label
+            key={option.key}
+            className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border bg-background px-3.5 text-[15px] has-[:checked]:border-foreground has-[:checked]:bg-foreground/[0.06] has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2"
+          >
+            <input
+              type="checkbox"
+              name={name}
+              value={option.key}
+              defaultChecked={checked.includes(option.key)}
+              className="h-4 w-4 accent-[hsl(var(--primary))]"
+            />
+            {option.label}
+          </label>
+        ))}
+      </div>
+      {error ? (
+        <p id={errorId} role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </fieldset>
+  );
+}
+
+/**
  * One quiet button that opens a short list of the teacher's own assignments.
  * The chosen one shows as a single small card; the post carries its id.
  */
@@ -446,7 +475,7 @@ function AttachFromYawp({
           aria-label="Attach from YAWP!"
           className="absolute left-0 top-full z-20 mt-1 w-full max-w-md overflow-hidden rounded-xl border bg-background shadow-lg"
         >
-          <p className="border-b px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="border-b px-4 py-2 text-sm font-medium text-muted-foreground">
             Your assignments
           </p>
           <ul className="max-h-72 overflow-y-auto py-1">
