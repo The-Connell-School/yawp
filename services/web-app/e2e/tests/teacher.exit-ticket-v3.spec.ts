@@ -280,7 +280,7 @@ test.describe.serial('Exit tickets, v3 builder', () => {
     ).toHaveCount(0);
 
     const stored = await storedTicket('Exit ticket v3: extras');
-    expect(stored.prompt).toEndWith(EXIT_TICKET_QUESTIONS_LINE);
+    expect(stored.prompt.endsWith(EXIT_TICKET_QUESTIONS_LINE)).toBe(true);
     expect(stored.exitTicketConfigJson).toMatchObject({
       activity: 'reflect',
       starter: 'learned',
