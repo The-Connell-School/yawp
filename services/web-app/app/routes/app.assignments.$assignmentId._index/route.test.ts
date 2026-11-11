@@ -5,7 +5,7 @@ const updateAssignmentInClassDeployment = mock();
 const createAssignmentDeployedToClasses = mock();
 
 const prisma = {
-  class: { findFirst: mock() },
+  class: { findFirst: mock(), findMany: mock() },
   assignment: { findFirst: mock(), update: mock() },
   assignmentType: { findFirst: mock(), findMany: mock() },
   documentGroup: { findFirst: mock() },
@@ -117,6 +117,7 @@ describe('app.assignments.$assignmentId loader', () => {
     prisma.submission.count.mockReset().mockResolvedValue(0);
     getAvailableAssignmentTypesForScopes.mockReset().mockResolvedValue([]);
     prisma.class.findFirst.mockReset();
+    prisma.class.findMany.mockReset().mockResolvedValue([]);
     prisma.assignment.findFirst.mockReset();
     prisma.assignment.update.mockReset();
     prisma.assignmentType.findFirst
@@ -171,6 +172,39 @@ describe('app.assignments.$assignmentId loader', () => {
 
     const where = prisma.classAssignment.findMany.mock.calls[0][0].where;
     expect(where.class).toEqual({ teachers: { some: { id: 'teacher-1' } } });
+  });
+
+  test('duplicateClasses lists assignable classes beyond this assignment’s deployments', async () => {
+    prisma.class.findMany.mockResolvedValue([
+      {
+        id: 'class-1',
+        grade: '10',
+        period: '3',
+        title: 'English',
+      },
+      {
+        id: 'class-2',
+        grade: '11',
+        period: '1',
+        title: 'Honors',
+      },
+    ]);
+
+    const data: any = await get();
+
+    const where = prisma.class.findMany.mock.calls[0][0].where;
+    expect(where.teachers).toEqual({ some: { id: 'teacher-1' } });
+    expect(where.isArchived).toBe(false);
+    expect(where.isArchived).not.toBe(true);
+    expect(Object.keys(where)).not.toContain('id');
+
+    expect(data.duplicateClasses).toEqual([
+      { id: 'class-1', name: 'English · Grade 10 • Period 3' },
+      { id: 'class-2', name: 'Honors · Grade 11 • Period 1' },
+    ]);
+    expect(
+      data.duplicateClasses.some((klass: { id: string }) => klass.id === 'class-2')
+    ).toBe(true);
   });
 
   test('a student is redirected away', async () => {

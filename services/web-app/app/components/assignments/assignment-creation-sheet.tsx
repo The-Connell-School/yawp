@@ -308,7 +308,7 @@ export type AssignmentCreationSheetProps = {
   fixedAssignmentTypeId?: string;
   initialAssignmentTypeId?: string;
   fixedClassId?: string;
-  /** When duplicating, no class is preselected (PR #933). */
+  /** Class ids to preselect on open when the class is not fixed (e.g. duplicate). */
   initialClassIds?: string[];
   /** Restyles the assign-to list for Duplicate (presentation). */
   assignToVariant?: 'default' | 'duplicate';
@@ -435,10 +435,9 @@ function initialAssignmentTypeSelection(
 
 function initialClassIds(
   fixedClassId?: string,
-  initialClassIdsProp?: string[]
+  presetClassIds?: string[]
 ) {
-  if (fixedClassId) return [fixedClassId];
-  return initialClassIdsProp ?? [];
+  return fixedClassId ? [fixedClassId] : (presetClassIds ?? []);
 }
 
 /** The point-value input is a string; a saved assignment may carry none. */
@@ -1173,6 +1172,7 @@ export function AssignmentCreationSheetContent({
     fixedAssignmentTypeId,
     initialAssignmentTypeId,
     fixedClassId,
+    initialClassIdsProp,
     initialPrompt,
     initialTitle,
     initialSubmitForGrade,

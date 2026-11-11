@@ -51,6 +51,10 @@ import {
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
 import { formatClassLabel } from '~/utils/class-display';
+import {
+  resolveTeacherSchoolYearScope,
+  schoolYearWhere,
+} from '~/utils/school-year-scope.server';
 import { dailyPagesEngagementPointValueError } from '~/domain/assignment-types/daily-pages-engagement-point-validation';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
@@ -126,6 +130,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const assignmentId = params.assignmentId!;
   const requestedClassId = new URL(request.url).searchParams.get('classId');
+  const schoolYearScope = await resolveTeacherSchoolYearScope(
+    request,
+    profile.id
+  );
 
   // Scoped to classes this teacher actually teaches, so the URL alone never
   // exposes another teacher's class.
@@ -318,6 +326,26 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         }
       : null;
 
+  const duplicateClassRows = await prisma.class.findMany({
+    where: {
+      teachers: { some: { id: profile.id } },
+      isArchived: false,
+      ...schoolYearWhere(schoolYearScope),
+    },
+    select: {
+      id: true,
+      grade: true,
+      period: true,
+      title: true,
+    },
+  });
+  const duplicateClasses = duplicateClassRows
+    .map((klass) => ({
+      id: klass.id,
+      name: formatClassLabel(klass),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   return {
     found: true as const,
     classInsightsEnabled,
@@ -341,6 +369,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: deployment.classId,
       name: formatClassLabel(deployment.class),
     })),
+    duplicateClasses,
     assignment: {
       id: active.assignment.id,
       classAssignmentId: active.id,
@@ -1109,11 +1138,10 @@ export default function AssignmentDetailRoute() {
           open={isDuplicateSheetOpen}
           onOpenChange={setIsDuplicateSheetOpen}
           entryPoint="class"
-          fixedClassId={activeClassId}
           assignToVariant="duplicate"
-          initialClassIds={[]}
           assignmentTypes={data.assignmentTypes}
-          teacherClasses={[activeClassOption]}
+          teacherClasses={data.duplicateClasses}
+          initialClassIds={[]}
           exitTicketBuilderV3Enabled={data.exitTicketBuilderV3Enabled}
           initialExitTicketConfig={assignment.exitTicket ?? null}
           initialAssignmentTypeId={assignment.assignmentTypeId}
