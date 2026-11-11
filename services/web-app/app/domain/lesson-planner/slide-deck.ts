@@ -221,7 +221,16 @@ const deckSchema = z.object({
 });
 
 export type Slide = z.infer<typeof slideSchema>;
-export type SlideDeck = z.infer<typeof deckSchema>;
+/** The look a gallery deck is drawn in: absent for spec v3, `v4` for spec v4. */
+export type DeckKit = 'v4';
+export type SlideDeck = z.infer<typeof deckSchema> & {
+  /**
+   * Render-only: set where the deck is loaded for drawing, from the school's
+   * `lesson_planner_deck_kit_v4` flag (`withDeckKit`). Never in the schema, so
+   * the planner cannot set it and a saved deck never stores it.
+   */
+  kit?: DeckKit;
+};
 
 // Any fenced block, however it is tagged. The model is writing this by hand and
 // reaches for ```json or a bare fence as often as the tag we asked for, so the
@@ -554,7 +563,9 @@ export function validateSlideDeck(json: string): SlideDeckValidation {
 
 /** A validated deck written back out as the block the renderer reads. */
 export function fenceSlideDeck(deck: SlideDeck): string {
-  return `\`\`\`${SLIDE_DECK_FENCE}\n${JSON.stringify(deck, null, 2)}\n\`\`\``;
+  // The kit is how this school draws the deck, not part of it: never stored.
+  const { kit: _kit, ...stored } = deck;
+  return `\`\`\`${SLIDE_DECK_FENCE}\n${JSON.stringify(stored, null, 2)}\n\`\`\``;
 }
 
 function withoutBlock(content: string, block: string): string {
