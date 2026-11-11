@@ -131,6 +131,11 @@ import {
 } from '~/utils/teacher-document-work-sort';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import {
+  AP_HISTORY_IN_NEW_ASSIGNMENT_FLAG,
+  ASSIGNMENTS_GROUPED_BY_TYPE_FLAG,
+} from '~/domain/feature-flags/feature-flags';
+import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
+import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   parseGradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
@@ -1475,6 +1480,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     exitTicketBuilderV3Enabled: await isExitTicketBuilderV3Enabled(
       klass.school.organizationId
     ),
+    assignmentsGroupedByTypeEnabled: await isFeatureFlagEnabled(
+      ASSIGNMENTS_GROUPED_BY_TYPE_FLAG,
+      klass.school.organizationId
+    ),
+    apHistoryInNewAssignmentEnabled: await isFeatureFlagEnabled(
+      AP_HISTORY_IN_NEW_ASSIGNMENT_FLAG,
+      klass.school.organizationId
+    ),
     classCodeUniqueEnabled: await classCodeUniquenessEnabled(prisma),
     classCodeHidden: hideTeachingSecrets,
     studentJoinUrl,
@@ -2341,6 +2354,8 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
             data.siteLicenseLockedAssignmentTiles
           }
           apHistoryAssignmentTypeId={data.apHistoryAssignmentTypeId}
+          apHistoryInNewAssignment={data.apHistoryInNewAssignmentEnabled}
+          groupedByType={data.assignmentsGroupedByTypeEnabled}
           exitTicketBuilderV3Enabled={data.exitTicketBuilderV3Enabled}
           classInsightsEnabled={classInsightsEnabled}
           teachingLocked={teachingLocked}
