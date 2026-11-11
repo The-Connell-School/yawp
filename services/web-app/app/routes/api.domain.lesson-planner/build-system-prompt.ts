@@ -1,6 +1,7 @@
+import { kitV4ArtColors } from '~/domain/lesson-planner/deck-kit-v4';
 import { buildTemplateSection, type LessonTemplate } from '~/domain/lesson-planner/lesson-templates';
 import type { RecentArt } from '~/domain/lesson-planner/recent-art';
-import { buildSourcesSection, type LessonUpload } from '~/domain/lesson-planner/lesson-uploads';
+import { buildSourcesSection, type DeckChoices, type LessonUpload } from '~/domain/lesson-planner/lesson-uploads';
 import { selectableDeckArt } from '~/domain/lesson-planner/deck-art';
 import { rubricCategories } from '~/domain/grading/rubric';
 import type { CacheableSystemBlock } from '~/utils/getLLMCompletion/getLLMCompletion';
@@ -193,7 +194,10 @@ function buildExitTicketSectionV3(): string[] {
     '  activity: reflect',
     '  starter: wondering',
     '  ```',
-    'A check for understanding asks for one thing from this lesson:',
+    '- What to ask first. An exit ticket needs one thing from the teacher: what the lesson taught (the text, term or idea, and the passage if there is one). When this conversation, the lesson stack or the class data already says it, write the tickets at once, without asking. When nothing does, ask that one question on its own, with no other question beside it.',
+    '- Never ask which activity, whether to grade it, whether there is a right answer, how many points, or how long students get. Offer the options below and the teacher picks one; grading is off and key points are optional, and the teacher changes either on the form.',
+    '- An exit ticket on its own is not a full lesson: do not ask which class, how long the period is, or what the students can already do. Those questions belong to planning a lesson, not to writing its check.',
+    'A check for understanding asks for one thing, in the words of this lesson:',
     '  ```' + EXIT_TICKET_FENCE,
     '  activity: answer-question',
     '  promptText: Who is Allie in The Catcher in the Rye, and why does Holden keep thinking about him?',
@@ -217,9 +221,10 @@ function buildExitTicketSectionV3(): string[] {
     '- Put nothing else in the block: no heading, no minutes, no teacher notes, no quotation marks. Where it sits in the lesson and how long it gets belong in the plan above it.',
     '- Do not also write the question anywhere else. The teacher sees exactly what students will get before anything is created.',
     '- When the same lesson has a deck, its closing slide sends students to the exit ticket in Yawp! — "Exit ticket: open it in Yawp! before you go" — and does not restate the question.',
-    '- When a full lesson closes on an exit ticket, offer three, each a different activity — a reflection, and the two checks that fit this lesson best — each in its own `' +
+    '- When a full lesson closes on an exit ticket, or the teacher asks for one on its own, offer three, each a different activity — a reflection, and the two checks that fit this lesson best — each in its own `' +
       EXIT_TICKET_FENCE +
-      '` block, so the teacher can pick the one that fits. Name all three in the closing step in one line; do not rank them. For a single exit ticket the teacher asked for on its own, give one.',
+      '` block, so the teacher can pick or stack the one that fits. When the teacher asked for one specific ticket ("a question about Allie"), give that one.',
+    '- Each card shows its prompt exactly as students will read it, so the teacher chooses by reading the prompts. Around the blocks, say at most one line, naming the options by what they ask ("what they still wonder, Allie, or the second stanza"), not by activity, grading or key points, and do not rank them.',
     '- One `' +
       EXIT_TICKET_FENCE +
       '` block per check. When a lesson genuinely needs a paper ticket as well, that stays a `yawp-material` `exit-ticket` block, and you say what each one is for.',
@@ -868,6 +873,53 @@ function buildDeckGallerySection(on: boolean, recentArt: RecentArt[] = []): stri
 }
 
 /**
+ * The gallery deck in the Lesson Deck Kit, spec v4 (Nov 6). Same slots as
+ * spec v3, so a deck written either way draws in both; what changes is how
+ * the slides look and what the planner is asked to write.
+ */
+function buildDeckKitV4Section(recentArt: RecentArt[] = []): string[] {
+  const art = selectableDeckArt()
+    .map(
+      (work) =>
+        `\`${work.id}\` (${work.artist}, ${work.title}, ${work.year}: ${work.subject}; about ${work.themes.join(', ')}; colors ${kitV4ArtColors(work).join(', ')})`
+    )
+    .join('; ');
+  return [
+    '',
+    'Gallery deck (Yawp! Lesson Deck Kit, spec v4): every deck should feel like a quiet, well-made book with one painting inside it. Every slide is cream; there are no dark or full-color slides. Color appears only as a solid panel on one side of a split slide (Yawp! draws it) or as type. Students should always be able to tell what they are being asked to do from across the room.',
+    'Labels, not mode words: a short label above the headline, in Arial, sentence case, no period ("Look", "Talk", "Hold this"). Yawp! draws each template’s own label; set `mode` only when a truer one fits ("Combine"), without a period, or `"mode": "none"` to leave it off. Use a label when the task changes, to mark a step, to flag something to keep, or to close; Yawp! drops one that repeats the headline or only decorates (Think, Begin, Also).',
+    'Use these templates:',
+    '- title — no label. `title` 3 words or fewer, `subtitle` 5 or fewer, optional `course` ("English 10, Period 3"). The painting hangs beside it as a plain plate.',
+    '- agenda — no label; Yawp! sets the headline "Today". Needs `agenda`: 3–6 items `{ "title", "minutes" }`, one per step of the plan; `body` is the one-line description of the session under "Today".',
+    '- steps — "Do", on a split slide: `title` and `minutes` on the panel, 2–4 numbered `bullets` on cream, 18 words or fewer each.',
+    '- discuss — "Talk", on a split slide: `title`, `grouping` ("Pairs") and `minutes` on the panel; one `question` of 18 words or fewer and an optional `stem` (a sentence starter) on cream.',
+    '- big_idea — "Hold this", beside a strip of the painting. One statement of 28 words or fewer in `body`; optional `followUp`, one line Yawp! sets in the deck color.',
+    '- write — "Write". The prompt in `body`, 40 words or fewer; `routine` ("Class starter" or "Daily Pages"); `minutes` or `seconds`, which Yawp! sets as a large timer.',
+    '- notes — "Know this", on a split slide: `title` on the panel; `timeline` (3–5 `{ "year", "caption" }`, captions 6 words or fewer) and/or `facts` (up to 3) on cream.',
+    '- divider — names the stage, only in decks over 10 slides: a verb `title` ("We draft."), an optional `subtitle` for one detail line. When it starts a stage of the writing process give `processStep` (1 pre-writing, 2 thesis, 3 introduction, 4 body paragraphs, 5 conclusion, 6 title and format) and it reads "Step 4"; otherwise `part` as a number ("2").',
+    '- read — "Read", on a split slide: `title` and the instruction (`body`) on the panel; 3 or fewer `tasks` `{ "verb", "text" }`, each led by a verb, on cream. Optional `work`, `page`.',
+    '- look — "Look": the painting as large as it goes, uncropped, with a narrow column beside it. Needs `question`; optional `seconds`, `routine` ("See, think, wonder"), `followUp`. Use it whenever students must study the image.',
+    '- excerpt — "Annotate": the passage on cream as printed, 40–90 words, only text the teacher supplied or a tool returned, with `author`, `work`, `page`; `tasks` or `bullets` (what to mark) on the panel.',
+    '- quiz — a discuss slide with `choices` (2–5 short answers) and no `answer` is a quiz question; Yawp! labels it "Question n of N". To reveal it, repeat the same slide right after it with `answer` (the number of the right choice): Yawp! puts a light band in the deck color behind it and greys the rest. Never mark the answer in the text.',
+    '- exit — "Before you go". Always last. `body` the statement or stem; optional `followUp`; `button` names what students open in Yawp! ("Exit ticket"), set as a line, "Exit ticket: open it in Yawp!"; optional `nextLesson`.',
+    'Prefer these to the older layouts: big_idea over statement, write or discuss over prompt, excerpt over quote, exit over closing, notes over bullets.',
+    'Rhythm: open with title then agenda, and close with exit. Never the same template twice in a row. Two split slides in a row may share a color.',
+    'Prompt type sizes itself: 12 words or fewer is set largest, up to 24 smaller, up to 40 smaller again. Over 40 words, split the slide.',
+    'Writing the slides: size content to the space and never add content to fill it; no filler, every line teaches, instructs or credits. Don’t give the answer away in a prompt. Mark words with color, never highlighting, and never pick out a single word in a headline. Write the name as Yawp!. No lesson, day or slide numbers in titles. Use numbers, never roman numerals, in every list, and no middle dots between words ("See, think, wonder"). Conventions on a slide (MLA, punctuation) must be correct.',
+    'Colors: give the deck `colors`, two or three mid-dark colors from its painting, the painting’s own v4 colors listed below; the first is the primary (the subtitle, labels, numerals, most panels), the second goes to alternate panels, and a third only for color-coding. No terracotta, clay, brick or brown: prefer the painting’s deep greens, blues, slates, maroons and plums. A slide can pick one with `color` (1, 2 or 3). When a slide teaches the parts of something (the three parts of a thesis, the moves of a conclusion), give each part its color and keep it all the way through, the sample paragraph included, by writing `~~1|the claim~~`, `~~2|the reason~~`, `~~3|the so-what~~` in any text field.',
+    `On the deck itself: \`unit\` (the unit's name) and, optionally, \`art\`. The deck and slide titles carry no lesson or day numbers.`,
+    `A painting is optional. Choose one only when what it shows (its subject, not just a mood) truly belongs with this lesson's text or idea, and then one work per lesson, chosen by theme, never by class, only from this library: ${art}. Never choose a painting because it is the only one or because it was used before: a deck without a painting is a good deck, in the house colors. Leave \`art\` out unless it fits. The art is shown and credited by Yawp!; never write about it on a slide except a look question. A photograph that is not public domain is fine in the teacher’s own class; say so before a deck is shared.`,
+    ...(recentArt.length
+      ? [
+          `Paintings this teacher has used lately: ${recentArt
+            .map((used) => `\`${used.art}\` in "${used.lesson}"${used.unit ? ` (${used.unit})` : ''}`)
+            .join('; ')}. Do not use one of these again unless this lesson is in that same unit.`,
+        ]
+      : []),
+  ];
+}
+
+/**
  * System prompt blocks for Anthropic prompt caching. The large stable prefix
  * is cached; the short personalized intro and per-lesson inventory sit after
  * the breakpoint.
@@ -885,7 +937,9 @@ export function buildLessonPlannerSystemPromptBlocks({
   lessonLength = null,
   template = null,
   deckGallery = false,
+  deckKitV4 = false,
   sources = [],
+  deckChoices,
   recentArt = [],
   weekContext = [],
   onStack = false,
@@ -912,8 +966,12 @@ export function buildLessonPlannerSystemPromptBlocks({
   template?: LessonTemplate | null;
   /** The gallery deck (Lesson Deck Kit): its templates, rhythm and art. */
   deckGallery?: boolean;
+  /** The Lesson Deck Kit, spec v4 (needs deckGallery). After the cache breakpoint. */
+  deckKitV4?: boolean;
   /** The teacher's own documents for this lesson (Oct 21). */
   sources?: LessonUpload[];
+  /** Which of "teach with my slides" and "refresh my deck" are on (Nov 1). */
+  deckChoices?: DeckChoices;
   /** Paintings on this teacher's recent decks, with the gallery deck on. */
   recentArt?: RecentArt[];
 }): CacheableSystemBlock[] {
@@ -932,8 +990,8 @@ export function buildLessonPlannerSystemPromptBlocks({
         ]
       : []),
     ...buildTemplateSection(template),
-    ...buildDeckGallerySection(deckGallery, recentArt),
-    ...buildSourcesSection(sources),
+    ...(deckGallery && deckKitV4 ? buildDeckKitV4Section(recentArt) : buildDeckGallerySection(deckGallery, recentArt)),
+    ...buildSourcesSection(sources, deckChoices, { onStack }),
   ].join('\n');
   const variable = tail ? `${intro}\n${tail}` : intro;
 
@@ -1050,3 +1108,31 @@ export const RECOMMENDED_LESSON_PLANNER_PROMPTS: Array<{
       'Make me some extra practice on a skill my students keep getting wrong — enough to use as homework or for the kids who finish early. Ask me which skill and which class.',
   },
 ];
+
+/**
+ * The v3 exit ticket starter. The v3 form needs only the question students
+ * answer, so the planner needs only what the lesson taught: it offers three
+ * tickets and the teacher picks, instead of being asked for the activity,
+ * the grading or the right answer first.
+ */
+const EXIT_TICKET_V3_STARTER_PROMPT =
+  'Make me an exit ticket that shows whether my students got today’s lesson. If you don’t already know what the lesson taught, ask me that and nothing else.';
+
+/**
+ * The starter tiles for this teacher. With the v3 exit ticket builder on for
+ * their school, the exit ticket tile asks for nothing but the lesson; every
+ * other tile, and the whole list with the flag off, is
+ * RECOMMENDED_LESSON_PLANNER_PROMPTS as it stands.
+ */
+export function recommendedLessonPlannerPrompts({
+  exitTicketBuilderV3,
+}: {
+  exitTicketBuilderV3: boolean;
+}): typeof RECOMMENDED_LESSON_PLANNER_PROMPTS {
+  if (!exitTicketBuilderV3) return RECOMMENDED_LESSON_PLANNER_PROMPTS;
+  return RECOMMENDED_LESSON_PLANNER_PROMPTS.map((entry) =>
+    entry.id === 'exit-ticket'
+      ? { ...entry, prompt: EXIT_TICKET_V3_STARTER_PROMPT }
+      : entry
+  );
+}

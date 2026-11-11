@@ -1686,9 +1686,18 @@ model LessonPlanConversation {
   /// per stack and reused until the stack changes (planSummaryKey).
   planSummary             Json?
   planSummaryKey          String?
-  /// When the teacher said "This lesson is set" (stack page redesign); null
-  /// while it is still being worked on. Built-in time is setAt − createdAt.
+  /// When the teacher tapped "Set this lesson" (stack page redesign); null
+  /// while it is still being worked on. Built-in time was setAt − createdAt;
+  /// with lesson_planner_active_time it is the working time below (Nov 3).
   setAt                   DateTime?                  @db.Timestamptz(6)
+  /// Seconds the teacher spent working on the lesson before setting it: the
+  /// planner pages count while they are in front of the teacher and in use.
+  activeSeconds           Int                        @default(0)
+  /// When that clock first counted this lesson; earlier activity is estimated.
+  activeSince             DateTime?                  @db.Timestamptz(6)
+  /// When the page last reported, so no report is credited more than the
+  /// time that has passed since the one before.
+  activeReportedAt        DateTime?                  @db.Timestamptz(6)
   /// The day this lesson will be taught. Null: not chosen yet.
   lessonDate              DateTime?                  @db.Timestamptz(6)
   /// The lesson's first name, kept once the teacher renames it, for "Started
@@ -1706,6 +1715,7 @@ model LessonPlanConversation {
   shareLinks              LessonShareLink[]
   uploads                 LessonPlanUpload[]
   assignmentLinks         LessonPlanAssignmentLink[]
+  slidePictures           LessonPlanUploadPicture[]
 
   @@index([membershipId, updatedAt(sort: Desc)])
   @@index([membershipId, starredAt(sort: Desc)])
@@ -1795,6 +1805,12 @@ model LessonPlanMaterial {
   label             String?
   /// Null: derived (student-facing or writing steps have a handout).
   hasHandout        Boolean?
+  /// The teacher's call on whether this step is writing time (Nov 4
+  /// follow-up): false takes a lecture about pre-writing out of the writing
+  /// tally, true counts a step the rule missed. Null: Yawp! decides from the
+  /// step (step-types.ts), as before. Written only with
+  /// lesson_planner_writing_override.
+  writing           Boolean?
   /// The Yawp! assignment created from this step ("Created in Yawp! · Open").
   yawpAssignmentId  String?
   yawpHref          String?
@@ -1878,23 +1894,66 @@ model LessonShareLink {
 }
 
 /// A document a teacher gave the lesson planner as source material (Oct 21).
-/// Only the text read out of it is kept, never the file.
+/// Only the text read out of it is kept, never the file, unless the deck is
+/// kept whole (see `file`, Nov 1).
 model LessonPlanUpload {
-  id             String                  @id @default(cuid())
-  createdAt      DateTime                @default(now()) @db.Timestamptz(6)
+  id             String                    @id @default(cuid())
+  createdAt      DateTime                  @default(now()) @db.Timestamptz(6)
   name           String
   contentType    String
   byteSize       Int
   /// The text read out of the file, capped.
   text           String
   /// More text than was kept.
-  truncated      Boolean                 @default(false)
+  truncated      Boolean                   @default(false)
   /// Null until the lesson's first message, which attaches it.
   conversationId String?
-  conversation   LessonPlanConversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation   LessonPlanConversation?   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   /// The teacher who uploaded it; every read is scoped to them.
   membershipId   String
+  /// The original file (Nov 1), kept only for a PowerPoint with
+  /// lesson_planner_upload_pictures on. Deleted with the row.
+  file           Bytes?
+  /// Whether `file` was kept, readable without loading the bytes.
+  keptDeck       Boolean                   @default(false)
+  /// What the teacher wants from their deck (Nov 1): 'teach' (teach with
+  /// these slides) or 'refresh' (refresh into a Yawp! deck). Null: not said.
+  mode           String?
+  /// The planner reply that carries the deck made from it (Nov 4): the deck
+  /// kept as is, or the reworked one. Null until it is made.
+  deckMessageId  String?
+  pictures       LessonPlanUploadPicture[]
 
+  @@index([conversationId])
+  @@index([membershipId])
+}
+
+/// A picture from a teacher's uploaded deck (Nov 1), saved once however many
+/// slides show it. Only browser-safe raster formats are kept; private to the
+/// teacher who uploaded it, and deleted with the upload.
+model LessonPlanUploadPicture {
+  id             String                  @id @default(cuid())
+  createdAt      DateTime                @default(now()) @db.Timestamptz(6)
+  /// The deck it came from; null for a picture added in the slide editor.
+  uploadId       String?
+  upload         LessonPlanUpload?       @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  /// The lesson a picture added in the slide editor belongs to (Nov 4).
+  conversationId String?
+  conversation   LessonPlanConversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// Same as the upload's; every read is scoped to it.
+  membershipId   String
+  /// Its order in the deck, from 1: "picture 3".
+  position       Int
+  /// The slides (as the teacher numbers them) it appears on.
+  slideNumbers   Int[]
+  altText        String
+  contentType    String
+  byteSize       Int
+  width          Int?
+  height         Int?
+  blob           Bytes
+
+  @@index([uploadId])
   @@index([conversationId])
   @@index([membershipId])
 }
@@ -2131,23 +2190,23 @@ model WritingPracticeClassAssignment {
 
 model User {
   classStudentHandles ClassStudentHandle[]
-  signonIdentities SignonIdentity[]
-  id                 String          @id @default(cuid())
-  createdAt          DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt          DateTime        @default(now()) @db.Timestamptz(6)
-  email              String?         @unique
-  username           String?         @unique
-  emailVerifiedAt    DateTime?       @db.Timestamptz(6)
-  mustChangePassword Boolean         @default(false)
-  name               String?
-  password           Password?
-  sessions           Session[]
-  memberships        OrgMembership[]
-  isTester           Boolean         @default(false)
-  testerFeedback     TesterFeedback[]
-  isAdmin            Boolean         @default(false)
-  isSuperAdmin       Boolean         @default(false)
-  mockAdminGranted   Boolean         @default(false)
+  signonIdentities    SignonIdentity[]
+  id                  String               @id @default(cuid())
+  createdAt           DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime             @default(now()) @db.Timestamptz(6)
+  email               String?              @unique
+  username            String?              @unique
+  emailVerifiedAt     DateTime?            @db.Timestamptz(6)
+  mustChangePassword  Boolean              @default(false)
+  name                String?
+  password            Password?
+  sessions            Session[]
+  memberships         OrgMembership[]
+  isTester            Boolean              @default(false)
+  testerFeedback      TesterFeedback[]
+  isAdmin             Boolean              @default(false)
+  isSuperAdmin        Boolean              @default(false)
+  mockAdminGranted    Boolean              @default(false)
   /// Dev-panel-only simulated students scoped to one class for demo data.
   simulatedForClassId String?
   tours              UserTour[]

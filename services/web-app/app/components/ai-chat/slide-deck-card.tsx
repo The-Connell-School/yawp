@@ -4,6 +4,7 @@
  * of. The teacher's next move is to project it, so that button is the loudest
  * thing on the card.
  */
+import { withDeckKit } from '~/domain/lesson-planner/deck-kit-v4';
 import { Link } from 'react-router';
 import { Check, Download, PenLine, Play, Plus, Presentation } from 'lucide-react';
 import { cn } from '~/utils/misc';
@@ -26,6 +27,8 @@ export function SlideDeckCard({
   onFit = null,
   /** Lesson Deck Kit: preview slides from the gallery renderer and art store. */
   deckGallery = false,
+  /** Lesson Deck Kit v4: the thumbnails in spec v4. */
+  deckKitV4 = false,
 }: {
   deck: SlideDeck;
   /** Absent while the reply is still unsaved and has no id to present by. */
@@ -53,6 +56,7 @@ export function SlideDeckCard({
   /** Ask the planner to fit the deck to the period. */
   onFit?: (() => void) | null;
   deckGallery?: boolean;
+  deckKitV4?: boolean;
 }) {
   const minutes = deckDurationMinutes(deck);
   const preview = deck.slides.slice(0, 4);
@@ -179,7 +183,7 @@ export function SlideDeckCard({
             }
           >
             {deckGallery ? (
-              <GallerySlideThumbnail deck={deck} index={index} width={thumbWidth} />
+              <GallerySlideThumbnail deck={withDeckKit(deck, { deckKitV4 })} index={index} width={thumbWidth} />
             ) : (
               <>
                 <p className="line-clamp-2 text-[10px] font-semibold leading-tight">

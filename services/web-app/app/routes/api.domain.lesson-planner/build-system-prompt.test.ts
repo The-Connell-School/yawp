@@ -18,6 +18,7 @@ import {
   buildLessonPlannerSystemPromptBlocks,
   LESSON_PLANNER_PROMPT_VERSION,
   RECOMMENDED_LESSON_PLANNER_PROMPTS,
+  recommendedLessonPlannerPrompts,
 } from './build-system-prompt';
 
 describe('buildLessonPlannerSystemPrompt', () => {
@@ -1871,6 +1872,22 @@ describe('planner prompt — the teacher’s own documents (Oct 21)', () => {
     expect(blocks[0]!.text).toBe(plain[0]!.text);
     expect(plain.at(-1)!.text).not.toContain('<document');
   });
+
+  test('the teacher’s choice for their own deck reaches the uncached tail (Nov 1)', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'School',
+      sources: [{ id: 'd1', name: 'Thesis.pptx', text: 'Slide 1', truncated: false, keptDeck: true, mode: 'teach' }],
+      deckChoices: { teach: true, refresh: true },
+    });
+    expect(blocks.at(-1)!.text).toContain('chose to keep "Thesis.pptx" as is');
+    const off = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'School',
+      sources: [{ id: 'd1', name: 'Thesis.pptx', text: 'Slide 1', truncated: false, keptDeck: true, mode: 'teach' }],
+    });
+    expect(off.at(-1)!.text).not.toContain('chose to keep');
+  });
 });
 
 describe('planner prompt — the painting is chosen, not reused (Kevin, Oct 22)', () => {
@@ -2043,5 +2060,138 @@ describe('the Yawp exit ticket, v3 builder', () => {
     });
     expect(blocks[0]!.text).toContain(`${LESSON_PLANNER_PROMPT_VERSION}-et3`);
     expect(blocks[0]!.text).toContain('activity: answer-question');
+  });
+});
+
+describe('the v3 exit ticket asks only what it needs', () => {
+  const v3 = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+    exitTicketsAvailable: true,
+    exitTicketBuilderV3: true,
+  });
+  const legacy = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+    exitTicketsAvailable: true,
+  });
+
+  test('one question at most: what the lesson taught, and none when the conversation says', () => {
+    expect(v3).toContain(
+      'An exit ticket needs one thing from the teacher: what the lesson taught'
+    );
+    expect(v3).toContain('write the tickets at once, without asking');
+    expect(v3).toContain('ask that one question on its own');
+  });
+
+  test('never asks what the form already defaults or the teacher picks from the options', () => {
+    expect(v3).toMatch(
+      /Never ask which activity, whether to grade it, whether there is a right answer, how many points/
+    );
+    // A standalone exit ticket is not a full lesson: no intake for it.
+    expect(v3).toContain(
+      'An exit ticket on its own is not a full lesson: do not ask which class, how long the period is'
+    );
+  });
+
+  test('names the options by what they ask, since each card shows its prompt', () => {
+    expect(v3).toContain(
+      'Each card shows its prompt exactly as students will read it'
+    );
+    expect(v3).not.toContain(
+      'Name all three in the closing step in one line; do not rank them.'
+    );
+  });
+
+  test('leaves the legacy prompt as it was', () => {
+    expect(legacy).not.toContain(
+      'An exit ticket needs one thing from the teacher'
+    );
+    expect(legacy).toContain(
+      'Name all three in the closing step in one line; do not rank them.'
+    );
+  });
+});
+
+describe('recommendedLessonPlannerPrompts', () => {
+  const exitTicket = (v3: boolean) =>
+    recommendedLessonPlannerPrompts({ exitTicketBuilderV3: v3 }).find(
+      (entry) => entry.id === 'exit-ticket'
+    )!;
+
+  test('flag off: the same list as before', () => {
+    expect(
+      recommendedLessonPlannerPrompts({ exitTicketBuilderV3: false })
+    ).toEqual(RECOMMENDED_LESSON_PLANNER_PROMPTS);
+  });
+
+  test('flag on: the exit ticket starter asks for nothing but the lesson', () => {
+    const entry = exitTicket(true);
+    expect(entry.label).toBe('Make me an exit ticket');
+    expect(entry.prompt).toContain('what the lesson taught');
+    expect(entry.prompt).toContain('nothing else');
+    expect(entry.prompt).not.toContain('every part of it');
+  });
+
+  test('flag on: every other starter is unchanged', () => {
+    const on = recommendedLessonPlannerPrompts({ exitTicketBuilderV3: true });
+    expect(on.map((entry) => entry.id)).toEqual(
+      RECOMMENDED_LESSON_PLANNER_PROMPTS.map((entry) => entry.id)
+    );
+    for (const entry of on) {
+      if (entry.id === 'exit-ticket') continue;
+      expect(entry).toEqual(
+        RECOMMENDED_LESSON_PLANNER_PROMPTS.find((same) => same.id === entry.id)!
+      );
+    }
+  });
+});
+
+describe('planner prompt — the Lesson Deck Kit, spec v4', () => {
+  const textOf = (deckKitV4: boolean) =>
+    buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', deckGallery: true, deckKitV4 })
+      .map((block) => block.text)
+      .join('\n');
+  const v4 = textOf(true);
+  const v3 = textOf(false);
+
+  test('teaches labels, not italic mode words, and cream slides with split panels', () => {
+    expect(v4).toContain('Lesson Deck Kit, spec v4');
+    expect(v4).toContain('Labels, not mode words');
+    expect(v4).toContain('cream');
+    expect(v4).toContain('split');
+    expect(v4).not.toContain('italic mode word');
+    expect(v4).not.toContain('accent wall');
+    expect(v4).not.toContain('on pine');
+  });
+
+  test('teaches the quiz as a question slide and an answer slide', () => {
+    expect(v4).toContain('Question n of N');
+    expect(v4).toMatch(/repeat[^.]*with `answer`/);
+  });
+
+  test('carries the kit’s writing and color rules', () => {
+    expect(v4).toContain('No terracotta, clay, brick or brown');
+    expect(v4).toContain('numbers, never roman numerals');
+    expect(v4).toContain('no middle dots');
+    expect(v4).toContain('Don’t give the answer away in a prompt');
+    expect(v4).not.toContain('accentWord');
+  });
+
+  test('lists each painting with its v4 colors', () => {
+    expect(v4).toContain('`hokusai-great-wave`');
+    expect(v4).toContain('#2F5873, #1E3A5F');
+  });
+
+  test('flag off: the spec v3 section, as before', () => {
+    expect(v3).toContain('italic mode word');
+    expect(v3).not.toContain('Lesson Deck Kit, spec v4');
+  });
+
+  test('without the gallery deck, neither section', () => {
+    const none = buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', deckGallery: false, deckKitV4: true })
+      .map((block) => block.text)
+      .join('\n');
+    expect(none).not.toContain('Lesson Deck Kit, spec v4');
   });
 });

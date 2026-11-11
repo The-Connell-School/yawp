@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  deckUploadFlags,
   FEATURE_FLAGS,
   GUIDED_TOURS_FLAG,
   CLASS_CODE_UNIQUE_FLAG,
@@ -21,6 +22,12 @@ import {
   LESSON_PLANNER_UPLOADS_FLAG,
   LESSON_PLANNER_TEACH_NOTES_FLAG,
   LESSON_PLANNER_LIBRARY_V2_FLAG,
+  LESSON_PLANNER_UPLOAD_PICTURES_FLAG,
+  LESSON_PLANNER_TEACH_MY_SLIDES_FLAG,
+  LESSON_PLANNER_REFRESH_MY_DECK_FLAG,
+  LESSON_PLANNER_ACTIVE_TIME_FLAG,
+  LESSON_PLANNER_WRITING_OVERRIDE_FLAG,
+  LESSON_PLANNER_DECK_KIT_V4_FLAG,
   LESSON_PLANNER_STACK_PANEL_FLAG,
   TEACHER_PROMPT_GENERATOR_FLAG,
   TEACHER_LOUNGE_FLAG,
@@ -71,6 +78,12 @@ describe('feature flag registry', () => {
       LESSON_PLANNER_UPLOADS_FLAG,
       LESSON_PLANNER_TEACH_NOTES_FLAG,
       LESSON_PLANNER_LIBRARY_V2_FLAG,
+      LESSON_PLANNER_UPLOAD_PICTURES_FLAG,
+      LESSON_PLANNER_TEACH_MY_SLIDES_FLAG,
+      LESSON_PLANNER_REFRESH_MY_DECK_FLAG,
+      LESSON_PLANNER_ACTIVE_TIME_FLAG,
+      LESSON_PLANNER_WRITING_OVERRIDE_FLAG,
+      LESSON_PLANNER_DECK_KIT_V4_FLAG,
       CLASS_CODE_UNIQUE_FLAG,
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
@@ -253,3 +266,26 @@ describe('evaluateFeatureFlag', () => {
     expect(isFreeTierGloballyEnabled({ mode: 'off', orgIds: [] })).toBe(false);
   });
 });
+
+describe('the teacher’s own deck flags (Nov 1)', () => {
+  const all = { uploads: true, uploadPictures: true, teachMySlides: true, refreshMyDeck: true };
+
+  test('keeping the deck and its pictures needs uploads on', () => {
+    expect(deckUploadFlags({ ...all, uploads: false })).toEqual({ uploadPictures: false, teachMySlides: false, refreshMyDeck: false });
+    expect(deckUploadFlags(all)).toEqual({ uploadPictures: true, teachMySlides: true, refreshMyDeck: true });
+  });
+
+  test('teach-with-my-slides and refresh both need the kept deck', () => {
+    expect(deckUploadFlags({ ...all, uploadPictures: false })).toEqual({
+      uploadPictures: false,
+      teachMySlides: false,
+      refreshMyDeck: false,
+    });
+    expect(deckUploadFlags({ ...all, refreshMyDeck: false })).toEqual({
+      uploadPictures: true,
+      teachMySlides: true,
+      refreshMyDeck: false,
+    });
+  });
+});
+

@@ -8,6 +8,7 @@
 import type { Slide, SlideDeck } from './slide-deck';
 import { resolveDeckArt } from './deck-art';
 import { deckColors, slideColor } from './deck-colors';
+import { isKitV4, kitV4Colors } from './deck-kit-v4';
 
 /** The kit's twelve templates, plus compare for a classic two-column slide. */
 export type GalleryTemplate =
@@ -23,7 +24,9 @@ export type GalleryTemplate =
   | 'look'
   | 'excerpt'
   | 'exit'
-  | 'compare';
+  | 'compare'
+  // The teacher's own picture (Nov 1), drawn like the Look slide's painting.
+  | 'picture';
 
 export type GalleryGround = 'paper' | 'pine' | 'ink' | 'accent' | 'art';
 
@@ -77,7 +80,17 @@ export const GALLERY_TEMPLATES: Record<GalleryTemplate, { mode: string | null; g
   excerpt: { mode: 'Annotate.', ground: 'paper' },
   exit: { mode: 'Before you go.', ground: 'accent' },
   compare: { mode: null, ground: 'paper' },
+  // On paper: a photograph or a handout reads truest on a light ground.
+  picture: { mode: 'Look.', ground: 'paper' },
 };
+
+/**
+ * Where a picture slide hangs the teacher's picture, in kit pixels: the Look
+ * slide's painting box, so the two read as one family. The words sit to its
+ * right, from `GALLERY_PICTURE_TEXT_LEFT`.
+ */
+export const GALLERY_PICTURE_BOX = { x: 64, y: 74, w: 720, h: 538 } as const;
+export const GALLERY_PICTURE_TEXT_LEFT = 846;
 
 /** The six steps of the writing process, as a divider names them. */
 export const WRITING_PROCESS_STEPS = [
@@ -217,8 +230,12 @@ export function planGalleryDeck(deck: SlideDeck): GallerySlidePlan[] {
   return plan;
 }
 
-/** The deck's two or three colors; the first is the primary. */
+/**
+ * The deck's two or three colors; the first is the primary. A deck drawn in
+ * spec v4 takes the v4 colors, so its handouts and lesson plan match it.
+ */
 export function galleryColors(deck: SlideDeck): string[] {
+  if (isKitV4(deck)) return kitV4Colors(deck);
   return deckColors(deck, resolveDeckArt(deck.art));
 }
 

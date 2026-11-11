@@ -10,7 +10,7 @@ import { Link, useFetcher, useRevalidator, useSearchParams } from 'react-router'
 import { Check, ChevronLeft, BookMarked, Lightbulb, X } from 'lucide-react';
 import type { LoadedLessonPacket } from '~/domain/lesson-planner/load-lesson-packet.server';
 import type { StackV3 } from '~/domain/lesson-planner/load-stack-v3.server';
-import { notYetInYawp, type StackStep } from '~/domain/lesson-planner/stack-steps';
+import { notYetInYawp, withWritingCall, writingCallFor, type StackStep } from '~/domain/lesson-planner/stack-steps';
 import type { SuggestedPiece } from '~/domain/lesson-planner/stack-suggestions';
 import { clampMinutes, stackTiming, timeFixes, type TimeFix } from '~/domain/lesson-planner/stack-timing';
 import { STEP_TYPE_LABELS } from '~/domain/lesson-planner/step-types';
@@ -131,10 +131,16 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
   const [localMinutes, setLocalMinutes] = useState<Record<string, number>>({});
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
-  const loadedKey = v3.steps.map((step) => `${step.key}:${step.minutes}`).join('|');
+  // The teacher's calls on writing, shown at once (Nov 4 follow-up).
+  const [localWriting, setLocalWriting] = useState<Record<string, boolean | null>>({});
+  const writingText = useRef('');
+  const loadedKey = v3.steps
+    .map((step) => `${step.key}:${step.minutes}:${step.isWriting}:${step.writingByTeacher}`)
+    .join('|');
   useEffect(() => {
     setLocalOrder(null);
     setLocalMinutes({});
+    setLocalWriting({});
     announceStackChange(conversationId);
     // Only when the loaded stack itself changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -147,8 +153,9 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
       : v3.steps;
     return ordered
       .filter((step) => !hiddenIds.includes(step.id))
-      .map((step) => (localMinutes[step.id] != null ? { ...step, minutes: localMinutes[step.id]! } : step));
-  }, [v3.steps, localOrder, localMinutes, hiddenIds]);
+      .map((step) => (localMinutes[step.id] != null ? { ...step, minutes: localMinutes[step.id]! } : step))
+      .map((step) => (step.id in localWriting ? withWritingCall(step, localWriting[step.id] ?? null) : step));
+  }, [v3.steps, localOrder, localMinutes, localWriting, hiddenIds]);
   const timing = useMemo(() => stackTiming(steps, data.periodMinutes), [steps, data.periodMinutes]);
   const fixes = useMemo(() => timeFixes(timing), [timing]);
   // Kevin's Oct 25 notes (8b, 8c, 9, 12a), with the teach notes flag.
@@ -191,6 +198,9 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
         undo: result.undo ?? null,
       });
     }
+    if ('writing' in result && result.undo) {
+      setChange({ text: writingText.current, undo: result.undo });
+    }
     if (result.extension) {
       setChange({ text: 'Saved for extra time. It waits after the closing.', undo: null });
     }
@@ -222,6 +232,17 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
         post(stackFetcher, STACK_API, { intent: 'set-minutes', materialId: step.id, minutes: String(value) });
       }, 400)
     );
+  }
+
+  function setWriting(step: StackStep, writing: boolean) {
+    const call = writingCallFor(step, writing);
+    writingText.current = writing ? 'Counted as writing.' : 'Not counted as writing.';
+    setLocalWriting((current) => ({ ...current, [step.id]: call }));
+    post(stackFetcher, STACK_API, {
+      intent: 'set-writing',
+      materialId: step.id,
+      writing: call === null ? 'auto' : String(call),
+    });
   }
 
   function reorder(keys: string[]) {
@@ -497,6 +518,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                   }
                   missingIds={new Set(missing.map((step) => step.id))}
                   flaggedId={extendStep?.id ?? null}
+                  onWriting={reviewFlags.writingOverride ? setWriting : null}
                   steps={steps}
                   blocks={timing.blocks}
                   openId={openId}
@@ -562,6 +584,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
               timing={timing}
               createdAt={v3.createdAt}
               setAt={v3.setAt}
+              planningSeconds={v3.planningSeconds}
               lessonDate={v3.lessonDate}
               missing={missing}
               onPaper={markPaper}
@@ -584,7 +607,11 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                   ? beforeClass({
                       over: timing.over,
                       period: timing.period,
-                      deck: { built: Boolean(v3.deck ?? v3.conversationDeck), stale: v3.deckStale },
+                      // The teacher's own deck, added as is, is the lesson's slides (Nov 3).
+                      deck:
+                        !v3.deck && v3.ownDecks.length
+                          ? { built: true, stale: false }
+                          : { built: Boolean(v3.deck ?? v3.conversationDeck), stale: v3.deckStale },
                       missingWriting: missing.length,
                       lessonDate: v3.lessonDate,
                     })
@@ -596,6 +623,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                       slideshowHref: slideshowHref(conversationId, v3.deck?.id ?? v3.conversationDeck?.messageId ?? null),
                       notesHref: `/show/${conversationId}?from=stack`,
                       onBuildDeck: () => buildDeck(BUILD_FROM_STACK_REQUESTS.deck, 'Build the slide deck'),
+                      ownDeckHref: v3.ownDecks[0] ? `/api/lesson-planner-deck/${v3.ownDecks[0].id}` : null,
                     }
                   : null
               }
@@ -634,6 +662,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                   conversationId={conversationId}
                   handoutCount={steps.filter((step) => step.hasHandout).length}
                   deck={v3.deck}
+                  ownDecks={v3.ownDecks}
                   builtDeck={
                     v3.conversationDeck && !v3.deck
                       ? {
@@ -662,6 +691,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
               stepCount={steps.length}
               handoutCount={steps.filter((step) => step.hasHandout).length}
               deck={v3.deck}
+              ownDecks={v3.ownDecks}
               builtDeck={
                 v3.conversationDeck && !v3.deck
                   ? {

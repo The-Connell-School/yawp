@@ -31,7 +31,7 @@ const SLIDE_RELATIONSHIP = /\/slide$/;
 const NOTES_RELATIONSHIP = /\/notesSlide$/;
 
 /** `<Relationship Id="rId3" Type="…/slide" Target="slides/slide7.xml"/>` */
-function readRelationships(
+export function readRelationships(
   xml: string
 ): Array<{ id: string; type: string; target: string }> {
   const found: Array<{ id: string; type: string; target: string }> = [];
@@ -46,7 +46,7 @@ function readRelationships(
 }
 
 /** Resolve a rels Target, which is relative to the part that declared it. */
-function resolvePart(fromPart: string, target: string): string {
+export function resolvePart(fromPart: string, target: string): string {
   const base = fromPart.slice(0, fromPart.lastIndexOf('/'));
   const segments = base.split('/');
   for (const piece of target.split('/')) {
@@ -56,7 +56,7 @@ function resolvePart(fromPart: string, target: string): string {
   return segments.join('/');
 }
 
-function read(entries: Map<string, ZipEntry>, part: string): string | null {
+export function readPart(entries: Map<string, ZipEntry>, part: string): string | null {
   const entry = entries.get(part);
   if (!entry) return null;
   try {
@@ -72,9 +72,9 @@ function read(entries: Map<string, ZipEntry>, part: string): string | null {
  * Falls back to numeric filename order when `presentation.xml` is missing or
  * says nothing useful — better a deck read in a plausible order than no deck.
  */
-function orderedSlideParts(entries: Map<string, ZipEntry>): string[] {
-  const presentation = read(entries, 'ppt/presentation.xml');
-  const rels = read(entries, 'ppt/_rels/presentation.xml.rels');
+export function orderedSlideParts(entries: Map<string, ZipEntry>): string[] {
+  const presentation = readPart(entries, 'ppt/presentation.xml');
+  const rels = readPart(entries, 'ppt/_rels/presentation.xml.rels');
   if (presentation && rels) {
     const byId = new Map(
       readRelationships(rels)
@@ -106,13 +106,13 @@ function slideFileNumber(part: string): number {
 }
 
 /** The notes part a given slide points at, if it has one. */
-function notesPartFor(
+export function notesPartFor(
   entries: Map<string, ZipEntry>,
   slidePart: string
 ): string | null {
   const file = slidePart.slice(slidePart.lastIndexOf('/') + 1);
   const relsPart = `${slidePart.slice(0, slidePart.lastIndexOf('/'))}/_rels/${file}.rels`;
-  const rels = read(entries, relsPart);
+  const rels = readPart(entries, relsPart);
   if (!rels) return null;
   const notes = readRelationships(rels).find((relationship) =>
     NOTES_RELATIONSHIP.test(relationship.type)
@@ -125,7 +125,7 @@ function notesPartFor(
  * part. That placeholder is a bare numeral, and letting it through means the
  * planner reads "3" as something the teacher wrote.
  */
-function readNotes(xml: string): string {
+export function readNotes(xml: string): string {
   const withoutFields = xml.replace(/<a:fld\b[\s\S]*?<\/a:fld>/g, '');
   return blocksOf(withoutFields, {
     blockTag: 'a:p',
@@ -141,7 +141,7 @@ function readNotes(xml: string): string {
 export function readPptxSlides(file: Uint8Array): PptxSlide[] {
   const entries = readZipEntries(file);
   return orderedSlideParts(entries).map((part, index) => {
-    const xml = read(entries, part) ?? '';
+    const xml = readPart(entries, part) ?? '';
     const lines = blocksOf(xml, {
       blockTag: 'a:p',
       runTag: 'a:t',
@@ -152,7 +152,7 @@ export function readPptxSlides(file: Uint8Array): PptxSlide[] {
       .filter(Boolean);
 
     const notesPart = notesPartFor(entries, part);
-    const notesXml = notesPart ? read(entries, notesPart) : null;
+    const notesXml = notesPart ? readPart(entries, notesPart) : null;
 
     return {
       number: index + 1,
@@ -171,6 +171,6 @@ export function hasSlideText(slides: PptxSlide[]): boolean {
 export function pptxPlainText(file: Uint8Array): string {
   const entries = readZipEntries(file);
   return orderedSlideParts(entries)
-    .map((part) => textOf(read(entries, part) ?? '', 'a:t').join(' '))
+    .map((part) => textOf(readPart(entries, part) ?? '', 'a:t').join(' '))
     .join('\n');
 }

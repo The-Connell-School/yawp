@@ -11,6 +11,7 @@ import type { StackTiming } from '~/domain/lesson-planner/stack-timing';
 import { READY_LINE, type BeforeClassItem } from '~/domain/lesson-planner/before-class';
 import { YawpChecklist } from './yawp-checklist';
 import { HEADING_FONT } from './theme';
+import { formatPlanningTime } from '~/domain/lesson-planner/active-time';
 
 function weekday(iso: string | null): string {
   if (!iso) return 'class';
@@ -73,6 +74,7 @@ export function FinishLine({
   timing,
   createdAt,
   setAt,
+  planningSeconds = null,
   lessonDate,
   onSet,
   onKeepEditing,
@@ -91,6 +93,8 @@ export function FinishLine({
   timing: StackTiming;
   createdAt: string;
   setAt: string | null;
+  /** Working time (Nov 3); null shows the time from first message to set. */
+  planningSeconds?: number | null;
   lessonDate: string | null;
   onSet: () => void;
   onKeepEditing: () => void;
@@ -106,7 +110,13 @@ export function FinishLine({
    * Stack page v2 (Oct 24 handoff, task 6): two Teach it buttons in place of
    * Run the show. With no deck yet, Open slideshow builds one first.
    */
-  teach?: { slideshowHref: string | null; notesHref: string; onBuildDeck: () => void } | null;
+  teach?: {
+    slideshowHref: string | null;
+    notesHref: string;
+    onBuildDeck: () => void;
+    /** The teacher's own deck, added as is (Nov 3): theirs to open, never one to build. */
+    ownDeckHref?: string | null;
+  } | null;
   /** The library redesign (Part 2, L3): a set lesson in no unit can be saved to one. */
   saveToUnit?: Array<{ id: string; title: string; course: string | null }> | null;
   /** The Before class list; null with it off. */
@@ -142,7 +152,7 @@ export function FinishLine({
           onClick={onSet}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--sv-ink)] py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
         >
-          <Check size={16} /> This lesson is set
+          <Check size={16} /> Set this lesson
         </button>
       </section>
     );
@@ -154,13 +164,24 @@ export function FinishLine({
         <Check size={18} /> Lesson set for {shortDate(lessonDate)}
       </h2>
       <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
-        {/* Not class time (Kevin's note 12b): how long the planning took. */}
-        <div className="rounded-lg bg-[#F1EBE2] p-2" title="From your first message to setting the lesson">
+        {/* Not class time (Kevin's note 12b): how long the planning took. With
+            the planning clock on (Nov 3), the time spent working on it, not the
+            time since it was started. */}
+        <div
+          className="rounded-lg bg-[#F1EBE2] p-2"
+          title={
+            planningSeconds !== null
+              ? 'Time you spent working on this lesson, with breaks and time away left out'
+              : 'From your first message to setting the lesson'
+          }
+        >
           <dt className="text-[10px] font-semibold uppercase tracking-wide text-[var(--sv-muted)]">Planned in</dt>
           <dd data-testid="stat-built" className="text-lg font-bold" style={HEADING_FONT}>
-            {builtIn(createdAt, setAt)}
+            {planningSeconds !== null ? formatPlanningTime(planningSeconds) : builtIn(createdAt, setAt)}
           </dd>
-          <dd className="text-[10px] leading-tight text-[var(--sv-muted)]">from first message to set</dd>
+          <dd className="text-[10px] leading-tight text-[var(--sv-muted)]">
+            {planningSeconds !== null ? 'of actual work' : 'from first message to set'}
+          </dd>
         </div>
         <div className="rounded-lg bg-[#F1EBE2] p-2">
           <dt className="text-[10px] font-semibold uppercase tracking-wide text-[var(--sv-muted)]">Class time</dt>
@@ -193,6 +214,19 @@ export function FinishLine({
                 <span className="block text-xs text-white/80">For the smartboard or projector</span>
               </span>
             </Link>
+          ) : teach.ownDeckHref ? (
+            <a
+              href={teach.ownDeckHref}
+              download
+              data-testid="open-own-deck"
+              className="flex w-full items-center gap-3 rounded-xl bg-[var(--sv-primary)] px-4 py-3 text-left text-white transition hover:opacity-90"
+            >
+              <MonitorPlay size={18} className="shrink-0" />
+              <span>
+                <span className="block text-sm font-bold">Open your slides</span>
+                <span className="block text-xs text-white/80">Your own deck, as you uploaded it</span>
+              </span>
+            </a>
           ) : (
             <button
               type="button"
