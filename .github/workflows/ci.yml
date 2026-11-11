@@ -1069,6 +1069,7 @@ jobs:
             app/routes/auth.login/route.test.tsx \
             app/components/free-account-usage.test.tsx \
             app/components/assignments/assignment-creation-sheet.test.tsx \
+            app/components/ai-chat/exit-ticket-card.test.tsx \
             app/routes/api.domain.grade-essay-ai/route.test.ts \
             app/domain/assignment-insights/class-insight-generation.server.test.ts \
             app/domain/assignment-insights/class-insight-cache.test.ts \
