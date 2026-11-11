@@ -137,6 +137,12 @@ const teacherClasses = [
   { id: 'class-2', name: 'English 10' },
 ];
 
+const threeTeacherClasses = [
+  { id: 'class-1', name: 'English 9' },
+  { id: 'class-2', name: 'English 10' },
+  { id: 'class-3', name: 'English 11' },
+];
+
 function render(element: ReactElement) {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -659,6 +665,39 @@ describe('AssignmentCreationSheetContent', () => {
 
     const classIds = allInputsByName('classIds').map((input) => input.value);
     expect(classIds).toEqual(['class-1']);
+  });
+
+  it('enables every class checkbox when no class is fixed', () => {
+    root = renderSheet({
+      teacherClasses: threeTeacherClasses,
+      initialClassIds: [],
+    }).root;
+
+    for (const classId of ['class-1', 'class-2', 'class-3']) {
+      const control = controlById(`assignment-create-class-${classId}`);
+      expect((control as HTMLButtonElement).disabled).toBe(false);
+    }
+
+    act(() => {
+      controlById('assignment-create-class-class-1').click();
+      controlById('assignment-create-class-class-2').click();
+    });
+
+    expect(allInputsByName('classIds').map((input) => input.value).sort()).toEqual(
+      ['class-1', 'class-2']
+    );
+  });
+
+  it('disables class checkboxes when fixedClassId is set', () => {
+    root = renderSheet({
+      teacherClasses: threeTeacherClasses,
+      fixedClassId: 'class-1',
+    }).root;
+
+    for (const classId of ['class-1', 'class-2', 'class-3']) {
+      const control = controlById(`assignment-create-class-${classId}`);
+      expect((control as HTMLButtonElement).disabled).toBe(true);
+    }
   });
 
   it('keeps extracted PDF fields when route data refreshes while the sheet stays open', () => {

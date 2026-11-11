@@ -302,6 +302,8 @@ export type AssignmentCreationSheetProps = {
   fixedAssignmentTypeId?: string;
   initialAssignmentTypeId?: string;
   fixedClassId?: string;
+  /** Class ids to preselect on open when the class is not fixed (e.g. duplicate). */
+  initialClassIds?: string[];
   /**
    * Present when this sheet is editing an existing assignment rather than
    * creating one. Same form either way — it swaps the intent, drops the
@@ -421,8 +423,11 @@ function initialAssignmentTypeSelection(
   return firstAvailable?.id ?? '';
 }
 
-function initialClassIds(fixedClassId?: string) {
-  return fixedClassId ? [fixedClassId] : [];
+function initialClassIds(
+  fixedClassId?: string,
+  presetClassIds?: string[]
+) {
+  return fixedClassId ? [fixedClassId] : (presetClassIds ?? []);
 }
 
 /** The point-value input is a string; a saved assignment may carry none. */
@@ -708,6 +713,7 @@ export function AssignmentCreationSheetContent({
   fixedAssignmentTypeId,
   initialAssignmentTypeId,
   fixedClassId,
+  initialClassIds: initialClassIdsProp,
   editingAssignment,
   initialTitle = '',
   initialPrompt = '',
@@ -751,7 +757,7 @@ export function AssignmentCreationSheetContent({
     fixedClassId ?? teacherClasses[0]?.id ?? ''
   );
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>(
-    initialClassIds(fixedClassId)
+    initialClassIds(fixedClassId, initialClassIdsProp)
   );
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState(initialPrompt);
@@ -1071,7 +1077,7 @@ export function AssignmentCreationSheetContent({
       )
     );
     setSelectedClassId(fixedClassId ?? teacherClasses[0]?.id ?? '');
-    setSelectedClassIds(initialClassIds(fixedClassId));
+    setSelectedClassIds(initialClassIds(fixedClassId, initialClassIdsProp));
     setTitle(initialTitle);
     setPrompt(initialPrompt);
     const resetTypeId = initialAssignmentTypeSelection(
@@ -1149,6 +1155,7 @@ export function AssignmentCreationSheetContent({
     fixedAssignmentTypeId,
     initialAssignmentTypeId,
     fixedClassId,
+    initialClassIdsProp,
     initialPrompt,
     initialTitle,
     initialSubmitForGrade,
