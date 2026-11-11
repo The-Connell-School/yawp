@@ -269,6 +269,7 @@ export function ExitTicketBuilderV3({
         {preview ? (
           <p
             aria-labelledby="assignment-create-exit-ticket-preview-label"
+            data-testid="exit-ticket-v3-preview"
             className="whitespace-pre-line rounded-md bg-muted p-3 text-sm"
           >
             {preview}

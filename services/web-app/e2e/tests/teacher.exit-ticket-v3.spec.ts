@@ -261,10 +261,12 @@ test.describe.serial('Exit tickets, v3 builder', () => {
     await expect(line).not.toBeChecked();
     await expect(note).toHaveValue('');
     await expect(create).toBeEnabled();
-    await expect(page.getByText(EXIT_TICKET_QUESTIONS_LINE)).toHaveCount(0);
+    // The checkbox shows the line; students see it only once it is on.
+    const preview = page.getByTestId('exit-ticket-v3-preview');
+    await expect(preview).not.toContainText(EXIT_TICKET_QUESTIONS_LINE);
 
     await line.check();
-    await expect(page.getByText(EXIT_TICKET_QUESTIONS_LINE)).toBeVisible();
+    await expect(preview).toContainText(EXIT_TICKET_QUESTIONS_LINE);
     await note.fill('We read chapters 1 to 3 and talked about Allie.');
 
     // "Still wondering" already asks for a question, so the line goes.
