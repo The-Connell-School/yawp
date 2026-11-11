@@ -50,7 +50,7 @@ export default function LoungeWelcomeRoute() {
   const [agreed, setAgreed] = useState(false);
 
   return (
-    <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll bg-secondary">
+    <section data-lounge-page className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll bg-secondary">
       <div className="mx-auto w-full max-w-xl px-4 py-10">
         <div className="rounded-2xl border bg-popover p-6 shadow-sm sm:p-8">
           <h1 className="lounge-serif text-[40px] leading-none text-foreground">{LOUNGE_NAME}</h1>

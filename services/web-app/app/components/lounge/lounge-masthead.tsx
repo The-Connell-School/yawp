@@ -17,11 +17,10 @@ export function LoungeMasthead({
 }) {
   const location = useLocation();
   return (
-    <header className="mx-auto w-full max-w-[960px] px-4 pt-8 sm:px-8 sm:pt-10">
+    <header data-lounge-page className="mx-auto w-full max-w-[960px] px-4 pt-8 sm:px-8 sm:pt-10">
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div className="flex flex-col">
-          <p className="lounge-accent text-xs font-medium uppercase tracking-[0.08em]">Teachers using YAWP!</p>
-          <h1 className="lounge-serif mt-1 text-[44px] leading-none text-foreground sm:text-[52px]">{LOUNGE_NAME}</h1>
+          <h1 className="lounge-serif text-[44px] leading-none text-foreground sm:text-[52px]">{LOUNGE_NAME}</h1>
           <nav aria-label={LOUNGE_NAME} className="mt-3 flex items-center gap-2 text-[15px]">
             <MastheadTab to="/app/lounge" current={active === 'community'}>
               Community

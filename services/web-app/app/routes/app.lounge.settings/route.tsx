@@ -11,6 +11,7 @@ import { ChevronLeft } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { requireLoungeMember } from '~/domain/lounge/access.server';
+import { BRAND } from '~/domain/brand';
 import { LOUNGE_NAME, LOUNGE_SHARE_CONSENT_LABEL } from '~/domain/lounge/launch';
 import { getLoungeProfile, updateLoungeSettings } from '~/domain/lounge/lounge.server';
 
@@ -38,7 +39,7 @@ export default function LoungeSettingsRoute() {
   const { hasProfile, shareConsent, emailNotifications } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   return (
-    <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
+    <section data-lounge-page className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="mx-auto w-full max-w-xl px-4 py-8">
         <Link
           to="/app/lounge"
@@ -66,7 +67,7 @@ export default function LoungeSettingsRoute() {
                 defaultChecked={emailNotifications}
                 className="mt-1 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
               />
-              <span>Email me about replies, mentions, and answers from the YAWP! team</span>
+              <span>Email me about replies, mentions, and answers from the {BRAND} team</span>
             </label>
             <div className="flex items-center gap-4">
               <Button type="submit">Save</Button>

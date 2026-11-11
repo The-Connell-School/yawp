@@ -55,7 +55,7 @@ export default function LoungeContactRoute() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   return (
-    <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
+    <section data-lounge-page className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="mx-auto w-full max-w-xl px-4 py-8">
         <Link
           to="/app/lounge"

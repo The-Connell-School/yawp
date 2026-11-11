@@ -20,8 +20,9 @@ export const LOUNGE_HOUSE_RULES = [
 ] as const;
 
 export const LOUNGE_RULES_CONSENT_LABEL = 'I agree to follow the Lounge’s House Rules.';
+/** Spelled as the rest of the app spells the brand (`BRAND`, Yawp!). */
 export const LOUNGE_SHARE_CONSENT_LABEL =
-  'YAWP! may share my posts, with my name removed, to show other educators how teachers are using YAWP!';
+  'Yawp! may share my posts, with my name removed, to show other educators how teachers are using Yawp!';
 
 type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 

@@ -75,9 +75,6 @@ export function LoungeFeatured({
       >
         {panel ? (
           <article className="relative flex flex-1 flex-col gap-2 rounded-2xl bg-foreground p-6 text-background">
-            <span className="text-xs font-medium uppercase tracking-[0.08em] opacity-75">
-              Pinned
-            </span>
             <h2 className="lounge-serif text-2xl leading-tight text-background">
               <Link
                 to={`/app/lounge/${panel.id}`}
@@ -122,7 +119,7 @@ export function LoungeFeatured({
         ))}
 
         <div className="flex flex-col gap-3 rounded-2xl border bg-popover px-5 py-4">
-          <h2 className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          <h2 className="text-[15px] font-medium text-foreground">
             {host
               ? `Ask ${host.firstName} or the YAWP! team`
               : 'Ask the YAWP! team'}
