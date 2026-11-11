@@ -35,7 +35,12 @@ describe('assignmentTypeHasHowItWorksGuide', () => {
     ).toBe(true);
   });
 
-  test('excludes types without a guide', () => {
+  test('recognizes site-license locked carousel tile keys', () => {
+    expect(siteLicenseLockedTileHasHowItWorksGuide('exit-ticket')).toBe(true);
+    expect(siteLicenseLockedTileHasHowItWorksGuide('not-a-tile')).toBe(false);
+  });
+
+  test('excludes types without a rendered guide', () => {
     expect(
       assignmentTypeHasHowItWorksGuide({
         title: 'Exit Ticket',
@@ -48,18 +53,5 @@ describe('assignmentTypeHasHowItWorksGuide', () => {
         kind: 'daily_pages',
       })
     ).toBe(false);
-  });
-});
-
-describe('siteLicenseLockedTileHasHowItWorksGuide', () => {
-  test('links every site-license carousel tile key to how-it-works', () => {
-    expect(siteLicenseLockedTileHasHowItWorksGuide('thesis_driven_essay')).toBe(
-      true
-    );
-    expect(siteLicenseLockedTileHasHowItWorksGuide('daily_pages')).toBe(true);
-    expect(siteLicenseLockedTileHasHowItWorksGuide('ap_history_essay')).toBe(
-      true
-    );
-    expect(siteLicenseLockedTileHasHowItWorksGuide('unknown_tile')).toBe(false);
   });
 });

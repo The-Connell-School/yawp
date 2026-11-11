@@ -2,56 +2,11 @@ import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
 
 const requireAnonymous = mock(async (_request: Request) => {});
 const loginAction = mock(async (_args: unknown) => new Response('legacy'));
-let unifiedFlagValue: string | null = null;
-const findUnique = mock(
-  async (_args: unknown): Promise<{ value: string } | null> => null
-);
-const findMany = mock(
-  async ({
-    where,
-  }: {
-    where: { name: { in: string[] } };
-  }): Promise<Array<{ name: string; value: string }>> => {
-    if (
-      unifiedFlagValue &&
-      where.name.in.some((name) => name.startsWith('feature_flag.'))
-    ) {
-      return where.name.in
-        .filter((name) => name === 'feature_flag.unified-sign-on')
-        .map((name) => ({ name, value: unifiedFlagValue! }));
-    }
-    return [];
-  }
-);
 mock.module('~/utils/auth.server', () => ({
   requireAnonymous,
   requireMutableRequest: async () => {},
 }));
 mock.module('./login.server', () => ({ loginAction }));
-mock.module('~/utils/db.server', () => ({
-  prisma: { setting: { findUnique, findMany } },
-}));
-function setUnifiedFlag(value: string | null) {
-  unifiedFlagValue = value;
-  findUnique.mockImplementation(async (args: unknown) => {
-    const where = (args as { where: { name: string } }).where;
-    return where.name === 'feature_flag.unified-sign-on' && value
-      ? { value }
-      : null;
-  });
-  findMany.mockImplementation(
-    async ({
-      where,
-    }: {
-      where: { name: { in: string[] } };
-    }): Promise<Array<{ name: string; value: string }>> => {
-      if (!unifiedFlagValue) return [];
-      return where.name.in
-        .filter((name) => name === 'feature_flag.unified-sign-on')
-        .map((name) => ({ name, value: unifiedFlagValue! }));
-    }
-  );
-}
 mock.module('~/components/login-form', () => ({ LoginForm: () => null }));
 mock.module('~/components/error-boundary', () => ({
   GeneralErrorBoundary: () => null,
@@ -76,72 +31,22 @@ beforeEach(() => {
   );
   requireAnonymous.mockClear();
   loginAction.mockClear();
-  findUnique.mockReset();
-  findMany.mockReset();
-  setUnifiedFlag(null);
   process.env.YAWP_ENVIRONMENT = 'production';
 });
 
 const args = (request: Request) =>
   ({ request, params: {}, context: {} }) as any;
-for (const value of [
-  null,
-  '',
-  'garbage',
-  'false',
-  '{"mode":"off"}',
-  '{"mode":"targeted","orgIds":["demo"]}',
-  '{"mode":true}',
-  '{"mode":"everyone","orgIds":false}',
-  '{"mode":"everyone","orgIds":[1]}',
-]) {
-  test(`flag ${String(value)} keeps legacy loader and POST dispatch`, async () => {
-    setUnifiedFlag(value === null ? null : value);
-    expect(
-      await loader(
-        args(
-          new Request(
-            'http://localhost/auth/login?screen=joined&fixture=success'
-          )
-        )
-      )
-    ).toBeNull();
-    const body = new URLSearchParams({
-      intent: 'resolve',
-      identifier: 'ENG-11X',
-    });
-    const request = new Request('http://localhost/auth/login', {
-      method: 'POST',
-      body,
-    });
-    const result = await action(args(request));
-    expect(await (result as Response).text()).toBe('legacy');
-    expect(loginAction).toHaveBeenCalledWith(
-      expect.objectContaining({ request })
-    );
-    expect(request.bodyUsed).toBe(false);
-  });
-}
 
-test('flag read failure retains legacy entry', async () => {
-  findUnique.mockRejectedValue(new Error('offline'));
-  expect(
-    await loader(args(new Request('http://localhost/auth/login')))
-  ).toBeNull();
-});
-
-test('anonymous guard runs before enabled UI dispatch', async () => {
+test('anonymous guard runs before entry dispatch', async () => {
   requireAnonymous.mockRejectedValueOnce(
     new Response(null, { status: 302, headers: { Location: '/app' } })
   );
   await expect(
     loader(args(new Request('http://localhost/auth/login')))
   ).rejects.toMatchObject({ status: 302 });
-  expect(findUnique).not.toHaveBeenCalled();
 });
 
-test('enabled entry sanitizes redirect and never exposes fixture selectors or Google', async () => {
-  setUnifiedFlag('{"mode":"everyone","orgIds":[]}');
+test('entry sanitizes redirect and never exposes fixture selectors or Google', async () => {
   const result = await loader(
     args(
       new Request(
@@ -158,7 +63,6 @@ test('enabled entry sanitizes redirect and never exposes fixture selectors or Go
 });
 
 test('a PR preview hides Google on an origin missing from its allowlist', async () => {
-  setUnifiedFlag('{"mode":"everyone","orgIds":[]}');
   process.env.YAWP_ENVIRONMENT = 'preview';
   process.env.GOOGLE_OAUTH_REQUIRE_ORIGIN_ALLOWLIST = 'true';
   process.env.GOOGLE_OAUTH_ORIGIN_ALLOWLIST = '';
@@ -176,25 +80,19 @@ test('a PR preview hides Google on an origin missing from its allowlist', async 
   }
 });
 
-test('signed-in entry retains the legacy destination off and uses app only on', async () => {
-  for (const enabled of [false, true]) {
-    setUnifiedFlag(enabled ? 'true' : null);
-    requireAnonymous.mockRejectedValueOnce(
-      new Response(null, { status: 302, headers: { Location: '/' } })
-    );
-    try {
-      await loader(args(new Request('http://localhost/auth/login')));
-      throw new Error('Expected authenticated entry to redirect');
-    } catch (response) {
-      expect((response as Response).headers.get('Location')).toBe(
-        enabled ? '/app' : '/'
-      );
-    }
+test('signed-in entry redirects to the app', async () => {
+  requireAnonymous.mockRejectedValueOnce(
+    new Response(null, { status: 302, headers: { Location: '/' } })
+  );
+  try {
+    await loader(args(new Request('http://localhost/auth/login')));
+    throw new Error('Expected authenticated entry to redirect');
+  } catch (response) {
+    expect((response as Response).headers.get('Location')).toBe('/app');
   }
 });
 
-test('enabled resolver delegates fields to the authoritative backend', async () => {
-  setUnifiedFlag('true');
+test('resolver delegates fields to the authoritative backend', async () => {
   const result = await action(
     args(
       new Request('http://localhost/auth/login', {
@@ -221,8 +119,7 @@ test('enabled resolver delegates fields to the authoritative backend', async () 
   expect((result as Response).headers.has('set-cookie')).toBe(false);
 });
 
-test('enabled password submission delegates unchanged to existing action', async () => {
-  setUnifiedFlag('true');
+test('password submission delegates unchanged to existing action', async () => {
   const request = new Request('http://localhost/auth/login', {
     method: 'POST',
     body: new URLSearchParams({
@@ -273,7 +170,6 @@ function proxyRequest(
   });
 }
 function enablePreview() {
-  setUnifiedFlag('true');
   process.env.YAWP_ENVIRONMENT = 'preview';
   process.env.PRIMARY_APP_URL = publicOrigin;
 }
@@ -357,14 +253,58 @@ test('configured origin cannot authorize another request host', async () => {
     ).status
   ).toBe(403);
 });
-for (const environment of ['production', 'development', '']) {
-  test(`no proxy correction outside preview: ${environment}`, async () => {
-    setUnifiedFlag('true');
+test('production HTTP ingress accepts the configured public HTTPS Origin', async () => {
+  process.env.YAWP_ENVIRONMENT = 'production';
+  process.env.PRIMARY_APP_URL = 'https://yawp.school';
+  const response = (await action(
+    args(
+      new Request('http://abc123.us-east-1.awsapprunner.com/auth/login.data', {
+        method: 'POST',
+        headers: {
+          host: 'abc123.us-east-1.awsapprunner.com',
+          Origin: 'https://yawp.school',
+        },
+        body: new URLSearchParams({
+          intent: 'resolve',
+          identifier: 'DEV-CLASS-101',
+        }),
+      })
+    )
+  )) as Response;
+  expect(response.status).toBe(200);
+  expect(unifiedAction).toHaveBeenCalled();
+});
+
+test('production HTTP ingress still rejects a foreign Origin', async () => {
+  process.env.YAWP_ENVIRONMENT = 'production';
+  process.env.PRIMARY_APP_URL = 'https://yawp.school';
+  const response = (await action(
+    args(
+      new Request('http://yawp.school/auth/login.data', {
+        method: 'POST',
+        headers: { Origin: 'https://evil.example' },
+        body: new URLSearchParams({
+          intent: 'resolve',
+          identifier: 'DEV-CLASS-101',
+        }),
+      })
+    )
+  )) as Response;
+  expect(response.status).toBe(403);
+  expect(unifiedAction).not.toHaveBeenCalled();
+});
+
+for (const environment of ['development', '']) {
+  test(`non-preview preview-host proxy without preview env stays rejected: ${environment}`, async () => {
     process.env.YAWP_ENVIRONMENT = environment;
-    process.env.PRIMARY_APP_URL = publicOrigin;
-    expect((await action(args(proxyRequest()))) as Response).toMatchObject({
-      status: 403,
-    });
+    process.env.PRIMARY_APP_URL = 'https://yawp.school';
+    const response = (await action(
+      args(
+        proxyRequest('https://pr-565.preview.yawp.school', {}, 'pr-565.preview.yawp.school')
+      )
+    )) as Response;
+    expect(response.status).toBe(403);
+    expect(unifiedAction).not.toHaveBeenCalled();
   });
 }
 for (const configured of [

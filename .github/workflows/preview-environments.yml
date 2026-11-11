@@ -24,7 +24,6 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       should_deploy: ${{ steps.policy.outputs.should_deploy }}
-      unified_sign_on: ${{ steps.policy.outputs.unified_sign_on }}
     steps:
       - name: Resolve live preview policy
         id: policy
@@ -46,12 +45,6 @@ jobs:
             --json title,body,headRefName,baseRefName,labels,headRefOid \
             > "$RUNNER_TEMP/pr.json"
 
-          # Unified sign-on is ON in every PR preview by default. The exact,
-          # case-sensitive opt-out label turns it OFF for that preview only. Use
-          # the live label list so removal queued behind another deploy counts.
-          unified_sign_on="$(jq -r '[.labels[]?.name] | index("preview-flag:unified-sign-on-off") == null' "$RUNNER_TEMP/pr.json")"
-          echo "unified_sign_on=$unified_sign_on" >> "$GITHUB_OUTPUT"
-
           title="$(jq -r '.title // ""' "$RUNNER_TEMP/pr.json")"
           body="$(jq -r '.body // ""' "$RUNNER_TEMP/pr.json")"
           head_ref="$(jq -r '.headRefName // ""' "$RUNNER_TEMP/pr.json")"
@@ -64,7 +57,7 @@ jobs:
 
           if [[ "$EVENT_ACTION" == "closed" ]]; then
             reason=closed
-          elif [[ ( "$EVENT_ACTION" == "labeled" || "$EVENT_ACTION" == "unlabeled" ) && "$EVENT_LABEL" != "preview-flag:unified-sign-on-off" && "$EVENT_LABEL" != "sanitized-production-data" ]]; then
+          elif [[ ( "$EVENT_ACTION" == "labeled" || "$EVENT_ACTION" == "unlabeled" ) && "$EVENT_LABEL" != "sanitized-production-data" ]]; then
             reason=unrelated_label
           elif [[ "$base_ref" != "$DEFAULT_BRANCH" ]]; then
             reason=non_default_base
@@ -113,9 +106,8 @@ jobs:
       PREVIEW_IDLE_SLEEP_HOURS: ${{ vars.PREVIEW_IDLE_SLEEP_HOURS || '48' }}
       PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}
       PREVIEW_DATA_MODE: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && 'sanitized-production' || vars.PREVIEW_DATA_MODE || 'seed' }}
-      PREVIEW_UNIFIED_SIGN_ON: ${{ needs.preview-policy.outputs.unified_sign_on }}
       PREVIEW_SEAT_COUNT: ${{ vars.PREVIEW_SEAT_COUNT || '1' }}
-      PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}
+      PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-5-5' }}
       PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
       PREVIEW_AI_MODE: live
       PREVIEW_UA_STUDENT_BILLING_ENABLED: ${{ vars.PREVIEW_UA_STUDENT_BILLING_ENABLED || 'false' }}
@@ -330,7 +322,6 @@ jobs:
             "PREVIEW_ZEROSSL_EAB_HMAC_KEY=$(shell_quote "$PREVIEW_ZEROSSL_EAB_HMAC_KEY")"
             "PREVIEW_RUNTIME=$(shell_quote "$PREVIEW_RUNTIME")"
             "PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")"
-            "PREVIEW_UNIFIED_SIGN_ON=$(shell_quote "$PREVIEW_UNIFIED_SIGN_ON")"
             "PREVIEW_SEAT_COUNT=$(shell_quote "$PREVIEW_SEAT_COUNT")"
             "PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")"
             "PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")"

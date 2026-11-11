@@ -9,6 +9,7 @@ import type { Prisma } from '@app/prisma';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import crypto from 'node:crypto';
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
@@ -18,6 +19,11 @@ import {
   buildGalsClaimsGradingContext,
   GALS_CLAIMS_ASSIGNMENT_TYPE_KIND,
 } from '~/domain/assignment-types/gals-claims-rubric';
+import { STRODE_AUTOBIOGRAPHY_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/strode-autobiography-rubric';
+import {
+  computeStrodeAutobiographyFinalPercent,
+  strodeEng101LetterFromPercent,
+} from '~/domain/assignment-types/strode-autobiography-scoring';
 import { computeIpHash } from '~/utils/ai-usage-log.server';
 import {
   computeWeightedBandPercentage,
@@ -531,15 +537,31 @@ function computeLegacyGradeFields({
 function computeBandScoredGradeFields({
   rubricScores,
   rubricCategories,
+  assignmentTypeKind,
 }: {
   rubricScores: Record<string, Prisma.InputJsonValue>;
   rubricCategories: GradingRubricCategory[];
+  assignmentTypeKind?: string | null;
 }) {
   const numericPercentage = computeWeightedBandPercentage(
     rubricScores as unknown as Record<string, unknown>,
     rubricCategories
   );
   if (numericPercentage === null) return null;
+
+  if (assignmentTypeKind === STRODE_AUTOBIOGRAPHY_ASSIGNMENT_TYPE_KIND) {
+    const capped = computeStrodeAutobiographyFinalPercent(
+      rubricScores as unknown as Record<string, unknown>
+    );
+    if (capped === null) return null;
+    const letterGrade = strodeEng101LetterFromPercent(capped);
+    return {
+      overallScore: capped,
+      numericPercentage: capped,
+      letterGrade,
+      score: formatGrade(capped, letterGrade) ?? '',
+    };
+  }
 
   const letterGrade = letterFromPercent(numericPercentage);
 
@@ -558,6 +580,7 @@ function buildDynamicGradeFields({
   maxScore,
   rubricCategories,
   bandScored,
+  assignmentTypeKind,
 }: {
   categories: Array<{ score: number }>;
   rubricScores: Record<string, Prisma.InputJsonValue>;
@@ -565,6 +588,7 @@ function buildDynamicGradeFields({
   maxScore: number;
   rubricCategories: GradingRubricCategory[];
   bandScored: boolean;
+  assignmentTypeKind?: string | null;
 }) {
   // Bands define valid category scores; the scoring type determines whether
   // the result is raw points or a percentage. Daily Pages remains 18/30.
@@ -572,7 +596,11 @@ function buildDynamicGradeFields({
   if (nonLegacy) return nonLegacy;
 
   if (bandScored) {
-    const banded = computeBandScoredGradeFields({ rubricScores, rubricCategories });
+    const banded = computeBandScoredGradeFields({
+      rubricScores,
+      rubricCategories,
+      assignmentTypeKind,
+    });
     if (banded) return banded;
   }
 
@@ -590,6 +618,7 @@ function applyStrictnessToGradeFields({
   score,
   scoringType,
   gradingAssistantStrictnessLevel,
+  assignmentTypeKind,
 }: {
   overallScore: number;
   numericPercentage: number | null;
@@ -597,6 +626,7 @@ function applyStrictnessToGradeFields({
   score: string | null;
   scoringType: string;
   gradingAssistantStrictnessLevel: GradingAssistantStrictnessLevel;
+  assignmentTypeKind?: string | null;
 }) {
   if (scoringType === ACT_WRITING_SCORING_TYPE) {
     const adjustedComposite = applyGradingAssistantStrictnessToActComposite(
@@ -619,7 +649,10 @@ function applyStrictnessToGradeFields({
     numericPercentage,
     gradingAssistantStrictnessLevel
   );
-  const adjustedLetterGrade = letterFromPercent(adjustedPercentage);
+  const adjustedLetterGrade =
+    assignmentTypeKind === STRODE_AUTOBIOGRAPHY_ASSIGNMENT_TYPE_KIND
+      ? strodeEng101LetterFromPercent(adjustedPercentage)
+      : letterFromPercent(adjustedPercentage);
   return {
     overallScore,
     numericPercentage: adjustedPercentage,
@@ -978,7 +1011,7 @@ export async function action({ request }: ActionFunctionArgs) {
           )
         );
 
-  const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
+  const model = process.env.AI_MODEL ?? DEFAULT_ANTHROPIC_MODEL;
   // llmRetry=fallback is the client half of the provider-failover handshake
   // (the server answers 202 {retrying:true}, the client re-posts with it). It
   // only selects the fallback model, and every request is rate limited above, so
@@ -1725,11 +1758,13 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         maxScore,
         rubricCategories,
         bandScored: promptShape.bandScored,
+        assignmentTypeKind,
       });
       const adjusted = applyStrictnessToGradeFields({
         ...baseGradeFields,
         scoringType,
         gradingAssistantStrictnessLevel,
+        assignmentTypeKind,
       });
       const pct =
         typeof adjusted.numericPercentage === 'number' &&
@@ -1772,11 +1807,13 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       maxScore,
       rubricCategories,
       bandScored: promptShape.bandScored,
+      assignmentTypeKind,
     });
     const adjusted = applyStrictnessToGradeFields({
       ...baseGradeFields,
       scoringType,
       gradingAssistantStrictnessLevel,
+      assignmentTypeKind,
     });
     overallScore = adjusted.overallScore;
     numericPercentage = adjusted.numericPercentage;

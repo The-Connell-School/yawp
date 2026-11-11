@@ -3,6 +3,7 @@
  * student version, a lesson rewritten for a sub or a family): the planner's
  * own budget and model, a short deadline, and only metadata in the logs.
  */
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { reserveAiRequest } from '~/utils/ai-admission.server';
 import { computeIpHash } from '~/utils/ai-usage-log.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
@@ -44,7 +45,7 @@ export async function plannerComplete({
     units: 1,
   });
   return getLLMCompletion({
-    model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
+    model: (process.env.AI_MODEL as any) ?? DEFAULT_ANTHROPIC_MODEL,
     system,
     messages: [{ role: AgentType.User, content: user }],
     maxTokens,

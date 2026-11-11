@@ -756,6 +756,9 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/seed-preview-teacher-notes-qa.ts \
         packages/prisma/scripts/local-dev/preview-teacher-notes-qa.ts \
         packages/prisma/scripts/assets/class-starter.jpg \
+        packages/prisma/scripts/assets/prewriting.jpg \
+        packages/prisma/scripts/assets/thesis-statement.jpg \
+        packages/prisma/scripts/seed-free-tier-bundle-assignment-types.ts \
         packages/prisma/scripts/sync-prod-fidelity-fixtures.ts \
         packages/prisma/scripts/preview-seats.ts \
         packages/prisma/scripts/seed-preview-seats.ts \
@@ -997,13 +1000,6 @@ rollout_demo_web_without_downtime() {
   remove_legacy_project_postgres
 }
 
-apply_preview_signon_flag() {
-  # Named demo/production environments reuse this script but must never run this
-  # updater. The toolbox also enforces environment + strict URL isolation itself.
-  [[ "$SLUG" =~ ^pr-[1-9][0-9]*$ ]] || return 0
-  "${compose[@]}" run --rm toolbox bun /preview-control/unified-signon-flag.mjs
-}
-
 if [[ "${DEMO_TRAINING_MEDIA_ENABLED:-false}" == "true" ]]; then
   bash "$SCRIPT_DIR/install-demo-training-media.sh"
 fi
@@ -1040,8 +1036,6 @@ harden_preview_database
 run_tooling_if_needed
 restore_demo_tester_feedback_after_reset
 ensure_preview_seats
-# Outside run_tooling_if_needed: also apply OFF after label removal on its early-return path.
-apply_preview_signon_flag
 assert_no_master_code_collision
 install_demo_backup_tooling
 health_url="${PREVIEW_HEALTHCHECK_URL:-${URL}/api/healthcheck}"

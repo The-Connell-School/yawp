@@ -104,7 +104,7 @@ const workflowsRequiringBoundedFrozenInstall = [
   {
     file: '.github/workflows/ci.yml',
     installStepName: '📦 Install dependencies',
-    expectedCallCount: 8,
+    expectedCallCount: 9,
   },
   {
     file: '.github/workflows/migration-integration.yml',

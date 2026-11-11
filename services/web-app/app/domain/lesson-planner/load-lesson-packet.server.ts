@@ -66,6 +66,8 @@ export type LoadedLessonPacket = {
       hasHandout: boolean | null;
       yawpAssignmentId: string | null;
       yawpCreated: boolean;
+      /** The teacher's call on writing (Nov 4 follow-up); null: Yawp! decides. */
+      writing: boolean | null;
       slot: string;
     }
   >;
@@ -143,6 +145,7 @@ export async function loadLessonPacket({
           yawpCreatedAt: true,
           label: true,
           hasHandout: true,
+          writing: true,
           yawpAssignmentId: true,
           slot: true,
         },
@@ -302,6 +305,7 @@ export async function loadLessonPacket({
           hasHandout: material.hasHandout,
           yawpAssignmentId: material.yawpAssignmentId,
           yawpCreated: Boolean(createdFor(assignmentLinks, material)),
+          writing: material.writing,
           slot: material.slot,
         },
       ])

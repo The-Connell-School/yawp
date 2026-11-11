@@ -193,6 +193,7 @@ import {
   teacherResetStudentPassword,
 } from '~/domain/free-tier/student-join.server';
 import { getDomainUrl } from '~/utils/misc';
+import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -1470,6 +1471,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     role: 'TEACHER' as const,
+    exitTicketBuilderV3Enabled: await isExitTicketBuilderV3Enabled(
+      klass.school.organizationId
+    ),
     classCodeUniqueEnabled: await classCodeUniquenessEnabled(prisma),
     classCodeHidden: hideTeachingSecrets,
     studentJoinUrl,
@@ -2346,6 +2350,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
             data.siteLicenseLockedAssignmentTiles
           }
           apHistoryAssignmentTypeId={data.apHistoryAssignmentTypeId}
+          exitTicketBuilderV3Enabled={data.exitTicketBuilderV3Enabled}
           classInsightsEnabled={classInsightsEnabled}
           teachingLocked={teachingLocked}
           teachingAccessAdminName={teachingAccessAdminName}

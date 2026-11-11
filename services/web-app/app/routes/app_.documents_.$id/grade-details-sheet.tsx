@@ -72,7 +72,7 @@ export function GradeDetailsSheet({
               </Badge>
             </div>
             {(grade.overallComment || grade.feedback) && (
-              <p className="text-sm text-muted-foreground mt-2">
+              <p className="text-sm text-foreground/90 mt-2">
                 {grade.overallComment || grade.feedback}
               </p>
             )}
@@ -111,7 +111,7 @@ export function GradeDetailsSheet({
                       </div>
                     </div>
                     {categoryScore.comment && (
-                      <p className="text-sm text-muted-foreground pt-2 border-t">
+                      <p className="text-sm text-foreground/90 pt-2 border-t">
                         {categoryScore.comment}
                       </p>
                     )}
@@ -122,7 +122,7 @@ export function GradeDetailsSheet({
           )}
 
           {/* Released Date */}
-          <div className="text-xs text-muted-foreground text-center pt-4 border-t">
+          <div className="text-xs text-foreground/80 text-center pt-4 border-t">
             {grade.releasedAt
               ? `Grade released on ${new Date(grade.releasedAt).toLocaleDateString(
                   'en-US',

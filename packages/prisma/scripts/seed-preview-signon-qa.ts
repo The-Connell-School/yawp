@@ -12,6 +12,7 @@ export const QA_CODES = {
   school: 'QA-EMAIL-101',
   free: 'qa-handle',
   multiple: 'QA-MULTI-101',
+  crossTenant: 'QA-XORG-101',
   full: 'QA-FULL-101',
   race: 'QA-RACE-101',
 };
@@ -126,7 +127,9 @@ export async function seedPreviewSignonQa(
         ['email', 'school', QA_CODES.school],
         ['free-class', 'free', QA_CODES.free],
         ['multiple-a', 'school', QA_CODES.multiple],
-        ['multiple-b', 'second', QA_CODES.multiple],
+        ['multiple-b', 'location-b', QA_CODES.multiple],
+        ['cross-a', 'school', QA_CODES.crossTenant],
+        ['cross-b', 'second', QA_CODES.crossTenant],
         ['full-class', 'full', QA_CODES.full],
         ['race-class', 'race', QA_CODES.race],
       ])

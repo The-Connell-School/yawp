@@ -48,24 +48,13 @@ function clip(name: string, label: string) {
   );
 }
 
-export function ClassStarterGuide({
-  pagePath,
-  backTo,
-  backLabel,
-}: {
-  pagePath: string;
-  backTo?: string;
-  backLabel?: string;
-}) {
+export function ClassStarterGuide({ pagePath }: { pagePath: string }) {
   const strong = (text: string) => (
     <strong className="text-foreground">{text}</strong>
   );
 
   return (
-    <GuidePage
-      backTo={backTo ?? pagePath}
-      backLabel={backLabel ?? 'Back to Class Starter'}
-    >
+    <GuidePage backTo={pagePath} backLabel="Back to Class Starter">
       <GuideHero
         title="Get every student writing"
         highlight="at the start of class."

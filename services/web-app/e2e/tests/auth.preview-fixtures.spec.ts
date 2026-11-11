@@ -41,7 +41,9 @@ for (const width of [1280, 390])
               : state === 'full'
                 ? QA_CODES.full
                 : QA_CODES.multiple;
-      await page.getByLabel('Email, handle, or class code').fill(identifier);
+      await page
+        .getByLabel('Email or class code', { exact: true })
+        .fill(identifier);
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
       if (before) {
         if (['full', 'multiple-classes'].includes(state))

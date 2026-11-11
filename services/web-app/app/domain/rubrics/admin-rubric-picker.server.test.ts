@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import galsClaimsLibrarySchema from './library/gals-claims.json';
+import strodeEssay2LibrarySchema from './library/strode-eng101-essay-2-autobiography.json';
 
 const catalogList = mock(async () => ({ rubrics: [] as object[] }));
 
@@ -82,6 +84,49 @@ describe('listLiveRubricsForAdminPicker', () => {
       return [];
     });
     assignmentType.findMany.mockResolvedValue([]);
+  });
+
+  test('includes library rubrics saved with top-level categories only (flat shape)', async () => {
+    const flatLibrary = {
+      name: 'looking-back-looking-forward',
+      title: 'Looking Back, Looking Forward',
+      scoringScale: { type: 'rubric_points', minScore: 0, maxScore: 5 },
+      categories: validLibrarySchema.rubric.categories,
+      promptConfig: { gradingInstructions: 'Grade.' },
+      outputSchema: validLibrarySchema.outputSchema,
+      calibrationNotes: null,
+    };
+    catalogList.mockResolvedValue({
+      rubrics: [
+        {
+          key: 'looking-back-looking-forward',
+          source: 'library',
+          name: 'looking-back-looking-forward',
+          title: 'Looking Back, Looking Forward',
+          editable: true,
+        },
+      ],
+    });
+    rubric.findMany.mockImplementation(async (args: { where?: { archivedAt?: unknown; name?: { in: string[] } } }) => {
+      if (args?.where?.archivedAt) return [];
+      if (args?.where?.name?.in) {
+        return [
+          {
+            id: 'lib-flat',
+            name: 'looking-back-looking-forward',
+            title: 'Looking Back, Looking Forward',
+            schemaJson: flatLibrary,
+            currentRevision: null,
+          },
+        ];
+      }
+      return [];
+    });
+
+    const options = await listLiveRubricsForAdminPicker(db as never);
+    expect(options).toHaveLength(1);
+    expect(options[0]?.name).toBe('looking-back-looking-forward');
+    expect(options[0]?.source).toBe('library');
   });
 
   test('lists library and per-type entries when RubricRelease is empty', async () => {
@@ -286,6 +331,133 @@ describe('listLiveRubricsForAdminPicker', () => {
     expect(options.find((row) => row.name === 'daily-pages-engagement')?.json).toContain(
       'Published copy'
     );
+  });
+
+  test('falls back to live schemaJson when the current revision has no categories', async () => {
+    catalogList.mockResolvedValue({
+      rubrics: [
+        {
+          key: 'strode-eng101-essay-2-autobiography',
+          source: 'library',
+          name: 'strode-eng101-essay-2-autobiography',
+          title: 'Strode ENG 101: Autobiographical Narrative (Essay 2)',
+          editable: true,
+        },
+      ],
+    });
+    rubric.findMany.mockImplementation(async (args: { where?: { archivedAt?: unknown; name?: { in: string[] } } }) => {
+      if (args?.where?.archivedAt) return [];
+      if (args?.where?.name?.in) {
+        return [
+          {
+            id: 'lib-strode-2',
+            name: 'strode-eng101-essay-2-autobiography',
+            title: 'Strode ENG 101: Autobiographical Narrative (Essay 2)',
+            schemaJson: validLibrarySchema,
+            currentRevision: {
+              schemaJson: { ...validLibrarySchema, rubric: { categories: [] } },
+            },
+          },
+        ];
+      }
+      return [];
+    });
+
+    const options = await listLiveRubricsForAdminPicker(db as never);
+    expect(options.map((row) => row.name)).toEqual([
+      'strode-eng101-essay-2-autobiography',
+    ]);
+  });
+
+  test('falls back to live schemaJson when the current revision fails parseRubricSchema', async () => {
+    catalogList.mockResolvedValue({
+      rubrics: [
+        {
+          key: 'strode-eng101-essay-2-autobiography',
+          source: 'library',
+          name: 'strode-eng101-essay-2-autobiography',
+          title: 'Strode ENG 101: Autobiographical Narrative (Essay 2)',
+          editable: true,
+        },
+      ],
+    });
+    rubric.findMany.mockImplementation(async (args: { where?: { archivedAt?: unknown; name?: { in: string[] } } }) => {
+      if (args?.where?.archivedAt) return [];
+      if (args?.where?.name?.in) {
+        return [
+          {
+            id: 'lib-strode-2',
+            name: 'strode-eng101-essay-2-autobiography',
+            title: 'Strode ENG 101: Autobiographical Narrative (Essay 2)',
+            schemaJson: strodeEssay2LibrarySchema,
+            currentRevision: {
+              schemaJson: {
+                ...strodeEssay2LibrarySchema,
+                rubric: {
+                  categories: [{ label: 'Missing key breaks parse' }],
+                },
+              },
+            },
+          },
+        ];
+      }
+      return [];
+    });
+
+    const options = await listLiveRubricsForAdminPicker(db as never);
+    expect(options.map((row) => row.name)).toEqual([
+      'strode-eng101-essay-2-autobiography',
+    ]);
+    expect(options[0]?.json).toContain('"plot"');
+  });
+
+  test('lists gals-claims and strode library shapes with bands and scoreLabels', async () => {
+    catalogList.mockResolvedValue({
+      rubrics: [
+        {
+          key: 'gals-claims',
+          source: 'library',
+          name: 'gals-claims',
+          title: 'GALS Claims',
+          editable: true,
+        },
+        {
+          key: 'strode-eng101-essay-2-autobiography',
+          source: 'library',
+          name: 'strode-eng101-essay-2-autobiography',
+          title: 'Strode ENG 101: Autobiographical Narrative (Essay 2)',
+          editable: true,
+        },
+      ],
+    });
+    rubric.findMany.mockImplementation(async (args: { where?: { archivedAt?: unknown; name?: { in: string[] } } }) => {
+      if (args?.where?.archivedAt) return [];
+      if (args?.where?.name?.in) {
+        return [
+          {
+            id: 'lib-gals',
+            name: 'gals-claims',
+            title: 'GALS Claims',
+            schemaJson: galsClaimsLibrarySchema,
+            currentRevision: null,
+          },
+          {
+            id: 'lib-strode-2',
+            name: 'strode-eng101-essay-2-autobiography',
+            title: 'Strode ENG 101: Autobiographical Narrative (Essay 2)',
+            schemaJson: strodeEssay2LibrarySchema,
+            currentRevision: null,
+          },
+        ];
+      }
+      return [];
+    });
+
+    const options = await listLiveRubricsForAdminPicker(db as never);
+    expect(options.map((row) => row.name).sort()).toEqual([
+      'gals-claims',
+      'strode-eng101-essay-2-autobiography',
+    ]);
   });
 
   test('omits per-type rows when live columns are empty and there is no baseline revision', async () => {

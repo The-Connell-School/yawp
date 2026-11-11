@@ -15,7 +15,6 @@ import {
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
 import type { useUser } from '~/hooks/useUser';
-import { isTeacherLoungeTemporarilyDisabledForUser } from '~/domain/teacher-lounge/teacher-lounge-temporary-disable';
 
 type User = ReturnType<typeof useUser>;
 
@@ -45,9 +44,6 @@ const reporterNavVisible = (user: User) =>
   teacher(user) &&
   user.selectedMembership?.organization?.plan !== 'FREE_CLASSROOM';
 const lessonPlannerNavVisible = (user: User) => teacher(user);
-const teacherLoungeNavVisible = (user: User) =>
-  teacher(user) &&
-  !isTeacherLoungeTemporarilyDisabledForUser({ email: user.email });
 const writingPracticeEnabled = (user: User) => teacher(user) || student(user);
 
 const icons = {
@@ -107,7 +103,7 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
         to: '/app/teacher-trainings',
         label: "Teacher's Lounge",
         icon: icons.lounge,
-        requires: teacherLoungeNavVisible,
+        requires: teacher,
       },
       {
         to: '/app/reporter',
@@ -154,16 +150,26 @@ function linkIsVisible(
   return link.requires.AND.every((rule) => rule(user));
 }
 
+export type SidebarNavVisibility = {
+  /** When false or omitted, Teacher's Lounge is hidden (fail closed). */
+  teacherLoungeNavVisible?: boolean;
+};
+
 export function getVisibleSidebarSections(
   sections: SidebarNavSection[],
   user: User,
+  visibility: SidebarNavVisibility = {},
 ) {
+  const showTeacherLounge = visibility.teacherLoungeNavVisible === true;
   return sections
     .map((section) => ({
       ...section,
-      links: section.links.filter((link) =>
-        linkIsVisible(link, user)
-      ),
+      links: section.links.filter((link) => {
+        if (link.to === '/app/teacher-trainings' && !showTeacherLounge) {
+          return false;
+        }
+        return linkIsVisible(link, user);
+      }),
     }))
     .filter((section) => section.links.length > 0);
 }
@@ -174,9 +180,8 @@ type SidebarNavLinksProps = {
   navExpanded: boolean;
   pathname: string;
   isAppNavLinkActive: (linkTo: string, pathname: string) => boolean;
+  teacherLoungeNavVisible?: boolean;
   forceFullNavigation?: boolean;
-  /** Free-tier locked preview: show LP nav with lock row when the org flag is off. */
-  includeLessonPlannerWhenFeatureOff?: boolean;
   renderLinkTrailing?: (link: SidebarNavLink) => React.ReactNode;
   renderNavRow?: (input: {
     link: SidebarNavLink;
@@ -193,22 +198,21 @@ export function SidebarNavLinks({
   navExpanded,
   pathname,
   isAppNavLinkActive,
+  teacherLoungeNavVisible = false,
   forceFullNavigation = false,
-  includeLessonPlannerWhenFeatureOff = false,
   renderLinkTrailing,
   renderNavRow,
 }: SidebarNavLinksProps) {
   const lessonPlannerFlagOn =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root')
       ?.lessonPlannerEnabled ?? false;
-  const visibleSections = getVisibleSidebarSections(sections, user)
+  const visibleSections = getVisibleSidebarSections(sections, user, {
+    teacherLoungeNavVisible,
+  })
     .map((section) => ({
       ...section,
       links: section.links.filter(
-        (link) =>
-          link.to !== '/app/lesson-planner' ||
-          lessonPlannerFlagOn ||
-          includeLessonPlannerWhenFeatureOff
+        (link) => link.to !== '/app/lesson-planner' || lessonPlannerFlagOn
       ),
     }))
     .filter((section) => section.links.length > 0);

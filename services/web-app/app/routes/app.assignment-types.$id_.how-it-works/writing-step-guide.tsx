@@ -28,21 +28,14 @@ import {
 export function WritingStepGuide({
   copy,
   pagePath,
-  backTo,
-  backLabel,
   lesson,
 }: {
   copy: WritingStepCopy;
   pagePath: string;
-  backTo?: string;
-  backLabel?: string;
   lesson: LessonMaterials | null;
 }) {
   return (
-    <GuidePage
-      backTo={backTo ?? pagePath}
-      backLabel={backLabel ?? `Back to ${copy.title}`}
-    >
+    <GuidePage backTo={pagePath} backLabel={`Back to ${copy.title}`}>
       <GuideHero
         title={`Teach ${copy.title}`}
         highlight={copy.guideHighlight}

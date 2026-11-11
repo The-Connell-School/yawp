@@ -24,6 +24,7 @@ const prisma = {
     deleteMany: mock(),
   },
   classAssignment: { findMany: mock() },
+  classAssignmentStudentFirstOpen: { findMany: mock() },
   classAssignmentInsight: { findMany: mock() },
   reporterGrowthPlan: { findMany: mock() },
 };
@@ -1031,6 +1032,7 @@ describe('class detail loader for students', () => {
       },
     ]);
     prisma.document.findMany.mockResolvedValue([]);
+    prisma.classAssignmentStudentFirstOpen.findMany.mockResolvedValue([]);
     getAvailableAssignmentTypesForScopes.mockResolvedValue([
       { id: 'type-1', title: 'Thesis Builder' },
     ]);

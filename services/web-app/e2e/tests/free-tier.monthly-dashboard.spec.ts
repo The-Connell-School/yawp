@@ -3,6 +3,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createE2EPrismaClient } from '../prisma-client';
+import { submitUnifiedLogin } from '../helpers/unified-login';
 const db = createE2EPrismaClient();
 const org = 'preview-free-classroom';
 const baseline = process.env.FTO_LIMITS_BEFORE === '1';
@@ -17,11 +18,11 @@ async function login(page: Page, free = true) {
   await page.context().clearCookies();
   await page.goto('/auth/login');
   await page.waitForLoadState('networkidle');
-  await page
-    .getByLabel('Email or handle')
-    .fill(free ? 'dev.teacher.free@yawp.local' : 'dev.teacher@yawp.local');
-  await page.locator('input[type="password"]').fill('yawp-dev');
-  await page.getByRole('button', { name: /Log in/i }).click();
+  await submitUnifiedLogin(
+    page,
+    free ? 'dev.teacher.free@yawp.local' : 'dev.teacher@yawp.local',
+    'yawp-dev'
+  );
   await page.waitForURL((url) => url.pathname.replace(/\/$/, '') === '/app');
 }
 async function shot(page: Page, name: string) {
@@ -162,24 +163,13 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
     await expect(page.getByTestId('free-reporter-locked')).toHaveCount(0);
     await shot(page, `reporter-${label}`);
   }
-  if (baseline) {
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto('/app');
-    await page.getByRole('button', { name: 'Usage', exact: true }).click();
-    await shot(page, 'monthly-usage');
-    return;
-  }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/app');
-  await page.getByRole('button', { name: 'Usage', exact: true }).click();
-  const usage = page.getByLabel('Usage', { exact: true }).last();
-  await expect(usage.getByText('Reporter', { exact: true })).toBeVisible();
-  await expect(usage.getByText('Students', { exact: true })).toHaveCount(0);
-  await expect(usage.getByText('Class Starter', { exact: true })).toHaveCount(
-    0
-  );
-  await shot(page, 'monthly-usage');
-  await page.keyboard.press('Escape');
+  await expect(
+    page.getByRole('button', { name: 'Usage', exact: true })
+  ).toHaveCount(0);
+  await expect(page.getByTestId('usage-nav-ring-lesson-planner')).toHaveCount(0);
+  await shot(page, 'monthly-dashboard-no-sidebar-meter');
   const studentMembership = await db.orgMembership.findFirstOrThrow({
     where: {
       organizationId: org,
@@ -237,11 +227,7 @@ for (const control of ['flag-off', 'untargeted', 'paid', 'pending'] as const)
         await page.context().clearCookies();
         await page.goto('/auth/login');
         await page.waitForLoadState('networkidle');
-        await page
-          .getByLabel('Email or handle')
-          .fill('dev.teacher.free@yawp.local');
-        await page.locator('input[type="password"]').fill('yawp-dev');
-        await page.getByRole('button', { name: /Log in/i }).click();
+        await submitUnifiedLogin(page, 'dev.teacher.free@yawp.local', 'yawp-dev');
         await page.waitForURL(/\/app\/free-tier\/preview/);
       } else await login(page, control !== 'paid');
       await expect(
@@ -491,8 +477,10 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
       }
       if (width === 390) {
         await page.getByRole('button', { name: 'Open app navigation' }).click();
-        await page.getByRole('button', { name: 'Usage', exact: true }).click();
-        await shot(page, 'monthly-usage-zero-mobile');
+        await expect(
+          page.getByTestId('usage-nav-ring-lesson-planner')
+        ).toHaveCount(0);
+        await shot(page, 'monthly-nav-zero-mobile');
         await page.keyboard.press('Escape');
       }
     }

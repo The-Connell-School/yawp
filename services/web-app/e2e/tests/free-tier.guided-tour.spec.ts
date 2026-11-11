@@ -4,7 +4,10 @@ import type { Page } from '@playwright/test';
 import { expect, test } from '../test-setup';
 import { setFreeTierFlag, setFeatureFlag } from '../feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
-import { TEACHER_LOUNGE_TEMPORARILY_DISABLED } from '../../app/domain/teacher-lounge/teacher-lounge-temporary-disable';
+import {
+  teacherLoungeE2eSkipReason,
+  teacherLoungeE2eSkipped,
+} from '../helpers/teacher-lounge-disabled';
 
 const FREE_TEACHER_EMAIL =
   process.env.E2E_FREE_CLASSROOM_TEACHER_EMAIL ?? 'dev.teacher.free@yawp.local';
@@ -83,11 +86,10 @@ async function createFreeTeacherScratchDocument() {
 }
 
 async function logInAsFreeTeacher(page: Page) {
+  const { submitUnifiedLogin } = await import('../helpers/unified-login');
   await page.goto('/auth/login');
   await page.waitForLoadState('networkidle');
-  await page.getByLabel('Email or handle').fill(FREE_TEACHER_EMAIL);
-  await page.locator('input[type="password"]').fill(FREE_TEACHER_PASSWORD);
-  await page.getByRole('button', { name: /log in/i }).click();
+  await submitUnifiedLogin(page, FREE_TEACHER_EMAIL, FREE_TEACHER_PASSWORD);
   await page.waitForURL((url) => url.pathname.startsWith('/app'), {
     timeout: 15000,
   });
@@ -315,14 +317,11 @@ test.describe.serial('Free tier guided tour', () => {
     },
     { path: '/app/lesson-planner', welcome: /Welcome to the Lesson Planner/i },
     { path: '/app/organization/classes', welcome: /Welcome to Organization/i },
-  ].filter(
-    (entry) =>
-      !(
-        TEACHER_LOUNGE_TEMPORARILY_DISABLED &&
-        entry.path === '/app/teacher-trainings'
-      )
-  )) {
+  ]) {
     test(`${path} has its own tour`, async ({ page }) => {
+      if (path === '/app/teacher-trainings' && (await teacherLoungeE2eSkipped())) {
+        test.skip(true, teacherLoungeE2eSkipReason);
+      }
       await logInAsFreeTeacher(page);
       await page.goto(path);
 

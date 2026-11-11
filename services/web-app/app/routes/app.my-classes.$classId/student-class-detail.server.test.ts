@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   class: { findFirst: mock() },
   classAssignment: { findMany: mock() },
+  classAssignmentStudentFirstOpen: { findMany: mock() },
   document: { findMany: mock() },
   organizationAssignmentType: { findMany: mock() },
   school: { findMany: mock() },
@@ -35,6 +36,7 @@ function seedEnrolledClass() {
     teachers: [{ id: 'teacher-1', user: { name: 'Ms. Frizzle' } }],
   });
   prisma.classAssignment.findMany.mockResolvedValue([]);
+  prisma.classAssignmentStudentFirstOpen.findMany.mockResolvedValue([]);
   prisma.document.findMany.mockResolvedValue([]);
   // getAvailableAssignmentTypesForScopes runs for real against these.
   prisma.organizationAssignmentType.findMany.mockResolvedValue([
@@ -240,5 +242,54 @@ describe('loadStudentClassDetail', () => {
     });
 
     expect(result?.assignmentTypes).toEqual([]);
+  });
+
+  test('marks assignments new until first open or an existing class document', async () => {
+    prisma.classAssignment.findMany.mockResolvedValue([
+      {
+        id: 'ca-new',
+        postAt: null,
+        dueAt: null,
+        assignment: {
+          id: 'a-new',
+          title: 'Fresh prompt',
+          prompt: 'Write',
+          collaborationEnabled: false,
+          assignmentType: { id: 'type-1', title: 'Thesis Builder' },
+        },
+      },
+      {
+        id: 'ca-opened',
+        postAt: null,
+        dueAt: null,
+        assignment: {
+          id: 'a-opened',
+          title: 'Started prompt',
+          prompt: 'Write more',
+          collaborationEnabled: false,
+          assignmentType: { id: 'type-1', title: 'Thesis Builder' },
+        },
+      },
+    ]);
+    prisma.classAssignmentStudentFirstOpen.findMany.mockResolvedValue([
+      { classAssignmentId: 'ca-opened' },
+    ]);
+    prisma.document.findMany.mockResolvedValue([
+      {
+        id: 'doc-1',
+        classAssignmentId: 'ca-legacy',
+        assignment: { id: 'a-legacy', title: 'Legacy' },
+      },
+    ]);
+
+    const result = await loadStudentClassDetail({
+      membershipId: 'student-1',
+      classId: 'class-1',
+    });
+
+    expect(result?.assignments.map((a) => [a.id, a.isNew])).toEqual([
+      ['ca-new', true],
+      ['ca-opened', false],
+    ]);
   });
 });

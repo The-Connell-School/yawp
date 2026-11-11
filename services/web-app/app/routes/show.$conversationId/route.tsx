@@ -4,6 +4,9 @@
  * it does not glare. The clock is off unless the teacher wants it, and
  * running long is calm: amber, "past the plan. No rush."
  */
+import { withDeckKit } from '~/domain/lesson-planner/deck-kit-v4';
+import { DeckPicturesProvider } from '~/components/lesson-planner/slide-picture';
+import { viewerDeckPictures } from '~/domain/lesson-planner/deck-pictures.server';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, redirect, useLoaderData, useLocation, type LoaderFunctionArgs, type MetaFunction } from 'react-router';
 import { closeHref } from '~/domain/lesson-planner/lesson-return';
@@ -57,8 +60,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       notes: Object.fromEntries(
         blocks.map((block) => [block.id, stored[block.id] ?? notesFallback(byId.get(block.id)?.content ?? '')])
       ),
-      deck: found ? { id: found.id, ...found.deck } : null,
+      deck: found ? withDeckKit({ id: found.id, ...found.deck }, loaded.reviewFlags) : null,
       gallery: loaded.reviewFlags.deckGallery,
+      pictures: await viewerDeckPictures(request, [found?.deck]),
       pending,
       extensions: loaded.v3.extensions.map((step) => ({
         id: step.id,
@@ -85,8 +89,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     blocks: loaded.v3.timing.blocks,
     notes: Object.fromEntries(loaded.v3.steps.map((step) => [step.id, step.excerpt])),
     labels: Object.fromEntries(loaded.v3.steps.map((step) => [step.id, step.label])),
-    deck: deck?.kind === 'deck' ? { id: deckRow!.id, ...syncAgendaToStack(deck.deck, loaded.v3.timing.blocks) } : null,
+    deck: deck?.kind === 'deck' ? withDeckKit({ id: deckRow!.id, ...syncAgendaToStack(deck.deck, loaded.v3.timing.blocks) }, loaded.reviewFlags) : null,
     gallery: loaded.reviewFlags.deckGallery,
+    pictures: await viewerDeckPictures(request, [deck?.kind === 'deck' ? deck.deck : null]),
   };
 }
 
@@ -103,6 +108,15 @@ function readClock(): ClockMode {
 }
 
 export default function ShowRoute() {
+  const data = useLoaderData<typeof loader>();
+  return (
+    <DeckPicturesProvider pictures={data.pictures}>
+      <ShowScreen />
+    </DeckPicturesProvider>
+  );
+}
+
+function ShowScreen() {
   const data = useLoaderData<typeof loader>();
   const location = useLocation();
   if (data.mode === 'notes') {

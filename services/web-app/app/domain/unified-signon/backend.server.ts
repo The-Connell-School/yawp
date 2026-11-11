@@ -44,7 +44,13 @@ import {
   withFlow,
   type Flow,
 } from './flow.server';
-import { chooseClass, resolveClasses, selectedClass } from './classes.server';
+import {
+  chooseClass,
+  resolveClasses,
+  resolveClassesForExistingStudent,
+  selectedClass,
+  teacherPromptStudentOrganizationId,
+} from './classes.server';
 import { deliverCode } from './mail.server';
 import { assertResendMailAvailable } from './resend-mail.server';
 import { finishAuthentication } from './authentication.server';
@@ -97,9 +103,52 @@ export async function resolveIdentifier(
     flow.data.studentEmailSignup = undefined;
     flow.data.classId = undefined;
     flow.data.classCode = undefined;
+    if (parsed.kind === 'handle') {
+      const user = await tx.user.findFirst({
+        where: { username: { equals: parsed.value, mode: 'insensitive' } },
+        select: {
+          id: true,
+          username: true,
+          password: { select: { userId: true } },
+        },
+      });
+      if (!user?.password)
+        throw new FlowError(
+          "We couldn't find that handle.",
+          400,
+          undefined,
+          { identifier: "We couldn't find that handle." }
+        );
+      const handle = user.username ?? parsed.value;
+      flow.data.identifier = `@${handle.replace(/^@/, '')}`;
+      flow.data.userId = user.id;
+      return stateFor(flow, {
+        screen: 'password',
+        identifier: `@${handle.replace(/^@/, '')}`,
+      });
+    }
     try {
       return await resolveClasses(tx, flow, parsed.value);
     } catch (error) {
+      if (parsed.kind === 'handle-or-code' && error instanceof FlowError) {
+        const user = await tx.user.findFirst({
+          where: { username: { equals: parsed.value, mode: 'insensitive' } },
+          select: {
+            id: true,
+            username: true,
+            password: { select: { userId: true } },
+          },
+        });
+        if (user?.password) {
+          const handle = user.username ?? parsed.value;
+          flow.data.identifier = `@${handle.replace(/^@/, '')}`;
+          flow.data.userId = user.id;
+          return stateFor(flow, {
+            screen: 'password',
+            identifier: `@${handle.replace(/^@/, '')}`,
+          });
+        }
+      }
       if (error instanceof FlowError && error.fieldErrors?.classCode)
         throw new FlowError(
           error.message,
@@ -593,7 +642,29 @@ async function operate(
     flow.data.classCandidates = undefined;
     flow.data.studentChoice = undefined;
     flow.data.studentEmailSignup = undefined;
-    const result = await resolveClasses(tx, flow, values.classCode || '');
+    const code = values.classCode || '';
+    let result;
+    if (
+      flow.data.teacherPromptEntry &&
+      authenticatedUserId &&
+      authenticatedUserId === flow.data.userId
+    ) {
+      const organizationId = await teacherPromptStudentOrganizationId(
+        tx,
+        request,
+        authenticatedUserId
+      );
+      result = organizationId
+        ? await resolveClassesForExistingStudent(
+            tx,
+            flow,
+            code,
+            organizationId
+          )
+        : await resolveClasses(tx, flow, code);
+    } else {
+      result = await resolveClasses(tx, flow, code);
+    }
     flow.data.otp = undefined; // A new class context requires a new challenge.
     if (
       authenticatedUserId &&

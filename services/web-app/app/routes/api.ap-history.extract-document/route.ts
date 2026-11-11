@@ -1,5 +1,6 @@
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { z } from 'zod';
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { anthropic } from '~/services/anthropic';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -93,7 +94,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const model =
     process.env.AI_MODEL && process.env.AI_MODEL.includes('claude')
       ? process.env.AI_MODEL
-      : 'claude-sonnet-4-6';
+      : DEFAULT_ANTHROPIC_MODEL;
 
   const system = [
     'You extract APUSH (AP U.S. History) DBQ and LEQ writing assignments from PDFs.',

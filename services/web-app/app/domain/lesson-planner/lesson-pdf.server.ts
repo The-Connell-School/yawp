@@ -20,6 +20,9 @@ import { classicSlide, deckDurationMinutes, type Slide, type SlideDeck } from '.
 import { deckColors, withoutColorMarks } from './deck-colors';
 import { GALLERY_COLORS, galleryAccent, galleryRunningHead, planGalleryDeck, type GallerySlidePlan } from './deck-gallery';
 import { deckArt } from './deck-art';
+import { KIT_V4_HOUSE_PALETTE, KIT_V4_WIDTH, isKitV4, layoutKitV4Slide, withDeckKit, type KitV4Run } from './deck-kit-v4';
+import { PICTURE_PLACEHOLDER } from './deck-pictures';
+import type { DeckPictureFiles } from './deck-pictures.server';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { registerKitFonts } from './kit-fonts.server';
@@ -76,10 +79,16 @@ const styleOf = (doc: Doc): PdfStyle => STYLES.get(doc) ?? CLASSIC_STYLE;
 export type HandoutKit = { color: string };
 
 /** The handout style for a lesson, from its deck's primary color; null with the kit off. */
-export function handoutKit(packet: LessonPacket, flags: { deckGallery: boolean }): HandoutKit | null {
+export function handoutKit(
+  packet: LessonPacket,
+  flags: { deckGallery: boolean; deckKitV4?: boolean }
+): HandoutKit | null {
   if (!flags.deckGallery) return null;
-  const deck = packet.sections.find((section) => section.deck)?.deck ?? null;
-  return { color: deck ? galleryAccent(deck) : deckColors({}, null)[0]! };
+  const found = packet.sections.find((section) => section.deck)?.deck ?? null;
+  // In spec v4, the deck's v4 primary; with no deck, the v4 house pine.
+  const deck = found ? withDeckKit(found, { deckKitV4: Boolean(flags.deckKitV4) }) : null;
+  if (deck) return { color: galleryAccent(deck) };
+  return { color: flags.deckKitV4 ? KIT_V4_HOUSE_PALETTE[0] : deckColors({}, null)[0]! };
 }
 
 function fontFor(doc: Doc, run: TextRun, serif = false): string {
@@ -343,7 +352,8 @@ function drawSlideFace(
   deck: SlideDeck,
   plan: GallerySlidePlan,
   art: { path: string } | null,
-  box: { x: number; y: number; w: number; h: number }
+  box: { x: number; y: number; w: number; h: number },
+  pictures: DeckPictureFiles = new Map()
 ): void {
   const primary = galleryAccent(deck);
   const light = plan.dark || plan.ground === 'accent';
@@ -379,6 +389,33 @@ function drawSlideFace(
       // An image PDFKit cannot read: the slide is drawn without it.
       doc.restore();
     }
+  }
+
+  // The teacher's own picture (Nov 1), whole, on the right where the painting
+  // would hang. PDFKit prints PNG and JPEG; anything else, or a picture this
+  // file may not carry, prints as a placeholder that says so.
+  if (slide.image) {
+    const width = box.w * 0.46;
+    const frame = { x: box.x + box.w - width - pad * 0.5, y: box.y + pad * 0.5, w: width, h: box.h - pad };
+    const file = pictures.get(slide.image);
+    let printed = false;
+    if (file && (file.contentType === 'image/png' || file.contentType === 'image/jpeg')) {
+      try {
+        doc.image(file.data, frame.x, frame.y, { fit: [frame.w, frame.h], align: 'center', valign: 'center' });
+        printed = true;
+      } catch {
+        printed = false;
+      }
+    }
+    if (!printed) {
+      doc.save().lineWidth(0.6).dash(3, { space: 2 }).strokeColor(muted).rect(frame.x, frame.y, frame.w, frame.h).stroke().undash().restore();
+      doc
+        .font(styleOf(doc).fonts.body)
+        .fontSize(7)
+        .fillColor(muted)
+        .text(PICTURE_PLACEHOLDER, frame.x + 6, frame.y + frame.h / 2 - 10, { width: frame.w - 12, align: 'center' });
+    }
+    textWidth = box.w - width - pad * 2;
   }
 
   let y = box.y + pad * 0.8;
@@ -444,6 +481,107 @@ function drawSlideFace(
 }
 
 /**
+ * A spec v4 slide, printed from the same layout Present and PowerPoint draw
+ * (`layoutKitV4Slide`), scaled into the card: cream, its panels and answer
+ * bands, the painting plain, and every word in the serif or the sans, never
+ * italic. Vector, so it prints sharp and its words stay searchable.
+ */
+function drawKitV4Face(
+  doc: Doc,
+  deck: SlideDeck,
+  index: number,
+  box: { x: number; y: number; w: number; h: number },
+  pictures: DeckPictureFiles = new Map()
+): void {
+  const layout = layoutKitV4Slide(deck, index);
+  const k = box.w / KIT_V4_WIDTH;
+  const at = (element: { x: number; y: number; w: number; h: number }) => ({
+    x: box.x + element.x * k,
+    y: box.y + element.y * k,
+    w: element.w * k,
+    h: element.h * k,
+  });
+  const serif = styleOf(doc).serif?.regular ?? 'Times-Roman';
+  const sans = styleOf(doc).fonts.body;
+  const sansBold = styleOf(doc).fonts.bold;
+  const fontOf = (run: KitV4Run) => (run.face === 'serif' ? serif : run.bold ? sansBold : sans);
+
+  doc.save();
+  doc.rect(box.x, box.y, box.w, box.h).fill(layout.background);
+  doc.rect(box.x, box.y, box.w, box.h).clip();
+
+  for (const element of layout.elements) {
+    const r = at(element);
+    if (element.kind === 'rect') {
+      doc.rect(r.x, r.y, r.w, r.h).fill(element.fill);
+      continue;
+    }
+    if (element.kind === 'art') {
+      const path = publicFile(element.src);
+      if (!path) continue;
+      try {
+        doc.save();
+        doc.rect(r.x, r.y, r.w, r.h).clip();
+        doc.image(path, r.x, r.y, element.fit === 'cover' ? { cover: [r.w, r.h], align: 'center', valign: 'center' } : { fit: [r.w, r.h], valign: 'center' });
+        doc.restore();
+      } catch {
+        // An image PDFKit cannot read: the slide is drawn without it.
+        doc.restore();
+      }
+      continue;
+    }
+    if (element.kind === 'picture') {
+      const file = pictures.get(element.id);
+      let printed = false;
+      if (file && (file.contentType === 'image/png' || file.contentType === 'image/jpeg')) {
+        try {
+          doc.image(file.data, r.x, r.y, { fit: [r.w, r.h], valign: 'center' });
+          printed = true;
+        } catch {
+          printed = false;
+        }
+      }
+      if (!printed) {
+        doc.save().lineWidth(0.6).dash(3, { space: 2 }).strokeColor('#5A5A5A').rect(r.x, r.y, r.w, r.h).stroke().undash().restore();
+        doc.font(sans).fontSize(7).fillColor('#5A5A5A').text(PICTURE_PLACEHOLDER, r.x + 6, r.y + r.h / 2 - 10, { width: r.w - 12, align: 'center' });
+      }
+      continue;
+    }
+
+    // Text: measure each paragraph, place the column by its alignment, then
+    // write each paragraph's runs one after another.
+    // A paragraph wraps like the run that carries most of its words, and is
+    // never shorter than one line of its largest run (a list's numeral).
+    const heights = element.paras.map((para) => {
+      const largest = para.runs.reduce((top, run) => (run.size > top.size ? run : top), para.runs[0]!);
+      const wordiest = para.runs.reduce((top, run) => (run.text.length > top.text.length ? run : top), para.runs[0]!);
+      doc.font(fontOf(wordiest)).fontSize(wordiest.size * k);
+      const wrapped = doc.heightOfString(para.runs.map((run) => run.text).join(''), { width: r.w });
+      return Math.max(wrapped, largest.size * k * 1.15) + (para.after ?? 0) * k;
+    });
+    const total = heights.reduce((sum, height) => sum + height, 0);
+    let y = element.valign === 'top' ? r.y : element.valign === 'bottom' ? r.y + r.h - total : r.y + (r.h - total) / 2;
+    doc.save();
+    doc.rect(r.x, r.y, r.w, r.h).clip();
+    element.paras.forEach((para, p) => {
+      para.runs.forEach((run, i) => {
+        const last = i === para.runs.length - 1;
+        doc.font(fontOf(run)).fontSize(run.size * k).fillColor(run.color);
+        const options = { width: r.w, continued: !last, align: element.align ?? 'left' } as const;
+        if (i === 0) doc.text(run.text, r.x, y, options);
+        else doc.text(run.text, options);
+      });
+      y += heights[p]!;
+    });
+    doc.restore();
+  }
+
+  doc.restore();
+  // A hairline around the card, so it reads as a slide on white paper.
+  doc.save().lineWidth(0.5).strokeColor(GALLERY_COLORS.rule).rect(box.x, box.y, box.w, box.h).stroke().restore();
+}
+
+/**
  * A deck, printed the way a teacher uses one on paper.
  *
  * Each slide as the class sees it, with what the teacher planned to say under
@@ -452,7 +590,7 @@ function drawSlideFace(
  * page; a slide never splits from its notes. Notes are set as a quote so the
  * bar down the margin tells them apart from what students see.
  */
-function drawSlideDeck(doc: Doc, deck: SlideDeck): void {
+function drawSlideDeck(doc: Doc, deck: SlideDeck, pictures: DeckPictureFiles = new Map()): void {
   const minutes = deckDurationMinutes(deck);
   const summary = [
     `${deck.slides.length} slide${deck.slides.length === 1 ? '' : 's'}`,
@@ -479,7 +617,9 @@ function drawSlideDeck(doc: Doc, deck: SlideDeck): void {
     // The picture, its caption and the start of its notes stay together.
     ensureRoom(doc, SLIDE_HEIGHT + 64);
     const top = doc.y + 4;
-    drawSlideFace(doc, deck, plan, art ? { path: art } : null, { x: left, y: top, w: SLIDE_WIDTH, h: SLIDE_HEIGHT });
+    const card = { x: left, y: top, w: SLIDE_WIDTH, h: SLIDE_HEIGHT };
+    if (isKitV4(deck)) drawKitV4Face(doc, deck, index, card, pictures);
+    else drawSlideFace(doc, deck, plan, art ? { path: art } : null, card, pictures);
     doc.x = left;
     doc.y = top + SLIDE_HEIGHT + 6;
     const blocks: Block[] = [
@@ -584,7 +724,8 @@ function packetSubtitle(packet: LessonPacket): string | null {
  * material kept inside a reply printed alongside it.
  */
 export async function renderPacketPdf(
-  packet: LessonPacket
+  packet: LessonPacket,
+  { pictures }: { pictures?: DeckPictureFiles } = {}
 ): Promise<Uint8Array> {
   const doc = newDocument(packet.title);
   drawTitle(doc, { title: packet.title, subtitle: packetSubtitle(packet) });
@@ -597,7 +738,7 @@ export async function renderPacketPdf(
       runs: [{ text: section.title, bold: true }],
     });
     drawMarkdown(doc, section.content);
-    if (section.deck) drawSlideDeck(doc, section.deck);
+    if (section.deck) drawSlideDeck(doc, section.deck, pictures);
 
     for (const material of section.materials) {
       drawBlock(doc, {
@@ -619,13 +760,16 @@ export async function renderPacketPdf(
 export async function renderSlidesPdf({
   lessonTitle,
   deck,
+  pictures,
 }: {
   lessonTitle: string;
   deck: SlideDeck;
+  /** The teacher's own pictures this file may carry (Nov 1). */
+  pictures?: DeckPictureFiles;
 }): Promise<Uint8Array> {
   const doc = newDocument(deck.title);
   drawTitle(doc, { title: deck.title, subtitle: lessonTitle });
-  drawSlideDeck(doc, deck);
+  drawSlideDeck(doc, deck, pictures);
   return finish(doc);
 }
 

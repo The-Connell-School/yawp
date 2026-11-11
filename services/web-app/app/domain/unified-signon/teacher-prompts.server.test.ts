@@ -1,7 +1,6 @@
 import { beforeEach, expect, mock, test } from 'bun:test';
 import type { Flow } from './flow.server';
 
-let enabled = true;
 let activeMemberships = 0;
 let row: { browserHash: string; expiresAt: Date; data: Flow['data'] };
 const classInfo = {
@@ -36,9 +35,6 @@ mock.module('~/utils/db.server', () => ({
       operation(tx),
   },
 }));
-mock.module('~/domain/feature-flags/feature-flags.server', () => ({
-  isFeatureFlagEnabled: async () => enabled,
-}));
 const confirmation = mock(async (_tx: unknown, flow: Flow) => ({
   state: flow.data.state,
 }));
@@ -49,7 +45,6 @@ const { flowCookie, digest } = await import('./flow.server');
 const { signedInTeacherPromptEntry } = await import('./teacher-prompts.server');
 
 beforeEach(() => {
-  enabled = true;
   activeMemberships = 0;
   create.mockClear();
   count.mockClear();
@@ -144,13 +139,6 @@ for (const invalid of [
     expect(create).toHaveBeenCalledTimes(1);
   });
 }
-
-test('flag off does not read or create a flow', async () => {
-  enabled = false;
-  expect(await load()).toBeNull();
-  expect(findUnique).not.toHaveBeenCalled();
-  expect(create).not.toHaveBeenCalled();
-});
 
 test('storage errors propagate instead of silently replacing a flow', async () => {
   findUnique.mockImplementationOnce(async () => {

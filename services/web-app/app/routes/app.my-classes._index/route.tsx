@@ -1,4 +1,4 @@
-import { classCodeUniquenessEnabled, resolveClassCode, ClassCodeCollisionError } from '~/utils/class-code-write.server';
+import { classCodeUniquenessEnabled, resolveClassCode } from '~/utils/class-code-write.server';
 import { useFreeAccountUsage } from '~/components/free-account-usage';
 import {
   FreeTierLockedPageHeader,
@@ -35,7 +35,6 @@ import { StudentClassCard } from '~/components/student-class-card';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { assertCanCreateClassForOrganizationPlan } from '~/utils/assignment-quota.server';
-import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import { getEntitlements } from '~/utils/entitlements.server';
 import { prisma } from '~/utils/db.server.js';
 import { generateClassCode } from '~/utils/class';
@@ -49,6 +48,11 @@ import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
 import { resolveTeacherSchoolYearScope } from '~/utils/school-year-scope.server';
 import { resolveStudentSchoolYearScope } from '~/utils/school-year-scope.server';
 import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
+import {
+  findTeacherClassIdentityConflict,
+  TEACHER_CLASS_IDENTITY_CONFLICT_MESSAGE,
+} from '~/utils/class-identity.server';
+import { classManageActionErrorFromCaught } from '~/utils/class-manage-action-errors.server';
 
 async function getTeacherSchoolIds(membershipId: string) {
   const teacher = await prisma.orgMembership.findUnique({
@@ -219,6 +223,21 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (!code) code = generateClassCode();
 
+    const identityConflict = await findTeacherClassIdentityConflict(prisma, {
+      schoolId,
+      schoolYear,
+      grade,
+      period,
+      title,
+      teacherMembershipIds: [profile.id],
+    });
+    if (identityConflict) {
+      return dataResponse(
+        { error: TEACHER_CLASS_IDENTITY_CONFLICT_MESSAGE },
+        { status: 400 }
+      );
+    }
+
     try {
       const classArtKey = await pickClassArtKeyForOrganization(
         profile.organization.id
@@ -244,35 +263,13 @@ export async function action({ request }: ActionFunctionArgs) {
         });
       });
       return dataResponse({ success: true });
-    } catch (error: any) {
-      if (error instanceof ClassCodeCollisionError) {
-        return dataResponse(
-          {
-            error: safeDomainErrorTextForClientResponse(
-              error,
-              'Class code already in use. Choose a different code.',
-            ),
-            field: 'code',
-          },
-          { status: 400 },
-        );
-      }
-      if (error instanceof Error && error.message.includes('Free classroom accounts include one class')) {
-        return dataResponse(
-          {
-            error: safeDomainErrorTextForClientResponse(
-              error,
-              'Free classroom accounts include one class. Archive your existing class or upgrade to add another.',
-            ),
-          },
-          { status: 403 },
-        );
-      }
-      if (error.code === 'P2002') {
-        return dataResponse(
-          { error: 'Class code already in use. Choose a different code.', field: 'code' },
-          { status: 400 }
-        );
+    } catch (error: unknown) {
+      const mapped = classManageActionErrorFromCaught(error, 'create');
+      if (mapped) {
+        const body = mapped.field
+          ? { error: mapped.error, field: mapped.field }
+          : { error: mapped.error };
+        return dataResponse(body, { status: mapped.status });
       }
       throw error;
     }
@@ -313,6 +310,22 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ error: 'Class not found.' }, { status: 404 });
     }
 
+    const identityConflict = await findTeacherClassIdentityConflict(prisma, {
+      schoolId,
+      schoolYear,
+      grade,
+      period,
+      title,
+      teacherMembershipIds: [profile.id],
+      excludeClassId: classId,
+    });
+    if (identityConflict) {
+      return dataResponse(
+        { error: TEACHER_CLASS_IDENTITY_CONFLICT_MESSAGE },
+        { status: 400 }
+      );
+    }
+
     try {
       await prisma.$transaction(async tx => {
         const resolvedCode = await resolveClassCode(tx, code, { classId });
@@ -332,24 +345,13 @@ export async function action({ request }: ActionFunctionArgs) {
         });
       });
       return dataResponse({ success: true });
-    } catch (error: any) {
-      if (error instanceof ClassCodeCollisionError) {
-        return dataResponse(
-          {
-            error: safeDomainErrorTextForClientResponse(
-              error,
-              'Class code already in use. Choose a different code.',
-            ),
-            field: 'code',
-          },
-          { status: 400 },
-        );
-      }
-      if (error.code === 'P2002') {
-        return dataResponse(
-          { error: 'Class code already in use. Choose a different code.', field: 'code' },
-          { status: 400 }
-        );
+    } catch (error: unknown) {
+      const mapped = classManageActionErrorFromCaught(error, 'update');
+      if (mapped) {
+        const body = mapped.field
+          ? { error: mapped.error, field: mapped.field }
+          : { error: mapped.error };
+        return dataResponse(body, { status: mapped.status });
       }
       throw error;
     }

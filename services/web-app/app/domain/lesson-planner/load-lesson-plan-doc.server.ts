@@ -3,6 +3,7 @@
  * summarized once per version of the stack and kept, so a second download is
  * instant and costs nothing. Only with lesson_planner_plan_export_v2 on.
  */
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { redirect } from 'react-router';
 import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
@@ -43,7 +44,7 @@ export async function loadLessonPlan({
 }): Promise<{ doc: LessonPlanDoc; kit: KitPlan | null }> {
   const access = await getLessonPlannerAccess(request);
   if (!access.allowed) throw redirect('/app');
-  const { planExportV2, deckGallery, teachNotes } = await getLessonPlannerReviewFlags(access.membership.organization.id);
+  const { planExportV2, deckGallery, deckKitV4, teachNotes } = await getLessonPlannerReviewFlags(access.membership.organization.id);
   if (!planExportV2) throw new Response('Not Found', { status: 404 });
 
   const loaded = await loadLessonPacket({ request, conversationId, withStackDetails: false });
@@ -78,7 +79,7 @@ export async function loadLessonPlan({
           units: 1,
         });
         return getLLMCompletion({
-          model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
+          model: (process.env.AI_MODEL as any) ?? DEFAULT_ANTHROPIC_MODEL,
           system: PLAN_SUMMARY_SYSTEM,
           messages: [{ role: AgentType.User, content: user }],
           maxTokens: SUMMARY_MAX_TOKENS,
@@ -121,7 +122,7 @@ export async function loadLessonPlan({
   });
   // The teacher's notes print under their steps (Oct 24 handoff, task 7).
   const doc = teachNotes ? withTeacherNotes(built, await storedTeacherNotes(loaded.conversationId)) : built;
-  return { doc, kit: deckGallery ? buildKitPlan({ doc, entries }) : null };
+  return { doc, kit: deckGallery ? buildKitPlan({ doc, entries, deckKitV4 }) : null };
 }
 
 export async function loadLessonPlanDoc(args: { request: Request; conversationId: string | undefined }): Promise<LessonPlanDoc> {

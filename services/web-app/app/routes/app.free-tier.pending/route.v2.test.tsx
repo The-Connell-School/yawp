@@ -128,24 +128,26 @@ test('crafted forward is refused when rollout is off', async () => {
   expect(forward).not.toHaveBeenCalled();
 });
 
-test('pending page offers explore and forward without draft request or legacy resend', () => {
+test('pending page offers additional administrator link and explore without legacy resend', () => {
   stopped = false;
   const html = renderWithCardPageChrome(<Page />);
   expect(html).toContain('Explore my classroom');
-  expect(html).toContain('Not the right person?');
+  expect(html).toContain(
+    'Not the right person? / Send to an additional administrator'
+  );
+  expect(html).toContain('data-testid="pending-additional-administrator-link"');
+  expect(html).toContain('/app/free-tier/onboarding?additional=1');
   expect(html).not.toContain('Draft a Request');
-  expect(html).not.toContain('data-testid="pending-draft-request"');
-  expect(html).not.toContain('free-tier-draft-request');
-  expect(html).not.toContain('lucide-mail');
-  expect(html).toContain('Explore my classroom');
+  expect(html).not.toContain('pending-forward-disclosure');
+  expect(html).not.toContain('mailto:');
   const progressIdx = html.indexOf('aria-label="Approval progress"');
   const personIdx = html.indexOf('free-tier-person-email');
-  const forwardIdx = html.indexOf('pending-forward-disclosure');
+  const linkIdx = html.indexOf('pending-additional-administrator-link');
   const exploreIdx = html.indexOf('locked-preview-explore');
   expect(progressIdx).toBeGreaterThan(-1);
   expect(personIdx).toBeGreaterThan(progressIdx);
-  expect(forwardIdx).toBeGreaterThan(personIdx);
-  expect(exploreIdx).toBeGreaterThan(forwardIdx);
+  expect(linkIdx).toBeGreaterThan(personIdx);
+  expect(exploreIdx).toBeGreaterThan(linkIdx);
   expect(html).not.toContain('Resend reminder');
   expect(html).not.toContain('Draft an email');
   expect(html).not.toContain('Take a look around');

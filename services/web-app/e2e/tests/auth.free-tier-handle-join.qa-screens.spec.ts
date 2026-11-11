@@ -11,6 +11,11 @@ import { generateStudentJoinToken } from '../../app/utils/student-join-token';
 import { FREE_CLASSROOM_STUDENT_SEAT_CAP } from '../../app/domain/free-tier/class-seat-cap';
 import { FREE_CLASS_CLASS_FULL_MESSAGE } from '../../app/domain/free-tier/class-seat-cap';
 import bcrypt from 'bcryptjs';
+import {
+  fillFreeTierJoinForm,
+  submitFreeTierJoinAndExpectApp,
+} from '../test-helpers';
+import { studentHandleBase } from '../../app/domain/unified-signon/student-handle';
 
 const OUT =
   process.env.QA_SCREENSHOT_DIR?.trim() ||
@@ -28,7 +33,7 @@ test.describe('QA screenshots — free-tier handle flows', () => {
   }) => {
     const prisma = createE2EPrismaClient();
     const run = Date.now().toString(36);
-    const handle = `qahandle${run}`.slice(0, 20);
+    const handle = studentHandleBase('QA', 'Handle Student');
     const password = 'yawp-test-pass-1';
     const joinToken = generateStudentJoinToken();
 
@@ -78,34 +83,36 @@ test.describe('QA screenshots — free-tier handle flows', () => {
     try {
       await page.goto(joinUrl);
       await shot(page, '05-join-handle-form.png');
-      await page.getByLabel('Display name').fill('QA Handle Student');
-      await page.getByLabel('Handle').fill(handle);
-      await page.getByLabel('Password', { exact: true }).fill(password);
-      await page.getByLabel('Confirm password').fill(password);
-      await page.getByRole('button', { name: 'Join class' }).click();
-      await expect(page).toHaveURL(/\/app/);
+      await fillFreeTierJoinForm(page, {
+        displayName: 'QA Handle Student',
+        handle,
+        password,
+      });
+      await submitFreeTierJoinAndExpectApp(page);
       await shot(page, '05-student-handle-signup-complete.png');
 
       await page.goto('/auth/logout');
       await page.goto('/auth/login');
-      await page.getByLabel('Email or handle').fill(handle);
-      await page.getByLabel('Password').fill('wrong-password-99');
-      await page.getByRole('button', { name: 'Log in' }).click();
+      await page.getByLabel('Email or class code', { exact: true }).fill(handle);
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page.getByLabel('Password', { exact: true }).fill('wrong-password-99');
+      await page.getByRole('button', { name: 'Log In', exact: true }).click();
       await page.waitForTimeout(800);
       await shot(page, '07-wrong-password-login.png');
 
-      await page.getByLabel('Password').fill(password);
-      await page.getByRole('button', { name: 'Log in' }).click();
+      await page.getByLabel('Password', { exact: true }).fill(password);
+      await page.getByRole('button', { name: 'Log In', exact: true }).click();
       await expect(page).toHaveURL(/\/app/);
       await shot(page, '08-handle-student-login.png');
 
       await page.goto('/auth/logout');
       await page.goto(joinUrl);
-      await page.getByLabel('Display name').fill('Duplicate');
-      await page.getByLabel('Handle').fill(handle);
-      await page.getByLabel('Password', { exact: true }).fill(password);
-      await page.getByLabel('Confirm password').fill(password);
-      await page.getByRole('button', { name: 'Join class' }).click();
+      await fillFreeTierJoinForm(page, {
+        displayName: 'QA Handle Student',
+        handle,
+        password,
+      });
+      await page.getByRole('button', { name: 'Join class', exact: true }).click();
       await page.waitForTimeout(800);
       await shot(page, '06-duplicate-handle-rejected.png');
 

@@ -1,3 +1,4 @@
+import { writeAdminConfigAudit } from '~/domain/admin-config/admin-config-audit.server';
 import { prisma } from '~/utils/db.server';
 import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import {
@@ -11,12 +12,18 @@ import {
   LESSON_PLANNER_TEMPLATES_FLAG,
   LESSON_PLANNER_DECK_GALLERY_FLAG,
   LESSON_PLANNER_UPLOADS_FLAG,
+  LESSON_PLANNER_UPLOAD_PICTURES_FLAG,
+  LESSON_PLANNER_TEACH_MY_SLIDES_FLAG,
+  LESSON_PLANNER_REFRESH_MY_DECK_FLAG,
+  LESSON_PLANNER_ACTIVE_TIME_FLAG,
+  LESSON_PLANNER_WRITING_OVERRIDE_FLAG,
+  LESSON_PLANNER_DECK_KIT_V4_FLAG,
+  deckUploadFlags,
   LESSON_PLANNER_TEACH_NOTES_FLAG,
   LESSON_PLANNER_LIBRARY_V2_FLAG,
   LESSON_PLANNER_STACK_PANEL_FLAG,
   FREE_TIER_FLAG,
   LESSON_PLANNER_FLAG,
-  UNIFIED_SIGN_ON_FLAG,
   TEACHER_PROMPT_GENERATOR_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
@@ -57,34 +64,21 @@ export type FeatureFlagState = {
 const LAST_CHANGED_BY_PREFIX = 'Last changed by ';
 const EVERYONE: FeatureFlagValue = { mode: 'everyone', orgIds: [] };
 
-export function isDemoDeployment(env: Record<string, string | undefined>) {
-  return (
-    env.PREVIEW_SLUG?.trim().toLowerCase() === 'demo' ||
-    env.YAWP_ENVIRONMENT?.trim().toLowerCase() === 'demo'
-  );
-}
-
-export function isPreviewDeployment(env: Record<string, string | undefined>) {
-  return env.YAWP_ENVIRONMENT?.trim().toLowerCase() === 'preview';
-}
-
-/**
- * Demo and PR previews ship with free tier and unified sign-on on without Internal
- * changes. This replaces a separate demo-only route gate (`isDemoFreeTierRouteOpen`);
- * Internal may have surfaced that as a synthetic `demo_free_tier` override — runtime
- * and the management API use `free-tier` persisted/effective only.
- */
-export function isNonProductionDefaultOnDeployment(
-  env: Record<string, string | undefined>
-) {
-  return isDemoDeployment(env) || isPreviewDeployment(env);
-}
+export {
+  isDemoDeployment,
+  isPreviewDeployment,
+  isNonProductionDefaultOnDeployment,
+} from './feature-flags.deployment';
+import {
+  isDemoDeployment,
+  isPreviewDeployment,
+  isNonProductionDefaultOnDeployment,
+} from './feature-flags.deployment';
 
 function runtimeDefaultOn(key: FeatureFlagKey, env: Record<string, string | undefined>) {
   if (!isNonProductionDefaultOnDeployment(env)) return false;
   return (
     key === FREE_TIER_FLAG ||
-    key === UNIFIED_SIGN_ON_FLAG ||
     key === TEACHER_PROMPT_GENERATOR_FLAG
   );
 }
@@ -138,7 +132,7 @@ async function readParsedValues(
 }
 
 async function readPrimaryFlagValue(
-  key: typeof FREE_TIER_FLAG | typeof UNIFIED_SIGN_ON_FLAG,
+  key: typeof FREE_TIER_FLAG,
   client: SettingReader = prisma
 ): Promise<FeatureFlagValue> {
   const [value] = await readParsedValues([featureFlagSettingName(key)], client);
@@ -214,20 +208,6 @@ export async function isFeatureFlagEnabled(
   orgId?: string | null
 ): Promise<boolean> {
   if (key === FREE_TIER_FLAG) return isFreeTierCapabilityEnabled(orgId);
-  if (key === UNIFIED_SIGN_ON_FLAG) {
-    if (isNonProductionDefaultOnDeployment(process.env)) return true;
-    try {
-      const primary = await readPrimaryFlagValue(UNIFIED_SIGN_ON_FLAG);
-      if (primary.mode === 'everyone') return true;
-      return evaluateFeatureFlag(primary, orgId);
-    } catch (error) {
-      console.error('feature_flag_read_failed', {
-        key: UNIFIED_SIGN_ON_FLAG,
-        error: buildSafeErrorForLog(error),
-      });
-      return false;
-    }
-  }
   if (key === TEACHER_PROMPT_GENERATOR_FLAG) {
     if (isNonProductionDefaultOnDeployment(process.env)) return true;
     try {
@@ -277,6 +257,12 @@ export async function getLessonPlannerReviewFlags(
     uploads,
     teachNotes,
     libraryV2,
+    uploadPictures,
+    teachMySlides,
+    refreshMyDeck,
+    activeTime,
+    writingOverride,
+    deckKitV4,
   ] = await Promise.all([
     isFeatureFlagEnabled(LESSON_PLANNER_INTAKE_V2_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_STACK_V2_FLAG, orgId),
@@ -291,7 +277,14 @@ export async function getLessonPlannerReviewFlags(
     isFeatureFlagEnabled(LESSON_PLANNER_UPLOADS_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_TEACH_NOTES_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_LIBRARY_V2_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_UPLOAD_PICTURES_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_TEACH_MY_SLIDES_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_REFRESH_MY_DECK_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_ACTIVE_TIME_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_WRITING_OVERRIDE_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_DECK_KIT_V4_FLAG, orgId),
   ]);
+  const deckFlags = deckUploadFlags({ uploads, uploadPictures, teachMySlides, refreshMyDeck });
   // The panel shows the stack v2 list; without stack v2 it has nothing to show.
   // The run 3 page builds on stack v2, and the rest build on the run 3 page.
   const v3 = stackV3 && stackV2;
@@ -309,6 +302,11 @@ export async function getLessonPlannerReviewFlags(
     uploads,
     teachNotes: teachNotes && v3,
     libraryV2: libraryV2 && v3,
+    ...deckFlags,
+    activeTime,
+    writingOverride: writingOverride && v3,
+    // Spec v4 draws the gallery deck, so it needs the gallery deck on.
+    deckKitV4: deckKitV4 && deckGallery && deckV2,
   };
 }
 
@@ -336,13 +334,24 @@ export type LessonPlannerReviewFlags = {
   teachNotes: boolean;
   /** The library redesign (Oct 24 handoff, Part 2); needs stack v3. */
   libraryV2: boolean;
+  /** An uploaded deck kept whole with its pictures (Nov 1); needs uploads. */
+  uploadPictures: boolean;
+  /** "Teach with these slides" (Nov 1); needs uploadPictures. */
+  teachMySlides: boolean;
+  /** "Refresh into a Yawp! deck" with the teacher's pictures (Nov 1); needs uploadPictures. */
+  refreshMyDeck: boolean;
+  /** "Planned in" is the time the teacher was working (Nov 3). */
+  activeTime: boolean;
+  /** The teacher's call on what counts as writing (Nov 4 follow-up); needs stackV3. */
+  writingOverride: boolean;
+  /** The Lesson Deck Kit, spec v4 (Nov 6); needs deckGallery. */
+  deckKitV4: boolean;
 };
 
 /** Yawp! Lesson Planner for teachers at the given school. */
 export async function isLessonPlannerEnabled(
   orgId: string | null | undefined
 ): Promise<boolean> {
-  if (!(await isFreeTierCapabilityEnabled(orgId))) return false;
   return isFeatureFlagEnabled(LESSON_PLANNER_FLAG, orgId);
 }
 
@@ -406,7 +415,12 @@ export async function findUnknownOrganizationIds(
 export async function setFeatureFlag(
   key: FeatureFlagKey,
   next: FeatureFlagValueInput,
-  operatorEmail: string
+  operatorEmail: string,
+  audit: {
+    source?: 'web_admin' | 'internal_api';
+    actorUserId?: string | null;
+    reason?: string | null;
+  } = {}
 ): Promise<{
   flag: FeatureFlagState;
   previous: FeatureFlagValue;
@@ -427,10 +441,22 @@ export async function setFeatureFlag(
     update: { value, valueType: 'json', description, updatedAt: new Date() },
     select: { name: true, value: true, description: true, updatedAt: true },
   });
+  const changed = !sameFeatureFlagValue(previous, normalized);
+  await writeAdminConfigAudit({
+    actorUserId: audit.actorUserId,
+    actorEmail: operatorEmail,
+    source: audit.source ?? 'internal_api',
+    entityType: 'feature_flag',
+    entityKey: key,
+    action: 'set',
+    before: previous,
+    after: normalized,
+    reason: audit.reason,
+  });
   return {
     flag: stateFor(key, row),
     previous,
-    changed: !sameFeatureFlagValue(previous, normalized),
+    changed,
   };
 }
 

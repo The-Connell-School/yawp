@@ -10,26 +10,17 @@ import { createE2EPrismaClient } from '../prisma-client';
 test.skip(process.env.SIGNON_ORIGIN_LOCAL !== '1', 'Local TLS proxy required');
 test.describe.configure({ mode: 'serial' });
 const db = createE2EPrismaClient();
-const flag = 'feature_flag.unified-sign-on';
 const prefix = `origin-browser-${Date.now()}`;
 const publicUrl = process.env.SIGNON_ORIGIN_URL!;
 const beforeFix = process.env.SIGNON_ORIGIN_BEFORE === '1';
 let proxy: Server;
 let localResources = false;
-let originalFlag: { value: string; valueType: string } | null = null;
 async function shot(page: Page, name: string, width: number) {
   if (!process.env.SIGNON_EVIDENCE_DIR) return;
   mkdirSync(process.env.SIGNON_EVIDENCE_DIR, { recursive: true });
   await page.screenshot({
     path: join(process.env.SIGNON_EVIDENCE_DIR, `${name}-${width}-impl.png`),
     fullPage: true,
-  });
-}
-async function setFlag(enabled: boolean) {
-  await db.setting.upsert({
-    where: { name: flag },
-    create: { name: flag, value: String(enabled), valueType: 'boolean' },
-    update: { value: String(enabled) },
   });
 }
 test.beforeAll(async () => {
@@ -41,10 +32,6 @@ test.beforeAll(async () => {
   )
     throw new Error('Local resources required');
   localResources = true;
-  originalFlag = await db.setting.findUnique({
-    where: { name: flag },
-    select: { value: true, valueType: true },
-  });
   await db.organization.create({
     data: { id: prefix, name: 'Lincoln High', plan: 'SCHOOL' },
   });
@@ -109,13 +96,6 @@ test.afterAll(async () => {
     proxy.closeAllConnections();
     await new Promise<void>((resolve) => proxy.close(() => resolve()));
   }
-  if (originalFlag)
-    await db.setting.upsert({
-      where: { name: flag },
-      create: { name: flag, ...originalFlag },
-      update: originalFlag,
-    });
-  else await db.setting.deleteMany({ where: { name: flag } });
   await db.class.deleteMany({ where: { id: prefix } });
   await db.school.deleteMany({ where: { id: prefix } });
   await db.organization.deleteMany({ where: { id: prefix } });
@@ -127,7 +107,6 @@ for (const width of [1280, 390]) {
     request,
   }) => {
     await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
-    await setFlag(true);
     for (const [identifier, heading, name] of [
       ['dev.teacher@yawp.local', 'Enter your password', 'signon-05-password'],
       [prefix, 'Join your class', 'signon-35-class'],
@@ -221,28 +200,6 @@ for (const width of [1280, 390]) {
       });
       expect(downgraded.status()).toBe(403);
       expect(await downgraded.text()).toContain('Invalid request origin.');
-    }
-  });
-  test(`flag OFF retains login, signup and reset at ${width}`, async ({
-    page,
-  }) => {
-    await setFlag(false);
-    await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
-    for (const [route, name] of [
-      ['/auth/login', 'login'],
-      ['/auth/inv/signup', 'signup'],
-      ['/auth/inv/forgot-password', 'reset'],
-    ]) {
-      await page.goto(`${publicUrl}${route}`);
-      await page.waitForFunction(() =>
-        Boolean((window as any).__reactRouterDataRouter)
-      );
-      await expect(page.locator('[data-signon-screen]')).toHaveCount(0);
-      await shot(
-        page,
-        `${beforeFix ? 'before' : 'after'}-flag-off-${name}`,
-        width
-      );
     }
   });
 }

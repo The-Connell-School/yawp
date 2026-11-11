@@ -46,6 +46,13 @@ import {
   GALS_CLAIMS_RUBRIC,
   GALS_CLAIMS_SCORING_SCALE,
 } from './gals-claims-rubric';
+import {
+  STRODE_AUTOBIOGRAPHY_ASSIGNMENT_TYPE_KIND,
+  STRODE_AUTOBIOGRAPHY_CALIBRATION_NOTES,
+  STRODE_AUTOBIOGRAPHY_PROMPT_CONFIG,
+  STRODE_AUTOBIOGRAPHY_RUBRIC,
+  STRODE_AUTOBIOGRAPHY_SCORING_SCALE,
+} from './strode-autobiography-rubric';
 
 export const MODULE_RUBRIC_RELATIONSHIPS = [
   'primary',
@@ -64,7 +71,8 @@ export type AssignmentTypeRubricConfigSource =
   | 'daily-pages-engagement-default'
   | 'class-starter-default'
   | 'exit-ticket-default'
-  | 'gals-claims-default';
+  | 'gals-claims-default'
+  | 'strode-autobiography-default';
 
 export type AssignmentTypeRubricConfigInput = {
   /**
@@ -203,6 +211,17 @@ const galsClaimsConfig: AssignmentTypeRubricConfig = {
   defaultLabel: 'GALS Claims',
 };
 
+const strodeAutobiographyConfig: AssignmentTypeRubricConfig = {
+  source: 'strode-autobiography-default',
+  scoringScale: STRODE_AUTOBIOGRAPHY_SCORING_SCALE,
+  rubric: STRODE_AUTOBIOGRAPHY_RUBRIC,
+  promptConfig: STRODE_AUTOBIOGRAPHY_PROMPT_CONFIG,
+  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+  calibrationNotes: STRODE_AUTOBIOGRAPHY_CALIBRATION_NOTES,
+  rubricIncomplete: false,
+  defaultLabel: 'Strode ENG 101 Autobiographical Narrative',
+};
+
 const defaultRubricConfigsByKind: Record<string, AssignmentTypeRubricConfig> = {
   [DAILY_PAGES_ASSIGNMENT_TYPE_KIND]: dailyPagesEngagementConfig,
   [CLASS_STARTER_ASSIGNMENT_TYPE_KIND]: classStarterConfig,
@@ -220,6 +239,7 @@ const defaultRubricConfigsByKind: Record<string, AssignmentTypeRubricConfig> = {
   [PREWRITING_ASSIGNMENT_TYPE_KIND]: prewritingConfig,
   [THESIS_STATEMENT_ASSIGNMENT_TYPE_KIND]: thesisStatementConfig,
   [GALS_CLAIMS_ASSIGNMENT_TYPE_KIND]: galsClaimsConfig,
+  [STRODE_AUTOBIOGRAPHY_ASSIGNMENT_TYPE_KIND]: strodeAutobiographyConfig,
 };
 
 function getDefaultRubricConfig(

@@ -147,10 +147,9 @@ test.describe('Free-tier event auto-admit QA', () => {
       expect(userId).toBeTruthy();
 
       await page.context().clearCookies();
+      const { submitUnifiedLogin } = await import('../helpers/unified-login');
       await page.goto('/auth/login');
-      await page.getByLabel('Email or handle').fill(email);
-      await page.getByLabel('Password').fill(password);
-      await page.getByRole('button', { name: 'Log in' }).click();
+      await submitUnifiedLogin(page, email, password);
       await expect(page).toHaveURL(/\/app/, { timeout: 15_000 });
       await shot(page, '05-account-sign-in-success.png');
     } finally {

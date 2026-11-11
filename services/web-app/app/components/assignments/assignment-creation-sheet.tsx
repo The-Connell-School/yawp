@@ -1,4 +1,5 @@
 import { useFreeAccountUsage } from '~/components/free-account-usage';
+import { freeAssignmentKindUsageMeta } from '~/domain/free-tier/inapp-usage';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type * as React from 'react';
 import { useFetcher, useNavigate } from 'react-router';
@@ -40,6 +41,12 @@ import {
   EXIT_TICKET_TUTOR_ENABLED_DEFAULT,
   composeExitTicketPrompt,
   defaultExitTicketLessonNotesEnabled,
+  EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+  exitTicketActivityKind,
+  exitTicketStarterOption,
+  exitTicketV3DraftFromConfig,
+  type ExitTicketConfig,
+  type ExitTicketV3Draft,
   exitTicketFocusOption,
   exitTicketTargetingHint,
   isExitTicketAssignmentType,
@@ -81,6 +88,7 @@ import {
   WhyDisclosure,
   type ExitTicketGradingDraft,
 } from './exit-ticket-builder';
+import { ExitTicketBuilderV3 } from './exit-ticket-builder-v3';
 import { cn } from '~/utils/misc';
 import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
@@ -348,6 +356,16 @@ export type AssignmentCreationSheetProps = {
   initialExitTicketAnswerType?: ExitTicketAnswerType | null;
   /** Present reopens the notes section filled in; absent leaves the default. */
   initialExitTicketLessonNotes?: ExitTicketLessonNotes | null;
+  /**
+   * The v3 exit ticket builder (flag `exit-ticket-builder-v3`). Off renders
+   * the quick builder. Either reads tickets the other wrote.
+   */
+  exitTicketBuilderV3Enabled?: boolean;
+  /**
+   * A stored ticket's whole config, for the v3 builder to reopen exactly,
+   * activity and prompt included. The quick builder reads the fields above.
+   */
+  initialExitTicketConfig?: ExitTicketConfig | null;
   teachingLocked?: boolean;
   createAssignmentTriggerRef?: React.RefObject<HTMLButtonElement | null>;
 };
@@ -430,6 +448,50 @@ function initialLessonNotesEnabled(
   notes: ExitTicketLessonNotes | null | undefined
 ) {
   return Boolean(notes);
+}
+
+/**
+ * What the v3 builder opens on. A stored config wins; otherwise the quick
+ * builder's starting answers (the Lesson Planner hand-off sends those) are
+ * read as the ticket they describe. A check without a topic is not yet a
+ * ticket, so it opens on the default reflection.
+ */
+export function initialExitTicketV3Draft({
+  config,
+  mode,
+  reflectionPrompt,
+  focus,
+  topic,
+  answerType,
+}: {
+  config: ExitTicketConfig | null;
+  mode: ExitTicketMode;
+  reflectionPrompt: ExitTicketReflectionPrompt | null;
+  focus: ExitTicketFocus;
+  topic: string;
+  answerType: ExitTicketAnswerType | null;
+}): ExitTicketV3Draft {
+  if (config) return exitTicketV3DraftFromConfig(config);
+  if (mode === 'specific') {
+    return topic.trim()
+      ? exitTicketV3DraftFromConfig({
+          schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+          mode: 'specific',
+          focus,
+          topic,
+          answerType: answerType ?? 'subjective',
+        })
+      : exitTicketV3DraftFromConfig(null);
+  }
+  return exitTicketV3DraftFromConfig(
+    reflectionPrompt
+      ? {
+          schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+          mode: 'basic',
+          reflectionPrompt,
+        }
+      : null
+  );
 }
 
 const EMPTY_LESSON_NOTES: ExitTicketLessonNotes = {
@@ -599,11 +661,7 @@ export function AssignmentCreationSheet({
                         row.remaining === 0 && 'text-amber-800'
                       )}
                     >
-                      {usage.unlimitedFreeAssignmentTiles
-                        ? 'Unlimited'
-                        : row.remaining
-                          ? `${row.remaining} of ${row.total} left`
-                          : 'None left'}
+                      {freeAssignmentKindUsageMeta(usage, row)}
                     </span>
                   </span>
                   {!usage.unlimitedFreeAssignmentTiles &&
@@ -672,6 +730,8 @@ export function AssignmentCreationSheetContent({
   initialExitTicketAnswerType = null,
   initialExitTicketTopic = '',
   initialExitTicketLessonNotes = null,
+  exitTicketBuilderV3Enabled = false,
+  initialExitTicketConfig = null,
   initialPostAt,
   initialDueAt,
   createFetcher,
@@ -790,6 +850,16 @@ export function AssignmentCreationSheetContent({
       ? initialExitTicketReflectionPrompt.text
       : ''
   );
+  const v3DraftFromProps = () =>
+    initialExitTicketV3Draft({
+      config: initialExitTicketConfig,
+      mode: initialExitTicketMode,
+      reflectionPrompt: initialExitTicketReflectionPrompt,
+      focus: initialExitTicketFocus,
+      topic: initialExitTicketTopic,
+      answerType: initialExitTicketAnswerType,
+    });
+  const [v3Draft, setV3Draft] = useState<ExitTicketV3Draft>(v3DraftFromProps);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [extractionTruncated, setExtractionTruncated] = useState(false);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -832,6 +902,10 @@ export function AssignmentCreationSheetContent({
   // the ordinary prompt box, so an exit ticket type can exist before this does.
   const isExitTicket = isExitTicketAssignmentType(selectedType);
   const isQuickExitTicket = isExitTicket;
+  // The v3 builder replaces the quick builder's form when its flag is on.
+  const isV3ExitTicket = isExitTicket && exitTicketBuilderV3Enabled;
+  const v3IsCheck =
+    isV3ExitTicket && exitTicketActivityKind(v3Draft.activity) === 'check';
   // Bands, never steps, for the quick builder: the exit ticket rubric is one
   // category with four bands, and a short response is not stepped through.
   const effectiveGradingMode: AssignmentGradingMode = isQuickExitTicket
@@ -845,12 +919,18 @@ export function AssignmentCreationSheetContent({
   // these, so it composes exactly what it always did.
   // Lesson notes post when the grading section asks for them as criteria, or
   // when the notes are switched on; the gate reads exactly what will post.
-  const criteriaNoteKeys = exitTicketCriteriaNoteKeys({
-    kind: exitTicketKindForMode(exitTicketMode),
-    graded: submitForGrade,
-    answerType: exitTicketAnswerType,
-    basis: gradingDraft.basis,
-  });
+  // In v3 a check asks for key points in the builder itself, so the notes
+  // section does not ask for them twice.
+  const criteriaNoteKeys: (keyof ExitTicketLessonNotes)[] = isV3ExitTicket
+    ? v3IsCheck
+      ? ['mustMention']
+      : []
+    : exitTicketCriteriaNoteKeys({
+        kind: exitTicketKindForMode(exitTicketMode),
+        graded: submitForGrade,
+        answerType: exitTicketAnswerType,
+        basis: gradingDraft.basis,
+      });
   const postedNote = (key: keyof ExitTicketLessonNotes) =>
     lessonNotesEnabled || criteriaNoteKeys.includes(key)
       ? lessonNotes[key]
@@ -867,7 +947,21 @@ export function AssignmentCreationSheetContent({
     lessonMustMention: postedNote('mustMention'),
     lessonWatchFor: postedNote('watchFor'),
   };
-  const exitTicketConfig = parseExitTicketConfigInput({
+  const v3Input = {
+    activity: v3Draft.activity,
+    promptText: v3Draft.promptText,
+    starter: v3Draft.starter,
+    graded: submitForGrade,
+    gradingBasis: gradingDraft.basis,
+    lessonMainPoints: postedNote('mainPoints'),
+    lessonMustMention: postedNote('mustMention'),
+    lessonWatchFor: postedNote('watchFor'),
+  };
+  const v3Config = parseExitTicketConfigInput(v3Input);
+  const v3Prompt = v3Config.success
+    ? composeExitTicketPrompt(v3Config.config)
+    : '';
+  const quickExitTicketConfig = parseExitTicketConfigInput({
     mode: exitTicketMode,
     focus: exitTicketFocus,
     topic: exitTicketTopic,
@@ -884,12 +978,14 @@ export function AssignmentCreationSheetContent({
     answerType: exitTicketAnswerType || EXIT_TICKET_ANSWER_TYPES[0],
     ...quickBuilderInput,
   });
-  const exitTicketPreview = exitTicketPreviewConfig.success
+  const quickExitTicketPreview = exitTicketPreviewConfig.success
     ? composeExitTicketPrompt(exitTicketPreviewConfig.config)
     : '';
-  const exitTicketPrompt = exitTicketConfig.success
-    ? composeExitTicketPrompt(exitTicketConfig.config)
+  const quickExitTicketPrompt = quickExitTicketConfig.success
+    ? composeExitTicketPrompt(quickExitTicketConfig.config)
     : '';
+  // Empty means the form is not answered yet, which also blocks submission.
+  const exitTicketPrompt = isV3ExitTicket ? v3Prompt : quickExitTicketPrompt;
   const selectedAssignmentType = assignmentTypes.find(
     (type) => type.id === assignmentTypeId
   );
@@ -1042,6 +1138,7 @@ export function AssignmentCreationSheetContent({
         ? initialExitTicketReflectionPrompt.text
         : ''
     );
+    setV3Draft(v3DraftFromProps());
     setAttachmentFile(null);
     setRemoveAttachment(false);
     setExtractionTruncated(false);
@@ -1070,6 +1167,7 @@ export function AssignmentCreationSheetContent({
     initialExitTicketReflectionPrompt,
     initialExitTicketGrading,
     initialExitTicketGradebook,
+    initialExitTicketConfig,
     editingAssignment,
     initialPostAt,
     initialDueAt,
@@ -1225,7 +1323,11 @@ export function AssignmentCreationSheetContent({
   // The composed prompt goes along so any handler that still expects a
   // prompt field keeps working. The server recomposes it from the answers
   // rather than trusting this value.
-  const exitTicketHiddenFields = (
+  const exitTicketHiddenFields = isV3ExitTicket ? (
+    // The v3 builder posts its own fields; the composed prompt still goes
+    // along for any handler that expects one, and is recomposed server-side.
+    <input type="hidden" name="prompt" value={exitTicketPrompt} />
+  ) : (
     <>
       <input type="hidden" name="exitTicketMode" value={exitTicketMode} />
       {exitTicketMode === 'specific' ? (
@@ -1446,67 +1548,157 @@ export function AssignmentCreationSheetContent({
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="assignment-create-attachment">
-            Attachment (optional)
-          </Label>
-          <p className="text-sm text-muted-foreground">
-            Any documents uploaded here will be attached to the prompt and
-            available to be viewed by students as they&apos;re working on their
-            document.
-          </p>
-          {editingAssignment?.promptAttachmentName && !removeAttachment ? (
-            <div className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
-              <span className="truncate">
-                {editingAssignment.promptAttachmentName}
-              </span>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => setRemoveAttachment(true)}
-                disabled={isSaving}
-              >
-                Remove
-              </Button>
+        {isV3ExitTicket ? (
+          // v3 exit tickets take no file. One already attached is still
+          // shown, so it can be removed rather than stranded.
+          editingAssignment?.promptAttachmentName ? (
+            <div className="space-y-2">
+              {removeAttachment ? (
+                <input
+                  type="hidden"
+                  name="removePromptAttachment"
+                  value="true"
+                />
+              ) : (
+                <div className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
+                  <span className="truncate">
+                    {editingAssignment.promptAttachmentName}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setRemoveAttachment(true)}
+                    disabled={isSaving}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              )}
             </div>
-          ) : null}
-          {removeAttachment ? (
-            <input type="hidden" name="removePromptAttachment" value="true" />
-          ) : null}
-          <Input
-            id="assignment-create-attachment"
-            ref={attachmentInputRef}
-            name="promptAttachment"
-            type="file"
-            accept="application/pdf,.pdf"
-            onChange={(event) => {
-              setAttachmentFile(event.target.files?.[0] ?? null);
-            }}
-            disabled={isSaving}
-          />
-          {attachmentFile ? (
-            <div className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
-              <span className="truncate">{attachmentFile.name}</span>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setAttachmentFile(null);
-                  if (attachmentInputRef.current) {
-                    attachmentInputRef.current.value = '';
-                  }
-                }}
-                disabled={isSaving}
-              >
-                Remove
-              </Button>
-            </div>
-          ) : null}
-        </div>
+          ) : null
+        ) : (
+          <div className="space-y-2">
+            <Label htmlFor="assignment-create-attachment">
+              Attachment (optional)
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              Any documents uploaded here will be attached to the prompt and
+              available to be viewed by students as they&apos;re working on
+              their document.
+            </p>
+            {editingAssignment?.promptAttachmentName && !removeAttachment ? (
+              <div className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
+                <span className="truncate">
+                  {editingAssignment.promptAttachmentName}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setRemoveAttachment(true)}
+                  disabled={isSaving}
+                >
+                  Remove
+                </Button>
+              </div>
+            ) : null}
+            {removeAttachment ? (
+              <input type="hidden" name="removePromptAttachment" value="true" />
+            ) : null}
+            <Input
+              id="assignment-create-attachment"
+              ref={attachmentInputRef}
+              name="promptAttachment"
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={(event) => {
+                setAttachmentFile(event.target.files?.[0] ?? null);
+              }}
+              disabled={isSaving}
+            />
+            {attachmentFile ? (
+              <div className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
+                <span className="truncate">{attachmentFile.name}</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setAttachmentFile(null);
+                    if (attachmentInputRef.current) {
+                      attachmentInputRef.current.value = '';
+                    }
+                  }}
+                  disabled={isSaving}
+                >
+                  Remove
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        )}
 
-        {isExitTicket ? (
+        {isV3ExitTicket ? (
+          <div className="space-y-4">
+            <ExitTicketBuilderV3
+              activity={v3Draft.activity}
+              onActivityChange={(activity) =>
+                setV3Draft((current) =>
+                  current.activity === activity
+                    ? current
+                    : activity === 'reflect'
+                      ? {
+                          activity,
+                          promptText:
+                            exitTicketStarterOption('learned')!.prompt,
+                          starter: 'learned',
+                        }
+                      : // A check's question is the teacher's to write; a
+                        // reflection starter would read as the wrong kind.
+                        {
+                          activity,
+                          promptText:
+                            current.activity === 'reflect'
+                              ? ''
+                              : current.promptText,
+                          starter: null,
+                        }
+                )
+              }
+              promptText={v3Draft.promptText}
+              onPromptTextChange={(promptText) =>
+                setV3Draft((current) => ({ ...current, promptText }))
+              }
+              starter={v3Draft.starter}
+              onStarterChange={(starter) =>
+                setV3Draft({
+                  activity: 'reflect',
+                  promptText: exitTicketStarterOption(starter)!.prompt,
+                  starter,
+                })
+              }
+              keyPoints={lessonNotes.mustMention}
+              onKeyPointsChange={(value) =>
+                setLessonNotes((current) => ({
+                  ...current,
+                  mustMention: value,
+                }))
+              }
+              graded={submitForGrade}
+              onGradedChange={setSubmitForGrade}
+              pointValue={pointValue}
+              onPointValueChange={setPointValue}
+              gradingBasis={gradingDraft.basis}
+              onGradingBasisChange={(basis) =>
+                setGradingDraft((current) => ({ ...current, basis }))
+              }
+              preview={v3Prompt}
+              disabled={isSaving}
+            />
+            {exitTicketHiddenFields}
+          </div>
+        ) : isExitTicket ? (
           <div className="space-y-4">
             <ExitTicketBuilder
               mode={exitTicketMode}
@@ -1533,7 +1725,7 @@ export function AssignmentCreationSheetContent({
               onLessonNoteChange={(key, value) =>
                 setLessonNotes((current) => ({ ...current, [key]: value }))
               }
-              preview={exitTicketPreview}
+              preview={quickExitTicketPreview}
               disabled={isSaving}
             />
             {exitTicketHiddenFields}
@@ -1890,13 +2082,15 @@ export function AssignmentCreationSheetContent({
             <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
               {isEditing
                 ? 'The tutor cannot be switched on or off after an assignment is created — students may already be working with it. Duplicate the assignment to give a class a version with the other setting.'
-                : isQuickExitTicket
-                  ? 'Off by default for exit tickets.'
-                  : isExitTicket
-                    ? 'Off by default for an exit ticket: it checks what students understand on their own, and a tutor in the document would answer the question for them. Turn it on if you want them to have help.'
-                    : "The tutor is on by default. Turning it off removes it from students' documents — the digital equivalent of an in-class essay. Assigning one now and then shows what a student can do unaided, and gives the Reporter a baseline to measure independent growth against."}
+                : isV3ExitTicket
+                  ? 'It starts off, because an exit ticket shows what students understand on their own. Turn it on for a class that tends to hand in six words. It will ask them to say more without giving away the answer or writing for them.'
+                  : isQuickExitTicket
+                    ? 'Off by default for exit tickets.'
+                    : isExitTicket
+                      ? 'Off by default for an exit ticket: it checks what students understand on their own, and a tutor in the document would answer the question for them. Turn it on if you want them to have help.'
+                      : "The tutor is on by default. Turning it off removes it from students' documents — the digital equivalent of an in-class essay. Assigning one now and then shows what a student can do unaided, and gives the Reporter a baseline to measure independent growth against."}
             </p>
-            {isQuickExitTicket && !isEditing ? (
+            {isQuickExitTicket && !isV3ExitTicket && !isEditing ? (
               <div className="mt-1 pl-[calc(1rem+0.625rem)]">
                 <WhyDisclosure>
                   <p>

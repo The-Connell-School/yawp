@@ -53,19 +53,3 @@ test('redirectLockedPreviewAssignmentTypeHomeToGuide is a no-op when approved', 
     },
   });
 });
-
-test('redirectLockedPreviewAssignmentTypeHomeToGuide sends pending teachers on site-license types to How It Works', async () => {
-  userHasPendingFreeTierTeachingLock.mockResolvedValue(true);
-  await expectRedirect(
-    () =>
-      redirectLockedPreviewAssignmentTypeHomeToGuide({
-        userId: 'u1',
-        assignmentType: {
-          id: 'at-daily-pages',
-          title: 'Daily Pages',
-          kind: 'daily_pages',
-        },
-      }),
-    '/app/assignment-types/at-daily-pages/how-it-works'
-  );
-});

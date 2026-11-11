@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  deckUploadFlags,
   FEATURE_FLAGS,
   GUIDED_TOURS_FLAG,
   CLASS_CODE_UNIQUE_FLAG,
@@ -8,7 +9,6 @@ import {
   LESSON_PLANNER_FLAG,
   FREE_TIER_FLAG,
   FREE_TIER_FLAG_LEGACY_KEY,
-  UNIFIED_SIGN_ON_FLAG,
   FEATURE_FLAG_KEYS,
   LESSON_PLANNER_INTAKE_V2_FLAG,
   LESSON_PLANNER_STACK_V2_FLAG,
@@ -22,8 +22,17 @@ import {
   LESSON_PLANNER_UPLOADS_FLAG,
   LESSON_PLANNER_TEACH_NOTES_FLAG,
   LESSON_PLANNER_LIBRARY_V2_FLAG,
+  LESSON_PLANNER_UPLOAD_PICTURES_FLAG,
+  LESSON_PLANNER_TEACH_MY_SLIDES_FLAG,
+  LESSON_PLANNER_REFRESH_MY_DECK_FLAG,
+  LESSON_PLANNER_ACTIVE_TIME_FLAG,
+  LESSON_PLANNER_WRITING_OVERRIDE_FLAG,
+  LESSON_PLANNER_DECK_KIT_V4_FLAG,
   LESSON_PLANNER_STACK_PANEL_FLAG,
   TEACHER_PROMPT_GENERATOR_FLAG,
+  TEACHER_LOUNGE_FLAG,
+  EXIT_TICKET_BUILDER_V3_FLAG,
+  EXIT_TICKET_CLASS_SUMMARY_FLAG,
   FOLDED_FREE_TIER_LEGACY_SETTINGS,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
@@ -44,6 +53,13 @@ describe('feature flag registry', () => {
     expect(isFeatureFlagKey(removed)).toBe(false);
   });
 
+  test('no longer has the shipped unified sign-on flag', () => {
+    for (const removed of ['unified-sign-on', 'signon-teacher-prompts']) {
+      expect(FEATURE_FLAG_KEYS as readonly string[]).not.toContain(removed);
+      expect(isFeatureFlagKey(removed)).toBe(false);
+    }
+  });
+
   test('registers only the collapsed rollout flags plus unrelated product flags', () => {
     expect(FEATURE_FLAG_KEYS).toEqual([
       LESSON_PLANNER_FLAG,
@@ -62,11 +78,19 @@ describe('feature flag registry', () => {
       LESSON_PLANNER_UPLOADS_FLAG,
       LESSON_PLANNER_TEACH_NOTES_FLAG,
       LESSON_PLANNER_LIBRARY_V2_FLAG,
-      UNIFIED_SIGN_ON_FLAG,
+      LESSON_PLANNER_UPLOAD_PICTURES_FLAG,
+      LESSON_PLANNER_TEACH_MY_SLIDES_FLAG,
+      LESSON_PLANNER_REFRESH_MY_DECK_FLAG,
+      LESSON_PLANNER_ACTIVE_TIME_FLAG,
+      LESSON_PLANNER_WRITING_OVERRIDE_FLAG,
+      LESSON_PLANNER_DECK_KIT_V4_FLAG,
       CLASS_CODE_UNIQUE_FLAG,
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       TEACHER_PROMPT_GENERATOR_FLAG,
+      TEACHER_LOUNGE_FLAG,
+      EXIT_TICKET_BUILDER_V3_FLAG,
+      EXIT_TICKET_CLASS_SUMMARY_FLAG,
     ]);
   });
 
@@ -79,7 +103,6 @@ describe('feature flag registry', () => {
     expect(resolveFeatureFlagKey(FREE_TIER_FLAG_LEGACY_KEY)).toBe(FREE_TIER_FLAG);
     expect(resolveFeatureFlagKey('free-tier-onboarding-v2')).toBe(FREE_TIER_FLAG);
     expect(resolveFeatureFlagKey('free-tier-inapp-v2')).toBe(FREE_TIER_FLAG);
-    expect(resolveFeatureFlagKey('signon-teacher-prompts')).toBe(UNIFIED_SIGN_ON_FLAG);
     expect(isFeatureFlagKey('free_tier')).toBe(true);
     expect(isFeatureFlagKey('free-tier-onboarding-v2')).toBe(true);
   });
@@ -243,3 +266,26 @@ describe('evaluateFeatureFlag', () => {
     expect(isFreeTierGloballyEnabled({ mode: 'off', orgIds: [] })).toBe(false);
   });
 });
+
+describe('the teacher’s own deck flags (Nov 1)', () => {
+  const all = { uploads: true, uploadPictures: true, teachMySlides: true, refreshMyDeck: true };
+
+  test('keeping the deck and its pictures needs uploads on', () => {
+    expect(deckUploadFlags({ ...all, uploads: false })).toEqual({ uploadPictures: false, teachMySlides: false, refreshMyDeck: false });
+    expect(deckUploadFlags(all)).toEqual({ uploadPictures: true, teachMySlides: true, refreshMyDeck: true });
+  });
+
+  test('teach-with-my-slides and refresh both need the kept deck', () => {
+    expect(deckUploadFlags({ ...all, uploadPictures: false })).toEqual({
+      uploadPictures: false,
+      teachMySlides: false,
+      refreshMyDeck: false,
+    });
+    expect(deckUploadFlags({ ...all, refreshMyDeck: false })).toEqual({
+      uploadPictures: true,
+      teachMySlides: true,
+      refreshMyDeck: false,
+    });
+  });
+});
+

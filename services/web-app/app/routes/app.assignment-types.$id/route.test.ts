@@ -37,9 +37,11 @@ const prisma = {
 
 const requireUserId = mock();
 const requireMembership = mock();
+const createDocumentForAssignmentType = mock();
 const redirectWithToast = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 const isAssignmentTypeAvailableForAnyScope = mock();
+const isTeacherPromptGeneratorEnabled = mock(async () => true);
 
 // bun's module mocks are global to the test run and mock.restore() does not
 // undo mock.module — restore from the pristine copy test-preload.ts captured
@@ -52,6 +54,10 @@ mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
 }));
+mock.module('~/domain/documents.server', () => ({
+  createDocumentForAssignmentType,
+  DocumentCreationError: class DocumentCreationError extends Error {},
+}));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
 }));
@@ -60,6 +66,9 @@ mock.module('~/utils/assignment-type-access.server', () => ({
   AssignmentTypeAccessScope: undefined,
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForAnyScope,
+}));
+mock.module('~/domain/teacher-prompt-generator/gate.server', () => ({
+  isTeacherPromptGeneratorEnabled,
 }));
 const redirectLockedPreviewAssignmentTypeHomeToGuide = mock(async () => {});
 mock.module(
@@ -129,6 +138,7 @@ describe('app.assignment-types.$id action', () => {
     prisma.savedThesisPrompt.findMany.mockResolvedValue([]);
     requireUserId.mockReset();
     requireMembership.mockReset();
+    createDocumentForAssignmentType.mockReset();
     redirectWithToast.mockReset();
     isAssignmentTypeAvailableForAnyScope.mockReset();
     redirectLockedPreviewAssignmentTypeHomeToGuide.mockReset();
@@ -166,6 +176,7 @@ describe('app.assignment-types.$id action', () => {
       }
     );
     mockActionAssignmentTypeAvailable();
+    createDocumentForAssignmentType.mockResolvedValue({ documentId: 'doc-1' });
     redirectWithToast.mockImplementation((url, toast) => ({
       redirectedTo: url,
       toast,
@@ -181,36 +192,95 @@ describe('app.assignment-types.$id action', () => {
     } as never);
 
     expect(response as unknown).toEqual({
-      redirectedTo: '/app/assignment-types/at-1',
+      redirectedTo: '/app',
       toast: {
         type: 'error',
         description: 'Start writing from an assignment in one of your classes.',
       },
     });
+    expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
   });
 
-  test('rejects direct document creation for teachers', async () => {
+  test('requires assignment type availability before creating a document', async () => {
     requireMembership.mockResolvedValue({
       id: 'profile-1',
       role: 'TEACHER',
       organization: { id: 'org-1', name: 'Org' },
     });
 
-    const response = await action({
+    await action({
       request: new Request('https://example.test/app/assignment-types/at-1', {
         method: 'POST',
       }),
       params: { id: 'at-1' },
     } as never);
 
-    expect(response as unknown).toEqual({
-      redirectedTo: '/app/assignment-types/at-1',
-      toast: {
-        type: 'error',
-        description:
-          'Documents are created from assignments, not from this page.',
+    expect(prisma.assignmentType.findFirst).toHaveBeenNthCalledWith(1, {
+      where: { id: 'at-1', archivedAt: null },
+      select: {
+        id: true,
       },
     });
+    expect(prisma.assignmentType.findFirst).toHaveBeenNthCalledWith(2, {
+      where: { archivedAt: null, id: 'at-1' },
+      select: { id: true, systemKey: true },
+    });
+    expect(createDocumentForAssignmentType).toHaveBeenCalledWith({
+      membershipId: 'profile-1',
+      assignmentTypeId: 'at-1',
+    });
+  });
+
+  test('rejects direct document creation for unavailable assignment types', async () => {
+    prisma.assignmentType.findFirst.mockResolvedValue(null);
+
+    const response = await action({
+      request: new Request('https://example.test/app/assignment-types/at-2', {
+        method: 'POST',
+      }),
+      params: { id: 'at-2' },
+    } as never);
+
+    expect(response as unknown).toEqual({
+      redirectedTo: '/app',
+      toast: {
+        type: 'error',
+        description: 'Assignment type not found',
+      },
+    });
+    expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
+  });
+
+  test('rejects direct document creation for AP History assignment types', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    mockActionAssignmentTypeAvailable({
+      id: 'ap-history-type',
+      systemKey: 'ap_history_essay',
+    });
+    prisma.organizationAssignmentType.findMany.mockResolvedValue([
+      { organizationId: 'org-1', assignmentTypeId: 'ap-history-type' },
+    ]);
+
+    const response = await action({
+      request: new Request(
+        'https://example.test/app/assignment-types/ap-history-type',
+        { method: 'POST' }
+      ),
+      params: { id: 'ap-history-type' },
+    } as never);
+
+    expect(response as unknown).toEqual({
+      redirectedTo: '/app/assignment-types/ap-history-type',
+      toast: {
+        type: 'error',
+        description: 'Choose an APUSH prompt from the library first.',
+      },
+    });
+    expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
   });
 });
 
@@ -267,11 +337,24 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     prisma.savedDailyPagesPrompt.findMany.mockResolvedValue([]);
   });
 
-  test('hides the modules accordion on this tip', () => {
+  test('hides the modules list on Class Starter (single module)', () => {
     expect(showModulesAccordion({ kind: 'class_starter' }, 1)).toBe(false);
+  });
+
+  test('hides the modules list on an exit ticket', () => {
+    // The exit ticket has one module whose whole description is "answer the
+    // exit ticket in your own words". The directions above it already say
+    // that, so the accordion is noise on this page only.
     expect(showModulesAccordion({ kind: 'exit_ticket' }, 1)).toBe(false);
-    expect(showModulesAccordion({ kind: null }, 1)).toBe(false);
+    expect(showModulesAccordion({ kind: null }, 1)).toBe(true);
+  });
+
+  test('hides the modules list on an exit ticket for students too', () => {
+    // Not gated on role: the row is equally uninformative either way.
     expect(showModulesAccordion({ kind: 'exit_ticket' }, 3)).toBe(false);
+  });
+
+  test('still hides the modules list when there are no modules at all', () => {
     expect(showModulesAccordion({ kind: null }, 0)).toBe(false);
   });
 
@@ -397,24 +480,6 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     expect(response.data.thesisPromptLibrary.facets.categories).toContain(
       'general'
     );
-  });
-
-  test('provides thesis prompt library for Thesis Statement kind', async () => {
-    getAvailableAssignmentTypesForScopes.mockResolvedValue([
-      withOrganizationAssignment(
-        makeAssignmentType({
-          title: 'Thesis Statement',
-          kind: 'thesis_statement',
-        })
-      ),
-    ]);
-
-    const response = (await loader({
-      request: new Request('https://example.test/app/assignment-types/at-1'),
-      params: { id: 'at-1' },
-    } as never)) as any;
-
-    expect(response.data.thesisPromptLibrary.totalCount).toBeGreaterThan(0);
   });
 
   test('merges the teacher\'s saved prompts into the thesis library as "My prompts"', async () => {
@@ -774,17 +839,6 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
 
     expect(response.data.apHistoryLibrary).toBeNull();
     expect(prisma.apHistoryPromptLibraryEntry.findMany).not.toHaveBeenCalled();
-  });
-
-  test('omits document queries for teachers', async () => {
-    const response = (await loader({
-      request: new Request('https://example.test/app/assignment-types/at-1'),
-      params: { id: 'at-1' },
-    } as never)) as any;
-
-    expect(response.data.documents).toEqual([]);
-    expect(response.data.archivedDocuments).toEqual([]);
-    expect(prisma.document.findMany).not.toHaveBeenCalled();
   });
 
   test('strips unreleased grade fields from document submission summaries', async () => {

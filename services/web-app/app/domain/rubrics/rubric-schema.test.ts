@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   formatRubricSchema,
   parseRubricSchema,
+  rubricCategoriesArrayFromSchemaJson,
   suggestRubricIdentity,
 } from './rubric-schema';
 import { STARTER_RUBRICS } from './starter-rubrics';
@@ -44,14 +45,28 @@ describe('rubric schema', () => {
   });
 
   test('reads categories at the top level as well as nested', () => {
-    const result = parseRubricSchema({
+    const flat = {
       name: 'flat',
       categories: minimal.rubric.categories,
-    });
+    };
+    const result = parseRubricSchema(flat);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.schema.rubric.categories).toHaveLength(1);
+    expect(rubricCategoriesArrayFromSchemaJson(flat)).toEqual(
+      minimal.rubric.categories
+    );
+  });
+
+  test('rubricCategoriesArrayFromSchemaJson prefers nested rubric.categories', () => {
+    expect(
+      rubricCategoriesArrayFromSchemaJson({
+        name: 'x',
+        rubric: { categories: [{ key: 'a', label: 'A' }] },
+        categories: [{ key: 'b', label: 'B' }],
+      })
+    ).toEqual([{ key: 'a', label: 'A' }]);
   });
 
   test('refuses a rubric with no categories', () => {
@@ -106,6 +121,8 @@ describe('rubric schema', () => {
       'class-starter-engagement',
       'daily-pages-short-form',
       'strode-eng101-essay-1-description',
+      'strode-eng101-essay-2-autobiography',
+      'gals-claims',
     ]);
 
     const thesis = STARTER_RUBRICS[0];

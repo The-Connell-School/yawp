@@ -56,6 +56,7 @@ export async function lessonRuns(conversationIds: string[], stackV2: boolean): P
           stepType: true,
           label: true,
           hasHandout: true,
+          writing: true,
           yawpAssignmentId: true,
           yawpHref: true,
           yawpCreatedAt: true,
@@ -85,6 +86,7 @@ export async function lessonRuns(conversationIds: string[], stackV2: boolean): P
               hasHandout: material.hasHandout,
               yawpAssignmentId: material.yawpAssignmentId,
               yawpCreated: Boolean(createdFor(links, material)),
+              writing: material.writing,
             },
           ])
         ),

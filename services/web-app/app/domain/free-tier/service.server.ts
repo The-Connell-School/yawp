@@ -338,7 +338,7 @@ export async function createAcquisitionTokens(
     explicitIdempotencyKey ?? createHash('sha256').update(fingerprint).digest('hex')
   }`;
   return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
     if (explicitIdempotencyKey) {
       const existing = await findRecentMatchingAcquisitionToken(tx, parsed, explicitIdempotencyKey);
       if (existing?.code) {

@@ -9,6 +9,8 @@
  */
 import { classicSlide, type Slide } from '~/domain/lesson-planner/slide-deck';
 import { BrandSafe } from '~/components/brand/brand-safe';
+import { SlidePicture } from '~/components/lesson-planner/slide-picture';
+import { pictureSlideText } from '~/domain/lesson-planner/deck-pictures';
 
 /** Scales with the slide surface, floored and capped so it never gets silly. */
 const TITLE_TYPE = 'clamp(1.75rem, 4.6cqw, 4.5rem)';
@@ -119,6 +121,24 @@ function SlideBody({ slide }: { slide: Slide }) {
           </p>
         </div>
       );
+
+    case 'picture': {
+      // The teacher's own picture, whole, with its question beside it (Nov 1).
+      const words = pictureSlideText(slide);
+      return (
+        <div className="flex h-full flex-col gap-[0.6em]">
+          <SlideTitle>{slide.title}</SlideTitle>
+          <div className={words ? 'grid min-h-0 flex-1 gap-[0.8em] @md:grid-cols-[3fr_2fr]' : 'flex min-h-0 flex-1'}>
+            <SlidePicture id={slide.image} className="min-h-0" />
+            {words ? (
+              <p className="self-center font-medium leading-[1.3] text-slate-900" style={{ fontSize: BODY_TYPE }}>
+                {words}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      );
+    }
 
     case 'compare': {
       // A compare slide is as often two paragraphs — a weak conclusion beside a

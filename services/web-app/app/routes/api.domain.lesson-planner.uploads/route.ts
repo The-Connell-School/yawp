@@ -3,6 +3,11 @@
  * back out. Only the text read out of the file is kept. Scoped to the
  * teacher's own lessons, behind lesson_planner_uploads.
  *
+ * With lesson_planner_upload_pictures (Nov 1), a PowerPoint is kept whole,
+ * with the pictures a browser can show, and the teacher can say what they
+ * want from it (`intent=mode`): teach with these slides, or refresh them into
+ * a Yawp! deck, each behind its own flag. Removing it deletes all of it.
+ *
  * On a lesson with no messages yet, the document waits for the first one:
  * that message attaches it (and counts as the new lesson, as always).
  */
@@ -17,7 +22,7 @@ import {
   readSourceDocument,
   SourceDocumentError,
 } from '~/domain/lesson-planner/source-documents.server';
-import { PENDING_UPLOAD_MS } from '~/domain/lesson-planner/lesson-uploads';
+import { PENDING_UPLOAD_MS, isDeckMode } from '~/domain/lesson-planner/lesson-uploads';
 import { readBoundedBytes } from '~/utils/bounded-body.server';
 import {
   safeDomainErrorTextForClientResponse,
@@ -80,6 +85,24 @@ export async function action({ request }: ActionFunctionArgs) {
     return removed.count ? dataResponse({ ok: true }) : bad('Not found.', 404);
   }
 
+  if (intent === 'mode') {
+    if (!flags.uploadPictures) return bad('Not found.', 404);
+    const uploadId = form.get('uploadId')?.toString();
+    if (!uploadId) return bad('Which document?');
+    const raw = form.get('mode')?.toString() ?? '';
+    const mode = raw === '' ? null : isDeckMode(raw) ? raw : undefined;
+    if (mode === undefined) return bad('Teach it or refresh it?');
+    if ((mode === 'teach' && !flags.teachMySlides) || (mode === 'refresh' && !flags.refreshMyDeck)) {
+      return bad('Not found.', 404);
+    }
+    const updated = await prisma.lessonPlanUpload.updateMany({
+      // Only a deck that was kept whole has slides to teach or pictures to keep.
+      where: { id: uploadId, membershipId: access.membership.id, keptDeck: true },
+      data: { mode },
+    });
+    return updated.count ? dataResponse({ ok: true, mode }) : bad('Not found.', 404);
+  }
+
   if (intent !== 'upload') return bad('Unknown request.');
   const file = form.get('file');
   if (!(file instanceof File)) return bad('Choose a file to add.');
@@ -103,7 +126,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   let read;
   try {
-    read = await readSourceDocument(file);
+    read = await readSourceDocument(file, { keepDeck: Boolean(flags.uploadPictures) });
   } catch (error) {
     if (error instanceof SourceDocumentError) {
       return bad(
@@ -123,6 +146,7 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
+  const deck = flags.uploadPictures ? read.deck : null;
   const upload = await prisma.lessonPlanUpload.create({
     data: {
       conversationId: conversation?.id ?? null,
@@ -132,12 +156,50 @@ export async function action({ request }: ActionFunctionArgs) {
       byteSize: file.size,
       text: read.text,
       truncated: read.truncated,
+      ...(deck
+        ? {
+            file: new Uint8Array(deck.file),
+            keptDeck: true,
+            pictures: {
+              create: deck.pictures.flatMap((picture) =>
+                picture.bytes && picture.contentType
+                  ? [
+                      {
+                        membershipId: access.membership.id,
+                        position: picture.position,
+                        slideNumbers: picture.slideNumbers,
+                        altText: picture.altText,
+                        contentType: picture.contentType,
+                        byteSize: picture.bytes.byteLength,
+                        width: picture.width,
+                        height: picture.height,
+                        blob: new Uint8Array(picture.bytes),
+                      },
+                    ]
+                  : []
+              ),
+            },
+          }
+        : {}),
     },
-    select: { id: true, name: true, truncated: true, text: true },
+    select: {
+      id: true,
+      name: true,
+      truncated: true,
+      text: true,
+      ...(deck ? { mode: true, _count: { select: { pictures: true } } } : {}),
+    },
   });
+  const kept = upload as typeof upload & { mode?: string | null; _count?: { pictures: number } };
   return dataResponse({
     ok: true,
     conversationId: conversation?.id ?? null,
-    upload: { id: upload.id, name: upload.name, truncated: upload.truncated, characters: upload.text.length },
+    upload: {
+      id: upload.id,
+      name: upload.name,
+      truncated: upload.truncated,
+      characters: upload.text.length,
+      ...(deck ? { deck: { pictures: kept._count?.pictures ?? 0, mode: kept.mode ?? null } } : {}),
+    },
   });
 }
