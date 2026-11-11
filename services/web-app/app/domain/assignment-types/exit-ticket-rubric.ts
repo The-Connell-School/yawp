@@ -6,11 +6,14 @@ import type {
 } from './assignment-type-rubric.shared';
 import {
   EXIT_TICKET_LESSON_NOTE_FIELDS,
+  exitTicketActivityKind,
+  exitTicketActivityOption,
   exitTicketFocusOption,
   exitTicketReflectionPromptOption,
   type ExitTicketAnswerType,
   type ExitTicketConfig,
   type ExitTicketGrading,
+  type ExitTicketLessonNotes,
 } from './exit-ticket';
 
 /** Exit Tickets judge one thing, so the rubric has one category. */
@@ -138,6 +141,37 @@ export const EXIT_TICKET_ANSWER_TYPE_GUIDANCE: Record<
 };
 
 /**
+ * The v3 builder never asks whether there is one right answer. This is what
+ * it tells the grader instead: read for the idea, and never mark a student
+ * down for getting it across in other words or spelling.
+ */
+export const EXIT_TICKET_FLEXIBLE_ANSWER_GUIDANCE =
+  'Read for understanding, not for matching words. Where the teacher gave a correct answer or key points, credit any response that gets the same idea across: in different wording, in a different order, or with a misspelling (a student who writes "Alley" for Allie has named the right person). Only a response that contradicts the key points, or leaves out the heart of them, is not there yet. Where there are no key points, judge against the prompt alone. Never treat the key points as a script the student has to repeat.';
+
+/** What a lesson note is called in the v3 form, where it differs. */
+const V3_NOTE_LABELS: Partial<Record<keyof ExitTicketLessonNotes, string>> = {
+  mustMention: 'Correct answer or key points',
+};
+
+/** The v3 half of the context: the activity, and how to read an answer. */
+function v3ActivitySections(config: ExitTicketConfig): string[] {
+  const option = config.activity
+    ? exitTicketActivityOption(config.activity)
+    : null;
+  if (!option) return [];
+  return [
+    [
+      `What this ticket asks the students to do: ${option.label.replace(/^Have the students /, '')}.`,
+      `The teacher’s prompt: "${config.promptText ?? ''}"`,
+      option.gradingCriteria,
+    ].join('\n'),
+    ...(exitTicketActivityKind(option.value) === 'check'
+      ? [EXIT_TICKET_FLEXIBLE_ANSWER_GUIDANCE]
+      : []),
+  ];
+}
+
+/**
  * How to read a reflection that is not the default one. "Still wondering"
  * asks for a question, so it borrows the ask-a-question criteria rather than
  * restating them: the rule that not knowing is the task, never a failure, has
@@ -206,12 +240,19 @@ export function buildExitTicketGradingContext(
   config: ExitTicketConfig | null | undefined
 ): string | null {
   const sections: string[] = [];
+  // A v3 ticket also carries the legacy fields for older readers; the grader
+  // reads only what the teacher actually answered.
+  const isV3 = Boolean(config?.activity && config.promptText);
 
-  if (config?.mode === 'basic' && config.reflectionPrompt) {
+  if (config && isV3) {
+    sections.push(...v3ActivitySections(config));
+  }
+
+  if (!isV3 && config?.mode === 'basic' && config.reflectionPrompt) {
     sections.push(reflectionGradingSection(config.reflectionPrompt));
   }
 
-  if (config?.mode === 'specific') {
+  if (!isV3 && config?.mode === 'specific') {
     const option = exitTicketFocusOption(config.focus);
     if (option) {
       sections.push(
@@ -232,7 +273,10 @@ export function buildExitTicketGradingContext(
   if (notes) {
     const lines = EXIT_TICKET_LESSON_NOTE_FIELDS.filter((field) =>
       notes[field.key]?.trim()
-    ).map((field) => `- ${field.label}: ${notes[field.key].trim()}`);
+    ).map(
+      (field) =>
+        `- ${(isV3 && V3_NOTE_LABELS[field.key]) || field.label}: ${notes[field.key].trim()}`
+    );
 
     if (lines.length > 0) {
       sections.push(

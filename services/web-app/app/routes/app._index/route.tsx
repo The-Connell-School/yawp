@@ -60,6 +60,7 @@ import {
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
 import { shouldHideFreeTierTeachingSecrets } from '~/domain/free-tier/locked-preview.server';
+import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
 
 const DASHBOARD_MAX_TEACHER_CLASSES = 6;
 
@@ -369,8 +370,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ? teacherClassesOrdered.map(({ code: _code, ...klass }) => klass)
     : teacherClassesOrdered;
 
+  const exitTicketBuilderV3Enabled = useStudentExperience
+    ? false
+    : await isExitTicketBuilderV3Enabled(profile.organization.id);
+
   return dataResponse({
     requiresClassCode: isStudentOnlyWithNoClasses,
+    exitTicketBuilderV3Enabled,
     enrolledClasses,
     writingPracticeAssignments,
     teacherClasses: teacherClassesForClient,
@@ -506,6 +512,7 @@ export default function AppRoute() {
                     }
                   }}
                   entryPoint="dashboard"
+                  exitTicketBuilderV3Enabled={data.exitTicketBuilderV3Enabled}
                   assignmentTypes={data.assignmentCreationTypes}
                   siteLicenseLockedAssignmentTiles={
                     data.siteLicenseLockedAssignmentTiles

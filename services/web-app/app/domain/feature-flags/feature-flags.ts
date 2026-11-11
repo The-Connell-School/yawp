@@ -156,6 +156,24 @@ export const TEACHER_PROMPT_GENERATOR_FLAG = 'teacher-prompt-generator' as const
 export const TEACHER_LOUNGE_FLAG = 'teacher-lounge' as const;
 
 /**
+ * Exit ticket builder v3 (docs/plans/2026-11-02-exit-ticket-builder-v3.md):
+ * no attachment, four "Have the students…" activities in two groups, a
+ * teacher-written prompt, optional key points instead of a right-answer
+ * question, completion or understanding grading. Off: the quick builder.
+ * Tickets written by either builder open in both.
+ */
+export const EXIT_TICKET_BUILDER_V3_FLAG = 'exit-ticket-builder-v3' as const;
+
+/**
+ * Exit ticket class summary (v3 plan, phase 5): on the exit ticket's Class
+ * read, a model-written summary of the responses — what landed, the shared
+ * confusion, a reteach call and a suggested opening block — generated when
+ * the teacher asks, and carried into "Plan tomorrow from this". Off: the
+ * deterministic Class read only. Stored summaries are kept either way.
+ */
+export const EXIT_TICKET_CLASS_SUMMARY_FLAG = 'exit-ticket-class-summary' as const;
+
+/**
  * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
  * reads only `feature_flag.free_tier`; these rows are not OR-merged.
  */
@@ -294,6 +312,16 @@ export const FEATURE_FLAGS = {
     label: "Teacher's Lounge",
     description:
       "Controls Teacher's Lounge nav and `/app/teacher-trainings` access. Off: hidden for all teachers except the runtime access list. Everyone: on for all teachers. Targeted: on for listed schools only.",
+  },
+  [EXIT_TICKET_BUILDER_V3_FLAG]: {
+    label: 'Exit ticket builder v3',
+    description:
+      'The simpler exit ticket form: no attachment, "Have the students…" activities (reflect or ask; explain a concept; answer a question; engage with a text or source), a prompt the teacher writes, and optional key points instead of "Is there a correct answer?". Off: the current quick builder. Tickets made with either open in both.',
+  },
+  [EXIT_TICKET_CLASS_SUMMARY_FLAG]: {
+    label: 'Exit ticket class summary',
+    description:
+      'On an exit ticket’s Class read, teachers can ask for a summary of the responses: what the class understood, where the confusion is, whether to reteach, and a suggested opening block for tomorrow, which "Plan tomorrow from this" passes to the planner. One model call per request, only when new responses have arrived. Off: the Class read only.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

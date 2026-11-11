@@ -1,11 +1,21 @@
 import { currentClassInsightRows } from '~/domain/assignment-insights/class-insight-inputs.server';
 import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { ExitTicketClassReadPanel } from '~/components/assignments/exit-ticket-class-read-panel';
+import { EXIT_TICKET_CLASS_SUMMARY_FLAG } from '~/domain/feature-flags/feature-flags';
+import { loadExitTicketClassSummary } from '~/domain/assignment-types/exit-ticket-class-summary.server';
+import {
+  EXIT_TICKET_SUMMARY_MIN_RESPONSES,
+  exitTicketSummaryTexts,
+} from '~/domain/assignment-types/exit-ticket-class-summary';
+import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
 import { buildExitTicketClassRead } from '~/domain/assignment-types/exit-ticket-class-read';
 import { loadExitTicketResponses } from '~/domain/assignment-types/exit-ticket-class-read.server';
 import { EXIT_TICKET_SEED_STEP } from '~/domain/lesson-planner/lesson-seed';
 import { Prisma } from '@app/prisma';
-import { isLessonPlannerEnabled } from '~/domain/feature-flags/feature-flags.server';
+import {
+  isFeatureFlagEnabled,
+  isLessonPlannerEnabled,
+} from '~/domain/feature-flags/feature-flags.server';
 import { useState, type MouseEvent, type ReactNode } from 'react';
 import {
   type LoaderFunctionArgs,
@@ -258,14 +268,37 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const exitTicketConfig = parseStoredExitTicketConfig(
     active.assignment.exitTicketConfigJson
   );
-  const exitTicketClassRead = isExitTicketAssignmentType(
+  const isExitTicket = isExitTicketAssignmentType(
     active.assignment.assignmentType
-  )
+  );
+  const exitTicketResponses = isExitTicket
+    ? await loadExitTicketResponses(active.id)
+    : [];
+  const exitTicketClassRead = isExitTicket
     ? buildExitTicketClassRead({
-        responses: await loadExitTicketResponses(active.id),
+        responses: exitTicketResponses,
         config: exitTicketConfig,
       })
     : null;
+  // The model-written summary beside the class read (flag
+  // exit-ticket-class-summary): whatever is stored, and whether it still
+  // matches the responses. Nothing is generated on page load.
+  const exitTicketSummary =
+    isExitTicket &&
+    (await isFeatureFlagEnabled(
+      EXIT_TICKET_CLASS_SUMMARY_FLAG,
+      profile.organization.id
+    ))
+      ? {
+          stored: await loadExitTicketClassSummary(
+            active.id,
+            exitTicketResponses
+          ),
+          canGenerate:
+            exitTicketSummaryTexts(exitTicketResponses).length >=
+            EXIT_TICKET_SUMMARY_MIN_RESPONSES,
+        }
+      : null;
   const insight =
     insightRow &&
     insightRow.status === 'ready' &&
@@ -288,6 +321,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return {
     found: true as const,
     classInsightsEnabled,
+    exitTicketBuilderV3Enabled: await isExitTicketBuilderV3Enabled(
+      profile.organization.id
+    ),
     assignmentTypes: assignmentTypeOptions,
     activeClassId: active.classId,
     // Group setup is per class, because the roster is: one assignment pushed to
@@ -333,6 +369,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       gradedCount,
       insight,
       exitTicketClassRead,
+      exitTicketSummary,
+      activeClassAssignmentId: active.id,
       // Only where the planner is on; the step is not an index, so it can
       // never be read as a Class Summary next step.
       exitTicketPlanHref:
@@ -1004,6 +1042,8 @@ export default function AssignmentDetailRoute() {
               <ExitTicketClassReadPanel
                 read={data.assignment.exitTicketClassRead}
                 planHref={data.assignment.exitTicketPlanHref}
+                classAssignmentId={data.assignment.activeClassAssignmentId}
+                summary={data.assignment.exitTicketSummary}
               />
             </div>
           ) : null}
@@ -1025,6 +1065,8 @@ export default function AssignmentDetailRoute() {
           fixedClassId={activeClassId}
           assignmentTypes={data.assignmentTypes}
           teacherClasses={[activeClassOption]}
+          exitTicketBuilderV3Enabled={data.exitTicketBuilderV3Enabled}
+          initialExitTicketConfig={assignment.exitTicket ?? null}
           editingAssignment={{
             id: assignment.id,
             promptAttachmentName: assignment.promptAttachmentName,
@@ -1087,6 +1129,8 @@ export default function AssignmentDetailRoute() {
           fixedClassId={activeClassId}
           assignmentTypes={data.assignmentTypes}
           teacherClasses={[activeClassOption]}
+          exitTicketBuilderV3Enabled={data.exitTicketBuilderV3Enabled}
+          initialExitTicketConfig={assignment.exitTicket ?? null}
           initialAssignmentTypeId={assignment.assignmentTypeId}
           initialTitle={`Copy of ${assignment.title?.trim() || 'Untitled Assignment'}`}
           initialPrompt={assignment.prompt}

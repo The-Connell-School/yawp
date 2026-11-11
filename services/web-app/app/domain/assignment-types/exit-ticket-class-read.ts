@@ -15,6 +15,10 @@
 import { readRubricEntryScore } from '~/domain/assignment-insights/aggregate-rubric-performance';
 import type { ExitTicketConfig } from './exit-ticket';
 import {
+  exitTicketSummarySeedLines,
+  type ExitTicketClassSummary,
+} from './exit-ticket-class-summary';
+import {
   EXIT_TICKET_SCORE_BANDS,
   EXIT_TICKET_UNDERSTANDING_CATEGORY_KEY,
 } from './exit-ticket-rubric';
@@ -154,10 +158,13 @@ export function buildExitTicketLessonSeed({
   read,
   className,
   assignmentTitle,
+  summary = null,
 }: {
   read: ExitTicketClassRead;
   className: string | null;
   assignmentTitle: string | null;
+  /** A current class summary, when the teacher has one (no names in it). */
+  summary?: ExitTicketClassSummary | null;
 }): { prompt: string; context: string } {
   const forClass = className ? ` from ${className}` : '';
   const title = assignmentTitle ? `"${assignmentTitle}"` : 'an exit ticket';
@@ -175,6 +182,7 @@ export function buildExitTicketLessonSeed({
       ...read.openQuestions.map((question) => `- ${question}`)
     );
   }
+  if (summary) lines.push(...exitTicketSummarySeedLines(summary));
   lines.push(
     '',
     'Plan tomorrow’s lesson from this: start where the class actually is. Ask me anything you need to know first.'

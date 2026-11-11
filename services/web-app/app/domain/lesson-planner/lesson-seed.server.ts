@@ -15,6 +15,10 @@ import {
   buildExitTicketLessonSeed,
 } from '~/domain/assignment-types/exit-ticket-class-read';
 import { loadExitTicketResponses } from '~/domain/assignment-types/exit-ticket-class-read.server';
+import { storedExitTicketSummary } from '~/domain/assignment-types/exit-ticket-class-summary.server';
+import { exitTicketResponsesFingerprint } from '~/domain/assignment-types/exit-ticket-class-summary';
+import { EXIT_TICKET_CLASS_SUMMARY_FLAG } from '~/domain/feature-flags/feature-flags';
+import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
 import {
   isExitTicketAssignmentType,
   parseStoredExitTicketConfig,
@@ -51,8 +55,23 @@ export async function loadLessonSeed({
           assignmentType: { select: { kind: true } },
         },
       },
-      class: { select: { title: true, grade: true, period: true } },
+      class: {
+        select: {
+          title: true,
+          grade: true,
+          period: true,
+          school: { select: { organizationId: true } },
+        },
+      },
       insight: { select: { status: true, summaryJson: true } },
+      exitTicketSummary: {
+        select: {
+          summaryJson: true,
+          responseCount: true,
+          inputFingerprint: true,
+          generatedAt: true,
+        },
+      },
     },
   });
   if (!classAssignment) return null;
@@ -78,12 +97,27 @@ export async function loadLessonSeed({
         classAssignment.assignment.exitTicketConfigJson
       ),
     });
+    // The class summary rides along only while it still describes these
+    // responses, and only while its flag is on for the school.
+    const stored = storedExitTicketSummary(
+      classAssignment.exitTicketSummary ?? null,
+      exitTicketResponsesFingerprint(responses)
+    );
+    const summary =
+      stored?.current &&
+      (await isFeatureFlagEnabled(
+        EXIT_TICKET_CLASS_SUMMARY_FLAG,
+        classAssignment.class.school?.organizationId
+      ))
+        ? stored.summary
+        : null;
     return {
       classAssignmentId: classAssignment.id,
       ...buildExitTicketLessonSeed({
         read,
         className,
         assignmentTitle: classAssignment.assignment.title ?? null,
+        summary,
       }),
     };
   }

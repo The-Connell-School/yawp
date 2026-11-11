@@ -97,6 +97,9 @@ mock.module('~/domain/free-tier/locked-preview.server', () => ({
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({
   getLessonPlannerReviewFlags,
 }));
+mock.module('~/domain/assignment-types/exit-ticket-builder-v3-gate.server', () => ({
+  isExitTicketBuilderV3Enabled: async () => false,
+}));
 mock.module('~/utils/lesson-planner/lesson-planner-access.server', () => ({
   requireLessonPlannerAccess,
 }));
