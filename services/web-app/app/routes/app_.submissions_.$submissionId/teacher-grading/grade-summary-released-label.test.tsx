@@ -9,5 +9,6 @@ describe('GradeSummaryReleasedLabel', () => {
     expect(html).toContain('data-testid="grade-summary-released-label"');
     expect(html).toContain('Released');
     expect(html).toContain('lucide-badge-check');
+    expect(html).toContain('text-foreground/90');
   });
 });

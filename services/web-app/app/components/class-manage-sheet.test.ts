@@ -23,6 +23,16 @@ describe('ClassManageSheet', () => {
     expect(source).not.toContain('onValueChange={setPeriod} required');
   });
 
+  test('always shows the top error banner even for code field failures', () => {
+    const source = readFileSync(
+      join(import.meta.dirname, 'class-manage-sheet.tsx'),
+      'utf8'
+    );
+
+    expect(source).toContain('{fetcher.data?.error ? (');
+    expect(source).not.toContain("fetcher.data?.field === 'code')");
+  });
+
   test('grade select is optional with a no-grade option', () => {
     const source = readFileSync(
       join(import.meta.dirname, 'class-manage-sheet.tsx'),

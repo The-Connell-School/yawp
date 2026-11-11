@@ -33,18 +33,21 @@ async function grading(id: string, nowMs: number) {
 }
 
 suite('token buckets enforce the configured windows', () => {
-  test('tutor: 6 in a minute pass, the 7th is denied with a usable Retry-After, then it recovers', async () => {
+  test('tutor: a full per-minute burst passes, the next request is denied with a usable Retry-After, then it recovers', async () => {
     const id = uid('tutor-burst');
     const t0 = Date.now();
-    for (let i = 0; i < 6; i += 1) expect((await tutor(id, t0 + i * 1000)).allowed).toBe(true);
-    const denied = await tutor(id, t0 + 7_000);
+    const burst = RATE_LIMITS.tutor.perMinute;
+    for (let i = 0; i < burst; i += 1) expect((await tutor(id, t0)).allowed).toBe(true);
+    const denied = await tutor(id, t0);
     expect(denied.allowed).toBe(false);
     if (!denied.allowed) {
       expect(denied.scope).toBe('user');
-      // 6/min refill = one token every 10 s; the last refill point was t0+5s.
+      // Refill is `burst` tokens per minute. Nothing has accrued at t0, so one
+      // token is ready within a single refill interval.
+      const refillSeconds = Math.ceil(60_000 / burst / 1000);
       expect(denied.retryAfterSeconds).toBeGreaterThan(0);
-      expect(denied.retryAfterSeconds).toBeLessThanOrEqual(11);
-      const exact = await tutor(id, t0 + 7_000 + denied.retryAfterSeconds * 1000);
+      expect(denied.retryAfterSeconds).toBeLessThanOrEqual(refillSeconds + 1);
+      const exact = await tutor(id, t0 + denied.retryAfterSeconds * 1000);
       expect(exact.allowed).toBe(true);
     }
   });
@@ -95,17 +98,15 @@ suite('token buckets enforce the configured windows', () => {
 
 suite('regressions found in review of the first version', () => {
   test('requests that arrive more often than one refill interval still earn tokens', async () => {
-    // Hourly window: 42/h => one token per ~85.7 s. One request every 45 s is a
-    // 1.3/min pace (well under p99.9) and must keep being served for 30 minutes
-    // of conversation; losing the fractional refill capped it at 6.
+    // One tutor message every 45s for 30 minutes is ordinary conversation.
+    // Buckets must keep partial refill credit so that pace is not stuck on the
+    // initial burst. 40 messages in that window sit inside the abuse ceilings.
     const id = uid('fractional');
     const t0 = Date.now();
     let allowed = 0;
     for (let i = 0; i < 40; i += 1) {
       if ((await tutor(id, t0 + i * 45_000)).allowed) allowed += 1;
     }
-    // 6 burst + ~0.7/min earned over 30 min is ~27 minute-window tokens, and the
-    // hourly bucket (42) is the binding one: all 40 are within the 42/h budget.
     expect(allowed).toBe(40);
   });
 
@@ -113,7 +114,7 @@ suite('regressions found in review of the first version', () => {
     const spammer = uid('spammer');
     const bystander = uid('bystander');
     const t0 = Date.now();
-    for (let i = 0; i < 6; i += 1) await tutor(spammer, t0);
+    for (let i = 0; i < RATE_LIMITS.tutor.perMinute; i += 1) await tutor(spammer, t0);
     // 100 more rejected attempts must not drain the platform-wide tutor bucket
     for (let i = 0; i < 100; i += 1) expect((await tutor(spammer, t0 + 1)).allowed).toBe(false);
     expect((await tutor(bystander, t0 + 2)).allowed).toBe(true);
@@ -122,21 +123,21 @@ suite('regressions found in review of the first version', () => {
   test('a request denied by the global bucket refunds the per-user buckets', async () => {
     const id = uid('refund');
     const t0 = Date.now() + 10 * 24 * 3_600_000; // isolate from other tests' global usage
-    const globalCap = 40;
+    const globalCap = RATE_LIMITS.tutor.globalPerMinute;
     const others = Array.from({ length: globalCap }, (_, i) => uid(`g${i}`));
     for (const other of others) expect((await tutor(other, t0)).allowed).toBe(true);
     const denied = await tutor(id, t0);
     expect(denied.allowed).toBe(false);
     if (!denied.allowed) expect(denied.scope).toBe('global');
-    // The student's own minute bucket is untouched: six more fit once the platform recovers.
+    // The student's own minute bucket is untouched: a full minute fits once the platform recovers.
     const later = t0 + 2 * MIN;
-    for (let i = 0; i < 6; i += 1) expect((await tutor(id, later)).allowed).toBe(true);
-  });
+    for (let i = 0; i < RATE_LIMITS.tutor.perMinute; i += 1) expect((await tutor(id, later)).allowed).toBe(true);
+  }, 60_000);
 
   test('denial is reported (the first version reported every call as allowed)', async () => {
     const id = uid('denial');
     const t0 = Date.now() + 20 * 24 * 3_600_000;
-    for (let i = 0; i < 6; i += 1) await tutor(id, t0);
+    for (let i = 0; i < RATE_LIMITS.tutor.perMinute; i += 1) await tutor(id, t0);
     expect((await tutor(id, t0)).allowed).toBe(false);
   });
 });

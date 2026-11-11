@@ -110,7 +110,9 @@ export async function featureFlagUpdate(request: Request, key: string | undefine
     if (unknownOrgIds.length > 0) {
       return response({ error: 'Unknown organizations', unknownOrgIds }, 400);
     }
-    const result = await setFeatureFlag(flagKey, next, operator.data);
+    const result = await setFeatureFlag(flagKey, next, operator.data, {
+      source: 'internal_api',
+    });
     console.info('feature_flag_set', {
       key: flagKey,
       mode: next.mode,

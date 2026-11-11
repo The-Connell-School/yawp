@@ -4,7 +4,7 @@ import { deidentifyLlmLogData } from './llm-log-deidentify.server';
 describe('LlmLog de-identification', () => {
   test('scrubs structured identifiers and feasible in-text PII while keeping prompt and response text', () => {
     const data = deidentifyLlmLogData({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       provider: 'anthropic',
       systemPrompt:
         'Help Maria Rivera at maria.rivera@example.edu with class cmabc12345678901234567890 for membership mem-1, IP hash 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef, phone 555-867-5309, SSN 123-45-6789, and user czzzzzzzzzzzzzzzzzzzz.',
@@ -80,7 +80,7 @@ describe('LlmLog de-identification', () => {
 
   test('scrubs free-form student names from prompt and response text', () => {
     const data = deidentifyLlmLogData({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       provider: 'anthropic',
       systemPrompt:
         'Student first name: Jordan\nIn overallComment, start with "Jordan," and continue with feedback.',
@@ -134,7 +134,7 @@ describe('LlmLog de-identification', () => {
     const hash =
       'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
     const data = deidentifyLlmLogData({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       provider: 'anthropic',
       systemPrompt: `Handle request from 203.0.113.42 with digest ${hash}.`,
       messages: [
@@ -166,7 +166,7 @@ describe('LlmLog de-identification', () => {
 
   test('scrubs contextual direct names and organization names from arbitrary prompt and response text', () => {
     const data = deidentifyLlmLogData({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       provider: 'anthropic',
       systemPrompt:
         'Create writing feedback for Brian Connell at Holy Family School.',

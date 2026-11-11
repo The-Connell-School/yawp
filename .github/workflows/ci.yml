@@ -4,7 +4,7 @@ on:
   pull_request:
     branches:
       - main
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
   push:
     branches:
       - main
@@ -26,8 +26,9 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       preview_tooling: ${{ steps.filter.outputs.preview_tooling }}
       prisma: ${{ steps.filter.outputs.prisma }}
-      # Draft PRs skip Playwright and other heavy jobs; mark Ready for review for full CI.
-      pr_run_heavy_jobs: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+      factory_l0_active: ${{ steps.factory_l0.outputs.active }}
+      # Draft PRs and factory-l0 fast path skip Playwright and other heavy jobs.
+      pr_run_heavy_jobs: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && steps.factory_l0.outputs.active != 'true') }}
       # Browser E2E runs whenever `code` changed, except on a pull request
       # whose every changed file is documentation (docs/** or *.md outside
       # services/web-app/app/**). main pushes always keep `e2e == code`.
@@ -82,6 +83,59 @@ jobs:
               - '!**/*.md'
             app_markdown:
               - 'services/web-app/app/**/*.md'
+      # Factory L0: fail closed if the PR diff leaves copy-only web-app scope (see FACTORY-L0.md).
+      - name: 🏭 Factory L0 scope detector (PR only)
+        id: factory_l0_scope
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
+        with:
+          filters: |
+            factory_l0_scope_violation:
+              - 'packages/**'
+              - 'scripts/**'
+              - '.github/**'
+              - 'bin/**'
+              - 'infra/**'
+              - 'design/**'
+              - 'qa/**'
+              - 'granola/**'
+              - 'state/**'
+              - '!state/SHIP_REVIEW_*.md'
+              - 'Dockerfile*'
+              - 'bun.lock'
+              - 'bun.lockb'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'yarn.lock'
+              - 'package-lock.json'
+              - 'tsconfig*'
+              - 'bunfig.toml'
+              - 'playwright.config.*'
+            prisma_migrations:
+              - 'packages/prisma/migrations/**'
+      - name: 🏭 Factory L0 eligibility
+        id: factory_l0
+        env:
+          HAS_LABEL: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'factory-l0') }}
+          SCOPE_VIOLATION: ${{ steps.factory_l0_scope.outputs.factory_l0_scope_violation == 'true' }}
+          PRISMA_MIGRATIONS: ${{ steps.factory_l0_scope.outputs.prisma_migrations == 'true' }}
+        run: |
+          set -euo pipefail
+          active=false
+          if [ "${HAS_LABEL}" = "true" ] && [ "${SCOPE_VIOLATION}" != "true" ] && [ "${PRISMA_MIGRATIONS}" != "true" ]; then
+            active=true
+          fi
+          echo "active=${active}" >> "$GITHUB_OUTPUT"
+          if [ "${HAS_LABEL}" = "true" ] && [ "${active}" != "true" ]; then
+            if [ "${PRISMA_MIGRATIONS}" = "true" ]; then
+              echo "::warning::factory-l0 label ignored: PR touches packages/prisma/migrations. Full CI runs (fail closed)."
+            else
+              echo "::warning::factory-l0 label ignored: diff outside L0 scope (services/web-app, docs, or markdown only). Full CI runs (fail closed)."
+            fi
+          fi
+          if [ "${active}" = "true" ]; then
+            echo "Factory L0 fast path active — heavy PR CI gates skipped; run PR preview smoke before merge (.github/FACTORY-L0.md)."
+          fi
   # CI names every test file it runs, so a test file that is merely present never executes.
   # scripts/preview/*.test.js sat unrun for exactly that reason. It matters most here:
   # enforce-cap.sh removes trees as root before every deploy, and the ownership case it
@@ -133,8 +187,20 @@ jobs:
           PREVIEW_DATABASE_ROLE_INTEGRATION: '1'
         run: bun test ./scripts/preview/ --timeout 180000
 
+  validate-prisma-migrations-factory-l0:
+    needs: [paths]
+    if: ${{ needs.paths.outputs.factory_l0_active == 'true' }}
+    name: Prisma migrations
+    runs-on: ubuntu-24.04
+    steps:
+      - name: ⏭️ Factory L0 fast path
+        run: |
+          echo "factory-l0: skipping Prisma migration CI gate (see .github/FACTORY-L0.md)."
+          echo "Merge still requires PR preview smoke and model self-check outside Actions."
+
   validate-prisma-migrations:
     needs: [paths]
+    if: ${{ needs.paths.outputs.factory_l0_active != 'true' }}
     name: Prisma migrations
     runs-on: ubuntu-22.04
     services:
@@ -770,8 +836,10 @@ jobs:
           bun test ./services/web-app/app/routes/auth.login/unified-dispatch.test.ts
           bun test ./services/web-app/app/utils/login-rate-limit-target.test.ts
           bun test ./services/web-app/app/domain/free-tier/student-join.server.test.ts
+          bun test ./services/web-app/app/domain/unified-signon/classes.server.test.ts
           bun test ./services/web-app/app/domain/unified-signon/class-student.real-db.integration.test.ts
           bun test ./services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts
+          bun test ./services/web-app/app/domain/unified-signon/class-code-collision.real-db.integration.test.ts
           bun test ./services/web-app/app/routes/join/route.real-db.integration.test.ts
 
       - name: Preview-only sign-on fixture guards and real handlers
@@ -826,8 +894,20 @@ jobs:
             CI=1 bun test --max-concurrency=2 "$file"
           done
 
+  typecheck-web-app-factory-l0:
+    needs: [paths]
+    if: ${{ needs.paths.outputs.factory_l0_active == 'true' }}
+    name: ʦ TypeScript
+    runs-on: ubuntu-24.04
+    steps:
+      - name: ⏭️ Factory L0 fast path
+        run: |
+          echo "factory-l0: skipping full TypeScript/unit CI gate (see .github/FACTORY-L0.md)."
+          echo "Factory L0 smoke job runs web-app typecheck instead."
+
   typecheck-web-app:
     needs: [paths]
+    if: ${{ needs.paths.outputs.factory_l0_active != 'true' }}
     name: ʦ TypeScript
     runs-on: ubuntu-22.04
     env:
@@ -1760,8 +1840,11 @@ jobs:
             exit 1
           fi
           ok_count=$(grep -cE '^[^#[:space:]].*: ok$' "$log" || true)
-          if [ "$ok_count" -ne 16 ]; then
-            echo "::error::Expected 16 catalog jump ok lines, found $ok_count"
+          # One ok line per catalog state. Keep this equal to the count asserted
+          # in free-tier-states.catalog.test.ts (lifecycle.rejected and
+          # lifecycle.expired brought the catalog from 16 to 18).
+          if [ "$ok_count" -ne 18 ]; then
+            echo "::error::Expected 18 catalog jump ok lines, found $ok_count"
             exit 1
           fi
 
@@ -1876,8 +1959,42 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  factory-l0-smoke:
+    needs: [paths]
+    if: ${{ needs.paths.outputs.factory_l0_active == 'true' }}
+    name: Factory L0 smoke
+    runs-on: ubuntu-22.04
+    env:
+      YAWP_CI_TYPECHECK_NO_DATABASE: '1'
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: ⎔ Setup node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.4
+      - name: 📥 Setup Bun
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
+        with:
+          bun-version: '1.4.4'
+      - name: 💾 Cache bun install
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
+      - name: 📦 Install dependencies
+        timeout-minutes: 22
+        run: bash scripts/ci/bun-install-frozen.sh
+      - name: ⚙️ Generate Prisma Client
+        run: bun prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_factory_l0_smoke
+      - name: 🔎 Type check (L0 smoke)
+        run: bun web-app:typecheck
+
   # Keeps the original check name. Passes when every E2E job passed, or when
-  # they were skipped on purpose (draft PR or no code changes).
+  # they were skipped on purpose (draft PR, factory-l0 fast path, or no code changes).
   e2e-web-app:
     needs: [paths, e2e-smoke, e2e-signon, e2e-browser-checks, e2e-locked-preview]
     if: ${{ always() }}

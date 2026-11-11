@@ -1,5 +1,5 @@
 export const EMAIL_PAGE_BG = '#f7f5ee';
-export const EMAIL_CARD_BG = '#ffffff';
+export const EMAIL_CARD_BG = '#fffdf9';
 export const EMAIL_CARD_BORDER = '#e6e2d6';
 export const EMAIL_FOREGROUND = '#3c3828';
 export const EMAIL_MUTED = '#6b6758';

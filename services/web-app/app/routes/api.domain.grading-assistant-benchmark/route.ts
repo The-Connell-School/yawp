@@ -6,6 +6,7 @@ import {
   STATIC_THESIS_GRADING_ASSISTANT_ID,
 } from '~/domain/ai-evaluation/grading-assistant-benchmark-run.server';
 import { gradingAssistantBenchmarkV1 } from '~/domain/ai-evaluation/grading-assistant-benchmark.v1';
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { requireAdmin } from '~/utils/auth.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import crypto from 'node:crypto';
@@ -51,7 +52,7 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
+  const model = process.env.AI_MODEL ?? DEFAULT_ANTHROPIC_MODEL;
   const useE2EFixture = process.env.E2E === 'true';
   const execute = async ({
     purpose,

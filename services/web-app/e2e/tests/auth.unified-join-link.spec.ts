@@ -9,16 +9,9 @@ test.skip(
 );
 const db = createE2EPrismaClient();
 const id = `join-link-${Date.now()}`;
-const flag = 'feature_flag.unified-sign-on';
 const token = `${id}-private`;
 const revoked = `${id}-revoked`;
 const archived = `${id}-archived`;
-const enabled = async (value: boolean) =>
-  db.setting.upsert({
-    where: { name: flag },
-    update: { value: String(value) },
-    create: { name: flag, value: String(value), valueType: 'boolean' },
-  });
 const counts = async () =>
   Promise.all([
     db.user.count(),
@@ -71,7 +64,6 @@ test.afterAll(async () => {
   await db.class.deleteMany({ where: { schoolId: id } });
   await db.school.delete({ where: { id } });
   await db.organization.delete({ where: { id } });
-  await db.setting.deleteMany({ where: { name: flag } });
   await db.$disconnect();
 });
 
@@ -79,7 +71,6 @@ for (const width of [1280, 390]) {
   test(`rejected join links use the error screen at ${width}`, async ({
     page,
   }) => {
-    await enabled(true);
     await page.setViewportSize({ width, height: width === 1280 ? 1006 : 844 });
     const before = await counts();
     for (const [name, rejected] of [
@@ -129,7 +120,7 @@ for (const width of [1280, 390]) {
     ).toBeVisible();
   });
 
-  test(`bare, blank, valid and flag-off controls at ${width}`, async ({
+  test(`bare, blank, and valid join links at ${width}`, async ({
     page,
     context,
   }) => {
@@ -144,49 +135,26 @@ for (const width of [1280, 390]) {
         fullPage: true,
       });
     };
-    for (const on of [true, false]) {
-      await enabled(on);
-      for (const query of ['', '?t=', '?t=%20%20']) {
-        await page.goto(`/join${query}`);
-        await expect(
-          page.getByRole('heading', { name: 'Join your class', exact: true })
-        ).toBeVisible();
-        await expect(
-          page.getByText(/Ask your teacher for the class join link/)
-        ).toBeVisible();
-        await expect(page.locator('input')).toHaveCount(0);
-      }
-      await shot(on ? 'bare-link' : 'flag-off-bare-link');
-      if (!on) {
-        await page.goto('/join?t=invalid');
-        await expect(
-          page.getByRole('heading', { name: 'Join your class', exact: true })
-        ).toBeVisible();
-        await shot('flag-off-invalid-link');
-      }
-      await page.goto(`/join?t=${token}`);
-      if (on) {
-        await expect(page).toHaveURL(/\/auth\/login\?continue=1/);
-        await expect(
-          page.getByText('English 11, Period 2', { exact: true })
-        ).toBeVisible();
-        await page.getByRole('button', { name: /^New/ }).click();
-        await expect(
-          page.getByLabel('First name', { exact: true })
-        ).toBeVisible();
-        await expect(page.getByText(/We add a number/)).toBeVisible();
-        await shot('valid-link');
-        await context.clearCookies();
-      } else {
-        await expect(
-          page.getByRole('heading', {
-            name: 'Create your student account',
-            exact: true,
-          })
-        ).toBeVisible();
-        await expect(page.getByLabel('Handle', { exact: true })).toBeVisible();
-        await shot('flag-off-valid-link');
-      }
+    for (const query of ['', '?t=', '?t=%20%20']) {
+      await page.goto(`/join${query}`);
+      await expect(
+        page.getByRole('heading', { name: 'Join your class', exact: true })
+      ).toBeVisible();
+      await expect(
+        page.getByText(/Ask your teacher for the class join link/)
+      ).toBeVisible();
+      await expect(page.locator('input')).toHaveCount(0);
     }
+    await shot('bare-link');
+    await page.goto(`/join?t=${token}`);
+    await expect(page).toHaveURL(/\/auth\/login\?continue=1/);
+    await expect(
+      page.getByText('English 11, Period 2', { exact: true })
+    ).toBeVisible();
+    await page.getByRole('button', { name: /^New/ }).click();
+    await expect(page.getByLabel('First name', { exact: true })).toBeVisible();
+    await expect(page.getByText(/We add a number/)).toBeVisible();
+    await shot('valid-link');
+    await context.clearCookies();
   });
 }

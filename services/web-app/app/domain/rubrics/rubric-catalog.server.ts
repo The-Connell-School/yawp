@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Prisma, PrismaClient } from '@app/prisma';
 import { redactEmailForLog } from '~/utils/redact-email-for-log.server';
 import { validateRubricPromotion, type RubricValidationIssue } from './rubric-promotion';
+import { rubricCategoriesArrayFromSchemaJson } from './rubric-schema';
 import { STARTER_RUBRICS } from './starter-rubrics';
 
 /**
@@ -78,10 +79,6 @@ export function perTypeContent(type: TypeColumns): JsonRecord {
   };
 }
 
-const categoriesOf = (content: unknown): unknown[] => {
-  const rubric = isRecord(content) ? content.rubric : null;
-  return isRecord(rubric) && Array.isArray(rubric.categories) ? rubric.categories : [];
-};
 function scaleOf(content: unknown) {
   const scale = isRecord(content) ? content.scoringScale : null;
   if (!isRecord(scale) || typeof scale.minScore !== 'number' || typeof scale.maxScore !== 'number') return null;
@@ -106,7 +103,7 @@ export function toEditable(content: JsonRecord, displayName: string) {
   const editable: JsonRecord = {
     name: displayName, title: typeof content.title === 'string' ? content.title : displayName,
     ...(scale ? { scoringScale: clone(scale) } : {}),
-    rubric: { categories: clone(categoriesOf(content)) },
+    rubric: { categories: clone(rubricCategoriesArrayFromSchemaJson(content)) },
     ...(Object.keys(keep).length ? { promptConfig: clone(keep) } : {}),
     ...(outputSchema ? { outputSchema: clone(outputSchema) } : {}),
     calibrationNotes: typeof content.calibrationNotes === 'string' ? content.calibrationNotes : null,
@@ -231,7 +228,7 @@ type RevisionRow = { id: string; rubricName: string; version: number; schemaJson
 // from migrations and environment data only.
 function readOnlyReason(source: 'library' | 'assignment-type', _name: string, content: unknown, linkedLibrary?: string | null): string | null {
   if (source === 'assignment-type' && linkedLibrary) return `This assignment type grades with the library rubric "${linkedLibrary}"; edit that rubric instead.`;
-  if (!categoriesOf(content).length) return 'No categories are stored, so this type grades with the built-in default rubric for its kind.';
+  if (!rubricCategoriesArrayFromSchemaJson(content).length) return 'No categories are stored, so this type grades with the built-in default rubric for its kind.';
   return null;
 }
 
@@ -296,7 +293,7 @@ export class RubricCatalog {
         liveMatchesVersion: current !== null,
         lastEditedAt: (latest?.createdAt ?? args.fallbackEditedAt)?.toISOString() ?? null,
         lastEditedBy: latest?.createdBy ?? null,
-        categoryCount: categoriesOf(args.content).length, scale: scaleOf(args.content),
+        categoryCount: rubricCategoriesArrayFromSchemaJson(args.content).length, scale: scaleOf(args.content),
         assignmentTypes: args.types.map((type) => ({ id: type.id, title: type.title, archived: type.archivedAt !== null })),
         organizations: [...organizations].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)),
         assignmentCount, assignmentsOnCurrentVersion: onCurrent, assignmentsOnOlderVersions: onOlder, assignmentsUnpinned: unpinned,

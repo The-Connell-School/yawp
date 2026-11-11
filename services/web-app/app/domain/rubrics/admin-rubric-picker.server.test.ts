@@ -86,6 +86,49 @@ describe('listLiveRubricsForAdminPicker', () => {
     assignmentType.findMany.mockResolvedValue([]);
   });
 
+  test('includes library rubrics saved with top-level categories only (flat shape)', async () => {
+    const flatLibrary = {
+      name: 'looking-back-looking-forward',
+      title: 'Looking Back, Looking Forward',
+      scoringScale: { type: 'rubric_points', minScore: 0, maxScore: 5 },
+      categories: validLibrarySchema.rubric.categories,
+      promptConfig: { gradingInstructions: 'Grade.' },
+      outputSchema: validLibrarySchema.outputSchema,
+      calibrationNotes: null,
+    };
+    catalogList.mockResolvedValue({
+      rubrics: [
+        {
+          key: 'looking-back-looking-forward',
+          source: 'library',
+          name: 'looking-back-looking-forward',
+          title: 'Looking Back, Looking Forward',
+          editable: true,
+        },
+      ],
+    });
+    rubric.findMany.mockImplementation(async (args: { where?: { archivedAt?: unknown; name?: { in: string[] } } }) => {
+      if (args?.where?.archivedAt) return [];
+      if (args?.where?.name?.in) {
+        return [
+          {
+            id: 'lib-flat',
+            name: 'looking-back-looking-forward',
+            title: 'Looking Back, Looking Forward',
+            schemaJson: flatLibrary,
+            currentRevision: null,
+          },
+        ];
+      }
+      return [];
+    });
+
+    const options = await listLiveRubricsForAdminPicker(db as never);
+    expect(options).toHaveLength(1);
+    expect(options[0]?.name).toBe('looking-back-looking-forward');
+    expect(options[0]?.source).toBe('library');
+  });
+
   test('lists library and per-type entries when RubricRelease is empty', async () => {
     catalogList.mockResolvedValue({
       rubrics: [

@@ -1,3 +1,4 @@
+import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import type { Prisma, PrismaClient } from '@app/prisma';
 import { z } from 'zod';
 import { authorizeInternalApiRequest } from './internal-platform-auth.server';
@@ -293,7 +294,7 @@ export function createInternalGradingWorkspaceHandlers(input: {
           getLLMCompletion({
             ...completion,
             logPayload: resource === 'scratch' ? 'audit-only' : 'metadata-only',
-            model: process.env.AI_MODEL ?? 'claude-sonnet-4-6',
+            model: process.env.AI_MODEL ?? DEFAULT_ANTHROPIC_MODEL,
             metadata: {
               feature: 'grading-evaluation',
               kind: purpose,

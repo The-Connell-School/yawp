@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import {
   capabilities,
   parseEnvFile,
+  prepushStepPlan,
   selectCompatibleBun,
   selectCompatibleNode,
 } from "./project-agent.mjs";
@@ -198,10 +199,36 @@ describe("Yawp project agent CLI", () => {
     const contract = capabilities();
     expect(contract.schemaVersion).toBe("project.capabilities/v1");
     expect(contract.commands.doctor).toBe("./bin/project doctor --json");
+    expect(contract.commands.verify).toBe("./bin/project verify --profile prepush --json");
     expect(contract.fixtures).toContain("local-dev");
     expect(contract.proofProfiles).toContain("qa-smoke");
     expect(contract.proofProfiles).toContain("collaboration-presence");
+    expect(contract.nextCommands[0]).toBe("./bin/project verify --profile prepush --json");
     expect(contract.nextCommands.length).toBeGreaterThan(2);
+  });
+
+  test("prepush verify plan mirrors CI TypeScript gate without browser work", () => {
+    expect(prepushStepPlan([])).toEqual({ kind: "none", steps: [] });
+    expect(prepushStepPlan(["docs/readme.md", "AGENTS.md"])).toEqual({ kind: "docs", steps: ["diff-check"] });
+    expect(prepushStepPlan(["scripts/project-agent.mjs"])).toEqual({ kind: "project-cli", steps: ["project-cli"] });
+    expect(prepushStepPlan(["services/web-app/app/root.tsx"])).toEqual({ kind: "code", steps: ["typecheck"] });
+    expect(prepushStepPlan(["packages/prisma/schema.prisma", "services/web-app/app/root.tsx"])).toEqual({
+      kind: "code",
+      steps: ["prisma-generate", "typecheck"],
+    });
+    expect(prepushStepPlan(["scripts/project-agent.mjs", "services/web-app/app/root.tsx"])).toEqual({
+      kind: "code",
+      steps: ["typecheck", "project-cli"],
+    });
+    const help = spawnSync(path.join(root, "bin", "project"), ["verify", "--help"], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 10000,
+      env: { ...process.env, CI: "1" },
+    });
+    expect(help.status).toBe(0);
+    expect(help.stdout).toContain("prepush");
+    expect(help.stdout).toContain("typecheck");
   });
 
   test("extensionless bin entrypoint returns machine-readable capabilities", () => {

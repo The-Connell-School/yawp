@@ -12,7 +12,6 @@ test.skip(
 test.describe.configure({ mode: 'serial' });
 const prefix = `signon-browser-${Date.now()}`;
 const db = createE2EPrismaClient();
-const flag = 'feature_flag.unified-sign-on';
 const evidence = process.env.SIGNON_EVIDENCE_DIR;
 const email = `${prefix}@example.test`;
 const capture = process.env.SIGNON_MAIL_CAPTURE_DIR!;
@@ -208,7 +207,6 @@ test.beforeAll(async () => {
   });
 });
 test.afterAll(async () => {
-  await db.setting.deleteMany({ where: { name: flag } });
   const users = await db.user.findMany({
     where: {
       OR: [
@@ -242,11 +240,6 @@ for (const width of [1280, 390]) {
       await page.setViewportSize({
         width,
         height: width === 1280 ? 1000 : 844,
-      });
-      await db.setting.upsert({
-        where: { name: flag },
-        update: { value: 'true' },
-        create: { name: flag, value: 'true', valueType: 'boolean' },
       });
       const address = `${prefix}-${journey}-${width}@example.test`;
       const username = `joined${width}${journey.replace(/-/g, '')}${Date.now()}`;
@@ -390,46 +383,6 @@ for (const width of [1280, 390]) {
     });
   }
 }
-for (const width of [1280, 390])
-  test(`confirmation flag-OFF legacy controls at ${width}`, async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
-    await db.setting.deleteMany({ where: { name: flag } });
-    for (const [route, name] of [
-      ['/auth/login?screen=joined&variant=already', 'login'],
-      ['/auth/inv/signup', 'signup'],
-      ['/join?t=invalid-local-token', 'class-link'],
-      ['/free', 'free-trial'],
-    ]) {
-      await page.goto(route);
-      await expect(page.locator('[data-signon-screen]')).toHaveCount(0);
-      await shot(page, `flag-off-${name}`, width);
-    }
-    const address = `${prefix}-legacy-${width}@example.test`;
-    const user = await db.user.create({
-      data: {
-        email: address,
-        password: { create: { hash: await bcrypt.hash('local-password', 10) } },
-        memberships: { create: { organizationId: prefix, role: 'STUDENT' } },
-      },
-    });
-    await page.goto('/auth/login?redirectTo=https%3A%2F%2Fevil.example');
-    await page.getByLabel('Email or handle').fill(address);
-    await page.getByLabel('Password', { exact: true }).fill('wrong-password');
-    await page.getByRole('button', { name: 'Log in', exact: true }).click();
-    await expect(page.getByText('Invalid email or password')).toBeVisible();
-    expect(await db.session.count({ where: { userId: user.id } })).toBe(0);
-    await page.getByLabel('Password', { exact: true }).fill('local-password');
-    await page.getByRole('button', { name: 'Log in', exact: true }).click();
-    await expect(page).toHaveURL(/\/app\/?$/);
-    expect(await db.session.count({ where: { userId: user.id } })).toBe(1);
-    expect(
-      await db.orgMembership.count({
-        where: { userId: user.id, classesAsStudent: { some: { id: prefix } } },
-      })
-    ).toBe(0);
-  });
 // Real resolver/registration regression for FAILURES.md di-signon-fix-email-handle-notice.
 for (const width of [1280, 390])
   test(`email-origin free-class notice survives navigation and validation at ${width}`, async ({
@@ -441,11 +394,6 @@ for (const width of [1280, 390])
     const username = `notice${width}${Date.now()}`;
     const notice =
       "We won't save your email. This class uses a handle and password.";
-    await db.setting.upsert({
-      where: { name: flag },
-      update: { value: 'true' },
-      create: { name: flag, value: 'true', valueType: 'boolean' },
-    });
     await db.organization.create({
       data: { id, name: 'Lincoln High', plan: 'FREE_CLASSROOM' },
     });
@@ -673,11 +621,6 @@ for (const width of [1280, 390])
   }) => {
     test.setTimeout(120000);
     await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
-    await db.setting.upsert({
-      where: { name: flag },
-      update: { value: 'true' },
-      create: { name: flag, value: 'true', valueType: 'boolean' },
-    });
     const address = `${prefix}-existing-${width}@example.test`;
     const password = 'disposable-password';
     const user = await db.user.create({
@@ -861,11 +804,6 @@ for (const width of [1280, 390])
   }) => {
     test.setTimeout(45000);
     await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
-    await db.setting.upsert({
-      where: { name: flag },
-      update: { value: 'true' },
-      create: { name: flag, value: 'true', valueType: 'boolean' },
-    });
     const backEmail = `${prefix}-back-existing-${width}@example.test`;
     await db.user.create({
       data: { email: backEmail, name: 'Local Existing' },
@@ -926,11 +864,6 @@ for (const width of [1280, 390])
     page,
   }) => {
     await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
-    await db.setting.upsert({
-      where: { name: flag },
-      update: { value: 'true' },
-      create: { name: flag, value: 'true', valueType: 'boolean' },
-    });
     const address = `${prefix}-teacher-${width}@example.test`;
     const second = `${prefix}-${width}`;
     const user = await db.user.create({
@@ -1030,11 +963,6 @@ for (const width of [1280, 390])
   }) => {
     test.setTimeout(120000);
     await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
-    await db.setting.upsert({
-      where: { name: flag },
-      update: { value: 'true' },
-      create: { name: flag, value: 'true', valueType: 'boolean' },
-    });
     const address = `${prefix}-maya${width}@example.test`;
     // Email identity is retained only for the existing invitation path. New
     // class-code registrations use generated handles in auth.unified-classcode.
@@ -1192,51 +1120,9 @@ for (const width of [1280, 390])
     expect(await bcrypt.compare('654321', changed.hash)).toBe(true);
     expect(await bcrypt.compare('123456', changed.hash)).toBe(false);
   });
-test('flag off retains live legacy login, signup, class links, and direct callback gates', async ({
-  page,
-  request,
-}) => {
-  for (const value of [
-    null,
-    'broken',
-    'false',
-    '{"mode":"targeted","orgIds":["demo"]}',
-  ]) {
-    await db.setting.deleteMany({ where: { name: flag } });
-    if (value)
-      await db.setting.create({
-        data: { name: flag, value, valueType: 'json' },
-      });
-    await page.goto('/auth/login');
-    await expect(
-      page.getByRole('heading', { name: 'Welcome back!' })
-    ).toBeVisible();
-    const result = await request.get(
-      '/auth/unified/google/callback?code=forged&state=forged'
-    );
-    expect(result.status()).toBe(404);
-  }
-  for (const width of [1280, 390]) {
-    await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
-    for (const [route, name] of [
-      ['/auth/login', 'login'],
-      ['/auth/inv/signup', 'signup'],
-      ['/join?t=invalid', 'class-link'],
-    ]) {
-      await page.goto(route);
-      await shot(page, `flag-off-${name}`, width);
-    }
-  }
-});
-
 test('bare short and reserved handle words resolve as real class codes in the browser', async ({
   page,
 }) => {
-  await db.setting.upsert({
-    where: { name: flag },
-    update: { value: 'true' },
-    create: { name: flag, value: 'true', valueType: 'boolean' },
-  });
   for (const classCode of ['12', 'student']) {
     await db.class.update({ where: { id: prefix }, data: { code: classCode } });
     await page.goto('/auth/login');
@@ -1254,114 +1140,3 @@ test('bare short and reserved handle words resolve as real class codes in the br
   }
 });
 
-test('local rollout rollback restores legacy views and blocks an in-flight reset', async ({
-  page,
-  request,
-}) => {
-  for (const width of [1280, 390]) {
-    const address = `rollback-${width}-${prefix}@example.test`;
-    await db.user.create({
-      data: {
-        email: address,
-        password: {
-          create: {
-            hash: await bcrypt.hash('local-password', 10),
-          },
-        },
-      },
-    });
-    await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
-    await db.setting.deleteMany({ where: { name: flag } });
-    for (const [route, name] of [
-      ['/auth/login', 'login'],
-      ['/auth/inv/signup', 'signup'],
-      ['/auth/inv/forgot-password', 'reset'],
-    ]) {
-      await page.goto(route);
-      await page.waitForFunction(() =>
-        Boolean((window as any).__reactRouterDataRouter)
-      );
-      await expect(page.locator('[data-signon-screen]')).toHaveCount(0);
-      await page.mouse.move(0, 0);
-      await shot(page, `flag-off-before-${name}`, width);
-    }
-    await page.goto('/auth/login');
-    await page.waitForFunction(() =>
-      Boolean((window as any).__reactRouterDataRouter)
-    );
-    await page.getByLabel('Email or handle', { exact: true }).fill(address);
-    await page.getByLabel('Password', { exact: true }).fill('short');
-    await page.getByRole('button', { name: 'Log in', exact: true }).click();
-    await expect(
-      page.getByText('Password is too short', { exact: true })
-    ).toBeVisible();
-    await shot(
-      page,
-      `flag-off-legacy-password-error-${process.env.SIGNON_VALIDATION_PHASE || 'after'}`,
-      width
-    );
-    await db.setting.create({
-      data: {
-        name: flag,
-        value: '{"mode":"everyone","orgIds":[]}',
-        valueType: 'json',
-      },
-    });
-    await page.goto('/auth/login');
-    await page.waitForFunction(() =>
-      Boolean((window as any).__reactRouterDataRouter)
-    );
-    await page.getByLabel('Email or class code').fill(address);
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(
-      page.getByRole('heading', { name: 'Enter your password' })
-    ).toBeVisible();
-    await page.getByRole('button', { name: 'Forgot password?' }).click();
-    await expect(
-      page.getByRole('heading', { name: 'Reset your password', exact: true })
-    ).toBeVisible();
-    await page.waitForFunction(() =>
-      Boolean((window as any).__reactRouterDataRouter)
-    );
-    await shot(page, 'signon-13-before-rollback-reset', width);
-    const sessionsBefore = await db.session.count();
-    await db.setting.update({
-      where: { name: flag },
-      data: { value: '{"mode":"off","orgIds":[]}' },
-    });
-    await page.getByLabel('Code', { exact: true }).fill(await codeFor(address));
-    const rejected = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'POST' &&
-        new URL(response.url()).pathname.startsWith('/auth/login')
-    );
-    await page.getByRole('button', { name: 'Verify', exact: true }).click();
-    // The already-open client can retain its old screen. The OFF server dispatch
-    // rejects this unified payload through legacy form validation. A fresh GET
-    // below must render legacy UI; no session is issued by the rejected POST.
-    expect((await rejected).status()).toBe(422);
-    expect(await db.session.count()).toBe(sessionsBefore);
-    expect(
-      (
-        await request.get(
-          '/auth/unified/google/callback?code=forged&state=forged'
-        )
-      ).status()
-    ).toBe(404);
-    for (const [route, name] of [
-      ['/auth/login', 'login'],
-      ['/auth/inv/signup', 'signup'],
-      ['/auth/inv/forgot-password', 'reset'],
-    ]) {
-      await page.goto(route);
-      await page.waitForFunction(() =>
-        Boolean((window as any).__reactRouterDataRouter)
-      );
-      await expect(page.locator('[data-signon-screen]')).toHaveCount(0);
-      await page.mouse.move(0, 0);
-      await shot(page, `flag-off-after-${name}`, width);
-    }
-  }
-  // This database began without the flag. Restore that exact local state.
-  await db.setting.deleteMany({ where: { name: flag } });
-});
