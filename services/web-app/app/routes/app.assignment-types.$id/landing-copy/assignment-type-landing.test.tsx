@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router';
+import type { LandingPageKey } from './content';
 
 const { LandingDescription, LandingSections, RichText } = await import(
   './assignment-type-landing'
@@ -245,7 +246,7 @@ describe('How to Teach It spotlight', () => {
 });
 
 describe('Section consistency (Kevin and Brian, Nov 11: the Thesis Statement page is the model)', () => {
-  const STEP_PAGES = ['class-starter', 'prewriting', 'thesis-statement'] as const;
+  const STEP_PAGES: LandingPageKey[] = ['class-starter', 'prewriting', 'thesis-statement'];
 
   it.each(STEP_PAGES)(
     '%s: every section is a box with its heading inside, How to Teach It open and the rest closed',
