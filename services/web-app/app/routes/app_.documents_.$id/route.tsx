@@ -1282,7 +1282,8 @@ export default function Route() {
                     <Printer className="h-4 w-4" />
                     Print
                   </DropdownMenuItem>
-                  {showGuidedTour ? (
+                  {/* Waiting teachers get no page tours until approval. */}
+                  {showGuidedTour && !data.guidedTours?.waitingForApproval ? (
                     <DropdownMenuItem
                       className="gap-2"
                       onSelect={() => startPageTour()}
