@@ -200,6 +200,9 @@ function buildExitTicketSectionV3(): string[] {
     '  starter: wondering',
     `  promptText: ${wondering.prompt}`,
     '  ```',
+    '- What to ask first. An exit ticket needs one thing from the teacher: what the lesson taught (the text, term or idea, and the passage if there is one). When this conversation, the lesson stack or the class data already says it, write the tickets at once, without asking. When nothing does, ask that one question on its own, with no other question beside it.',
+    '- Never ask which activity, whether to grade it, whether there is a right answer, how many points, or how long students get. Offer the options below and the teacher picks one; grading is off and key points are optional, and the teacher changes either on the form.',
+    '- An exit ticket on its own is not a full lesson: do not ask which class, how long the period is, or what the students can already do. Those questions belong to planning a lesson, not to writing its check.',
     'A check for understanding asks for one thing, in the words of this lesson:',
     '  ```' + EXIT_TICKET_FENCE,
     '  activity: answer-question',
@@ -224,9 +227,10 @@ function buildExitTicketSectionV3(): string[] {
     '- Put nothing else in the block: no heading, no minutes, no teacher notes, no quotation marks. Where it sits in the lesson and how long it gets belong in the plan above it.',
     '- Do not also write the question anywhere else. The teacher sees exactly what students will get before anything is created, and a question reworded elsewhere would be a second, different ticket.',
     '- When the same lesson has a deck, its closing slide sends students to the exit ticket in Yawp! — "Exit ticket: open it in Yawp! before you go" — and does not restate the question.',
-    '- When a full lesson closes on an exit ticket, offer three, each a different activity — a reflection, and the two checks that fit this lesson best — each in its own `' +
+    '- When a full lesson closes on an exit ticket, or the teacher asks for one on its own, offer three, each a different activity — a reflection, and the two checks that fit this lesson best — each in its own `' +
       EXIT_TICKET_FENCE +
-      '` block, so the teacher can pick or stack the one that fits. Name all three in the closing step in one line; do not rank them. For a single exit ticket the teacher asked for on its own, give one.',
+      '` block, so the teacher can pick or stack the one that fits. When the teacher asked for one specific ticket ("a question about Allie"), give that one.',
+    '- Each card shows its prompt exactly as students will read it, so the teacher chooses by reading the prompts. Around the blocks, say at most one line, naming the options by what they ask ("what they still wonder, Allie, or the second stanza"), not by activity, grading or key points, and do not rank them.',
     '- One `' +
       EXIT_TICKET_FENCE +
       '` block per check. When a lesson genuinely needs a paper ticket as well, that stays a `yawp-material` `exit-ticket` block, and you say what each one is for.',
@@ -1060,3 +1064,31 @@ export const RECOMMENDED_LESSON_PLANNER_PROMPTS: Array<{
       'Make me some extra practice on a skill my students keep getting wrong — enough to use as homework or for the kids who finish early. Ask me which skill and which class.',
   },
 ];
+
+/**
+ * The v3 exit ticket starter. The v3 form needs only the question students
+ * answer, so the planner needs only what the lesson taught: it offers three
+ * tickets and the teacher picks, instead of being asked for the activity,
+ * the grading or the right answer first.
+ */
+const EXIT_TICKET_V3_STARTER_PROMPT =
+  'Make me an exit ticket that shows whether my students got today’s lesson. If you don’t already know what the lesson taught, ask me that and nothing else.';
+
+/**
+ * The starter tiles for this teacher. With the v3 exit ticket builder on for
+ * their school, the exit ticket tile asks for nothing but the lesson; every
+ * other tile, and the whole list with the flag off, is
+ * RECOMMENDED_LESSON_PLANNER_PROMPTS as it stands.
+ */
+export function recommendedLessonPlannerPrompts({
+  exitTicketBuilderV3,
+}: {
+  exitTicketBuilderV3: boolean;
+}): typeof RECOMMENDED_LESSON_PLANNER_PROMPTS {
+  if (!exitTicketBuilderV3) return RECOMMENDED_LESSON_PLANNER_PROMPTS;
+  return RECOMMENDED_LESSON_PLANNER_PROMPTS.map((entry) =>
+    entry.id === 'exit-ticket'
+      ? { ...entry, prompt: EXIT_TICKET_V3_STARTER_PROMPT }
+      : entry
+  );
+}

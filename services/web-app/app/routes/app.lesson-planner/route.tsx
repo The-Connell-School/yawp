@@ -61,7 +61,8 @@ import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { formatClassCardTitle } from '~/utils/class-display';
-import { RECOMMENDED_LESSON_PLANNER_PROMPTS } from '~/routes/api.domain.lesson-planner/build-system-prompt';
+import { recommendedLessonPlannerPrompts } from '~/routes/api.domain.lesson-planner/build-system-prompt';
+import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
 import { parseAssistantMessage } from '~/components/ai-chat/parse-assistant-message';
 import {
   LessonIntakeCard,
@@ -313,6 +314,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const reviewFlags = await getLessonPlannerReviewFlags(
     access.membership.organization.id
   );
+  // The v3 exit ticket starter tile, under the same condition as the planner's
+  // v3 hand-off: the school has the Exit Ticket type and the v3 builder.
+  const exitTicketBuilderV3 =
+    Boolean(exitTicketTypeId) &&
+    (await isExitTicketBuilderV3Enabled(access.membership.organization.id));
 
   // Intake v2 (A1): the classes come from the teacher's real class list, not
   // from whatever the model guessed. Same scope as list_classes.
@@ -459,7 +465,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         }
       : null,
-    recommendedPrompts: RECOMMENDED_LESSON_PLANNER_PROMPTS,
+    recommendedPrompts: recommendedLessonPlannerPrompts({ exitTicketBuilderV3 }),
     seed,
   };
 }
