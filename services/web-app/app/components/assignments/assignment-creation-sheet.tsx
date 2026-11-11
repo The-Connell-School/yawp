@@ -248,6 +248,20 @@ export type AssignmentCreationAssignmentType = {
   quotaExhaustedMessage?: string;
 };
 
+/**
+ * An assignment type that is not written in this sheet but built from its own
+ * library (AP History: a curated prompt and source set). It is listed with the
+ * other types so the teacher finds it where every type lives; choosing it
+ * closes the sheet and opens `href`.
+ */
+export type AssignmentCreationLibraryType = {
+  id: string;
+  title: string;
+  /** Shown under the title in the type list, e.g. "Opens the AP prompt library". */
+  description: string;
+  href: string;
+};
+
 export type AssignmentCreationEditingAssignment = {
   id: string;
   promptAttachmentName?: string | null;
@@ -297,6 +311,11 @@ export type AssignmentCreationSheetProps = {
   onCreated?: (info: { nextStep: boolean }) => void;
   entryPoint: AssignmentCreationEntryPoint;
   assignmentTypes: AssignmentCreationAssignmentType[];
+  /**
+   * Types built from their own library rather than this form (flag
+   * `ap-history-in-new-assignment`). Never offered while editing.
+   */
+  libraryAssignmentTypes?: AssignmentCreationLibraryType[];
   siteLicenseLockedAssignmentTiles?: SiteLicenseLockedTile[];
   teacherClasses: AssignmentCreationClassOption[];
   fixedAssignmentTypeId?: string;
@@ -704,6 +723,7 @@ export function AssignmentCreationSheetContent({
   onCreated,
   entryPoint,
   assignmentTypes,
+  libraryAssignmentTypes = [],
   teacherClasses,
   fixedAssignmentTypeId,
   initialAssignmentTypeId,
@@ -867,6 +887,8 @@ export function AssignmentCreationSheetContent({
   const wasOpenRef = useRef(false);
 
   const isEditing = Boolean(editingAssignment);
+  const offeredLibraryTypes =
+    isEditing || fixedAssignmentTypeId ? [] : libraryAssignmentTypes;
   const [removeAttachment, setRemoveAttachment] = useState(false);
 
   const CreateForm = createFetcher.Form;
@@ -1384,10 +1406,20 @@ export function AssignmentCreationSheetContent({
         )}
 
         <div className="space-y-2">
-          <Label>Assignment type</Label>
+          <Label htmlFor="assignment-creation-type">Assignment type</Label>
           <Select
             value={assignmentTypeId}
             onValueChange={(nextTypeId) => {
+              const libraryType = offeredLibraryTypes.find(
+                (type) => type.id === nextTypeId
+              );
+              if (libraryType) {
+                // Built from its own library, not this form: leave the form's
+                // type alone and send the teacher to the library.
+                onOpenChange(false);
+                navigate(libraryType.href);
+                return;
+              }
               setSelectedAssignmentTypeId(nextTypeId);
               // Type-dependent defaults follow the type. Editing never reaches
               // here for the tutor: the toggle is frozen after creation.
@@ -1421,7 +1453,7 @@ export function AssignmentCreationSheetContent({
               Boolean(editingAssignment?.assignmentTypeLocked)
             }
           >
-            <SelectTrigger>
+            <SelectTrigger id="assignment-creation-type">
               <SelectValue placeholder="Select an assignment type" />
             </SelectTrigger>
             <SelectContent>
@@ -1447,6 +1479,18 @@ export function AssignmentCreationSheetContent({
                         : assignmentType.quotaLabel}
                     </span>
                   ) : null}
+                </SelectItem>
+              ))}
+              {offeredLibraryTypes.map((libraryType) => (
+                <SelectItem
+                  key={libraryType.id}
+                  value={libraryType.id}
+                  textValue={libraryType.title}
+                  triggerLabel={libraryType.title}
+                >
+                  <span className="text-xs text-muted-foreground">
+                    {libraryType.description}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
