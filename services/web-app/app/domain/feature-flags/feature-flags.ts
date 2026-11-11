@@ -128,10 +128,11 @@ export const TEACHER_LOUNGE_FLAG = 'teacher-lounge' as const;
 
 /**
  * Exit ticket builder v3 (docs/plans/2026-11-02-exit-ticket-builder-v3.md):
- * no attachment, four "Have the students…" activities in two groups, a
- * teacher-written prompt, optional key points instead of a right-answer
- * question, completion or understanding grading. Off: the quick builder.
- * Tickets written by either builder open in both.
+ * no attachment and no grading; "What will students do?" with four
+ * reflections (three fixed, one the teacher writes) and three checks
+ * (explain a concept, answer a question, grapple with a text or source),
+ * and a box for the correct answer when there is one. Off: the quick
+ * builder. Tickets written by either builder open in both.
  */
 export const EXIT_TICKET_BUILDER_V3_FLAG = 'exit-ticket-builder-v3' as const;
 
@@ -262,7 +263,7 @@ export const FEATURE_FLAGS = {
   [EXIT_TICKET_BUILDER_V3_FLAG]: {
     label: 'Exit ticket builder v3',
     description:
-      'The simpler exit ticket form: no attachment, "Have the students…" activities (reflect or ask; explain a concept; answer a question; engage with a text or source), a prompt the teacher writes, and optional key points instead of "Is there a correct answer?". Off: the current quick builder. Tickets made with either open in both.',
+      'The simpler exit ticket form: no attachment and no grading. "What will students do?" offers What I learned, Most interesting, Still wondering, or the teacher\'s own question; or a check: explain a concept in their own words, answer a question, or grapple with a text or source, with a box for the correct answer when there is one. Off: the current quick builder. Tickets made with either open in both.',
   },
   [EXIT_TICKET_CLASS_SUMMARY_FLAG]: {
     label: 'Exit ticket class summary',
