@@ -4,6 +4,7 @@ import {
   type LoungePostKindKey,
   type LoungeTopicKey,
 } from './topics';
+import { legacyLoungeColumns, parseLoungeTags, type LoungePostTags } from './tags';
 
 export const LOUNGE_TITLE_MIN = 5;
 export const LOUNGE_TITLE_MAX = 160;
@@ -20,6 +21,8 @@ export type LoungePostInput = {
   body: string;
   askStaff: boolean;
   askPrivately: boolean;
+  /** Every tag checked. `kind` and `topic` above are the first of them. */
+  tags: LoungePostTags;
 };
 
 export type LoungeReplyInput = { body: string; videoUrl: string | null };
@@ -37,27 +40,47 @@ function checkBody(body: string, errors: Errors) {
   else if (body.length > LOUNGE_BODY_MAX) errors.body = 'Keep it under 5,000 characters.';
 }
 
+/** The single-choice form from before tags: one kind, one topic. */
+function isLegacyPostForm(input: Input): boolean {
+  const tagged = ['kinds', 'subjects', 'topics'].some((key) => key in input);
+  return !tagged && typeof input.kind === 'string';
+}
+
 export function parseLoungePostInput(input: Input): Result<LoungePostInput> {
   const errors: Errors = {};
-  const kind = text(input.kind);
-  const topic = text(input.topic);
   const title = text(input.title);
   const body = text(input.body);
-  if (!isLoungePostKind(kind)) errors.kind = 'Choose Question, Share, or Win.';
-  if (!isLoungeTopic(topic)) errors.topic = 'Choose a topic.';
+  let columns: { kind: LoungePostKindKey; topic: LoungeTopicKey } | null = null;
+  let tags: LoungePostTags | null = null;
+  if (isLegacyPostForm(input)) {
+    const kind = text(input.kind);
+    const topic = text(input.topic);
+    if (!isLoungePostKind(kind)) errors.kind = 'Choose Question, Share, or Win.';
+    if (!isLoungeTopic(topic)) errors.topic = 'Choose a topic.';
+    if (isLoungePostKind(kind) && isLoungeTopic(topic)) {
+      columns = { kind, topic };
+      tags = { kinds: [kind], subjects: [], topics: topic === 'other' ? [] : [topic] };
+    }
+  } else {
+    const parsed = parseLoungeTags(input);
+    if (parsed.ok) {
+      tags = parsed.value;
+      columns = legacyLoungeColumns(tags);
+    } else Object.assign(errors, parsed.errors);
+  }
   checkTitle(title, errors);
   checkBody(body, errors);
-  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  if (Object.keys(errors).length > 0 || !columns || !tags) return { ok: false, errors };
   const askPrivately = checked(input.askPrivately);
   return {
     ok: true,
     value: {
-      kind: kind as LoungePostKindKey,
-      topic: topic as LoungeTopicKey,
+      ...columns,
       title,
       body,
       askStaff: askPrivately || checked(input.askStaff),
       askPrivately,
+      tags,
     },
   };
 }

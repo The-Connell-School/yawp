@@ -16,12 +16,15 @@ import { LOUNGE_TEAM_MENTION_ID, mentionedUserIds, mentionsTeam, plainTextWithMe
 import { sortByTop } from './ranking';
 import { assignmentShareSnapshot } from './shares';
 import { loungeTopicLabel, type LoungePostKindKey } from './topics';
+import { resolveLoungePostTags, type LoungePostTags } from './tags';
 import type { LoungePostInput, LoungeReplyInput } from './validation';
 import { baseVideoContentType, type LoungeVideo } from './video';
 import { hasPlaceholderText, type LoungeSchedule } from './launch';
 import { avatarToneFor, firstNameOf, initialsFor, previewFor } from './avatar';
 
-export type CreateLoungePostInput = LoungePostInput & {
+export type CreateLoungePostInput = Omit<LoungePostInput, 'tags'> & {
+  /** Every tag checked. Without them, the post is tagged with its kind and topic. */
+  tags?: LoungePostTags;
   /** One of the author's own assignments to share, frozen at post time. */
   attachAssignmentId?: string | null;
   /** Yawp team only; ignored for teachers. */
@@ -160,8 +163,11 @@ function feedWhere(viewer: LoungeViewer, topic?: string | null, now: Date = new 
     ...liveWhere(now),
     deletedAt: null,
     hiddenAt: null,
-    ...(topic ? { topic } : {}),
-    OR: [{ visibility: 'COMMUNITY' }, { authorUserId: viewer.userId }],
+    // A post files under its old single topic and under every topic tagged.
+    AND: [
+      ...(topic ? [{ OR: [{ topic }, { topics: { has: topic } }] }] : []),
+      { OR: [{ visibility: 'COMMUNITY' }, { authorUserId: viewer.userId }] },
+    ],
   };
 }
 
@@ -171,6 +177,9 @@ function summarySelect(viewer: LoungeViewer) {
     createdAt: true,
     kind: true,
     topic: true,
+    kinds: true,
+    subjects: true,
+    topics: true,
     title: true,
     visibility: true,
     authorUserId: true,
@@ -207,6 +216,8 @@ export type LoungePostSummary = {
   kind: LoungePostKindKey;
   topic: string;
   topicLabel: string;
+  /** Every tag; posts from before tags read their kind and topic. */
+  tags: LoungePostTags;
   title: string;
   createdAt: string;
   author: LoungeByline;
@@ -237,6 +248,7 @@ function toSummary(row: SummaryRow, viewer: LoungeViewer): LoungePostSummary {
     kind: row.kind,
     topic: row.topic,
     topicLabel: loungeTopicLabel(row.topic),
+    tags: resolveLoungePostTags(row),
     title: row.title,
     createdAt: row.createdAt.toISOString(),
     author: bylineFor(row.author, row.organization?.name, row.author.isAdmin),
@@ -553,6 +565,14 @@ async function actorName(viewer: LoungeViewer, organizationId: string | null): P
   return bylineFor(author, organization?.name, viewer.isStaff).name;
 }
 
+/** The tags columns for a new post, from its tags or else its kind and topic. */
+function tagData(input: CreateLoungePostInput) {
+  const tags =
+    input.tags ??
+    resolveLoungePostTags({ kind: input.kind, topic: input.topic, kinds: [], subjects: [], topics: [] });
+  return { kinds: tags.kinds, subjects: tags.subjects, topics: tags.topics };
+}
+
 export async function createLoungePost(params: {
   viewer: LoungeViewer;
   organizationId: string | null;
@@ -586,6 +606,7 @@ export async function createLoungePost(params: {
         organizationId: params.organizationId,
         kind: input.kind,
         topic: input.topic,
+        ...tagData(input),
         title: input.title,
         body: input.body,
         visibility: input.askPrivately ? 'STAFF_ONLY' : 'COMMUNITY',
@@ -1374,19 +1395,26 @@ export async function getLoungeHost(): Promise<LoungeHost | null> {
 
 export type LoungeTopicCount = { topic: string; label: string; count: number };
 
-/** Live posts the viewer can see, per topic, busiest first. */
+/**
+ * Live posts the viewer can see, per topic, busiest first. A post counts
+ * under every topic it is tagged with; a post with none is "Something else".
+ */
 export async function listLoungeTopicCounts(
   viewer: LoungeViewer,
   now: Date = new Date()
 ): Promise<LoungeTopicCount[]> {
-  const groups = await prisma.loungePost.groupBy({
-    by: ['topic'],
+  const rows = await prisma.loungePost.findMany({
     where: feedWhere(viewer, null, now),
-    _count: { _all: true },
+    select: { kind: true, topic: true, kinds: true, subjects: true, topics: true },
   });
-  return groups
-    .map((group) => ({ topic: group.topic, label: loungeTopicLabel(group.topic), count: group._count._all }))
-    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const { topics } = resolveLoungePostTags(row);
+    for (const topic of topics.length > 0 ? topics : ['other']) counts.set(topic, (counts.get(topic) ?? 0) + 1);
+  }
+  return Array.from(counts, ([topic, count]) => ({ topic, label: loungeTopicLabel(topic), count })).sort(
+    (a, b) => b.count - a.count || a.label.localeCompare(b.label)
+  );
 }
 
 export async function setLoungePostPinned(

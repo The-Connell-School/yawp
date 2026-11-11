@@ -2759,6 +2759,14 @@ model LoungePost {
   kind             LoungePostKind
   /// One of LOUNGE_TOPICS in app/domain/lounge/topics.ts.
   topic            String
+  /// Every post type checked (Question, Share). Empty on posts from before
+  /// tags, which read `kind` instead; new posts fill `kind` from the first.
+  kinds            LoungePostKind[]     @default([])
+  /// LOUNGE_SUBJECTS keys in app/domain/lounge/tags.ts.
+  subjects         String[]             @default([])
+  /// Every LOUNGE_TOPICS key checked. Empty on posts from before tags, which
+  /// read `topic` instead; new posts fill `topic` from the first.
+  topics           String[]             @default([])
   title            String
   body             String
   visibility       LoungePostVisibility @default(COMMUNITY)
@@ -2794,6 +2802,7 @@ model LoungePost {
   @@index([staffStatus, staffRequestedAt])
   @@index([authorUserId])
   @@index([topic, createdAt(sort: Desc)])
+  @@index([topics], type: Gin)
   @@index([pinnedAt])
 }
 
