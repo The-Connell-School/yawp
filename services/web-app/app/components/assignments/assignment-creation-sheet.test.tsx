@@ -515,6 +515,45 @@ describe('AssignmentCreationSheetContent', () => {
     expectText('Could not create the assignment.');
   });
 
+  it('shows the assignment created success view when create returns assignmentId', () => {
+    root = renderSheet({
+      createFetcher: idleFetcher({
+        success: true,
+        assignmentId: 'asgn-123',
+      }),
+      initialClassIds: ['class-1'],
+      initialTitle: 'Community Gardens — Thesis',
+      initialAssignmentTypeId: 'type-2',
+    }).root;
+
+    expect(
+      document.querySelector('[data-testid="assignment-created-success"]')
+    ).not.toBeNull();
+    expectText('Assignment created');
+    expectText('Community Gardens — Thesis');
+    expect(
+      document.querySelector('[data-testid="assignment-created-share-url"]')
+    ).not.toBeNull();
+    expectNoText('Create Assignment');
+  });
+
+  it('shows duplicate assign-to counter with none preselected and blocks submit', () => {
+    root = renderSheet({
+      assignToVariant: 'duplicate',
+      initialClassIds: [],
+      duplicateClasses: teacherClasses,
+      initialTitle: 'Copy of Essay',
+      initialAssignmentTypeId: 'type-2',
+      initialPrompt: 'Duplicate prompt',
+    }).root;
+
+    expectText(`0 of ${teacherClasses.length} selected`);
+    expect(
+      document.querySelector<HTMLButtonElement>('button[type="submit"]')!
+        .disabled
+    ).toBe(true);
+  });
+
   it('names a tutor-off assignment a cold write', () => {
     root = renderSheet().root;
     expectNoText('Cold write');
