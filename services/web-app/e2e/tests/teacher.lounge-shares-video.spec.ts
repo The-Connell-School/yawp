@@ -1,5 +1,5 @@
 import { expect, test } from '../test-setup';
-import { setLoungeCommunityFlag } from '../feature-flags';
+import { setLoungeCommunityFlag, setTeacherLoungeFlag } from '../feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
@@ -82,10 +82,12 @@ async function seedWaitingQuestion(teacherUserId: string, organizationId: string
 
 test.describe.serial("Faculty Lounge shares and Brian's videos", () => {
   test.beforeAll(async () => {
+    await setTeacherLoungeFlag(true);
     await setLoungeCommunityFlag(true);
   });
 
   test.afterAll(async () => {
+    await setTeacherLoungeFlag(false);
     await setLoungeCommunityFlag(false);
   });
 

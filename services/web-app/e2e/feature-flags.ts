@@ -124,6 +124,15 @@ export async function setLoungeCommunityFlag(enabled: boolean) {
   await setFeatureFlag('teacher_lounge_community', enabled);
 }
 
+/**
+ * Main's runtime gate for the whole Lounge (nav item and routes), for
+ * everyone (true) or no one (false). The community specs need it on; with it
+ * off the Lounge is hidden whatever `teacher_lounge_community` says.
+ */
+export async function setTeacherLoungeFlag(enabled: boolean) {
+  await setFeatureFlag('teacher-lounge', enabled);
+}
+
 /** Lesson Planner review flags (intake v2, stack v2, deck v2, run 2). */
 export type LessonPlannerReviewFlag = Extract<
   FeatureFlagKey,

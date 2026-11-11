@@ -1,5 +1,5 @@
 import { expect, test } from '../test-setup';
-import { setLoungeCommunityFlag } from '../feature-flags';
+import { setLoungeCommunityFlag, setTeacherLoungeFlag } from '../feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
 import { expectNoAllCapsText } from '../helpers/lounge-style';
 
@@ -34,10 +34,12 @@ async function logout(page: import('@playwright/test').Page) {
 
 test.describe.serial("Faculty Lounge community board", () => {
   test.beforeAll(async () => {
+    await setTeacherLoungeFlag(true);
     await clearLounge();
   });
 
   test.afterAll(async () => {
+    await setTeacherLoungeFlag(false);
     await setLoungeCommunityFlag(false);
     await clearLounge();
   });

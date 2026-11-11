@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '../test-setup';
-import { setLoungeCommunityFlag } from '../feature-flags';
+import { setLoungeCommunityFlag, setTeacherLoungeFlag } from '../feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
 import { expectNoAllCapsText } from '../helpers/lounge-style';
 
@@ -52,10 +52,12 @@ async function logout(page: import('@playwright/test').Page) {
 
 test.describe.serial('Faculty Lounge launch', () => {
   test.beforeAll(async () => {
+    await setTeacherLoungeFlag(true);
     await setLoungeCommunityFlag(true);
   });
 
   test.afterAll(async () => {
+    await setTeacherLoungeFlag(false);
     await setLoungeCommunityFlag(false);
   });
 
