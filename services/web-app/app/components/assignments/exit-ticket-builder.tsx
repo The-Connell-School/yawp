@@ -96,7 +96,7 @@ export type ExitTicketBuilderProps = {
  * note. The stored key is the same; only the question changes.
  */
 const CRITERIA_LABELS: Partial<Record<keyof ExitTicketLessonNotes, string>> = {
-  mainPoints: 'Main points of the lesson',
+  mainPoints: 'Main points of the lesson (optional)',
   mustMention: 'Correct answer or key points',
   watchFor: 'Common mix-ups (optional)',
 };
@@ -554,7 +554,10 @@ export function ExitTicketBuilder({
             {asksWhatToAssess ? (
               <div className="space-y-1.5">
                 <Label htmlFor="assignment-create-exit-ticket-assess-for">
-                  What should be assessed?
+                  What should be assessed?{' '}
+                  <span className="font-normal text-muted-foreground">
+                    (optional)
+                  </span>
                 </Label>
                 <Textarea
                   id="assignment-create-exit-ticket-assess-for"
