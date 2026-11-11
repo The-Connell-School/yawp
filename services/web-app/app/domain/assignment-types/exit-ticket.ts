@@ -22,6 +22,8 @@ import {
   exitTicketActivityKind,
   exitTicketActivityOption,
   exitTicketCloser,
+  exitTicketOffersQuestionsLine,
+  EXIT_TICKET_QUESTIONS_LINE,
   exitTicketStarterOption,
   composeExplainConceptPrompt,
   normalizeExitTicketPromptText,
@@ -174,6 +176,17 @@ export const EXIT_TICKET_LESSON_NOTE_FIELDS: ExitTicketLessonNoteField[] = [
     placeholder: 'e.g., Using “theme” and “topic” interchangeably.',
   },
 ];
+
+/**
+ * The v3 form's one optional note, stored as `mainPoints` so the grader, the
+ * class summary and the tutor read it where they already read the lesson.
+ */
+export const EXIT_TICKET_V3_CONTEXT_FIELD: ExitTicketLessonNoteField = {
+  key: 'mainPoints',
+  label: 'Anything Yawp! should know to give useful feedback?',
+  helperText: 'Students don’t see this.',
+  placeholder: 'e.g., What you covered in class today',
+};
 
 /**
  * How pointed the reading of this ticket can be, given what the teacher has
@@ -489,6 +502,8 @@ type ExitTicketConfigBase = {
   promptText?: string;
   /** A reflection's fixed prompt; absent when the teacher wrote their own. */
   starter?: ExitTicketStarter;
+  /** v3 only: end with EXIT_TICKET_QUESTIONS_LINE. Absent means off. */
+  invitesQuestions?: true;
   /** Absent, never empty: a ticket without notes stores no key at all. */
   lessonNotes?: ExitTicketLessonNotes;
   /** Present only on a ticket the teacher chose to grade. */
@@ -765,8 +780,13 @@ function reflectionPromptText(config: ExitTicketConfig): string {
 /** The prompt the student actually sees. */
 export function composeExitTicketPrompt(config: ExitTicketConfig): string {
   if (config.activity && config.promptText) {
-    const closer = exitTicketCloser(config.activity, config.starter);
-    return closer ? `${config.promptText}\n\n${closer}` : config.promptText;
+    return [
+      config.promptText,
+      exitTicketCloser(config.activity, config.starter),
+      config.invitesQuestions ? EXIT_TICKET_QUESTIONS_LINE : null,
+    ]
+      .filter((part): part is string => Boolean(part))
+      .join('\n\n');
   }
   if (config.mode === 'basic') {
     return `${reflectionPromptText(config)}\n\n${EXIT_TICKET_ELABORATION_NOTE}`;
@@ -796,6 +816,8 @@ export type ExitTicketConfigInput = {
   activity?: string | null;
   promptText?: string | null;
   starter?: string | null;
+  /** v3 only: the questions line, as a checkbox posts it. */
+  invitesQuestions?: string | boolean | null;
   /** Posted by the new builder. Absent from every v1 client. */
   kind?: string | null;
   mode?: string | null;
@@ -1077,6 +1099,13 @@ function parseExitTicketStarter(
     : null;
 }
 
+/** A checkbox or a hidden field, as the form or a link posts it. */
+function postedTrue(value: string | boolean | null | undefined): boolean {
+  if (value === true) return true;
+  const text = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return text === 'true' || text === 'on' || text === 'yes';
+}
+
 /** Only a prompt still in a starter's exact words keeps that starter. */
 function keptStarter(
   activity: ExitTicketActivity,
@@ -1230,6 +1259,10 @@ function parseV3ConfigInput(
     activity,
     promptText,
     ...(starter ? { starter } : {}),
+    ...(postedTrue(input.invitesQuestions) &&
+    exitTicketOffersQuestionsLine({ activity, starter })
+      ? { invitesQuestions: true as const }
+      : {}),
   };
   const gradingField = grading ? { grading } : {};
 
@@ -1278,7 +1311,10 @@ function parseV3ConfigInput(
 function parseStoredV3Fields(
   record: Record<string, unknown>,
   mode: ExitTicketMode
-): Pick<ExitTicketConfigBase, 'activity' | 'promptText' | 'starter'> {
+): Pick<
+  ExitTicketConfigBase,
+  'activity' | 'promptText' | 'starter' | 'invitesQuestions'
+> {
   const activity = parseExitTicketActivity(
     typeof record.activity === 'string' ? record.activity : null
   );
@@ -1297,7 +1333,15 @@ function parseStoredV3Fields(
     ),
     promptText
   );
-  return { activity, promptText, ...(starter ? { starter } : {}) };
+  const invitesQuestions =
+    record.invitesQuestions === true &&
+    exitTicketOffersQuestionsLine({ activity, starter });
+  return {
+    activity,
+    promptText,
+    ...(starter ? { starter } : {}),
+    ...(invitesQuestions ? { invitesQuestions: true as const } : {}),
+  };
 }
 
 /** What the v3 builder edits. */
@@ -1311,6 +1355,8 @@ export type ExitTicketV3Draft = {
   topic: string;
   /** Checks only. */
   answerType: ExitTicketAnswerType;
+  /** Ends the ticket with EXIT_TICKET_QUESTIONS_LINE. Off by default. */
+  invitesQuestions: boolean;
 };
 
 export function emptyExitTicketV3Draft(
@@ -1322,6 +1368,7 @@ export function emptyExitTicketV3Draft(
     promptText: '',
     topic: '',
     answerType: 'subjective',
+    invitesQuestions: false,
     ...patch,
   };
 }
@@ -1331,7 +1378,12 @@ export function exitTicketV3DraftInput(
   draft: ExitTicketV3Draft
 ): Pick<
   ExitTicketConfigInput,
-  'activity' | 'promptText' | 'starter' | 'topic' | 'answerType'
+  | 'activity'
+  | 'promptText'
+  | 'starter'
+  | 'topic'
+  | 'answerType'
+  | 'invitesQuestions'
 > {
   const fixed =
     draft.activity === 'reflect'
@@ -1351,6 +1403,8 @@ export function exitTicketV3DraftInput(
       exitTicketActivityKind(draft.activity) === 'check'
         ? draft.answerType
         : null,
+    invitesQuestions:
+      draft.invitesQuestions && exitTicketOffersQuestionsLine(draft),
   };
 }
 
@@ -1359,6 +1413,13 @@ export function exitTicketV3DraftInput(
  * quick builder or the Lesson Planner wrote.
  */
 export function exitTicketV3DraftFromConfig(
+  config: ExitTicketConfig | null | undefined
+): ExitTicketV3Draft {
+  const draft = draftFromConfigFields(config);
+  return config?.invitesQuestions ? { ...draft, invitesQuestions: true } : draft;
+}
+
+function draftFromConfigFields(
   config: ExitTicketConfig | null | undefined
 ): ExitTicketV3Draft {
   if (!config) return emptyExitTicketV3Draft();

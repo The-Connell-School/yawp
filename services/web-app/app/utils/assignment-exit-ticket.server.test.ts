@@ -413,6 +413,38 @@ describe('a v3 builder post', () => {
     });
   });
 
+  test('stores the questions line and the note for Yawp!, both optional', () => {
+    const result = parseAssignmentExitTicket(
+      formDataFor({
+        exitTicketActivity: 'answer-question',
+        exitTicketKind: 'check',
+        exitTicketPromptText: QUESTION,
+        exitTicketInvitesQuestions: 'true',
+        exitTicketLessonMainPoints: 'We read chapters 1 to 3 today.',
+        submitForGrade: 'false',
+      })
+    );
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.value.prompt).toBe(
+      `${QUESTION}\n\nFeel free to ask any questions you still have.`
+    );
+    expect(result.value.exitTicketConfigJson).toMatchObject({
+      invitesQuestions: true,
+      lessonNotes: { mainPoints: 'We read chapters 1 to 3 today.' },
+    });
+
+    const without = parseAssignmentExitTicket(
+      formDataFor({
+        exitTicketActivity: 'answer-question',
+        exitTicketKind: 'check',
+        exitTicketPromptText: QUESTION,
+        submitForGrade: 'false',
+      })
+    );
+    expect(without).toMatchObject({ success: true, value: { prompt: QUESTION } });
+  });
+
   test('an edited graded ticket keeps its grade', () => {
     const result = parseAssignmentExitTicket(
       formDataFor({

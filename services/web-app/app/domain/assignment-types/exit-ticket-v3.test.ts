@@ -7,11 +7,15 @@ import {
   EXIT_TICKET_CONFIG_SCHEMA_VERSION,
   EXIT_TICKET_EXPLAIN_CLOSER,
   EXIT_TICKET_PROMPT_TEXT_MAX_LENGTH,
+  EXIT_TICKET_QUESTIONS_LINE,
+  EXIT_TICKET_V3_CONTEXT_FIELD,
   EXIT_TICKET_STARTER_OPTIONS,
   EXIT_TICKET_TOPIC_MAX_LENGTH,
   composeExitTicketPrompt,
   emptyExitTicketV3Draft,
   exitTicketActivityKind,
+  exitTicketActivityOption,
+  exitTicketOffersQuestionsLine,
   exitTicketChoiceFor,
   exitTicketStarterOption,
   exitTicketV3DraftFromConfig,
@@ -56,9 +60,9 @@ describe('what students can do', () => {
       [
         'Check for understanding',
         [
-          'Explain a concept in their own words',
-          'Answer a question',
-          'Grapple with a text or source',
+          'Have students explain a concept in their own words',
+          'Have students answer a question you ask',
+          'Have students understand or grapple with a text or source',
         ],
       ],
     ]);
@@ -481,5 +485,130 @@ describe('opening any ticket in the v3 builder', () => {
     for (const option of EXIT_TICKET_ACTIVITY_OPTIONS) {
       expect(reachable.has(option.value)).toBe(true);
     }
+  });
+});
+
+describe('the optional line inviting questions', () => {
+  test('is the line Brian asked for, and off by default', () => {
+    expect(EXIT_TICKET_QUESTIONS_LINE).toBe(
+      'Feel free to ask any questions you still have.'
+    );
+    expect(emptyExitTicketV3Draft().invitesQuestions).toBe(false);
+    expect(parseDraft({}).invitesQuestions).toBeUndefined();
+    expect(composeExitTicketPrompt(parseDraft({}))).not.toContain(
+      EXIT_TICKET_QUESTIONS_LINE
+    );
+  });
+
+  test('switched on, students read it last, on a reflection or a check', () => {
+    const reflection = parseDraft({ invitesQuestions: true });
+    expect(reflection.invitesQuestions).toBe(true);
+    expect(composeExitTicketPrompt(reflection)).toBe(
+      `${exitTicketStarterOption('learned')!.prompt}\n\n${EXIT_TICKET_EXPLAIN_CLOSER}\n\n${EXIT_TICKET_QUESTIONS_LINE}`
+    );
+    const check = parseDraft({
+      activity: 'answer-question',
+      starter: null,
+      promptText: ANSWER_QUESTION,
+      invitesQuestions: true,
+    });
+    expect(composeExitTicketPrompt(check)).toBe(
+      `${ANSWER_QUESTION}\n\n${EXIT_TICKET_QUESTIONS_LINE}`
+    );
+  });
+
+  test('is not offered where the prompt already asks for a question', () => {
+    expect(exitTicketOffersQuestionsLine(emptyExitTicketV3Draft())).toBe(true);
+    expect(
+      exitTicketOffersQuestionsLine(
+        emptyExitTicketV3Draft({ starter: 'wondering' })
+      )
+    ).toBe(false);
+    const wondering = parseDraft({
+      starter: 'wondering',
+      invitesQuestions: true,
+    });
+    expect(wondering.invitesQuestions).toBeUndefined();
+    expect(composeExitTicketPrompt(wondering)).not.toContain(
+      EXIT_TICKET_QUESTIONS_LINE
+    );
+  });
+
+  test('reads the form’s posted value', () => {
+    for (const value of ['true', 'on', true]) {
+      expect(
+        parse({ activity: 'reflect', starter: 'learned', invitesQuestions: value })
+          .invitesQuestions
+      ).toBe(true);
+    }
+    for (const value of ['false', '', null, false]) {
+      expect(
+        parse({ activity: 'reflect', starter: 'learned', invitesQuestions: value })
+          .invitesQuestions
+      ).toBeUndefined();
+    }
+  });
+
+  test('survives storage and reopens switched on', () => {
+    const config = parseDraft({ starter: 'interesting', invitesQuestions: true });
+    const stored = parseStoredExitTicketConfig(
+      JSON.parse(JSON.stringify(config))
+    )!;
+    expect(stored).toEqual(config);
+    expect(composeExitTicketPrompt(stored)).toEndWith(EXIT_TICKET_QUESTIONS_LINE);
+    expect(exitTicketV3DraftFromConfig(stored).invitesQuestions).toBe(true);
+  });
+
+  test('a legacy ticket never gets the line', () => {
+    const legacy = parse({ mode: 'basic' });
+    expect(composeExitTicketPrompt(legacy)).not.toContain(
+      EXIT_TICKET_QUESTIONS_LINE
+    );
+  });
+});
+
+describe('the optional note on what Yawp! should know', () => {
+  test('is one short, optional field stored as the lesson’s main points', () => {
+    expect(EXIT_TICKET_V3_CONTEXT_FIELD).toMatchObject({
+      key: 'mainPoints',
+      label: 'Anything Yawp! should know to give useful feedback?',
+    });
+    expect(EXIT_TICKET_V3_CONTEXT_FIELD.placeholder).toContain('covered in class');
+  });
+
+  test('left blank, the ticket still parses and stores no notes', () => {
+    const config = parse({
+      ...exitTicketV3DraftInput(emptyExitTicketV3Draft()),
+      lessonMainPoints: '   ',
+    });
+    expect(config.lessonNotes).toBeUndefined();
+  });
+
+  test('filled in, it is stored for the grader, the summary and the tutor', () => {
+    const config = parse({
+      ...exitTicketV3DraftInput(emptyExitTicketV3Draft()),
+      lessonMainPoints: 'We read chapters 1–3 and talked about Allie.',
+    });
+    expect(config.lessonNotes?.mainPoints).toBe(
+      'We read chapters 1–3 and talked about Allie.'
+    );
+  });
+});
+
+describe('check labels say what students will do', () => {
+  test('each starts with “Have students”, and keeps a short tag for cards', () => {
+    expect(exitTicketActivityOption('explain-concept')).toMatchObject({
+      label: 'Have students explain a concept in their own words',
+      tag: 'Explain a concept',
+    });
+    expect(exitTicketActivityOption('answer-question')).toMatchObject({
+      label: 'Have students answer a question you ask',
+      tag: 'Answer a question',
+    });
+    expect(exitTicketActivityOption('engage-text')).toMatchObject({
+      label: 'Have students understand or grapple with a text or source',
+      tag: 'Grapple with a text or source',
+    });
+    expect(exitTicketActivityOption('reflect')?.tag).toBe('Reflection');
   });
 });

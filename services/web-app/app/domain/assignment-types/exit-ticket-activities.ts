@@ -32,6 +32,14 @@ export const DEFAULT_EXIT_TICKET_ACTIVITY: ExitTicketActivity = 'reflect';
 export const EXIT_TICKET_EXPLAIN_CLOSER =
   'Write as much as you can. Don’t worry about polish.';
 
+/**
+ * The optional line a teacher can add to any v3 ticket. It invites questions
+ * without making the ticket about them: off by default, and never on a ticket
+ * whose prompt already asks for a question.
+ */
+export const EXIT_TICKET_QUESTIONS_LINE =
+  'Feel free to ask any questions you still have.';
+
 export type ExitTicketActivityKind = 'reflection' | 'check';
 
 /** The legacy focus a check dual-writes, so pre-v3 readers still parse it. */
@@ -40,7 +48,10 @@ export type ExitTicketLegacyFocus = 'explain-concept' | 'understand-text';
 export type ExitTicketActivityOption = {
   value: ExitTicketActivity;
   kind: ExitTicketActivityKind;
+  /** What the teacher reads on the form: what students will do. */
   label: string;
+  /** A few words for a card's tag, the grader and the class summary. */
+  tag: string;
   placeholder: string;
   /** Null when the ticket ends with the teacher's own words. */
   closer: string | null;
@@ -54,6 +65,7 @@ export const EXIT_TICKET_ACTIVITY_OPTIONS: ExitTicketActivityOption[] = [
     value: 'reflect',
     kind: 'reflection',
     label: 'Reflect on the lesson',
+    tag: 'Reflection',
     placeholder: 'e.g., What would you tell a friend about today’s lesson?',
     closer: null,
     legacyFocus: null,
@@ -63,7 +75,8 @@ export const EXIT_TICKET_ACTIVITY_OPTIONS: ExitTicketActivityOption[] = [
   {
     value: 'explain-concept',
     kind: 'check',
-    label: 'Explain a concept in their own words',
+    label: 'Have students explain a concept in their own words',
+    tag: 'Explain a concept',
     placeholder: 'e.g., how Edwards uses reason and emotion together',
     closer: EXIT_TICKET_EXPLAIN_CLOSER,
     legacyFocus: 'explain-concept',
@@ -73,7 +86,8 @@ export const EXIT_TICKET_ACTIVITY_OPTIONS: ExitTicketActivityOption[] = [
   {
     value: 'answer-question',
     kind: 'check',
-    label: 'Answer a question',
+    label: 'Have students answer a question you ask',
+    tag: 'Answer a question',
     placeholder:
       'e.g., Who is Allie in The Catcher in the Rye, and why does Holden keep thinking about him?',
     closer: null,
@@ -84,7 +98,8 @@ export const EXIT_TICKET_ACTIVITY_OPTIONS: ExitTicketActivityOption[] = [
   {
     value: 'engage-text',
     kind: 'check',
-    label: 'Grapple with a text or source',
+    label: 'Have students understand or grapple with a text or source',
+    tag: 'Grapple with a text or source',
     placeholder:
       'e.g., Reread the second stanza. Find two examples of enjambment and say what each one does to the poem’s pace.',
     closer: null,
@@ -227,6 +242,17 @@ export function exitTicketCloser(
     return exitTicketStarterOption(starter)?.closer ?? null;
   }
   return exitTicketActivityOption(activity)?.closer ?? null;
+}
+
+/** Whether the questions line is on offer: not where the prompt asks for one. */
+export function exitTicketOffersQuestionsLine({
+  activity,
+  starter,
+}: {
+  activity: ExitTicketActivity;
+  starter?: ExitTicketStarter | null;
+}): boolean {
+  return !(activity === 'reflect' && starter === 'wondering');
 }
 
 /**
