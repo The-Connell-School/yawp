@@ -2,8 +2,11 @@ import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { Textarea } from '~/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '~/components/ui/radio-group';
+import { Checkbox } from '~/components/ui/checkbox';
 import {
   EXIT_TICKET_CHOICE_GROUPS,
+  EXIT_TICKET_QUESTIONS_LINE,
+  EXIT_TICKET_V3_CONTEXT_FIELD,
   EXIT_TICKET_LESSON_NOTE_MAX_LENGTH,
   EXIT_TICKET_PROMPT_TEXT_MAX_LENGTH,
   EXIT_TICKET_TOPIC_MAX_LENGTH,
@@ -11,6 +14,7 @@ import {
   exitTicketActivityOption,
   exitTicketChoiceFor,
   exitTicketModeForKind,
+  exitTicketOffersQuestionsLine,
   exitTicketV3DraftInput,
   type ExitTicketActivity,
   type ExitTicketChoice,
@@ -24,6 +28,11 @@ export type ExitTicketBuilderV3Props = {
   /** The correct answer and any context; stored as the `mustMention` note. */
   answerContext: string;
   onAnswerContextChange: (value: string) => void;
+  /** "Anything Yawp! should know…", stored as the `mainPoints` note. */
+  contextNote: string;
+  onContextNoteChange: (value: string) => void;
+  /** A mix-up note from an older form or the planner, posted unchanged. */
+  keptWatchFor?: string;
   /** The composed prompt, or empty while something is still missing. */
   preview: string;
   disabled: boolean;
@@ -61,8 +70,9 @@ const PROMPT_LABELS: Partial<Record<ExitTicketActivity, string>> = {
 
 /**
  * The v3 exit ticket builder: what will students do, then whatever that
- * choice needs. Nothing on it is optional in disguise: every field it shows
- * is either filled for the teacher or plainly needed.
+ * choice needs. The prompt (or concept) is the only thing it requires; the
+ * correct answer, the questions line and the note for Yawp! are labelled
+ * optional and never hold Create back.
  *
  * Controlled by the creation sheet, which owns the state and the submit gate.
  */
@@ -71,6 +81,9 @@ export function ExitTicketBuilderV3({
   onDraftChange,
   answerContext,
   onAnswerContextChange,
+  contextNote,
+  onContextNoteChange,
+  keptWatchFor = '',
   preview,
   disabled,
 }: ExitTicketBuilderV3Props) {
@@ -199,7 +212,7 @@ export function ExitTicketBuilderV3({
           {draft.answerType === 'objective' ? (
             <div className="space-y-1.5">
               <Label htmlFor="assignment-create-exit-ticket-answer-context">
-                The answer{' '}
+                Describe the correct answer{' '}
                 <span className="font-normal text-muted-foreground">
                   (optional)
                 </span>
@@ -215,11 +228,34 @@ export function ExitTicketBuilderV3({
                 disabled={disabled}
               />
               <p className="text-sm text-muted-foreground">
-                Add the answer and any context for reading responses. Students
-                don’t see this.
+                Yawp! uses it to give accurate feedback. Students don’t see it.
               </p>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {exitTicketOffersQuestionsLine(draft) ? (
+        <div className="flex items-start gap-2.5">
+          <Checkbox
+            id="assignment-create-exit-ticket-invites-questions"
+            checked={draft.invitesQuestions}
+            onCheckedChange={(checked) =>
+              onDraftChange({ invitesQuestions: checked === true })
+            }
+            disabled={disabled}
+            className="mt-0.5 size-4 shrink-0"
+          />
+          <Label
+            htmlFor="assignment-create-exit-ticket-invites-questions"
+            className="cursor-pointer font-normal leading-snug"
+          >
+            Add a line inviting questions{' '}
+            <span className="text-muted-foreground">(optional)</span>
+            <span className="block text-sm text-muted-foreground">
+              Students see: “{EXIT_TICKET_QUESTIONS_LINE}”
+            </span>
+          </Label>
         </div>
       ) : null}
 
@@ -246,7 +282,39 @@ export function ExitTicketBuilderV3({
         )}
       </div>
 
+      <div className="space-y-1.5">
+        <Label htmlFor="assignment-create-exit-ticket-context-note">
+          {EXIT_TICKET_V3_CONTEXT_FIELD.label}{' '}
+          <span className="font-normal text-muted-foreground">(optional)</span>
+        </Label>
+        <Textarea
+          id="assignment-create-exit-ticket-context-note"
+          name="exitTicketLessonMainPoints"
+          value={contextNote}
+          onChange={(event) => onContextNoteChange(event.target.value)}
+          rows={2}
+          maxLength={EXIT_TICKET_LESSON_NOTE_MAX_LENGTH}
+          placeholder={EXIT_TICKET_V3_CONTEXT_FIELD.placeholder}
+          disabled={disabled}
+        />
+        <p className="text-sm text-muted-foreground">
+          {EXIT_TICKET_V3_CONTEXT_FIELD.helperText}
+        </p>
+      </div>
+
       <input type="hidden" name="exitTicketActivity" value={draft.activity} />
+      <input
+        type="hidden"
+        name="exitTicketInvitesQuestions"
+        value={posted.invitesQuestions ? 'true' : 'false'}
+      />
+      {keptWatchFor ? (
+        <input
+          type="hidden"
+          name="exitTicketLessonWatchFor"
+          value={keptWatchFor}
+        />
+      ) : null}
       <input type="hidden" name="exitTicketKind" value={kind} />
       <input
         type="hidden"

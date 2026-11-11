@@ -935,9 +935,18 @@ export function AssignmentCreationSheetContent({
   // text posts only then, whatever the lesson notes hold.
   const v3HidesAnswer =
     v3IsCheck && v3Draft.answerType !== 'objective';
+  // In v3 the builder shows the correct answer (checks with one) and the
+  // note for Yawp!; a "mix-up" note from an older form or the planner is
+  // kept as it was, since v3 has no field for it.
+  const v3PostedNote = (key: keyof ExitTicketLessonNotes) =>
+    key === 'mustMention'
+      ? v3HidesAnswer
+        ? undefined
+        : lessonNotes.mustMention
+      : lessonNotes[key] || undefined;
   const postedNote = (key: keyof ExitTicketLessonNotes) =>
-    key === 'mustMention' && v3HidesAnswer
-      ? undefined
+    isV3ExitTicket
+      ? v3PostedNote(key)
       : lessonNotesEnabled || criteriaNoteKeys.includes(key)
         ? lessonNotes[key]
         : undefined;
@@ -1661,6 +1670,14 @@ export function AssignmentCreationSheetContent({
                   mustMention: value,
                 }))
               }
+              contextNote={lessonNotes.mainPoints}
+              onContextNoteChange={(value) =>
+                setLessonNotes((current) => ({
+                  ...current,
+                  mainPoints: value,
+                }))
+              }
+              keptWatchFor={postedNote('watchFor') ?? ''}
               preview={v3Prompt}
               disabled={isSaving}
             />
@@ -2015,7 +2032,7 @@ export function AssignmentCreationSheetContent({
           open={moreOptionsOpen}
           onOpenChange={setMoreOptionsOpen}
         >
-          {isQuickExitTicket ? (
+          {isQuickExitTicket && !isV3ExitTicket ? (
             <div className="pt-4">
               <ExitTicketLessonNotesSection
                 criteriaKeys={criteriaNoteKeys}

@@ -47,8 +47,14 @@ const {
   EXIT_TICKET_FOCUS_OPTIONS,
   EXIT_TICKET_ACTIVITIES,
   EXIT_TICKET_EXPLAIN_CLOSER,
+  EXIT_TICKET_QUESTIONS_LINE,
   exitTicketStarterOption,
 } = await import('~/domain/assignment-types/exit-ticket');
+const { readPlannedExitTickets, exitTicketCreateHref, readExitTicketPrefill } =
+  await import('~/domain/lesson-planner/exit-ticket-block');
+const { exitTicketSheetPropsFromPrefill } = await import(
+  '~/routes/app.assignment-types.$id/exit-ticket-sheet-props'
+);
 
 describe('assignmentCreationClassLabel', () => {
   it('shows grade and period when both are present', () => {
@@ -1227,6 +1233,128 @@ describe('AssignmentCreationSheetContent', () => {
       expect(inputByName('submitForGrade').value).toBe('true');
       expect(inputByName('pointValue').value).toBe('5');
       expect(inputByName('exitTicketGradingBasis').value).toBe('bands');
+    });
+
+    it('labels each check by what students will do', () => {
+      root = renderV3Sheet().root;
+      expectText('Have students explain a concept in their own words');
+      expectText('Have students answer a question you ask');
+      expectText('Have students understand or grapple with a text or source');
+    });
+
+    it('the questions line is an optional checkbox, off until ticked', () => {
+      root = renderV3Sheet().root;
+      const line = () =>
+        controlById('assignment-create-exit-ticket-invites-questions');
+      expect(isChecked(line())).toBe(false);
+      expect(inputByName('exitTicketInvitesQuestions').value).toBe('false');
+      expect(inputByName('prompt').value).not.toContain(
+        EXIT_TICKET_QUESTIONS_LINE
+      );
+      act(() => {
+        line().click();
+      });
+      expect(inputByName('exitTicketInvitesQuestions').value).toBe('true');
+      expect(inputByName('prompt').value).toEndWith(EXIT_TICKET_QUESTIONS_LINE);
+      expectText(EXIT_TICKET_QUESTIONS_LINE);
+      expect(submitButton().disabled).toBe(false);
+
+      // Not offered where the prompt already asks for a question.
+      choose('reflect-wondering');
+      expect(
+        document.getElementById('assignment-create-exit-ticket-invites-questions')
+      ).toBeNull();
+      expect(inputByName('prompt').value).not.toContain(
+        EXIT_TICKET_QUESTIONS_LINE
+      );
+    });
+
+    it('asks one optional question for Yawp!, in place of the lesson notes', () => {
+      root = renderV3Sheet().root;
+      expectText('Anything Yawp! should know to give useful feedback?');
+      expectNoText('Add notes about the lesson');
+      expect(
+        document.querySelector('textarea[name="exitTicketLessonWatchFor"]')
+      ).toBeNull();
+      // Blank is fine.
+      expect(submitButton().disabled).toBe(false);
+      act(() => {
+        setTextareaValue(
+          textareaByName('exitTicketLessonMainPoints'),
+          'We read chapters 1 to 3.'
+        );
+      });
+      expect(submitButton().disabled).toBe(false);
+      expect(textareaByName('exitTicketLessonMainPoints').value).toBe(
+        'We read chapters 1 to 3.'
+      );
+    });
+
+    it('describes the correct answer in its own box, labelled optional', () => {
+      root = renderV3Sheet().root;
+      choose('answer-question');
+      act(() => {
+        controlById('assignment-create-exit-ticket-answer-objective').click();
+      });
+      expectText('Describe the correct answer');
+      expect(
+        textareaByName('exitTicketLessonMustMention').getAttribute('id')
+      ).toBe('assignment-create-exit-ticket-answer-context');
+    });
+
+    describe('a Lesson Planner hand-off', () => {
+      // The link the planner's card opens, read back the way the assignment
+      // type page reads it, into the props that page gives the sheet.
+      function handOff(block: string, flag: boolean) {
+        const [ticket] = readPlannedExitTickets(
+          '```yawp-exit-ticket\n' + block + '\n```'
+        ).tickets;
+        if (!ticket) throw new Error('block did not parse');
+        const href = exitTicketCreateHref('exit-1', ticket);
+        const prefill = readExitTicketPrefill(
+          new URL(href, 'https://example.test').searchParams
+        );
+        if (!prefill) throw new Error('link did not prefill');
+        return renderV3Sheet({
+          exitTicketBuilderV3Enabled: flag,
+          ...exitTicketSheetPropsFromPrefill(prefill),
+        }).root;
+      }
+
+      const BLOCKS = {
+        'a reflection': 'activity: reflect\nstarter: wondering',
+        'a check with its answer':
+          'activity: answer-question\npromptText: Who is Allie?\nanswer: yes\nmustMention: His younger brother.',
+        'a check the planner marked graded':
+          'activity: answer-question\npromptText: Who is Allie?\ngraded: yes\nbasis: understanding',
+        'a concept to explain':
+          'activity: explain-concept\ntopic: photosynthesis',
+        'a graded legacy check with no criteria':
+          'mode: specific\nfocus: explain-concept\ntopic: erosion\nanswer: subjective\ngraded: yes\nbasis: quality',
+        'a graded legacy reflection with no criteria':
+          'mode: basic\ngraded: yes\nbasis: quality',
+      };
+
+      for (const flag of [true, false]) {
+        for (const [name, block] of Object.entries(BLOCKS)) {
+          it(`${name} can be created right away (v3 ${flag ? 'on' : 'off'})`, () => {
+            root = handOff(block, flag);
+            expect(inputByName('prompt').value.trim()).not.toBe('');
+            expect(submitButton().disabled).toBe(false);
+          });
+        }
+      }
+
+      it('opens on the planner’s question and correct answer', () => {
+        root = handOff(BLOCKS['a check with its answer'], true);
+        expect(promptBox().value).toBe('Who is Allie?');
+        expect(
+          isChecked(controlById('assignment-create-exit-ticket-answer-objective'))
+        ).toBe(true);
+        expect(textareaByName('exitTicketLessonMustMention').value).toBe(
+          'His younger brother.'
+        );
+      });
     });
 
     it('still lets a teacher remove a file attached before v3', () => {

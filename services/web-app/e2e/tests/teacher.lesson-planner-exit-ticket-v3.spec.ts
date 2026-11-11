@@ -1,7 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { setFeatureFlag } from '../feature-flags';
-import { EXIT_TICKET_EXPLAIN_CLOSER } from '../../app/domain/assignment-types/exit-ticket-activities';
 
 // The Lesson Planner with the v3 exit ticket builder on
 // (docs/plans/2026-11-02-exit-ticket-builder-v3.md). The planner offers three
@@ -96,9 +95,8 @@ test.describe.serial('Lesson Planner exit tickets, v3 builder', () => {
     await expect(cards.nth(1).getByTestId('exit-ticket-question')).toHaveText(
       ALLIE
     );
-    await expect(cards.nth(1).getByTestId('exit-ticket-closer')).toHaveText(
-      EXIT_TICKET_EXPLAIN_CLOSER
-    );
+    // A question gets no closing line; Yawp! adds one only to "explain".
+    await expect(cards.nth(1).getByTestId('exit-ticket-closer')).toHaveCount(0);
     await expect(cards.nth(2).getByTestId('exit-ticket-question')).toHaveText(
       STANZA
     );
@@ -109,11 +107,10 @@ test.describe.serial('Lesson Planner exit tickets, v3 builder', () => {
     );
     await expect(row).not.toContainText('Ungraded');
 
-    // The key points are there, one click away, not on the card's face.
-    const notes = cards.nth(1).getByTestId('exit-ticket-notes');
-    await expect(notes.getByText(KEY_POINTS)).toBeHidden();
-    await notes.getByText('What responses are read against').click();
-    await expect(notes.getByText(KEY_POINTS)).toBeVisible();
+    // Only what students read: the key points stay off the card. They
+    // still travel to the form (next test).
+    await expect(row.getByTestId('exit-ticket-notes')).toHaveCount(0);
+    await expect(row).not.toContainText(KEY_POINTS);
   });
 
   test('creating one opens the v3 form on exactly that question', async ({
@@ -135,11 +132,23 @@ test.describe.serial('Lesson Planner exit tickets, v3 builder', () => {
       )
     );
     await expect(
-      page.getByRole('radio', { name: /^Have the students answer a question/ })
+      page.getByRole('radio', { name: 'Have students answer a question you ask' })
     ).toBeChecked();
-    await expect(page.getByLabel('Prompt')).toHaveValue(ALLIE);
-    // The v3 form never asks whether there is a correct answer.
-    await expect(page.getByText('Is there a correct answer?')).toHaveCount(0);
+    await expect(page.getByLabel('Question', { exact: true })).toHaveValue(
+      ALLIE
+    );
+    // The planner's key points arrive as the correct answer.
+    await expect(page.getByRole('radio', { name: 'Yes' })).toBeChecked();
+    await expect(page.getByLabel(/Describe the correct answer/)).toHaveValue(
+      KEY_POINTS
+    );
+    await expect(
+      page.getByRole('button', { name: /Create Assignment/i })
+    ).toBeDisabled(); // only until a class is picked
+    await page.getByRole('checkbox', { name: /Grade 9th/ }).check();
+    await expect(
+      page.getByRole('button', { name: /Create Assignment/i })
+    ).toBeEnabled();
   });
 
   test('the exit ticket starter asks for nothing but the lesson', async ({

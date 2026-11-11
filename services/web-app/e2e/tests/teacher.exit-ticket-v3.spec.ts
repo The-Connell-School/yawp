@@ -3,8 +3,13 @@ import { createE2EPrismaClient } from '../prisma-client';
 import { setFeatureFlag } from '../feature-flags';
 import {
   EXIT_TICKET_EXPLAIN_CLOSER,
+  EXIT_TICKET_QUESTIONS_LINE,
   exitTicketStarterOption,
 } from '../../app/domain/assignment-types/exit-ticket-activities';
+import {
+  exitTicketCreateHref,
+  readPlannedExitTickets,
+} from '../../app/domain/lesson-planner/exit-ticket-block';
 
 // The v3 exit ticket builder (docs/plans/2026-11-02-exit-ticket-builder-v3.md),
 // behind `exit-ticket-builder-v3`. The teacher picks what students will do
@@ -80,9 +85,9 @@ test.describe.serial('Exit tickets, v3 builder', () => {
       'Most interesting',
       'Still wondering',
       'Write your own question',
-      'Explain a concept in their own words',
-      'Answer a question',
-      'Grapple with a text or source',
+      'Have students explain a concept in their own words',
+      'Have students answer a question you ask',
+      'Have students understand or grapple with a text or source',
     ]) {
       await expect(page.getByRole('radio', { name })).toBeVisible();
     }
@@ -161,7 +166,7 @@ test.describe.serial('Exit tickets, v3 builder', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await openNewExitTicket(page, e2eContext.exitTicketAssignmentTypeId);
 
-    await page.getByRole('radio', { name: 'Answer a question' }).click();
+    await page.getByRole('radio', { name: 'Have students answer a question you ask' }).click();
     const create = page.getByRole('button', { name: /Create Assignment/i });
     await expect(create).toBeDisabled();
     await page.getByLabel('Question', { exact: true }).fill(QUESTION);
@@ -169,11 +174,11 @@ test.describe.serial('Exit tickets, v3 builder', () => {
 
     // No correct answer is the default, so there is no answer box yet.
     await expect(page.getByRole('radio', { name: 'No' })).toBeChecked();
-    await expect(page.getByLabel(/The answer/)).toHaveCount(0);
+    await expect(page.getByLabel(/Describe the correct answer/)).toHaveCount(0);
     await page.getByRole('radio', { name: 'Yes' }).click();
     // The box is optional and never holds Create back.
     await expect(create).toBeEnabled();
-    await page.getByLabel(/The answer/).fill(ANSWER);
+    await page.getByLabel(/Describe the correct answer/).fill(ANSWER);
 
     await page.getByLabel('Title (optional)').fill('Exit ticket v3: Allie');
     await create.click();
@@ -200,11 +205,11 @@ test.describe.serial('Exit tickets, v3 builder', () => {
       .first()
       .click();
     await expect(
-      page.getByRole('radio', { name: 'Answer a question' })
+      page.getByRole('radio', { name: 'Have students answer a question you ask' })
     ).toBeChecked();
     await expect(page.getByLabel('Question', { exact: true })).toHaveValue(QUESTION);
     await expect(page.getByRole('radio', { name: 'Yes' })).toBeChecked();
-    await expect(page.getByLabel(/The answer/)).toHaveValue(ANSWER);
+    await expect(page.getByLabel(/Describe the correct answer/)).toHaveValue(ANSWER);
   });
 
   test('explaining a concept takes only the concept', async ({
@@ -216,7 +221,9 @@ test.describe.serial('Exit tickets, v3 builder', () => {
     await openNewExitTicket(page, e2eContext.exitTicketAssignmentTypeId);
 
     await page
-      .getByRole('radio', { name: 'Explain a concept in their own words' })
+      .getByRole('radio', {
+        name: 'Have students explain a concept in their own words',
+      })
       .click();
     await page.getByLabel('Which concept?').fill(CONCEPT);
     const prompt = `In your own words, explain ${CONCEPT}.`;
@@ -238,6 +245,86 @@ test.describe.serial('Exit tickets, v3 builder', () => {
       answerType: 'subjective',
     });
   });
+
+  test('the questions line and the note for Yawp! are optional extras', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await openNewExitTicket(page, e2eContext.exitTicketAssignmentTypeId);
+    const create = page.getByRole('button', { name: /Create Assignment/i });
+
+    // Neither is needed: the ticket is ready with both left alone.
+    const line = page.getByLabel(/Add a line inviting questions/);
+    const note = page.getByLabel(/Anything Yawp! should know/);
+    await expect(line).not.toBeChecked();
+    await expect(note).toHaveValue('');
+    await expect(create).toBeEnabled();
+    await expect(page.getByText(EXIT_TICKET_QUESTIONS_LINE)).toHaveCount(0);
+
+    await line.check();
+    await expect(page.getByText(EXIT_TICKET_QUESTIONS_LINE)).toBeVisible();
+    await note.fill('We read chapters 1 to 3 and talked about Allie.');
+
+    // "Still wondering" already asks for a question, so the line goes.
+    await page.getByRole('radio', { name: 'Still wondering' }).click();
+    await expect(line).toHaveCount(0);
+    await page.getByRole('radio', { name: 'What I learned' }).click();
+    await expect(line).toBeChecked();
+
+    await page.getByLabel('Title (optional)').fill('Exit ticket v3: extras');
+    await create.click();
+    await expect(
+      page.getByRole('heading', { name: 'New Assignment' })
+    ).toHaveCount(0);
+
+    const stored = await storedTicket('Exit ticket v3: extras');
+    expect(stored.prompt).toEndWith(EXIT_TICKET_QUESTIONS_LINE);
+    expect(stored.exitTicketConfigJson).toMatchObject({
+      activity: 'reflect',
+      starter: 'learned',
+      invitesQuestions: true,
+      lessonNotes: {
+        mainPoints: 'We read chapters 1 to 3 and talked about Allie.',
+      },
+    });
+  });
+
+  for (const [name, block] of [
+    [
+      'a check with its answer',
+      `activity: answer-question\npromptText: ${QUESTION}\nanswer: yes\nmustMention: ${ANSWER}`,
+    ],
+    [
+      'a check the planner marked graded',
+      `activity: answer-question\npromptText: ${QUESTION}\ngraded: yes\nbasis: understanding`,
+    ],
+    ['a reflection', 'activity: reflect\nstarter: wondering'],
+  ] as const) {
+    test(`a Lesson Planner hand-off (${name}) can be created right away`, async ({
+      page,
+      e2eContext,
+      signIn,
+    }) => {
+      const [ticket] = readPlannedExitTickets(
+        '```yawp-exit-ticket\n' + block + '\n```'
+      ).tickets;
+      expect(ticket).toBeTruthy();
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto(
+        exitTicketCreateHref(e2eContext.exitTicketAssignmentTypeId, ticket!)
+      );
+      await expect(
+        page.getByRole('heading', { name: 'New Assignment' })
+      ).toBeVisible();
+      await page.getByRole('checkbox', { name: /Grade 9th/ }).check();
+      // Nothing left to fill in: every optional field may stay empty.
+      await expect(
+        page.getByRole('button', { name: /Create Assignment/i })
+      ).toBeEnabled();
+    });
+  }
 
   test('the tutor starts off and says when to turn it on', async ({
     page,
@@ -295,7 +382,9 @@ test.describe.serial('Exit tickets, v3 builder', () => {
       .first()
       .click();
     await expect(
-      page.getByRole('radio', { name: 'Explain a concept in their own words' })
+      page.getByRole('radio', {
+        name: 'Have students explain a concept in their own words',
+      })
     ).toBeChecked();
     await expect(page.getByLabel('Which concept?')).toHaveValue('erosion');
     await expect(page.getByRole('radio', { name: 'Yes' })).toBeChecked();
