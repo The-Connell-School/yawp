@@ -262,7 +262,7 @@ suite('Teacher Lounge against the database', () => {
     });
 
     // Filed under its second topic too, and counted there.
-    const reporter = await lounge.listLoungePosts(maria(), { sort: 'latest', topic: 'reporter' });
+    const reporter = await lounge.listLoungePosts(maria(), { sort: 'new', topic: 'reporter' });
     const summary = reporter.posts.find((post) => post.id === postId);
     expect(summary?.tags).toEqual({ kinds: ['QUESTION', 'SHARE'], subjects: ['english'], topics: ['grading', 'reporter'] });
     const counts = await lounge.listLoungeTopicCounts(maria());
@@ -284,7 +284,7 @@ suite('Teacher Lounge against the database', () => {
       },
       select: { id: true },
     });
-    const feed = await lounge.listLoungePosts(maria(), { sort: 'latest', topic: 'daily-pages' });
+    const feed = await lounge.listLoungePosts(maria(), { sort: 'new', topic: 'daily-pages' });
     expect(feed.posts.find((post) => post.id === old.id)?.tags).toEqual({
       kinds: ['WIN'],
       subjects: [],

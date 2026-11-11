@@ -19,7 +19,7 @@ describe('the New Post tag choices', () => {
   });
 
   test('module or topic leaves out "Something else": no topic checked means that', () => {
-    expect(LOUNGE_FORM_TOPICS.some((topic) => topic.key === 'other')).toBe(false);
+    expect(LOUNGE_FORM_TOPICS.map((topic) => topic.key as string)).not.toContain('other');
     expect(LOUNGE_FORM_TOPICS.map((topic) => topic.key)).toContain('daily-pages');
   });
 });
