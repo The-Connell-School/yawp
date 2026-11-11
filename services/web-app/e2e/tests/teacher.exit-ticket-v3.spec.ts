@@ -164,7 +164,7 @@ test.describe.serial('Exit tickets, v3 builder', () => {
     await page.getByRole('radio', { name: 'Answer a question' }).click();
     const create = page.getByRole('button', { name: /Create Assignment/i });
     await expect(create).toBeDisabled();
-    await page.getByLabel('Question').fill(QUESTION);
+    await page.getByLabel('Question', { exact: true }).fill(QUESTION);
     await expect(create).toBeEnabled();
 
     // No correct answer is the default, so there is no answer box yet.
@@ -202,7 +202,7 @@ test.describe.serial('Exit tickets, v3 builder', () => {
     await expect(
       page.getByRole('radio', { name: 'Answer a question' })
     ).toBeChecked();
-    await expect(page.getByLabel('Question')).toHaveValue(QUESTION);
+    await expect(page.getByLabel('Question', { exact: true })).toHaveValue(QUESTION);
     await expect(page.getByRole('radio', { name: 'Yes' })).toBeChecked();
     await expect(page.getByLabel(/The answer/)).toHaveValue(ANSWER);
   });
@@ -267,6 +267,7 @@ test.describe.serial('Exit tickets, v3 builder', () => {
           prompt: 'In your own words, explain erosion.',
           assignmentTypeId: e2eContext.exitTicketAssignmentTypeId,
           submitForGrade: false,
+          pointValue: null,
           tutorEnabled: false,
           exitTicketConfigJson: {
             schemaVersion: 1,
@@ -317,6 +318,7 @@ test.describe.serial('Exit tickets, v3 builder', () => {
             prompt: QUESTION,
             assignmentTypeId: e2eContext.exitTicketAssignmentTypeId,
             submitForGrade: false,
+            pointValue: null,
             tutorEnabled: false,
           },
           select: { id: true },
@@ -378,8 +380,10 @@ test.describe.serial('Exit tickets, v3 builder', () => {
       });
 
       await page.getByTestId('exit-ticket-plan-tomorrow').click();
-      await expect(page.getByTestId('lesson-planner-seed')).toContainText(
-        'Recommendation: Quick review'
+      await expect(page.getByTestId('lesson-planner-seed')).toBeVisible();
+      // The summary is written into the planner's opening message.
+      await expect(page.locator('textarea').first()).toHaveValue(
+        /Recommendation: Quick review/
       );
     } finally {
       await setFeatureFlag('exit-ticket-class-summary', false);

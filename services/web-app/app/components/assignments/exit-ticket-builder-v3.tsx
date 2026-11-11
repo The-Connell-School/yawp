@@ -29,15 +29,28 @@ export type ExitTicketBuilderV3Props = {
   disabled: boolean;
 };
 
-function draftPatchForChoice(choice: ExitTicketChoice): Partial<ExitTicketV3Draft> {
-  if (choice.startsWith('reflect:')) {
-    const starter = choice.slice('reflect:'.length);
-    return {
-      activity: 'reflect',
-      starter: starter === 'custom' ? null : (starter as ExitTicketStarter),
-    };
-  }
-  return { activity: choice as ExitTicketActivity, starter: null };
+/**
+ * A typed prompt follows the teacher between "Answer a question" and
+ * "Grapple with a text or source", which both take one. A reflection
+ * question is not carried into a check, or a check into a reflection.
+ */
+function draftPatchForChoice(
+  current: ExitTicketV3Draft,
+  choice: ExitTicketChoice
+): Partial<ExitTicketV3Draft> {
+  const next: Partial<ExitTicketV3Draft> = choice.startsWith('reflect:')
+    ? {
+        activity: 'reflect',
+        starter:
+          choice === 'reflect:custom'
+            ? null
+            : (choice.slice('reflect:'.length) as ExitTicketStarter),
+      }
+    : { activity: choice as ExitTicketActivity, starter: null };
+  const sameKind =
+    exitTicketActivityKind(current.activity) ===
+    exitTicketActivityKind(next.activity!);
+  return sameKind ? next : { ...next, promptText: '' };
 }
 
 const PROMPT_LABELS: Partial<Record<ExitTicketActivity, string>> = {
@@ -79,7 +92,7 @@ export function ExitTicketBuilderV3({
           aria-labelledby="assignment-create-exit-ticket-activity-label"
           value={choice}
           onValueChange={(value) =>
-            onDraftChange(draftPatchForChoice(value as ExitTicketChoice))
+            onDraftChange(draftPatchForChoice(draft, value as ExitTicketChoice))
           }
           disabled={disabled}
           className="gap-4"
