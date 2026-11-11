@@ -288,7 +288,7 @@ export function exitTicketSummarySeedLines(
     );
   }
   lines.push(
-    `Recommendation: ${EXIT_TICKET_RETEACH_LABELS[summary.reteach]} — ${summary.reteachReason}`
+    `Recommendation: ${EXIT_TICKET_RETEACH_LABELS[summary.reteach]}. ${summary.reteachReason}`
   );
   if (summary.nextLessonMove) {
     const move = summary.nextLessonMove;

@@ -206,5 +206,9 @@ describe('labels, the fixture and the planner seed', () => {
     expect(text).toContain('Several mix Allie up with D.B.');
     expect(text).toContain('Quick review');
     expect(text).toContain('Sort the Caulfield family (8 min)');
+    expect(text).toContain(
+      'Recommendation: Quick review. The idea landed, but the brothers are getting mixed up.'
+    );
+    expect(text).not.toMatch(/[\u2014\u2013]/);
   });
 });

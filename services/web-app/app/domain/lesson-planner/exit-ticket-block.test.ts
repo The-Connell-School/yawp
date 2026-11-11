@@ -11,6 +11,7 @@ import {
   EXIT_TICKET_CONFIG_SCHEMA_VERSION,
   EXIT_TICKET_ELABORATION_NOTE,
   EXIT_TICKET_EXPLAIN_CLOSER,
+  EXIT_TICKET_QUESTIONS_LINE,
   exitTicketStarterOption,
 } from '~/domain/assignment-types/exit-ticket';
 
@@ -381,6 +382,47 @@ describe('a v3 exit ticket block', () => {
         .searchParams
     );
     expect(prefill?.config).toEqual(tickets[0]!.config);
+  });
+
+  it('reads `questions: yes` and `context:` and carries them to the sheet', () => {
+    const { tickets } = readPlannedExitTickets(
+      fenced(
+        [
+          'activity: answer-question',
+          `promptText: ${QUESTION}`,
+          'questions: yes',
+          'context: We read chapters 1 to 3 today.',
+        ].join('\n')
+      )
+    );
+    expect(tickets[0]!.config).toMatchObject({
+      invitesQuestions: true,
+      lessonNotes: { mainPoints: 'We read chapters 1 to 3 today.' },
+    });
+    expect(tickets[0]!.prompt).toBe(
+      `${QUESTION}\n\n${EXIT_TICKET_QUESTIONS_LINE}`
+    );
+    const prefill = readExitTicketPrefill(
+      new URL(exitTicketCreateHref('type-1', tickets[0]!), 'http://x')
+        .searchParams
+    );
+    expect(prefill?.config).toEqual(tickets[0]!.config);
+  });
+
+  it('leaves the questions line off unless the block asks for it', () => {
+    const { tickets } = readPlannedExitTickets(
+      fenced(['activity: reflect', 'starter: learned', 'questions: no'].join('\n'))
+    );
+    expect(tickets[0]!.config.invitesQuestions).toBeUndefined();
+    expect(tickets[0]!.prompt).not.toContain(EXIT_TICKET_QUESTIONS_LINE);
+  });
+
+  it('a printed ticket carries the questions line too', () => {
+    expect(
+      inlinePlannedExitTickets(
+        fenced(['activity: reflect', 'starter: learned', 'questions: yes'].join('\n'))
+      )
+    ).toContain(EXIT_TICKET_QUESTIONS_LINE);
   });
 
   it('a legacy link has no v3 config', () => {

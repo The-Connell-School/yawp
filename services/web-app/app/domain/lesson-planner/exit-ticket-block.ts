@@ -59,6 +59,10 @@ type BlockFields = {
   /** v3: what students do; with it, `promptText` is the whole question. */
   activity?: string;
   starter?: string;
+  /** v3: `yes` ends the ticket with the questions line. */
+  questions?: string;
+  /** v3: the note for Yawp!, stored as the lesson's main points. */
+  context?: string;
   minutes?: string;
   kind?: string;
   mode?: string;
@@ -83,6 +87,8 @@ const FIELD_ALIASES: Record<string, keyof BlockFields> = {
   minutes: 'minutes',
   activity: 'activity',
   starter: 'starter',
+  questions: 'questions',
+  context: 'context',
   kind: 'kind',
   mode: 'mode',
   prompt: 'prompt',
@@ -248,9 +254,10 @@ function readV3Block(fields: BlockFields): PlannedExitTicket | null {
     activity: fields.activity,
     promptText: fields.promptText ?? fields.prompt,
     starter: fields.starter,
+    invitesQuestions: YES.has(fields.questions?.trim().toLowerCase() ?? ''),
     topic: fields.topic,
     answerType: blockAnswerType(fields.answer),
-    lessonMainPoints: fields.mainPoints,
+    lessonMainPoints: fields.context ?? fields.mainPoints,
     lessonMustMention: fields.mustMention,
     lessonWatchFor: fields.watchFor,
   });
@@ -310,6 +317,7 @@ export const EXIT_TICKET_PARAMS = {
   activity: 'exitTicketActivity',
   promptText: 'exitTicketPromptText',
   starter: 'exitTicketStarter',
+  invitesQuestions: 'exitTicketInvitesQuestions',
   mode: 'exitTicketMode',
   focus: 'exitTicketFocus',
   topic: 'exitTicketTopic',
@@ -392,6 +400,9 @@ export function exitTicketCreateHref(
     params.set(EXIT_TICKET_PARAMS.activity, config.activity);
     params.set(EXIT_TICKET_PARAMS.promptText, config.promptText);
     if (config.starter) params.set(EXIT_TICKET_PARAMS.starter, config.starter);
+    if (config.invitesQuestions) {
+      params.set(EXIT_TICKET_PARAMS.invitesQuestions, 'true');
+    }
   }
   if (conversationId) params.set(FROM_LESSON_PARAM, conversationId);
   return `/app/assignment-types/${assignmentTypeId}?${params}`;
@@ -426,6 +437,7 @@ function readPrefillV3Config(params: URLSearchParams): ExitTicketConfig | null {
     activity,
     promptText: params.get(EXIT_TICKET_PARAMS.promptText),
     starter: params.get(EXIT_TICKET_PARAMS.starter),
+    invitesQuestions: params.get(EXIT_TICKET_PARAMS.invitesQuestions),
     topic: params.get(EXIT_TICKET_PARAMS.topic),
     answerType: params.get(EXIT_TICKET_PARAMS.answerType),
     lessonMainPoints: params.get(EXIT_TICKET_PARAMS.mainPoints),
