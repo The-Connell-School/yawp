@@ -13,6 +13,7 @@ import {
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { HelpfulButton } from '~/components/lounge/helpful-button';
 import { LoungeBody } from '~/components/lounge/lounge-body';
+import { LoungeTagList } from '~/components/lounge/lounge-tags';
 import { LoungeAvatar } from '~/components/lounge/lounge-avatar';
 import { MentionTextarea } from '~/components/lounge/mention-textarea';
 import { LoungeVideoPlayer } from '~/components/lounge/lounge-video-player';
@@ -273,7 +274,6 @@ function FormErrors({ errors }: { errors?: Record<string, string | undefined> })
 }
 
 /** One reply: a YAWP! team answer (accented) or a teacher's reply. Authors can edit their own. */
-const KIND_LABEL = { QUESTION: 'Question', SHARE: 'Share', WIN: 'Win' } as const;
 
 /** Avatar, name, and a quiet second line: school or team, when, edited. */
 function AuthorLine({
@@ -405,7 +405,7 @@ function ReplyItem({
       <article id={`reply-${reply.id}`} className="flex flex-col gap-4 rounded-2xl border bg-popover p-6 sm:p-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <AuthorLine author={reply.author} avatar={reply.avatar} when={reply.when} edited={reply.isEdited} />
-          <span className="lounge-accent lounge-accent-soft rounded-md px-2.5 py-1 text-xs font-medium uppercase tracking-wide">
+          <span className="lounge-accent lounge-accent-soft rounded-md px-2.5 py-1 text-[13px] font-medium">
             {firstName}&apos;s answer
           </span>
         </div>
@@ -445,7 +445,7 @@ export default function LoungeThreadRoute() {
   const replyBoxKey = `${staffReplies.length + replies.length}-${retryBody === null ? 'fresh' : 'retry'}`;
 
   return (
-    <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
+    <section data-lounge-page className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="mx-auto flex w-full max-w-[760px] flex-col gap-8 px-4 pb-16 pt-6 sm:px-8 sm:pt-8">
         <Link
           to="/app/lounge"
@@ -476,19 +476,9 @@ export default function LoungeThreadRoute() {
             />
           ) : (
             <>
-              <p className="lounge-accent text-xs font-medium uppercase tracking-[0.08em]">
-                {KIND_LABEL[post.kind]}
-                {post.topic === 'other' ? null : (
-                  <>
-                    {' · '}
-                    <Link to={`/app/lounge?topic=${post.topic}`} className="hover:underline">
-                      {post.topicLabel}
-                    </Link>
-                  </>
-                )}
-              </p>
               <h1 className="lounge-serif text-[34px] leading-[1.1] text-foreground sm:text-[42px]">{post.title}</h1>
               <AuthorLine author={post.author} avatar={post.avatar} when={post.when} edited={post.isEdited} />
+              <LoungeTagList tags={post.tags} topicHref={(topic) => `/app/lounge?topic=${encodeURIComponent(topic)}`} />
             </>
           )}
           {post.isPrivate ? (
@@ -496,7 +486,12 @@ export default function LoungeThreadRoute() {
           ) : null}
           {post.isHidden ? <p className="text-sm font-medium text-destructive">Hidden by the {LOUNGE_TEAM_NAME}.</p> : null}
           {editingPost ? null : (
-            <LoungeBody body={post.body} className="text-[17px] leading-[1.65]" testId="lounge-post-body" />
+            <LoungeBody
+              body={post.body}
+              className="text-[17px] leading-[1.65]"
+              testId="lounge-post-body"
+              boldNumberedLeads={post.avatar.isStaff}
+            />
           )}
           {post.video ? (
             <LoungeVideoPlayer
