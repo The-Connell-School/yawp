@@ -25,6 +25,7 @@ const actions = {
   moveStepToTomorrow: mock(),
   restoreStackSnapshot: mock(),
   setStepMinutes: mock(),
+  setStepWriting: mock(),
 };
 const runStackCommand = mock();
 const saveStepNotes = mock(async (_input: any) => undefined);
@@ -168,6 +169,37 @@ describe("handouts for any step (Brian's run 3, item 8)", () => {
       where: { id: 'hook', conversationId: 'plan-1' },
       data: { hasHandout: false },
     });
+  });
+});
+
+describe("the teacher's call on writing (Nov 4 follow-up)", () => {
+  test('nothing without the writing override flag', async () => {
+    const response = await post({ intent: 'set-writing', conversationId: 'plan-1', materialId: 'pre', writing: 'false' });
+    expect(response.init.status).toBe(404);
+    expect(actions.setStepWriting).not.toHaveBeenCalled();
+  });
+
+  test('a step is marked not writing, writing, or back to Yawp!, with Undo', async () => {
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, writingOverride: true });
+    actions.setStepWriting.mockResolvedValue(UNDO);
+    const off = await post({ intent: 'set-writing', conversationId: 'plan-1', materialId: 'pre', writing: 'false' });
+    expect(actions.setStepWriting).toHaveBeenLastCalledWith('plan-1', 'pre', false);
+    expect(off.data).toEqual({ ok: true, undo: UNDO, writing: false });
+    await post({ intent: 'set-writing', conversationId: 'plan-1', materialId: 'hook', writing: 'true' });
+    expect(actions.setStepWriting).toHaveBeenLastCalledWith('plan-1', 'hook', true);
+    const auto = await post({ intent: 'set-writing', conversationId: 'plan-1', materialId: 'pre', writing: 'auto' });
+    expect(actions.setStepWriting).toHaveBeenLastCalledWith('plan-1', 'pre', null);
+    expect(auto.data.writing).toBeNull();
+  });
+
+  test('needs a step and a call, and the step must be in this lesson', async () => {
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, writingOverride: true });
+    expect((await post({ intent: 'set-writing', conversationId: 'plan-1', writing: 'false' })).init.status).toBe(400);
+    expect((await post({ intent: 'set-writing', conversationId: 'plan-1', materialId: 'pre' })).init.status).toBe(400);
+    actions.setStepWriting.mockResolvedValue(null);
+    expect(
+      (await post({ intent: 'set-writing', conversationId: 'plan-1', materialId: 'gone', writing: 'false' })).init.status
+    ).toBe(404);
   });
 });
 

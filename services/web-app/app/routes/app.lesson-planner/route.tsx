@@ -1,4 +1,8 @@
 import { MadeNotice } from '~/components/lesson-planner/made-notice';
+import { DeckAskCard } from '~/components/lesson-planner/deck-ask-card';
+import { useActiveTime } from '~/components/lesson-planner/use-active-time';
+import { DeckPicturesProvider } from '~/components/lesson-planner/slide-picture';
+import { picturedDecks, viewerDeckPictures } from '~/domain/lesson-planner/deck-pictures.server';
 import {
   LessonPlannerMonthlyLimitNotice,
   lessonPlannerPausedPlaceholder,
@@ -11,6 +15,7 @@ import {
   SourceChips,
   useSourceDocuments,
   type SourceDocumentsState,
+  type SourceChip,
 } from '~/components/lesson-planner/source-documents';
 import { groupOptionParts } from '~/domain/lesson-planner/option-groups';
 import type { ReplyPart } from '~/domain/lesson-planner/reply-parts';
@@ -56,7 +61,8 @@ import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { formatClassCardTitle } from '~/utils/class-display';
-import { RECOMMENDED_LESSON_PLANNER_PROMPTS } from '~/routes/api.domain.lesson-planner/build-system-prompt';
+import { recommendedLessonPlannerPrompts } from '~/routes/api.domain.lesson-planner/build-system-prompt';
+import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
 import { parseAssistantMessage } from '~/components/ai-chat/parse-assistant-message';
 import {
   LessonIntakeCard,
@@ -226,7 +232,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
             },
             uploads: {
               orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-              select: { id: true, name: true, truncated: true },
+              select: {
+                id: true,
+                name: true,
+                truncated: true,
+                // A deck kept whole (Nov 1): its pictures and the teacher's choice.
+                keptDeck: true,
+                mode: true,
+                _count: { select: { pictures: true } },
+              },
             },
           },
         })
@@ -300,6 +314,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const reviewFlags = await getLessonPlannerReviewFlags(
     access.membership.organization.id
   );
+  // The v3 exit ticket starter tile, under the same condition as the planner's
+  // v3 hand-off: the school has the Exit Ticket type and the v3 builder.
+  const exitTicketBuilderV3 =
+    Boolean(exitTicketTypeId) &&
+    (await isExitTicketBuilderV3Enabled(access.membership.organization.id));
 
   // Intake v2 (A1): the classes come from the teacher's real class list, not
   // from whatever the model guessed. Same scope as list_classes.
@@ -348,6 +367,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return {
     reviewFlags,
+    // The teacher's own pictures on this lesson's decks (Nov 1).
+    deckPictures: selected
+      ? await viewerDeckPictures(
+          request,
+          picturedDecks(selected.messages.map((message) => message.content))
+        )
+      : {},
     templates,
     teacherClasses,
     practice,
@@ -383,7 +409,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
           // Yawp! can be remembered, and where to open it once it has been
           // (Brian's run 3, item 4).
           // The teacher's own documents for this lesson (Oct 21).
-          uploads: reviewFlags.uploads ? selected.uploads : [],
+          uploads: reviewFlags.uploads
+            ? selected.uploads.map(
+                (upload): SourceChip => ({
+                  id: upload.id,
+                  name: upload.name,
+                  truncated: upload.truncated,
+                  deck:
+                    upload.keptDeck && reviewFlags.uploadPictures
+                      ? {
+                          pictures: upload._count.pictures,
+                          mode: upload.mode === 'teach' || upload.mode === 'refresh' ? upload.mode : null,
+                        }
+                      : null,
+                })
+              )
+            : [],
           // Every piece with an assignment, filed or not, from the one record
           // the stack reads too (Oct 24 handoff, task 1).
           stackPieces: (() => {
@@ -424,7 +465,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         }
       : null,
-    recommendedPrompts: RECOMMENDED_LESSON_PLANNER_PROMPTS,
+    recommendedPrompts: recommendedLessonPlannerPrompts({ exitTicketBuilderV3 }),
     seed,
   };
 }
@@ -439,6 +480,8 @@ type LessonPlannerActionData = {
   /** Set when the turn was a "build this day" click. */
   unitDay?: number | null;
   openedNewDay?: boolean;
+  /** Pieces the turn filed into the stack itself: an uploaded deck's deck (Nov 4). */
+  filed?: string[];
 };
 
 export default function LessonPlannerRoute() {
@@ -460,6 +503,7 @@ export default function LessonPlannerRoute() {
     unitMapConversation,
     savedUnit,
     reviewFlags,
+    deckPictures,
     teacherClasses,
     templates,
   } = useLoaderData<typeof loader>();
@@ -504,6 +548,7 @@ export default function LessonPlannerRoute() {
     conversationId,
     saved: selectedConversation?.uploads ?? [],
     enabled: reviewFlags.uploads,
+    deckChoices: { teach: reviewFlags.teachMySlides, refresh: reviewFlags.refreshMyDeck },
   });
   const transcriptRef = useRef<HTMLDivElement>(null);
   // Track the last fetcher result we merged so switching conversations (which
@@ -512,6 +557,8 @@ export default function LessonPlannerRoute() {
 
   // A streamed turn is in flight exactly while there is a bar to draw.
   const isSending = fetcher.state !== 'idle' || progress !== null;
+  // "Planned in" is working time (Nov 3): this page counts it.
+  useActiveTime({ conversationId, enabled: reviewFlags.activeTime, waiting: isSending });
   // Whichever path answered. Only one runs per turn.
   const result = streamed ?? (fetcher.state === 'idle' ? fetcher.data : null);
 
@@ -549,6 +596,9 @@ export default function LessonPlannerRoute() {
         ]);
       }
       return;
+    }
+    if (result.filed?.length) {
+      setAddedMaterials((prev) => new Set([...prev, ...result.filed!]));
     }
     if (result.reply) {
       // A "build this day" turn is written into that day's own conversation.
@@ -965,6 +1015,8 @@ export default function LessonPlannerRoute() {
     setMessages((prev) => [...prev, { role: 'user', content: trimmed, displayText: unitDay?.display ?? null }]);
     setPendingSubmission({ message: trimmed, conversationKey, displayText: unitDay?.display ?? null });
     setInput('');
+    // The documents went with this message: they leave the message bar (Brian, Nov 4).
+    sources.markSent();
     setStreamed(null);
     void sendStreaming(trimmed, unitDay);
   }
@@ -1070,6 +1122,7 @@ export default function LessonPlannerRoute() {
   }
 
   return (
+    <DeckPicturesProvider pictures={deckPictures}>
     <section className="flex h-full w-full">
       <LessonRail
         lessons={conversations}
@@ -1234,6 +1287,7 @@ export default function LessonPlannerRoute() {
                   intakeV2={reviewFlags.intakeV2}
                   deckV2={reviewFlags.deckV2}
                   deckGallery={reviewFlags.deckGallery}
+                  deckKitV4={reviewFlags.deckKitV4}
                   editedDeck={selectedConversation?.editedDeck ?? null}
                   periodMinutes={selectedConversation?.periodMinutes ?? null}
                   previousUserText={
@@ -1251,6 +1305,19 @@ export default function LessonPlannerRoute() {
                 />
               ))
             )}
+            {/* "Rework it, or keep it as is?" for an uploaded deck, in the
+                conversation under the planner's reply (Brian, Nov 4). */}
+            {hasMessages && !isSending && messages[messages.length - 1]?.role === 'assistant' ? (
+              <DeckAskCard
+                decks={sources.allDocs.filter((doc) => doc.deck && !doc.deck.mode)}
+                choices={sources.deckChoices}
+                disabled={isSending}
+                onChoose={async (deck, mode, message) => {
+                  await sources.choose(deck.id, mode);
+                  send(message);
+                }}
+              />
+            ) : null}
             {isSending &&
             pendingSubmission?.conversationKey === conversationKey ? (
               progress ? (
@@ -1337,6 +1404,7 @@ export default function LessonPlannerRoute() {
         />
       ) : null}
     </section>
+    </DeckPicturesProvider>
   );
 }
 
@@ -1582,6 +1650,7 @@ function MessageBubble({
   teacherClasses = [],
   deckV2 = false,
   deckGallery = false,
+  deckKitV4 = false,
   editedDeck = null,
   periodMinutes = null,
   previousUserText = null,
@@ -1646,6 +1715,8 @@ function MessageBubble({
   deckV2?: boolean;
   /** Lesson Deck Kit: gallery slide previews on the deck card. */
   deckGallery?: boolean;
+  /** Lesson Deck Kit v4: the deck card's slides in spec v4. */
+  deckKitV4?: boolean;
   editedDeck?: {
     materialId: string;
     sourceMessageId: string;
@@ -2107,6 +2178,7 @@ function MessageBubble({
                     }
                     periodMinutes={deckV2 ? periodMinutes : null}
                     deckGallery={deckGallery}
+                    deckKitV4={deckKitV4}
                     onFit={
                       deckV2 && periodMinutes
                         ? () =>

@@ -3,21 +3,25 @@
  * Slide deck › PDF): every slide with its notes. The deck is the one in the
  * stack, or the newest one built for the lesson.
  */
+import { withDeckKit } from '~/domain/lesson-planner/deck-kit-v4';
 import type { LoaderFunctionArgs } from 'react-router';
 import { loadLessonPacket } from '~/domain/lesson-planner/load-lesson-packet.server';
 import { lessonDeck } from '~/domain/lesson-planner/lesson-deck.server';
 import { pdfFilename, renderSlidesPdf } from '~/domain/lesson-planner/lesson-pdf.server';
+import { viewerDeckPictureFiles } from '~/domain/lesson-planner/deck-pictures.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   // Access first: the teacher's own lesson, or not found.
-  const { conversationId, packet } = await loadLessonPacket({
+  const { conversationId, packet, reviewFlags } = await loadLessonPacket({
     request,
     conversationId: params.conversationId,
     withStackDetails: false,
   });
   const found = await lessonDeck(conversationId);
   if (!found) throw new Response('Not Found', { status: 404 });
-  const pdf = await renderSlidesPdf({ lessonTitle: packet.title, deck: found.deck });
+  const pictures = await viewerDeckPictureFiles(request, [found.deck]);
+  // Printed in spec v4 where the school draws its decks that way.
+  const pdf = await renderSlidesPdf({ lessonTitle: packet.title, deck: withDeckKit(found.deck, reviewFlags), pictures });
   const filename = pdfFilename(packet.title, 'Slides');
   return new Response(pdf as unknown as BodyInit, {
     headers: {

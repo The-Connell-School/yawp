@@ -75,6 +75,7 @@ import { ShortFormPromptGenerator } from './short-form-prompts-library/short-for
 import { ExitTicketPromptGenerator } from './exit-ticket-prompt-generator/exit-ticket-prompt-generator';
 import type { GeneratedExitTicketOption } from './exit-ticket-prompt-generator/prompt-generator';
 import { isTeacherPromptGeneratorEnabled } from '~/domain/teacher-prompt-generator/gate.server';
+import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
 import { AboutExitTicket } from './about-exit-ticket/about-exit-ticket';
@@ -655,6 +656,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isTeacher
       ? await isTeacherPromptGeneratorEnabled(profile.organization.id)
       : false;
+  const exitTicketBuilderV3Enabled = isTeacher
+    ? await isExitTicketBuilderV3Enabled(profile.organization.id)
+    : false;
 
   return dataResponse({
     loungeSharePrompt,
@@ -679,6 +683,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       profile.role === 'TEACHER' &&
       isExitTicketAssignmentType(assignmentType),
     teacherPromptGeneratorEnabled,
+    exitTicketBuilderV3Enabled,
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -1150,6 +1155,7 @@ export default function AppAssignmentTypesIdRoute() {
                 onOpenChange={setIsAssignmentSheetOpen}
                 initialPrompt={libraryPrompt}
                 plannedExitTicket={plannedExitTicket}
+                exitTicketBuilderV3Enabled={data.exitTicketBuilderV3Enabled}
                 titleRequired={showThesisLibrary}
                 apHistoryEntry={apHistoryEntry}
                 teachingLocked={teachingLockedPreview}

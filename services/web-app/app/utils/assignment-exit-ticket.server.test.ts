@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   BASIC_EXIT_TICKET_PROMPT,
   EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+  EXIT_TICKET_POLISH_CLOSER,
   EXIT_TICKET_TOPIC_MAX_LENGTH,
 } from '~/domain/assignment-types/exit-ticket';
 import {
@@ -345,5 +346,91 @@ describe('exitTicketGradingModeFor', () => {
         gradingMode: 'step',
       })
     ).toBe('step');
+  });
+});
+
+describe('a v3 builder post', () => {
+  const QUESTION = 'Who is Allie, and why does Holden keep thinking about him?';
+
+  test('stores the teacher’s prompt with the activity’s closer', () => {
+    const result = parseAssignmentExitTicket(
+      formDataFor({
+        exitTicketActivity: 'answer-question',
+        exitTicketKind: 'check',
+        exitTicketPromptText: QUESTION,
+        exitTicketLessonMustMention: 'His younger brother, who died.',
+        submitForGrade: 'false',
+      })
+    );
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.value.prompt).toBe(
+      `${QUESTION}\n\n${EXIT_TICKET_POLISH_CLOSER}`
+    );
+    expect(result.value.exitTicketConfigJson).toMatchObject({
+      mode: 'specific',
+      kind: 'check',
+      activity: 'answer-question',
+      promptText: QUESTION,
+      answerType: 'subjective',
+      lessonNotes: { mustMention: 'His younger brother, who died.' },
+    });
+    expect(result.value.exitTicketConfigJson.grading).toBeUndefined();
+  });
+
+  test('reads the grading basis when graded, with no other criteria', () => {
+    const result = parseAssignmentExitTicket(
+      formDataFor({
+        exitTicketActivity: 'explain-concept',
+        exitTicketKind: 'check',
+        exitTicketPromptText: 'In your own words, explain irony.',
+        submitForGrade: 'true',
+        exitTicketGradingBasis: 'completion',
+      })
+    );
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.value.exitTicketConfigJson.grading).toEqual({
+      basis: 'completion',
+    });
+  });
+
+  test('a graded v3 ticket without a basis is refused', () => {
+    const result = parseAssignmentExitTicket(
+      formDataFor({
+        exitTicketActivity: 'reflect',
+        exitTicketPromptText: 'What stuck with you?',
+        submitForGrade: 'true',
+      })
+    );
+    expect(result).toEqual({
+      success: false,
+      message: 'Choose how this ticket is graded.',
+    });
+  });
+
+  test('ignores a posted prompt field: the server composes it', () => {
+    const result = resolveAssignmentPrompt({
+      assignmentTypeKind: 'exit_ticket',
+      postedPrompt: 'Something else entirely',
+      formData: formDataFor({
+        exitTicketActivity: 'reflect',
+        exitTicketPromptText: 'What surprised you?',
+        submitForGrade: 'false',
+      }),
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.prompt.startsWith('What surprised you?')).toBe(true);
+  });
+
+  test('is always graded in bands', () => {
+    expect(
+      exitTicketGradingModeFor({
+        assignmentTypeKind: 'exit_ticket',
+        formData: formDataFor({ exitTicketActivity: 'reflect' }),
+        gradingMode: 'step',
+      })
+    ).toBe('bands');
   });
 });

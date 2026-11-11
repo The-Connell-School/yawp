@@ -1,4 +1,5 @@
 import { monthlyFreeTierPolicy } from '~/domain/free-tier/monthly-policy.server';
+import { applyDeckChoice, fileUploadedDeck, keptDeckBlock, withKeptDeck } from '~/domain/lesson-planner/uploaded-deck.server';
 import { lessonPlannerMonthlyQuotaEnforced } from '~/domain/free-tier/monthly-quota-cap.server';
 import { recentArtFrom } from '~/domain/lesson-planner/recent-art';
 import { plannerHistory } from '~/domain/lesson-planner/planner-history';
@@ -53,6 +54,7 @@ import {
 } from '~/domain/lesson-planner/lesson-links';
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
+import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
 import { readLessonLength } from '~/domain/lesson-planner/lesson-length';
 import { asksForDeck } from '~/domain/lesson-planner/suggestions';
 import { loadStackContents } from '~/domain/lesson-planner/stack-contents.server';
@@ -479,12 +481,24 @@ export async function action({ request }: ActionFunctionArgs) {
     const exitTicketsAvailable = Boolean(
       (await findWritingExerciseTypeIds(ctx)).exitTicket
     );
+    // The v3 hand-off only where the v3 sheet will open it: same flag, same school.
+    const exitTicketBuilderV3 =
+      exitTicketsAvailable &&
+      (await isExitTicketBuilderV3Enabled(ctx.organizationId));
 
     // Brian's review (B6): with stack v2 on, outputs are built from what the
     // teacher kept, so the planner sees the stack itself, not just its titles.
-    const { stackV2, intakeV2, templates: templatesOn, deckGallery, uploads: uploadsOn } = await getLessonPlannerReviewFlags(
-      ctx.organizationId
-    );
+    const {
+      stackV2,
+      intakeV2,
+      templates: templatesOn,
+      deckGallery,
+      deckKitV4,
+      uploads: uploadsOn,
+      teachMySlides,
+      refreshMyDeck,
+    } = await getLessonPlannerReviewFlags(ctx.organizationId);
+    const deckChoices = { teach: teachMySlides, refresh: refreshMyDeck };
     // The teacher's own documents (Oct 21): this lesson's, and any added
     // before its first message, which this turn attaches. Only theirs.
     const pendingUploadIds = (turn.uploadIds ?? '').split(',').filter(Boolean).slice(0, MAX_PENDING_UPLOAD_IDS);
@@ -500,10 +514,34 @@ export async function action({ request }: ActionFunctionArgs) {
             ],
           },
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-          select: { id: true, name: true, text: true, truncated: true, conversationId: true },
+          select: {
+            id: true,
+            name: true,
+            text: true,
+            truncated: true,
+            conversationId: true,
+            // The teacher's own deck (Nov 1): what they want from it, and its pictures to place.
+            keptDeck: true,
+            mode: true,
+            deckMessageId: true,
+            ...(refreshMyDeck || teachMySlides
+              ? {
+                  pictures: {
+                    orderBy: { position: 'asc' as const },
+                    select: { id: true, position: true, slideNumbers: true, altText: true, width: true, height: true },
+                  },
+                }
+              : {}),
+          },
         })
       : [];
     const attachUploadIds = sources.filter((source) => !source.conversationId).map((source) => source.id);
+    // An uploaded deck (Brian, Nov 4): whether its deck has been made, and the
+    // teacher's answer to "rework it, or keep it as is?" if this message is one.
+    for (const source of sources as Array<(typeof sources)[number] & { deckMessageId?: string | null; deckBuilt?: boolean }>) {
+      source.deckBuilt = Boolean(source.deckMessageId);
+    }
+    await applyDeckChoice({ sources, message: turn.message, choices: deckChoices, membershipId: ctx.membershipId });
     // Brian's run 3: a lesson built from the teacher's own template keeps its
     // shape. Only the teacher's own, and only with templates on.
     const templateRow =
@@ -587,10 +625,13 @@ export async function action({ request }: ActionFunctionArgs) {
       intakeV2,
       unitContext,
       exitTicketsAvailable,
+      exitTicketBuilderV3,
       writingPracticeAvailable: ctx.writingPracticeEnabled,
       template,
       deckGallery,
+      deckKitV4,
       sources,
+      deckChoices,
       recentArt,
       weekContext,
       onStack: turn.surface === 'stack',
@@ -728,6 +769,11 @@ export async function action({ request }: ActionFunctionArgs) {
       // A card promising material is a louder claim than a sentence, so the same
       // rule applies harder: no block survives whose address a tool never returned.
       reply = verifyLessonResources(reply, toolLinks).reply;
+
+      // "Keep it as is" (Brian, Nov 4): their deck, slide for slide, is this
+      // reply's deck, so it is in the stack when the teacher opens it.
+      const keptDeck = await keptDeckBlock({ sources, choices: deckChoices, membershipId: ctx.membershipId }).catch(() => null);
+      if (keptDeck) reply = withKeptDeck(reply, keptDeck.block);
 
       // A lesson is named after the plan it turned out to be, not after the
       // sentence that started it — otherwise every lesson opened from the pinned
@@ -871,6 +917,23 @@ export async function action({ request }: ActionFunctionArgs) {
         return { status: 500, payload: { error: PLANNER_FAILED } };
       }
 
+      // The deck an uploaded deck asked for goes into the lesson's stack now,
+      // not when the teacher remembers to add it (Brian, Nov 4). Never fails
+      // the turn: the reply, with its deck, is already saved.
+      let filed: string[] = [];
+      try {
+        filed = await fileUploadedDeck({
+          conversationId,
+          message: { id: assistantMessageId, createdAt: answeredAt, content: reply },
+          sources,
+          choices: deckChoices,
+          keptUploadId: keptDeck?.uploadId ?? null,
+          onStack: turn.surface === 'stack',
+        });
+      } catch (error) {
+        console.error('[lesson-planner] uploaded deck not filed', error instanceof Error ? error.message : 'unknown');
+      }
+
       return {
         status: 200,
         payload: {
@@ -887,6 +950,8 @@ export async function action({ request }: ActionFunctionArgs) {
             : (activeConversation?.unitDay ?? null),
           /** True when this click opened a day that did not exist a moment ago. */
           openedNewDay: Boolean(dayTarget && !dayTarget.conversationId),
+          // "<messageId>:<blockKey>" now in the lesson's stack (Nov 4).
+          ...(filed.length ? { filed } : {}),
         },
       };
     }

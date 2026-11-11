@@ -63,6 +63,8 @@ type ClassAssignmentsTabProps = {
   }[];
   siteLicenseLockedAssignmentTiles?: SiteLicenseLockedAssignmentTile[];
   apHistoryAssignmentTypeId?: string | null;
+  /** The v3 exit ticket builder; off renders the quick builder. */
+  exitTicketBuilderV3Enabled?: boolean;
   /** Gated on the organization's classInsightsEnabled flag. */
   classInsightsEnabled: boolean;
   teachingLocked?: boolean;
@@ -96,6 +98,7 @@ export function ClassAssignmentsTab({
   assignmentTypes,
   siteLicenseLockedAssignmentTiles = [],
   apHistoryAssignmentTypeId,
+  exitTicketBuilderV3Enabled = false,
   classInsightsEnabled,
   teachingLocked = false,
   teachingAccessAdminName = 'your administrator',
@@ -441,6 +444,7 @@ export function ClassAssignmentsTab({
         open={isCreateSheetOpen}
         onOpenChange={handleCreateSheetOpenChange}
         entryPoint="class"
+        exitTicketBuilderV3Enabled={exitTicketBuilderV3Enabled}
         fixedClassId={classOption.id}
         assignmentTypes={assignmentTypes}
         siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}

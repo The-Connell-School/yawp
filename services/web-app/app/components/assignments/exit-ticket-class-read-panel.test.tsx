@@ -11,7 +11,7 @@ try {
 import { afterEach, describe, expect, it } from 'bun:test';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, RouterProvider, createMemoryRouter } from 'react-router';
 
 const { ExitTicketClassReadPanel } =
   await import('./exit-ticket-class-read-panel');
@@ -94,5 +94,112 @@ describe('ExitTicketClassReadPanel', () => {
     expect(
       container.querySelector('[data-testid="exit-ticket-plan-tomorrow"]')
     ).toBeNull();
+  });
+});
+
+describe('ExitTicketClassReadPanel with the class summary', () => {
+  const stored = {
+    summary: {
+      understood: 'Most of the class knows Allie is Holden’s brother.',
+      confusions: [
+        { point: 'Some mix Allie up with D.B.', share: 'some' as const },
+      ],
+      reteach: 'quick-review' as const,
+      reteachReason: 'The brothers are getting mixed up.',
+      nextLessonMove: {
+        title: 'Family map',
+        minutes: 8,
+        detail: 'Open with the Caulfields on the board.',
+      },
+    },
+    responseCount: 3,
+    generatedAt: '2026-11-02T15:00:00.000Z',
+    current: true,
+  };
+
+  function renderWithData(
+    props: Parameters<typeof ExitTicketClassReadPanel>[0]
+  ) {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    const router = createMemoryRouter([
+      { path: '/', element: <ExitTicketClassReadPanel {...props} /> },
+    ]);
+    act(() => {
+      root!.render(<RouterProvider router={router} />);
+    });
+    return container;
+  }
+
+  function summaryButton(container: HTMLElement) {
+    return container.querySelector<HTMLButtonElement>(
+      '[data-testid="exit-ticket-summary"] button[type="submit"]'
+    );
+  }
+
+  it('shows nothing of it while the flag is off', () => {
+    const container = render({ read, planHref: null });
+    expect(
+      container.querySelector('[data-testid="exit-ticket-summary"]')
+    ).toBeNull();
+  });
+
+  it('offers to summarize once there are enough responses', () => {
+    const container = renderWithData({
+      read,
+      planHref: null,
+      classAssignmentId: 'ca-1',
+      summary: { stored: null, canGenerate: true },
+    });
+    const button = summaryButton(container)!;
+    expect(button.textContent).toContain('Summarize responses');
+    expect(button.disabled).toBe(false);
+    expect(
+      container.querySelector<HTMLInputElement>(
+        'input[name="classAssignmentId"]'
+      )?.value
+    ).toBe('ca-1');
+  });
+
+  it('says how many responses it needs before then', () => {
+    const container = renderWithData({
+      read,
+      planHref: null,
+      classAssignmentId: 'ca-1',
+      summary: { stored: null, canGenerate: false },
+    });
+    expect(summaryButton(container)!.disabled).toBe(true);
+    expect(container.textContent).toContain('at least 3 responses');
+  });
+
+  it('shows a current summary, the call, and tomorrow’s opening, with nothing to click', () => {
+    const container = renderWithData({
+      read,
+      planHref: null,
+      classAssignmentId: 'ca-1',
+      summary: { stored, canGenerate: true },
+    });
+    const text = container.textContent ?? '';
+    expect(text).toContain(stored.summary.understood);
+    expect(text).toContain('Some mix Allie up with D.B.');
+    expect(text).toContain('Quick review');
+    expect(text).toContain('Tomorrow: Family map');
+    expect(text).toContain('(8 min)');
+    expect(text).toContain('Every response is still in the list below.');
+    expect(summaryButton(container)).toBeNull();
+  });
+
+  it('offers an update once new responses arrive', () => {
+    const container = renderWithData({
+      read,
+      planHref: null,
+      classAssignmentId: 'ca-1',
+      summary: { stored: { ...stored, current: false }, canGenerate: true },
+    });
+    expect(summaryButton(container)!.textContent).toContain('Update summary');
+    expect(container.textContent).toContain(
+      'New responses have come in since.'
+    );
   });
 });

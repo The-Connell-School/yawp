@@ -127,6 +127,12 @@ describe('internal feature-flag endpoints', () => {
       'lesson_planner_uploads',
       'lesson_planner_teach_notes',
       'lesson_planner_library_v2',
+      'lesson_planner_upload_pictures',
+      'lesson_planner_teach_my_slides',
+      'lesson_planner_refresh_my_deck',
+      'lesson_planner_active_time',
+      'lesson_planner_writing_override',
+      'lesson_planner_deck_kit_v4',
       'classcode-unique',
       'teacher_lounge_community',
       'thesis_essay_decks',
@@ -134,6 +140,8 @@ describe('internal feature-flag endpoints', () => {
       'guided-tours',
       'teacher-prompt-generator',
       'teacher-lounge',
+      'exit-ticket-builder-v3',
+      'exit-ticket-class-summary',
     ]);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
@@ -217,6 +225,12 @@ describe('internal feature-flag endpoints', () => {
       'lesson_planner_uploads',
       'lesson_planner_teach_notes',
       'lesson_planner_library_v2',
+      'lesson_planner_upload_pictures',
+      'lesson_planner_teach_my_slides',
+      'lesson_planner_refresh_my_deck',
+      'lesson_planner_active_time',
+      'lesson_planner_writing_override',
+      'lesson_planner_deck_kit_v4',
       'classcode-unique',
       'teacher_lounge_community',
       'thesis_essay_decks',
@@ -224,6 +238,8 @@ describe('internal feature-flag endpoints', () => {
       'guided-tours',
       'teacher-prompt-generator',
       'teacher-lounge',
+      'exit-ticket-builder-v3',
+      'exit-ticket-class-summary',
     ]);
   });
 

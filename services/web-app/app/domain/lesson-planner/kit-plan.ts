@@ -8,12 +8,12 @@
  * turns it into the Word file and the PDF. Built from the concise plan
  * (lesson-plan-doc.ts) and the lesson's deck, when it has one.
  */
-import { resolveDeckArt } from './deck-art';
 import { deckColors, normalizedHex, withoutColorMarks } from './deck-colors';
-import { WRITING_PROCESS_STEPS, withoutLessonNumber } from './deck-gallery';
+import { WRITING_PROCESS_STEPS, galleryColors, withoutLessonNumber } from './deck-gallery';
 import type { LessonPlanDoc, LessonPlanEntry, LessonPlanStep } from './lesson-plan-doc';
 import { noteSections } from './teacher-notes';
 import { readSlideDeck, type SlideDeck } from './slide-deck';
+import { withDeckKit } from './deck-kit-v4';
 import { upperKeepingBrand } from '~/domain/brand';
 
 export type KitListItem = string | { t: string; sub: string[] };
@@ -122,9 +122,20 @@ function stepBlock(step: LessonPlanStep, num: number, deck: SlideDeck | null): K
   };
 }
 
-export function buildKitPlan({ doc, entries }: { doc: LessonPlanDoc; entries: LessonPlanEntry[] }): KitPlan {
-  const deck = deckFrom(entries);
-  const colors = deckColors(deck ?? {}, deck ? resolveDeckArt(deck.art) : null);
+export function buildKitPlan({
+  doc,
+  entries,
+  deckKitV4 = false,
+}: {
+  doc: LessonPlanDoc;
+  entries: LessonPlanEntry[];
+  /** The school draws its decks in spec v4: the plan takes the v4 colors. */
+  deckKitV4?: boolean;
+}): KitPlan {
+  const found = deckFrom(entries);
+  const deck = found ? withDeckKit(found, { deckKitV4 }) : null;
+  // The deck's own colors, in whichever kit it is drawn (v4 included).
+  const colors = deck ? galleryColors(deck) : deckColors({}, null);
   const accent = colors[0]!.replace('#', '').toUpperCase();
   const title = withoutLessonNumber(deck?.title ?? doc.title);
   const titleSlide = deck?.slides.find((slide) => slide.layout === 'title');
