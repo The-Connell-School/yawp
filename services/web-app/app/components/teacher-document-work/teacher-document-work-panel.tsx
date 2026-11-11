@@ -14,11 +14,7 @@ import { Pagination } from '~/components/table/pagination';
 import { formatUserDisplayName } from '~/utils/user-display';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '~/components/ui/collapsible';
+import { CollapsibleGroupSection } from '~/components/collapsible-group-section';
 import { Input } from '~/components/ui/input';
 import {
   Popover,
@@ -805,8 +801,25 @@ export function TeacherDocumentWorkPanel({
             const isOpen = !collapsedGroups.has(group.key);
 
             return (
-              <Collapsible
+              <CollapsibleGroupSection
                 key={group.key}
+                label={group.label}
+                labelContent={
+                  filters.group === 'status' ? (
+                    <Badge
+                      variant="secondary"
+                      className={cn(
+                        TEACHER_DOCUMENT_STATUS_BADGE_CLASSES[
+                          group.key as TeacherDocumentStatus
+                        ],
+                        'font-semibold'
+                      )}
+                    >
+                      {group.label}
+                    </Badge>
+                  ) : undefined
+                }
+                count={group.documents.length}
                 open={isOpen}
                 onOpenChange={(open) => {
                   onCollapsedGroupsChange(
@@ -821,46 +834,9 @@ export function TeacherDocumentWorkPanel({
                     })()
                   );
                 }}
-                className="overflow-hidden rounded-lg border bg-background shadow-sm"
               >
-                <CollapsibleTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-3 bg-muted/70 px-4 py-3 text-left transition-colors hover:bg-muted"
-                  >
-                    {isOpen ? (
-                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    )}
-                    {filters.group === 'status' ? (
-                      <Badge
-                        variant="secondary"
-                        className={cn(
-                          TEACHER_DOCUMENT_STATUS_BADGE_CLASSES[
-                            group.key as TeacherDocumentStatus
-                          ],
-                          'font-semibold'
-                        )}
-                      >
-                        {group.label}
-                      </Badge>
-                    ) : (
-                      <span className="text-base font-semibold text-foreground">
-                        {group.label}
-                      </span>
-                    )}
-                    <Badge variant="secondary" className="ml-1">
-                      {group.documents.length}
-                    </Badge>
-                  </button>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="border-t bg-muted/50">
-                    {renderDocumentsTable(group.documents, true)}
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
+                {renderDocumentsTable(group.documents, true)}
+              </CollapsibleGroupSection>
             );
           })}
         </div>

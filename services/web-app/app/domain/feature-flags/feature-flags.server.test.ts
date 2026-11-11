@@ -14,7 +14,7 @@ const {
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, TEACHER_PROMPT_GENERATOR_FLAG, TEACHER_LOUNGE_FLAG, EXIT_TICKET_BUILDER_V3_FLAG, EXIT_TICKET_CLASS_SUMMARY_FLAG, FOLDED_FREE_TIER_LEGACY_SETTINGS } = await import(
+const { GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, TEACHER_PROMPT_GENERATOR_FLAG, TEACHER_LOUNGE_FLAG, EXIT_TICKET_BUILDER_V3_FLAG, EXIT_TICKET_CLASS_SUMMARY_FLAG, ASSIGNMENTS_GROUPED_BY_TYPE_FLAG, AP_HISTORY_IN_NEW_ASSIGNMENT_FLAG, FOLDED_FREE_TIER_LEGACY_SETTINGS } = await import(
   './feature-flags'
 );
 
@@ -329,6 +329,8 @@ describe('feature flags (server)', () => {
       TEACHER_LOUNGE_FLAG,
       EXIT_TICKET_BUILDER_V3_FLAG,
       EXIT_TICKET_CLASS_SUMMARY_FLAG,
+      ASSIGNMENTS_GROUPED_BY_TYPE_FLAG,
+      AP_HISTORY_IN_NEW_ASSIGNMENT_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -378,6 +380,8 @@ describe('feature flags (server)', () => {
       TEACHER_LOUNGE_FLAG,
       EXIT_TICKET_BUILDER_V3_FLAG,
       EXIT_TICKET_CLASS_SUMMARY_FLAG,
+      ASSIGNMENTS_GROUPED_BY_TYPE_FLAG,
+      AP_HISTORY_IN_NEW_ASSIGNMENT_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;

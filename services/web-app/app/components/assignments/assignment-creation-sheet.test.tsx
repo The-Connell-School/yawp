@@ -837,6 +837,98 @@ describe('AssignmentCreationSheetContent', () => {
     expect((classControl as HTMLButtonElement).disabled).toBe(true);
   });
 
+  describe('library assignment types (AP History from a class)', () => {
+    const apHistory = {
+      id: 'type-apush',
+      title: 'AP History Essay',
+      description: 'Opens the AP prompt library',
+      href: '/app/assignment-types/type-apush?classId=class-1',
+    };
+
+    function nativeTypeSelect() {
+      const trigger = controlById('assignment-creation-type');
+      const select = trigger.parentElement?.querySelector('select');
+      expect(select).not.toBeNull();
+      return select!;
+    }
+
+    function chooseType(value: string) {
+      const select = nativeTypeSelect();
+      act(() => {
+        select.value = value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    }
+
+    it('labels the type picker "Assignment type"', () => {
+      root = renderSheet({ entryPoint: 'class', fixedClassId: 'class-1' }).root;
+      const trigger = controlById('assignment-creation-type');
+      const label = document.querySelector('label[for="assignment-creation-type"]');
+      expect(label?.textContent).toBe('Assignment type');
+      expect(trigger.getAttribute('role')).toBe('combobox');
+    });
+
+    it('lists a library type among the assignment types', () => {
+      root = renderSheet({
+        entryPoint: 'class',
+        fixedClassId: 'class-1',
+        libraryAssignmentTypes: [apHistory],
+      }).root;
+      const values = Array.from(nativeTypeSelect().options).map((o) => o.value);
+      expect(values).toContain('type-1');
+      expect(values).toContain('type-apush');
+    });
+
+    it('choosing a library type closes the sheet and opens its library instead of the form', () => {
+      const navigate = mock();
+      const onOpenChange = mock();
+      root = renderSheet({
+        entryPoint: 'class',
+        fixedClassId: 'class-1',
+        libraryAssignmentTypes: [apHistory],
+        navigate,
+        onOpenChange,
+      }).root;
+
+      chooseType('type-apush');
+
+      expect(navigate).toHaveBeenCalledWith(
+        '/app/assignment-types/type-apush?classId=class-1'
+      );
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+      // The form keeps a real type: a library type is never submitted.
+      expect(inputByName('assignmentTypeId').value).toBe('type-1');
+    });
+
+    it('choosing an ordinary type still stays in the sheet', () => {
+      const navigate = mock();
+      root = renderSheet({
+        entryPoint: 'class',
+        fixedClassId: 'class-1',
+        libraryAssignmentTypes: [apHistory],
+        navigate,
+      }).root;
+
+      chooseType('type-2');
+
+      expect(navigate).not.toHaveBeenCalled();
+      expect(inputByName('assignmentTypeId').value).toBe('type-2');
+    });
+
+    it('offers no library types while editing an assignment', () => {
+      root = renderSheet({
+        entryPoint: 'class',
+        fixedClassId: 'class-1',
+        libraryAssignmentTypes: [apHistory],
+        editingAssignment: { id: 'existing' },
+        initialAssignmentTypeId: 'type-1',
+        initialPrompt: 'Prompt',
+      }).root;
+      const values = Array.from(nativeTypeSelect().options).map((o) => o.value);
+      expect(values).not.toContain('type-apush');
+    });
+  });
+
   it('marks the title required and blocks submit while it is empty when titleRequired is set', () => {
     root = renderSheet({
       entryPoint: 'class',
