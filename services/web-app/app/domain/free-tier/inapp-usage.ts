@@ -4,6 +4,7 @@ export const FREE_ASSIGNMENT_LABELS: Record<string, string> = {
   class_starter: 'Class Starter',
   prewriting: 'Prewriting',
   thesis_statement: 'Thesis Statement',
+  exit_ticket: 'Exit Ticket',
 };
 export function buildFreeAccountUsage(input: {
   monthly?: boolean;

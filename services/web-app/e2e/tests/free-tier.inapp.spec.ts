@@ -595,10 +595,13 @@ for (const width of [1440, 390]) {
         ['class_starter', 12],
         ['prewriting', 3],
         ['thesis_statement', 3],
+        ['exit_ticket', 12],
       ] as const)
-        await db.freeClassroomAssignmentKindUsage.update({
+        // Upsert: an org with no Exit Ticket yet has no usage row for it.
+        await db.freeClassroomAssignmentKindUsage.upsert({
           where: { organizationId_kind: { organizationId: orgId, kind } },
-          data: { lifetimeCreatedCount },
+          create: { organizationId: orgId, kind, lifetimeCreatedCount },
+          update: { lifetimeCreatedCount },
         });
       await page.goto('/app/assignments');
       if (!before)

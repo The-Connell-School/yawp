@@ -314,7 +314,12 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
     await db.invitation.delete({ where: { id: reservationId } });
     reservationId = undefined;
     // Lifetime counts deliberately exceed each legacy cap before hitting real HTTP routes.
-    for (const kind of ['class_starter', 'prewriting', 'thesis_statement']) {
+    for (const kind of [
+      'class_starter',
+      'prewriting',
+      'thesis_statement',
+      'exit_ticket',
+    ]) {
       await db.freeClassroomAssignmentKindUsage.upsert({
         where: { organizationId_kind: { organizationId: org, kind } },
         create: { organizationId: org, kind, lifetimeCreatedCount: 99 },
@@ -351,7 +356,7 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
       page
         .getByTestId('free-assignment-tiles')
         .getByRole('link', { name: /New .* assignment/ })
-    ).toHaveCount(3);
+    ).toHaveCount(4);
     for (const link of await page
       .getByTestId('free-assignment-tiles')
       .getByRole('link', { name: /New .* assignment/ })

@@ -35,6 +35,7 @@ export function freeClassroomQuotaMessage(
     class_starter: 'Class Starters',
     prewriting: 'Prewriting assignments',
     thesis_statement: 'Thesis Statement assignments',
+    exit_ticket: 'Exit Tickets',
   };
   const cap = FREE_CLASSROOM_ASSIGNMENT_QUOTAS[kind];
   if (remaining <= 0) {
