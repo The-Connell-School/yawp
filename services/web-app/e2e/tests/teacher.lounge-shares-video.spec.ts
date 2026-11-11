@@ -93,10 +93,10 @@ test.describe.serial("Faculty Lounge shares and Brian's videos", () => {
     await resetLounge(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/lounge/new');
-    await page.getByLabel('Share').check();
     await page.getByLabel('Title').fill(SHARE_TITLE);
     await page.getByLabel('Details').fill('I give it the day before the essay is due.');
-    await page.getByLabel('Topic').selectOption({ label: 'Writing Lessons' });
+    await page.getByRole('group', { name: 'Post type' }).getByRole('checkbox', { name: 'Share' }).check();
+    await page.getByRole('group', { name: 'Module or topic' }).getByRole('checkbox', { name: 'Writing Lessons' }).check();
 
     await page.getByRole('button', { name: 'Attach from YAWP!' }).click();
     const picker = page.getByRole('dialog', { name: 'Attach from YAWP!' });
@@ -178,10 +178,10 @@ test.describe.serial("Faculty Lounge shares and Brian's videos", () => {
   test('Brian pins a weekly prompt to the top of the feed', async ({ page, signIn, e2eContext }) => {
     await signIn(e2eContext.adminEmail, ADMIN_PASSWORD);
     await page.goto('/app/lounge/new');
-    await page.getByLabel('Question').check();
     await page.getByLabel('Title').fill(PROMPT_TITLE);
     await page.getByLabel('Details').fill('Reply with yours. I will share mine on Friday.');
-    await page.getByLabel('Topic').selectOption({ label: 'Writing Lessons' });
+    await page.getByRole('group', { name: 'Post type' }).getByRole('checkbox', { name: 'Question' }).check();
+    await page.getByRole('group', { name: 'Module or topic' }).getByRole('checkbox', { name: 'Writing Lessons' }).check();
     await page.getByLabel('Pin to the top of the Lounge').check();
     await page.getByRole('button', { name: 'Post', exact: true }).click();
     await expect(page.getByRole('heading', { name: PROMPT_TITLE })).toBeVisible();

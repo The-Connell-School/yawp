@@ -23,6 +23,7 @@ describe('parseLoungePostInput', () => {
         body: 'We lose ten minutes settling in.',
         askStaff: true,
         askPrivately: false,
+        tags: { kinds: ['QUESTION'], subjects: [], topics: ['daily-pages'] },
       },
     });
   });
@@ -62,6 +63,36 @@ describe('parseLoungePostInput', () => {
     for (const topic of LOUNGE_TOPICS) {
       expect(parseLoungePostInput({ ...goodPost, topic: topic.key }).ok).toBe(true);
     }
+  });
+});
+
+describe('parseLoungePostInput with the multi-select tags', () => {
+  const tagged = {
+    kinds: ['QUESTION', 'SHARE'],
+    subjects: ['english'],
+    topics: ['grading', 'reporter'],
+    title: 'How do you grade a stack of essays?',
+    body: 'Asking for my Friday.',
+  };
+
+  test('keeps every tag, and fills the old kind and topic from the first', () => {
+    const result = parseLoungePostInput(tagged);
+    expect(result.ok && result.value).toMatchObject({
+      kind: 'QUESTION',
+      topic: 'grading',
+      tags: { kinds: ['QUESTION', 'SHARE'], subjects: ['english'], topics: ['grading', 'reporter'] },
+    });
+  });
+
+  test('no topic is fine: the old column reads "Something else"', () => {
+    const result = parseLoungePostInput({ ...tagged, kinds: ['SHARE'], topics: [] });
+    expect(result.ok && result.value).toMatchObject({ kind: 'SHARE', topic: 'other' });
+  });
+
+  test('needs a post type', () => {
+    const result = parseLoungePostInput({ ...tagged, kinds: [] });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors).toEqual({ kinds: 'Choose Question, Share, or both.' });
   });
 });
 

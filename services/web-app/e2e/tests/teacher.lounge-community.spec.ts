@@ -1,6 +1,7 @@
 import { expect, test } from '../test-setup';
 import { setLoungeCommunityFlag } from '../feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
+import { expectNoAllCapsText } from '../helpers/lounge-style';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 const ADMIN_PASSWORD = 'admin-e2e-password';
@@ -80,21 +81,65 @@ test.describe.serial("Faculty Lounge community board", () => {
     await expect(page.getByRole('link', { name: 'Community' })).toBeVisible();
     await page.getByRole('link', { name: 'Community' }).click();
 
+    // No all-caps eyebrows ("TEACHERS USING YAWP!") over the masthead.
+    await expect(page.getByText('Teachers using YAWP!')).toHaveCount(0);
+    await expectNoAllCapsText(page);
+
     await page.getByRole('link', { name: 'New post' }).click();
     await expect(page).toHaveURL(/\/app\/lounge\/new/);
-    await page.getByLabel('Question').check();
-    await page.getByLabel('Title').fill(QUESTION_TITLE);
+    await expectNoAllCapsText(page);
+    const title = page.getByLabel('Title');
+    await expect(title).toHaveAttribute('placeholder', 'Your question or headline');
+    await title.fill(QUESTION_TITLE);
     await page.getByLabel('Details').fill('My student Jake rushes it.');
     await expect(page.getByText(/may include a student's name/)).toBeVisible();
     await page.getByLabel('Details').fill(QUESTION_BODY);
     await expect(page.getByText(/may include a student's name/)).toHaveCount(0);
-    await page.getByLabel('Topic').selectOption({ label: 'Daily Pages' });
+
+    // Tags sit under the details: checkboxes, select all that apply.
+    await expect(page.getByLabel('Topic')).toHaveCount(0);
+    await expect(page.getByText('Select all that apply.')).toBeVisible();
+    const postType = page.getByRole('group', { name: 'Post type' });
+    const subject = page.getByRole('group', { name: 'Subject' });
+    const topic = page.getByRole('group', { name: 'Module or topic' });
+    await expect(postType.getByRole('checkbox', { name: 'Question' })).toBeVisible();
+    await expect(postType.getByRole('checkbox', { name: 'Share' })).toBeVisible();
+    const detailsBox = await page.getByLabel('Details').boundingBox();
+    const postTypeBox = await postType.boundingBox();
+    expect(postTypeBox!.y).toBeGreaterThan(detailsBox!.y + detailsBox!.height);
+
+    // Nothing checked: the form asks for a post type and keeps what was typed.
+    await page.getByRole('button', { name: 'Post', exact: true }).click();
+    await expect(page.getByText('Choose Question, Share, or both.')).toBeVisible();
+    await expect(page.getByLabel('Title')).toHaveValue(QUESTION_TITLE);
+
+    await postType.getByRole('checkbox', { name: 'Question' }).check();
+    await subject.getByRole('checkbox', { name: 'English' }).check();
+    await topic.getByRole('checkbox', { name: 'Daily Pages' }).check();
+    await topic.getByRole('checkbox', { name: 'Classroom Routines' }).check();
     await page.getByLabel('Ask the YAWP! team to answer this').check();
     await page.getByRole('button', { name: 'Post', exact: true }).click();
 
     await expect(page.getByRole('heading', { name: QUESTION_TITLE })).toBeVisible();
     await expect(page.getByText(QUESTION_BODY)).toBeVisible();
     await expect(page.getByText('Waiting on the YAWP! team')).toBeVisible();
+    const threadTags = page.getByRole('list', { name: 'Tags' });
+    await expect(threadTags.getByRole('listitem')).toHaveText(['English', 'Daily Pages', 'Classroom Routines']);
+    await expectNoAllCapsText(page);
+
+    // In the feed the post is its own card, and lifts a little on hover.
+    await page.getByRole('link', { name: 'Faculty Lounge' }).first().click();
+    const card = page.getByRole('article').filter({ hasText: QUESTION_TITLE });
+    await expect(card.getByRole('list', { name: 'Tags' }).getByRole('listitem')).toHaveText([
+      'English',
+      'Daily Pages',
+      'Classroom Routines',
+    ]);
+    await card.hover();
+    await expect(card).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 0, -\d/);
+    // A second topic files it under that topic too.
+    await page.getByRole('navigation', { name: 'Topics' }).getByRole('link', { name: 'Classroom Routines' }).click();
+    await expect(page.getByRole('link', { name: QUESTION_TITLE })).toBeVisible();
   });
 
   test('the YAWP! team answers from the admin inbox', async ({ page, signIn, e2eContext }) => {

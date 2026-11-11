@@ -233,4 +233,64 @@ suite('Teacher Lounge against the database', () => {
     expect(candidates[devinIndex]).toMatchObject({ label: 'Devin R.', detail: `St. Ignatius ${stamp}` });
     expect(candidates.some((c) => c.userId === ids.maria)).toBe(false);
   });
+
+  test('tags: a post keeps every tag, still fills the old kind and topic, and files under each topic', async () => {
+    const { postId } = await lounge.createLoungePost({
+      viewer: devin(),
+      organizationId: ids.orgB,
+      membershipId: null,
+      input: {
+        kind: 'QUESTION',
+        topic: 'grading',
+        tags: { kinds: ['QUESTION', 'SHARE'], subjects: ['english'], topics: ['grading', 'reporter'] },
+        title: `Tagged ${stamp}`,
+        body: 'Rubric first, or the Reporter first?',
+        askStaff: false,
+        askPrivately: false,
+      },
+    });
+    const row = await prisma.loungePost.findUniqueOrThrow({
+      where: { id: postId },
+      select: { kind: true, topic: true, kinds: true, subjects: true, topics: true },
+    });
+    expect(row).toEqual({
+      kind: 'QUESTION',
+      topic: 'grading',
+      kinds: ['QUESTION', 'SHARE'],
+      subjects: ['english'],
+      topics: ['grading', 'reporter'],
+    });
+
+    // Filed under its second topic too, and counted there.
+    const reporter = await lounge.listLoungePosts(maria(), { sort: 'latest', topic: 'reporter' });
+    const summary = reporter.posts.find((post) => post.id === postId);
+    expect(summary?.tags).toEqual({ kinds: ['QUESTION', 'SHARE'], subjects: ['english'], topics: ['grading', 'reporter'] });
+    const counts = await lounge.listLoungeTopicCounts(maria());
+    expect(counts.find((count) => count.topic === 'reporter')?.count).toBeGreaterThanOrEqual(1);
+    // Still a question to the Unanswered list.
+    const unanswered = await lounge.listLoungePosts(maria(), { sort: 'unanswered' });
+    expect(unanswered.posts.some((post) => post.id === postId)).toBe(true);
+  });
+
+  test('tags: a post written before tags reads its old kind and topic', async () => {
+    const old = await prisma.loungePost.create({
+      data: {
+        authorUserId: ids.devin,
+        organizationId: ids.orgB,
+        kind: 'WIN',
+        topic: 'daily-pages',
+        title: `Before tags ${stamp}`,
+        body: 'Twelve minutes, every day.',
+      },
+      select: { id: true },
+    });
+    const feed = await lounge.listLoungePosts(maria(), { sort: 'latest', topic: 'daily-pages' });
+    expect(feed.posts.find((post) => post.id === old.id)?.tags).toEqual({
+      kinds: ['WIN'],
+      subjects: [],
+      topics: ['daily-pages'],
+    });
+    const thread = await lounge.getLoungeThread(maria(), old.id);
+    expect(thread?.post.tags.topics).toEqual(['daily-pages']);
+  });
 });

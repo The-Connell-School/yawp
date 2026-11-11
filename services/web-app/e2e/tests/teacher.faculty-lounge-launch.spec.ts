@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, test } from '../test-setup';
 import { setLoungeCommunityFlag } from '../feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
+import { expectNoAllCapsText } from '../helpers/lounge-style';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 const ADMIN_PASSWORD = 'admin-e2e-password';
@@ -74,7 +75,7 @@ test.describe.serial('Faculty Lounge launch', () => {
 
     const enter = page.getByRole('button', { name: 'Enter the Lounge' });
     await expect(enter).toBeDisabled();
-    await page.getByLabel(/YAWP! may share my posts, with my name removed/).check();
+    await page.getByLabel(/Yawp! may share my posts, with my name removed/).check();
     await expect(enter).toBeDisabled();
     await page.getByLabel('I agree to follow the Lounge’s House Rules.').check();
     await expect(enter).toBeEnabled();
@@ -114,17 +115,49 @@ test.describe.serial('Faculty Lounge launch', () => {
     await expect(page.getByTestId('lounge-post-body')).toHaveCount(0);
   });
 
+  test('the House Rules read as seven bold headers, with nothing above the title', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto('/app/lounge');
+    await page.getByRole('region', { name: 'Pinned' }).getByRole('link', { name: 'House Rules for the Lounge' }).click();
+    await expect(page.getByRole('heading', { name: 'House Rules for the Lounge', level: 1 })).toBeVisible();
+
+    const body = page.getByTestId('lounge-post-body');
+    await expect(body.locator('strong')).toHaveText([
+      '1. Protect your students.',
+      '2. Ask the question.',
+      '3. Think out loud.',
+      '4. Give each other grace.',
+      '5. Vent if you need to, but lean toward solutions.',
+      '6. Keep it about teaching.',
+      '7. Something broken or wrong?',
+    ]);
+    // The rule's detail stays in the regular weight.
+    await expect(body.getByText(/No names, photos, or details that could identify a student\./)).toBeVisible();
+    await expect(body.locator('strong', { hasText: 'No names' })).toHaveCount(0);
+
+    // No "SHARE" eyebrow above the title, and no all-caps anywhere on the page.
+    const article = page.getByRole('article').first();
+    await expect(article.getByText('Share', { exact: true })).toHaveCount(0);
+    await expectNoAllCapsText(page);
+  });
+
   test('settings change the sharing consent later', async ({ page, signIn, e2eContext }) => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/lounge');
     await page.getByRole('link', { name: 'Lounge settings' }).click();
-    const consent = page.getByLabel(/YAWP! may share my posts, with my name removed/);
+    await expectNoAllCapsText(page);
+    const consent = page.getByLabel(/Yawp! may share my posts, with my name removed/);
     await expect(consent).toBeChecked();
+    await expect(page.getByLabel('Email me about replies, mentions, and answers from the Yawp! team')).toBeChecked();
     await consent.uncheck();
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByText('Saved.')).toBeVisible();
     await page.reload();
-    await expect(page.getByLabel(/YAWP! may share my posts, with my name removed/)).not.toBeChecked();
+    await expect(page.getByLabel(/Yawp! may share my posts, with my name removed/)).not.toBeChecked();
   });
 
   test('Contact Us reaches the YAWP! team inbox, not the Lounge', async ({ page, signIn, e2eContext }) => {
@@ -190,10 +223,10 @@ test.describe.serial('Faculty Lounge launch', () => {
   test('the YAWP! team schedules a post for later from the composer', async ({ page, signIn, e2eContext }) => {
     await signIn(e2eContext.adminEmail, ADMIN_PASSWORD);
     await page.goto('/app/lounge/new');
-    await page.getByLabel('Question').check();
     await page.getByLabel('Title').fill('How do you get through a stack of essays?');
     await page.getByLabel('Details').fill('Asking for everyone.');
-    await page.getByLabel('Topic').selectOption({ label: 'Grading & Rubrics' });
+    await page.getByRole('group', { name: 'Post type' }).getByRole('checkbox', { name: 'Question' }).check();
+    await page.getByRole('group', { name: 'Module or topic' }).getByRole('checkbox', { name: 'Grading & Rubrics' }).check();
     await page.getByLabel('Schedule').check();
     await page.getByLabel('Post on').fill('2099-01-05T07:30');
     await page.getByRole('button', { name: 'Schedule post' }).click();
