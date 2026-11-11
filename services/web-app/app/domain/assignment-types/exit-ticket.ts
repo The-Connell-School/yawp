@@ -22,7 +22,10 @@ import {
   exitTicketActivityKind,
   exitTicketActivityOption,
   exitTicketCloser,
+  exitTicketOffersQuestionsLine,
+  EXIT_TICKET_QUESTIONS_LINE,
   exitTicketStarterOption,
+  composeExplainConceptPrompt,
   normalizeExitTicketPromptText,
   type ExitTicketActivity,
   type ExitTicketStarter,
@@ -173,6 +176,17 @@ export const EXIT_TICKET_LESSON_NOTE_FIELDS: ExitTicketLessonNoteField[] = [
     placeholder: 'e.g., Using “theme” and “topic” interchangeably.',
   },
 ];
+
+/**
+ * The v3 form's one optional note, stored as `mainPoints` so the grader, the
+ * class summary and the tutor read it where they already read the lesson.
+ */
+export const EXIT_TICKET_V3_CONTEXT_FIELD: ExitTicketLessonNoteField = {
+  key: 'mainPoints',
+  label: 'Anything Yawp! should know to give useful feedback?',
+  helperText: 'Students don’t see this.',
+  placeholder: 'e.g., What you covered in class today',
+};
 
 /**
  * How pointed the reading of this ticket can be, given what the teacher has
@@ -486,8 +500,10 @@ type ExitTicketConfigBase = {
    */
   activity?: ExitTicketActivity;
   promptText?: string;
-  /** A reflection's starter, kept only while its words are unchanged. */
+  /** A reflection's fixed prompt; absent when the teacher wrote their own. */
   starter?: ExitTicketStarter;
+  /** v3 only: end with EXIT_TICKET_QUESTIONS_LINE. Absent means off. */
+  invitesQuestions?: true;
   /** Absent, never empty: a ticket without notes stores no key at all. */
   lessonNotes?: ExitTicketLessonNotes;
   /** Present only on a ticket the teacher chose to grade. */
@@ -569,9 +585,8 @@ function parseMinimum(
 }
 
 /**
- * A graded ticket has to say what it is graded against. A general prompt read
- * with nothing to hold it to cannot support a points-based grade, so the
- * criteria each shape needs are required here rather than hoped for.
+ * What a graded ticket is graded on. Only a check with a right answer has to
+ * name it; everything else is optional and read against the prompt if blank.
  */
 function parseGradingInput(
   input: ExitTicketConfigInput,
@@ -593,8 +608,6 @@ function parseGradingInput(
     'sentences'
   );
   if (!minSentences.success) return minSentences;
-  const hasLength =
-    minWords.value !== undefined || minSentences.value !== undefined;
 
   const assessFor =
     input.assessFor?.toString().trim().replace(/\s+/g, ' ') ?? '';
@@ -615,13 +628,6 @@ function parseGradingInput(
       };
     }
     basis = posted as ExitTicketGradingBasis;
-    if (basis === 'bands' && !lessonNotes?.mainPoints && !hasLength) {
-      return {
-        success: false,
-        message:
-          'Add the main points of the lesson or a minimum length, so there is something to grade against.',
-      };
-    }
   } else if (answerType === 'objective') {
     if (!lessonNotes?.mustMention) {
       return {
@@ -629,12 +635,11 @@ function parseGradingInput(
         message: 'Add the correct answer so this can be graded.',
       };
     }
-  } else if (!assessFor && !hasLength) {
-    return {
-      success: false,
-      message: 'Say what to assess, since there is no single right answer.',
-    };
   }
+  // Main points, what to assess, and a minimum length sharpen the grade but
+  // are not required: the form shows them as optional, and a ticket without
+  // them is graded against its prompt. Requiring one of them kept Create
+  // disabled with every visible field filled in.
 
   return {
     success: true,
@@ -775,7 +780,13 @@ function reflectionPromptText(config: ExitTicketConfig): string {
 /** The prompt the student actually sees. */
 export function composeExitTicketPrompt(config: ExitTicketConfig): string {
   if (config.activity && config.promptText) {
-    return `${config.promptText}\n\n${exitTicketCloser(config.activity, config.starter)}`;
+    return [
+      config.promptText,
+      exitTicketCloser(config.activity, config.starter),
+      config.invitesQuestions ? EXIT_TICKET_QUESTIONS_LINE : null,
+    ]
+      .filter((part): part is string => Boolean(part))
+      .join('\n\n');
   }
   if (config.mode === 'basic') {
     return `${reflectionPromptText(config)}\n\n${EXIT_TICKET_ELABORATION_NOTE}`;
@@ -805,6 +816,8 @@ export type ExitTicketConfigInput = {
   activity?: string | null;
   promptText?: string | null;
   starter?: string | null;
+  /** v3 only: the questions line, as a checkbox posts it. */
+  invitesQuestions?: string | boolean | null;
   /** Posted by the new builder. Absent from every v1 client. */
   kind?: string | null;
   mode?: string | null;
@@ -1067,7 +1080,7 @@ function parseStoredLessonNotes(value: unknown): {
 }
 
 // ---------------------------------------------------------------------------
-// v3 builder: the teacher writes the prompt; the activity decides the rest.
+// v3 builder: the teacher picks what students do; the prompt follows from it.
 // ---------------------------------------------------------------------------
 
 function parseExitTicketActivity(
@@ -1086,7 +1099,14 @@ function parseExitTicketStarter(
     : null;
 }
 
-/** Only a starter whose words are still the starter's decides the closer. */
+/** A checkbox or a hidden field, as the form or a link posts it. */
+function postedTrue(value: string | boolean | null | undefined): boolean {
+  if (value === true) return true;
+  const text = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return text === 'true' || text === 'on' || text === 'yes';
+}
+
+/** Only a prompt still in a starter's exact words keeps that starter. */
 function keptStarter(
   activity: ExitTicketActivity,
   starter: ExitTicketStarter | null,
@@ -1105,22 +1125,97 @@ function legacyTopicFor(promptText: string): string {
   return normalizeTopic(flat.slice(0, EXIT_TICKET_TOPIC_MAX_LENGTH));
 }
 
+/** What the old reflection reader needs to reopen the same question. */
+function legacyReflectionPrompt(
+  starter: ExitTicketStarter | null,
+  promptText: string
+): ExitTicketReflectionPrompt | undefined {
+  if (starter === 'learned') return undefined;
+  if (starter === 'interesting' || starter === 'wondering') {
+    return { id: starter };
+  }
+  return { id: 'custom', text: normalizePromptText(promptText) };
+}
+
 /**
- * The v3 parse. No answer-type question and no required criteria: a graded
- * ticket is read against the teacher's prompt and whatever key points they
- * gave, so it only has to say whether it is graded on completion or on
- * understanding. Lengths are still accepted from a client that sends them.
+ * The v3 parse.
+ *
+ * - A reflection is one of the fixed prompts (`starter`) or the teacher's
+ *   own question (`promptText`).
+ * - "Explain a concept" takes the concept (`topic`) and builds the sentence.
+ *   Without a topic, a written prompt is read as "Answer a question", which
+ *   is what a Lesson Planner block that wrote out the whole question means.
+ * - The other checks take the teacher's prompt.
+ * - A check has a correct answer or it does not. Unanswered means no, the
+ *   reading that cannot mark a defensible answer wrong, unless the correct
+ *   answer was given (the planner gives it without saying so).
+ *
+ * Grading is no longer asked for. A ticket that is already graded keeps its
+ * grade when it is edited, so a posted grade is still read.
  */
 function parseV3ConfigInput(
   input: ExitTicketConfigInput
 ): ExitTicketConfigParseResult {
-  const activity = parseExitTicketActivity(input.activity?.toString().trim());
+  let activity = parseExitTicketActivity(input.activity?.toString().trim());
   if (!activity) {
     return { success: false, message: 'Choose what students will do.' };
   }
+
+  let promptText = normalizeExitTicketPromptText(
+    input.promptText?.toString() ?? ''
+  );
+  let topic = '';
+  let starter: ExitTicketStarter | null = null;
+
+  if (activity === 'reflect') {
+    starter = parseExitTicketStarter(input.starter?.toString().trim());
+    const fixed = exitTicketStarterOption(starter)?.prompt;
+    if (fixed) {
+      // A fixed prompt and its id cannot disagree: an edited fixed prompt
+      // is the teacher's own question.
+      if (!promptText) promptText = fixed;
+      starter = keptStarter(activity, starter, promptText);
+    } else {
+      starter = null;
+    }
+  } else if (activity === 'explain-concept') {
+    topic = normalizeTopic(input.topic?.toString() ?? '');
+    if (topic) {
+      if (topic.length > EXIT_TICKET_TOPIC_MAX_LENGTH) {
+        return {
+          success: false,
+          message: `Keep the concept under ${EXIT_TICKET_TOPIC_MAX_LENGTH} characters.`,
+        };
+      }
+      promptText = composeExplainConceptPrompt(topic);
+    } else if (promptText) {
+      activity = 'answer-question';
+    } else {
+      return {
+        success: false,
+        message: 'Name the concept students will explain.',
+      };
+    }
+  }
+
+  if (!promptText) {
+    return {
+      success: false,
+      message:
+        activity === 'reflect'
+          ? 'Write the question students will answer.'
+          : 'Write the prompt students will answer.',
+    };
+  }
+  if (promptText.length > EXIT_TICKET_PROMPT_TEXT_MAX_LENGTH) {
+    return {
+      success: false,
+      message: `Keep the prompt under ${EXIT_TICKET_PROMPT_TEXT_MAX_LENGTH} characters.`,
+    };
+  }
+
   const kind = exitTicketActivityKind(activity);
   const mode = exitTicketModeForKind(kind);
-
   const postedKind = input.kind?.toString().trim() ?? '';
   const postedMode = input.mode?.toString().trim() ?? '';
   if (
@@ -1130,33 +1225,12 @@ function parseV3ConfigInput(
     return { success: false, message: 'Exit ticket type is invalid.' };
   }
 
-  const promptText = normalizeExitTicketPromptText(
-    input.promptText?.toString() ?? ''
-  );
-  if (!promptText) {
-    return {
-      success: false,
-      message: 'Write the prompt students will answer.',
-    };
-  }
-  if (promptText.length > EXIT_TICKET_PROMPT_TEXT_MAX_LENGTH) {
-    return {
-      success: false,
-      message: `Keep the prompt under ${EXIT_TICKET_PROMPT_TEXT_MAX_LENGTH} characters.`,
-    };
-  }
-  const starter = keptStarter(
-    activity,
-    parseExitTicketStarter(input.starter?.toString().trim()),
-    promptText
-  );
-
   const notes = parseLessonNotesInput(input);
   if (!notes.success) return notes;
 
   let grading: ExitTicketGrading | undefined;
   if (input.graded === true) {
-    const basis = input.gradingBasis?.toString().trim() ?? '';
+    const basis = input.gradingBasis?.toString().trim() || 'completion';
     if (!(EXIT_TICKET_GRADING_BASES as readonly string[]).includes(basis)) {
       return { success: false, message: 'Choose how this ticket is graded.' };
     }
@@ -1185,10 +1259,15 @@ function parseV3ConfigInput(
     activity,
     promptText,
     ...(starter ? { starter } : {}),
+    ...(postedTrue(input.invitesQuestions) &&
+    exitTicketOffersQuestionsLine({ activity, starter })
+      ? { invitesQuestions: true as const }
+      : {}),
   };
   const gradingField = grading ? { grading } : {};
 
   if (mode === 'basic') {
+    const reflectionPrompt = legacyReflectionPrompt(starter, promptText);
     return {
       success: true,
       config: withLessonNotes(
@@ -1197,17 +1276,17 @@ function parseV3ConfigInput(
           mode: 'basic',
           kind: 'reflection',
           ...v3,
-          // What the quick builder reads, so it reopens the same question.
-          reflectionPrompt: {
-            id: 'custom',
-            text: normalizePromptText(promptText),
-          },
+          ...(reflectionPrompt ? { reflectionPrompt } : {}),
           ...gradingField,
         },
         notes
       ),
     };
   }
+
+  const answerType =
+    exitTicketAnswerType(input.answerType?.toString().trim()) ??
+    (notes.lessonNotes?.mustMention ? 'objective' : 'subjective');
 
   return {
     success: true,
@@ -1219,10 +1298,8 @@ function parseV3ConfigInput(
         ...v3,
         focus:
           exitTicketActivityOption(activity)?.legacyFocus ?? 'explain-concept',
-        topic: legacyTopicFor(promptText),
-        // v3 never asks for a single right answer. Older readers get the
-        // reading that cannot mark a defensible answer wrong.
-        answerType: 'subjective',
+        topic: topic || legacyTopicFor(promptText),
+        answerType,
         ...gradingField,
       },
       notes
@@ -1234,7 +1311,10 @@ function parseV3ConfigInput(
 function parseStoredV3Fields(
   record: Record<string, unknown>,
   mode: ExitTicketMode
-): Pick<ExitTicketConfigBase, 'activity' | 'promptText' | 'starter'> {
+): Pick<
+  ExitTicketConfigBase,
+  'activity' | 'promptText' | 'starter' | 'invitesQuestions'
+> {
   const activity = parseExitTicketActivity(
     typeof record.activity === 'string' ? record.activity : null
   );
@@ -1253,81 +1333,163 @@ function parseStoredV3Fields(
     ),
     promptText
   );
-  return { activity, promptText, ...(starter ? { starter } : {}) };
+  const invitesQuestions =
+    record.invitesQuestions === true &&
+    exitTicketOffersQuestionsLine({ activity, starter });
+  return {
+    activity,
+    promptText,
+    ...(starter ? { starter } : {}),
+    ...(invitesQuestions ? { invitesQuestions: true as const } : {}),
+  };
 }
 
-/** What the v3 builder edits: an activity, a prompt, and maybe a starter. */
+/** What the v3 builder edits. */
 export type ExitTicketV3Draft = {
   activity: ExitTicketActivity;
-  promptText: string;
+  /** A reflection's fixed prompt; null for the teacher's own question. */
   starter: ExitTicketStarter | null;
+  /** The teacher's question or prompt. Unused by fixed reflections. */
+  promptText: string;
+  /** The concept, for "Explain a concept in their own words". */
+  topic: string;
+  /** Checks only. */
+  answerType: ExitTicketAnswerType;
+  /** Ends the ticket with EXIT_TICKET_QUESTIONS_LINE. Off by default. */
+  invitesQuestions: boolean;
 };
 
-function starterDraft(starter: ExitTicketStarter): ExitTicketV3Draft {
+export function emptyExitTicketV3Draft(
+  patch: Partial<ExitTicketV3Draft> = {}
+): ExitTicketV3Draft {
   return {
     activity: 'reflect',
-    promptText: exitTicketStarterOption(starter)!.prompt,
-    starter,
+    starter: DEFAULT_EXIT_TICKET_STARTER,
+    promptText: '',
+    topic: '',
+    answerType: 'subjective',
+    invitesQuestions: false,
+    ...patch,
+  };
+}
+
+/** What the draft posts, for the same parser the server runs. */
+export function exitTicketV3DraftInput(
+  draft: ExitTicketV3Draft
+): Pick<
+  ExitTicketConfigInput,
+  | 'activity'
+  | 'promptText'
+  | 'starter'
+  | 'topic'
+  | 'answerType'
+  | 'invitesQuestions'
+> {
+  const fixed =
+    draft.activity === 'reflect'
+      ? exitTicketStarterOption(draft.starter)
+      : null;
+  return {
+    activity: draft.activity,
+    promptText:
+      draft.activity === 'explain-concept'
+        ? ''
+        : fixed
+          ? fixed.prompt
+          : draft.promptText,
+    starter: fixed ? fixed.id : null,
+    topic: draft.activity === 'explain-concept' ? draft.topic : null,
+    answerType:
+      exitTicketActivityKind(draft.activity) === 'check'
+        ? draft.answerType
+        : null,
+    invitesQuestions:
+      draft.invitesQuestions && exitTicketOffersQuestionsLine(draft),
   };
 }
 
 /**
  * Any ticket, as the v3 builder opens it: a new one, a v3 one, or one the
- * quick builder or the Lesson Planner wrote. A legacy check's sentence is
- * rebuilt without the phrasing the team retired, so saving it in v3 never
- * brings that wording back.
+ * quick builder or the Lesson Planner wrote.
  */
 export function exitTicketV3DraftFromConfig(
   config: ExitTicketConfig | null | undefined
 ): ExitTicketV3Draft {
-  if (!config) return starterDraft(DEFAULT_EXIT_TICKET_STARTER);
+  const draft = draftFromConfigFields(config);
+  return config?.invitesQuestions ? { ...draft, invitesQuestions: true } : draft;
+}
+
+function draftFromConfigFields(
+  config: ExitTicketConfig | null | undefined
+): ExitTicketV3Draft {
+  if (!config) return emptyExitTicketV3Draft();
+  const answerType =
+    config.mode === 'specific' ? config.answerType : 'subjective';
 
   if (config.activity && config.promptText) {
-    return {
+    if (config.activity === 'reflect') {
+      return config.starter
+        ? emptyExitTicketV3Draft({ starter: config.starter })
+        : emptyExitTicketV3Draft({
+            starter: null,
+            promptText: config.promptText,
+          });
+    }
+    if (config.activity === 'explain-concept') {
+      const topic = config.mode === 'specific' ? config.topic : '';
+      return composeExplainConceptPrompt(topic) === config.promptText
+        ? emptyExitTicketV3Draft({
+            activity: 'explain-concept',
+            starter: null,
+            topic,
+            answerType,
+          })
+        : emptyExitTicketV3Draft({
+            activity: 'answer-question',
+            starter: null,
+            promptText: config.promptText,
+            answerType,
+          });
+    }
+    return emptyExitTicketV3Draft({
       activity: config.activity,
+      starter: null,
       promptText: config.promptText,
-      starter: config.starter ?? null,
-    };
+      answerType,
+    });
   }
 
   if (config.mode === 'basic') {
     const reflection = config.reflectionPrompt;
-    if (!reflection) return starterDraft(DEFAULT_EXIT_TICKET_STARTER);
-    if (reflection.id === 'wondering') return starterDraft('wondering');
+    if (!reflection) return emptyExitTicketV3Draft();
     if (reflection.id === 'custom') {
-      return {
-        activity: 'reflect',
-        promptText: reflection.text,
+      return emptyExitTicketV3Draft({
         starter: null,
-      };
+        promptText: reflection.text,
+      });
     }
-    return {
-      activity: 'reflect',
-      promptText:
-        exitTicketReflectionPromptOption(reflection.id)?.prompt ??
-        exitTicketStarterOption(DEFAULT_EXIT_TICKET_STARTER)!.prompt,
-      starter: null,
-    };
+    return emptyExitTicketV3Draft({ starter: reflection.id });
   }
 
   const topic = normalizeTopic(config.topic);
   if (config.focus === 'ask-question') {
-    return {
-      activity: 'reflect',
-      promptText: `What is one question you still have about ${topic}?`,
+    return emptyExitTicketV3Draft({
       starter: null,
-    };
+      promptText: `What is one question you still have about ${topic}?`,
+    });
   }
   if (config.focus === 'understand-text') {
-    return {
+    return emptyExitTicketV3Draft({
       activity: 'engage-text',
-      promptText: `What is ${topic} saying? Put it in your own words, then point to what in it made you read it that way.`,
       starter: null,
-    };
+      promptText: `What is ${topic} saying? Point to the part that shows it.`,
+      answerType,
+    });
   }
-  return {
+  return emptyExitTicketV3Draft({
     activity: 'explain-concept',
-    promptText: `In your own words, explain ${topic}.`,
     starter: null,
-  };
+    topic,
+    answerType,
+  });
 }

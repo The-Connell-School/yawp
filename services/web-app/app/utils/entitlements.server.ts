@@ -8,10 +8,15 @@ export { FREE_CLASSROOM_STUDENT_SEAT_CAP, FREE_CLASSROOM_LESSON_PLAN_QUOTA } fro
 export const FREE_CLASSROOM_TEACHER_SEAT_CAP = 1;
 export const FREE_CLASSROOM_ACTIVE_CLASS_CAP = 1;
 
+// Lifetime caps per kind. Exit Ticket joins the free bundle for launch
+// (Brian, Nov 2026) with the Class Starter's cap: both are short, daily
+// writing. A FREE_CLASSROOM org only exists through the free tier, so this
+// reaches no one while `free_tier` is off.
 export const FREE_CLASSROOM_ASSIGNMENT_QUOTAS = {
   class_starter: 12,
   prewriting: 3,
   thesis_statement: 3,
+  exit_ticket: 12,
 } as const;
 
 export type FreeClassroomAssignmentQuotaKind =

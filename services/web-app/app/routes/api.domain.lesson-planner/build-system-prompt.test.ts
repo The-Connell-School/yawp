@@ -19,7 +19,9 @@ import {
   LESSON_PLANNER_PROMPT_VERSION,
   RECOMMENDED_LESSON_PLANNER_PROMPTS,
   recommendedLessonPlannerPrompts,
+  exitTicketSectionV3ForTest,
 } from './build-system-prompt';
+import { EXIT_TICKET_QUESTIONS_LINE } from '~/domain/assignment-types/exit-ticket';
 
 describe('buildLessonPlannerSystemPrompt', () => {
   const prompt = buildLessonPlannerSystemPrompt({
@@ -2008,26 +2010,28 @@ describe('the Yawp exit ticket, v3 builder', () => {
 
   test('teaches every activity the v3 form offers, and the prompt the planner writes', () => {
     for (const option of EXIT_TICKET_ACTIVITY_OPTIONS) {
-      expect(v3).toContain(`\`${option.value}\``);
-      expect(v3).toContain(option.label);
+      expect(v3).toContain(`\`${option.value}\`: ${option.tag}.`);
     }
     expect(v3).toContain('activity: answer-question');
     expect(v3).toContain('promptText:');
+    expect(v3).toContain('topic:');
+    expect(v3).toContain('answer: yes');
     for (const starter of EXIT_TICKET_STARTER_OPTIONS) {
       expect(v3).toContain(`\`${starter.id}\``);
     }
   });
 
-  test('no longer teaches the fill-in-the-blank focus or the right-answer question', () => {
+  test('no longer teaches the fill-in-the-blank focus or grading', () => {
     expect(v3).not.toContain('focus: explain-concept');
-    expect(v3).not.toContain('answer: objective');
     expect(v3).not.toContain('`ask-question`');
+    expect(v3).toContain('Do not write `graded`');
+    expect(v3).not.toContain('basis: understanding');
   });
 
-  test('carries Brian’s wording rule, and leaves the closing line to Yawp!', () => {
+  test('carries the wording rule, and leaves the closing line to Yawp!', () => {
     expect(v3).toContain('someone who missed class');
     expect(v3).toContain('not the definition you were given');
-    expect(v3).toMatch(/Do not write the closing line/);
+    expect(v3).toMatch(/Yawp! adds any closing line itself/);
     // The printed ticket follows the same rule, closer included.
     expect(v3).toContain(EXIT_TICKET_EXPLAIN_CLOSER);
   });
@@ -2106,6 +2110,38 @@ describe('the v3 exit ticket asks only what it needs', () => {
     );
     expect(legacy).toContain(
       'Name all three in the closing step in one line; do not rank them.'
+    );
+  });
+});
+
+describe('the v3 exit ticket section follows the new form', () => {
+  const section = exitTicketSectionV3ForTest().join('\n');
+
+  test('reads as plain instructions: no em or en dashes', () => {
+    expect(section).not.toMatch(/[\u2014\u2013]/);
+    expect(section).not.toContain(' -- ');
+  });
+
+  test('names the two types and the correct answer the form asks for', () => {
+    expect(section).toContain('There are two types');
+    expect(section).toContain('describe the correct answer in `mustMention`');
+  });
+
+  test('offers the questions line and the note for Yawp!, both optional', () => {
+    expect(section).toContain('`questions: yes`');
+    expect(section).toContain(EXIT_TICKET_QUESTIONS_LINE);
+    expect(section).toContain('Use it only when the teacher asks for it');
+    expect(section).toContain('`context:`');
+  });
+
+  test('no longer asks for the notes the form dropped', () => {
+    expect(section).not.toContain('mainPoints');
+    expect(section).not.toContain('watchFor');
+  });
+
+  test('keeps notes, answers and rankings away from the options', () => {
+    expect(section).toContain(
+      'Do not add notes, rationale, answers or rankings next to them.'
     );
   });
 });

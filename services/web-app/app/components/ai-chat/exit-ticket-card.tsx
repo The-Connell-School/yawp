@@ -26,19 +26,15 @@ import {
   exitTicketReflectionPromptOption,
 } from '~/domain/assignment-types/exit-ticket';
 import {
+  EXIT_TICKET_QUESTIONS_LINE,
   exitTicketActivityOption,
   exitTicketCloser,
   type ExitTicketActivity,
 } from '~/domain/assignment-types/exit-ticket-activities';
 
-/**
- * The activity in a few words, for the card's tag: the form's own label
- * without its "Have the students" lead ("Answer a question").
- */
+/** The activity in a few words, for the card's tag ("Answer a question"). */
 function activityTag(activity: ExitTicketActivity): string {
-  const label = exitTicketActivityOption(activity)?.label ?? '';
-  const short = label.replace(/^Have the students\s+/i, '');
-  return short ? short.charAt(0).toUpperCase() + short.slice(1) : 'Exit ticket';
+  return exitTicketActivityOption(activity)?.tag ?? 'Exit ticket';
 }
 
 export function ExitTicketCard({
@@ -236,13 +232,11 @@ function CardActions({
 }
 
 /**
- * A v3 ticket (the teacher's own question), shown the way students will get
- * it. When the planner offers three side by side, the teacher picks one by
- * reading what students would read, so that is what the card is: the
- * question, then the closing line Yawp! adds. The activity is a short tag,
- * grading shows only when the ticket is graded, and the key points the
- * responses are read against stay one click away, since students never see
- * them.
+ * A v3 ticket, shown the way students will get it. When the planner offers
+ * three side by side, the teacher picks one by reading what students would
+ * read, so that is all the card shows: a short tag, the question, and any
+ * line Yawp! adds. The correct answer and notes still travel to the form
+ * through the create link, where the teacher sees and edits them.
  */
 function PromptFirstCard({
   ticket,
@@ -257,14 +251,6 @@ function PromptFirstCard({
 }) {
   const { config } = ticket;
   const closer = exitTicketCloser(activity, config.starter);
-  const notes = config.lessonNotes;
-  const filledNotes = notes
-    ? EXIT_TICKET_LESSON_NOTE_FIELDS.filter(
-        (field) => notes[field.key].trim().length > 0
-      )
-    : [];
-  const noteLabel = (key: string, label: string) =>
-    key === 'mustMention' ? 'Correct answer or key points' : label;
 
   return (
     <div
@@ -274,16 +260,6 @@ function PromptFirstCard({
       <div className="flex items-center gap-2 px-4 pt-3 text-xs text-muted-foreground">
         <ClipboardCheck size={14} className="shrink-0 text-primary" />
         <span data-testid="exit-ticket-activity">{activityTag(activity)}</span>
-        {ticket.graded ? (
-          <span data-testid="exit-ticket-grading" className="ml-auto">
-            {[
-              'Graded',
-              ticket.pointValue ? `${ticket.pointValue} points` : null,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </span>
-        ) : null}
       </div>
 
       <div className="px-4 pb-3.5 pt-2">
@@ -293,37 +269,23 @@ function PromptFirstCard({
         >
           {question}
         </p>
-        <p
-          data-testid="exit-ticket-closer"
-          className="mt-2 text-sm leading-relaxed text-muted-foreground"
-        >
-          {closer}
-        </p>
+        {closer ? (
+          <p
+            data-testid="exit-ticket-closer"
+            className="mt-2 text-sm leading-relaxed text-muted-foreground"
+          >
+            {closer}
+          </p>
+        ) : null}
+        {config.invitesQuestions ? (
+          <p
+            data-testid="exit-ticket-questions-line"
+            className="mt-2 text-sm leading-relaxed text-muted-foreground"
+          >
+            {EXIT_TICKET_QUESTIONS_LINE}
+          </p>
+        ) : null}
       </div>
-
-      {filledNotes.length > 0 ? (
-        <details
-          data-testid="exit-ticket-notes"
-          className="border-t border-primary/15 px-4 py-2.5 text-xs"
-        >
-          <summary className="cursor-pointer font-medium text-muted-foreground">
-            What responses are read against
-          </summary>
-          <p className="mt-2 text-muted-foreground">Students don’t see this.</p>
-          <dl className="mt-1.5 space-y-1.5">
-            {filledNotes.map((field) => (
-              <div key={field.key} className="flex gap-2">
-                <dt className="shrink-0 font-medium text-muted-foreground">
-                  {noteLabel(field.key, field.label)}:
-                </dt>
-                <dd className="min-w-0 text-foreground/80">
-                  {notes![field.key]}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </details>
-      ) : null}
 
       {footer}
     </div>

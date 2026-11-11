@@ -777,6 +777,53 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect(prisma.assignmentModuleSession.update).not.toHaveBeenCalled();
   });
 
+  test('tells the tutor an exit ticket’s correct answer and the teacher’s note', async () => {
+    getLLMCompletion.mockResolvedValue('What makes you think so?');
+    mockCms({
+      assignment: {
+        id: 'assignment-1',
+        title: 'Exit ticket',
+        prompt: 'Who is Allie?',
+        tutorEnabled: true,
+        exitTicketConfigJson: {
+          schemaVersion: 1,
+          mode: 'specific',
+          kind: 'check',
+          activity: 'answer-question',
+          promptText: 'Who is Allie?',
+          focus: 'explain-concept',
+          topic: 'Who is Allie',
+          answerType: 'objective',
+          lessonNotes: {
+            mainPoints: 'We read chapters 1 to 3.',
+            mustMention: 'Holden’s younger brother.',
+            watchFor: '',
+          },
+        },
+      },
+    });
+
+    const body = new FormData();
+    body.set('response', 'Is he his friend?');
+    body.set('cmsId', 'cms-1');
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
+    const context = completionArgs.messages.find(
+      (message: { role: string; content: string }) =>
+        message.role === 'user' &&
+        message.content.includes('<assignment_context')
+    ).content as string;
+    expect(context).toContain('<correct_answer>Holden’s younger brother.</correct_answer>');
+    expect(context).toContain('<teacher_note>We read chapters 1 to 3.</teacher_note>');
+    expect(context).toContain('Never tell the student the answer');
+  });
+
   test('allows the tutor response when the document has no linked assignment', async () => {
     getLLMCompletion.mockResolvedValue('Draft a clearer thesis.');
     mockCms({ assignment: null });

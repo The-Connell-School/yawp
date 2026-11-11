@@ -2,23 +2,29 @@ import { describe, expect, test } from 'bun:test';
 import {
   BASIC_EXIT_TICKET_PROMPT,
   DEFAULT_EXIT_TICKET_ACTIVITY,
-  EXIT_TICKET_ACTIVITY_GROUPS,
   EXIT_TICKET_ACTIVITY_OPTIONS,
+  EXIT_TICKET_CHOICE_GROUPS,
   EXIT_TICKET_CONFIG_SCHEMA_VERSION,
   EXIT_TICKET_EXPLAIN_CLOSER,
-  EXIT_TICKET_POLISH_CLOSER,
   EXIT_TICKET_PROMPT_TEXT_MAX_LENGTH,
+  EXIT_TICKET_QUESTIONS_LINE,
+  EXIT_TICKET_V3_CONTEXT_FIELD,
   EXIT_TICKET_STARTER_OPTIONS,
   EXIT_TICKET_TOPIC_MAX_LENGTH,
   composeExitTicketPrompt,
+  emptyExitTicketV3Draft,
   exitTicketActivityKind,
   exitTicketActivityOption,
+  exitTicketOffersQuestionsLine,
+  exitTicketChoiceFor,
   exitTicketStarterOption,
   exitTicketV3DraftFromConfig,
+  exitTicketV3DraftInput,
   parseExitTicketConfigInput,
   parseStoredExitTicketConfig,
   type ExitTicketConfig,
   type ExitTicketConfigInput,
+  type ExitTicketV3Draft,
 } from './exit-ticket';
 
 const ANSWER_QUESTION =
@@ -30,61 +36,43 @@ function parse(input: ExitTicketConfigInput): ExitTicketConfig {
   return result.config;
 }
 
-describe('the v3 activities', () => {
-  test('are four, in two groups, reflection first', () => {
-    expect(EXIT_TICKET_ACTIVITY_OPTIONS.map((option) => option.value)).toEqual([
-      'reflect',
-      'explain-concept',
-      'answer-question',
-      'engage-text',
+function parseDraft(patch: Partial<ExitTicketV3Draft>): ExitTicketConfig {
+  return parse(exitTicketV3DraftInput(emptyExitTicketV3Draft(patch)));
+}
+
+describe('what students can do', () => {
+  test('reflections first, then checks for understanding', () => {
+    expect(
+      EXIT_TICKET_CHOICE_GROUPS.map((group) => [
+        group.label,
+        group.choices.map((choice) => choice.label),
+      ])
+    ).toEqual([
+      [
+        'Reflection',
+        [
+          'What I learned',
+          'Most interesting',
+          'Still wondering',
+          'Write your own question',
+        ],
+      ],
+      [
+        'Check for understanding',
+        [
+          'Have students explain a concept in their own words',
+          'Have students answer a question you ask',
+          'Have students understand or grapple with a text or source',
+        ],
+      ],
     ]);
-    expect(EXIT_TICKET_ACTIVITY_GROUPS.map((group) => group.kind)).toEqual([
-      'reflection',
-      'check',
-    ]);
-    expect(EXIT_TICKET_ACTIVITY_GROUPS[0]!.activities).toEqual(['reflect']);
-    expect(EXIT_TICKET_ACTIVITY_GROUPS[1]!.activities).toEqual([
-      'explain-concept',
-      'answer-question',
-      'engage-text',
-    ]);
+  });
+
+  test('every choice maps back to one activity and reflection', () => {
+    expect(exitTicketChoiceFor('reflect', 'learned')).toBe('reflect:learned');
+    expect(exitTicketChoiceFor('reflect', null)).toBe('reflect:custom');
+    expect(exitTicketChoiceFor('engage-text', null)).toBe('engage-text');
     expect(DEFAULT_EXIT_TICKET_ACTIVITY).toBe('reflect');
-  });
-
-  test('are labelled for what the students do', () => {
-    expect(EXIT_TICKET_ACTIVITY_OPTIONS.map((option) => option.label)).toEqual([
-      'Have the students reflect or ask a question',
-      'Have the students explain a concept',
-      'Have the students answer a question',
-      'Have the students engage with a text or source',
-    ]);
-  });
-
-  test('every activity has a description, placeholder and grading criteria', () => {
-    for (const option of EXIT_TICKET_ACTIVITY_OPTIONS) {
-      expect(option.description.length).toBeGreaterThan(40);
-      expect(option.placeholder.startsWith('e.g., ')).toBe(true);
-      expect(option.gradingCriteria.length).toBeGreaterThan(40);
-    }
-  });
-
-  test('"answer a question" is the teacher asking, not the student', () => {
-    const option = exitTicketActivityOption('answer-question')!;
-    expect(option.description).toMatch(
-      /quick question about what you just taught/
-    );
-    expect(option.gradingCriteria).toMatch(/misspell/);
-  });
-
-  test('the reflection group covers what they learned, what surprised them, and what they wonder', () => {
-    expect(EXIT_TICKET_ACTIVITY_GROUPS[0]!.description).toBe(
-      'Students tell you what they learned, what surprised them, or what they’re still wondering.'
-    );
-    expect(EXIT_TICKET_STARTER_OPTIONS.map((option) => option.id)).toEqual([
-      'learned',
-      'surprised',
-      'wondering',
-    ]);
   });
 
   test('maps each activity to the kind it is', () => {
@@ -95,384 +83,532 @@ describe('the v3 activities', () => {
   });
 });
 
-describe('the wording rule', () => {
-  test('the explain closer is Brian’s line, word for word', () => {
-    expect(EXIT_TICKET_EXPLAIN_CLOSER).toBe(
-      'Keep it conversational, in your words, and write as much as you can — the more you can explain your thinking, the better. Don’t worry too much about polish. This is about what you understand, not writing perfectly.'
-    );
-  });
+describe('the wording students see', () => {
+  const studentText = [
+    EXIT_TICKET_EXPLAIN_CLOSER,
+    ...EXIT_TICKET_STARTER_OPTIONS.map((option) => option.prompt),
+  ];
 
-  test('no v3 wording uses the phrases the team asked to drop', () => {
-    const banned = [
-      /someone who missed class/i,
-      /not the definition you were given/i,
-      /ask the real one/i,
-      /afraid to ask/i,
-    ];
-    const texts = [
-      EXIT_TICKET_EXPLAIN_CLOSER,
-      EXIT_TICKET_POLISH_CLOSER,
-      ...EXIT_TICKET_ACTIVITY_OPTIONS.flatMap((option) => [
-        option.description,
-        option.placeholder,
-      ]),
-      ...EXIT_TICKET_STARTER_OPTIONS.map((option) => option.prompt),
-    ];
-    for (const text of texts) {
-      for (const pattern of banned) expect(text).not.toMatch(pattern);
+  test('is short and plain', () => {
+    for (const text of studentText) {
+      expect(text).not.toContain('—');
+      expect(text.length).toBeLessThan(70);
     }
   });
 
-  test('explaining a concept ends with the explain closer', () => {
-    const config = parse({
-      activity: 'explain-concept',
-      promptText:
-        'In your own words, explain how Edwards uses reason and emotion together to persuade.',
-    });
-    expect(composeExitTicketPrompt(config)).toBe(
-      `In your own words, explain how Edwards uses reason and emotion together to persuade.\n\n${EXIT_TICKET_EXPLAIN_CLOSER}`
+  test('drops the phrases the team asked to cut', () => {
+    const all = studentText.join(' ').toLowerCase();
+    for (const phrase of [
+      'someone who missed class',
+      'not the definition you were given',
+      'the real one',
+      'the more you',
+      'this is about what you understand',
+      'be honest',
+    ]) {
+      expect(all).not.toContain(phrase);
+    }
+  });
+
+  test('“what I learned” ends with the one closing line', () => {
+    expect(composeExitTicketPrompt(parseDraft({ starter: 'learned' }))).toBe(
+      `What did you learn today? Explain it in your own words.\n\n${EXIT_TICKET_EXPLAIN_CLOSER}`
     );
   });
 
-  test('a quick question gets no push for length', () => {
-    const prompt = composeExitTicketPrompt(
-      parse({ activity: 'answer-question', promptText: ANSWER_QUESTION })
+  test('“most interesting” and “still wondering” just ask', () => {
+    expect(
+      composeExitTicketPrompt(parseDraft({ starter: 'interesting' }))
+    ).toBe('What was the most interesting part of today’s lesson? Why?');
+    expect(composeExitTicketPrompt(parseDraft({ starter: 'wondering' }))).toBe(
+      'What is one question you still have about today’s lesson?'
     );
-    expect(prompt).toBe(`${ANSWER_QUESTION}\n\n${EXIT_TICKET_POLISH_CLOSER}`);
-    expect(prompt).not.toMatch(/as much as you can/);
   });
 
-  test('“still wondering” just asks the question', () => {
-    const wondering = exitTicketStarterOption('wondering')!;
-    const prompt = composeExitTicketPrompt(
-      parse({
-        activity: 'reflect',
-        promptText: wondering.prompt,
-        starter: 'wondering',
-      })
-    );
-    expect(prompt).not.toMatch(/as much as you can/);
-    expect(prompt.startsWith(wondering.prompt)).toBe(true);
-  });
-
-  test('“what I learned” is an own-words ticket and gets the explain closer', () => {
-    const learned = exitTicketStarterOption('learned')!;
+  test('a teacher’s own question is exactly what students see', () => {
     expect(
       composeExitTicketPrompt(
-        parse({
-          activity: 'reflect',
-          promptText: learned.prompt,
-          starter: 'learned',
-        })
+        parseDraft({ starter: null, promptText: 'What will you try tomorrow?' })
       )
-    ).toBe(`${learned.prompt}\n\n${EXIT_TICKET_EXPLAIN_CLOSER}`);
+    ).toBe('What will you try tomorrow?');
   });
 
-  test('a starter the teacher rewrote is the teacher’s own and gets only the polish note', () => {
-    const config = parse({
-      activity: 'reflect',
-      promptText: 'What questions do you have about the reading?',
-      starter: 'learned',
-    });
-    expect(config.starter).toBeUndefined();
-    expect(composeExitTicketPrompt(config)).toBe(
-      `What questions do you have about the reading?\n\n${EXIT_TICKET_POLISH_CLOSER}`
+  test('“explain a concept” builds the sentence from the concept', () => {
+    expect(
+      composeExitTicketPrompt(
+        parseDraft({
+          activity: 'explain-concept',
+          starter: null,
+          topic: '  how Edwards uses reason and emotion together. ',
+        })
+      )
+    ).toBe(
+      `In your own words, explain how Edwards uses reason and emotion together.\n\n${EXIT_TICKET_EXPLAIN_CLOSER}`
     );
+  });
+
+  test('a question and a text task get no closing line', () => {
+    expect(
+      composeExitTicketPrompt(
+        parseDraft({
+          activity: 'answer-question',
+          starter: null,
+          promptText: ANSWER_QUESTION,
+        })
+      )
+    ).toBe(ANSWER_QUESTION);
+    expect(
+      composeExitTicketPrompt(
+        parseDraft({
+          activity: 'engage-text',
+          starter: null,
+          promptText: 'Reread stanza two.\n1. What is the speaker saying?',
+        })
+      )
+    ).toBe('Reread stanza two.\n1. What is the speaker saying?');
   });
 });
 
 describe('parsing a v3 ticket', () => {
-  test('requires a prompt', () => {
-    const result = parseExitTicketConfigInput({
-      activity: 'answer-question',
-      promptText: '   ',
+  test('a fixed reflection needs nothing typed', () => {
+    const config = parse({ activity: 'reflect', starter: 'wondering' });
+    expect(config).toMatchObject({
+      mode: 'basic',
+      activity: 'reflect',
+      starter: 'wondering',
+      promptText: exitTicketStarterOption('wondering')!.prompt,
+      reflectionPrompt: { id: 'wondering' },
     });
-    expect(result).toEqual({
+  });
+
+  test('“what I learned” writes no legacy reflection, like the quick builder', () => {
+    const config = parse({ activity: 'reflect', starter: 'learned' });
+    expect(config.mode === 'basic' && config.reflectionPrompt).toBeFalsy();
+  });
+
+  test('a teacher’s own question dual-writes as a custom reflection', () => {
+    expect(
+      parse({ activity: 'reflect', promptText: 'What will you try?' })
+    ).toMatchObject({
+      mode: 'basic',
+      kind: 'reflection',
+      promptText: 'What will you try?',
+      reflectionPrompt: { id: 'custom', text: 'What will you try?' },
+    });
+  });
+
+  test('an edited fixed prompt is the teacher’s own', () => {
+    const config = parse({
+      activity: 'reflect',
+      starter: 'learned',
+      promptText: 'What did you learn about semicolons?',
+    });
+    expect(config.starter).toBeUndefined();
+    expect(config.mode === 'basic' && config.reflectionPrompt).toEqual({
+      id: 'custom',
+      text: 'What did you learn about semicolons?',
+    });
+  });
+
+  test('says what is missing', () => {
+    expect(parseExitTicketConfigInput({ activity: 'reflect' })).toEqual({
+      success: false,
+      message: 'Write the question students will answer.',
+    });
+    expect(
+      parseExitTicketConfigInput({ activity: 'explain-concept' })
+    ).toEqual({
+      success: false,
+      message: 'Name the concept students will explain.',
+    });
+    expect(
+      parseExitTicketConfigInput({ activity: 'answer-question', promptText: ' ' })
+    ).toEqual({
       success: false,
       message: 'Write the prompt students will answer.',
     });
+    expect(parseExitTicketConfigInput({ activity: 'quiz' })).toEqual({
+      success: false,
+      message: 'Choose what students will do.',
+    });
   });
 
-  test('refuses an unknown activity', () => {
-    const result = parseExitTicketConfigInput({
-      activity: 'multiple-choice',
-      promptText: 'Pick one.',
-    });
-    expect(result.success).toBe(false);
-  });
-
-  test('refuses a prompt over the limit', () => {
-    const result = parseExitTicketConfigInput({
-      activity: 'engage-text',
-      promptText: 'x'.repeat(EXIT_TICKET_PROMPT_TEXT_MAX_LENGTH + 1),
-    });
-    expect(result.success).toBe(false);
+  test('refuses text over the limits', () => {
+    expect(
+      parseExitTicketConfigInput({
+        activity: 'answer-question',
+        promptText: 'x'.repeat(EXIT_TICKET_PROMPT_TEXT_MAX_LENGTH + 1),
+      }).success
+    ).toBe(false);
+    expect(
+      parseExitTicketConfigInput({
+        activity: 'explain-concept',
+        topic: 'x'.repeat(EXIT_TICKET_TOPIC_MAX_LENGTH + 1),
+      }).success
+    ).toBe(false);
   });
 
   test('refuses a kind or mode that disagrees with the activity', () => {
     expect(
       parseExitTicketConfigInput({
-        activity: 'reflect',
-        kind: 'check',
-        promptText: 'What stuck?',
-      }).success
-    ).toBe(false);
-    expect(
-      parseExitTicketConfigInput({
         activity: 'answer-question',
-        mode: 'basic',
         promptText: ANSWER_QUESTION,
-      }).success
-    ).toBe(false);
+        kind: 'reflection',
+      })
+    ).toEqual({ success: false, message: 'Exit ticket type is invalid.' });
   });
 
-  test('keeps line breaks, so several questions about a text stay several', () => {
-    const config = parse({
-      activity: 'engage-text',
-      promptText:
-        '  Reread the second stanza.\n\n\n\n1. Find two examples of enjambment.   \n2. What does each do?  ',
-    });
-    expect(config.promptText).toBe(
-      'Reread the second stanza.\n\n1. Find two examples of enjambment.\n2. What does each do?'
-    );
-  });
-
-  test('a reflection dual-writes as a custom reflection the quick builder can read', () => {
-    const config = parse({
-      activity: 'reflect',
-      promptText: 'What surprised you?',
-    });
-    expect(config).toEqual({
-      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
-      mode: 'basic',
-      kind: 'reflection',
-      activity: 'reflect',
-      promptText: 'What surprised you?',
-      reflectionPrompt: { id: 'custom', text: 'What surprised you?' },
-    });
-  });
-
-  test('a check dual-writes the legacy focus, a topic, and no fixed right answer', () => {
-    const config = parse({
-      activity: 'answer-question',
-      promptText: ANSWER_QUESTION,
-      lessonMustMention: 'Allie is his younger brother, who died of leukemia.',
-    });
-    expect(config).toMatchObject({
-      mode: 'specific',
-      kind: 'check',
-      activity: 'answer-question',
-      focus: 'explain-concept',
-      answerType: 'subjective',
-      lessonNotes: {
-        mustMention: 'Allie is his younger brother, who died of leukemia.',
-      },
-    });
-    if (config.mode !== 'specific') throw new Error('expected a check');
-    expect(config.topic.length).toBeLessThanOrEqual(
-      EXIT_TICKET_TOPIC_MAX_LENGTH
-    );
-    expect(config.topic).not.toBe('');
-  });
-
-  test('engaging with a text maps to the legacy text focus', () => {
+  test('“explain a concept” stores the concept as the legacy topic', () => {
     expect(
-      parse({ activity: 'engage-text', promptText: 'Find the volta.' })
+      parse({ activity: 'explain-concept', topic: 'a theme vs. a topic' })
+    ).toMatchObject({
+      mode: 'specific',
+      focus: 'explain-concept',
+      topic: 'a theme vs. a topic',
+      promptText: 'In your own words, explain a theme vs. a topic.',
+    });
+  });
+
+  test('“explain a concept” with a written question and no concept is a question', () => {
+    expect(
+      parse({ activity: 'explain-concept', promptText: ANSWER_QUESTION })
+    ).toMatchObject({ activity: 'answer-question', promptText: ANSWER_QUESTION });
+  });
+
+  test('a check has no correct answer unless the teacher says so', () => {
+    expect(
+      parse({ activity: 'answer-question', promptText: ANSWER_QUESTION })
+    ).toMatchObject({ answerType: 'subjective' });
+    expect(
+      parse({
+        activity: 'answer-question',
+        promptText: ANSWER_QUESTION,
+        answerType: 'objective',
+        lessonMustMention: 'His younger brother, who died.',
+      })
+    ).toMatchObject({
+      answerType: 'objective',
+      lessonNotes: { mustMention: 'His younger brother, who died.' },
+    });
+  });
+
+  test('a correct answer given without saying so means there is one', () => {
+    expect(
+      parse({
+        activity: 'answer-question',
+        promptText: ANSWER_QUESTION,
+        lessonMustMention: 'His younger brother.',
+      })
+    ).toMatchObject({ answerType: 'objective' });
+  });
+
+  test('a correct answer can be left blank', () => {
+    expect(
+      parse({
+        activity: 'answer-question',
+        promptText: ANSWER_QUESTION,
+        answerType: 'objective',
+      })
+    ).toMatchObject({ answerType: 'objective' });
+  });
+
+  test('grapple with a text maps to the legacy text focus', () => {
+    expect(
+      parse({ activity: 'engage-text', promptText: 'Reread stanza two.' })
     ).toMatchObject({ focus: 'understand-text' });
   });
 
   test('a long prompt still writes a legacy topic inside its limit', () => {
     const config = parse({
-      activity: 'explain-concept',
-      promptText: `Explain ${'the causes of the war '.repeat(30)}`,
+      activity: 'engage-text',
+      promptText: 'Reread the passage. '.repeat(40),
     });
-    if (config.mode !== 'specific') throw new Error('expected a check');
-    expect(config.topic.length).toBeLessThanOrEqual(
-      EXIT_TICKET_TOPIC_MAX_LENGTH
-    );
-  });
-});
-
-describe('grading a v3 ticket', () => {
-  test('any activity can be graded for completion', () => {
-    const config = parse({
-      activity: 'answer-question',
-      promptText: ANSWER_QUESTION,
-      graded: true,
-      gradingBasis: 'completion',
-    });
-    expect(config.grading).toEqual({ basis: 'completion' });
-  });
-
-  test('understanding needs nothing beyond the prompt', () => {
-    const config = parse({
-      activity: 'reflect',
-      promptText: 'What did you learn?',
-      graded: true,
-      gradingBasis: 'bands',
-    });
-    expect(config.grading).toEqual({ basis: 'bands' });
-  });
-
-  test('a graded ticket must say how it is graded', () => {
-    const result = parseExitTicketConfigInput({
-      activity: 'explain-concept',
-      promptText: 'Explain irony.',
-      graded: true,
-    });
-    expect(result).toEqual({
-      success: false,
-      message: 'Choose how this ticket is graded.',
-    });
-  });
-
-  test('an ungraded ticket stores no grading', () => {
     expect(
-      parse({ activity: 'reflect', promptText: 'What stuck?', graded: false })
-        .grading
-    ).toBeUndefined();
+      config.mode === 'specific' && config.topic.length
+    ).toBeLessThanOrEqual(EXIT_TICKET_TOPIC_MAX_LENGTH);
+  });
+
+  test('nothing new is graded, but an edited graded ticket keeps its grade', () => {
+    expect(parse({ activity: 'reflect', starter: 'learned' }).grading).toBe(
+      undefined
+    );
+    expect(
+      parse({ activity: 'reflect', starter: 'learned', graded: true }).grading
+    ).toEqual({ basis: 'completion' });
+    expect(
+      parse({
+        activity: 'reflect',
+        starter: 'learned',
+        graded: true,
+        gradingBasis: 'bands',
+      }).grading
+    ).toEqual({ basis: 'bands' });
   });
 });
 
 describe('reading a stored v3 ticket', () => {
   test('round-trips through storage and composes the same prompt', () => {
-    const config = parse({
-      activity: 'reflect',
-      promptText: exitTicketStarterOption('learned')!.prompt,
-      starter: 'learned',
-      graded: true,
-      gradingBasis: 'completion',
-    });
-    const stored = parseStoredExitTicketConfig(
-      JSON.parse(JSON.stringify(config))
-    );
-    expect(stored).toEqual(config);
-    expect(composeExitTicketPrompt(stored!)).toBe(
-      composeExitTicketPrompt(config)
-    );
-  });
-
-  test('drops v3 fields that disagree with the mode, keeping the legacy ticket', () => {
-    const stored = parseStoredExitTicketConfig({
-      schemaVersion: 1,
-      mode: 'basic',
-      activity: 'answer-question',
-      promptText: 'Who is Allie?',
-    });
-    expect(stored).toEqual({ schemaVersion: 1, mode: 'basic' });
+    for (const patch of [
+      { starter: 'interesting' as const },
+      { starter: null, promptText: 'What will you try?' },
+      { activity: 'explain-concept' as const, starter: null, topic: 'irony' },
+      {
+        activity: 'answer-question' as const,
+        starter: null,
+        promptText: ANSWER_QUESTION,
+        answerType: 'objective' as const,
+      },
+    ]) {
+      const config = parseDraft(patch);
+      const stored = parseStoredExitTicketConfig(
+        JSON.parse(JSON.stringify(config))
+      );
+      expect(stored).toEqual(config);
+      expect(composeExitTicketPrompt(stored!)).toBe(
+        composeExitTicketPrompt(config)
+      );
+    }
   });
 
   test('a reader that ignores the v3 keys still has a valid ticket', () => {
-    const config = parse({
-      activity: 'answer-question',
-      promptText: ANSWER_QUESTION,
-    });
+    const config = parseDraft({ starter: 'wondering' }) as Record<
+      string,
+      unknown
+    >;
     const { activity, promptText, starter, ...legacy } = config;
     void activity;
     void promptText;
     void starter;
-    expect(parseStoredExitTicketConfig(legacy)).not.toBeNull();
+    expect(parseStoredExitTicketConfig(legacy)).toMatchObject({
+      mode: 'basic',
+      reflectionPrompt: { id: 'wondering' },
+    });
   });
 
   test('legacy rows are untouched', () => {
-    const legacy = { schemaVersion: 1, mode: 'basic' };
-    expect(parseStoredExitTicketConfig(legacy)).toEqual({
-      schemaVersion: 1,
+    const legacy = {
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
       mode: 'basic',
-    });
-    expect(
-      composeExitTicketPrompt({ schemaVersion: 1, mode: 'basic' })
-    ).toMatch(BASIC_EXIT_TICKET_PROMPT);
+    };
+    expect(composeExitTicketPrompt(parseStoredExitTicketConfig(legacy)!)).toContain(
+      BASIC_EXIT_TICKET_PROMPT
+    );
   });
 });
 
 describe('opening any ticket in the v3 builder', () => {
   test('a new ticket starts on “what I learned”', () => {
-    expect(exitTicketV3DraftFromConfig(null)).toEqual({
+    expect(exitTicketV3DraftFromConfig(null)).toEqual(emptyExitTicketV3Draft());
+    expect(emptyExitTicketV3Draft()).toMatchObject({
       activity: 'reflect',
-      promptText: exitTicketStarterOption('learned')!.prompt,
       starter: 'learned',
     });
   });
 
-  test('a v3 ticket reopens as written', () => {
-    const config = parse({
-      activity: 'answer-question',
-      promptText: ANSWER_QUESTION,
-    });
-    expect(exitTicketV3DraftFromConfig(config)).toEqual({
-      activity: 'answer-question',
-      promptText: ANSWER_QUESTION,
-      starter: null,
-    });
+  test('a v3 ticket reopens on the same choice', () => {
+    for (const patch of [
+      { starter: 'interesting' as const },
+      { starter: null, promptText: 'What will you try?' },
+      { activity: 'explain-concept' as const, starter: null, topic: 'irony' },
+      {
+        activity: 'engage-text' as const,
+        starter: null,
+        promptText: 'Reread stanza two.',
+        answerType: 'objective' as const,
+      },
+    ]) {
+      expect(exitTicketV3DraftFromConfig(parseDraft(patch))).toEqual(
+        emptyExitTicketV3Draft(patch)
+      );
+    }
   });
 
-  test('a legacy “still wondering” reflection reopens on the wondering starter', () => {
+  test('legacy reflections reopen on the matching choice', () => {
+    for (const id of ['interesting', 'wondering'] as const) {
+      expect(
+        exitTicketV3DraftFromConfig({
+          schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+          mode: 'basic',
+          reflectionPrompt: { id },
+        })
+      ).toEqual(emptyExitTicketV3Draft({ starter: id }));
+    }
     expect(
       exitTicketV3DraftFromConfig({
-        schemaVersion: 1,
+        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
         mode: 'basic',
-        reflectionPrompt: { id: 'wondering' },
+        reflectionPrompt: { id: 'custom', text: 'What clicked?' },
       })
-    ).toEqual({
-      activity: 'reflect',
-      promptText: exitTicketStarterOption('wondering')!.prompt,
-      starter: 'wondering',
-    });
+    ).toEqual(emptyExitTicketV3Draft({ starter: null, promptText: 'What clicked?' }));
   });
 
-  test('a legacy custom reflection keeps the teacher’s question', () => {
+  test('a legacy “explain a concept” check keeps its concept and answer type', () => {
     expect(
       exitTicketV3DraftFromConfig({
-        schemaVersion: 1,
-        mode: 'basic',
-        reflectionPrompt: {
-          id: 'custom',
-          text: 'What would you teach a friend?',
-        },
+        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+        mode: 'specific',
+        focus: 'explain-concept',
+        topic: 'irony',
+        answerType: 'objective',
       })
-    ).toEqual({
-      activity: 'reflect',
-      promptText: 'What would you teach a friend?',
-      starter: null,
-    });
-  });
-
-  test('a legacy check becomes the matching activity, without the dropped phrasing', () => {
-    const explain = exitTicketV3DraftFromConfig({
-      schemaVersion: 1,
-      mode: 'specific',
-      focus: 'explain-concept',
-      topic: 'weathering and erosion.',
-      answerType: 'objective',
-    });
-    expect(explain).toEqual({
-      activity: 'explain-concept',
-      promptText: 'In your own words, explain weathering and erosion.',
-      starter: null,
-    });
-
-    const asked = exitTicketV3DraftFromConfig({
-      schemaVersion: 1,
-      mode: 'specific',
-      focus: 'ask-question',
-      topic: 'semicolons',
-      answerType: 'subjective',
-    });
-    expect(asked.activity).toBe('reflect');
-    expect(asked.promptText).toBe(
-      'What is one question you still have about semicolons?'
+    ).toEqual(
+      emptyExitTicketV3Draft({
+        activity: 'explain-concept',
+        starter: null,
+        topic: 'irony',
+        answerType: 'objective',
+      })
     );
+  });
 
-    const text = exitTicketV3DraftFromConfig({
-      schemaVersion: 1,
-      mode: 'specific',
-      focus: 'understand-text',
-      topic: 'the second stanza',
-      answerType: 'subjective',
+  test('a legacy text check opens as grappling with the text', () => {
+    expect(
+      exitTicketV3DraftFromConfig({
+        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+        mode: 'specific',
+        focus: 'understand-text',
+        topic: 'the second stanza',
+        answerType: 'subjective',
+      })
+    ).toMatchObject({
+      activity: 'engage-text',
+      promptText: 'What is the second stanza saying? Point to the part that shows it.',
     });
-    expect(text.activity).toBe('engage-text');
-    expect(text.promptText).toMatch(/the second stanza/);
-    expect(text.promptText).not.toMatch(/someone who missed class/);
+  });
+
+  test('every activity option is reachable from the form', () => {
+    const reachable = new Set(
+      EXIT_TICKET_CHOICE_GROUPS.flatMap((group) =>
+        group.choices.map((choice) => choice.value.split(':')[0])
+      )
+    );
+    for (const option of EXIT_TICKET_ACTIVITY_OPTIONS) {
+      expect(reachable.has(option.value)).toBe(true);
+    }
+  });
+});
+
+describe('the optional line inviting questions', () => {
+  test('is the line Brian asked for, and off by default', () => {
+    expect(EXIT_TICKET_QUESTIONS_LINE).toBe(
+      'Feel free to ask any questions you still have.'
+    );
+    expect(emptyExitTicketV3Draft().invitesQuestions).toBe(false);
+    expect(parseDraft({}).invitesQuestions).toBeUndefined();
+    expect(composeExitTicketPrompt(parseDraft({}))).not.toContain(
+      EXIT_TICKET_QUESTIONS_LINE
+    );
+  });
+
+  test('switched on, students read it last, on a reflection or a check', () => {
+    const reflection = parseDraft({ invitesQuestions: true });
+    expect(reflection.invitesQuestions).toBe(true);
+    expect(composeExitTicketPrompt(reflection)).toBe(
+      `${exitTicketStarterOption('learned')!.prompt}\n\n${EXIT_TICKET_EXPLAIN_CLOSER}\n\n${EXIT_TICKET_QUESTIONS_LINE}`
+    );
+    const check = parseDraft({
+      activity: 'answer-question',
+      starter: null,
+      promptText: ANSWER_QUESTION,
+      invitesQuestions: true,
+    });
+    expect(composeExitTicketPrompt(check)).toBe(
+      `${ANSWER_QUESTION}\n\n${EXIT_TICKET_QUESTIONS_LINE}`
+    );
+  });
+
+  test('is not offered where the prompt already asks for a question', () => {
+    expect(exitTicketOffersQuestionsLine(emptyExitTicketV3Draft())).toBe(true);
+    expect(
+      exitTicketOffersQuestionsLine(
+        emptyExitTicketV3Draft({ starter: 'wondering' })
+      )
+    ).toBe(false);
+    const wondering = parseDraft({
+      starter: 'wondering',
+      invitesQuestions: true,
+    });
+    expect(wondering.invitesQuestions).toBeUndefined();
+    expect(composeExitTicketPrompt(wondering)).not.toContain(
+      EXIT_TICKET_QUESTIONS_LINE
+    );
+  });
+
+  test('reads the form’s posted value', () => {
+    for (const value of ['true', 'on', true]) {
+      expect(
+        parse({ activity: 'reflect', starter: 'learned', invitesQuestions: value })
+          .invitesQuestions
+      ).toBe(true);
+    }
+    for (const value of ['false', '', null, false]) {
+      expect(
+        parse({ activity: 'reflect', starter: 'learned', invitesQuestions: value })
+          .invitesQuestions
+      ).toBeUndefined();
+    }
+  });
+
+  test('survives storage and reopens switched on', () => {
+    const config = parseDraft({ starter: 'interesting', invitesQuestions: true });
+    const stored = parseStoredExitTicketConfig(
+      JSON.parse(JSON.stringify(config))
+    )!;
+    expect(stored).toEqual(config);
+    expect(composeExitTicketPrompt(stored)).toEndWith(EXIT_TICKET_QUESTIONS_LINE);
+    expect(exitTicketV3DraftFromConfig(stored).invitesQuestions).toBe(true);
+  });
+
+  test('a legacy ticket never gets the line', () => {
+    const legacy = parse({ mode: 'basic' });
+    expect(composeExitTicketPrompt(legacy)).not.toContain(
+      EXIT_TICKET_QUESTIONS_LINE
+    );
+  });
+});
+
+describe('the optional note on what Yawp! should know', () => {
+  test('is one short, optional field stored as the lesson’s main points', () => {
+    expect(EXIT_TICKET_V3_CONTEXT_FIELD).toMatchObject({
+      key: 'mainPoints',
+      label: 'Anything Yawp! should know to give useful feedback?',
+    });
+    expect(EXIT_TICKET_V3_CONTEXT_FIELD.placeholder).toContain('covered in class');
+  });
+
+  test('left blank, the ticket still parses and stores no notes', () => {
+    const config = parse({
+      ...exitTicketV3DraftInput(emptyExitTicketV3Draft()),
+      lessonMainPoints: '   ',
+    });
+    expect(config.lessonNotes).toBeUndefined();
+  });
+
+  test('filled in, it is stored for the grader, the summary and the tutor', () => {
+    const config = parse({
+      ...exitTicketV3DraftInput(emptyExitTicketV3Draft()),
+      lessonMainPoints: 'We read chapters 1–3 and talked about Allie.',
+    });
+    expect(config.lessonNotes?.mainPoints).toBe(
+      'We read chapters 1–3 and talked about Allie.'
+    );
+  });
+});
+
+describe('check labels say what students will do', () => {
+  test('each starts with “Have students”, and keeps a short tag for cards', () => {
+    expect(exitTicketActivityOption('explain-concept')).toMatchObject({
+      label: 'Have students explain a concept in their own words',
+      tag: 'Explain a concept',
+    });
+    expect(exitTicketActivityOption('answer-question')).toMatchObject({
+      label: 'Have students answer a question you ask',
+      tag: 'Answer a question',
+    });
+    expect(exitTicketActivityOption('engage-text')).toMatchObject({
+      label: 'Have students understand or grapple with a text or source',
+      tag: 'Grapple with a text or source',
+    });
+    expect(exitTicketActivityOption('reflect')?.tag).toBe('Reflection');
   });
 });

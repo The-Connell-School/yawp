@@ -265,13 +265,14 @@ async function expectFreeDashboardAssignmentTiles(
   page: import('@playwright/test').Page
 ) {
   const tiles = page.getByTestId('free-assignment-tiles');
-  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(3);
+  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(4);
   await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
     0
   );
   await expect(tiles.getByText('Class Starter', { exact: true })).toBeVisible();
   await expect(tiles.getByText('Prewriting', { exact: true })).toBeVisible();
   await expect(tiles.getByText('Thesis Statement', { exact: true })).toBeVisible();
+  await expect(tiles.getByText('Exit Ticket', { exact: true })).toBeVisible();
 }
 
 test.describe.configure({ mode: 'serial' });

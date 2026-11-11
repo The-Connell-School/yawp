@@ -43,8 +43,8 @@ import {
   defaultExitTicketLessonNotesEnabled,
   EXIT_TICKET_CONFIG_SCHEMA_VERSION,
   exitTicketActivityKind,
-  exitTicketStarterOption,
   exitTicketV3DraftFromConfig,
+  exitTicketV3DraftInput,
   type ExitTicketConfig,
   type ExitTicketV3Draft,
   exitTicketFocusOption,
@@ -937,10 +937,29 @@ export function AssignmentCreationSheetContent({
         answerType: exitTicketAnswerType,
         basis: gradingDraft.basis,
       });
+  // A v3 check asks for the answer only when there is one, so the box's
+  // text posts only then, whatever the lesson notes hold.
+  const v3HidesAnswer =
+    v3IsCheck && v3Draft.answerType !== 'objective';
+  // In v3 the builder shows the correct answer (checks with one) and the
+  // note for Yawp!; a "mix-up" note from an older form or the planner is
+  // kept as it was, since v3 has no field for it.
+  const v3PostedNote = (key: keyof ExitTicketLessonNotes) =>
+    key === 'mustMention'
+      ? v3HidesAnswer
+        ? undefined
+        : lessonNotes.mustMention
+      : lessonNotes[key] || undefined;
   const postedNote = (key: keyof ExitTicketLessonNotes) =>
-    lessonNotesEnabled || criteriaNoteKeys.includes(key)
-      ? lessonNotes[key]
-      : undefined;
+    isV3ExitTicket
+      ? v3PostedNote(key)
+      : lessonNotesEnabled || criteriaNoteKeys.includes(key)
+        ? lessonNotes[key]
+        : undefined;
+  // The v3 form does not offer grading. A ticket that is already graded keeps
+  // its grade when edited; a new one is never graded.
+  const effectiveSubmitForGrade =
+    isV3ExitTicket && !isEditing ? false : submitForGrade;
   const quickBuilderInput = {
     reflectionPrompt: reflectionPromptId,
     reflectionPromptText,
@@ -954,10 +973,8 @@ export function AssignmentCreationSheetContent({
     lessonWatchFor: postedNote('watchFor'),
   };
   const v3Input = {
-    activity: v3Draft.activity,
-    promptText: v3Draft.promptText,
-    starter: v3Draft.starter,
-    graded: submitForGrade,
+    ...exitTicketV3DraftInput(v3Draft),
+    graded: effectiveSubmitForGrade,
     gradingBasis: gradingDraft.basis,
     lessonMainPoints: postedNote('mainPoints'),
     lessonMustMention: postedNote('mustMention'),
@@ -1242,7 +1259,7 @@ export function AssignmentCreationSheetContent({
     (!isEditing && selectedClassCount === 0) ||
     (isExitTicket ? !exitTicketPrompt : !prompt.trim()) ||
     (titleRequired && !title.trim()) ||
-    (submitForGrade && !pointValue.trim());
+    (effectiveSubmitForGrade && !pointValue.trim());
 
   const headingText = isEditing ? 'Edit Assignment' : 'New Assignment';
   const headingDescription = isEditing
@@ -1649,60 +1666,40 @@ export function AssignmentCreationSheetContent({
         {isV3ExitTicket ? (
           <div className="space-y-4">
             <ExitTicketBuilderV3
-              activity={v3Draft.activity}
-              onActivityChange={(activity) =>
-                setV3Draft((current) =>
-                  current.activity === activity
-                    ? current
-                    : activity === 'reflect'
-                      ? {
-                          activity,
-                          promptText:
-                            exitTicketStarterOption('learned')!.prompt,
-                          starter: 'learned',
-                        }
-                      : // A check's question is the teacher's to write; a
-                        // reflection starter would read as the wrong kind.
-                        {
-                          activity,
-                          promptText:
-                            current.activity === 'reflect'
-                              ? ''
-                              : current.promptText,
-                          starter: null,
-                        }
-                )
+              draft={v3Draft}
+              onDraftChange={(patch) =>
+                setV3Draft((current) => ({ ...current, ...patch }))
               }
-              promptText={v3Draft.promptText}
-              onPromptTextChange={(promptText) =>
-                setV3Draft((current) => ({ ...current, promptText }))
-              }
-              starter={v3Draft.starter}
-              onStarterChange={(starter) =>
-                setV3Draft({
-                  activity: 'reflect',
-                  promptText: exitTicketStarterOption(starter)!.prompt,
-                  starter,
-                })
-              }
-              keyPoints={lessonNotes.mustMention}
-              onKeyPointsChange={(value) =>
+              answerContext={lessonNotes.mustMention}
+              onAnswerContextChange={(value) =>
                 setLessonNotes((current) => ({
                   ...current,
                   mustMention: value,
                 }))
               }
-              graded={submitForGrade}
-              onGradedChange={setSubmitForGrade}
-              pointValue={pointValue}
-              onPointValueChange={setPointValue}
-              gradingBasis={gradingDraft.basis}
-              onGradingBasisChange={(basis) =>
-                setGradingDraft((current) => ({ ...current, basis }))
+              contextNote={lessonNotes.mainPoints}
+              onContextNoteChange={(value) =>
+                setLessonNotes((current) => ({
+                  ...current,
+                  mainPoints: value,
+                }))
               }
+              keptWatchFor={postedNote('watchFor') ?? ''}
               preview={v3Prompt}
               disabled={isSaving}
             />
+            {effectiveSubmitForGrade ? (
+              // Only an already-graded ticket being edited: its grade is
+              // kept as it was.
+              <>
+                <input type="hidden" name="pointValue" value={pointValue} />
+                <input
+                  type="hidden"
+                  name="exitTicketGradingBasis"
+                  value={gradingDraft.basis}
+                />
+              </>
+            ) : null}
             {exitTicketHiddenFields}
           </div>
         ) : isExitTicket ? (
@@ -2018,7 +2015,10 @@ export function AssignmentCreationSheetContent({
               />
             </div>
           ) : null}
-          <BooleanFormValue name="submitForGrade" value={submitForGrade} />
+          <BooleanFormValue
+            name="submitForGrade"
+            value={effectiveSubmitForGrade}
+          />
         </div>
 
         {showIndividualDocumentNotice ? (
@@ -2039,7 +2039,7 @@ export function AssignmentCreationSheetContent({
           open={moreOptionsOpen}
           onOpenChange={setMoreOptionsOpen}
         >
-          {isQuickExitTicket ? (
+          {isQuickExitTicket && !isV3ExitTicket ? (
             <div className="pt-4">
               <ExitTicketLessonNotesSection
                 criteriaKeys={criteriaNoteKeys}
@@ -2293,7 +2293,7 @@ export function AssignmentCreationSheetContent({
           </div>
         ) : null}
 
-        {!submitForGrade ? (
+        {!effectiveSubmitForGrade ? (
           <input type="hidden" name="pointValue" value="" />
         ) : null}
 

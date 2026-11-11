@@ -252,3 +252,56 @@ On `claude/affectionate-noether-6g3y31`:
 
 Still open for the team: whether the summary should generate on its own once
 a class has handed in (cost per class per day), and whether admins see it.
+
+## Revision, 2026-11-11: reworked flow
+
+Review of the first build changed the form. Where this section and the plan
+above disagree, this section is current.
+
+- **What will students do?** is one grouped choice.
+  - Reflection: What I learned, Most interesting, Still wondering (fixed
+    prompts, nothing to type), or Write your own question.
+  - Check for understanding: Explain a concept in their own words (the
+    teacher names the concept; Yawp! writes "In your own words, explain …"),
+    Answer a question, or Grapple with a text or source (the teacher writes
+    the prompt for both).
+- A check asks **Is there a correct answer?** (Yes/No, default No). With Yes,
+  an optional box takes the answer and any context for reading responses.
+  It is stored as the `mustMention` lesson note with `answerType: objective`.
+- **No grading.** "Grade this ticket" is gone. New v3 tickets are never
+  graded, and a v3 Lesson Planner block's `graded:` line is ignored. Editing
+  a ticket that is already graded posts its grade unchanged.
+- **Wording.** Student-facing text is short. The only closing line is
+  "Write as much as you can. Don't worry about polish.", on What I learned
+  and Explain a concept. Questions and text tasks get none.
+- **Bug fix (both forms).** With grading on in the quick builder, a Quality
+  reflection or a check with no single right answer kept Create disabled
+  until main points, what to assess, or a minimum length was filled in, though
+  all were shown as optional. They are now optional in fact.
+
+## Revision, 2026-11-11 (later): Brian and Kevin's builder notes
+
+Current where it differs from the sections above.
+
+- **Check labels say what students do:** "Have students explain a concept in
+  their own words", "Have students answer a question you ask", "Have
+  students understand or grapple with a text or source". Cards, the grader
+  and the class summary use a short tag instead ("Answer a question").
+- **Correct answer:** with Yes, "Describe the correct answer (optional)". It
+  does not depend on grading and goes to the grader, the class summary and,
+  new here, the tutor (`exit-ticket-tutor-context.ts`, which tells it never
+  to give the answer away).
+- **Optional questions line:** "Add a line inviting questions" appends
+  "Feel free to ask any questions you still have." (`invitesQuestions`). Off
+  by default and not offered on Still wondering. The ticket is not built
+  around it.
+- **Optional note for Yawp!:** "Anything Yawp! should know to give useful
+  feedback?" replaces the three lesson-note boxes in v3. Stored as
+  `mainPoints`. A mix-up note from an older form or the planner is kept on
+  edit.
+- **Lesson Planner:** blocks take `questions: yes` and `context:`. The card
+  shows only what students read. The v3 prompt section is plain sentences
+  with no em dashes, and asks for nothing the form no longer has.
+- **Planner hand-off test:** `assignment-creation-sheet.test.tsx` opens six
+  planner blocks through the real link and prefill, flag on and off, and
+  checks each can be created at once (the bug fixed above).

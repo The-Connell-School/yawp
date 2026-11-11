@@ -41,7 +41,7 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
-test('free-tier flag on shows three dashboard tiles and locked tiles in picker', async ({
+test('free-tier flag on shows four dashboard tiles and locked tiles in picker', async ({
   page,
 }) => {
   await flag('free_tier', true);
@@ -50,7 +50,7 @@ test('free-tier flag on shows three dashboard tiles and locked tiles in picker',
   await loginFreeTeacher(page);
   await page.goto('/app');
   const tiles = page.getByTestId('free-assignment-tiles');
-  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(3);
+  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(4);
   await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
     0
   );
@@ -59,6 +59,7 @@ test('free-tier flag on shows three dashboard tiles and locked tiles in picker',
   await expect(tiles.getByText('Class Starter', { exact: true })).toBeVisible();
   await expect(tiles.getByText('Prewriting', { exact: true })).toBeVisible();
   await expect(tiles.getByText('Thesis Statement', { exact: true })).toBeVisible();
+  await expect(tiles.getByText('Exit Ticket', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'New assignment' }).click();
   await expect(
     page.getByTestId('site-license-locked-assignment-tile').first()

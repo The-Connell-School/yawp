@@ -171,7 +171,8 @@ test('adapter reads authoritative usage, including invites and lifetime counts',
   const usage = await readFreeAccountUsage(profile, true, 'user-1');
   expect(usage!.students.total).toBe(10);
   expect(usage!.students.remaining).toBe(0);
-  expect(usage!.assignments.map((row) => row.remaining)).toEqual([9, 0, 3]);
+  // Class Starter, Prewriting, Thesis Statement, then an unused Exit Ticket.
+  expect(usage!.assignments.map((row) => row.remaining)).toEqual([9, 0, 3, 12]);
   expect(usage!.lessonPlans.remaining).toBe(0);
   expect(classRead.mock.calls[0][0].where).toMatchObject({
     school: { organizationId: 'org' },

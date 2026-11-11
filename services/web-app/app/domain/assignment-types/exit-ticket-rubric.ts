@@ -141,16 +141,16 @@ export const EXIT_TICKET_ANSWER_TYPE_GUIDANCE: Record<
 };
 
 /**
- * The v3 builder never asks whether there is one right answer. This is what
- * it tells the grader instead: read for the idea, and never mark a student
- * down for getting it across in other words or spelling.
+ * How a v3 check with a correct answer is read: for the idea, never for
+ * matching the teacher's words or spelling.
  */
 export const EXIT_TICKET_FLEXIBLE_ANSWER_GUIDANCE =
-  'Read for understanding, not for matching words. Where the teacher gave a correct answer or key points, credit any response that gets the same idea across: in different wording, in a different order, or with a misspelling (a student who writes "Alley" for Allie has named the right person). Only a response that contradicts the key points, or leaves out the heart of them, is not there yet. Where there are no key points, judge against the prompt alone. Never treat the key points as a script the student has to repeat.';
+  'The teacher says this has a correct answer. Read for the idea, not for matching words: credit a response that gets it across in different wording, in a different order, or with a misspelling (a student who writes "Alley" for Allie has named the right person). A response that contradicts the answer is wrong, and the feedback should say so plainly. If the teacher gave no answer, judge correctness from the question.';
 
 /** What a lesson note is called in the v3 form, where it differs. */
 const V3_NOTE_LABELS: Partial<Record<keyof ExitTicketLessonNotes, string>> = {
-  mustMention: 'Correct answer or key points',
+  mustMention: 'The correct answer, with the teacher’s context',
+  mainPoints: 'What the teacher wants Yawp! to know',
 };
 
 /** The v3 half of the context: the activity, and how to read an answer. */
@@ -159,14 +159,19 @@ function v3ActivitySections(config: ExitTicketConfig): string[] {
     ? exitTicketActivityOption(config.activity)
     : null;
   if (!option) return [];
+  const isCheck = exitTicketActivityKind(option.value) === 'check';
   return [
     [
-      `What this ticket asks the students to do: ${option.label.replace(/^Have the students /, '')}.`,
-      `The teacher’s prompt: "${config.promptText ?? ''}"`,
+      `What this ticket asks the students to do: ${option.tag.toLowerCase()}.`,
+      `The prompt: "${config.promptText ?? ''}"`,
       option.gradingCriteria,
     ].join('\n'),
-    ...(exitTicketActivityKind(option.value) === 'check'
-      ? [EXIT_TICKET_FLEXIBLE_ANSWER_GUIDANCE]
+    ...(isCheck && config.mode === 'specific'
+      ? [
+          config.answerType === 'objective'
+            ? EXIT_TICKET_FLEXIBLE_ANSWER_GUIDANCE
+            : EXIT_TICKET_ANSWER_TYPE_GUIDANCE.subjective,
+        ]
       : []),
   ];
 }
