@@ -30,6 +30,10 @@ import {
 } from '~/components/ui/table';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
+import { ASSIGNMENTS_GROUPED_BY_TYPE_FLAG } from '~/domain/feature-flags/feature-flags';
+import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { CollapsibleGroupSection } from '~/components/collapsible-group-section';
+import { groupByAssignmentType } from '~/utils/group-by-assignment-type';
 // The flag is read by the component, so it has to come from the client-safe module.
 // Importing it through saved-assignments.server (which merely re-exports it) makes the
 // component depend on server-only code, and React Router can only strip server code from
@@ -99,7 +103,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           // tutor is a cold write, and a teacher scanning this list needs to
           // see which rows those are.
           tutorEnabled: true,
-          assignmentType: { select: { title: true } },
+          assignmentType: { select: { id: true, title: true } },
         },
       },
       // Counted per deployment, not per assignment: the assignment-level count
@@ -117,6 +121,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     {
       assignmentId: string;
       title: string;
+      assignmentTypeId: string;
       assignmentTypeTitle: string;
       tutorEnabled: boolean;
       documentCount: number;
@@ -129,6 +134,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const entry = existing ?? {
       assignmentId: classAssignment.assignment.id,
       title: classAssignment.assignment.title?.trim() || 'Untitled Assignment',
+      assignmentTypeId: classAssignment.assignment.assignmentType.id,
       assignmentTypeTitle: classAssignment.assignment.assignmentType.title,
       // A property of the Assignment, so it is the same across every class the
       // assignment was deployed to; collapsing rows cannot disagree about it.
@@ -226,6 +232,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     assignments,
     savedAssignments,
     exitTicketBuilderV3Enabled: await isExitTicketBuilderV3Enabled(
+      profile.organization.id
+    ),
+    assignmentsGroupedByTypeEnabled: await isFeatureFlagEnabled(
+      ASSIGNMENTS_GROUPED_BY_TYPE_FLAG,
       profile.organization.id
     ),
     assignmentCreationClasses: teacherClasses.map((klass) => ({
@@ -495,6 +505,7 @@ export default function MyAssignmentsRoute() {
     assignmentCreationTypes,
     siteLicenseLockedAssignmentTiles,
     exitTicketBuilderV3Enabled,
+    assignmentsGroupedByTypeEnabled: groupedByType,
   } = useLoaderData<typeof loader>();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -572,6 +583,145 @@ export default function MyAssignmentsRoute() {
   }, [filteredAssignments, setSelectedAssignmentIds]);
 
   const hasSelection = selectedAssignmentIds.length > 0;
+
+  // Flag `assignments-grouped-by-type`: one section per assignment type, the
+  // Documents page's grouping. Off: the flat, paginated table.
+  const [collapsedTypeIds, setCollapsedTypeIds] = useState<Set<string>>(
+    () => new Set()
+  );
+  const typeGroups = useMemo(
+    () =>
+      groupedByType
+        ? groupByAssignmentType({
+            items: filteredAssignments,
+            getAssignmentType: (assignment) => ({
+              id: assignment.assignmentTypeId,
+              title: assignment.assignmentTypeTitle,
+            }),
+            collator,
+          })
+        : [],
+    [collator, filteredAssignments, groupedByType]
+  );
+  const toggleSelectedGroup = (ids: string[], checked: boolean) => {
+    setSelectedAssignmentIds((current) => {
+      const next = new Set(current);
+      for (const id of ids) {
+        if (checked) next.add(id);
+        else next.delete(id);
+      }
+      return Array.from(next);
+    });
+  };
+
+  type AssignmentRow = (typeof assignments)[number];
+
+  const renderAssignmentsTable = ({
+    rows,
+    tableLabel,
+    selectAllLabel,
+    allRowsSelected,
+    onSelectAll,
+    showTypeColumn,
+  }: {
+    rows: AssignmentRow[];
+    tableLabel: string;
+    selectAllLabel: string;
+    allRowsSelected: boolean;
+    onSelectAll: (checked: boolean) => void;
+    showTypeColumn: boolean;
+  }) => (
+    <Table aria-label={tableLabel}>
+      <TableHeader className="rounded-t-lg">
+        <TableRow className="rounded-t-lg bg-muted/50">
+          <TableHead className="w-[50px] rounded-tl-lg pl-4">
+            <Checkbox
+              aria-label={selectAllLabel}
+              checked={allRowsSelected}
+              onCheckedChange={onSelectAll}
+            />
+          </TableHead>
+          <TableHead>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="-ml-2 h-8 gap-2 px-2"
+              aria-label={`Sort assignments by title ${
+                sortDirection === 'asc' ? 'descending' : 'ascending'
+              }`}
+              onClick={() =>
+                setSortDirection((current) =>
+                  current === 'asc' ? 'desc' : 'asc'
+                )
+              }
+            >
+              Assignment
+              {sortDirection === 'asc' ? (
+                <ArrowUp className="h-4 w-4" />
+              ) : (
+                <ArrowDown className="h-4 w-4" />
+              )}
+            </Button>
+          </TableHead>
+          <TableHead className="whitespace-nowrap">Classes</TableHead>
+          {showTypeColumn ? (
+            <TableHead className="whitespace-nowrap">Type</TableHead>
+          ) : null}
+          <TableHead className="whitespace-nowrap rounded-tr-lg pr-4">
+            Documents
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((assignment) => (
+          <TableRow
+            key={assignment.assignmentId}
+            data-state={
+              selectedAssignmentIds.includes(assignment.assignmentId)
+                ? 'selected'
+                : undefined
+            }
+          >
+            <TableCell className="max-h-[37px] pl-4">
+              <Checkbox
+                aria-label={`Select assignment ${assignment.title}`}
+                checked={selectedAssignmentIds.includes(
+                  assignment.assignmentId
+                )}
+                onCheckedChange={() =>
+                  handleSelect(assignment.assignmentId)
+                }
+              />
+            </TableCell>
+            <TableCell className="font-medium">
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  to={assignment.href}
+                  className="[overflow-wrap:anywhere] hover:underline"
+                  data-testid={`my-assignment-open-${assignment.assignmentId}`}
+                >
+                  {assignment.title}
+                </Link>
+                <TutorOffBadge tutorEnabled={assignment.tutorEnabled} />
+              </div>
+            </TableCell>
+            <TableCell className="text-muted-foreground">
+              <AssignmentClasses classes={assignment.classes} />
+            </TableCell>
+            {showTypeColumn ? (
+              <TableCell className="text-muted-foreground">
+                {assignment.assignmentTypeTitle}
+              </TableCell>
+            ) : null}
+            <TableCell className="pr-4 text-muted-foreground">
+              {assignment.documentCount}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
 
   return (
     <div className="mx-auto h-full min-h-0 w-full max-w-5xl overflow-y-auto px-4 py-8">
@@ -715,102 +865,58 @@ export default function MyAssignmentsRoute() {
             Try a different search term
           </span>
         </div>
+      ) : groupedByType ? (
+        <div data-tour="my-assignments-list" className="space-y-3">
+          {typeGroups.map((group) => {
+            const ids = group.items.map((assignment) => assignment.assignmentId);
+            return (
+              <CollapsibleGroupSection
+                key={group.key}
+                label={group.label}
+                count={group.items.length}
+                open={!collapsedTypeIds.has(group.key)}
+                onOpenChange={(open) =>
+                  setCollapsedTypeIds((current) => {
+                    const next = new Set(current);
+                    if (open) next.delete(group.key);
+                    else next.add(group.key);
+                    return next;
+                  })
+                }
+                data-testid={`assignment-type-section-${group.key}`}
+                data-assignment-type-title={group.label}
+              >
+                {renderAssignmentsTable({
+                  rows: group.items,
+                  tableLabel: `${group.label} assignments`,
+                  selectAllLabel: `Select all ${group.label} assignments`,
+                  allRowsSelected: ids.every((id) =>
+                    selectedAssignmentIds.includes(id)
+                  ),
+                  onSelectAll: (checked) => toggleSelectedGroup(ids, checked),
+                  // The section heading already names the type.
+                  showTypeColumn: false,
+                })}
+              </CollapsibleGroupSection>
+            );
+          })}
+        </div>
       ) : (
         <div data-tour="my-assignments-list" className="rounded-lg bg-muted/50">
-          <Table aria-label="My Assignments">
-            <TableHeader className="rounded-t-lg">
-              <TableRow className="rounded-t-lg bg-muted/50">
-                <TableHead className="w-[50px] rounded-tl-lg pl-4">
-                  <Checkbox
-                    aria-label="Select all assignments"
-                    checked={
-                      filteredAssignments.length > 0 &&
-                      selectedAssignmentIds.length ===
-                        filteredAssignments.length
-                    }
-                    onCheckedChange={handleSelectAll}
-                  />
-                </TableHead>
-                <TableHead>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="-ml-2 h-8 gap-2 px-2"
-                    aria-label={`Sort assignments by title ${
-                      sortDirection === 'asc' ? 'descending' : 'ascending'
-                    }`}
-                    onClick={() =>
-                      setSortDirection((current) =>
-                        current === 'asc' ? 'desc' : 'asc'
-                      )
-                    }
-                  >
-                    Assignment
-                    {sortDirection === 'asc' ? (
-                      <ArrowUp className="h-4 w-4" />
-                    ) : (
-                      <ArrowDown className="h-4 w-4" />
-                    )}
-                  </Button>
-                </TableHead>
-                <TableHead className="whitespace-nowrap">Classes</TableHead>
-                <TableHead className="whitespace-nowrap">Type</TableHead>
-                <TableHead className="whitespace-nowrap rounded-tr-lg pr-4">
-                  Documents
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedAssignments.map((assignment) => (
-                <TableRow
-                  key={assignment.assignmentId}
-                  data-state={
-                    selectedAssignmentIds.includes(assignment.assignmentId)
-                      ? 'selected'
-                      : undefined
-                  }
-                >
-                  <TableCell className="max-h-[37px] pl-4">
-                    <Checkbox
-                      aria-label={`Select assignment ${assignment.title}`}
-                      checked={selectedAssignmentIds.includes(
-                        assignment.assignmentId
-                      )}
-                      onCheckedChange={() =>
-                        handleSelect(assignment.assignmentId)
-                      }
-                    />
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link
-                        to={assignment.href}
-                        className="[overflow-wrap:anywhere] hover:underline"
-                        data-testid={`my-assignment-open-${assignment.assignmentId}`}
-                      >
-                        {assignment.title}
-                      </Link>
-                      <TutorOffBadge tutorEnabled={assignment.tutorEnabled} />
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    <AssignmentClasses classes={assignment.classes} />
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {assignment.assignmentTypeTitle}
-                  </TableCell>
-                  <TableCell className="pr-4 text-muted-foreground">
-                    {assignment.documentCount}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          {renderAssignmentsTable({
+            rows: paginatedAssignments,
+            tableLabel: 'My Assignments',
+            selectAllLabel: 'Select all assignments',
+            allRowsSelected:
+              filteredAssignments.length > 0 &&
+              selectedAssignmentIds.length === filteredAssignments.length,
+            onSelectAll: handleSelectAll,
+            showTypeColumn: true,
+          })}
         </div>
       )}
 
-      {filteredAssignments.length > 0 ? (
+      {filteredAssignments.length > 0 && !groupedByType ? (
         <Pagination
           totalCount={filteredAssignments.length}
           skip={pagination.skip}
