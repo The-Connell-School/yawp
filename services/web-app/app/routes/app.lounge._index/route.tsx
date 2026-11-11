@@ -93,7 +93,7 @@ export default function LoungeFeedRoute() {
   const { posts, sort, topic, chips, nextCursor, pinned, host } = useLoaderData<typeof loader>();
 
   return (
-    <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
+    <section data-lounge-page className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <LoungeMasthead
         active="community"
         action={
@@ -152,10 +152,14 @@ export default function LoungeFeedRoute() {
             </p>
           </div>
         ) : (
-          <ul className="-mt-6 flex flex-col">
+          <ul className="-mt-2 flex flex-col gap-3">
             {posts.map((post) => (
               <li key={post.id}>
-                <LoungePostRow post={post} when={post.when} topicHref={feedHref({ sort, topic: post.topic })} />
+                <LoungePostRow
+                  post={post}
+                  when={post.when}
+                  topicHref={(postTopic) => feedHref({ sort, topic: postTopic })}
+                />
               </li>
             ))}
           </ul>
