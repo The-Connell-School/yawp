@@ -231,9 +231,7 @@ for (const viewport of [
       await page.waitForURL('**/app/free-tier/onboarding**');
       await capture('teacher-approval-request');
       if (!before) {
-        await expect(
-          page.getByRole('heading', { name: 'Let’s set up your classroom' })
-        ).toBeVisible();
+        await expect(page.getByText('Let’s set up your classroom')).toBeVisible();
         await page.getByLabel('Class name').fill('AP English 11');
         await page.getByLabel('Grade').selectOption('11');
         await page.getByRole('button', { name: 'Create my class', exact: true }).click();

@@ -86,6 +86,23 @@ async function expectLockedAppHome(page: import('@playwright/test').Page) {
   await expect(page).toHaveURL(/\/app\/?$/);
 }
 
+async function expectLockedPendingDashboardCard(
+  page: import('@playwright/test').Page,
+  adminName = 'Dr. Patel'
+) {
+  const card = page.getByTestId('locked-dashboard-pending-card');
+  await expect(card).toBeVisible();
+  await expect(
+    card.getByText(new RegExp(`Request sent to ${adminName}`))
+  ).toBeVisible();
+}
+
+async function expectNoLockedPendingDashboardCard(
+  page: import('@playwright/test').Page
+) {
+  await expect(page.getByTestId('locked-dashboard-pending-card')).toHaveCount(0);
+}
+
 async function login(page: import('@playwright/test').Page, email: string) {
   const user = await prisma.user.findUniqueOrThrow({ where: { email } });
   const session = await prisma.session.create({
@@ -354,12 +371,7 @@ for (const width of [390, 1440]) {
     await expect(
       page.getByRole('heading', { name: 'New assignment' })
     ).toHaveCount(0);
-    await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
-    await expect(
-      page
-        .getByTestId('teaching-access-banner')
-        .getByText(/Waiting for Dr\. Patel to approve your classroom/)
-    ).toBeVisible();
+    await expectLockedPendingDashboardCard(page);
     await capture(page, `locked-app-before-${width}`);
     await expectFreeDashboardAssignmentTiles(page);
     await expectTileNamesWrapOnWordBoundaries(
@@ -441,12 +453,10 @@ for (const width of [390, 1440]) {
       0
     );
     if (width === 390) {
-      await expect(
-        page.getByTestId('teaching-access-banner').getByText(/View status/)
-      ).toBeVisible();
-      await expect(
-        page.getByTestId('teaching-access-banner').getByText(/\.\.\./)
-      ).toHaveCount(0);
+      await expectLockedPendingDashboardCard(page);
+      await expect(page.getByTestId('locked-dashboard-pending-card')).not.toContainText(
+        '...'
+      );
     }
     const before = await prisma.assignment.count();
     for (const path of [
@@ -478,7 +488,7 @@ for (const width of [390, 1440]) {
       data: { status: 'APPROVED' },
     });
     await page.reload();
-    await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
+    await expectNoLockedPendingDashboardCard(page);
     await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible();
     await expectFreeDashboardAssignmentTiles(page);
     await expectDashboardAssignmentTileNameMetaNoOverlap(
@@ -536,7 +546,7 @@ test('explore stays on pending when classroom is not provisioned yet', async ({
   ).toBeVisible();
   await page.getByRole('link', { name: 'Explore my classroom' }).click();
   await expectLockedAppHome(page);
-  await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
+  await expectLockedPendingDashboardCard(page);
   const updated = await prisma.freeTierApplication.findUniqueOrThrow({
     where: { id: app.id },
     select: { organizationId: true },
@@ -568,7 +578,7 @@ test('explore shows with a stale default-org membership cookie', async ({
   ).toBeVisible();
   await page.getByRole('link', { name: 'Explore my classroom' }).click();
   await expectLockedAppHome(page);
-  await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
+  await expectLockedPendingDashboardCard(page);
 });
 
 test('stale tab blocked POST shows approval required toast without changing page state', async ({
@@ -594,7 +604,7 @@ test('stale tab blocked POST shows approval required toast without changing page
     })
     .toBe('APPROVED');
   await page.goto('/app');
-  await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
+  await expectNoLockedPendingDashboardCard(page);
   await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible({
     timeout: 30_000,
   });
@@ -681,7 +691,7 @@ async function exploreLockedApp(page: import('@playwright/test').Page, userEmail
   await page.goto('/app/free-tier/pending');
   await page.getByRole('link', { name: 'Explore my classroom' }).click();
   await expectLockedAppHome(page);
-  await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
+  await expectLockedPendingDashboardCard(page);
 }
 
 async function expectRouteOmitsTeachingSecrets(
@@ -898,6 +908,6 @@ test('flag OFF keeps the waiting page and does not expose the in-app lock', asyn
   await login(page, user.email!);
   await page.goto('/app/free-tier/pending');
   await expect(page).toHaveURL(/free-tier\/pending/);
-  await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
+  await expectNoLockedPendingDashboardCard(page);
   await expect(page.getByTestId('free-assignment-tiles')).toHaveCount(0);
 });

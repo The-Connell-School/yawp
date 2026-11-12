@@ -131,6 +131,9 @@ export async function assertChatControlsInBoundsAtBreakpoints(
 
       await page.setViewportSize(viewport);
       await page.goto(options.path, { waitUntil: 'networkidle' });
+      if (viewport.width <= 480) {
+        await page.reload({ waitUntil: 'networkidle' });
+      }
       await observability.waitForRouteSettled();
 
       const composer = page.getByLabel(options.composerLabel);

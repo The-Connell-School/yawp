@@ -2,6 +2,11 @@ import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { currentSchoolYear } from '../../app/utils/school-year';
 import type { Page } from '@playwright/test';
+import {
+  expectNewAssignmentBuilderPage,
+  fillAndCreateOnAssignmentBuilderV3,
+  finishAssignmentCreatedView,
+} from '../helpers/assignment-builder-v3-page';
 
 const CLASS_LABEL = /Grade 9th .* Period 1st/;
 
@@ -51,20 +56,15 @@ async function expectStandardizedAssignmentForm(page: Page) {
 
 
 async function expectNewAssignmentPage(page: Page) {
-  await expect(page).toHaveURL(/\/app\/assignments\/new/);
-  await expect(page.getByTestId('new-assignment-type-grid')).toBeVisible();
-  await expect(page.locator('#title')).toBeVisible();
-  await expect(page.locator('#classId')).toBeVisible();
-  await expect(page.locator('#prompt')).toBeVisible();
+  await expectNewAssignmentBuilderPage(page);
 }
 
 async function fillAndSubmitNewAssignment(
   page: Page,
   input: { title: string; prompt: string }
 ) {
-  await page.locator('#title').fill(input.title);
-  await page.locator('#prompt').fill(input.prompt);
-  await page.getByRole('button', { name: 'Create assignment' }).click();
+  await fillAndCreateOnAssignmentBuilderV3(page, input);
+  await finishAssignmentCreatedView(page);
 }
 
 async function expectAssignmentCreatedSuccessSheet(page: Page) {
@@ -431,8 +431,6 @@ test.describe.serial('Teacher dashboard workspace', () => {
         .click();
       await expectNewAssignmentPage(page);
       await fillAndSubmitNewAssignment(page, { title, prompt });
-
-      await expect(page).toHaveURL(/\/app\/assignments\/.+/);
       await expectCreatedAssignment({
         classId: e2eContext.classId,
         assignmentTypeId: e2eContext.assignmentTypeId,
@@ -579,7 +577,6 @@ test.describe.serial('Teacher dashboard workspace', () => {
     await page.getByRole('menuitem', { name: 'Assignment' }).click();
     await expectNewAssignmentPage(page);
     await fillAndSubmitNewAssignment(page, { title, prompt });
-    await expect(page).toHaveURL(/\/app\/assignments\/.+/);
 
     await expectCreatedAssignment({
       classId: e2eContext.classId,
