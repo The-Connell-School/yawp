@@ -110,7 +110,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await screenshot('button');
     const { panel, noteLabel, hasSeverity } = await openGiveFeedback(page);
     await expect(panel.getByLabel(noteLabel)).toBeVisible({ timeout: 15_000 });
-    await expect(panel.getByText(/\/app\/assignments/)).toBeVisible();
+    await expect(panel.getByText(/Page: \/app\/assignments/)).toBeVisible();
     await screenshot('panel');
     await panel.getByLabel(noteLabel).fill('Local demo feedback E2E note');
     if (hasSeverity) await panel.getByLabel('Severity').selectOption('high');
@@ -212,7 +212,15 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       where: {
         userId: teacher.id,
         whatHappened: {
-          in: ['Local demo feedback E2E note', 'Retry keeps my note'],
+          contains: 'Local demo feedback E2E note',
+        },
+      },
+    });
+    await prisma.testerFeedback.deleteMany({
+      where: {
+        userId: teacher.id,
+        whatHappened: {
+          contains: 'Retry keeps my note',
         },
       },
     });

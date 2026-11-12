@@ -65,13 +65,16 @@ test.describe('Dev panel class simulation', () => {
     await expect(
       panelAgain.getByRole('group', { name: 'Confirm clear' })
     ).toBeVisible();
+    const clearPost = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/dev-panel/class-simulation') &&
+        response.request().method() === 'POST'
+    );
     await panelAgain.getByRole('button', { name: 'Clear', exact: true }).click();
+    expect((await clearPost).ok()).toBeTruthy();
     await expect(
-      panelAgain
-        .getByRole('option')
-        .filter({ hasText: klass!.title! })
-        .getByText('0 sim')
-    ).toBeVisible({ timeout: 60_000 });
+      panelAgain.locator('.yawp-dev-panel-class-sim-success')
+    ).toContainText(/Cleared 3 simulated students/i, { timeout: 60_000 });
     await page.goto(`/app/my-classes/${klass!.id}?tab=students`);
     await expect(page.getByText('Alex Rivera')).toHaveCount(0);
   });
