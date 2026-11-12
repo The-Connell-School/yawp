@@ -7,6 +7,7 @@ import {
   devPanelFreeTierGroupTrigger,
   devPanelFreeTierStateOption,
   devToolsPanel,
+  expectGiveFeedbackNoteCleared,
   openDevPanelClassSimulationFlyout,
   openDevToolsPanel,
   openGiveFeedback,
@@ -168,8 +169,7 @@ test.describe('Dev panel artboard evidence', () => {
     );
     await sendFeedback.click();
     expect((await feedbackPost).ok()).toBeTruthy();
-    ({ panel: feedbackDialog } = await openGiveFeedback(page));
-    await expect(feedbackDialog.getByLabel('What happened?')).toHaveValue('');
+    ({ panel: feedbackDialog } = await expectGiveFeedbackNoteCleared(page));
     await shot(page, '59');
 
     ({ panel: feedbackDialog } = await openGiveFeedback(page));

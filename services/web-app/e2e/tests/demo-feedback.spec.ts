@@ -3,6 +3,7 @@ import { createE2EPrismaClient } from '../prisma-client';
 import path from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import {
+  expectGiveFeedbackNoteCleared,
   isDevPanelActive,
   openGiveFeedback,
 } from '../helpers/dev-panel-feedback';
@@ -125,10 +126,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await sendButton.click();
     const submitted = (await submission).postDataJSON();
     expect(submitted.note).toContain('Local demo feedback E2E note');
-    const reopened = await openGiveFeedback(page);
-    await expect(reopened.panel.getByLabel(reopened.noteLabel)).toHaveValue('', {
-      timeout: 15_000,
-    });
+    await expectGiveFeedbackNoteCleared(page);
     const entry = await prisma.testerFeedback.findFirstOrThrow({
       where: {
         userId: teacher.id,

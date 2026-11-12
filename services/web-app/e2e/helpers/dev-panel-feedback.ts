@@ -196,6 +196,27 @@ export async function expectGiveFeedbackAccessible(page: Page) {
   await expect(legacy).toBeVisible();
 }
 
+/** After a successful send the inline section collapses and the note is cleared in state. */
+export async function expectGiveFeedbackNoteCleared(page: Page) {
+  const tools = await openDevToolsPanel(page);
+  const feedbackRow = devPanelGiveFeedbackRow(tools);
+  await expect(feedbackRow).toHaveAttribute('aria-expanded', 'false', {
+    timeout: 15_000,
+  });
+  await feedbackRow.click();
+  await expect(feedbackRow).toHaveAttribute('aria-expanded', 'true', {
+    timeout: 15_000,
+  });
+  const inline = tools.locator('.yawp-dev-panel-give-feedback-inline');
+  await expect(inline).toBeVisible({ timeout: 15_000 });
+  await expect(inline.getByLabel('What happened?')).toHaveValue('');
+  return {
+    panel: inline,
+    noteLabel: 'What happened?' as const,
+    hasSeverity: false,
+  };
+}
+
 export async function openGiveFeedback(page: Page) {
   const devPanelDialog = giveFeedbackDialog(page);
   if (await devPanelDialog.isVisible().catch(() => false)) {

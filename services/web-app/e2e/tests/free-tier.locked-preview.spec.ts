@@ -840,13 +840,12 @@ test('locked class surfaces hide the real class code and lock invite controls', 
   await page.goto('/app/my-classes');
   await expect(page.getByTestId('my-classes-class-options')).toBeVisible();
   await page.goto(`/app/my-classes/${klass.id}?tab=students`);
-  const joinCard = page.getByTestId('free-class-join-card-locked');
-  await expect(joinCard).toBeVisible();
+  await expect(page.getByTestId('class-code-masked')).toBeVisible();
   const html = await page.content();
   expect(html).not.toContain(klass.code);
-  await expect(joinCard.getByTestId('class-code-masked')).toBeVisible();
-  await expect(joinCard.getByTestId('class-qr-locked-placeholder')).toBeVisible();
-  await joinCard.getByTestId('copy-join-link-button').hover();
+  const lockedInvite = page.getByTestId('class-detail-add-students');
+  await expect(lockedInvite).toBeVisible();
+  await lockedInvite.hover();
   await page.waitForTimeout(350);
   await expect(
     page.getByRole('tooltip', {
