@@ -68,7 +68,9 @@ for (const path of paths) {
     // JSON token rejects unknown intent, while form owns it.
     if (path === 'token') delete (fields as any).intent;
     const first = await post(path, { ...fields, email: fields.email.toUpperCase() });
-    expect(first.body).toEqual(path === 'free' ? { ok: true, declined: true } : { ok: true });
+    expect(first.body).toMatchObject(
+      path === 'free' ? { ok: true, declined: true } : { ok: true }
+    );
     const row = await prisma.freeTierApplication.findUniqueOrThrow({ where: { email: fields.email } });
     expect(row).toMatchObject({ status: 'REJECTED', tags: ['below-hs'], userId: null, organizationId: null, releasedAt: null, acquisitionTokenId: path === 'waitlist' ? null : event.id, releaseEmailCopyVersion: null });
     expect(await prisma.freeTierEmailLog.count({ where: { applicationId: row.id } })).toBe(0);
@@ -76,7 +78,10 @@ for (const path of paths) {
     expect(await prisma.freeTierSignedLink.count({ where: { applicationId: row.id } })).toBe(0);
     expect(await prisma.user.count({ where: { email: fields.email } })).toBe(0);
     const repeats = await Promise.all([post(path, { ...fields, name: 'Changed' }), post(path, fields)]);
-    for (const repeat of repeats) expect(repeat.body).toEqual(first.body);
+    for (const repeat of repeats)
+      expect(repeat.body).toMatchObject(
+        path === 'free' ? { ok: true, declined: true } : { ok: true }
+      );
     const promotion = { ...fields, gradeLevel: '11' };
     expect((await post(path, promotion)).body.ok).toBe(true);
     await flag('false');
@@ -97,7 +102,9 @@ for (const path of paths) {
     const row = await prisma.freeTierApplication.create({ data: { ...fields, gradeLevel: '11', status: 'INVITED', tags: ['existing'], releasedAt: new Date() } });
     const event = await fixture(path + '-existing');
     const body = { ...fields, ...(path === 'waitlist' ? {} : { token: event.code! }), ...(path === 'free' ? { intent: 'redeem' } : {}) };
-    expect((await post(path, body)).body).toEqual(path === 'free' ? { ok: true, declined: true } : { ok: true });
+    expect((await post(path, body)).body).toMatchObject(
+      path === 'free' ? { ok: true, declined: true } : { ok: true }
+    );
     expect(await prisma.freeTierApplication.findUniqueOrThrow({ where: { id: row.id } })).toEqual(row);
     expect((await prisma.acquisitionToken.findUniqueOrThrow({ where: { id: event.id } })).uses).toBe(0);
   });

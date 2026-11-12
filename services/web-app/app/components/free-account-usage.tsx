@@ -621,7 +621,8 @@ export function FreeAssignmentTiles({
         onScroll={carousel.updateScrollState}
       >
         {entitledTiles}
-        {siteLicenseLockedAssignmentTiles.map((tile) => (
+        {!teachingLocked &&
+          siteLicenseLockedAssignmentTiles.map((tile) => (
           <FreeTierCarouselTile
             key={tile.key}
             label={tile.label}
