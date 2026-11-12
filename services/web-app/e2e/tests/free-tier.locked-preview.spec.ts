@@ -457,9 +457,9 @@ for (const width of [390, 1440]) {
     );
     if (width === 390) {
       await expectLockedPendingDashboardCard(page);
-      await expect(page.getByTestId('locked-dashboard-pending-card')).not.toContainText(
-        '...'
-      );
+      await expect(
+        page.getByTestId('locked-dashboard-pending-card').first()
+      ).not.toContainText('...');
     }
     const before = await prisma.assignment.count();
     for (const path of [
