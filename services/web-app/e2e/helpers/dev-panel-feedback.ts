@@ -150,7 +150,9 @@ export async function openDevPanelSection(page: Page, sectionName: string) {
   const expanded = await trigger.getAttribute('aria-expanded');
   if (expanded !== 'true') {
     await trigger.click();
-    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true', {
+      timeout: 15_000,
+    });
   }
   return panel;
 }

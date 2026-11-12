@@ -2,10 +2,7 @@ import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
-import {
-  openDevPanelSection,
-  openDevToolsPanel,
-} from '../helpers/dev-panel-feedback';
+import { openDevPanelSection } from '../helpers/dev-panel-feedback';
 import {
   listCatalogFreeTierJumpExpectations,
   type FreeTierJumpExpectation,

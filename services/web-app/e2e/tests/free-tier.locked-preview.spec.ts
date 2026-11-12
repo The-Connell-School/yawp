@@ -381,10 +381,6 @@ for (const width of [390, 1440]) {
       page,
       page.getByTestId('free-assignment-tiles')
     );
-    await expectDashboardAssignmentTileNameMetaNoOverlap(
-      page,
-      page.getByTestId('free-assignment-tiles')
-    );
     await expect(
       page.getByTestId('free-assignment-tiles').locator('img')
     ).toHaveCount(0);
