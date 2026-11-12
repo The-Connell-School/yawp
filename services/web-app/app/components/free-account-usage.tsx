@@ -73,11 +73,9 @@ import {
   teachingAccessMobileSheetBodyInvite,
   TEACHING_ACCESS_LOCKED_TOOLTIP,
 } from '~/domain/free-tier/teaching-access-copy';
-import type { SiteLicenseLockedAssignmentTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 import {
   FREE_TIER_UNLIMITED_TILE_LABEL,
   LOCKED_DASHBOARD_GETTING_STARTED_TITLE,
-  SITE_LICENSE_ONLY_TILE_LABEL,
 } from '~/domain/free-tier/locked-dashboard-copy';
 import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 
@@ -502,7 +500,6 @@ function FreeTierCarouselTile({
 export function FreeAssignmentTiles({
   usage = null,
   types,
-  siteLicenseLockedAssignmentTiles = [],
   assignmentsSeeHowItWorksTo,
   teachingLocked: teachingLockedProp = false,
   onCreate,
@@ -516,7 +513,6 @@ export function FreeAssignmentTiles({
     imageId?: string | null;
     imageTitle?: string | null;
   }>;
-  siteLicenseLockedAssignmentTiles?: SiteLicenseLockedAssignmentTile[];
   assignmentsSeeHowItWorksTo?: string;
   teachingLocked?: boolean;
   onCreate: (id?: string) => void;
@@ -624,20 +620,6 @@ export function FreeAssignmentTiles({
         onScroll={carousel.updateScrollState}
       >
         {entitledTiles}
-        {!teachingLocked &&
-          siteLicenseLockedAssignmentTiles.map((tile) => (
-          <FreeTierCarouselTile
-            key={tile.key}
-            label={tile.label}
-            meta={SITE_LICENSE_ONLY_TILE_LABEL}
-            metaClassName="font-normal text-muted-foreground"
-            imageId={tile.imageId}
-            siteLicense
-            teachingLocked={teachingLocked}
-            assignmentTypeId={tile.assignmentTypeId}
-            siteLicenseTileKey={tile.key}
-          />
-        ))}
       </FreeTierAssignmentCarouselTrack>
     </div>
     </div>
