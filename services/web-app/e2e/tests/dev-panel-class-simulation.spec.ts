@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
-import { openDevPanelClassSimulationFlyout } from '../helpers/dev-panel-feedback';
+import {
+  devToolsPanel,
+  openDevPanelClassSimulationFlyout,
+} from '../helpers/dev-panel-feedback';
 import { ensureDemoDevTeacherSession } from '../helpers/dev-panel-preview-access';
 
 const prisma = createE2EPrismaClient();
@@ -30,24 +33,30 @@ test.describe('Dev panel class simulation', () => {
 
     await page.goto('/app/my-classes');
     await openDevPanelClassSimulationFlyout(page);
-    let simSheet = page.getByRole('dialog', { name: 'Class simulation' });
-    const classSelect = simSheet.locator('#dev-panel-simulation-class');
-    await expect(classSelect).toBeVisible({ timeout: 30_000 });
-    await classSelect.selectOption(klass!.id);
-    await simSheet.getByLabel('Student count').fill('3');
-    await simSheet.getByRole('button', { name: 'Populate class', exact: true }).click();
+    const panel = devToolsPanel(page);
+    await panel
+      .getByRole('listbox', { name: 'Class' })
+      .getByRole('option')
+      .filter({ hasText: klass!.title! })
+      .click();
+    await panel.locator('#dev-panel-sim-count').fill('3');
+    await panel.getByRole('button', { name: 'Populate class', exact: true }).click();
     await expect(page.getByText(/Added 3 students/i)).toBeVisible({ timeout: 60_000 });
 
     await page.goto(`/app/my-classes/${klass!.id}?tab=students`);
     await expect(page.getByText('Alex Rivera')).toBeVisible({ timeout: 30_000 });
 
     await openDevPanelClassSimulationFlyout(page);
-    simSheet = page.getByRole('dialog', { name: 'Class simulation' });
-    await expect(simSheet.getByText('Loading your classes…')).toHaveCount(0, {
+    const panelAgain = devToolsPanel(page);
+    await panelAgain
+      .getByRole('listbox', { name: 'Class' })
+      .getByRole('option')
+      .filter({ hasText: klass!.title! })
+      .click();
+    await expect(panelAgain.getByText('Loading your classes…')).toHaveCount(0, {
       timeout: 30_000,
     });
-    await simSheet.locator('#dev-panel-simulation-class').selectOption(klass!.id);
-    const clearSimulated = simSheet.getByRole('button', {
+    const clearSimulated = panelAgain.getByRole('button', {
       name: 'Clear simulated data',
       exact: true,
     });

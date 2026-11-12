@@ -130,10 +130,8 @@ test.describe('Dev panel artboard evidence', () => {
           locationRef.assign = original;
         };
     });
-    await stateSheet.getByRole('button', { name: 'Jump to this state' }).click();
-    await expect(
-      stateSheet.getByRole('button', { name: 'Jumping…' })
-    ).toBeVisible();
+    await page.getByRole('button', { name: 'Jump', exact: true }).click();
+    await expect(page.getByText(/Jumping to/i)).toBeVisible();
     await shot(page, '21');
     await page
       .evaluate(() => {

@@ -5,6 +5,7 @@ import { writeFile } from 'node:fs/promises';
 import {
   isDevPanelActive,
   openGiveFeedback,
+  waitForDevPanelReady,
 } from '../helpers/dev-panel-feedback';
 import { ensureDemoDevTeacherSession } from '../helpers/dev-panel-preview-access';
 
@@ -107,6 +108,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       page.getByRole('button', { name: 'Log feedback', exact: true })
     ).toHaveCount(0);
     await screenshot('button');
+    await waitForDevPanelReady(page);
     const { panel, noteLabel, hasSeverity } = await openGiveFeedback(page);
     await expect(panel.getByLabel(noteLabel)).toBeFocused({ timeout: 15_000 });
     await expect(panel.getByLabel('Page')).toHaveValue(/\/app\/assignments/);
@@ -318,8 +320,9 @@ test('local demo single trigger reserves mobile content space on landing, classe
         await expect(
           page.getByRole('button', { name: 'Log feedback', exact: true })
         ).toHaveCount(0);
-        const { panel, noteLabel, hasSeverity } = await openGiveFeedback(page);
-        await expect(panel).toBeVisible();
+    await waitForDevPanelReady(page);
+    const { panel, noteLabel, hasSeverity } = await openGiveFeedback(page);
+    await expect(panel).toBeVisible();
         if (hasSeverity) await panel.getByLabel('Severity').selectOption('medium');
         else await panel.getByLabel(noteLabel).fill('Layout check note');
         await page.waitForTimeout(300);
