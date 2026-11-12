@@ -522,10 +522,8 @@ export function FreeAssignmentTiles({
   onCreate: (id?: string) => void;
   createTriggerRef?: RefObject<HTMLButtonElement | null>;
 }) {
-  const { locked: teachingAccessLocked, loading: teachingAccessLoading } =
-    useTeachingAccess();
-  const teachingLocked =
-    teachingLockedProp || teachingAccessLocked || teachingAccessLoading;
+  const { locked: teachingAccessLocked } = useTeachingAccess();
+  const teachingLocked = teachingLockedProp || teachingAccessLocked;
   const carousel = useFreeTierAssignmentCarousel();
   const quotaMode = Boolean(usage);
 

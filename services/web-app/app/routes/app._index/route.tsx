@@ -338,8 +338,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     gradesGrammar: gradesGrammarIds.has(type.id),
     ...quotaByTypeId.get(type.id),
   }));
-  const siteLicenseLockedAssignmentTiles =
-    await loadSiteLicenseLockedAssignmentTiles(profile.organization);
+  const siteLicenseLockedAssignmentTiles = hideTeachingSecrets
+    ? []
+    : await loadSiteLicenseLockedAssignmentTiles(profile.organization);
 
   // A student's assigned Writing Fundamentals practice, surfaced on their
   // dashboard alongside their classes (each card links into the practice

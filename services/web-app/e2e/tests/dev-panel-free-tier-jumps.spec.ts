@@ -37,6 +37,35 @@ type CatalogJumpEntry = FreeTierJumpExpectation & {
   label: string;
 };
 
+async function waitForDevPanelOrgReady(
+  page: Page,
+  tools: ReturnType<typeof openDevToolsPanel>
+) {
+  await page
+    .waitForResponse(
+      (response) =>
+        response.url().includes('/api/dev-panel/orgs') && response.ok(),
+      { timeout: 60_000 }
+    )
+    .catch(() => {});
+  await expect(tools.locator('.yawp-dev-panel-org-pe3-loading')).toHaveCount(0, {
+    timeout: 60_000,
+  });
+  const trigger = tools.locator('.yawp-dev-panel-org-pe3-trigger');
+  if (await trigger.count()) {
+    await expect(trigger.first()).toBeVisible({ timeout: 30_000 });
+    await trigger.first().click();
+    const option = tools.locator('.yawp-dev-panel-org-pe3-option').first();
+    await expect(option).toBeVisible({ timeout: 30_000 });
+    await option.click();
+    return;
+  }
+  await expect(tools.locator('.yawp-dev-panel-org-pe3-single')).not.toHaveText(
+    'No organization',
+    { timeout: 60_000 }
+  );
+}
+
 async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
   const softErrorsBefore = test.info().errors.length;
   await ensureDevTeacherSignedIn(page);
@@ -45,14 +74,7 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
   await page.reload();
 
   const tools = await openDevPanelSection(page, 'Free-tier');
-  await expect(tools.locator('.yawp-dev-panel-org-pe3-loading')).toHaveCount(0, {
-    timeout: 30_000,
-  });
-  const orgSurface = tools
-    .locator('.yawp-dev-panel-org-pe3-single')
-    .filter({ hasNotText: 'No organization' })
-    .or(tools.locator('.yawp-dev-panel-org-pe3-trigger'));
-  await expect(orgSurface.first()).toBeVisible({ timeout: 30_000 });
+  await waitForDevPanelOrgReady(page, tools);
   const stateSheet = tools.getByTestId('free-tier-session-runner');
   await expect(stateSheet).toBeVisible({ timeout: 15_000 });
   await stateSheet.getByRole('button', { name: 'Jump to state (advanced)' }).click();
