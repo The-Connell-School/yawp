@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
 import {
   openDevPanelSection,
@@ -27,9 +27,12 @@ function recordJumpLine(line: string) {
 
 async function ensureDevTeacherSignedIn(page: Page) {
   await page.context().clearCookies();
-  await page.request.post('/auth/dev-login', {
+  const response = await page.request.post('/auth/dev-login', {
     form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
   });
+  expect(response.ok()).toBe(true);
+  await page.goto('/app/assignments');
+  await expect(page).toHaveURL(/\/app\/assignments/);
 }
 
 type CatalogJumpEntry = FreeTierJumpExpectation & {
@@ -37,10 +40,7 @@ type CatalogJumpEntry = FreeTierJumpExpectation & {
   label: string;
 };
 
-async function waitForDevPanelOrgReady(
-  page: Page,
-  tools: ReturnType<typeof openDevToolsPanel>
-) {
+async function waitForDevPanelOrgReady(page: Page, tools: Locator) {
   await page
     .waitForResponse(
       (response) =>
