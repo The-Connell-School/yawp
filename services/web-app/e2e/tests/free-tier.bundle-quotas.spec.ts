@@ -1,4 +1,8 @@
 import { expect, test } from '../test-setup';
+import {
+  expectNewAssignmentBuilderPage,
+  openAssignmentTypePicker,
+} from '../helpers/new-assignment-builder';
 
 const FREE_CLASSROOM_PASSWORD = 'yawp-dev';
 
@@ -22,18 +26,15 @@ test.describe('Free classroom bundle quotas', () => {
     });
     await expect(newAssignment).toBeVisible({ timeout: 20_000 });
     await newAssignment.click();
-    await expect(page).toHaveURL(/\/app\/assignments\/new/, {
-      timeout: 20_000,
-    });
-    const typeGrid = page.getByTestId('new-assignment-type-grid');
-    await expect(typeGrid).toBeVisible({ timeout: 20_000 });
-    const prewritingTile = typeGrid.getByRole('button', { name: /Prewriting/i });
+    await expectNewAssignmentBuilderPage(page);
+    const typePicker = await openAssignmentTypePicker(page);
+    const prewritingTile = typePicker.getByRole('button', { name: /Prewriting/i });
     if (await prewritingTile.count()) {
       await expect(prewritingTile).toContainText(
         /Unlimited|\d+ of \d+|None left/
       );
     }
-    const classStarterTile = typeGrid.getByRole('button', {
+    const classStarterTile = typePicker.getByRole('button', {
       name: /Class Starter/i,
     });
     await expect(classStarterTile).toBeVisible({ timeout: 20_000 });

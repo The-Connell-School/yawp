@@ -232,7 +232,7 @@ for (const viewport of [
       await capture('teacher-approval-request');
       if (!before) {
         await expect(
-          page.getByRole('heading', { name: 'Let’s set up your classroom' })
+          page.getByRole('heading', { name: /Let.s set up your classroom/ })
         ).toBeVisible();
         await page.getByLabel('Class name').fill('AP English 11');
         await page.getByLabel('Grade').selectOption('11');

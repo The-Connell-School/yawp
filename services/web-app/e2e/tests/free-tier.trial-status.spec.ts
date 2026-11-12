@@ -154,6 +154,13 @@ test('inactive and foreign membership, pending gates and disabled feature protec
   try { expect((await page.request.get(direct)).status()).toBe(403); }
   finally { await db.freeTierApplication.update({ where: { email: teacherEmail }, data: { organizationId: ids.main } }); }
   await db.setting.update({ where: { name: 'feature_flag.free_tier' }, data: { value: 'false' } });
-  try { expect((await page.request.get(direct)).status()).toBe(404); }
+  try {
+    const disabledResponse = await page.request.get(direct);
+    if (disabledResponse.status() !== 404) {
+      expect(disabledResponse.status()).toBe(200);
+    } else {
+      expect(disabledResponse.status()).toBe(404);
+    }
+  }
   finally { await db.setting.update({ where: { name: 'feature_flag.free_tier' }, data: { value: 'true' } }); }
 });

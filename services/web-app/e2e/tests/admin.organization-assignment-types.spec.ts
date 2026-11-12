@@ -1,5 +1,9 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import {
+  expectNewAssignmentBuilderPage,
+  openAssignmentTypePicker,
+} from '../helpers/new-assignment-builder';
 
 test.describe.serial('Admin organization assignment types', () => {
   test('manages assignment type availability from the organization page', async ({
@@ -73,9 +77,9 @@ test.describe.serial('Admin organization assignment types', () => {
         .getByRole('button', { name: /New Assignment/ })
         .first()
         .click();
-      await expect(page.getByRole('dialog')).toBeVisible();
-      await page.getByRole('dialog').locator('[role="combobox"]').first().click();
-      await expect(page.getByRole('option', { name: title })).toBeVisible();
+      await expectNewAssignmentBuilderPage(page);
+      const typePicker = await openAssignmentTypePicker(page);
+      await expect(typePicker.getByRole('button', { name: title })).toBeVisible();
     } finally {
       await prisma.organizationAssignmentType.deleteMany({
         where: { assignmentTypeId: assignmentType.id },

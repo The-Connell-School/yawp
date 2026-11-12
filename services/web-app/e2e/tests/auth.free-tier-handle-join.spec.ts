@@ -152,8 +152,8 @@ test.describe('Free-tier handle student', () => {
       await expect(teacherPage.getByText(displayName)).toBeVisible();
       await expect(teacherPage.getByText(`@${handle}`)).toBeVisible();
       await expect(
-        teacherPage.getByTestId('class-detail-add-students')
-      ).toBeVisible();
+        teacherPage.getByRole('tab', { name: /students/i })
+      ).toHaveAttribute('data-state', 'active');
 
       await teacherPage.goto(`/app/my-classes/${klass.id}?tab=documents`, {
         waitUntil: 'domcontentloaded',

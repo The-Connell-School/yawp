@@ -2,6 +2,10 @@ import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { currentSchoolYear } from '../../app/utils/school-year';
 import type { Page } from '@playwright/test';
+import {
+  expectNewAssignmentBuilderPage,
+  fillAndSubmitNewAssignmentBuilder,
+} from '../helpers/new-assignment-builder';
 
 const CLASS_LABEL = /Grade 9th .* Period 1st/;
 
@@ -50,22 +54,8 @@ async function expectStandardizedAssignmentForm(page: Page) {
 }
 
 
-async function expectNewAssignmentPage(page: Page) {
-  await expect(page).toHaveURL(/\/app\/assignments\/new/);
-  await expect(page.getByTestId('new-assignment-type-grid')).toBeVisible();
-  await expect(page.locator('#title')).toBeVisible();
-  await expect(page.locator('#classId')).toBeVisible();
-  await expect(page.locator('#prompt')).toBeVisible();
-}
-
-async function fillAndSubmitNewAssignment(
-  page: Page,
-  input: { title: string; prompt: string }
-) {
-  await page.locator('#title').fill(input.title);
-  await page.locator('#prompt').fill(input.prompt);
-  await page.getByRole('button', { name: 'Create assignment' }).click();
-}
+const expectNewAssignmentPage = expectNewAssignmentBuilderPage;
+const fillAndSubmitNewAssignment = fillAndSubmitNewAssignmentBuilder;
 
 async function expectAssignmentCreatedSuccessSheet(page: Page) {
   const dialog = page.getByRole('dialog');
