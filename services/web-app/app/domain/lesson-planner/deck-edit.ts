@@ -62,7 +62,7 @@ export function deckFromEditor(
 
 /** A single piece of text a slide can carry, and the layouts it belongs to. */
 export type SlideTextField = {
-  key: 'subtitle' | 'body' | 'question' | 'followUp' | 'stem' | 'grouping' | 'routine' | 'accentWord' | 'attribution' | 'author' | 'work' | 'page' | 'part' | 'course' | 'mode' | 'button' | 'nextLesson';
+  key: 'subtitle' | 'body' | 'question' | 'followUp' | 'stem' | 'grouping' | 'routine' | 'accentWord' | 'attribution' | 'author' | 'work' | 'page' | 'part' | 'teacher' | 'course' | 'mode' | 'button' | 'nextLesson';
   label: string;
   max: number;
   long?: boolean;
@@ -90,6 +90,7 @@ export const SLIDE_TEXT_FIELDS: SlideTextField[] = [
   { key: 'work', label: 'Work', max: 120 },
   { key: 'page', label: 'Page', max: 20 },
   { key: 'part', label: 'Part', max: 12 },
+  { key: 'teacher', label: 'Teacher', max: 80 },
   { key: 'course', label: 'Course', max: 80 },
   { key: 'mode', label: 'Label above the slide', max: 24 },
   { key: 'button', label: 'Button', max: 40 },

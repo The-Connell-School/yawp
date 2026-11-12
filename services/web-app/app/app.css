@@ -4,6 +4,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Lesson Deck Kit, spec v4.1: titles and headlines in Fraunces Bold (SOFT 100,
+   WONK 1), served with the app (SIL OFL; public/lesson-planner/fonts). The
+   browser fetches it only when a slide uses it. */
+@font-face {
+  font-family: 'Fraunces';
+  src: url('/lesson-planner/fonts/Fraunces-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* UI Theme */
 
 :root {

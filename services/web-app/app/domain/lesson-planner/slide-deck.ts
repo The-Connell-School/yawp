@@ -146,6 +146,9 @@ const slideSchema = z
     button: z.string().trim().min(1).max(40).optional(),
     // The title slide's course line ("English 9").
     course: z.string().trim().min(1).max(80).optional(),
+    // Deck spec v4.1: the title slide's teacher line, above class and date.
+    // Yawp! fills it from the session; the planner never writes a name.
+    teacher: z.string().trim().min(1).max(80).optional(),
     // Which of the deck's colors (1-based) this slide uses, for a section
     // that keeps its own color.
     color: z.coerce.number().int().min(1).max(3).optional(),

@@ -68,6 +68,8 @@ describe('every piece of text on a slide has a field (Brian, Nov 4)', () => {
       'routine',
     ]);
     expect(keys({ layout: 'title', title: 'T', course: 'English 9', speakerNotes: 'n' })).toEqual(['subtitle', 'course']);
+    // Spec v4.1: a title slide that carries the teacher's name can edit it, above the course.
+    expect(keys({ layout: 'title', title: 'T', teacher: 'Ms. Rivera', course: 'English 9', speakerNotes: 'n' })).toEqual(['subtitle', 'teacher', 'course']);
   });
 
   test('lists a slide holds, whatever its layout', async () => {

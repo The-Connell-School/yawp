@@ -1,12 +1,15 @@
 /**
- * The gallery deck in the Yawp! Lesson Deck Kit, spec v4 (Nov 6, 2026):
- * "a quiet, well-made book with one painting inside it". Cream paper on
- * every slide, Georgia for what students read as an idea, Arial for labels,
- * instructions, credits and facts, everything left-aligned. Color appears in
+ * The gallery deck in the Yawp! Lesson Deck Kit, spec v4.1 (Nov 11, 2026;
+ * v4 was Nov 6): "a quiet, well-made book with one painting inside it".
+ * Cream paper on every slide, Fraunces Bold for titles and headlines
+ * (anything over 40px), Georgia for the rest of what students read as an
+ * idea, Arial for labels, instructions, credits and facts, everything
+ * left-aligned. No running head: the lesson's name is on the title slide. Color appears in
  * two ways only: a solid deck-color panel on one side of a split slide, or
  * type. No full-color slides, no italic mode words (a short Arial label
- * instead), no hairlines, rules, boxes, small caps, middle dots or roman
- * numerals, no mat around the painting.
+ * instead, and none that tells students how to treat the content: Hold
+ * this, Know this, Read, Remember), no hairlines, rules, boxes, small caps,
+ * middle dots or roman numerals, no mat around the painting.
  *
  * One layout drives every renderer: `layoutKitV4Slide` places each slide's
  * text, panels, bands and pictures as boxes in kit pixels (1280 × 720), and
@@ -21,7 +24,7 @@
 import type { Slide, SlideDeck } from './slide-deck';
 import { resolveDeckArt, type DeckArt } from './deck-art';
 import { contrastRatio, normalizedHex, splitColorMarks } from './deck-colors';
-import { galleryTemplate, withoutLessonNumber, type GalleryTemplate } from './deck-gallery';
+import { galleryTemplate, type GalleryTemplate } from './deck-gallery';
 import { pictureSlideText } from './deck-pictures';
 
 /** Spec v4 color tokens. */
@@ -62,6 +65,8 @@ const LEGACY_ACCENTS_V4: Record<string, string> = {
 };
 
 export const KIT_V4_FONTS = {
+  /** Fraunces Bold (SOFT 100, WONK 1), public/lesson-planner/fonts. */
+  display: "Fraunces, Georgia, 'Times New Roman', serif",
   serif: "Georgia, Gelasio, 'Times New Roman', serif",
   sans: "Arial, Arimo, 'Liberation Sans', Helvetica, sans-serif",
 } as const;
@@ -69,7 +74,8 @@ export const KIT_V4_FONTS = {
 export const KIT_V4_WIDTH = 1280;
 export const KIT_V4_HEIGHT = 720;
 const MARGIN = 80;
-const RUNNING_HEAD_TOP = 48;
+/** The write slide's label, top right. */
+const LABEL_TOP = 44;
 /** The split panel: within the kit's 420–660px. */
 const PANEL_WIDTH = 520;
 const EXCERPT_PANEL_WIDTH = 480;
@@ -175,11 +181,12 @@ const DEFAULT_LABELS: Record<KitV4Template, string | null> = {
   agenda: null,
   steps: 'Do',
   discuss: 'Talk',
-  big_idea: 'Hold this',
+  // Spec v4.1: no label that tells students how to treat the content.
+  big_idea: null,
   write: 'Write',
-  notes: 'Know this',
+  notes: null,
   divider: null,
-  read: 'Read',
+  read: null,
   look: 'Look',
   picture: 'Look',
   excerpt: 'Annotate',
@@ -190,6 +197,8 @@ const DEFAULT_LABELS: Record<KitV4Template, string | null> = {
 
 /** Labels that only decorate. */
 const DECORATIVE = new Set(['think', 'begin', 'also', 'next', 'now', 'here']);
+/** Labels that tell students how to treat the content (spec v4.1): just give them the content. */
+const HOW_TO_TREAT = new Set(['hold this', 'know this', 'read', 'remember']);
 
 const PANELS: Partial<Record<KitV4Template, { side: 'left' | 'right'; which: 0 | 1 }>> = {
   steps: { side: 'left', which: 0 },
@@ -244,7 +253,7 @@ function labelFor(template: KitV4Template, slide: Slide, previous: string | null
   }
   const label = own ? cleanLabel(own) : DEFAULT_LABELS[template];
   if (!label) return null;
-  if (DECORATIVE.has(label.toLowerCase())) return null;
+  if (DECORATIVE.has(label.toLowerCase()) || HOW_TO_TREAT.has(label.toLowerCase())) return null;
   // A label the deck did not ask for is skipped where the headline says it.
   if (!own && repeatsHeadline(label, template, slide)) return null;
   // The task did not change.
@@ -299,10 +308,10 @@ export function planKitV4Deck(deck: SlideDeck): KitV4Plan[] {
   return plans;
 }
 
-/** Prompt type by its words: 68 up to 12, 54 up to 24, 44 up to 40, then 34. */
-export function kitV4PromptSize(text: string): 68 | 54 | 44 | 34 {
+/** Prompt type by its words, within the kit's 34–64: 64 up to 12, 54 up to 24, 44 up to 40, then 34. */
+export function kitV4PromptSize(text: string): 64 | 54 | 44 | 34 {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
-  if (words <= 12) return 68;
+  if (words <= 12) return 64;
   if (words <= 24) return 54;
   if (words <= 40) return 44;
   return 34;
@@ -312,11 +321,12 @@ export function kitV4PromptSize(text: string): 68 | 54 | 44 | 34 {
 
 export type KitV4Run = {
   text: string;
-  face: 'serif' | 'sans';
+  /** display: Fraunces Bold, over 40px only. serif: Georgia. sans: Arial. */
+  face: 'display' | 'serif' | 'sans';
   /** Kit pixels at 1280 wide. */
   size: number;
   color: string;
-  /** Arial only: Georgia is never bold. */
+  /** Arial only: Georgia is never bold, and Fraunces is bold by its face. */
   bold?: boolean;
 };
 
@@ -337,7 +347,7 @@ export type KitV4Element =
       paras: KitV4Para[];
       valign: 'top' | 'middle' | 'bottom';
       align?: 'left' | 'right';
-      role?: 'running-head' | 'credit' | 'timer' | 'body';
+      role?: 'credit' | 'timer' | 'body';
     })
   | (Box & { kind: 'art'; src: string; fit: 'contain' | 'cover'; alt: string })
   | (Box & { kind: 'picture'; id: string });
@@ -349,6 +359,9 @@ export type KitV4SlideLayout = {
 };
 
 const serif = (text: string, size: number, color: string): KitV4Run => ({ text, face: 'serif', size, color });
+const display = (text: string, size: number, color: string): KitV4Run => ({ text, face: 'display', size, color });
+/** A prompt: Fraunces Bold over 40px, Georgia at 40px and under. */
+const prompt = (text: string, size: number, color: string): KitV4Run => (size > 40 ? display(text, size, color) : serif(text, size, color));
 const sans = (text: string, size: number, color: string, bold = false): KitV4Run =>
   bold ? { text, face: 'sans', size, color, bold: true } : { text, face: 'sans', size, color };
 
@@ -381,19 +394,6 @@ function credit(art: DeckArt, box: Box): KitV4Element {
     valign: 'top',
     ...box,
     paras: [para([sans(art.artist, 15, KIT_V4.ink, true), sans(`, ${art.title}, ${art.year}`, 15, KIT_V4.grey)])],
-  };
-}
-
-function runningHead(deck: SlideDeck, x: number, right = KIT_V4_WIDTH - MARGIN): KitV4Element {
-  return {
-    kind: 'text',
-    role: 'running-head',
-    valign: 'top',
-    x,
-    y: RUNNING_HEAD_TOP,
-    w: right - x,
-    h: 26,
-    paras: [para([sans(withoutLessonNumber(deck.title), 17, KIT_V4.grey)])],
   };
 }
 
@@ -430,24 +430,26 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
     elements.push(column({ x: panelX + (left ? MARGIN : 60), y: 96, w: width - MARGIN - (left ? 60 : 60), h: H - 96 - 64 }, panelParas));
     const creamX = left ? width + MARGIN : MARGIN;
     const creamRight = left ? W - MARGIN : W - width - 60;
-    elements.push(runningHead(deck, creamX, creamRight));
     elements.push(column({ x: creamX, y: 96, w: creamRight - creamX, h: H - 96 - 64 }, creamParas));
   };
   const panelLabel = labelRun(plan.label, KIT_V4.gold);
-  const panelHeadline = (text: string) => serif(text, text.length <= 22 ? 60 : 52, KIT_V4.white);
+  const panelHeadline = (text: string) => display(text, text.length <= 22 ? 60 : 52, KIT_V4.white);
   const mark = (text: string, make: (text: string, color: string) => KitV4Run, base: string = KIT_V4.ink) => marked(text, colors, make, base);
 
   switch (plan.template) {
     case 'title': {
       const right = art ? 640 : W - MARGIN;
-      // 92px for a short title; a long one, or one long word, at 80.
+      // Fraunces at 84px for a short title; a long one, or one long word,
+      // at 72; a very long one at 66 (the kit's 66–84).
       const longestWord = Math.max(...slide.title.split(/\s+/).map((word) => word.length));
-      const titleSize = slide.title.length > 24 || longestWord > 9 ? 80 : 92;
+      const titleSize = slide.title.length > 40 ? 66 : slide.title.length > 24 || longestWord > 9 ? 72 : 84;
+      // Spec v4.1: the teacher's name, then class and date. No program line.
       elements.push(
         column({ x: MARGIN, y: 80, w: right - MARGIN, h: H - 160 }, [
           para([deck.unit ? sans(deck.unit, 24, color, true) : null], 28),
-          para([serif(slide.title, titleSize, KIT_V4.ink)], 20, 1.0),
+          para([display(slide.title, titleSize, KIT_V4.ink)], 20, 1.0),
           para([slide.subtitle ? serif(slide.subtitle, 40, color) : null], 32),
+          para([slide.teacher ? sans(slide.teacher, 22, KIT_V4.body) : null], 6),
           para([slide.course ? sans(slide.course, 20, KIT_V4.grey) : null]),
         ])
       );
@@ -460,10 +462,9 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
 
     case 'agenda': {
       const items = slide.agenda ?? (slide.bullets ?? []).map((title) => ({ title, minutes: undefined as number | undefined }));
-      elements.push(runningHead(deck, MARGIN));
       elements.push(
         column({ x: MARGIN, y: 96, w: 360, h: H - 160 }, [
-          para([serif('Today', 72, KIT_V4.ink)], 16, 1.0),
+          para([display('Today', 72, KIT_V4.ink)], 16, 1.0),
           para([slide.body ?? slide.subtitle ? sans((slide.body ?? slide.subtitle)!, 22, KIT_V4.body) : null]),
         ])
       );
@@ -493,7 +494,7 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
       split(
         [para([panelLabel], 18), para([panelHeadline(slide.title)], 18, 1.05), para([grouping ? sans(grouping, 22, KIT_V4.sand) : null])],
         [
-          para(mark(question, (t, c) => serif(t, Math.min(kitV4PromptSize(question), 54), c)), 30, 1.15),
+          para(mark(question, (t, c) => prompt(t, Math.min(kitV4PromptSize(question), 54), c)), 30, 1.15),
           para([slide.stem ? serif(slide.stem, 30, color) : null], 20, 1.25),
           para([slide.followUp ? sans(slide.followUp, 22, KIT_V4.body) : null]),
         ]
@@ -552,11 +553,10 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
       const statement = slide.body ?? slide.title;
       const left = art ? 410 : MARGIN;
       if (art) elements.push({ kind: 'art', src: art.crops.strip, fit: 'cover', alt: '', x: 0, y: 0, w: 330, h: H });
-      elements.push(runningHead(deck, left));
       elements.push(
         column({ x: left, y: 96, w: W - MARGIN - left, h: H - 96 - 96 }, [
           para([labelRun(plan.label, color)], 22),
-          para(mark(statement, (t, c) => serif(t, kitV4PromptSize(statement), c)), 26, 1.12),
+          para(mark(statement, (t, c) => prompt(t, kitV4PromptSize(statement), c)), 26, 1.12),
           para([slide.followUp ? serif(slide.followUp, 30, color) : null], 0, 1.25),
         ])
       );
@@ -565,16 +565,15 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
     }
 
     case 'write': {
-      const prompt = slide.body ?? slide.question ?? slide.title;
+      const words = slide.body ?? slide.question ?? slide.title;
       const minutes = slide.seconds ? Math.max(1, Math.round(slide.seconds / 60)) : slide.minutes;
       const right = minutes ? 900 : W - MARGIN;
-      elements.push(runningHead(deck, MARGIN, 900));
       if (plan.label) {
-        elements.push({ kind: 'text', role: 'body', valign: 'top', align: 'right', x: 940, y: RUNNING_HEAD_TOP - 4, w: W - MARGIN - 940, h: 34, paras: [para([labelRun(plan.label, color)])] });
+        elements.push({ kind: 'text', role: 'body', valign: 'top', align: 'right', x: 940, y: LABEL_TOP, w: W - MARGIN - 940, h: 34, paras: [para([labelRun(plan.label, color)])] });
       }
       elements.push(
         column({ x: MARGIN, y: 110, w: right - MARGIN - 40, h: H - 110 - 80 }, [
-          para(mark(prompt, (t, c) => serif(t, kitV4PromptSize(prompt), c)), 28, 1.12),
+          para(mark(words, (t, c) => prompt(t, kitV4PromptSize(words), c)), 28, 1.12),
           para([slide.routine ? sans(withoutDots(slide.routine), 22, color) : null], 12),
           para([slide.stem ?? slide.followUp ? serif((slide.stem ?? slide.followUp)!, 28, KIT_V4.body) : null], 0, 1.25),
         ])
@@ -589,7 +588,7 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
           y: 180,
           w: W - MARGIN - 900,
           h: 440,
-          paras: [para([serif(String(minutes), 220, color)], 4, 0.9), para([sans(minutes === 1 ? 'minute' : 'minutes', 20, KIT_V4.grey)])],
+          paras: [para([display(String(minutes), 200, color)], 4, 0.9), para([sans(minutes === 1 ? 'minute' : 'minutes', 20, KIT_V4.grey)])],
         });
       }
       return out();
@@ -600,7 +599,7 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
       elements.push(
         column({ x: MARGIN, y: 80, w: right - MARGIN, h: H - 160 }, [
           para([labelRun(plan.label, color)], 22),
-          para([serif(slide.title, 80, KIT_V4.ink)], 22, 1.0),
+          para([display(slide.title, slide.title.length > 24 ? 72 : 80, KIT_V4.ink)], 22, 1.0),
           para([slide.subtitle ? sans(slide.subtitle, 22, KIT_V4.body) : null]),
         ])
       );
@@ -631,7 +630,7 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
           para([labelRun(plan.label, color)], 16),
           para([isPicture ? sans(slide.title, 20, KIT_V4.grey) : seconds ? sans(seconds, 20, KIT_V4.grey) : null], 4),
           para([!isPicture && routine ? sans(routine, 20, KIT_V4.grey) : null], 16),
-          para(question ? mark(question, (t, c) => serif(t, large ? 34 : kitV4PromptSize(question), c)) : [], 20, 1.2),
+          para(question ? mark(question, (t, c) => prompt(t, large ? 34 : kitV4PromptSize(question), c)) : [], 20, 1.2),
           para([slide.followUp ? serif(slide.followUp, large ? 26 : 32, color) : null], 0, 1.25),
         ])
       );
@@ -646,8 +645,7 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
       const questionH = size >= 54 ? 150 : 120;
       const total = 34 + questionH + 24 + rowH * choices.length;
       const top = Math.max(96, (H - total) / 2 + 16);
-      elements.push(runningHead(deck, MARGIN));
-      elements.push(column({ x: MARGIN, y: top, w: W - MARGIN * 2, h: 34 + questionH }, [para([labelRun(plan.label, color)], 14), para(mark(question, (t, c) => serif(t, size, c)), 0, 1.12)], 'bottom'));
+      elements.push(column({ x: MARGIN, y: top, w: W - MARGIN * 2, h: 34 + questionH }, [para([labelRun(plan.label, color)], 14), para(mark(question, (t, c) => prompt(t, size, c)), 0, 1.12)], 'bottom'));
       const reveal = plan.quiz?.reveal && slide.answer ? slide.answer : null;
       choices.forEach((choice, i) => {
         const y = top + 34 + questionH + 24 + i * rowH;
@@ -666,11 +664,10 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
     case 'exit': {
       const statement = slide.body ?? slide.title;
       const right = art ? 820 : W - MARGIN;
-      elements.push(runningHead(deck, MARGIN));
       elements.push(
         column({ x: MARGIN, y: 96, w: right - MARGIN, h: H - 96 - 64 }, [
           para([labelRun(plan.label, color)], 22),
-          para(mark(statement, (t, c) => serif(t, Math.min(kitV4PromptSize(statement), 54), c)), 22, 1.15),
+          para(mark(statement, (t, c) => prompt(t, Math.min(kitV4PromptSize(statement), 54), c)), 22, 1.15),
           para([slide.followUp ? serif(slide.followUp, 28, KIT_V4.body) : null], 22, 1.25),
           para([slide.button ? sans(`${slide.button}: open it in Yawp!`, 24, color, true) : null], 18),
           para([slide.nextLesson ? sans(`Next time: ${slide.nextLesson}`, 20, KIT_V4.grey) : null]),
@@ -684,8 +681,7 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
     }
 
     case 'compare': {
-      elements.push(runningHead(deck, MARGIN));
-      elements.push(column({ x: MARGIN, y: 96, w: W - MARGIN * 2, h: 130 }, [para([serif(slide.title, 52, KIT_V4.ink)], 0, 1.05)], 'bottom'));
+      elements.push(column({ x: MARGIN, y: 96, w: W - MARGIN * 2, h: 130 }, [para([display(slide.title, 52, KIT_V4.ink)], 0, 1.05)], 'bottom'));
       [slide.left, slide.right].forEach((side, i) => {
         if (!side) return;
         elements.push(
@@ -699,7 +695,7 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
       return out();
     }
   }
-  elements.push(column(fullColumn, [para([serif(slide.title, 52, KIT_V4.ink)])]));
+  elements.push(column(fullColumn, [para([display(slide.title, 52, KIT_V4.ink)])]));
   return out();
 }
 

@@ -15,14 +15,21 @@ const deck: SlideDeck = {
 };
 
 describe('KitV4SlideCanvas', () => {
-  test('draws the slide on cream, its words in Georgia and Arial, never italic', () => {
+  test('draws the slide on cream, its words in Fraunces, Georgia and Arial, never italic', () => {
     const html = renderToStaticMarkup(<KitV4SlideCanvas deck={deck} index={2} />);
     expect(html).toContain('data-theme="kit-v4"');
     expect(html).toContain('background:#F3F0E8');
     expect(html).toContain('What does your first reason prove?');
     expect(html).not.toContain('italic');
-    expect(html).toContain('Georgia');
     expect(html).toContain('Arial');
+    // Spec v4.1: the prompt and the timer in Fraunces Bold.
+    expect(html).toMatch(/font-family:Fraunces[^"]*;font-weight:700[^>]*>What does your first reason prove\?</);
+  });
+
+  test('spec v4.1: a step’s words are in Georgia, and no slide draws a running head', () => {
+    const html = renderToStaticMarkup(<KitV4SlideCanvas deck={deck} index={1} />);
+    expect(html).toMatch(/font-family:Georgia[^"]*;font-weight:400[^>]*>1</);
+    expect(html).not.toContain('gallery-running-head');
   });
 
   test('a split slide draws its panel and its label in gold', () => {

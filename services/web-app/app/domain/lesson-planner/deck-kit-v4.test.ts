@@ -26,7 +26,7 @@ const deck = (slides: Slide[], extra: Partial<SlideDeck> = {}): SlideDeck => ({
 
 const lesson = deck(
   [
-    slide({ layout: 'title', title: 'Body Paragraphs', subtitle: 'Build on your thesis', course: 'English 10' }),
+    slide({ layout: 'title', title: 'Body Paragraphs', subtitle: 'Build on your thesis', teacher: 'Ms. Rivera', course: 'English 10, Period 3, November 12' }),
     slide({ layout: 'agenda', title: 'Today’s program', body: 'We build one paragraph together.', agenda: [{ title: 'Warm up', minutes: 5 }, { title: 'Model', minutes: 15 }, { title: 'Write', minutes: 20 }] }),
     slide({ layout: 'steps', title: 'Draft your topic sentence', bullets: ['Reread your thesis', 'Pick one reason', 'Write the sentence'], minutes: 6 }),
     slide({ layout: 'discuss', title: 'Turn and talk', question: 'Which reason is strongest, and why?', grouping: 'Pairs', minutes: 4 }),
@@ -51,8 +51,23 @@ describe('planKitV4Deck: labels replace mode words', () => {
     expect(label('agenda')).toBeNull();
     expect(label('steps')).toBe('Do');
     expect(label('write')).toBe('Write');
-    expect(label('notes')).toBe('Know this');
     expect(label('exit')).toBe('Before you go');
+  });
+
+  test('spec v4.1: no label that tells students how to treat the content', () => {
+    // Notes, big idea and read along take none of their own.
+    expect(label('notes')).toBeNull();
+    const plans = planKitV4Deck(
+      deck([
+        slide({ layout: 'big_idea', title: 'Idea', body: 'A claim is an argument.' }),
+        slide({ layout: 'read', title: 'Read along', tasks: [{ verb: 'Underline', text: 'every claim' }] }),
+        slide({ layout: 'steps', title: 'Steps', bullets: ['One', 'Two'], mode: 'Hold this.' }),
+        slide({ layout: 'discuss', title: 'Pairs', question: 'Why?', mode: 'Know this' }),
+        slide({ layout: 'write', title: 'W', body: 'Write it.', mode: 'Remember' }),
+        slide({ layout: 'steps', title: 'More steps', bullets: ['One', 'Two'], mode: 'read' }),
+      ])
+    );
+    expect(plans.map((plan) => plan.label)).toEqual([null, null, null, null, null, null]);
   });
 
   test('a label that repeats the headline is skipped', () => {
@@ -114,9 +129,9 @@ describe('planKitV4Deck: color comes as a panel or as type', () => {
 describe('layoutKitV4Slide: type', () => {
   const all = lesson.slides.flatMap((_, index) => texts(layoutKitV4Slide(lesson, index).elements));
 
-  test('Georgia is never bold, nothing is italic, only Georgia and Arial', () => {
+  test('Georgia is never bold, nothing is italic, only Fraunces, Georgia and Arial', () => {
     for (const run of all) {
-      expect(['serif', 'sans']).toContain(run.face);
+      expect(['display', 'serif', 'sans']).toContain(run.face);
       if (run.face === 'serif') expect(run.bold).toBeFalsy();
       expect((run as { italic?: boolean }).italic).toBeUndefined();
     }
@@ -130,6 +145,13 @@ describe('layoutKitV4Slide: type', () => {
     }
   });
 
+  test('spec v4.1: Fraunces Bold for everything over 40px, Georgia for reading type at 40 and under', () => {
+    for (const run of all) {
+      if (run.face === 'display') expect(run.size).toBeGreaterThan(40);
+      if (run.face === 'serif' && !/^\d+$/.test(run.text)) expect(run.size).toBeLessThanOrEqual(40);
+    }
+  });
+
   test('no middle dots and no roman numerals anywhere a student reads', () => {
     for (const run of all) {
       expect(run.text).not.toContain('·');
@@ -137,15 +159,37 @@ describe('layoutKitV4Slide: type', () => {
     }
   });
 
-  test('the running head is the lesson’s name, without its number, in grey at 17px', () => {
-    const head = layoutKitV4Slide(lesson, 2).elements.find((element) => element.kind === 'text' && element.role === 'running-head');
-    expect(head && head.kind === 'text' && head.y).toBe(48);
-    expect(head && head.kind === 'text' && head.paras[0]!.runs[0]).toMatchObject({ text: 'Body Paragraphs', size: 17, color: KIT_V4.grey });
+  test('spec v4.1: no running head; the lesson’s name is on the title slide only', () => {
+    lesson.slides.forEach((_, index) => {
+      const runs = texts(layoutKitV4Slide(lesson, index).elements);
+      expect(runs.some((run) => run.size === 17)).toBe(false);
+      if (index > 0) expect(runs.some((run) => run.text === 'Body Paragraphs')).toBe(false);
+    });
+  });
+
+  test('spec v4.1: the title slide reads unit, title, subtitle, then the teacher, then class and date', () => {
+    const runs = texts(layoutKitV4Slide(lesson, 0).elements);
+    const order = ['The Critical Essay', 'Body Paragraphs', 'Build on your thesis', 'Ms. Rivera', 'English 10, Period 3, November 12'].map((text) =>
+      runs.findIndex((run) => run.text === text)
+    );
+    expect(order.every((at) => at >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    const title = runs.find((run) => run.text === 'Body Paragraphs')!;
+    expect(title.face).toBe('display');
+    expect(title.size).toBeGreaterThanOrEqual(66);
+    expect(title.size).toBeLessThanOrEqual(84);
+    expect(runs.some((run) => run.text.includes('Writing Program'))).toBe(false);
+  });
+
+  test('spec v4.1: without the teacher’s name the line is left out', () => {
+    const plain = deck([slide({ layout: 'title', title: 'Body Paragraphs', course: 'English 10' })]);
+    const column = layoutKitV4Slide(plain, 0).elements.find((element) => element.kind === 'text')!;
+    expect(column.kind === 'text' && column.paras.map((para) => para.runs.map((run) => run.text).join(''))).toEqual(['The Critical Essay', 'Body Paragraphs', 'English 10']);
   });
 
   test('the agenda reads "Today" with its description, and numbers its items', () => {
     const runs = texts(layoutKitV4Slide(lesson, 1).elements);
-    expect(runs.find((run) => run.text === 'Today')).toBeTruthy();
+    expect(runs.find((run) => run.text === 'Today')).toMatchObject({ face: 'display' });
     expect(runs.find((run) => run.text === 'We build one paragraph together.')).toBeTruthy();
     expect(runs.find((run) => run.text === '1' && run.face === 'serif')).toBeTruthy();
     expect(runs.some((run) => run.text.includes('program'))).toBe(false);
@@ -154,12 +198,12 @@ describe('layoutKitV4Slide: type', () => {
   test('a split slide puts its label in gold and its headline in white on the panel', () => {
     const runs = texts(layoutKitV4Slide(lesson, 2).elements);
     expect(runs.find((run) => run.text === 'Do')).toMatchObject({ face: 'sans', bold: true, size: 24, color: KIT_V4.gold });
-    expect(runs.find((run) => run.text === 'Draft your topic sentence')).toMatchObject({ face: 'serif', color: KIT_V4.white });
+    expect(runs.find((run) => run.text === 'Draft your topic sentence')).toMatchObject({ face: 'display', color: KIT_V4.white });
   });
 
-  test('the write slide sets its timer as a 220px numeral in the deck color', () => {
+  test('the write slide sets its timer as a 200px Fraunces numeral in the deck color', () => {
     const runs = texts(layoutKitV4Slide(lesson, 4).elements);
-    expect(runs.find((run) => run.text === '5')).toMatchObject({ face: 'serif', size: 220, color: kitV4Colors(lesson)[0] });
+    expect(runs.find((run) => run.text === '5')).toMatchObject({ face: 'display', size: 200, color: kitV4Colors(lesson)[0] });
   });
 
   test('the exit sends students to Yawp! in a line, not a button', () => {
@@ -168,11 +212,23 @@ describe('layoutKitV4Slide: type', () => {
     expect(runs.find((run) => run.text === 'Next time: Conclusions')).toBeTruthy();
   });
 
-  test('prompt sizes by length: 68 up to 12 words, 54 up to 24, 44 up to 40, then 34', () => {
-    expect(kitV4PromptSize('One two three')).toBe(68);
+  test('prompt sizes by length, within the kit’s 34–64: 64 up to 12 words, 54 up to 24, 44 up to 40, then 34', () => {
+    expect(kitV4PromptSize('One two three')).toBe(64);
     expect(kitV4PromptSize(Array(20).fill('word').join(' '))).toBe(54);
     expect(kitV4PromptSize(Array(35).fill('word').join(' '))).toBe(44);
     expect(kitV4PromptSize(Array(50).fill('word').join(' '))).toBe(34);
+  });
+});
+
+describe('layoutKitV4Slide: prompts', () => {
+  test('a short prompt is set in Fraunces, a long one at 34px in Georgia', () => {
+    const long = Array(45).fill('word').join(' ');
+    const prompts = deck([
+      slide({ layout: 'big_idea', title: 'Idea', body: 'A thesis is a promise.' }),
+      slide({ layout: 'write', title: 'Write', body: long }),
+    ]);
+    expect(texts(layoutKitV4Slide(prompts, 0).elements).find((run) => run.text === 'A thesis is a promise.')).toMatchObject({ face: 'display', size: 64 });
+    expect(texts(layoutKitV4Slide(prompts, 1).elements).find((run) => run.text === long)).toMatchObject({ face: 'serif', size: 34 });
   });
 });
 

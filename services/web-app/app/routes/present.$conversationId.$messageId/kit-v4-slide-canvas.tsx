@@ -1,8 +1,9 @@
 /**
- * A gallery slide in the Yawp! Lesson Deck Kit, spec v4, drawn from its
+ * A gallery slide in the Yawp! Lesson Deck Kit, spec v4.1, drawn from its
  * layout (`layoutKitV4Slide`) on a 1280×720 design canvas that scales with
  * its box: every size is a kit pixel, in `u` (1/1280 of the slide's width).
  * The same boxes PowerPoint and the PDF draw, so all three hang one slide.
+ * Fraunces Bold comes from the @font-face in app.css.
  */
 import type { CSSProperties } from 'react';
 import { SlidePicture } from '~/components/lesson-planner/slide-picture';
@@ -40,12 +41,13 @@ function Para({ para, align }: { para: KitV4Para; align?: 'left' | 'right' }) {
         <span
           key={i}
           style={{
-            fontFamily: run.face === 'serif' ? KIT_V4_FONTS.serif : KIT_V4_FONTS.sans,
-            fontWeight: run.face === 'sans' && run.bold ? 700 : 400,
+            fontFamily: KIT_V4_FONTS[run.face],
+            // Fraunces is only ever Bold; Georgia never is.
+            fontWeight: run.face === 'display' || (run.face === 'sans' && run.bold) ? 700 : 400,
             fontStyle: 'normal',
             fontSize: u(run.size),
             color: run.color,
-            letterSpacing: run.face === 'serif' && run.size >= 52 ? '-0.01em' : undefined,
+            letterSpacing: run.face !== 'sans' && run.size >= 52 ? '-0.01em' : undefined,
           }}
         >
           <BrandSafe>{run.text}</BrandSafe>
@@ -78,7 +80,7 @@ function Element({ element }: { element: KitV4Element }) {
     case 'text':
       return (
         <div
-          data-testid={element.role === 'credit' ? 'gallery-credit' : element.role === 'running-head' ? 'gallery-running-head' : undefined}
+          data-testid={element.role === 'credit' ? 'gallery-credit' : undefined}
           style={{ ...box, display: 'flex', flexDirection: 'column', justifyContent: JUSTIFY[element.valign], overflow: 'hidden' }}
         >
           {element.paras.map((para, i) => (
