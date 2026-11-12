@@ -167,11 +167,14 @@ describe('the free tier bundle tile artwork', () => {
     }
   );
 
-  test('the Pre-Writing and Thesis Statement cards are the redrawn dog-in-a-beret art', () => {
+  test('the Pre-Writing and Thesis Statement cards are the dog-in-a-beret art, without a wordmark', () => {
     expect(BUNDLE_TILE_IMAGES[PREWRITING_KIND].altText).toMatch(/beret/);
-    expect(BUNDLE_TILE_IMAGES[PREWRITING_KIND].altText).toMatch(/Pre-Writing/);
+    expect(BUNDLE_TILE_IMAGES[PREWRITING_KIND].altText).toMatch(/lightbulb/);
     expect(BUNDLE_TILE_IMAGES[THESIS_STATEMENT_KIND].altText).toMatch(/beret/);
-    expect(BUNDLE_TILE_IMAGES[THESIS_STATEMENT_KIND].altText).toMatch(
+    expect(BUNDLE_TILE_IMAGES[THESIS_STATEMENT_KIND].altText).toMatch(/yawp!/);
+    // The tile prints the title, so the cards carry no wordmark.
+    expect(BUNDLE_TILE_IMAGES[PREWRITING_KIND].altText).not.toMatch(/Pre-Writing/);
+    expect(BUNDLE_TILE_IMAGES[THESIS_STATEMENT_KIND].altText).not.toMatch(
       /Thesis Statement/
     );
   });

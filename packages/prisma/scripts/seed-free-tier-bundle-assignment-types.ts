@@ -209,8 +209,9 @@ export function readBundleTileImage(
 
 /**
  * The card artwork for each bundle type: a 940x788 JPEG in ./assets with the
- * same torn paper edge, scratchy ink and Didone wordmark as the Daily Pages
- * card. Authored art, so it lives in the repo rather than a fixture bundle.
+ * same torn paper edge and scratchy ink as the Daily Pages card. The drawing
+ * fills the card on its own; the tile already prints the type's title, so
+ * there is no wordmark. Authored art, so it lives in the repo rather than a fixture bundle.
  */
 export const BUNDLE_TILE_IMAGES: Record<
   string,
@@ -223,12 +224,12 @@ export const BUNDLE_TILE_IMAGES: Record<
   [PREWRITING_KIND]: {
     file: 'prewriting.jpg',
     altText:
-      'A scratchy ink drawing of a dog in a beret and striped shirt with a lightbulb over its head, above the words Pre-Writing, on torn white paper.',
+      'A scratchy ink drawing of a dog in a beret and striped shirt with a lightbulb over its head, on torn white paper.',
   },
   [THESIS_STATEMENT_KIND]: {
     file: 'thesis-statement.jpg',
     altText:
-      'A scratchy ink drawing of a dog in a beret and striped shirt saying yawp! in a speech bubble, above the words Thesis Statement, on torn white paper.',
+      'A scratchy ink drawing of a dog in a beret and striped shirt saying yawp! in a speech bubble, on torn white paper.',
   },
 };
 
@@ -245,12 +246,16 @@ export const BUNDLE_RETIRED_ARTWORK_MD5S: Record<string, string[]> = {
     '2e22d9bede4d3eee6d1ca26a446ef931',
     // The dog in a beret, as first encoded on the pr-892 preview (Nov 6, 2026).
     '0894136c31fa3eee303d703e72a3ba6c',
+    // The dog above the Pre-Writing wordmark (November 2026).
+    'f903a3e91b54fc985e511c39a5e3c137',
   ],
   [THESIS_STATEMENT_KIND]: [
     // A quill writing an underlined thesis sentence, the first card (October 2026).
     'c024adc8c638fbec53ac10bb4cb86d18',
     // The dog saying yawp!, as first encoded on the pr-892 preview (Nov 6, 2026).
     '8124afc102fdb63532b6602643dc193d',
+    // The dog above the Thesis Statement wordmark (November 2026).
+    'd0d12c18db5bed8eefa47bb550de2ff9',
   ],
 };
 
