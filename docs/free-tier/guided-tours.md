@@ -21,7 +21,7 @@ partway through records nothing.
 ## Who sees it
 
 Teachers whose organization plan is `FREE_CLASSROOM`, and only while the
-`free_tier` flag is on and the separate `guided-tours` flag is enabled for their organization. `guided-tours` defaults OFF on demo and production, with no deployment override. Nobody sees it during read-only impersonation. Paid
+`free_tier` flag is on and the separate `guided-tours` flag is enabled for their organization. `guided-tours` defaults OFF on demo and production, with no deployment override. PR previews are the exception: the preview seed (`ensureGuidedToursEnabledForPreview`) stores `guided-tours` as Everyone in `yawp_pr_<n>` databases, unless a value is already stored, so reviewers see the tours and can still switch them off under Admin, Access flags. Nobody sees it during read-only impersonation. Paid
 accounts and students never do.
 
 ## Pages and steps

@@ -28,6 +28,7 @@ import {
 } from './local-dev/seed-lesson-planner-feature-flag';
 import { ensureFreeTierEnabledForPreview } from './local-dev/seed-free-tier-feature-flag';
 import { ensureDemoFeedbackEnabled } from './local-dev/seed-demo-feedback';
+import { ensureGuidedToursEnabledForPreview } from './local-dev/seed-guided-tours-feature-flag';
 import {
   seedPreviewTeacherNotesQa,
   shouldRunPreviewTeacherNotesQaSeed,
@@ -46,6 +47,8 @@ try {
   await ensureDemoFeedbackEnabled(prisma);
   const freeTierFlag = await ensureFreeTierEnabledForPreview(prisma, databaseName);
   console.log(`Free tier feature flag seed: ${JSON.stringify(freeTierFlag)}`);
+  const guidedToursFlag = await ensureGuidedToursEnabledForPreview(prisma, databaseName);
+  console.log(`Page tours feature flag seed: ${JSON.stringify(guidedToursFlag)}`);
   const lessonPlannerFlags = await ensureLessonPlannerEnabledForPreview(
     prisma,
     databaseName
