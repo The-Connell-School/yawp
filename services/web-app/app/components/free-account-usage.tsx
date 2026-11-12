@@ -381,9 +381,10 @@ function FreeTierCarouselTile({
       badge={teachingLocked || siteLicense ? 'locked' : 'create'}
     />
   );
-  const testId = siteLicense
-    ? 'site-license-locked-assignment-tile'
-    : dashboardAssignmentTileTestId;
+  const testId =
+    siteLicense && !teachingLocked
+      ? 'site-license-locked-assignment-tile'
+      : dashboardAssignmentTileTestId;
 
   const guideOnly = teachingLocked || siteLicense;
   const hasHowItWorksGuide =
