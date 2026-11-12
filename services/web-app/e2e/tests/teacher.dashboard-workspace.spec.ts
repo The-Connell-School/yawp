@@ -575,8 +575,13 @@ test.describe.serial('Teacher dashboard workspace', () => {
     const prompt = `Type Page E2E prompt ${Date.now()}`;
     await page.getByRole('button', { name: /^New/ }).click();
     await page.getByRole('menuitem', { name: 'Assignment' }).click();
-    await expectNewAssignmentPage(page);
-    await fillAndSubmitNewAssignment(page, { title, prompt });
+    const sheet = page.getByRole('dialog');
+    await expect(sheet.getByRole('heading', { name: 'New Assignment' })).toBeVisible();
+    await sheet.getByLabel('Title (optional)').fill(title);
+    await sheet.getByLabel('Prompt', { exact: true }).fill(prompt);
+    await sheet.getByRole('button', { name: /Create Assignment/i }).click();
+    await expectAssignmentCreatedSuccessSheet(page);
+    await dismissAssignmentCreatedSuccessSheet(page);
 
     await expectCreatedAssignment({
       classId: e2eContext.classId,

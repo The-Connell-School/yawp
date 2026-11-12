@@ -26,7 +26,7 @@ test('My Assignments scrolls at short and tall viewports while navigation stays 
       await page.goto('/app/assignments');
       await page.getByTestId('my-assignments-search').fill('Scroll regression');
       const scroll = page
-        .locator('div.overflow-y-auto')
+        .locator('section.free-tier-b2-page-shell, div.overflow-y-auto')
         .filter({ has: page.getByTestId('my-assignments-search') })
         .first();
       const nav = page.getByRole('link', {
