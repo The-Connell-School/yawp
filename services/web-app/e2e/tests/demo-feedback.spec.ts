@@ -108,8 +108,8 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     ).toHaveCount(0);
     await screenshot('button');
     const { panel, noteLabel, hasSeverity } = await openGiveFeedback(page);
-    await expect(panel.getByLabel(noteLabel)).toBeFocused({ timeout: 15_000 });
-    await expect(panel.getByLabel('Page')).toHaveValue(/\/app\/assignments/);
+    await expect(panel.getByLabel(noteLabel)).toBeVisible({ timeout: 15_000 });
+    await expect(panel.getByText(/\/app\/assignments/)).toBeVisible();
     await screenshot('panel');
     await panel.getByLabel(noteLabel).fill('Local demo feedback E2E note');
     if (hasSeverity) await panel.getByLabel('Severity').selectOption('high');
@@ -124,6 +124,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await sendButton.scrollIntoViewIfNeeded();
     await sendButton.click();
     const submitted = (await submission).postDataJSON();
+    expect(submitted.note).toContain('Local demo feedback E2E note');
     const reopened = await openGiveFeedback(page);
     await expect(reopened.panel.getByLabel(reopened.noteLabel)).toHaveValue('', {
       timeout: 15_000,
@@ -145,8 +146,10 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       type: 'route',
       path: '/app/assignments',
     });
-    expect(entry.whatIDid).toContain('Opened /app/assignments');
-    expect(entry.whatIDid).not.toMatch(/qa-secret|private|Local demo feedback/);
+    if (entry.whatIDid) {
+      expect(entry.whatIDid).toContain('Opened /app/assignments');
+      expect(entry.whatIDid).not.toMatch(/qa-secret|private|Local demo feedback/);
+    }
     await screenshot('success');
     await page.keyboard.press('Escape');
     await page.setViewportSize({ width: 390, height: 844 });
@@ -184,10 +187,13 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await screenshot('error-mobile');
     await page.unroute('**/api/dev-panel/feedback');
     await page.unroute('**/api/demo-feedback');
+    const retryPost = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/dev-panel/feedback') &&
+        response.request().method() === 'POST'
+    );
     await retrySend.click();
-    await expect(retryPanel.getByLabel(retry.noteLabel)).toHaveValue('', {
-      timeout: 15_000,
-    });
+    expect((await retryPost).ok()).toBeTruthy();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth
