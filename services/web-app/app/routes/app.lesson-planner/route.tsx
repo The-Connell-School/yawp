@@ -103,6 +103,7 @@ import { UnitPlanCard } from '~/components/ai-chat/unit-plan-card';
 import { buildDayDisplay, buildDayRequest, readUnitPlan } from '~/domain/lesson-planner/unit-plan';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
 import { hidePromptIds } from '~/domain/lesson-planner/prompt-ids';
+import { teacherFacingMarkdown } from '~/domain/lesson-planner/step-type-tags';
 import { overTime, planMinutes } from '~/domain/lesson-planner/plan-timing';
 import { readPlanSteps, readStepHeading, splitAtStepHeadings } from '~/domain/lesson-planner/plan-steps';
 import { SegmentToggle } from '~/components/lesson-planner/segment-toggle';
@@ -1898,7 +1899,7 @@ function MessageBubble({
   const renderPart = (part: ReplyPart, index: number) => {
     const key = `${message.id ?? 'pending'}:${index}`;
     if (part.kind === 'markdown') {
-      const raw = hidePromptIds(linkMaterialTitles(part.text, materials));
+      const raw = teacherFacingMarkdown(linkMaterialTitles(part.text, materials));
       // No "I have everything I need" above a plan (Brian's run 3).
       const text = framePlan && index === 0 ? stripPlanPreamble(raw) : raw;
       if (!planSteps.length) {
@@ -2347,7 +2348,7 @@ function MessageBubble({
             <button
               type="button"
               onClick={() =>
-                printAssistantMessage(body, 'Yawp! Lesson Planner')
+                printAssistantMessage(teacherFacingMarkdown(body), 'Yawp! Lesson Planner')
               }
               className="ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
             >
