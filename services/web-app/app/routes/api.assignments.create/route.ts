@@ -316,7 +316,7 @@ export async function action({ request }: ActionFunctionArgs) {
         );
       }
 
-      await createAssignmentDeployedToClasses({
+      const createdCustomApAssignment = await createAssignmentDeployedToClasses({
         data: buildAssignmentCreateInputFromCustomApHistory({
           assignmentTypeId: assignmentType.id,
           title,
@@ -329,6 +329,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({
         success: true,
         message: 'Assignment created and applied to classes.',
+        assignmentId: createdCustomApAssignment.id,
       });
     }
 
@@ -394,6 +395,7 @@ export async function action({ request }: ActionFunctionArgs) {
       success: true,
       message: 'Assignment created and applied to classes.',
       nextStep,
+      assignmentId: createdApAssignment.id,
     });
   }
 
@@ -449,9 +451,10 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   let nextStep: ReturnType<typeof groupSetupNextStep> = null;
+  let createdAssignment: { id: string } | undefined;
 
   try {
-    const createdAssignment = await createAssignmentDeployedToClasses({
+    createdAssignment = await createAssignmentDeployedToClasses({
       data: {
         assignmentTypeId: assignmentType.id,
         title,
@@ -564,6 +567,7 @@ export async function action({ request }: ActionFunctionArgs) {
         message:
           'Assignment created and applied to classes, but it could not be saved for reuse.',
         nextStep,
+        assignmentId: createdAssignment?.id,
       });
     }
   }
@@ -574,6 +578,7 @@ export async function action({ request }: ActionFunctionArgs) {
       ? 'Assignment created. Students cannot see it until you finalize groups.'
       : 'Assignment created and applied to classes.',
     nextStep,
+    assignmentId: createdAssignment?.id,
   });
 }
 

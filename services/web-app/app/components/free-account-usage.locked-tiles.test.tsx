@@ -114,6 +114,27 @@ test('FreeAssignmentTiles renders assignment artwork when imageId is present', (
   expect(html).toContain('src="/api/image/course/img-1"');
 });
 
+test('FreeAssignmentTiles artwork shows no hover tooltip with the image description', () => {
+  const html = renderToStaticMarkup(
+    <StaticRouter location="/app">
+      <FreeAssignmentTiles
+        usage={usage}
+        types={[
+          {
+            id: 'starter',
+            kind: 'class_starter',
+            imageId: 'img-1',
+            imageTitle: 'Scratchy ink drawing of a dog in a beret',
+          },
+        ]}
+        onCreate={() => {}}
+      />
+    </StaticRouter>
+  );
+  expect(html).toContain('src="/api/image/course/img-1"');
+  expect(html).not.toContain('Scratchy ink drawing of a dog in a beret');
+});
+
 test('FreeAssignmentTiles shows Unlimited meta for monthly free assignments', () => {
   const html = renderToStaticMarkup(
     <StaticRouter location="/app">

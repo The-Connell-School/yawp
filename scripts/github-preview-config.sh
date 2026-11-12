@@ -58,7 +58,7 @@ gh_var PREVIEW_RUNTIME "${PREVIEW_RUNTIME:-fast}"
 gh_var PREVIEW_DATA_MODE "${PREVIEW_DATA_MODE:-seed}"
 gh_var PREVIEW_SEAT_COUNT "${PREVIEW_SEAT_COUNT:-1}"
 gh_var PREVIEW_DEV_LOGIN_EMAIL "${PREVIEW_DEV_LOGIN_EMAIL:-dev.teacher@yawp.local}"
-gh_var PREVIEW_AI_MODEL "${PREVIEW_AI_MODEL:-claude-sonnet-5-5}"
+gh_var PREVIEW_AI_MODEL "${PREVIEW_AI_MODEL:-claude-sonnet-4-6}"
 gh_var PREVIEW_DB_DUMP_S3_URI "${PREVIEW_DB_DUMP_S3_URI:-s3://yawp-preview-videos/production.dump}"
 
 if [[ -n "${PREVIEW_SANITIZED_DUMP_VERSION:-}" ]]; then

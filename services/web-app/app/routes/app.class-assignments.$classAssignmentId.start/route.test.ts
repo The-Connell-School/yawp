@@ -6,30 +6,15 @@ const prisma = {
 
 const requireUserId = mock();
 const requireMembership = mock();
-const createDocumentForAssignmentType = mock();
-const findStudentGroupDocument = mock();
-const recordClassAssignmentFirstOpen = mock();
+const openClassAssignmentForStudent = mock();
 const redirectWithToast = mock();
-class DocumentCreationError extends Error {}
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
-mock.module('~/domain/documents.server', () => ({
-  createDocumentForAssignmentType,
-  DocumentCreationError,
-}));
-mock.module('~/domain/student-class-assignment-first-open.server', () => ({
-  recordClassAssignmentFirstOpen,
-}));
-// Spread the pristine module: bun's mock.module is global to the test run, so
-// replacing it wholesale would strip arrangeGroups/openGroups for other files
-// (see the comment in test-preload.ts).
-const actualGroups = globalThis.__realModules[
-  '~/domain/collaboration/groups.server'
-];
-mock.module('~/domain/collaboration/groups.server', () => ({
-  ...actualGroups,
-  findStudentGroupDocument,
+const actualOpenClassAssignment =
+  globalThis.__realModules['~/domain/assignments/open-class-assignment.server'];
+mock.module('~/domain/assignments/open-class-assignment.server', () => ({
+  openClassAssignmentForStudent,
 }));
 mock.module('~/utils/toast.server', () => ({ redirectWithToast }));
 
@@ -37,7 +22,11 @@ const { action } = await import('./route');
 
 afterAll(() => {
   mock.restore();
-  mock.module('~/domain/collaboration/groups.server', () => actualGroups);
+  if (actualOpenClassAssignment) {
+    mock.module('~/domain/assignments/open-class-assignment.server', () =>
+      actualOpenClassAssignment
+    );
+  }
 });
 
 const call = () =>
@@ -49,17 +38,6 @@ const call = () =>
     params: { classAssignmentId: 'ca-1' },
   } as any);
 
-const classAssignment = ({ collaborationEnabled = false } = {}) => ({
-  id: 'ca-1',
-  assignmentId: 'a-1',
-  assignment: { assignmentTypeId: 'at-1', collaborationEnabled },
-  class: {
-    id: 'class-1',
-    school: { id: 'school-1', organizationId: 'org-1' },
-    teachers: [{ id: 'teacher-1' }],
-  },
-});
-
 describe('class assignment start', () => {
   beforeEach(() => {
     prisma.classAssignment.findFirst.mockReset();
@@ -68,78 +46,51 @@ describe('class assignment start', () => {
       id: 'member-1',
       role: 'STUDENT',
     });
-    createDocumentForAssignmentType
+    openClassAssignmentForStudent
       .mockReset()
-      .mockResolvedValue({ documentId: 'doc-solo' });
-    findStudentGroupDocument.mockReset().mockResolvedValue(null);
-    recordClassAssignmentFirstOpen.mockReset().mockResolvedValue(undefined);
-    redirectWithToast.mockReset().mockImplementation((to: string) => ({ to }));
+      .mockResolvedValue({ ok: true, url: '/app/documents/doc-solo?spa=1' });
+    redirectWithToast
+      .mockReset()
+      .mockImplementation((to: string, options?: any) => ({ to, options }));
   });
 
-  describe('solo assignments (existing behavior)', () => {
-    test('still creates a personal document and opens the solo editor', async () => {
-      prisma.classAssignment.findFirst.mockResolvedValue(classAssignment());
+  test('delegates solo starts to openClassAssignmentForStudent', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue({ id: 'ca-1' });
 
-      const result: any = await call();
+    const result: any = await call();
 
-      expect(createDocumentForAssignmentType).toHaveBeenCalledWith({
-        membershipId: 'member-1',
-        assignmentTypeId: 'at-1',
-        assignmentId: 'a-1',
-        classAssignmentId: 'ca-1',
-      });
-      expect(result.to).toContain('/app/documents/doc-solo');
-      // The collaborative branch must not be consulted at all.
-      expect(findStudentGroupDocument).not.toHaveBeenCalled();
-      expect(recordClassAssignmentFirstOpen).toHaveBeenCalledWith({
-        classAssignmentId: 'ca-1',
-        membershipId: 'member-1',
-      });
+    expect(openClassAssignmentForStudent).toHaveBeenCalledWith({
+      classAssignmentId: 'ca-1',
+      membershipId: 'member-1',
     });
+    expect(result.to).toContain('/app/documents/doc-solo');
   });
 
-  describe('collaborative assignments', () => {
-    test('opens the group draft instead of creating a personal document', async () => {
-      prisma.classAssignment.findFirst.mockResolvedValue(
-        classAssignment({ collaborationEnabled: true })
-      );
-      findStudentGroupDocument.mockResolvedValue({ documentId: 'doc-group' });
-
-      const result: any = await call();
-
-      expect(result.to).toContain('/app/collab-documents/doc-group');
-      // This is what removes the two-partners-click-Start race: no document is
-      // created here at all.
-      expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
+  test('opens the group draft when the shared helper returns a collab URL', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue({ id: 'ca-1' });
+    openClassAssignmentForStudent.mockResolvedValue({
+      ok: true,
+      url: '/app/collab-documents/doc-group?exitTo=%2Fapp%3Ftab%3Dassignments',
     });
 
-    test('looks up the group for this student and class assignment', async () => {
-      prisma.classAssignment.findFirst.mockResolvedValue(
-        classAssignment({ collaborationEnabled: true })
-      );
-      findStudentGroupDocument.mockResolvedValue({ documentId: 'doc-group' });
+    const result: any = await call();
 
-      await call();
+    expect(result.to).toContain('/app/collab-documents/doc-group');
+    expect(result.options.description).toBe('Opening your group document.');
+  });
 
-      expect(findStudentGroupDocument).toHaveBeenCalledWith({
-        classAssignmentId: 'ca-1',
-        membershipId: 'member-1',
-      });
+  test('tells the student when their teacher has not opened groups yet', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue({ id: 'ca-1' });
+    openClassAssignmentForStudent.mockResolvedValue({
+      ok: false,
+      reason: 'groups-not-open',
+      message: 'Your teacher has not opened groups for this assignment yet.',
     });
 
-    test('tells the student when their teacher has not opened groups yet', async () => {
-      prisma.classAssignment.findFirst.mockResolvedValue(
-        classAssignment({ collaborationEnabled: true })
-      );
-      findStudentGroupDocument.mockResolvedValue(null);
+    const result: any = await call();
 
-      await call();
-
-      expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
-      const [, options] = redirectWithToast.mock.calls[0];
-      expect(options.type).toBe('error');
-      expect(options.description).toMatch(/not opened groups/i);
-    });
+    expect(result.options.type).toBe('error');
+    expect(result.options.description).toMatch(/not opened groups/i);
   });
 
   test('non-students are still turned away', async () => {
@@ -153,18 +104,6 @@ describe('class assignment start', () => {
   });
 });
 
-/**
- * Arrived on `main` while the collaboration branch was open, and both sides
- * created this file — so the two suites are merged here rather than one of them
- * being dropped.
- *
- * The block above mocks `~/utils/toast.server`, and bun's mock.module is global
- * to the test run, so this suite cannot get the real `redirectWithToast` back.
- * It stands in a passthrough that returns what the real helper returns — a 302
- * carrying `Location` — which leaves the assertions below testing the route
- * (where it sends a student, and that the query is gated on `postAt`) rather
- * than testing the toast helper.
- */
 describe('student start is rejected when postAt is in the future', () => {
   beforeEach(() => {
     prisma.classAssignment.findFirst.mockReset();
@@ -197,7 +136,6 @@ describe('student start is rejected when postAt is in the future', () => {
       context: {} as never,
     } as any);
 
-    // Redirect back to assignments with a toast
     expect(response).toBeInstanceOf(Response);
     if (!(response instanceof Response)) {
       throw new Error('Expected assignment-not-found redirect response');
@@ -206,7 +144,6 @@ describe('student start is rejected when postAt is in the future', () => {
     const location = response.headers.get('Location') || '';
     expect(location).toContain('/app?tab=assignments');
 
-    // The query included the visibility gate on postAt
     const where = prisma.classAssignment.findFirst.mock.calls[0][0].where;
     expect(where).toEqual(
       expect.objectContaining({

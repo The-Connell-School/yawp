@@ -79,7 +79,6 @@ export function LockedAssignmentTypePickerSheet({
       kind: 'free' as const,
       label: row.label,
       imageId: type.imageId,
-      imageTitle: type.imageTitle,
       included: 'Unlimited',
       selected: selectedId === type.id,
       onSelect: () => setSelectedId(type.id),
@@ -89,7 +88,6 @@ export function LockedAssignmentTypePickerSheet({
       kind: 'locked' as const,
       label: tile.label,
       imageId: tile.imageId,
-      imageTitle: null as string | null,
       selected: false,
       onSelect: undefined,
     })),
@@ -160,7 +158,6 @@ export function LockedAssignmentTypePickerSheet({
                   key={tile.key}
                   label={tile.label}
                   imageId={tile.imageId}
-                  imageTitle={tile.imageTitle}
                   tabIndex={0}
                   tileRef={(el) => {
                     tileRefs.current[index] = el as HTMLButtonElement | null;
@@ -188,7 +185,6 @@ export function LockedAssignmentTypePickerSheet({
                 <div className={assignmentTypeTileImageWrapClassName()}>
                   <AssignmentTypeTileImage
                     imageId={tile.imageId}
-                    imageTitle={tile.imageTitle}
                     className={assignmentTypeTileImageClassName}
                   />
                 </div>

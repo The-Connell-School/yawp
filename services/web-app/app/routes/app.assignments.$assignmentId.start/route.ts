@@ -1,13 +1,7 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
-import { findStudentGroupDocument } from '~/domain/collaboration/groups.server';
-import {
-  createDocumentForAssignmentType,
-  DocumentCreationError,
-  documentCreationErrorTextForClient,
-} from '~/domain/documents.server';
-import { recordClassAssignmentFirstOpen } from '~/domain/student-class-assignment-first-open.server';
+import { openClassAssignmentForStudent } from '~/domain/assignments/open-class-assignment.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -31,6 +25,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const classAssignment = await prisma.classAssignment.findFirst({
     where: {
       assignmentId: params.assignmentId,
+      OR: [{ postAt: null }, { postAt: { lte: new Date() } }],
       class: {
         students: {
           some: {
@@ -39,22 +34,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
         },
       },
     },
+    orderBy: { createdAt: 'asc' },
     select: {
       id: true,
-      assignmentId: true,
-      assignment: {
-        select: {
-          assignmentTypeId: true,
-          collaborationEnabled: true,
-        },
-      },
-      class: {
-        select: {
-          id: true,
-          school: { select: { id: true, organizationId: true } },
-          teachers: { select: { id: true } },
-        },
-      },
     },
   });
 
@@ -65,73 +47,26 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
   }
 
-  // The same branch the class-assignment start route takes. Without it this
-  // endpoint would hand a student a personal solo document for an assignment
-  // their group already owns a draft for — the exact orphan draft the other
-  // route exists to prevent. Both are student-facing POSTs, so the guard has to
-  // live in both rather than only in the one the UI happens to use.
-  if (classAssignment.assignment.collaborationEnabled) {
-    const groupDocument = await findStudentGroupDocument({
-      classAssignmentId: classAssignment.id,
-      membershipId: profile.id,
-    });
-
-    if (!groupDocument) {
-      return redirectWithToast('/app?tab=assignments', {
-        type: 'error',
-        description:
-          'Your teacher has not opened groups for this assignment yet.',
-      });
-    }
-
-    await recordClassAssignmentFirstOpen({
-      classAssignmentId: classAssignment.id,
-      membershipId: profile.id,
-    });
-
-    const collabParams = new URLSearchParams({
-      exitTo: '/app?tab=assignments',
-    });
-
-    return redirectWithToast(
-      `/app/collab-documents/${groupDocument.documentId}?${collabParams}`,
-      { type: 'success', description: 'Opening your group document.' }
-    );
-  }
-
-  let documentId = '';
-  try {
-    const created = await createDocumentForAssignmentType({
-      membershipId: profile.id,
-      assignmentTypeId: classAssignment.assignment.assignmentTypeId,
-      assignmentId: classAssignment.assignmentId,
-      classAssignmentId: classAssignment.id,
-    });
-    documentId = created.documentId;
-  } catch (creationError) {
-    if (creationError instanceof DocumentCreationError) {
-      return redirectWithToast('/app?tab=assignments', {
-        type: 'error',
-        description: documentCreationErrorTextForClient(
-          creationError,
-          'Could not start this assignment.',
-        ),
-      });
-    }
-    throw creationError;
-  }
-
-  await recordClassAssignmentFirstOpen({
+  const opened = await openClassAssignmentForStudent({
     classAssignmentId: classAssignment.id,
     membershipId: profile.id,
   });
 
-  const redirectParams = new URLSearchParams({
-    spa: '1',
-    exitTo: '/app?tab=assignments',
-  });
+  if (!opened.ok) {
+    return redirectWithToast('/app?tab=assignments', {
+      type: 'error',
+      description: opened.message,
+    });
+  }
 
-  return redirectWithToast(`/app/documents/${documentId}?${redirectParams}`, {
+  if (opened.url.includes('/app/collab-documents/')) {
+    return redirectWithToast(opened.url, {
+      type: 'success',
+      description: 'Opening your group document.',
+    });
+  }
+
+  return redirectWithToast(opened.url, {
     type: 'success',
     description: 'Document created successfully.',
   });

@@ -163,7 +163,6 @@ export function FreeAssignmentTiles({
               <div className={assignmentTypeTileImageWrapClassName()}>
                 <AssignmentTypeTileImage
                   imageId={type?.imageId}
-                  imageTitle={type?.imageTitle}
                   className={assignmentTypeTileImageClassName}
                 />
               </div>

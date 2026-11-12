@@ -753,7 +753,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
  * document is created from — but an exit ticket's is a single row whose
  * description restates the prompt, sitting directly under directions that
  * already explain the whole thing. Hidden there rather than deleted, because
- * the module itself is still what New -> Document builds from.
+ * the module itself is still what New -> Sample document builds from.
  */
 export function showModulesAccordion(
   assignmentType: { kind?: string | null },
@@ -889,7 +889,7 @@ export default function AppAssignmentTypesIdRoute() {
   // Daily Pages carries one module, whose blurb is freewrite-era copy telling
   // students to throw ideas around — which the about section directly above it
   // now contradicts. The module row itself stays: documents are created inside
-  // it, and `hasModules` still gates New → Document.
+  // it, and `hasModules` still gates New → Sample document.
   const showModules = modulesVisible && !showShortFormLibrary;
   // The same door, for the other end of the lesson: the planner sends a
   // teacher here with the exit ticket its plan ended on, already answered.
@@ -999,12 +999,6 @@ export default function AppAssignmentTypesIdRoute() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
-                          disabled={!hasModules || isLoading}
-                          onSelect={() => docFormRef.current?.requestSubmit()}
-                        >
-                          Document
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
                           disabled={data.teacherClasses.length === 0}
                           onSelect={() => {
                             setLibraryPrompt('');
@@ -1021,6 +1015,12 @@ export default function AppAssignmentTypesIdRoute() {
                             Generate a prompt
                           </DropdownMenuItem>
                         ) : null}
+                        <DropdownMenuItem
+                          disabled={!hasModules || isLoading}
+                          onSelect={() => docFormRef.current?.requestSubmit()}
+                        >
+                          Sample document
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}

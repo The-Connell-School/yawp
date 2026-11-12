@@ -33,7 +33,7 @@ import {
   useSearchParams,
 } from 'react-router';
 import { toCollaborationGroupMode } from '~/domain/assignments/collaboration';
-import { Copy, Pencil, UsersIcon } from 'lucide-react';
+import { AssignmentDetailHeaderActions } from '~/components/assignments/assignment-detail-header-actions';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
@@ -57,6 +57,10 @@ import {
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
 import { formatClassLabel } from '~/utils/class-display';
+import {
+  resolveTeacherSchoolYearScope,
+  schoolYearWhere,
+} from '~/utils/school-year-scope.server';
 import { dailyPagesEngagementPointValueError } from '~/domain/assignment-types/daily-pages-engagement-point-validation';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
@@ -142,6 +146,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const assignmentId = params.assignmentId!;
   const requestedClassId = new URL(request.url).searchParams.get('classId');
+  const schoolYearScope = await resolveTeacherSchoolYearScope(
+    request,
+    profile.id
+  );
 
   // Scoped to classes this teacher actually teaches, so the URL alone never
   // exposes another teacher's class.
@@ -334,6 +342,26 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         }
       : null;
 
+  const duplicateClassRows = await prisma.class.findMany({
+    where: {
+      teachers: { some: { id: profile.id } },
+      isArchived: false,
+      ...schoolYearWhere(schoolYearScope),
+    },
+    select: {
+      id: true,
+      grade: true,
+      period: true,
+      title: true,
+    },
+  });
+  const duplicateClasses = duplicateClassRows
+    .map((klass) => ({
+      id: klass.id,
+      name: formatClassLabel(klass),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   return {
     found: true as const,
     classInsightsEnabled,
@@ -357,6 +385,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: deployment.classId,
       name: formatClassLabel(deployment.class),
     })),
+    duplicateClasses,
     assignment: {
       id: active.assignment.id,
       classAssignmentId: active.id,
@@ -983,81 +1012,64 @@ export default function AssignmentDetailRoute() {
                   </span>
                 </div>
               </div>
-              <div
-                className="flex shrink-0 items-center gap-2"
-                data-testid="assignment-detail-actions"
-              >
-                {classes.length > 1 ? (
-                  <Select
-                    value={activeClassId}
-                    onValueChange={handleClassChange}
-                  >
-                    <SelectTrigger
-                      className="w-[200px]"
-                      aria-label="Class"
+              <AssignmentDetailHeaderActions
+                assignmentId={assignment.id}
+                canEdit={canEdit}
+                collaboration={collaboration ?? undefined}
+                classAssignmentId={assignment.classAssignmentId}
+                onDuplicate={() => setIsDuplicateSheetOpen(true)}
+                onEdit={() => setIsEditSheetOpen(true)}
+                collaborationEnabled={Boolean(collaboration)}
+                groupsNotOpened={Boolean(
+                  collaboration && !collaboration.groupsOpened
+                )}
+                duplicateDisabled={Boolean(
+                  !freeUsage?.monthly &&
+                    freeUsage?.assignments.find(
+                      (row) => row.kind === assignment.assignmentType.kind
+                    )?.remaining === 0
+                )}
+                duplicateDisabledNote={
+                  !freeUsage?.monthly &&
+                  freeUsage?.assignments.find(
+                    (row) => row.kind === assignment.assignmentType.kind
+                  )?.remaining === 0 ? (
+                    <span className="text-xs text-amber-800">
+                      No {assignment.assignmentType.title} left
+                    </span>
+                  ) : null
+                }
+                classPicker={
+                  classes.length > 1 ? (
+                    <Select
+                      value={activeClassId}
+                      onValueChange={handleClassChange}
+                    >
+                      <SelectTrigger
+                        className="w-[200px]"
+                        aria-label="Class"
+                        data-testid="assignment-detail-class-picker"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {classes.map((klass) => (
+                          <SelectItem key={klass.id} value={klass.id}>
+                            {klass.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : classes.length === 1 ? (
+                    <span
+                      className="hidden text-sm text-muted-foreground md:inline"
                       data-testid="assignment-detail-class-picker"
                     >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {classes.map((klass) => (
-                        <SelectItem key={klass.id} value={klass.id}>
-                          {klass.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : null}
-                {collaboration ? (
-                  <Button asChild variant="outline">
-                    <Link
-                      to={`/app/class-assignments/${assignment.classAssignmentId}/groups`}
-                      data-testid="assignment-detail-groups-link"
-                    >
-                      <UsersIcon className="mr-2 h-4 w-4" />
-                      {collaboration.groupsOpened
-                        ? 'Groups'
-                        : collaboration.groupCount > 0
-                          ? 'Finish setting up groups'
-                          : 'Set up groups'}
-                    </Link>
-                  </Button>
-                ) : null}
-                {canEdit ? (
-                  <>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setIsDuplicateSheetOpen(true)}
-                      disabled={Boolean(
-                        !freeUsage?.monthly &&
-                        freeUsage?.assignments.find(
-                          (row) => row.kind === assignment.assignmentType.kind
-                        )?.remaining === 0
-                      )}
-                    >
-                      <Copy className="mr-2 h-4 w-4" />
-                      Duplicate
-                    </Button>
-                    {!freeUsage?.monthly &&
-                      freeUsage?.assignments.find(
-                        (row) => row.kind === assignment.assignmentType.kind
-                      )?.remaining === 0 && (
-                        <span className="text-xs text-amber-800">
-                          No {assignment.assignmentType.title} left
-                        </span>
-                      )}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsEditSheetOpen(true)}
-                    >
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Edit
-                    </Button>
-                  </>
-                ) : null}
-              </div>
+                      {activeClassOption.name}
+                    </span>
+                  ) : null
+                }
+              />
             </div>
           </div>
 
@@ -1150,9 +1162,10 @@ export default function AssignmentDetailRoute() {
           open={isDuplicateSheetOpen}
           onOpenChange={setIsDuplicateSheetOpen}
           entryPoint="class"
-          fixedClassId={activeClassId}
+          assignToVariant="duplicate"
           assignmentTypes={data.assignmentTypes}
-          teacherClasses={[activeClassOption]}
+          teacherClasses={data.duplicateClasses}
+          initialClassIds={[]}
           exitTicketBuilderV3Enabled={data.exitTicketBuilderV3Enabled}
           initialExitTicketConfig={assignment.exitTicket ?? null}
           initialAssignmentTypeId={assignment.assignmentTypeId}

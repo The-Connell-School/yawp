@@ -167,6 +167,9 @@ if (isWebAppTestFile()) {
         '~/domain/assignment-types/assignment-type-grading-config.server'
       ),
     '~/domain/documents.server': await snapshot('~/domain/documents.server'),
+  '~/domain/assignments/open-class-assignment.server': await snapshot(
+    '~/domain/assignments/open-class-assignment.server'
+  ),
     // Loader route tests stub peek/applicationIdFromSignedToken; the known-request
     // helper test needs the real decoder when it runs in the same bun invocation.
     '~/domain/free-tier/signed-link.server': await snapshot(
