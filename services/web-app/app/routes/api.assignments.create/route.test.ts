@@ -209,6 +209,7 @@ describe('api.assignments.create', () => {
       },
       select: {
         id: true,
+        title: true,
         systemKey: true,
         kind: true,
         collaborationSupported: true,
@@ -568,6 +569,7 @@ describe('api.assignments.create', () => {
       },
       select: {
         id: true,
+        title: true,
         systemKey: true,
         kind: true,
         collaborationSupported: true,
