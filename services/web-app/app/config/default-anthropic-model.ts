@@ -3,4 +3,4 @@
  * `process.env.AI_MODEL ?? DEFAULT_ANTHROPIC_MODEL` (or equivalent) so previews
  * and local overrides keep working.
  */
-export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-5-5' as const;
+export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6' as const;
