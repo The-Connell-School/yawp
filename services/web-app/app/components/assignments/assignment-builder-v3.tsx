@@ -35,7 +35,6 @@ import {
   SITE_LICENSE_ONLY_TILE_LABEL,
 } from '~/domain/free-tier/locked-dashboard-copy';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
-import { lockedTeachingButtonProps } from '~/components/free-tier/locked-teaching-control';
 import { TeachingApprovalRequiredAlert } from '~/components/free-tier/teaching-approval-required-alert';
 import { isTeachingApprovalRequiredActionData } from '~/domain/free-tier/teaching-approval-required';
 import { toDateInputValue } from '~/utils/date-only';
@@ -362,6 +361,14 @@ export function AssignmentBuilderV3({
       setDirty(false);
       return;
     }
+    if (isTeachingApprovalRequiredActionData(data)) {
+      const fields = data.fields;
+      const titleField = fields.title;
+      if (typeof titleField === 'string') setTitle(titleField);
+      const promptField = fields.prompt;
+      if (typeof promptField === 'string') setPrompt(promptField);
+      return;
+    }
     if (!data.success && data.message) {
       setFormError(data.message);
     }
@@ -471,7 +478,7 @@ export function AssignmentBuilderV3({
   }
 
   function handleCreate() {
-    if (!canCreate || teachingLocked || teachingLoading) return;
+    if (!canCreate || teachingLoading) return;
     setFormError(null);
     void createFetcher.submit(buildCreateFormData(), {
       method: 'post',
@@ -1183,16 +1190,7 @@ export function AssignmentBuilderV3({
               <button
                 type="button"
                 className="abv3-btn-primary"
-                disabled={
-                  !canCreate ||
-                  isSaving ||
-                  isExitTicket ||
-                  teachingLocked ||
-                  teachingLoading
-                }
-                {...lockedTeachingButtonProps(
-                  teachingLocked || teachingLoading
-                )}
+                disabled={!canCreate || isSaving || isExitTicket || teachingLoading}
                 onClick={handleCreate}
               >
                 {isSaving ? 'Creating…' : 'Create assignment'}

@@ -894,9 +894,7 @@ test('full-page assignment form shows inline approval alert and keeps field valu
   await expectNewAssignmentBuilderPage(page);
   await page.locator('#abv3-title').fill('Community Gardens — Prewriting');
   await page.locator('#abv3-prompt').fill('Pick one community garden in your town.');
-  await page
-    .getByRole('button', { name: 'Create assignment' })
-    .click({ force: true });
+  await page.getByRole('button', { name: 'Create assignment' }).click();
   await expect(page.getByTestId('teaching-approval-required-alert')).toBeVisible();
   await expect(page.locator('#abv3-title')).toHaveValue('Community Gardens — Prewriting');
   await expect(page.locator('#abv3-prompt')).toHaveValue(
