@@ -102,11 +102,12 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
     return;
   }
 
-  const landingUrl = new URL(redirectTo, page.url());
   if (entry.toastLabel) {
-    landingUrl.searchParams.set('devPanelJumpToast', entry.toastLabel);
+    await page.evaluate((label) => {
+      sessionStorage.setItem('yawp-dev-panel-jump-toast', label);
+    }, entry.toastLabel);
   }
-  await page.goto(landingUrl.toString());
+  await page.goto(redirectTo);
   await page.waitForLoadState('domcontentloaded').catch(() => undefined);
 
   const pathname = new URL(page.url()).pathname;

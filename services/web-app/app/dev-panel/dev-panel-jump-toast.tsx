@@ -33,14 +33,11 @@ export function consumeDevPanelJumpToast() {
 export function appendJumpToastToRedirect(redirectTo: string, label: string) {
   try {
     const target = new URL(redirectTo, window.location.origin);
-    if (target.origin !== window.location.origin) {
-      target.searchParams.set(JUMP_TOAST_QUERY, label);
-      return target.toString();
-    }
+    target.searchParams.set(JUMP_TOAST_QUERY, label);
+    return `${target.pathname}${target.search}${target.hash}`;
   } catch {
     return redirectTo;
   }
-  return redirectTo;
 }
 
 export function stashDevPanelJumpToast(label: string) {
