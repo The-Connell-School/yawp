@@ -43,7 +43,7 @@ async function postFreeTierJump(
     headers: { 'content-type': 'application/json' },
     data: {
       stateId: entry.stateId,
-      throwaway: entry.throwawayRequired === true,
+      throwaway: entry.throwawayRequired !== false,
       organizationId: DEMO_ORG_ID,
     },
   });
