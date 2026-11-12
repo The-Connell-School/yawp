@@ -64,7 +64,9 @@ if (run) {
   }));
 
   mock.module('./dev-panel/dev-panel-runtime.server.ts', () => ({
+    isDevPanelBuildEnabled: () => true,
     isDevPanelRuntimeEnabled: () => true,
+    isLocalDevPanelEnvironment: () => true,
     devPanelEnvBadge: () => 'Dev',
   }));
 

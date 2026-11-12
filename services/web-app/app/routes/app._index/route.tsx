@@ -589,14 +589,6 @@ export default function AppRoute() {
     const assignmentsSeeHowItWorksTo = classStarterType
       ? `/app/assignment-types/${classStarterType.id}/how-it-works`
       : undefined;
-    const thesisEssayLockedTile = data.siteLicenseLockedAssignmentTiles.find(
-      (tile) => tile.key === 'thesis_driven_essay'
-    );
-    const gradingSeeHowItWorksTo =
-      thesisEssayLockedTile != null
-        ? `/app/assignment-types/${thesisEssayLockedTile.assignmentTypeId}/how-it-works`
-        : assignmentsSeeHowItWorksTo;
-
     const welcomeName = teacherFirstName(user.name ?? 'Teacher');
     const freeAccountRail = freeUsage ? (
       locked ? (
@@ -677,17 +669,14 @@ export default function AppRoute() {
                   </p>
                 </div>
               </div>
-            ) : (
+            ) : !locked ? (
                 <TeacherGradingAtAGlance
                   freeAccount={Boolean(freeUsage)}
                   licensedGradingBand={Boolean(freeUsage)}
-                  seeHowItWorksTo={
-                    locked ? gradingSeeHowItWorksTo : undefined
-                  }
                   needsGradingCount={needsGradingCount}
                   readyToReleaseCount={readyToReleaseCount}
                 />
-            )}
+            ) : null}
       </>
     );
 
