@@ -883,7 +883,7 @@ test('locked assignments tab shows sample rows and locked documents pill', async
   ).toBeVisible();
 });
 
-test('full-page assignment form shows inline approval alert and keeps field values', async ({
+test('full-page assignment form keeps draft when create stays teaching-locked', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
