@@ -390,7 +390,7 @@ for (const width of [390, 1440]) {
       page.getByTestId('teacher-assignments-grid').locator('img')
     ).toHaveCount(9);
     await expect(page.getByTestId('free-account-checklist')).toHaveCount(0);
-    await expect(page.getByTestId('teacher-grading-grid')).toHaveCount(0);
+    await expect(page.getByTestId('teacher-grading-grid')).toBeVisible();
     await expect(page.getByTestId('preview-assignment-creation-disabled')).toHaveCount(
       0
     );
