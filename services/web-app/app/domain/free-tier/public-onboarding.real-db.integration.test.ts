@@ -68,9 +68,14 @@ for (const path of paths) {
     // JSON token rejects unknown intent, while form owns it.
     if (path === 'token') delete (fields as any).intent;
     const first = await post(path, { ...fields, email: fields.email.toUpperCase() });
-    expect(first.body).toMatchObject(
-      path === 'free' ? { ok: true, declined: true } : { ok: true }
-    );
+    if (path === 'free') {
+      expect(first.body).toMatchObject({ ok: true, declined: true });
+      expect(typeof (first.body as { applicationId?: string }).applicationId).toBe(
+        'string'
+      );
+    } else {
+      expect(first.body).toEqual({ ok: true });
+    }
     const row = await prisma.freeTierApplication.findUniqueOrThrow({ where: { email: fields.email } });
     expect(row).toMatchObject({ status: 'REJECTED', tags: ['below-hs'], userId: null, organizationId: null, releasedAt: null, acquisitionTokenId: path === 'waitlist' ? null : event.id, releaseEmailCopyVersion: null });
     expect(await prisma.freeTierEmailLog.count({ where: { applicationId: row.id } })).toBe(0);
@@ -102,9 +107,15 @@ for (const path of paths) {
     const row = await prisma.freeTierApplication.create({ data: { ...fields, gradeLevel: '11', status: 'INVITED', tags: ['existing'], releasedAt: new Date() } });
     const event = await fixture(path + '-existing');
     const body = { ...fields, ...(path === 'waitlist' ? {} : { token: event.code! }), ...(path === 'free' ? { intent: 'redeem' } : {}) };
-    expect((await post(path, body)).body).toMatchObject(
-      path === 'free' ? { ok: true, declined: true } : { ok: true }
-    );
+    const declined = (await post(path, body)).body;
+    if (path === 'free') {
+      expect(declined).toMatchObject({ ok: true, declined: true });
+      expect(typeof (declined as { applicationId?: string }).applicationId).toBe(
+        'string'
+      );
+    } else {
+      expect(declined).toEqual({ ok: true });
+    }
     expect(await prisma.freeTierApplication.findUniqueOrThrow({ where: { id: row.id } })).toEqual(row);
     expect((await prisma.acquisitionToken.findUniqueOrThrow({ where: { id: event.id } })).uses).toBe(0);
   });
