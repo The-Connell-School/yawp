@@ -278,6 +278,7 @@ async function capture(page: import('@playwright/test').Page, state: string) {
   }
 }
 
+/** Pending and approved free dashboards expose exactly three entitled assignment kinds. */
 async function expectFreeDashboardAssignmentTiles(
   page: import('@playwright/test').Page
 ) {
