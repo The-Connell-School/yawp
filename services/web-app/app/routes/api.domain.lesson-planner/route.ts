@@ -37,7 +37,8 @@ import {
   LESSON_PLANNER_TOOLS,
 } from '~/domain/lesson-planner/lesson-planner-tools.server';
 import { repairSlideDeck } from '~/domain/lesson-planner/repair-slide-deck.server';
-import { markFailedDecks } from '~/domain/lesson-planner/slide-deck';
+import { withDeckTeacher } from '~/domain/lesson-planner/deck-teacher';
+import { markFailedDecks, readSlideDeck } from '~/domain/lesson-planner/slide-deck';
 import {
   buildUnitContext,
   markFailedUnitPlans,
@@ -769,6 +770,15 @@ export async function action({ request }: ActionFunctionArgs) {
       // A card promising material is a louder claim than a sentence, so the same
       // rule applies harder: no block survives whose address a tool never returned.
       reply = verifyLessonResources(reply, toolLinks).reply;
+
+      // Lesson Deck Kit v4.1: the title slide carries the teacher's name from
+      // their account, put there now, never by the model (which is not sent it).
+      if (deckGallery && deckKitV4 && readSlideDeck(reply).kind === 'deck') {
+        const account = await prisma.user
+          .findUnique({ where: { id: access.userId }, select: { name: true } })
+          .catch(() => null);
+        reply = withDeckTeacher(reply, account?.name);
+      }
 
       // "Keep it as is" (Brian, Nov 4): their deck, slide for slide, is this
       // reply's deck, so it is in the stack when the teacher opens it.

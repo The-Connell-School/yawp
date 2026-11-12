@@ -66,6 +66,11 @@ const prisma = {
   lessonPlanMessage: {
     create: mock(),
     findFirst: mock(),
+    findMany: mock(async () => []),
+  },
+  // The teacher's name, for a v4.1 deck's title slide.
+  user: {
+    findUnique: mock(),
   },
   lessonPlanUnit: {
     findFirst: mock(async () => null),
@@ -205,6 +210,7 @@ beforeEach(() => {
   prisma.lessonPlanMessage.findFirst.mockReset().mockResolvedValue(null);
   prisma.lessonPlanUnit.create.mockReset().mockResolvedValue({ id: 'unit-1' });
   prisma.classAssignment.findFirst.mockReset().mockResolvedValue(null);
+  prisma.user.findUnique.mockReset().mockResolvedValue({ name: 'Ms. Rivera' });
   prisma.$transaction.mockReset();
   prisma.$transaction.mockImplementation(
     async (callback: (client: typeof prisma) => unknown) => callback(prisma)
@@ -1269,4 +1275,44 @@ test('streamed monthly admission and replay use the same terminal-event protocol
   }
   expect(getLLMCompletion).not.toHaveBeenCalled();
   expect(reserveAiRequest).not.toHaveBeenCalled();
+});
+
+describe('Lesson Deck Kit v4.1: the teacher’s name on the title slide', () => {
+  const deckReply = [
+    'Here is the deck.',
+    '```yawp-slides',
+    JSON.stringify({
+      title: 'Body Paragraphs',
+      slides: [
+        { layout: 'title', title: 'Body Paragraphs', course: 'English 10', teacher: 'Mr. Invented', speakerNotes: 'Open.' },
+        { layout: 'steps', title: 'Draft it', bullets: ['One', 'Two'], speakerNotes: 'Go.' },
+      ],
+    }),
+    '```',
+  ].join('\n');
+
+  async function turn(flags: Record<string, boolean>) {
+    getLessonPlannerReviewFlags.mockResolvedValue({ ...(await getLessonPlannerReviewFlags()), ...flags });
+    getLLMCompletion.mockResolvedValue(deckReply);
+    prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-1', messages: [] });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+    await action({ request: formRequest({ message: 'Make me slides on body paragraphs' }) } as any);
+    const saved = prisma.lessonPlanMessage.create.mock.calls.map((call: any) => call[0].data).find((data: any) => data.role === 'assistant');
+    const json = /```yawp-slides\n([\s\S]*?)\n```/.exec(saved.content)![1]!;
+    return { title: JSON.parse(json).slides[0], system: systemText(getLLMCompletion.mock.calls[0][0].system) };
+  }
+
+  test('with v4 on, the name comes from the teacher’s account, never from the model', async () => {
+    const { title, system } = await turn({ deckGallery: true, deckKitV4: true });
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: 'user-1' }, select: { name: true } });
+    expect(title.teacher).toBe('Ms. Rivera');
+    expect(title.course).toBe('English 10');
+    expect(system).not.toContain('Ms. Rivera');
+  });
+
+  test('with v4 off, the reply is stored as written and no name is looked up', async () => {
+    const { title } = await turn({ deckGallery: true, deckKitV4: false });
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(title.teacher).toBe('Mr. Invented');
+  });
 });

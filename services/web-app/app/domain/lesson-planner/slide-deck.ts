@@ -593,7 +593,13 @@ export type ParsedSlideDeck = {
  */
 export type SlideDeckOutcome =
   | { kind: 'none' }
-  | { kind: 'deck'; deck: SlideDeck; body: string }
+  | {
+      kind: 'deck';
+      deck: SlideDeck;
+      body: string;
+      /** The whole fenced block, so a caller can swap a changed one in place. */
+      block: string;
+    }
   | {
       kind: 'unreadable';
       body: string;
@@ -620,7 +626,7 @@ export function readSlideDeck(content: string): SlideDeckOutcome {
     };
   }
 
-  return { kind: 'deck', deck: validated.deck, body };
+  return { kind: 'deck', deck: validated.deck, body, block: found.block };
 }
 
 /** Convenience wrapper for callers that only care about a usable deck. */
