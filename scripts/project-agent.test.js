@@ -16,6 +16,14 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("Yawp project agent CLI", () => {
+  test("advertises focused page performance regression checks", () => {
+    expect(capabilities().proofProfiles).toContain("page-performance-unit");
+    const result = spawnSync(path.join(root, "bin/project"), ["test", "--help"], {
+      cwd: root, encoding: "utf8", timeout: 10000,
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("page-performance-unit");
+  });
   test("advertises each guided tour profile once in capabilities and both help pages", () => {
     const profiles = ["guided-tours-unit", "guided-tours-db", "guided-tours-browser"];
     const advertised = capabilities().proofProfiles;

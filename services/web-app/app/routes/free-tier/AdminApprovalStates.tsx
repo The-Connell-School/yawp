@@ -320,7 +320,7 @@ export function AdminForwardBackLink({
     <p className={`text-center text-sm ${className ?? ''}`}>
       <Link
         to={`/free/admin/approve?t=${encodeURIComponent(approveToken)}`}
-        className="font-medium text-primary underline underline-offset-4"
+        className="font-medium text-link underline underline-offset-4"
       >
         Back to approval
       </Link>
@@ -342,7 +342,7 @@ export function AdminForwardLink({
       Not the right person?{' '}
       <Link
         to={`/free/admin/not-right-person${buildAdminForwardPageSearch(forwardToken, approveToken)}`}
-        className="font-medium text-primary underline underline-offset-4"
+        className="font-medium text-link underline underline-offset-4"
       >
         Forward this request
       </Link>

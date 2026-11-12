@@ -14,7 +14,11 @@ import {
 import type { Organization } from '@app/prisma';
 import { isLessonPlannerEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { monthlyFreeTierPolicy } from '~/domain/free-tier/monthly-policy.server';
-import { isDevPanelRuntimeEnabled } from '~/dev-panel/dev-panel-runtime.server';
+import {
+  isDevPanelRuntimeEnabled,
+  isLocalDevPanelEnvironment,
+} from '~/dev-panel/dev-panel-runtime.server';
+import { prisma } from '~/utils/db.server';
 
 export type LessonPlannerAccess = {
   userId: string;
@@ -29,6 +33,7 @@ export async function isLessonPlannerEnabledForOrganization(
   organization: Pick<Organization, 'id' | 'plan'>
 ): Promise<boolean> {
   if (await isLessonPlannerEnabled(organization.id)) return true;
+  if (isLocalDevPanelEnvironment()) return true;
   if (!isDevPanelRuntimeEnabled()) return false;
   if (organization.plan !== 'FREE_CLASSROOM') return false;
   const policy = await monthlyFreeTierPolicy(organization);
@@ -45,12 +50,21 @@ export async function getLessonPlannerAccess(
     membership.organization
   );
 
+  let allowed = isTeacher && enabled;
+  if (enabled && !allowed && isLocalDevPanelEnvironment()) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isAdmin: true },
+    });
+    allowed = Boolean(user?.isAdmin);
+  }
+
   return {
     userId,
     membership,
     isTeacher,
     enabled,
-    allowed: isTeacher && enabled,
+    allowed,
   };
 }
 

@@ -1,6 +1,6 @@
 import { Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Form, Link } from 'react-router';
+import { Form, Link, useSearchParams } from 'react-router';
 import { CaretLeftIcon } from '~/components/icons';
 import { ClassArt } from '~/components/class-art';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder';
@@ -325,6 +325,10 @@ export function StudentClassDetailView({
 }) {
   const { klass, assignments, assignmentTypes, documents } = data;
   const { title, subtitle } = getClassCardHeading(klass);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const activeTab =
+    requestedTab === 'documents' ? 'documents' : 'assignments';
 
   const startedClassAssignmentIds = useMemo(() => {
     const ids = new Set<string>();
@@ -386,7 +390,15 @@ export function StudentClassDetailView({
       </div>
 
       <div className="mx-auto flex w-full max-w-screen-lg flex-col gap-5 px-3 py-5 pb-24 sm:px-5">
-        <Tabs defaultValue="assignments" className="flex flex-col gap-6">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => {
+            const next = new URLSearchParams(searchParams);
+            next.set('tab', value);
+            setSearchParams(next, { replace: true });
+          }}
+          className="flex flex-col gap-6"
+        >
           <TabsList
             aria-label="Class"
             className="inline-flex h-auto w-full justify-start rounded-none border-b border-border bg-transparent p-0"

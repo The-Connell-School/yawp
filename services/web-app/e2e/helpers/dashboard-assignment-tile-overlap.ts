@@ -6,7 +6,7 @@ export function dashboardAssignmentTileOverlapIssues(scope: ParentNode) {
   );
   if (tiles.length === 0) {
     tiles = scope.querySelectorAll(
-      '[data-testid="free-assignment-tiles"] button[aria-label]'
+      '[data-testid="teacher-assignments-grid"] a[aria-label], [data-testid="teacher-assignments-grid"] button[aria-label]'
     );
   }
   if (tiles.length === 0) {
@@ -50,7 +50,7 @@ export function dashboardAssignmentTileOverlapIssues(scope: ParentNode) {
 export function legacyDashboardAssignmentTileOverlapIssues(scope: ParentNode) {
   const issues: string[] = [];
   const tiles = scope.querySelectorAll(
-    '[data-testid="free-assignment-tiles"] button[aria-label]'
+    '[data-testid="teacher-assignments-grid"] a[aria-label], [data-testid="teacher-assignments-grid"] button[aria-label]'
   );
   for (const tile of tiles) {
     const name = tile.querySelector(

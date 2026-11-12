@@ -4,6 +4,11 @@
  * CSS variables, so nothing reaches the rest of the app.
  */
 import type { CSSProperties } from 'react';
+import {
+  YAWP_BRAND,
+  YAWP_BRAND_MID,
+  YAWP_BRAND_WASH,
+} from '~/emails/brand';
 import { STEP_TYPE_COLORS, WRITING_COLOR, WRITING_STRIP, type StepType } from '~/domain/lesson-planner/step-types';
 
 export const STACK_FONTS_HREF =
@@ -15,8 +20,9 @@ export const STACK_THEME: CSSProperties = {
   ['--sv-ink' as string]: '#1C1A17',
   ['--sv-muted' as string]: '#6E665C',
   ['--sv-line' as string]: '#E7DFD3',
-  ['--sv-primary' as string]: '#A8482A',
-  ['--sv-coral' as string]: '#E47F5F',
+  ['--sv-primary' as string]: YAWP_BRAND,
+  ['--sv-coral' as string]: YAWP_BRAND_MID,
+  ['--sv-brand-wash' as string]: YAWP_BRAND_WASH,
   ['--sv-writing' as string]: WRITING_COLOR,
   ['--sv-writing-strip' as string]: WRITING_STRIP,
   ['--sv-dark' as string]: '#1C1A17',

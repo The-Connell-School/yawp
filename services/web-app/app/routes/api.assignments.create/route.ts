@@ -27,6 +27,7 @@ import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-
 import { autoArrangeNewAssignment } from '~/domain/collaboration/auto-arrange.server';
 import { groupSetupNextStep } from '~/domain/collaboration/next-step';
 import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
+import { formatClassLabel } from '~/utils/class-display';
 import { FreeClassroomAssignmentQuotaError } from '~/utils/assignment-quota.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -49,6 +50,15 @@ import {
   exitTicketGradingModeFor,
   resolveAssignmentPrompt,
 } from '~/utils/assignment-exit-ticket.server';
+
+async function classLabelsForDeploy(classIds: string[]) {
+  const classRows = await prisma.class.findMany({
+    where: { id: { in: classIds } },
+    select: { grade: true, period: true, title: true },
+    orderBy: [{ grade: 'asc' }, { period: 'asc' }],
+  });
+  return classRows.map((row) => formatClassLabel(row));
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -221,6 +231,7 @@ export async function action({ request }: ActionFunctionArgs) {
     },
     select: {
       id: true,
+      title: true,
       systemKey: true,
       kind: true,
       collaborationSupported: true,
@@ -451,7 +462,9 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   let nextStep: ReturnType<typeof groupSetupNextStep> = null;
-  let createdAssignment: { id: string } | undefined;
+  let createdAssignment: Awaited<
+    ReturnType<typeof createAssignmentDeployedToClasses>
+  > | null = null;
 
   try {
     createdAssignment = await createAssignmentDeployedToClasses({
@@ -568,6 +581,9 @@ export async function action({ request }: ActionFunctionArgs) {
           'Assignment created and applied to classes, but it could not be saved for reuse.',
         nextStep,
         assignmentId: createdAssignment?.id,
+        title: title ?? '',
+        typeTitle: assignmentType.title,
+        classLabels: await classLabelsForDeploy(deployClassIds),
       });
     }
   }
@@ -579,6 +595,9 @@ export async function action({ request }: ActionFunctionArgs) {
       : 'Assignment created and applied to classes.',
     nextStep,
     assignmentId: createdAssignment?.id,
+    title: title ?? '',
+    typeTitle: assignmentType.title,
+    classLabels: await classLabelsForDeploy(deployClassIds),
   });
 }
 

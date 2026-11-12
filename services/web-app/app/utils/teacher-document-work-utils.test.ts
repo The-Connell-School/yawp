@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   buildReleaseGradeRows,
+  buildTeacherPreviewArchiveRows,
   buildTeacherUnsubmitRows,
   getTeacherDocumentWorkStatusDisplay,
   formatClassLabel,
@@ -150,6 +151,30 @@ describe('teacher document work grading display', () => {
         },
       }).label
     ).toBe('Released · 91 / 200');
+  });
+});
+
+describe('buildTeacherPreviewArchiveRows', () => {
+  test('returns only teacher assignment previews from the selection', () => {
+    const rows = buildTeacherPreviewArchiveRows([
+      documentRow({
+        id: 'student-doc',
+        isTeacherAssignmentPreview: false,
+      }),
+      documentRow({
+        id: 'preview-doc',
+        title: 'My preview',
+        isTeacherAssignmentPreview: true,
+      }),
+    ]);
+
+    expect(rows).toEqual([
+      {
+        id: 'preview-doc',
+        title: 'My preview',
+        assignmentTitle: 'Essay One',
+      },
+    ]);
   });
 });
 

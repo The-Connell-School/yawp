@@ -248,7 +248,7 @@ export function FirstAssignmentCelebrationReopenButton({
   return (
     <button
       type="button"
-      className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+      className="text-sm font-medium text-link underline-offset-4 hover:underline"
       data-testid="first-assignment-celebration-reopen"
       onClick={onReopen}
     >

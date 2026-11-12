@@ -9,7 +9,7 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Form, useFetcher, useLocation, useRouteLoaderData } from 'react-router';
+import { Form, useLocation, useNavigation, useRouteLoaderData } from 'react-router';
 import { Button } from '~/components/ui/button';
 import {
   Collapsible,
@@ -182,8 +182,12 @@ export function DevPanelShell() {
   const [logins, setLogins] = useState<Array<{ email: string; label: string; role: string }>>([]);
   const groupedLogins = useMemo(() => groupDevPanelLogins(logins), [logins]);
   const [loginState, setLoginState] = useState<'idle' | 'loading' | 'error' | 'empty'>('idle');
-  const loginFetcher = useFetcher();
+  const navigation = useNavigation();
   const location = useLocation();
+  const devLoginInFlight = navigation.formAction === '/auth/dev-login';
+  const devLoginEmail = devLoginInFlight
+    ? String(navigation.formData?.get('email') ?? '')
+    : null;
   const currentEmail = rootData?.user?.email ?? null;
   const signedInUser = rootData?.user ?? null;
   const signedInRole = membershipRoleLabel(
@@ -375,19 +379,16 @@ export function DevPanelShell() {
                       <ul className="m-0 list-none p-0">
                         {group.logins.map((login) => (
                           <li key={login.email}>
-                            <loginFetcher.Form
+                            <Form
                               method="post"
                               action="/auth/dev-login"
                               className="block"
                             >
                               <input type="hidden" name="email" value={login.email} />
-                              <input
-                                type="hidden"
-                                name="redirectTo"
-                                value={`${location.pathname}${location.search}`}
-                              />
+                              <input type="hidden" name="redirectTo" value="/app" />
                               <button
                                 type="submit"
+                                disabled={devLoginInFlight}
                                 className={cn(
                                   'yawp-dev-panel-login-row',
                                   currentEmail === login.email &&
@@ -397,7 +398,12 @@ export function DevPanelShell() {
                               >
                                 <span className="yawp-dev-panel-login-label">{login.label}</span>
                                 <span className="yawp-dev-panel-login-role">{login.role}</span>
-                                {currentEmail === login.email ? (
+                                {devLoginInFlight && devLoginEmail === login.email ? (
+                                  <Loader2
+                                    className="size-3.5 shrink-0 animate-spin text-muted-foreground"
+                                    aria-hidden="true"
+                                  />
+                                ) : currentEmail === login.email ? (
                                   <span className="shrink-0 pr-1.5 text-xs text-muted-foreground">
                                     Signed in
                                   </span>
@@ -405,7 +411,7 @@ export function DevPanelShell() {
                                   <span className="yawp-dev-panel-sign-in-pill">Sign in</span>
                                 )}
                               </button>
-                            </loginFetcher.Form>
+                            </Form>
                           </li>
                         ))}
                       </ul>

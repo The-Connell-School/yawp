@@ -4,6 +4,7 @@ import {
   FreeAccountRail,
 } from '~/components/free-account-usage';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import { freeTierStandardPageShellClassName } from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { TeachingAccessDashboardSkeleton } from '~/components/free-tier/teaching-access-dashboard-skeleton';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
@@ -14,11 +15,11 @@ import {
   useRevalidator,
   useRouteLoaderData,
   useNavigate,
+  useSearchParams,
 } from 'react-router';
 import { PenLine } from 'lucide-react';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Route as RootRoute } from '../../+types/root';
-import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { Button } from '~/components/ui/button';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
@@ -39,10 +40,11 @@ import {
   resolveSchoolYearScopeForMembership,
   schoolYearWhere,
 } from '~/utils/school-year-scope.server';
-import { AssignmentsAtAGlance } from './components/assignments-at-a-glance';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
 import { TeacherGradingAtAGlance } from './components/teacher-grading-at-a-glance';
 import { formatClassLabel } from '~/utils/class-display';
+import { useNavigateToNewAssignmentPage } from '~/domain/free-tier/navigate-to-new-assignment-page';
+import { cn } from '~/utils/misc';
 import { writingPracticeAssignmentTitle } from '~/utils/writing-lessons/assignment-title';
 import {
   computeAssignedProgress,
@@ -57,11 +59,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from '~/components/ui/dialog';
+import {
+  FirstAssignmentCelebrationReopenButton,
+  FirstAssignmentCelebrationScrim,
+  type FirstAssignmentCelebrationPreview,
+  syncFirstAssignmentCelebrationPending,
+} from '~/components/free-tier/first-assignment-congratulations-dialog';
+import {
+  acknowledgeFirstAssignmentCelebration,
+  readFirstAssignmentCelebrationPending,
+  readFirstAssignmentCelebrationPendingClassId,
+  writeFirstAssignmentCelebrationPending,
+  isFirstAssignmentCelebrationAcknowledged,
+} from '~/domain/free-tier/first-assignment-celebration.client';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
 import { shouldHideFreeTierTeachingSecrets } from '~/domain/free-tier/locked-preview.server';
-import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
-
 const DASHBOARD_MAX_TEACHER_CLASSES = 6;
 
 function formatAssignmentDueDate(iso: string): string {
@@ -370,13 +383,47 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ? teacherClassesOrdered.map(({ code: _code, ...klass }) => klass)
     : teacherClassesOrdered;
 
-  const exitTicketBuilderV3Enabled = useStudentExperience
-    ? false
-    : await isExitTicketBuilderV3Enabled(profile.organization.id);
+  const celebrationAssignmentId = new URL(request.url).searchParams.get(
+    'firstAssignment'
+  );
+  const celebrationClassIdParam = new URL(request.url).searchParams.get(
+    'firstAssignmentClassId'
+  );
+  let firstAssignmentCelebrationPreview: FirstAssignmentCelebrationPreview | null =
+    null;
+  if (!useStudentExperience && celebrationAssignmentId) {
+    const classAssignment = await prisma.classAssignment.findFirst({
+      where: {
+        assignmentId: celebrationAssignmentId,
+        ...(celebrationClassIdParam
+          ? { classId: celebrationClassIdParam }
+          : {}),
+        class: { teachers: { some: { id: profile.id } } },
+      },
+      select: {
+        dueAt: true,
+        assignment: {
+          select: { id: true, title: true, assignmentTypeId: true },
+        },
+        class: {
+          select: { id: true, title: true, grade: true, period: true },
+        },
+      },
+    });
+    if (classAssignment) {
+      firstAssignmentCelebrationPreview = {
+        assignmentId: classAssignment.assignment.id,
+        classId: classAssignment.class.id,
+        title: classAssignment.assignment.title?.trim() || 'Untitled assignment',
+        assignmentTypeId: classAssignment.assignment.assignmentTypeId,
+        dueAt: classAssignment.dueAt?.toISOString() ?? null,
+        classDisplayName: formatClassLabel(classAssignment.class),
+      };
+    }
+  }
 
   return dataResponse({
     requiresClassCode: isStudentOnlyWithNoClasses,
-    exitTicketBuilderV3Enabled,
     enrolledClasses,
     writingPracticeAssignments,
     teacherClasses: teacherClassesForClient,
@@ -391,6 +438,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     })),
     assignmentCreationTypes,
     siteLicenseLockedAssignmentTiles,
+    firstAssignmentCelebrationPreview,
   });
 }
 
@@ -403,18 +451,122 @@ export default function AppRoute() {
   const data = useLoaderData<typeof loader>();
   const freeUsage = useFreeAccountUsage();
   const { locked, loading } = useTeachingAccess();
-  const ContentColumn = freeUsage ? 'div' : Fragment;
+  const ContentColumn = 'div';
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const user = useUser();
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const createAssignmentTriggerRef = useRef<HTMLButtonElement>(null);
-  const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
-  const [createAssignmentTypeId, setCreateAssignmentTypeId] = useState<
-    string | undefined
-  >();
+  const navigateToNewAssignmentPage = useNavigateToNewAssignmentPage();
+  const [firstAssignmentCelebrationOpen, setFirstAssignmentCelebrationOpen] =
+    useState(false);
+  const [firstAssignmentCelebrationId, setFirstAssignmentCelebrationId] =
+    useState<string | null>(null);
+  const [firstAssignmentCelebrationClassId, setFirstAssignmentCelebrationClassId] =
+    useState<string | null>(null);
+  const [firstAssignmentCelebrationSyncKey, setFirstAssignmentCelebrationSyncKey] =
+    useState(0);
+  const [celebrationPreview, setCelebrationPreview] =
+    useState<FirstAssignmentCelebrationPreview | null>(
+      () => data.firstAssignmentCelebrationPreview ?? null
+    );
+  const celebrationPreviewFetcher = useFetcher<typeof loader>();
   const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const assignmentsEnabled = data.assignmentsEnabled ?? false;
+
+  const dismissFirstAssignmentCelebration = () => {
+    if (!firstAssignmentCelebrationId) return;
+    acknowledgeFirstAssignmentCelebration(firstAssignmentCelebrationId);
+    setFirstAssignmentCelebrationOpen(false);
+    setFirstAssignmentCelebrationSyncKey((key) => key + 1);
+  };
+
+  const resolvedCelebrationPreview =
+    celebrationPreview &&
+    firstAssignmentCelebrationId &&
+    celebrationPreview.assignmentId === firstAssignmentCelebrationId
+      ? celebrationPreview
+      : null;
+
+  useEffect(() => {
+    if (data.firstAssignmentCelebrationPreview) {
+      setCelebrationPreview(data.firstAssignmentCelebrationPreview);
+    }
+  }, [data.firstAssignmentCelebrationPreview]);
+
+  useEffect(() => {
+    if (!isTeacher || !firstAssignmentCelebrationId || celebrationPreview) {
+      return;
+    }
+    const params = new URLSearchParams({
+      firstAssignment: firstAssignmentCelebrationId,
+    });
+    if (firstAssignmentCelebrationClassId) {
+      params.set('firstAssignmentClassId', firstAssignmentCelebrationClassId);
+    }
+    celebrationPreviewFetcher.load(`/app?${params.toString()}`);
+  }, [
+    celebrationPreview,
+    celebrationPreviewFetcher,
+    firstAssignmentCelebrationClassId,
+    firstAssignmentCelebrationId,
+    isTeacher,
+  ]);
+
+  useEffect(() => {
+    if (celebrationPreviewFetcher.data?.firstAssignmentCelebrationPreview) {
+      setCelebrationPreview(
+        celebrationPreviewFetcher.data.firstAssignmentCelebrationPreview
+      );
+    }
+  }, [celebrationPreviewFetcher.data?.firstAssignmentCelebrationPreview]);
+
+  useEffect(() => {
+    if (!isTeacher) return;
+    const fromUrl = searchParams.get('firstAssignment');
+    const classFromUrl = searchParams.get('firstAssignmentClassId');
+    if (fromUrl) {
+      setFirstAssignmentCelebrationId(fromUrl);
+      setFirstAssignmentCelebrationClassId(classFromUrl);
+      setFirstAssignmentCelebrationOpen(true);
+      writeFirstAssignmentCelebrationPending(fromUrl, classFromUrl);
+      syncFirstAssignmentCelebrationPending(fromUrl, classFromUrl);
+      const next = new URLSearchParams(searchParams);
+      next.delete('firstAssignment');
+      next.delete('firstAssignmentClassId');
+      setSearchParams(next, { replace: true });
+      return;
+    }
+    const pending = readFirstAssignmentCelebrationPending();
+    if (pending) {
+      setFirstAssignmentCelebrationId(pending);
+      const pendingClass = readFirstAssignmentCelebrationPendingClassId();
+      if (pendingClass) {
+        setFirstAssignmentCelebrationClassId(pendingClass);
+      }
+    }
+  }, [isTeacher, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (
+      firstAssignmentCelebrationOpen &&
+      firstAssignmentCelebrationId &&
+      !isFirstAssignmentCelebrationAcknowledged(firstAssignmentCelebrationId)
+    ) {
+      syncFirstAssignmentCelebrationPending(
+        firstAssignmentCelebrationId,
+        firstAssignmentCelebrationClassId ??
+          celebrationPreview?.classId ??
+          readFirstAssignmentCelebrationPendingClassId()
+      );
+    }
+  }, [
+    celebrationPreview?.classId,
+    firstAssignmentCelebrationClassId,
+    firstAssignmentCelebrationId,
+    firstAssignmentCelebrationOpen,
+  ]);
 
   if (isTeacher && freeUsage && loading) {
     return <TeachingAccessDashboardSkeleton />;
@@ -429,143 +581,172 @@ export default function AppRoute() {
       (total, klass) => total + (klass.gradedUnreleasedCount ?? 0),
       0
     );
+    const classStarterType = data.assignmentCreationTypes.find(
+      (type) => type.kind === 'class_starter'
+    );
+    const assignmentsSeeHowItWorksTo = classStarterType
+      ? `/app/assignment-types/${classStarterType.id}/how-it-works`
+      : undefined;
+    const thesisEssayLockedTile = data.siteLicenseLockedAssignmentTiles.find(
+      (tile) => tile.key === 'thesis_driven_essay'
+    );
+    const gradingSeeHowItWorksTo =
+      thesisEssayLockedTile != null
+        ? `/app/assignment-types/${thesisEssayLockedTile.assignmentTypeId}/how-it-works`
+        : assignmentsSeeHowItWorksTo;
+
+    const welcomeName = teacherFirstName(user.name ?? 'Teacher');
+    const freeAccountRail = freeUsage ? (
+      <FreeAccountRail
+        usage={freeUsage}
+        classStarterAssignmentTypeId={classStarterType?.id}
+      />
+    ) : null;
+
+    const dashboardSections = (
+      <>
+            <ClassesAtAGlance
+              classes={data.teacherClassCards}
+              totalClassCount={data.totalTeacherClassCount}
+              showAssignmentsTab={assignmentsEnabled}
+              firstAssignmentCelebration={
+                firstAssignmentCelebrationId &&
+                firstAssignmentCelebrationOpen &&
+                resolvedCelebrationPreview
+                  ? {
+                      open: true,
+                      preview: resolvedCelebrationPreview,
+                      onDismiss: dismissFirstAssignmentCelebration,
+                    }
+                  : undefined
+              }
+            />
+            {assignmentsEnabled ? (
+              <FreeAssignmentTiles
+                usage={freeUsage}
+                types={data.assignmentCreationTypes}
+                siteLicenseLockedAssignmentTiles={
+                  data.siteLicenseLockedAssignmentTiles
+                }
+                assignmentsSeeHowItWorksTo={assignmentsSeeHowItWorksTo}
+                teachingLocked={locked}
+                createTriggerRef={createAssignmentTriggerRef}
+                onCreate={(id) => {
+                  if (locked) return;
+                  navigateToNewAssignmentPage({ assignmentTypeId: id });
+                }}
+              />
+            ) : null}
+            {freeUsage?.gradingPause && !locked ? (
+              <div>
+                <h2 className="mb-4 text-lg font-bold">Grading</h2>
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
+                  <p className="font-medium">
+                    Grading assistant paused for{' '}
+                    {Math.max(
+                      1,
+                      Math.ceil(
+                        (new Date(freeUsage.gradingPause.retryAt).getTime() -
+                          Date.now()) /
+                          60000
+                      )
+                    )}{' '}
+                    minutes
+                  </p>
+                  <p className="mt-1">
+                    You hit the {freeUsage.gradingPause.window} limit of{' '}
+                    {freeUsage.gradingPause.limit}. It picks back up at{' '}
+                    <time dateTime={freeUsage.gradingPause.retryAt}>
+                      {new Date(
+                        freeUsage.gradingPause.retryAt
+                      ).toLocaleTimeString([], {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </time>
+                    .
+                  </p>
+                </div>
+              </div>
+            ) : (
+                <TeacherGradingAtAGlance
+                  freeAccount={Boolean(freeUsage)}
+                  licensedGradingBand={Boolean(freeUsage)}
+                  seeHowItWorksTo={
+                    locked ? gradingSeeHowItWorksTo : undefined
+                  }
+                  needsGradingCount={needsGradingCount}
+                  readyToReleaseCount={readyToReleaseCount}
+                />
+            )}
+      </>
+    );
 
     return (
       <section
         data-testid="app._index"
-        className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
+        className={cn(
+          'no-scrollbar flex h-full w-full flex-col overflow-y-scroll',
+          freeTierStandardPageShellClassName()
+        )}
       >
-        <div className="flex w-full justify-between border-b bg-secondary">
-          <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-            <div className="flex flex-col">
-              <h2>Welcome, {teacherFirstName(user.name ?? 'Teacher')}!</h2>
-              <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
-                {locked
-                  ? 'Your classroom is set up. Look around while you wait.'
-                  : freeUsage
-                    ? 'Your class, assignments, and grading in one place.'
-                    : 'Your classes, assignments, and grading in one place.'}
-              </p>
+        <div
+          className={cn(
+            'locked-home-b2 free-dashboard w-full pb-24',
+            freeAccountRail && 'locked-home-b2--with-rail'
+          )}
+        >
+          <div className="mx-auto w-full max-w-screen-xl">
+            <div className="locked-home-columns">
+              <ContentColumn className="locked-home-main flex flex-col">
+                <h1 className="locked-home-welcome">
+                  Welcome, {welcomeName}!
+                  <span className="ml-3 inline-flex align-middle">
+                    <FirstAssignmentCelebrationReopenButton
+                      syncKey={firstAssignmentCelebrationSyncKey}
+                      onReopen={() => {
+                        const pending =
+                          firstAssignmentCelebrationId ??
+                          readFirstAssignmentCelebrationPending();
+                        if (pending) {
+                          setFirstAssignmentCelebrationId(pending);
+                          setFirstAssignmentCelebrationOpen(true);
+                        }
+                      }}
+                    />
+                  </span>
+                </h1>
+                {freeAccountRail ? (
+                  <aside
+                    className="locked-home-rail-mobile"
+                    aria-label="Your request and next steps"
+                  >
+                    {freeAccountRail}
+                  </aside>
+                ) : null}
+                <div className="locked-home-sections flex flex-col gap-4">
+                  {dashboardSections}
+                </div>
+              </ContentColumn>
+              {freeAccountRail ? (
+                <aside
+                  className="locked-home-rail-desktop"
+                  aria-label="Your request and next steps"
+                >
+                  {freeAccountRail}
+                </aside>
+              ) : null}
             </div>
           </div>
         </div>
-        <div
-          className={
-            freeUsage
-              ? locked
-                ? 'free-dashboard mx-auto flex w-full max-w-[1136px] flex-col gap-4 px-5 py-6 pb-24 sm:px-12'
-                : 'free-dashboard grid w-full max-w-[1136px] items-start gap-7 px-5 py-6 pb-24 sm:px-12 lg:grid-cols-[minmax(0,1fr)_300px]'
-              : 'mx-auto flex w-full max-w-screen-lg flex-col gap-8 px-3 py-6 pb-24 sm:px-5'
-          }
-        >
-          <ContentColumn
-            {...(freeUsage ? { className: 'flex min-w-0 flex-col gap-4' } : {})}
-          >
-            <ClassesAtAGlance
-              classes={data.teacherClassCards}
-              totalClassCount={data.totalTeacherClassCount}
-            />
-            {assignmentsEnabled ? (
-              <>
-                {freeUsage ? (
-                  <FreeAssignmentTiles
-                    usage={freeUsage}
-                    types={data.assignmentCreationTypes}
-                    teachingLocked={locked}
-                    createTriggerRef={createAssignmentTriggerRef}
-                    onCreate={(id) => {
-                      setCreateAssignmentTypeId(locked ? undefined : id);
-                      setIsCreateSheetOpen(true);
-                    }}
-                  />
-                ) : (
-                  <AssignmentsAtAGlance
-                    assignmentTypes={data.teacherAssignmentTypes}
-                    onCreateAssignment={() => {
-                      setCreateAssignmentTypeId(undefined);
-                      setIsCreateSheetOpen(true);
-                    }}
-                    onCreateAssignmentForType={(assignmentTypeId) => {
-                      const assignmentType = data.teacherAssignmentTypes.find(
-                        (type) => type.id === assignmentTypeId
-                      );
-                      if (
-                        assignmentType?.systemKey ===
-                        AP_HISTORY_ASSIGNMENT_TYPE_KEY
-                      ) {
-                        void navigate(
-                          `/app/assignment-types/${assignmentTypeId}`
-                        );
-                        return;
-                      }
-                      setCreateAssignmentTypeId(assignmentTypeId);
-                      setIsCreateSheetOpen(true);
-                    }}
-                  />
-                )}
-                <AssignmentCreationSheet
-                  open={isCreateSheetOpen}
-                  onOpenChange={(open) => {
-                    setIsCreateSheetOpen(open);
-                    if (!open) {
-                      setCreateAssignmentTypeId(undefined);
-                    }
-                  }}
-                  entryPoint="dashboard"
-                  exitTicketBuilderV3Enabled={data.exitTicketBuilderV3Enabled}
-                  assignmentTypes={data.assignmentCreationTypes}
-                  siteLicenseLockedAssignmentTiles={
-                    data.siteLicenseLockedAssignmentTiles
-                  }
-                  teacherClasses={data.assignmentCreationClasses}
-                  initialAssignmentTypeId={createAssignmentTypeId}
-                  teachingLocked={locked}
-                  createAssignmentTriggerRef={createAssignmentTriggerRef}
-                />
-              </>
-            ) : null}
-            {!locked &&
-              (freeUsage?.gradingPause ? (
-                <div>
-                  <h2 className="mb-4 text-lg font-bold">Grading</h2>
-                  <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
-                    <p className="font-medium">
-                      Grading assistant paused for{' '}
-                      {Math.max(
-                        1,
-                        Math.ceil(
-                          (new Date(freeUsage.gradingPause.retryAt).getTime() -
-                            Date.now()) /
-                            60000
-                        )
-                      )}{' '}
-                      minutes
-                    </p>
-                    <p className="mt-1">
-                      You hit the {freeUsage.gradingPause.window} limit of{' '}
-                      {freeUsage.gradingPause.limit}. It picks back up at{' '}
-                      <time dateTime={freeUsage.gradingPause.retryAt}>
-                        {new Date(
-                          freeUsage.gradingPause.retryAt
-                        ).toLocaleTimeString([], {
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
-                      </time>
-                      .
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <TeacherGradingAtAGlance
-                  freeAccount={Boolean(freeUsage)}
-                  needsGradingCount={needsGradingCount}
-                  readyToReleaseCount={readyToReleaseCount}
-                />
-              ))}
-          </ContentColumn>
-          {freeUsage && !locked ? <FreeAccountRail usage={freeUsage} /> : null}
-        </div>
+        <FirstAssignmentCelebrationScrim
+          open={Boolean(
+            firstAssignmentCelebrationOpen &&
+              firstAssignmentCelebrationId &&
+              resolvedCelebrationPreview
+          )}
+          onDismiss={dismissFirstAssignmentCelebration}
+        />
       </section>
     );
   }

@@ -1,7 +1,6 @@
 import { useRef } from 'react';
 import { Link } from 'react-router';
 import { Badge } from '~/components/ui/badge';
-import { useFreeAccountUsage } from '~/components/free-account-usage';
 import {
   FirstAssignmentCelebrationAnchor,
   type FirstAssignmentCelebrationPreview,
@@ -26,23 +25,22 @@ export function ClassesAtAGlance({
     onDismiss: () => void;
   };
 }) {
-  const freeUsage = useFreeAccountUsage();
   const featuredAssignmentRowRef = useRef<HTMLAnchorElement>(null);
   const celebrationClassId = firstAssignmentCelebration?.preview?.classId;
 
   return (
     <div data-testid="teacher-classes-grid" data-tour="dashboard-classes">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-base font-semibold">My Classes</h2>
+        <h2>My Classes</h2>
         <div className="flex items-center gap-2">
-          {!freeUsage && totalClassCount > 0 ? (
+          {totalClassCount > 0 ? (
             <Badge variant="secondary" size="sm">
               {totalClassCount}
             </Badge>
           ) : null}
           <Link
             to="/app/my-classes"
-            className="text-[13px] text-muted-foreground hover:text-foreground"
+            className="text-sm text-muted-foreground hover:text-foreground"
           >
             View all
           </Link>

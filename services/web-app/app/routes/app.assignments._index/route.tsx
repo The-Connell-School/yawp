@@ -17,7 +17,7 @@ import {
 import { Form, Link, useFetcher, useLoaderData, useSearchParams } from 'react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Search, Trash2 } from 'lucide-react';
-import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
+import { useNavigateToNewAssignmentPage } from '~/domain/free-tier/navigate-to-new-assignment-page';
 import { TutorOffBadge } from '~/components/assignments/tutor-off-badge';
 import { AssignmentTryItPill } from '~/components/assignments/assignment-try-it-pill';
 import { Button } from '~/components/ui/button';
@@ -37,7 +37,6 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
-import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
 // The flag is read by the component, so it has to come from the client-safe module.
 // Importing it through saved-assignments.server (which merely re-exports it) makes the
 // component depend on server-only code, and React Router can only strip server code from
@@ -237,9 +236,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return {
     assignments,
     savedAssignments,
-    exitTicketBuilderV3Enabled: await isExitTicketBuilderV3Enabled(
-      profile.organization.id
-    ),
     assignmentCreationClasses: teacherClasses.map((klass) => ({
       id: klass.id,
       name: formatClassLabel(klass),
@@ -494,6 +490,7 @@ function SavedAssignmentsPanel({
 
 export default function MyAssignmentsRoute() {
   const freeUsage = useFreeAccountUsage();
+  const navigateToNewAssignmentPage = useNavigateToNewAssignmentPage();
   const { locked: teachingLocked, state: teachingAccessState } =
     useTeachingAccess();
   const teachingAccessAdminName =
@@ -506,16 +503,12 @@ export default function MyAssignmentsRoute() {
     assignmentCreationClasses,
     assignmentCreationTypes,
     siteLicenseLockedAssignmentTiles,
-    exitTicketBuilderV3Enabled,
   } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const highlightAssignmentId = searchParams.get('highlightAssignment');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
-  const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
-  const [reusedAssignment, setReusedAssignment] =
-    useState<SavedAssignment | null>(null);
 
   const collator = useMemo(
     () => new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }),
@@ -598,33 +591,13 @@ export default function MyAssignmentsRoute() {
       {SAVED_ASSIGNMENTS_ENABLED ? (
         <SavedAssignmentsPanel
           savedAssignments={savedAssignments}
-          onReuse={setReusedAssignment}
-        />
-      ) : null}
-
-      {reusedAssignment ? (
-        <AssignmentCreationSheet
-          // Remounting per saved assignment is what re-seeds the sheet's own
-          // state with that assignment's settings.
-          key={reusedAssignment.id}
-          open
-          onOpenChange={(open) => {
-            if (!open) setReusedAssignment(null);
+          onReuse={(savedAssignment) => {
+            navigateToNewAssignmentPage({
+              assignmentTypeId: savedAssignment.assignmentTypeId,
+              title: savedAssignment.title,
+              prompt: savedAssignment.prompt,
+            });
           }}
-          entryPoint="dashboard"
-          exitTicketBuilderV3Enabled={exitTicketBuilderV3Enabled}
-          assignmentTypes={assignmentCreationTypes}
-          siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
-          teacherClasses={assignmentCreationClasses}
-          initialAssignmentTypeId={reusedAssignment.assignmentTypeId}
-          initialTitle={reusedAssignment.title}
-          initialPrompt={reusedAssignment.prompt}
-          initialSubmitForGrade={reusedAssignment.submitForGrade}
-          initialPointValue={reusedAssignment.pointValue}
-          initialTutorEnabled={reusedAssignment.tutorEnabled}
-          initialGradingAssistantStrictnessLevel={
-            reusedAssignment.gradingAssistantStrictnessLevel
-          }
         />
       ) : null}
 
@@ -703,7 +676,7 @@ export default function MyAssignmentsRoute() {
                   !freeUsage?.monthly &&
                   freeUsage?.allAssignmentsUsed
                 }
-                onClick={() => setIsCreateSheetOpen(true)}
+                onClick={() => navigateToNewAssignmentPage()}
               >
                 <Plus className="mr-2 h-4 w-4" />
                 New Assignment
@@ -837,6 +810,10 @@ export default function MyAssignmentsRoute() {
                         assignment={{
                           id: assignment.assignmentId,
                           assignmentTypeId: assignment.assignmentTypeId,
+                          classId:
+                            assignment.classes.length === 1
+                              ? assignment.classes[0]?.id
+                              : undefined,
                         }}
                       />
                       <TutorOffBadge tutorEnabled={assignment.tutorEnabled} />
@@ -876,16 +853,6 @@ export default function MyAssignmentsRoute() {
       {/* Creating from here spans classes, so the sheet takes the teacher's
           whole class list rather than being fixed to one. Editing uses this
           same sheet from the assignment detail page a row links to. */}
-      <AssignmentCreationSheet
-        open={isCreateSheetOpen}
-        onOpenChange={setIsCreateSheetOpen}
-        entryPoint="dashboard"
-        exitTicketBuilderV3Enabled={exitTicketBuilderV3Enabled}
-        assignmentTypes={assignmentCreationTypes}
-        siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
-        teacherClasses={assignmentCreationClasses}
-        teachingLocked={teachingLocked}
-      />
     </>
   );
 

@@ -11,7 +11,7 @@ export type FreeTierGettingStartedStep = {
   content?: ReactNode;
 };
 
-const PE3_ACCENT = 'hsl(14.8837 58.9041% 57.0588%)';
+const PE3_ACCENT = 'hsl(155.2174 42.5926% 21.1765%)';
 
 export function FreeTierGettingStartedTimeline({
   title,
@@ -91,7 +91,7 @@ function FreeTierGettingStartedTimelineMarker({
       aria-hidden
       className={cn(
         'relative z-[1] box-border flex size-5 shrink-0 items-center justify-center rounded-full border-2 bg-background',
-        state === 'current' ? 'border-[hsl(14.8837_58.9041%_57.0588%)]' : 'border-border'
+        state === 'current' ? 'border-[hsl(155.2174_42.5926%_21.1765%)]' : 'border-border'
       )}
       style={state === 'current' ? { borderColor: PE3_ACCENT } : undefined}
     >

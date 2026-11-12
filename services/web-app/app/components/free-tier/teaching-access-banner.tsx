@@ -21,7 +21,7 @@ export function TeachingAccessBanner({ adminName }: { adminName: string }) {
         </div>
         <Link
           to="/app/free-tier/pending"
-          className="shrink-0 pl-6 text-primary underline underline-offset-4 sm:pl-0"
+          className="shrink-0 pl-6 text-link underline underline-offset-4 sm:pl-0"
         >
           View status
         </Link>

@@ -8,7 +8,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Form, useFetcher, useLocation } from 'react-router';
+import { Form, useLocation, useNavigation } from 'react-router';
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
@@ -84,12 +84,10 @@ function EnvironmentIcon({
 }
 
 function LoginOptionRow({
-  Form,
   option,
   isSubmitting,
   submittingEmail,
 }: {
-  Form: ReturnType<typeof useFetcher>['Form'];
   option: LocalDevLoginOption;
   isSubmitting: boolean;
   submittingEmail: string | null;
@@ -101,6 +99,7 @@ function LoginOptionRow({
   return (
     <Form method="post" action="/auth/dev-login" className="block">
       <input type="hidden" name="email" value={option.email} />
+      <input type="hidden" name="redirectTo" value="/app" />
       <button
         type="submit"
         disabled={isSubmitting}
@@ -130,13 +129,11 @@ function LoginOptionRow({
 }
 
 function LoginOptionGroup({
-  Form,
   label,
   options,
   isSubmitting,
   submittingEmail,
 }: {
-  Form: ReturnType<typeof useFetcher>['Form'];
   label: string;
   options: LocalDevLoginOption[];
   isSubmitting: boolean;
@@ -155,7 +152,6 @@ function LoginOptionGroup({
         {options.map((option) => (
           <LoginOptionRow
             key={option.email}
-            Form={Form}
             option={option}
             isSubmitting={isSubmitting}
             submittingEmail={submittingEmail}
@@ -179,7 +175,7 @@ function LocalDevQuickLoginPanel({
 }) {
   const location = useLocation();
   const devLoginReturnTo = `${location.pathname}${location.search}`;
-  const loginFetcher = useFetcher();
+  const navigation = useNavigation();
   const onPreviewAccessPage = location.pathname === '/auth/preview-access';
   const needsDevLoginAccessCode =
     previewAccessGateEnabled && !previewAccessSeatLabel && !onPreviewAccessPage;
@@ -191,9 +187,9 @@ function LocalDevQuickLoginPanel({
   const firstPageRequested = useRef(false);
   const loadInFlight = useRef(false);
   const isMounted = useRef(true);
-  const isSubmitting = loginFetcher.state !== 'idle';
+  const isSubmitting = navigation.formAction === '/auth/dev-login';
   const submittingEmail = isSubmitting
-    ? String(loginFetcher.formData?.get('email') ?? '')
+    ? String(navigation.formData?.get('email') ?? '')
     : null;
   const { staff, students } = groupOptions(options);
 
@@ -289,7 +285,6 @@ function LocalDevQuickLoginPanel({
       {!needsDevLoginAccessCode ? (
         <>
       <LoginOptionGroup
-        Form={loginFetcher.Form}
         label="Staff"
         options={staff}
         isSubmitting={isSubmitting}
@@ -299,7 +294,6 @@ function LocalDevQuickLoginPanel({
         <div className="my-1.5 h-px bg-border/60" aria-hidden="true" />
       ) : null}
       <LoginOptionGroup
-        Form={loginFetcher.Form}
         label="Students"
         options={students}
         isSubmitting={isSubmitting}

@@ -47,7 +47,7 @@ export function LessonMaterialsCard({
             </>
           );
           const linkClass =
-            'inline-flex items-center gap-2 py-2 text-sm text-foreground hover:text-primary hover:underline underline-offset-4';
+            'inline-flex items-center gap-2 py-2 text-sm text-foreground hover:text-link hover:text-link-hover hover:underline underline-offset-4';
           return (
             <li key={material.href + material.label}>
               {material.kind === 'video' ? (

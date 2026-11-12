@@ -3,14 +3,12 @@ import type { OpenEndedPromptLibraryVariant } from './library-variant';
 
 // Class Starter is the only reader of this folder's freewrite corpus now.
 // Daily Pages has its own library and its own directions.
-export const CLASS_STARTER_HOW_IT_WORKS_TAB_LABEL = 'How Class Starter works';
-
 const COPY: Record<
   OpenEndedPromptLibraryVariant,
   { heading: string; body: string; examplesLabel: string }
 > = {
   'class-starter': {
-    heading: CLASS_STARTER_HOW_IT_WORKS_TAB_LABEL,
+    heading: 'How Class Starter works',
     body: 'Write a prompt, hit New → Assignment, and every student in the class gets a blank document pre-titled with your prompt. Class Starter is effort-based: the grading assistant checks that the student wrote and reflected, and Tutor and Teacher feedback focuses on ideas rather than rubric scores or correctness.',
     examplesLabel: 'For inspiration',
   },

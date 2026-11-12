@@ -35,7 +35,7 @@ export function TeachingApprovalRequiredAlert() {
           </p>
           <Link
             to="/app/free-tier/pending"
-            className="font-medium text-primary underline underline-offset-4"
+            className="font-medium text-link underline underline-offset-4"
           >
             View status
           </Link>

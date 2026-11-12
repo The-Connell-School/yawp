@@ -296,7 +296,7 @@ export function AddPanel({
                 </p>
               ) : (
                 <div key={turn.id} className="flex gap-2">
-                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#FBE5DC] text-[var(--sv-primary)]">
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--sv-brand-wash)] text-[var(--sv-primary)]">
                     <Lightbulb size={12} />
                   </span>
                   <div className="min-w-0 flex-1 space-y-2">

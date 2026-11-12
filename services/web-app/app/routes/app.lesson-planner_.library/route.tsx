@@ -205,7 +205,7 @@ function LessonRow({
           <div className="min-w-0 flex-1">
           <Link
             to={lessonHref(lesson)}
-            className="font-medium hover:text-primary hover:underline"
+            className="font-medium hover:text-link hover:text-link-hover hover:underline"
           >
             {lesson.title}
           </Link>
@@ -437,7 +437,7 @@ function UnitFolderRow({ folder, folders }: { folder: UnitFolder; folders: Folde
           <Link
             to={`/app/lesson-planner?c=${folder.planning.id}`}
             data-testid="unit-folder-planning"
-            className="mt-3 inline-block text-xs font-semibold text-primary underline"
+            className="mt-3 inline-block text-xs font-semibold text-link underline"
           >
             The chat that planned it
           </Link>

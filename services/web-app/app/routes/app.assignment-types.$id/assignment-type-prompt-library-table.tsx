@@ -167,7 +167,7 @@ export function PromptLibraryExpandableTable({
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="self-start text-[13px] font-medium text-primary hover:underline"
+          className="self-start text-[13px] font-medium text-link hover:text-link-hover hover:underline"
         >
           Show {hiddenCount} more prompts
         </button>

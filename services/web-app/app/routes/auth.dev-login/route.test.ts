@@ -144,7 +144,9 @@ describe('auth.dev-login action', () => {
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/app');
+    expect(redirectResponse.mock.calls[0]?.[0].get('Location')).toBe(
+      '/app/documents/abc'
+    );
     const setCookie = redirectResponse.mock.calls[0]?.[0].get('set-cookie');
     expect(setCookie).toContain('en_session=new-session; Path=/; HttpOnly');
     expect(setCookie).toContain('membership-id=mem-1; Path=/; HttpOnly');

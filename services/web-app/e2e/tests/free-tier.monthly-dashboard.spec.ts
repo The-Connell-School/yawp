@@ -68,10 +68,15 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
     await page.setViewportSize({ width, height });
     await page.goto('/app');
     await page.evaluate(() => document.fonts.ready);
-    await expect(page.locator('.locked-home-welcome')).toHaveCSS(
-      'font-family',
-      /Caveat/i
+    const myClassesHeading = page
+      .getByTestId('teacher-classes-grid')
+      .getByRole('heading', { name: 'My Classes' });
+    const welcomeHeading = page.locator('.locked-home-welcome');
+    const myClassesFont = await myClassesHeading.evaluate((el) =>
+      window.getComputedStyle(el).fontFamily
     );
+    await expect(welcomeHeading).toHaveCSS('font-family', myClassesFont);
+    await expect(welcomeHeading).toHaveCSS('font-weight', '600');
     await shot(page, `dashboard-${label}`);
     if (baseline) {
       for (const [route, name] of [
@@ -143,11 +148,13 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
     await page.goto('/app/assignments');
     await shot(page, `assignments-${label}`);
     await page.getByTestId('my-assignments-new-assignment').click();
+    await expect(page).toHaveURL(/\/app\/assignments\/new/);
+    await expect(page.getByTestId('new-assignment-type-grid')).toBeVisible();
     await expect(
-      page.getByRole('dialog').getByText('Unlimited').first()
+      page.getByTestId('new-assignment-type-grid').getByText('Unlimited').first()
     ).toBeVisible();
     await shot(page, `type-picker-${label}`);
-    await page.keyboard.press('Escape');
+    await page.goto('/app/assignments');
     await page.goto('/app/lesson-planner');
     await expect(page.getByTestId('free-lesson-remaining')).toContainText(
       /Your free classroom includes \d+ lesson plans and \d+ reports each month\. Renews/
@@ -349,11 +356,11 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
     await page.goto('/app');
     await expect(
       page
-        .getByTestId('free-assignment-tiles')
+        .getByTestId('teacher-assignments-grid')
         .getByRole('link', { name: /New .* assignment/ })
     ).toHaveCount(3);
     for (const link of await page
-      .getByTestId('free-assignment-tiles')
+      .getByTestId('teacher-assignments-grid')
       .getByRole('link', { name: /New .* assignment/ })
       .all())
       await expect(link).toBeVisible();
@@ -644,7 +651,7 @@ test('unlocked free dashboard assignment tiles navigate to assignment type home'
   });
   await page.goto('/app');
   const tile = page
-    .getByTestId('free-assignment-tiles')
+    .getByTestId('teacher-assignments-grid')
     .getByRole('link', { name: 'New Class Starter assignment' });
   await expect(tile).toHaveAttribute(
     'href',

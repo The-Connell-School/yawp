@@ -13,7 +13,7 @@
   --card-foreground: 60 1.9608% 10%;
   --popover: 48 100% 99.0196%;
   --popover-foreground: 50.7692 20% 12.7451%;
-  --primary: 14.8837 58.9041% 57.0588%;
+  --primary: 155.2174 42.5926% 21.1765%;
   --primary-foreground: 48 100% 99.0196%;
   --secondary: 45 24.2424% 87.0588%;
   --secondary-foreground: 50 8% 29.4118%;
@@ -27,14 +27,16 @@
   --input: 51.4286 8.2353% 66.6667%;
   --input-background: 45 24.2424% 90%;
   --ring: 210.1604 75.1004% 48.8235%;
-  --chart-1: 18.24 57.0776% 42.9412%;
+  --link: 210.1604 75.1004% 48.8235%;
+  --link-hover: 211.4286 80% 41.1765%;
+  --chart-1: 155.2174 42.5926% 32%;
   --chart-2: 251.3793 84.058% 72.9412%;
   --chart-3: 45 28% 80.3922%;
   --chart-4: 255.8824 50% 86.6667%;
-  --chart-5: 17.7273 60% 43.1373%;
+  --chart-5: 155.2174 42.5926% 35%;
   --sidebar: 53.3333 24.3243% 92.7451%;
   --sidebar-foreground: 60 2.5641% 22.9412%;
-  --sidebar-primary: 15.2174 55.6452% 51.3725%;
+  --sidebar-primary: 155.2174 42.5926% 21.1765%;
   --sidebar-primary-foreground: 48 100% 99.0196%;
   --sidebar-accent: 45 24.2424% 87.0588%;
   --sidebar-accent-foreground: 0 0% 20.3922%;
@@ -160,7 +162,9 @@
 }
 
 :root[data-contrast='high'] {
-  --primary: 14.8837 58.9041% 40%;
+  --primary: 155.2174 42.5926% 16%;
+  --link: 211.4286 80% 41.1765%;
+  --link-hover: 211.4286 85% 32%;
   --muted-foreground: 50 2.4% 36%;
 }
 
@@ -171,7 +175,7 @@
   --card-foreground: 46.6667 36% 95.098%;
   --popover: 60 2.1739% 18.0392%;
   --popover-foreground: 60 6.25% 87.451%;
-  --primary: 14.7761 63.2075% 58.4314%;
+  --primary: 155.2174 38.3333% 45%;
   --primary-foreground: 0 0% 100%;
   --secondary: 46.6667 36% 95.098%;
   --secondary-foreground: 60 2.1739% 18.0392%;
@@ -185,11 +189,13 @@
   --input: 51.4286 4.5752% 30%;
   --input-background: 60 1.9608% 12%;
   --ring: 210.1604 75.1004% 48.8235%;
-  --chart-1: 18.24 57.0776% 42.9412%;
+  --link: 210.1604 75.1004% 62%;
+  --link-hover: 210.1604 80% 72%;
+  --chart-1: 155.2174 42.5926% 32%;
   --chart-2: 251.3793 84.058% 72.9412%;
   --chart-3: 48 9.8039% 10%;
   --chart-4: 248.2759 25.6637% 22.1569%;
-  --chart-5: 17.7273 60% 43.1373%;
+  --chart-5: 155.2174 42.5926% 35%;
   --sidebar: 30 3.4483% 11.3725%;
   --sidebar-foreground: 42.8571 10% 72.549%;
   --sidebar-primary: 0 0% 20.3922%;
@@ -560,7 +566,7 @@ figure.document-image.ProseMirror-selectednode img {
 }
 
 .yawp-public {
-  --yawp-coral: #e07856;
+  --yawp-coral: #1f4d3a;
   --yawp-cream: #f3f0e8;
   --yawp-ink: #1b1b1b;
   --yawp-muted: #555555;
@@ -2161,10 +2167,13 @@ ul.free-tier-qa-answer:not(.free-tier-qa-privacy-list) {
   font: inherit;
   font-size: 14px;
   line-height: 21px;
-  color: hsl(var(--primary));
+  color: hsl(var(--link));
   background: transparent;
   border: none;
   cursor: pointer;
+}
+.free-tier-pending-forward-trigger:hover {
+  color: hsl(var(--link-hover));
 }
 .free-tier-pending-forward-trigger:focus-visible {
   outline: 2px solid #2563eb;

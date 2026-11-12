@@ -135,17 +135,6 @@ describe('app.assignments.new route gate', () => {
     classAssignmentCount.mockResolvedValue(1);
   });
 
-  test('loader returns 404 when free-tier is off', async () => {
-    isFreeTierEnabled.mockResolvedValue(false);
-    await expect(
-      loader({
-        request: new Request('http://localhost/app/assignments/new'),
-        params: {},
-        context: {} as never,
-      } as never)
-    ).rejects.toMatchObject({ status: 404 });
-  });
-
   test('loader succeeds for an approved free-tier teacher', async () => {
     const result = await loader({
       request: new Request('http://localhost/app/assignments/new'),
@@ -185,22 +174,15 @@ describe('app.assignments.new route gate', () => {
     expect(result.defaults.title).toBe('');
   });
 
-  test('action returns 404 when free-tier is off', async () => {
-    isFreeTierEnabled.mockResolvedValue(false);
-    const form = new FormData();
-    form.set('intent', 'create-assignment');
-    form.set('title', 'Draft');
-    await expect(
-      action({
-        request: new Request('http://localhost/app/assignments/new', {
-          method: 'POST',
-          body: form,
-        }),
-        params: {},
-        context: {} as never,
-      } as never)
-    ).rejects.toMatchObject({ status: 404 });
-    expect(guardTeachingFormAction).not.toHaveBeenCalled();
+  test('title query pre-fills the assignment title when not first assignment', async () => {
+    const result = await loader({
+      request: new Request(
+        'http://localhost/app/assignments/new?assignmentTypeId=type-1&title=Copy%20of%20Essay'
+      ),
+      params: {},
+      context: {} as never,
+    } as never);
+    expect(result.defaults.title).toBe('Copy of Essay');
   });
 
   test('action creates assignment for approved teacher', async () => {

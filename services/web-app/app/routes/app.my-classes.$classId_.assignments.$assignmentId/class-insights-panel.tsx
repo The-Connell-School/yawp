@@ -281,7 +281,7 @@ function CategoryCard({
                   <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                     <Link
                       to={example.href}
-                      className="inline-flex items-center gap-0.5 font-medium text-primary hover:underline"
+                      className="inline-flex items-center gap-0.5 font-medium text-link hover:text-link-hover hover:underline"
                     >
                       {example.studentName}
                       <ArrowUpRight className="h-3 w-3" aria-hidden />
@@ -307,7 +307,7 @@ function StudentLink({ student }: { student: DifferentiationStudent }) {
   return (
     <Link
       to={student.href}
-      className="inline-flex items-center gap-0.5 text-sm font-medium text-primary hover:underline"
+      className="inline-flex items-center gap-0.5 text-sm font-medium text-link hover:text-link-hover hover:underline"
     >
       {student.name}
       <ArrowUpRight className="h-3 w-3" aria-hidden />
@@ -513,7 +513,7 @@ function InsightBody({
                         // Ids only: the planner rebuilds the ask from the
                         // stored insight rather than trusting URL text.
                         to={`/app/lesson-planner?from=${classAssignmentId}&step=${index}`}
-                        className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-md text-sm font-medium text-primary hover:underline"
+                        className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-md text-sm font-medium text-link hover:text-link-hover hover:underline"
                       >
                         <Lightbulb size={14} className="shrink-0" />
                         Plan this lesson

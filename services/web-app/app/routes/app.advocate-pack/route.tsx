@@ -26,7 +26,7 @@ export default function AdvocatePack() {
           </p>
           <p className="mt-4">Unlimited with a site license</p>
           <a
-            className="mt-4 inline-block text-primary underline"
+            className="mt-4 inline-block text-link underline"
             href={FULL_ACCESS_CONTACT}
           >
             Need more? Talk to us

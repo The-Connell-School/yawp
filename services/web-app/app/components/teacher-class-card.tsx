@@ -5,6 +5,7 @@ import type { RefObject } from 'react';
 import { ClassArt } from '~/components/class-art';
 import { TeacherClassCardMenuOverlay } from '~/components/teacher-class-card-menu-overlay';
 import { getClassCardHeading } from '~/utils/class-display';
+import { buildMyClassTabHref } from '~/utils/class-page-tab-href';
 import { cn } from '~/utils/misc';
 import type { FirstAssignmentCelebrationPreview } from '~/components/free-tier/first-assignment-congratulations-dialog';
 
@@ -50,7 +51,7 @@ function ClassCardTabLink({
   label,
   testId,
 }: {
-  to: string;
+  to: ReturnType<typeof buildMyClassTabHref>;
   count: number;
   label: string;
   testId: string;
@@ -59,7 +60,8 @@ function ClassCardTabLink({
     <Link
       to={to}
       data-testid={testId}
-      className="flex flex-col gap-0.5 px-4 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+      onClick={(event) => event.stopPropagation()}
+      className="relative z-[1] flex flex-col gap-0.5 px-4 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
     >
       <p className="text-xl font-semibold tabular-nums text-foreground">{count}</p>
       <p className="text-xs text-muted-foreground">{label}</p>
@@ -97,14 +99,14 @@ export function TeacherClassCard({
   const footerTabs = [
     {
       id: 'students' as const,
-      to: `${classPath}?tab=students`,
+      to: buildMyClassTabHref(klass.id, 'students'),
       count: klass._count.students,
       label: klass._count.students === 1 ? 'Student' : 'Students',
       testId: 'teacher-class-card-tab-students',
     },
     {
       id: 'documents' as const,
-      to: `${classPath}?tab=documents`,
+      to: buildMyClassTabHref(klass.id, 'documents'),
       count: documentCount,
       label: documentCount === 1 ? 'Document' : 'Documents',
       testId: 'teacher-class-card-tab-documents',
@@ -113,7 +115,7 @@ export function TeacherClassCard({
       ? [
           {
             id: 'assignments' as const,
-            to: `${classPath}?tab=assignments`,
+            to: buildMyClassTabHref(klass.id, 'assignments'),
             count: klass._count.assignments,
             label: klass._count.assignments === 1 ? 'Assignment' : 'Assignments',
             testId: 'teacher-class-card-tab-assignments',
@@ -132,7 +134,7 @@ export function TeacherClassCard({
       <Link
         to={classPath}
         data-testid="teacher-class-card-main-link"
-        className="flex min-h-0 flex-1 flex-col"
+        className="block shrink-0"
       >
         <div
           className={`${IMAGE_HEIGHT_CLASS} w-full shrink-0 overflow-hidden border-b border-black/5`}
@@ -192,7 +194,7 @@ export function TeacherClassCard({
       ) : null}
       <div
         className={cn(
-          'mt-auto grid divide-x divide-black/5 border-t border-black/5',
+          'relative z-[1] mt-auto grid divide-x divide-black/5 border-t border-black/5',
           footerTabs.length === 3 ? 'grid-cols-3' : 'grid-cols-2'
         )}
       >

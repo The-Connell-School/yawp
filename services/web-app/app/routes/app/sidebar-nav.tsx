@@ -2,16 +2,12 @@ import { Link, useRouteLoaderData } from 'react-router';
 import type { Route as RootRoute } from '../../+types/root';
 import {
   BookOpenIcon,
-  NotebookPen,
   CogIcon,
   FileText,
-  GaugeIcon,
-  Lightbulb,
   LockIcon,
-  Microscope,
   MonitorPlay,
-  Users,
 } from 'lucide-react';
+import { requiredAppSidebarIcon } from '~/components/app-sidebar-icons';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
 import type { useUser } from '~/hooks/useUser';
@@ -43,18 +39,12 @@ const admin = (user: User) => user.isAdmin;
 const reporterNavVisible = (user: User) =>
   teacher(user) &&
   user.selectedMembership?.organization?.plan !== 'FREE_CLASSROOM';
-const lessonPlannerNavVisible = (user: User) => teacher(user);
+const lessonPlannerNavVisible = (user: User) => teacher(user) || admin(user);
 const writingPracticeEnabled = (user: User) => teacher(user) || student(user);
 
 const icons = {
-  dashboard: <GaugeIcon size={20} className="shrink-0" />,
-  classes: <Users size={20} className="shrink-0" />,
-  studentWork: <FileText size={20} className="shrink-0" />,
-  assignments: <NotebookPen size={20} className="shrink-0" />,
   myDocuments: <FileText size={20} className="shrink-0" />,
   lounge: <MonitorPlay size={20} className="shrink-0" />,
-  reporter: <Microscope size={20} className="shrink-0" />,
-  lessonPlanner: <Lightbulb size={20} className="shrink-0" />,
   writingPractice: <BookOpenIcon size={20} className="shrink-0" />,
   organization: <CogIcon size={20} className="shrink-0" />,
   admin: <LockIcon size={20} className="shrink-0" />,
@@ -67,24 +57,24 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
         to: '/app',
         label: 'Dashboard',
         end: true,
-        icon: icons.dashboard,
+        icon: requiredAppSidebarIcon('/app'),
       },
       {
         to: '/app/my-classes',
         label: 'My Classes',
-        icon: icons.classes,
+        icon: requiredAppSidebarIcon('/app/my-classes'),
         requires: { OR: [teacher, student] },
       },
       {
         to: '/app/assignments',
         label: 'My Assignments',
-        icon: icons.assignments,
+        icon: requiredAppSidebarIcon('/app/assignments'),
         requires: teacher,
       },
       {
         to: '/app/documents',
         label: 'Documents',
-        icon: icons.studentWork,
+        icon: requiredAppSidebarIcon('/app/documents'),
         requires: teacher,
       },
       {
@@ -108,13 +98,13 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
       {
         to: '/app/reporter',
         label: 'Reporter',
-        icon: icons.reporter,
+        icon: requiredAppSidebarIcon('/app/reporter'),
         requires: reporterNavVisible,
       },
       {
         to: '/app/lesson-planner',
         label: 'Lesson Planner',
-        icon: icons.lessonPlanner,
+        icon: requiredAppSidebarIcon('/app/lesson-planner'),
         requires: lessonPlannerNavVisible,
       },
       {
@@ -232,16 +222,11 @@ export function SidebarNavLinks({
           <div className="grid gap-1">
             {section.links.map((link) => {
               const isActive = isAppNavLinkActive(link.to, pathname);
-              const rowClassName = cn(
-                'flex w-full items-center gap-1 rounded-xl px-3 py-2 text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
-                {
-                  'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary':
-                    isActive,
-                  'justify-center py-2': !navExpanded,
-                }
-              );
+              const rowClassName = cn('app-sidebar-row flex w-full items-center', {
+                'justify-center': !navExpanded,
+              });
               const linkClassName = cn(
-                'flex min-w-0 flex-1 items-center gap-2 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'app-sidebar-link flex min-w-0 flex-1 items-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 { 'flex-1': navExpanded, 'justify-center': !navExpanded }
               );
               const trailing = renderLinkTrailing?.(link);

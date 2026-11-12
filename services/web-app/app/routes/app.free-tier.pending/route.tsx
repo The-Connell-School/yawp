@@ -3,8 +3,10 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
   useActionData,
+  useFetcher,
   useLoaderData,
   useNavigation,
+  useRevalidator,
   Link,
 } from 'react-router';
 import { useEffect, useState } from 'react';
@@ -28,7 +30,7 @@ import {
   ApprovalForwardForm,
   approvalForwardError,
 } from '../free-tier/ApprovalForwardForm';
-import { PendingAdditionalAdministratorLink } from '../free-tier/PendingAdditionalAdministratorLink';
+import { PendingForwardDisclosure } from '../free-tier/PendingForwardDisclosure';
 import { PendingForwardSuccessBanner } from '../free-tier/PendingForwardSuccessBanner';
 import { Clock, Info } from 'lucide-react';
 import { requireUserId } from '~/utils/auth.server';
@@ -220,6 +222,7 @@ export async function action({ request }: ActionFunctionArgs) {
         newAdminName: String(form.get('adminName') ?? ''),
         newAdminEmail: String(form.get('adminEmail') ?? ''),
         request,
+        keepPreviousPending: true,
       });
     } catch {
       return { ok: false as const, reason: 'unavailable' };
@@ -310,16 +313,32 @@ export default function FreeTierPendingRoute() {
     additionalSentAdmin,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const forwardFetcher = useFetcher<typeof action>();
+  const revalidator = useRevalidator();
   const navigation = useNavigation();
   const resending =
     navigation.state === 'submitting' &&
     navigation.formData?.get('intent') !== 'forward';
+  const forwardActionData = forwardFetcher.data;
   const adminName = pending?.adminName ?? 'your administrator';
   const [askAnotherOpen, setAskAnotherOpen] = useState(askOpen);
+  const [forwardOpen, setForwardOpen] = useState(false);
+  const forwarding = forwardFetcher.state !== 'idle';
 
   useEffect(() => {
     if (askOpen) setAskAnotherOpen(true);
   }, [askOpen]);
+
+  useEffect(() => {
+    if (isForwardActionError(forwardActionData)) setForwardOpen(true);
+  }, [forwardActionData]);
+
+  useEffect(() => {
+    if (forwardActionData?.ok && 'queued' in forwardActionData) {
+      setForwardOpen(false);
+      revalidator.revalidate();
+    }
+  }, [forwardActionData, revalidator]);
 
   if (teacherDenied && approvalV2?.enabled) {
     const { denied, chainCapReached, askAnotherHint: hint } = teacherDenied;
@@ -429,7 +448,13 @@ export default function FreeTierPendingRoute() {
           </>
         ) : (
           <>
-            {actionData?.ok && 'queued' in actionData && actionData.adminName ? (
+            {forwardActionData?.ok &&
+            'queued' in forwardActionData &&
+            forwardActionData.adminName ? (
+              <PendingForwardSuccessBanner
+                adminName={forwardActionData.adminName}
+              />
+            ) : actionData?.ok && 'queued' in actionData && actionData.adminName ? (
               <PendingForwardSuccessBanner adminName={actionData.adminName} />
             ) : additionalSentAdmin ? (
               <PendingForwardSuccessBanner adminName={additionalSentAdmin} />
@@ -465,7 +490,29 @@ export default function FreeTierPendingRoute() {
                   name={current.adminName}
                   email={current.adminEmail}
                 />
-                <PendingAdditionalAdministratorLink />
+                <PendingForwardDisclosure
+                  currentAdminName={current.adminName}
+                  currentAdminEmail={current.adminEmail}
+                  approvalId={current.id}
+                  open={forwardOpen}
+                  onOpenChange={setForwardOpen}
+                  forwarding={forwarding}
+                  schoolName={app?.schoolName ?? 'your school'}
+                  fetcher={forwardFetcher}
+                  serverAlert={
+                    isForwardActionError(forwardActionData)
+                      ? pendingForwardAlertMessage(forwardActionData.reason, {
+                          schoolName: app?.schoolName ?? 'your school',
+                          adminName: current.adminName,
+                        })
+                      : null
+                  }
+                  forwardRetry={
+                    isForwardActionError(forwardActionData) &&
+                    (forwardActionData.reason === 'unavailable' ||
+                      forwardActionData.reason === 'email_failed')
+                  }
+                />
                 {showExploreClassroom ? <LockedPreviewExploreButton /> : null}
               </>
             ) : null}

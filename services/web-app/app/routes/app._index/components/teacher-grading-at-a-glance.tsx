@@ -113,7 +113,7 @@ export function TeacherGradingAtAGlance({
   return (
     <div data-testid="teacher-grading-grid" data-tour="dashboard-grading">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-base font-semibold">Grading</h2>
+        <h2>Grading</h2>
         {seeHowItWorksTo ? (
           <SeeHowItWorksLink to={seeHowItWorksTo} />
         ) : (

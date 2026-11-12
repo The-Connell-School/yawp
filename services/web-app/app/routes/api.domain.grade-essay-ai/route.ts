@@ -387,23 +387,36 @@ const e2eRubricFixtures: Record<string, { score: number; comment: string }> = {
   },
 };
 
-function shouldUseE2EGradingFixture(
+export function shouldUseDeterministicGradingFixture(
   request: Request,
   forceFromForm: boolean
 ) {
-  if (
-    process.env.E2E !== 'true' ||
-    process.env.E2E_GRADE_ESSAY_AI_FIXTURE !== 'true'
-  ) {
-    return false;
-  }
   if (
     forceFromForm ||
     request.headers.get('x-e2e-force-grade-essay-ai-fixture') === 'true'
   ) {
     return true;
   }
-  return !process.env.ANTHROPIC_API_KEY;
+  const apiKeyMissing = !process.env.ANTHROPIC_API_KEY?.trim();
+  if (
+    process.env.E2E === 'true' &&
+    process.env.E2E_GRADE_ESSAY_AI_FIXTURE === 'true' &&
+    apiKeyMissing
+  ) {
+    return true;
+  }
+  // Local dev without a model key should still exercise grading UI flows.
+  if (process.env.NODE_ENV === 'development' && apiKeyMissing) {
+    return true;
+  }
+  return false;
+}
+
+function isLlmProviderConfigurationError(error: unknown) {
+  return (
+    error instanceof Error &&
+    error.message.includes('Could not resolve authentication method')
+  );
 }
 
 function buildE2EGradingFixtureResponse({
@@ -734,6 +747,7 @@ export async function action({ request }: ActionFunctionArgs) {
     document: {
       select: {
         id: true,
+        artifactKind: true,
         membershipId: true,
         assignmentTypeId: true,
         // Only to tell a group brief from a solo essay when deciding who the
@@ -774,6 +788,22 @@ export async function action({ request }: ActionFunctionArgs) {
                   },
                 },
                 teachers: { select: { id: true } },
+              },
+            },
+          },
+        },
+        teacherPreviewClassAssignment: {
+          select: {
+            class: {
+              select: {
+                school: {
+                  select: {
+                    organizationId: true,
+                    organization: {
+                      select: { submissionActivityEnabled: true },
+                    },
+                  },
+                },
               },
             },
           },
@@ -845,7 +875,8 @@ export async function action({ request }: ActionFunctionArgs) {
       actor.membershipId,
       submission.document.membershipId,
       actor.userId,
-      submission.document.membership?.userId
+      submission.document.membership?.userId,
+      { artifactKind: submission.document.artifactKind }
     ) || submission.document.group?.members.some((member) =>
       member.membershipId === actor.membershipId || member.membership.userId === actor.userId
     )
@@ -872,6 +903,8 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const organizationId =
     submission.document.classAssignment?.class?.school?.organizationId ??
+    submission.document.teacherPreviewClassAssignment?.class?.school
+      ?.organizationId ??
     submission.document.membership?.organizationId ??
     actor.organizationId;
   const gradeActorMembershipId = resolveSubmissionActivityActorMembershipId({
@@ -883,6 +916,8 @@ export async function action({ request }: ActionFunctionArgs) {
     submission.releasedAt != null &&
     (submission.document.classAssignment?.class?.school?.organization
       ?.submissionActivityEnabled ??
+      submission.document.teacherPreviewClassAssignment?.class?.school
+        ?.organization?.submissionActivityEnabled ??
       submission.document.membership?.organization
         ?.submissionActivityEnabled) !== true
   ) {
@@ -1067,7 +1102,7 @@ export async function action({ request }: ActionFunctionArgs) {
       'holistic_tier';
   const useE2EFixture =
     holisticE2eFixture ||
-    shouldUseE2EGradingFixture(
+    shouldUseDeterministicGradingFixture(
       request,
       data.e2eForceGradingFixture === 'true'
     );
@@ -1157,6 +1192,16 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         return gradingDeadlineResponse();
       }
       if (isLlmFallbackRetrySignal(error)) return retryResponse();
+      if (isLlmProviderConfigurationError(error)) {
+        return dataResponse(
+          {
+            success: false,
+            message:
+              'Grading Assistant is not configured in this environment. Add ANTHROPIC_API_KEY or use local dev fixtures.',
+          },
+          { status: 503 }
+        );
+      }
       return dataResponse(
         {
           success: false,
@@ -1354,6 +1399,16 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       }
       if (error instanceof Response && error.status === 429) return error;
       if (isLlmFallbackRetrySignal(error)) return retryResponse();
+      if (isLlmProviderConfigurationError(error)) {
+        return dataResponse(
+          {
+            success: false,
+            message:
+              'Grading Assistant is not configured in this environment. Add ANTHROPIC_API_KEY or use local dev fixtures.',
+          },
+          { status: 503 }
+        );
+      }
       throw error;
     }
   }

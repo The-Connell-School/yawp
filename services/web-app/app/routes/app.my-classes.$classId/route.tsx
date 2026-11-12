@@ -89,6 +89,7 @@ import { Checkbox } from '~/components/ui/checkbox';
 import { HandleStudentPasswordReset } from './handle-student-password-reset';
 import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
 import { UnsubmitSubmissionsSheet } from '~/components/teacher-document-work/unsubmit-submissions-sheet';
+import { ArchiveTeacherPreviewDocumentsSheet } from '~/components/teacher-document-work/archive-teacher-preview-documents-sheet';
 import {
   ArrowDown,
   ArrowUp,
@@ -109,6 +110,7 @@ import {
 } from '~/components/ui/select';
 import { studentModuleSessionSingleSelect } from './module-session-select.server';
 import { buildClassDocumentScope } from './class-document-where.server';
+import { TEACHER_ASSIGNMENT_PREVIEW_SUBJECT_LABEL } from '~/domain/assignments/teacher-assignment-preview';
 import { parseDocumentGroupMode } from './class-documents-grouping';
 import {
   getStoredCollapsedDocumentGroups,
@@ -147,9 +149,11 @@ import {
 } from '~/utils/teacher-document-status';
 import {
   buildReleaseGradeRows,
+  buildTeacherPreviewArchiveRows,
   buildTeacherUnsubmitRows,
   countTeacherDocumentWorkStatuses,
   type ReleaseGradeRow,
+  type TeacherPreviewArchiveRow,
   type TeacherUnsubmitRow,
   type TeacherDocumentWorkRow,
 } from '~/utils/teacher-document-work-utils';
@@ -1146,6 +1150,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: {
           id: true,
           title: true,
+          artifactKind: true,
           assignment: {
             select: {
               id: true,
@@ -1212,6 +1217,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: true,
       title: true,
       updatedAt: true,
+      artifactKind: true,
       assignment: {
         select: {
           id: true,
@@ -1256,6 +1262,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       updatedAt: 'desc',
     },
   });
+
+  const { loadTeacherPreviewDocumentsForClass } = await import(
+    './class-teacher-preview-documents.server'
+  );
+  const teacherPreviewDocuments = await loadTeacherPreviewDocumentsForClass({
+    classId,
+    teacherMembershipId: profile.id,
+  });
+
+  const inProgressDocumentsForClass = [
+    ...inProgressDocuments,
+    ...teacherPreviewDocuments.inProgressDocuments,
+  ];
+  const submissionsForClass = [
+    ...submissions,
+    ...teacherPreviewDocuments.submissions,
+  ];
 
   const [classAssignments, availableAssignmentTypes] = await Promise.all([
     prisma.classAssignment.findMany({
@@ -1341,6 +1364,28 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
         })
       : [];
+  const studentDocumentCountByClassAssignmentId = new Map(
+    classAssignmentIds.length > 0
+      ? (
+          await prisma.document.groupBy({
+            by: ['classAssignmentId'],
+            where: {
+              classAssignmentId: { in: classAssignmentIds },
+              deletedAt: null,
+              OR: [
+                { artifactKind: 'ASSIGNMENT_GROUP' },
+                {
+                  artifactKind: 'STUDENT',
+                  membership: { is: { role: 'STUDENT' } },
+                },
+              ],
+            },
+            _count: { _all: true },
+          })
+        ).map((row) => [row.classAssignmentId!, row._count._all])
+      : []
+  );
+
   const insightByClassAssignmentId = new Map(
     (await currentClassInsightRows(insightRows))
       .filter((row) => row.status === 'ready' && row.summaryJson)
@@ -1370,7 +1415,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       classAssignment.assignment._count.classAssignments - 1,
       0
     ),
-    _count: classAssignment._count,
+    _count: {
+      documents:
+        studentDocumentCountByClassAssignmentId.get(classAssignment.id) ?? 0,
+    },
     insight: insightByClassAssignmentId.get(classAssignment.id) ?? null,
     hasSharedWork: classAssignment.documentGroups.length > 0,
   }));
@@ -1478,8 +1526,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     classCodeHidden: hideTeachingSecrets,
     studentJoinUrl,
     klass: klassForClient,
-    submissions,
-    inProgressDocuments,
+    submissions: submissionsForClass,
+    inProgressDocuments: inProgressDocumentsForClass,
     assignments,
     assignmentTypes: creationTypeRows.map(
       ({ id, title, kind, collaborationSupported, rubric }) => ({
@@ -1525,10 +1573,49 @@ type ClassDocumentSubmission = {
   gradedAt?: Date | string | null;
 };
 
+function classDocumentSubjectForRow(params: {
+  membership:
+    | {
+        id: string;
+        user: {
+          name: string | null;
+          email: string | null;
+          username?: string | null;
+        };
+      }
+    | null
+    | undefined;
+  group: TeacherDocumentWorkRow['group'];
+  documentId: string;
+  artifactKind?: string | null;
+}): ClassDocumentRow['membership'] {
+  if (
+    params.artifactKind === 'TEACHER_ASSIGNMENT_PREVIEW' &&
+    params.membership
+  ) {
+    return {
+      ...params.membership,
+      user: {
+        ...params.membership.user,
+        name: TEACHER_ASSIGNMENT_PREVIEW_SUBJECT_LABEL,
+      },
+    };
+  }
+  if (params.membership) return params.membership;
+  return {
+    id: `group:${params.group?.id ?? params.documentId}`,
+    user: {
+      name: params.group?.label ?? 'Collaborative group',
+      email: '',
+    },
+  };
+}
+
 type ClassDocumentRow = {
   id: string;
   title: string | null;
   updatedAt: Date;
+  isTeacherAssignmentPreview?: boolean;
   membership: {
     id: string;
     user: {
@@ -1625,6 +1712,8 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
   const [isReleaseGradesSheetOpen, setIsReleaseGradesSheetOpen] =
     useState(false);
   const [isUnsubmitSheetOpen, setIsUnsubmitSheetOpen] = useState(false);
+  const [isArchivePreviewSheetOpen, setIsArchivePreviewSheetOpen] =
+    useState(false);
   const [studentNameSortDirection, setStudentNameSortDirection] =
     useState<SortDirection>('asc');
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
@@ -1633,6 +1722,9 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
   >([]);
   const [unsubmitRowsForSheet, setUnsubmitRowsForSheet] = useState<
     TeacherUnsubmitRow[]
+  >([]);
+  const [archivePreviewRowsForSheet, setArchivePreviewRowsForSheet] = useState<
+    TeacherPreviewArchiveRow[]
   >([]);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [growthPlanStudent, setGrowthPlanStudent] = useState<{
@@ -1870,17 +1962,19 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
     const byDocumentId = new Map<string, ClassDocumentRow>();
 
     for (const document of data.inProgressDocuments) {
-      const subject = document.membership ?? {
-        id: `group:${document.group?.id ?? document.id}`,
-        user: {
-          name: document.group?.label ?? 'Collaborative group',
-          email: '',
-        },
-      };
+      const isTeacherAssignmentPreview =
+        document.artifactKind === 'TEACHER_ASSIGNMENT_PREVIEW';
+      const subject = classDocumentSubjectForRow({
+        membership: document.membership,
+        group: document.group,
+        documentId: document.id,
+        artifactKind: document.artifactKind,
+      });
       byDocumentId.set(document.id, {
         id: document.id,
         title: document.title,
         updatedAt: new Date(document.updatedAt),
+        isTeacherAssignmentPreview,
         membership: subject,
         group: document.group,
         assignment: document.assignment,
@@ -1891,17 +1985,19 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
 
     for (const submission of allSubmissions) {
       const existing = byDocumentId.get(submission.documentId);
-      const subject = submission.document.membership ?? {
-        id: `group:${submission.document.group?.id ?? submission.documentId}`,
-        user: {
-          name: submission.document.group?.label ?? 'Collaborative group',
-          email: '',
-        },
-      };
+      const isTeacherAssignmentPreview =
+        submission.document.artifactKind === 'TEACHER_ASSIGNMENT_PREVIEW';
+      const subject = classDocumentSubjectForRow({
+        membership: submission.document.membership,
+        group: submission.document.group,
+        documentId: submission.documentId,
+        artifactKind: submission.document.artifactKind,
+      });
       const row: ClassDocumentRow = existing ?? {
         id: submission.documentId,
         title: submission.document.title,
         updatedAt: new Date(submission.submittedAt ?? submission.createdAt),
+        isTeacherAssignmentPreview,
         membership: subject,
         group: submission.document.group,
         assignment: submission.document.assignment,
@@ -1986,6 +2082,11 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
     [selectedDocuments]
   );
 
+  const archivePreviewRows = useMemo(
+    () => buildTeacherPreviewArchiveRows(selectedDocuments),
+    [selectedDocuments]
+  );
+
   // Handle URL param for to-release action (legacy deep link)
   useEffect(() => {
     const tab = searchParams.get('tab');
@@ -2023,6 +2124,18 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
     setUnsubmitRowsForSheet([]);
     setSelectedDocumentIds([]);
     window.location.reload();
+  };
+
+  const openArchivePreviewSheet = () => {
+    if (archivePreviewRows.length === 0) return;
+    setArchivePreviewRowsForSheet(archivePreviewRows);
+    setIsArchivePreviewSheetOpen(true);
+  };
+
+  const handleArchivePreviewSuccess = () => {
+    setArchivePreviewRowsForSheet([]);
+    setSelectedDocumentIds([]);
+    revalidator.revalidate();
   };
 
   const documentWorkStatusCounts = useMemo(
@@ -2317,6 +2430,18 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
               count: unsubmitRows.length > 0 ? unsubmitRows.length : undefined,
               disabled: unsubmitRows.length === 0,
               onSelect: openUnsubmitSheet,
+            },
+            {
+              id: 'archive-preview',
+              label: 'Archive preview',
+              count:
+                archivePreviewRows.length > 0
+                  ? archivePreviewRows.length
+                  : undefined,
+              disabled:
+                selectedDocumentIds.length === 0 ||
+                archivePreviewRows.length === 0,
+              onSelect: openArchivePreviewSheet,
             },
           ]}
           selection={{
@@ -2976,6 +3101,13 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
         isOpen={isUnsubmitSheetOpen}
         onClose={() => setIsUnsubmitSheetOpen(false)}
         onSuccess={handleUnsubmitSuccess}
+      />
+
+      <ArchiveTeacherPreviewDocumentsSheet
+        documents={archivePreviewRowsForSheet}
+        isOpen={isArchivePreviewSheetOpen}
+        onClose={() => setIsArchivePreviewSheetOpen(false)}
+        onSuccess={handleArchivePreviewSuccess}
       />
 
       <StudentGrowthPlansSheet

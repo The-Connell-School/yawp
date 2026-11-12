@@ -1,0 +1,1 @@
+export const TEACHER_ASSIGNMENT_PREVIEW_SUBJECT_LABEL = 'You (preview)';

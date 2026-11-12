@@ -258,7 +258,7 @@ export default function AdminAccessFlagsPage() {
             {data.flags.length} flags · stored values, read on each request
           </span>
           <div className="flex-1" />
-          <a href="#audit" className="text-primary text-xs hover:underline">
+          <a href="#audit" className="text-link text-xs hover:text-link-hover hover:underline">
             Open audit log
           </a>
         </PanelHeader>
@@ -310,7 +310,7 @@ export default function AdminAccessFlagsPage() {
               <div className="whitespace-nowrap px-3.5 py-3 text-right">
                 <button
                   type="button"
-                  className="mr-3 text-primary text-xs hover:underline"
+                  className="mr-3 text-link text-xs hover:text-link-hover hover:underline"
                   onClick={() => setHistoryScope({ type: 'flag', key: flag.key })}
                 >
                   History
@@ -346,7 +346,7 @@ export default function AdminAccessFlagsPage() {
           <div className="flex-1" />
           <button
             type="button"
-            className="text-primary text-xs hover:underline"
+            className="text-link text-xs hover:text-link-hover hover:underline"
             onClick={() => setHistoryScope({ type: 'access' })}
           >
             History
@@ -389,7 +389,7 @@ export default function AdminAccessFlagsPage() {
             </p>
             <button
               type="button"
-              className="mt-1.5 text-primary text-xs hover:underline"
+              className="mt-1.5 text-link text-xs hover:text-link-hover hover:underline"
               onClick={() => setHistoryScope({ type: 'access' })}
             >
               See removed entries in history
@@ -495,7 +495,7 @@ export default function AdminAccessFlagsPage() {
           <div className="flex-1" />
           <a
             href={`?${new URLSearchParams({ ...Object.fromEntries(searchParams), export: 'csv' }).toString()}`}
-            className="text-primary text-xs hover:underline"
+            className="text-link text-xs hover:text-link-hover hover:underline"
           >
             Export CSV
           </a>
@@ -804,7 +804,7 @@ export default function AdminAccessFlagsPage() {
           </ol>
           <div className="border-t px-5 py-3 text-xs text-muted-foreground">
             Showing {filteredHistory.length} entries ·{' '}
-            <a href="#audit" className="text-primary hover:underline" onClick={() => setHistoryScope(null)}>
+            <a href="#audit" className="text-link hover:text-link-hover hover:underline" onClick={() => setHistoryScope(null)}>
               Open in Audit log →
             </a>
           </div>

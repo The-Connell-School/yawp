@@ -755,7 +755,7 @@ function LooseLessonCard({
       <GripVertical size={16} className="shrink-0 text-muted-foreground/60" aria-hidden />
       <div className="min-w-0 flex-1">
         <LessonRename conversationId={lesson.id} title={lesson.title} originalTitle={lesson.originalTitle} variant="card">
-          <Link to={lesson.href} className="font-semibold hover:text-primary hover:underline">
+          <Link to={lesson.href} className="font-semibold hover:text-link hover:text-link-hover hover:underline">
             {lesson.title}
           </Link>
           <Badge variant={lesson.set ? 'default' : 'outline'} data-testid="lesson-set-badge">

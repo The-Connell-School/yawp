@@ -394,7 +394,7 @@ export default function FreeTierOnboardingRoute() {
             administrator; department chairs and teachers can’t approve.
           </p>
           {app?.status === 'ACCOUNT_CREATED' ? (
-            <Link to="?step=class" className="text-sm text-primary underline">
+            <Link to="?step=class" className="text-sm text-link underline">
               Back to your class
             </Link>
           ) : null}
@@ -413,7 +413,7 @@ export default function FreeTierOnboardingRoute() {
       {additionalAdministrator ? (
         <Link
           to="/app/free-tier/pending"
-          className="text-sm text-primary underline"
+          className="text-sm text-link underline"
         >
           Back to waiting for approval
         </Link>

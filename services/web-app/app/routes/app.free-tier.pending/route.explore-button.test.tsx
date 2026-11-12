@@ -13,6 +13,8 @@ function mockPage(loaderData: Record<string, unknown>) {
     ...router,
     useLoaderData: () => loaderData,
     useActionData: () => undefined,
+    useFetcher: () => ({ state: 'idle', data: undefined, submit: () => {} }),
+    useRevalidator: () => ({ revalidate: () => {} }),
     useNavigation: () => ({ state: 'idle' }),
     Form: ({ children, ...props }: any) => <form {...props}>{children}</form>,
     Link: ({ children, ...props }: any) => <a {...props}>{children}</a>,

@@ -47,3 +47,30 @@ test.describe('Mobile app shell horizontal padding', () => {
     await expectBalancedShellInset(page, '.free-tier-b2-page-shell');
   });
 });
+
+async function loginLicensedTeacher(page: import('@playwright/test').Page) {
+  await page.context().clearCookies();
+  await page.goto('/auth/login');
+  await page.getByLabel('Email or handle').fill('dev.teacher@yawp.local');
+  await page.locator('input[type="password"]').fill('yawp-dev');
+  await page.getByRole('button', { name: /Log in/i }).click();
+  await page.waitForURL((url) => url.pathname.replace(/\/$/, '') === '/app', {
+    timeout: 15000,
+  });
+}
+
+test.describe('Licensed teacher app shell sidebar', () => {
+  test('uses the shared warm nav chrome at 1280px', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await loginLicensedTeacher(page);
+    await page.goto('/app/assignments');
+    await page.waitForLoadState('networkidle');
+
+    const nav = page.locator('[data-app-shell] > nav').first();
+    await expect(nav).toBeVisible();
+    const bg = await nav.evaluate(
+      (el) => getComputedStyle(el).backgroundColor
+    );
+    expect(bg).toBe('rgb(237, 235, 228)');
+  });
+});

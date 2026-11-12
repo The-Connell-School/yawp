@@ -7,12 +7,9 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '~/components/ui/accordion';
+import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
+import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
-import {
-  PromptLibraryEmptyState,
-  PromptLibraryTable,
-  PromptLibraryTableRow,
-} from '../assignment-type-prompt-library-table';
 import { Input } from '~/components/ui/input';
 import {
   Sheet,
@@ -217,7 +214,13 @@ export function ShortFormPromptsLibrary({
       : `${prompts.length} of ${totalCount} prompts`;
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row">
+    <Accordion type="single" collapsible>
+      <AccordionItem value="library">
+        <AccordionTrigger className="py-2 text-base">
+          Prompt Library
+        </AccordionTrigger>
+        <AccordionContent>
+          <div className="flex flex-col gap-6 pt-2 lg:flex-row">
             <aside className="hidden lg:block lg:w-[240px] lg:shrink-0">
               {filterPanel}
             </aside>
@@ -247,7 +250,7 @@ export function ShortFormPromptsLibrary({
               </Sheet>
             </div>
 
-            <main className="min-w-0 flex-1">
+            <main className="min-w-0 flex-1 lg:max-w-[720px]">
               <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/40 pb-3 text-xs text-muted-foreground">
                 <span>{countLabel}</span>
                 {activeChips.length > 0 ? (
@@ -268,44 +271,110 @@ export function ShortFormPromptsLibrary({
               </div>
 
               {prompts.length === 0 ? (
-                <PromptLibraryEmptyState showingOnlyMine={showingOnlyMine} />
+                <p className="py-12 text-center text-sm text-muted-foreground">
+                  {showingOnlyMine
+                    ? 'You haven’t saved any prompts yet. Use New → Generate a prompt, then “Save prompt” (or “Use this prompt”) to keep one here.'
+                    : 'No prompts match the current filters.'}
+                </p>
               ) : (
-                <PromptLibraryTable>
-                  {prompts.map((p, index) => (
-                    <PromptLibraryTableRow
+                <ul className="flex min-w-0 flex-col gap-3">
+                  {prompts.map((p) => (
+                    <PromptCard
                       key={p.id}
-                      isFirst={index === 0}
-                      primary={p.title}
-                      meta={formatShortFormPromptMetaLine(p)}
+                      prompt={p}
                       assignmentCreationLocked={assignmentCreationLocked}
                       onSelect={() => onSelectPrompt(p.prompt)}
                     />
                   ))}
-                </PromptLibraryTable>
+                </ul>
               )}
             </main>
-    </div>
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   );
 }
 
-function formatShortFormPromptMetaLine(prompt: ShortFormLibraryEntry): string {
+function PromptCard({
+  prompt,
+  onSelect,
+  assignmentCreationLocked = false,
+}: {
+  prompt: ShortFormLibraryEntry;
+  onSelect: () => void;
+  assignmentCreationLocked?: boolean;
+}) {
   const text = prompt.textsOrUnits[0];
   const move = prompt.cognitiveMoves[0];
-  const tags: string[] = [];
-  if (prompt.kind) tags.push(KIND_LABEL[prompt.kind]);
-  if (prompt.sourceNeed) tags.push(SOURCE_NEED_LABEL[prompt.sourceNeed]);
-  if (prompt.lengthTarget) tags.push(LENGTH_TARGET_LABEL[prompt.lengthTarget]);
-  if (text) tags.push(text);
-  if (move) tags.push(COGNITIVE_MOVE_LABEL[move]);
-  if (prompt.gradeBands.length > 0) {
-    tags.push(`Grades ${prompt.gradeBands.join(', ')}`);
-  }
-  const excerpt =
-    prompt.prompt.length > 160
-      ? `${prompt.prompt.slice(0, 160).trim()}…`
-      : prompt.prompt;
-  if (tags.length === 0) return excerpt;
-  return `${excerpt} · ${tags.join(' · ')}`;
+
+  const cardButton = (
+    <button
+      type="button"
+      onClick={assignmentCreationLocked ? undefined : onSelect}
+      className="block w-full min-w-0 cursor-pointer rounded-lg border bg-card p-4 text-left text-card-foreground shadow-sm transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+        <div className="flex w-full min-w-0 flex-col gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <h3 className="min-w-0 break-words text-base font-semibold leading-snug">
+              {prompt.title}
+            </h3>
+            <Badge variant="secondary" size="sm" className="w-fit shrink-0">
+              {prompt.kind
+                ? KIND_LABEL[prompt.kind]
+                : COLLECTION_LABEL[prompt.collection]}
+            </Badge>
+          </div>
+
+          <p className="line-clamp-3 whitespace-normal break-words text-sm font-normal leading-6 text-muted-foreground">
+            {prompt.prompt}
+          </p>
+
+          <div className="flex flex-wrap gap-2">
+            {/* Source need and length lead the badges: they are what decides
+                whether this prompt can be assigned today, and what the student
+                has to be told before they start. */}
+            {prompt.sourceNeed ? (
+              <Badge variant="outline" size="sm">
+                {SOURCE_NEED_LABEL[prompt.sourceNeed]}
+              </Badge>
+            ) : null}
+            {prompt.lengthTarget ? (
+              <Badge variant="outline" size="sm">
+                {LENGTH_TARGET_LABEL[prompt.lengthTarget]}
+              </Badge>
+            ) : null}
+            {text ? (
+              <Badge variant="outline" size="sm">
+                {text}
+              </Badge>
+            ) : null}
+            {move ? (
+              <Badge variant="outline" size="sm">
+                {COGNITIVE_MOVE_LABEL[move]}
+              </Badge>
+            ) : null}
+            {prompt.gradeBands.length > 0 ? (
+              <Badge variant="outline" size="sm">
+                Grades {prompt.gradeBands.join(', ')}
+              </Badge>
+            ) : null}
+          </div>
+        </div>
+      </button>
+  );
+
+  return (
+    <li className="min-w-0">
+      {assignmentCreationLocked ? (
+        <PreviewAssignmentCreationControl fullWidth>
+          {cardButton}
+        </PreviewAssignmentCreationControl>
+      ) : (
+        cardButton
+      )}
+    </li>
+  );
 }
 
 function FilterPanel({

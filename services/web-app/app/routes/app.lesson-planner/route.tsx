@@ -1218,7 +1218,7 @@ export default function LessonPlannerRoute() {
                     next.set('c', unitMapConversation);
                     setSearchParams(next);
                   }}
-                  className="underline hover:text-primary"
+                  className="text-link underline hover:text-link-hover"
                 >
                   Back to the unit map
                 </button>
@@ -1250,7 +1250,7 @@ export default function LessonPlannerRoute() {
                       next.set('c', unitMapConversation);
                       setSearchParams(next);
                     }}
-                    className="underline hover:text-primary"
+                    className="text-link underline hover:text-link-hover"
                   >
                     Back to the unit map
                   </button>
@@ -1447,7 +1447,7 @@ export default function LessonPlannerRoute() {
                     writeStackPanelClosed(false);
                     setPanelClosed(false);
                   }}
-                  className="ml-auto hidden text-sm font-medium text-primary hover:underline lg:inline"
+                  className="ml-auto hidden text-sm font-medium text-link hover:text-link-hover hover:underline lg:inline"
                 >
                   Show the stack here
                 </button>
@@ -1455,7 +1455,7 @@ export default function LessonPlannerRoute() {
               <Link
                 to={`/app/lesson-planner/${conversationId}/packet`}
                 className={cn(
-                  'text-sm font-medium text-primary hover:underline',
+                  'text-sm font-medium text-link hover:text-link-hover hover:underline',
                   !(reviewFlags.stackPanel && panelClosed) && 'ml-auto'
                 )}
               >
@@ -1679,7 +1679,7 @@ function LessonPlannerEmptyState({
                   Delete one to plan another.
                 </p>
                 <Link
-                  className="mt-2 inline-block text-primary underline"
+                  className="mt-2 inline-block text-link underline"
                   to="/app/free-tier/status"
                 >
                   Need more? Talk to us
@@ -2204,7 +2204,7 @@ function MessageBubble({
                     Saved to your library as <strong className="font-semibold text-foreground">{savedUnit.title}</strong>. Build the days
                     whenever you're ready.
                   </span>
-                  <Link to={`/app/lesson-planner/library/unit/${savedUnit.id}`} className="font-medium text-primary underline underline-offset-2">
+                  <Link to={`/app/lesson-planner/library/unit/${savedUnit.id}`} className="font-medium text-link underline underline-offset-2">
                     Open the unit
                   </Link>
                 </p>

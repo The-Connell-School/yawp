@@ -615,7 +615,7 @@ function LessonPacketRouteV2() {
                       <button
                         type="button"
                         onClick={() => jumpTo(entry.anchor)}
-                        className="text-left font-medium hover:text-primary hover:underline print:no-underline"
+                        className="text-left font-medium hover:text-link hover:text-link-hover hover:underline print:no-underline"
                       >
                         {entry.title}
                       </button>
@@ -935,7 +935,7 @@ function MakeUpLink({ conversationId }: { conversationId: string }) {
   return (
     <Link
       to={`/app/lesson-planner?c=${conversationId}&build=makeup`}
-      className="mt-2 block text-xs font-medium text-primary hover:underline print:hidden"
+      className="mt-2 block text-xs font-medium text-link hover:text-link-hover hover:underline print:hidden"
     >
       Send this lesson to a student who missed class
     </Link>

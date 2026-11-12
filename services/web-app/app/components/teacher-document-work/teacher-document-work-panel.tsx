@@ -208,7 +208,6 @@ export function TeacherDocumentWorkPanel({
   const showAssignmentColumn =
     assignmentsEnabled && filters.group !== 'assignment';
   const showStatusColumn = filters.group !== 'status';
-
   const uniqueStudents = useMemo(
     () => dedupeFilterOptionsById(students),
     [students]

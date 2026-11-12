@@ -49,7 +49,7 @@ test('free-tier flag on shows three dashboard tiles and locked tiles in picker',
   await flag('free-tier-onboarding-v2', { mode: 'targeted', orgIds: [org] });
   await loginFreeTeacher(page);
   await page.goto('/app');
-  const tiles = page.getByTestId('free-assignment-tiles');
+  const tiles = page.getByTestId('teacher-assignments-grid');
   await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(3);
   await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
     0
@@ -105,7 +105,6 @@ test('free-tier flag off keeps the licensed teacher dashboard unchanged', async 
   await loginSchoolTeacher(page);
   await page.goto('/app');
   await expect(page.getByTestId('teacher-assignments-grid')).toBeVisible();
-  await expect(page.getByTestId('free-assignment-tiles')).toHaveCount(0);
   await expect(page.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
     0
   );
