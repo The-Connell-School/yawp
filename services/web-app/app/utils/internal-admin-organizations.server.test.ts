@@ -406,7 +406,6 @@ describe('internal admin organization endpoints', () => {
       writingPracticeEnabled: false,
       submissionActivityEnabled: false,
       revisionFlowEnabled: false,
-      apHistoryEnabled: false,
       collaborativeDraftsEnabled: false,
       studentDocumentSharingEnabled: false,
       memberships: [

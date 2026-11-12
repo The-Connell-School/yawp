@@ -5,9 +5,6 @@ const prisma = {
     findMany: mock(),
     findFirst: mock(),
   },
-  organization: {
-    findMany: mock(),
-  },
   assignmentType: {
     findFirst: mock(),
   },
@@ -134,10 +131,6 @@ describe('api.assignments.create', () => {
   beforeEach(() => {
     prisma.class.findMany.mockReset();
     prisma.class.findFirst.mockReset().mockResolvedValue(null);
-    prisma.organization.findMany.mockReset();
-    prisma.organization.findMany.mockResolvedValue([
-      { id: 'org-1', apHistoryEnabled: true },
-    ]);
     prisma.assignmentType.findFirst.mockReset();
     prisma.organizationAssignmentType.findMany.mockReset();
     prisma.school.findMany.mockReset();
@@ -235,8 +228,6 @@ describe('api.assignments.create', () => {
       deployment: { postAt: null, dueAt: null },
     });
   });
-
-// AP History is now always enabled; no org-level gating remains.
 
   test('stores a PDF attachment for assignments created across classes', async () => {
     const form = new FormData();
@@ -1273,9 +1264,6 @@ describe('api.assignments.create', () => {
         role: 'TEACHER',
         organization: { id: 'org-free', name: 'Free Org', plan: 'FREE_CLASSROOM' },
       });
-      prisma.organization.findMany.mockResolvedValue([
-        { id: 'org-free', apHistoryEnabled: false },
-      ]);
       prisma.class.findMany.mockResolvedValue([
         {
           id: 'class-1',

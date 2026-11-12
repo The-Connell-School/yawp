@@ -27,7 +27,6 @@ const featureToggleKeys = [
   'writingPracticeEnabled',
   'submissionActivityEnabled',
   'revisionFlowEnabled',
-  'apHistoryEnabled',
   'collaborativeDraftsEnabled',
   'studentDocumentSharingEnabled',
 ] as const;
@@ -189,7 +188,6 @@ const organizationBaseSelect = {
   writingPracticeEnabled: true,
   submissionActivityEnabled: true,
   revisionFlowEnabled: true,
-  apHistoryEnabled: true,
   collaborativeDraftsEnabled: true,
   studentDocumentSharingEnabled: true,
 } as const;
@@ -212,7 +210,6 @@ const organizationWriteSchema = z
         writingPracticeEnabled: z.boolean().optional(),
         submissionActivityEnabled: z.boolean().optional(),
         revisionFlowEnabled: z.boolean().optional(),
-        apHistoryEnabled: z.boolean().optional(),
         collaborativeDraftsEnabled: z.boolean().optional(),
         studentDocumentSharingEnabled: z.boolean().optional(),
       })
