@@ -11,6 +11,7 @@ import {
   openDevPanelClassSimulationFlyout,
   openDevToolsPanel,
   openGiveFeedback,
+  waitForDeveloperToolsPageReady,
 } from '../helpers/dev-panel-feedback';
 import { ensureDemoDevTeacherSession } from '../helpers/dev-panel-preview-access';
 
@@ -65,6 +66,7 @@ test.describe('Dev panel artboard evidence', () => {
     await page.goto('/app/assignments', { waitUntil: 'domcontentloaded' });
     await clearDevPanelStorageWhenStable(page);
     await page.reload({ waitUntil: 'domcontentloaded' });
+    await waitForDeveloperToolsPageReady(page);
     await openDevToolsPanel(page);
     await shot(page, '01');
 

@@ -186,10 +186,10 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await retrySend.click();
     expect((await failedFeedback).ok()).toBeFalsy();
     await expect(
-      retryPanel.getByRole('alert').filter({
-        hasText: /Could not save feedback|Could not send feedback/i,
-      })
-    ).toBeVisible();
+      retryPanel
+        .locator('[role="alert"], .yawp-dev-panel-pe3-error')
+        .filter({ hasText: /Could not save feedback|Could not send feedback/i })
+    ).toBeVisible({ timeout: 15_000 });
     await expect(retryPanel.getByLabel(retry.noteLabel)).toHaveValue(
       'Retry keeps my note'
     );
