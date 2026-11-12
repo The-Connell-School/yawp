@@ -30,6 +30,7 @@ import type {
 } from '~/domain/free-tier/inapp-usage';
 import {
   formatUsageRenewsLabel,
+  freeAssignmentKindUsageMeta,
   isLessonPlannerMonthlyExhausted,
 } from '~/domain/free-tier/inapp-usage';
 import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
@@ -40,7 +41,12 @@ import {
   siteLicenseLockedTileHasHowItWorksGuide,
 } from '~/domain/assignment-types/assignment-type-how-it-works';
 import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
-import { dashboardAssignmentTileTestId } from '~/components/assignment-type-tile-layout';
+import { SiteLicenseLockButton } from '~/components/site-license-lock-button';
+import {
+  dashboardAssignmentTileClassName,
+  dashboardAssignmentTileTestId,
+  DashboardAssignmentTileFooter,
+} from '~/components/assignment-type-tile-layout';
 import {
   FreeTierAssignmentCarouselControls,
   FreeTierAssignmentCarouselTrack,
@@ -50,8 +56,6 @@ import {
   useFreeTierAssignmentCarousel,
 } from '~/components/free-tier/free-tier-assignment-carousel';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
-import { LockedDashboardGettingStarted } from '~/components/free-tier/locked-dashboard-getting-started';
-import { LockedDashboardPendingCard } from '~/components/free-tier/locked-dashboard-pending-card';
 import { FreeTierGettingStartedTimeline } from '~/components/free-tier/free-tier-getting-started-timeline';
 import {
   FREE_TIER_NEEDS_GRADING_DOCUMENTS_HREF,
@@ -316,7 +320,7 @@ function FreeTierCarouselTileImage({
     >
       <AssignmentTypeTileImage
         imageId={imageId}
-        alt={imageTitle ?? ''}
+        alt=""
         className={freeTierAssignmentTileImageClassName}
       />
       {siteLicense ? (
@@ -389,6 +393,37 @@ function FreeTierCarouselTile({
           title: assignmentTypeTitle ?? label,
           kind: assignmentTypeKind ?? null,
         });
+
+  if (teachingLocked) {
+    const footer = (
+      <DashboardAssignmentTileFooter
+        label={label}
+        meta={meta}
+        metaClassName={metaClassName}
+        trailing={<SiteLicenseLockButton />}
+      />
+    );
+    if (hasHowItWorksGuide) {
+      return (
+        <Link
+          to={assignmentTypeHowItWorksPath(assignmentTypeId)}
+          data-testid={testId}
+          aria-label={`New ${label} assignment`}
+          className={dashboardAssignmentTileClassName()}
+        >
+          {footer}
+        </Link>
+      );
+    }
+    return (
+      <div
+        data-testid={testId}
+        className={dashboardAssignmentTileClassName('cursor-default')}
+      >
+        {footer}
+      </div>
+    );
+  }
 
   if (guideOnly && hasHowItWorksGuide) {
     const ariaLabel = `${label}, ${meta}. See how it works`;
@@ -499,6 +534,7 @@ export function FreeAssignmentTiles({
       type="button"
       disabled={
         quotaMode &&
+        !usage!.monthly &&
         !usage!.unlimitedFreeAssignmentTiles &&
         usage!.allAssignmentsUsed
       }
@@ -514,18 +550,16 @@ export function FreeAssignmentTiles({
         .map((row) => {
           const type = types.find((t) => t.kind === row.kind);
           if (!type) return null;
-          const meta = usage!.unlimitedFreeAssignmentTiles
-            ? FREE_TIER_UNLIMITED_TILE_LABEL
-            : row.remaining
-              ? `${row.remaining} of ${row.total} left`
-              : 'None left';
+          const meta = freeAssignmentKindUsageMeta(usage!, row);
+          const unlimitedMeta =
+            meta === 'Unlimited' || meta === FREE_TIER_UNLIMITED_TILE_LABEL;
           return (
             <FreeTierCarouselTile
               key={row.kind}
               label={row.label}
               meta={meta}
               metaClassName={
-                usage!.unlimitedFreeAssignmentTiles
+                unlimitedMeta
                   ? 'font-semibold text-[#1f3532]'
                   : row.remaining === 0
                     ? 'font-normal text-amber-800'
@@ -539,6 +573,7 @@ export function FreeAssignmentTiles({
               assignmentTypeKind={type.kind}
               tileDisabled={
                 !teachingLocked &&
+                !usage!.monthly &&
                 !usage!.unlimitedFreeAssignmentTiles &&
                 row.remaining === 0
               }
@@ -564,6 +599,7 @@ export function FreeAssignmentTiles({
       ));
 
   return (
+    <div data-testid="free-assignment-tiles">
     <div
       data-testid="teacher-assignments-grid"
       data-tour="dashboard-assignments"
@@ -599,6 +635,7 @@ export function FreeAssignmentTiles({
           />
         ))}
       </FreeTierAssignmentCarouselTrack>
+    </div>
     </div>
   );
 }
@@ -1088,12 +1125,7 @@ export function FreeAccountRail({
 }) {
   const { locked: teachingLocked } = useTeachingAccess();
   if (teachingLocked) {
-    return (
-      <div className="flex flex-col gap-4" data-testid="free-account-rail">
-        <LockedDashboardPendingCard />
-        <LockedDashboardGettingStarted />
-      </div>
-    );
+    return null;
   }
   const showChecklist = freeTierShowGettingStartedChecklist(usage);
   const showAdvocatePack = freeTierShowAdvocatePack(usage);
