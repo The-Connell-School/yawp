@@ -27,7 +27,8 @@ const FILES: Record<keyof KitPdfFonts, [file: string, fallback: string]> = {
   sansBold: ['Arimo-Bold.ttf', 'Helvetica-Bold'],
 };
 
-function fontPath(file: string): string | null {
+/** A font from public/lesson-planner/fonts, as built or in development; null if missing. */
+export function kitFontPath(file: string): string | null {
   for (const root of ['build/client', 'public']) {
     const path = join(process.cwd(), root, 'lesson-planner/fonts', file);
     if (existsSync(path)) return path;
@@ -41,7 +42,7 @@ function fontPath(file: string): string | null {
  * Times-Bold.
  */
 export function registerKitDisplayFont(pdf: InstanceType<typeof PDFDocument>): string {
-  const path = fontPath('Fraunces-Bold.ttf');
+  const path = kitFontPath('Fraunces-Bold.ttf');
   if (!path) return 'Times-Bold';
   pdf.registerFont('kit-display', path);
   return 'kit-display';
@@ -51,7 +52,7 @@ export function registerKitDisplayFont(pdf: InstanceType<typeof PDFDocument>): s
 export function registerKitFonts(pdf: InstanceType<typeof PDFDocument>): KitPdfFonts {
   const names = {} as KitPdfFonts;
   for (const [key, [file, fallback]] of Object.entries(FILES) as Array<[keyof KitPdfFonts, [string, string]]>) {
-    const path = fontPath(file);
+    const path = kitFontPath(file);
     if (path) {
       const name = `kit-${key}`;
       pdf.registerFont(name, path);

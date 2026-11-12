@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { deflateRawSync } from 'node:zlib';
-import { readZip, readZipEntries, ZipError } from './zip';
+import { readZip, readZipEntries, writeZip, ZipError } from './zip';
 import { readFixture } from './fixtures';
 
 describe('readZip', () => {
@@ -106,3 +106,27 @@ function buildOneEntryZip(
 
   return Buffer.concat([local, nameBytes, compressed, central, nameBytes, end]);
 }
+
+describe('writeZip', () => {
+  test('writes what readZip reads back, in order, byte for byte', () => {
+    const xml = Buffer.from('<p:presentation>' + 'x'.repeat(5000) + '</p:presentation>');
+    const binary = Buffer.from(Array.from({ length: 3000 }, (_, i) => (i * 37) % 256));
+    const written = writeZip([
+      { name: '[Content_Types].xml', data: Buffer.from('<Types/>') },
+      { name: 'ppt/presentation.xml', data: xml },
+      { name: 'ppt/fonts/font1.fntdata', data: binary },
+    ]);
+    const entries = readZip(written);
+    expect(entries.map((entry) => entry.name)).toEqual(['[Content_Types].xml', 'ppt/presentation.xml', 'ppt/fonts/font1.fntdata']);
+    expect(entries[1]!.read().equals(xml)).toBe(true);
+    expect(entries[2]!.read().equals(binary)).toBe(true);
+    // Deflated: the repeated XML shrinks.
+    expect(written.length).toBeLessThan(xml.length);
+  });
+
+  test('carries a CRC-32 any unzip tool can check', () => {
+    const written = writeZip([{ name: 'a.txt', data: Buffer.from('The quick brown fox jumps over the lazy dog') }]);
+    // The well-known CRC-32 of that sentence, in the local header.
+    expect(written.readUInt32LE(14)).toBe(0x414fa339);
+  });
+});

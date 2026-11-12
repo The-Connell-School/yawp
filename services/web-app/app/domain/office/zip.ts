@@ -1,5 +1,5 @@
 /**
- * A zip archive reader, small enough to own.
+ * A zip archive reader (and a small writer), small enough to own.
  *
  * .pptx and .docx are both zip archives full of XML, so reading either one
  * starts here. Nothing in the repo unzips anything yet, and the alternative was
@@ -11,7 +11,7 @@
  * zero and put them in a trailing data descriptor, which makes the front-to-back
  * walk guesswork. The central directory always has the real numbers.
  */
-import { inflateRawSync } from 'node:zlib';
+import { deflateRawSync, inflateRawSync } from 'node:zlib';
 
 export type ZipEntry = {
   /** The path inside the archive, e.g. `ppt/slides/slide1.xml`. */
@@ -211,4 +211,80 @@ export function readZip(input: Uint8Array): ZipEntry[] {
 /** The archive as a map, which is how both readers want to walk it. */
 export function readZipEntries(input: Uint8Array): Map<string, ZipEntry> {
   return new Map(readZip(input).map((entry) => [entry.name, entry]));
+}
+
+// Writing ---------------------------------------------------------------------
+
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(data: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (let i = 0; i < data.length; i += 1) crc = CRC_TABLE[(crc ^ data[i]!) & 0xff]! ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+/**
+ * A zip archive from whole entries, in the order given, each deflated (or
+ * stored, where deflating would not help). For rewriting an Office file we
+ * have just made: no zip64, so nothing over 4GB, which a slide deck is not.
+ */
+export function writeZip(entries: Array<{ name: string; data: Uint8Array }>): Buffer {
+  const locals: Buffer[] = [];
+  const centrals: Buffer[] = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const name = Buffer.from(entry.name, 'utf8');
+    const raw = Buffer.isBuffer(entry.data) ? entry.data : Buffer.from(entry.data);
+    const deflated = deflateRawSync(raw);
+    const stored = deflated.length >= raw.length;
+    const body = stored ? raw : deflated;
+    const crc = crc32(raw);
+
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(LOCAL_FILE_HEADER, 0);
+    local.writeUInt16LE(20, 4); // version needed
+    local.writeUInt16LE(0x0800, 6); // UTF-8 names
+    local.writeUInt16LE(stored ? STORED : DEFLATED, 8);
+    local.writeUInt16LE(0, 10); // time
+    local.writeUInt16LE(0x21, 12); // date: 1980-01-01
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(body.length, 18);
+    local.writeUInt32LE(raw.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    local.writeUInt16LE(0, 28);
+
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(CENTRAL_FILE_HEADER, 0);
+    central.writeUInt16LE(20, 4); // version made by
+    central.writeUInt16LE(20, 6); // version needed
+    central.writeUInt16LE(0x0800, 8);
+    central.writeUInt16LE(stored ? STORED : DEFLATED, 10);
+    central.writeUInt16LE(0, 12);
+    central.writeUInt16LE(0x21, 14);
+    central.writeUInt32LE(crc, 16);
+    central.writeUInt32LE(body.length, 20);
+    central.writeUInt32LE(raw.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(offset, 42);
+
+    locals.push(local, name, body);
+    centrals.push(central, name);
+    offset += local.length + name.length + body.length;
+  }
+  const directory = Buffer.concat(centrals);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(END_OF_CENTRAL_DIRECTORY, 0);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(directory.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, directory, end]);
 }

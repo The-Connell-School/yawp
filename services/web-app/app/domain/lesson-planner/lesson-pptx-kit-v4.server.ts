@@ -1,15 +1,20 @@
 /**
- * A gallery deck in the Lesson Deck Kit, spec v4, as PowerPoint ("Building
+ * A gallery deck in the Lesson Deck Kit, spec v4.1, as PowerPoint ("Building
  * for Google Slides and PowerPoint"): the slide's v4 layout
  * (`layoutKitV4Slide`) on a 13.333 × 7.5 in canvas, where a kit pixel is
  * 0.01042 in and a point is px × 0.75.
  *
  * Rectangles only (the panels and answer bands), no shadows, gradients,
- * transparency or rules. Georgia and Arial only, as the theme fonts too.
+ * transparency or rules. Fraunces Bold for headings, Georgia and Arial, as
+ * the theme fonts too, with Fraunces Bold built into the file so it shows
+ * where it is not installed.
  * Every word is a real text box in reading order, and a column's label,
  * headline and body share one box so they push each other down.
  */
+import { readFileSync } from 'node:fs';
 import PptxGenJS from 'pptxgenjs';
+import { embedPptxFont } from '../office/pptx-fonts';
+import { kitFontPath } from './kit-fonts.server';
 import { addPptxPicture, type DeckPictureFiles } from './deck-pictures.server';
 import { KIT_V4, layoutKitV4Slide, type KitV4Element } from './deck-kit-v4';
 import type { SlideDeck } from './slide-deck';
@@ -17,6 +22,7 @@ import { notesWithMinutes } from './tile-theme';
 import { galleryImageData } from './lesson-pptx-gallery.server';
 
 const LAYOUT = { name: 'YAWP_KIT_V4_16x9', width: 13.333, height: 7.5 };
+const DISPLAY = 'Fraunces';
 const SERIF = 'Georgia';
 const SANS = 'Arial';
 const hex = (color: string) => color.replace('#', '').toUpperCase();
@@ -61,11 +67,11 @@ function drawElement(
           runs.push({
             text: run.text,
             options: {
-              fontFace: run.face === 'serif' ? SERIF : SANS,
+              fontFace: run.face === 'display' ? DISPLAY : run.face === 'serif' ? SERIF : SANS,
               fontSize: pt(run.size),
               color: hex(run.color),
-              // Georgia is never bold, and nothing is italic.
-              bold: run.face === 'sans' && Boolean(run.bold),
+              // Fraunces is only ever Bold, Georgia never is, and nothing is italic.
+              bold: run.face === 'display' || (run.face === 'sans' && Boolean(run.bold)),
               italic: false,
               ...(last && p < element.paras.length - 1 ? { breakLine: true } : {}),
               ...(last ? { paraSpaceAfter: pt(para.after ?? 0) } : {}),
@@ -94,7 +100,7 @@ export async function renderDeckPptxKitV4(
   const pptx = new PptxGenJS();
   pptx.defineLayout(LAYOUT);
   pptx.layout = LAYOUT.name;
-  pptx.theme = { headFontFace: SERIF, bodyFontFace: SANS };
+  pptx.theme = { headFontFace: DISPLAY, bodyFontFace: SANS };
   pptx.title = deck.title;
   if (deck.subtitle) pptx.subject = deck.subtitle;
   pptx.company = 'Yawp!';
@@ -112,6 +118,8 @@ export async function renderDeckPptxKitV4(
     slide.addNotes(notesWithMinutes(spec.speakerNotes, spec.minutes));
   });
 
-  const written = await pptx.write({ outputType: 'nodebuffer' });
-  return new Uint8Array(written as Buffer);
+  const written = new Uint8Array((await pptx.write({ outputType: 'nodebuffer' })) as Buffer);
+  // Without the font file the deck still exports; PowerPoint falls back.
+  const fraunces = kitFontPath('Fraunces-Bold.ttf');
+  return fraunces ? new Uint8Array(embedPptxFont(written, { typeface: DISPLAY, bold: readFileSync(fraunces) })) : written;
 }

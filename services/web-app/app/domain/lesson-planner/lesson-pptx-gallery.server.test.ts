@@ -169,12 +169,31 @@ describe('renderDeckPptxGallery (Deck spec v4)', () => {
       for (const run of xml.matchAll(/<a:rPr[^>]*b="1"[^>]*>[\s\S]*?<\/a:rPr>/g)) {
         expect(run[0]).not.toContain('Georgia');
       }
-      expect([...xml.matchAll(/typeface="([^"]+)"/g)].every((match) => ['Georgia', 'Arial'].includes(match[1]!))).toBe(true);
+      expect([...xml.matchAll(/typeface="([^"]+)"/g)].every((match) => ['Fraunces', 'Georgia', 'Arial'].includes(match[1]!))).toBe(true);
     }
     expect(slideText(parts, 3)).toContain('Do');
     expect(slideText(parts, 3)).not.toContain('Do.');
     expect(slideText(parts, 2)).toContain('Today');
     expect(slideText(parts, 2)).not.toContain('program');
+  });
+
+  test('spec v4.1: headlines in Fraunces Bold, built into the file', async () => {
+    const parts = pptxParts(await renderDeckPptxGallery(v4));
+    // The split slide's headline.
+    expect(parts.get('ppt/slides/slide3.xml')).toMatch(/<a:rPr[^>]*b="1"[^>]*>(?:(?!<\/a:rPr>)[\s\S])*typeface="Fraunces"/);
+    for (let number = 1; number <= v4.slides.length; number += 1) {
+      for (const run of parts.get(`ppt/slides/slide${number}.xml`)!.matchAll(/<a:rPr[^>]*>(?:(?!<\/a:rPr>)[\s\S])*?typeface="Fraunces"/g)) {
+        expect(run[0]).toContain('b="1"');
+      }
+    }
+    expect([...parts.keys()].some((name) => /^ppt\/fonts\/font\d+\.fntdata$/.test(name))).toBe(true);
+    expect(parts.get('ppt/presentation.xml')).toMatch(/<p:embeddedFont><p:font typeface="Fraunces"[^>]*\/><p:bold r:id="/);
+    expect(parts.get('ppt/theme/theme1.xml')).toMatch(/<a:majorFont><a:latin typeface="Fraunces"/);
+  });
+
+  test('an unmarked deck embeds no font', async () => {
+    const parts = pptxParts(await renderDeckPptxGallery(deck));
+    expect([...parts.keys()].some((name) => name.startsWith('ppt/fonts/'))).toBe(false);
   });
 
   test('the split slide has its panel; the quiz names its question and bands the answer', async () => {
