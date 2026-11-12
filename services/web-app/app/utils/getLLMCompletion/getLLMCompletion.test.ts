@@ -83,6 +83,31 @@ describe('getLLMCompletion', () => {
     anthropicCreate.mockResolvedValue(anthropicTextResponse('Logged response'));
   });
 
+  test('omits temperature for Claude 5.x models', async () => {
+    await getLLMCompletion({
+      model: 'claude-sonnet-5-5',
+      system: 'System',
+      messages: [{ role: 'user', content: 'Hi' }],
+      attribution: testAttribution,
+    });
+
+    const request = anthropicCreate.mock.calls[0][0];
+    expect(request).not.toHaveProperty('temperature');
+  });
+
+  test('sends default temperature 0.6 for Claude 4.6', async () => {
+    await getLLMCompletion({
+      model: 'claude-sonnet-4-6',
+      system: 'System',
+      messages: [{ role: 'user', content: 'Hi' }],
+      attribution: testAttribution,
+    });
+
+    expect(anthropicCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ temperature: 0.6 })
+    );
+  });
+
   test('logs the exact normalized Anthropic payload with audit metadata', async () => {
     const response = await getLLMCompletion({
       model: 'claude-sonnet-5-5',

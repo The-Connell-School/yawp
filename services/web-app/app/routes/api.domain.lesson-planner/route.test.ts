@@ -1113,6 +1113,25 @@ describe('api.domain.lesson-planner action — the progress stream', () => {
     expect(JSON.stringify(events)).not.toContain('provider-secret');
   });
 
+  test('returns planner failed copy for Anthropic invalid_request 400', async () => {
+    const invalidRequest = Object.assign(new Error('Bad Request'), {
+      name: 'BadRequestError',
+      status: 400,
+      error: { type: 'invalid_request_error' },
+    });
+    getLLMCompletion.mockRejectedValue(invalidRequest);
+
+    const { events } = await streamEvents({ message: 'plan it' });
+    const done = events.at(-1)!;
+
+    expect(done.type).toBe('done');
+    expect(done.status).toBe(500);
+    expect(done.payload.error).toBe(
+      'The lesson planner could not put that together. Please try again.'
+    );
+    expect(JSON.stringify(events)).not.toContain('invalid_request');
+  });
+
   test('never asks the model anything when the stream was not requested', async () => {
     getLLMCompletion.mockResolvedValue('## A lesson\n\nDo the thing.');
     prisma.lessonPlanConversation.create.mockResolvedValue({
