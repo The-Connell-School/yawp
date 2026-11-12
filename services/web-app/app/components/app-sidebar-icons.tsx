@@ -1,4 +1,4 @@
-import type { ReactNode, SVGProps } from 'react';
+import { forwardRef, type ReactNode, type SVGProps } from 'react';
 
 const stroke = {
   fill: 'none',
@@ -8,21 +8,24 @@ const stroke = {
   strokeLinejoin: 'round' as const,
 };
 
-function AppNavSvg({ children, ...props }: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      aria-hidden
-      width={17}
-      height={17}
-      viewBox="0 0 24 24"
-      className="shrink-0"
-      {...stroke}
-      {...props}
-    >
-      {children}
-    </svg>
-  );
-}
+const AppNavSvg = forwardRef<SVGSVGElement, SVGProps<SVGSVGElement>>(
+  function AppNavSvg({ children, ...props }, ref) {
+    return (
+      <svg
+        ref={ref}
+        aria-hidden
+        width={17}
+        height={17}
+        viewBox="0 0 24 24"
+        className="shrink-0"
+        {...stroke}
+        {...props}
+      >
+        {children}
+      </svg>
+    );
+  }
+);
 
 export const appSidebarIcons = {
   home: (

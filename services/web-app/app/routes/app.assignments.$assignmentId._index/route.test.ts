@@ -9,7 +9,7 @@ const prisma = {
   assignment: { findFirst: mock(), update: mock() },
   assignmentType: { findFirst: mock(), findMany: mock() },
   documentGroup: { findFirst: mock() },
-  document: { findMany: mock() },
+  document: { findMany: mock(), count: mock(), findFirst: mock() },
   classAssignment: { findMany: mock() },
   classAssignmentInsight: { findUnique: mock() },
   submission: { count: mock() },
@@ -115,6 +115,8 @@ describe('app.assignments.$assignmentId loader', () => {
       .mockReset()
       .mockResolvedValue(null);
     prisma.submission.count.mockReset().mockResolvedValue(0);
+    prisma.document.count.mockReset().mockResolvedValue(0);
+    prisma.document.findFirst.mockReset().mockResolvedValue(null);
     getAvailableAssignmentTypesForScopes.mockReset().mockResolvedValue([]);
     prisma.class.findFirst.mockReset();
     prisma.class.findMany.mockReset().mockResolvedValue([]);

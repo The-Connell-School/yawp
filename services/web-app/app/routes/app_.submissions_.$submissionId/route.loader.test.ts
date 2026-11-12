@@ -500,6 +500,19 @@ describe('submission loader — unsubmitted redirect', () => {
             },
           },
         },
+        {
+          artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW',
+          teacherPreviewClassAssignment: {
+            is: {
+              class: {
+                school: { organizationId: 'org-1' },
+                teachers: {
+                  some: { id: TEACHER_MEMBERSHIP_ID, isActive: true },
+                },
+              },
+            },
+          },
+        },
       ],
     });
   });

@@ -390,6 +390,21 @@ export default function ReporterRoute() {
                         </option>
                       ))}
                     </select>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      aria-label="New report"
+                      onClick={() => {
+                        setPendingConversationId(null);
+                        setMessages([]);
+                        const next = new URLSearchParams(searchParams);
+                        next.delete('c');
+                        setSearchParams(next);
+                      }}
+                    >
+                      <Plus size={16} />
+                    </Button>
                   </div>
                 </>
               }

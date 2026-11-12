@@ -74,7 +74,7 @@ test.describe('App sidebar on short desktop viewports', () => {
       .getByRole('button', { name: 'Collapse app navigation' })
       .click();
 
-    const settingsTrigger = page.locator('[data-tour="app-nav"] .border-t');
+    const settingsTrigger = page.getByTestId('app-nav-settings');
     await expect(settingsTrigger).toBeVisible();
     const box = await settingsTrigger.boundingBox();
     const viewport = page.viewportSize();

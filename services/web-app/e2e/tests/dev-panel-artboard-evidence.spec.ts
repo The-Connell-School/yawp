@@ -10,6 +10,7 @@ import {
   openDevToolsPanel,
   openGiveFeedback,
 } from '../helpers/dev-panel-feedback';
+import { ensureDemoDevTeacherSession } from '../helpers/dev-panel-preview-access';
 
 const evidenceRoot =
   process.env.DEV_PANEL_EVIDENCE_DIR ??
@@ -30,9 +31,7 @@ test.describe('Dev panel artboard evidence', () => {
   });
 
   test.beforeEach(async ({ page }) => {
-    await page.request.post('/auth/dev-login', {
-      form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
-    });
+    await ensureDemoDevTeacherSession(page);
     await prisma.setting.upsert({
       where: { name: 'feature_flag.demo-feedback-widget' },
       create: {

@@ -1,4 +1,4 @@
-#!/opt/homebrew/bin/bash
+#!/usr/bin/env bash
 # Remove Docker containers publishing the given host TCP ports (worktree Postgres in CI).
 set -euo pipefail
 

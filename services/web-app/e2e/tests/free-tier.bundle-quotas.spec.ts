@@ -25,15 +25,19 @@ test.describe('Free classroom bundle quotas', () => {
     await expect(page).toHaveURL(/\/app\/assignments\/new/, {
       timeout: 20_000,
     });
-    const typeGrid = page.getByTestId('new-assignment-type-grid');
-    await expect(typeGrid).toBeVisible({ timeout: 20_000 });
-    const prewritingTile = typeGrid.getByRole('button', { name: /Prewriting/i });
+    await expect(page.getByTestId('assignment-builder-v3')).toBeVisible({
+      timeout: 20_000,
+    });
+    await page.getByRole('button', { name: 'Change' }).click();
+    const picker = page.getByRole('dialog', { name: 'Assignment type' });
+    await expect(picker).toBeVisible({ timeout: 20_000 });
+    const prewritingTile = picker.getByRole('button', { name: /Prewriting/i });
     if (await prewritingTile.count()) {
       await expect(prewritingTile).toContainText(
-        /Unlimited|\d+ of \d+|None left/
+        /Unlimited|\d+ of \d+|None left|No remaining/
       );
     }
-    const classStarterTile = typeGrid.getByRole('button', {
+    const classStarterTile = picker.getByRole('button', {
       name: /Class Starter/i,
     });
     await expect(classStarterTile).toBeVisible({ timeout: 20_000 });

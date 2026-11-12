@@ -1,5 +1,10 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import {
+  clickClassNewAssignment,
+  expectTypeAbsentInPicker,
+  expectTypePresentInPicker,
+} from '../helpers/assignment-builder-v3-page';
 
 test.describe.serial('Admin assignment type archive', () => {
   test.setTimeout(60_000);
@@ -47,16 +52,11 @@ test.describe.serial('Admin assignment type archive', () => {
       await expect(page.getByText('E2E Class Assignment')).toBeVisible();
       await expect(page.getByText('E2E Course').first()).toBeVisible();
 
-      await page
-        .getByRole('button', { name: /New Assignment/ })
-        .first()
-        .click();
-      await expect(page.getByRole('dialog')).toBeVisible();
+      await clickClassNewAssignment(page);
       // ...but the archived type no longer appears as a selectable option.
-      await page.getByRole('dialog').locator('[role="combobox"]').first().click();
-      await expect(page.getByRole('option', { name: 'E2E Course' })).toHaveCount(0);
-      await page.keyboard.press('Escape');
-      await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+      await expectTypeAbsentInPicker(page, 'E2E Course');
+      await page.goBack();
+      await expect(page).toHaveURL(/tab=assignments/);
 
       await page.context().clearCookies();
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
@@ -73,13 +73,8 @@ test.describe.serial('Admin assignment type archive', () => {
       await page.context().clearCookies();
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
-      await page
-        .getByRole('button', { name: /New Assignment/ })
-        .first()
-        .click();
-      await expect(page.getByRole('dialog')).toBeVisible();
-      await page.getByRole('dialog').locator('[role="combobox"]').first().click();
-      await expect(page.getByRole('option', { name: 'E2E Course' })).toBeVisible();
+      await clickClassNewAssignment(page);
+      await expectTypePresentInPicker(page, 'E2E Course');
     } finally {
       await prisma.assignmentType.update({
         where: { id: e2eContext.assignmentTypeId },
