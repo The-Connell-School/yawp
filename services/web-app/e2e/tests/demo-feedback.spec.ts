@@ -16,9 +16,12 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
   page,
 }) => {
   test.setTimeout(120_000);
-  await page.request.post('/auth/dev-login', {
+  const login = await page.request.post('/auth/dev-login', {
     form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
   });
+  expect(login.ok()).toBe(true);
+  await page.goto('/app/assignments');
+  await expect(page).toHaveURL(/\/app\/assignments/);
   const flag = 'feature_flag.demo-feedback-widget';
   const screenshot = async (name: string) => {
     if (evidence) {
@@ -260,9 +263,12 @@ test('local demo single trigger reserves mobile content space on landing, classe
       create: { name: flag, value: 'true', valueType: 'boolean' },
       update: { value: 'true' },
     });
-    await page.request.post('/auth/dev-login', {
+    const login = await page.request.post('/auth/dev-login', {
       form: { email: teacher.email!, redirectTo: '/app' },
     });
+    expect(login.ok()).toBe(true);
+    await page.goto('/app');
+    await expect(page).toHaveURL(/\/app/);
     for (const viewport of [
       { width: 360, height: 740 },
       { width: 390, height: 844 },

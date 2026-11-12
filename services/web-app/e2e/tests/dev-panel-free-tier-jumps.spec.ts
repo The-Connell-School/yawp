@@ -70,7 +70,13 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
   await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
   await page.reload();
 
+  const orgListWait = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/dev-panel/orgs') && response.ok(),
+    { timeout: 60_000 }
+  );
   const tools = await openDevPanelSection(page, 'Free-tier');
+  await orgListWait.catch(() => {});
   await waitForDevPanelOrgReady(page, tools);
   const stateSheet = tools.getByTestId('free-tier-session-runner');
   await expect(stateSheet).toBeVisible({ timeout: 15_000 });
