@@ -1238,6 +1238,8 @@ jobs:
             app/domain/lesson-planner/option-groups.test.ts \
             app/domain/lesson-planner/lesson-templates.test.ts \
             app/domain/lesson-planner/yawp-catalog.server.test.ts \
+            app/domain/lesson-planner/yawp-lessons.server.test.ts \
+            app/domain/lesson-planner/yawp-lessons.test.ts \
             app/routes/api.domain.lesson-planner.stack/route.test.ts \
             app/routes/api.domain.lesson-planner.library/route.test.ts \
             app/domain/lesson-planner/deck-art.test.ts \
