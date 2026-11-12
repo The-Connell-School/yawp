@@ -267,6 +267,7 @@ function FreeAccountUsageDetails({ usage }: { usage: FreeAccountUsage }) {
 }
 const freeTierAssignmentTileImageClassName = 'size-[168px] object-cover';
 
+/** Carousel tiles share name/meta test ids with dashboard rows for E2E geometry checks. */
 function FreeTierCarouselTileCaption({
   label,
   meta,
