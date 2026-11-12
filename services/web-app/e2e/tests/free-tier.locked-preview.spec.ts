@@ -843,6 +843,7 @@ test('locked class surfaces hide the real class code and lock invite controls', 
   await expect(page.getByTestId('class-code-masked')).toBeVisible();
   const html = await page.content();
   expect(html).not.toContain(klass.code);
+  await expect(page.getByTestId('class-detail-add-students')).toHaveCount(0);
   const lockedInvite = page.getByRole('button', { name: 'Add Student' });
   await expect(lockedInvite).toBeVisible();
   await lockedInvite.hover();
