@@ -31,6 +31,7 @@ type DevPanelContextValue = {
   updateForms: (forms: Partial<DevPanelPersistedState['forms']>) => void;
   setScroll: (scroll: DevPanelPersistedState['scroll']) => void;
   clearFeedbackForm: () => void;
+  dismissGiveFeedbackAfterSubmit: () => void;
   previewAccessSeatLabel: string | null;
   setPreviewAccessSeatLabel: (label: string | null) => void;
   previewAccessGateEnabled: boolean;
@@ -186,6 +187,16 @@ export function DevPanelProvider({
           ...state,
           forms: { ...state.forms, feedbackNote: '' },
         }),
+      dismissGiveFeedbackAfterSubmit: () => {
+        const openSections = state.openSections.filter(
+          (sectionId) => sectionId !== 'give-feedback'
+        );
+        persist({
+          ...state,
+          openSections,
+          forms: { ...state.forms, feedbackNote: '' },
+        });
+      },
       previewAccessSeatLabel: seatLabel,
       setPreviewAccessSeatLabel: setSeatLabel,
       previewAccessGateEnabled,

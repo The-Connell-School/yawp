@@ -39,7 +39,7 @@ export function DevPanelGiveFeedbackInline({
     ReturnType<typeof createDevPanelFeedbackContext>['snapshot']
   >;
 }) {
-  const { state, updateForms, toggleSection } = useDevPanel();
+  const { state, updateForms, dismissGiveFeedbackAfterSubmit } = useDevPanel();
   const rootData = useRouteLoaderData<typeof rootLoader>('root');
   const location = useLocation();
   const path = devPanelFeedbackPath(location.pathname + location.search);
@@ -131,9 +131,8 @@ export function DevPanelGiveFeedbackInline({
         setStatus('error');
         return;
       }
-      updateForms({ feedbackNote: '' });
       setStatus('idle');
-      toggleSection('give-feedback');
+      dismissGiveFeedbackAfterSubmit();
     } catch {
       setStatus('error');
       setError('');
@@ -148,7 +147,7 @@ export function DevPanelGiveFeedbackInline({
     path,
     screenshot,
     screenshotOmitted,
-    toggleSection,
+    dismissGiveFeedbackAfterSubmit,
     updateForms,
   ]);
 

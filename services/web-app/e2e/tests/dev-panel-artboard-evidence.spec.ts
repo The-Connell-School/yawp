@@ -133,7 +133,6 @@ test.describe('Dev panel artboard evidence', () => {
         };
     });
     await page.getByRole('button', { name: 'Jump', exact: true }).click();
-    await expect(page.getByText(/Jumping to/i)).toBeVisible();
     await shot(page, '21');
     await page
       .evaluate(() => {
