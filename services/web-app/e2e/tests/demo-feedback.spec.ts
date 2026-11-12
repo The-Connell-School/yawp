@@ -158,24 +158,38 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       await retryPanel.getByLabel('Severity').selectOption('medium');
     }
     await retryPanel.getByLabel(retry.noteLabel).fill('Retry keeps my note');
+    const feedbackErrorBody = JSON.stringify({
+      ok: false,
+      error: 'Could not save feedback. Please try again.',
+    });
     await page.route('**/api/dev-panel/feedback', (route) =>
       route.fulfill({
         status: 503,
-        json: { error: 'Could not save feedback. Please try again.' },
+        contentType: 'application/json',
+        body: feedbackErrorBody,
       })
     );
     await page.route('**/api/demo-feedback', (route) =>
       route.fulfill({
         status: 503,
-        json: { error: 'Could not save feedback. Please try again.' },
+        contentType: 'application/json',
+        body: feedbackErrorBody,
       })
     );
     const retrySend = retryPanel.getByRole('button', { name: 'Send feedback' });
     await retrySend.scrollIntoViewIfNeeded();
-    await retrySend.click();
-    await expect(retryPanel.getByRole('alert')).toContainText(
-      /Could not save feedback|Could not send feedback/i
+    const failedFeedback = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/dev-panel/feedback') &&
+        response.request().method() === 'POST'
     );
+    await retrySend.click();
+    expect((await failedFeedback).ok()).toBeFalsy();
+    await expect(
+      retryPanel.getByRole('alert').filter({
+        hasText: /Could not save feedback|Could not send feedback/i,
+      })
+    ).toBeVisible();
     await expect(retryPanel.getByLabel(retry.noteLabel)).toHaveValue(
       'Retry keeps my note'
     );

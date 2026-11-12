@@ -41,7 +41,10 @@ test.describe('Dev panel class simulation', () => {
       .click();
     await panel.locator('#dev-panel-sim-count').fill('3');
     await panel.getByRole('button', { name: 'Populate class', exact: true }).click();
-    await expect(page.getByText(/Added 3 students/i)).toBeVisible({ timeout: 60_000 });
+    await expect(panel.locator('.yawp-dev-panel-class-sim-success')).toContainText(
+      /Added 3 students/i,
+      { timeout: 60_000 }
+    );
 
     await page.goto(`/app/my-classes/${klass!.id}?tab=students`);
     await expect(page.getByText('Alex Rivera')).toBeVisible({ timeout: 30_000 });

@@ -79,11 +79,7 @@ test.describe('Dev panel artboard evidence', () => {
     await shot(page, '06');
 
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.context().clearCookies();
-    await page.request.post('/auth/dev-login', {
-      form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
-    });
-    await page.goto('/app/assignments');
+    await ensureDemoDevTeacherSession(page, '/app/assignments');
     await openDevToolsPanel(page);
     if (await page.getByRole('button', { name: 'Enter access code' }).count()) {
       await shot(page, '34');
@@ -156,10 +152,7 @@ test.describe('Dev panel artboard evidence', () => {
     );
     await page.waitForLoadState('domcontentloaded');
     await page.unroute('**/api/dev-panel/free-tier-jump');
-    await page.request.post('/auth/dev-login', {
-      form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
-    });
-    await page.goto('/app/assignments', { waitUntil: 'domcontentloaded' });
+    await ensureDemoDevTeacherSession(page, '/app/assignments');
     await clearDevPanelStorageWhenStable(page);
 
     let { panel: feedbackDialog } = await openGiveFeedback(page);
