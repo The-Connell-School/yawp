@@ -12,7 +12,12 @@ const setting = mock(async (..._args: any[]): Promise<any> => ({ value: 'true' }
 const enabled = mock(async () => {});
 const throttle = mock(async (..._args: any[]): Promise<any> => ({ allowed: true }));
 const mail = mock(async () => {});
-mock.module('~/utils/db.server', () => ({ prisma: { setting: { findUnique: setting } } }));
+mock.module('~/utils/db.server', () => ({
+  prisma: {
+    setting: { findUnique: setting },
+    freeTierApplication: { findUnique: async () => null },
+  },
+}));
 mock.module('./service.server', () => ({ waitlistInputSchema,
   redeemInputSchema: waitlistInputSchema.omit({ middleName: true }).extend({ token: z.string().min(1).max(500) }),
   submitWaitlist: submit, redeemToken: redeem, normalizeEmail: (s: string) => s.trim().toLowerCase(),

@@ -361,7 +361,7 @@ for (const width of [390, 1440]) {
     await expect(exploreLink).toHaveAttribute('href', '/app');
     await exploreLink.click();
     await expectLockedAppHome(page);
-    await expect(page.getByTestId('free-account-rail')).toBeVisible({
+    await expect(page.getByTestId('free-account-rail').first()).toBeVisible({
       timeout: 30_000,
     });
     await expect(page).not.toHaveURL(/free-tier\/preview/);
