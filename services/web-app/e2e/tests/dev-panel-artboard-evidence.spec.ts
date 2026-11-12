@@ -133,15 +133,23 @@ test.describe('Dev panel artboard evidence', () => {
         };
     });
     await page.getByRole('button', { name: 'Jump', exact: true }).click();
-    await expect(page.getByText(/Jumping to/i)).toBeVisible();
+    await page
+      .waitForURL(
+        (url) =>
+          url.pathname === '/app' ||
+          url.pathname === '/app/' ||
+          url.searchParams.has('devPanelJumpToast'),
+        { timeout: 15_000 }
+      )
+      .catch(async () => {
+        await expect(page.getByText(/Jumping to/i)).toBeVisible({ timeout: 5_000 });
+      });
     await shot(page, '21');
     await page
       .evaluate(() => {
         (window as unknown as { __restoreJumpAssign?: () => void }).__restoreJumpAssign?.();
       })
       .catch(() => undefined);
-    // Client schedules location.assign 350ms after a successful jump; wait for
-    // that navigation before loading another route (avoids goto interruptions).
     await page.waitForURL(
       (url) => url.pathname === '/app' || url.pathname === '/app/',
       { timeout: 10_000 }

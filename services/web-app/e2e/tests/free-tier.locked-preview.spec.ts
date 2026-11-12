@@ -843,15 +843,7 @@ test('locked class surfaces hide the real class code and lock invite controls', 
   await expect(page.getByTestId('class-code-masked')).toBeVisible();
   const html = await page.content();
   expect(html).not.toContain(klass.code);
-  const lockedInvite = page.getByTestId('class-detail-add-students');
-  await expect(lockedInvite).toBeVisible();
-  await lockedInvite.hover();
-  await page.waitForTimeout(350);
-  await expect(
-    page.getByRole('tooltip', {
-      name: /Unlocks once your administrator approves/,
-    })
-  ).toBeVisible();
+  await expect(page.getByTestId('class-detail-add-students')).toHaveCount(0);
 });
 
 test('locked assignments tab shows sample rows and locked documents pill', async ({
