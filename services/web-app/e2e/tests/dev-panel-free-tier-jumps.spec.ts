@@ -2,7 +2,10 @@ import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
-import { openDevToolsPanel } from '../helpers/dev-panel-feedback';
+import {
+  openDevPanelSection,
+  openDevToolsPanel,
+} from '../helpers/dev-panel-feedback';
 import {
   listCatalogFreeTierJumpExpectations,
   type FreeTierJumpExpectation,
@@ -41,11 +44,18 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
   await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
   await page.reload();
 
-  const tools = await openDevToolsPanel(page);
-  await tools.getByRole('button', { name: /^Free-tier\b/ }).click();
-  const stateSheet = page.getByTestId('free-tier-session-runner');
+  const tools = await openDevPanelSection(page, 'Free-tier');
+  await expect(tools.locator('.yawp-dev-panel-org-pe3-loading')).toHaveCount(0, {
+    timeout: 30_000,
+  });
+  const orgSurface = tools
+    .locator('.yawp-dev-panel-org-pe3-single')
+    .filter({ hasNotText: 'No organization' })
+    .or(tools.locator('.yawp-dev-panel-org-pe3-trigger'));
+  await expect(orgSurface.first()).toBeVisible({ timeout: 30_000 });
+  const stateSheet = tools.getByTestId('free-tier-session-runner');
   await expect(stateSheet).toBeVisible({ timeout: 15_000 });
-  await tools.getByRole('button', { name: 'Jump to state (advanced)' }).click();
+  await stateSheet.getByRole('button', { name: 'Jump to state (advanced)' }).click();
 
   const jumpRow = stateSheet.getByRole('button', {
     name: new RegExp(`^${entry.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`),
