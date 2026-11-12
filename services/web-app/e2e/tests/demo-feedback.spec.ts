@@ -124,7 +124,10 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await sendButton.scrollIntoViewIfNeeded();
     await sendButton.click();
     const submitted = (await submission).postDataJSON();
-    await expect(panel.getByLabel(noteLabel)).toHaveValue('', { timeout: 15_000 });
+    const reopened = await openGiveFeedback(page);
+    await expect(reopened.panel.getByLabel(reopened.noteLabel)).toHaveValue('', {
+      timeout: 15_000,
+    });
     const entry = await prisma.testerFeedback.findFirstOrThrow({
       where: {
         userId: teacher.id,

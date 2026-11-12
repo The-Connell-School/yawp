@@ -820,7 +820,8 @@ test('approved teacher sees the real class code on the dashboard card', async ({
   });
   await login(page, user.email!);
   await page.goto(`/app/my-classes/${klass.id}`);
-  await expect(page.getByTestId('class-code-display')).toContainText(klass.code);
+  await page.getByTestId('class-code-trigger').click();
+  await expect(page.getByTestId('class-code-display')).toHaveText(klass.code);
 });
 
 test('locked class surfaces hide the real class code and lock invite controls', async ({
