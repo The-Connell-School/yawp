@@ -90,7 +90,7 @@ async function expectLockedPendingDashboardCard(
   page: import('@playwright/test').Page,
   adminName = 'Dr. Patel'
 ) {
-  const card = page.getByTestId('locked-dashboard-pending-card');
+  const card = page.getByTestId('locked-dashboard-pending-card').first();
   await expect(card).toBeVisible();
   await expect(
     card.getByText(new RegExp(`Request sent to ${adminName}`))
