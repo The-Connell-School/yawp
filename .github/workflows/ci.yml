@@ -1149,6 +1149,8 @@ jobs:
             ../../packages/prisma/scripts/exit-ticket-migration-image.test.ts \
             ../../packages/prisma/scripts/preview-seats.test.ts \
             app/domain/lesson-planner/lesson-seed.test.ts \
+            app/domain/lesson-planner/yawp-lessons.server.test.ts \
+            app/domain/lesson-planner/yawp-lessons.test.ts \
             app/routes/api.domain.lesson-planner/build-system-prompt.test.ts \
             app/domain/lesson-planner/suggestions.test.ts \
             app/domain/lesson-planner/daily-pages-block.test.ts \
