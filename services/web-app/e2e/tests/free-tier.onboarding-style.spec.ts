@@ -87,13 +87,7 @@ for (const viewport of [
           });
         }
         const heading = target.locator('.free-tier-page h1');
-        const usesAppShellHeading = await heading.evaluate((el) =>
-          el.classList.contains('text-lg')
-        );
-        await expect(heading).toHaveCSS(
-          'line-height',
-          usesAppShellHeading ? '24.3px' : '32px'
-        );
+        await expect(heading).toHaveCSS('line-height', '24.3px');
         const fields = target.locator('.free-tier-page input:not([type="hidden"]):not(.hidden)');
         if (await fields.count()) await expect(fields.first()).toHaveCSS('font-size', '16px');
         await expect(target.locator('[class*="yawp-entry"]')).toHaveCount(0);
