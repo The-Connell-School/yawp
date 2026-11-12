@@ -73,10 +73,8 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
   await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
   await page.reload();
 
-  const tools = await openDevToolsPanel(page);
-  await openDevPanelSection(page, 'Sign in as');
+  const tools = await openDevPanelSection(page, 'Free-tier');
   await waitForDevPanelOrgReady(page, tools);
-  await openDevPanelSection(page, 'Free-tier');
   const stateSheet = tools.getByTestId('free-tier-session-runner');
   await expect(stateSheet).toBeVisible({ timeout: 15_000 });
   await stateSheet.getByRole('button', { name: 'Jump to state (advanced)' }).click();
