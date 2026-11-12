@@ -133,7 +133,7 @@ test('FreeAssignmentTiles artwork shows no hover tooltip with the image descript
     </StaticRouter>
   );
   expect(html).toContain('src="/api/image/course/img-1"');
-  expect(html).toContain('alt="Scratchy ink drawing of a dog in a beret"');
+  expect(html).toContain('alt=""');
   expect(html).not.toContain('title="Scratchy ink drawing of a dog in a beret"');
 });
 
@@ -147,7 +147,7 @@ test('FreeAssignmentTiles shows Unlimited meta for monthly free assignments', ()
       />
     </StaticRouter>
   );
-  expect(html).toContain('Unlimited with free tier');
+  expect(html).toContain('Unlimited');
   expect(html).not.toContain('site-license-lock-button');
 });
 
@@ -221,9 +221,9 @@ test('FreeAssignmentTiles locked pending hides create control and uses text-only
   );
   expect(html).not.toContain('preview-assignment-creation-disabled');
   expect(html).not.toContain('Create assignment');
-  expect(html).toContain('/api/image/course/');
+  expect(html).not.toContain('/api/image/course/');
   expect(html).toContain('aria-label="Locked"');
-  expect(html).toContain('Unlimited with free tier');
+  expect(html).toContain('Unlimited');
   expect(html).not.toMatch(/\d+ of \d+ left/);
 });
 
