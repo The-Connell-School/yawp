@@ -53,4 +53,16 @@ describe('requireFreeTierEnabled', () => {
     await expect(requireFreeTierEnabled()).resolves.toBeUndefined();
     expect(isFreeTierEnabled).not.toHaveBeenCalled();
   });
+
+  test('throws 404 when E2E_ENFORCE_FREE_TIER_FLAG is set even under dev panel', async () => {
+    isFreeTierEnabled.mockResolvedValue(false);
+    isDevPanelRuntimeEnabled.mockReturnValue(true);
+    process.env.E2E_ENFORCE_FREE_TIER_FLAG = '1';
+    const thrown = await requireFreeTierEnabled().catch((error) => error);
+    expect(thrown).toMatchObject({
+      type: 'DataWithResponseInit',
+      init: { status: 404 },
+    });
+    Reflect.deleteProperty(process.env, 'E2E_ENFORCE_FREE_TIER_FLAG');
+  });
 });

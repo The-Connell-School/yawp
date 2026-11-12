@@ -1378,6 +1378,7 @@ jobs:
         env:
           CI: true
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          E2E_ENFORCE_FREE_TIER_FLAG: '1'
           FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
           PRIMARY_APP_URL: http://127.0.0.1:5173
           RESEND_API_KEY: ''
@@ -1603,6 +1604,7 @@ jobs:
         env:
           CI: true
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          E2E_ENFORCE_FREE_TIER_FLAG: '1'
           FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
           PRIMARY_APP_URL: http://127.0.0.1:5173
           RESEND_API_KEY: ''
