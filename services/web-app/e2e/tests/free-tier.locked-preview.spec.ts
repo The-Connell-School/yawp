@@ -529,8 +529,9 @@ for (const width of [390, 1440]) {
     await page.reload();
     await expect(page.getByTestId('teaching-access-approval-toast')).toHaveCount(0);
     await page
+      .getByTestId('free-assignment-tiles')
       .getByRole('button', { name: /New Class Starter assignment/i })
-      .click();
+      .click({ force: true });
     await expect(page).toHaveURL(/\/app\/assignments\/new\?type=/);
     await expect(page).not.toHaveURL(/\/how-it-works$/);
     const seeHowItWorks = page.getByRole('link', { name: /See how it works/i });

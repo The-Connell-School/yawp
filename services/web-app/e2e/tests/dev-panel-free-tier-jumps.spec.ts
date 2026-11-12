@@ -43,7 +43,7 @@ async function postFreeTierJump(
     headers: { 'content-type': 'application/json' },
     data: {
       stateId: entry.stateId,
-      throwaway: entry.throwawayRequired !== false,
+      throwaway: entry.throwawayRequired === true,
       organizationId: DEMO_ORG_ID,
     },
   });
@@ -104,7 +104,7 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
 
   const landingUrl = new URL(redirectTo, page.url());
   if (entry.toastLabel) {
-    landingUrl.searchParams.set('devPanelJumpToast', entry.toastLabel);
+    landingUrl.searchParams.set('devPanelJumpToast', entry.label);
   }
   await page.goto(landingUrl.toString());
   await page.waitForLoadState('domcontentloaded').catch(() => undefined);
