@@ -48,7 +48,8 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    if (!(await isDevPanelActive(page))) {
+    const devPanelActive = await isDevPanelActive(page);
+    if (!devPanelActive) {
       await expect(
         page.getByRole('button', { name: 'Give feedback', exact: true })
       ).toHaveCount(0);
@@ -57,7 +58,12 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       name: 'Log feedback',
       exact: true,
     });
-    await expect(logFeedback).toBeVisible();
+    if (devPanelActive) {
+      await expect(logFeedback).toHaveCount(0);
+    } else {
+      await expect(logFeedback).toBeVisible();
+    }
+    if (!devPanelActive) {
     await screenshot('before-disabled');
     await logFeedback.click();
     const legacy = page.getByRole('dialog', { name: 'Log feedback' });
@@ -86,6 +92,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     expect(legacyEntry.whatHappened).toBe('Legacy note remains readable');
     expect(legacyEntry.whatIWish).toBe('Legacy wish remains readable');
     await page.keyboard.press('Escape');
+    }
 
     expect(
       (
