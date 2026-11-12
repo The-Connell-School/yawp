@@ -294,7 +294,7 @@ export const FEATURE_FLAGS = {
   [LESSON_PLANNER_DECK_KIT_V4_FLAG]: {
     label: 'Lesson Planner: Lesson Deck Kit v4',
     description:
-      'The Lesson Deck Kit, spec v4 (Nov 6): every slide on cream, color only as a solid panel on split slides or as type, short Arial labels (Look, Talk, Hold this) instead of italic mode words, no rules, small caps, middle dots or roman numerals, a plain painting plate, a quiz template, and colors with no terracotta or brown. Applies to every gallery deck the school opens, in Present, Run the show, PowerPoint, the PDFs and shared links, and the planner writes to the v4 templates. Needs the Lesson Deck Kit. Off: spec v3, as before.',
+      'The Lesson Deck Kit, spec v4.1 (Nov 11): every slide on cream, color only as a solid panel on split slides or as type, titles and headlines in Fraunces Bold (built into every PowerPoint export), short Arial labels (Look, Talk, Write) instead of italic mode words and none like Hold this or Know this, no running head, the teacher’s name on the title slide, no rules, small caps, middle dots or roman numerals, a plain painting plate, a quiz template, and colors with no terracotta or brown. Applies to every gallery deck the school opens, in Present, Run the show, PowerPoint, the PDFs and shared links, and the planner writes to the v4 templates. Needs the Lesson Deck Kit. Off: spec v3, as before.',
   },
   [CLASS_CODE_UNIQUE_FLAG]: {
     label: 'Unique class codes',

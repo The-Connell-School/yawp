@@ -2206,6 +2206,25 @@ describe('planner prompt — the Lesson Deck Kit, spec v4', () => {
     expect(v4).toContain('#294457, #6E1A26, #2F5F66, #5A5A5A, #5E3A5E');
   });
 
+  test('spec v4.1: no label that tells students how to treat the content', () => {
+    expect(v4).toContain('Lesson Deck Kit, spec v4.1');
+    expect(v4).toContain('Never a label that tells students how to treat the content (Hold this, Know this, Read, Remember)');
+    expect(v4).not.toMatch(/- big_idea — "Hold this"/);
+    expect(v4).not.toMatch(/- notes — "Know this"/);
+    expect(v4).not.toMatch(/- read — "Read"/);
+  });
+
+  test('spec v4.1: the title slide’s class and date, the name left to Yawp!, no program line', () => {
+    expect(v4).toMatch(/- title — no label\.[^\n]*`course`: the class, then the date only if the teacher has given it/);
+    expect(v4).toContain('Yawp! adds the teacher’s name above it from their account: never write a name');
+    expect(v4).toContain('No "Yawp! Writing Program" line');
+  });
+
+  test('spec v4.1: Fraunces for the headlines, and no running head', () => {
+    expect(v4).toContain('Fraunces Bold');
+    expect(v4).toContain('no running head');
+  });
+
   test('the kit’s later rules stay out of the spec v3 section', () => {
     expect(v3).not.toContain('The web address stays yawp.school');
     expect(v3).not.toContain('#2F5F66');

@@ -1,5 +1,5 @@
 /**
- * The Lesson Deck Kit, spec v4 (Nov 6), behind `lesson_planner_deck_kit_v4`
+ * The Lesson Deck Kit, spec v4.1 (Nov 11), behind `lesson_planner_deck_kit_v4`
  * with the gallery deck on. Every reply is seeded: the model is never called.
  * Each test turns on the flags it needs and the afterEach turns them off.
  */
@@ -141,11 +141,25 @@ test.describe.serial('Lesson Deck Kit v4', () => {
     await expect(stage.getByTestId('gallery-credit')).toContainText(
       'Katsushika Hokusai'
     );
+    // Spec v4.1: the title in Fraunces Bold, and the font really loads.
+    await expect(
+      stage.getByText('Body Paragraphs', { exact: true }).first()
+    ).toHaveCSS('font-family', /^Fraunces/);
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          await document.fonts.ready;
+          return document.fonts.check('700 40px Fraunces');
+        })
+      )
+      .toBe(true);
 
     await page.keyboard.press('ArrowRight');
     await expect(stage.locator('[data-kit-role="panel"]')).toBeVisible();
     await expect(stage).toContainText('Draft your topic sentence');
     await expect(stage).not.toContainText('Do.');
+    // Spec v4.1: no running head; the lesson's name is on the title slide only.
+    await expect(stage).not.toContainText('Body Paragraphs');
 
     await page.keyboard.press('ArrowRight');
     await expect(stage).toContainText('Question 1 of 1');
@@ -176,6 +190,9 @@ test.describe.serial('Lesson Deck Kit v4', () => {
     );
     expect(response.ok()).toBe(true);
     expect(response.headers()['content-type']).toContain('presentationml');
+    // Spec v4.1: Fraunces Bold is built into the file.
+    const body = Buffer.from(await response.body());
+    expect(body.includes('ppt/fonts/font1.fntdata')).toBe(true);
   });
 
   test('flag off: the same deck in spec v3', async ({

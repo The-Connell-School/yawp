@@ -880,9 +880,9 @@ function buildDeckGallerySection(on: boolean, recentArt: RecentArt[] = []): stri
 }
 
 /**
- * The gallery deck in the Lesson Deck Kit, spec v4 (Nov 6). Same slots as
- * spec v3, so a deck written either way draws in both; what changes is how
- * the slides look and what the planner is asked to write.
+ * The gallery deck in the Lesson Deck Kit, spec v4.1 (Nov 11; v4 was Nov 6).
+ * Same slots as spec v3, so a deck written either way draws in both; what
+ * changes is how the slides look and what the planner is asked to write.
  */
 function buildDeckKitV4Section(recentArt: RecentArt[] = []): string[] {
   const art = selectableDeckArt()
@@ -893,18 +893,18 @@ function buildDeckKitV4Section(recentArt: RecentArt[] = []): string[] {
     .join('; ');
   return [
     '',
-    'Gallery deck (Yawp! Lesson Deck Kit, spec v4): every deck should feel like a quiet, well-made book with one painting inside it. Every slide is cream; there are no dark or full-color slides. Color appears only as a solid panel on one side of a split slide (Yawp! draws it) or as type. Students should always be able to tell what they are being asked to do from across the room.',
-    'Labels, not mode words: a short label above the headline, in Arial, sentence case, no period ("Look", "Talk", "Hold this"). Yawp! draws each template’s own label; set `mode` only when a truer one fits ("Combine"), without a period, or `"mode": "none"` to leave it off. Use a label when the task changes, to mark a step, to flag something to keep, or to close; Yawp! drops one that repeats the headline or only decorates (Think, Begin, Also).',
+    'Gallery deck (Yawp! Lesson Deck Kit, spec v4.1): every deck should feel like a quiet, well-made book with one painting inside it. Every slide is cream; there are no dark or full-color slides. Color appears only as a solid panel on one side of a split slide (Yawp! draws it) or as type. Yawp! sets titles and headlines in Fraunces Bold, and there is no running head: the lesson’s name is on the title slide only. Students should always be able to tell what they are being asked to do from across the room.',
+    'Labels, not mode words: a short label above the headline, in Arial, sentence case, no period ("Look", "Talk", "Write"). Yawp! draws each template’s own label; set `mode` only when a truer one fits ("Combine"), without a period, or `"mode": "none"` to leave it off. Use a label when the task changes, to mark a step, or to close. Never a label that tells students how to treat the content (Hold this, Know this, Read, Remember): just give them the content. Yawp! drops one that repeats the headline or only decorates (Think, Begin, Also).',
     'Use these templates:',
-    '- title — no label. `title` 3 words or fewer, `subtitle` 5 or fewer, optional `course` ("English 10, Period 3"). The painting hangs beside it as a plain plate.',
+    '- title — no label. `title` 3 words or fewer, `subtitle` 5 or fewer, then `course`: the class, then the date only if the teacher has given it ("English 10, Period 3, November 12"); never guess a date. Yawp! adds the teacher’s name above it from their account: never write a name. No "Yawp! Writing Program" line. The painting hangs beside it as a plain plate.',
     '- agenda — no label; Yawp! sets the headline "Today". Needs `agenda`: 3–6 items `{ "title", "minutes" }`, one per step of the plan; `body` is the one-line description of the session under "Today".',
     '- steps — "Do", or the step it is ("Step 2"), on a split slide: `title` and `minutes` on the panel, 2–4 numbered `bullets` on cream, 18 words or fewer each.',
     '- discuss — "Talk", on a split slide: `title`, `grouping` ("Pairs") and `minutes` on the panel; one `question` of 18 words or fewer and an optional `stem` (a sentence starter) on cream.',
-    '- big_idea — "Hold this", beside a strip of the painting. One statement of 28 words or fewer in `body`; optional `followUp`, one line Yawp! sets in the deck color.',
+    '- big_idea — no label, beside a strip of the painting. One statement of 28 words or fewer in `body`; optional `followUp`, one line Yawp! sets in the deck color.',
     '- write — "Write". The prompt in `body`, 40 words or fewer; `routine` ("Class starter" or "Daily Pages"); `minutes` or `seconds`, which Yawp! sets as a large timer.',
-    '- notes — "Know this", on a split slide: `title` on the panel; `timeline` (3–5 `{ "year", "caption" }`, captions 6 words or fewer) and/or `facts` (up to 3) on cream.',
+    '- notes — no label, on a split slide: `title` on the panel; `timeline` (3–5 `{ "year", "caption" }`, captions 6 words or fewer) and/or `facts` (up to 3) on cream.',
     '- divider — names the stage, only in decks over 10 slides: a verb `title` ("We draft."), an optional `subtitle` for one detail line. When it starts a stage of the writing process give `processStep` (1 pre-writing, 2 thesis, 3 introduction, 4 body paragraphs, 5 conclusion, 6 title and format) and it reads "Step 4"; otherwise `part` as a number ("2").',
-    '- read — "Read", on a split slide: `title` and the instruction (`body`) on the panel; 3 or fewer `tasks` `{ "verb", "text" }`, each led by a verb, on cream. Optional `work`, `page`.',
+    '- read — no label, on a split slide: `title` and the instruction (`body`) on the panel; 3 or fewer `tasks` `{ "verb", "text" }`, each led by a verb, on cream. Optional `work`, `page`.',
     '- look — "Look": the painting as large as it goes, uncropped, with a narrow column beside it. Needs `question`; optional `seconds`, `routine` ("See, think, wonder"), `followUp`. Use it whenever students must study the image.',
     '- excerpt — "Annotate": the passage on cream as printed, 40–90 words, only text the teacher supplied or a tool returned, with `author`, `work`, `page`; `tasks` or `bullets` (what to mark) on the panel.',
     '- quiz — a discuss slide with `choices` (2–5 short answers) and no `answer` is a quiz question; Yawp! labels it "Question n of N". To reveal it, repeat the same slide right after it with `answer` (the number of the right choice): Yawp! puts a light band in the deck color behind it and greys the rest. Never mark the answer in the text.',

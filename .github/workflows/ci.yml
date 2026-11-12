@@ -1071,6 +1071,8 @@ jobs:
             app/components/assignments/assignment-creation-sheet.test.tsx \
             app/components/ai-chat/exit-ticket-card.test.tsx \
             app/domain/lesson-planner/deck-kit-v4.test.ts \
+            app/domain/lesson-planner/deck-teacher.test.ts \
+            app/domain/office/pptx-fonts.test.ts \
             'app/routes/present.$conversationId.$messageId/kit-v4-slide-canvas.test.tsx' \
             app/routes/api.domain.grade-essay-ai/route.test.ts \
             app/domain/assignment-insights/class-insight-generation.server.test.ts \
