@@ -21,9 +21,9 @@ describe('resolveGeneratorModel', () => {
 
   test('falls back to a stable default for non-Claude or missing models', () => {
     expect(resolveGeneratorModel({ AI_MODEL: 'gpt-4o' })).toBe(
-      'claude-sonnet-5-5'
+      'claude-sonnet-4-6'
     );
-    expect(resolveGeneratorModel({})).toBe('claude-sonnet-5-5');
+    expect(resolveGeneratorModel({})).toBe('claude-sonnet-4-6');
   });
 });
 
