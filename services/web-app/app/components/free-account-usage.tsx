@@ -40,7 +40,11 @@ import {
   siteLicenseLockedTileHasHowItWorksGuide,
 } from '~/domain/assignment-types/assignment-type-how-it-works';
 import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
-import { dashboardAssignmentTileTestId } from '~/components/assignment-type-tile-layout';
+import {
+  assignmentTypeTileMetaTestId,
+  assignmentTypeTileNameTestId,
+  dashboardAssignmentTileTestId,
+} from '~/components/assignment-type-tile-layout';
 import {
   FreeTierAssignmentCarouselControls,
   FreeTierAssignmentCarouselTrack,
@@ -279,7 +283,10 @@ function FreeTierCarouselTileCaption({
         meta ? 'min-h-[58px]' : 'min-h-[44px] justify-center'
       )}
     >
-      <span className="text-sm font-medium leading-snug text-foreground">
+      <span
+        className="text-sm font-medium leading-snug text-foreground"
+        data-testid={assignmentTypeTileNameTestId}
+      >
         {label}
       </span>
       {meta ? (
@@ -288,6 +295,7 @@ function FreeTierCarouselTileCaption({
             'text-xs leading-snug',
             metaClassName ?? 'font-semibold text-[#1f3532]'
           )}
+          data-testid={assignmentTypeTileMetaTestId}
         >
           {meta}
         </span>

@@ -2,12 +2,11 @@ import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
-import { openDevToolsPanel } from '../helpers/dev-panel-feedback';
 import {
   listCatalogFreeTierJumpExpectations,
   type FreeTierJumpExpectation,
 } from '../../app/dev-panel/free-tier-jump-expectations';
-import { findPe3FreeTierState } from '../../app/dev-panel/dev-panel-pe3-states';
+import { ensureDemoDevTeacherSession } from '../helpers/dev-panel-preview-access';
 
 const prisma = createE2EPrismaClient();
 const DEMO_ORG_ID = 'local-dev-org';
@@ -22,13 +21,6 @@ function recordJumpLine(line: string) {
   mkdirSync(path.dirname(JUMP_LOG_PATH), { recursive: true });
   appendFileSync(JUMP_LOG_PATH, `${line}\n`, 'utf8');
   console.log(line);
-}
-
-async function ensureDevTeacherSignedIn(page: Page) {
-  await page.context().clearCookies();
-  await page.request.post('/auth/dev-login', {
-    form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
-  });
 }
 
 type CatalogJumpEntry = FreeTierJumpExpectation & {
@@ -54,46 +46,13 @@ async function postFreeTierJump(
       organizationId: DEMO_ORG_ID,
     },
   });
-  const body = (await response.json().catch(() => null)) as JumpResult['body'];
-  return {
-    jumpOk: response.ok() && body?.ok === true,
-    body,
-    status: response.status(),
-  };
-}
-
-async function jumpViaPe3Panel(
-  page: Page,
-  entry: CatalogJumpEntry,
-  pe3Label: string
-): Promise<JumpResult> {
-  await ensureDevTeacherSignedIn(page);
-  await page.goto('/app/assignments');
-  await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
-  await page.reload();
-
-  const tools = await openDevToolsPanel(page);
-  await tools.getByRole('button', { name: /^Free-tier\b/ }).click();
-  const stateSheet = page.getByTestId('free-tier-session-runner');
-  await expect(stateSheet).toBeVisible({ timeout: 15_000 });
-  await stateSheet.getByRole('button', { name: 'Jump to state (advanced)' }).click();
-
-  const jumpRow = stateSheet.getByRole('button', {
-    name: new RegExp(
-      `^${pe3Label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`
-    ),
-  });
-  await jumpRow.click();
-
-  const jumpResponse = page.waitForResponse(
-    (response) =>
-      response.url().includes('/api/dev-panel/free-tier-jump') &&
-      response.request().method() === 'POST',
-    { timeout: 120_000 }
-  );
-  await stateSheet.getByRole('button', { name: 'Jump', exact: true }).click();
-  const response = await jumpResponse;
-  const body = (await response.json().catch(() => null)) as JumpResult['body'];
+  const raw = await response.text();
+  let body: JumpResult['body'] = null;
+  try {
+    body = raw ? (JSON.parse(raw) as JumpResult['body']) : null;
+  } catch {
+    body = { error: raw.slice(0, 200) || 'non-json response' };
+  }
   return {
     jumpOk: response.ok() && body?.ok === true,
     body,
@@ -103,13 +62,8 @@ async function jumpViaPe3Panel(
 
 async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
   const softErrorsBefore = test.info().errors.length;
-  const pe3 = findPe3FreeTierState(entry.stateId);
-  const jump = pe3
-    ? await jumpViaPe3Panel(page, entry, pe3.label)
-    : await (async () => {
-        await ensureDevTeacherSignedIn(page);
-        return postFreeTierJump(page, entry);
-      })();
+  await ensureDemoDevTeacherSession(page);
+  const jump = await postFreeTierJump(page, entry);
 
   expect.soft(jump.status < 400, `${entry.stateId} API HTTP status`).toBe(true);
   expect.soft(jump.body?.ok, `${entry.stateId} API ok flag`).toBe(true);
@@ -172,8 +126,7 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
   }
 
   const checksPassed = test.info().errors.length === softErrorsBefore;
-  const landedOk =
-    pathname.startsWith(expectedPathPrefix) && checksPassed;
+  const landedOk = pathname.startsWith(expectedPathPrefix) && checksPassed;
   recordJumpLine(
     landedOk
       ? `${entry.stateId}: ok`

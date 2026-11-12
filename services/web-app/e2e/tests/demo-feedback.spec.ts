@@ -6,6 +6,7 @@ import {
   isDevPanelActive,
   openGiveFeedback,
 } from '../helpers/dev-panel-feedback';
+import { ensureDemoDevTeacherSession } from '../helpers/dev-panel-preview-access';
 
 const prisma = createE2EPrismaClient();
 const evidence = process.env.DEMO_FEEDBACK_EVIDENCE_DIR;
@@ -16,9 +17,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
   page,
 }) => {
   test.setTimeout(120_000);
-  await page.request.post('/auth/dev-login', {
-    form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
-  });
+  await ensureDemoDevTeacherSession(page);
   const flag = 'feature_flag.demo-feedback-widget';
   const screenshot = async (name: string) => {
     if (evidence) {
@@ -257,9 +256,7 @@ test('local demo single trigger reserves mobile content space on landing, classe
       create: { name: flag, value: 'true', valueType: 'boolean' },
       update: { value: 'true' },
     });
-    await page.request.post('/auth/dev-login', {
-      form: { email: teacher.email!, redirectTo: '/app' },
-    });
+    await ensureDemoDevTeacherSession(page, '/app');
     for (const viewport of [
       { width: 360, height: 740 },
       { width: 390, height: 844 },
