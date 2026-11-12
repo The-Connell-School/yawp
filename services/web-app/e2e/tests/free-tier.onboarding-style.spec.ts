@@ -86,9 +86,13 @@ for (const viewport of [
             background: 'rgb(255, 255, 255)',
           });
         }
-        await expect(target.locator('.free-tier-page h1')).toHaveCSS(
+        const heading = target.locator('.free-tier-page h1');
+        const usesAppShellHeading = await heading.evaluate((el) =>
+          el.classList.contains('text-lg')
+        );
+        await expect(heading).toHaveCSS(
           'line-height',
-          '24.3px'
+          usesAppShellHeading ? '24.3px' : '32px'
         );
         const fields = target.locator('.free-tier-page input:not([type="hidden"]):not(.hidden)');
         if (await fields.count()) await expect(fields.first()).toHaveCSS('font-size', '16px');

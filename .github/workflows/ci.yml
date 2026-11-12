@@ -1110,6 +1110,7 @@ jobs:
             'app/dev-panel/dev-panel-provider.test.tsx' \
             'app/dev-panel/dev-panel-shell-boundary.test.tsx' \
             'app/root.dev-panel-user.test.ts' \
+            'app/dev-panel/dev-panel-free-tier-inline.test.tsx' \
             'app/dev-panel/dev-panel-flyout-instant.test.tsx' \
             'app/dev-panel/dev-panel-feedback-path.test.ts' \
             'app/dev-panel/dev-panel-bundle.test.ts' \
