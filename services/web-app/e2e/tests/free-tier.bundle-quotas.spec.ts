@@ -1,8 +1,4 @@
 import { expect, test } from '../test-setup';
-import {
-  expectNewAssignmentBuilderPage,
-  openAssignmentTypePicker,
-} from '../helpers/new-assignment-builder';
 
 const FREE_CLASSROOM_PASSWORD = 'yawp-dev';
 
@@ -26,15 +22,22 @@ test.describe('Free classroom bundle quotas', () => {
     });
     await expect(newAssignment).toBeVisible({ timeout: 20_000 });
     await newAssignment.click();
-    await expectNewAssignmentBuilderPage(page);
-    const typePicker = await openAssignmentTypePicker(page);
-    const prewritingTile = typePicker.getByRole('button', { name: /Prewriting/i });
+    await expect(page).toHaveURL(/\/app\/assignments\/new/, {
+      timeout: 20_000,
+    });
+    await expect(page.getByTestId('assignment-builder-v3')).toBeVisible({
+      timeout: 20_000,
+    });
+    await page.getByRole('button', { name: 'Change' }).click();
+    const picker = page.getByRole('dialog', { name: 'Assignment type' });
+    await expect(picker).toBeVisible({ timeout: 20_000 });
+    const prewritingTile = picker.getByRole('button', { name: /Prewriting/i });
     if (await prewritingTile.count()) {
       await expect(prewritingTile).toContainText(
-        /Unlimited|\d+ of \d+|None left/
+        /Unlimited|\d+ of \d+|None left|No remaining/
       );
     }
-    const classStarterTile = typePicker.getByRole('button', {
+    const classStarterTile = picker.getByRole('button', {
       name: /Class Starter/i,
     });
     await expect(classStarterTile).toBeVisible({ timeout: 20_000 });

@@ -4,8 +4,9 @@ import { currentSchoolYear } from '../../app/utils/school-year';
 import type { Page } from '@playwright/test';
 import {
   expectNewAssignmentBuilderPage,
-  fillAndSubmitNewAssignmentBuilder,
-} from '../helpers/new-assignment-builder';
+  fillAndCreateOnAssignmentBuilderV3,
+  finishAssignmentCreatedView,
+} from '../helpers/assignment-builder-v3-page';
 
 const CLASS_LABEL = /Grade 9th .* Period 1st/;
 
@@ -54,8 +55,17 @@ async function expectStandardizedAssignmentForm(page: Page) {
 }
 
 
-const expectNewAssignmentPage = expectNewAssignmentBuilderPage;
-const fillAndSubmitNewAssignment = fillAndSubmitNewAssignmentBuilder;
+async function expectNewAssignmentPage(page: Page) {
+  await expectNewAssignmentBuilderPage(page);
+}
+
+async function fillAndSubmitNewAssignment(
+  page: Page,
+  input: { title: string; prompt: string }
+) {
+  await fillAndCreateOnAssignmentBuilderV3(page, input);
+  await finishAssignmentCreatedView(page);
+}
 
 async function expectAssignmentCreatedSuccessSheet(page: Page) {
   const dialog = page.getByRole('dialog');
@@ -421,8 +431,6 @@ test.describe.serial('Teacher dashboard workspace', () => {
         .click();
       await expectNewAssignmentPage(page);
       await fillAndSubmitNewAssignment(page, { title, prompt });
-
-      await expect(page).toHaveURL(/\/app\/assignments\/.+/);
       await expectCreatedAssignment({
         classId: e2eContext.classId,
         assignmentTypeId: e2eContext.assignmentTypeId,
@@ -569,7 +577,6 @@ test.describe.serial('Teacher dashboard workspace', () => {
     await page.getByRole('menuitem', { name: 'Assignment' }).click();
     await expectNewAssignmentPage(page);
     await fillAndSubmitNewAssignment(page, { title, prompt });
-    await expect(page).toHaveURL(/\/app\/assignments\/.+/);
 
     await expectCreatedAssignment({
       classId: e2eContext.classId,

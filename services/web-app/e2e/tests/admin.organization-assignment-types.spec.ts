@@ -1,9 +1,9 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import {
-  expectNewAssignmentBuilderPage,
+  clickClassNewAssignment,
   openAssignmentTypePicker,
-} from '../helpers/new-assignment-builder';
+} from '../helpers/assignment-builder-v3-page';
 
 test.describe.serial('Admin organization assignment types', () => {
   test('manages assignment type availability from the organization page', async ({
@@ -73,13 +73,13 @@ test.describe.serial('Admin organization assignment types', () => {
       await page.context().clearCookies();
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
-      await page
-        .getByRole('button', { name: /New Assignment/ })
-        .first()
-        .click();
-      await expectNewAssignmentBuilderPage(page);
-      const typePicker = await openAssignmentTypePicker(page);
-      await expect(typePicker.getByRole('button', { name: title })).toBeVisible();
+      await clickClassNewAssignment(page);
+      await openAssignmentTypePicker(page);
+      await expect(
+        page.getByRole('dialog', { name: 'Assignment type' }).getByRole('button', {
+          name: title,
+        })
+      ).toBeVisible();
     } finally {
       await prisma.organizationAssignmentType.deleteMany({
         where: { assignmentTypeId: assignmentType.id },

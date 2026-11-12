@@ -304,18 +304,19 @@ test.describe.serial('Teacher class page redesign', () => {
       detail.getByTestId('class-insight-panel-subtitle')
     ).toContainText(/regenerate in \d+ (hours|minutes)/i);
 
+    // Edit navigates to the dedicated builder page (#941) and returns on cancel.
     await detail.getByRole('button', { name: /^edit$/i }).click();
-    await page.waitForURL(
+    await expect(page).toHaveURL(
       `/app/assignments/${e2eContext.assignmentId}/edit?classId=${e2eContext.classId}`
     );
     await expect(page.getByTestId('assignment-builder-v3')).toBeVisible();
     await expect(
-      page.getByRole('heading', { name: /edit assignment/i })
+      page.getByRole('heading', { name: /^Edit assignment$/i })
     ).toBeVisible();
     await expect(page.locator('#abv3-title')).toBeVisible();
 
     await page.getByRole('button', { name: 'Cancel' }).click();
-    await page.waitForURL(
+    await expect(page).toHaveURL(
       `/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
     );
     await expect(detail.getByLabel('Title (optional)')).toHaveCount(0);
