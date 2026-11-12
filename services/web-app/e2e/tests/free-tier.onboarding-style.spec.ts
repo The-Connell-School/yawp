@@ -236,8 +236,8 @@ for (const viewport of [
       await capture('teacher-approval-request');
       if (!before) {
         await expect(
-          page.getByText(/Let.s set up your classroom/)
-        ).toBeVisible();
+          page.getByTestId('free-tier-setup-timeline-card')
+        ).toContainText(/set up your classroom/);
         await page.getByLabel('Class name').fill('AP English 11');
         await page.getByLabel('Grade').selectOption('11');
         await page.getByRole('button', { name: 'Create my class', exact: true }).click();
@@ -247,8 +247,11 @@ for (const viewport of [
           })
         ).toBeVisible();
         await expect(
-          page.getByRole('list', { name: 'Setup steps' })
+          page.getByTestId('free-tier-setup-timeline-card')
         ).toContainText('Administrator approval');
+        await expect(page.locator('[aria-current="step"]')).toContainText(
+          'Administrator approval'
+        );
       }
       await prisma.freeTierEmailLog.create({
         data: {

@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
 import { openDevPanelClassSimulationFlyout } from '../helpers/dev-panel-feedback';
+import { ensureDemoDevTeacherSession } from '../helpers/dev-panel-preview-access';
 
 const prisma = createE2EPrismaClient();
 
@@ -13,9 +14,7 @@ test.describe('Dev panel class simulation', () => {
     page,
   }) => {
     test.setTimeout(120_000);
-    await page.request.post('/auth/dev-login', {
-      form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/my-classes' },
-    });
+    await ensureDemoDevTeacherSession(page, '/app/my-classes');
 
     const membership = await prisma.orgMembership.findFirst({
       where: { user: { email: 'dev.teacher@yawp.local' }, role: 'TEACHER' },

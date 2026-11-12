@@ -472,15 +472,49 @@ describe('submission loader — unsubmitted redirect', () => {
 
     const query = prisma.submission.findFirst.mock.calls[0]?.[0] as any;
     const teacherBranch = query.where.document.is.OR[2];
-    const { buildTeacherDocumentAccessWhere } = await import(
-      '~/utils/grading-auth.server'
-    );
-    expect(teacherBranch).toEqual(
-      buildTeacherDocumentAccessWhere({
-        membershipId: TEACHER_MEMBERSHIP_ID,
-        organizationId: 'org-1',
-      })
-    );
+    expect(teacherBranch).toEqual({
+      OR: [
+        {
+          classAssignment: {
+            class: {
+              school: { organizationId: 'org-1' },
+              teachers: {
+                some: { id: TEACHER_MEMBERSHIP_ID, isActive: true },
+              },
+            },
+          },
+        },
+        {
+          classAssignment: { is: null },
+          membership: {
+            is: {
+              organizationId: 'org-1',
+              classesAsStudent: {
+                some: {
+                  school: { organizationId: 'org-1' },
+                  teachers: {
+                    some: { id: TEACHER_MEMBERSHIP_ID, isActive: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+        {
+          artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW',
+          teacherPreviewClassAssignment: {
+            is: {
+              class: {
+                school: { organizationId: 'org-1' },
+                teachers: {
+                  some: { id: TEACHER_MEMBERSHIP_ID, isActive: true },
+                },
+              },
+            },
+          },
+        },
+      ],
+    });
   });
 
   test('preserves tenant-scoped teacher access for legacy submissions', async () => {

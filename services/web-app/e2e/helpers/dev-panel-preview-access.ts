@@ -19,6 +19,21 @@ export function previewUnlockCodeFromEnv(): string | null {
   }
 }
 
+/** Preview gate + dev-login order used by demo-feedback Playwright jobs. */
+export async function ensureDemoDevTeacherSession(
+  page: Page,
+  redirectTo = '/app/assignments'
+) {
+  await page.context().clearCookies();
+  if (process.env.PREVIEW_ACCESS_GATE === 'on') {
+    await mintDevPanelPreviewAccessCookie(page);
+  }
+  const response = await page.request.post('/auth/dev-login', {
+    form: { email: 'dev.teacher@yawp.local', redirectTo },
+  });
+  expect(response.ok(), await response.text()).toBeTruthy();
+}
+
 export async function mintDevPanelPreviewAccessCookie(page: Page) {
   const code = previewUnlockCodeFromEnv();
   expect(

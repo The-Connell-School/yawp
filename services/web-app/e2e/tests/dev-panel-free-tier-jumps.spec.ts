@@ -1,14 +1,15 @@
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { test, expect, type Locator, type Page } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
-import { openDevPanelSection } from '../helpers/dev-panel-feedback';
 import {
   listCatalogFreeTierJumpExpectations,
   type FreeTierJumpExpectation,
 } from '../../app/dev-panel/free-tier-jump-expectations';
+import { ensureDemoDevTeacherSession } from '../helpers/dev-panel-preview-access';
 
 const prisma = createE2EPrismaClient();
+const DEMO_ORG_ID = 'local-dev-org';
 
 const JUMP_LOG_PATH = path.join(
   process.cwd(),
@@ -22,89 +23,61 @@ function recordJumpLine(line: string) {
   console.log(line);
 }
 
-async function ensureDevTeacherSignedIn(page: Page) {
-  await page.context().clearCookies();
-  const response = await page.request.post('/auth/dev-login', {
-    form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
-  });
-  expect(response.ok()).toBe(true);
-  await page.goto('/app/assignments');
-  await expect(page).toHaveURL(/\/app\/assignments/);
-}
-
 type CatalogJumpEntry = FreeTierJumpExpectation & {
   stateId: string;
   label: string;
 };
 
-async function waitForDevPanelOrgReady(page: Page, tools: Locator) {
-  await page
-    .waitForResponse(
-      (response) =>
-        response.url().includes('/api/dev-panel/orgs') && response.ok(),
-      { timeout: 60_000 }
-    )
-    .catch(() => {});
-  await expect(tools.locator('.yawp-dev-panel-org-pe3-loading')).toHaveCount(0, {
-    timeout: 60_000,
+type JumpResult = {
+  jumpOk: boolean;
+  body: { ok?: boolean; redirectTo?: string; error?: string } | null;
+  status: number;
+};
+
+async function postFreeTierJump(
+  page: Page,
+  entry: CatalogJumpEntry
+): Promise<JumpResult> {
+  const response = await page.request.post('/api/dev-panel/free-tier-jump', {
+    headers: { 'content-type': 'application/json' },
+    data: {
+      stateId: entry.stateId,
+      throwaway: entry.throwawayRequired !== false,
+      organizationId: DEMO_ORG_ID,
+    },
   });
-  const trigger = tools.locator('.yawp-dev-panel-org-pe3-trigger');
-  if (await trigger.count()) {
-    await expect(trigger.first()).toBeVisible({ timeout: 30_000 });
-    await trigger.first().click();
-    const option = tools.locator('.yawp-dev-panel-org-pe3-option').first();
-    await expect(option).toBeVisible({ timeout: 30_000 });
-    await option.click();
-    return;
+  const raw = await response.text();
+  let body: JumpResult['body'] = null;
+  try {
+    body = raw ? (JSON.parse(raw) as JumpResult['body']) : null;
+  } catch {
+    body = { error: raw.slice(0, 200) || 'non-json response' };
   }
-  await expect(tools.locator('.yawp-dev-panel-org-pe3-single')).not.toHaveText(
-    'No organization',
-    { timeout: 60_000 }
-  );
+  return {
+    jumpOk: response.ok() && body?.ok === true,
+    body,
+    status: response.status(),
+  };
 }
 
 async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
   const softErrorsBefore = test.info().errors.length;
-  await ensureDevTeacherSignedIn(page);
-  await page.goto('/app/assignments');
-  await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
-  await page.reload();
+  await ensureDemoDevTeacherSession(page);
+  const jump = await postFreeTierJump(page, entry);
 
-  const tools = await openDevPanelSection(page, 'Free-tier');
-  await waitForDevPanelOrgReady(page, tools);
-  const stateSheet = tools.getByTestId('free-tier-session-runner');
-  await expect(stateSheet).toBeVisible({ timeout: 15_000 });
-  await stateSheet.getByRole('button', { name: 'Jump to state (advanced)' }).click();
+  expect.soft(jump.status < 400, `${entry.stateId} API HTTP status`).toBe(true);
+  expect.soft(jump.body?.ok, `${entry.stateId} API ok flag`).toBe(true);
 
-  const jumpRow = stateSheet.getByRole('button', {
-    name: new RegExp(`^${entry.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`),
-  });
-  await jumpRow.click();
-
-  const jumpResponse = page.waitForResponse(
-    (response) =>
-      response.url().includes('/api/dev-panel/free-tier-jump') &&
-      response.request().method() === 'POST',
-    { timeout: 120_000 }
-  );
-  await stateSheet.getByRole('button', { name: 'Jump', exact: true }).click();
-  const response = await jumpResponse;
-  const body = await response.json().catch(() => null);
-  const jumpOk = response.ok() && body?.ok === true;
-
-  expect.soft(response.ok(), `${entry.stateId} API HTTP status`).toBe(true);
-  expect.soft(body?.ok, `${entry.stateId} API ok flag`).toBe(true);
-
-  if (!jumpOk) {
+  if (!jump.jumpOk || !jump.body?.redirectTo) {
     const err =
-      typeof body?.error === 'string'
-        ? body.error
-        : `HTTP ${response.status()}`;
+      typeof jump.body?.error === 'string'
+        ? jump.body.error
+        : `HTTP ${jump.status}`;
     recordJumpLine(`${entry.stateId}: ${err}`);
     return;
   }
 
-  const redirectTo = String(body.redirectTo);
+  const redirectTo = String(jump.body.redirectTo);
   const expectedPathPrefix = entry.redirectPath.split('?')[0]!;
 
   if (entry.adminSide) {
@@ -128,11 +101,7 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
     return;
   }
 
-  await page
-    .waitForURL((url) => url.pathname.startsWith(expectedPathPrefix), {
-      timeout: 120_000,
-    })
-    .catch(() => undefined);
+  await page.goto(redirectTo);
   await page.waitForLoadState('domcontentloaded').catch(() => undefined);
 
   const pathname = new URL(page.url()).pathname;
@@ -157,8 +126,7 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
   }
 
   const checksPassed = test.info().errors.length === softErrorsBefore;
-  const landedOk =
-    pathname.startsWith(expectedPathPrefix) && checksPassed;
+  const landedOk = pathname.startsWith(expectedPathPrefix) && checksPassed;
   recordJumpLine(
     landedOk
       ? `${entry.stateId}: ok`

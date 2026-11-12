@@ -4,12 +4,12 @@ import {
   type LoaderFunctionArgs,
 } from 'react-router';
 import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
+import { requirePublicFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 import type { FreeTierLayoutContext } from '../free-tier/useFreeTierLayoutContext';
 
 /** Layout for /free, /free/join, and /free/admin/* public free-tier routes. */
 export async function loader(_args: LoaderFunctionArgs) {
-  await requireFreeTierEnabled();
+  await requirePublicFreeTierEnabled();
   return {
     freeTierEnabled: await isFreeTierEnabled(),
   } satisfies FreeTierLayoutContext;

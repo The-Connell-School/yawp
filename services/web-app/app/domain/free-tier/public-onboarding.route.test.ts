@@ -12,10 +12,11 @@ const setting = mock(async (..._args: any[]): Promise<any> => ({ value: 'true' }
 const enabled = mock(async () => {});
 const throttle = mock(async (..._args: any[]): Promise<any> => ({ allowed: true }));
 const mail = mock(async () => {});
+const findApplication = mock(async () => null as { id: string } | null);
 mock.module('~/utils/db.server', () => ({
   prisma: {
     setting: { findUnique: setting },
-    freeTierApplication: { findUnique: async () => null },
+    freeTierApplication: { findUnique: findApplication },
   },
 }));
 mock.module('./service.server', () => ({ waitlistInputSchema,
@@ -43,6 +44,7 @@ async function post(path: typeof paths[number], gradeLevel: unknown, extra: obje
 }
 beforeEach(() => {
   setting.mockReset().mockResolvedValue({ value: 'true' });
+  findApplication.mockReset().mockResolvedValue(null);
   submit.mockClear(); redeem.mockClear(); decline.mockClear(); mail.mockClear();
   throttle.mockReset().mockResolvedValue({ allowed: true }); enabled.mockClear();
 });

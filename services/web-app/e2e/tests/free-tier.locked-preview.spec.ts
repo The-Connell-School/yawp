@@ -90,7 +90,11 @@ async function expectLockedPendingDashboardCard(
   page: import('@playwright/test').Page,
   adminName = 'Dr. Patel'
 ) {
-  const card = page.getByTestId('locked-dashboard-pending-card').first();
+  const card = page
+    .locator(
+      '.locked-home-rail-mobile:visible [data-testid="locked-dashboard-pending-card"], .locked-home-rail-desktop:visible [data-testid="locked-dashboard-pending-card"]'
+    )
+    .first();
   await expect(card).toBeVisible();
   await expect(
     card.getByText(new RegExp(`Request sent to ${adminName}`))
@@ -378,6 +382,10 @@ for (const width of [390, 1440]) {
     await expectLockedPendingDashboardCard(page);
     await capture(page, `locked-app-before-${width}`);
     await expectFreeDashboardAssignmentTiles(page);
+    await expectDashboardAssignmentTileNameMetaNoOverlap(
+      page,
+      page.getByTestId('free-assignment-tiles')
+    );
     await expectTileNamesWrapOnWordBoundaries(
       page,
       page.getByTestId('free-assignment-tiles')
@@ -455,7 +463,11 @@ for (const width of [390, 1440]) {
     if (width === 390) {
       await expectLockedPendingDashboardCard(page);
       await expect(
-        page.getByTestId('locked-dashboard-pending-card').first()
+        page
+          .locator(
+            '.locked-home-rail-mobile:visible [data-testid="locked-dashboard-pending-card"], .locked-home-rail-desktop:visible [data-testid="locked-dashboard-pending-card"]'
+          )
+          .first()
       ).not.toContainText('...');
     }
     const before = await prisma.assignment.count();
