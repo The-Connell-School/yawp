@@ -17,6 +17,14 @@ function linkSecrets() {
     const preview = process.env.PREVIEW_ACCESS_SECRET?.trim();
     if (preview) return [preview];
   }
+  // Worktree local dev (.env) sets SESSION_SECRET but not FREE_TIER_LINK_HMAC_SECRET;
+  // dev-panel pending jumps mint admin links via mintSignedLinkForDevPanel.
+  if (process.env.NODE_ENV === 'development') {
+    const dev =
+      process.env.SESSION_SECRET?.trim() ||
+      process.env.INTERNAL_COMMAND_TOKEN?.trim();
+    if (dev) return [dev];
+  }
   return [];
 }
 

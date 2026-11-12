@@ -38,6 +38,7 @@ const classRead = mock(async (..._args: any[]) => ({
   code: 'CLASS',
 }));
 const count = mock(async () => 0);
+const submissionFindFirst = mock(async () => null);
 let freeTierValue: string | null = 'true';
 const settingRows = () => ({
   'feature_flag.free_tier': freeTierValue,
@@ -75,6 +76,7 @@ mock.module('~/utils/db.server', () => ({
     setting: { findUnique: settingRead, findMany: settingReadMany },
     class: { findFirst: classRead },
     document: { count },
+    submission: { findFirst: submissionFindFirst },
   },
 }));
 mock.module('~/utils/assignment-quota.server', () => ({
@@ -135,6 +137,8 @@ beforeEach(() => {
   applicationStatus = 'APPROVED';
   classRead.mockClear();
   count.mockClear();
+  submissionFindFirst.mockClear();
+  submissionFindFirst.mockResolvedValue(null);
   settingRead.mockClear();
   settingReadMany.mockClear();
   shouldHideFreeTierTeachingSecrets.mockClear();
@@ -183,6 +187,19 @@ test('adapter reads authoritative usage, including invites and lifetime counts',
     writingSubmitted: false,
     graded: false,
   });
+  expect(usage!.gradeStepHref).toBe(
+    '/app/documents?status=needs-grading&reset=1'
+  );
+});
+test('checklist graded follows teacher saved or released grades in the class', async () => {
+  (submissionFindFirst as any).mockImplementation(async (args: { where?: unknown }) => {
+    const where = args.where as { gradedByMembershipId?: string };
+    if (where?.gradedByMembershipId) return { id: 'sub-graded' };
+    return null;
+  });
+  freeTierValue = '{"mode":"targeted","orgIds":["org"]}';
+  const usage = await readFreeAccountUsage(profile, true, 'user-1');
+  expect(usage!.checklist.graded).toBe(true);
 });
 test('free tier usage reflects configured caps without hiding excess students', async () => {
   freeTierValue = '{"mode":"everyone","orgIds":[]}';
@@ -190,6 +207,8 @@ test('free tier usage reflects configured caps without hiding excess students', 
   expect(usage!.students.total).toBe(10);
   expect(usage!.students.remaining).toBe(0);
   expect(usage!.monthly).toBe(true);
+  expect(usage!.lessonPlannerMonthlyMetering).toBe(true);
+  expect(usage!.lessonPlannerMonthly?.used).toBe(2);
   const now = new Date();
   expect(usage!.renewsAt).toBe(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString());
   expect(usage!.reporter).toEqual({ used: 0, total: 100, remaining: 100 });

@@ -47,10 +47,12 @@ import { getMembershipId } from './cookies/membership-id.server.ts';
 import { LocalDevEnvironmentBar } from './components/local-dev-environment-bar.tsx';
 import { DevPanelMount } from './dev-panel/dev-panel-entry.tsx';
 import { devPanelRestoreInlineScript } from './dev-panel/dev-panel-restore-inline.ts';
+import { formatDevPanelBuildFooter } from './dev-panel/dev-panel-build-footer.ts';
 import {
   devPanelEnvBadge,
   isDevPanelRuntimeEnabled,
 } from './dev-panel/dev-panel-runtime.server.ts';
+import { getBuildMetadata } from './utils/build-metadata.server.ts';
 import { isLocalDevAuthEnabled } from './utils/local-dev-auth.server.ts';
 import { isBlackboardLtiMockUiEnabled } from './utils/blackboard-lti-mock-ui.server.ts';
 import { useContrastPreference } from './routes/api.preferences.contrast/route.tsx';
@@ -66,7 +68,7 @@ import {
   previewAccessMiddleware,
 } from './utils/preview-access.server.ts';
 import { uaPartnerMiddleware } from './utils/ua-partner.server.ts';
-import { isLessonPlannerEnabled } from './domain/feature-flags/feature-flags.server.ts';
+import { isLessonPlannerEnabledForOrganization } from './utils/lesson-planner/lesson-planner-access.server.ts';
 import { getRootMembershipWhere } from './utils/root-membership-filter.server.ts';
 
 export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware];
@@ -158,6 +160,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
                   organizationId: true,
                   organization: {
                     select: {
+                      id: true,
                       name: true,
                       plan: true,
                       reporterEnabled: true,
@@ -213,6 +216,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         blackboardLtiMockEnabled: isBlackboardLtiMockUiEnabled(),
         devPanelEnabled,
         devPanelEnvBadge: devPanelEnvBadge(),
+        devPanelBuildFooter: formatDevPanelBuildFooter(getBuildMetadata()),
         lessonPlannerEnabled: false,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
         toast: null,
@@ -271,6 +275,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
                   organizationId: true,
                   organization: {
                     select: {
+                      id: true,
                       name: true,
                       plan: true,
                       reporterEnabled: true,
@@ -316,9 +321,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     bannerWarning,
     localDevAuthEnabled: isLocalDevAuthEnabled(),
   });
-  const lessonPlannerEnabled = userId
-    ? await isLessonPlannerEnabled(membership?.organizationId ?? null)
-    : false;
+  const lessonPlannerEnabled =
+    userId && membership?.organization
+      ? await isLessonPlannerEnabledForOrganization({
+          id: membership.organization.id,
+          plan: membership.organization.plan,
+        })
+      : false;
 
   return data(
     {
@@ -352,6 +361,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       blackboardLtiMockEnabled: isBlackboardLtiMockUiEnabled(),
       devPanelEnabled: isDevPanelRuntimeEnabled(),
       devPanelEnvBadge: devPanelEnvBadge(),
+      devPanelBuildFooter: formatDevPanelBuildFooter(getBuildMetadata()),
       impersonation,
       internalImpersonation: internal ? { ...internal, email: user?.email ?? internal.userId } : null,
       toast,

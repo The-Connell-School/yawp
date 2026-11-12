@@ -1,6 +1,6 @@
 import { AlertCircle } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
-import { Form } from 'react-router';
+import { Form, type FetcherWithComponents } from 'react-router';
 import {
   forwardValidationSummary,
   teacherPendingForwardError,
@@ -58,6 +58,8 @@ export function PendingApprovalForwardForm({
   forwardRetry = false,
   onCancel,
   focusNameOnMount,
+  fetcher,
+  formAction,
 }: {
   approvalId?: string;
   forwarding: boolean;
@@ -68,6 +70,8 @@ export function PendingApprovalForwardForm({
   forwardRetry?: boolean;
   onCancel: () => void;
   focusNameOnMount?: boolean;
+  fetcher?: FetcherWithComponents<unknown>;
+  formAction?: string;
 }) {
   const [clientErrors, setClientErrors] = useState<FieldErrors>({});
   const [adminName, setAdminName] = useState('');
@@ -101,9 +105,12 @@ export function PendingApprovalForwardForm({
     if (serverAlert) summaryRef.current?.focus();
   }, [serverAlert]);
 
+  const SubmitForm = fetcher?.Form ?? Form;
+
   return (
-    <Form
+    <SubmitForm
       method="post"
+      action={formAction}
       className="flex flex-col gap-4 text-sm"
       noValidate
       onSubmit={(event) => {
@@ -238,6 +245,6 @@ export function PendingApprovalForwardForm({
           Cancel
         </Button>
       </div>
-    </Form>
+    </SubmitForm>
   );
 }

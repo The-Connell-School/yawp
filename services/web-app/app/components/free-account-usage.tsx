@@ -1,43 +1,81 @@
 import { StudentInvitationDialog } from '~/components/student-invitation-dialog';
 import { useRef, useState } from 'react';
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from '~/components/ui/sheet';
 import { Link, useRouteLoaderData } from 'react-router';
 import {
   AlertTriangle,
   ChartNoAxesColumn,
   Check,
+  ChevronRight,
+  Copy,
+  Heart,
   Lock,
+  Microscope,
   Plus,
   Users,
 } from 'lucide-react';
-import type { FreeAccountUsage } from '~/domain/free-tier/inapp-usage';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '~/components/ui/popover';
+import type {
+  FreeAccountUsage,
+  UsageCount,
+} from '~/domain/free-tier/inapp-usage';
 import {
   formatUsageRenewsLabel,
-  freeAssignmentKindUsageMeta,
   isLessonPlannerMonthlyExhausted,
 } from '~/domain/free-tier/inapp-usage';
 import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
 import { cn } from '~/utils/misc';
-import { assignmentTypeHowItWorksPath } from '~/domain/assignment-types/assignment-type-how-it-works';
-import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
-import { SiteLicenseLockButton } from '~/components/site-license-lock-button';
 import {
-  assignmentTypeTileCardClassName,
-  assignmentTypeTileFooterClassName,
-  assignmentTypeTileGridClassName,
-  assignmentTypeTileImageClassName,
-  assignmentTypeTileImageWrapClassName,
-  DashboardAssignmentTileFooter,
-  dashboardAssignmentTileClassName,
-  dashboardAssignmentTileTestId,
-  assignmentTypeTileTrailingIconClassName,
-} from '~/components/assignment-type-tile-layout';
+  assignmentTypeHasHowItWorksGuide,
+  assignmentTypeHowItWorksPath,
+  siteLicenseLockedTileHasHowItWorksGuide,
+} from '~/domain/assignment-types/assignment-type-how-it-works';
+import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
+import { dashboardAssignmentTileTestId } from '~/components/assignment-type-tile-layout';
+import {
+  FreeTierAssignmentCarouselControls,
+  FreeTierAssignmentCarouselTrack,
+  FreeTierAssignmentTileImageBadge,
+  freeTierAssignmentTileImageWrapClassName,
+  freeTierAssignmentTileShellClassName,
+  useFreeTierAssignmentCarousel,
+} from '~/components/free-tier/free-tier-assignment-carousel';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
+import { LockedDashboardGettingStarted } from '~/components/free-tier/locked-dashboard-getting-started';
+import { LockedDashboardPendingCard } from '~/components/free-tier/locked-dashboard-pending-card';
+import { FreeTierGettingStartedTimeline } from '~/components/free-tier/free-tier-getting-started-timeline';
+import {
+  FREE_TIER_NEEDS_GRADING_DOCUMENTS_HREF,
+  freeTierShowAdvocatePack,
+  freeTierShowGettingStartedChecklist,
+} from '~/domain/free-tier/getting-started-grade';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import {
+  FreeTierLockedPageHeader,
+  freeTierLockedPageBodyClassName,
+  freeTierLockedPageOuterClassName,
+} from '~/components/free-tier/free-tier-teacher-page-chrome';
 import type { RefObject } from 'react';
 import {
   teachingAccessMobileSheetBodyInvite,
   TEACHING_ACCESS_LOCKED_TOOLTIP,
 } from '~/domain/free-tier/teaching-access-copy';
+import type { SiteLicenseLockedAssignmentTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
+import {
+  FREE_TIER_UNLIMITED_TILE_LABEL,
+  LOCKED_DASHBOARD_GETTING_STARTED_TITLE,
+  SITE_LICENSE_ONLY_TILE_LABEL,
+} from '~/domain/free-tier/locked-dashboard-copy';
+import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 
 export function useFreeAccountUsage() {
   return (
@@ -46,182 +84,575 @@ export function useFreeAccountUsage() {
     )?.freeAccountUsage ?? null
   );
 }
-function lockedDashboardAssignmentMeta(
-  usage: FreeAccountUsage,
-  row: FreeAccountUsage['assignments'][number]
-) {
-  return freeAssignmentKindUsageMeta(usage, row);
+function Meter({ count }: { count: UsageCount }) {
+  return (
+    <div
+      className="h-1.5 overflow-hidden rounded-full bg-secondary"
+      aria-hidden="true"
+    >
+      <div
+        className={cn(
+          'h-full rounded-full bg-primary',
+          count.remaining === 0 && 'bg-amber-600'
+        )}
+        style={{
+          width: `${count.total === 0 ? 100 : Math.min(100, (count.used / count.total) * 100)}%`,
+        }}
+      />
+    </div>
+  );
 }
-
-export function FreeAssignmentTiles({
+export function FreeAccountUsagePopover({
   usage,
-  types,
-  teachingLocked = false,
-  onCreate,
-  createTriggerRef,
+  expanded,
+  isMobile,
+  onMobileOpen,
+  onMobileClose,
 }: {
   usage: FreeAccountUsage;
-  types: Array<{
-    id: string;
-    kind?: string | null;
-    imageId?: string | null;
-    imageTitle?: string | null;
-  }>;
-  teachingLocked?: boolean;
-  onCreate: (id?: string) => void;
-  createTriggerRef?: RefObject<HTMLButtonElement | null>;
+  expanded: boolean;
+  isMobile: boolean;
+  onMobileOpen: () => void;
+  onMobileClose: () => void;
 }) {
-  if (teachingLocked) {
+  const [open, setOpen] = useState(false);
+  const trigger = (
+    <button
+      type="button"
+      aria-label="Usage"
+      className={cn(
+        'mx-4 mb-3 flex flex-col gap-2 rounded-lg border bg-popover p-3 text-left text-sm',
+        !expanded && 'mx-1 p-2'
+      )}
+    >
+      <span className="flex items-center justify-between font-semibold">
+        {expanded ? (
+          <>
+            {usage.monthly ? 'Monthly usage' : 'Usage'}{' '}
+            <ChevronRight size={14} />
+          </>
+        ) : (
+          <Users size={18} />
+        )}
+      </span>
+      {expanded && (
+        <>
+          <span className="flex justify-between text-xs">
+            <span>{usage.monthly ? 'Lesson Planner' : 'Students'}</span>
+            <span className="text-muted-foreground">
+              {usage.monthly
+                ? `${usage.lessonPlans.remaining} left`
+                : usage.students.remaining === 0
+                  ? 'Full'
+                  : `${usage.students.remaining} left`}
+            </span>
+          </span>
+          <Meter count={usage.monthly ? usage.lessonPlans : usage.students} />
+          {usage.monthly && usage.reporter && (
+            <>
+              <span className="flex justify-between text-xs">
+                <span>Reporter</span>
+                <span className="text-muted-foreground">
+                  {usage.reporter.remaining} left
+                </span>
+              </span>
+              <Meter count={usage.reporter} />
+            </>
+          )}
+          {!usage.monthly && usage.warning && (
+            <span className="text-xs text-amber-800">{usage.warning}</span>
+          )}
+        </>
+      )}
+    </button>
+  );
+  const details = <FreeAccountUsageDetails usage={usage} />;
+  if (isMobile) {
     return (
-      <div data-testid="free-assignment-tiles">
-        <h2 className="mb-4 text-lg font-bold">Assignments</h2>
-        <div className={assignmentTypeTileGridClassName()}>
-          {usage.assignments.map((row) => {
-            const type = types.find((t) => t.kind === row.kind);
-            const tileLabel = `New ${row.label} assignment`;
-            const tileBody = (
-              <div
-                className={dashboardAssignmentTileClassName(
-                  'relative h-full w-full'
+      <Sheet
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (next) onMobileOpen();
+        }}
+      >
+        <SheetTrigger asChild>{trigger}</SheetTrigger>
+        <SheetContent
+          side="bottom"
+          aria-describedby={undefined}
+          overlayClassName="free-usage-overlay bg-foreground/35"
+          className="h-auto max-h-[90dvh] rounded-t-2xl border-x-0 border-b-0 bg-background px-5 pb-7 pt-5"
+          onCloseAutoFocus={(event) => {
+            // The Usage trigger is now in the closed drawer. Restore focus to
+            // the visible navigation opener instead of the hidden trigger.
+            event.preventDefault();
+            onMobileClose();
+          }}
+        >
+          <SheetTitle className="mb-4 font-bold">Usage</SheetTitle>
+          {details}
+        </SheetContent>
+      </Sheet>
+    );
+  }
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverContent
+        side="right"
+        align="end"
+        aria-label="Usage"
+        className="w-[min(340px,calc(100vw-24px))] rounded-xl p-5"
+      >
+        <h2 className="mb-4 text-lg font-bold">Usage</h2>
+        {details}
+      </PopoverContent>
+    </Popover>
+  );
+}
+function FreeAccountUsageDetails({ usage }: { usage: FreeAccountUsage }) {
+  return (
+    <>
+      <div className="space-y-4">
+        {(usage.monthly
+          ? [
+              { label: 'Lesson Planner', ...usage.lessonPlans },
+              { label: 'Reporter', ...usage.reporter! },
+            ]
+          : [
+              { label: 'Students', ...usage.students },
+              ...usage.assignments,
+              { label: 'Lesson plans', ...usage.lessonPlans },
+            ]
+        ).map((row) => (
+          <div key={row.label}>
+            <div className="mb-1.5 flex justify-between gap-2 text-sm">
+              <span>{row.label}</span>
+              <span
+                className={cn(
+                  'text-xs text-muted-foreground',
+                  !usage.monthly && row.remaining === 0 && 'text-amber-800'
                 )}
               >
-                <DashboardAssignmentTileFooter
-                  label={row.label}
-                  meta={lockedDashboardAssignmentMeta(usage, row)}
-                  metaClassName={
-                    !usage.monthly && row.remaining === 0
-                      ? 'text-amber-800'
-                      : undefined
-                  }
-                  trailing={<SiteLicenseLockButton />}
-                />
-              </div>
-            );
-            if (type) {
-              return (
-                <Link
-                  key={row.kind}
-                  to={assignmentTypeHowItWorksPath(type.id)}
-                  data-testid={dashboardAssignmentTileTestId}
-                  aria-label={tileLabel}
-                  className="block min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
-                >
-                  {tileBody}
-                </Link>
-              );
-            }
-            return (
-              <div
-                key={row.kind}
-                data-testid={dashboardAssignmentTileTestId}
-                className="min-w-0"
-              >
-                {tileBody}
-              </div>
-            );
-          })}
-        </div>
+                {row.used} of {row.total} ·{' '}
+                {row.remaining === 0 ? 'none left' : `${row.remaining} left`}
+              </span>
+            </div>
+            <Meter count={row} />
+          </div>
+        ))}
+      </div>
+      <p className="mt-5 text-xs leading-relaxed text-muted-foreground">
+        {usage.monthly ? (
+          'Monthly uses reset on the first day of each month (UTC). Deleting a report or draft does not restore a use.'
+        ) : (
+          <>
+            Assignments count when you create them. Deleting one doesn't give it
+            back.
+          </>
+        )}
+      </p>
+      <Link
+        to={usage.monthly ? FULL_ACCESS_CONTACT : '/app/free-tier/status'}
+        className="mt-4 inline-block text-sm text-link underline"
+      >
+        Need more? Talk to us
+      </Link>
+    </>
+  );
+}
+const freeTierAssignmentTileImageClassName = 'size-[168px] object-cover';
+
+function FreeTierCarouselTileCaption({
+  label,
+  meta,
+  metaClassName,
+}: {
+  label: string;
+  meta?: string;
+  metaClassName?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        'flex flex-col gap-0.5 px-3 py-2.5',
+        meta ? 'min-h-[58px]' : 'min-h-[44px] justify-center'
+      )}
+    >
+      <span className="text-sm font-medium leading-snug text-foreground">
+        {label}
+      </span>
+      {meta ? (
+        <span
+          className={cn(
+            'text-xs leading-snug',
+            metaClassName ?? 'font-semibold text-[#1f3532]'
+          )}
+        >
+          {meta}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function FreeTierCarouselTileImage({
+  imageId,
+  imageTitle,
+  siteLicense,
+  badge,
+}: {
+  imageId?: string | null;
+  imageTitle?: string | null;
+  siteLicense?: boolean;
+  badge?: 'create' | 'locked';
+}) {
+  return (
+    <div
+      className={cn(
+        freeTierAssignmentTileImageWrapClassName(),
+        siteLicense && 'saturate-[0.6]'
+      )}
+    >
+      <AssignmentTypeTileImage
+        imageId={imageId}
+        alt={imageTitle ?? ''}
+        className={freeTierAssignmentTileImageClassName}
+      />
+      {siteLicense ? (
+        <div className="pointer-events-none absolute inset-0 bg-muted/35" aria-hidden />
+      ) : null}
+      {badge ? <FreeTierAssignmentTileImageBadge variant={badge} /> : null}
+    </div>
+  );
+}
+
+function FreeTierCarouselTile({
+  label,
+  meta,
+  metaClassName,
+  imageId,
+  imageTitle,
+  siteLicense,
+  teachingLocked,
+  assignmentTypeId,
+  assignmentTypeTitle,
+  assignmentTypeKind,
+  siteLicenseTileKey,
+  tileDisabled,
+  onCreateForType,
+}: {
+  label: string;
+  meta?: string;
+  metaClassName?: string;
+  imageId?: string | null;
+  imageTitle?: string | null;
+  siteLicense?: boolean;
+  teachingLocked: boolean;
+  assignmentTypeId: string;
+  assignmentTypeTitle?: string;
+  assignmentTypeKind?: string | null;
+  siteLicenseTileKey?: string;
+  tileDisabled?: boolean;
+  onCreateForType?: (assignmentTypeId: string) => void;
+}) {
+  const shellClass = freeTierAssignmentTileShellClassName(
+    cn(
+      siteLicense ? 'bg-secondary' : 'bg-[#fffdf9]',
+      'outline-none focus-visible:ring-2 focus-visible:ring-ring'
+    )
+  );
+  const caption = (
+    <FreeTierCarouselTileCaption
+      label={label}
+      meta={meta}
+      metaClassName={metaClassName}
+    />
+  );
+  const image = (
+    <FreeTierCarouselTileImage
+      imageId={imageId}
+      imageTitle={imageTitle}
+      siteLicense={siteLicense}
+      badge={teachingLocked || siteLicense ? 'locked' : 'create'}
+    />
+  );
+  const testId = siteLicense
+    ? 'site-license-locked-assignment-tile'
+    : dashboardAssignmentTileTestId;
+
+  const guideOnly = teachingLocked || siteLicense;
+  const hasHowItWorksGuide =
+    siteLicenseTileKey != null
+      ? siteLicenseLockedTileHasHowItWorksGuide(siteLicenseTileKey)
+      : assignmentTypeHasHowItWorksGuide({
+          title: assignmentTypeTitle ?? label,
+          kind: assignmentTypeKind ?? null,
+        });
+
+  if (guideOnly && hasHowItWorksGuide) {
+    const ariaLabel = `${label}, ${meta}. See how it works`;
+    return (
+      <Link
+        to={assignmentTypeHowItWorksPath(assignmentTypeId)}
+        data-testid={testId}
+        aria-label={ariaLabel}
+        className={shellClass}
+      >
+        {image}
+        {caption}
+      </Link>
+    );
+  }
+
+  if (guideOnly) {
+    return (
+      <div data-testid={testId} className={cn(shellClass, 'cursor-default')}>
+        {image}
+        {caption}
       </div>
     );
   }
 
-  const createButton = (
+  const tileLabel = `New ${label} assignment`;
+  if (tileDisabled) {
+    return (
+      <button
+        type="button"
+        data-testid={testId}
+        disabled
+        aria-label={tileLabel}
+        className={cn(shellClass, 'cursor-not-allowed opacity-60')}
+      >
+        {image}
+        {caption}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      data-testid={testId}
+      className={cn(shellClass, 'relative')}
+    >
+      <Link
+        to={`/app/assignment-types/${assignmentTypeId}`}
+        className="block"
+        aria-label={`Open ${label} assignment type`}
+      >
+        <FreeTierCarouselTileImage
+          imageId={imageId}
+          imageTitle={imageTitle}
+          siteLicense={siteLicense}
+        />
+        {caption}
+      </Link>
+      <button
+        type="button"
+        data-testid="dashboard-assignment-tile-create"
+        aria-label={tileLabel}
+        onClick={() => onCreateForType?.(assignmentTypeId)}
+        className={cn(
+          'absolute right-2 top-2 z-10 inline-flex',
+          !onCreateForType && 'pointer-events-none'
+        )}
+      >
+        <FreeTierAssignmentTileImageBadge variant="create" />
+      </button>
+    </div>
+  );
+}
+
+export function FreeAssignmentTiles({
+  usage = null,
+  types,
+  siteLicenseLockedAssignmentTiles = [],
+  assignmentsSeeHowItWorksTo,
+  teachingLocked = false,
+  onCreate,
+  createTriggerRef,
+}: {
+  usage?: FreeAccountUsage | null;
+  types: Array<{
+    id: string;
+    title?: string | null;
+    kind?: string | null;
+    imageId?: string | null;
+    imageTitle?: string | null;
+  }>;
+  siteLicenseLockedAssignmentTiles?: SiteLicenseLockedAssignmentTile[];
+  assignmentsSeeHowItWorksTo?: string;
+  teachingLocked?: boolean;
+  onCreate: (id?: string) => void;
+  createTriggerRef?: RefObject<HTMLButtonElement | null>;
+}) {
+  const carousel = useFreeTierAssignmentCarousel();
+  const quotaMode = Boolean(usage);
+
+  const headerActions = teachingLocked ? (
+    assignmentsSeeHowItWorksTo ? (
+      <SeeHowItWorksLink to={assignmentsSeeHowItWorksTo} />
+    ) : null
+  ) : (
     <button
       ref={createTriggerRef as RefObject<HTMLButtonElement> | undefined}
       type="button"
       disabled={
-        !usage.unlimitedFreeAssignmentTiles && usage.allAssignmentsUsed
+        quotaMode &&
+        !usage!.unlimitedFreeAssignmentTiles &&
+        usage!.allAssignmentsUsed
       }
       onClick={() => onCreate()}
-      className="text-sm text-primary underline disabled:text-muted-foreground"
+      className="text-sm font-medium text-muted-foreground hover:text-foreground disabled:opacity-50"
     >
-      New assignment
+      + New assignment
     </button>
   );
-  return (
-    <div data-testid="free-assignment-tiles">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-bold">Assignments</h2>
-        {createButton}
-      </div>
-      <div className={assignmentTypeTileGridClassName()}>
-        {usage.assignments.map((row) => {
+
+  const entitledTiles = quotaMode
+    ? usage!.assignments
+        .map((row) => {
           const type = types.find((t) => t.kind === row.kind);
-          const tileDisabled =
-            !type ||
-            (!usage.unlimitedFreeAssignmentTiles && row.remaining === 0);
-          const tileClassName = cn(
-            assignmentTypeTileCardClassName(
-              'bg-popover shadow-sm disabled:bg-muted/30'
-            ),
-            !tileDisabled &&
-              'outline-none focus-visible:ring-2 focus-visible:ring-ring'
-          );
-          const tileLabel = `New ${row.label} assignment`;
-          const tileBody = (
-            <>
-              <div className={assignmentTypeTileImageWrapClassName()}>
-                <AssignmentTypeTileImage
-                  imageId={type?.imageId}
-                  className={assignmentTypeTileImageClassName}
-                />
-              </div>
-              <div className={assignmentTypeTileFooterClassName('px-3 py-2')}>
-                <DashboardAssignmentTileFooter
-                  label={row.label}
-                  meta={freeAssignmentKindUsageMeta(usage, row)}
-                  metaClassName={
-                    !usage.monthly && row.remaining === 0
-                      ? 'text-amber-800'
-                      : undefined
-                  }
-                  trailing={
-                    <Plus
-                      size={16}
-                      className={assignmentTypeTileTrailingIconClassName(
-                        'text-muted-foreground'
-                      )}
-                      aria-hidden
-                    />
-                  }
-                />
-              </div>
-            </>
-          );
-          if (type && !tileDisabled) {
-            return (
-              <Link
-                key={row.kind}
-                to={`/app/assignment-types/${type.id}`}
-                data-testid={dashboardAssignmentTileTestId}
-                aria-label={tileLabel}
-                className={tileClassName}
-              >
-                {tileBody}
-              </Link>
-            );
-          }
+          if (!type) return null;
+          const meta = usage!.unlimitedFreeAssignmentTiles
+            ? FREE_TIER_UNLIMITED_TILE_LABEL
+            : row.remaining
+              ? `${row.remaining} of ${row.total} left`
+              : 'None left';
           return (
-            <button
+            <FreeTierCarouselTile
               key={row.kind}
-              type="button"
-              data-testid={dashboardAssignmentTileTestId}
-              disabled={tileDisabled}
-              onClick={() => onCreate(type?.id)}
-              aria-label={tileLabel}
-              className={tileClassName}
-            >
-              {tileBody}
-            </button>
+              label={row.label}
+              meta={meta}
+              metaClassName={
+                usage!.unlimitedFreeAssignmentTiles
+                  ? 'font-semibold text-[#1f3532]'
+                  : row.remaining === 0
+                    ? 'font-normal text-amber-800'
+                    : undefined
+              }
+              imageId={type.imageId}
+              imageTitle={type.imageTitle}
+              teachingLocked={teachingLocked}
+              assignmentTypeId={type.id}
+              assignmentTypeTitle={type.title ?? undefined}
+              assignmentTypeKind={type.kind}
+              tileDisabled={
+                !teachingLocked &&
+                !usage!.unlimitedFreeAssignmentTiles &&
+                row.remaining === 0
+              }
+              onCreateForType={
+                teachingLocked ? undefined : (id) => onCreate(id)
+              }
+            />
           );
-        })}
+        })
+        .filter(Boolean)
+    : types.map((type) => (
+        <FreeTierCarouselTile
+          key={type.id}
+          label={type.title?.trim() || 'Assignment'}
+          imageId={type.imageId}
+          imageTitle={type.imageTitle}
+          teachingLocked={teachingLocked}
+          assignmentTypeId={type.id}
+          assignmentTypeTitle={type.title ?? undefined}
+          assignmentTypeKind={type.kind}
+          onCreateForType={(id) => onCreate(id)}
+        />
+      ));
+
+  return (
+    <div
+      data-testid="teacher-assignments-grid"
+      data-tour="dashboard-assignments"
+    >
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2>Assignments</h2>
+        <span className="inline-flex shrink-0 items-center gap-3">
+          {headerActions}
+          <FreeTierAssignmentCarouselControls
+            canScrollLeft={carousel.canScrollLeft}
+            canScrollRight={carousel.canScrollRight}
+            onScrollLeft={() => carousel.scrollByPage(-1)}
+            onScrollRight={() => carousel.scrollByPage(1)}
+          />
+        </span>
       </div>
+      <FreeTierAssignmentCarouselTrack
+        trackRef={carousel.trackRef}
+        onScroll={carousel.updateScrollState}
+      >
+        {entitledTiles}
+        {siteLicenseLockedAssignmentTiles.map((tile) => (
+          <FreeTierCarouselTile
+            key={tile.key}
+            label={tile.label}
+            meta={SITE_LICENSE_ONLY_TILE_LABEL}
+            metaClassName="font-normal text-muted-foreground"
+            imageId={tile.imageId}
+            siteLicense
+            teachingLocked={teachingLocked}
+            assignmentTypeId={tile.assignmentTypeId}
+            siteLicenseTileKey={tile.key}
+          />
+        ))}
+      </FreeTierAssignmentCarouselTrack>
     </div>
   );
 }
-export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
+function FreeTierClassCodeChip({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <div className="flex min-w-0 items-center gap-1.5 rounded-lg border bg-background py-1 pl-3 pr-1">
+      <code className="min-w-0 flex-1 truncate font-mono text-sm font-bold tracking-wide text-foreground">
+        {code}
+      </code>
+      <button
+        type="button"
+        aria-label={copied ? 'Class code copied' : 'Copy class code'}
+        className="inline-flex size-[30px] shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(code);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 2000);
+          } catch {
+            // Code remains selectable in the chip.
+          }
+        }}
+      >
+        {copied ? (
+          <Check size={15} aria-hidden className="text-green-600" />
+        ) : (
+          <Copy size={15} aria-hidden />
+        )}
+      </button>
+    </div>
+  );
+}
+
+export function FreeAccountChecklist({
+  usage,
+  classStarterAssignmentTypeId,
+}: {
+  usage: FreeAccountUsage;
+  classStarterAssignmentTypeId?: string | null;
+}) {
   const [invitationOpen, setInvitationOpen] = useState(false);
   const invitationTriggerRef = useRef<HTMLButtonElement>(null);
+  const createFirstAssignmentTo = (() => {
+    const params = new URLSearchParams({ first: '1' });
+    if (classStarterAssignmentTypeId) {
+      params.set('assignmentTypeId', classStarterAssignmentTypeId);
+    }
+    if (usage.classId) {
+      params.set('classId', usage.classId);
+    }
+    return `/app/assignments/new?${params.toString()}`;
+  })();
   const { locked: teachingLocked, state: teachingAccessState } =
     useTeachingAccess();
   const teachingAccessAdminName =
@@ -234,31 +665,155 @@ export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
     mobileSheetBody: teachingAccessMobileSheetBodyInvite(teachingAccessAdminName),
     tooltip: TEACHING_ACCESS_LOCKED_TOOLTIP,
   };
-  const steps = usage.monthly
-    ? [
-        {
-          label: 'Create your first assignment',
-          done: usage.checklist.assignmentCreated,
-          to: '/app/assignments',
-          hint: 'A five-minute Class Starter is the easiest way to begin.',
-        },
-        {
-          label: 'Add your students to your class',
-          done: usage.students.used > 0,
-          to: usage.classId
-            ? `/app/my-classes/${usage.classId}?tab=students`
-            : '/app/my-classes',
-        },
-        {
-          label: 'See what your class needs',
-          done: usage.checklist.writingSubmitted,
-          to: usage.classId
-            ? `/app/my-classes/${usage.classId}`
-            : '/app/my-classes',
-          hint: 'Your Class Summary, after students submit.',
-        },
-      ]
-    : [
+  const gradeStepHref =
+    usage.gradeStepHref ?? FREE_TIER_NEEDS_GRADING_DOCUMENTS_HREF;
+
+  if (usage.monthly) {
+    const pe3Steps = [
+      {
+        key: 'class',
+        label: 'Class ready',
+        done: usage.checklist.classReady,
+      },
+      {
+        key: 'assignment',
+        label: 'First assignment created',
+        done: usage.checklist.assignmentCreated,
+        hint: 'Welcome to Yawp! Class Starter',
+        createTo: createFirstAssignmentTo,
+      },
+      {
+        key: 'students',
+        label: 'Add your students',
+        done: usage.students.used > 0,
+      },
+      {
+        key: 'grade',
+        label: 'Grade your first submission',
+        done: usage.checklist.graded,
+        to: gradeStepHref,
+      },
+    ] as const;
+    const currentIndex = pe3Steps.findIndex((step) => !step.done);
+    const stepNumber =
+      currentIndex >= 0 ? currentIndex + 1 : pe3Steps.length;
+    const currentKey = pe3Steps.find((step) => !step.done)?.key ?? null;
+
+    return (
+      <>
+        <FreeTierGettingStartedTimeline
+          title={LOCKED_DASHBOARD_GETTING_STARTED_TITLE}
+          progressLabel={`Step ${stepNumber} of ${pe3Steps.length}`}
+          testId="free-account-checklist"
+          steps={pe3Steps.map((step) => {
+            const state = step.done
+              ? ('done' as const)
+              : step.key === currentKey
+                ? ('current' as const)
+                : ('upcoming' as const);
+            const isStudentsStep = step.key === 'students';
+            const isAssignmentStep = step.key === 'assignment';
+            const isGradeStep = step.key === 'grade';
+            const showStudentsPanel =
+              isStudentsStep &&
+              state === 'current' &&
+              usage.classCode &&
+              !step.done &&
+              !teachingLocked &&
+              usage.checklist.assignmentCreated;
+
+            return {
+              key: step.key,
+              label:
+                isAssignmentStep && !step.done
+                  ? 'Create your first assignment'
+                  : step.label,
+              state,
+              content: (
+                <>
+                  {'hint' in step && step.hint && !step.done ? (
+                    <span className="mt-1 block text-[13px] font-normal text-muted-foreground">
+                      {step.hint}
+                    </span>
+                  ) : null}
+                  {isAssignmentStep && state === 'current' && !step.done ? (
+                    <Link
+                      to={
+                        'createTo' in step && step.createTo
+                          ? step.createTo
+                          : createFirstAssignmentTo
+                      }
+                      data-testid="checklist-create-first-assignment"
+                      className="mt-2 inline-flex h-9 items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
+                    >
+                      Create
+                    </Link>
+                  ) : null}
+                  {isGradeStep &&
+                  state === 'current' &&
+                  !step.done &&
+                  'to' in step &&
+                  step.to ? (
+                    <Link
+                      to={step.to}
+                      data-testid="checklist-grade-first-submission"
+                      className="mt-2 inline-flex h-9 items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
+                    >
+                      Grade
+                    </Link>
+                  ) : null}
+                  {showStudentsPanel ? (
+                    <div className="mt-2 space-y-2 rounded-lg border bg-secondary/40 p-3">
+                      <p className="text-[13px] leading-snug text-foreground">
+                        Students join with your class code. It takes about five
+                        minutes with your class in the room.
+                      </p>
+                      <FreeTierClassCodeChip code={usage.classCode!} />
+                      <button
+                        type="button"
+                        ref={invitationTriggerRef}
+                        onClick={() => setInvitationOpen(true)}
+                        className="inline-flex h-9 w-full items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
+                      >
+                        Invite students
+                      </button>
+                    </div>
+                  ) : null}
+                  {isStudentsStep &&
+                  !showStudentsPanel &&
+                  !step.done &&
+                  usage.classId &&
+                  (usage.classCodeHidden ||
+                    (teachingLocked && !usage.classCode)) ? (
+                    <LockedTeachingControl {...lockedInviteProps}>
+                      <button
+                        type="button"
+                        data-testid="checklist-invite-locked"
+                        className="mt-1 text-left text-link underline opacity-60"
+                      >
+                        {step.label}
+                      </button>
+                    </LockedTeachingControl>
+                  ) : null}
+                </>
+              ),
+            };
+          })}
+        />
+        {usage.classCode ? (
+          <StudentInvitationDialog
+            returnFocusRef={invitationTriggerRef}
+            code={usage.classCode}
+            freeTierCopy
+            open={invitationOpen}
+            onOpenChange={setInvitationOpen}
+          />
+        ) : null}
+      </>
+    );
+  }
+
+  const steps = [
         {
           label: 'Share your class code',
           done: usage.checklist.classReady,
@@ -280,13 +835,11 @@ export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
         {
           label: 'Grade it',
           done: usage.checklist.graded,
-          to: '/app/documents?status=needs-grading&reset=1',
+          to: gradeStepHref,
           hint: 'Using the grading assistant.',
         },
       ];
-  const classStepDone = usage.monthly ? usage.checklist.classReady : false;
-  const doneCount =
-    steps.filter((s) => s.done).length + (usage.monthly && classStepDone ? 1 : 0);
+  const doneCount = steps.filter((s) => s.done).length;
   return (
     <>
       <aside
@@ -294,120 +847,43 @@ export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
         data-testid="free-account-checklist"
       >
         <div className="flex items-baseline justify-between gap-2">
-          <h2 className="text-lg font-bold">
-            {usage.monthly ? 'Your first steps' : 'Get your class going'}
-          </h2>
+          <h2 className="text-lg font-bold">Get your class going</h2>
           <span className="text-xs text-muted-foreground">
             {doneCount} of 4
           </span>
         </div>
         <ol className="mt-3">
-          {usage.monthly ? (
-            <li className="flex gap-3 border-t py-3 text-sm">
-              <span
-                aria-hidden="true"
-                className={cn(
-                  'flex size-[22px] shrink-0 items-center justify-center rounded-full border-2',
-                  classStepDone &&
-                    'border-emerald-800 bg-emerald-800 text-white'
-                )}
-              >
-                {classStepDone && <Check size={14} />}
-              </span>
-              <span>
-                <span className="text-muted-foreground">Your class is ready</span>
-                <span className="mt-1 block text-[13px] text-muted-foreground">
-                  1 class · up to {usage.students.total} students
-                </span>
-              </span>
-            </li>
-          ) : null}
           {steps.map((step) => (
             <li key={step.label} className="border-t py-3">
-              {usage.monthly &&
-              step.label === 'Add your students to your class' &&
-              usage.classCode ? (
-                <button
-                  type="button"
-                  ref={invitationTriggerRef}
-                  onClick={() => setInvitationOpen(true)}
-                  className="flex gap-3 text-left text-sm text-primary underline"
+              <Link to={step.to} className="flex gap-3 text-sm">
+                <span
+                  className={cn(
+                    'flex size-[22px] shrink-0 items-center justify-center rounded-full border-2',
+                    step.done &&
+                      'border-emerald-800 bg-emerald-800 text-white'
+                  )}
                 >
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      'flex size-[22px] shrink-0 items-center justify-center rounded-full border-2',
-                      step.done &&
-                        'border-emerald-800 bg-emerald-800 text-white'
-                    )}
-                  >
-                    {step.done && <Check size={14} />}
-                  </span>
-                  Add your students to your class
-                </button>
-              ) : usage.monthly &&
-                step.label === 'Add your students to your class' &&
-                usage.classId &&
-                (usage.classCodeHidden || (teachingLocked && !usage.classCode)) ? (
-                <LockedTeachingControl {...lockedInviteProps}>
-                  <button
-                    type="button"
-                    data-testid="checklist-invite-locked"
-                    className="flex gap-3 text-left text-sm text-primary underline opacity-60"
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        'flex size-[22px] shrink-0 items-center justify-center rounded-full border-2',
-                        step.done &&
-                          'border-emerald-800 bg-emerald-800 text-white'
-                      )}
-                    >
-                      {step.done && <Check size={14} />}
-                    </span>
-                    Add your students to your class
-                  </button>
-                </LockedTeachingControl>
-              ) : (
-                <Link to={step.to} className="flex gap-3 text-sm">
+                  {step.done && <Check size={14} />}
+                </span>
+                <span>
                   <span
                     className={cn(
-                      'flex size-[22px] shrink-0 items-center justify-center rounded-full border-2',
-                      step.done &&
-                        'border-emerald-800 bg-emerald-800 text-white'
+                      step.done && 'text-muted-foreground line-through'
                     )}
                   >
-                    {step.done && <Check size={14} />}
+                    {step.label}
                   </span>
-                  <span>
-                    <span
-                      className={cn(
-                        step.done && 'text-muted-foreground line-through'
-                      )}
-                    >
-                      {step.label}
+                  {step.hint && !step.done && (
+                    <span className="mt-1 block text-[13px] text-muted-foreground">
+                      {step.hint}
                     </span>
-                    {step.hint && !step.done && (
-                      <span className="mt-1 block text-[13px] text-muted-foreground">
-                        {step.hint}
-                      </span>
-                    )}
-                  </span>
-                </Link>
-              )}
+                  )}
+                </span>
+              </Link>
             </li>
           ))}
         </ol>
       </aside>
-      {usage.monthly && usage.classCode && (
-        <StudentInvitationDialog
-          returnFocusRef={invitationTriggerRef}
-          code={usage.classCode}
-          freeTierCopy
-          open={invitationOpen}
-          onOpenChange={setInvitationOpen}
-        />
-      )}
     </>
   );
 }
@@ -419,26 +895,19 @@ export function FreeReporterLocked({
   return (
     <section
       data-testid="free-reporter-locked"
-      className="flex h-full flex-col overflow-auto"
+      className={freeTierLockedPageOuterClassName()}
     >
-      <header className="bg-secondary px-4 py-6 sm:px-12">
-        <h1 className="text-[28px] font-bold leading-[1.2]">Reporter</h1>
-        {variant === 'pending' ? (
-          <p className="mt-1 text-sm text-muted-foreground">
-            Your class reports.
-          </p>
-        ) : null}
-      </header>
-      <div className="px-4 pb-12 pt-6 sm:px-12">
+      <FreeTierLockedPageHeader title="Reporter" />
+      <div className={freeTierLockedPageBodyClassName('pb-12 pt-2')}>
         <section
           data-testid="free-reporter-card"
           className="flex max-w-[616px] flex-col items-start gap-3.5 rounded-xl border bg-popover p-7 text-left shadow-sm"
         >
           <span
-            data-testid="reporter-lock-badge"
-            className="flex size-10 items-center justify-center rounded-full bg-secondary"
+            data-testid="reporter-feature-icon"
+            className="flex size-10 items-center justify-center rounded-full bg-secondary text-muted-foreground"
           >
-            <Lock size={20} aria-hidden="true" />
+            <Microscope size={20} aria-hidden="true" />
           </span>
           <h2 className="text-xl font-bold leading-[1.35]">
             {variant === 'pending'
@@ -500,6 +969,7 @@ export function FreeReporterMonthlyLimit({
       </header>
       <div className="px-4 pb-12 pt-6 sm:px-12">
         <section className="flex max-w-[616px] flex-col items-start gap-3 rounded-xl border bg-popover p-7 text-left shadow-sm">
+          <UsageNavRingMiniStatic />
           <h2 className="text-xl font-bold leading-[1.35]">
             You&apos;ve reached this month&apos;s Reporter limit
           </h2>
@@ -515,6 +985,27 @@ export function FreeReporterMonthlyLimit({
         </section>
       </div>
     </section>
+  );
+}
+
+function UsageNavRingMiniStatic() {
+  return (
+    <svg
+      width={18}
+      height={18}
+      viewBox="0 0 18 18"
+      className="shrink-0 text-muted-foreground"
+      aria-hidden
+    >
+      <circle
+        cx={9}
+        cy={9}
+        r={7}
+        fill="none"
+        className="stroke-muted"
+        strokeWidth={2}
+      />
+    </svg>
   );
 }
 
@@ -564,36 +1055,56 @@ export function lessonPlannerPausedPlaceholder(usage: FreeAccountUsage): string 
 
 export function AdvocatePackEntry() {
   return (
-    <section className="rounded-xl border bg-popover p-5 shadow-sm">
-      <h2 className="text-lg font-bold">
-        Loving what Yawp! is doing for your students' writing?
-      </h2>
-      <p className="mt-2 text-sm">
-        A site license opens the full platform to you and your colleagues. Our
-        Advocate Pack makes it easy to share what you're seeing with your
-        administrator.
+    <section
+      className="rounded-xl border bg-popover p-5 shadow-sm"
+      data-testid="free-tier-advocate-rail"
+    >
+      <span
+        aria-hidden
+        className="mb-3 flex size-10 items-center justify-center rounded-full bg-secondary"
+      >
+        <Heart size={18} className="text-foreground/80" />
+      </span>
+      <p className="text-sm leading-snug text-foreground">
+        Loving what Yawp! is doing for your students? Tell a colleague. They can
+        start their own free classroom.
       </p>
       <Link
         to="/app/advocate-pack"
-        className="mt-3 inline-block text-sm font-medium text-primary underline"
+        className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-full border text-sm font-medium text-foreground hover:bg-muted/50"
       >
-        Get the Advocate Pack
+        Share with a colleague
       </Link>
     </section>
   );
 }
 
-export function FreeAccountRail({ usage }: { usage: FreeAccountUsage }) {
+export function FreeAccountRail({
+  usage,
+  classStarterAssignmentTypeId,
+}: {
+  usage: FreeAccountUsage;
+  classStarterAssignmentTypeId?: string | null;
+}) {
   const { locked: teachingLocked } = useTeachingAccess();
   if (teachingLocked) {
-    return null;
+    return (
+      <div className="flex flex-col gap-4" data-testid="free-account-rail">
+        <LockedDashboardPendingCard />
+        <LockedDashboardGettingStarted />
+      </div>
+    );
   }
-  const showAdvocatePack =
-    usage.monthly &&
-    usage.students.used > 0;
+  const showChecklist = freeTierShowGettingStartedChecklist(usage);
+  const showAdvocatePack = freeTierShowAdvocatePack(usage);
   return (
     <div className="space-y-5" data-testid="free-account-rail">
-      <FreeAccountChecklist usage={usage} />
+      {showChecklist ? (
+        <FreeAccountChecklist
+          usage={usage}
+          classStarterAssignmentTypeId={classStarterAssignmentTypeId}
+        />
+      ) : null}
       {showAdvocatePack ? <AdvocatePackEntry /> : null}
     </div>
   );
@@ -636,10 +1147,10 @@ export function MonthlyUsageNotice({
       </p>
       {count.remaining === 0 && (
         <div className="mt-3 flex flex-wrap gap-3">
-          <Link to="/app/advocate-pack" className="text-primary underline">
+          <Link to="/app/advocate-pack" className="text-link underline">
             Share Yawp! with my administrator
           </Link>
-          <a href={FULL_ACCESS_CONTACT} className="text-primary underline">
+          <a href={FULL_ACCESS_CONTACT} className="text-link underline">
             Learn about site licenses
           </a>
         </div>

@@ -15,7 +15,7 @@ export function DevPanelBeaker() {
         type="button"
         className={cn(
           'relative rounded-full bg-slate-900 p-2.5 text-white shadow-lg ring-1 ring-black/10',
-          'transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
         )}
         aria-label={locked ? 'Open developer tools (locked)' : 'Open developer tools'}
         title={label}

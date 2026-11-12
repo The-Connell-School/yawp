@@ -550,7 +550,7 @@ export default function AssignmentSubmissionsRoute() {
                               ? `/app/group-drafts/${doc.id}`
                               : `/app/documents/${doc.id}?left=tutor`
                           }
-                          className="text-primary hover:underline"
+                          className="text-link hover:text-link-hover hover:underline"
                         >
                           {doc.title || 'Untitled'}
                         </Link>
@@ -574,7 +574,7 @@ export default function AssignmentSubmissionsRoute() {
               <p className="py-8 text-center text-muted-foreground text-sm">
                 All selected essays have been graded. Switch to{' '}
                 <button
-                  className="text-primary hover:underline"
+                  className="text-link hover:text-link-hover hover:underline"
                   onClick={() => handleStatusChange('graded')}
                 >
                   Graded
@@ -628,7 +628,7 @@ export default function AssignmentSubmissionsRoute() {
                             to={`/app/submissions/${sub.id}?${
                               isDocumentSubmissionEnabled ? 'edit=1&' : ''
                             }exitTo=${encodeURIComponent(backUrl)}`}
-                            className="text-primary hover:underline"
+                            className="text-link hover:text-link-hover hover:underline"
                           >
                             {sub.document.title || sub.title || 'Untitled'}
                           </Link>
@@ -698,7 +698,7 @@ export default function AssignmentSubmissionsRoute() {
               <p className="py-8 text-center text-muted-foreground text-sm">
                 All grades released. Switch to{' '}
                 <button
-                  className="text-primary hover:underline"
+                  className="text-link hover:text-link-hover hover:underline"
                   onClick={() => handleStatusChange('released')}
                 >
                   Released
@@ -743,7 +743,7 @@ export default function AssignmentSubmissionsRoute() {
                           to={`/app/submissions/${sub.id}?${
                             isDocumentSubmissionEnabled ? 'edit=1&' : ''
                           }exitTo=${encodeURIComponent(backUrl)}`}
-                          className="text-primary hover:underline"
+                          className="text-link hover:text-link-hover hover:underline"
                         >
                           {sub.document.title || sub.title || 'Untitled'}
                         </Link>
@@ -794,7 +794,7 @@ export default function AssignmentSubmissionsRoute() {
                           to={`/app/submissions/${sub.id}?${
                             isDocumentSubmissionEnabled ? 'edit=1&' : ''
                           }exitTo=${encodeURIComponent(backUrl)}`}
-                          className="text-primary hover:underline"
+                          className="text-link hover:text-link-hover hover:underline"
                         >
                           {sub.document.title || sub.title || 'Untitled'}
                         </Link>

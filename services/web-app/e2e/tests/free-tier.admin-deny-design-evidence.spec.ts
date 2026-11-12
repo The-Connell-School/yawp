@@ -200,7 +200,7 @@ for (const width of [1440, 390]) {
 
     await page.goto(approveUrl, { waitUntil: 'networkidle' });
     await expect(page.getByTestId('admin-approval-qa')).toBeVisible();
-    await expect(page.getByRole('link', { name: /learn more first/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Talk to us first/i })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Forward this request' })).toBeVisible();
     await capture(page, `01_deny-request-button-states_${suffix}`);
     await capture(page, `02_approve-page-with-deny-qanda-placeholder_${suffix}`);

@@ -22,8 +22,10 @@ export function FreeTierAuthCard({
   icon,
   status,
   aside,
+  aboveCard,
   belowCard,
   stackAfterCard,
+  splitAside,
 }: {
   title: string;
   subtitle?: string;
@@ -31,49 +33,88 @@ export function FreeTierAuthCard({
   footer?: ReactNode;
   icon?: ReactNode;
   status?: boolean;
-  /** @deprecated Use stackAfterCard for Q&A below the approve card. */
+  /** @deprecated Use splitAside for Q&A beside the approve card. */
   aside?: ReactNode;
+  aboveCard?: ReactNode;
   belowCard?: ReactNode;
+  /** @deprecated Use splitAside for admin approve split view. */
   stackAfterCard?: ReactNode;
+  splitAside?: ReactNode;
 }) {
-  const stacked = Boolean(stackAfterCard || belowCard);
+  const faqColumn = splitAside ?? stackAfterCard;
+  const split = Boolean(faqColumn);
+  const stacked = Boolean(faqColumn || belowCard) && !split;
   return (
     <div
       className={`free-tier-page${
-        stacked
-          ? ' free-tier-approval-stack'
-          : aside
-            ? ' free-tier-approval-v2'
-            : ''
-      }`}
+        split
+          ? ' free-tier-approval-split'
+          : stacked
+            ? ' free-tier-approval-stack'
+            : aside
+              ? ' free-tier-approval-v2'
+              : ''
+      }${aboveCard ? ' free-tier-setup-page' : ''}`}
     >
       <AuthPageShell>
-        {aside && !stacked ? (
+        {aside && !stacked && !split ? (
           <div className="free-tier-approval-info">{aside}</div>
         ) : null}
-        <div className={stacked ? 'free-tier-approval-column' : undefined}>
-          <AuthFormCard
-            title={title}
-            subtitle={subtitle}
-            className="free-tier-form-card"
-            role={status ? 'status' : undefined}
-            icon={
-              icon ? (
-                <div className="free-tier-state-icon" aria-hidden="true">
-                  {icon}
-                </div>
-              ) : undefined
-            }
-          >
-            <div className="flex flex-col gap-4">{children}</div>
-          </AuthFormCard>
-          {belowCard ? (
-            <div className="free-tier-below-card">{belowCard}</div>
-          ) : null}
-          {stackAfterCard ? (
-            <div className="free-tier-stack-after-card">{stackAfterCard}</div>
-          ) : null}
-        </div>
+        {split ? (
+          <div className="free-tier-approval-split-grid">
+            <div className="free-tier-approval-split-left">
+              {aboveCard ? (
+                <div className="free-tier-above-card">{aboveCard}</div>
+              ) : null}
+              <AuthFormCard
+                title={title}
+                subtitle={subtitle}
+                className="free-tier-form-card"
+                role={status ? 'status' : undefined}
+                icon={
+                  icon ? (
+                    <div className="free-tier-state-icon" aria-hidden="true">
+                      {icon}
+                    </div>
+                  ) : undefined
+                }
+              >
+                <div className="flex flex-col gap-4">{children}</div>
+              </AuthFormCard>
+              {belowCard ? (
+                <div className="free-tier-below-card">{belowCard}</div>
+              ) : null}
+            </div>
+            <div className="free-tier-approval-split-right">{faqColumn}</div>
+          </div>
+        ) : (
+          <div className={stacked ? 'free-tier-approval-column' : undefined}>
+            {aboveCard ? (
+              <div className="free-tier-above-card">{aboveCard}</div>
+            ) : null}
+            <AuthFormCard
+              title={title}
+              subtitle={subtitle}
+              className="free-tier-form-card"
+              role={status ? 'status' : undefined}
+              icon={
+                icon ? (
+                  <div className="free-tier-state-icon" aria-hidden="true">
+                    {icon}
+                  </div>
+                ) : undefined
+              }
+            >
+              <div className="flex flex-col gap-4">{children}</div>
+            </AuthFormCard>
+            {belowCard ? (
+              <div className="free-tier-below-card">{belowCard}</div>
+            ) : null}
+            {faqColumn ? (
+              <div className="free-tier-stack-after-card">{faqColumn}</div>
+            ) : null}
+          </div>
+        )}
         {footer ? <div className="free-tier-footer">{footer}</div> : null}
         <FreeTierLegalLinks />
       </AuthPageShell>

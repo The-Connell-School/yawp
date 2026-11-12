@@ -1,5 +1,12 @@
 import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
+import {
+  FreeTierLockedPageHeader,
+  freeTierStandardPageBodyClassName,
+  freeTierStandardPageShellClassName,
+  useFreeTierLockedB2PageChrome,
+  useFreeTierStandardPageShell,
+} from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import {
   type ActionFunctionArgs,
@@ -7,11 +14,12 @@ import {
   data as dataResponse,
   redirect,
 } from 'react-router';
-import { Form, Link, useFetcher, useLoaderData } from 'react-router';
+import { Form, Link, useFetcher, useLoaderData, useSearchParams } from 'react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Search, Trash2 } from 'lucide-react';
-import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
+import { useNavigateToNewAssignmentPage } from '~/domain/free-tier/navigate-to-new-assignment-page';
 import { TutorOffBadge } from '~/components/assignments/tutor-off-badge';
+import { AssignmentTryItPill } from '~/components/assignments/assignment-try-it-pill';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
@@ -29,7 +37,6 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
-import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
 // The flag is read by the component, so it has to come from the client-safe module.
 // Importing it through saved-assignments.server (which merely re-exports it) makes the
 // component depend on server-only code, and React Router can only strip server code from
@@ -62,6 +69,7 @@ import {
 import { formatClassLabel } from '~/utils/teacher-document-work-utils';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
+import { cn } from '~/utils/misc';
 
 export const handle = { breadcrumb: 'My Assignments' };
 
@@ -99,6 +107,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           // tutor is a cold write, and a teacher scanning this list needs to
           // see which rows those are.
           tutorEnabled: true,
+          assignmentTypeId: true,
           assignmentType: { select: { title: true } },
         },
       },
@@ -117,6 +126,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     {
       assignmentId: string;
       title: string;
+      assignmentTypeId: string;
       assignmentTypeTitle: string;
       tutorEnabled: boolean;
       documentCount: number;
@@ -129,6 +139,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const entry = existing ?? {
       assignmentId: classAssignment.assignment.id,
       title: classAssignment.assignment.title?.trim() || 'Untitled Assignment',
+      assignmentTypeId: classAssignment.assignment.assignmentTypeId,
       assignmentTypeTitle: classAssignment.assignment.assignmentType.title,
       // A property of the Assignment, so it is the same across every class the
       // assignment was deployed to; collapsing rows cannot disagree about it.
@@ -225,9 +236,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return {
     assignments,
     savedAssignments,
-    exitTicketBuilderV3Enabled: await isExitTicketBuilderV3Enabled(
-      profile.organization.id
-    ),
     assignmentCreationClasses: teacherClasses.map((klass) => ({
       id: klass.id,
       name: formatClassLabel(klass),
@@ -482,6 +490,7 @@ function SavedAssignmentsPanel({
 
 export default function MyAssignmentsRoute() {
   const freeUsage = useFreeAccountUsage();
+  const navigateToNewAssignmentPage = useNavigateToNewAssignmentPage();
   const { locked: teachingLocked, state: teachingAccessState } =
     useTeachingAccess();
   const teachingAccessAdminName =
@@ -494,14 +503,12 @@ export default function MyAssignmentsRoute() {
     assignmentCreationClasses,
     assignmentCreationTypes,
     siteLicenseLockedAssignmentTiles,
-    exitTicketBuilderV3Enabled,
   } = useLoaderData<typeof loader>();
+  const [searchParams] = useSearchParams();
+  const highlightAssignmentId = searchParams.get('highlightAssignment');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
-  const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
-  const [reusedAssignment, setReusedAssignment] =
-    useState<SavedAssignment | null>(null);
 
   const collator = useMemo(
     () => new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }),
@@ -572,59 +579,52 @@ export default function MyAssignmentsRoute() {
   }, [filteredAssignments, setSelectedAssignmentIds]);
 
   const hasSelection = selectedAssignmentIds.length > 0;
+  const freeTierB2 = useFreeTierLockedB2PageChrome();
+  const freeTierShell = useFreeTierStandardPageShell();
 
-  return (
-    <div className="mx-auto h-full min-h-0 w-full max-w-5xl overflow-y-auto px-4 py-8">
-      <h1 className="mb-6 text-2xl font-semibold">My Assignments</h1>
+  const assignmentsContent = (
+    <>
+      {!freeTierB2 ? (
+        <h1 className="mb-6 text-2xl font-semibold">My Assignments</h1>
+      ) : null}
 
       {SAVED_ASSIGNMENTS_ENABLED ? (
         <SavedAssignmentsPanel
           savedAssignments={savedAssignments}
-          onReuse={setReusedAssignment}
-        />
-      ) : null}
-
-      {reusedAssignment ? (
-        <AssignmentCreationSheet
-          // Remounting per saved assignment is what re-seeds the sheet's own
-          // state with that assignment's settings.
-          key={reusedAssignment.id}
-          open
-          onOpenChange={(open) => {
-            if (!open) setReusedAssignment(null);
+          onReuse={(savedAssignment) => {
+            navigateToNewAssignmentPage({
+              assignmentTypeId: savedAssignment.assignmentTypeId,
+              title: savedAssignment.title,
+              prompt: savedAssignment.prompt,
+            });
           }}
-          entryPoint="dashboard"
-          exitTicketBuilderV3Enabled={exitTicketBuilderV3Enabled}
-          assignmentTypes={assignmentCreationTypes}
-          siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
-          teacherClasses={assignmentCreationClasses}
-          initialAssignmentTypeId={reusedAssignment.assignmentTypeId}
-          initialTitle={reusedAssignment.title}
-          initialPrompt={reusedAssignment.prompt}
-          initialSubmitForGrade={reusedAssignment.submitForGrade}
-          initialPointValue={reusedAssignment.pointValue}
-          initialTutorEnabled={reusedAssignment.tutorEnabled}
-          initialGradingAssistantStrictnessLevel={
-            reusedAssignment.gradingAssistantStrictnessLevel
-          }
         />
       ) : null}
 
-      <h2 className="mb-2 text-lg font-semibold">Assigned</h2>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="relative min-w-0 w-full max-w-sm flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            name="my-assignments-search"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search assignments"
-            className="h-9 rounded-md border-0 bg-background pl-9 shadow-none ring-1 ring-black/5 focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Search assignments"
-            data-testid="my-assignments-search"
-          />
-        </div>
-        <div className="ml-auto flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
+      <section
+        className="flex min-w-0 flex-col gap-4"
+        aria-labelledby="my-assignments-assigned-heading"
+      >
+        <h2
+          id="my-assignments-assigned-heading"
+          className="m-0 text-lg font-semibold"
+        >
+          Assigned
+        </h2>
+        <div className="flex min-w-0 flex-nowrap items-center justify-between gap-3">
+          <div className="relative min-w-0 flex-1 sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              name="my-assignments-search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search assignments"
+              className="h-9 pl-9"
+              aria-label="Search assignments"
+              data-testid="my-assignments-search"
+            />
+          </div>
+          <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
           {hasSelection ? (
             <Form
               method="post"
@@ -668,7 +668,7 @@ export default function MyAssignmentsRoute() {
               <Button
                 type="button"
                 size="sm"
-                className="shrink-0"
+                className="h-9 shrink-0"
                 data-testid="my-assignments-new-assignment"
                 data-tour="my-assignments-new"
                 disabled={
@@ -676,7 +676,7 @@ export default function MyAssignmentsRoute() {
                   !freeUsage?.monthly &&
                   freeUsage?.allAssignmentsUsed
                 }
-                onClick={() => setIsCreateSheetOpen(true)}
+                onClick={() => navigateToNewAssignmentPage()}
               >
                 <Plus className="mr-2 h-4 w-4" />
                 New Assignment
@@ -695,32 +695,38 @@ export default function MyAssignmentsRoute() {
               No free assignments left
             </span>
           )}
+          </div>
         </div>
-      </div>
 
-      {assignments.length === 0 ? (
+        {assignments.length === 0 ? (
+          <div
+            data-tour="my-assignments-list"
+            className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/50 p-12 text-center"
+          >
+            <span className="text-lg font-bold">No assignments yet</span>
+            <span className="text-base/7 text-muted-foreground sm:text-sm/6">
+              Assignments you create for your classes will show up here.
+            </span>
+          </div>
+        ) : filteredAssignments.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/50 p-12 text-center">
+            <span className="text-lg font-bold">No assignments found</span>
+            <span className="text-base/7 text-muted-foreground sm:text-sm/6">
+              Try a different search term
+            </span>
+          </div>
+        ) : (
         <div
           data-tour="my-assignments-list"
-          className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/50 p-12 text-center"
+          className="min-w-0 overflow-hidden rounded-lg border bg-muted/50"
         >
-          <span className="text-lg font-bold">No assignments yet</span>
-          <span className="text-base/7 text-muted-foreground sm:text-sm/6">
-            Assignments you create for your classes will show up here.
-          </span>
-        </div>
-      ) : filteredAssignments.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/50 p-12 text-center">
-          <span className="text-lg font-bold">No assignments found</span>
-          <span className="text-base/7 text-muted-foreground sm:text-sm/6">
-            Try a different search term
-          </span>
-        </div>
-      ) : (
-        <div data-tour="my-assignments-list" className="rounded-lg bg-muted/50">
-          <Table aria-label="My Assignments">
-            <TableHeader className="rounded-t-lg">
-              <TableRow className="rounded-t-lg bg-muted/50">
-                <TableHead className="w-[50px] rounded-tl-lg pl-4">
+          <Table
+            aria-label="My Assignments"
+            containerClassName="border-0 rounded-none"
+          >
+            <TableHeader>
+              <TableRow className="bg-muted/50 hover:bg-muted/50">
+                <TableHead className="h-11 w-[50px] px-4 align-middle">
                   <Checkbox
                     aria-label="Select all assignments"
                     checked={
@@ -731,12 +737,12 @@ export default function MyAssignmentsRoute() {
                     onCheckedChange={handleSelectAll}
                   />
                 </TableHead>
-                <TableHead>
+                <TableHead className="h-11 px-4 align-middle">
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="-ml-2 h-8 gap-2 px-2"
+                    className="h-8 gap-2 px-0"
                     aria-label={`Sort assignments by title ${
                       sortDirection === 'asc' ? 'descending' : 'ascending'
                     }`}
@@ -754,9 +760,13 @@ export default function MyAssignmentsRoute() {
                     )}
                   </Button>
                 </TableHead>
-                <TableHead className="whitespace-nowrap">Classes</TableHead>
-                <TableHead className="whitespace-nowrap">Type</TableHead>
-                <TableHead className="whitespace-nowrap rounded-tr-lg pr-4">
+                <TableHead className="h-11 whitespace-nowrap px-4 align-middle">
+                  Classes
+                </TableHead>
+                <TableHead className="h-11 px-4 align-middle md:whitespace-nowrap">
+                  Type
+                </TableHead>
+                <TableHead className="h-11 px-4 align-middle md:whitespace-nowrap">
                   Documents
                 </TableHead>
               </TableRow>
@@ -765,13 +775,18 @@ export default function MyAssignmentsRoute() {
               {paginatedAssignments.map((assignment) => (
                 <TableRow
                   key={assignment.assignmentId}
+                  className={cn(
+                    'h-11',
+                    highlightAssignmentId === assignment.assignmentId &&
+                      'ring-2 ring-primary ring-inset'
+                  )}
                   data-state={
                     selectedAssignmentIds.includes(assignment.assignmentId)
                       ? 'selected'
                       : undefined
                   }
                 >
-                  <TableCell className="max-h-[37px] pl-4">
+                  <TableCell className="h-11 px-4 align-middle">
                     <Checkbox
                       aria-label={`Select assignment ${assignment.title}`}
                       checked={selectedAssignmentIds.includes(
@@ -782,7 +797,7 @@ export default function MyAssignmentsRoute() {
                       }
                     />
                   </TableCell>
-                  <TableCell className="font-medium">
+                  <TableCell className="h-11 px-4 align-middle font-medium">
                     <div className="flex flex-wrap items-center gap-2">
                       <Link
                         to={assignment.href}
@@ -791,16 +806,29 @@ export default function MyAssignmentsRoute() {
                       >
                         {assignment.title}
                       </Link>
+                      <AssignmentTryItPill
+                        assignment={{
+                          id: assignment.assignmentId,
+                          assignmentTypeId: assignment.assignmentTypeId,
+                          classId:
+                            assignment.classes.length === 1
+                              ? assignment.classes[0]?.id
+                              : undefined,
+                        }}
+                      />
                       <TutorOffBadge tutorEnabled={assignment.tutorEnabled} />
                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="h-11 px-4 align-middle text-muted-foreground">
                     <AssignmentClasses classes={assignment.classes} />
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell
+                    className="h-11 min-w-0 px-4 align-middle text-muted-foreground md:max-w-[12rem] md:truncate md:whitespace-nowrap"
+                    title={assignment.assignmentTypeTitle}
+                  >
                     {assignment.assignmentTypeTitle}
                   </TableCell>
-                  <TableCell className="pr-4 text-muted-foreground">
+                  <TableCell className="h-11 px-4 align-middle text-muted-foreground md:whitespace-nowrap">
                     {assignment.documentCount}
                   </TableCell>
                 </TableRow>
@@ -810,28 +838,40 @@ export default function MyAssignmentsRoute() {
         </div>
       )}
 
-      {filteredAssignments.length > 0 ? (
-        <Pagination
-          totalCount={filteredAssignments.length}
-          skip={pagination.skip}
-          take={pagination.take}
-          onChange={(skip, take) => setPagination({ skip, take })}
-        />
-      ) : null}
+        {filteredAssignments.length > 0 ? (
+          <div className="w-full min-w-0">
+            <Pagination
+              totalCount={filteredAssignments.length}
+              skip={pagination.skip}
+              take={pagination.take}
+              onChange={(skip, take) => setPagination({ skip, take })}
+            />
+          </div>
+        ) : null}
+      </section>
 
       {/* Creating from here spans classes, so the sheet takes the teacher's
           whole class list rather than being fixed to one. Editing uses this
           same sheet from the assignment detail page a row links to. */}
-      <AssignmentCreationSheet
-        open={isCreateSheetOpen}
-        onOpenChange={setIsCreateSheetOpen}
-        entryPoint="dashboard"
-        exitTicketBuilderV3Enabled={exitTicketBuilderV3Enabled}
-        assignmentTypes={assignmentCreationTypes}
-        siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
-        teacherClasses={assignmentCreationClasses}
-        teachingLocked={teachingLocked}
-      />
+    </>
+  );
+
+  if (freeTierShell) {
+    return (
+      <section className={freeTierStandardPageShellClassName()}>
+        {freeTierB2 ? (
+          <FreeTierLockedPageHeader title="My Assignments" />
+        ) : null}
+        <div className={freeTierStandardPageBodyClassName()}>
+          {assignmentsContent}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <div className="mx-auto h-full min-h-0 w-full max-w-5xl overflow-y-auto px-4 py-8">
+      {assignmentsContent}
     </div>
   );
 }

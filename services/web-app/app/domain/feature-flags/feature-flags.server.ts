@@ -25,6 +25,9 @@ import {
   FREE_TIER_FLAG,
   LESSON_PLANNER_FLAG,
   TEACHER_PROMPT_GENERATOR_FLAG,
+  ASSIGNMENT_TYPE_LANDING_V2_FLAG,
+  ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG,
+  ASSIGNMENT_TYPE_LESSON_PLANS_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
   type FeatureFlagKey,
@@ -219,6 +222,26 @@ export async function isFeatureFlagEnabled(
     } catch (error) {
       console.error('feature_flag_read_failed', {
         key: TEACHER_PROMPT_GENERATOR_FLAG,
+        error: buildSafeErrorForLog(error),
+      });
+      return false;
+    }
+  }
+  if (
+    key === ASSIGNMENT_TYPE_LANDING_V2_FLAG ||
+    key === ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG ||
+    key === ASSIGNMENT_TYPE_LESSON_PLANS_FLAG
+  ) {
+    if (isDemoDeployment(process.env)) return true;
+    try {
+      const row = await prisma.setting.findUnique({
+        where: { name: featureFlagSettingName(key) },
+        select: { value: true },
+      });
+      return evaluateFeatureFlag(parseFeatureFlagValue(row?.value), orgId);
+    } catch (error) {
+      console.error('feature_flag_read_failed', {
+        key,
         error: buildSafeErrorForLog(error),
       });
       return false;

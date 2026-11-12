@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/opt/homebrew/bin/bash
 # Remove Docker containers publishing the given host TCP ports (worktree Postgres in CI).
 set -euo pipefail
 
@@ -33,16 +33,14 @@ for port in "$@"; do
     exit 1
   fi
 
-  mapfile -t filter_ids < <(docker ps -q --filter "publish=${port}" 2>/dev/null || true)
-  for cid in "${filter_ids[@]}"; do
+  while IFS= read -r cid; do
     [[ -n "$cid" ]] && docker rm -f "$cid" >/dev/null 2>&1 || true
-  done
+  done < <(docker ps -q --filter "publish=${port}" 2>/dev/null || true)
 
-  mapfile -t all_ids < <(docker ps -q 2>/dev/null || true)
-  for cid in "${all_ids[@]}"; do
+  while IFS= read -r cid; do
     [[ -z "$cid" ]] && continue
     if port_published_by_container "$cid" "$port"; then
       docker rm -f "$cid" >/dev/null 2>&1 || true
     fi
-  done
+  done < <(docker ps -q 2>/dev/null || true)
 done

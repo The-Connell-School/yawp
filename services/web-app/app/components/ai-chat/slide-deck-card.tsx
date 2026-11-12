@@ -108,7 +108,7 @@ export function SlideDeckCard({
                   type="button"
                   disabled={disabled}
                   onClick={onFit}
-                  className="font-medium text-primary hover:underline disabled:opacity-50"
+                  className="font-medium text-link hover:text-link-hover hover:underline disabled:opacity-50"
                 >
                   Fit the deck to {periodMinutes} minutes
                 </button>

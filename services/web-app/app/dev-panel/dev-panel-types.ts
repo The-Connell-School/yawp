@@ -6,13 +6,17 @@ export type DevPanelSubSheet =
   | 'class-simulation'
   | null;
 
+export type DevPanelFeedbackType = 'bug' | 'idea' | 'copy';
+
 export type DevPanelPersistedForms = {
   feedbackNote?: string;
+  feedbackType?: DevPanelFeedbackType;
+  feedbackAttachScreenshot?: boolean;
   throwawaySwitch?: boolean;
   selectedStateId?: string | null;
-  /** Last state the environment was jumped into (shows the Current pill). */
-  activeStateId?: string | null;
-  blackboardRole?: 'teacher' | 'student';
+  /** Session runner: disposable ft-test+…@yawp.test being exercised manually. */
+  freeTierFollowEmail?: string | null;
+  freeTierFormFilled?: boolean;
   simulationClassId?: string | null;
   simulationStudentCount?: number;
   /** Opens the class simulation flyout straight to clear confirmation. */
@@ -38,8 +42,9 @@ export const DEV_PANEL_DEFAULT_STATE: DevPanelPersistedState = {
   scroll: {},
   forms: {
     throwawaySwitch: true,
-    blackboardRole: 'teacher',
     simulationStudentCount: 20,
+    feedbackType: 'bug',
+    feedbackAttachScreenshot: true,
   },
 };
 

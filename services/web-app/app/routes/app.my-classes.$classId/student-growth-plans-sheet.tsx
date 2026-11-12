@@ -12,6 +12,7 @@ import {
   StudentPasteAlertsSection,
   type StudentPasteAlert,
 } from './student-paste-alerts-section';
+import { HandleStudentPasswordReset } from './handle-student-password-reset';
 
 export type StudentGrowthPlan = {
   id: string;
@@ -85,6 +86,8 @@ export type StudentGrowthPlansSheetContentProps = {
   pasteAlertsExitTo?: string;
   /** Set false when growth plans aren't shown for this student (e.g. Reporter disabled). */
   showGrowthPlans?: boolean;
+  /** Handle-only students: show reset login in the sheet body. */
+  showHandlePasswordReset?: boolean;
   /**
    * Set false to render the header as plain markup instead of Radix
    * SheetHeader/SheetTitle, which require a Dialog context. Lets tests
@@ -105,6 +108,7 @@ export function StudentGrowthPlansSheetContent({
   pasteAlerts = [],
   pasteAlertsExitTo = '',
   showGrowthPlans = true,
+  showHandlePasswordReset = false,
   renderSheet = true,
 }: StudentGrowthPlansSheetContentProps) {
   const header = renderSheet ? (
@@ -126,18 +130,27 @@ export function StudentGrowthPlansSheetContent({
       {header}
 
       {student ? (
-        <button
-          type="button"
-          className={cn(
-            badgeVariants({ variant: 'secondary' }),
-            'mt-4 cursor-pointer gap-1 py-1 pl-2 pr-1'
-          )}
-          onClick={onViewDocuments}
-          aria-label={`View ${student.name}'s documents`}
-        >
-          Docs
-          <ChevronRight className="size-3 shrink-0" aria-hidden="true" />
-        </button>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className={cn(
+              badgeVariants({ variant: 'secondary' }),
+              'cursor-pointer gap-1 py-1 pl-2 pr-1'
+            )}
+            onClick={onViewDocuments}
+            aria-label={`View ${student.name}'s documents`}
+          >
+            Docs
+            <ChevronRight className="size-3 shrink-0" aria-hidden="true" />
+          </button>
+          {showHandlePasswordReset ? (
+            <HandleStudentPasswordReset
+              studentMembershipId={student.id}
+              studentName={student.name}
+              trigger="sheet"
+            />
+          ) : null}
+        </div>
       ) : null}
 
       <StudentPasteAlertsSection alerts={pasteAlerts} exitTo={pasteAlertsExitTo} />
@@ -168,6 +181,7 @@ export function StudentGrowthPlansSheet({
   pasteAlerts = [],
   pasteAlertsExitTo = '',
   showGrowthPlans = true,
+  showHandlePasswordReset = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -177,6 +191,7 @@ export function StudentGrowthPlansSheet({
   pasteAlerts?: StudentPasteAlert[];
   pasteAlertsExitTo?: string;
   showGrowthPlans?: boolean;
+  showHandlePasswordReset?: boolean;
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -188,6 +203,7 @@ export function StudentGrowthPlansSheet({
           pasteAlerts={pasteAlerts}
           pasteAlertsExitTo={pasteAlertsExitTo}
           showGrowthPlans={showGrowthPlans}
+          showHandlePasswordReset={showHandlePasswordReset}
         />
       </SheetContent>
     </Sheet>

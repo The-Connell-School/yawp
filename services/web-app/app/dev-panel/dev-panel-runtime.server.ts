@@ -39,7 +39,8 @@ export function isDevPanelRuntimeEnabled(
   return isLocalDevPanelEnvironment(env);
 }
 
-function isLocalDevPanelEnvironment(env: NodeJS.ProcessEnv) {
+/** Local `bun dev` against a worktree Postgres — not demo, not PR preview. */
+export function isLocalDevPanelEnvironment(env: NodeJS.ProcessEnv = process.env) {
   return (
     env.NODE_ENV === 'development' &&
     isLocalDatabaseUrl(String(env.DATABASE_URL ?? ''))

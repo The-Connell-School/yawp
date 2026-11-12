@@ -76,7 +76,12 @@ export default defineConfig({
     conditions: ['import', 'require'],
   },
   ssr: {
-    noExternal: ['posthog-js', 'posthog-js/react'],
+    noExternal: [
+      'posthog-js',
+      'posthog-js/react',
+      // Package dist/ uses extensionless relative imports; bundle for SSR.
+      'tiptap-pagination-plus',
+    ],
   },
   server: {
     port: Number(process.env.PORT ?? 5176),

@@ -39,7 +39,7 @@ createRoot(document.getElementById('root')!).render(
         </form>
       </FreeTierWelcomeCard>
     ) : state === 'v2-decline' ? (
-      <FreeTierBelowHighSchoolCard />
+      <FreeTierBelowHighSchoolCard applicationId="fixture-below-hs-app" />
     ) : (
       <FreeTierSubmissionCard onboardingV2={onboardingV2 || undefined} email="ada@example.test" bypassWaitlist={state === 'v2-event-confirmation'} />
     )}

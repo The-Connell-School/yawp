@@ -6,7 +6,11 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
-import { documentReadWhere } from '~/utils/document-access.server';
+import {
+  documentAuthorWhere,
+  documentReadWhere,
+  whereSoloAuthorDocumentArtifactKind,
+} from '~/utils/document-access.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 import { buildTeacherDocumentAccessWhere } from '~/utils/grading-auth.server';
 import {
@@ -56,7 +60,7 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
       const updated = await prisma.document.updateMany({
         where: {
           id: params.id,
-          artifactKind: 'STUDENT',
+          ...whereSoloAuthorDocumentArtifactKind(),
           membershipId: profile.id,
         },
         data: {
@@ -75,7 +79,7 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
     const updated = await prisma.document.updateMany({
       where: {
         id: params.id,
-        artifactKind: 'STUDENT',
+        ...whereSoloAuthorDocumentArtifactKind(),
         membershipId: profile.id,
       },
       data: { deletedAt: new Date() },
@@ -113,11 +117,13 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
       ...(snapshotId
         ? documentReadWhere({ profileId: profile.id, isAdmin: user.isAdmin })
         : {
-            artifactKind: 'STUDENT',
-            ...documentReadWhere({
-              profileId: profile.id,
-              isAdmin: user.isAdmin,
-            }),
+            AND: [
+              whereSoloAuthorDocumentArtifactKind(),
+              documentAuthorWhere({
+                profileId: profile.id,
+                isAdmin: user.isAdmin,
+              }),
+            ],
           }),
     },
   });

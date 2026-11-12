@@ -1,9 +1,11 @@
 import { useState, type ReactNode } from 'react';
+import { useFetcher } from 'react-router';
 import { CircleCheck, Mail } from 'lucide-react';
 import {
   FreeTierAuthCard,
   FreeTierFieldLabel,
   FreeTierTextInput,
+  FreeTierButton,
 } from '../free-tier/FreeTierAuthCard';
 
 export function FreeTierWelcomeCard({
@@ -68,7 +70,23 @@ export function FreeTierSubmissionCard({
 }
 
 /** Render only after the server has durably recorded a below-9 submission. */
-export function FreeTierBelowHighSchoolCard() {
+export function FreeTierBelowHighSchoolCard({
+  applicationId,
+}: {
+  applicationId: string;
+}) {
+  const fetcher = useFetcher<{ ok?: boolean; talkToTeamSent?: boolean; error?: string }>();
+  const pending = fetcher.state !== 'idle';
+  if (fetcher.data?.ok && fetcher.data.talkToTeamSent) {
+    return (
+      <FreeTierAuthCard status title="Thanks for your interest in Yawp!">
+        <p className="text-sm text-muted-foreground">
+          Message sent using the details you entered on the previous screen. Brian will be in touch shortly.
+        </p>
+      </FreeTierAuthCard>
+    );
+  }
+
   return (
     <FreeTierAuthCard status title="Thanks for your interest in Yawp!">
       <p className="text-sm text-muted-foreground">
@@ -77,9 +95,18 @@ export function FreeTierBelowHighSchoolCard() {
       <p className="text-sm text-muted-foreground">
         We’ve saved your email, and we’ll let you know if free access opens up for your grade level.
       </p>
-      <a className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground" href="mailto:hello@yawp.school">
-        Talk with our team
-      </a>
+      <fetcher.Form method="post" className="flex flex-col gap-2">
+        <input type="hidden" name="intent" value="talk_to_team" />
+        <input type="hidden" name="applicationId" value={applicationId} />
+        <FreeTierButton type="submit" disabled={pending || !applicationId} isLoading={pending}>
+          {pending ? 'Sending…' : 'Talk with our team'}
+        </FreeTierButton>
+        {fetcher.data?.ok === false ? (
+          <p className="text-sm text-destructive" role="alert">
+            We couldn’t send your message. Please try again in a moment.
+          </p>
+        ) : null}
+      </fetcher.Form>
     </FreeTierAuthCard>
   );
 }

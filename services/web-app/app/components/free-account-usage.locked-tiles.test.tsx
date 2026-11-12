@@ -91,7 +91,7 @@ test('FreeAssignmentTiles renders only entitled free assignment rows on the dash
       />
     </StaticRouter>
   );
-  expect(html).toContain('data-testid="free-assignment-tiles"');
+  expect(html).toContain('data-testid="teacher-assignments-grid"');
   expect(html.match(/data-testid="dashboard-assignment-tile"/g)).toHaveLength(3);
   expect(html).toContain('Class Starter');
   expect(html).toContain('Prewriting');

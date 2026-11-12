@@ -373,7 +373,7 @@ export function TourThisPageButton({
         onClick?.();
         window.dispatchEvent(new Event(START_EVENT));
       }}
-      className="flex items-center gap-2 border-t px-4 py-3 text-left text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
+      className="app-nav-footer-action flex w-full items-center gap-2 text-left transition"
     >
       <Compass size={18} aria-hidden="true" />
       {navExpanded ? <span>Tour this page</span> : null}

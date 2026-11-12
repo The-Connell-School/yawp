@@ -3,10 +3,19 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const requireUserId = mock();
 const requireMembership = mock();
 
+let lessonPlannerMeteringEnabled = false;
+mock.module('~/domain/free-tier/monthly-policy.server', () => ({
+  monthlyFreeTierPolicy: async () => ({
+    enabled: lessonPlannerMeteringEnabled,
+    lessonPlannerMeteringEnabled,
+  }),
+}));
+
 // The flag is read from its real Setting row, so this suite never replaces
 // the feature-flag module for the suites that share its process.
 const findUnique = mock();
 const findMany = mock();
+const userFindUnique = mock();
 const flagValue = (value: string | null) => {
   const freeTierRow = { name: 'feature_flag.free_tier', value: '{"mode":"everyone","orgIds":[]}' };
   findMany.mockImplementation(({ where }: { where: { name: { in: string[] } } }) =>
@@ -29,7 +38,10 @@ mock.module('~/utils/auth.server', () => ({
   requireMutableRequest: mock(),
 }));
 mock.module('~/utils/db.server', () => ({
-  prisma: { setting: { findUnique, findMany } },
+  prisma: {
+    setting: { findUnique, findMany },
+    user: { findUnique: userFindUnique },
+  },
 }));
 
 const { getLessonPlannerAccess, requireLessonPlannerAccess } =
@@ -39,11 +51,15 @@ afterAll(() => {
   mock.restore();
 });
 
-function membership(role: 'TEACHER' | 'STUDENT', organizationId = 'org-1') {
+function membership(
+  role: 'TEACHER' | 'STUDENT',
+  organizationId = 'org-1',
+  plan: 'SCHOOL' | 'FREE_CLASSROOM' = 'SCHOOL'
+) {
   return {
     id: 'member-1',
     role,
-    organization: { id: organizationId, name: 'Org', plan: 'SCHOOL' },
+    organization: { id: organizationId, name: 'Org', plan },
   };
 }
 
@@ -54,7 +70,9 @@ beforeEach(() => {
   requireMembership.mockReset().mockResolvedValue(membership('TEACHER'));
   findUnique.mockReset();
   findMany.mockReset();
+  userFindUnique.mockReset().mockResolvedValue({ isAdmin: false });
   flagValue('true');
+  lessonPlannerMeteringEnabled = false;
 });
 
 describe('getLessonPlannerAccess', () => {
@@ -109,5 +127,83 @@ describe('requireLessonPlannerAccess', () => {
       (error: unknown) => error
     );
     expect((thrown as { init: { status: number } }).init.status).toBe(404);
+  });
+
+  test('denies FREE_CLASSROOM teachers when only monthly Lesson Planner metering is on', async () => {
+    flagValue('false');
+    lessonPlannerMeteringEnabled = true;
+    requireMembership.mockResolvedValue(
+      membership('TEACHER', 'org-free', 'FREE_CLASSROOM')
+    );
+    const access = await getLessonPlannerAccess(request);
+    expect(access).toMatchObject({
+      isTeacher: true,
+      enabled: false,
+      allowed: false,
+    });
+  });
+
+  test('allows SCHOOL teachers on localhost when lesson_planner flag is off', async () => {
+    flagValue('false');
+    requireMembership.mockResolvedValue(membership('TEACHER', 'org-school', 'SCHOOL'));
+    const savedNodeEnv = process.env.NODE_ENV;
+    const savedDb = process.env.DATABASE_URL;
+    process.env.NODE_ENV = 'development';
+    process.env.DATABASE_URL = 'postgresql://yawp:yawp@127.0.0.1:5432/yawp_local';
+    try {
+      const access = await getLessonPlannerAccess(request);
+      expect(access).toMatchObject({
+        isTeacher: true,
+        enabled: true,
+        allowed: true,
+      });
+    } finally {
+      process.env.NODE_ENV = savedNodeEnv;
+      process.env.DATABASE_URL = savedDb;
+    }
+  });
+
+  test('allows admins on localhost even when not a teacher', async () => {
+    flagValue('false');
+    userFindUnique.mockResolvedValue({ isAdmin: true });
+    requireMembership.mockResolvedValue(membership('STUDENT', 'org-school', 'SCHOOL'));
+    const savedNodeEnv = process.env.NODE_ENV;
+    const savedDb = process.env.DATABASE_URL;
+    process.env.NODE_ENV = 'development';
+    process.env.DATABASE_URL = 'postgresql://yawp:yawp@127.0.0.1:5432/yawp_local';
+    try {
+      const access = await getLessonPlannerAccess(request);
+      expect(access).toMatchObject({
+        isTeacher: false,
+        enabled: true,
+        allowed: true,
+      });
+    } finally {
+      process.env.NODE_ENV = savedNodeEnv;
+      process.env.DATABASE_URL = savedDb;
+    }
+  });
+
+  test('allows approved FREE_CLASSROOM on local dev panel when lesson_planner flag is off', async () => {
+    flagValue('false');
+    lessonPlannerMeteringEnabled = true;
+    requireMembership.mockResolvedValue(
+      membership('TEACHER', 'org-free', 'FREE_CLASSROOM')
+    );
+    const savedNodeEnv = process.env.NODE_ENV;
+    const savedDb = process.env.DATABASE_URL;
+    process.env.NODE_ENV = 'development';
+    process.env.DATABASE_URL = 'postgresql://yawp:yawp@127.0.0.1:5432/yawp_local';
+    try {
+      const access = await getLessonPlannerAccess(request);
+      expect(access).toMatchObject({
+        isTeacher: true,
+        enabled: true,
+        allowed: true,
+      });
+    } finally {
+      process.env.NODE_ENV = savedNodeEnv;
+      process.env.DATABASE_URL = savedDb;
+    }
   });
 });

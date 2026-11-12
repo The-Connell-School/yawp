@@ -624,7 +624,7 @@ function MarkRow({
         <button
           type="button"
           onClick={onStartComment}
-          className="mt-1 text-[11px] text-primary hover:underline"
+          className="mt-1 text-[11px] text-link hover:text-link-hover hover:underline"
         >
           Add comment
         </button>

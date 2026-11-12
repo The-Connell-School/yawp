@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { buildTeacherClassWorkDocumentWhere } from './class-assignment-scope.server';
+import {
+  buildClassStudentWorkOnAssignmentBranches,
+  buildTeacherClassWorkDocumentWhere,
+} from './class-assignment-scope';
 
 describe('buildTeacherClassWorkDocumentWhere', () => {
   test('includes assignmentless documents for students enrolled in teacher classes', () => {
@@ -13,9 +16,8 @@ describe('buildTeacherClassWorkDocumentWhere', () => {
       AND: [
         {
           OR: [
-            {
-              classAssignment: { classId: { in: ['class-a', 'class-b'] } },
-            },
+            ...buildClassStudentWorkOnAssignmentBranches('class-a'),
+            ...buildClassStudentWorkOnAssignmentBranches('class-b'),
             {
               classAssignmentId: null,
               membership: {
@@ -53,7 +55,7 @@ describe('buildTeacherClassWorkDocumentWhere', () => {
       AND: [
         {
           OR: [
-            { classAssignment: { classId: { in: ['class-a'] } } },
+            ...buildClassStudentWorkOnAssignmentBranches('class-a'),
             {
               classAssignmentId: null,
               membership: {

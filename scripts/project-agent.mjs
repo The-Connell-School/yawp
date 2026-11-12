@@ -177,6 +177,7 @@ export function capabilities() {
       "./bin/project qa prepare --json",
     ],
   };
+  result.proofProfiles.unshift("page-performance-unit");
   result.proofProfiles.unshift("guided-tours-unit", "guided-tours-browser", "guided-tours-db");
   result.proofProfiles.unshift("free-tier-locked-preview-unit", "free-tier-locked-preview-db", "free-tier-locked-preview-browser", "free-tier-class-step-unit", "free-tier-class-step-browser", "free-tier-welcome-unit", "free-tier-welcome-browser", "free-tier-welcome-live-browser", "free-tier-welcome-db");
   return result;
@@ -940,6 +941,15 @@ function runTestProfile(profile, { json }) {
       env: { ...selected.env, CI: '1', TESTER_FEEDBACK_ENABLED: 'true', E2E_DATABASE_URL: local.DATABASE_URL, DEMO_FEEDBACK_BASE_URL: `http://127.0.0.1:${local.DEV_PORT}`, DEV_PANEL_EVIDENCE_DIR: process.env.DEV_PANEL_EVIDENCE_DIR || 'dev-panel-evidence' },
     }) });
   }
+  else if (chosen === "page-performance-unit") {
+    for (const file of [
+      "app/utils/teacher-class-card-stats.server.test.ts",
+      "app/utils/teacher-dashboard-recent-classes.server.test.ts",
+      "app/utils/teacher-document-status.test.ts",
+      "app/routes/app._index/route.test.ts",
+      "app/routes/app.my-classes._index/route.test.ts",
+    ]) runWebApp(file, ["test", file]);
+  }
   else if (chosen === "unit") run("unit", ["run", "--cwd", "services/web-app", "test"]);
   else if (chosen === "typecheck") run("typecheck", ["run", "web-app:typecheck"]);
   else if (chosen === "build") run("build", ["run", "web-app:build"]);
@@ -1107,6 +1117,7 @@ function help(topic = "root") {
   const classStepHelp = "\nAdditional test profiles: free-tier-locked-preview-unit|free-tier-locked-preview-db|free-tier-locked-preview-browser|free-tier-class-step-unit|free-tier-class-step-browser|free-tier-welcome-unit|free-tier-welcome-browser|free-tier-welcome-live-browser|free-tier-welcome-db\n";
   pages.root += classStepHelp;
   pages.test += classStepHelp;
+  for (const topic of ["root", "test"]) pages[topic] += "\nPage performance profile: page-performance-unit\n";
   const tourHelp = "\nGuided tour test profiles: guided-tours-unit|guided-tours-browser|guided-tours-db\n";
   pages.root += tourHelp;
   pages.test += tourHelp;

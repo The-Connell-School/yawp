@@ -38,7 +38,9 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
           .getByRole('button', { name: /E2E Rhetorical Analysis/i })
           .first();
         await expect(assignmentCard).toBeVisible({ timeout: 10000 });
-        await expect(assignmentCard).toContainText(uniquePromptMarker);
+        await expect(page.getByTestId('student-class-detail')).toContainText(
+          uniquePromptMarker
+        );
 
         await assignmentCard.click();
         await page.waitForURL('**/app/documents/**', { timeout: 15000 });

@@ -1,21 +1,16 @@
 import { currentClassInsightRows } from '~/domain/assignment-insights/class-insight-inputs.server';
 import { useFreeAccountUsage } from '~/components/free-account-usage';
-import { ExitTicketClassReadPanel } from '~/components/assignments/exit-ticket-class-read-panel';
-import { EXIT_TICKET_CLASS_SUMMARY_FLAG } from '~/domain/feature-flags/feature-flags';
-import { loadExitTicketClassSummary } from '~/domain/assignment-types/exit-ticket-class-summary.server';
 import {
-  EXIT_TICKET_SUMMARY_MIN_RESPONSES,
-  exitTicketSummaryTexts,
-} from '~/domain/assignment-types/exit-ticket-class-summary';
-import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
+  freeTierStandardPageBodyClassName,
+  freeTierStandardPageShellClassName,
+  useFreeTierStandardPageShell,
+} from '~/components/free-tier/free-tier-teacher-page-chrome';
+import { ExitTicketClassReadPanel } from '~/components/assignments/exit-ticket-class-read-panel';
 import { buildExitTicketClassRead } from '~/domain/assignment-types/exit-ticket-class-read';
 import { loadExitTicketResponses } from '~/domain/assignment-types/exit-ticket-class-read.server';
 import { EXIT_TICKET_SEED_STEP } from '~/domain/lesson-planner/lesson-seed';
 import { Prisma } from '@app/prisma';
-import {
-  isFeatureFlagEnabled,
-  isLessonPlannerEnabled,
-} from '~/domain/feature-flags/feature-flags.server';
+import { isLessonPlannerEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { useState, type MouseEvent, type ReactNode } from 'react';
 import {
   type LoaderFunctionArgs,
@@ -25,6 +20,7 @@ import {
   redirect,
   useLoaderData,
   useNavigate,
+  useLocation,
   useSearchParams,
 } from 'react-router';
 import { toCollaborationGroupMode } from '~/domain/assignments/collaboration';
@@ -43,8 +39,10 @@ import {
   SelectValue,
 } from '~/components/ui/select';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { buildNewAssignmentPageHref } from '~/domain/free-tier/new-assignment-page-url';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { TutorOffBadge } from '~/components/assignments/tutor-off-badge';
+import { AssignmentTryItPill } from '~/components/assignments/assignment-try-it-pill';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   parseGradingAssistantStrictnessLevel,
@@ -55,6 +53,7 @@ import {
   resolveTeacherSchoolYearScope,
   schoolYearWhere,
 } from '~/utils/school-year-scope.server';
+import { buildClassAssignmentStudentDocumentCountWhere } from '~/utils/class-assignment-scope';
 import { dailyPagesEngagementPointValueError } from '~/domain/assignment-types/daily-pages-engagement-point-validation';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
@@ -101,6 +100,16 @@ import {
  * content's width or gutters.
  */
 function PageShell({ children }: { children: ReactNode }) {
+  const teacherPageShell = useFreeTierStandardPageShell();
+  if (teacherPageShell) {
+    return (
+      <section className={freeTierStandardPageShellClassName()}>
+        <div className={freeTierStandardPageBodyClassName()}>
+          {children}
+        </div>
+      </section>
+    );
+  }
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="mx-auto w-full max-w-screen-xl px-3 py-3 pb-24 sm:px-5">
@@ -205,7 +214,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const classInsightsEnabled =
     active.class.school.organization.classInsightsEnabled === true;
 
-  const [insightRow, gradedCount, assignmentTypes] = await Promise.all([
+  const [
+    insightRow,
+    gradedCount,
+    documentCount,
+    teacherPreviewDocumentId,
+    assignmentTypes,
+  ] = await Promise.all([
     classInsightsEnabled
       ? prisma.classAssignmentInsight.findUnique({
           where: { classAssignmentId: active.id },
@@ -221,9 +236,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       where: {
         gradedAt: { not: null },
         unsubmittedAt: null,
-        document: { is: { classAssignmentId: active.id, deletedAt: null } },
+        document: { is: buildClassAssignmentStudentDocumentCountWhere(active.id) },
       },
     }),
+    prisma.document.count({
+      where: buildClassAssignmentStudentDocumentCountWhere(active.id),
+    }),
+    import('~/domain/assignments/teacher-assignment-preview.server').then(
+      ({ findTeacherAssignmentPreviewDocumentId }) =>
+        findTeacherAssignmentPreviewDocumentId({
+          teacherMembershipId: profile.id,
+          classAssignmentId: active.id,
+        })
+    ),
     getAvailableAssignmentTypesForScopes<{
       id: string;
       title: string;
@@ -276,37 +301,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const exitTicketConfig = parseStoredExitTicketConfig(
     active.assignment.exitTicketConfigJson
   );
-  const isExitTicket = isExitTicketAssignmentType(
+  const exitTicketClassRead = isExitTicketAssignmentType(
     active.assignment.assignmentType
-  );
-  const exitTicketResponses = isExitTicket
-    ? await loadExitTicketResponses(active.id)
-    : [];
-  const exitTicketClassRead = isExitTicket
+  )
     ? buildExitTicketClassRead({
-        responses: exitTicketResponses,
+        responses: await loadExitTicketResponses(active.id),
         config: exitTicketConfig,
       })
     : null;
-  // The model-written summary beside the class read (flag
-  // exit-ticket-class-summary): whatever is stored, and whether it still
-  // matches the responses. Nothing is generated on page load.
-  const exitTicketSummary =
-    isExitTicket &&
-    (await isFeatureFlagEnabled(
-      EXIT_TICKET_CLASS_SUMMARY_FLAG,
-      profile.organization.id
-    ))
-      ? {
-          stored: await loadExitTicketClassSummary(
-            active.id,
-            exitTicketResponses
-          ),
-          canGenerate:
-            exitTicketSummaryTexts(exitTicketResponses).length >=
-            EXIT_TICKET_SUMMARY_MIN_RESPONSES,
-        }
-      : null;
   const insight =
     insightRow &&
     insightRow.status === 'ready' &&
@@ -349,9 +351,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return {
     found: true as const,
     classInsightsEnabled,
-    exitTicketBuilderV3Enabled: await isExitTicketBuilderV3Enabled(
-      profile.organization.id
-    ),
     assignmentTypes: assignmentTypeOptions,
     activeClassId: active.classId,
     // Group setup is per class, because the roster is: one assignment pushed to
@@ -394,12 +393,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       // default answers in both cases.
       exitTicket: exitTicketConfig,
       assignmentType: active.assignment.assignmentType,
-      documentCount: active._count.documents,
+      documentCount,
+      teacherPreviewDocumentId,
       gradedCount,
       insight,
       exitTicketClassRead,
-      exitTicketSummary,
-      activeClassAssignmentId: active.id,
       // Only where the planner is on; the step is not an index, so it can
       // never be read as a Class Summary next step.
       exitTicketPlanHref:
@@ -864,10 +862,10 @@ export default function AssignmentDetailRoute() {
   const data = useLoaderData<typeof loader>();
   const freeUsage = useFreeAccountUsage();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [isEditSheetOpen, setIsEditSheetOpen] = useState(false);
-  const [isDuplicateSheetOpen, setIsDuplicateSheetOpen] = useState(false);
 
   const handleEditSheetOpenChange = (open: boolean) => {
     setIsEditSheetOpen(open);
@@ -967,9 +965,27 @@ export default function AssignmentDetailRoute() {
           <div className="mb-6 overflow-hidden rounded-xl border bg-white dark:bg-card">
             <div className="flex flex-wrap items-start justify-between gap-4 p-4 sm:p-5">
               <div className="min-w-0 flex-1">
-                <h1 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
-                  {assignment.title?.trim() || 'Untitled Assignment'}
-                </h1>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
+                    {assignment.title?.trim() || 'Untitled Assignment'}
+                  </h1>
+                  <AssignmentTryItPill
+                    assignment={{
+                      id: assignment.id,
+                      assignmentTypeId: assignment.assignmentType?.id,
+                      classId: activeClassId,
+                    }}
+                  />
+                  {assignment.teacherPreviewDocumentId ? (
+                    <Link
+                      to={`/app/documents/${assignment.teacherPreviewDocumentId}?spa=1&exitTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`}
+                      className="inline-flex h-6 shrink-0 items-center rounded-full border border-muted-foreground/30 bg-muted/40 px-2.5 text-xs font-medium text-foreground hover:bg-muted"
+                      data-testid="assignment-your-preview"
+                    >
+                      Your preview
+                    </Link>
+                  ) : null}
+                </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base/6 text-muted-foreground sm:text-sm/5">
                   {assignment.assignmentType ? (
                     <Badge variant="outline" size="sm">
@@ -993,8 +1009,21 @@ export default function AssignmentDetailRoute() {
                 canEdit={canEdit}
                 collaboration={collaboration ?? undefined}
                 classAssignmentId={assignment.classAssignmentId}
-                onDuplicate={() => setIsDuplicateSheetOpen(true)}
-                onEdit={() => setIsEditSheetOpen(true)}
+                onDuplicate={() => {
+                  void navigate(
+                    buildNewAssignmentPageHref({
+                      assignmentTypeId: assignment.assignmentTypeId,
+                      classId: activeClassId,
+                      title: `Copy of ${assignment.title?.trim() || 'Untitled Assignment'}`,
+                      prompt: assignment.prompt,
+                    })
+                  );
+                }}
+                onEdit={() => {
+                  void navigate(
+                    `/app/assignments/${assignment.id}/edit?classId=${activeClassId}`
+                  );
+                }}
                 collaborationEnabled={Boolean(collaboration)}
                 groupsNotOpened={Boolean(
                   collaboration && !collaboration.groupsOpened
@@ -1054,8 +1083,6 @@ export default function AssignmentDetailRoute() {
               <ExitTicketClassReadPanel
                 read={data.assignment.exitTicketClassRead}
                 planHref={data.assignment.exitTicketPlanHref}
-                classAssignmentId={data.assignment.activeClassAssignmentId}
-                summary={data.assignment.exitTicketSummary}
               />
             </div>
           ) : null}
@@ -1077,8 +1104,6 @@ export default function AssignmentDetailRoute() {
           fixedClassId={activeClassId}
           assignmentTypes={data.assignmentTypes}
           teacherClasses={[activeClassOption]}
-          exitTicketBuilderV3Enabled={data.exitTicketBuilderV3Enabled}
-          initialExitTicketConfig={assignment.exitTicket ?? null}
           editingAssignment={{
             id: assignment.id,
             promptAttachmentName: assignment.promptAttachmentName,
@@ -1131,52 +1156,6 @@ export default function AssignmentDetailRoute() {
           initialExitTicketGrading={assignment.exitTicket?.grading ?? null}
         />
 
-        {/* Same sheet, same props as the class page's "Add assignment", so
-            the form reads identically from either entry point. Duplicate only
-            adds the starting values it copies forward. */}
-        <AssignmentCreationSheet
-          open={isDuplicateSheetOpen}
-          onOpenChange={setIsDuplicateSheetOpen}
-          entryPoint="class"
-          assignToVariant="duplicate"
-          assignmentTypes={data.assignmentTypes}
-          teacherClasses={data.duplicateClasses}
-          initialClassIds={[]}
-          exitTicketBuilderV3Enabled={data.exitTicketBuilderV3Enabled}
-          initialExitTicketConfig={assignment.exitTicket ?? null}
-          initialAssignmentTypeId={assignment.assignmentTypeId}
-          initialTitle={`Copy of ${assignment.title?.trim() || 'Untitled Assignment'}`}
-          initialPrompt={assignment.prompt}
-          initialRubricTotalPoints={assignment.rubricTotalPoints}
-          initialGradingMode={
-            assignment.gradingMode === 'bands' ? 'bands' : 'step'
-          }
-          initialExitTicketMode={assignment.exitTicket?.mode}
-          initialExitTicketFocus={
-            assignment.exitTicket?.mode === 'specific'
-              ? assignment.exitTicket.focus
-              : undefined
-          }
-          initialExitTicketTopic={
-            assignment.exitTicket?.mode === 'specific'
-              ? assignment.exitTicket.topic
-              : undefined
-          }
-          initialExitTicketAnswerType={
-            assignment.exitTicket?.mode === 'specific'
-              ? assignment.exitTicket.answerType
-              : undefined
-          }
-          initialExitTicketLessonNotes={
-            assignment.exitTicket?.lessonNotes ?? null
-          }
-          initialExitTicketReflectionPrompt={
-            assignment.exitTicket?.mode === 'basic'
-              ? (assignment.exitTicket.reflectionPrompt ?? null)
-              : null
-          }
-          initialExitTicketGrading={assignment.exitTicket?.grading ?? null}
-        />
       </div>
     </PageShell>
   );

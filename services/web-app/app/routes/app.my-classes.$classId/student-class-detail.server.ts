@@ -6,8 +6,6 @@ import {
 } from '~/domain/student-class-assignment-first-open.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { buildStudentClassDocumentsScope } from '~/utils/class-assignment-scope.server';
-import { groupStudentClassAssignmentsByType } from '~/utils/student-class-assignment-groups';
-
 /**
  * Read model for the student view of a single class.
  *
@@ -21,7 +19,22 @@ export type StudentClassDetail = NonNullable<
 >;
 
 const studentDocumentInclude = (membershipId: string) => ({
-  assignment: { select: { id: true, title: true } },
+  assignment: {
+    select: {
+      id: true,
+      title: true,
+      assignmentType: { select: { id: true, title: true } },
+    },
+  },
+  classAssignment: {
+    select: {
+      assignment: {
+        select: {
+          assignmentType: { select: { id: true, title: true } },
+        },
+      },
+    },
+  },
   group: { select: { id: true, label: true } },
   assignmentModuleSessions: {
     where: { OR: [{ membershipId: null }, { membershipId }] },
@@ -123,14 +136,18 @@ export async function loadStudentClassDetail({
       },
       orderBy: [{ createdAt: 'desc' }],
     }),
-    getAvailableAssignmentTypesForScopes<{ id: string; title: string }>({
+    getAvailableAssignmentTypesForScopes<{
+      id: string;
+      title: string;
+      image: { id: string } | null;
+    }>({
       // A class with no teacher on it still falls back to the school/org
       // defaults rather than showing nothing.
       scopes:
         teacherScopes.length > 0
           ? teacherScopes
           : [{ organizationId, schoolId }],
-      select: { id: true, title: true },
+      select: { id: true, title: true, image: { select: { id: true } } },
       orderBy: { position: 'asc' },
     }),
     prisma.document.findMany({
@@ -164,11 +181,6 @@ export async function loadStudentClassDetail({
     ),
   }));
 
-  const assignmentGroups = groupStudentClassAssignmentsByType(
-    assignmentsWithNew,
-    assignmentTypes.map(({ id, title }) => ({ id, title }))
-  );
-
   return {
     klass: {
       id: klass.id,
@@ -185,8 +197,11 @@ export async function loadStudentClassDetail({
         .filter((name): name is string => Boolean(name)),
     },
     assignments: assignmentsWithNew,
-    assignmentGroups,
-    assignmentTypes: assignmentTypes.map(({ id, title }) => ({ id, title })),
+    assignmentTypes: assignmentTypes.map(({ id, title, image }) => ({
+      id,
+      title,
+      image,
+    })),
     documents,
   };
 }

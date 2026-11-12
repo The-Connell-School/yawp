@@ -374,7 +374,7 @@ function RunTheShow({
           ) : step ? (
             <section data-testid="show-now" className="flex flex-1 flex-col rounded-3xl bg-[#F3EDE4] p-6 text-[#1C1A17] sm:p-8">
               <div className="flex items-start justify-between gap-4">
-                <p className="text-sm font-bold uppercase tracking-[0.14em] text-[#A8482A]">
+                <p className="text-sm font-bold uppercase tracking-[0.14em] text-[#1F4D3A]">
                   Now · Step {current + 1} of {blocks.length}
                 </p>
                 <div className="text-right text-sm text-[#45403A]" data-testid="show-clock" hidden={roomView}>

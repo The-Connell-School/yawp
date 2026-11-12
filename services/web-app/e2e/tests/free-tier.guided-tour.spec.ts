@@ -64,6 +64,31 @@ async function tourOutcome(tourId: string) {
   }
 }
 
+async function createFreeTeacherScratchDocument() {
+  const prisma = createE2EPrismaClient();
+  try {
+    const membership = await prisma.orgMembership.findFirstOrThrow({
+      where: { user: { email: FREE_TEACHER_EMAIL }, role: 'TEACHER' },
+      select: { id: true },
+    });
+    const assignmentType = await prisma.assignmentType.findFirstOrThrow({
+      select: { id: true },
+    });
+    return await prisma.document.create({
+      data: {
+        title: 'Guided tour scratch document',
+        text: 'Enough words for the writing page tour to load.',
+        html: '<p>Enough words for the writing page tour to load.</p>',
+        membershipId: membership.id,
+        assignmentTypeId: assignmentType.id,
+      },
+      select: { id: true },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 async function logInAsFreeTeacher(page: Page) {
   const { submitUnifiedLogin } = await import('../helpers/unified-login');
   await page.goto('/auth/login');
@@ -366,36 +391,38 @@ test.describe.serial('Free tier guided tour', () => {
   test('opening a document for the first time shows the writing page tour', async ({
     page,
   }) => {
-    await logInAsFreeTeacher(page);
-    await page.goto('/app');
-    await page.getByRole('button', { name: 'Skip' }).click();
-    await page
-      .getByTestId('teacher-assignments-grid')
-      .getByText('Class Starter', { exact: true })
-      .first()
-      .click();
-    await page.waitForURL(/\/app\/assignment-types\/[^/]+$/);
-    await page.getByRole('button', { name: 'Skip' }).click();
-    await page.getByRole('button', { name: /^New/ }).click();
-    await page.getByRole('menuitem', { name: 'Sample document' }).click();
-    await page.waitForURL(/\/app\/documents\/[^/?]+/);
+    const scratch = await createFreeTeacherScratchDocument();
+    try {
+      await logInAsFreeTeacher(page);
+      await page.goto('/app');
+      await page.getByRole('button', { name: 'Skip' }).click();
+      await page.goto(`/app/documents/${scratch.id}`);
+      await page.waitForURL(new RegExp(`/app/documents/${scratch.id}`));
 
-    const card = page.getByRole('dialog', {
-      name: /Welcome to the writing page/i,
-    });
-    await expect(card).toBeVisible();
-    await capturePair(page, 'document');
-    await card.getByRole('button', { name: 'Take a tour' }).click();
-    const step = page.getByTestId('guided-tour-step');
-    await expect(step).toContainText('Step 1 of');
-    await expect(page.locator('[data-tour-active="true"]')).toHaveCount(1);
-    await page.keyboard.press('Escape');
-    await expect(page.getByTestId('document-actions-menu')).toBeFocused();
+      const card = page.getByRole('dialog', {
+        name: /Welcome to the writing page/i,
+      });
+      await expect(card).toBeVisible();
+      await capturePair(page, 'document');
+      await card.getByRole('button', { name: 'Take a tour' }).click();
+      const step = page.getByTestId('guided-tour-step');
+      await expect(step).toContainText('Step 1 of');
+      await expect(page.locator('[data-tour-active="true"]')).toHaveCount(1);
+      await page.keyboard.press('Escape');
+      await expect(page.getByTestId('document-actions-menu')).toBeFocused();
 
-    // The page has no sidebar, so its menu offers the tour again.
-    await page.getByTestId('document-actions-menu').click();
-    await page.getByRole('menuitem', { name: 'Tour this page' }).click();
-    await expect(step).toContainText('Step 1 of');
+      // The page has no sidebar, so its menu offers the tour again.
+      await page.getByTestId('document-actions-menu').click();
+      await page.getByRole('menuitem', { name: 'Tour this page' }).click();
+      await expect(step).toContainText('Step 1 of');
+    } finally {
+      const prisma = createE2EPrismaClient();
+      try {
+        await prisma.document.delete({ where: { id: scratch.id } });
+      } finally {
+        await prisma.$disconnect();
+      }
+    }
   });
 
   test('Restart all tours brings every welcome card back', async ({ page }) => {

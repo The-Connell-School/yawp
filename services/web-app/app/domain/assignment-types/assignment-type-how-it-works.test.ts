@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   assignmentTypeHasHowItWorksGuide,
   assignmentTypeHowItWorksPath,
+  siteLicenseLockedTileHasHowItWorksGuide,
 } from './assignment-type-how-it-works';
 
 describe('assignmentTypeHowItWorksPath', () => {
@@ -32,6 +33,11 @@ describe('assignmentTypeHasHowItWorksGuide', () => {
         kind: 'thesis_statement',
       })
     ).toBe(true);
+  });
+
+  test('recognizes site-license locked carousel tile keys', () => {
+    expect(siteLicenseLockedTileHasHowItWorksGuide('exit-ticket')).toBe(true);
+    expect(siteLicenseLockedTileHasHowItWorksGuide('not-a-tile')).toBe(false);
   });
 
   test('excludes types without a rendered guide', () => {

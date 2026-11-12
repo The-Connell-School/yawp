@@ -11,7 +11,14 @@ import {
   requireUserId,
   type RequiredMembership,
 } from '~/utils/auth.server';
+import type { Organization } from '@app/prisma';
 import { isLessonPlannerEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { monthlyFreeTierPolicy } from '~/domain/free-tier/monthly-policy.server';
+import {
+  isDevPanelRuntimeEnabled,
+  isLocalDevPanelEnvironment,
+} from '~/dev-panel/dev-panel-runtime.server';
+import { prisma } from '~/utils/db.server';
 
 export type LessonPlannerAccess = {
   userId: string;
@@ -21,20 +28,43 @@ export type LessonPlannerAccess = {
   allowed: boolean;
 };
 
+/** Production: free-tier capability and lesson_planner flag. Local dev panel: also approved FREE_CLASSROOM. */
+export async function isLessonPlannerEnabledForOrganization(
+  organization: Pick<Organization, 'id' | 'plan'>
+): Promise<boolean> {
+  if (await isLessonPlannerEnabled(organization.id)) return true;
+  if (isLocalDevPanelEnvironment()) return true;
+  if (!isDevPanelRuntimeEnabled()) return false;
+  if (organization.plan !== 'FREE_CLASSROOM') return false;
+  const policy = await monthlyFreeTierPolicy(organization);
+  return policy.enabled;
+}
+
 export async function getLessonPlannerAccess(
   request: Request
 ): Promise<LessonPlannerAccess> {
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
   const isTeacher = membership.role === 'TEACHER';
-  const enabled = await isLessonPlannerEnabled(membership.organization.id);
+  const enabled = await isLessonPlannerEnabledForOrganization(
+    membership.organization
+  );
+
+  let allowed = isTeacher && enabled;
+  if (enabled && !allowed && isLocalDevPanelEnvironment()) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isAdmin: true },
+    });
+    allowed = Boolean(user?.isAdmin);
+  }
 
   return {
     userId,
     membership,
     isTeacher,
     enabled,
-    allowed: isTeacher && enabled,
+    allowed,
   };
 }
 

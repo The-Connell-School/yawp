@@ -252,10 +252,12 @@ export function AdminApprovePageIntro({
   teacherName,
   schoolName,
   teacherEmail,
+  showIfApprovedCopy = false,
 }: {
   teacherName: string;
   schoolName: string;
   teacherEmail?: string;
+  showIfApprovedCopy?: boolean;
 }) {
   const pass1 = useFreeTierEnabled();
   return (
@@ -264,12 +266,27 @@ export function AdminApprovePageIntro({
         <p className="text-sm text-muted-foreground">
           {approvePageIntro(teacherName, schoolName)}
         </p>
+      ) : (
+        <FreeTierPerson
+          name={teacherName}
+          email={teacherEmail}
+          subtitle={`Teacher at ${schoolName}`}
+        />
+      )}
+      {showIfApprovedCopy ? (
+        <p className="text-base text-card-foreground">
+          If approved,{' '}
+          <span
+            className="font-medium underline decoration-primary decoration-dotted underline-offset-[3px]"
+            title={teacherName}
+          >
+            {teacherName}
+          </span>{' '}
+          will have a free Yawp! license for one class of up to 35 students.
+          There&apos;s no cost to the teacher or the school, no credit card, and
+          nothing to purchase.
+        </p>
       ) : null}
-      <FreeTierPerson
-        name={teacherName}
-        email={teacherEmail}
-        subtitle={`Teacher at ${schoolName}`}
-      />
       <AdminApprovalFeatureList />
     </>
   );
@@ -303,7 +320,7 @@ export function AdminForwardBackLink({
     <p className={`text-center text-sm ${className ?? ''}`}>
       <Link
         to={`/free/admin/approve?t=${encodeURIComponent(approveToken)}`}
-        className="font-medium text-primary underline underline-offset-4"
+        className="font-medium text-link underline underline-offset-4"
       >
         Back to approval
       </Link>
@@ -325,7 +342,7 @@ export function AdminForwardLink({
       Not the right person?{' '}
       <Link
         to={`/free/admin/not-right-person${buildAdminForwardPageSearch(forwardToken, approveToken)}`}
-        className="font-medium text-primary underline underline-offset-4"
+        className="font-medium text-link underline underline-offset-4"
       >
         Forward this request
       </Link>

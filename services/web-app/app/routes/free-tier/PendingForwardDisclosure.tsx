@@ -1,5 +1,6 @@
 import { ChevronDown } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
+import type { FetcherWithComponents } from 'react-router';
 import { PendingApprovalForwardForm } from './PendingApprovalForwardForm';
 
 function usePrefersReducedMotion() {
@@ -24,6 +25,9 @@ export function PendingForwardDisclosure({
   serverAlert,
   forwardRetry = false,
   schoolName,
+  triggerVariant = 'pending-page',
+  fetcher,
+  formAction,
 }: {
   currentAdminName: string;
   currentAdminEmail: string;
@@ -34,6 +38,9 @@ export function PendingForwardDisclosure({
   serverAlert?: string | null;
   forwardRetry?: boolean;
   schoolName: string;
+  triggerVariant?: 'pending-page' | 'dashboard-rail';
+  fetcher?: FetcherWithComponents<unknown>;
+  formAction?: string;
 }) {
   const panelId = useId();
   const buttonId = useId();
@@ -60,28 +67,45 @@ export function PendingForwardDisclosure({
       className="free-tier-pending-forward"
       data-testid="pending-forward-disclosure"
     >
-      <button
-        type="button"
-        id={buttonId}
-        ref={triggerRef}
-        className="free-tier-pending-forward-trigger"
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={() => onOpenChange(!open)}
-      >
-        <span>Not the right person?</span>
-        <span
-          aria-hidden
-          className={`free-tier-pending-forward-chevron-wrap${
-            open ? ' free-tier-pending-forward-chevron-wrap-open' : ''
-          }${reducedMotion ? ' free-tier-pending-forward-chevron-wrap-reduced' : ''}`}
-          style={
-            reducedMotion ? undefined : { transitionDuration: `${durationMs}ms` }
-          }
+      {triggerVariant === 'dashboard-rail' ? (
+        <p className="mt-4 text-[13px] text-muted-foreground">
+          Not the right person?{' '}
+          <button
+            type="button"
+            id={buttonId}
+            ref={triggerRef}
+            className="free-tier-pending-forward-trigger font-medium underline-offset-2"
+            aria-expanded={open}
+            aria-controls={panelId}
+            onClick={() => onOpenChange(!open)}
+          >
+            Send to an additional administrator
+          </button>
+        </p>
+      ) : (
+        <button
+          type="button"
+          id={buttonId}
+          ref={triggerRef}
+          className="free-tier-pending-forward-trigger"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => onOpenChange(!open)}
         >
-          <ChevronDown className="free-tier-pending-forward-chevron" />
-        </span>
-      </button>
+          <span>Not the right person?</span>
+          <span
+            aria-hidden
+            className={`free-tier-pending-forward-chevron-wrap${
+              open ? ' free-tier-pending-forward-chevron-wrap-open' : ''
+            }${reducedMotion ? ' free-tier-pending-forward-chevron-wrap-reduced' : ''}`}
+            style={
+              reducedMotion ? undefined : { transitionDuration: `${durationMs}ms` }
+            }
+          >
+            <ChevronDown className="free-tier-pending-forward-chevron" />
+          </span>
+        </button>
+      )}
       <div
         id={panelId}
         role="region"
@@ -113,6 +137,8 @@ export function PendingForwardDisclosure({
               schoolName={schoolName}
               serverAlert={serverAlert}
               forwardRetry={forwardRetry}
+              fetcher={fetcher}
+              formAction={formAction}
               onCancel={() => {
                 onOpenChange(false);
                 triggerRef.current?.focus();

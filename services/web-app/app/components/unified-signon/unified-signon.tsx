@@ -761,7 +761,6 @@ export function UnifiedSignon({
       break;
     case 'teacher':
       title = 'Teachers start with a free trial';
-      subtitle = 'Your school admin approves it.';
       body = (
         <Button asChild className="signon-primary">
           <Link to="/free">Start a free trial</Link>

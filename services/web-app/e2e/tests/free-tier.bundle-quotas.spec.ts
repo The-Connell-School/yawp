@@ -3,7 +3,7 @@ import { expect, test } from '../test-setup';
 const FREE_CLASSROOM_PASSWORD = 'yawp-dev';
 
 test.describe('Free classroom bundle quotas', () => {
-  test('teacher sees assignment type counters in the creation sheet', async ({
+  test('teacher sees assignment type counters on the new assignment page', async ({
     page,
     signIn,
   }) => {
@@ -22,29 +22,22 @@ test.describe('Free classroom bundle quotas', () => {
     });
     await expect(newAssignment).toBeVisible({ timeout: 20_000 });
     await newAssignment.click();
-    const sheet = page.locator('[role="dialog"]');
-    await expect(sheet).toBeVisible({ timeout: 20_000 });
-    const prewritingPicker = sheet.getByRole('button', { name: /Prewriting/i });
-    if (await prewritingPicker.count()) {
-      await expect(prewritingPicker).toContainText(
+    await expect(page).toHaveURL(/\/app\/assignments\/new/, {
+      timeout: 20_000,
+    });
+    const typeGrid = page.getByTestId('new-assignment-type-grid');
+    await expect(typeGrid).toBeVisible({ timeout: 20_000 });
+    const prewritingTile = typeGrid.getByRole('button', { name: /Prewriting/i });
+    if (await prewritingTile.count()) {
+      await expect(prewritingTile).toContainText(
         /Unlimited|\d+ of \d+|None left/
       );
-      await sheet.getByRole('button', { name: /Class Starter/i }).click();
-      await expect(sheet.getByRole('combobox').first()).toBeVisible({
-        timeout: 20_000,
-      });
     }
-    const typeTrigger = sheet.getByRole('combobox').first();
-    await expect(typeTrigger).toBeVisible({ timeout: 20_000 });
-    await expect(typeTrigger).not.toContainText(/\d+ of \d+/);
-    await typeTrigger.click();
-    const prewritingOption = page.getByRole('option', { name: /Prewriting/i });
-    await expect(prewritingOption).toBeVisible();
-    const optionText = await prewritingOption.textContent();
-    if (optionText && /\d+ of \d+/.test(optionText)) {
-      await expect(prewritingOption).toContainText(/\d+ of \d+/);
-    }
-    await page.keyboard.press('Escape');
+    const classStarterTile = typeGrid.getByRole('button', {
+      name: /Class Starter/i,
+    });
+    await expect(classStarterTile).toBeVisible({ timeout: 20_000 });
+    await expect(classStarterTile).not.toContainText(/\d+ of \d+/);
   });
 
   test('teacher cannot create a second class from My Classes', async ({

@@ -5,10 +5,9 @@ import {
   useLoaderData,
   useActionData,
 } from 'react-router';
-import { CircleAlert, Shield } from 'lucide-react';
+import { CircleAlert } from 'lucide-react';
 import { Form } from 'react-router';
 import { peekSignedLink } from '~/domain/free-tier/signed-link.server';
-import { FREE_TIER_ADMIN_MODEL_TRAINING_LINE as FREE_TIER_MODEL_TRAINING_LINE } from '~/domain/free-tier/admin-approval-copy';
 import { createFreeTierTeacherAccount } from '~/domain/free-tier/approval-flow.server';
 import {
   getPasswordHash,
@@ -155,7 +154,6 @@ export default function FreeJoinRoute() {
         </FreeTierFieldLabel>
         <FreeTierButton type="submit">Create account</FreeTierButton>
       </Form>
-      <p className="flex items-start gap-2 text-xs text-muted-foreground"><Shield aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />{FREE_TIER_MODEL_TRAINING_LINE}</p>
     </FreeTierAuthCard>
   );
 }

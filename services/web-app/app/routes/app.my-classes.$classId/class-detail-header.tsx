@@ -9,6 +9,11 @@ import {
 } from 'react';
 import { Check, Copy, Lock } from 'lucide-react';
 import { TEACHING_ACCESS_CLASS_CODE_HIDDEN_LABEL } from '~/domain/free-tier/teaching-access-copy';
+import { useFreeAccountUsage } from '~/components/free-account-usage';
+import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
+import { StudentInvitationDialog } from '~/components/student-invitation-dialog';
+import { useLockedTeachingInviteControlProps } from '~/components/free-tier/locked-teaching-invite-props';
 import { ClassArt } from '~/components/class-art';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -30,6 +35,28 @@ export function resolveClassHeaderTab(
   tab: 'students' | 'documents' | 'assignments'
 ): ClassHeaderTab {
   return tab;
+}
+
+export type ClassDetailStudentInviteState = 'none' | 'locked' | 'ready';
+
+export function resolveClassDetailStudentInviteState(args: {
+  usageMonthly: boolean;
+  usageClassId: string | null | undefined;
+  klassId: string;
+  klassCode: string;
+  classCodeHidden: boolean;
+  teachingLocked: boolean;
+}): ClassDetailStudentInviteState {
+  if (args.classCodeHidden || !args.klassCode.trim()) {
+    return 'none';
+  }
+  if (!args.usageMonthly || args.usageClassId !== args.klassId) {
+    return 'none';
+  }
+  if (args.teachingLocked) {
+    return 'locked';
+  }
+  return 'ready';
 }
 
 export type ClassDetailHeaderProps = {
@@ -197,6 +224,68 @@ function EditClassButton({ onEdit }: { onEdit: () => void }) {
   );
 }
 
+function ClassDetailStudentInviteButton({
+  klassId,
+  klassCode,
+  classCodeHidden,
+}: {
+  klassId: string;
+  klassCode: string;
+  classCodeHidden: boolean;
+}) {
+  const usage = useFreeAccountUsage();
+  const { locked: teachingLocked } = useTeachingAccess();
+  const inviteLockProps = useLockedTeachingInviteControlProps();
+  const inviteState = resolveClassDetailStudentInviteState({
+    usageMonthly: Boolean(usage?.monthly),
+    usageClassId: usage?.classId,
+    klassId,
+    klassCode,
+    classCodeHidden,
+    teachingLocked,
+  });
+  const [invitationOpen, setInvitationOpen] = useState(false);
+  const invitationTriggerRef = useRef<HTMLButtonElement>(null);
+
+  if (inviteState === 'none') {
+    return null;
+  }
+
+  const inviteLabel = 'Add your students to your class';
+  const inviteButtonProps = {
+    size: 'sm' as const,
+    type: 'button' as const,
+    variant: 'outline' as const,
+    className: 'shrink-0',
+    'data-testid': 'class-detail-add-students' as const,
+    children: inviteLabel,
+  };
+
+  return (
+    <>
+      {inviteState === 'locked' ? (
+        <LockedTeachingControl {...inviteLockProps}>
+          <Button {...inviteButtonProps} />
+        </LockedTeachingControl>
+      ) : (
+        <Button
+          {...inviteButtonProps}
+          ref={invitationTriggerRef}
+          onClick={() => setInvitationOpen(true)}
+        />
+      )}
+      {inviteState === 'ready' ? (
+        <StudentInvitationDialog
+          returnFocusRef={invitationTriggerRef}
+          code={klassCode}
+          open={invitationOpen}
+          onOpenChange={setInvitationOpen}
+        />
+      ) : null}
+    </>
+  );
+}
+
 type HeaderTabConfig = {
   id: ClassHeaderTab;
   label: string;
@@ -353,7 +442,14 @@ export function ClassDetailHeader({
                 classCodeHidden={classCodeHidden}
               />
             </div>
-            <EditClassButton onEdit={props.onEdit} />
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <ClassDetailStudentInviteButton
+                klassId={props.klass.id}
+                klassCode={props.klass.code}
+                classCodeHidden={classCodeHidden}
+              />
+              <EditClassButton onEdit={props.onEdit} />
+            </div>
           </div>
         </div>
       </div>

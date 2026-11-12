@@ -28,6 +28,7 @@ const LESSON_PLANNER_MIGRATIONS = [
   '20261020100300_lesson_carry_over',
   '20261020100400_lesson_message_surface',
   '20261020100500_lesson_share_links',
+  '20261105130000_lesson_yawp_lesson_slug',
 ];
 
 describe('lesson planner migration order', () => {

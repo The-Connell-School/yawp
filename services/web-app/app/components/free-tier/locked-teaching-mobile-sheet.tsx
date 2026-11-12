@@ -63,7 +63,7 @@ export function LockedTeachingMobileSheet({
           </Button>
           <Link
             to="/app/free-tier/pending"
-            className="text-center text-sm text-primary underline underline-offset-4"
+            className="text-center text-sm text-link underline underline-offset-4"
             onClick={() => onOpenChange(false)}
           >
             View status

@@ -1,7 +1,7 @@
 import { expect, test } from '../test-setup';
 
-const BRAND_PRIMARY = '14.8837 58.9041% 57.0588%';
-const HIGH_CONTRAST_PRIMARY = '14.8837 58.9041% 40%';
+const BRAND_PRIMARY = '155.2174 42.5926% 21.1765%';
+const HIGH_CONTRAST_PRIMARY = '155.2174 42.5926% 16%';
 
 async function primaryToken(page: import('@playwright/test').Page) {
   return page.evaluate(() =>

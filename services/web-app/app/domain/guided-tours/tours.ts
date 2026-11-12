@@ -334,7 +334,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'type-new',
         title: 'Make one',
-        body: 'New → Assignment gives it to your class. New → Sample document lets you try it yourself first, the way your students will. Use these assignments to help students practice and develop their own ideas.',
+        body: 'New → Assignment gives it to your class. Use these assignments to help students practice and develop their own ideas.',
       },
       {
         target: 'type-directions',
@@ -351,11 +351,6 @@ const TOURS: Record<TourId, PageTour> = {
         title: 'The writing process',
         body: 'The steps this assignment walks students through. Open one for an overview of what they will do.',
       },
-      {
-        target: 'type-documents',
-        title: 'Your own drafts',
-        body: 'Documents you start with New → Sample document show up here, so you can see the student side before you assign it.',
-      },
     ],
   },
   'type-prewriting': {
@@ -369,17 +364,12 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'type-new',
         title: 'Make one',
-        body: 'New → Assignment gives it to your class. New → Sample document lets you try it yourself first, the way your students will. Use these assignments to help students practice and develop their own ideas.',
+        body: 'New → Assignment gives it to your class. Use these assignments to help students practice and develop their own ideas.',
       },
       {
         target: 'type-modules',
         title: 'The writing process',
         body: 'The steps this assignment walks students through. Open one for an overview of what they will do.',
-      },
-      {
-        target: 'type-documents',
-        title: 'Your own drafts',
-        body: 'Documents you start with New → Sample document show up here, so you can see the student side before you assign it.',
       },
     ],
   },
@@ -394,7 +384,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'type-new',
         title: 'Make one',
-        body: 'New → Assignment gives it to your class. New → Sample document lets you try it yourself first, the way your students will. Use these assignments to help students practice and develop their own ideas.',
+        body: 'New → Assignment gives it to your class. Use these assignments to help students practice and develop their own ideas.',
       },
       {
         target: 'type-directions',
@@ -410,11 +400,6 @@ const TOURS: Record<TourId, PageTour> = {
         target: 'type-modules',
         title: 'The writing process',
         body: 'The steps this assignment walks students through. Open one for an overview of what they will do.',
-      },
-      {
-        target: 'type-documents',
-        title: 'Your own drafts',
-        body: 'Documents you start with New → Sample document show up here, so you can see the student side before you assign it.',
       },
     ],
   },

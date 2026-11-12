@@ -47,6 +47,20 @@ async function defaultOrg(prisma: Awaited<ReturnType<typeof loadPrisma>>) {
   return org.id;
 }
 
+async function localDevOrg(prisma: Awaited<ReturnType<typeof loadPrisma>>) {
+  const org =
+    (await prisma.organization.findUnique({
+      where: { id: 'local-dev-org' },
+      select: { id: true },
+    })) ??
+    (await prisma.organization.create({
+      data: { id: 'local-dev-org', name: 'Yawp Local Dev', plan: 'SCHOOL' },
+      select: { id: true },
+    }));
+  orgIds.push(org.id);
+  return org.id;
+}
+
 describe.skipIf(!enabled)('executeFreeTierStateJump pending states (real db)', () => {
   beforeEach(() => {
     sendEmail.mockClear();
@@ -147,6 +161,41 @@ describe.skipIf(!enabled)('executeFreeTierStateJump pending states (real db)', (
     expect(data.pending?.adminEmail).toMatch(/^admin\.fixture@pending-/);
     expect(data.approvalV2?.approval?.adminEmail).toBe(data.pending?.adminEmail);
     expect(data.showExploreClassroom).toBe(true);
+  });
+
+  test('waiting-on-admin throwaway succeeds for seeded local-dev-org id', async () => {
+    delete process.env.FREE_TIER_LINK_HMAC_SECRET;
+    process.env.NODE_ENV = 'development';
+    process.env.SESSION_SECRET ??= 'local-dev-panel-jump-test-session-secret';
+    const prisma = await loadPrisma();
+    const { executeFreeTierStateJump } = await loadJump();
+    await enableFreeTierFlag(prisma);
+    const organizationId = await localDevOrg(prisma);
+
+    const result = await executeFreeTierStateJump({
+      request: new Request('http://localhost/'),
+      stateId: 'pending.waiting-on-admin',
+      throwaway: true,
+      currentUserId: null,
+      organizationId,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(sendEmail).not.toHaveBeenCalled();
+
+    const user = await prisma.user.findFirst({
+      where: { email: result.throwawayEmail },
+      select: { id: true },
+    });
+    expect(user?.id).toBeTruthy();
+    userIds.push(user!.id);
+
+    const app = await prisma.freeTierApplication.findFirst({
+      where: { userId: user!.id },
+      select: { id: true, status: true },
+    });
+    expect(app?.status).toBe('SENT');
+    if (app) appIds.push(app.id);
   });
 
   test('manual-review throwaway reaches MANUAL_REVIEW under demo runtime', async () => {

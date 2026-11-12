@@ -192,7 +192,7 @@ export default function JoinRoute() {
         </p>
         <p className="mt-6 text-center text-sm text-muted-foreground">
           Already have an account?{' '}
-          <Link to="/auth/login" className="text-primary underline-offset-4 hover:underline">
+          <Link to="/auth/login" className="text-link underline-offset-4 hover:underline">
             Log in
           </Link>
         </p>

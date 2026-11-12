@@ -79,6 +79,7 @@ test('approval rejects a blank role on the server without consuming a link', asy
       method: 'POST',
       body: new URLSearchParams({
         token: 'token',
+        intent: 'approve',
         adminRole: ' ',
         authorized: 'on',
       }),
@@ -97,8 +98,10 @@ test('approve page uses the designed heading and forward link', () => {
     'Approve Yawp! for Jordan Rivera at Lincoln High School'
   );
   expect(html).toContain('Deny request');
-  expect(html).toContain('I&#x27;d like to learn more first');
-  expect(html).toContain('What Yawp! is');
+  expect(html).toContain('Talk to us first');
+  expect(html).toContain('Questions administrators ask');
+  expect(html).toContain('FERPA compliant');
+  expect(html).toContain('If approved');
   expect(html).toContain('Forward this request');
   expect(html).toContain(
     '/free/admin/not-right-person?t=forward-token&amp;approveT=approve-token'

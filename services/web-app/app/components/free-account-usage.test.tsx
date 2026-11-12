@@ -2,6 +2,7 @@ import { afterAll, expect, mock, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { StaticRouter } from 'react-router';
 import type { FreeAccountUsage } from '~/domain/free-tier/inapp-usage';
+import { FREE_TIER_NEEDS_GRADING_DOCUMENTS_HREF } from '~/domain/free-tier/getting-started-grade';
 mock.module('~/components/student-invitation-dialog', () => ({
   StudentInvitationDialog: () => null,
 }));
@@ -76,7 +77,7 @@ test('monthly guidance is absent with the monthly flag off', () => {
     )
   ).toBe('');
 });
-test('Advocate Pack stays hidden until a student joins and stays off legacy usage', () => {
+test('Advocate Pack stays hidden until the teacher grades and stays off legacy usage', () => {
   const noStudents = {
     ...usage,
     checklist: {
@@ -87,28 +88,79 @@ test('Advocate Pack stays hidden until a student joins and stays off legacy usag
     },
   };
   const html = render(<FreeAccountRail usage={noStudents} />);
-  expect(html).toContain('Create your first assignment');
+  expect(html).toContain('First assignment created');
   expect(html).not.toContain('Give your first assignment');
-  expect(html).not.toContain('Loving what Yawp!');
-  expect(html).not.toContain('Get the Advocate Pack');
-  const withStudent = {
+  expect(html).not.toContain('Tell a colleague');
+  expect(html).not.toContain('Share with a colleague');
+  const enrolledNotGraded = {
     ...noStudents,
     students: { ...count, used: 1 },
     checklist: {
       ...noStudents.checklist,
       writingSubmitted: true,
+      graded: false,
+    },
+  };
+  const stillOnChecklist = render(<FreeAccountRail usage={enrolledNotGraded} />);
+  expect(stillOnChecklist).toContain('Grade your first submission');
+  expect(stillOnChecklist).not.toContain('Share with a colleague');
+  expect(stillOnChecklist).toContain('data-testid="free-account-checklist"');
+  const withGrade = {
+    ...enrolledNotGraded,
+    checklist: {
+      ...enrolledNotGraded.checklist,
       graded: true,
     },
   };
-  const enrolled = render(<FreeAccountRail usage={withStudent} />);
-  expect(enrolled).toContain('Loving what Yawp!');
-  expect(enrolled.indexOf('free-account-checklist')).toBeLessThan(
-    enrolled.indexOf('Loving what Yawp!')
-  );
-  expect(enrolled).toContain('Get the Advocate Pack');
+  const enrolled = render(<FreeAccountRail usage={withGrade} />);
+  expect(enrolled).toContain('Tell a colleague');
+  expect(enrolled).not.toContain('free-account-checklist');
+  expect(enrolled).toContain('Share with a colleague');
   expect(
-    render(<FreeAccountRail usage={{ ...withStudent, monthly: false }} />)
-  ).not.toContain('Get the Advocate Pack');
+    render(<FreeAccountRail usage={{ ...withGrade, monthly: false }} />)
+  ).not.toContain('Share with a colleague');
+});
+test('grade step CTA deep-links to the first to-grade submission when provided', () => {
+  const gradeHref = `/app/submissions/sub-first?edit=1&exitTo=${encodeURIComponent(
+    FREE_TIER_NEEDS_GRADING_DOCUMENTS_HREF
+  )}`;
+  const html = render(
+    <FreeAccountRail
+      usage={{
+        ...usage,
+        students: { ...count, used: 1 },
+        gradeStepHref: gradeHref,
+        checklist: {
+          classReady: true,
+          assignmentCreated: true,
+          writingSubmitted: true,
+          graded: false,
+        },
+      }}
+    />
+  );
+  expect(html).toContain('data-testid="checklist-grade-first-submission"');
+  expect(html).toContain('/app/submissions/sub-first?edit=1');
+  expect(html).toContain(
+    'exitTo=%2Fapp%2Fdocuments%3Fstatus%3Dneeds-grading%26reset%3D1'
+  );
+});
+test('grade step CTA falls back to the needs-grading documents list', () => {
+  const html = render(
+    <FreeAccountRail
+      usage={{
+        ...usage,
+        students: { ...count, used: 1 },
+        checklist: {
+          classReady: true,
+          assignmentCreated: true,
+          writingSubmitted: true,
+          graded: false,
+        },
+      }}
+    />
+  );
+  expect(html).toContain('href="/app/documents?status=needs-grading&amp;reset=1"');
 });
 test('monthly first steps order and two-of-four progress after class and assignment', () => {
   const html = render(
@@ -125,14 +177,39 @@ test('monthly first steps order and two-of-four progress after class and assignm
       }}
     />
   );
-  expect(html).toContain('2 of 4');
-  expect(html).toContain('Your class is ready');
-  const assignmentIdx = html.indexOf('Create your first assignment');
-  const studentsIdx = html.indexOf('Add your students to your class');
-  const fourthIdx = html.indexOf('See what your class needs');
+  expect(html).toContain('Step 3 of 4');
+  expect(html).toContain('Class ready');
+  const assignmentIdx = html.indexOf('First assignment created');
+  const studentsIdx = html.indexOf('Add your students');
+  const fourthIdx = html.indexOf('Grade your first submission');
   expect(assignmentIdx).toBeGreaterThan(-1);
   expect(studentsIdx).toBeGreaterThan(assignmentIdx);
   expect(fourthIdx).toBeGreaterThan(studentsIdx);
+});
+test('monthly checklist hides invite panel until assignment exists and prompts to create', () => {
+  const html = render(
+    <FreeAccountRail
+      usage={{
+        ...usage,
+        classCode: 'DEV-CLASS-101',
+        classId: 'class-1',
+        students: { ...count, used: 0 },
+        checklist: {
+          classReady: true,
+          assignmentCreated: false,
+          writingSubmitted: false,
+          graded: false,
+        },
+      }}
+      classStarterAssignmentTypeId="type-class-starter"
+    />
+  );
+  expect(html).toContain('Create your first assignment');
+  expect(html).toContain('data-testid="checklist-create-first-assignment"');
+  expect(html).toContain('/app/assignments/new?first=1');
+  expect(html).toContain('assignmentTypeId=type-class-starter');
+  expect(html).toContain('classId=class-1');
+  expect(html).not.toContain('Invite students');
 });
 test('Reporter pending lock copy matches approval gate', () => {
   const html = render(<FreeReporterLocked variant="pending" />);

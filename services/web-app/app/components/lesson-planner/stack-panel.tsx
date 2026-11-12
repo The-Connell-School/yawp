@@ -124,7 +124,7 @@ export function StackPanel({
       <div className="border-t px-4 py-3">
         <Link
           to={`/app/lesson-planner/${conversationId}/packet`}
-          className="text-sm font-medium text-primary hover:underline"
+          className="text-sm font-medium text-link hover:text-link-hover hover:underline"
         >
           Open the full stack
         </Link>

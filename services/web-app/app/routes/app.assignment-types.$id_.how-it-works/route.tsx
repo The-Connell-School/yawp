@@ -302,7 +302,7 @@ function ThesisEssayGuide({
           {coursePath ? (
             <Link
               to={coursePath}
-              className="text-[15px] font-medium text-primary underline-offset-4 hover:underline"
+              className="text-[15px] font-medium text-link underline-offset-4 hover:underline"
             >
               Open the course
             </Link>

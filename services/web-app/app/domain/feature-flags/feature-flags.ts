@@ -176,6 +176,18 @@ export const EXIT_TICKET_BUILDER_V3_FLAG = 'exit-ticket-builder-v3' as const;
  */
 export const EXIT_TICKET_CLASS_SUMMARY_FLAG = 'exit-ticket-class-summary' as const;
 
+/** Teacher-facing assignment-type landing pages (Brian's v2 copy). Default off on production. */
+export const ASSIGNMENT_TYPE_LANDING_V2_FLAG =
+  'assignment-type-landing-v2' as const;
+
+/** Thesis-Driven Essay landing page; requires v2. Demo on by default. */
+export const ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG =
+  'assignment-type-landing-thesis-essay' as const;
+
+/** How to Teach It's lesson plan links open Lesson Planner stacks instead of PDFs. */
+export const ASSIGNMENT_TYPE_LESSON_PLANS_FLAG =
+  'assignment-type-lesson-plans' as const;
+
 /**
  * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
  * reads only `feature_flag.free_tier`; these rows are not OR-merged.
@@ -330,6 +342,21 @@ export const FEATURE_FLAGS = {
     label: 'Exit ticket class summary',
     description:
       'On an exit ticket’s Class read, teachers can ask for a summary of the responses: what the class understood, where the confusion is, whether to reteach, and a suggested opening block for tomorrow, which "Plan tomorrow from this" passes to the planner. One model call per request, only when new responses have arrived. Off: the Class read only.',
+  },
+  [ASSIGNMENT_TYPE_LANDING_V2_FLAG]: {
+    label: 'Assignment type landing v2',
+    description:
+      "Brian's teacher-facing landing pages on assignment types. Off: the legacy prompts library only.",
+  },
+  [ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG]: {
+    label: 'Thesis essay landing page',
+    description:
+      'The Thesis-Driven Essay landing page. Needs assignment type landing v2. Off: legacy thesis library.',
+  },
+  [ASSIGNMENT_TYPE_LESSON_PLANS_FLAG]: {
+    label: 'Assignment type lesson plan stacks',
+    description:
+      'How to Teach It opens ready-built Lesson Planner stacks. Needs assignment type landing v2.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

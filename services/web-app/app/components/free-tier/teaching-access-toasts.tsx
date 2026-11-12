@@ -44,7 +44,7 @@ export function ApprovalRequiredToast({
           </p>
           <Link
             to="/app/free-tier/pending"
-            className="mt-2 inline-block text-sm text-primary underline underline-offset-4"
+            className="mt-2 inline-block text-sm text-link underline underline-offset-4"
           >
             View status
           </Link>

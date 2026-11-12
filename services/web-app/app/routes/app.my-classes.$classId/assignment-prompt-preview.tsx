@@ -29,7 +29,7 @@ export function AssignmentPromptPreview({ prompt }: { prompt: string }) {
       {truncatable ? (
         <button
           type="button"
-          className="mt-1.5 text-sm font-medium text-primary hover:underline"
+          className="mt-1.5 text-sm font-medium text-link hover:text-link-hover hover:underline"
           onClick={() => setExpanded((current) => !current)}
           aria-expanded={expanded}
           data-testid="assignment-prompt-toggle"

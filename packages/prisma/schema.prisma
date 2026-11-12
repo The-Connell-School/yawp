@@ -258,8 +258,9 @@ enum StudentLicenseSource {
 /// to a teacher-created group inside one ClassAssignment; group membership is
 /// access, not ownership.
 enum DocumentArtifactKind {
-  STUDENT          @map("student")
-  ASSIGNMENT_GROUP @map("assignment-group")
+  STUDENT                    @map("student")
+  ASSIGNMENT_GROUP           @map("assignment-group")
+  TEACHER_ASSIGNMENT_PREVIEW @map("teacher-assignment-preview")
 }
 
 model Class {
@@ -565,11 +566,12 @@ model ClassAssignment {
   postAt         DateTime?                @db.Timestamptz(6)
   /// Optional due date for this class's deployment of the assignment.
   dueAt          DateTime?                @db.Timestamptz(6)
-  documents      Document[]
-  insight        ClassAssignmentInsight?
+  documents               Document[]
+  teacherPreviewDocuments Document[]               @relation("TeacherPreviewDocuments")
+  insight                 ClassAssignmentInsight?
   /// The model-written summary of an exit ticket's responses (v3 plan, phase 5).
-  exitTicketSummary ExitTicketClassSummary?
-  documentGroups DocumentGroup[]
+  exitTicketSummary       ExitTicketClassSummary?
+  documentGroups          DocumentGroup[]
   lessonPlans    LessonPlanConversation[]
   studentFirstOpens ClassAssignmentStudentFirstOpen[]
 
@@ -1099,6 +1101,9 @@ model Document {
   assignment               Assignment?               @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   classAssignmentId        String?
   classAssignment          ClassAssignment?          @relation(fields: [classAssignmentId], references: [id], onDelete: SetNull)
+  /// Try-it previews: tied to a class deployment for reuse and breadcrumbs, but not class student work.
+  teacherPreviewClassAssignmentId String?
+  teacherPreviewClassAssignment   ClassAssignment?   @relation("TeacherPreviewDocuments", fields: [teacherPreviewClassAssignmentId], references: [id], onDelete: SetNull)
   assignmentModuleSessions AssignmentModuleSession[]
   comments                 DocumentComment[]
   writeJournals            DocumentWriteJournal[]
@@ -1114,6 +1119,7 @@ model Document {
 
   @@index([assignmentId])
   @@index([classAssignmentId])
+  @@index([teacherPreviewClassAssignmentId])
   @@index([assignmentTypeId])
   @@index([membershipId])
 }
@@ -1710,6 +1716,8 @@ model LessonPlanConversation {
   deckStackKey            String?
   /// Steps moved to "If you have extra time", out of the timed lesson (note 8c).
   extensionStepIds        Json?
+  /// Catalog Yawp! lesson slug when this conversation is a teacher copy of one.
+  yawpLessonSlug          String?
   messages                LessonPlanMessage[]
   materials               LessonPlanMaterial[]
   shareLinks              LessonShareLink[]
@@ -1720,6 +1728,7 @@ model LessonPlanConversation {
   @@index([membershipId, updatedAt(sort: Desc)])
   @@index([membershipId, starredAt(sort: Desc)])
   @@index([membershipId, publishedAt(sort: Desc)])
+  @@index([membershipId, yawpLessonSlug])
   @@index([organizationId])
   @@index([originClassAssignmentId])
   @@index([unitId, unitDay])

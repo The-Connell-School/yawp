@@ -287,6 +287,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
     select: {
       id: true,
+      artifactKind: true,
       createdAt: true,
       updatedAt: true,
       revision: true,
@@ -549,6 +550,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       profile.role === 'STUDENT' &&
       !hasEffectivePlatformAdmin(user?.isAdmin),
     documentNavigation,
+    isTeacherAssignmentPreview:
+      doc.artifactKind === 'TEACHER_ASSIGNMENT_PREVIEW',
   });
 }
 
@@ -732,8 +735,11 @@ export default function Route() {
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const tutorEnabled = isTutorEnabledForAssignment(data.doc.assignment);
   const tab = searchParams.get('tab') ?? (tutorEnabled ? 'tutor' : 'editor');
-  const isViewingAsTeacher =
-    data.doc && user.id !== data.doc?.membership.userId;
+  const isViewingAsTeacher = Boolean(
+    data.doc &&
+      (data.isTeacherAssignmentPreview ||
+        user.id !== data.doc.membership.userId)
+  );
   // Owner or class teacher (loader); api.model.document allows both to persist edits.
   const isDocumentEditable = true;
   const assignment = data.doc.assignment;
@@ -1301,6 +1307,15 @@ export default function Route() {
             />
           </div>
         </nav>
+        {data.isTeacherAssignmentPreview ? (
+          <div
+            className="border-b border-amber-200/80 bg-amber-50 px-3 py-2 text-center text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
+            data-testid="teacher-assignment-preview-banner"
+          >
+            Assignment preview — students do not see this document or your test
+            submissions in the class.
+          </div>
+        ) : null}
         {showDbqWorkspace && apHistorySnapshot ? (
           <>
             <AssignmentPromptStrip
