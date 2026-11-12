@@ -25,7 +25,7 @@ import { PICTURE_PLACEHOLDER } from './deck-pictures';
 import type { DeckPictureFiles } from './deck-pictures.server';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { registerKitFonts } from './kit-fonts.server';
+import { registerKitDisplayFont, registerKitFonts } from './kit-fonts.server';
 
 /** The kit's ink and stone (lesson plan spec v1, "Type and color"). */
 const KIT_PLAN_COLORS_HEX = { ink: '#1B1B1B', stone: '#6F6A63' } as const;
@@ -504,7 +504,8 @@ function drawKitV4Face(
   const serif = styleOf(doc).serif?.regular ?? 'Times-Roman';
   const sans = styleOf(doc).fonts.body;
   const sansBold = styleOf(doc).fonts.bold;
-  const fontOf = (run: KitV4Run) => (run.face === 'serif' ? serif : run.bold ? sansBold : sans);
+  const display = registerKitDisplayFont(doc);
+  const fontOf = (run: KitV4Run) => (run.face === 'display' ? display : run.face === 'serif' ? serif : run.bold ? sansBold : sans);
 
   doc.save();
   doc.rect(box.x, box.y, box.w, box.h).fill(layout.background);

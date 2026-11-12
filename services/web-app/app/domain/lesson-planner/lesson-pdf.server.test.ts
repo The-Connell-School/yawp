@@ -713,6 +713,11 @@ describe('renderSlidesPdf — a deck drawn in spec v4', () => {
     expect(text).toContain('Slide 2 of 3');
   });
 
+  test('spec v4.1: embeds Fraunces Bold for the headlines', async () => {
+    const raw = Buffer.from(await renderSlidesPdf({ lessonTitle: 'Body Paragraphs', deck: v4 as never })).toString('latin1');
+    expect(raw).toMatch(/\/BaseFont \/[A-Z]{6}\+Fraunces-Bold/);
+  });
+
   test('fills the cream ground and the split slide’s panel', async () => {
     const bytes = await renderSlidesPdf({ lessonTitle: 'Body Paragraphs', deck: v4 as never });
     const raw = Buffer.from(bytes).toString('latin1');

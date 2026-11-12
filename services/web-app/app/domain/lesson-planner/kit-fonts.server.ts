@@ -35,6 +35,18 @@ function fontPath(file: string): string | null {
   return null;
 }
 
+/**
+ * Fraunces Bold, the Lesson Deck Kit's headline face (spec v4.1), on a PDF:
+ * registered once, its name returned. Without the file, the built-in
+ * Times-Bold.
+ */
+export function registerKitDisplayFont(pdf: InstanceType<typeof PDFDocument>): string {
+  const path = fontPath('Fraunces-Bold.ttf');
+  if (!path) return 'Times-Bold';
+  pdf.registerFont('kit-display', path);
+  return 'kit-display';
+}
+
 /** Registers the kit's fonts on a PDF and returns the names to use. */
 export function registerKitFonts(pdf: InstanceType<typeof PDFDocument>): KitPdfFonts {
   const names = {} as KitPdfFonts;
