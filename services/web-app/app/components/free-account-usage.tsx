@@ -43,6 +43,8 @@ import {
 import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
 import { SiteLicenseLockButton } from '~/components/site-license-lock-button';
 import {
+  assignmentTypeTileMetaTestId,
+  assignmentTypeTileNameTestId,
   dashboardAssignmentTileClassName,
   dashboardAssignmentTileTestId,
   DashboardAssignmentTileFooter,
@@ -274,26 +276,30 @@ function FreeTierCarouselTileCaption({
   meta?: string;
   metaClassName?: string;
 }) {
+  const hasVisibleMeta = meta != null && meta !== '';
   return (
     <span
       className={cn(
         'flex flex-col gap-0.5 px-3 py-2.5',
-        meta ? 'min-h-[58px]' : 'min-h-[44px] justify-center'
+        hasVisibleMeta ? 'min-h-[58px]' : 'min-h-[44px] justify-center'
       )}
     >
-      <span className="text-sm font-medium leading-snug text-foreground">
+      <span
+        className="text-sm font-medium leading-snug text-foreground"
+        data-testid={assignmentTypeTileNameTestId}
+      >
         {label}
       </span>
-      {meta ? (
-        <span
-          className={cn(
-            'text-xs leading-snug',
-            metaClassName ?? 'font-semibold text-[#1f3532]'
-          )}
-        >
-          {meta}
-        </span>
-      ) : null}
+      <span
+        className={cn(
+          'text-xs leading-snug',
+          !hasVisibleMeta && 'sr-only',
+          hasVisibleMeta && (metaClassName ?? 'font-semibold text-[#1f3532]')
+        )}
+        data-testid={assignmentTypeTileMetaTestId}
+      >
+        {meta ?? ''}
+      </span>
     </span>
   );
 }
