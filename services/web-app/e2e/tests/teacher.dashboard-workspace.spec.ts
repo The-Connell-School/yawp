@@ -560,7 +560,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
     }
   });
 
-  test('creates an assignment from the assignment type page via the new assignment page', async ({
+  test('creates an assignment from the assignment type page via the creation sheet', async ({
     page,
     e2eContext,
     signIn,
@@ -580,10 +580,15 @@ test.describe.serial('Teacher dashboard workspace', () => {
     await expect(
       sheet.getByRole('heading', { name: /New Assignment/i })
     ).toBeVisible();
+    await sheet.getByLabel(CLASS_LABEL).check();
     await sheet.getByLabel('Title (optional)').fill(title);
     await sheet.getByLabel('Prompt', { exact: true }).fill(prompt);
+    await expect(
+      sheet.getByRole('button', { name: /Create Assignment/i })
+    ).toBeEnabled();
     await sheet.getByRole('button', { name: /Create Assignment/i }).click();
-    await expect(page).toHaveURL(/\/app\/assignments\/.+/);
+    await expectAssignmentCreatedSuccessSheet(page);
+    await dismissAssignmentCreatedSuccessSheet(page);
 
     await expectCreatedAssignment({
       classId: e2eContext.classId,

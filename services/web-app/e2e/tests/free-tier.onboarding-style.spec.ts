@@ -243,8 +243,11 @@ for (const viewport of [
           })
         ).toBeVisible();
         await expect(
-          page.getByRole('list', { name: 'Onboarding progress' })
-        ).toContainText('Ask your administrator');
+          page.getByTestId('free-tier-setup-timeline-card')
+        ).toContainText('Administrator approval');
+        await expect(page.locator('[aria-current="step"]')).toContainText(
+          'Administrator approval'
+        );
       }
       await prisma.freeTierEmailLog.create({
         data: {

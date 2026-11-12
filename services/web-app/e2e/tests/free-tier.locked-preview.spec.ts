@@ -285,7 +285,7 @@ async function capture(page: import('@playwright/test').Page, state: string) {
 async function expectFreeDashboardAssignmentTiles(
   page: import('@playwright/test').Page
 ) {
-  const tiles = page.getByTestId('free-assignment-tiles');
+  const tiles = page.getByTestId('teacher-assignments-grid');
   await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(3);
   await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
     0
@@ -380,14 +380,14 @@ for (const width of [390, 1440]) {
     await expectFreeDashboardAssignmentTiles(page);
     await expectTileNamesWrapOnWordBoundaries(
       page,
-      page.getByTestId('free-assignment-tiles')
+      page.getByTestId('teacher-assignments-grid')
     );
     await expectDashboardAssignmentTileNameMetaNoOverlap(
       page,
-      page.getByTestId('free-assignment-tiles')
+      page.getByTestId('teacher-assignments-grid')
     );
     await expect(
-      page.getByTestId('free-assignment-tiles').locator('img')
+      page.getByTestId('teacher-assignments-grid').locator('img')
     ).toHaveCount(0);
     await expect(page.getByTestId('free-account-checklist')).toHaveCount(0);
     await expect(page.getByTestId('teacher-grading-grid')).toHaveCount(0);
@@ -501,14 +501,14 @@ for (const width of [390, 1440]) {
     await expectFreeDashboardAssignmentTiles(page);
     await expectDashboardAssignmentTileNameMetaNoOverlap(
       page,
-      page.getByTestId('free-assignment-tiles')
+      page.getByTestId('teacher-assignments-grid')
     );
     await expectTileNamesWrapOnWordBoundaries(
       page,
-      page.getByTestId('free-assignment-tiles')
+      page.getByTestId('teacher-assignments-grid')
     );
     await expect(
-      page.getByTestId('free-assignment-tiles').locator('img')
+      page.getByTestId('teacher-assignments-grid').locator('img')
     ).toHaveCount(3);
     if (width === 390) {
       await capture(page, 'dashboard-approved-390');
@@ -917,5 +917,5 @@ test('flag OFF keeps the waiting page and does not expose the in-app lock', asyn
   await page.goto('/app/free-tier/pending');
   await expect(page).toHaveURL(/free-tier\/pending/);
   await expectNoLockedPendingDashboardCard(page);
-  await expect(page.getByTestId('free-assignment-tiles')).toHaveCount(0);
+  await expect(page.getByTestId('teacher-assignments-grid')).toHaveCount(0);
 });
