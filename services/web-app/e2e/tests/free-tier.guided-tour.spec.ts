@@ -71,12 +71,16 @@ async function createFreeTeacherScratchDocument() {
       where: { user: { email: FREE_TEACHER_EMAIL }, role: 'TEACHER' },
       select: { id: true },
     });
+    const assignmentType = await prisma.assignmentType.findFirstOrThrow({
+      select: { id: true },
+    });
     return await prisma.document.create({
       data: {
         title: 'Guided tour scratch document',
         text: 'Enough words for the writing page tour to load.',
         html: '<p>Enough words for the writing page tour to load.</p>',
         membershipId: membership.id,
+        assignmentTypeId: assignmentType.id,
       },
       select: { id: true },
     });

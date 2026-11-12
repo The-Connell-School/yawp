@@ -160,6 +160,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
                   organizationId: true,
                   organization: {
                     select: {
+                      id: true,
                       name: true,
                       plan: true,
                       reporterEnabled: true,
@@ -274,6 +275,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
                   organizationId: true,
                   organization: {
                     select: {
+                      id: true,
                       name: true,
                       plan: true,
                       reporterEnabled: true,
@@ -321,7 +323,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
   const lessonPlannerEnabled =
     userId && membership?.organization
-      ? await isLessonPlannerEnabledForOrganization(membership.organization)
+      ? await isLessonPlannerEnabledForOrganization({
+          id: membership.organization.id,
+          plan: membership.organization.plan,
+        })
       : false;
 
   return data(

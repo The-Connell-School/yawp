@@ -68,7 +68,7 @@ export function NewAssignmentTypePickerGrid({
               <div className={assignmentTypeTileImageWrapClassName()}>
                 <AssignmentTypeTileImage
                   imageId={type.imageId}
-                  imageTitle={type.imageTitle}
+                  alt={type.imageTitle ?? type.label}
                   className={assignmentTypeTileImageClassName}
                 />
               </div>
@@ -94,7 +94,6 @@ export function NewAssignmentTypePickerGrid({
             key={tile.key}
             label={tile.label}
             imageId={tile.imageId}
-            imageTitle={null}
             tabIndex={-1}
           />
         ))}

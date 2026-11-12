@@ -217,9 +217,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const [
     insightRow,
     gradedCount,
-    assignmentTypes,
     documentCount,
     teacherPreviewDocumentId,
+    assignmentTypes,
   ] = await Promise.all([
     classInsightsEnabled
       ? prisma.classAssignmentInsight.findUnique({

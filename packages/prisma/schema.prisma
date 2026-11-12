@@ -567,15 +567,32 @@ model ClassAssignment {
   /// Optional due date for this class's deployment of the assignment.
   dueAt          DateTime?                @db.Timestamptz(6)
   documents               Document[]
-  teacherPreviewDocuments Document[]       @relation("TeacherPreviewDocuments")
+  teacherPreviewDocuments Document[]               @relation("TeacherPreviewDocuments")
   insight                 ClassAssignmentInsight?
+  /// The model-written summary of an exit ticket's responses (v3 plan, phase 5).
+  exitTicketSummary       ExitTicketClassSummary?
   documentGroups          DocumentGroup[]
   lessonPlans    LessonPlanConversation[]
+  studentFirstOpens ClassAssignmentStudentFirstOpen[]
 
   @@unique([assignmentId, classId])
   @@index([classId, createdAt(sort: Desc)])
   @@index([postAt])
   @@index([dueAt])
+}
+
+/// When a student first opened a class assignment (via Start or an equivalent entry).
+/// Drives the "new" pill on the student class dashboard until first open.
+model ClassAssignmentStudentFirstOpen {
+  id                String          @id @default(cuid())
+  openedAt          DateTime        @default(now()) @db.Timestamptz(6)
+  classAssignmentId String
+  classAssignment   ClassAssignment @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  membershipId      String
+  membership        OrgMembership   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([classAssignmentId, membershipId])
+  @@index([membershipId])
 }
 
 /// One collaboration group within one ClassAssignment.
@@ -783,6 +800,25 @@ model DocumentGroupMember {
   @@unique([groupId, membershipId])
   @@index([membershipId])
   @@index([groupId, removedAt])
+}
+
+/// What a class's exit tickets said, written by the model when the teacher
+/// asks: what landed, the shared confusion, and whether to reteach. One per
+/// class assignment, replaced on each generation. `inputFingerprint` names the
+/// set of responses it read, so the page can tell when new ones have arrived.
+/// Never holds student names.
+model ExitTicketClassSummary {
+  id                      String          @id @default(cuid())
+  createdAt               DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime        @default(now()) @updatedAt @db.Timestamptz(6)
+  classAssignmentId       String          @unique
+  classAssignment         ClassAssignment @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  model                   String?
+  responseCount           Int             @default(0)
+  inputFingerprint        String
+  summaryJson             Json
+  generatedByMembershipId String?
+  generatedAt             DateTime        @default(now()) @db.Timestamptz(6)
 }
 
 /// Class-wide, assignment-level feedback for the teacher: an AI summary of how
@@ -1067,7 +1103,7 @@ model Document {
   classAssignment          ClassAssignment?          @relation(fields: [classAssignmentId], references: [id], onDelete: SetNull)
   /// Try-it previews: tied to a class deployment for reuse and breadcrumbs, but not class student work.
   teacherPreviewClassAssignmentId String?
-  teacherPreviewClassAssignment   ClassAssignment?          @relation("TeacherPreviewDocuments", fields: [teacherPreviewClassAssignmentId], references: [id], onDelete: SetNull)
+  teacherPreviewClassAssignment   ClassAssignment?   @relation("TeacherPreviewDocuments", fields: [teacherPreviewClassAssignmentId], references: [id], onDelete: SetNull)
   assignmentModuleSessions AssignmentModuleSession[]
   comments                 DocumentComment[]
   writeJournals            DocumentWriteJournal[]
@@ -1422,6 +1458,7 @@ model OrgMembership {
   documentGroupMemberGrades        DocumentGroupMemberGrade[]
   assignmentModuleSessions         AssignmentModuleSession[]
   documentGroupMemberGradesGiven   DocumentGroupMemberGrade[] @relation("DocumentGroupMemberGradedBy")
+  classAssignmentFirstOpens        ClassAssignmentStudentFirstOpen[]
 
   writingPracticeAttempts   WritingPracticeAttempt[]   @relation("WritingPracticeAttemptStudent")
   writingPracticePromptSets WritingPracticePromptSet[] @relation("WritingPracticePromptSetStudent")
@@ -1655,9 +1692,18 @@ model LessonPlanConversation {
   /// per stack and reused until the stack changes (planSummaryKey).
   planSummary             Json?
   planSummaryKey          String?
-  /// When the teacher said "This lesson is set" (stack page redesign); null
-  /// while it is still being worked on. Built-in time is setAt − createdAt.
+  /// When the teacher tapped "Set this lesson" (stack page redesign); null
+  /// while it is still being worked on. Built-in time was setAt − createdAt;
+  /// with lesson_planner_active_time it is the working time below (Nov 3).
   setAt                   DateTime?                  @db.Timestamptz(6)
+  /// Seconds the teacher spent working on the lesson before setting it: the
+  /// planner pages count while they are in front of the teacher and in use.
+  activeSeconds           Int                        @default(0)
+  /// When that clock first counted this lesson; earlier activity is estimated.
+  activeSince             DateTime?                  @db.Timestamptz(6)
+  /// When the page last reported, so no report is credited more than the
+  /// time that has passed since the one before.
+  activeReportedAt        DateTime?                  @db.Timestamptz(6)
   /// The day this lesson will be taught. Null: not chosen yet.
   lessonDate              DateTime?                  @db.Timestamptz(6)
   /// The lesson's first name, kept once the teacher renames it, for "Started
@@ -1670,15 +1716,19 @@ model LessonPlanConversation {
   deckStackKey            String?
   /// Steps moved to "If you have extra time", out of the timed lesson (note 8c).
   extensionStepIds        Json?
+  /// Catalog Yawp! lesson slug when this conversation is a teacher copy of one.
+  yawpLessonSlug          String?
   messages                LessonPlanMessage[]
   materials               LessonPlanMaterial[]
   shareLinks              LessonShareLink[]
   uploads                 LessonPlanUpload[]
   assignmentLinks         LessonPlanAssignmentLink[]
+  slidePictures           LessonPlanUploadPicture[]
 
   @@index([membershipId, updatedAt(sort: Desc)])
   @@index([membershipId, starredAt(sort: Desc)])
   @@index([membershipId, publishedAt(sort: Desc)])
+  @@index([membershipId, yawpLessonSlug])
   @@index([organizationId])
   @@index([originClassAssignmentId])
   @@index([unitId, unitDay])
@@ -1764,6 +1814,12 @@ model LessonPlanMaterial {
   label             String?
   /// Null: derived (student-facing or writing steps have a handout).
   hasHandout        Boolean?
+  /// The teacher's call on whether this step is writing time (Nov 4
+  /// follow-up): false takes a lecture about pre-writing out of the writing
+  /// tally, true counts a step the rule missed. Null: Yawp! decides from the
+  /// step (step-types.ts), as before. Written only with
+  /// lesson_planner_writing_override.
+  writing           Boolean?
   /// The Yawp! assignment created from this step ("Created in Yawp! · Open").
   yawpAssignmentId  String?
   yawpHref          String?
@@ -1847,23 +1903,66 @@ model LessonShareLink {
 }
 
 /// A document a teacher gave the lesson planner as source material (Oct 21).
-/// Only the text read out of it is kept, never the file.
+/// Only the text read out of it is kept, never the file, unless the deck is
+/// kept whole (see `file`, Nov 1).
 model LessonPlanUpload {
-  id             String                  @id @default(cuid())
-  createdAt      DateTime                @default(now()) @db.Timestamptz(6)
+  id             String                    @id @default(cuid())
+  createdAt      DateTime                  @default(now()) @db.Timestamptz(6)
   name           String
   contentType    String
   byteSize       Int
   /// The text read out of the file, capped.
   text           String
   /// More text than was kept.
-  truncated      Boolean                 @default(false)
+  truncated      Boolean                   @default(false)
   /// Null until the lesson's first message, which attaches it.
   conversationId String?
-  conversation   LessonPlanConversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation   LessonPlanConversation?   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   /// The teacher who uploaded it; every read is scoped to them.
   membershipId   String
+  /// The original file (Nov 1), kept only for a PowerPoint with
+  /// lesson_planner_upload_pictures on. Deleted with the row.
+  file           Bytes?
+  /// Whether `file` was kept, readable without loading the bytes.
+  keptDeck       Boolean                   @default(false)
+  /// What the teacher wants from their deck (Nov 1): 'teach' (teach with
+  /// these slides) or 'refresh' (refresh into a Yawp! deck). Null: not said.
+  mode           String?
+  /// The planner reply that carries the deck made from it (Nov 4): the deck
+  /// kept as is, or the reworked one. Null until it is made.
+  deckMessageId  String?
+  pictures       LessonPlanUploadPicture[]
 
+  @@index([conversationId])
+  @@index([membershipId])
+}
+
+/// A picture from a teacher's uploaded deck (Nov 1), saved once however many
+/// slides show it. Only browser-safe raster formats are kept; private to the
+/// teacher who uploaded it, and deleted with the upload.
+model LessonPlanUploadPicture {
+  id             String                  @id @default(cuid())
+  createdAt      DateTime                @default(now()) @db.Timestamptz(6)
+  /// The deck it came from; null for a picture added in the slide editor.
+  uploadId       String?
+  upload         LessonPlanUpload?       @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  /// The lesson a picture added in the slide editor belongs to (Nov 4).
+  conversationId String?
+  conversation   LessonPlanConversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// Same as the upload's; every read is scoped to it.
+  membershipId   String
+  /// Its order in the deck, from 1: "picture 3".
+  position       Int
+  /// The slides (as the teacher numbers them) it appears on.
+  slideNumbers   Int[]
+  altText        String
+  contentType    String
+  byteSize       Int
+  width          Int?
+  height         Int?
+  blob           Bytes
+
+  @@index([uploadId])
   @@index([conversationId])
   @@index([membershipId])
 }
@@ -2012,6 +2111,55 @@ model Setting {
   valueType   String   @default("string")
 }
 
+enum AdminConfigAuditSource {
+  web_admin
+  internal_api
+}
+
+enum AdminConfigAuditEntityType {
+  feature_flag
+  access_list
+}
+
+enum AdminConfigAuditAction {
+  set
+  add
+  remove
+}
+
+/// Runtime allowlist rows (e.g. Teacher's Lounge bypass while a flag is off).
+model AccessListEntry {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  listKey         String
+  userId          String?
+  user            User?    @relation("AccessListUser", fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  email           String
+  note            String?
+  createdByUserId String?
+  createdByUser   User?    @relation("AccessListCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@unique([listKey, email])
+  @@index([listKey, userId])
+}
+
+/// Append-only audit of runtime admin config changes (feature flags and access lists).
+model AdminConfigAudit {
+  id          String                   @id @default(cuid())
+  createdAt   DateTime                 @default(now()) @db.Timestamptz(6)
+  actorUserId String?
+  actorEmail  String
+  source      AdminConfigAuditSource
+  entityType  AdminConfigAuditEntityType
+  entityKey   String
+  action      AdminConfigAuditAction
+  before      Json?
+  after       Json?
+  reason      String?
+
+  @@index([entityType, entityKey, createdAt(sort: Desc)])
+}
+
 /// A teacher-authored writing-practice assignment. The lesson slugs remain
 /// separate from regular assignment types so this feature can roll out without
 /// changing the existing essay-assignment data model.
@@ -2051,26 +2199,28 @@ model WritingPracticeClassAssignment {
 
 model User {
   classStudentHandles ClassStudentHandle[]
-  signonIdentities SignonIdentity[]
-  id                 String          @id @default(cuid())
-  createdAt          DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt          DateTime        @default(now()) @db.Timestamptz(6)
-  email              String?         @unique
-  username           String?         @unique
-  emailVerifiedAt    DateTime?       @db.Timestamptz(6)
-  mustChangePassword Boolean         @default(false)
-  name               String?
-  password           Password?
-  sessions           Session[]
-  memberships        OrgMembership[]
-  isTester           Boolean         @default(false)
-  testerFeedback     TesterFeedback[]
-  isAdmin            Boolean         @default(false)
-  isSuperAdmin       Boolean         @default(false)
-  mockAdminGranted   Boolean         @default(false)
+  signonIdentities    SignonIdentity[]
+  id                  String               @id @default(cuid())
+  createdAt           DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime             @default(now()) @db.Timestamptz(6)
+  email               String?              @unique
+  username            String?              @unique
+  emailVerifiedAt     DateTime?            @db.Timestamptz(6)
+  mustChangePassword  Boolean              @default(false)
+  name                String?
+  password            Password?
+  sessions            Session[]
+  memberships         OrgMembership[]
+  isTester            Boolean              @default(false)
+  testerFeedback      TesterFeedback[]
+  isAdmin             Boolean              @default(false)
+  isSuperAdmin        Boolean              @default(false)
+  mockAdminGranted    Boolean              @default(false)
   /// Dev-panel-only simulated students scoped to one class for demo data.
   simulatedForClassId String?
   tours              UserTour[]
+  accessListEntries   AccessListEntry[] @relation("AccessListUser")
+  accessListEntriesCreated AccessListEntry[] @relation("AccessListCreatedBy")
 
   @@index([simulatedForClassId])
 }

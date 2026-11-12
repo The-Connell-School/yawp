@@ -2475,7 +2475,6 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
             data.siteLicenseLockedAssignmentTiles
           }
           apHistoryAssignmentTypeId={data.apHistoryAssignmentTypeId}
-          exitTicketBuilderV3Enabled={data.exitTicketBuilderV3Enabled}
           classInsightsEnabled={classInsightsEnabled}
           teachingLocked={teachingLocked}
           teachingAccessAdminName={teachingAccessAdminName}

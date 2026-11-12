@@ -29,6 +29,7 @@ const emptyFacets: FacetValues = {
   textsOrUnits: [],
   cognitiveMoves: [],
   gradeBands: [],
+  sourceNeeds: [],
 };
 
 const emptyCounts: OptionCounts = {
@@ -38,6 +39,7 @@ const emptyCounts: OptionCounts = {
   textsOrUnits: {},
   cognitiveMoves: {},
   gradeBands: {},
+  sourceNeeds: {},
 };
 
 let root: Root | null = null;

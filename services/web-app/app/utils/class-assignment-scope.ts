@@ -6,6 +6,10 @@ export type ClassScopedDocumentWhere = {
 
 export type StudentClassDocumentsWhere = {
   OR: Array<
+    | (ClassScopedDocumentWhere & {
+        artifactKind: 'STUDENT';
+        membershipId: string;
+      })
     | (ClassScopedDocumentWhere & { membershipId: string })
     | {
         classAssignment: {

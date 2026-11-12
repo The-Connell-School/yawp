@@ -192,7 +192,7 @@ test('adapter reads authoritative usage, including invites and lifetime counts',
   );
 });
 test('checklist graded follows teacher saved or released grades in the class', async () => {
-  submissionFindFirst.mockImplementation(async (args: { where?: unknown }) => {
+  (submissionFindFirst as any).mockImplementation(async (args: { where?: unknown }) => {
     const where = args.where as { gradedByMembershipId?: string };
     if (where?.gradedByMembershipId) return { id: 'sub-graded' };
     return null;

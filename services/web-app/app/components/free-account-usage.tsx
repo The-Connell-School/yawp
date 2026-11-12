@@ -316,7 +316,7 @@ function FreeTierCarouselTileImage({
     >
       <AssignmentTypeTileImage
         imageId={imageId}
-        imageTitle={imageTitle}
+        alt={imageTitle ?? ''}
         className={freeTierAssignmentTileImageClassName}
       />
       {siteLicense ? (

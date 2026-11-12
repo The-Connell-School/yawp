@@ -39,7 +39,7 @@ describe('teacher page chrome hooks', () => {
   test('disabled for students', () => {
     useUser.mockReturnValue({
       selectedMembership: { role: 'STUDENT' },
-    });
+    } as unknown as ReturnType<typeof useUser>);
     expect(renderTeacherChromeFlags()).toBe('false-false');
   });
 });

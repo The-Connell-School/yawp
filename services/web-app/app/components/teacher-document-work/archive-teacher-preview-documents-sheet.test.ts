@@ -13,7 +13,7 @@ describe('archiveTeacherPreviewDocuments', () => {
       return new Response(null, { status: 204 });
     });
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = fetchMock as typeof fetch;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     try {
       await archiveTeacherPreviewDocuments(['doc-1', 'doc-2']);

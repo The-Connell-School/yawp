@@ -94,7 +94,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       pointValue: active.assignment.pointValue,
       strictness: strictness as GradingAssistantStrictnessLevel,
       tutorEnabled: active.assignment.tutorEnabled,
-      grammarGradingEnabled: active.assignment.grammarGradingEnabled,
+      grammarGradingEnabled: active.assignment.grammarGradingEnabled ?? false,
       collaborationEnabled: active.assignment.collaborationEnabled,
       promptAttachmentName: active.assignment.promptAttachmentName,
       assignmentTypeLocked: active.assignment.collaborationEnabled,
