@@ -7,10 +7,7 @@ import { provisionFreeClassroomForE2E } from '../helpers/provision-free-classroo
 import { seedSiteLicenseLockedCatalogForE2E } from '../helpers/seed-site-license-locked-catalog-for-e2e';
 import { dashboardAssignmentTileOverlapIssues } from '../helpers/dashboard-assignment-tile-overlap';
 import { expectGiveFeedbackAccessible } from '../helpers/dev-panel-feedback';
-import {
-  expectNewAssignmentBuilderPage,
-  fillAndCreateOnAssignmentBuilderV3,
-} from '../helpers/assignment-builder-v3-page';
+import { expectNewAssignmentBuilderPage } from '../helpers/assignment-builder-v3-page';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
     'Run class-step tests with ./bin/project test --profile free-tier-locked-preview-browser'
@@ -895,10 +892,11 @@ test('full-page assignment form shows inline approval alert and keeps field valu
   await exploreLockedApp(page, user.email!);
   await page.goto('/app/assignments/new');
   await expectNewAssignmentBuilderPage(page);
-  await fillAndCreateOnAssignmentBuilderV3(page, {
-    title: 'Community Gardens — Prewriting',
-    prompt: 'Pick one community garden in your town.',
-  });
+  await page.locator('#abv3-title').fill('Community Gardens — Prewriting');
+  await page.locator('#abv3-prompt').fill('Pick one community garden in your town.');
+  await page
+    .getByRole('button', { name: 'Create assignment' })
+    .click({ force: true });
   await expect(page.getByTestId('teaching-approval-required-alert')).toBeVisible();
   await expect(page.locator('#abv3-title')).toHaveValue('Community Gardens — Prewriting');
   await expect(page.locator('#abv3-prompt')).toHaveValue(
