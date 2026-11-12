@@ -10,7 +10,9 @@ mock.module('~/dev-panel/dev-panel-runtime.server', () => ({
   isDevPanelRuntimeEnabled: () => isDevPanelRuntimeEnabled(),
 }));
 
-const { requireFreeTierEnabled } = await import('./free-tier-feature-gate.server');
+const { requireFreeTierEnabled, requirePublicFreeTierEnabled } = await import(
+  './free-tier-feature-gate.server'
+);
 
 describe('requireFreeTierEnabled', () => {
   const oldPreviewSlug = process.env.PREVIEW_SLUG;
@@ -50,7 +52,58 @@ describe('requireFreeTierEnabled', () => {
   test('allows /app/free-tier routes on localhost dev panel when global flag is off (post-jump landing)', async () => {
     isFreeTierEnabled.mockResolvedValue(false);
     isDevPanelRuntimeEnabled.mockReturnValue(true);
+  if (process.env.CI === 'true') Reflect.deleteProperty(process.env, 'CI');
     await expect(requireFreeTierEnabled()).resolves.toBeUndefined();
     expect(isFreeTierEnabled).not.toHaveBeenCalled();
+  });
+
+  test('enforces the flag in CI even when dev panel runtime is on', async () => {
+    const oldCi = process.env.CI;
+    process.env.CI = 'true';
+    process.env.YAWP_ENVIRONMENT = 'development';
+    isFreeTierEnabled.mockResolvedValue(false);
+    isDevPanelRuntimeEnabled.mockReturnValue(true);
+    try {
+      const thrown = await requireFreeTierEnabled().catch((error) => error);
+      expect(thrown).toMatchObject({
+        type: 'DataWithResponseInit',
+        init: { status: 404 },
+      });
+      expect(isFreeTierEnabled).toHaveBeenCalled();
+    } finally {
+      if (oldCi === undefined) Reflect.deleteProperty(process.env, 'CI');
+      else process.env.CI = oldCi;
+    }
+  });
+
+  test('allows demo CI dev panel jumps when the flag row is off', async () => {
+    const oldCi = process.env.CI;
+    process.env.CI = 'true';
+    process.env.YAWP_ENVIRONMENT = 'demo';
+    isFreeTierEnabled.mockResolvedValue(false);
+    isDevPanelRuntimeEnabled.mockReturnValue(true);
+    try {
+      await expect(requireFreeTierEnabled()).resolves.toBeUndefined();
+      expect(isFreeTierEnabled).not.toHaveBeenCalled();
+    } finally {
+      if (oldCi === undefined) Reflect.deleteProperty(process.env, 'CI');
+      else process.env.CI = oldCi;
+    }
+  });
+});
+
+describe('requirePublicFreeTierEnabled', () => {
+  beforeEach(() => {
+    isFreeTierEnabled.mockReset().mockResolvedValue(true);
+    isDevPanelRuntimeEnabled.mockReset().mockReturnValue(true);
+  });
+
+  test('throws 404 when the flag is off even with dev panel runtime', async () => {
+    isFreeTierEnabled.mockResolvedValue(false);
+    const thrown = await requirePublicFreeTierEnabled().catch((error) => error);
+    expect(thrown).toMatchObject({
+      type: 'DataWithResponseInit',
+      init: { status: 404 },
+    });
   });
 });
