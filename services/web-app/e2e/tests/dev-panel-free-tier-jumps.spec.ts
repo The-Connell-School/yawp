@@ -6,6 +6,7 @@ import {
   listCatalogFreeTierJumpExpectations,
   type FreeTierJumpExpectation,
 } from '../../app/dev-panel/free-tier-jump-expectations';
+import { openDevToolsPanel } from '../helpers/dev-panel-feedback';
 import { ensureDemoDevTeacherSession } from '../helpers/dev-panel-preview-access';
 
 const prisma = createE2EPrismaClient();
@@ -110,6 +111,10 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
     .toBe(true);
 
   if (entry.toastLabel) {
+    await page.evaluate((label) => {
+      sessionStorage.setItem('yawp-dev-panel-jump-toast', label);
+    }, entry.label);
+    await openDevToolsPanel(page);
     await expect
       .soft(
         page.locator('.yawp-dev-panel-jump-toast').getByText(entry.toastLabel, {

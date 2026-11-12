@@ -32,6 +32,8 @@ export async function ensureDemoDevTeacherSession(
     form: { email: 'dev.teacher@yawp.local', redirectTo },
   });
   expect(response.ok(), await response.text()).toBeTruthy();
+  await page.goto(redirectTo);
+  await page.waitForLoadState('domcontentloaded');
 }
 
 export async function mintDevPanelPreviewAccessCookie(page: Page) {
