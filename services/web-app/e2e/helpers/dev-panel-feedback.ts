@@ -219,12 +219,24 @@ export async function openGiveFeedback(page: Page) {
   const tools = await openDevToolsPanel(page);
   const feedbackRow = devPanelGiveFeedbackRow(tools);
   if (await feedbackRow.isVisible().catch(() => false)) {
-    await feedbackRow.click();
-  } else {
-    await expect(giveFeedbackDialog(page)).toBeVisible({ timeout: 60_000 });
+    const expanded = await feedbackRow.getAttribute('aria-expanded');
+    if (expanded !== 'true') {
+      await feedbackRow.click();
+      await expect(feedbackRow).toHaveAttribute('aria-expanded', 'true', {
+        timeout: 15_000,
+      });
+    }
+    const inline = tools.locator('.yawp-dev-panel-give-feedback-inline');
+    await expect(inline).toBeVisible({ timeout: 60_000 });
+    return {
+      panel: inline,
+      noteLabel: 'What happened?',
+      hasSeverity: false,
+    };
   }
+  await expect(giveFeedbackDialog(page)).toBeVisible({ timeout: 60_000 });
   return {
-    panel: page.getByRole('dialog', { name: 'Give feedback' }),
+    panel: giveFeedbackDialog(page),
     noteLabel: 'Note',
     hasSeverity: false,
   };

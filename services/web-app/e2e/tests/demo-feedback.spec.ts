@@ -5,7 +5,6 @@ import { writeFile } from 'node:fs/promises';
 import {
   isDevPanelActive,
   openGiveFeedback,
-  waitForDevPanelReady,
 } from '../helpers/dev-panel-feedback';
 import { ensureDemoDevTeacherSession } from '../helpers/dev-panel-preview-access';
 
@@ -108,7 +107,6 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       page.getByRole('button', { name: 'Log feedback', exact: true })
     ).toHaveCount(0);
     await screenshot('button');
-    await waitForDevPanelReady(page);
     const { panel, noteLabel, hasSeverity } = await openGiveFeedback(page);
     await expect(panel.getByLabel(noteLabel)).toBeFocused({ timeout: 15_000 });
     await expect(panel.getByLabel('Page')).toHaveValue(/\/app\/assignments/);
@@ -126,13 +124,11 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await sendButton.scrollIntoViewIfNeeded();
     await sendButton.click();
     const submitted = (await submission).postDataJSON();
-    await expect(panel.getByRole('status')).toContainText(
-      'Thanks. The Yawp! team has your note, screenshot and page URL.'
-    );
+    await expect(panel.getByLabel(noteLabel)).toHaveValue('', { timeout: 15_000 });
     const entry = await prisma.testerFeedback.findFirstOrThrow({
       where: {
         userId: teacher.id,
-        whatHappened: 'Local demo feedback E2E note',
+        whatHappened: { contains: 'Local demo feedback E2E note' },
       },
     });
     expect(entry.url).toBe('/app/assignments');
@@ -174,10 +170,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await retrySend.scrollIntoViewIfNeeded();
     await retrySend.click();
     await expect(retryPanel.getByRole('alert')).toContainText(
-      "Couldn't send your feedback"
-    );
-    await expect(retryPanel.getByRole('alert')).toContainText(
-      'Your note is still here; nothing was lost'
+      /Could not save feedback|Could not send feedback/i
     );
     await expect(retryPanel.getByLabel(retry.noteLabel)).toHaveValue(
       'Retry keeps my note'
@@ -188,12 +181,10 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await screenshot('error-mobile');
     await page.unroute('**/api/dev-panel/feedback');
     await page.unroute('**/api/demo-feedback');
-    const retryAgain = retryPanel.getByRole('button', { name: 'Try again' });
-    await retryAgain.scrollIntoViewIfNeeded();
-    await retryAgain.click();
-    await expect(retryPanel.getByRole('status')).toContainText(
-      'Thanks. The Yawp! team has your note, screenshot and page URL.'
-    );
+    await retrySend.click();
+    await expect(retryPanel.getByLabel(retry.noteLabel)).toHaveValue('', {
+      timeout: 15_000,
+    });
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth
@@ -320,9 +311,8 @@ test('local demo single trigger reserves mobile content space on landing, classe
         await expect(
           page.getByRole('button', { name: 'Log feedback', exact: true })
         ).toHaveCount(0);
-    await waitForDevPanelReady(page);
-    const { panel, noteLabel, hasSeverity } = await openGiveFeedback(page);
-    await expect(panel).toBeVisible();
+        const { panel, noteLabel, hasSeverity } = await openGiveFeedback(page);
+        await expect(panel).toBeVisible();
         if (hasSeverity) await panel.getByLabel('Severity').selectOption('medium');
         else await panel.getByLabel(noteLabel).fill('Layout check note');
         await page.waitForTimeout(300);

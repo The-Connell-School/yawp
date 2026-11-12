@@ -62,8 +62,10 @@ test.describe('Dev panel class simulation', () => {
     });
     await expect(clearSimulated).toBeEnabled({ timeout: 60_000 });
     await clearSimulated.click();
-    await expect(page.getByRole('alertdialog')).toBeVisible();
-    await page.getByRole('button', { name: 'Clear', exact: true }).click();
+    await expect(
+      panelAgain.getByRole('group', { name: 'Confirm clear' })
+    ).toBeVisible();
+    await panelAgain.getByRole('button', { name: 'Clear', exact: true }).click();
     await expect(page.getByText(/Cleared 3 simulated/i)).toBeVisible({ timeout: 60_000 });
     await page.goto(`/app/my-classes/${klass!.id}?tab=students`);
     await expect(page.getByText('Alex Rivera')).toHaveCount(0);
