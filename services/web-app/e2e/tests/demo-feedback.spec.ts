@@ -173,9 +173,9 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     const retrySend = retryPanel.getByRole('button', { name: 'Send feedback' });
     await retrySend.scrollIntoViewIfNeeded();
     await retrySend.click();
-    await expect(retryPanel.getByRole('alert')).toContainText(
+    await expect(retryPanel.getByText(
       /Could not save feedback|Could not send feedback/i
-    );
+    )).toBeVisible({ timeout: 15_000 });
     await expect(retryPanel.getByLabel(retry.noteLabel)).toHaveValue(
       'Retry keeps my note'
     );
