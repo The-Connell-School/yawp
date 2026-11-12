@@ -161,8 +161,13 @@ test.describe('Dev panel artboard evidence', () => {
     await shot(page, '57');
 
     await feedbackDialog.getByLabel('What happened?').fill('Evidence note for sent state');
+    const feedbackPost = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/dev-panel/feedback') &&
+        response.request().method() === 'POST'
+    );
     await sendFeedback.click();
-    await expect(feedbackDialog.getByLabel('What happened?')).toHaveValue('');
+    expect((await feedbackPost).ok()).toBeTruthy();
     await shot(page, '59');
 
     ({ panel: feedbackDialog } = await openGiveFeedback(page));
