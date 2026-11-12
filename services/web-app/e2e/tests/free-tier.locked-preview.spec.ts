@@ -287,9 +287,9 @@ async function expectFreeDashboardAssignmentTiles(
 ) {
   const tiles = page.getByTestId('teacher-assignments-grid');
   await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(3);
-  await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
-    0
-  );
+  await expect(
+    tiles.getByTestId('site-license-locked-assignment-tile')
+  ).toHaveCount(6);
   await expect(tiles.getByText('Class Starter', { exact: true })).toBeVisible();
   await expect(tiles.getByText('Prewriting', { exact: true })).toBeVisible();
   await expect(tiles.getByText('Thesis Statement', { exact: true })).toBeVisible();

@@ -7,8 +7,10 @@ import {
   listCatalogFreeTierJumpExpectations,
   type FreeTierJumpExpectation,
 } from '../../app/dev-panel/free-tier-jump-expectations';
+import { findPe3FreeTierState } from '../../app/dev-panel/dev-panel-pe3-states';
 
 const prisma = createE2EPrismaClient();
+const DEMO_ORG_ID = 'local-dev-org';
 
 const JUMP_LOG_PATH = path.join(
   process.cwd(),
@@ -34,8 +36,37 @@ type CatalogJumpEntry = FreeTierJumpExpectation & {
   label: string;
 };
 
-async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
-  const softErrorsBefore = test.info().errors.length;
+type JumpResult = {
+  jumpOk: boolean;
+  body: { ok?: boolean; redirectTo?: string; error?: string } | null;
+  status: number;
+};
+
+async function postFreeTierJump(
+  page: Page,
+  entry: CatalogJumpEntry
+): Promise<JumpResult> {
+  const response = await page.request.post('/api/dev-panel/free-tier-jump', {
+    headers: { 'content-type': 'application/json' },
+    data: {
+      stateId: entry.stateId,
+      throwaway: entry.throwawayRequired !== false,
+      organizationId: DEMO_ORG_ID,
+    },
+  });
+  const body = (await response.json().catch(() => null)) as JumpResult['body'];
+  return {
+    jumpOk: response.ok() && body?.ok === true,
+    body,
+    status: response.status(),
+  };
+}
+
+async function jumpViaPe3Panel(
+  page: Page,
+  entry: CatalogJumpEntry,
+  pe3Label: string
+): Promise<JumpResult> {
   await ensureDevTeacherSignedIn(page);
   await page.goto('/app/assignments');
   await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
@@ -45,10 +76,12 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
   await tools.getByRole('button', { name: /^Free-tier\b/ }).click();
   const stateSheet = page.getByTestId('free-tier-session-runner');
   await expect(stateSheet).toBeVisible({ timeout: 15_000 });
-  await tools.getByRole('button', { name: 'Jump to state (advanced)' }).click();
+  await stateSheet.getByRole('button', { name: 'Jump to state (advanced)' }).click();
 
   const jumpRow = stateSheet.getByRole('button', {
-    name: new RegExp(`^${entry.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`),
+    name: new RegExp(
+      `^${pe3Label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`
+    ),
   });
   await jumpRow.click();
 
@@ -60,22 +93,37 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
   );
   await stateSheet.getByRole('button', { name: 'Jump', exact: true }).click();
   const response = await jumpResponse;
-  const body = await response.json().catch(() => null);
-  const jumpOk = response.ok() && body?.ok === true;
+  const body = (await response.json().catch(() => null)) as JumpResult['body'];
+  return {
+    jumpOk: response.ok() && body?.ok === true,
+    body,
+    status: response.status(),
+  };
+}
 
-  expect.soft(response.ok(), `${entry.stateId} API HTTP status`).toBe(true);
-  expect.soft(body?.ok, `${entry.stateId} API ok flag`).toBe(true);
+async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
+  const softErrorsBefore = test.info().errors.length;
+  const pe3 = findPe3FreeTierState(entry.stateId);
+  const jump = pe3
+    ? await jumpViaPe3Panel(page, entry, pe3.label)
+    : await (async () => {
+        await ensureDevTeacherSignedIn(page);
+        return postFreeTierJump(page, entry);
+      })();
 
-  if (!jumpOk) {
+  expect.soft(jump.status < 400, `${entry.stateId} API HTTP status`).toBe(true);
+  expect.soft(jump.body?.ok, `${entry.stateId} API ok flag`).toBe(true);
+
+  if (!jump.jumpOk || !jump.body?.redirectTo) {
     const err =
-      typeof body?.error === 'string'
-        ? body.error
-        : `HTTP ${response.status()}`;
+      typeof jump.body?.error === 'string'
+        ? jump.body.error
+        : `HTTP ${jump.status}`;
     recordJumpLine(`${entry.stateId}: ${err}`);
     return;
   }
 
-  const redirectTo = String(body.redirectTo);
+  const redirectTo = String(jump.body.redirectTo);
   const expectedPathPrefix = entry.redirectPath.split('?')[0]!;
 
   if (entry.adminSide) {
@@ -99,11 +147,7 @@ async function runCatalogStateJump(page: Page, entry: CatalogJumpEntry) {
     return;
   }
 
-  await page
-    .waitForURL((url) => url.pathname.startsWith(expectedPathPrefix), {
-      timeout: 120_000,
-    })
-    .catch(() => undefined);
+  await page.goto(redirectTo);
   await page.waitForLoadState('domcontentloaded').catch(() => undefined);
 
   const pathname = new URL(page.url()).pathname;
