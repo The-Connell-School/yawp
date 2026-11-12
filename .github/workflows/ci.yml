@@ -1155,6 +1155,7 @@ jobs:
             app/domain/lesson-planner/stack-items.test.ts \
             app/domain/lesson-planner/stack-create-link.test.ts \
             app/domain/lesson-planner/prompt-ids.test.ts \
+            app/domain/lesson-planner/step-type-tags.test.ts \
             app/domain/lesson-planner/lesson-length.test.ts \
             app/domain/lesson-planner/plan-timing.test.ts \
             app/domain/lesson-planner/plan-steps.test.ts \
