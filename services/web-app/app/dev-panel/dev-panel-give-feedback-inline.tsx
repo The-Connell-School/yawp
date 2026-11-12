@@ -127,7 +127,7 @@ export function DevPanelGiveFeedbackInline({
         const message =
           typeof result?.error === 'string' ? result.error : 'Could not send feedback.';
         setServerError(message);
-        setError(message);
+        setError('');
         setStatus('error');
         return;
       }

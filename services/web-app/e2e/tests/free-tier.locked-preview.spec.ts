@@ -883,7 +883,7 @@ test('locked assignments tab shows sample rows and locked documents pill', async
   ).toBeVisible();
 });
 
-test('full-page assignment form shows inline approval alert and keeps field values', async ({
+test('full-page assignment form keeps draft when create stays teaching-locked', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -894,10 +894,10 @@ test('full-page assignment form shows inline approval alert and keeps field valu
   await expectNewAssignmentBuilderPage(page);
   await page.locator('#abv3-title').fill('Community Gardens — Prewriting');
   await page.locator('#abv3-prompt').fill('Pick one community garden in your town.');
-  await page
-    .getByRole('button', { name: 'Create assignment' })
-    .click({ force: true });
-  await expect(page.getByTestId('teaching-approval-required-alert')).toBeVisible();
+  const create = page.getByRole('button', { name: 'Create assignment' });
+  await expect(create).toHaveAttribute('data-teaching-locked', 'true');
+  await create.click({ force: true });
+  await expect(page.getByTestId('teaching-approval-required-alert')).toHaveCount(0);
   await expect(page.locator('#abv3-title')).toHaveValue('Community Gardens — Prewriting');
   await expect(page.locator('#abv3-prompt')).toHaveValue(
     'Pick one community garden in your town.'

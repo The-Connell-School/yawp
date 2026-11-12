@@ -185,7 +185,7 @@ test.describe('Dev panel artboard evidence', () => {
       });
     });
     await feedbackDialog.getByRole('button', { name: 'Send feedback' }).click();
-    await expect(feedbackDialog.getByRole('alert')).toContainText(
+    await expect(feedbackDialog.locator('.yawp-dev-panel-pe3-error')).toContainText(
       /Could not save feedback|Could not send feedback/i
     );
     await expect(feedbackDialog.getByLabel('What happened?')).toHaveValue(
