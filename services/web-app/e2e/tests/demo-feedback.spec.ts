@@ -53,39 +53,43 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
         page.getByRole('button', { name: 'Give feedback', exact: true })
       ).toHaveCount(0);
     }
-    const logFeedback = page.getByRole('button', {
-      name: 'Log feedback',
-      exact: true,
-    });
-    await expect(logFeedback).toBeVisible();
-    await screenshot('before-disabled');
-    await logFeedback.click();
-    const legacy = page.getByRole('dialog', { name: 'Log feedback' });
-    await legacy
-      .getByLabel('What I did')
-      .fill('Local legacy demo compatibility');
-    await legacy
-      .getByLabel('What happened')
-      .fill('Legacy note remains readable');
-    await legacy
-      .getByLabel('What I wish it did')
-      .fill('Legacy wish remains readable');
-    await legacy.getByLabel('Severity').selectOption('low');
-    await legacy.getByRole('button', { name: 'Save feedback' }).click();
-    await expect(legacy.getByRole('status')).toHaveText(
-      'Feedback saved. Thank you.'
-    );
-    const legacyEntry = await prisma.testerFeedback.findFirstOrThrow({
-      where: {
-        userId: teacher.id,
-        whatIDid: 'Local legacy demo compatibility',
-      },
-    });
-    expect(legacyEntry.actions).toBeNull();
-    expect(legacyEntry.severity).toBe('low');
-    expect(legacyEntry.whatHappened).toBe('Legacy note remains readable');
-    expect(legacyEntry.whatIWish).toBe('Legacy wish remains readable');
-    await page.keyboard.press('Escape');
+    if (await isDevPanelActive(page)) {
+      await screenshot('before-disabled');
+    } else {
+      const logFeedback = page.getByRole('button', {
+        name: 'Log feedback',
+        exact: true,
+      });
+      await expect(logFeedback).toBeVisible();
+      await screenshot('before-disabled');
+      await logFeedback.click();
+      const legacy = page.getByRole('dialog', { name: 'Log feedback' });
+      await legacy
+        .getByLabel('What I did')
+        .fill('Local legacy demo compatibility');
+      await legacy
+        .getByLabel('What happened')
+        .fill('Legacy note remains readable');
+      await legacy
+        .getByLabel('What I wish it did')
+        .fill('Legacy wish remains readable');
+      await legacy.getByLabel('Severity').selectOption('low');
+      await legacy.getByRole('button', { name: 'Save feedback' }).click();
+      await expect(legacy.getByRole('status')).toHaveText(
+        'Feedback saved. Thank you.'
+      );
+      const legacyEntry = await prisma.testerFeedback.findFirstOrThrow({
+        where: {
+          userId: teacher.id,
+          whatIDid: 'Local legacy demo compatibility',
+        },
+      });
+      expect(legacyEntry.actions).toBeNull();
+      expect(legacyEntry.severity).toBe('low');
+      expect(legacyEntry.whatHappened).toBe('Legacy note remains readable');
+      expect(legacyEntry.whatIWish).toBe('Legacy wish remains readable');
+      await page.keyboard.press('Escape');
+    }
 
     expect(
       (
