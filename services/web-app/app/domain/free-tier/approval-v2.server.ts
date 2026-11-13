@@ -369,7 +369,7 @@ export async function forwardApprovalRequest(args: {
   const parsed = forwardApprovalSchema.safeParse({
     newAdminName: args.newAdminName,
     newAdminEmail: args.newAdminEmail,
-    newAdminRole: args.newAdminRole ?? '',
+    newAdminRole: args.newAdminRole?.trim() || 'Administrator',
   });
   if (!parsed.success)
     return {
@@ -557,7 +557,7 @@ export async function forwardApprovalByToken(args: {
   const parsed = forwardApprovalSchema.safeParse({
     newAdminName: args.newAdminName,
     newAdminEmail: args.newAdminEmail,
-    newAdminRole: args.newAdminRole ?? '',
+    newAdminRole: args.newAdminRole?.trim() || 'Administrator',
   });
   if (!parsed.success) {
     return {

@@ -16,9 +16,8 @@ test.describe('Free classroom bundle quotas', () => {
 
     await page.goto('/app/assignments');
     await page.waitForLoadState('networkidle');
-    const newAssignment = page.getByRole('button', {
-      name: /New [Aa]ssignment/,
-    });
+    await page.getByTestId('my-assignments-filter').click();
+    const newAssignment = page.getByTestId('my-assignments-new-assignment');
     await expect(newAssignment).toBeVisible({ timeout: 20_000 });
     await newAssignment.click();
     await expect(page).toHaveURL(/\/app\/assignments\/new/, {

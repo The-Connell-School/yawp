@@ -98,7 +98,7 @@ async function expectLockedPendingDashboardCard(
     .first();
   await expect(card).toBeVisible();
   await expect(
-    card.getByText(new RegExp(`Request sent to ${adminName}`))
+    card.getByText(new RegExp(`Awaiting approval from ${adminName}`))
   ).toBeVisible();
 }
 
