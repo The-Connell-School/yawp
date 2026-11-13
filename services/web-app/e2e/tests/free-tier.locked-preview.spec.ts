@@ -283,6 +283,14 @@ async function capture(page: import('@playwright/test').Page, state: string) {
   }
 }
 
+const FREE_DASHBOARD_BUNDLE_TILE_LABELS = [
+  'Class Starter',
+  'Exit Ticket',
+  '5-Paragraph Essay',
+  'Pre-writing',
+  'Thesis Builder',
+] as const;
+
 /** Pending and approved free dashboards expose the five entitled bundle kinds. */
 async function expectFreeDashboardAssignmentTiles(
   page: import('@playwright/test').Page
@@ -292,11 +300,10 @@ async function expectFreeDashboardAssignmentTiles(
   await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
     0
   );
-  await expect(tiles.getByText('Class Starter', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('Exit Ticket', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('5-Paragraph Essay', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('Pre-writing', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('Thesis Builder', { exact: true })).toBeVisible();
+  const tileNames = await tiles
+    .getByTestId('assignment-type-tile-name')
+    .allTextContents();
+  expect(tileNames).toEqual([...FREE_DASHBOARD_BUNDLE_TILE_LABELS]);
 }
 
 test.describe.configure({ mode: 'serial' });

@@ -56,11 +56,16 @@ test('free-tier flag on shows five dashboard tiles and locked tiles in picker', 
   );
   await expect(tiles).not.toContainText('Available with a site license.');
   await expect(tiles.locator('img')).toHaveCount(0);
-  await expect(tiles.getByText('Class Starter', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('Exit Ticket', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('5-Paragraph Essay', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('Pre-writing', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('Thesis Builder', { exact: true })).toBeVisible();
+  const tileNames = await tiles
+    .getByTestId('assignment-type-tile-name')
+    .allTextContents();
+  expect(tileNames).toEqual([
+    'Class Starter',
+    'Exit Ticket',
+    '5-Paragraph Essay',
+    'Pre-writing',
+    'Thesis Builder',
+  ]);
   await page.getByRole('button', { name: 'New assignment' }).click();
   await expect(
     page.getByTestId('site-license-locked-assignment-tile').first()
