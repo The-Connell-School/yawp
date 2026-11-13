@@ -252,6 +252,10 @@ export const EXIT_TICKET_ANSWER_TYPE_OPTIONS: ExitTicketAnswerTypeOption[] = [
   },
 ];
 
+/** One line under "Is there a correct answer?" on the builder (Brian, Oct 31). */
+export const EXIT_TICKET_ANSWER_TYPE_HELPER_TEXT =
+  'Say yes and fill in the acceptable answer(s). Say no and responses are graded on effort and overall quality.';
+
 export function exitTicketAnswerType(
   value: string | null | undefined
 ): ExitTicketAnswerType | null {
@@ -302,7 +306,7 @@ export const EXIT_TICKET_FOCUS_OPTIONS: ExitTicketFocusOption[] = [
       'Can they put the idea in their own words instead of repeating yours?',
     topicPlaceholder: 'e.g., how to work a quotation into your own sentence',
     template:
-      'In your own words, explain {topic}. Write it the way you would explain it to someone who missed class today — not the definition you were given, but what you actually understand it to mean.',
+      'In your own words, explain {topic}.',
     gradingCriteria:
       'Judge whether the student can restate the idea in their own words and whether their explanation would genuinely help someone who missed the lesson. Fluent phrasing borrowed from the teacher or the textbook, with nothing showing the student has made the idea theirs, is names it only however polished it sounds.',
   },
@@ -334,13 +338,25 @@ export const BASIC_EXIT_TICKET_PROMPT =
   'Tell me, in your own words, what you learned today. Don’t just name the topic — explain what you understand now that you didn’t understand at the start of class, and be honest about the parts you are still unsure of.';
 
 /**
- * Appended to both shapes. Exit tickets are short by nature, and without this
- * a lot of students answer in one line; the ask for elaboration is the whole
- * difference between a check that tells the teacher something and one that
- * does not.
+ * How every "explain it in your own words" ticket ends, exactly (Brian's
+ * wording rule, Oct 31). Exit tickets are short by nature, and without an ask
+ * for more a lot of students answer in one line.
+ *
+ * Not every ticket is a "more" situation, though: a question ticket just asks
+ * the question, and a teacher's own question is theirs. Those end with the
+ * polish note alone. See `exitTicketEnding`.
+ *
+ * Prompts are composed when a ticket is made and stored, so tickets made
+ * before this keep the ending they were made with.
  */
 export const EXIT_TICKET_ELABORATION_NOTE =
-  'Write as much as you can, and go further than your first sentence — the more you explain your thinking, the more this is worth. Don’t worry about polish. This is about what you understand, not how neatly you say it.';
+  'Keep it conversational, in your words, and write as much as you can — the more you can explain your thinking, the better. Don’t worry too much about polish. This is about what you understand, not writing perfectly.';
+
+/**
+ * Fine on any exit ticket: they are rarely, if ever, graded on grammar,
+ * syntax or polish, and by default are not scored on them at all.
+ */
+export const EXIT_TICKET_POLISH_NOTE = 'Don’t worry too much about polish.';
 
 /**
  * The reflection prompts a teacher can pick from, plus their own. A short list
@@ -773,12 +789,29 @@ function reflectionPromptText(config: ExitTicketConfig): string {
 }
 
 /** The prompt the student actually sees. */
+/**
+ * The line a ticket ends with. Explain-it tickets ask for as much as students
+ * can write; question tickets (what are you still wondering?) and a teacher's
+ * own question get no length push, only the polish note.
+ */
+function exitTicketEnding(config: ExitTicketConfig): string {
+  if (config.mode === 'basic') {
+    const id = config.reflectionPrompt?.id;
+    return id === 'wondering' || id === 'custom'
+      ? EXIT_TICKET_POLISH_NOTE
+      : EXIT_TICKET_ELABORATION_NOTE;
+  }
+  return config.focus === 'ask-question'
+    ? EXIT_TICKET_POLISH_NOTE
+    : EXIT_TICKET_ELABORATION_NOTE;
+}
+
 export function composeExitTicketPrompt(config: ExitTicketConfig): string {
   if (config.activity && config.promptText) {
     return `${config.promptText}\n\n${exitTicketCloser(config.activity, config.starter)}`;
   }
   if (config.mode === 'basic') {
-    return `${reflectionPromptText(config)}\n\n${EXIT_TICKET_ELABORATION_NOTE}`;
+    return `${reflectionPromptText(config)}\n\n${exitTicketEnding(config)}`;
   }
 
   const option = exitTicketFocusOption(config.focus);
@@ -793,7 +826,7 @@ export function composeExitTicketPrompt(config: ExitTicketConfig): string {
     '{topic}',
     normalizeTopic(config.topic)
   );
-  return `${sentence}\n\n${EXIT_TICKET_ELABORATION_NOTE}`;
+  return `${sentence}\n\n${exitTicketEnding(config)}`;
 }
 
 export type ExitTicketConfigParseResult =

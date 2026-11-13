@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '~/components/ui/select';
 import {
+  EXIT_TICKET_ANSWER_TYPE_HELPER_TEXT,
   EXIT_TICKET_ANSWER_TYPE_OPTIONS,
   EXIT_TICKET_ASSESS_FOR_MAX_LENGTH,
   EXIT_TICKET_GRADING_BASIS_OPTIONS,
@@ -356,8 +357,15 @@ export function ExitTicketBuilder({
               <Label id="assignment-create-exit-ticket-answer-label">
                 Is there a correct answer?
               </Label>
+              <p
+                id="assignment-create-exit-ticket-answer-help"
+                className="text-sm text-muted-foreground"
+              >
+                {EXIT_TICKET_ANSWER_TYPE_HELPER_TEXT}
+              </p>
               <RadioGroup
                 aria-labelledby="assignment-create-exit-ticket-answer-label"
+                aria-describedby="assignment-create-exit-ticket-answer-help"
                 value={answerType}
                 onValueChange={onAnswerTypeChange}
                 disabled={disabled}

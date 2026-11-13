@@ -1,8 +1,9 @@
 /**
- * The teacher's call on writing (Nov 4 follow-up): a lecture that introduces
- * a writing idea ("Pre-writing: the four moves") reads as writing by the
- * rule, and counts in the writing tally. The teacher can say it isn't, take
- * that back, and count a step the rule missed. And the finish line's button
+ * The teacher's call on writing (Nov 4 follow-up): a quick write reads as
+ * writing by the rule and counts in the writing tally. The teacher can say it
+ * isn't (they will talk it through instead), take that back, and count a
+ * step the rule missed. (It stood on a lecture, "Pre-writing: the four
+ * moves", until Kevin's Nov 6 fix stopped the rule counting lectures.) And the finish line's button
  * says what it does: "Set this lesson".
  *
  * Every reply is seeded: the model is never called. Each test turns on the
@@ -19,9 +20,9 @@ const ALL_FLAGS: LessonPlannerReviewFlag[] = [...STACK_FLAGS, 'lesson_planner_wr
 const REPLY = [
   '# Pre-Writing',
   '',
-  '## Pre-writing: the four moves (10 min)',
+  '## Quick write: the four moves (10 min)',
   '',
-  'Slides on brainstorming, listing, mapping and freewriting, with an example of each.',
+  'Quick write: of brainstorming, listing, mapping and freewriting, which would you reach for first, and why?',
   '',
   '## Hook activity: What’s in your bag? (15 min)',
   '',
@@ -93,7 +94,7 @@ test.describe("Lesson Planner — the teacher's call on writing (Nov 4 follow-up
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     const { conversationId } = await seedLesson(page, e2eContext);
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
-    const card = page.getByTestId('run-card').filter({ hasText: 'Pre-writing: the four moves' });
+    const card = page.getByTestId('run-card').filter({ hasText: 'Quick write: the four moves' });
     await expect(card.getByTestId('writing-badge')).toBeVisible();
     await card.getByTestId('run-card-title').click();
     await expect(card.getByTestId('run-card-detail')).toBeVisible();
@@ -119,7 +120,7 @@ test.describe("Lesson Planner — the teacher's call on writing (Nov 4 follow-up
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
 
     const card = (title: string) => page.getByTestId('run-card').filter({ hasText: title });
-    const lecture = card('Pre-writing: the four moves');
+    const lecture = card('Quick write: the four moves');
     const strip = page.getByTestId('writing-strip');
 
     // The rule counts the lecture: 10 of 50 minutes.
@@ -134,19 +135,19 @@ test.describe("Lesson Planner — the teacher's call on writing (Nov 4 follow-up
     await expect(lecture.getByTestId('writing-badge')).toHaveCount(0);
     await expect(strip).toContainText('0% of class is writing · 0 min');
     await expect(page.getByTestId('stack-change')).toContainText('Not counted as writing.');
-    await expect.poll(async () => (await writingCalls(conversationId))['Pre-writing: the four moves']).toBe(false);
+    await expect.poll(async () => (await writingCalls(conversationId))['Quick write: the four moves']).toBe(false);
 
     // Undo puts it back as Yawp! had it.
     await page.getByTestId('stack-change').getByRole('button', { name: 'Undo' }).click();
     await expect(lecture.getByTestId('writing-badge')).toBeVisible();
     await expect(strip).toContainText('10 min');
-    await expect.poll(async () => (await writingCalls(conversationId))['Pre-writing: the four moves']).toBeNull();
+    await expect.poll(async () => (await writingCalls(conversationId))['Quick write: the four moves']).toBeNull();
 
     // Taken out again, it stays out after a reload, marked as the teacher's call.
     if (!(await lecture.getByTestId('run-card-detail').isVisible())) await lecture.getByTestId('run-card-title').click();
     await lecture.getByTestId('step-writing-toggle').click();
     await expect(lecture.getByTestId('writing-badge')).toHaveCount(0);
-    await expect.poll(async () => (await writingCalls(conversationId))['Pre-writing: the four moves']).toBe(false);
+    await expect.poll(async () => (await writingCalls(conversationId))['Quick write: the four moves']).toBe(false);
     await page.reload();
     await expect(lecture.getByTestId('writing-badge')).toHaveCount(0);
     await expect(strip).toContainText('0 min');
@@ -157,7 +158,7 @@ test.describe("Lesson Planner — the teacher's call on writing (Nov 4 follow-up
     await expect(lecture.getByTestId('step-writing-toggle')).toHaveText('Count as writing');
     await lecture.getByTestId('step-writing-toggle').click();
     await expect(lecture.getByTestId('writing-badge')).toBeVisible();
-    await expect.poll(async () => (await writingCalls(conversationId))['Pre-writing: the four moves']).toBeNull();
+    await expect.poll(async () => (await writingCalls(conversationId))['Quick write: the four moves']).toBeNull();
     await expect(lecture.getByTestId('step-writing-your-call')).toHaveCount(0);
   });
 

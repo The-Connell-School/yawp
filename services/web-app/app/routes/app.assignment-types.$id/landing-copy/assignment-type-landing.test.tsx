@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router';
+import type { LandingPageKey } from './content';
 
 const { LandingDescription, LandingSections, RichText } = await import(
   './assignment-type-landing'
@@ -44,9 +45,15 @@ afterEach(() => {
 const headings = (root: HTMLElement) =>
   [...root.querySelectorAll('h2')].map((h) => h.textContent);
 
-/** The drop-down button for a section, found by its heading text. */
+/**
+ * The Show/Hide button for a boxed section, found by the section's heading
+ * (its accessible name is "Show <heading>" or "Hide <heading>").
+ */
 const toggle = (root: HTMLElement, name: string) =>
-  [...root.querySelectorAll('button')].find((b) => b.textContent === name);
+  [...root.querySelectorAll<HTMLButtonElement>('button')].find((b) => {
+    const label = b.getAttribute('aria-label');
+    return label === `Show ${name}` || label === `Hide ${name}`;
+  });
 
 function open(button: HTMLButtonElement | undefined) {
   if (!button) throw new Error('no such drop-down');
@@ -90,7 +97,7 @@ describe('LandingDescription', () => {
     }
     const root = render(<LandingDescription page={LANDING_PAGES.prewriting} />);
     expect(root.querySelector('p strong')?.textContent).toBe(
-      'Step 1 of the Yawp! writing process.'
+      'Step one of the critical essay writing process.'
     );
     expect(root.textContent).toContain('big, hot, rambling mess');
     expect(root.querySelector('h2')).toBeNull();
@@ -138,13 +145,13 @@ describe("Brian's Nov 3 round 2", () => {
     }
   });
 
-  it('an opened drop-down shows its text in the same kind of box as How to Teach It', () => {
+  it('an opened section shows its text in the same kind of box as How to Teach It', () => {
     const root = render(<LandingSections page={LANDING_PAGES['class-starter']} modules={[]} />);
-    expect(root.querySelector('[data-testid="landing-section-panel"]')).toBeNull();
+    expect(root.textContent).not.toContain('Tutor on or off?');
     open(toggle(root, 'How it works'));
-    const panel = root.querySelector('[data-testid="landing-section-panel"]')!;
-    expect(panel.textContent).toContain('Tutor on or off?');
-    const classes = panel.className.split(/\s+/);
+    const box = root.querySelector('[data-testid="landing-section-how-it-works"]')!;
+    expect(box.textContent).toContain('Tutor on or off?');
+    const classes = box.className.split(/\s+/);
     expect(classes).toContain('hover:-translate-y-0.5');
     expect(classes).toContain('rounded-2xl');
     expect(classes.some((c) => c.startsWith('bg-['))).toBe(true);
@@ -165,17 +172,21 @@ describe("Brian's Nov 3 round 2", () => {
     act(() => activeRoot?.unmount());
     activeRoot = null;
 
-    // Pre-Writing: the Prompt Library intro and its Note sit on the page.
-    const root = render(<LandingSections page={LANDING_PAGES.prewriting} modules={[]} />);
-    const library = root.querySelector('[data-testid="landing-section-prompt-library"]')!;
+    // Daily Pages: the Prompt Library intro sits on the page.
+    const daily = render(<LandingSections page={LANDING_PAGES['daily-pages']} modules={[]} />);
+    const library = daily.querySelector('[data-testid="landing-section-prompt-library"]')!;
     const libraryParagraphs = [...library.querySelectorAll('p')];
-    expect(libraryParagraphs.length).toBe(2);
+    expect(libraryParagraphs.length).toBe(1);
     for (const p of libraryParagraphs) expect(tone(p)).toBe('dark');
-    // Inside an opened drop-down's box, the text stays as it is in How to Teach It.
+    act(() => activeRoot?.unmount());
+    activeRoot = null;
+
+    // Inside an opened box, the text stays as it is in How to Teach It.
+    const root = render(<LandingSections page={LANDING_PAGES.prewriting} modules={[]} />);
     open(toggle(root, 'How it works'));
-    for (const p of root.querySelectorAll('[data-testid="landing-section-panel"] p')) {
-      expect(tone(p)).toBe('soft');
-    }
+    const panel = root.querySelectorAll('[data-testid="landing-section-how-it-works"] p');
+    expect(panel.length).toBe(4);
+    for (const p of panel) expect(tone(p)).toBe('soft');
     act(() => activeRoot?.unmount());
     activeRoot = null;
 
@@ -222,7 +233,7 @@ describe('How to Teach It spotlight', () => {
     expect(course.className.split(/\s+/)).not.toContain('border');
   });
 
-  it('boxes only How to Teach It', () => {
+  it('boxes How to Teach It once, and every other drop-down in a box of its own', () => {
     for (const page of Object.values(LANDING_PAGES)) {
       const root = render(<LandingSections page={page} modules={THESIS_MODULES} />);
       const boxed = root.querySelectorAll('[data-testid="how-to-teach-spotlight"]').length;
@@ -231,6 +242,128 @@ describe('How to Teach It spotlight', () => {
       act(() => activeRoot?.unmount());
       activeRoot = null;
     }
+  });
+});
+
+describe('Section consistency (Kevin and Brian, Nov 11: the Thesis Statement page is the model)', () => {
+  const STEP_PAGES: LandingPageKey[] = ['class-starter', 'prewriting', 'thesis-statement'];
+
+  it.each(STEP_PAGES)(
+    '%s: every section is a box with its heading inside, How to Teach It open and the rest closed',
+    (key) => {
+      const page = LANDING_PAGES[key];
+      const root = render(<LandingSections page={page} modules={[]} />);
+      const landing = root.querySelector('[data-testid="assignment-type-landing"]')!;
+      for (const section of page.sections) {
+        const box =
+          section.id === 'how-to-teach-it'
+            ? root.querySelector('[data-testid="how-to-teach-spotlight"]')
+            : root.querySelector(`[data-testid="landing-section-${section.id}"]`);
+        expect({ key, section: section.id, boxed: !!box }).toEqual({
+          key,
+          section: section.id,
+          boxed: true,
+        });
+        const classes = box!.className.split(/\s+/);
+        expect(classes).toContain('rounded-2xl');
+        expect(classes).toContain('hover:-translate-y-0.5');
+        // The heading is inside the box, not above it.
+        expect(box!.querySelector('h2')?.textContent).toBe(section.heading);
+        const button = toggle(root, section.heading)!;
+        expect(box!.contains(button)).toBe(true);
+        expect(button.getAttribute('aria-expanded')).toBe(
+          section.id === 'how-to-teach-it' ? 'true' : 'false'
+        );
+      }
+      // No loose paragraphs: every bit of copy sits inside a box.
+      const loose = [...landing.querySelectorAll('p')].filter(
+        (p) => !p.closest('[data-testid="how-to-teach-spotlight"], [data-landing-box]')
+      );
+      expect(loose).toHaveLength(0);
+      // A closed box shows its heading only.
+      const closed = page.sections.filter((s) => s.id !== 'how-to-teach-it');
+      for (const section of closed) {
+        const box = root.querySelector(`[data-testid="landing-section-${section.id}"]`)!;
+        expect(box.querySelectorAll('p, ul')).toHaveLength(0);
+      }
+      // Opened, each shows its copy, and Hide closes it again.
+      for (const section of closed) {
+        open(toggle(root, section.heading));
+        const box = root.querySelector(`[data-testid="landing-section-${section.id}"]`)!;
+        expect(box.querySelectorAll('p, ul').length).toBeGreaterThan(0);
+        expect(toggle(root, section.heading)?.getAttribute('aria-label')).toBe(
+          `Hide ${section.heading}`
+        );
+      }
+      open(toggle(root, closed[0]!.heading));
+      expect(toggle(root, closed[0]!.heading)?.getAttribute('aria-expanded')).toBe('false');
+    }
+  );
+
+  it('Pre-Writing reads When to use it, How it works, then the YAWP! philosophy box', () => {
+    const root = render(<LandingSections page={LANDING_PAGES.prewriting} modules={[]} />);
+    expect(headings(root)).toEqual([
+      'How to Teach It',
+      'When to use it',
+      'How it works',
+      'YAWP! philosophy on essay prompts',
+    ]);
+    expect(root.textContent).not.toContain('Have your own prompt');
+    open(toggle(root, 'YAWP! philosophy on essay prompts'));
+    const box = root.querySelector('[data-testid="landing-section-philosophy"]')!;
+    expect(box.textContent).toContain('students write their best essays');
+    expect(box.textContent).not.toContain('Note:');
+  });
+
+  it.each([
+    ['prewriting', 2],
+    ['thesis-statement', 3],
+  ] as const)('%s: "Watch the short tutorial video" opens that lesson’s tutorial', (key, n) => {
+    const href = `/app/assignment-types/t1/tutorial/${n}`;
+    const root = render(
+      <LandingSections page={LANDING_PAGES[key]} modules={[]} lessonVideos={{ [n]: href }} />
+    );
+    open(toggle(root, 'How it works'));
+    const box = root.querySelector('[data-testid="landing-section-how-it-works"]')!;
+    const link = [...box.querySelectorAll('a')].find(
+      (a) => a.textContent === 'Watch the short tutorial video'
+    );
+    expect(link?.getAttribute('href')).toBe(href);
+    expect(link?.closest('p')?.textContent).toContain(
+      'First time teaching it? Watch the short tutorial video before class.'
+    );
+    act(() => activeRoot?.unmount());
+    activeRoot = null;
+
+    // A teacher who cannot open the tutorial reads the same words, unlinked.
+    const plain = render(<LandingSections page={LANDING_PAGES[key]} modules={[]} />);
+    open(toggle(plain, 'How it works'));
+    const unlinked = plain.querySelector('[data-testid="landing-section-how-it-works"]')!;
+    expect(unlinked.textContent).toContain('Watch the short tutorial video before class.');
+    expect(unlinked.querySelectorAll('a')).toHaveLength(0);
+  });
+
+  it('The Thesis-Driven Essay puts the YAWP! philosophy box under the Pre-writing lesson, closed', () => {
+    const root = render(
+      <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} />
+    );
+    const rows = [...root.querySelectorAll('[data-testid="course-lesson"]')];
+    const withBox = rows.filter((row) =>
+      row.querySelector('[data-testid="landing-section-philosophy"]')
+    );
+    expect(withBox).toHaveLength(1);
+    expect(withBox[0]!.querySelector('[data-lesson-title]')?.textContent).toBe('Pre-writing');
+    const box = withBox[0]!.querySelector('[data-testid="landing-section-philosophy"]')!;
+    expect(box.querySelector('h4')?.textContent).toBe('YAWP! philosophy on essay prompts');
+    const button = toggle(root, 'YAWP! philosophy on essay prompts')!;
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(box.textContent).not.toContain('75 essays');
+    open(button);
+    expect(box.textContent).toContain('75 essays with 75 different angles');
+    expect(box.textContent).not.toContain('Note:');
+    // Nothing loose between How to Teach It and the library.
+    expect(root.querySelector('[data-testid="landing-section-prompt-library"]')).toBeNull();
+    expect(root.textContent).not.toContain('Have your own prompt?');
   });
 });
 
@@ -266,10 +399,12 @@ describe('LandingSections', () => {
       'When to use it',
       'What makes a good exit ticket',
       'What makes a strong thesis',
+      'YAWP! philosophy on essay prompts',
     ]);
     for (const page of Object.values(LANDING_PAGES)) {
       const root = render(<LandingSections page={page} modules={THESIS_MODULES} />);
       for (const section of page.sections) {
+        if (section.id === 'how-to-teach-it' || section.id === 'prompt-library') continue;
         const button = toggle(root, section.heading);
         expect({ page: page.key, section: section.id, dropDown: !!button }).toEqual({
           page: page.key,
@@ -287,22 +422,24 @@ describe('LandingSections', () => {
     const root = render(
       <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} />
     );
-    expect(toggle(root, 'How to Teach It')).toBeUndefined();
+    expect(toggle(root, 'How to Teach It')?.getAttribute('aria-expanded')).toBe('true');
     expect(root.querySelector('[data-testid="thesis-essay-course"]')).not.toBeNull();
-    expect(root.textContent).toContain('Have your own prompt?');
+    act(() => activeRoot?.unmount());
+    activeRoot = null;
+    const daily = render(<LandingSections page={LANDING_PAGES['daily-pages']} modules={[]} />);
+    expect(toggle(daily, 'Prompt Library')).toBeUndefined();
+    expect(daily.textContent).toContain('Need a prompt? Browse the library');
   });
 
   it('labels the Prompt Library intro for screen readers only, since the library below carries the visible label', () => {
     const root = render(
-      <LandingSections page={LANDING_PAGES['class-starter']} modules={[]} />
+      <LandingSections page={LANDING_PAGES['daily-pages']} modules={[]} />
     );
     const libraryHeading = [...root.querySelectorAll('h2')].find(
       (h) => h.textContent === 'Prompt Library'
     );
     expect(libraryHeading?.className).toContain('sr-only');
-    expect(root.textContent).toContain(
-      'Need an idea to get students thinking? Browse the library!'
-    );
+    expect(root.textContent).toContain('Need a prompt? Browse the library');
   });
 
   it("shows the Thesis-Driven Essay course under How to Teach It, as in Brian's mock-up", () => {

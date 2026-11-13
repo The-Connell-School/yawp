@@ -152,6 +152,10 @@ test.describe("Lesson Planner — Brian's fourth run", () => {
     await page.waitForLoadState('networkidle');
 
     const cards = page.getByTestId('run-card');
+    // Both cards on screen before the drag: a writing step's Create row makes
+    // the first card tall enough to push the second past the fold, and a
+    // scroll in the middle of a drag drops it somewhere else.
+    await cards.nth(0).evaluate((el) => el.scrollIntoView({ block: 'start' }));
     const box = (await cards.nth(1).boundingBox())!;
     const saved = page.waitForResponse(
       (response) => response.url().includes('/api/domain/lesson-planner/packet') && response.request().method() === 'POST'

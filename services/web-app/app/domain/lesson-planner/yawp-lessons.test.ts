@@ -130,11 +130,10 @@ describe('the Yawp! lesson catalog', () => {
     }
   });
 
-  test.each(LESSONS)('$slug links Brian’s deck and PDF', ({ lesson }) => {
+  test.each(LESSONS)('$slug links Brian’s deck and PDF, and both files exist', ({ lesson }) => {
     for (const file of [lesson.deck, lesson.lessonPlanPdf]) {
       expect(file.href.startsWith('/courses/thesis-driven-essay/')).toBe(true);
-      // TODO: Brian's deck/PDF assets are not committed to public/courses yet; restore this check when they land.
-      void existsSync(join(PUBLIC, file.href));
+      expect(existsSync(join(PUBLIC, file.href))).toBe(true);
       expect(lesson.plan).toContain(`](${file.href})`);
     }
     expect(lesson.deck.fileName.endsWith('.pptx')).toBe(true);

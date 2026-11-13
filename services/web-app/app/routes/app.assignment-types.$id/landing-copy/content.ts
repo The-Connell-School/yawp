@@ -35,7 +35,16 @@ export type LandingPageKey =
   | 'welcome-to-yawp';
 
 export type LandingBlock =
-  | { type: 'paragraph'; text: string }
+  | {
+      type: 'paragraph';
+      text: string;
+      /**
+       * `linkText`, which appears word for word in `text`, opens this lesson's
+       * tutorial video where the teacher can watch it, and is plain text
+       * where they cannot.
+       */
+      tutorial?: { lesson: YawpLessonSlug; linkText: string };
+    }
   | { type: 'bullets'; items: string[] }
   /**
    * The assignment type's modules, one row each and in order. `lead` sits
@@ -46,7 +55,16 @@ export type LandingBlock =
    * The Thesis-Driven Essay course: each lesson with its slide deck and its
    * tutorial video (see thesis-essay-course.ts). `lead` sits directly above it.
    */
-  | { type: 'course'; lead?: string }
+  | {
+      type: 'course';
+      lead?: string;
+      /**
+       * A closed box under a lesson's row, for what a teacher should know
+       * when they get to that lesson (the YAWP! philosophy on essay prompts,
+       * under Pre-writing).
+       */
+      lessonNotes?: Partial<Record<YawpLessonSlug, LandingSection>>;
+    }
   /**
    * One lesson of the course on its own, for the page of the step it teaches
    * (Pre-Writing, Thesis Statement): its slide deck and its tutorial video.
@@ -60,7 +78,8 @@ export type LandingSectionId =
   | 'how-it-works'
   | 'prompt-library'
   | 'what-makes-a-good-one'
-  | 'what-makes-a-strong-thesis';
+  | 'what-makes-a-strong-thesis'
+  | 'philosophy';
 
 export type LandingSection = {
   id: LandingSectionId;
@@ -86,6 +105,15 @@ const ul = (...items: string[]): LandingBlock => ({ type: 'bullets', items });
 
 const TUTOR_NEVER_WRITES = 'It will never write for them.';
 
+const PHILOSOPHY_HEADING = 'YAWP! philosophy on essay prompts';
+
+/** "First time teaching it?" on the step pages, its tutorial one click away. */
+const firstTimeTeaching = (lesson: YawpLessonSlug): LandingBlock => ({
+  type: 'paragraph',
+  text: '**First time teaching it?** Watch the short tutorial video before class. It walks you through this step of the Yawp! writing process and comes with a ready-to-teach lesson (slides and handouts) you can use as is or edit.',
+  tutorial: { lesson, linkText: 'Watch the short tutorial video' },
+});
+
 const THESIS_DRIVEN_ESSAY: LandingPage = {
   key: 'thesis-driven-essay',
   description: [
@@ -104,21 +132,28 @@ const THESIS_DRIVEN_ESSAY: LandingPage = {
         {
           type: 'course',
           lead: '**Teach these steps in order! (Did we mention that?)**',
+          // Kevin and Brian, Nov 11: Brian's note on prompts, as its own box
+          // under Pre-writing, the lesson where students take a prompt and
+          // find what they care about in it.
+          lessonNotes: {
+            'pre-writing': {
+              id: 'philosophy',
+              heading: PHILOSOPHY_HEADING,
+              blocks: [
+                p(
+                  "We've found that students write their best essays about something they actually care about, so many of our prompts are open on purpose and encourage students to choose their own adventure within a topic. You'll enjoy reading 75 essays with 75 different angles a lot more than 75 essays answering the same narrow question. Still, some students and teachers prefer a tighter, more specific scope, and that's OK too! Either way, help students find their personal connection to the topic. If a student is stuck, send them to the emotional charge: what they loved, what grabbed them, what made them upset."
+                ),
+              ],
+            },
+          },
         },
       ],
     },
-    {
-      id: 'prompt-library',
-      heading: 'Prompt Library',
-      blocks: [
-        p(
-          'Have your own prompt? Click **New** above to create it in the Assignment Builder. Or choose one from our library: filter by subject, text, or grade level, click a prompt, and edit it however you like in the Assignment Builder.'
-        ),
-      ],
-    },
   ],
+  // At the top of the library itself (Nov 11: no loose paragraphs between
+  // the How to Teach It box and the library).
   libraryNote:
-    "**Note:** We've found that students write their best essays about something they actually care about, so many of our prompts are open on purpose and encourage students to choose their own adventure within a topic. You'll enjoy reading 75 essays with 75 different angles a lot more than 75 essays answering the same narrow question. Still, some students and teachers prefer a tighter, more specific scope, and that's OK too! Either way, help students find their personal connection to the topic. If a student is stuck, send them to the emotional charge: what they loved, what grabbed them, what made them upset.",
+    'Have your own prompt? Click **New** above to create it in the Assignment Builder. Or choose one from our library: filter by subject, text, or grade level, click a prompt, and edit it however you like in the Assignment Builder.',
   library: 'thesis',
 };
 
@@ -145,13 +180,9 @@ const CLASS_STARTER: LandingPage = {
         ),
       ],
     },
-    {
-      id: 'prompt-library',
-      heading: 'Prompt Library',
-      blocks: [p('Need an idea to get students thinking? Browse the library!')],
-    },
   ],
-  libraryNote: null,
+  // At the top of the library itself, not loose under How it works (Nov 11).
+  libraryNote: 'Need an idea to get students thinking? Browse the library!',
   library: 'open-ended',
 };
 
@@ -200,10 +231,10 @@ const PREWRITING: LandingPage = {
   key: 'prewriting',
   description: [
     p(
-      '**Step 1 of the Yawp! writing process.** Start here, before students write a word of their essay.'
+      '**Step one of the critical essay writing process.** Start here, before students write a word of their essay.'
     ),
     p(
-      'Pre-writing may be the most important — and most overlooked — part of the writing process. Most students skip straight from the prompt to the essay, and it shows. They end up sorting out their ideas in the essay itself, which can result in a big, hot, rambling mess. Pre-writing is where students figure out what they actually think about the topic or prompt...*before they write their essay.* We promise: the writing they do before the actual writing of their essays will greatly improve the quality of their finished products (and the quality of your reading/grading experience)!'
+      'Pre-writing may be the most important (and most overlooked) part of the writing process. Most students skip straight from the prompt to the essay, and it shows. They end up sorting out their ideas in the essay itself, which can result in a big, hot, rambling mess. Pre-writing is where students figure out what they actually think about the topic or prompt...*before they write their essay.* We promise: the writing they do before the actual writing of their essays will greatly improve the quality of their finished products (and the quality of your reading/grading experience)!'
     ),
   ],
   sections: [
@@ -237,26 +268,24 @@ const PREWRITING: LandingPage = {
         p(
           'Click **New** above to write a prompt, or pick one from the Prompt Library below.'
         ),
-        p(
-          '**First time teaching it?** Watch the short tutorial video before class. It walks you through this step of the Yawp! writing process and comes with a ready-to-teach lesson (slides and handouts) you can use as is or edit.'
-        ),
+        firstTimeTeaching('pre-writing'),
         p(
           `**Tutor on or off?** With the tutor on, students get immediate feedback as they write: questions that push their thinking so they can develop original ideas. ${TUTOR_NEVER_WRITES} This is one of the steps where the Tutor really shines and will save you, the teacher, a lot of time. Turn it off if you want to see how students do on their own.`
         ),
         p(
-          '**Grading is on the focus and the thinking behind it.** Once students find their focus, they label it at the bottom of the page and submit their document to you. You can see everything they wrote and any chat they had with the Tutor. The Grading Assistant looks at the focus and the pre-writing that led to it. This is about critical thinking, not grammar or polish.'
+          '**Grading is on the focus and the critical thinking behind it.** Once students find their focus, they label it at the bottom of the page and submit their document to you. You can see everything they wrote and any chat they had with the Tutor. The Grading Assistant looks at the focus and the pre-writing that led to it. This is about critical thinking, not grammar or polish.'
         ),
       ],
     },
+    // Kevin and Brian, Nov 11: "Have your own prompt? Click New above…" is
+    // gone (How it works says it), and the note is its own box. The library
+    // follows it, with nothing loose in between.
     {
-      id: 'prompt-library',
-      heading: 'Prompt Library',
+      id: 'philosophy',
+      heading: PHILOSOPHY_HEADING,
       blocks: [
         p(
-          'Have your own prompt to get students going? Click **New** above. Or choose one from our library: filter by subject, text, or grade level, click a prompt, and edit it however you like in the Assignment Builder.'
-        ),
-        p(
-          "**Note:** We've found that students write their best essays about something they actually care about, so many of our prompts are open on purpose and let students choose their own adventure within a topic. That's exactly what pre-writing is for. Still, some students and teachers prefer a tighter, more specific scope, and that's OK too! Either way, help students find their personal connection to the topic. If a student is stuck, send them to the emotional charge: what they loved, what grabbed them, what made them upset."
+          "We've found that students write their best essays about something they actually care about, so many of our prompts are open on purpose and let students choose their own adventure within a topic. That's exactly what pre-writing is for. Still, some students and teachers prefer a tighter, more specific scope, and that's OK too! Either way, help students find their personal connection to the topic. If a student is stuck, send them to the emotional charge: what they loved, what grabbed them, what made them upset."
         ),
       ],
     },
@@ -308,9 +337,7 @@ const THESIS_STATEMENT: LandingPage = {
         p(
           'Click **New** above and use the same essay prompt students pre-wrote on.'
         ),
-        p(
-          '**First time teaching it?** Watch the short tutorial video before class. It walks you through this step of the Yawp! writing process and comes with a ready-to-teach lesson (slides and handouts) you can use as is or edit.'
-        ),
+        firstTimeTeaching('thesis-statement'),
         p(
           "**Tutor on or off?** With the tutor on, students get immediate feedback as they shape their thesis: what's working, what's missing, and how to sharpen it. It will never write the thesis for them. This is one of the steps where the Tutor really shines and will save you, the teacher, a lot of time. Turn it off if you want to see how students do on their own."
         ),
@@ -614,7 +641,14 @@ export function landingPagePlainText(page: LandingPage): string {
     .flatMap((block) => {
       if (block.type === 'paragraph') return [block.text];
       if (block.type === 'bullets') return block.items;
-      return block.lead ? [block.lead] : [];
+      const notes =
+        block.type === 'course'
+          ? Object.values(block.lessonNotes ?? {}).flatMap((note) => [
+              note!.heading,
+              ...note!.blocks.flatMap((b) => (b.type === 'paragraph' ? [b.text] : [])),
+            ])
+          : [];
+      return [...(block.lead ? [block.lead] : []), ...notes];
     })
     .map(stripMarkup)
     .filter(Boolean)

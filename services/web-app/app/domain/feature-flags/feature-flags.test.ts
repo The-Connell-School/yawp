@@ -30,12 +30,12 @@ import {
   LESSON_PLANNER_DECK_KIT_V4_FLAG,
   LESSON_PLANNER_STACK_PANEL_FLAG,
   TEACHER_PROMPT_GENERATOR_FLAG,
-  TEACHER_LOUNGE_FLAG,
-  EXIT_TICKET_BUILDER_V3_FLAG,
-  EXIT_TICKET_CLASS_SUMMARY_FLAG,
   ASSIGNMENT_TYPE_LANDING_V2_FLAG,
   ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG,
   ASSIGNMENT_TYPE_LESSON_PLANS_FLAG,
+  TEACHER_LOUNGE_FLAG,
+  EXIT_TICKET_BUILDER_V3_FLAG,
+  EXIT_TICKET_CLASS_SUMMARY_FLAG,
   FOLDED_FREE_TIER_LEGACY_SETTINGS,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
@@ -50,6 +50,30 @@ import {
 } from './feature-flags';
 
 describe('feature flag registry', () => {
+  test('registers the assignment-type landing page flags', () => {
+    expect(ASSIGNMENT_TYPE_LANDING_V2_FLAG).toBe('assignment-type-landing-v2');
+    expect(ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG).toBe(
+      'assignment-type-landing-thesis-essay'
+    );
+    expect(featureFlagSettingName(ASSIGNMENT_TYPE_LANDING_V2_FLAG)).toBe(
+      'feature_flag.assignment-type-landing-v2'
+    );
+    expect(FEATURE_FLAGS[ASSIGNMENT_TYPE_LANDING_V2_FLAG].label.length).toBeGreaterThan(0);
+    expect(
+      FEATURE_FLAGS[ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG].description
+    ).toContain('landing page');
+  });
+
+  test('registers the How to Teach It lesson plans flag', () => {
+    expect(ASSIGNMENT_TYPE_LESSON_PLANS_FLAG).toBe('assignment-type-lesson-plans');
+    expect(featureFlagSettingName(ASSIGNMENT_TYPE_LESSON_PLANS_FLAG)).toBe(
+      'feature_flag.assignment-type-lesson-plans'
+    );
+    expect(FEATURE_FLAGS[ASSIGNMENT_TYPE_LESSON_PLANS_FLAG].description).toContain(
+      'Lesson Planner'
+    );
+  });
+
   test('no longer has the removed Daily Pages writing-conditions flag', () => {
     const removed = 'daily_pages_paragraph_type_and_writing_time';
     expect(FEATURE_FLAG_KEYS as readonly string[]).not.toContain(removed);
@@ -91,12 +115,12 @@ describe('feature flag registry', () => {
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       TEACHER_PROMPT_GENERATOR_FLAG,
-      TEACHER_LOUNGE_FLAG,
-      EXIT_TICKET_BUILDER_V3_FLAG,
-      EXIT_TICKET_CLASS_SUMMARY_FLAG,
       ASSIGNMENT_TYPE_LANDING_V2_FLAG,
       ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG,
       ASSIGNMENT_TYPE_LESSON_PLANS_FLAG,
+      TEACHER_LOUNGE_FLAG,
+      EXIT_TICKET_BUILDER_V3_FLAG,
+      EXIT_TICKET_CLASS_SUMMARY_FLAG,
     ]);
   });
 

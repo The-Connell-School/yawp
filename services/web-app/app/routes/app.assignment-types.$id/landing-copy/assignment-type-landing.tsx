@@ -1,6 +1,5 @@
-import { Fragment, useId, useState } from 'react';
+import { Fragment, useId, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import * as AccordionPrimitive from '@radix-ui/react-accordion';
 import { ChevronDown, CirclePlay, Presentation } from 'lucide-react';
 
 import { cn } from '~/utils/misc';
@@ -104,17 +103,18 @@ function CourseLessonRow({
   title,
   decks,
   tutorialHref,
+  note,
 }: {
   index: number | null;
   title: string;
   decks: CourseDeck[];
   tutorialHref: string | null;
+  /** A closed box under the row (the YAWP! philosophy, under Pre-writing). */
+  note?: ReactNode;
 }) {
   return (
-    <li
-      data-testid="course-lesson"
-      className="flex flex-col gap-1.5 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
-    >
+    <li data-testid="course-lesson" className="py-3">
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <span className="flex items-baseline gap-3 text-base">
         {index !== null ? (
           <span className="w-4 shrink-0 tabular-nums text-muted-foreground">{index}</span>
@@ -157,6 +157,8 @@ function CourseLessonRow({
           ) : null}
         </span>
       </span>
+      </div>
+      {note ? <div className={cn('mt-3', index !== null && 'sm:pl-7')}>{note}</div> : null}
     </li>
   );
 }
@@ -189,15 +191,28 @@ function ThesisEssayCourse({
           {THESIS_ESSAY_COURSE_TITLE}
         </h3>
         <ol className="flex flex-col divide-y">
-          {THESIS_ESSAY_COURSE.map((lesson, index) => (
-            <CourseLessonRow
-              key={lesson.title}
-              index={index + 1}
-              title={lesson.title}
-              decks={lesson.decks}
-              tutorialHref={lessonVideos[index + 1] ?? null}
-            />
-          ))}
+          {THESIS_ESSAY_COURSE.map((lesson, index) => {
+            const note = lesson.yawpLesson ? block.lessonNotes?.[lesson.yawpLesson] : undefined;
+            return (
+              <CourseLessonRow
+                key={lesson.title}
+                index={index + 1}
+                title={lesson.title}
+                decks={lesson.decks}
+                tutorialHref={lessonVideos[index + 1] ?? null}
+                note={
+                  note ? (
+                    <BoxedSection
+                      section={note}
+                      lessonVideos={lessonVideos}
+                      defaultExpanded={false}
+                      nested
+                    />
+                  ) : null
+                }
+              />
+            );
+          })}
         </ol>
       </div>
     </div>
@@ -242,6 +257,34 @@ function YawpLessonBlock({
 }
 
 /**
+ * A paragraph's text. Where it names a lesson's tutorial, that phrase opens
+ * the tutorial for a teacher who can watch it, and is plain text otherwise.
+ */
+function ParagraphText({
+  block,
+  lessonVideos,
+}: {
+  block: Extract<LandingBlock, { type: 'paragraph' }>;
+} & LessonLinks) {
+  const tutorial = block.tutorial;
+  const href = tutorial ? lessonVideos[YAWP_LESSONS[tutorial.lesson].lessonNumber] : undefined;
+  const at = tutorial ? block.text.indexOf(tutorial.linkText) : -1;
+  if (!tutorial || !href || at < 0) return <RichText text={block.text} />;
+  return (
+    <>
+      <RichText text={block.text.slice(0, at)} />
+      <Link
+        to={href}
+        className="font-medium text-foreground underline underline-offset-4 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {tutorial.linkText}
+      </Link>
+      <RichText text={block.text.slice(at + tutorial.linkText.length)} />
+    </>
+  );
+}
+
+/**
  * Where copy sits, which sets its color (Brian, Nov 3). On the cream page it
  * is the dark text color; inside a light box (How to Teach It, an opened
  * drop-down) it keeps the softer gray the How to Teach It box already uses.
@@ -266,7 +309,7 @@ function Block({
   if (block.type === 'paragraph') {
     return (
       <p className={cn('text-sm sm:text-base', TONE_CLASS[tone])}>
-        <RichText text={block.text} />
+        <ParagraphText block={block} lessonVideos={lessonVideos} />
       </p>
     );
   }
@@ -307,74 +350,19 @@ export function LandingDescription({ page }: { page: LandingPage }) {
 }
 
 /**
- * Sections that start closed: the heading shows with a chevron, and a teacher
- * opens the ones they want. Brian's copy is all still there, word for word;
- * it just is not a wall of text by default. How to Teach It (the course or
- * the steps) and the Prompt Library intro stay open: they are what a teacher
- * came to the page to use.
+ * Sections that start closed: a box with the heading and Show inside it, and
+ * a teacher opens the ones they want (Kevin and Brian, Nov 11: every section
+ * matches the How to Teach It box). Brian's copy is all still there, word for
+ * word; it just is not a wall of text by default. How to Teach It is boxed
+ * the same way but starts open, since it is what a teacher came to use.
  */
 export const COLLAPSED_SECTIONS: ReadonlySet<LandingSectionId> = new Set([
   'how-it-works',
   'when-to-use-it',
   'what-makes-a-good-one',
   'what-makes-a-strong-thesis',
+  'philosophy',
 ]);
-
-function CollapsibleSection({
-  section,
-  modules,
-  lessonVideos,
-}: {
-  section: LandingSection;
-  modules: LandingModule[];
-} & LessonLinks) {
-  const headingId = `landing-${section.id}`;
-  return (
-    <section
-      aria-labelledby={headingId}
-      data-testid={`landing-section-${section.id}`}
-      data-tour={section.id === 'how-it-works' ? 'type-directions' : undefined}
-    >
-      <AccordionPrimitive.Root type="single" collapsible>
-        <AccordionPrimitive.Item value={section.id} className="border-b">
-          <AccordionPrimitive.Header asChild>
-            <h2 id={headingId} className="flex">
-              <AccordionPrimitive.Trigger className="group flex flex-1 items-center justify-between gap-3 py-3 text-left text-base font-semibold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                {section.heading}
-                <ChevronDown
-                  className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180"
-                  aria-hidden
-                />
-              </AccordionPrimitive.Trigger>
-            </h2>
-          </AccordionPrimitive.Header>
-          <AccordionPrimitive.Content className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
-            {/* Opened, the text sits in the same light box as How to Teach It
-                (Brian, Nov 3). The padding around it, offset by a negative
-                margin, leaves room for the box's shadow and lift inside the
-                clipped drop-down while keeping it flush with the rows. */}
-            <div className="-mx-3 px-3 pb-8 pt-2">
-              <div
-                data-testid="landing-section-panel"
-                className={cn(SPOTLIGHT_BOX, 'flex flex-col gap-3')}
-              >
-                {section.blocks.map((block, index) => (
-                  <Block
-                    key={index}
-                    block={block}
-                    modules={modules}
-                    tone="box"
-                    lessonVideos={lessonVideos}
-                  />
-                ))}
-              </div>
-            </div>
-          </AccordionPrimitive.Content>
-        </AccordionPrimitive.Item>
-      </AccordionPrimitive.Root>
-    </section>
-  );
-}
 
 /**
  * The spotlight box (Brian, Nov 3), around How to Teach It and around each
@@ -395,44 +383,62 @@ export const SPOTLIGHT_BOX = [
   'dark:border-border dark:bg-white/[0.04]',
 ].join(' ');
 
+/** A box inside a box (under a course lesson): flat, so only the outer one lifts. */
+const NESTED_BOX =
+  'rounded-xl border border-[#E4DCCF] bg-white/70 px-4 py-3 dark:border-border dark:bg-white/[0.03]';
+
 /**
- * How to Teach It, in its spotlight box. Always expanded when a teacher
- * arrives; Hide collapses it to the heading and a two-line preview of its
- * first paragraph (Brian's Nov 3 mock-up), and Show brings the rest back.
- * Nothing is remembered between visits, so it is open again next time.
+ * One section in its own box, the heading and the Show/Hide button inside it
+ * (Kevin and Brian, Nov 11, modeled on How to Teach It). How to Teach It
+ * opens expanded and folds to its heading and a two-line preview of its first
+ * paragraph (Brian's Nov 3 mock-up); every other section opens closed, to its
+ * heading alone. Nothing is remembered between visits.
  */
-export function HowToTeachSection({
+export function BoxedSection({
   section,
   modules = [],
   lessonVideos,
+  defaultExpanded,
+  preview: showPreview = false,
+  nested = false,
   className,
 }: {
   section: LandingSection;
   modules?: LandingModule[];
-  /**
-   * The How It Works pages (Kevin, Nov 10) put the same block on a white
-   * card; the landing page keeps the spotlight box.
-   */
+  defaultExpanded: boolean;
+  /** Closed, show a two-line preview of the first paragraph. */
+  preview?: boolean;
+  /** Inside another box (a course lesson's note): a flat box and an h4. */
+  nested?: boolean;
   className?: string;
 } & LessonLinks) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const bodyId = useId();
   const headingId = `landing-${section.id}`;
-  const preview = section.blocks.find(
-    (block): block is Extract<LandingBlock, { type: 'paragraph' }> =>
-      block.type === 'paragraph'
-  );
+  const preview = showPreview
+    ? section.blocks.find(
+        (block): block is Extract<LandingBlock, { type: 'paragraph' }> =>
+          block.type === 'paragraph'
+      )
+    : undefined;
   const label = expanded ? 'Hide' : 'Show';
+  const Heading = nested ? 'h4' : 'h2';
+  const isHowToTeach = section.id === 'how-to-teach-it';
   return (
     <section
       aria-labelledby={headingId}
-      data-testid="how-to-teach-spotlight"
-      className={cn(SPOTLIGHT_BOX, className)}
+      data-testid={isHowToTeach ? 'how-to-teach-spotlight' : `landing-section-${section.id}`}
+      data-landing-box=""
+      data-tour={section.id === 'how-it-works' ? 'type-directions' : undefined}
+      className={cn(nested ? NESTED_BOX : SPOTLIGHT_BOX, className)}
     >
       <div className="flex items-center justify-between gap-4">
-        <h2 id={headingId} className="text-lg font-semibold sm:text-xl">
+        <Heading
+          id={headingId}
+          className={nested ? 'text-sm font-semibold sm:text-base' : 'text-lg font-semibold sm:text-xl'}
+        >
           {section.heading}
-        </h2>
+        </Heading>
         <button
           type="button"
           aria-expanded={expanded}
@@ -444,7 +450,10 @@ export function HowToTeachSection({
           {label}
           <span
             aria-hidden
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E4DCCF] bg-[#F3F1EC] text-foreground transition-colors group-hover:bg-[#ECE8E0] dark:border-border dark:bg-white/[0.06]"
+            className={cn(
+              'flex items-center justify-center rounded-full border border-[#E4DCCF] bg-[#F3F1EC] text-foreground transition-colors group-hover:bg-[#ECE8E0] dark:border-border dark:bg-white/[0.06]',
+              nested ? 'h-8 w-8' : 'h-10 w-10'
+            )}
           >
             <ChevronDown
               className={cn(
@@ -479,6 +488,37 @@ export function HowToTeachSection({
   );
 }
 
+/**
+ * How to Teach It, in its spotlight box: expanded when a teacher arrives;
+ * Hide collapses it to the heading and a two-line preview, and Show brings
+ * the rest back.
+ */
+export function HowToTeachSection({
+  section,
+  modules = [],
+  lessonVideos,
+  className,
+}: {
+  section: LandingSection;
+  modules?: LandingModule[];
+  /**
+   * The How It Works pages (Kevin, Nov 10) put the same block on a white
+   * card; the landing page keeps the spotlight box.
+   */
+  className?: string;
+} & LessonLinks) {
+  return (
+    <BoxedSection
+      section={section}
+      modules={modules}
+      lessonVideos={lessonVideos}
+      defaultExpanded
+      preview
+      className={className}
+    />
+  );
+}
+
 function Section({
   section,
   modules,
@@ -488,7 +528,14 @@ function Section({
   modules: LandingModule[];
 } & LessonLinks) {
   if (COLLAPSED_SECTIONS.has(section.id)) {
-    return <CollapsibleSection section={section} modules={modules} lessonVideos={lessonVideos} />;
+    return (
+      <BoxedSection
+        section={section}
+        modules={modules}
+        lessonVideos={lessonVideos}
+        defaultExpanded={false}
+      />
+    );
   }
   if (section.id === 'how-to-teach-it') {
     return <HowToTeachSection section={section} modules={modules} lessonVideos={lessonVideos} />;
@@ -550,34 +597,16 @@ export function LandingSections({
   /** Each lesson's tutorial video, by lesson number, where the teacher can open it. */
   lessonVideos?: LessonVideos;
 }) {
-  // Back-to-back drop-downs stack as one list, like the library's own row;
-  // open sections keep their breathing room around them.
-  const groups: LandingSection[][] = [];
-  for (const section of page.sections) {
-    const last = groups.at(-1);
-    if (
-      last &&
-      COLLAPSED_SECTIONS.has(section.id) &&
-      COLLAPSED_SECTIONS.has(last[0]!.id)
-    ) {
-      last.push(section);
-    } else {
-      groups.push([section]);
-    }
-  }
+  // Every section is its own box (Nov 11), spaced evenly down the page.
   return (
-    <div className="mb-6 flex flex-col gap-6" data-testid="assignment-type-landing">
-      {groups.map((group) => (
-        <div key={group[0]!.id} className="flex flex-col">
-          {group.map((section) => (
-            <Section
-              key={section.id}
-              section={section}
-              modules={modules}
-              lessonVideos={lessonVideos}
-            />
-          ))}
-        </div>
+    <div className="mb-6 flex flex-col gap-4" data-testid="assignment-type-landing">
+      {page.sections.map((section) => (
+        <Section
+          key={section.id}
+          section={section}
+          modules={modules}
+          lessonVideos={lessonVideos}
+        />
       ))}
     </div>
   );

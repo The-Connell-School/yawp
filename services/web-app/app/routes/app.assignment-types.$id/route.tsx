@@ -127,6 +127,17 @@ import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 import { assignmentTypeHasHowItWorksGuide } from '~/domain/assignment-types/assignment-type-how-it-works';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { wrapPreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
+import { getAssignmentTypeLandingFlags } from '~/domain/assignment-types/landing-page-gate.server';
+import { findThesisEssayCourse, tutorialHrefs } from '~/domain/teacher-trainings/thesis-essay-course.server';
+import {
+  LandingDescription,
+  LandingSections,
+} from './landing-copy/assignment-type-landing';
+import {
+  enabledLandingPageKey,
+  LANDING_PAGES,
+  resolveLandingPageKey,
+} from './landing-copy/content';
 
 /** How the Lesson Planner hands a written warm-up to this page. */
 const NEW_PROMPT_PARAM = 'newPrompt';
@@ -487,6 +498,27 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const showsShortFormLibrary =
     isTeacher && usesShortFormLibrary(promptLibraryVariant);
   const isThesisEssay = isThesisDrivenEssayTitle(assignmentType.title);
+  // Brian's teacher-facing landing page, behind its flags. Null keeps the old
+  // page: students, school-authored types, and every type while it is off.
+  const landingFlags = isTeacher
+    ? await getAssignmentTypeLandingFlags(profile.organization.id)
+    : null;
+  const landingPageKey = landingFlags
+    ? enabledLandingPageKey(resolveLandingPageKey(assignmentType), landingFlags)
+    : null;
+  // How to Teach It's "Watch tutorial" links (Brian, Nov 6): each lesson's
+  // video from the Teachers' Lounge course, played on this type's own
+  // tutorial page, for the lessons whose module this teacher can reach.
+  const landingVideos =
+    landingPageKey !== null
+      ? tutorialHrefs(assignmentType.id, await findThesisEssayCourse(profile.id))
+      : {};
+  // Pre-Writing reuses the Thesis-Driven Essay library on its new page: the
+  // same prompt carries students through Pre-Writing and then Thesis Statement.
+  const showsThesisLibrary =
+    isTeacher &&
+    (isThesisEssay ||
+      (landingPageKey !== null && LANDING_PAGES[landingPageKey].library === 'thesis'));
   const isApHistory =
     assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   // "My prompts": prompts this teacher generated and kept, shown in the same
@@ -551,21 +583,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // "My prompts": prompts this teacher generated and kept, shown in the same
   // library alongside the fixed corpus and filterable on their own.
   const savedThesisPrompts =
-    profile.role === 'TEACHER' && isThesisEssay
+    showsThesisLibrary
       ? await listSavedThesisPrompts({
           membershipId: profile.id,
           assignmentTypeId: assignmentType.id,
         })
       : [];
   const thesisLibraryEntries =
-    profile.role === 'TEACHER' && isThesisEssay
+    showsThesisLibrary
       ? [
           ...savedThesisPrompts.map(savedThesisPromptToLibraryEntry),
           ...ALL_THESIS_PROMPTS,
         ]
       : [];
   const thesisPromptLibrary =
-    profile.role === 'TEACHER' && isThesisEssay
+    showsThesisLibrary
       ? {
           prompts: applyThesisFilters(
             thesisLibraryEntries,
@@ -651,6 +683,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       profile.role === 'TEACHER' &&
       isExitTicketAssignmentType(assignmentType),
     teacherPromptGeneratorEnabled,
+    landingPageKey,
+    landingVideos,
     exitTicketBuilderV3Enabled,
   });
 }
@@ -819,8 +853,12 @@ export default function AppAssignmentTypesIdRoute() {
     data.teacherPromptGeneratorEnabled && showPromptsLibrary;
   const showShortFormPromptGenerator =
     data.teacherPromptGeneratorEnabled && data.shortFormPromptLibrary != null;
+  // The thesis generator saves to the Thesis-Driven Essay's own prompts, so it
+  // stays there even where another type borrows its library (Pre-Writing).
   const showThesisPromptGenerator =
-    data.teacherPromptGeneratorEnabled && data.thesisPromptLibrary != null;
+    data.teacherPromptGeneratorEnabled &&
+    data.thesisPromptLibrary != null &&
+    isThesisDrivenEssayTitle(data.assignmentType.title);
   const showExitTicketPromptGenerator =
     data.teacherPromptGeneratorEnabled && isTeacher && isExitTicketType;
   const showAnyPromptGenerator =
@@ -923,6 +961,9 @@ export default function AppAssignmentTypesIdRoute() {
   ]);
 
   const showThesisLibrary = data.thesisPromptLibrary != null;
+  const landingPage = data.landingPageKey
+    ? LANDING_PAGES[data.landingPageKey]
+    : null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const canCreateDirectDocument = !isApHistoryAssignmentType;
@@ -964,10 +1005,14 @@ export default function AppAssignmentTypesIdRoute() {
 
           {isTeacher ? (
             <div className="flex items-center gap-2">
-              {assignmentTypeHasHowItWorksGuide({
-                title: data.assignmentType.title,
-                kind: data.assignmentType.kind,
-              }) ? (
+              {assignmentTypeHasHowItWorksGuide(
+                {
+                  title: data.assignmentType.title,
+                  kind: data.assignmentType.kind,
+                },
+                // The Exit Ticket guide comes with Brian's landing page.
+                { exitTicketGuide: data.landingPageKey === 'exit-ticket' }
+              ) ? (
                 <SeeHowItWorksLink
                   to={`/app/assignment-types/${data.assignmentType.id}/how-it-works`}
                 />
@@ -1174,27 +1219,40 @@ export default function AppAssignmentTypesIdRoute() {
           ) : null}
           <div className="flex flex-col gap-3">
             <h1 className="text-3xl font-bold">{data.assignmentType.title}</h1>
-            <p className="text-sm sm:text-base">
-              {data.assignmentType.description}
-            </p>
+            {landingPage ? (
+              <LandingDescription page={landingPage} />
+            ) : (
+              <p className="text-sm sm:text-base">
+                {data.assignmentType.description}
+              </p>
+            )}
           </div>
         </div>
-        {data.showAboutExitTicket ? <AboutExitTicket /> : null}
-        {data.promptLibrary ? (
+        {landingPage ? (
+          <LandingSections
+            page={landingPage}
+            modules={data.assignmentType.assignmentModules}
+            lessonVideos={data.landingVideos}
+          />
+        ) : null}
+        {/* Brian's landing page replaces every block from here to the
+            library: the old directions and the Modules accordion. */}
+        {!landingPage && data.showAboutExitTicket ? <AboutExitTicket /> : null}
+        {!landingPage && data.promptLibrary ? (
           <div data-tour="type-directions">
             <TeacherDirections variant={data.promptLibrary.variant} />
           </div>
         ) : null}
-        {showDailyPagesAbout ? <AboutDailyPages /> : null}
-        {showThesisLibrary ? (
+        {!landingPage && showDailyPagesAbout ? <AboutDailyPages /> : null}
+        {!landingPage && showThesisLibrary ? (
           <div data-tour="type-directions">
             <ThesisTeacherDirections />
           </div>
         ) : null}
-        {data.apHistoryLibrary?.mode === 'teacher' ? (
+        {!landingPage && data.apHistoryLibrary?.mode === 'teacher' ? (
           <ApHistoryTeacherDirections />
         ) : null}
-        {showModules ? (
+        {!landingPage && showModules ? (
           <Accordion type="single" collapsible data-tour="type-modules">
             <AccordionItem value="modules">
               <AccordionTrigger className="py-2 text-base">
@@ -1232,6 +1290,7 @@ export default function AppAssignmentTypesIdRoute() {
         {data.promptLibrary ? (
           <div className="pb-6" data-tour="type-library">
             <PromptsLibrary
+              topNote={landingPage?.libraryNote ?? null}
               prompts={data.promptLibrary.prompts}
               facets={data.promptLibrary.facets}
               optionCounts={data.promptLibrary.optionCounts}
@@ -1266,6 +1325,7 @@ export default function AppAssignmentTypesIdRoute() {
         {data.thesisPromptLibrary ? (
           <div className="pb-6" data-tour="type-library">
             <ThesisPromptsLibrary
+              topNote={landingPage?.libraryNote ?? null}
               prompts={data.thesisPromptLibrary.prompts}
               facets={data.thesisPromptLibrary.facets}
               optionCounts={data.thesisPromptLibrary.optionCounts}

@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { PenLine } from 'lucide-react';
 import type { StackStep } from '~/domain/lesson-planner/stack-steps';
+import { CreateAssignmentChooser } from '~/components/lesson-planner/create-assignment-chooser';
 
 const key = (conversationId: string) => `yawp-lesson-paper:${conversationId}`;
 
@@ -66,13 +67,16 @@ export function YawpChecklist({ missing, onPaper }: { missing: StackStep[]; onPa
               <span className="block truncate text-xs text-[var(--sv-muted)]">{step.title}</span>
             </span>
             <span className="flex shrink-0 flex-col items-end gap-1">
-              <Link
-                to={step.create!.href}
-                className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-semibold"
-                style={{ color: 'var(--sv-writing)' }}
-              >
-                <PenLine size={12} /> Create
-              </Link>
+              <span className="inline-flex items-center gap-1">
+                <Link
+                  to={step.create!.href}
+                  className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-semibold"
+                  style={{ color: 'var(--sv-writing)' }}
+                >
+                  <PenLine size={12} /> Create
+                </Link>
+                <CreateAssignmentChooser options={step.create!.options} className="bg-white" />
+              </span>
               <button
                 type="button"
                 data-testid="yawp-paper"

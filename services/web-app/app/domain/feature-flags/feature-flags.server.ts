@@ -82,7 +82,10 @@ function runtimeDefaultOn(key: FeatureFlagKey, env: Record<string, string | unde
   if (!isNonProductionDefaultOnDeployment(env)) return false;
   return (
     key === FREE_TIER_FLAG ||
-    key === TEACHER_PROMPT_GENERATOR_FLAG
+    key === TEACHER_PROMPT_GENERATOR_FLAG ||
+    key === ASSIGNMENT_TYPE_LANDING_V2_FLAG ||
+    key === ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG ||
+    key === ASSIGNMENT_TYPE_LESSON_PLANS_FLAG
   );
 }
 
@@ -211,8 +214,8 @@ export async function isFeatureFlagEnabled(
   orgId?: string | null
 ): Promise<boolean> {
   if (key === FREE_TIER_FLAG) return isFreeTierCapabilityEnabled(orgId);
+  if (runtimeDefaultOn(key, process.env)) return true;
   if (key === TEACHER_PROMPT_GENERATOR_FLAG) {
-    if (isNonProductionDefaultOnDeployment(process.env)) return true;
     try {
       const row = await prisma.setting.findUnique({
         where: { name: featureFlagSettingName(TEACHER_PROMPT_GENERATOR_FLAG) },

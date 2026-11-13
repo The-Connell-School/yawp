@@ -7,6 +7,7 @@ import {
   THESIS_ESSAY_COURSE_TITLE,
 } from './thesis-essay-course';
 import { YAWP_LESSONS, YAWP_LESSON_SLUGS } from '~/domain/lesson-planner/yawp-lessons';
+import { readZipEntries } from '~/domain/office/zip';
 
 const PUBLIC_DIR = join(import.meta.dir, '../../../../public');
 
@@ -106,4 +107,33 @@ describe('The Thesis-Driven Essay course', () => {
     ]);
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });
+});
+
+// Teachers open these decks in PowerPoint, Google Slides and Keynote. Keynote
+// ignores fonts embedded in a .pptx and swaps in a wider face, so a deck set
+// in a web font (Cormorant Garamond, Libre Franklin) wraps and overlaps there.
+// Every deck uses fonts all three apps have: Georgia and Arial.
+const FONTS_EVERY_APP_HAS = new Set(['Georgia', 'Arial']);
+
+describe('the slide decks open cleanly in PowerPoint, Google Slides and Keynote', () => {
+  const decks = THESIS_ESSAY_COURSE.flatMap((lesson) => lesson.decks);
+
+  test.each(decks.map((deck) => [deck.fileName, deck.href]))(
+    '%s uses only Georgia and Arial on its slides, and embeds no fonts',
+    (_name, href) => {
+      const parts = readZipEntries(readFileSync(publicFile(href)));
+      const used = new Set<string>();
+      for (const [name, entry] of parts) {
+        if (!/^ppt\/slides\/slide\d+\.xml$/.test(name)) continue;
+        for (const m of entry.read().toString('utf8').matchAll(/<a:latin typeface="([^"]*)"/g)) {
+          used.add(m[1]!);
+        }
+      }
+      expect([...used].filter((font) => !FONTS_EVERY_APP_HAS.has(font))).toEqual([]);
+      expect([...parts.keys()].filter((name) => name.startsWith('ppt/fonts/'))).toEqual([]);
+      expect(parts.get('ppt/presentation.xml')!.read().toString('utf8')).not.toContain(
+        'embeddedFontLst'
+      );
+    }
+  );
 });

@@ -62,16 +62,37 @@ function slidesOf(numbers: number[]): string {
   return `slides ${numbers.slice(0, -1).join(', ')} and ${numbers[numbers.length - 1]}`;
 }
 
+/** One line per picture: its id, where it sat, its shape, and what it shows. */
+function pictureIdLines(pictures: UploadPictureRef[]): string[] {
+  return pictures.map(
+    (picture) =>
+      `- "${attribute(picture.id)}": picture ${picture.position}, on ${slidesOf(picture.slideNumbers)}, ${shapeOf(picture)}: ${picture.altText || 'no description'}`
+  );
+}
+
 /** The teacher's pictures from a deck, by id, for slides that use them. */
 function pictureLines(upload: LessonUpload): string[] {
   const pictures = upload.pictures ?? [];
   if (!pictures.length) return ['- None of its pictures could be kept.'];
   return [
     'Pictures from it you can put on a slide, each on its own picture slide: {"layout": "picture", "title": …, "question" or "body": …, "image": "<picture id>", "speakerNotes": …}. Use only an id listed here, each where their deck had it; a picture marked above as one Yawp! cannot show has no id, so describe it in the speaker notes instead.',
-    ...pictures.map(
-      (picture) =>
-        `- "${attribute(picture.id)}": picture ${picture.position}, on ${slidesOf(picture.slideNumbers)}, ${shapeOf(picture)}: ${picture.altText || 'no description'}`
-    ),
+    ...pictureIdLines(pictures),
+  ];
+}
+
+/**
+ * The lesson's own pictures (Kevin, Nov 6): the ones that came with a Yawp!
+ * lesson's deck, or were added in the slide editor, which belong to the
+ * lesson rather than to an upload. Listed so a deck the planner builds or
+ * rebuilds keeps them, rather than reaching for gallery art in their place.
+ */
+export function buildLessonPicturesSection(pictures: UploadPictureRef[]): string[] {
+  if (!pictures.length) return [];
+  return [
+    '',
+    'This lesson’s own pictures (from its slide deck, kept with the lesson):',
+    'When you write or rebuild this lesson’s deck, put each of these back on its own picture slide, where the deck had it: {"layout": "picture", "title": …, "question" or "body": …, "image": "<picture id>", "speakerNotes": …}. Use only an id listed here. Never put gallery art where one of these belongs.',
+    ...pictureIdLines(pictures),
   ];
 }
 

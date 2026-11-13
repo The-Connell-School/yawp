@@ -1705,6 +1705,24 @@ describe("buildLessonPlannerSystemPrompt — one heading per step (Brian's run 2
 describe("planner prompt — Brian's run 3", () => {
   const prompt = buildLessonPlannerSystemPrompt({} as any);
 
+  test('lists the lesson’s own pictures for a deck it writes or rebuilds (Kevin, Nov 6)', () => {
+    const text = (pictures: Parameters<typeof buildLessonPlannerSystemPromptBlocks>[0]['lessonPictures']) =>
+      buildLessonPlannerSystemPromptBlocks({ teacherName: 'Ms. Rivera', organizationName: 'Connell School', lessonPictures: pictures })
+        .map((block) => block.text)
+        .join('\n');
+    const withPictures = text([{ id: 'pic2', position: 2, slideNumbers: [6], altText: 'Fallen Man, Paris', width: 900, height: 1200 }]);
+    expect(withPictures).toContain('This lesson’s own pictures');
+    expect(withPictures).toContain('"pic2": picture 2, on slide 6, portrait: Fallen Man, Paris');
+    expect(text([])).not.toContain('This lesson’s own pictures');
+  });
+
+  test('the type tag says who is doing the work: context is the teacher talking (Kevin, Nov 6)', () => {
+    expect(prompt).toContain('`context` is the teacher talking');
+    expect(prompt).toContain('A step where students write gets `class_starter`, `daily_pages`, `thesis_essay`, or `activity`');
+    expect(prompt).toContain('counts the lesson\'s writing time from the steps where students write');
+    expect(prompt).toContain('carries a prompt line that starts with the act and a colon: `Pre-write: …`');
+  });
+
   test('every step heading carries its minutes and a type tag', () => {
     expect(prompt).toContain('{type: read_aloud}');
     expect(prompt).toContain('including a framing note and a Daily Pages reflection');
