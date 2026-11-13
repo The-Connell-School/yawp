@@ -83,7 +83,19 @@ function getResponseLocation(headers) {
   return value ? String(value) : null;
 }
 
-/** Dev-login GET may redirect ungated anonymous callers to the preview-access screen. */
+const AUTH_SESSION_COOKIE_MARKERS = ['en_session=', 'membership-id='];
+
+function responseSetsAuthSessionCookie(headers) {
+  const raw = headers?.['set-cookie'];
+  const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  return values.some((value) =>
+    AUTH_SESSION_COOKIE_MARKERS.some((marker) =>
+      String(value).toLowerCase().includes(marker)
+    )
+  );
+}
+
+/** Dev-login probes may redirect ungated anonymous callers to the preview-access screen. */
 export function isAnonymousDevLoginPreviewAccessRedirect(baseUrl, response) {
   if (response.status < 300 || response.status >= 400) return false;
   const location = getResponseLocation(response.headers);
@@ -93,6 +105,30 @@ export function isAnonymousDevLoginPreviewAccessRedirect(baseUrl, response) {
   } catch {
     return false;
   }
+}
+
+/** Anonymous dev-login is gated when it returns 401 or a sessionless preview-access redirect. */
+export function isAnonymousDevLoginAcceptablyBlocked(baseUrl, response) {
+  if (response.status === 401) return true;
+  if (!isAnonymousDevLoginPreviewAccessRedirect(baseUrl, response)) return false;
+  return !responseSetsAuthSessionCookie(response.headers);
+}
+
+function assertAnonymousDevLoginProbeBlocked(baseUrl, response) {
+  if (isAnonymousDevLoginAcceptablyBlocked(baseUrl, response)) return;
+
+  const location = getResponseLocation(response.headers);
+  if (response.status >= 200 && response.status < 400) {
+    throw new Error(
+      `Expected anonymous dev-login probe to be blocked, got HTTP ${response.status}${
+        location ? ` redirecting to ${location}` : ''
+      }`
+    );
+  }
+
+  throw new Error(
+    `Expected anonymous dev-login probe to return HTTP 401 or redirect to /auth/preview-access without a session, got HTTP ${response.status}`
+  );
 }
 
 async function assertNoSiteGatePublicEndpoints({ baseUrl, requestFn }) {
@@ -144,7 +180,7 @@ async function assertNoSiteGatePublicEndpoints({ baseUrl, requestFn }) {
         : {}),
     });
     if (check.relaxedGetDevLogin) {
-      if (isAnonymousDevLoginPreviewAccessRedirect(baseUrl, response)) {
+      if (isAnonymousDevLoginAcceptablyBlocked(baseUrl, response)) {
         continue;
       }
       if (response.status >= 200 && response.status < 400) {
@@ -160,6 +196,10 @@ async function assertNoSiteGatePublicEndpoints({ baseUrl, requestFn }) {
           `Expected anonymous GET /auth/dev-login to be blocked (401, 403, 404, or 405), got HTTP ${response.status}`
         );
       }
+      continue;
+    }
+    if (check.pathname === '/auth/dev-login' && check.method === 'POST') {
+      assertAnonymousDevLoginProbeBlocked(baseUrl, response);
       continue;
     }
     if (response.status !== 401) {
@@ -271,11 +311,7 @@ export async function enterPreviewAccess({
       },
     }
   );
-  if (blockedDevLogin.status !== 401) {
-    throw new Error(
-      `Expected anonymous POST /auth/dev-login to return HTTP 401, got ${blockedDevLogin.status}`
-    );
-  }
+  assertAnonymousDevLoginProbeBlocked(baseUrl, blockedDevLogin);
 
   return submitPreviewAccessCode({ baseUrl, accessCode, requestFn });
 }
