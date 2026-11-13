@@ -364,9 +364,6 @@ describe('feature flags (server)', () => {
       TEACHER_LOUNGE_FLAG,
       EXIT_TICKET_BUILDER_V3_FLAG,
       EXIT_TICKET_CLASS_SUMMARY_FLAG,
-      ASSIGNMENT_TYPE_LANDING_V2_FLAG,
-      ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG,
-      ASSIGNMENT_TYPE_LESSON_PLANS_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -419,9 +416,6 @@ describe('feature flags (server)', () => {
       TEACHER_LOUNGE_FLAG,
       EXIT_TICKET_BUILDER_V3_FLAG,
       EXIT_TICKET_CLASS_SUMMARY_FLAG,
-      ASSIGNMENT_TYPE_LANDING_V2_FLAG,
-      ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG,
-      ASSIGNMENT_TYPE_LESSON_PLANS_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;
