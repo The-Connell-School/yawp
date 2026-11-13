@@ -170,6 +170,7 @@ export function AssignmentBuilderV3({
   const [typeOpen, setTypeOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [classMenuOpen, setClassMenuOpen] = useState(false);
+  const [localApprovalRequired, setLocalApprovalRequired] = useState(false);
 
   const [assignmentTypeId, setAssignmentTypeId] = useState(
     editing?.assignmentTypeId ?? defaults.assignmentTypeId
@@ -362,6 +363,7 @@ export function AssignmentBuilderV3({
       return;
     }
     if (isTeachingApprovalRequiredActionData(data)) {
+      setLocalApprovalRequired(true);
       const fields = data.fields;
       const titleField = fields.title;
       if (typeof titleField === 'string') setTitle(titleField);
@@ -479,6 +481,12 @@ export function AssignmentBuilderV3({
 
   function handleCreate() {
     if (!canCreate || teachingLoading) return;
+    if (teachingLocked) {
+      setLocalApprovalRequired(true);
+      setFormError(null);
+      return;
+    }
+    setLocalApprovalRequired(false);
     setFormError(null);
     void createFetcher.submit(buildCreateFormData(), {
       method: 'post',
@@ -766,7 +774,7 @@ export function AssignmentBuilderV3({
             ) : null}
           </div>
 
-          {approvalBlocked ? (
+          {approvalBlocked || localApprovalRequired ? (
             <div style={{ marginTop: 16 }}>
               <TeachingApprovalRequiredAlert />
             </div>

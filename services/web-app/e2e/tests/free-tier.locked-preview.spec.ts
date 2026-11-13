@@ -896,13 +896,7 @@ test('full-page assignment form keeps draft when create stays teaching-locked', 
   await page.locator('#abv3-prompt').fill('Pick one community garden in your town.');
   const create = page.getByRole('button', { name: 'Create assignment' });
   await expect(create).toBeEnabled({ timeout: 15_000 });
-  const blockedCreate = page.waitForResponse(
-    (response) =>
-      response.url().includes('/api/assignments/create') &&
-      response.request().method() === 'POST'
-  );
   await create.click();
-  expect((await blockedCreate).status()).toBe(403);
   await expect(page.getByTestId('teaching-approval-required-alert')).toBeVisible({
     timeout: 15_000,
   });
