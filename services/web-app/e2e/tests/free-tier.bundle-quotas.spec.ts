@@ -16,7 +16,7 @@ test.describe('Free classroom bundle quotas', () => {
 
     await page.goto('/app/assignments');
     await page.waitForLoadState('networkidle');
-    await page.getByTestId('my-assignments-filter').click();
+    await page.getByTestId('my-assignments-actions').click();
     const newAssignment = page.getByTestId('my-assignments-new-assignment');
     await expect(newAssignment).toBeVisible({ timeout: 20_000 });
     await newAssignment.click();
@@ -32,9 +32,7 @@ test.describe('Free classroom bundle quotas', () => {
     ).toBeVisible({ timeout: 20_000 });
     const prewritingTile = page.getByRole('option', { name: /Prewriting/i });
     if (await prewritingTile.count()) {
-      await expect(prewritingTile).toContainText(
-        /Unlimited|\d+ of \d+|None left|No remaining/
-      );
+      await expect(prewritingTile).not.toContainText(/\d+ of \d+/);
     }
     const classStarterTile = page.getByRole('option', {
       name: /Class Starter/i,

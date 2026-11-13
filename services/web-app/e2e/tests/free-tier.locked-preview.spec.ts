@@ -293,9 +293,13 @@ async function expectFreeDashboardAssignmentTiles(
   await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
     options?.teachingApproved ? 5 : 0
   );
-  await expect(tiles.getByText('Class Starter', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('Prewriting', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('Thesis Statement', { exact: true })).toBeVisible();
+  for (const label of ['Class Starter', 'Prewriting', 'Thesis Statement'] as const) {
+    const name = tiles
+      .getByTestId('assignment-type-tile-name')
+      .filter({ hasText: new RegExp(`^${label}$`) });
+    await name.first().scrollIntoViewIfNeeded();
+    await expect(name.first()).toBeVisible();
+  }
 }
 
 test.describe.configure({ mode: 'serial' });

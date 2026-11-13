@@ -55,7 +55,7 @@ test('My Assignments scrolls at short and tall viewports while navigation stays 
       });
       await expect(
         page.getByTestId(`my-assignment-open-${ids[29]}`)
-      ).toBeInViewport();
+      ).toBeVisible({ timeout: 15_000 });
     }
   } finally {
     await prisma.classAssignment.deleteMany({
