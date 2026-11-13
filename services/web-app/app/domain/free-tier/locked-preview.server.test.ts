@@ -1,10 +1,10 @@
-import { afterEach, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
 
 let enabled = true;
 let application: any = { id: 'app-a', status: 'SENT', organizationId: 'org-a' };
 let memberships: any[] = [{ role: 'TEACHER', organizationId: 'org-a', organization: { plan: 'FREE_CLASSROOM' } }];
 const queries: any[] = [];
-const db = {
+const db: any = {
   freeTierApplication: { findFirst: mock(async (q: any) => { queries.push(q); return application; }) },
   orgMembership: { findMany: mock(async () => memberships) },
   organization: { findUnique: mock(async () => ({ plan: 'FREE_CLASSROOM' })) },
@@ -13,6 +13,22 @@ mock.module('~/utils/db.server', () => ({ prisma: db }));
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({
   isFeatureFlagEnabled: mock(async (_key: string, org: string) => enabled && (!org || org === 'org-a')),
 }));
+let provisionResult: { status: string; organizationId?: string } = {
+  status: 'already_provisioned',
+  organizationId: 'org-a',
+};
+let teacherMembership: any = null;
+let cookieMembershipId = '';
+mock.module('./provision-free-classroom.server', () => ({
+  provisionFreeClassroom: mock(async () => provisionResult),
+}));
+mock.module('./locked-preview-class-seed.server', () => ({
+  ensureLockedPreviewSampleAssignments: mock(async () => {}),
+}));
+mock.module('~/cookies/membership-id.server', () => ({
+  getMembershipId: mock(async () => cookieMembershipId),
+}));
+const originalOrgFindFirst = db.orgMembership.findMany;
 const {
   enforceLockedPreviewRequest,
   assertOrganizationTeachingApproved,
@@ -21,7 +37,26 @@ const {
   redactClassTeachingSecrets,
   organizationClassListQueryParts,
   organizationClassListTableState,
+  ensureLockedPreviewClassroomForUser,
+  recoverPendingLockedPreviewAccess,
+  resolveLockedPreviewTeacherMembershipId,
 } = await import('./locked-preview.server');
+
+function resetLockedPreviewMembershipMocks() {
+  provisionResult = { status: 'already_provisioned', organizationId: 'org-a' };
+  teacherMembership = null;
+  cookieMembershipId = '';
+  db.orgMembership.findFirst = mock(async (args: any) => {
+    if (args.where.role === 'TEACHER' && teacherMembership) {
+      return teacherMembership;
+    }
+    return null;
+  });
+  db.orgMembership.update = mock(async () => teacherMembership);
+  db.orgMembership.create = mock(async () => ({ id: 'member-new' }));
+  db.school = { findFirst: mock(async () => ({ id: 'school-a' })) };
+  db.class = { findFirst: mock(async () => ({ id: 'class-a' })) };
+}
 
 afterEach(() => {
   enabled = true;
@@ -32,6 +67,106 @@ afterEach(() => {
     queries.push(q);
     return application;
   });
+  db.orgMembership.findMany = originalOrgFindFirst;
+  resetLockedPreviewMembershipMocks();
+});
+
+beforeEach(() => resetLockedPreviewMembershipMocks());
+
+test('ensureLockedPreviewClassroomForUser repairs teacher membership when org is already provisioned', async () => {
+  application = { id: 'app-a', status: 'SENT', organizationId: 'org-a' };
+  teacherMembership = null;
+  const create = mock(async () => ({ id: 'member-repaired' }));
+  db.orgMembership.create = create;
+  await ensureLockedPreviewClassroomForUser('teacher');
+  expect(create).toHaveBeenCalled();
+});
+
+test('resolveLockedPreviewTeacherMembershipId reactivates an inactive teacher membership', async () => {
+  teacherMembership = { id: 'member-a', isActive: false };
+  const update = mock(async () => teacherMembership);
+  db.orgMembership.update = update;
+  await expect(resolveLockedPreviewTeacherMembershipId('teacher')).resolves.toBe(
+    'member-a'
+  );
+  expect(update).toHaveBeenCalled();
+});
+
+test('recoverPendingLockedPreviewAccess repairs stale membership cookies', async () => {
+  teacherMembership = { id: 'member-a', isActive: true };
+  cookieMembershipId = 'stale-cookie';
+  const recovery = await recoverPendingLockedPreviewAccess(
+    new Request('https://yawp.test/app'),
+    'teacher'
+  );
+  expect(recovery).toEqual({
+    kind: 'membership',
+    membershipId: 'member-a',
+    repairCookie: true,
+  });
+});
+
+test('recoverPendingLockedPreviewAccess falls back to pending when provisioning cannot succeed', async () => {
+  provisionResult = { status: 'pending_user' };
+  const recovery = await recoverPendingLockedPreviewAccess(
+    new Request('https://yawp.test/app'),
+    'teacher'
+  );
+  expect(recovery).toEqual({ kind: 'pending' });
+});
+
+test('recoverPendingLockedPreviewAccess is what /no-membership uses to reopen locked preview', async () => {
+  teacherMembership = { id: 'member-a', isActive: true };
+  cookieMembershipId = '';
+  const recovery = await recoverPendingLockedPreviewAccess(
+    new Request('https://yawp.test/no-membership'),
+    'teacher'
+  );
+  expect(recovery).toMatchObject({
+    kind: 'membership',
+    membershipId: 'member-a',
+    repairCookie: true,
+  });
+});
+
+test('requireMembership uses locked preview recovery before sending teachers to /no-membership', async () => {
+  teacherMembership = {
+    id: 'member-a',
+    isActive: true,
+    role: 'TEACHER',
+    isOrgOwner: true,
+    organization: {
+      id: 'org-a',
+      name: 'Free classroom',
+      plan: 'FREE_CLASSROOM',
+      numOfTeacherSeats: 1,
+      reporterEnabled: false,
+      classInsightsEnabled: true,
+      writingPracticeEnabled: false,
+      submissionActivityEnabled: false,
+      revisionFlowEnabled: true,
+    },
+  };
+  cookieMembershipId = 'stale-membership';
+  const setMembershipId = mock(async () => 'membership-id=member-a');
+  mock.module('~/cookies/membership-id.server', () => ({
+    getMembershipId: mock(async () => cookieMembershipId),
+    setMembershipId,
+  }));
+  mock.module('~/domain/student-license/student-license.server', () => ({
+    getUaStudentLicenseAccess: mock(async () => 'BYPASS'),
+  }));
+  db.orgMembership.findUnique = mock(async (args: any) =>
+    args.where.id === 'member-a' ? teacherMembership : null
+  );
+  const { requireMembership } = await import('~/utils/auth.server');
+  const error = await requireMembership(
+    new Request('https://yawp.test/app/my-classes'),
+    'teacher'
+  ).catch((thrown) => thrown);
+  expect(error.status).toBe(302);
+  expect(error.headers.get('location')).toBe('/app/my-classes');
+  expect(setMembershipId).toHaveBeenCalledWith('member-a');
 });
 test('pending direct APIs fail with 403 before execution; app reads pass through', async () => {
   for (const path of ['/api/domain/reporter', '/app/assignments']) {
