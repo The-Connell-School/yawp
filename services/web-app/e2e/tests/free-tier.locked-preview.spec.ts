@@ -283,17 +283,19 @@ async function capture(page: import('@playwright/test').Page, state: string) {
   }
 }
 
-/** Pending and approved free dashboards expose exactly three entitled assignment kinds. */
+/** Pending and approved free dashboards expose the five entitled bundle kinds. */
 async function expectFreeDashboardAssignmentTiles(
   page: import('@playwright/test').Page
 ) {
   const tiles = page.getByTestId('free-assignment-tiles');
-  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(3);
+  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(5);
   await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
     0
   );
   await expect(tiles.getByText('Class Starter', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('Prewriting', { exact: true })).toBeVisible();
+  await expect(tiles.getByText('Exit Ticket', { exact: true })).toBeVisible();
+  await expect(tiles.getByText('5-Paragraph Essay', { exact: true })).toBeVisible();
+  await expect(tiles.getByText('Pre-writing', { exact: true })).toBeVisible();
   await expect(tiles.getByText('Thesis Builder', { exact: true })).toBeVisible();
 }
 
@@ -418,7 +420,7 @@ for (const width of [390, 1440]) {
     await page.goto('/app');
     await expectFreeDashboardAssignmentTiles(page);
     await page
-      .getByRole('link', { name: /New Prewriting assignment/i })
+      .getByRole('link', { name: /New Pre-writing assignment/i })
       .click();
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     await page.goto('/app');
