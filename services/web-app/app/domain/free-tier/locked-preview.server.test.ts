@@ -22,6 +22,7 @@ const {
   organizationClassListQueryParts,
   organizationClassListTableState,
 } = await import('./locked-preview.server');
+
 afterEach(() => {
   enabled = true;
   application = { id: 'app-a', status: 'SENT', organizationId: 'org-a' };
@@ -34,8 +35,12 @@ afterEach(() => {
 });
 test('pending direct APIs fail with 403 before execution; app reads pass through', async () => {
   for (const path of ['/api/domain/reporter', '/app/assignments']) {
-    try { await enforceLockedPreviewRequest(new Request(`http://local${path}`, { method: 'POST' }), 'teacher'); throw Error('allowed'); }
-    catch (e) { expect((e as Response).status).toBe(403); }
+    await expect(
+      enforceLockedPreviewRequest(
+        new Request(`http://local${path}`, { method: 'POST' }),
+        'teacher'
+      )
+    ).rejects.toMatchObject({ init: { status: 403 } });
   }
   await enforceLockedPreviewRequest(
     new Request('http://local/api/domain/lesson-planner', { method: 'POST' }),
@@ -50,7 +55,7 @@ test('pending direct APIs fail with 403 before execution; app reads pass through
         }),
         'teacher'
       )
-    ).rejects.toMatchObject({ status: 403 });
+    ).rejects.toMatchObject({ init: { status: 403 } });
   }
   application.status = 'SENT';
   await expect(
@@ -60,7 +65,7 @@ test('pending direct APIs fail with 403 before execution; app reads pass through
       }),
       'teacher'
     )
-  ).rejects.toMatchObject({ status: 403 });
+  ).rejects.toMatchObject({ init: { status: 403 } });
   await enforceLockedPreviewRequest(new Request('http://local/app/reporter'), 'teacher');
   await enforceLockedPreviewRequest(new Request('http://local/app/my-classes'), 'teacher');
 });
@@ -74,17 +79,14 @@ test('blocked assignment create returns teaching-approval shape with echoed fiel
   form.set('intent', 'create-assignment');
   form.set('title', 'Community Gardens');
   form.set('prompt', 'Pick one community garden in your town.');
-  try {
-    await enforceLockedPreviewRequest(
+  await expect(
+    enforceLockedPreviewRequest(
       new Request('http://local/api/assignments/create', { method: 'POST', body: form }),
       'teacher'
-    );
-    throw new Error('allowed');
-  } catch (error) {
-    const response = error as Response;
-    expect(response.status).toBe(403);
-    const body = await response.json();
-    expect(body).toMatchObject({
+    )
+  ).rejects.toMatchObject({
+    init: { status: 403 },
+    data: {
       error: 'approval_required',
       approvalRequired: true,
       fields: {
@@ -92,16 +94,26 @@ test('blocked assignment create returns teaching-approval shape with echoed fiel
         title: 'Community Gardens',
         prompt: 'Pick one community garden in your town.',
       },
-    });
-  }
+    },
+  });
 });
 
 test('a new teacher has no organization membership until approval; the default shell plan is irrelevant', async () => {
   application.organizationId = null;
   memberships = [];
-  await expect(enforceLockedPreviewRequest(new Request('http://local/api/assignments/create', { method: 'POST' }), 'teacher')).rejects.toMatchObject({ status: 403 });
+  await expect(
+    enforceLockedPreviewRequest(
+      new Request('http://local/api/assignments/create', { method: 'POST' }),
+      'teacher'
+    )
+  ).rejects.toMatchObject({ init: { status: 403 } });
   memberships = [{ role: 'TEACHER', organizationId: 'default-org', organization: { plan: 'SCHOOL' } }];
-  await expect(enforceLockedPreviewRequest(new Request('http://local/api/assignments/create', { method: 'POST' }), 'teacher')).rejects.toMatchObject({ status: 403 });
+  await expect(
+    enforceLockedPreviewRequest(
+      new Request('http://local/api/assignments/create', { method: 'POST' }),
+      'teacher'
+    )
+  ).rejects.toMatchObject({ init: { status: 403 } });
 });
 test('flag off, approved and other roles retain normal behavior', async () => {
   const plannerReq = new Request('http://local/api/domain/lesson-planner', {
@@ -120,15 +132,11 @@ test('flag off, approved and other roles retain normal behavior', async () => {
   await enforceLockedPreviewRequest(plannerReq, 'teacher');
   await expect(
     enforceLockedPreviewRequest(assignmentReq, 'teacher')
-  ).rejects.toMatchObject({
-    status: 403,
-  });
+  ).rejects.toMatchObject({ init: { status: 403 } });
   memberships[0].role = 'ADMIN';
   await expect(
     enforceLockedPreviewRequest(assignmentReq, 'teacher')
-  ).rejects.toMatchObject({
-    status: 403,
-  });
+  ).rejects.toMatchObject({ init: { status: 403 } });
 });
 test('stale default-org membership hides preview app identity but pending lock stays on', async () => {
   memberships = [
@@ -149,7 +157,7 @@ test('a pending application blocks mutations even with a mismatched membership c
       'teacher',
       'stale-membership-id'
     )
-  ).rejects.toMatchObject({ status: 403 });
+  ).rejects.toMatchObject({ init: { status: 403 } });
   memberships[0].organizationId = 'org-a';
   memberships[0].organization.plan = 'SCHOOL';
   await expect(
@@ -157,7 +165,7 @@ test('a pending application blocks mutations even with a mismatched membership c
       new Request('http://local/app/my-classes', { method: 'POST' }),
       'teacher'
     )
-  ).rejects.toMatchObject({ status: 403 });
+  ).rejects.toMatchObject({ init: { status: 403 } });
 });
 test('userHasPendingFreeTierTeachingLock fails closed when application lookup throws', async () => {
   db.freeTierApplication.findFirst = mock(async () => {
