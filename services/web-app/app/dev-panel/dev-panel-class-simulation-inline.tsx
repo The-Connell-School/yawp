@@ -193,6 +193,9 @@ export function DevPanelClassSimulationInline({
         setBusy(null);
         return;
       }
+      const message =
+        typeof result?.message === 'string' ? result.message : 'Cleared simulated students.';
+      setPopulateSuccess(message);
       revalidator.revalidate();
       setClasses((prev) =>
         prev.map((entry) =>

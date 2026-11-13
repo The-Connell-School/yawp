@@ -3,6 +3,8 @@ import {
   FreeAssignmentTiles,
   FreeAccountRail,
 } from '~/components/free-account-usage';
+import { LockedDashboardGettingStarted } from '~/components/free-tier/locked-dashboard-getting-started';
+import { LockedDashboardPendingCard } from '~/components/free-tier/locked-dashboard-pending-card';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { freeTierStandardPageShellClassName } from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { TeachingAccessDashboardSkeleton } from '~/components/free-tier/teaching-access-dashboard-skeleton';
@@ -336,8 +338,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     gradesGrammar: gradesGrammarIds.has(type.id),
     ...quotaByTypeId.get(type.id),
   }));
-  const siteLicenseLockedAssignmentTiles =
-    await loadSiteLicenseLockedAssignmentTiles(profile.organization);
+  const siteLicenseLockedAssignmentTiles = hideTeachingSecrets
+    ? []
+    : await loadSiteLicenseLockedAssignmentTiles(profile.organization);
 
   // A student's assigned Writing Fundamentals practice, surfaced on their
   // dashboard alongside their classes (each card links into the practice
@@ -587,20 +590,19 @@ export default function AppRoute() {
     const assignmentsSeeHowItWorksTo = classStarterType
       ? `/app/assignment-types/${classStarterType.id}/how-it-works`
       : undefined;
-    const thesisEssayLockedTile = data.siteLicenseLockedAssignmentTiles.find(
-      (tile) => tile.key === 'thesis_driven_essay'
-    );
-    const gradingSeeHowItWorksTo =
-      thesisEssayLockedTile != null
-        ? `/app/assignment-types/${thesisEssayLockedTile.assignmentTypeId}/how-it-works`
-        : assignmentsSeeHowItWorksTo;
-
     const welcomeName = teacherFirstName(user.name ?? 'Teacher');
     const freeAccountRail = freeUsage ? (
-      <FreeAccountRail
-        usage={freeUsage}
-        classStarterAssignmentTypeId={classStarterType?.id}
-      />
+      locked ? (
+        <div className="flex flex-col gap-4" data-testid="free-account-rail">
+          <LockedDashboardPendingCard />
+          <LockedDashboardGettingStarted />
+        </div>
+      ) : (
+        <FreeAccountRail
+          usage={freeUsage}
+          classStarterAssignmentTypeId={classStarterType?.id}
+        />
+      )
     ) : null;
 
     const dashboardSections = (
@@ -625,9 +627,6 @@ export default function AppRoute() {
               <FreeAssignmentTiles
                 usage={freeUsage}
                 types={data.assignmentCreationTypes}
-                siteLicenseLockedAssignmentTiles={
-                  data.siteLicenseLockedAssignmentTiles
-                }
                 assignmentsSeeHowItWorksTo={assignmentsSeeHowItWorksTo}
                 teachingLocked={locked}
                 createTriggerRef={createAssignmentTriggerRef}
@@ -668,17 +667,14 @@ export default function AppRoute() {
                   </p>
                 </div>
               </div>
-            ) : (
+            ) : !locked ? (
                 <TeacherGradingAtAGlance
                   freeAccount={Boolean(freeUsage)}
                   licensedGradingBand={Boolean(freeUsage)}
-                  seeHowItWorksTo={
-                    locked ? gradingSeeHowItWorksTo : undefined
-                  }
                   needsGradingCount={needsGradingCount}
                   readyToReleaseCount={readyToReleaseCount}
                 />
-            )}
+            ) : null}
       </>
     );
 

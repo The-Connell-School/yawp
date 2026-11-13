@@ -7,6 +7,7 @@ import { provisionFreeClassroomForE2E } from '../helpers/provision-free-classroo
 import { seedSiteLicenseLockedCatalogForE2E } from '../helpers/seed-site-license-locked-catalog-for-e2e';
 import { dashboardAssignmentTileOverlapIssues } from '../helpers/dashboard-assignment-tile-overlap';
 import { expectGiveFeedbackAccessible } from '../helpers/dev-panel-feedback';
+import { expectNewAssignmentBuilderPage } from '../helpers/assignment-builder-v3-page';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
     'Run class-step tests with ./bin/project test --profile free-tier-locked-preview-browser'
@@ -282,14 +283,15 @@ async function capture(page: import('@playwright/test').Page, state: string) {
   }
 }
 
+/** Pending and approved free dashboards expose exactly three entitled assignment kinds. */
 async function expectFreeDashboardAssignmentTiles(
   page: import('@playwright/test').Page
 ) {
-  const tiles = page.getByTestId('teacher-assignments-grid');
+  const tiles = page.getByTestId('free-assignment-tiles');
   await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(3);
-  await expect(
-    tiles.getByTestId('site-license-locked-assignment-tile')
-  ).toHaveCount(6);
+  await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
+    0
+  );
   await expect(tiles.getByText('Class Starter', { exact: true })).toBeVisible();
   await expect(tiles.getByText('Prewriting', { exact: true })).toBeVisible();
   await expect(tiles.getByText('Thesis Statement', { exact: true })).toBeVisible();
@@ -378,19 +380,19 @@ for (const width of [390, 1440]) {
     await expectLockedPendingDashboardCard(page);
     await capture(page, `locked-app-before-${width}`);
     await expectFreeDashboardAssignmentTiles(page);
-    await expectTileNamesWrapOnWordBoundaries(
-      page,
-      page.getByTestId('teacher-assignments-grid')
-    );
     await expectDashboardAssignmentTileNameMetaNoOverlap(
       page,
-      page.getByTestId('teacher-assignments-grid')
+      page.getByTestId('free-assignment-tiles')
+    );
+    await expectTileNamesWrapOnWordBoundaries(
+      page,
+      page.getByTestId('free-assignment-tiles')
     );
     await expect(
-      page.getByTestId('teacher-assignments-grid').locator('img')
-    ).toHaveCount(9);
+      page.getByTestId('free-assignment-tiles').locator('img')
+    ).toHaveCount(0);
     await expect(page.getByTestId('free-account-checklist')).toHaveCount(0);
-    await expect(page.getByTestId('teacher-grading-grid')).toBeVisible();
+    await expect(page.getByTestId('teacher-grading-grid')).toHaveCount(0);
     await expect(page.getByTestId('preview-assignment-creation-disabled')).toHaveCount(
       0
     );
@@ -501,14 +503,14 @@ for (const width of [390, 1440]) {
     await expectFreeDashboardAssignmentTiles(page);
     await expectDashboardAssignmentTileNameMetaNoOverlap(
       page,
-      page.getByTestId('teacher-assignments-grid')
+      page.getByTestId('free-assignment-tiles')
     );
     await expectTileNamesWrapOnWordBoundaries(
       page,
-      page.getByTestId('teacher-assignments-grid')
+      page.getByTestId('free-assignment-tiles')
     );
     await expect(
-      page.getByTestId('teacher-assignments-grid').locator('img')
+      page.getByTestId('free-assignment-tiles').locator('img')
     ).toHaveCount(3);
     if (width === 390) {
       await capture(page, 'dashboard-approved-390');
@@ -525,7 +527,7 @@ for (const width of [390, 1440]) {
     await page.reload();
     await expect(page.getByTestId('teaching-access-approval-toast')).toHaveCount(0);
     await page
-      .getByRole('link', { name: /New Class Starter assignment/i })
+      .getByRole('link', { name: /Open Class Starter assignment type/i })
       .click();
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+$/);
     await expect(page).not.toHaveURL(/\/how-it-works$/);
@@ -818,8 +820,9 @@ test('approved teacher sees the real class code on the dashboard card', async ({
     select: { id: true, code: true },
   });
   await login(page, user.email!);
-  await page.goto('/app');
-  await expect(page.getByTestId('class-code')).toContainText(klass.code);
+  await page.goto(`/app/my-classes/${klass.id}`);
+  const trigger = page.getByTestId('class-code-trigger');
+  await expect(trigger).toContainText(klass.code);
 });
 
 test('locked class surfaces hide the real class code and lock invite controls', async ({
@@ -838,13 +841,13 @@ test('locked class surfaces hide the real class code and lock invite controls', 
   await page.goto('/app/my-classes');
   await expect(page.getByTestId('my-classes-class-options')).toBeVisible();
   await page.goto(`/app/my-classes/${klass.id}?tab=students`);
-  const joinCard = page.getByTestId('free-class-join-card-locked');
-  await expect(joinCard).toBeVisible();
+  await expect(page.getByTestId('class-code-masked')).toBeVisible();
   const html = await page.content();
   expect(html).not.toContain(klass.code);
-  await expect(joinCard.getByTestId('class-code-masked')).toBeVisible();
-  await expect(joinCard.getByTestId('class-qr-locked-placeholder')).toBeVisible();
-  await joinCard.getByTestId('copy-join-link-button').hover();
+  await expect(page.getByTestId('class-detail-add-students')).toHaveCount(0);
+  const lockedInvite = page.getByRole('button', { name: 'Add Student' });
+  await expect(lockedInvite).toBeVisible();
+  await lockedInvite.hover();
   await page.waitForTimeout(350);
   await expect(
     page.getByRole('tooltip', {
@@ -880,7 +883,7 @@ test('locked assignments tab shows sample rows and locked documents pill', async
   ).toBeVisible();
 });
 
-test('full-page assignment form shows inline approval alert and keeps field values', async ({
+test('full-page assignment form keeps draft when create stays teaching-locked', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -888,15 +891,17 @@ test('full-page assignment form shows inline approval alert and keeps field valu
   await provisionPendingClassroom(app.id, user.id!);
   await exploreLockedApp(page, user.email!);
   await page.goto('/app/assignments/new');
-  await page.locator('#assignmentTypeId').selectOption({ index: 1 });
-  await page.getByLabel('Title').fill('Community Gardens — Prewriting');
-  await page.getByLabel('Prompt').fill('Pick one community garden in your town.');
-  await page
-    .getByRole('button', { name: 'Create assignment' })
-    .click({ force: true });
-  await expect(page.getByTestId('teaching-approval-required-alert')).toBeVisible();
-  await expect(page.getByLabel('Title')).toHaveValue('Community Gardens — Prewriting');
-  await expect(page.getByLabel('Prompt')).toHaveValue(
+  await expectNewAssignmentBuilderPage(page);
+  await page.locator('#abv3-title').fill('Community Gardens — Prewriting');
+  await page.locator('#abv3-prompt').fill('Pick one community garden in your town.');
+  const create = page.getByRole('button', { name: 'Create assignment' });
+  await expect(create).toBeEnabled({ timeout: 15_000 });
+  await create.click();
+  await expect(page.getByTestId('teaching-approval-required-alert')).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.locator('#abv3-title')).toHaveValue('Community Gardens — Prewriting');
+  await expect(page.locator('#abv3-prompt')).toHaveValue(
     'Pick one community garden in your town.'
   );
 });
@@ -917,5 +922,5 @@ test('flag OFF keeps the waiting page and does not expose the in-app lock', asyn
   await page.goto('/app/free-tier/pending');
   await expect(page).toHaveURL(/free-tier\/pending/);
   await expectNoLockedPendingDashboardCard(page);
-  await expect(page.getByTestId('teacher-assignments-grid')).toHaveCount(0);
+  await expect(page.getByTestId('free-assignment-tiles')).toHaveCount(0);
 });

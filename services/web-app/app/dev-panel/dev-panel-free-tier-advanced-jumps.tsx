@@ -55,7 +55,11 @@ export function DevPanelFreeTierAdvancedJumps({
   }, [confirmCatalogId]);
 
   const runJump = async (catalogId: string) => {
-    if (!orgId || applyingCatalogId) return;
+    if (applyingCatalogId) return;
+    if (!orgId) {
+      setJumpError('Select an organization in Developer tools first.');
+      return;
+    }
     const found = findFreeTierState(catalogId);
     const pe3 = findPe3FreeTierState(catalogId);
     if (!found || !pe3) return;

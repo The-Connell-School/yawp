@@ -79,6 +79,12 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const formData = await request.formData();
+  const { guardTeachingFormAction } = await import(
+    '~/domain/free-tier/teaching-approval-required.server'
+  );
+  const teachingBlocked = await guardTeachingFormAction(request, userId, formData);
+  if (teachingBlocked) return teachingBlocked;
+
   const intent = formData.get('intent')?.toString();
   if (intent !== 'create-assignment') {
     return dataResponse(

@@ -59,6 +59,8 @@ describe('requireFreeTierEnabled', () => {
 
   test('enforces the flag in CI even when dev panel runtime is on', async () => {
     const oldCi = process.env.CI;
+    const oldEnforce = process.env.E2E_ENFORCE_FREE_TIER_FLAG;
+    Reflect.deleteProperty(process.env, 'E2E_ENFORCE_FREE_TIER_FLAG');
     process.env.CI = 'true';
     process.env.YAWP_ENVIRONMENT = 'development';
     isFreeTierEnabled.mockResolvedValue(false);
@@ -73,6 +75,28 @@ describe('requireFreeTierEnabled', () => {
     } finally {
       if (oldCi === undefined) Reflect.deleteProperty(process.env, 'CI');
       else process.env.CI = oldCi;
+      if (oldEnforce === undefined)
+        Reflect.deleteProperty(process.env, 'E2E_ENFORCE_FREE_TIER_FLAG');
+      else process.env.E2E_ENFORCE_FREE_TIER_FLAG = oldEnforce;
+    }
+  });
+
+  test('throws 404 when E2E_ENFORCE_FREE_TIER_FLAG is set even under dev panel', async () => {
+    const oldEnforce = process.env.E2E_ENFORCE_FREE_TIER_FLAG;
+    process.env.E2E_ENFORCE_FREE_TIER_FLAG = '1';
+    isFreeTierEnabled.mockResolvedValue(false);
+    isDevPanelRuntimeEnabled.mockReturnValue(true);
+    try {
+      const thrown = await requireFreeTierEnabled().catch((error) => error);
+      expect(thrown).toMatchObject({
+        type: 'DataWithResponseInit',
+        init: { status: 404 },
+      });
+      expect(isFreeTierEnabled).toHaveBeenCalled();
+    } finally {
+      if (oldEnforce === undefined)
+        Reflect.deleteProperty(process.env, 'E2E_ENFORCE_FREE_TIER_FLAG');
+      else process.env.E2E_ENFORCE_FREE_TIER_FLAG = oldEnforce;
     }
   });
 

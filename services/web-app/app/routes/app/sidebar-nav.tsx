@@ -240,7 +240,7 @@ export function SidebarNavLinks({
                     open={navExpanded ? false : undefined}
                     contentProps={{ side: 'right' }}
                   >
-                    {link.icon}
+                    <span className="inline-flex shrink-0">{link.icon}</span>
                   </Tooltip>
                 )
               ) : null;

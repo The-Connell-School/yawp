@@ -82,7 +82,7 @@ test.describe('App sidebar on short desktop viewports', () => {
     expect(viewport).not.toBeNull();
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height);
 
-    await settingsTrigger.click({ force: true });
+    await page.getByTestId('app-nav-settings').click({ force: true });
     await expect(
       page.getByRole('button', { name: 'Logout', exact: true })
     ).toBeVisible();

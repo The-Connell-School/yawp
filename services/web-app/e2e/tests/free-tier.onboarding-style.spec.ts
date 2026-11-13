@@ -86,6 +86,11 @@ for (const viewport of [
             background: 'rgb(255, 255, 255)',
           });
         }
+        const heading = target.locator('.free-tier-page h1');
+        const lineHeight = await heading.evaluate(
+          (el) => getComputedStyle(el).lineHeight
+        );
+        expect(['24.3px', '32px']).toContain(lineHeight);
         const fields = target.locator('.free-tier-page input:not([type="hidden"]):not(.hidden)');
         if (await fields.count()) await expect(fields.first()).toHaveCSS('font-size', '16px');
         await expect(target.locator('[class*="yawp-entry"]')).toHaveCount(0);

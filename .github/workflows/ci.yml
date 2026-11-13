@@ -545,6 +545,7 @@ jobs:
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          E2E_ENFORCE_FREE_TIER_FLAG: '1'
           FREE_WELCOME_DB_TESTS: '1'
           FREE_TIER_BUDGET_ENVIRONMENT: preview
         run: bun test ./services/web-app/app/domain/free-tier/public-onboarding.real-db.integration.test.ts
@@ -1109,6 +1110,7 @@ jobs:
             'app/dev-panel/dev-panel-provider.test.tsx' \
             'app/dev-panel/dev-panel-shell-boundary.test.tsx' \
             'app/root.dev-panel-user.test.ts' \
+            'app/dev-panel/dev-panel-free-tier-inline.test.tsx' \
             'app/dev-panel/dev-panel-flyout-instant.test.tsx' \
             'app/dev-panel/dev-panel-feedback-path.test.ts' \
             'app/dev-panel/dev-panel-bundle.test.ts' \
@@ -1148,6 +1150,8 @@ jobs:
             ../../packages/prisma/scripts/exit-ticket-migration-image.test.ts \
             ../../packages/prisma/scripts/preview-seats.test.ts \
             app/domain/lesson-planner/lesson-seed.test.ts \
+            app/domain/lesson-planner/yawp-lessons.server.test.ts \
+            app/domain/lesson-planner/yawp-lessons.test.ts \
             app/routes/api.domain.lesson-planner/build-system-prompt.test.ts \
             app/domain/lesson-planner/suggestions.test.ts \
             app/domain/lesson-planner/daily-pages-block.test.ts \
@@ -1381,6 +1385,7 @@ jobs:
         env:
           CI: true
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          E2E_ENFORCE_FREE_TIER_FLAG: '1'
           FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
           PRIMARY_APP_URL: http://127.0.0.1:5173
           RESEND_API_KEY: ''
@@ -1508,7 +1513,7 @@ jobs:
           TMPDIR: ${{ runner.temp }}/locked-preview
           FREE_TIER_LINK_HMAC_SECRET: ci-locked-preview-free-tier-link-hmac-secret
           PRIMARY_APP_URL: http://127.0.0.1:5199
-          LOCKED_PREVIEW_BROWSER_DEFERRED: '1'
+          E2E_ENFORCE_FREE_TIER_FLAG: '1'
         run: |
           mkdir -p locked-preview-evidence "$TMPDIR"
           bun x playwright test --config playwright.locked-preview.config.ts --workers=1
@@ -1607,6 +1612,7 @@ jobs:
         env:
           CI: true
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          E2E_ENFORCE_FREE_TIER_FLAG: '1'
           FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
           PRIMARY_APP_URL: http://127.0.0.1:5173
           RESEND_API_KEY: ''
@@ -1834,7 +1840,7 @@ jobs:
           DEV_PANEL_ARTIFACT_COPY_DIR: /opt/cursor/artifacts/screenshots
           RESEND_API_KEY: ''
           RESEND_FROM_EMAIL: ''
-          DEMO_FEEDBACK_BROWSER_DEFERRED: '1'
+          E2E_ENFORCE_FREE_TIER_FLAG: '1'
         run: |
           REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
           cd "$REPO_ROOT"
@@ -1863,8 +1869,6 @@ jobs:
           fi
 
       - name: Assert dev panel free-tier jump catalog complete
-        # Skipped while DEMO_FEEDBACK_BROWSER_DEFERRED runs the stub spec (signed-out /free still gates below).
-        if: false
         run: |
           log=services/web-app/test-results/dev-panel-free-tier-jump.log
           if [ ! -f "$log" ]; then

@@ -11,6 +11,26 @@ import {
   LOCKED_PREVIEW_PATH,
 } from './locked-preview';
 import { provisionFreeClassroom } from './provision-free-classroom.server';
+import {
+  teachingApprovalRequiredResponse,
+  teachingFormFieldsFromFormData,
+} from './teaching-approval-required.server';
+
+async function lockedPreviewBlockedMutationResponse(request: Request) {
+  let fields = {};
+  try {
+    const contentType = request.headers.get('content-type') ?? '';
+    if (
+      contentType.includes('multipart/form-data') ||
+      contentType.includes('application/x-www-form-urlencoded')
+    ) {
+      fields = teachingFormFieldsFromFormData(await request.formData());
+    }
+  } catch {
+    fields = {};
+  }
+  throw teachingApprovalRequiredResponse(fields);
+}
 
 /** Pending approval from the teacher's own application — not membership cookie or org. */
 export async function userHasPendingFreeTierTeachingLock(
@@ -68,16 +88,13 @@ export async function enforceLockedPreviewRequest(request: Request, userId: stri
       app &&
       (app.status === 'ACCOUNT_CREATED' || app.status === 'ADMIN_SUBMITTED')
     ) {
-      throw Response.json(
-        { error: 'approval_required', message: LOCKED_PREVIEW_MESSAGE },
-        { status: 403 }
-      );
+      await lockedPreviewBlockedMutationResponse(request);
     }
   }
   if (isLockedPreviewRequestAllowed(request.method, pathname)) return;
   if (['GET', 'HEAD'].includes(request.method))
     throw redirect(LOCKED_PREVIEW_APP_HOME);
-  throw Response.json({ error: 'approval_required', message: LOCKED_PREVIEW_MESSAGE }, { status: 403 });
+  await lockedPreviewBlockedMutationResponse(request);
 }
 
 /** Provisions the browse-only classroom once the teacher is waiting on approval. */

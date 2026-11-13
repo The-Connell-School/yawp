@@ -15,6 +15,7 @@ import {
   Scripts,
   ScrollRestoration,
   Outlet,
+  useLocation,
   useRouteLoaderData,
 } from 'react-router';
 import { PostHogProvider } from 'posthog-js/react';
@@ -46,6 +47,7 @@ import omit from 'lodash/omit';
 import { getMembershipId } from './cookies/membership-id.server.ts';
 import { LocalDevEnvironmentBar } from './components/local-dev-environment-bar.tsx';
 import { DevPanelMount } from './dev-panel/dev-panel-entry.tsx';
+import { consumeDevPanelJumpToast } from './dev-panel/dev-panel-jump-toast';
 import { devPanelRestoreInlineScript } from './dev-panel/dev-panel-restore-inline.ts';
 import { formatDevPanelBuildFooter } from './dev-panel/dev-panel-build-footer.ts';
 import {
@@ -447,6 +449,12 @@ function Document({
 export default function App({ loaderData: data }: Route.ComponentProps) {
   const nonce = useNonce();
   const contrastPreference = useContrastPreference();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!data.devPanelEnabled || data.internalImpersonation) return;
+    consumeDevPanelJumpToast();
+  }, [data.devPanelEnabled, data.internalImpersonation, location.pathname, location.search]);
 
   // Copy/cut provenance for the paste alert. It has to live at the root,
   // not in the /app layout: the document editor is an `app_.documents_.$id`
