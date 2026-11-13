@@ -27,6 +27,15 @@ function actionStatus(result: unknown): number {
   }
   return 200;
 }
+
+const teachingLockRejection = {
+  init: { status: 403 },
+  data: { error: 'approval_required', approvalRequired: true },
+};
+
+function expectTeachingLockBlocked(promise: Promise<unknown>) {
+  return expect(promise).rejects.toMatchObject(teachingLockRejection);
+}
 async function invokeAction(
   action: (args: never) => unknown,
   request: Request
@@ -96,7 +105,15 @@ local('real authenticated route actions reject crafted requests before parsing o
       ['/api/domain/lesson-planner/packet', packet],
       ['/app/organization/students', students],
     ] as const) {
-      await expect(action({ request: new Request(`http://localhost${path}`, { method: 'POST', headers, body: 'crafted-invalid-body' }) } as never)).rejects.toMatchObject({ status: 403 });
+      await expectTeachingLockBlocked(
+        action({
+          request: new Request(`http://localhost${path}`, {
+            method: 'POST',
+            headers,
+            body: 'crafted-invalid-body',
+          }),
+        } as never)
+      );
     }
     const plannerResult = await invokeAction(
       planner,
@@ -263,9 +280,21 @@ local('waiting tour POST persists only its own progress while all teaching route
     for (const fields of [{ tourId: 'dashboard', status: 'completed' }, { intent: 'reset' }] as Record<string, string>[])
       expect((await post(fields)).status).toBe(403);
     for (const path of ['/api/assignments/create', '/api/domain/reporter', '/app/organization/students'])
-      await expect(enforceLockedPreviewRequest(new Request(`http://localhost${path}`, { method: 'POST' }), userId)).rejects.toMatchObject({ init: { status: 403 } });
+      await expectTeachingLockBlocked(
+        enforceLockedPreviewRequest(
+          new Request(`http://localhost${path}`, { method: 'POST' }),
+          userId
+        )
+      );
     await enforceLockedPreviewRequest(new Request('http://localhost/api/domain/lesson-planner', { method: 'POST' }), userId);
-    await expect(enforceLockedPreviewRequest(new Request('http://localhost/api/domain/lesson-planner/packet', { method: 'POST' }), userId)).rejects.toMatchObject({ init: { status: 403 } });
+    await expectTeachingLockBlocked(
+      enforceLockedPreviewRequest(
+        new Request('http://localhost/api/domain/lesson-planner/packet', {
+          method: 'POST',
+        }),
+        userId
+      )
+    );
     expect(await prisma.assignment.count()).toBe(before.assignments);
     expect(await prisma.orgMembership.count()).toBe(before.members);
     expect(await prisma.aiRequestReservation.count()).toBe(before.reservations);
@@ -296,13 +325,13 @@ local('pending teacher with stale membership cookie is still denied on default-d
       '/app/my-classes',
       '/api/preferences/nav',
     ] as const) {
-      await expect(
+      await expectTeachingLockBlocked(
         enforceLockedPreviewRequest(
           new Request(`http://localhost${path}`, { method: 'POST' }),
           userId,
           staleMembership.id
         )
-      ).rejects.toMatchObject({ init: { status: 403 } });
+      );
     }
   } finally {
     await prisma.orgMembership.delete({ where: { id: staleMembership.id } });
@@ -382,7 +411,7 @@ local('approval restores assignment admission and flag OFF preserves request beh
   await setFlag('false');
   await enforceLockedPreviewRequest(request, userId);
   await setFlag(JSON.stringify({ mode: 'targeted', orgIds: [orgId] }));
-  await expect(enforceLockedPreviewRequest(request, userId)).rejects.toMatchObject({ init: { status: 403 } });
+  await expectTeachingLockBlocked(enforceLockedPreviewRequest(request, userId));
   await prisma.freeTierApplication.update({ where: { id: appId }, data: { status: 'APPROVED' } });
   await enforceLockedPreviewRequest(request, userId);
   await prisma.$transaction(tx => assertCanCreateAssignmentOfKindInTransaction(tx, { id: orgId, plan: 'FREE_CLASSROOM' }, 'class_starter'));
