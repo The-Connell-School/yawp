@@ -2,7 +2,9 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import http from 'node:http';
 import {
   enterPreviewAccess,
+  isAnonymousDevLoginAcceptablyBlocked,
   isAnonymousDevLoginPreviewAccessRedirect,
+  probeAnonymousDevLoginBlocked,
   isDemoEnvironment,
   isPreviewAccessGateEnabled,
   logPreviewLoginSmokeFailure,
@@ -138,6 +140,89 @@ describe('isAnonymousDevLoginPreviewAccessRedirect', () => {
   });
 });
 
+describe('probeAnonymousDevLoginBlocked', () => {
+  test('accepts HTTP 401 from a live-style POST probe', async () => {
+    const requestFn = async (url, options = {}) => {
+      expect(options.method).toBe('POST');
+      expect(new URL(url).pathname).toBe('/auth/dev-login');
+      return { status: 401, headers: {}, body: '' };
+    };
+    await expect(
+      probeAnonymousDevLoginBlocked('https://demo.yawp.school', { requestFn })
+    ).resolves.toMatchObject({ status: 401 });
+  });
+
+  test('accepts a sessionless preview-access redirect from a POST probe', async () => {
+    const requestFn = async () => ({
+      status: 302,
+      headers: {
+        location: '/auth/preview-access?returnTo=/auth/dev-login',
+      },
+      body: '',
+    });
+    await expect(
+      probeAnonymousDevLoginBlocked('https://demo.yawp.school', { requestFn })
+    ).resolves.toMatchObject({ status: 302 });
+  });
+});
+
+describe('isAnonymousDevLoginAcceptablyBlocked', () => {
+  const baseUrl = 'https://demo.yawp.school';
+
+  test('accepts HTTP 401', () => {
+    expect(
+      isAnonymousDevLoginAcceptablyBlocked(baseUrl, { status: 401, headers: {} })
+    ).toBe(true);
+  });
+
+  test('accepts redirect to preview-access without auth cookies', () => {
+    expect(
+      isAnonymousDevLoginAcceptablyBlocked(baseUrl, {
+        status: 302,
+        headers: {
+          location: '/auth/preview-access?returnTo=/auth/dev-login',
+        },
+      })
+    ).toBe(true);
+    expect(
+      isAnonymousDevLoginAcceptablyBlocked(baseUrl, {
+        status: 303,
+        headers: {
+          location:
+            'https://demo.yawp.school/auth/preview-access?returnTo=%2Fauth%2Fdev-login',
+        },
+      })
+    ).toBe(true);
+  });
+
+  test('rejects redirects that set an auth session cookie', () => {
+    expect(
+      isAnonymousDevLoginAcceptablyBlocked(baseUrl, {
+        status: 302,
+        headers: {
+          location: '/auth/preview-access?returnTo=/auth/dev-login',
+          'set-cookie': 'en_session=leaked; Path=/; HttpOnly',
+        },
+      })
+    ).toBe(false);
+  });
+
+  test('rejects successful redirects outside preview-access', () => {
+    expect(
+      isAnonymousDevLoginAcceptablyBlocked(baseUrl, {
+        status: 302,
+        headers: { location: '/app' },
+      })
+    ).toBe(false);
+    expect(
+      isAnonymousDevLoginPreviewAccessRedirect(baseUrl, {
+        status: 302,
+        headers: { location: '/app' },
+      })
+    ).toBe(false);
+  });
+});
+
 describe('isPreviewAccessGateEnabled', () => {
   const saved = {};
 
@@ -267,6 +352,91 @@ describe('enterPreviewAccess', () => {
         requestFn,
       })
     ).resolves.toBe('');
+  });
+
+  test('without a site gate, accepts POST /auth/dev-login redirect to preview-access', async () => {
+    const requestFn = async (url, options = {}) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === '/' && isGet(options)) {
+        return { status: 200, headers: {}, body: 'home' };
+      }
+      if (pathname === '/api/healthcheck' && isGet(options)) {
+        return { status: 200, headers: {}, body: 'ok' };
+      }
+      if (pathname === '/auth/dev-login' && isGet(options)) {
+        return { status: 400, headers: {}, body: 'no loader' };
+      }
+      if (pathname === '/auth/dev-login' && options.method === 'POST') {
+        return {
+          status: 302,
+          headers: {
+            location: '/auth/preview-access?returnTo=/auth/dev-login',
+          },
+          body: '',
+        };
+      }
+      if (pathname === '/auth/dev-login/options' && isGet(options)) {
+        return { status: 401, headers: {}, body: '' };
+      }
+      if (pathname === '/lti/launch' && options.method === 'POST') {
+        return { status: 401, headers: {}, body: '' };
+      }
+      return { status: 404, headers: {}, body: '' };
+    };
+
+    await expect(
+      enterPreviewAccess({
+        baseUrl: 'https://demo.yawp.school',
+        accessCode,
+        gateEnabled: false,
+        obtainAccessCookie: false,
+        requestFn,
+      })
+    ).resolves.toBe('');
+  });
+
+  test('without a site gate, rejects POST /auth/dev-login redirect with a session cookie', async () => {
+    const requestFn = async (url, options = {}) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === '/' && isGet(options)) {
+        return { status: 200, headers: {}, body: 'home' };
+      }
+      if (pathname === '/api/healthcheck' && isGet(options)) {
+        return { status: 200, headers: {}, body: 'ok' };
+      }
+      if (pathname === '/auth/dev-login' && isGet(options)) {
+        return { status: 400, headers: {}, body: 'no loader' };
+      }
+      if (pathname === '/auth/dev-login' && options.method === 'POST') {
+        return {
+          status: 302,
+          headers: {
+            location: '/auth/preview-access?returnTo=/auth/dev-login',
+            'set-cookie': 'en_session=leaked; Path=/; HttpOnly',
+          },
+          body: '',
+        };
+      }
+      if (pathname === '/auth/dev-login/options' && isGet(options)) {
+        return { status: 401, headers: {}, body: '' };
+      }
+      if (pathname === '/lti/launch' && options.method === 'POST') {
+        return { status: 401, headers: {}, body: '' };
+      }
+      return { status: 404, headers: {}, body: '' };
+    };
+
+    await expect(
+      enterPreviewAccess({
+        baseUrl: 'https://demo.yawp.school',
+        accessCode,
+        gateEnabled: false,
+        obtainAccessCookie: false,
+        requestFn,
+      })
+    ).rejects.toThrow(
+      'Expected anonymous dev-login probe to be blocked, got HTTP 302 redirecting to /auth/preview-access?returnTo=/auth/dev-login'
+    );
   });
 
   test('without a site gate, accepts GET /auth/dev-login redirect to preview-access', async () => {
@@ -424,6 +594,48 @@ describe('enterPreviewAccess', () => {
     expect(seenPaths).toEqual(['/', '/auth/dev-login', '/auth/preview-access']);
   });
 
+  test('accepts POST /auth/dev-login redirect to preview-access without a gate cookie', async () => {
+    const requestFn = async (url, options = {}) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === '/') {
+        return {
+          status: 302,
+          headers: { location: '/auth/preview-access?returnTo=%2F' },
+          body: '',
+        };
+      }
+      if (pathname === '/auth/dev-login' && options.method === 'POST') {
+        return {
+          status: 302,
+          headers: {
+            location: '/auth/preview-access?returnTo=/auth/dev-login',
+          },
+          body: '',
+        };
+      }
+      if (pathname === '/auth/preview-access' && options.method === 'POST') {
+        return {
+          status: 302,
+          headers: {
+            location: '/',
+            'set-cookie':
+              '__yawp_preview_access=signed; Path=/; HttpOnly; SameSite=Lax',
+          },
+          body: '',
+        };
+      }
+      return { status: 404, headers: {}, body: '' };
+    };
+
+    await expect(
+      enterPreviewAccess({
+        baseUrl: 'https://pr-142.preview.yawp.school',
+        accessCode,
+        requestFn,
+      })
+    ).resolves.toContain('__yawp_preview_access=');
+  });
+
   test('fails if POST /auth/dev-login reaches the app without a gate cookie', async () => {
     const requestFn = async (url, options = {}) => {
       const pathname = new URL(url).pathname;
@@ -435,7 +647,14 @@ describe('enterPreviewAccess', () => {
         };
       }
       if (pathname === '/auth/dev-login' && options.method === 'POST') {
-        return { status: 302, headers: { location: '/app' }, body: '' };
+        return {
+          status: 302,
+          headers: {
+            location: '/app',
+            'set-cookie': 'en_session=leaked; Path=/; HttpOnly',
+          },
+          body: '',
+        };
       }
       return { status: 404, headers: {}, body: '' };
     };
@@ -447,7 +666,7 @@ describe('enterPreviewAccess', () => {
         requestFn,
       })
     ).rejects.toThrow(
-      'Expected anonymous POST /auth/dev-login to return HTTP 401, got 302'
+      'Expected anonymous dev-login probe to be blocked, got HTTP 302 redirecting to /app'
     );
   });
 });
