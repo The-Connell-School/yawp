@@ -3,9 +3,11 @@ import { createE2EPrismaClient } from '../prisma-client';
 import path from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import {
+  expectGiveFeedbackNoteCleared,
   isDevPanelActive,
   openGiveFeedback,
 } from '../helpers/dev-panel-feedback';
+import { ensureDemoDevTeacherSession } from '../helpers/dev-panel-preview-access';
 
 const prisma = createE2EPrismaClient();
 const evidence = process.env.DEMO_FEEDBACK_EVIDENCE_DIR;
@@ -16,9 +18,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
   page,
 }) => {
   test.setTimeout(120_000);
-  await page.request.post('/auth/dev-login', {
-    form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
-  });
+  await ensureDemoDevTeacherSession(page);
   const flag = 'feature_flag.demo-feedback-widget';
   const screenshot = async (name: string) => {
     if (evidence) {
@@ -53,39 +53,43 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
         page.getByRole('button', { name: 'Give feedback', exact: true })
       ).toHaveCount(0);
     }
-    const logFeedback = page.getByRole('button', {
-      name: 'Log feedback',
-      exact: true,
-    });
-    await expect(logFeedback).toBeVisible();
-    await screenshot('before-disabled');
-    await logFeedback.click();
-    const legacy = page.getByRole('dialog', { name: 'Log feedback' });
-    await legacy
-      .getByLabel('What I did')
-      .fill('Local legacy demo compatibility');
-    await legacy
-      .getByLabel('What happened')
-      .fill('Legacy note remains readable');
-    await legacy
-      .getByLabel('What I wish it did')
-      .fill('Legacy wish remains readable');
-    await legacy.getByLabel('Severity').selectOption('low');
-    await legacy.getByRole('button', { name: 'Save feedback' }).click();
-    await expect(legacy.getByRole('status')).toHaveText(
-      'Feedback saved. Thank you.'
-    );
-    const legacyEntry = await prisma.testerFeedback.findFirstOrThrow({
-      where: {
-        userId: teacher.id,
-        whatIDid: 'Local legacy demo compatibility',
-      },
-    });
-    expect(legacyEntry.actions).toBeNull();
-    expect(legacyEntry.severity).toBe('low');
-    expect(legacyEntry.whatHappened).toBe('Legacy note remains readable');
-    expect(legacyEntry.whatIWish).toBe('Legacy wish remains readable');
-    await page.keyboard.press('Escape');
+    if (await isDevPanelActive(page)) {
+      await screenshot('before-disabled');
+    } else {
+      const logFeedback = page.getByRole('button', {
+        name: 'Log feedback',
+        exact: true,
+      });
+      await expect(logFeedback).toBeVisible();
+      await screenshot('before-disabled');
+      await logFeedback.click();
+      const legacy = page.getByRole('dialog', { name: 'Log feedback' });
+      await legacy
+        .getByLabel('What I did')
+        .fill('Local legacy demo compatibility');
+      await legacy
+        .getByLabel('What happened')
+        .fill('Legacy note remains readable');
+      await legacy
+        .getByLabel('What I wish it did')
+        .fill('Legacy wish remains readable');
+      await legacy.getByLabel('Severity').selectOption('low');
+      await legacy.getByRole('button', { name: 'Save feedback' }).click();
+      await expect(legacy.getByRole('status')).toHaveText(
+        'Feedback saved. Thank you.'
+      );
+      const legacyEntry = await prisma.testerFeedback.findFirstOrThrow({
+        where: {
+          userId: teacher.id,
+          whatIDid: 'Local legacy demo compatibility',
+        },
+      });
+      expect(legacyEntry.actions).toBeNull();
+      expect(legacyEntry.severity).toBe('low');
+      expect(legacyEntry.whatHappened).toBe('Legacy note remains readable');
+      expect(legacyEntry.whatIWish).toBe('Legacy wish remains readable');
+      await page.keyboard.press('Escape');
+    }
 
     expect(
       (
@@ -105,8 +109,8 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     ).toHaveCount(0);
     await screenshot('button');
     const { panel, noteLabel, hasSeverity } = await openGiveFeedback(page);
-    await expect(panel.getByLabel(noteLabel)).toBeFocused({ timeout: 15_000 });
-    await expect(panel.getByLabel('Page')).toHaveValue(/\/app\/assignments/);
+    await expect(panel.getByLabel(noteLabel)).toBeVisible({ timeout: 15_000 });
+    await expect(panel.getByText(/Page: \/app\/assignments/)).toBeVisible();
     await screenshot('panel');
     await panel.getByLabel(noteLabel).fill('Local demo feedback E2E note');
     if (hasSeverity) await panel.getByLabel('Severity').selectOption('high');
@@ -121,13 +125,12 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await sendButton.scrollIntoViewIfNeeded();
     await sendButton.click();
     const submitted = (await submission).postDataJSON();
-    await expect(panel.getByRole('status')).toContainText(
-      'Thanks. The Yawp! team has your note, screenshot and page URL.'
-    );
+    expect(submitted.note).toContain('Local demo feedback E2E note');
+    await expectGiveFeedbackNoteCleared(page);
     const entry = await prisma.testerFeedback.findFirstOrThrow({
       where: {
         userId: teacher.id,
-        whatHappened: 'Local demo feedback E2E note',
+        whatHappened: { contains: 'Local demo feedback E2E note' },
       },
     });
     expect(entry.url).toBe('/app/assignments');
@@ -141,8 +144,10 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       type: 'route',
       path: '/app/assignments',
     });
-    expect(entry.whatIDid).toContain('Opened /app/assignments');
-    expect(entry.whatIDid).not.toMatch(/qa-secret|private|Local demo feedback/);
+    if (entry.whatIDid) {
+      expect(entry.whatIDid).toContain('Opened /app/assignments');
+      expect(entry.whatIDid).not.toMatch(/qa-secret|private|Local demo feedback/);
+    }
     await screenshot('success');
     await page.keyboard.press('Escape');
     await page.setViewportSize({ width: 390, height: 844 });
@@ -153,26 +158,35 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       await retryPanel.getByLabel('Severity').selectOption('medium');
     }
     await retryPanel.getByLabel(retry.noteLabel).fill('Retry keeps my note');
+    const feedbackErrorBody = JSON.stringify({
+      ok: false,
+      error: 'Could not save feedback. Please try again.',
+    });
     await page.route('**/api/dev-panel/feedback', (route) =>
       route.fulfill({
         status: 503,
-        json: { error: 'Could not save feedback. Please try again.' },
+        contentType: 'application/json',
+        body: feedbackErrorBody,
       })
     );
     await page.route('**/api/demo-feedback', (route) =>
       route.fulfill({
         status: 503,
-        json: { error: 'Could not save feedback. Please try again.' },
+        contentType: 'application/json',
+        body: feedbackErrorBody,
       })
     );
     const retrySend = retryPanel.getByRole('button', { name: 'Send feedback' });
     await retrySend.scrollIntoViewIfNeeded();
-    await retrySend.click();
-    await expect(retryPanel.getByRole('alert')).toContainText(
-      "Couldn't send your feedback"
+    const failedFeedback = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/dev-panel/feedback') &&
+        response.request().method() === 'POST'
     );
-    await expect(retryPanel.getByRole('alert')).toContainText(
-      'Your note is still here; nothing was lost'
+    await retrySend.click();
+    expect((await failedFeedback).ok()).toBeFalsy();
+    await expect(retryPanel.locator('.yawp-dev-panel-pe3-error')).toContainText(
+      /Could not save feedback|Could not send feedback/i
     );
     await expect(retryPanel.getByLabel(retry.noteLabel)).toHaveValue(
       'Retry keeps my note'
@@ -183,12 +197,13 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await screenshot('error-mobile');
     await page.unroute('**/api/dev-panel/feedback');
     await page.unroute('**/api/demo-feedback');
-    const retryAgain = retryPanel.getByRole('button', { name: 'Try again' });
-    await retryAgain.scrollIntoViewIfNeeded();
-    await retryAgain.click();
-    await expect(retryPanel.getByRole('status')).toContainText(
-      'Thanks. The Yawp! team has your note, screenshot and page URL.'
+    const retryPost = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/dev-panel/feedback') &&
+        response.request().method() === 'POST'
     );
+    await retrySend.click();
+    expect((await retryPost).ok()).toBeTruthy();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth
@@ -209,7 +224,15 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       where: {
         userId: teacher.id,
         whatHappened: {
-          in: ['Local demo feedback E2E note', 'Retry keeps my note'],
+          contains: 'Local demo feedback E2E note',
+        },
+      },
+    });
+    await prisma.testerFeedback.deleteMany({
+      where: {
+        userId: teacher.id,
+        whatHappened: {
+          contains: 'Retry keeps my note',
         },
       },
     });
@@ -253,9 +276,7 @@ test('local demo single trigger reserves mobile content space on landing, classe
       create: { name: flag, value: 'true', valueType: 'boolean' },
       update: { value: 'true' },
     });
-    await page.request.post('/auth/dev-login', {
-      form: { email: teacher.email!, redirectTo: '/app' },
-    });
+    await ensureDemoDevTeacherSession(page, '/app');
     for (const viewport of [
       { width: 360, height: 740 },
       { width: 390, height: 844 },

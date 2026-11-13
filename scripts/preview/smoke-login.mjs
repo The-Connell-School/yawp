@@ -76,6 +76,78 @@ function joinCookieHeaders(accessCookie, authCookies) {
   return accessCookie || authCookies || '';
 }
 
+function getResponseLocation(headers) {
+  const raw = headers?.location ?? headers?.Location;
+  if (raw == null) return null;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value ? String(value) : null;
+}
+
+const AUTH_SESSION_COOKIE_MARKERS = ['en_session=', 'membership-id='];
+
+function responseSetsAuthSessionCookie(headers) {
+  const raw = headers?.['set-cookie'];
+  const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  return values.some((value) =>
+    AUTH_SESSION_COOKIE_MARKERS.some((marker) =>
+      String(value).toLowerCase().includes(marker)
+    )
+  );
+}
+
+/** Dev-login probes may redirect ungated anonymous callers to the preview-access screen. */
+export function isAnonymousDevLoginPreviewAccessRedirect(baseUrl, response) {
+  if (response.status < 300 || response.status >= 400) return false;
+  const location = getResponseLocation(response.headers);
+  if (!location) return false;
+  try {
+    return new URL(location, baseUrl).pathname === '/auth/preview-access';
+  } catch {
+    return false;
+  }
+}
+
+/** Anonymous dev-login is gated when it returns 401 or a sessionless preview-access redirect. */
+export function isAnonymousDevLoginAcceptablyBlocked(baseUrl, response) {
+  if (response.status === 401) return true;
+  if (!isAnonymousDevLoginPreviewAccessRedirect(baseUrl, response)) return false;
+  return !responseSetsAuthSessionCookie(response.headers);
+}
+
+function assertAnonymousDevLoginProbeBlocked(baseUrl, response) {
+  if (isAnonymousDevLoginAcceptablyBlocked(baseUrl, response)) return;
+
+  const location = getResponseLocation(response.headers);
+  if (response.status >= 200 && response.status < 400) {
+    throw new Error(
+      `Expected anonymous dev-login probe to be blocked, got HTTP ${response.status}${
+        location ? ` redirecting to ${location}` : ''
+      }`
+    );
+  }
+
+  throw new Error(
+    `Expected anonymous dev-login probe to return HTTP 401 or redirect to /auth/preview-access without a session, got HTTP ${response.status}`
+  );
+}
+
+/** Anonymous POST /auth/dev-login used by deploy smoke and workflow gate checks. */
+export async function probeAnonymousDevLoginBlocked(
+  baseUrl,
+  { email = 'dev.admin@yawp.local', requestFn = request } = {}
+) {
+  const devLoginProbeBody = new URLSearchParams({ email }).toString();
+  const response = await requestFn(appendPath(baseUrl, '/auth/dev-login'), {
+    method: 'POST',
+    body: devLoginProbeBody,
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+  });
+  assertAnonymousDevLoginProbeBlocked(baseUrl, response);
+  return response;
+}
+
 async function assertNoSiteGatePublicEndpoints({ baseUrl, requestFn }) {
   const anonymousPage = await requestFn(baseUrl);
   if (anonymousPage.status !== 200) {
@@ -125,6 +197,9 @@ async function assertNoSiteGatePublicEndpoints({ baseUrl, requestFn }) {
         : {}),
     });
     if (check.relaxedGetDevLogin) {
+      if (isAnonymousDevLoginAcceptablyBlocked(baseUrl, response)) {
+        continue;
+      }
       if (response.status >= 200 && response.status < 400) {
         throw new Error(
           `Expected anonymous GET /auth/dev-login not to succeed, got HTTP ${response.status}`
@@ -138,6 +213,10 @@ async function assertNoSiteGatePublicEndpoints({ baseUrl, requestFn }) {
           `Expected anonymous GET /auth/dev-login to be blocked (401, 403, 404, or 405), got HTTP ${response.status}`
         );
       }
+      continue;
+    }
+    if (check.pathname === '/auth/dev-login' && check.method === 'POST') {
+      assertAnonymousDevLoginProbeBlocked(baseUrl, response);
       continue;
     }
     if (response.status !== 401) {
@@ -249,11 +328,7 @@ export async function enterPreviewAccess({
       },
     }
   );
-  if (blockedDevLogin.status !== 401) {
-    throw new Error(
-      `Expected anonymous POST /auth/dev-login to return HTTP 401, got ${blockedDevLogin.status}`
-    );
-  }
+  assertAnonymousDevLoginProbeBlocked(baseUrl, blockedDevLogin);
 
   return submitPreviewAccessCode({ baseUrl, accessCode, requestFn });
 }

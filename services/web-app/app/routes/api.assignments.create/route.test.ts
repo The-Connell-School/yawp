@@ -44,8 +44,18 @@ const actualAssignmentPromptAttachment =
 // before any file could mock.module() this path (see comment there).
 const actualAssignmentTypeAccess =
   globalThis.__realModules['~/utils/assignment-type-access.server'];
+const actualTeachingApproval = await import(
+  '~/domain/free-tier/teaching-approval-required.server'
+);
+const guardTeachingFormAction = mock<
+  typeof actualTeachingApproval.guardTeachingFormAction
+>();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
+mock.module('~/domain/free-tier/teaching-approval-required.server', () => ({
+  ...actualTeachingApproval,
+  guardTeachingFormAction,
+}));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
@@ -73,6 +83,7 @@ mock.module('~/domain/assignments/saved-assignments.server', () => ({
   saveAssignmentForReuse,
 }));
 
+const { data: dataResponse } = await import('react-router');
 const { action } = await import('./route');
 const {
   BASIC_EXIT_TICKET_PROMPT,
@@ -150,6 +161,7 @@ describe('api.assignments.create', () => {
       .mockResolvedValue([{ id: 'ca-1', classId: 'class-1' }]);
     requireUserId.mockReset();
     requireMembership.mockReset();
+    guardTeachingFormAction.mockReset().mockResolvedValue(null);
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -209,6 +221,7 @@ describe('api.assignments.create', () => {
       },
       select: {
         id: true,
+        title: true,
         systemKey: true,
         kind: true,
         collaborationSupported: true,
@@ -568,6 +581,7 @@ describe('api.assignments.create', () => {
       },
       select: {
         id: true,
+        title: true,
         systemKey: true,
         kind: true,
         collaborationSupported: true,
@@ -1402,5 +1416,36 @@ describe('api.assignments.create', () => {
         })
       );
     });
+  });
+
+  test('returns approval_required without deploying when teaching is locked', async () => {
+    guardTeachingFormAction.mockResolvedValue(
+      dataResponse(
+        {
+          error: 'approval_required',
+          approvalRequired: true as const,
+          fields: { title: 'Locked title', prompt: 'Locked prompt' },
+        },
+        { status: 403 }
+      )
+    );
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1'],
+        prompt: 'Locked prompt',
+        title: 'Locked title',
+      }),
+      params: {},
+    } as any);
+
+    expect(responseStatus(response)).toBe(403);
+    const body = await readBody(response);
+    expect(body).toMatchObject({
+      approvalRequired: true,
+      fields: { title: 'Locked title', prompt: 'Locked prompt' },
+    });
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 });

@@ -151,6 +151,35 @@ export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
 export const TEACHER_PROMPT_GENERATOR_FLAG = 'teacher-prompt-generator' as const;
 
 /**
+ * Brian's teacher-facing assignment-type landing pages (Oct 31 copy edits):
+ * a short Description, How it works, and the Prompt Library intro in a mentor
+ * teacher's voice, with the one-step types' Modules block removed. Off: every
+ * assignment type page as before. Default off on production; on by default on
+ * demo and PR previews. The Thesis-Driven Essay page has its own flag below.
+ */
+export const ASSIGNMENT_TYPE_LANDING_V2_FLAG = 'assignment-type-landing-v2' as const;
+
+/**
+ * The new Thesis-Driven Essay landing page, with How to Teach It (a lesson
+ * stack and tutorial video per step). Demo only until the stacks and videos
+ * exist; turning this on in production is how it goes live. Needs
+ * {@link ASSIGNMENT_TYPE_LANDING_V2_FLAG}.
+ */
+export const ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG =
+  'assignment-type-landing-thesis-essay' as const;
+
+/**
+ * How to Teach It → ready-built lesson plans (Kevin, Nov 5). On the new
+ * landing pages, a lesson's "Lesson plan" opens Brian's lesson in the
+ * teacher's own Lesson Planner, on the stack page, built from the Yawp!
+ * lesson catalog (`/app/lesson-planner/yawp/<slug>`). Off: the row is the
+ * lesson plan PDF and the route is a 404. Needs
+ * {@link ASSIGNMENT_TYPE_LANDING_V2_FLAG} and the school's Lesson Planner.
+ * Default off on production; on by default on demo and PR previews.
+ */
+export const ASSIGNMENT_TYPE_LESSON_PLANS_FLAG = 'assignment-type-lesson-plans' as const;
+
+/**
  * Teacher's Lounge (`/app/teacher-trainings`). Off: hidden and redirected except
  * for emails on the `teacher_lounge` access list. Everyone: on for all teachers
  * (role checks unchanged). Targeted: on for listed schools only, with the same
@@ -175,18 +204,6 @@ export const EXIT_TICKET_BUILDER_V3_FLAG = 'exit-ticket-builder-v3' as const;
  * deterministic Class read only. Stored summaries are kept either way.
  */
 export const EXIT_TICKET_CLASS_SUMMARY_FLAG = 'exit-ticket-class-summary' as const;
-
-/** Teacher-facing assignment-type landing pages (Brian's v2 copy). Default off on production. */
-export const ASSIGNMENT_TYPE_LANDING_V2_FLAG =
-  'assignment-type-landing-v2' as const;
-
-/** Thesis-Driven Essay landing page; requires v2. Demo on by default. */
-export const ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG =
-  'assignment-type-landing-thesis-essay' as const;
-
-/** How to Teach It's lesson plan links open Lesson Planner stacks instead of PDFs. */
-export const ASSIGNMENT_TYPE_LESSON_PLANS_FLAG =
-  'assignment-type-lesson-plans' as const;
 
 /**
  * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
@@ -328,6 +345,21 @@ export const FEATURE_FLAGS = {
     description:
       'Shows New → Generate a prompt and the LLM drafting sheet on assignment types that support it (Class Starter, Daily Pages, Exit Ticket, Thesis-Driven Essay). Default off on production; on by default on demo and PR previews.',
   },
+  [ASSIGNMENT_TYPE_LANDING_V2_FLAG]: {
+    label: 'Assignment type pages: teacher-facing copy',
+    description:
+      "Brian's new landing page for each assignment type (Class Starter, Exit Ticket, Pre-Writing, Thesis Statement, Daily Pages, AP History, and the other built-in types): a short description, How it works, and the Prompt Library intro, with no Modules block on one-step types. Off: the old pages. Default off on production; on by default on demo and PR previews.",
+  },
+  [ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG]: {
+    label: 'Assignment type pages: Thesis-Driven Essay',
+    description:
+      'The new Thesis-Driven Essay landing page, with How to Teach It (lesson stack and tutorial video per step). Needs the teacher-facing copy flag. Turn on in production once the stacks and videos exist. Default off on production; on by default on demo and PR previews.',
+  },
+  [ASSIGNMENT_TYPE_LESSON_PLANS_FLAG]: {
+    label: 'Assignment type pages: lesson plans in the Lesson Planner',
+    description:
+      "How to Teach It's \"Lesson plan\" links open Brian's Thesis-Driven Essay lessons as ready-built stacks in the teacher's own Lesson Planner (one copy per teacher per lesson). Off: the links are the lesson plan PDFs. Needs the teacher-facing copy flag and the Lesson Planner. Default off on production; on by default on demo and PR previews.",
+  },
   [TEACHER_LOUNGE_FLAG]: {
     label: "Teacher's Lounge",
     description:
@@ -342,21 +374,6 @@ export const FEATURE_FLAGS = {
     label: 'Exit ticket class summary',
     description:
       'On an exit ticket’s Class read, teachers can ask for a summary of the responses: what the class understood, where the confusion is, whether to reteach, and a suggested opening block for tomorrow, which "Plan tomorrow from this" passes to the planner. One model call per request, only when new responses have arrived. Off: the Class read only.',
-  },
-  [ASSIGNMENT_TYPE_LANDING_V2_FLAG]: {
-    label: 'Assignment type landing v2',
-    description:
-      "Brian's teacher-facing landing pages on assignment types. Off: the legacy prompts library only.",
-  },
-  [ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG]: {
-    label: 'Thesis essay landing page',
-    description:
-      'The Thesis-Driven Essay landing page. Needs assignment type landing v2. Off: legacy thesis library.',
-  },
-  [ASSIGNMENT_TYPE_LESSON_PLANS_FLAG]: {
-    label: 'Assignment type lesson plan stacks',
-    description:
-      'How to Teach It opens ready-built Lesson Planner stacks. Needs assignment type landing v2.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

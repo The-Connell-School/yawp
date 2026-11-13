@@ -8,10 +8,11 @@ import {
   freeTierShowAdvocatePack,
   freeTierShowGettingStartedChecklist,
 } from '~/domain/free-tier/getting-started-grade';
+import { LockedDashboardGettingStarted } from '~/components/free-tier/locked-dashboard-getting-started';
+import { LockedDashboardPendingCard } from '~/components/free-tier/locked-dashboard-pending-card';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { freeTierStandardPageShellClassName } from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { TeachingAccessDashboardSkeleton } from '~/components/free-tier/teaching-access-dashboard-skeleton';
-import { LockedDashboardGettingStarted } from '~/components/free-tier/locked-dashboard-getting-started';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
   Form,
@@ -342,8 +343,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     gradesGrammar: gradesGrammarIds.has(type.id),
     ...quotaByTypeId.get(type.id),
   }));
-  const siteLicenseLockedAssignmentTiles =
-    await loadSiteLicenseLockedAssignmentTiles(profile.organization);
+  const siteLicenseLockedAssignmentTiles = hideTeachingSecrets
+    ? []
+    : await loadSiteLicenseLockedAssignmentTiles(profile.organization);
 
   // A student's assigned Writing Fundamentals practice, surfaced on their
   // dashboard alongside their classes (each card links into the practice
@@ -592,14 +594,19 @@ export default function AppRoute() {
     );
     const welcomeName = teacherFirstName(user.name ?? 'Teacher');
     // Getting started sits beside the first class card in both locked preview
-    // and the approved free tier, so approval doesn't move it. The rail only
-    // carries what's left (the advocate pack).
-    const freeAccountRail =
-      freeUsage && !locked && freeTierShowAdvocatePack(freeUsage) ? (
-        <div className="space-y-5" data-testid="free-account-rail">
-          <AdvocatePackEntry />
-        </div>
-      ) : null;
+    // and the approved free tier, so approval doesn't move it. The rail carries
+    // the pending card while locked and the advocate pack once approved.
+    const freeAccountRail = !freeUsage
+      ? null
+      : locked ? (
+          <div className="space-y-5" data-testid="free-account-rail">
+            <LockedDashboardPendingCard />
+          </div>
+        ) : freeTierShowAdvocatePack(freeUsage) ? (
+          <div className="space-y-5" data-testid="free-account-rail">
+            <AdvocatePackEntry />
+          </div>
+        ) : null;
 
     const gettingStartedTile = !freeUsage ? null : locked ? (
       <LockedDashboardGettingStarted />
@@ -675,7 +682,7 @@ export default function AppRoute() {
                   </p>
                 </div>
               </div>
-            ) : (
+            ) : !locked ? (
                 <TeacherGradingAtAGlance
                   freeAccount={Boolean(freeUsage)}
                   licensedGradingBand={Boolean(freeUsage)}
@@ -683,7 +690,7 @@ export default function AppRoute() {
                   needsGradingCount={needsGradingCount}
                   readyToReleaseCount={readyToReleaseCount}
                 />
-            )}
+            ) : null}
       </>
     );
 

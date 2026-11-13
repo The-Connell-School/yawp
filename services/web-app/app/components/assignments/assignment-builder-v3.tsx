@@ -31,7 +31,6 @@ import {
 } from '~/domain/assignments/new-assignment-defaults';
 import { isExitTicketAssignmentType } from '~/domain/assignment-types/exit-ticket';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
-import { lockedTeachingButtonProps } from '~/components/free-tier/locked-teaching-control';
 import { TeachingApprovalRequiredAlert } from '~/components/free-tier/teaching-approval-required-alert';
 import { isTeachingApprovalRequiredActionData } from '~/domain/free-tier/teaching-approval-required';
 import { toDateInputValue } from '~/utils/date-only';
@@ -194,6 +193,7 @@ export function AssignmentBuilderV3({
     createFetcher.state !== 'idle' || updateFetcher.state !== 'idle';
 
   const [classMenuOpen, setClassMenuOpen] = useState(false);
+  const [localApprovalRequired, setLocalApprovalRequired] = useState(false);
 
   const [assignmentTypeId, setAssignmentTypeId] = useState(
     editing?.assignmentTypeId ?? defaults.assignmentTypeId
@@ -347,6 +347,15 @@ export function AssignmentBuilderV3({
       }
       return;
     }
+    if (isTeachingApprovalRequiredActionData(data)) {
+      setLocalApprovalRequired(true);
+      const fields = data.fields;
+      const titleField = fields.title;
+      if (typeof titleField === 'string') setTitle(titleField);
+      const promptField = fields.prompt;
+      if (typeof promptField === 'string') setPrompt(promptField);
+      return;
+    }
     if (!data.success && data.message) {
       setFormError(data.message);
     }
@@ -454,7 +463,13 @@ export function AssignmentBuilderV3({
   }
 
   function handleCreate() {
-    if (!canCreate || teachingLocked || teachingLoading) return;
+    if (!canCreate || teachingLoading) return;
+    if (teachingLocked) {
+      setLocalApprovalRequired(true);
+      setFormError(null);
+      return;
+    }
+    setLocalApprovalRequired(false);
     setFormError(null);
     void createFetcher.submit(buildCreateFormData(), {
       method: 'post',
@@ -550,7 +565,7 @@ export function AssignmentBuilderV3({
             )}
           </div>
 
-          {approvalBlocked ? (
+          {approvalBlocked || localApprovalRequired ? (
             <div style={{ marginTop: 16 }}>
               <TeachingApprovalRequiredAlert />
             </div>
@@ -930,16 +945,7 @@ export function AssignmentBuilderV3({
               <button
                 type="button"
                 className="abv3-btn-primary"
-                disabled={
-                  !canCreate ||
-                  isSaving ||
-                  isExitTicket ||
-                  teachingLocked ||
-                  teachingLoading
-                }
-                {...lockedTeachingButtonProps(
-                  teachingLocked || teachingLoading
-                )}
+                disabled={!canCreate || isSaving || isExitTicket || teachingLoading}
                 onClick={handleCreate}
               >
                 {isSaving ? 'Creating…' : 'Create assignment'}

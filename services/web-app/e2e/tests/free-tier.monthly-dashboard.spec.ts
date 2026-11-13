@@ -151,10 +151,12 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
     await page.getByTestId('my-assignments-actions').click();
     await page.getByTestId('my-assignments-new-assignment').click();
     await expect(page).toHaveURL(/\/app\/assignments\/new/);
-    await expect(page.getByTestId('new-assignment-type-grid')).toBeVisible();
-    await expect(
-      page.getByTestId('new-assignment-type-grid').getByText('Unlimited').first()
-    ).toBeVisible();
+    await expect(page.getByTestId('assignment-builder-v3')).toBeVisible();
+    await page.getByRole('button', { name: 'Change' }).click();
+    const picker = page.getByRole('dialog', { name: 'Assignment type' });
+    await expect(picker).toBeVisible();
+    await expect(picker.getByText('Unlimited').first()).toBeVisible();
+    await page.keyboard.press('Escape');
     await shot(page, `type-picker-${label}`);
     await page.goto('/app/assignments');
     await page.goto('/app/lesson-planner');

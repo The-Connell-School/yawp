@@ -439,13 +439,7 @@ jobs:
             exit 1
           }
 
-          blocked="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
-            -X POST --data-urlencode 'email=dev.admin@yawp.local' \
-            "$url/auth/dev-login")"
-          test "$blocked" = "401" || {
-            echo "POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401" >&2
-            exit 1
-          }
+          node preview-control/scripts/preview/assert-anonymous-dev-login-blocked.mjs "$url"
 
           cookie_jar="$(mktemp)"
           entered="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -c "$cookie_jar" \

@@ -7,6 +7,7 @@ import { provisionFreeClassroomForE2E } from '../helpers/provision-free-classroo
 import { seedSiteLicenseLockedCatalogForE2E } from '../helpers/seed-site-license-locked-catalog-for-e2e';
 import { dashboardAssignmentTileOverlapIssues } from '../helpers/dashboard-assignment-tile-overlap';
 import { expectGiveFeedbackAccessible } from '../helpers/dev-panel-feedback';
+import { expectNewAssignmentBuilderPage } from '../helpers/assignment-builder-v3-page';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
     'Run class-step tests with ./bin/project test --profile free-tier-locked-preview-browser'
@@ -84,6 +85,27 @@ async function fixture(
 
 async function expectLockedAppHome(page: import('@playwright/test').Page) {
   await expect(page).toHaveURL(/\/app\/?$/);
+}
+
+async function expectLockedPendingDashboardCard(
+  page: import('@playwright/test').Page,
+  adminName = 'Dr. Patel'
+) {
+  const card = page
+    .locator(
+      '.locked-home-rail-mobile:visible [data-testid="locked-dashboard-pending-card"], .locked-home-rail-desktop:visible [data-testid="locked-dashboard-pending-card"]'
+    )
+    .first();
+  await expect(card).toBeVisible();
+  await expect(
+    card.getByText(new RegExp(`Request sent to ${adminName}`))
+  ).toBeVisible();
+}
+
+async function expectNoLockedPendingDashboardCard(
+  page: import('@playwright/test').Page
+) {
+  await expect(page.getByTestId('locked-dashboard-pending-card')).toHaveCount(0);
 }
 
 async function login(page: import('@playwright/test').Page, email: string) {
@@ -261,6 +283,7 @@ async function capture(page: import('@playwright/test').Page, state: string) {
   }
 }
 
+/** Pending and approved free dashboards expose exactly three entitled assignment kinds. */
 async function expectFreeDashboardAssignmentTiles(
   page: import('@playwright/test').Page
 ) {
@@ -354,19 +377,14 @@ for (const width of [390, 1440]) {
     await expect(
       page.getByRole('heading', { name: 'New assignment' })
     ).toHaveCount(0);
-    await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
-    await expect(
-      page
-        .getByTestId('teaching-access-banner')
-        .getByText(/Waiting for Dr\. Patel to approve your classroom/)
-    ).toBeVisible();
+    await expectLockedPendingDashboardCard(page);
     await capture(page, `locked-app-before-${width}`);
     await expectFreeDashboardAssignmentTiles(page);
-    await expectTileNamesWrapOnWordBoundaries(
+    await expectDashboardAssignmentTileNameMetaNoOverlap(
       page,
       page.getByTestId('free-assignment-tiles')
     );
-    await expectDashboardAssignmentTileNameMetaNoOverlap(
+    await expectTileNamesWrapOnWordBoundaries(
       page,
       page.getByTestId('free-assignment-tiles')
     );
@@ -441,12 +459,14 @@ for (const width of [390, 1440]) {
       0
     );
     if (width === 390) {
+      await expectLockedPendingDashboardCard(page);
       await expect(
-        page.getByTestId('teaching-access-banner').getByText(/View status/)
-      ).toBeVisible();
-      await expect(
-        page.getByTestId('teaching-access-banner').getByText(/\.\.\./)
-      ).toHaveCount(0);
+        page
+          .locator(
+            '.locked-home-rail-mobile:visible [data-testid="locked-dashboard-pending-card"], .locked-home-rail-desktop:visible [data-testid="locked-dashboard-pending-card"]'
+          )
+          .first()
+      ).not.toContainText('...');
     }
     const before = await prisma.assignment.count();
     for (const path of [
@@ -478,7 +498,7 @@ for (const width of [390, 1440]) {
       data: { status: 'APPROVED' },
     });
     await page.reload();
-    await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
+    await expectNoLockedPendingDashboardCard(page);
     await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible();
     await expectFreeDashboardAssignmentTiles(page);
     await expectDashboardAssignmentTileNameMetaNoOverlap(
@@ -507,7 +527,7 @@ for (const width of [390, 1440]) {
     await page.reload();
     await expect(page.getByTestId('teaching-access-approval-toast')).toHaveCount(0);
     await page
-      .getByRole('link', { name: /New Class Starter assignment/i })
+      .getByRole('link', { name: /Open Class Starter assignment type/i })
       .click();
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+$/);
     await expect(page).not.toHaveURL(/\/how-it-works$/);
@@ -536,7 +556,7 @@ test('explore stays on pending when classroom is not provisioned yet', async ({
   ).toBeVisible();
   await page.getByRole('link', { name: 'Explore my classroom' }).click();
   await expectLockedAppHome(page);
-  await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
+  await expectLockedPendingDashboardCard(page);
   const updated = await prisma.freeTierApplication.findUniqueOrThrow({
     where: { id: app.id },
     select: { organizationId: true },
@@ -568,7 +588,7 @@ test('explore shows with a stale default-org membership cookie', async ({
   ).toBeVisible();
   await page.getByRole('link', { name: 'Explore my classroom' }).click();
   await expectLockedAppHome(page);
-  await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
+  await expectLockedPendingDashboardCard(page);
 });
 
 test('stale tab blocked POST shows approval required toast without changing page state', async ({
@@ -594,7 +614,7 @@ test('stale tab blocked POST shows approval required toast without changing page
     })
     .toBe('APPROVED');
   await page.goto('/app');
-  await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
+  await expectNoLockedPendingDashboardCard(page);
   await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible({
     timeout: 30_000,
   });
@@ -681,7 +701,7 @@ async function exploreLockedApp(page: import('@playwright/test').Page, userEmail
   await page.goto('/app/free-tier/pending');
   await page.getByRole('link', { name: 'Explore my classroom' }).click();
   await expectLockedAppHome(page);
-  await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
+  await expectLockedPendingDashboardCard(page);
 }
 
 async function expectRouteOmitsTeachingSecrets(
@@ -800,8 +820,9 @@ test('approved teacher sees the real class code on the dashboard card', async ({
     select: { id: true, code: true },
   });
   await login(page, user.email!);
-  await page.goto('/app');
-  await expect(page.getByTestId('class-code')).toContainText(klass.code);
+  await page.goto(`/app/my-classes/${klass.id}`);
+  const trigger = page.getByTestId('class-code-trigger');
+  await expect(trigger).toContainText(klass.code);
 });
 
 test('locked class surfaces hide the real class code and lock invite controls', async ({
@@ -820,13 +841,13 @@ test('locked class surfaces hide the real class code and lock invite controls', 
   await page.goto('/app/my-classes');
   await expect(page.getByTestId('my-classes-class-options')).toBeVisible();
   await page.goto(`/app/my-classes/${klass.id}?tab=students`);
-  const joinCard = page.getByTestId('free-class-join-card-locked');
-  await expect(joinCard).toBeVisible();
+  await expect(page.getByTestId('class-code-masked')).toBeVisible();
   const html = await page.content();
   expect(html).not.toContain(klass.code);
-  await expect(joinCard.getByTestId('class-code-masked')).toBeVisible();
-  await expect(joinCard.getByTestId('class-qr-locked-placeholder')).toBeVisible();
-  await joinCard.getByTestId('copy-join-link-button').hover();
+  await expect(page.getByTestId('class-detail-add-students')).toHaveCount(0);
+  const lockedInvite = page.getByRole('button', { name: 'Add Student' });
+  await expect(lockedInvite).toBeVisible();
+  await lockedInvite.hover();
   await page.waitForTimeout(350);
   await expect(
     page.getByRole('tooltip', {
@@ -869,7 +890,7 @@ test('locked assignments tab shows sample rows and locked documents pill', async
   ).toBeVisible();
 });
 
-test('full-page assignment form shows inline approval alert and keeps field values', async ({
+test('full-page assignment form keeps draft when create stays teaching-locked', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -877,15 +898,17 @@ test('full-page assignment form shows inline approval alert and keeps field valu
   await provisionPendingClassroom(app.id, user.id!);
   await exploreLockedApp(page, user.email!);
   await page.goto('/app/assignments/new');
-  await page.locator('#assignmentTypeId').selectOption({ index: 1 });
-  await page.getByLabel('Title').fill('Community Gardens — Prewriting');
-  await page.getByLabel('Prompt').fill('Pick one community garden in your town.');
-  await page
-    .getByRole('button', { name: 'Create assignment' })
-    .click({ force: true });
-  await expect(page.getByTestId('teaching-approval-required-alert')).toBeVisible();
-  await expect(page.getByLabel('Title')).toHaveValue('Community Gardens — Prewriting');
-  await expect(page.getByLabel('Prompt')).toHaveValue(
+  await expectNewAssignmentBuilderPage(page);
+  await page.locator('#abv3-title').fill('Community Gardens — Prewriting');
+  await page.locator('#abv3-prompt').fill('Pick one community garden in your town.');
+  const create = page.getByRole('button', { name: 'Create assignment' });
+  await expect(create).toBeEnabled({ timeout: 15_000 });
+  await create.click();
+  await expect(page.getByTestId('teaching-approval-required-alert')).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.locator('#abv3-title')).toHaveValue('Community Gardens — Prewriting');
+  await expect(page.locator('#abv3-prompt')).toHaveValue(
     'Pick one community garden in your town.'
   );
 });
@@ -905,6 +928,6 @@ test('flag OFF keeps the waiting page and does not expose the in-app lock', asyn
   await login(page, user.email!);
   await page.goto('/app/free-tier/pending');
   await expect(page).toHaveURL(/free-tier\/pending/);
-  await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
+  await expectNoLockedPendingDashboardCard(page);
   await expect(page.getByTestId('free-assignment-tiles')).toHaveCount(0);
 });

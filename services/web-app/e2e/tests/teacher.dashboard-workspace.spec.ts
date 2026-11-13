@@ -2,6 +2,11 @@ import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { currentSchoolYear } from '../../app/utils/school-year';
 import type { Page } from '@playwright/test';
+import {
+  expectNewAssignmentBuilderPage,
+  fillAndCreateOnAssignmentBuilderV3,
+  finishAssignmentCreatedView,
+} from '../helpers/assignment-builder-v3-page';
 
 const CLASS_LABEL = /Grade 9th .* Period 1st/;
 
@@ -51,20 +56,15 @@ async function expectStandardizedAssignmentForm(page: Page) {
 
 
 async function expectNewAssignmentPage(page: Page) {
-  await expect(page).toHaveURL(/\/app\/assignments\/new/);
-  await expect(page.getByTestId('new-assignment-type-grid')).toBeVisible();
-  await expect(page.locator('#title')).toBeVisible();
-  await expect(page.locator('#classId')).toBeVisible();
-  await expect(page.locator('#prompt')).toBeVisible();
+  await expectNewAssignmentBuilderPage(page);
 }
 
 async function fillAndSubmitNewAssignment(
   page: Page,
   input: { title: string; prompt: string }
 ) {
-  await page.locator('#title').fill(input.title);
-  await page.locator('#prompt').fill(input.prompt);
-  await page.getByRole('button', { name: 'Create assignment' }).click();
+  await fillAndCreateOnAssignmentBuilderV3(page, input);
+  await finishAssignmentCreatedView(page);
 }
 
 async function expectAssignmentCreatedSuccessSheet(page: Page) {
@@ -431,8 +431,6 @@ test.describe.serial('Teacher dashboard workspace', () => {
         .click();
       await expectNewAssignmentPage(page);
       await fillAndSubmitNewAssignment(page, { title, prompt });
-
-      await expect(page).toHaveURL(/\/app\/assignments\/.+/);
       await expectCreatedAssignment({
         classId: e2eContext.classId,
         assignmentTypeId: e2eContext.assignmentTypeId,
@@ -562,7 +560,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
     }
   });
 
-  test('creates an assignment from the assignment type page via the new assignment page', async ({
+  test('creates an assignment from the assignment type page via the creation sheet', async ({
     page,
     e2eContext,
     signIn,
@@ -577,9 +575,20 @@ test.describe.serial('Teacher dashboard workspace', () => {
     const prompt = `Type Page E2E prompt ${Date.now()}`;
     await page.getByRole('button', { name: /^New/ }).click();
     await page.getByRole('menuitem', { name: 'Assignment' }).click();
-    await expectNewAssignmentPage(page);
-    await fillAndSubmitNewAssignment(page, { title, prompt });
-    await expect(page).toHaveURL(/\/app\/assignments\/.+/);
+    const sheet = page.getByRole('dialog');
+    await expect(sheet).toBeVisible();
+    await expect(
+      sheet.getByRole('heading', { name: /New Assignment/i })
+    ).toBeVisible();
+    await sheet.getByLabel(CLASS_LABEL).check();
+    await sheet.getByLabel('Title (optional)').fill(title);
+    await sheet.getByLabel('Prompt', { exact: true }).fill(prompt);
+    await expect(
+      sheet.getByRole('button', { name: /Create Assignment/i })
+    ).toBeEnabled();
+    await sheet.getByRole('button', { name: /Create Assignment/i }).click();
+    await expectAssignmentCreatedSuccessSheet(page);
+    await dismissAssignmentCreatedSuccessSheet(page);
 
     await expectCreatedAssignment({
       classId: e2eContext.classId,

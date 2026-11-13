@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  buildLessonPicturesSection,
   buildSourcesSection,
   PART_CHARS,
   readUploadPart,
@@ -131,3 +132,21 @@ describe('the teacher’s own deck: rework it, or keep it as is (Brian, Nov 4)',
     expect(said).not.toContain('as is');
   });
 });
+
+describe('buildLessonPicturesSection: the lesson’s own pictures (Kevin, Nov 6)', () => {
+  test('nothing kept, nothing said', () => {
+    expect(buildLessonPicturesSection([])).toEqual([]);
+  });
+
+  test('lists each picture by id so a rebuilt deck keeps it where it was', () => {
+    const text = buildLessonPicturesSection([
+      { id: 'pic1', position: 1, slideNumbers: [1], altText: 'Children’s Games, Bruegel', width: 1600, height: 1100 },
+      { id: 'pic2', position: 2, slideNumbers: [4, 6], altText: 'Fallen Man, Paris, Meyerowitz', width: 900, height: 1200 },
+    ]).join('\n');
+    expect(text).toContain('This lesson’s own pictures');
+    expect(text).toContain('"pic1": picture 1, on slide 1, landscape: Children’s Games, Bruegel');
+    expect(text).toContain('"pic2": picture 2, on slides 4 and 6, portrait: Fallen Man, Paris, Meyerowitz');
+    expect(text).toContain('Never put gallery art where one of these belongs.');
+  });
+});
+

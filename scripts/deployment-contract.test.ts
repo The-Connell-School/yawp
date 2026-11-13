@@ -2200,7 +2200,7 @@ describe('demo environment deployment contract', () => {
     );
     expect(workflow).toContain('/free/admin/approve');
     expect(workflow).toContain(
-      'POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401'
+      'assert-anonymous-dev-login-blocked.mjs'
     );
     expect(workflow).toContain('/auth/dev-login/options');
     expect(workflow).toContain('POST /lti/launch without an access cookie');
@@ -2443,9 +2443,7 @@ describe('demo environment deployment contract', () => {
     for (const workflow of [previewWorkflow, demoWorkflow]) {
       expect(workflow).not.toContain(deprecatedPreviewBasicAuth);
       expect(workflow).not.toContain('curl --user');
-      expect(workflow).toContain(
-        'POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401'
-      );
+      expect(workflow).toContain('assert-anonymous-dev-login-blocked.mjs');
     }
     expect(previewWorkflow).toContain('data-preview-access-screen');
     expect(demoWorkflow).toContain(

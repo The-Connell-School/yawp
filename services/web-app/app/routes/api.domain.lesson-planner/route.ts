@@ -542,6 +542,17 @@ export async function action({ request }: ActionFunctionArgs) {
       source.deckBuilt = Boolean(source.deckMessageId);
     }
     await applyDeckChoice({ sources, message: turn.message, choices: deckChoices, membershipId: ctx.membershipId });
+    // The lesson's own pictures (Kevin, Nov 6): a Yawp! lesson's deck, or a
+    // picture added in the slide editor, belongs to the lesson and not to an
+    // upload, so a rebuilt deck would lose them unless they are listed too.
+    const lessonPictures =
+      activeConversation && (refreshMyDeck || teachMySlides)
+        ? await prisma.lessonPlanUploadPicture.findMany({
+            where: { conversationId: activeConversation.id, uploadId: null, membershipId: ctx.membershipId },
+            orderBy: { position: 'asc' },
+            select: { id: true, position: true, slideNumbers: true, altText: true, width: true, height: true },
+          })
+        : [];
     // Brian's run 3: a lesson built from the teacher's own template keeps its
     // shape. Only the teacher's own, and only with templates on.
     const templateRow =
@@ -631,6 +642,7 @@ export async function action({ request }: ActionFunctionArgs) {
       deckGallery,
       deckKitV4,
       sources,
+      lessonPictures,
       deckChoices,
       recentArt,
       weekContext,

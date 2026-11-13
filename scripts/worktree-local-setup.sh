@@ -1,4 +1,4 @@
-#!/opt/homebrew/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 umask 077
 
@@ -86,7 +86,7 @@ release_postgres_host_port() {
   if [[ -z "${PG_PORT:-}" ]]; then
     return 0
   fi
-  /opt/homebrew/bin/bash "$ROOT/scripts/ci/release-docker-host-port.sh" "$PG_PORT"
+  bash "$ROOT/scripts/ci/release-docker-host-port.sh" "$PG_PORT"
 }
 
 ensure_postgres() {

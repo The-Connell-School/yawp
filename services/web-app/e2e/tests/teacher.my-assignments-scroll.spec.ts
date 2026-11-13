@@ -27,9 +27,12 @@ test('My Assignments scrolls at short and tall viewports while navigation stays 
       await page.getByTestId('my-assignments-filter').click();
       await page.getByTestId('my-assignments-search').fill('Scroll regression');
       await page.keyboard.press('Escape');
-      const scroll = page
-        .getByRole('heading', { name: 'My Assignments', exact: true })
-        .locator('..');
+      const scroll =
+        (await page.locator('section.free-tier-b2-page-shell').count()) > 0
+          ? page.locator('section.free-tier-b2-page-shell')
+          : page
+              .getByRole('heading', { name: 'My Assignments', exact: true })
+              .locator('..');
       const nav = page.getByRole('link', {
         name: 'My Assignments',
         exact: true,

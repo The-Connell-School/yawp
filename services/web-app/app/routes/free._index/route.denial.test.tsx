@@ -12,8 +12,10 @@ const router = { ...(await import('react-router')) };
 let error = 'cap_reached';
 mock.module('react-router', () => ({
   ...router,
+  useRouteLoaderData: () => null,
   useLoaderData: () => ({
     mode: 'token', token: 'fixture-event', tokenValid: { valid: true }, linkClosed: false,
+    onboardingV2: false,
   }),
   useFetcher: () => ({
     data: { ok: false, error },

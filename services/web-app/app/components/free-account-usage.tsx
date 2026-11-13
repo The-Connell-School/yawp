@@ -30,6 +30,7 @@ import type {
 } from '~/domain/free-tier/inapp-usage';
 import {
   formatUsageRenewsLabel,
+  freeAssignmentKindUsageMeta,
   isLessonPlannerMonthlyExhausted,
 } from '~/domain/free-tier/inapp-usage';
 import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
@@ -40,7 +41,14 @@ import {
   siteLicenseLockedTileHasHowItWorksGuide,
 } from '~/domain/assignment-types/assignment-type-how-it-works';
 import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
-import { dashboardAssignmentTileTestId } from '~/components/assignment-type-tile-layout';
+import { SiteLicenseLockButton } from '~/components/site-license-lock-button';
+import {
+  assignmentTypeTileMetaTestId,
+  assignmentTypeTileNameTestId,
+  dashboardAssignmentTileClassName,
+  dashboardAssignmentTileTestId,
+  DashboardAssignmentTileFooter,
+} from '~/components/assignment-type-tile-layout';
 import {
   FreeTierAssignmentCarouselControls,
   FreeTierAssignmentCarouselTrack,
@@ -260,6 +268,7 @@ function FreeAccountUsageDetails({ usage }: { usage: FreeAccountUsage }) {
 }
 const freeTierAssignmentTileImageClassName = 'h-full w-full object-cover';
 
+/** Carousel tiles share name/meta test ids with dashboard rows for E2E geometry checks. */
 function FreeTierCarouselTileCaption({
   label,
   meta,
@@ -269,21 +278,30 @@ function FreeTierCarouselTileCaption({
   meta?: string;
   metaClassName?: string;
 }) {
+  const hasVisibleMeta = meta != null && meta !== '';
   return (
-    <span className="flex shrink-0 flex-col gap-0.5 p-3.5">
-      <span className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
+    <span
+      className={cn(
+        'flex shrink-0 flex-col gap-0.5 p-3.5',
+        hasVisibleMeta ? 'min-h-[58px]' : 'min-h-[44px] justify-center'
+      )}
+    >
+      <span
+        className="line-clamp-2 text-sm font-medium leading-snug text-foreground"
+        data-testid={assignmentTypeTileNameTestId}
+      >
         {label}
       </span>
-      {meta ? (
-        <span
-          className={cn(
-            'line-clamp-1 text-xs leading-snug',
-            metaClassName ?? 'font-semibold text-[#1f3532]'
-          )}
-        >
-          {meta}
-        </span>
-      ) : null}
+      <span
+        className={cn(
+          'line-clamp-1 text-xs leading-snug',
+          !hasVisibleMeta && 'sr-only',
+          hasVisibleMeta && (metaClassName ?? 'font-semibold text-[#1f3532]')
+        )}
+        data-testid={assignmentTypeTileMetaTestId}
+      >
+        {meta ?? ''}
+      </span>
     </span>
   );
 }
@@ -308,7 +326,7 @@ function FreeTierCarouselTileImage({
     >
       <AssignmentTypeTileImage
         imageId={imageId}
-        alt={imageTitle ?? ''}
+        alt=""
         className={freeTierAssignmentTileImageClassName}
       />
       {siteLicense ? (
@@ -369,9 +387,10 @@ function FreeTierCarouselTile({
       badge={teachingLocked || siteLicense ? 'locked' : 'create'}
     />
   );
-  const testId = siteLicense
-    ? 'site-license-locked-assignment-tile'
-    : dashboardAssignmentTileTestId;
+  const testId =
+    siteLicense && !teachingLocked
+      ? 'site-license-locked-assignment-tile'
+      : dashboardAssignmentTileTestId;
 
   const guideOnly = teachingLocked || siteLicense;
   const hasHowItWorksGuide =
@@ -381,6 +400,37 @@ function FreeTierCarouselTile({
           title: assignmentTypeTitle ?? label,
           kind: assignmentTypeKind ?? null,
         });
+
+  if (teachingLocked) {
+    const footer = (
+      <DashboardAssignmentTileFooter
+        label={label}
+        meta={meta}
+        metaClassName={metaClassName}
+        trailing={<SiteLicenseLockButton />}
+      />
+    );
+    if (hasHowItWorksGuide) {
+      return (
+        <Link
+          to={assignmentTypeHowItWorksPath(assignmentTypeId)}
+          data-testid={testId}
+          aria-label={`New ${label} assignment`}
+          className={dashboardAssignmentTileClassName()}
+        >
+          {footer}
+        </Link>
+      );
+    }
+    return (
+      <div
+        data-testid={testId}
+        className={dashboardAssignmentTileClassName('cursor-default')}
+      >
+        {footer}
+      </div>
+    );
+  }
 
   if (guideOnly && hasHowItWorksGuide) {
     const ariaLabel = `${label}, ${meta}. See how it works`;
@@ -461,7 +511,7 @@ export function FreeAssignmentTiles({
   usage = null,
   types,
   siteLicenseLockedAssignmentTiles = [],
-  teachingLocked = false,
+  teachingLocked: teachingLockedProp = false,
   onCreate,
   createTriggerRef,
 }: {
@@ -478,6 +528,8 @@ export function FreeAssignmentTiles({
   onCreate: (id?: string) => void;
   createTriggerRef?: RefObject<HTMLButtonElement | null>;
 }) {
+  const { locked: teachingAccessLocked } = useTeachingAccess();
+  const teachingLocked = teachingLockedProp || teachingAccessLocked;
   const carousel = useFreeTierAssignmentCarousel();
   const quotaMode = Boolean(usage);
 
@@ -487,6 +539,7 @@ export function FreeAssignmentTiles({
       type="button"
       disabled={
         quotaMode &&
+        !usage!.monthly &&
         !usage!.unlimitedFreeAssignmentTiles &&
         usage!.allAssignmentsUsed
       }
@@ -502,20 +555,19 @@ export function FreeAssignmentTiles({
         .map((row) => {
           const type = types.find((t) => t.kind === row.kind);
           if (!type) return null;
-          const meta = usage!.unlimitedFreeAssignmentTiles
-            ? ''
-            : row.remaining
-              ? `${row.remaining} of ${row.total} left`
-              : 'None left';
+          const meta = freeAssignmentKindUsageMeta(usage!, row);
+          const unlimitedMeta = meta === '';
           return (
             <FreeTierCarouselTile
               key={row.kind}
               label={row.label}
               meta={meta}
               metaClassName={
-                row.remaining === 0
-                  ? 'font-normal text-amber-800'
-                  : undefined
+                unlimitedMeta
+                  ? undefined
+                  : row.remaining === 0
+                    ? 'font-normal text-amber-800'
+                    : undefined
               }
               imageId={type.imageId}
               imageTitle={type.imageTitle}
@@ -525,6 +577,7 @@ export function FreeAssignmentTiles({
               assignmentTypeKind={type.kind}
               tileDisabled={
                 !teachingLocked &&
+                !usage!.monthly &&
                 !usage!.unlimitedFreeAssignmentTiles &&
                 row.remaining === 0
               }
@@ -550,6 +603,7 @@ export function FreeAssignmentTiles({
       ));
 
   return (
+    <div data-testid="free-assignment-tiles">
     <div
       data-testid="teacher-assignments-grid"
       data-tour="dashboard-assignments"
@@ -585,6 +639,7 @@ export function FreeAssignmentTiles({
           />
         ))}
       </FreeTierAssignmentCarouselTrack>
+    </div>
     </div>
   );
 }

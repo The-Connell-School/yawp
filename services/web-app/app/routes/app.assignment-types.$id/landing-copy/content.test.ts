@@ -87,19 +87,32 @@ describe("Brian's pages, word for word", () => {
       'The Yawp! process is what we wish someone had shown us in our first year teaching. Teach the steps below in order. Each has a slide deck and a short tutorial video. Whether this is your first year or your twentieth, watch each video before you teach that lesson (at least the first time through). This is a step-by-step process, and going in order makes the difference: how students find a focus, develop a thesis, and build body paragraphs that actually prove it.',
     ]);
     // The course card: each lesson with its lesson plan and slide deck.
-    expect(howToTeach.blocks).toContainEqual({
-      type: 'course',
-      lead: '**Teach these steps in order! (Did we mention that?)**',
-    });
-    expect(paragraphs(section('thesis-driven-essay', 'prompt-library').blocks)).toEqual([
-      'Have your own prompt? Click **New** above to create it in the Assignment Builder. Or choose one from our library: filter by subject, text, or grade level, click a prompt, and edit it however you like in the Assignment Builder.',
-    ]);
-    // Brian: the note goes at the top of the library itself, not with the
-    // explanation above it.
-    expect(page('thesis-driven-essay').libraryNote).toBe(
-      "**Note:** We've found that students write their best essays about something they actually care about, so many of our prompts are open on purpose and encourage students to choose their own adventure within a topic. You'll enjoy reading 75 essays with 75 different angles a lot more than 75 essays answering the same narrow question. Still, some students and teachers prefer a tighter, more specific scope, and that's OK too! Either way, help students find their personal connection to the topic. If a student is stuck, send them to the emotional charge: what they loved, what grabbed them, what made them upset."
+    expect(howToTeach.blocks).toContainEqual(
+      expect.objectContaining({
+        type: 'course',
+        lead: '**Teach these steps in order! (Did we mention that?)**',
+      })
     );
+    // Kevin and Brian, Nov 11: no loose paragraphs between the sections. The
+    // library intro moves to the top of the library itself, and Brian's note
+    // becomes the YAWP! philosophy box under the Pre-writing lesson.
+    expect(page('thesis-driven-essay').sections.map((s) => s.id)).toEqual(['how-to-teach-it']);
+    expect(page('thesis-driven-essay').libraryNote).toBe(
+      'Have your own prompt? Click **New** above to create it in the Assignment Builder. Or choose one from our library: filter by subject, text, or grade level, click a prompt, and edit it however you like in the Assignment Builder.'
+    );
+    const course = howToTeach.blocks.find((b) => b.type === 'course');
+    if (course?.type !== 'course') throw new Error('no course');
+    expect(Object.keys(course.lessonNotes ?? {})).toEqual(['pre-writing']);
+    const philosophy = course.lessonNotes!['pre-writing']!;
+    expect(philosophy.id).toBe('philosophy');
+    expect(philosophy.heading).toBe('YAWP! philosophy on essay prompts');
+    expect(paragraphs(philosophy.blocks)).toEqual([
+      "We've found that students write their best essays about something they actually care about, so many of our prompts are open on purpose and encourage students to choose their own adventure within a topic. You'll enjoy reading 75 essays with 75 different angles a lot more than 75 essays answering the same narrow question. Still, some students and teachers prefer a tighter, more specific scope, and that's OK too! Either way, help students find their personal connection to the topic. If a student is stuck, send them to the emotional charge: what they loved, what grabbed them, what made them upset.",
+    ]);
     expect(landingPagePlainText(page('thesis-driven-essay'))).not.toContain('Note:');
+    expect(landingPagePlainText(page('thesis-driven-essay'))).toContain(
+      'YAWP! philosophy on essay prompts'
+    );
     expect(page('thesis-driven-essay').library).toBe('thesis');
   });
 
@@ -113,10 +126,12 @@ describe("Brian's pages, word for word", () => {
       '**Tutor on or off?** You choose in the Assignment Builder. With the tutor on, students get feedback on what they wrote and encouragement to write a little more. It will never write for them. Turn it off when you just want them writing on their own.',
       '**Grading is about effort.** Any real attempt earns full credit, a thin one earns partial credit, and a blank page earns none.',
     ]);
-    expect(paragraphs(section('class-starter', 'prompt-library').blocks)).toEqual([
-      'Need an idea to get students thinking? Browse the library!',
-    ]);
-    expect(page('class-starter').libraryNote).toBeNull();
+    // Nov 11: the library intro sits at the top of the library, not loose
+    // under the How it works box.
+    expect(page('class-starter').sections.map((s) => s.id)).toEqual(['how-it-works']);
+    expect(page('class-starter').libraryNote).toBe(
+      'Need an idea to get students thinking? Browse the library!'
+    );
     expect(page('class-starter').library).toBe('open-ended');
   });
 
@@ -159,15 +174,15 @@ describe("Brian's pages, word for word", () => {
     expect(words.length).toBeLessThan(260);
   });
 
-  test('Pre-Writing', () => {
+  test('Pre-Writing (Kevin and Brian, Nov 11)', () => {
     expect(page('prewriting').description).toEqual([
       {
         type: 'paragraph',
-        text: '**Step 1 of the Yawp! writing process.** Start here, before students write a word of their essay.',
+        text: '**Step one of the critical essay writing process.** Start here, before students write a word of their essay.',
       },
       {
         type: 'paragraph',
-        text: 'Pre-writing may be the most important — and most overlooked — part of the writing process. Most students skip straight from the prompt to the essay, and it shows. They end up sorting out their ideas in the essay itself, which can result in a big, hot, rambling mess. Pre-writing is where students figure out what they actually think about the topic or prompt...*before they write their essay.* We promise: the writing they do before the actual writing of their essays will greatly improve the quality of their finished products (and the quality of your reading/grading experience)!',
+        text: 'Pre-writing may be the most important (and most overlooked) part of the writing process. Most students skip straight from the prompt to the essay, and it shows. They end up sorting out their ideas in the essay itself, which can result in a big, hot, rambling mess. Pre-writing is where students figure out what they actually think about the topic or prompt...*before they write their essay.* We promise: the writing they do before the actual writing of their essays will greatly improve the quality of their finished products (and the quality of your reading/grading experience)!',
       },
     ]);
     expect(section('prewriting', 'when-to-use-it').heading).toBe('When to use it');
@@ -179,12 +194,32 @@ describe("Brian's pages, word for word", () => {
       'Click **New** above to write a prompt, or pick one from the Prompt Library below.',
       '**First time teaching it?** Watch the short tutorial video before class. It walks you through this step of the Yawp! writing process and comes with a ready-to-teach lesson (slides and handouts) you can use as is or edit.',
       '**Tutor on or off?** With the tutor on, students get immediate feedback as they write: questions that push their thinking so they can develop original ideas. It will never write for them. This is one of the steps where the Tutor really shines and will save you, the teacher, a lot of time. Turn it off if you want to see how students do on their own.',
-      '**Grading is on the focus and the thinking behind it.** Once students find their focus, they label it at the bottom of the page and submit their document to you. You can see everything they wrote and any chat they had with the Tutor. The Grading Assistant looks at the focus and the pre-writing that led to it. This is about critical thinking, not grammar or polish.',
+      '**Grading is on the focus and the critical thinking behind it.** Once students find their focus, they label it at the bottom of the page and submit their document to you. You can see everything they wrote and any chat they had with the Tutor. The Grading Assistant looks at the focus and the pre-writing that led to it. This is about critical thinking, not grammar or polish.',
     ]);
-    expect(paragraphs(section('prewriting', 'prompt-library').blocks)).toEqual([
-      'Have your own prompt to get students going? Click **New** above. Or choose one from our library: filter by subject, text, or grade level, click a prompt, and edit it however you like in the Assignment Builder.',
-      "**Note:** We've found that students write their best essays about something they actually care about, so many of our prompts are open on purpose and let students choose their own adventure within a topic. That's exactly what pre-writing is for. Still, some students and teachers prefer a tighter, more specific scope, and that's OK too! Either way, help students find their personal connection to the topic. If a student is stuck, send them to the emotional charge: what they loved, what grabbed them, what made them upset.",
+    // "Watch the short tutorial video" opens Lesson 2's tutorial.
+    expect(section('prewriting', 'how-it-works').blocks[1]).toEqual({
+      type: 'paragraph',
+      text: '**First time teaching it?** Watch the short tutorial video before class. It walks you through this step of the Yawp! writing process and comes with a ready-to-teach lesson (slides and handouts) you can use as is or edit.',
+      tutorial: { lesson: 'pre-writing', linkText: 'Watch the short tutorial video' },
+    });
+    const philosophy = section('prewriting', 'philosophy');
+    expect(philosophy.heading).toBe('YAWP! philosophy on essay prompts');
+    expect(paragraphs(philosophy.blocks)).toEqual([
+      "We've found that students write their best essays about something they actually care about, so many of our prompts are open on purpose and let students choose their own adventure within a topic. That's exactly what pre-writing is for. Still, some students and teachers prefer a tighter, more specific scope, and that's OK too! Either way, help students find their personal connection to the topic. If a student is stuck, send them to the emotional charge: what they loved, what grabbed them, what made them upset.",
     ]);
+    // "Have your own prompt? Click New above…" is gone: How it works says it.
+    // The library itself follows the boxes, with nothing loose above it.
+    expect(page('prewriting').sections.map((s) => s.id)).toEqual([
+      'how-to-teach-it',
+      'when-to-use-it',
+      'how-it-works',
+      'philosophy',
+    ]);
+    const text = landingPagePlainText(page('prewriting'));
+    expect(text).not.toContain('Have your own prompt');
+    expect(text).not.toContain('Note:');
+    expect(text).not.toContain('—');
+    expect(page('prewriting').libraryNote).toBeNull();
     // Reuses the Thesis-Driven Essay library rather than building a new one.
     expect(page('prewriting').library).toBe('thesis');
   });
@@ -204,6 +239,9 @@ describe("Brian's pages, word for word", () => {
       "**Tutor on or off?** With the tutor on, students get immediate feedback as they shape their thesis: what's working, what's missing, and how to sharpen it. It will never write the thesis for them. This is one of the steps where the Tutor really shines and will save you, the teacher, a lot of time. Turn it off if you want to see how students do on their own.",
       '**Grading is on the thesis alone.** Students type their thesis on the page and submit the document to you, and the Grading Assistant judges that one sentence.',
     ]);
+    expect(section('thesis-statement', 'how-it-works').blocks[1]).toMatchObject({
+      tutorial: { lesson: 'thesis-statement', linkText: 'Watch the short tutorial video' },
+    });
     const strong = section('thesis-statement', 'what-makes-a-strong-thesis');
     expect(strong.heading).toBe('What makes a strong thesis');
     expect(strong.blocks).toEqual([
@@ -253,7 +291,7 @@ describe('every page', () => {
   });
 
   test.each(keys)('%s points teachers at New, or Create assignment for AP History', (key) => {
-    const text = landingPagePlainText(page(key));
+    const text = landingPagePlainText(page(key)) + (page(key).libraryNote ?? '');
     expect(text).toContain(key === 'ap-history' ? 'Create assignment' : 'New');
   });
 
@@ -291,17 +329,47 @@ describe('every page', () => {
       // Brian's sections follow, in his order.
       expect(sections.slice(1).map((s) => s.id)).toEqual(
         key === 'prewriting'
-          ? ['when-to-use-it', 'how-it-works', 'prompt-library']
+          ? ['when-to-use-it', 'how-it-works', 'philosophy']
           : ['when-to-use-it', 'how-it-works', 'what-makes-a-strong-thesis']
       );
       expect(landingPagePlainText(page(key))).toContain(lead);
     });
   });
 
-  test('a page with a library has a Prompt Library section, and one without does not', () => {
+  test('a page with a library introduces it in a Prompt Library section or at the top of the library', () => {
     for (const key of keys) {
       const hasSection = page(key).sections.some((s) => s.id === 'prompt-library');
-      expect({ key, hasSection }).toEqual({ key, hasSection: page(key).library !== null });
+      const introduced = hasSection || page(key).libraryNote !== null;
+      // Pre-Writing's How it works already says where its prompts come from.
+      expect({ key, introduced }).toEqual({
+        key,
+        introduced: page(key).library !== null && key !== 'prewriting',
+      });
+    }
+  });
+
+  test('the step pages and Class Starter have no loose paragraphs between their boxes', () => {
+    for (const key of ['class-starter', 'prewriting', 'thesis-statement', 'thesis-driven-essay'] as const) {
+      expect({ key, ids: page(key).sections.map((s) => s.id) }).toEqual({
+        key,
+        ids: page(key).sections.map((s) => s.id).filter((id) => id !== 'prompt-library'),
+      });
+    }
+  });
+
+  test('only the step pages link a paragraph to a lesson tutorial', () => {
+    const linked = keys.filter((key) =>
+      page(key).sections.some((s) =>
+        s.blocks.some((b) => b.type === 'paragraph' && b.tutorial)
+      )
+    );
+    expect(linked.sort()).toEqual(['prewriting', 'thesis-statement']);
+    for (const key of linked) {
+      for (const s of page(key).sections) {
+        for (const b of s.blocks) {
+          if (b.type === 'paragraph' && b.tutorial) expect(b.text).toContain(b.tutorial.linkText);
+        }
+      }
     }
   });
 });

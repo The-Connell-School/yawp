@@ -43,7 +43,7 @@ test.describe('Thesis-Driven Essay: See how it works', () => {
     await expect(tutor).toContainText(/feedback on their own draft/i);
     await expect(tutor).toContainText(/cardinal rule/i);
     await expect(tutor).toContainText(/won’t write for the student/i);
-    await expect(tutor).toContainText(/the refusal is the point/i);
+    await expect(tutor).toContainText(/when a student asks it to write for them/i);
     await expect(tutor).toContainText(/immediate feedback/i);
     await expect(tutor.locator('video source').first()).toHaveAttribute(
       'src',

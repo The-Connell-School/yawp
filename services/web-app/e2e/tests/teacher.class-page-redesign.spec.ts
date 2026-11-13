@@ -304,21 +304,21 @@ test.describe.serial('Teacher class page redesign', () => {
       detail.getByTestId('class-insight-panel-subtitle')
     ).toContainText(/regenerate in \d+ (hours|minutes)/i);
 
-    // Edit is reachable explicitly and opens the same sheet used to create an
-    // assignment, so the form lives in a dialog rather than replacing the page.
-    // The URL does not change either way.
+    // Edit navigates to the dedicated builder page (#941) and returns on cancel.
     await detail.getByRole('button', { name: /^edit$/i }).click();
-    const editSheet = page.getByRole('dialog');
-    await expect(editSheet).toBeVisible();
-    await expect(editSheet.getByLabel('Title (optional)')).toBeVisible();
+    await expect(page).toHaveURL(
+      `/app/assignments/${e2eContext.assignmentId}/edit?classId=${e2eContext.classId}`
+    );
+    await expect(page.getByTestId('assignment-builder-v3')).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /^Edit assignment$/i })
+    ).toBeVisible();
+    await expect(page.locator('#abv3-title')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Cancel' }).click();
     await expect(page).toHaveURL(
       `/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
     );
-
-    // Closing the sheet returns to view mode in place — no form left behind on
-    // the page, and the URL still doesn't change.
-    await editSheet.getByRole('button', { name: 'Cancel' }).click();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(detail.getByLabel('Title (optional)')).toHaveCount(0);
     await expect(
       detail.getByRole('heading', { name: 'E2E Class Assignment' })

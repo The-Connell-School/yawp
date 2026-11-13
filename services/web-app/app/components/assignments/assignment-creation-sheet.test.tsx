@@ -1277,6 +1277,11 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('What are you checking for?');
       expectText('What specifically?');
       expectText('Is there a correct answer?');
+      // Brian: the "is there a correct answer?" explanation is one line of
+      // helper text on the field.
+      expectText(
+        'Say yes and fill in the acceptable answer(s). Say no and responses are graded on effort and overall quality.'
+      );
       expect(inputByName('exitTicketKind').value).toBe('check');
       expect(inputByName('exitTicketMode').value).toBe('specific');
       // No topic, no answer: nothing to create yet.

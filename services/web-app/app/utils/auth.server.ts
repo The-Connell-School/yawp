@@ -197,6 +197,40 @@ export async function requireUserId(
   return userId;
 }
 
+async function recoverLockedPreviewMembershipForRequest(
+  request: Request,
+  userId: string,
+  allowPaymentRequired: boolean
+): Promise<RequiredMembership | null> {
+  const { recoverPendingLockedPreviewAccess } =
+    await import('~/domain/free-tier/locked-preview.server');
+  const recovery = await recoverPendingLockedPreviewAccess(request, userId);
+  if (!recovery || recovery.kind === 'pending') {
+    if (recovery?.kind === 'pending') {
+      throw redirect('/app/free-tier/pending');
+    }
+    return null;
+  }
+  const membership = await prisma.orgMembership.findUnique({
+    where: {
+      id: recovery.membershipId,
+      userId,
+      isActive: true,
+    },
+    select: membershipSelect,
+  });
+  if (!membership) {
+    throw redirect('/app/free-tier/pending');
+  }
+  if (recovery.repairCookie) {
+    const url = new URL(request.url);
+    throw redirect(`${url.pathname}${url.search}`, {
+      headers: { 'set-cookie': await setMembershipId(recovery.membershipId) },
+    });
+  }
+  return requireLicensedMembership(request, membership, allowPaymentRequired);
+}
+
 export async function requireMembership(
   request: Request,
   userId: string,
@@ -211,6 +245,12 @@ export async function requireMembership(
     });
 
     if (!membership) {
+      const recovered = await recoverLockedPreviewMembershipForRequest(
+        request,
+        userId,
+        allowPaymentRequired
+      );
+      if (recovered) return recovered;
       throw redirect('/no-membership', {
         headers: { 'set-cookie': await setMembershipId('') },
       });
@@ -234,6 +274,12 @@ export async function requireMembership(
     memberships[0];
 
   if (!membership) {
+    const recovered = await recoverLockedPreviewMembershipForRequest(
+      request,
+      userId,
+      allowPaymentRequired
+    );
+    if (recovered) return recovered;
     throw redirect('/no-membership');
   }
 

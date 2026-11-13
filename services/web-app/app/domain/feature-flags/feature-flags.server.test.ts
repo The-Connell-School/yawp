@@ -14,7 +14,7 @@ const {
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, TEACHER_PROMPT_GENERATOR_FLAG, TEACHER_LOUNGE_FLAG, EXIT_TICKET_BUILDER_V3_FLAG, EXIT_TICKET_CLASS_SUMMARY_FLAG, FOLDED_FREE_TIER_LEGACY_SETTINGS } = await import(
+const { GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, TEACHER_PROMPT_GENERATOR_FLAG, TEACHER_LOUNGE_FLAG, EXIT_TICKET_BUILDER_V3_FLAG, EXIT_TICKET_CLASS_SUMMARY_FLAG, ASSIGNMENT_TYPE_LANDING_V2_FLAG, ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG, ASSIGNMENT_TYPE_LESSON_PLANS_FLAG, FOLDED_FREE_TIER_LEGACY_SETTINGS } = await import(
   './feature-flags'
 );
 
@@ -104,6 +104,38 @@ describe('feature flags (server)', () => {
     expect(await isFeatureFlagEnabled(INTERNAL_RUBRICS_FLAG, null)).toBe(false);
     prisma.setting.findUnique.mockResolvedValue({ value: '{"mode":"everyone","orgIds":[]}' });
     expect(await isFeatureFlagEnabled(INTERNAL_RUBRICS_FLAG, 'org-2')).toBe(true);
+  });
+
+  test('assignment-type landing flags default on for demo and preview, off on production', async () => {
+    const previous = process.env.YAWP_ENVIRONMENT;
+    try {
+      for (const key of [
+        'assignment-type-landing-v2',
+        'assignment-type-landing-thesis-essay',
+        'assignment-type-lesson-plans',
+      ] as const) {
+        for (const environment of ['demo', 'preview']) {
+          process.env.YAWP_ENVIRONMENT = environment;
+          prisma.setting.findUnique.mockResolvedValue(null);
+          expect({ key, environment, on: await isFeatureFlagEnabled(key) }).toEqual({
+            key,
+            environment,
+            on: true,
+          });
+        }
+        process.env.YAWP_ENVIRONMENT = 'production';
+        prisma.setting.findUnique.mockResolvedValue(null);
+        expect(await isFeatureFlagEnabled(key, 'org-1')).toBe(false);
+        prisma.setting.findUnique.mockResolvedValue({
+          value: '{"mode":"targeted","orgIds":["org-1"]}',
+        });
+        expect(await isFeatureFlagEnabled(key, 'org-1')).toBe(true);
+        expect(await isFeatureFlagEnabled(key, 'org-2')).toBe(false);
+      }
+    } finally {
+      if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
+      else process.env.YAWP_ENVIRONMENT = previous;
+    }
   });
 
   test('exit ticket builder v3 is off everywhere until a row turns it on', async () => {
@@ -326,6 +358,9 @@ describe('feature flags (server)', () => {
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       TEACHER_PROMPT_GENERATOR_FLAG,
+      'assignment-type-landing-v2',
+      'assignment-type-landing-thesis-essay',
+      'assignment-type-lesson-plans',
       TEACHER_LOUNGE_FLAG,
       EXIT_TICKET_BUILDER_V3_FLAG,
       EXIT_TICKET_CLASS_SUMMARY_FLAG,
@@ -375,6 +410,9 @@ describe('feature flags (server)', () => {
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       TEACHER_PROMPT_GENERATOR_FLAG,
+      'assignment-type-landing-v2',
+      'assignment-type-landing-thesis-essay',
+      'assignment-type-lesson-plans',
       TEACHER_LOUNGE_FLAG,
       EXIT_TICKET_BUILDER_V3_FLAG,
       EXIT_TICKET_CLASS_SUMMARY_FLAG,

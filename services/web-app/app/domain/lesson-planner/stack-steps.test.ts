@@ -57,13 +57,13 @@ describe('notYetInYawp: what still has to be made in Yawp! before class', () => 
 });
 
 describe("the teacher's call on writing (Nov 4 follow-up)", () => {
-  // A lecture that introduces pre-writing reads as writing by the rule: the
-  // teacher can say it isn't, and say it back.
+  // A quick write reads as writing by the rule: the teacher can say it isn't
+  // (they will talk it through instead), and say it back.
   const packet = buildLessonPacket({
     title: 'Pre-writing',
     className: null,
     sections: [
-      { id: 'pre', origin: 'material', kind: 'plan', keptAudience: 'teacher', keptTitle: 'Pre-writing: the four moves (10 min)', content: 'Slides on brainstorming, listing, mapping and freewriting.' },
+      { id: 'pre', origin: 'material', kind: 'plan', keptAudience: 'teacher', keptTitle: 'Quick write: the four moves (10 min)', content: 'Quick write: which of brainstorming, listing, mapping and freewriting would you reach for first, and why?' },
       { id: 'hook', origin: 'material', kind: 'plan', keptAudience: 'teacher', keptTitle: 'Hook activity: What’s in your bag? (15 min)', content: 'Pairs share.' },
     ],
   });
@@ -137,7 +137,7 @@ describe('withWritingCall and writingCallFor: the page shows the call at once', 
     title: 'Pre-writing',
     className: null,
     sections: [
-      { id: 'pre', origin: 'material', kind: 'plan', keptAudience: 'teacher', keptTitle: 'Pre-writing: the four moves (10 min)', content: 'Slides.' },
+      { id: 'pre', origin: 'material', kind: 'plan', keptAudience: 'teacher', keptTitle: 'Quick write: the four moves (10 min)', content: 'Quick write: which move would you reach for first?' },
     ],
   });
   const [pre] = stackSteps({

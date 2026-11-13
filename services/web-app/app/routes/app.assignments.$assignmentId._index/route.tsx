@@ -997,6 +997,10 @@ export default function AssignmentDetailRoute() {
                   });
                 }}
                 onEdit={() => {
+                  if (isExitTicketAssignmentType(assignment.assignmentType)) {
+                    setIsEditSheetOpen(true);
+                    return;
+                  }
                   void navigate(
                     `/app/assignments/${assignment.id}/edit?classId=${activeClassId}`
                   );
