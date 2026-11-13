@@ -346,7 +346,6 @@ for (const viewport of [
       await admin
         .locator('input[name="adminEmail"]')
         .fill(`replacement-${stamp}@example.edu`);
-      await admin.locator('input[name="adminRole"]').fill('Principal');
       await prisma.freeTierApplication.update({
         where: { id: app.id },
         data: { adminRedirectCount: 100 },
@@ -369,7 +368,6 @@ for (const viewport of [
       await admin
         .locator('input[name="adminEmail"]')
         .fill(`replacement-${stamp}@example.edu`);
-      await admin.locator('input[name="adminRole"]').fill('Principal');
       await admin.getByRole('button', { name: 'Forward request' }).click();
       await expect(
         admin.getByRole('heading', { name: 'Request forwarded' })
