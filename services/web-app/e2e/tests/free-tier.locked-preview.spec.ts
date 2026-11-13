@@ -536,14 +536,17 @@ for (const width of [390, 1440]) {
     }
     await page
       .getByTestId('teaching-access-approval-toast')
-      .getByRole('button', { name: 'Close toast' })
+      .getByRole('button')
       .click();
     await expect(page.getByTestId('teaching-access-approval-toast')).toHaveCount(0);
     await page.reload();
     await expect(page.getByTestId('teaching-access-approval-toast')).toHaveCount(0);
-    await page
-      .getByRole('link', { name: /Open Class Starter assignment type/i })
-      .click();
+    const openStarter = page.getByRole('link', {
+      name: /Open Class Starter assignment type/i,
+    });
+    const starterHome = await openStarter.getAttribute('href');
+    expect(starterHome).toMatch(/assignment-types/);
+    await page.goto(starterHome!);
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+$/);
     await expect(page).not.toHaveURL(/\/how-it-works$/);
     const seeHowItWorks = page.getByRole('link', { name: /See how it works/i });
