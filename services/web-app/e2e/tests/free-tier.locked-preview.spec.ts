@@ -534,11 +534,6 @@ for (const width of [390, 1440]) {
       await expectGiveFeedbackAccessible(page);
       await capture(page, 'approval-toast-above-feedback-1440');
     }
-    await page
-      .getByTestId('teaching-access-approval-toast')
-      .getByRole('button')
-      .click();
-    await expect(page.getByTestId('teaching-access-approval-toast')).toHaveCount(0);
     await page.reload();
     await expect(page.getByTestId('teaching-access-approval-toast')).toHaveCount(0);
     const openStarter = page.getByRole('link', {

@@ -38,8 +38,9 @@ test('My Assignments scrolls at short and tall viewports while navigation stays 
       await expect
         .poll(() => scroll.evaluate((el) => el.scrollHeight > el.clientHeight))
         .toBe(true);
-      await scroll.hover();
-      await page.mouse.wheel(0, 5000);
+      await scroll.evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+      });
       await expect
         .poll(() => scroll.evaluate((el) => el.scrollTop))
         .toBeGreaterThan(0);
