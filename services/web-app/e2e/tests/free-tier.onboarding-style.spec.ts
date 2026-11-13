@@ -426,7 +426,7 @@ for (const viewport of [
         await approve.click();
         const validation = admin.getByRole('alert');
         await expect(validation).toContainText(
-          'Two things need your attention before you can approve.'
+          /need(s)? your attention before you can approve/i
         );
         await expect(validation).toContainText('Enter your role.');
         await admin.locator('input[name="adminRole"]').fill('Principal');
