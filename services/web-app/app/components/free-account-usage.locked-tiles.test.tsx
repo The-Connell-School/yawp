@@ -137,7 +137,7 @@ test('FreeAssignmentTiles artwork shows no hover tooltip with the image descript
   expect(html).not.toContain('title="Scratchy ink drawing of a dog in a beret"');
 });
 
-test('FreeAssignmentTiles shows Unlimited meta for monthly free assignments', () => {
+test('FreeAssignmentTiles hides quota meta for monthly free assignments', () => {
   const html = renderToStaticMarkup(
     <StaticRouter location="/app">
       <FreeAssignmentTiles
@@ -147,7 +147,8 @@ test('FreeAssignmentTiles shows Unlimited meta for monthly free assignments', ()
       />
     </StaticRouter>
   );
-  expect(html).toContain('assignment-type-tile-meta">Unlimited</span>');
+  expect(html).not.toContain('assignment-type-tile-meta');
+  expect(html).not.toContain('Unlimited');
   expect(html).not.toContain('site-license-lock-button');
 });
 
@@ -223,8 +224,8 @@ test('FreeAssignmentTiles locked pending hides create control and uses text-only
   expect(html).not.toContain('Create assignment');
   expect(html).not.toContain('/api/image/course/');
   expect(html).toContain('data-testid="assignment-type-tile-name"');
-  expect(html).toContain('data-testid="assignment-type-tile-meta"');
-  expect(html).toContain('Unlimited');
+  expect(html).not.toContain('data-testid="assignment-type-tile-meta"');
+  expect(html).not.toContain('Unlimited');
   expect(html).not.toMatch(/\d+ of \d+ left/);
 });
 

@@ -285,12 +285,13 @@ async function capture(page: import('@playwright/test').Page, state: string) {
 
 /** Pending and approved free dashboards expose exactly three entitled assignment kinds. */
 async function expectFreeDashboardAssignmentTiles(
-  page: import('@playwright/test').Page
+  page: import('@playwright/test').Page,
+  options?: { teachingApproved?: boolean }
 ) {
   const tiles = page.getByTestId('free-assignment-tiles');
   await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(3);
   await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
-    0
+    options?.teachingApproved ? 5 : 0
   );
   await expect(tiles.getByText('Class Starter', { exact: true })).toBeVisible();
   await expect(tiles.getByText('Prewriting', { exact: true })).toBeVisible();
@@ -502,7 +503,7 @@ for (const width of [390, 1440]) {
     await page.reload();
     await expectNoLockedPendingDashboardCard(page);
     await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible();
-    await expectFreeDashboardAssignmentTiles(page);
+    await expectFreeDashboardAssignmentTiles(page, { teachingApproved: true });
     await expectDashboardAssignmentTileNameMetaNoOverlap(
       page,
       page.getByTestId('free-assignment-tiles')
@@ -513,7 +514,7 @@ for (const width of [390, 1440]) {
     );
     await expect(
       page.getByTestId('free-assignment-tiles').locator('img')
-    ).toHaveCount(3);
+    ).toHaveCount(8);
     if (width === 390) {
       await capture(page, 'dashboard-approved-390');
     }
