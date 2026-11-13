@@ -76,6 +76,25 @@ function joinCookieHeaders(accessCookie, authCookies) {
   return accessCookie || authCookies || '';
 }
 
+function getResponseLocation(headers) {
+  const raw = headers?.location ?? headers?.Location;
+  if (raw == null) return null;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value ? String(value) : null;
+}
+
+/** Dev-login GET may redirect ungated anonymous callers to the preview-access screen. */
+export function isAnonymousDevLoginPreviewAccessRedirect(baseUrl, response) {
+  if (response.status < 300 || response.status >= 400) return false;
+  const location = getResponseLocation(response.headers);
+  if (!location) return false;
+  try {
+    return new URL(location, baseUrl).pathname === '/auth/preview-access';
+  } catch {
+    return false;
+  }
+}
+
 async function assertNoSiteGatePublicEndpoints({ baseUrl, requestFn }) {
   const anonymousPage = await requestFn(baseUrl);
   if (anonymousPage.status !== 200) {
@@ -125,6 +144,9 @@ async function assertNoSiteGatePublicEndpoints({ baseUrl, requestFn }) {
         : {}),
     });
     if (check.relaxedGetDevLogin) {
+      if (isAnonymousDevLoginPreviewAccessRedirect(baseUrl, response)) {
+        continue;
+      }
       if (response.status >= 200 && response.status < 400) {
         throw new Error(
           `Expected anonymous GET /auth/dev-login not to succeed, got HTTP ${response.status}`
