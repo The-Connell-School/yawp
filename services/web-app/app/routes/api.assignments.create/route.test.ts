@@ -36,6 +36,7 @@ const uploadAssignmentPromptAttachment = mock();
 const deleteAssignmentPromptAttachment = mock();
 const saveAssignmentForReuse = mock();
 const autoArrangeNewAssignment = mock();
+const guardTeachingFormAction = mock(async (): Promise<unknown> => null);
 class AssignmentPromptAttachmentError extends Error {}
 const actualAssignmentPromptAttachment =
   await import('~/domain/assignments/assignment-prompt-attachment.server');
@@ -72,7 +73,11 @@ mock.module('~/domain/assignments/saved-assignments.server', () => ({
   SAVED_ASSIGNMENTS_ENABLED: true,
   saveAssignmentForReuse,
 }));
+mock.module('~/domain/free-tier/teaching-approval-required.server', () => ({
+  guardTeachingFormAction,
+}));
 
+const { data: dataResponse } = await import('react-router');
 const { action } = await import('./route');
 const {
   BASIC_EXIT_TICKET_PROMPT,
@@ -150,6 +155,8 @@ describe('api.assignments.create', () => {
       .mockResolvedValue([{ id: 'ca-1', classId: 'class-1' }]);
     requireUserId.mockReset();
     requireMembership.mockReset();
+    guardTeachingFormAction.mockReset();
+    guardTeachingFormAction.mockResolvedValue(null);
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -1404,5 +1411,36 @@ describe('api.assignments.create', () => {
         })
       );
     });
+  });
+
+  test('returns approval_required without deploying when teaching is locked', async () => {
+    guardTeachingFormAction.mockResolvedValue(
+      dataResponse(
+        {
+          error: 'approval_required',
+          approvalRequired: true as const,
+          fields: { title: 'Locked title', prompt: 'Locked prompt' },
+        },
+        { status: 403 }
+      )
+    );
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1'],
+        prompt: 'Locked prompt',
+        title: 'Locked title',
+      }),
+      params: {},
+    } as any);
+
+    expect(responseStatus(response)).toBe(403);
+    const body = await readBody(response);
+    expect(body).toMatchObject({
+      approvalRequired: true,
+      fields: { title: 'Locked title', prompt: 'Locked prompt' },
+    });
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 });

@@ -69,6 +69,33 @@ test('allowed app reads, preparation and approval actions pass', async () => {
   await enforceLockedPreviewRequest(new Request('http://local/app/free-tier/onboarding', { method: 'POST' }), 'teacher');
   await enforceLockedPreviewRequest(new Request('http://local/app/free-tier/pending', { method: 'POST' }), 'teacher');
 });
+test('blocked assignment create returns teaching-approval shape with echoed fields', async () => {
+  const form = new FormData();
+  form.set('intent', 'create-assignment');
+  form.set('title', 'Community Gardens');
+  form.set('prompt', 'Pick one community garden in your town.');
+  try {
+    await enforceLockedPreviewRequest(
+      new Request('http://local/api/assignments/create', { method: 'POST', body: form }),
+      'teacher'
+    );
+    throw new Error('allowed');
+  } catch (error) {
+    const response = error as Response;
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body).toMatchObject({
+      error: 'approval_required',
+      approvalRequired: true,
+      fields: {
+        intent: 'create-assignment',
+        title: 'Community Gardens',
+        prompt: 'Pick one community garden in your town.',
+      },
+    });
+  }
+});
+
 test('a new teacher has no organization membership until approval; the default shell plan is irrelevant', async () => {
   application.organizationId = null;
   memberships = [];
