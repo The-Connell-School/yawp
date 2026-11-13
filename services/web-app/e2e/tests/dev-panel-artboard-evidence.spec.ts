@@ -11,6 +11,7 @@ import {
   openDevPanelClassSimulationFlyout,
   openDevToolsPanel,
   openGiveFeedback,
+  waitForDevPanelFeedbackNotePersisted,
   waitForDeveloperToolsPageReady,
 } from '../helpers/dev-panel-feedback';
 import { ensureDemoDevTeacherSession } from '../helpers/dev-panel-preview-access';
@@ -213,6 +214,10 @@ test.describe('Dev panel artboard evidence', () => {
     await shot(page, '72');
 
     await feedbackDialog.getByLabel('What happened?').fill('Partly typed note before reload');
+    await waitForDevPanelFeedbackNotePersisted(
+      page,
+      'Partly typed note before reload'
+    );
     await page.reload();
     await openDevToolsPanel(page);
     ({ panel: feedbackDialog } = await openGiveFeedback(page));

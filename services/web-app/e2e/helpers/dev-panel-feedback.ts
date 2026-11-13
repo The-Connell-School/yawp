@@ -12,6 +12,28 @@ export async function clearDevPanelStorageWhenStable(page: Page) {
   }).toPass({ timeout: 15_000 });
 }
 
+/** Dev panel feedback drafts persist via React state → `yawp-dev-panel` in localStorage. */
+export async function waitForDevPanelFeedbackNotePersisted(
+  page: Page,
+  note: string,
+  { timeout = 15_000 } = {}
+) {
+  await expect(async () => {
+    await page.waitForLoadState('domcontentloaded');
+    const stored = await page.evaluate((key: string) => {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw) as { forms?: { feedbackNote?: string } };
+        return parsed.forms?.feedbackNote ?? null;
+      } catch {
+        return null;
+      }
+    }, DEV_PANEL_STORAGE_KEY);
+    expect(stored).toBe(note);
+  }).toPass({ timeout });
+}
+
 export function devToolsPanel(page: Page) {
   return page.locator('#devtools');
 }
