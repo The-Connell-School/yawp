@@ -114,7 +114,7 @@ describe('team-contact.server', () => {
         }),
       })
     );
-    const firstCall = findFirstLog.mock.calls[0] as
+    const firstCall = findFirstLog.mock.calls[0] as unknown as
       | [{ where: { createdAt: { gte: Date } } }]
       | undefined;
     if (!firstCall) throw new Error('expected findFirstLog call');
