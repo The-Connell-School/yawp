@@ -1734,7 +1734,6 @@ model LessonPlanConversation {
   @@index([organizationId])
   @@index([originClassAssignmentId])
   @@index([unitId, unitDay])
-  @@index([membershipId, yawpLessonSlug])
 }
 
 /// A single turn in a Lesson Planner conversation. `role` is 'user' or
