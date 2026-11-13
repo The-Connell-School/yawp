@@ -351,7 +351,13 @@ test.describe.serial('Free tier guided tour', () => {
     });
   }
 
-  for (const type of ['Class Starter', 'Prewriting', 'Thesis Statement']) {
+  for (const type of [
+    'Class Starter',
+    'Exit Ticket',
+    '5-Paragraph Essay',
+    'Pre-writing',
+    'Thesis Builder',
+  ]) {
     test(`clicking into ${type} shows that type's tour`, async ({ page }) => {
       await logInAsFreeTeacher(page);
       await page.goto('/app');

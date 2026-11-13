@@ -294,7 +294,7 @@ async function expectFreeDashboardAssignmentTiles(
   );
   await expect(tiles.getByText('Class Starter', { exact: true })).toBeVisible();
   await expect(tiles.getByText('Prewriting', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('Thesis Statement', { exact: true })).toBeVisible();
+  await expect(tiles.getByText('Thesis Builder', { exact: true })).toBeVisible();
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -423,7 +423,7 @@ for (const width of [390, 1440]) {
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     await page.goto('/app');
     await page
-      .getByRole('link', { name: /New Thesis Statement assignment/i })
+      .getByRole('link', { name: /New Thesis Builder assignment/i })
       .click();
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     const thesisTypeId = page.url().match(/assignment-types\/([^/]+)/)?.[1];

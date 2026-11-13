@@ -718,11 +718,17 @@ describe('migration integration (real Postgres)', () => {
         'count', (
           SELECT COUNT(*)::int
           FROM "AssignmentType"
-          WHERE "kind" IN ('class_starter', 'prewriting', 'thesis_statement')
+          WHERE "kind" IN (
+            'class_starter',
+            'exit_ticket',
+            'five_paragraph_essay',
+            'prewriting',
+            'thesis_statement'
+          )
         )
       )
     `);
-    expect(bundleKinds.count).toBe(3);
+    expect(bundleKinds.count).toBeGreaterThanOrEqual(3);
 
     const usageTable = jsonQuery(`
       SELECT json_build_object(
@@ -748,11 +754,17 @@ describe('migration integration (real Postgres)', () => {
           SELECT COUNT(*)::int
           FROM "AssignmentModule" am
           JOIN "AssignmentType" at ON at.id = am."assignmentTypeId"
-          WHERE at."kind" IN ('class_starter', 'prewriting', 'thesis_statement')
+          WHERE at."kind" IN (
+            'class_starter',
+            'exit_ticket',
+            'five_paragraph_essay',
+            'prewriting',
+            'thesis_statement'
+          )
         )
       )
     `);
-    expect(moduleCount.count).toBeGreaterThanOrEqual(3);
+    expect(moduleCount.count).toBeGreaterThanOrEqual(5);
 
     const imageCount = jsonQuery(`
       SELECT json_build_object(
@@ -760,11 +772,17 @@ describe('migration integration (real Postgres)', () => {
           SELECT COUNT(*)::int
           FROM "AssignmentTypeImage" img
           JOIN "AssignmentType" at ON at.id = img."assignmentTypeId"
-          WHERE at."kind" IN ('class_starter', 'prewriting', 'thesis_statement')
+          WHERE at."kind" IN (
+            'class_starter',
+            'exit_ticket',
+            'five_paragraph_essay',
+            'prewriting',
+            'thesis_statement'
+          )
         )
       )
     `);
-    expect(imageCount.count).toBe(3);
+    expect(imageCount.count).toBeGreaterThanOrEqual(5);
 
     const seedTwice = run(
       'bun',

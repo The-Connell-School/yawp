@@ -117,7 +117,15 @@ export async function seedSiteLicenseLockedCatalogForE2E(
       assignmentType: {
         ownerOrgId: null,
         ownerMembershipId: null,
-        kind: { in: ['class_starter', 'prewriting', 'thesis_statement'] },
+        kind: {
+          in: [
+            'class_starter',
+            'exit_ticket',
+            'five_paragraph_essay',
+            'prewriting',
+            'thesis_statement',
+          ],
+        },
       },
     },
     select: { contentType: true, blob: true, altText: true },
