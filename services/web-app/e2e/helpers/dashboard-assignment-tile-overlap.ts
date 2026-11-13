@@ -20,8 +20,11 @@ export function dashboardAssignmentTileOverlapIssues(scope: ParentNode) {
     const meta = tile.querySelector(
       '[data-testid="assignment-type-tile-meta"]'
     ) as HTMLElement | null;
-    if (!name || !meta) {
-      issues.push('dashboard tile missing name or meta test id');
+    if (!name) {
+      issues.push('dashboard tile missing name test id');
+      continue;
+    }
+    if (!meta || !meta.textContent?.trim()) {
       continue;
     }
     const a = name.getBoundingClientRect();
@@ -59,7 +62,7 @@ export function legacyDashboardAssignmentTileOverlapIssues(scope: ParentNode) {
     const meta = tile.querySelector(
       '[data-testid="assignment-type-tile-meta"]'
     ) as HTMLElement | null;
-    if (!name || !meta) continue;
+    if (!name || !meta || !meta.textContent?.trim()) continue;
     const a = name.getBoundingClientRect();
     const b = meta.getBoundingClientRect();
     const pad = 0.5;

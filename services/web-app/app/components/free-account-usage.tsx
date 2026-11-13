@@ -292,16 +292,17 @@ function FreeTierCarouselTileCaption({
       >
         {label}
       </span>
-      <span
-        className={cn(
-          'line-clamp-1 text-xs leading-snug',
-          !hasVisibleMeta && 'sr-only',
-          hasVisibleMeta && (metaClassName ?? 'font-semibold text-[#1f3532]')
-        )}
-        data-testid={assignmentTypeTileMetaTestId}
-      >
-        {meta ?? ''}
-      </span>
+      {hasVisibleMeta ? (
+        <span
+          className={cn(
+            'line-clamp-1 text-xs leading-snug',
+            metaClassName ?? 'font-semibold text-[#1f3532]'
+          )}
+          data-testid={assignmentTypeTileMetaTestId}
+        >
+          {meta}
+        </span>
+      ) : null}
     </span>
   );
 }
