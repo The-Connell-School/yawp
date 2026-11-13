@@ -4,7 +4,7 @@ let enabled = true;
 let application: any = { id: 'app-a', status: 'SENT', organizationId: 'org-a' };
 let memberships: any[] = [{ role: 'TEACHER', organizationId: 'org-a', organization: { plan: 'FREE_CLASSROOM' } }];
 const queries: any[] = [];
-const db = {
+const db: any = {
   freeTierApplication: { findFirst: mock(async (q: any) => { queries.push(q); return application; }) },
   orgMembership: { findMany: mock(async () => memberships) },
   organization: { findUnique: mock(async () => ({ plan: 'FREE_CLASSROOM' })) },
@@ -17,7 +17,7 @@ let provisionResult: { status: string; organizationId?: string } = {
   status: 'already_provisioned',
   organizationId: 'org-a',
 };
-let teacherMembership: { id: string; isActive: boolean } | null = null;
+let teacherMembership: any = null;
 let cookieMembershipId = '';
 mock.module('./provision-free-classroom.server', () => ({
   provisionFreeClassroom: mock(async () => provisionResult),
