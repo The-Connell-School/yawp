@@ -1,3 +1,4 @@
+import { SortableTableHeadButton } from '~/components/ui/sortable-table-head-button';
 import {
   data as dataResponse,
   useLoaderData,
@@ -20,7 +21,7 @@ import {
 } from '~/components/ui/table';
 import { Badge } from '~/components/ui/badge';
 import { Checkbox } from '~/components/ui/checkbox';
-import { ArrowDown, ArrowUp, ArrowUpDown, Pencil } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import { Pagination } from '~/components/table/pagination';
 import { cn } from '~/utils/misc';
 import { TooltipIdCopy } from '~/components/ui/tooltip-id-copy';
@@ -677,7 +678,7 @@ export default function OrganizationStudentsRoute() {
               <div
                 className={cn(isLoading ? 'opacity-50 transition-opacity' : '')}
               >
-                <Table className="rounded-lg bg-muted">
+                <Table className="rounded-lg">
                   <TableHeader className="rounded-t-lg">
                     <TableRow className="bg-muted/50 rounded-t-lg">
                       {Object.entries(COLUMNS).map(
@@ -692,12 +693,16 @@ export default function OrganizationStudentsRoute() {
                                   : ''
                             }
                           >
-                            <Button
-                              variant="unstyled"
-                              className={cn(
-                                'h-8 p-0',
-                                !value ? 'pointer-events-none' : ''
-                              )}
+                            <SortableTableHeadButton
+                              label={label}
+                              disabled={!value}
+                              arrow={
+                                table.sort === value
+                                  ? table.direction === 'desc'
+                                    ? 'up'
+                                    : 'down'
+                                  : null
+                              }
                               onClick={() =>
                                 value
                                   ? handleSort(
@@ -706,24 +711,7 @@ export default function OrganizationStudentsRoute() {
                                     )
                                   : undefined
                               }
-                            >
-                              {label}
-                              {!value ? null : table.sort === value ? (
-                                table.direction === 'desc' ? (
-                                  <ArrowUp
-                                    className="ml-2 h-4 w-4 text-primary"
-                                    strokeWidth={3}
-                                  />
-                                ) : (
-                                  <ArrowDown
-                                    className="ml-2 h-4 w-4 text-primary"
-                                    strokeWidth={3}
-                                  />
-                                )
-                              ) : (
-                                <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
-                              )}
-                            </Button>
+                            />
                           </TableHead>
                         )
                       )}

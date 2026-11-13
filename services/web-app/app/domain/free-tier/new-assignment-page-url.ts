@@ -4,6 +4,8 @@ export type NewAssignmentPageHrefOptions = {
   prompt?: string | null;
   title?: string | null;
   first?: boolean;
+  /** Where to return after a successful create (in-app path). */
+  exitTo?: string | null;
 };
 
 export function buildNewAssignmentPageHref(input: NewAssignmentPageHrefOptions) {
@@ -13,6 +15,8 @@ export function buildNewAssignmentPageHref(input: NewAssignmentPageHrefOptions) 
     params.set('assignmentTypeId', input.assignmentTypeId);
   }
   if (input.classId) params.set('classId', input.classId);
+  const exitTo = input.exitTo?.trim();
+  if (exitTo) params.set('exitTo', exitTo);
   const prompt = input.prompt?.trim();
   if (prompt) params.set('prompt', prompt);
   const title = input.title?.trim();

@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import {
   resolveSiteLicenseLockedAssignmentTiles,
   siteLicenseLockedAssignmentTilesForOrganization,
@@ -11,12 +10,6 @@ const catalog = [
     title: 'The Thesis-Driven Essay',
     kind: null,
     systemKey: null,
-  },
-  {
-    id: 'ap-history',
-    title: 'AP History Essay',
-    kind: 'ap_history',
-    systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY,
   },
   {
     id: 'daily',
@@ -48,7 +41,6 @@ test('orders locked tiles and skips free-bundle kinds', () => {
   const tiles = resolveSiteLicenseLockedAssignmentTiles(catalog);
   expect(tiles.map((tile) => tile.key)).toEqual([
     'thesis_driven_essay',
-    'ap_history_essay',
     'daily_pages',
     'act_writing',
   ]);

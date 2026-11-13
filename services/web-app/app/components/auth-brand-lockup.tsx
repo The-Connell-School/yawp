@@ -93,7 +93,7 @@ export function AuthBrandLockup({ partner }: { partner?: 'ua' | null }) {
     <img
       src="/img/logo_for_light_mode.png"
       alt=""
-      className="mx-auto h-auto w-40 rounded object-cover sm:w-52"
+      className="mx-auto h-auto w-36 rounded object-cover sm:w-44"
     />
   );
 }

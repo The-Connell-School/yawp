@@ -24,7 +24,9 @@ test('My Assignments scrolls at short and tall viewports while navigation stays 
     for (const height of [400, 900]) {
       await page.setViewportSize({ width: 1280, height });
       await page.goto('/app/assignments');
+      await page.getByTestId('my-assignments-filter').click();
       await page.getByTestId('my-assignments-search').fill('Scroll regression');
+      await page.keyboard.press('Escape');
       const scroll = page
         .getByRole('heading', { name: 'My Assignments', exact: true })
         .locator('..');

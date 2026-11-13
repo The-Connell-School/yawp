@@ -6,7 +6,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '~/components/ui/sheet';
-import { Link, useRouteLoaderData } from 'react-router';
+import { Link, useLocation, useRouteLoaderData } from 'react-router';
 import {
   AlertTriangle,
   ChartNoAxesColumn,
@@ -50,14 +50,13 @@ import {
   useFreeTierAssignmentCarousel,
 } from '~/components/free-tier/free-tier-assignment-carousel';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
-import { LockedDashboardGettingStarted } from '~/components/free-tier/locked-dashboard-getting-started';
-import { LockedDashboardPendingCard } from '~/components/free-tier/locked-dashboard-pending-card';
 import { FreeTierGettingStartedTimeline } from '~/components/free-tier/free-tier-getting-started-timeline';
 import {
   FREE_TIER_NEEDS_GRADING_DOCUMENTS_HREF,
   freeTierShowAdvocatePack,
   freeTierShowGettingStartedChecklist,
 } from '~/domain/free-tier/getting-started-grade';
+import { buildNewAssignmentPageHref } from '~/domain/free-tier/new-assignment-page-url';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import {
   FreeTierLockedPageHeader,
@@ -71,11 +70,9 @@ import {
 } from '~/domain/free-tier/teaching-access-copy';
 import type { SiteLicenseLockedAssignmentTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 import {
-  FREE_TIER_UNLIMITED_TILE_LABEL,
   LOCKED_DASHBOARD_GETTING_STARTED_TITLE,
   SITE_LICENSE_ONLY_TILE_LABEL,
 } from '~/domain/free-tier/locked-dashboard-copy';
-import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 
 export function useFreeAccountUsage() {
   return (
@@ -261,7 +258,7 @@ function FreeAccountUsageDetails({ usage }: { usage: FreeAccountUsage }) {
     </>
   );
 }
-const freeTierAssignmentTileImageClassName = 'size-[168px] object-cover';
+const freeTierAssignmentTileImageClassName = 'h-full w-full object-cover';
 
 function FreeTierCarouselTileCaption({
   label,
@@ -273,19 +270,14 @@ function FreeTierCarouselTileCaption({
   metaClassName?: string;
 }) {
   return (
-    <span
-      className={cn(
-        'flex flex-col gap-0.5 px-3 py-2.5',
-        meta ? 'min-h-[58px]' : 'min-h-[44px] justify-center'
-      )}
-    >
-      <span className="text-sm font-medium leading-snug text-foreground">
+    <span className="flex shrink-0 flex-col gap-0.5 p-3.5">
+      <span className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
         {label}
       </span>
       {meta ? (
         <span
           className={cn(
-            'text-xs leading-snug',
+            'line-clamp-1 text-xs leading-snug',
             metaClassName ?? 'font-semibold text-[#1f3532]'
           )}
         >
@@ -437,7 +429,9 @@ function FreeTierCarouselTile({
     >
       <Link
         to={`/app/assignment-types/${assignmentTypeId}`}
-        className="block"
+        // A flex column like the tile shell, so the image shrinks to leave the
+        // caption its full padding instead of pushing it past the tile's edge.
+        className="flex min-h-0 flex-1 flex-col"
         aria-label={`Open ${label} assignment type`}
       >
         <FreeTierCarouselTileImage
@@ -467,7 +461,6 @@ export function FreeAssignmentTiles({
   usage = null,
   types,
   siteLicenseLockedAssignmentTiles = [],
-  assignmentsSeeHowItWorksTo,
   teachingLocked = false,
   onCreate,
   createTriggerRef,
@@ -481,7 +474,6 @@ export function FreeAssignmentTiles({
     imageTitle?: string | null;
   }>;
   siteLicenseLockedAssignmentTiles?: SiteLicenseLockedAssignmentTile[];
-  assignmentsSeeHowItWorksTo?: string;
   teachingLocked?: boolean;
   onCreate: (id?: string) => void;
   createTriggerRef?: RefObject<HTMLButtonElement | null>;
@@ -489,11 +481,7 @@ export function FreeAssignmentTiles({
   const carousel = useFreeTierAssignmentCarousel();
   const quotaMode = Boolean(usage);
 
-  const headerActions = teachingLocked ? (
-    assignmentsSeeHowItWorksTo ? (
-      <SeeHowItWorksLink to={assignmentsSeeHowItWorksTo} />
-    ) : null
-  ) : (
+  const headerActions = teachingLocked ? null : (
     <button
       ref={createTriggerRef as RefObject<HTMLButtonElement> | undefined}
       type="button"
@@ -515,7 +503,7 @@ export function FreeAssignmentTiles({
           const type = types.find((t) => t.kind === row.kind);
           if (!type) return null;
           const meta = usage!.unlimitedFreeAssignmentTiles
-            ? FREE_TIER_UNLIMITED_TILE_LABEL
+            ? ''
             : row.remaining
               ? `${row.remaining} of ${row.total} left`
               : 'None left';
@@ -525,11 +513,9 @@ export function FreeAssignmentTiles({
               label={row.label}
               meta={meta}
               metaClassName={
-                usage!.unlimitedFreeAssignmentTiles
-                  ? 'font-semibold text-[#1f3532]'
-                  : row.remaining === 0
-                    ? 'font-normal text-amber-800'
-                    : undefined
+                row.remaining === 0
+                  ? 'font-normal text-amber-800'
+                  : undefined
               }
               imageId={type.imageId}
               imageTitle={type.imageTitle}
@@ -643,16 +629,13 @@ export function FreeAccountChecklist({
 }) {
   const [invitationOpen, setInvitationOpen] = useState(false);
   const invitationTriggerRef = useRef<HTMLButtonElement>(null);
-  const createFirstAssignmentTo = (() => {
-    const params = new URLSearchParams({ first: '1' });
-    if (classStarterAssignmentTypeId) {
-      params.set('assignmentTypeId', classStarterAssignmentTypeId);
-    }
-    if (usage.classId) {
-      params.set('classId', usage.classId);
-    }
-    return `/app/assignments/new?${params.toString()}`;
-  })();
+  const location = useLocation();
+  const createFirstAssignmentTo = buildNewAssignmentPageHref({
+    first: true,
+    assignmentTypeId: classStarterAssignmentTypeId ?? undefined,
+    classId: usage.classId,
+    exitTo: `${location.pathname}${location.search}`,
+  });
   const { locked: teachingLocked, state: teachingAccessState } =
     useTeachingAccess();
   const teachingAccessAdminName =
@@ -1088,12 +1071,7 @@ export function FreeAccountRail({
 }) {
   const { locked: teachingLocked } = useTeachingAccess();
   if (teachingLocked) {
-    return (
-      <div className="flex flex-col gap-4" data-testid="free-account-rail">
-        <LockedDashboardPendingCard />
-        <LockedDashboardGettingStarted />
-      </div>
-    );
+    return null;
   }
   const showChecklist = freeTierShowGettingStartedChecklist(usage);
   const showAdvocatePack = freeTierShowAdvocatePack(usage);

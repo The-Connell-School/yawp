@@ -21,7 +21,13 @@ const PREVIEW_PREWRITING_PROMPT =
 const PREVIEW_THESIS_PROMPT =
   'Draft one arguable thesis sentence about whether cities should require community gardens in new developments.';
 
-/** Browse-only sample assignments for pending teachers (not sent). */
+export const LOCKED_PREVIEW_SAMPLE_TITLES = [
+  'Opening Lines',
+  'Community Gardens — Prewriting',
+  'Community Gardens — Thesis',
+] as const;
+
+/** Dev panel / e2e only — pending teachers no longer get auto-planted samples. */
 export async function ensureLockedPreviewSampleAssignments(
   organizationId: string,
   classId: string
@@ -83,5 +89,31 @@ export async function ensureLockedPreviewSampleAssignments(
         classAssignments: { create: { classId } },
       },
     });
+  }
+}
+
+/** Drops legacy browse-only samples from a class (idempotent). */
+export async function removeLockedPreviewSampleAssignments(classId: string) {
+  const links = await prisma.classAssignment.findMany({
+    where: {
+      classId,
+      assignment: { title: { in: [...LOCKED_PREVIEW_SAMPLE_TITLES] } },
+    },
+    select: { assignmentId: true },
+  });
+  if (!links.length) return;
+
+  const assignmentIds = [...new Set(links.map((link) => link.assignmentId))];
+  await prisma.classAssignment.deleteMany({
+    where: { classId, assignmentId: { in: assignmentIds } },
+  });
+
+  for (const assignmentId of assignmentIds) {
+    const remainingLinks = await prisma.classAssignment.count({
+      where: { assignmentId },
+    });
+    if (remainingLinks === 0) {
+      await prisma.assignment.delete({ where: { id: assignmentId } });
+    }
   }
 }

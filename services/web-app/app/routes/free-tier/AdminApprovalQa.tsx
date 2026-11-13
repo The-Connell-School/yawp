@@ -6,13 +6,18 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '~/components/ui/accordion';
+import {
+  ADMIN_APPROVE_FERPA_TRUST,
+  ADMIN_APPROVE_NDPA_TRUST,
+  ADMIN_APPROVE_STUDENT_PRIVACY_FAQ,
+} from '~/domain/free-tier/admin-privacy-agreements-copy';
 
-const ADMIN_FAQ = [
+export const ADMIN_APPROVE_FAQ = [
   {
     id: 'what',
     question: 'What Yawp! is',
     answer:
-      'Yawp! is a writing platform for middle school, high school and college classrooms. Students learn a writing process, draft essays and get feedback from the Yawp! tutor. Teachers set assignments and follow each student’s progress.',
+      'Yawp! is a writing program that makes teaching writing far more efficient. It gives teachers a full curriculum, ready-to-teach lessons, and grading tools that save hours of feedback time, so students can write more often and improve faster. As they write, an AI tutor gives them immediate feedback that pushes them to think critically and develop their own ideas. It never writes for them, and teachers can see every draft and every tutor conversation. It’s the writing program teachers, students, and parents have been waiting for.',
   },
   {
     id: 'free',
@@ -30,69 +35,65 @@ const ADMIN_FAQ = [
     id: 'doesnt',
     question: 'What it doesn’t do',
     answer:
-      'The Yawp! tutor guides, it never writes. It won’t write essays, paragraphs or sentences for students, and it doesn’t grade work in place of the teacher. There are no ads in Yawp!.',
+      'The tutor’s non-negotiable rule: it will not write for students. Instead, it asks questions and guides so that students can develop original ideas and improve their writing skills. Yawp! contains no advertisements and does not use student writing or data to train outside models.',
   },
   {
     id: 'why-ask',
-    question: 'Why we ask for your approval',
+    question: 'Why we ask you',
     answer:
-      'Yawp! stores student writing, so using it means adopting a tool that handles student records. That decision belongs with you: no student data enters Yawp! until you approve.',
+      'When administrators know what’s happening in their buildings, they’re better equipped to tell the story of their students’ success. Your approval provides oversight and clear communication, and it lets you see and support good work as it happens. A free Yawp! classroom is an easy win: you’ll be backing a teacher who is taking initiative, and you’ll be able to see evidence of their students’ growth.',
   },
   {
     id: 'privacy',
     question: 'Student privacy',
-    answer:
-      'Student writing belongs to the student and the school. Yawp! uses it to give feedback in the classroom and for nothing else: not for advertising and not to train AI models. Under the NDPA you can ask us to delete your students’ data at any time.',
+    answer: ADMIN_APPROVE_STUDENT_PRIVACY_FAQ,
   },
 ] as const;
 
-function AdminPrivacyTrustBadges({
-  onOpenPrivacy,
-  compact,
-}: {
-  onOpenPrivacy: () => void;
-  compact?: boolean;
-}) {
-  const trustButton = (
-    icon: ReactNode,
-    title: string,
-    line: string,
-    key: string
-  ) => (
-    <button
-      key={key}
-      type="button"
-      className="free-tier-trust-badge"
-      onClick={onOpenPrivacy}
-      aria-label={`${title}. ${line} Opens Student privacy.`}
-    >
-      <span className="free-tier-trust-badge-icon" aria-hidden="true">
-        {icon}
-      </span>
-      <span className="free-tier-trust-badge-text">
-        <b>{title}</b>
-        {compact ? null : <span>{line}</span>}
-      </span>
-    </button>
-  );
+function AdminPrivacyTrustStamps({ onOpenPrivacy }: { onOpenPrivacy: () => void }) {
+  const items: {
+    id: string;
+    icon: ReactNode;
+    title: string;
+    line: string;
+  }[] = [
+    {
+      id: 'ferpa',
+      icon: <Shield className="h-3.5 w-3.5" strokeWidth={1.75} />,
+      ...ADMIN_APPROVE_FERPA_TRUST,
+    },
+    {
+      id: 'ndpa',
+      icon: <FileCheck className="h-3.5 w-3.5" strokeWidth={1.75} />,
+      ...ADMIN_APPROVE_NDPA_TRUST,
+    },
+  ];
 
   return (
-    <div
-      className={`free-tier-trust-row${compact ? ' free-tier-trust-row-compact' : ''}`}
-    >
-      {trustButton(
-        <Shield className="h-4 w-4" />,
-        'FERPA compliant',
-        'Student records stay under your school’s control.',
-        'ferpa'
-      )}
-      {trustButton(
-        <FileCheck className="h-4 w-4" />,
-        'NDPA signed',
-        'National Data Privacy Agreement, through the Student Data Privacy Consortium.',
-        'ndpa'
-      )}
-    </div>
+    <ul className="free-tier-approval-trust-stamps" aria-label="Privacy agreements">
+      {items.map((item) => (
+        <li key={item.id}>
+          <button
+            type="button"
+            className="free-tier-approval-trust-stamp"
+            onClick={onOpenPrivacy}
+            aria-label={`${item.title}. ${item.line} Opens Student privacy.`}
+          >
+            <span className="free-tier-approval-trust-stamp-seal" aria-hidden="true">
+              {item.icon}
+            </span>
+            <span className="free-tier-approval-trust-stamp-copy">
+              <span className="free-tier-approval-trust-stamp-title">
+                {item.title}
+              </span>
+              <span className="free-tier-approval-trust-stamp-line">
+                {item.line}
+              </span>
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -111,7 +112,7 @@ export function AdminApprovalQa({ teacherName: _teacherName }: { teacherName: st
       <h2 id={headingId} className="free-tier-approval-faq-heading">
         Questions administrators ask
       </h2>
-      <AdminPrivacyTrustBadges onOpenPrivacy={openPrivacy} />
+      <AdminPrivacyTrustStamps onOpenPrivacy={openPrivacy} />
       <Accordion
         type="single"
         collapsible
@@ -119,7 +120,7 @@ export function AdminApprovalQa({ teacherName: _teacherName }: { teacherName: st
         onValueChange={(value) => setOpen(value ?? '')}
         className="free-tier-approval-faq-accordion"
       >
-        {ADMIN_FAQ.map((item) => (
+        {ADMIN_APPROVE_FAQ.map((item) => (
           <AccordionItem key={item.id} value={item.id}>
             <AccordionTrigger className="free-tier-approval-faq-trigger">
               {item.question}

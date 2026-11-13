@@ -14,7 +14,7 @@ export const FREE_TIER_SUPPORT_EMAIL = 'support@yawp.school';
 export const FREE_TIER_HELLO_EMAIL = 'hello@yawp.school';
 
 export const FREE_TIER_ADMIN_MODEL_TRAINING_LINE =
-  'Student writing is never used to train outside models.';
+  'Student writing is kept private and never used to train models.';
 
 export function teacherAtSchool(teacherName: string, schoolName: string) {
   return `${teacherName} at ${schoolName}`;

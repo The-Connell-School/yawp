@@ -10,7 +10,8 @@ const Table = React.forwardRef<
 >(({ className, containerClassName, ...props }, ref) => (
   <div
     className={cn(
-      'no-scrollbar relative w-full overflow-auto border rounded-lg',
+      // Tables are white everywhere in the app, whatever the page behind them.
+      'no-scrollbar relative w-full overflow-auto border rounded-lg bg-white',
       containerClassName
     )}
   >

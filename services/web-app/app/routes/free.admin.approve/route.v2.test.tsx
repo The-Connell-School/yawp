@@ -20,6 +20,7 @@ mock.module('~/utils/db.server', () => ({
         email: 'jrivera@lincolnhs.org',
       }),
     },
+    freeTierEmailLog: { findFirst: async () => null },
   },
 }));
 mock.module('~/domain/free-tier/signed-link.server', () => ({
@@ -70,6 +71,7 @@ test('valid signed administrator request includes teacher and school', async () 
     ok: true,
     teacherName: 'Jordan Rivera',
     schoolName: 'Lincoln High School',
+    learnMoreRecentlySent: false,
   });
 });
 
@@ -100,7 +102,8 @@ test('approve page uses the designed heading and forward link', () => {
   expect(html).toContain('Deny request');
   expect(html).toContain('Talk to us first');
   expect(html).toContain('Questions administrators ask');
-  expect(html).toContain('FERPA compliant');
+  expect(html).toContain('SDPC NDPA');
+  expect(html).toContain('will sign');
   expect(html).toContain('If approved');
   expect(html).toContain('Forward this request');
   expect(html).toContain(

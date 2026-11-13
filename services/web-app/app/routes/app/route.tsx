@@ -179,10 +179,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (freeTierApplication) {
     const { retryFreeClassroomProvisioningForUser } =
       await import('~/domain/free-tier/provision-free-classroom.server');
-    const { ensureLockedPreviewClassroomForUser } =
+    const { ensureLockedPreviewClassroomForUserBestEffort } =
       await import('~/domain/free-tier/locked-preview.server');
-    await ensureLockedPreviewClassroomForUser(userId);
-    await retryFreeClassroomProvisioningForUser(userId);
+    await ensureLockedPreviewClassroomForUserBestEffort(userId);
+    try {
+      await retryFreeClassroomProvisioningForUser(userId);
+    } catch (error) {
+      const { buildSafeErrorForLog } = await import('~/utils/server-error-request-context.server');
+      console.error('free_tier_classroom_provision_retry_failed', {
+        userId,
+        error: buildSafeErrorForLog(error),
+      });
+    }
     await enforceFreeTierTeacherGate({
       userId,
       pathname,

@@ -43,9 +43,10 @@ export const CLASS_STARTER_ASSIGNMENT_TYPE_DATA = {
 
 /**
  * The card artwork, drawn to sit with the Daily Pages image: same 940x788
- * frame, same torn paper edge, same scratchy ink and Didone wordmark. It lives
- * in the repo rather than in a fixture bundle because it is authored art, not
- * a snapshot of production.
+ * frame, same torn paper edge, same scratchy ink. The cat fills the card on
+ * its own; the tile already prints the type's title, so there is no wordmark.
+ * It lives in the repo rather than in a fixture bundle because it is authored
+ * art, not a snapshot of production.
  */
 export const CLASS_STARTER_IMAGE_PATH = new URL(
   './assets/class-starter.jpg',
@@ -60,6 +61,8 @@ export const CLASS_STARTER_IMAGE_PATH = new URL(
 export const CLASS_STARTER_RETIRED_ARTWORK_MD5S: string[] = [
   // The rooster mid-crow, the first card (October 2026).
   '429eac2e3a0b56f3140f6a8da4382101',
+  // The cat above the Class Starter wordmark (October 2026).
+  'f902670ff70ebcee17a0a733c5ad0248',
 ];
 
 export function readClassStarterImage() {
@@ -67,7 +70,7 @@ export function readClassStarterImage() {
     blob: readFileSync(CLASS_STARTER_IMAGE_PATH),
     contentType: 'image/jpeg',
     altText:
-      'A scratchy ink drawing of a smiling cat holding a mug of coffee above the words Class Starter, on torn white paper.',
+      'A scratchy ink drawing of a smiling cat holding a mug of coffee, on torn white paper.',
   };
 }
 

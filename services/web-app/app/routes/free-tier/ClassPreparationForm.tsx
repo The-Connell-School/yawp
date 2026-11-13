@@ -71,7 +71,7 @@ export function ClassPreparationForm({
                 aria-describedby={
                   errors?.grade ? 'class-grade-error' : undefined
                 }
-                className="h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                className="h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset required:invalid:text-muted-foreground/50"
               >
                 <option value="">Choose a grade</option>
                 {CLASS_GRADES.map((value) => (

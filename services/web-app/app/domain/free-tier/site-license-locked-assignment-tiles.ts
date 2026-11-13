@@ -1,4 +1,3 @@
-import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
 import {
   FREE_CLASSROOM_ASSIGNMENT_KINDS,
@@ -82,11 +81,6 @@ const LOCKED_ASSIGNMENT_SPECS: LockedSpec[] = [
       isPlatformOwned(type) && isThesisDrivenEssayTitle(type.title),
   },
   {
-    key: 'ap_history_essay',
-    matches: (type) => type.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY,
-    allowOrgOwned: true,
-  },
-  {
     key: 'daily_pages',
     matches: (type) => isPlatformOwned(type) && type.kind === 'daily_pages',
   },
@@ -145,14 +139,9 @@ export function siteLicenseLockedAssignmentTypesWhere() {
 
   return {
     archivedAt: null,
-    OR: [
-      { systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY },
-      {
-        ownerOrgId: null,
-        ownerMembershipId: null,
-        OR: platformIdentityOr,
-      },
-    ],
+    ownerOrgId: null,
+    ownerMembershipId: null,
+    OR: platformIdentityOr,
   };
 }
 

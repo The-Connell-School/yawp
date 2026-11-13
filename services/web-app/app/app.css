@@ -86,18 +86,18 @@
 }
 
 .auth-page-logo img {
-  width: 13rem;
+  width: 11.25rem;
 }
 
 .auth-page-shell--chrome .auth-page-logo img,
 .auth-page-shell--chrome .card-page-logo-link img {
-  width: 10rem;
+  width: 8.75rem;
 }
 
 @media (min-width: 640px) {
   .auth-page-shell--chrome .auth-page-logo img,
   .auth-page-shell--chrome .card-page-logo-link img {
-    width: 13rem;
+    width: 11.25rem;
   }
 }
 
@@ -1644,8 +1644,8 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
 }
 .free-tier-page .auth-page-logo img,
 .free-tier-page .card-page-logo-link img {
-  width: 208px;
-  height: 208px;
+  width: 176px;
+  height: auto;
   object-fit: contain;
 }
 .free-tier-page .auth-page-content {
@@ -1698,6 +1698,14 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
 .free-tier-page .free-tier-form-card:has(.free-tier-state-icon) > div:last-child { margin-top: 8px; }
 
 .free-tier-page input:not([type="hidden"]) { font-size: 16px; }
+.free-tier-page input:not([type="hidden"])::placeholder,
+.free-tier-page textarea::placeholder {
+  color: hsl(var(--muted-foreground) / 0.5);
+  opacity: 1;
+}
+.free-tier-page select:required:invalid {
+  color: hsl(var(--muted-foreground) / 0.5);
+}
 
 .free-tier-page .free-tier-footer button {
   height: auto;
@@ -1705,6 +1713,67 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
   font-size: 14px;
   line-height: 21px;
   text-decoration: underline;
+}
+
+/* /free/admin/approve — cream page, white split card, corner logo. */
+.free-tier-admin-approve-shell .free-tier-page .auth-page-shell {
+  position: relative;
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 20px 32px;
+}
+.free-tier-admin-approve-shell .auth-page-logo {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 20;
+  display: inline-flex;
+  width: auto;
+  max-width: none;
+  margin: 0;
+  justify-content: flex-start;
+}
+.free-tier-admin-approve-shell .auth-page-logo img,
+.free-tier-admin-approve-shell .card-page-logo-link img {
+  width: 4.5rem;
+  max-width: 4.5rem;
+  margin: 0;
+}
+.free-tier-admin-approve-shell .card-page-logo-link {
+  display: inline-flex;
+}
+.free-tier-admin-approve-shell .auth-page-frame {
+  width: 100%;
+  max-width: min(100%, 960px);
+  min-height: 0;
+  margin-inline: auto;
+  align-items: center;
+  gap: 16px;
+}
+.free-tier-admin-approve-shell .auth-page-content {
+  width: 100%;
+  margin-top: 0;
+  align-items: center;
+}
+.free-tier-admin-approve-shell .free-tier-approval-split .auth-page-content {
+  width: 100%;
+  max-width: min(100%, 960px);
+  margin-inline: auto;
+  align-items: center;
+}
+.free-tier-admin-approve-shell .free-tier-approval-split-grid {
+  width: 100%;
+  max-width: 960px;
+  margin-inline: auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.free-tier-admin-approve-shell .free-tier-legal {
+  width: 100%;
+  max-width: min(100%, 960px);
+  margin-inline: auto;
 }
 
 /* Approve page: decision column + FAQ column (split view). */
@@ -1772,6 +1841,67 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
     padding: 20px;
     border-top: 1px solid hsl(var(--border));
   }
+}
+
+/* Admin approve: paired white tiles, slim gutter (not one shared outline). */
+.free-tier-admin-approve-shell .free-tier-approval-split-grid {
+  gap: 8px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.free-tier-admin-approve-shell .free-tier-approval-split-left,
+.free-tier-admin-approve-shell .free-tier-approval-split-right {
+  background: #fff;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+.free-tier-admin-approve-shell .free-tier-approval-split-left {
+  border-right: 1px solid hsl(var(--border));
+  border-bottom: none;
+}
+.free-tier-admin-approve-shell .free-tier-approval-split-right {
+  border-top: none;
+}
+@media (max-width: 767px) {
+  /* Phones: logo sits above the tiles instead of over them, and the decision
+     tile stacks above the FAQ tile at full width. */
+  .free-tier-admin-approve-shell .free-tier-page .auth-page-shell {
+    justify-content: flex-start;
+    padding: 16px 16px 24px;
+  }
+  .free-tier-admin-approve-shell .auth-page-logo {
+    position: static;
+    align-self: flex-start;
+    margin-bottom: 12px;
+  }
+  .free-tier-admin-approve-shell .auth-page-logo img,
+  .free-tier-admin-approve-shell .card-page-logo-link img {
+    width: 3.25rem;
+    max-width: 3.25rem;
+  }
+  .free-tier-admin-approve-shell .free-tier-approval-split .auth-page-content {
+    max-width: 100%;
+  }
+  .free-tier-admin-approve-shell .free-tier-approval-split-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .free-tier-admin-approve-shell .free-tier-approval-split-left,
+  .free-tier-admin-approve-shell .free-tier-approval-split-right {
+    border: 1px solid hsl(var(--border));
+    padding: 24px 20px;
+  }
+  .free-tier-admin-approve-shell .free-tier-approval-qa {
+    max-width: none;
+  }
+}
+.free-tier-approval-faq-trigger {
+  text-align: left;
+  gap: 12px;
 }
 
 /* Approve page: card, forward link, and Q&A in one 320px column (legacy stack). */
@@ -1993,71 +2123,66 @@ ul.free-tier-qa-answer:not(.free-tier-qa-privacy-list) {
     line-height: 28px;
   }
 }
-.free-tier-trust-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin: 0 0 18px;
-}
-.free-tier-trust-row-compact {
+/* Admin approve FAQ: subtle agreement stamps (not primary-colored cards). */
+.free-tier-approval-trust-stamps {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
 }
-.free-tier-trust-badge {
+.free-tier-approval-trust-stamp {
   all: unset;
   box-sizing: border-box;
-  cursor: pointer;
   display: flex;
-  gap: 12px;
+  width: 100%;
   align-items: flex-start;
-  padding: 14px 16px;
-  border: 1.5px solid hsl(var(--primary));
-  border-radius: 8px;
-  background: hsl(var(--popover));
+  gap: 10px;
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 4px 2px;
   color: hsl(var(--foreground));
 }
-.free-tier-trust-badge:hover {
-  background: hsl(from hsl(var(--primary)) h s l / 0.06);
+.free-tier-approval-trust-stamp:hover .free-tier-approval-trust-stamp-seal {
+  border-color: hsl(var(--muted-foreground) / 0.45);
+  background: hsl(var(--muted) / 0.55);
 }
-.free-tier-trust-badge:focus-visible {
+.free-tier-approval-trust-stamp:focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
 }
-.free-tier-trust-badge-icon {
+.free-tier-approval-trust-stamp-seal {
   flex: none;
-  width: 36px;
-  height: 36px;
-  border-radius: 9999px;
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.free-tier-trust-row-compact .free-tier-trust-badge {
-  padding: 10px 12px;
-  align-items: center;
-  gap: 10px;
-}
-.free-tier-trust-row-compact .free-tier-trust-badge-icon {
   width: 30px;
   height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px dashed hsl(var(--border));
+  background: hsl(var(--muted) / 0.4);
+  color: hsl(var(--muted-foreground));
+  box-shadow: inset 0 0 0 1px hsl(var(--background));
 }
-.free-tier-trust-badge-text {
+.free-tier-approval-trust-stamp-copy {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 2px;
+  padding-top: 2px;
+  text-align: left;
+}
+.free-tier-approval-trust-stamp-title {
   font-size: 13px;
   line-height: 18px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
 }
-.free-tier-trust-badge-text b {
-  font-size: 16px;
-  line-height: 22px;
-  font-weight: 700;
-  color: var(--heading);
-}
-.free-tier-trust-row-compact .free-tier-trust-badge-text b {
-  font-size: 14px;
+.free-tier-approval-trust-stamp-line {
+  font-size: 13px;
   line-height: 18px;
+  color: hsl(var(--muted-foreground));
 }
 .free-tier-approval-faq-accordion {
   width: 100%;
@@ -2066,7 +2191,7 @@ ul.free-tier-qa-answer:not(.free-tier-qa-privacy-list) {
   padding-top: 12px;
   padding-bottom: 12px;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 700;
 }
 .free-tier-approval-faq-answer {
   margin: 0;
@@ -2090,17 +2215,7 @@ ul.free-tier-qa-answer:not(.free-tier-qa-privacy-list) {
 }
 .free-tier-setup-timeline-card {
   width: 100%;
-  border-radius: 12px;
-  background: #fff;
-  padding: 12px 20px;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid hsl(var(--border));
   box-sizing: border-box;
-}
-@media (max-width: 639px) {
-  .free-tier-setup-timeline-card {
-    padding: 10px 14px;
-  }
 }
 .free-tier-setup-timeline {
   list-style: none;
@@ -2158,6 +2273,14 @@ ul.free-tier-qa-answer:not(.free-tier-qa-privacy-list) {
   align-items: center;
   width: 100%;
   text-align: left;
+}
+
+.free-tier-pending-forward-timeline {
+  align-items: flex-start;
+}
+
+.free-tier-getting-started-step-accessory .free-tier-pending-forward {
+  align-items: flex-start;
 }
 .free-tier-pending-forward-trigger {
   display: inline-flex;

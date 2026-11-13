@@ -1,3 +1,4 @@
+import { SortableTableHeadButton } from '~/components/ui/sortable-table-head-button';
 import { ClassCodeInput } from '~/components/class-code-input';
 import { classCodeUniquenessEnabled, resolveClassCode } from '~/utils/class-code-write.server';
 import {
@@ -22,9 +23,6 @@ import {
 import { Badge } from '~/components/ui/badge';
 import { Checkbox } from '~/components/ui/checkbox';
 import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
   Trash2,
   Plus,
   Pencil,
@@ -903,7 +901,7 @@ export default function OrganizationClassesRoute() {
               <div
                 className={cn(isLoading ? 'opacity-50 transition-opacity' : '')}
               >
-                <Table className="rounded-lg bg-muted">
+                <Table className="rounded-lg">
                   <TableHeader className="rounded-t-lg">
                     <TableRow className="bg-muted/50 rounded-t-lg">
                       <TableHead className="w-[50px] pl-4 rounded-tl-lg">
@@ -922,38 +920,25 @@ export default function OrganizationClassesRoute() {
                             key={key}
                             className={key === 'actions' ? 'pr-4' : ''}
                           >
-                            <Button
-                              variant="unstyled"
-                              className={cn(
-                                'h-8 p-0',
-                                sortDisabled ? 'pointer-events-none' : ''
-                              )}
+                            <SortableTableHeadButton
+                              label={label}
+                              disabled={sortDisabled}
+                              arrow={
+                                table.sort === value
+                                  ? table.direction === 'desc'
+                                    ? 'up'
+                                    : 'down'
+                                  : null
+                              }
                               onClick={() =>
-                                !sortDisabled
+                                value
                                   ? handleSort(
                                       value,
                                       table.direction === 'asc' ? 'desc' : 'asc'
                                     )
                                   : undefined
                               }
-                            >
-                              {label}
-                              {sortDisabled ? null : table.sort === value ? (
-                                table.direction === 'desc' ? (
-                                  <ArrowUp
-                                    className="ml-2 h-4 w-4 text-primary"
-                                    strokeWidth={3}
-                                  />
-                                ) : (
-                                  <ArrowDown
-                                    className="ml-2 h-4 w-4 text-primary"
-                                    strokeWidth={3}
-                                  />
-                                )
-                              ) : (
-                                <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
-                              )}
-                            </Button>
+                            />
                           </TableHead>
                           );
                         }

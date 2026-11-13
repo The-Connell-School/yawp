@@ -3,7 +3,9 @@ import { lockApprovalApplication } from './approval-lock.server';
 import {
   claimSignedLinkInTransaction,
   invalidateOpenAdminApprovalLinks,
+  mintSignedLink,
   peekSignedLink,
+  verifySignedLinkIgnoringUse,
 } from './signed-link.server';
 import { fetchFreeTierApplicationTerminalGate } from './admin-link-gate.server';
 import {
@@ -12,7 +14,6 @@ import {
 } from './admin-link-known-request.server';
 import { hashRequestMeta } from './approval-flow.server';
 import {
-  flushTeacherDenyEmail,
   isApprovalV2Enabled,
   queueTeacherDenyEmailInTransaction,
 } from './approval-v2.server';
@@ -238,25 +239,8 @@ export async function denySchoolAdminApproval(args: {
     result = fail('unavailable');
   }
 
-  if (result.ok) {
-    const linkId = linkIdFromSignedToken(args.token);
-    const approvalId =
-      ('notify' in result && result.notify?.approvalId) ||
-      (earlyAppId
-        ? (
-            await prisma.freeTierAdminApproval.findFirst({
-              where: {
-                applicationId: earlyAppId,
-                status: 'DENIED',
-                ...(linkId ? { signedLinkId: linkId } : {}),
-              },
-              orderBy: { decidedAt: 'desc' },
-              select: { id: true },
-            })
-          )?.id
-        : null);
-    if (approvalId) await flushTeacherDenyEmail(approvalId);
-  }
+  // The teacher's denial email is queued for later (TEACHER_DENY_EMAIL_DELAY_MS)
+  // and goes out from the approval jobs runner, so a quick reopen cancels it.
   return result;
 }
 
@@ -301,4 +285,94 @@ export async function loadTeacherDeniedSurface(args: { applicationId: string }) 
       ADMIN_REDIRECT_CHAIN_CAP
     ),
   };
+}
+
+export type ReopenDeniedApprovalResult =
+  | { ok: true; approveToken: string }
+  | {
+      ok: false;
+      reason:
+        | 'invalid'
+        | 'closed'
+        | 'not_allowed'
+        | 'not_denied'
+        | 'superseded'
+        | 'unavailable';
+    };
+
+/**
+ * Undo a school admin's deny from the same link they denied with, and hand
+ * back a fresh approve link so they land on the approval screen again.
+ *
+ * The approval goes back to PENDING, its reminders resume, and the teacher's
+ * denial email is cancelled if it has not gone out yet (it is held for
+ * TEACHER_DENY_EMAIL_DELAY_MS). The DENIED decision row stays as history.
+ * Refused when the request has since closed, or when the teacher has already
+ * asked someone else (a newer pending approval).
+ */
+export async function reopenDeniedSchoolAdminApproval(args: {
+  token: string;
+}): Promise<ReopenDeniedApprovalResult> {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const verified = await verifySignedLinkIgnoringUse(tx, {
+        token: args.token,
+        expectedPurpose: 'ADMIN_APPROVE',
+      });
+      if (!verified.ok) return { ok: false as const, reason: 'invalid' as const };
+      await lockApprovalApplication(tx, verified.applicationId);
+
+      const app = await tx.freeTierApplication.findUnique({
+        where: { id: verified.applicationId },
+        select: { id: true, status: true, userId: true, organizationId: true },
+      });
+      if (!app) return { ok: false as const, reason: 'invalid' as const };
+      if (app.status !== 'SENT' && app.status !== 'MANUAL_REVIEW') {
+        return { ok: false as const, reason: 'closed' as const };
+      }
+      if (!(await isApprovalV2Enabled(app, tx))) {
+        return { ok: false as const, reason: 'not_allowed' as const };
+      }
+
+      const denied = await tx.freeTierAdminApproval.findFirst({
+        where: {
+          applicationId: app.id,
+          signedLinkId: verified.linkId,
+          status: 'DENIED',
+        },
+        select: { id: true },
+      });
+      if (!denied) return { ok: false as const, reason: 'not_denied' as const };
+
+      const newer = await tx.freeTierAdminApproval.findFirst({
+        where: { applicationId: app.id, status: 'PENDING' },
+        select: { id: true },
+      });
+      if (newer) return { ok: false as const, reason: 'superseded' as const };
+
+      const fresh = await mintSignedLink({
+        applicationId: app.id,
+        purpose: 'ADMIN_APPROVE',
+        tx,
+      });
+      await tx.freeTierAdminApproval.update({
+        where: { id: denied.id },
+        data: {
+          status: 'PENDING',
+          decidedAt: null,
+          denyReason: null,
+          autoRemindersStopped: false,
+          stopReason: null,
+          signedLinkId: fresh.linkId,
+        },
+      });
+      await tx.freeTierApprovalDelivery.updateMany({
+        where: { approvalId: denied.id, kind: 'teacher_deny', state: 'QUEUED' },
+        data: { state: 'CANCELLED', error: 'reopened' },
+      });
+      return { ok: true as const, approveToken: fresh.token };
+    });
+  } catch {
+    return { ok: false, reason: 'unavailable' };
+  }
 }

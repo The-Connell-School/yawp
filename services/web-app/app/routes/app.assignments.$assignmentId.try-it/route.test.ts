@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const requireUserId = mock();
 const requireMembership = mock();
 const resolveTeacherTryItClassAssignment = mock();
-const createOrReuseTeacherAssignmentPreviewDocument = mock();
+const createTeacherAssignmentTestDocument = mock();
 const redirectWithToast = mock();
 
 class DocumentCreationError extends Error {}
@@ -20,7 +20,7 @@ mock.module('~/domain/documents.server', () => ({
   documentCreationErrorTextForClient: (_e: Error, fallback: string) => fallback,
 }));
 mock.module('~/domain/assignments/teacher-assignment-preview.server', () => ({
-  createOrReuseTeacherAssignmentPreviewDocument,
+  createTeacherAssignmentTestDocument,
 }));
 mock.module('~/utils/toast.server', () => ({ redirectWithToast }));
 
@@ -46,19 +46,19 @@ describe('assignment try-it loader', () => {
       assignmentId: 'a-1',
       assignment: { assignmentTypeId: 'at-1', collaborationEnabled: false },
     });
-    createOrReuseTeacherAssignmentPreviewDocument
+    createTeacherAssignmentTestDocument
       .mockReset()
       .mockResolvedValue({ documentId: 'doc-try' });
     redirectWithToast.mockReset();
   });
 
-  test('creates or reuses a teacher-owned preview document and redirects to the editor', async () => {
+  test('creates a new teacher test document and redirects to the editor', async () => {
     const response = await loader({
       request: baseRequest('?returnTo=%2Fapp%2Fassignments'),
       params: { assignmentId: 'a-1' },
     } as any);
 
-    expect(createOrReuseTeacherAssignmentPreviewDocument).toHaveBeenCalledWith({
+    expect(createTeacherAssignmentTestDocument).toHaveBeenCalledWith({
       membershipId: 'teacher-1',
       assignmentTypeId: 'at-1',
       assignmentId: 'a-1',
@@ -79,6 +79,6 @@ describe('assignment try-it loader', () => {
     } as any);
 
     expect(redirectWithToast).toHaveBeenCalled();
-    expect(createOrReuseTeacherAssignmentPreviewDocument).not.toHaveBeenCalled();
+    expect(createTeacherAssignmentTestDocument).not.toHaveBeenCalled();
   });
 });

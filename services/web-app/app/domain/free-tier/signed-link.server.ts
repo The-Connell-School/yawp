@@ -215,6 +215,38 @@ export async function claimSignedLinkInTransaction(
   return { ok: false, reason: 'invalid' };
 }
 
+/**
+ * Prove a token is a genuine, unexpired link of this purpose for its
+ * application, whether or not it has been used. Reopening a denied request
+ * relies on this: the deny consumed the admin's link, but the same person
+ * still holds it and should be able to take the denial back.
+ */
+export async function verifySignedLinkIgnoringUse(
+  tx: Prisma.TransactionClient,
+  args: { token: string; expectedPurpose: FreeTierSignedLinkPurpose }
+): Promise<{ ok: true; applicationId: string; linkId: string } | { ok: false }> {
+  const parsed = parseSignedLinkToken(args.token, args.expectedPurpose);
+  if (!parsed.ok) return { ok: false };
+  const row = await tx.freeTierSignedLink.findUnique({
+    where: { id: parsed.payload.linkId },
+    select: { applicationId: true, purpose: true, tokenHash: true, expiresAt: true },
+  });
+  if (
+    !row ||
+    row.applicationId !== parsed.payload.applicationId ||
+    row.purpose !== args.expectedPurpose ||
+    row.tokenHash !== parsed.tokenHash ||
+    row.expiresAt.getTime() < Date.now()
+  ) {
+    return { ok: false };
+  }
+  return {
+    ok: true,
+    applicationId: parsed.payload.applicationId,
+    linkId: parsed.payload.linkId,
+  };
+}
+
 export async function consumeSignedLink(args: {
   token: string;
   expectedPurpose: FreeTierSignedLinkPurpose;

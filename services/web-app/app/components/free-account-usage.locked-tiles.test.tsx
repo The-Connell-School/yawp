@@ -225,7 +225,7 @@ test('FreeAssignmentTiles locked pending hides create control and uses text-only
   expect(html).not.toMatch(/\d+ of \d+ left/);
 });
 
-test('FreeAccountRail is hidden while teaching is locked', async () => {
+test('FreeAccountRail is empty while teaching is locked', async () => {
   mock.module('~/components/free-tier/teaching-access-context', () => ({
     useTeachingAccess: () => ({
       locked: true,

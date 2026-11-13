@@ -3,6 +3,7 @@ import { Form } from 'react-router';
 import {
   forwardInlineAlert,
   forwardRateLimitedBody,
+  forwardValidationSummary,
   unableToForwardBody,
 } from '~/domain/free-tier/admin-approval-copy';
 import {
@@ -11,13 +12,21 @@ import {
   FreeTierTextInput,
 } from './FreeTierAuthCard';
 
+const TITLE_PLACEHOLDER =
+  'Principal, Assistant Principal, Director of Curriculum and Instruction';
+
 type FieldErrors = {
+  adminRole?: string;
   adminName?: string;
   adminEmail?: string;
 };
 
 function ForwardValidationSummary({ errors }: { errors: FieldErrors }) {
-  const messages = [errors.adminName, errors.adminEmail].filter(Boolean) as string[];
+  const messages = [
+    errors.adminRole,
+    errors.adminName,
+    errors.adminEmail,
+  ].filter(Boolean) as string[];
   if (!messages.length) return null;
   return (
     <div
@@ -25,7 +34,9 @@ function ForwardValidationSummary({ errors }: { errors: FieldErrors }) {
       tabIndex={-1}
       className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
     >
-      <p className="font-medium">Enter their name and a valid email address.</p>
+      <p className="font-medium">
+        {forwardValidationSummary(messages.length)}
+      </p>
       <ul className="mt-1 list-disc pl-5">
         {messages.map((message) => (
           <li key={message}>{message}</li>
@@ -47,18 +58,22 @@ export function ApprovalForwardForm({
   action?: string;
 }) {
   const [clientErrors, setClientErrors] = useState<FieldErrors>({});
+  const [adminRole, setAdminRole] = useState('');
   const [adminName, setAdminName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
   const summaryRef = useRef<HTMLDivElement>(null);
+  const roleRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
+  const roleErrorId = useId();
   const nameErrorId = useId();
   const emailErrorId = useId();
 
   useEffect(() => {
     if (!Object.keys(clientErrors).length) return;
     summaryRef.current?.focus();
-    if (clientErrors.adminName) nameRef.current?.focus();
+    if (clientErrors.adminRole) roleRef.current?.focus();
+    else if (clientErrors.adminName) nameRef.current?.focus();
     else if (clientErrors.adminEmail) emailRef.current?.focus();
   }, [clientErrors]);
 
@@ -70,6 +85,7 @@ export function ApprovalForwardForm({
       noValidate
       onSubmit={(event) => {
         const next: FieldErrors = {};
+        if (!adminRole.trim()) next.adminRole = 'Enter their title.';
         if (!adminName.trim()) next.adminName = 'Enter their name.';
         if (!adminEmail.trim()) next.adminEmail = 'Enter a valid email address.';
         else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail.trim())) {
@@ -91,6 +107,32 @@ export function ApprovalForwardForm({
       <div ref={summaryRef}>
         <ForwardValidationSummary errors={clientErrors} />
       </div>
+      <FreeTierFieldLabel label="Title" htmlFor="forward-adminRole">
+        <FreeTierTextInput
+          ref={roleRef}
+          id="forward-adminRole"
+          name="adminRole"
+          placeholder={TITLE_PLACEHOLDER}
+          value={adminRole}
+          onChange={(event) => {
+            setAdminRole(event.target.value);
+            if (clientErrors.adminRole) {
+              setClientErrors((current) => ({
+                ...current,
+                adminRole: undefined,
+              }));
+            }
+          }}
+          maxLength={120}
+          aria-invalid={clientErrors.adminRole ? true : undefined}
+          aria-describedby={clientErrors.adminRole ? roleErrorId : undefined}
+        />
+        {clientErrors.adminRole ? (
+          <span id={roleErrorId} className="text-xs text-destructive">
+            {clientErrors.adminRole}
+          </span>
+        ) : null}
+      </FreeTierFieldLabel>
       <FreeTierFieldLabel
         label="Administrator name"
         htmlFor="forward-adminName"
@@ -166,7 +208,7 @@ export function approvalForwardError(
   const schoolName = options.schoolName ?? 'your school';
   switch (reason) {
     case 'validation':
-      return 'Enter their name and a valid email address.';
+      return 'Enter their title, name, and a valid email address.';
     case 'same_administrator':
       return forwardInlineAlert({
         reason: 'same_administrator',

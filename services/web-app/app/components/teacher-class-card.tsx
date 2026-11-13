@@ -77,10 +77,13 @@ export function TeacherClassCard({
   highlightFeaturedAssignment = false,
   featuredAssignmentRowRef,
   celebrationElevated = false,
+  titleOnly = false,
 }: {
   klass: TeacherClassCardData;
   showSchoolYear?: boolean;
   showAssignmentsTab?: boolean;
+  /** Dashboard home: class name only (no school eyebrow or grade/period). */
+  titleOnly?: boolean;
   featuredAssignment?: TeacherClassCardFeaturedAssignment | null;
   highlightFeaturedAssignment?: boolean;
   featuredAssignmentRowRef?: RefObject<HTMLAnchorElement | null>;
@@ -148,7 +151,7 @@ export function TeacherClassCard({
 
         <div className="flex flex-1 flex-col gap-3 p-4">
           <div>
-            {klass.school?.name || showSchoolYear ? (
+            {!titleOnly && (klass.school?.name || showSchoolYear) ? (
               <p className="flex items-center gap-1.5 font-mono text-[0.625rem] font-medium uppercase tracking-wide text-muted-foreground">
                 {klass.school?.name ? <span>{klass.school.name}</span> : null}
                 {showSchoolYear && klass.schoolYear ? (
@@ -159,10 +162,15 @@ export function TeacherClassCard({
                 ) : null}
               </p>
             ) : null}
-            <h4 className="mt-1 text-balance text-base font-semibold tracking-tight text-foreground">
+            <h4
+              className={cn(
+                'text-balance text-base font-semibold tracking-tight text-foreground',
+                !titleOnly && (klass.school?.name || showSchoolYear) && 'mt-1'
+              )}
+            >
               {title}
             </h4>
-            {subtitle ? (
+            {!titleOnly && subtitle ? (
               <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
             ) : null}
           </div>

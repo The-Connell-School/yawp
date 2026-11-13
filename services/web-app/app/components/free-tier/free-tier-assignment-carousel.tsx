@@ -147,11 +147,11 @@ export function FreeTierAssignmentTileImageBadge({
 
 export function freeTierAssignmentTileShellClassName(extra?: string) {
   return cn(
-    'flex w-[168px] shrink-0 snap-start flex-col overflow-hidden rounded-xl text-left shadow-sm ring-1 ring-black/[0.06]',
+    'flex size-[168px] shrink-0 snap-start flex-col overflow-hidden rounded-xl text-left shadow-sm ring-1 ring-black/[0.06]',
     extra
   );
 }
 
 export function freeTierAssignmentTileImageWrapClassName(extra?: string) {
-  return cn('relative block size-[168px] shrink-0', extra);
+  return cn('relative block min-h-0 w-full flex-1 overflow-hidden', extra);
 }

@@ -27,15 +27,21 @@ import {
 
 export function WritingStepGuide({
   copy,
+  backTo,
+  backLabel,
   pagePath,
+  teachingLocked,
   lesson,
 }: {
   copy: WritingStepCopy;
+  backTo: string;
+  backLabel: string;
   pagePath: string;
+  teachingLocked: boolean;
   lesson: LessonMaterials | null;
 }) {
   return (
-    <GuidePage backTo={pagePath} backLabel={`Back to ${copy.title}`}>
+    <GuidePage backTo={backTo} backLabel={backLabel}>
       <GuideHero
         title={`Teach ${copy.title}`}
         highlight={copy.guideHighlight}
@@ -86,11 +92,13 @@ export function WritingStepGuide({
 
       <WillWont will={WRITING_STEP_WILL} wont={WRITING_STEP_WONT} />
 
-      <GuideFooter
-        note={`${copy.title} is one step of the thesis-driven essay, assigned on its own.`}
-        startTo={pagePath}
-        startLabel="Create an assignment"
-      />
+      {!teachingLocked ? (
+        <GuideFooter
+          note={`${copy.title} is one step of the thesis-driven essay, assigned on its own.`}
+          startTo={pagePath}
+          startLabel="Create an assignment"
+        />
+      ) : null}
     </GuidePage>
   );
 }

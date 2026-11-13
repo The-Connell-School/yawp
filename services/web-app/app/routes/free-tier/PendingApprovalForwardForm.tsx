@@ -11,7 +11,11 @@ import {
   FreeTierTextInput,
 } from './FreeTierAuthCard';
 
+const TITLE_PLACEHOLDER =
+  'Principal, Assistant Principal, Director of Curriculum and Instruction';
+
 type FieldErrors = {
+  adminRole?: string;
   adminName?: string;
   adminEmail?: string;
 };
@@ -21,7 +25,11 @@ function ForwardValidationSummary({
 }: {
   errors: FieldErrors;
 }) {
-  const messages = [errors.adminName, errors.adminEmail].filter(Boolean) as string[];
+  const messages = [
+    errors.adminRole,
+    errors.adminName,
+    errors.adminEmail,
+  ].filter(Boolean) as string[];
   if (!messages.length) return null;
   const intro = forwardValidationSummary(messages.length);
   return (
@@ -74,30 +82,35 @@ export function PendingApprovalForwardForm({
   formAction?: string;
 }) {
   const [clientErrors, setClientErrors] = useState<FieldErrors>({});
+  const [adminRole, setAdminRole] = useState('');
   const [adminName, setAdminName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
   const summaryRef = useRef<HTMLDivElement>(null);
+  const roleRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
+  const roleErrorId = useId();
   const nameErrorId = useId();
   const emailErrorId = useId();
   const showRetry = forwardRetry;
 
   const formComplete =
+    adminRole.trim().length > 0 &&
     adminName.trim().length > 0 &&
     adminEmail.trim().length > 0 &&
     EMAIL_PATTERN.test(adminEmail.trim());
 
   useEffect(() => {
     if (focusNameOnMount && !forwarding) {
-      nameRef.current?.focus();
+      roleRef.current?.focus();
     }
   }, [focusNameOnMount, forwarding]);
 
   useEffect(() => {
     if (!Object.keys(clientErrors).length) return;
     summaryRef.current?.focus();
-    if (clientErrors.adminName) nameRef.current?.focus();
+    if (clientErrors.adminRole) roleRef.current?.focus();
+    else if (clientErrors.adminName) nameRef.current?.focus();
     else if (clientErrors.adminEmail) emailRef.current?.focus();
   }, [clientErrors]);
 
@@ -115,6 +128,7 @@ export function PendingApprovalForwardForm({
       noValidate
       onSubmit={(event) => {
         const next: FieldErrors = {};
+        if (!adminRole.trim()) next.adminRole = 'Enter their title.';
         if (!adminName.trim()) next.adminName = 'Enter their name.';
         const trimmedEmail = adminEmail.trim();
         if (!trimmedEmail) next.adminEmail = BAD_EMAIL_HINT;
@@ -152,6 +166,33 @@ export function PendingApprovalForwardForm({
         ) : null}
         <ForwardValidationSummary errors={clientErrors} />
       </div>
+      <FreeTierFieldLabel label="Title" htmlFor="pending-forward-adminRole">
+        <FreeTierTextInput
+          ref={roleRef}
+          id="pending-forward-adminRole"
+          name="adminRole"
+          placeholder={TITLE_PLACEHOLDER}
+          value={adminRole}
+          readOnly={forwarding}
+          onChange={(event) => {
+            setAdminRole(event.target.value);
+            if (clientErrors.adminRole) {
+              setClientErrors((current) => ({
+                ...current,
+                adminRole: undefined,
+              }));
+            }
+          }}
+          maxLength={120}
+          aria-invalid={clientErrors.adminRole ? true : undefined}
+          aria-describedby={clientErrors.adminRole ? roleErrorId : undefined}
+        />
+        {clientErrors.adminRole ? (
+          <span id={roleErrorId} className="text-xs text-destructive">
+            {clientErrors.adminRole}
+          </span>
+        ) : null}
+      </FreeTierFieldLabel>
       <FreeTierFieldLabel
         label="Administrator name"
         htmlFor="pending-forward-adminName"

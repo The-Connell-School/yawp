@@ -95,7 +95,10 @@ afterAll(() => {
   );
 });
 
-import { buildClassStudentWorkOnAssignmentBranches } from '~/utils/class-assignment-scope';
+import {
+  buildClassStudentWorkOnAssignmentBranches,
+  buildClassTeacherAssignmentTestDocumentBranch,
+} from '~/utils/class-assignment-scope';
 
 describe('class detail loader document visibility', () => {
   beforeEach(() => {
@@ -177,6 +180,7 @@ describe('class detail loader document visibility', () => {
     const expectedScope = {
       OR: [
         ...buildClassStudentWorkOnAssignmentBranches('class-1'),
+        buildClassTeacherAssignmentTestDocumentBranch('class-1'),
         { id: { in: ['legacy-doc-1', 'legacy-doc-2'] } },
       ],
     };
@@ -200,7 +204,7 @@ describe('class detail loader document visibility', () => {
       archivedAt: null,
       submissions: { none: {} },
     });
-    expect(prisma.document.findMany).toHaveBeenCalledTimes(2);
+    expect(prisma.document.findMany).toHaveBeenCalledTimes(1);
   });
 
   test('keeps existing submissions visible for teachers', async () => {
@@ -220,7 +224,7 @@ describe('class detail loader document visibility', () => {
     expect(data.submissions).toEqual([
       { id: 'submission-1', title: 'Submitted essay' },
     ]);
-    expect(prisma.submission.findMany).toHaveBeenCalledTimes(2);
+    expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
   });
 
   test('loads growth plans even when the organization previously had reporter disabled', async () => {

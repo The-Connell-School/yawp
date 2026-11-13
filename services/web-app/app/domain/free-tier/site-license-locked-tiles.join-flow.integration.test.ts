@@ -198,13 +198,11 @@ test.skipIf(!enabled)(
 
     expect(lockedTiles.map((tile) => tile.key)).toEqual([
       'thesis_driven_essay',
-      'ap_history_essay',
       'daily_pages',
       'act_writing',
     ]);
     expect(lockedTiles.map((tile) => tile.label)).toEqual([
       SITE_LICENSE_LOCKED_TILE_LABELS.thesis_driven_essay,
-      SITE_LICENSE_LOCKED_TILE_LABELS.ap_history_essay,
       SITE_LICENSE_LOCKED_TILE_LABELS.daily_pages,
       SITE_LICENSE_LOCKED_TILE_LABELS.act_writing,
     ]);

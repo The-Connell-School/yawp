@@ -120,7 +120,7 @@ export function FreeTierGradeField({ serverError = false }: { serverError?: bool
         <select id="gradeLevel" name="gradeLevel" required defaultValue=""
           aria-invalid={showError} aria-describedby={showError ? 'signup-grade-error' : undefined}
           onInvalid={() => setInvalid(true)} onChange={() => setInvalid(false)}
-          className="h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+          className="h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset required:invalid:text-muted-foreground/50"
         >
           <option value="">Choose a grade</option>
           {['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'].map(grade => <option key={grade} value={grade}>{grade === 'K' ? 'Kindergarten' : grade}</option>)}

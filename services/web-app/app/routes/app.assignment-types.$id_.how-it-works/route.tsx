@@ -30,7 +30,12 @@ import {
   GuideStep,
   WillWont,
 } from '~/components/how-it-works/guide';
+import { assignmentTypeGuideBackNavigation } from '~/domain/assignment-types/assignment-type-guide-back-navigation';
+import { assignmentTypeHasHowItWorksGuide } from '~/domain/assignment-types/assignment-type-how-it-works';
 import { howItWorksGuideFor } from '~/domain/assignment-types/how-it-works-guide';
+import { LOCKED_PREVIEW_APP_HOME } from '~/domain/free-tier/locked-preview';
+import { userHasPendingFreeTierTeachingLock } from '~/domain/free-tier/locked-preview.server';
+import { assignmentTypeMatchesSiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
 import { isAssignmentTypeAvailableForAnyScope } from '~/utils/assignment-type-access.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
@@ -53,9 +58,26 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const assignmentTypeId = params.id ?? '';
   const pagePath = `/app/assignment-types/${assignmentTypeId}`;
+  const teachingLocked = await userHasPendingFreeTierTeachingLock(userId);
+
+  const assignmentType = await prisma.assignmentType.findFirst({
+    where: { id: assignmentTypeId, archivedAt: null },
+    select: { id: true, title: true, kind: true, systemKey: true },
+  });
+  if (!assignmentType) throw redirect(LOCKED_PREVIEW_APP_HOME);
+
+  const lockedPreviewGuideBrowse =
+    teachingLocked &&
+    (assignmentTypeHasHowItWorksGuide(assignmentType) ||
+      assignmentTypeMatchesSiteLicenseLockedTile({
+        title: assignmentType.title,
+        kind: assignmentType.kind,
+        systemKey: assignmentType.systemKey,
+      }));
 
   // The same access check as the assignment type page: the type has to be
-  // switched on for one of this teacher's schools.
+  // switched on for one of this teacher's schools — except pending teachers
+  // browsing How It Works for bundle or site-license tiles.
   const teacherClasses = await prisma.class.findMany({
     where: { teachers: { some: { id: profile.id } }, isArchived: false },
     select: { school: { select: { id: true, organizationId: true } } },
@@ -77,19 +99,28 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignmentTypeId,
     scopes,
   });
-  if (!available) throw redirect('/app');
+  if (!available && !lockedPreviewGuideBrowse) throw redirect(LOCKED_PREVIEW_APP_HOME);
 
-  const assignmentType = await prisma.assignmentType.findFirst({
-    where: { id: assignmentTypeId, archivedAt: null },
-    select: { id: true, title: true, kind: true },
-  });
+  const lockedPreviewBack = () =>
+    teachingLocked ? LOCKED_PREVIEW_APP_HOME : pagePath;
   // Prewriting and Thesis Statement, single steps of the essay, have their own
   // shorter guide.
+  const back = assignmentType
+    ? assignmentTypeGuideBackNavigation(
+        teachingLocked,
+        pagePath,
+        assignmentType.title?.trim() || 'Assignment'
+      )
+    : assignmentTypeGuideBackNavigation(teachingLocked, pagePath, 'Assignment');
+
   if (assignmentType && isWritingStepKind(assignmentType.kind)) {
     return {
       guide: 'writing-step' as const,
       kind: assignmentType.kind,
+      backTo: back.backTo,
+      backLabel: back.backLabel,
       pagePath,
+      teachingLocked,
       lesson: await getLessonMaterialsForAssignmentType(
         assignmentType.kind,
         profile.id
@@ -100,11 +131,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? howItWorksGuideFor(assignmentType.title)
     : null;
   if (titleGuide === 'class-starter') {
-    return { guide: 'class-starter' as const, pagePath };
+    return {
+      guide: 'class-starter' as const,
+      backTo: back.backTo,
+      backLabel: back.backLabel,
+      pagePath,
+      teachingLocked,
+    };
+  }
+  if (titleGuide === 'daily-pages') {
+    throw redirect(lockedPreviewBack());
   }
   // Otherwise only The Thesis-Driven Essay has a guide so far.
-  if (!assignmentType || !isThesisDrivenEssayTitle(assignmentType.title)) {
-    throw redirect(pagePath);
+  if (!isThesisDrivenEssayTitle(assignmentType.title)) {
+    throw redirect(lockedPreviewBack());
   }
 
   // The course that teaches teachers the process. It is linked only when this
@@ -125,7 +165,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return {
     guide: 'thesis-essay' as const,
+    backTo: back.backTo,
+    backLabel: back.backLabel,
     pagePath,
+    teachingLocked,
     coursePath: course ? `/app/teacher-trainings/${course.id}` : null,
   };
 }
@@ -213,29 +256,51 @@ export default function HowItWorksRoute() {
     return (
       <WritingStepGuide
         copy={WRITING_STEP_COPY[data.kind]}
+        backTo={data.backTo}
+        backLabel={data.backLabel}
         pagePath={data.pagePath}
+        teachingLocked={data.teachingLocked}
         lesson={data.lesson}
       />
     );
   }
   if (data.guide === 'class-starter') {
-    return <ClassStarterGuide pagePath={data.pagePath} />;
+    return (
+      <ClassStarterGuide
+        backTo={data.backTo}
+        backLabel={data.backLabel}
+        pagePath={data.pagePath}
+        teachingLocked={data.teachingLocked}
+      />
+    );
   }
   return (
-    <ThesisEssayGuide pagePath={data.pagePath} coursePath={data.coursePath} />
+    <ThesisEssayGuide
+      backTo={data.backTo}
+      backLabel={data.backLabel}
+      pagePath={data.pagePath}
+      teachingLocked={data.teachingLocked}
+      coursePath={data.coursePath}
+    />
   );
 }
 
 function ThesisEssayGuide({
+  backTo,
+  backLabel,
   pagePath,
+  teachingLocked,
   coursePath,
 }: {
+  backTo: string;
+  backLabel: string;
   pagePath: string;
+  teachingLocked: boolean;
   coursePath: string | null;
 }) {
 
   return (
-    <GuidePage backTo={pagePath} backLabel="Back to The Thesis-Driven Essay">
+    <GuidePage backTo={backTo} backLabel={backLabel}>
       <GuideHero
         title="Teach the thesis-driven essay"
         highlight="one step at a time."
@@ -489,11 +554,13 @@ function ThesisEssayGuide({
 
       <WillWont will={WILL} wont={WONT} />
 
-      <GuideFooter
-        note="Clips use demo classes. The Tutor’s replies, the Grading Assistant’s suggestions, and Reporter’s answer in them were scripted for the recording. Reporter’s numbers are the demo class’s grades."
-        startTo={pagePath}
-        startLabel="Create an assignment"
-      />
+      {!teachingLocked ? (
+        <GuideFooter
+          note="Clips use demo classes. The Tutor’s replies, the Grading Assistant’s suggestions, and Reporter’s answer in them were scripted for the recording. Reporter’s numbers are the demo class’s grades."
+          startTo={pagePath}
+          startLabel="Create an assignment"
+        />
+      ) : null}
     </GuidePage>
   );
 }

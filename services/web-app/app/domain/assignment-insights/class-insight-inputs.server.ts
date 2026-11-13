@@ -9,7 +9,11 @@ import {
 
 export async function loadClassInsightInputs(classAssignmentIds: string[]) {
   const documents = await prisma.document.findMany({
-    where: { classAssignmentId: { in: classAssignmentIds }, deletedAt: null },
+    where: {
+      classAssignmentId: { in: classAssignmentIds },
+      deletedAt: null,
+      artifactKind: { not: 'TEACHER_ASSIGNMENT_PREVIEW' },
+    },
     select: {
       id: true,
       classAssignmentId: true,

@@ -8,10 +8,7 @@ import {
 } from '~/components/assignment-type-tile-layout';
 import { SiteLicenseLockedAssignmentGridTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
-import {
-  FREE_TIER_UNLIMITED_TILE_LABEL,
-  SITE_LICENSE_ONLY_TILE_LABEL,
-} from '~/domain/free-tier/locked-dashboard-copy';
+import { SITE_LICENSE_ONLY_TILE_LABEL } from '~/domain/free-tier/locked-dashboard-copy';
 import { cn } from '~/utils/misc';
 
 export type NewAssignmentSelectableType = {
@@ -113,7 +110,7 @@ export function metaLabelForFreeAssignmentTile(params: {
   total: number;
 }) {
   if (params.unlimitedFreeAssignmentTiles) {
-    return FREE_TIER_UNLIMITED_TILE_LABEL;
+    return '';
   }
   if (params.remaining > 0) {
     return `${params.remaining} of ${params.total} left`;

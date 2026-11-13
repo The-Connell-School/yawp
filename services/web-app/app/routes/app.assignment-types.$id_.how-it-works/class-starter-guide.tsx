@@ -48,13 +48,23 @@ function clip(name: string, label: string) {
   );
 }
 
-export function ClassStarterGuide({ pagePath }: { pagePath: string }) {
+export function ClassStarterGuide({
+  backTo,
+  backLabel,
+  pagePath,
+  teachingLocked,
+}: {
+  backTo: string;
+  backLabel: string;
+  pagePath: string;
+  teachingLocked: boolean;
+}) {
   const strong = (text: string) => (
     <strong className="text-foreground">{text}</strong>
   );
 
   return (
-    <GuidePage backTo={pagePath} backLabel="Back to Class Starter">
+    <GuidePage backTo={backTo} backLabel={backLabel}>
       <GuideHero
         title="Get every student writing"
         highlight="at the start of class."
@@ -203,11 +213,13 @@ export function ClassStarterGuide({ pagePath }: { pagePath: string }) {
 
       <WillWont will={WILL} wont={WONT} />
 
-      <GuideFooter
-        note="Clips use demo classes. The prompt generator’s reply and the Grading Assistant’s suggestion in them were scripted for the recording."
-        startTo={pagePath}
-        startLabel="Go to Class Starter"
-      />
+      {!teachingLocked ? (
+        <GuideFooter
+          note="Clips use demo classes. The prompt generator’s reply and the Grading Assistant’s suggestion in them were scripted for the recording."
+          startTo={pagePath}
+          startLabel="Go to Class Starter"
+        />
+      ) : null}
     </GuidePage>
   );
 }

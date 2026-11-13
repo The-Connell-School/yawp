@@ -8,8 +8,8 @@
 }
 .auth-page-shell:has(.unified-signon) .auth-page-logo img,
 .auth-page-shell:has(.unified-signon) .card-page-logo-link img {
-  width: 208px;
-  height: 208px;
+  width: 176px;
+  height: auto;
   object-fit: contain;
 }
 .unified-signon {

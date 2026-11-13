@@ -4,6 +4,7 @@ import {
   Form,
   Link,
   useActionData,
+  redirect,
   useLoaderData,
   useNavigation,
 } from 'react-router';
@@ -15,6 +16,7 @@ import {
 } from '~/domain/free-tier/admin-link-gate.server';
 import {
   denySchoolAdminApproval,
+  reopenDeniedSchoolAdminApproval,
   resolveAdminDenyAnsweredGate,
 } from '~/domain/free-tier/approval-deny.server';
 import { prisma } from '~/utils/db.server';
@@ -110,6 +112,19 @@ export async function action({ request }: ActionFunctionArgs) {
   }
   const formData = await request.formData();
   const token = String(formData.get('token') ?? '');
+  if (formData.get('intent') === 'reopen') {
+    const reopened = await reopenDeniedSchoolAdminApproval({ token });
+    if (reopened.ok) {
+      throw redirect(
+        `/free/admin/approve?t=${encodeURIComponent(reopened.approveToken)}`
+      );
+    }
+    return {
+      ok: false as const,
+      reopenFailed: true as const,
+      reason: reopened.reason,
+    };
+  }
   const reason = String(formData.get('reason') ?? '');
   const result = await denySchoolAdminApproval({ token, reason, request });
   if (!result.ok && result.reason === 'unavailable') {
@@ -127,8 +142,10 @@ export default function FreeAdminApproveDenyRoute() {
     navigation.formData?.get('intent') === 'deny';
 
   if (actionData?.ok && !('idempotent' in actionData && actionData.idempotent)) {
-    const teacherName = data.ok ? data.teacherName : 'A teacher';
-    const schoolName = data.ok ? data.schoolName : 'your school';
+    // After the deny the loader revalidates into its admin_denied shape, which
+    // still carries the names.
+    const teacherName = data.teacherName ?? 'A teacher';
+    const schoolName = data.schoolName ?? 'your school';
     return <AdminDenyThanksCard teacherName={teacherName} schoolName={schoolName} />;
   }
 

@@ -1,11 +1,17 @@
 import {
   useFreeAccountUsage,
   FreeAssignmentTiles,
-  FreeAccountRail,
+  FreeAccountChecklist,
+  AdvocatePackEntry,
 } from '~/components/free-account-usage';
+import {
+  freeTierShowAdvocatePack,
+  freeTierShowGettingStartedChecklist,
+} from '~/domain/free-tier/getting-started-grade';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { freeTierStandardPageShellClassName } from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { TeachingAccessDashboardSkeleton } from '~/components/free-tier/teaching-access-dashboard-skeleton';
+import { LockedDashboardGettingStarted } from '~/components/free-tier/locked-dashboard-getting-started';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
   Form,
@@ -584,20 +590,21 @@ export default function AppRoute() {
     const classStarterType = data.assignmentCreationTypes.find(
       (type) => type.kind === 'class_starter'
     );
-    const assignmentsSeeHowItWorksTo = classStarterType
-      ? `/app/assignment-types/${classStarterType.id}/how-it-works`
-      : undefined;
-    const thesisEssayLockedTile = data.siteLicenseLockedAssignmentTiles.find(
-      (tile) => tile.key === 'thesis_driven_essay'
-    );
-    const gradingSeeHowItWorksTo =
-      thesisEssayLockedTile != null
-        ? `/app/assignment-types/${thesisEssayLockedTile.assignmentTypeId}/how-it-works`
-        : assignmentsSeeHowItWorksTo;
-
     const welcomeName = teacherFirstName(user.name ?? 'Teacher');
-    const freeAccountRail = freeUsage ? (
-      <FreeAccountRail
+    // Getting started sits beside the first class card in both locked preview
+    // and the approved free tier, so approval doesn't move it. The rail only
+    // carries what's left (the advocate pack).
+    const freeAccountRail =
+      freeUsage && !locked && freeTierShowAdvocatePack(freeUsage) ? (
+        <div className="space-y-5" data-testid="free-account-rail">
+          <AdvocatePackEntry />
+        </div>
+      ) : null;
+
+    const gettingStartedTile = !freeUsage ? null : locked ? (
+      <LockedDashboardGettingStarted />
+    ) : freeTierShowGettingStartedChecklist(freeUsage) ? (
+      <FreeAccountChecklist
         usage={freeUsage}
         classStarterAssignmentTypeId={classStarterType?.id}
       />
@@ -608,6 +615,7 @@ export default function AppRoute() {
             <ClassesAtAGlance
               classes={data.teacherClassCards}
               totalClassCount={data.totalTeacherClassCount}
+              afterFirstClassTile={gettingStartedTile}
               showAssignmentsTab={assignmentsEnabled}
               firstAssignmentCelebration={
                 firstAssignmentCelebrationId &&
@@ -628,7 +636,6 @@ export default function AppRoute() {
                 siteLicenseLockedAssignmentTiles={
                   data.siteLicenseLockedAssignmentTiles
                 }
-                assignmentsSeeHowItWorksTo={assignmentsSeeHowItWorksTo}
                 teachingLocked={locked}
                 createTriggerRef={createAssignmentTriggerRef}
                 onCreate={(id) => {
@@ -672,9 +679,7 @@ export default function AppRoute() {
                 <TeacherGradingAtAGlance
                   freeAccount={Boolean(freeUsage)}
                   licensedGradingBand={Boolean(freeUsage)}
-                  seeHowItWorksTo={
-                    locked ? gradingSeeHowItWorksTo : undefined
-                  }
+                  teachingLocked={locked}
                   needsGradingCount={needsGradingCount}
                   readyToReleaseCount={readyToReleaseCount}
                 />

@@ -1,5 +1,6 @@
 import type { MetaFunction } from 'react-router';
 import type { ReactNode } from 'react';
+import { PRIVACY_LAWS_AND_AGREEMENTS } from '~/domain/free-tier/admin-privacy-agreements-copy';
 import { PublicLegalPage, PublicLegalSection } from '../terms/PublicLegalPage';
 
 export const meta: MetaFunction = () => [
@@ -160,6 +161,19 @@ export default function PrivacyRoute() {
           the services and to identify abuse, then removed unless legally
           required.
         </p>
+      </PublicLegalSection>
+
+      <PublicLegalSection title="Privacy laws and agreements" id="privacy-laws">
+        <List>
+          {PRIVACY_LAWS_AND_AGREEMENTS.map((item) => (
+            <li key={item.id}>
+              <strong className="font-semibold text-foreground">
+                {item.label}:
+              </strong>{' '}
+              {item.text}
+            </li>
+          ))}
+        </List>
       </PublicLegalSection>
 
       <PublicLegalSection title="Retention">

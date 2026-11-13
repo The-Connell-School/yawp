@@ -5,7 +5,6 @@ import { approvalSentDate } from '~/domain/free-tier/approval-waiting';
 import { teacherPendingForwardError } from '~/domain/free-tier/admin-approval-copy';
 import { approvalForwardError } from '~/routes/free-tier/ApprovalForwardForm';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
-import { FreeTierPerson } from '~/routes/free-tier/FreeTierAuthCard';
 import { PendingForwardDisclosure } from '~/routes/free-tier/PendingForwardDisclosure';
 
 const FORWARD_ERROR_REASONS = new Set([
@@ -95,36 +94,28 @@ export function LockedDashboardPendingCard() {
       data-testid="locked-dashboard-pending-card"
       aria-label="Approval request"
     >
-      <div className="flex items-center gap-2.5 rounded-lg border px-3 py-2.5">
-        <span
-          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary"
-          aria-hidden
-        >
-          <Clock className="h-4 w-4 text-foreground" />
-        </span>
-        <p className="text-[15px] font-semibold leading-snug">
-          Request sent to {adminName}
-        </p>
+      <div className="flex items-start gap-2">
+        <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        <h2 className="text-base font-semibold leading-snug text-foreground">
+          Awaiting approval from {adminName}
+        </h2>
       </div>
       {sentLabel ? (
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
           {sentLabel} It may be a good idea to give {adminName} a quick heads-up
           so the email doesn&apos;t get buried. We&apos;ll let you know the
-          moment they approve.
+          moment they approve. In the meantime, feel free to explore your
+          classroom!
         </p>
       ) : (
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
           It may be a good idea to give {adminName} a quick heads-up so the
           email doesn&apos;t get buried. We&apos;ll let you know the moment they
-          approve.
+          approve. In the meantime, feel free to explore your classroom!
         </p>
       )}
-      {adminEmail ? (
-        <div className="mt-4">
-          <FreeTierPerson name={adminName} email={adminEmail} />
-        </div>
-      ) : null}
       {state.forwardDisclosureAvailable && adminEmail ? (
+        <div className="mt-4">
         <PendingForwardDisclosure
           triggerVariant="dashboard-rail"
           currentAdminName={adminName}
@@ -150,6 +141,7 @@ export function LockedDashboardPendingCard() {
               actionData.reason === 'email_failed')
           }
         />
+        </div>
       ) : null}
       {actionData?.ok && 'queued' in actionData && actionData.adminName ? (
         <p role="status" className="mt-3 text-sm text-muted-foreground">

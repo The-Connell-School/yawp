@@ -57,7 +57,21 @@ describe('teacher class card statistics', () => {
     expect(prisma.document.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
       deletedAt: null,
-      classAssignment: { classId: { in: ['a', 'b', 'empty'] } },
+      OR: [
+        { classAssignment: { classId: { in: ['a', 'b', 'empty'] } } },
+        {
+          teacherPreviewClassAssignment: { classId: 'a' },
+          artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW',
+        },
+        {
+          teacherPreviewClassAssignment: { classId: 'b' },
+          artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW',
+        },
+        {
+          teacherPreviewClassAssignment: { classId: 'empty' },
+          artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW',
+        },
+      ],
     });
     expect(prisma.document.count).not.toHaveBeenCalled();
   });

@@ -75,7 +75,6 @@ test('loads locked tiles from the global catalog for FREE_CLASSROOM orgs', async
   });
   expect(tiles.map((tile) => tile.key)).toEqual([
     'thesis_driven_essay',
-    'ap_history_essay',
     'daily_pages',
     'act_writing',
   ]);

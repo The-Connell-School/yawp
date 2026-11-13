@@ -11,8 +11,9 @@ try {
 import { describe, expect, it } from 'bun:test';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router';
 import {
-  ApprovalSuccessToast,
+  ApprovalRequiredToast,
   TEACHING_ACCESS_TOAST_DESKTOP_POSITION,
 } from './teaching-access-toasts';
 
@@ -25,10 +26,14 @@ describe('Teaching access toast positioning', () => {
     document.body.appendChild(container);
     const root = createRoot(container);
     act(() => {
-      root.render(<ApprovalSuccessToast onDismiss={() => {}} />);
+      root.render(
+        <MemoryRouter>
+          <ApprovalRequiredToast mobilePinned={false} onDismiss={() => {}} />
+        </MemoryRouter>
+      );
     });
     const toast = container.querySelector(
-      '[data-testid="teaching-access-approval-toast"]'
+      '[data-testid="teaching-access-error-toast"]'
     );
     expect(toast?.className).toContain('--teaching-access-toast-bottom');
     act(() => root.unmount());

@@ -11,6 +11,8 @@ import {
   LOCKED_PREVIEW_PATH,
 } from './locked-preview';
 import { provisionFreeClassroom } from './provision-free-classroom.server';
+import { removeLockedPreviewSampleAssignments } from './locked-preview-class-seed.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 
 /** Pending approval from the teacher's own application — not membership cookie or org. */
 export async function userHasPendingFreeTierTeachingLock(
@@ -182,23 +184,39 @@ export async function ensureLockedPreviewClassroomForUser(userId: string) {
     result.status === 'provisioned' || result.status === 'already_provisioned'
       ? result.organizationId
       : null;
-  if (organizationId) {
-    const { ensureLockedPreviewSampleAssignments } =
-      await import('./locked-preview-class-seed.server');
-    const klass = await prisma.class.findFirst({
-      where: {
-        isArchived: false,
-        school: { organizationId },
-        teachers: { some: { userId } },
-      },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true },
-    });
-    if (klass) {
-      await ensureLockedPreviewSampleAssignments(organizationId, klass.id);
-    }
-  }
   return result;
+}
+
+/** Idempotent cleanup for legacy auto-planted browse-only samples. */
+export async function scrubLockedPreviewSampleAssignmentsForUser(userId: string) {
+  if (!(await userHasPendingFreeTierTeachingLock(userId))) return;
+  const classes = await prisma.class.findMany({
+    where: {
+      teachers: { some: { userId } },
+      school: { organization: { plan: 'FREE_CLASSROOM' } },
+    },
+    select: { id: true },
+  });
+  await Promise.all(
+    classes.map((klass) => removeLockedPreviewSampleAssignments(klass.id))
+  );
+}
+
+/** Log and continue when preview provisioning is not ready (e.g. local seed gap). */
+export async function ensureLockedPreviewClassroomForUserBestEffort(
+  userId: string
+) {
+  try {
+    const result = await ensureLockedPreviewClassroomForUser(userId);
+    await scrubLockedPreviewSampleAssignmentsForUser(userId);
+    return result;
+  } catch (error) {
+    console.error('free_tier_locked_preview_provision_failed', {
+      userId,
+      error: buildSafeErrorForLog(error),
+    });
+    return null;
+  }
 }
 
 export type TeachingApprovalScope = {

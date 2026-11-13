@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { TEACHER_ASSIGNMENT_PREVIEW_SUBJECT_LABEL } from './teacher-assignment-preview';
+import { TEACHER_ASSIGNMENT_TEST_SUBJECT_LABEL } from './teacher-assignment-preview';
 import { buildTeacherAssignmentPreviewDocumentsWhere } from './teacher-assignment-preview-where';
 import { isTeacherAssignmentPreviewSelfGrading } from './teacher-assignment-preview-grading';
 
 describe('teacher-assignment-preview label', () => {
   test('uses a stable preview subject label', () => {
-    expect(TEACHER_ASSIGNMENT_PREVIEW_SUBJECT_LABEL).toBe('You (preview)');
+    expect(TEACHER_ASSIGNMENT_TEST_SUBJECT_LABEL).toBe('Test document');
   });
 });
 

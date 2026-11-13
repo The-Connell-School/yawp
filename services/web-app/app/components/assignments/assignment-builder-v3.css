@@ -17,7 +17,8 @@
   --abv3-badge-bg: #e9e6dc;
   --abv3-popover-bg: #fffefa;
   --abv3-type-selected: #f1efe8;
-  --abv3-footer-h: 64px;
+  /* Matches the sidebar's Settings block so the two dividers line up. */
+  --abv3-footer-h: 45px;
   --abv3-input-h: 40px;
   --abv3-prompt-h: 220px;
   --abv3-radius: 8px;
@@ -36,6 +37,20 @@
 @media (min-width: 640px) {
   .abv3-root {
     margin: -1.25rem -1.25rem 0;
+  }
+}
+
+/* Inside the teacher page shell, cancel its padding exactly so the footer's
+   divider runs edge to edge (sidebar border to the window edge). */
+.free-tier-b2-page-shell .abv3-root {
+  margin-left: -40px;
+  margin-right: -40px;
+}
+
+@media (max-width: 1023px) {
+  .free-tier-b2-page-shell .abv3-root {
+    margin-left: -16px;
+    margin-right: -16px;
   }
 }
 
@@ -178,6 +193,55 @@
   padding: 0 12px;
 }
 
+.abv3-input--locked {
+  display: flex;
+  align-items: center;
+  color: var(--abv3-muted);
+  background: var(--abv3-locked-field);
+  border-color: var(--abv3-shell-border);
+}
+
+.abv3-type-select-trigger {
+  height: var(--abv3-input-h);
+  border-color: var(--abv3-border);
+  border-radius: var(--abv3-radius);
+  background: var(--abv3-input-bg);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--abv3-body);
+  box-shadow: none;
+}
+
+.abv3-type-select-trigger:hover {
+  background: var(--abv3-input-bg);
+}
+
+.abv3-class-empty-hint {
+  flex: 1;
+  min-width: 40px;
+  padding: 0 4px;
+  font-size: 13px;
+  line-height: 26px;
+  color: var(--abv3-muted);
+  opacity: 0.55;
+  user-select: none;
+}
+
+.abv3-class-input-spacer {
+  flex: 1;
+  min-width: 40px;
+  height: 26px;
+}
+
+.abv3-class-menu-empty {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--abv3-muted);
+  opacity: 0.55;
+}
+
 .abv3-textarea {
   height: var(--abv3-prompt-h);
   resize: vertical;
@@ -207,6 +271,21 @@
 
 .abv3-input-with-icon {
   padding-right: 36px;
+}
+
+/* Date fields show our calendar icon; the browser's own indicator is made
+   invisible but stretched over it, so clicking the icon still opens the
+   native picker without drawing a second icon. */
+.abv3-input-with-icon[type='date']::-webkit-calendar-picker-indicator {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 40px;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .abv3-class-chips {
@@ -577,4 +656,116 @@
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 13px;
+}
+
+/* Assignment settings: one rounded, bordered group; sections share borders
+   (a divider between them) and each has the same padding. */
+.abv3-settings {
+  margin-top: 24px;
+  border: 1px solid var(--abv3-shell-border);
+  border-radius: 16px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.abv3-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+}
+
+.abv3-settings-section + .abv3-settings-section {
+  border-top: 1px solid var(--abv3-divider);
+}
+
+.abv3-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.abv3-settings-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.abv3-settings-title {
+  margin: 0;
+}
+
+.abv3-settings-status {
+  font-size: 14px;
+  color: var(--abv3-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.abv3-settings-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.abv3-settings-helper {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--abv3-muted);
+}
+
+.abv3-settings-section .abv3-switch-row {
+  min-height: 24px;
+}
+
+.abv3-switch-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.abv3-switch-row .abv3-switch-label {
+  flex: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--abv3-body);
+  cursor: pointer;
+}
+
+.abv3-switch-description {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--abv3-muted);
+}
+
+.abv3-switch-state {
+  flex: none;
+  min-width: 24px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--abv3-muted);
+}
+
+.abv3-switch-state[data-on='true'] {
+  color: var(--abv3-primary);
+}
+
+.abv3-switch-row {
+  align-items: center;
+}
+
+/* Placeholders in the builder's warm muted tone, not the browser's blue-gray. */
+.abv3-input::placeholder,
+.abv3-textarea::placeholder {
+  color: var(--abv3-muted);
+  opacity: 0.7;
 }

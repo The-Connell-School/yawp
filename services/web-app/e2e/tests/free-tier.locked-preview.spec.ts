@@ -501,7 +501,7 @@ for (const width of [390, 1440]) {
     }
     await page
       .getByTestId('teaching-access-approval-toast')
-      .getByRole('button', { name: 'Dismiss' })
+      .getByRole('button', { name: 'Close toast' })
       .click();
     await expect(page.getByTestId('teaching-access-approval-toast')).toHaveCount(0);
     await page.reload();
@@ -844,8 +844,15 @@ test('locked assignments tab shows sample rows and locked documents pill', async
   await provisionPendingClassroom(app.id, user.id!);
   const klass = await prisma.class.findFirstOrThrow({
     where: { teachers: { some: { user: { id: user.id } } } },
-    select: { id: true },
+    select: { id: true, school: { select: { organizationId: true } } },
   });
+  const { ensureLockedPreviewSampleAssignments } = await import(
+    '~/domain/free-tier/locked-preview-class-seed.server'
+  );
+  await ensureLockedPreviewSampleAssignments(
+    klass.school.organizationId,
+    klass.id
+  );
   await exploreLockedApp(page, user.email!);
   await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
   await expect(page.getByText('Sample · Not sent').first()).toBeVisible();

@@ -7,7 +7,28 @@ mock.module('react-router', () => ({
   useNavigation: () => ({ state: 'idle' }),
 }));
 
-test('collapsed pending forward shows disclosure under recipient flow', () => {
+mock.module('~/components/ui/dialog', () => ({
+  Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
+    open ? <div data-testid="pending-forward-dialog-open">{children}</div> : null,
+  DialogContent: ({
+    children,
+    ...props
+  }: {
+    children: React.ReactNode;
+    'data-testid'?: string;
+  }) => <div {...props}>{children}</div>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
+  ),
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
+}));
+
+test('pending forward trigger opens modal flow', () => {
   const html = renderToStaticMarkup(
     <PendingForwardDisclosure
       currentAdminName="Dr. Alan Brooks"
@@ -21,8 +42,8 @@ test('collapsed pending forward shows disclosure under recipient flow', () => {
   );
   expect(html).toContain('Not the right person?');
   expect(html).toContain('data-testid="pending-forward-disclosure"');
-  expect(html).toContain('aria-expanded="false"');
-  expect(html).not.toContain('free-tier-pending-forward-panel-open');
+  expect(html).toContain('aria-haspopup="dialog"');
+  expect(html).not.toContain('pending-forward-dialog-open');
 });
 
 test('dashboard rail trigger uses inline send link copy', () => {
@@ -38,12 +59,28 @@ test('dashboard rail trigger uses inline send link copy', () => {
       schoolName="Lincoln High School"
     />
   );
-  expect(html).toContain('Not the right person?');
   expect(html).toContain('Send to an additional administrator');
-  expect(html).not.toContain('free-tier-pending-forward-chevron');
+  expect(html).not.toContain('Not the right person?');
 });
 
-test('expanded pending forward shows tinted panel and helper copy', () => {
+test('timeline trigger uses pending forward link under current step', () => {
+  const html = renderToStaticMarkup(
+    <PendingForwardDisclosure
+      triggerVariant="timeline"
+      currentAdminName="Dr. Alan Brooks"
+      currentAdminEmail="admin@example.test"
+      approvalId="ap1"
+      open={false}
+      onOpenChange={() => {}}
+      forwarding={false}
+      schoolName="Lincoln High School"
+    />
+  );
+  expect(html).toContain('Send to another administrator');
+  expect(html).not.toContain('Not the right person?');
+});
+
+test('open pending forward modal shows form copy', () => {
   const html = renderToStaticMarkup(
     <PendingForwardDisclosure
       currentAdminName="Dr. Alan Brooks"
@@ -57,10 +94,11 @@ test('expanded pending forward shows tinted panel and helper copy', () => {
   );
   expect(html).toContain('Send to a different administrator');
   expect(html).toContain('stop reminders to Dr. Alan Brooks');
+  expect(html).toContain('Title');
   expect(html).toContain('Administrator name');
   expect(html).toContain('Administrator email');
   expect(html).toContain('name@school.org');
   expect(html).toContain('Forward request');
   expect(html).toContain('Cancel');
-  expect(html).toContain('free-tier-pending-forward-panel');
+  expect(html).toContain('data-testid="pending-forward-modal"');
 });

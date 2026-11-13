@@ -389,7 +389,7 @@ export default function OrganizationSchoolsRoute() {
               <div
                 className={cn(isLoading ? 'opacity-50 transition-opacity' : '')}
               >
-                <Table className="rounded-lg bg-muted">
+                <Table className="rounded-lg">
                   <TableHeader className="rounded-t-lg">
                     <TableRow className="bg-muted/50 rounded-t-lg">
                       <TableHead className="w-[50px] pl-4 rounded-tl-lg">

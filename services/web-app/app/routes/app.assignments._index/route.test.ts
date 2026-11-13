@@ -117,6 +117,7 @@ describe('My Assignments loader', () => {
           id: 'assignment-1',
           title: 'Essay One',
           assignmentType: { title: 'Essay' },
+          createdAt: new Date('2026-11-01T00:00:00.000Z'),
         },
         _count: { documents: 3 },
       },
@@ -169,6 +170,7 @@ describe('My Assignments loader', () => {
       id: 'assignment-1',
       title: 'Essay One',
       assignmentType: { title: 'Essay' },
+      createdAt: new Date('2026-11-01T00:00:00.000Z'),
     };
     prisma.classAssignment.findMany.mockResolvedValue([
       {
@@ -220,6 +222,7 @@ describe('My Assignments loader', () => {
           id: 'assignment-1',
           title: 'Essay One',
           assignmentType: { title: 'Essay' },
+          createdAt: new Date('2026-11-01T00:00:00.000Z'),
         },
         _count: { documents: 2 },
       },
@@ -246,6 +249,7 @@ describe('My Assignments loader', () => {
           id: 'assignment-2',
           title: '   ',
           assignmentType: { title: 'Prompt' },
+          createdAt: new Date('2026-11-01T00:00:00.000Z'),
         },
         _count: { documents: 0 },
       },
@@ -407,6 +411,7 @@ describe('My Assignments loader', () => {
           title: 'Diagnostic Essay',
           tutorEnabled: false,
           assignmentType: { title: 'Essay' },
+          createdAt: new Date('2026-11-01T00:00:00.000Z'),
         },
         _count: { documents: 3 },
       },
@@ -418,6 +423,7 @@ describe('My Assignments loader', () => {
           title: 'Essay Two',
           tutorEnabled: true,
           assignmentType: { title: 'Essay' },
+          createdAt: new Date('2026-11-01T00:00:00.000Z'),
         },
         _count: { documents: 2 },
       },

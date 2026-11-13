@@ -978,19 +978,28 @@ describe('AssignmentCreationSheetContent', () => {
   });
 
   describe('collaborative drafts', () => {
-    it('does not offer the toggle when creating any assignment type', () => {
-      for (const typeId of ['type-1', 'type-2'] as const) {
-        root = renderSheet({
-          entryPoint: 'assignment-type',
-          fixedAssignmentTypeId: typeId,
-        }).root;
+    it('offers the group project toggle for collaboration-supported types', () => {
+      root = renderSheet({
+        entryPoint: 'assignment-type',
+        fixedAssignmentTypeId: 'type-1',
+      }).root;
 
-        expect(
-          document.getElementById('assignment-create-collaboration-enabled')
-        ).toBeNull();
-        expectText('Each student receives their own document');
-        expectText('Yawp! does not create a shared group document');
-      }
+      expect(
+        document.getElementById('assignment-create-collaboration-enabled')
+      ).not.toBeNull();
+      expectText('Group project');
+      expectText('Turn on for a collaborative document.');
+    });
+
+    it('hides the group project toggle for types without collaboration', () => {
+      root = renderSheet({
+        entryPoint: 'assignment-type',
+        fixedAssignmentTypeId: 'type-2',
+      }).root;
+
+      expect(
+        document.getElementById('assignment-create-collaboration-enabled')
+      ).toBeNull();
     });
 
     it('shows the frozen toggle when editing an existing collaborative assignment', () => {
@@ -1571,9 +1580,6 @@ describe('AssignmentCreationSheetContent', () => {
       ]) {
         expect(more.contains(controlById(id))).toBe(true);
       }
-      expect(document.body.textContent).toMatch(
-        /Each student receives their own document/
-      );
       // Tucked away is not switched off: the tutor still posts its value.
       expect(allInputsByName('tutorEnabled').length).toBeGreaterThan(0);
     });

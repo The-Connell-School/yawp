@@ -28,6 +28,8 @@ export async function isFirstFreeTierEssayInTx(
       (await tx.submission.count({
         where: {
           document: {
+            // A teacher trying out their own assignment is not a student essay.
+            artifactKind: { not: 'TEACHER_ASSIGNMENT_PREVIEW' },
             OR: [
               { membership: { organizationId } },
               { classAssignment: { class: { school: { organizationId } } } },

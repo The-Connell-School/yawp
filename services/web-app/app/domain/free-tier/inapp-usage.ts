@@ -136,10 +136,10 @@ export function freeAssignmentKindUsageMeta(
     usage.unlimitedFreeAssignmentTiles ||
     row.total <= 0;
   if (unlimited) {
-    return 'Unlimited';
+    return '';
   }
   if (row.remaining === 0) {
     return 'None left';
   }
-  return 'Unlimited';
+  return `${row.remaining} of ${row.total} left`;
 }

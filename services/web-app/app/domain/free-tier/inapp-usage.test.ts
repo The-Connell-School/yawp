@@ -45,17 +45,23 @@ test('isLessonPlannerMonthlyExhausted uses monthly metering when enabled', () =>
   ).toBe(true);
 });
 
-test('freeAssignmentKindUsageMeta never shows N-of-N counters', () => {
+test('freeAssignmentKindUsageMeta hides unlimited copy and shows quotas when capped', () => {
+  expect(
+    freeAssignmentKindUsageMeta(
+      { monthly: false, unlimitedFreeAssignmentTiles: true },
+      { used: 0, total: 12, remaining: 12 }
+    )
+  ).toBe('');
   const row = { used: 3, total: 12, remaining: 9 };
   expect(
     freeAssignmentKindUsageMeta(
       { monthly: false, unlimitedFreeAssignmentTiles: false },
       row
     )
-  ).toBe('Unlimited');
+  ).toBe('9 of 12 left');
   expect(
     freeAssignmentKindUsageMeta({ monthly: true, unlimitedFreeAssignmentTiles: false }, row)
-  ).toBe('Unlimited');
+  ).toBe('');
   expect(
     freeAssignmentKindUsageMeta(
       { monthly: false, unlimitedFreeAssignmentTiles: false },

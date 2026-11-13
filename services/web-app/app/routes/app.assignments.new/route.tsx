@@ -13,7 +13,6 @@ import {
 } from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { metaLabelForFreeAssignmentTile } from '~/components/assignments/new-assignment-type-picker-grid';
 import { CLASS_STARTER_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/class-starter-rubric';
-import { FREE_TIER_UNLIMITED_TILE_LABEL } from '~/domain/free-tier/locked-dashboard-copy';
 import { readFreeAccountUsage } from '~/domain/free-tier/inapp-usage.server';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
@@ -108,7 +107,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : v3.assignmentTypes.map((type) => ({
           id: type.id,
           label: type.title,
-          meta: FREE_TIER_UNLIMITED_TILE_LABEL,
+          meta: '',
           disabled: false,
         }));
 

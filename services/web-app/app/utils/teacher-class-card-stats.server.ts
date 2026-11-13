@@ -1,5 +1,6 @@
 import { prisma } from '~/utils/db.server';
 import { hasMeaningfulGrade } from '~/utils/teacher-document-status';
+import { buildClassTeacherAssignmentTestDocumentBranch } from './class-assignment-scope';
 
 type ClassCardStats = {
   ungradedCount: number;
@@ -51,13 +52,26 @@ function statsFromDocuments(
   };
 }
 
+function classIdForCardStatsDocument(document: {
+  classAssignment: { classId: string } | null;
+  teacherPreviewClassAssignment: { classId: string } | null;
+}): string | undefined {
+  return (
+    document.classAssignment?.classId ??
+    document.teacherPreviewClassAssignment?.classId
+  );
+}
+
 export async function getTeacherClassCardStats(
   classId: string
 ): Promise<ClassCardStats> {
   const documents = await prisma.document.findMany({
     where: {
       deletedAt: null,
-      classAssignment: { classId },
+      OR: [
+        { classAssignment: { classId } },
+        buildClassTeacherAssignmentTestDocumentBranch(classId),
+      ],
     },
     select: {
       submissions: {
@@ -93,10 +107,16 @@ export async function getTeacherClassCardStatsByClassIds(
   const documents = await prisma.document.findMany({
     where: {
       deletedAt: null,
-      classAssignment: { classId: { in: uniqueClassIds } },
+      OR: [
+        { classAssignment: { classId: { in: uniqueClassIds } } },
+        ...uniqueClassIds.map((id) =>
+          buildClassTeacherAssignmentTestDocumentBranch(id)
+        ),
+      ],
     },
     select: {
       classAssignment: { select: { classId: true } },
+      teacherPreviewClassAssignment: { select: { classId: true } },
       submissions: {
         orderBy: { submittedAt: 'desc' },
         take: 1,
@@ -107,7 +127,7 @@ export async function getTeacherClassCardStatsByClassIds(
 
   const byClass = new Map<string, typeof documents>();
   for (const document of documents) {
-    const classId = document.classAssignment?.classId;
+    const classId = classIdForCardStatsDocument(document);
     if (!classId) continue;
     const list = byClass.get(classId) ?? [];
     list.push(document);
