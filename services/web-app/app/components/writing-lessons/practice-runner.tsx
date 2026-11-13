@@ -405,7 +405,7 @@ export function PracticeRunner({
                   <button
                     type="button"
                     onClick={() => setRecapOpen(true)}
-                    className="inline-flex items-center gap-1 text-base text-primary hover:underline sm:text-sm"
+                    className="inline-flex items-center gap-1 text-base text-link hover:text-link-hover hover:underline sm:text-sm"
                   >
                     <BookOpen className="h-4 w-4" />
                     Review lesson: {currentItem.lessonTitle}
@@ -415,7 +415,7 @@ export function PracticeRunner({
                     to={`/app/writing-lessons/${currentItem.lessonSlug}?from=${encodeURIComponent(
                       reviewFrom
                     )}`}
-                    className="inline-flex items-center gap-1 text-base text-primary hover:underline sm:text-sm"
+                    className="inline-flex items-center gap-1 text-base text-link hover:text-link-hover hover:underline sm:text-sm"
                   >
                     <BookOpen className="h-4 w-4" />
                     Review lesson: {currentItem.lessonTitle}

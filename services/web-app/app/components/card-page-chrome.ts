@@ -29,10 +29,12 @@ export function shouldShowCardPageBackLink(
   isSignedIn: boolean
 ): boolean {
   if (!pathnameUsesCardPageChrome(pathname)) return false;
-  if (isSignedIn) return false;
   const path = normalizePathname(pathname);
   if (path === '/auth/login') return false;
   if (isAdminApprovalCardPage(path)) return false;
+  // Public waitlist entry keeps sign-in chrome even when a dev session exists (localhost QA).
+  if (path === '/free' || path === '/free/join') return true;
+  if (isSignedIn) return false;
   return true;
 }
 

@@ -13,7 +13,7 @@ import { afterEach, expect, mock, test } from 'bun:test';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router';
+import { createMemoryRouter, RouterProvider, StaticRouter } from 'react-router';
 import type { FreeAccountUsage } from '~/domain/free-tier/inapp-usage';
 
 mock.module('~/components/student-invitation-dialog', () => ({
@@ -32,6 +32,7 @@ afterEach(() => {
 
 const usage: FreeAccountUsage = {
   monthly: true,
+  unlimitedFreeAssignmentTiles: true,
   students: { used: 0, total: 35, remaining: 35 },
   lessonPlans: { used: 0, total: 5, remaining: 5 },
   assignments: [
@@ -91,7 +92,7 @@ test('FreeAssignmentTiles renders only entitled free assignment rows on the dash
       />
     </StaticRouter>
   );
-  expect(html).toContain('data-testid="free-assignment-tiles"');
+  expect(html).toContain('data-testid="teacher-assignments-grid"');
   expect(html.match(/data-testid="dashboard-assignment-tile"/g)).toHaveLength(3);
   expect(html).toContain('Class Starter');
   expect(html).toContain('Prewriting');
@@ -114,6 +115,28 @@ test('FreeAssignmentTiles renders assignment artwork when imageId is present', (
   expect(html).toContain('src="/api/image/course/img-1"');
 });
 
+test('FreeAssignmentTiles artwork shows no hover tooltip with the image description', () => {
+  const html = renderToStaticMarkup(
+    <StaticRouter location="/app">
+      <FreeAssignmentTiles
+        usage={usage}
+        types={[
+          {
+            id: 'starter',
+            kind: 'class_starter',
+            imageId: 'img-1',
+            imageTitle: 'Scratchy ink drawing of a dog in a beret',
+          },
+        ]}
+        onCreate={() => {}}
+      />
+    </StaticRouter>
+  );
+  expect(html).toContain('src="/api/image/course/img-1"');
+  expect(html).toContain('alt=""');
+  expect(html).not.toContain('title="Scratchy ink drawing of a dog in a beret"');
+});
+
 test('FreeAssignmentTiles shows Unlimited meta for monthly free assignments', () => {
   const html = renderToStaticMarkup(
     <StaticRouter location="/app">
@@ -124,7 +147,7 @@ test('FreeAssignmentTiles shows Unlimited meta for monthly free assignments', ()
       />
     </StaticRouter>
   );
-  expect(html).toContain('Unlimited');
+  expect(html).toContain('assignment-type-tile-meta">Unlimited</span>');
   expect(html).not.toContain('site-license-lock-button');
 });
 
@@ -199,7 +222,8 @@ test('FreeAssignmentTiles locked pending hides create control and uses text-only
   expect(html).not.toContain('preview-assignment-creation-disabled');
   expect(html).not.toContain('Create assignment');
   expect(html).not.toContain('/api/image/course/');
-  expect(html).toContain('site-license-lock-button');
+  expect(html).toContain('data-testid="assignment-type-tile-name"');
+  expect(html).toContain('data-testid="assignment-type-tile-meta"');
   expect(html).toContain('Unlimited');
   expect(html).not.toMatch(/\d+ of \d+ left/);
 });
@@ -209,15 +233,26 @@ test('FreeAccountRail is hidden while teaching is locked', async () => {
     useTeachingAccess: () => ({
       locked: true,
       loading: false,
-      state: { variant: 'locked', adminName: 'Dr. Patel' },
+      state: {
+        variant: 'locked',
+        adminName: 'Dr. Patel',
+        schoolName: 'Test School',
+        sentAt: new Date('2026-01-01T12:00:00Z'),
+      },
     }),
   }));
   const { FreeAccountRail } = await import('./free-account-usage');
-  const html = renderToStaticMarkup(
-    <StaticRouter location="/app">
-      <FreeAccountRail usage={usage} />
-    </StaticRouter>
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  lockedTileRoot = createRoot(container);
+  const router = createMemoryRouter(
+    [{ path: '/', element: <FreeAccountRail usage={usage} /> }],
+    { initialEntries: ['/'] }
   );
-  expect(html).toBe('');
+  await act(async () => {
+    lockedTileRoot!.render(<RouterProvider router={router} />);
+  });
+  expect(container.innerHTML).not.toContain('free-account-rail');
+  expect(container.innerHTML).not.toContain('free-account-checklist');
   mock.restore();
 });

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { DEFAULT_ANTHROPIC_MODEL } from '../services/web-app/app/config/default-anthropic-model';
 import { execFileSync, spawnSync } from 'child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -1489,7 +1490,7 @@ describe('PR preview deployment contract', () => {
       "PREVIEW_DEV_LOGIN_EMAIL: ${{ vars.PREVIEW_DEV_LOGIN_EMAIL || 'dev.teacher@yawp.local' }}"
     );
     expect(previewWorkflow).toContain(
-      "PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-5-5' }}"
+      "PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}"
     );
     expect(previewWorkflow).toContain(
       'PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}'
@@ -1542,6 +1543,32 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('[[ -n "$PREVIEW_LOGIN_PASSWORD" ]]');
     expect(previewWorkflow).toContain('sanitized-production)');
     expect(previewWorkflow).toContain('PREVIEW_SANITIZED_DUMP_VERSION');
+  });
+
+  test('non-prod Anthropic model defaults match Terraform and app fallback', () => {
+    const canonical = DEFAULT_ANTHROPIC_MODEL;
+    expect(canonical).toBe('claude-sonnet-4-6');
+
+    const demoWorkflow = readRepoFile('.github/workflows/demo-environment.yml');
+    expect(demoWorkflow).toContain(
+      `vars.DEMO_AI_MODEL || '${canonical}'`
+    );
+
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
+    expect(previewWorkflow).toContain(
+      `vars.PREVIEW_AI_MODEL || '${canonical}'`
+    );
+
+    const renderCompose = readRepoFile('scripts/preview/render-compose.mjs');
+    expect(renderCompose).toContain(`'${canonical}'`);
+
+    const previewConfig = readRepoFile('scripts/github-preview-config.sh');
+    expect(previewConfig).toContain(`PREVIEW_AI_MODEL:-${canonical}`);
+
+    const infra = readRepoFile('infra/main.tf');
+    expect(infra).toContain(`AI_MODEL                    = "${canonical}"`);
   });
 
   test('preview and production deployments have complete UA Stripe configuration paths', () => {
@@ -2173,7 +2200,7 @@ describe('demo environment deployment contract', () => {
     );
     expect(workflow).toContain('/free/admin/approve');
     expect(workflow).toContain(
-      'POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401'
+      'assert-anonymous-dev-login-blocked.mjs'
     );
     expect(workflow).toContain('/auth/dev-login/options');
     expect(workflow).toContain('POST /lti/launch without an access cookie');
@@ -2416,9 +2443,7 @@ describe('demo environment deployment contract', () => {
     for (const workflow of [previewWorkflow, demoWorkflow]) {
       expect(workflow).not.toContain(deprecatedPreviewBasicAuth);
       expect(workflow).not.toContain('curl --user');
-      expect(workflow).toContain(
-        'POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401'
-      );
+      expect(workflow).toContain('assert-anonymous-dev-login-blocked.mjs');
     }
     expect(previewWorkflow).toContain('data-preview-access-screen');
     expect(demoWorkflow).toContain(

@@ -96,7 +96,7 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('bun scripts/blackboard-lti-mock/server.mjs');
     expect(compose).toContain('BLACKBOARD_LTI_MOCK_ENABLED: "true"');
     expect(compose).toContain('BLACKBOARD_LTI_MOCK_ISSUER: "https://blackboard.com"');
-    expect(compose).toContain('AI_MODEL: "claude-sonnet-5-5"');
+    expect(compose).toContain('AI_MODEL: "claude-sonnet-4-6"');
     expect(compose).not.toContain('target: production');
     expect(compose).not.toContain('traefik');
     expect(compose).not.toContain('yawp-pr-142-postgres-data');

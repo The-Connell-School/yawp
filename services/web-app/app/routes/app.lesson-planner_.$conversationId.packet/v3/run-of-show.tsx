@@ -143,7 +143,7 @@ function InsertPoint({
     return (
       <div
         data-testid="insert-placeholder"
-        className="my-1 flex items-center gap-2 rounded-xl border-2 border-dashed border-[var(--sv-coral)] bg-[#FBE5DC] px-4 py-3 text-sm font-semibold text-[var(--sv-primary)]"
+        className="my-1 flex items-center gap-2 rounded-xl border-2 border-dashed border-[var(--sv-coral)] bg-[var(--sv-brand-wash)] px-4 py-3 text-sm font-semibold text-[var(--sv-primary)]"
       >
         <Plus size={14} /> New piece goes here
       </div>
@@ -169,7 +169,7 @@ function InsertPoint({
           still
             ? over && 'bg-[var(--sv-coral)]'
             : over
-              ? 'h-14 border-[var(--sv-coral)] bg-[#FBE5DC] text-[var(--sv-primary)]'
+              ? 'h-14 border-[var(--sv-coral)] bg-[var(--sv-brand-wash)] text-[var(--sv-primary)]'
               : 'h-6 border-[var(--sv-line)] text-[var(--sv-muted)]'
         )}
       >

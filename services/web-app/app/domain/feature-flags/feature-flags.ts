@@ -115,6 +115,9 @@ export const LESSON_PLANNER_ACTIVE_TIME_FLAG = 'lesson_planner_active_time' as c
 /** The teacher's call on whether a stack step is writing time (Nov 4 follow-up). Needs the stack page redesign. */
 export const LESSON_PLANNER_WRITING_OVERRIDE_FLAG = 'lesson_planner_writing_override' as const;
 
+/** The Lesson Deck Kit, spec v4 (Nov 6): cream slides, split panels, labels. Needs the Lesson Deck Kit. */
+export const LESSON_PLANNER_DECK_KIT_V4_FLAG = 'lesson_planner_deck_kit_v4' as const;
+
 /**
  * The teacher's own deck flags as they apply (Nov 1): keeping the deck needs
  * uploads, and both choices work from the kept deck.
@@ -183,6 +186,36 @@ export const ASSIGNMENT_TYPE_LESSON_PLANS_FLAG = 'assignment-type-lesson-plans' 
  * access-list bypass when off for a school.
  */
 export const TEACHER_LOUNGE_FLAG = 'teacher-lounge' as const;
+
+/**
+ * Exit ticket builder v3 (docs/plans/2026-11-02-exit-ticket-builder-v3.md):
+ * no attachment, four "Have the students…" activities in two groups, a
+ * teacher-written prompt, optional key points instead of a right-answer
+ * question, completion or understanding grading. Off: the quick builder.
+ * Tickets written by either builder open in both.
+ */
+export const EXIT_TICKET_BUILDER_V3_FLAG = 'exit-ticket-builder-v3' as const;
+
+/**
+ * Exit ticket class summary (v3 plan, phase 5): on the exit ticket's Class
+ * read, a model-written summary of the responses — what landed, the shared
+ * confusion, a reteach call and a suggested opening block — generated when
+ * the teacher asks, and carried into "Plan tomorrow from this". Off: the
+ * deterministic Class read only. Stored summaries are kept either way.
+ */
+export const EXIT_TICKET_CLASS_SUMMARY_FLAG = 'exit-ticket-class-summary' as const;
+
+/** Teacher-facing assignment-type landing pages (Brian's v2 copy). Default off on production. */
+export const ASSIGNMENT_TYPE_LANDING_V2_FLAG =
+  'assignment-type-landing-v2' as const;
+
+/** Thesis-Driven Essay landing page; requires v2. Demo on by default. */
+export const ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG =
+  'assignment-type-landing-thesis-essay' as const;
+
+/** How to Teach It's lesson plan links open Lesson Planner stacks instead of PDFs. */
+export const ASSIGNMENT_TYPE_LESSON_PLANS_FLAG =
+  'assignment-type-lesson-plans' as const;
 
 /**
  * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
@@ -299,6 +332,11 @@ export const FEATURE_FLAGS = {
     description:
       'On the stack page, an opened step offers “Don’t count as writing” or “Count as writing”, with Undo: a lecture that introduces pre-writing can be taken out of the writing tally, and a step the rule missed can be counted. The teacher’s call drives the Writing badge, the writing minutes and percent, and Create in Yawp!. Needs the stack page redesign. Off: Yawp! decides, as before.',
   },
+  [LESSON_PLANNER_DECK_KIT_V4_FLAG]: {
+    label: 'Lesson Planner: Lesson Deck Kit v4',
+    description:
+      'The Lesson Deck Kit, spec v4 (Nov 6): every slide on cream, color only as a solid panel on split slides or as type, short Arial labels (Look, Talk, Hold this) instead of italic mode words, no rules, small caps, middle dots or roman numerals, a plain painting plate, a quiz template, and colors with no terracotta or brown. Applies to every gallery deck the school opens, in Present, Run the show, PowerPoint, the PDFs and shared links, and the planner writes to the v4 templates. Needs the Lesson Deck Kit. Off: spec v3, as before.',
+  },
   [CLASS_CODE_UNIQUE_FLAG]: {
     label: 'Unique class codes',
     description:
@@ -338,6 +376,31 @@ export const FEATURE_FLAGS = {
     label: "Teacher's Lounge",
     description:
       "Controls Teacher's Lounge nav and `/app/teacher-trainings` access. Off: hidden for all teachers except the runtime access list. Everyone: on for all teachers. Targeted: on for listed schools only.",
+  },
+  [EXIT_TICKET_BUILDER_V3_FLAG]: {
+    label: 'Exit ticket builder v3',
+    description:
+      'The simpler exit ticket form: no attachment, "Have the students…" activities (reflect or ask; explain a concept; answer a question; engage with a text or source), a prompt the teacher writes, and optional key points instead of "Is there a correct answer?". Off: the current quick builder. Tickets made with either open in both.',
+  },
+  [EXIT_TICKET_CLASS_SUMMARY_FLAG]: {
+    label: 'Exit ticket class summary',
+    description:
+      'On an exit ticket’s Class read, teachers can ask for a summary of the responses: what the class understood, where the confusion is, whether to reteach, and a suggested opening block for tomorrow, which "Plan tomorrow from this" passes to the planner. One model call per request, only when new responses have arrived. Off: the Class read only.',
+  },
+  [ASSIGNMENT_TYPE_LANDING_V2_FLAG]: {
+    label: 'Assignment type landing v2',
+    description:
+      "Brian's teacher-facing landing pages on assignment types. Off: the legacy prompts library only.",
+  },
+  [ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG]: {
+    label: 'Thesis essay landing page',
+    description:
+      'The Thesis-Driven Essay landing page. Needs assignment type landing v2. Off: legacy thesis library.',
+  },
+  [ASSIGNMENT_TYPE_LESSON_PLANS_FLAG]: {
+    label: 'Assignment type lesson plan stacks',
+    description:
+      'How to Teach It opens ready-built Lesson Planner stacks. Needs assignment type landing v2.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

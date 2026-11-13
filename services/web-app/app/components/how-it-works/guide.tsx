@@ -532,7 +532,7 @@ export function GuideLink({ to, children }: { to: string; children: React.ReactN
       to={to}
       className={cn(
         'text-[15px] font-medium underline-offset-4 hover:underline',
-        accent ? `${HEADING} underline` : 'text-primary'
+        accent ? `${HEADING} underline` : 'text-link'
       )}
     >
       {children}

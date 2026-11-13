@@ -55,13 +55,11 @@ export function SiteLicenseLockedAssignmentTile({
 export function SiteLicenseLockedAssignmentGridTile({
   label,
   imageId,
-  imageTitle,
   tabIndex,
   tileRef,
 }: {
   label: string;
   imageId?: string | null;
-  imageTitle?: string | null;
   tabIndex?: number;
   tileRef?: (el: HTMLDivElement | null) => void;
 }) {
@@ -87,7 +85,6 @@ export function SiteLicenseLockedAssignmentGridTile({
       >
         <AssignmentTypeTileImage
           imageId={imageId}
-          imageTitle={imageTitle}
           className={assignmentTypeTileImageClassName}
         />
         <div

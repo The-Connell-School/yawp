@@ -177,6 +177,7 @@ export function capabilities() {
       "./bin/project qa prepare --json",
     ],
   };
+  result.proofProfiles.unshift("page-performance-unit");
   result.proofProfiles.unshift("guided-tours-unit", "guided-tours-browser", "guided-tours-db");
   result.proofProfiles.unshift("free-tier-locked-preview-unit", "free-tier-locked-preview-db", "free-tier-locked-preview-browser", "free-tier-class-step-unit", "free-tier-class-step-browser", "free-tier-welcome-unit", "free-tier-welcome-browser", "free-tier-welcome-live-browser", "free-tier-welcome-db");
   return result;
@@ -523,7 +524,7 @@ function runTestProfile(profile, { json }) {
   }
   else if (chosen === "signon-teacher-prompts-unit") {
     runWebApp("teacher-prompts-flow", ["test", "--max-concurrency=2", "app/domain/unified-signon/teacher-prompts.server.test.ts"]);
-    for (const file of ["app/routes/enter-code/teacher-prompts-compat.test.ts", "app/routes/enter-code/authz.test.ts", "app/routes/enter-code/selection-screen.test.tsx", "app/utils/auth.server.test.ts", "app/domain/unified-signon/teacher-prompts.test.ts", "app/routes/auth.logout/route.test.ts", "app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/utils/internal-feature-flags-http.server.test.ts", "app/routes/auth.login/unified-dispatch.test.ts"])
+    for (const file of ["app/routes/enter-code/teacher-prompts-compat.test.ts", "app/routes/enter-code/authz.test.ts", "app/routes/enter-code/selection-screen.test.tsx", "app/utils/auth.server.test.ts", "app/domain/unified-signon/teacher-prompts.test.ts", "app/routes/auth.logout/route.test.ts", "app/routes/auth.logout/route.get-logout.test.ts", "app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/utils/internal-feature-flags-http.server.test.ts", "app/routes/auth.login/unified-dispatch.test.ts"])
       runWebApp(file, ["test", "--max-concurrency=2", file]);
   }
   else if (chosen === "signon-teacher-prompts-browser") {
@@ -936,9 +937,18 @@ function runTestProfile(profile, { json }) {
       ),
     });
     results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.demo-feedback.config.ts", "--workers=1"], {
-      json, cwd: webAppRoot, timeout: 900000,
+      json, cwd: webAppRoot, timeout: 38 * 60 * 1000,
       env: { ...selected.env, CI: '1', TESTER_FEEDBACK_ENABLED: 'true', E2E_DATABASE_URL: local.DATABASE_URL, DEMO_FEEDBACK_BASE_URL: `http://127.0.0.1:${local.DEV_PORT}`, DEV_PANEL_EVIDENCE_DIR: process.env.DEV_PANEL_EVIDENCE_DIR || 'dev-panel-evidence' },
     }) });
+  }
+  else if (chosen === "page-performance-unit") {
+    for (const file of [
+      "app/utils/teacher-class-card-stats.server.test.ts",
+      "app/utils/teacher-dashboard-recent-classes.server.test.ts",
+      "app/utils/teacher-document-status.test.ts",
+      "app/routes/app._index/route.test.ts",
+      "app/routes/app.my-classes._index/route.test.ts",
+    ]) runWebApp(file, ["test", file]);
   }
   else if (chosen === "unit") run("unit", ["run", "--cwd", "services/web-app", "test"]);
   else if (chosen === "typecheck") run("typecheck", ["run", "web-app:typecheck"]);
@@ -1107,6 +1117,7 @@ function help(topic = "root") {
   const classStepHelp = "\nAdditional test profiles: free-tier-locked-preview-unit|free-tier-locked-preview-db|free-tier-locked-preview-browser|free-tier-class-step-unit|free-tier-class-step-browser|free-tier-welcome-unit|free-tier-welcome-browser|free-tier-welcome-live-browser|free-tier-welcome-db\n";
   pages.root += classStepHelp;
   pages.test += classStepHelp;
+  for (const topic of ["root", "test"]) pages[topic] += "\nPage performance profile: page-performance-unit\n";
   const tourHelp = "\nGuided tour test profiles: guided-tours-unit|guided-tours-browser|guided-tours-db\n";
   pages.root += tourHelp;
   pages.test += tourHelp;

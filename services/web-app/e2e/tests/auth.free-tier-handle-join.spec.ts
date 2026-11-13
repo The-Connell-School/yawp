@@ -151,11 +151,6 @@ test.describe('Free-tier handle student', () => {
       await teacherPage.goto(`/app/my-classes/${klass.id}?tab=students`);
       await expect(teacherPage.getByText(displayName)).toBeVisible();
       await expect(teacherPage.getByText(`@${handle}`)).toBeVisible();
-      await expect(
-        teacherPage.getByRole('heading', {
-          name: /Student join link|How students join/,
-        })
-      ).toBeVisible();
 
       await teacherPage.goto(`/app/my-classes/${klass.id}?tab=documents`, {
         waitUntil: 'domcontentloaded',

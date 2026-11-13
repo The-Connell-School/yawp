@@ -22,10 +22,9 @@ export const TILE_SLIDE_EYEBROWS: Record<ClassicSlideLayout, string> = {
  * The template's colours, as hex without the "#" (PowerPoint's form). The
  * HTML renderer adds the "#".
  *
- * Brian's run 2: "subtle, subtle, subtle". Full-strength terracotta stays for
- * small marks (eyebrows, numerals, a quote mark, a hairline bar); big blocks
- * use the softer orange, and cards are raised white tiles with a faint orange
- * border instead of an orange band.
+ * Brian's run 2: "subtle, subtle, subtle". Full-strength brand green for small
+ * marks; big blocks use the softer tint; cards are raised white tiles with a
+ * faint green edge instead of a colour band.
  */
 export const TILE_COLORS = {
   cream: 'F7F5EE', // --background
@@ -35,14 +34,14 @@ export const TILE_COLORS = {
   wash: 'E6E2D6', // --accent
   rule: 'D6D4CC', // --border
   /** --primary: small marks only. */
-  accent: 'D27151',
-  /** About half-strength terracotta on paper: title block, closing, headers. */
-  accentSoft: 'EBC0AE',
-  /** A faint orange edge on a raised tile. */
-  tileBorder: 'F1D5C9',
+  accent: '1F4D3A',
+  /** Softer brand green on paper: title block, closing, headers. */
+  accentSoft: 'C7D3CE',
+  /** A faint green edge on a raised tile. */
+  tileBorder: 'D7DFDC',
 } as const;
 
-/** "#D27151" for CSS. */
+/** Brand accent for CSS. */
 export function css(color: keyof typeof TILE_COLORS): string {
   return `#${TILE_COLORS[color]}`;
 }

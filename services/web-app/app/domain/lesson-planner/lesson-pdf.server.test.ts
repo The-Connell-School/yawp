@@ -687,3 +687,48 @@ describe("renderStepHandoutPdf (Brian's run 3, item 8)", () => {
     expect(Buffer.from(bytes).toString('latin1').startsWith('%PDF-')).toBe(true);
   });
 });
+
+describe('renderSlidesPdf — a deck drawn in spec v4', () => {
+  const v4 = {
+    title: 'Body Paragraphs',
+    kit: 'v4',
+    slides: [
+      { layout: 'agenda', title: "Today's program", body: 'We build one paragraph.', speakerNotes: 'Walk it.', agenda: [{ title: 'Close reading', minutes: 15 }] },
+      { layout: 'steps', title: 'Draft your topic sentence', bullets: ['Reread your thesis'], minutes: 6, speakerNotes: 'Go.' },
+      { layout: 'exit', title: 'Before you go', body: 'Bring your draft.', button: 'Exit ticket', speakerNotes: 'Close.' },
+    ],
+  };
+
+  test('prints the v4 slide: "Today", the label without its period, the Yawp! line', async () => {
+    const text = pdfText(await renderSlidesPdf({ lessonTitle: 'Body Paragraphs', deck: v4 as never }));
+    expect(text).toContain('Today');
+    // "Today’s program" is only the notes caption, never on the slide.
+    expect(text.slice(0, text.indexOf('Slide 1 of 3'))).not.toContain('program');
+    expect(text).toContain('Close reading');
+    expect(text).toContain('15 minutes');
+    expect(text).toContain('Draft your topic sentence');
+    expect(text).toContain('Exit ticket: open it in Yawp!');
+    expect(text).not.toContain('Do.');
+    // The notes still follow each slide.
+    expect(text).toContain('Slide 2 of 3');
+  });
+
+  test('fills the cream ground and the split slide’s panel', async () => {
+    const bytes = await renderSlidesPdf({ lessonTitle: 'Body Paragraphs', deck: v4 as never });
+    const raw = Buffer.from(bytes).toString('latin1');
+    let drawn = '';
+    for (const match of raw.matchAll(/stream\r?\n/g)) {
+      const start = match.index! + match[0].length;
+      const end = raw.indexOf('endstream', start);
+      try {
+        drawn += inflateSync(Buffer.from(bytes).subarray(start, end)).toString('latin1');
+      } catch {
+        // Not a page.
+      }
+    }
+    // Cream (#F3F0E8) is 0.953 0.941 0.910 in PDF color.
+    expect(drawn).toMatch(/0\.95294\d* 0\.94117\d* 0\.90980\d* scn\nf/);
+    // The panel, filled in the deck's primary (pine, with no art).
+    expect(drawn).toMatch(/0\.12156\d* 0\.20784\d* 0\.19607\d* scn\nf/);
+  });
+});

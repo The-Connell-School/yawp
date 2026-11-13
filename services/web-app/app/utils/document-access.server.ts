@@ -126,7 +126,32 @@ export function documentOwnerWhere({
 }): Prisma.DocumentWhereInput {
   if (hasEffectivePlatformAdmin(isAdmin)) return {};
 
-  return { artifactKind: 'STUDENT', membershipId: profileId };
+  return {
+    OR: [
+      { artifactKind: 'STUDENT', membershipId: profileId },
+      {
+        artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW',
+        membershipId: profileId,
+      },
+    ],
+  };
+}
+
+const soloStudentOrTeacherPreviewDocument = {
+  OR: [
+    { artifactKind: 'STUDENT' as const },
+    { artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW' as const },
+  ],
+};
+
+/** Solo-author documents a membership may edit (student work + teacher try-it previews). */
+export function whereSoloAuthorDocumentArtifactKind(): Pick<
+  Prisma.DocumentWhereInput,
+  'artifactKind'
+> {
+  return {
+    artifactKind: { in: ['STUDENT', 'TEACHER_ASSIGNMENT_PREVIEW'] },
+  };
 }
 
 /**
@@ -162,7 +187,9 @@ export function documentAuthorOwnSessionWhere({
       {
         membershipId: null,
         document: {
-          is: { artifactKind: 'STUDENT', membershipId: profileId },
+          is: {
+            AND: [soloStudentOrTeacherPreviewDocument, { membershipId: profileId }],
+          },
         },
       },
       // Shared: the session names its student, and they must also still be an
@@ -186,7 +213,9 @@ export function documentOwnerSessionWhere({
 
   return {
     document: {
-      is: { artifactKind: 'STUDENT', membershipId: profileId },
+      is: {
+        AND: [soloStudentOrTeacherPreviewDocument, { membershipId: profileId }],
+      },
     },
   };
 }

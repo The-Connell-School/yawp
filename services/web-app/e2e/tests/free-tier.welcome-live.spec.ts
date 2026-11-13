@@ -72,12 +72,13 @@ for (const width of [1280, 390]) {
     await fill(page, `${width}-below`, '7');
     await page.getByRole('button', { name: 'Join the waitlist' }).click();
     await expect(page.getByRole('heading', { name: 'Thanks for your interest in Yawp!' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'hello@yawp.school' })).toHaveAttribute('href', 'mailto:hello@yawp.school');
+    await page.getByRole('button', { name: 'Talk with our team' }).click();
+    await expect(page.getByText('Message sent using the details you entered on the previous screen. Brian will be in touch shortly.')).toBeVisible();
     await capture(page, `${width}-v2-decline`);
     const row = await prisma.freeTierApplication.findUniqueOrThrow({ where: { email: `${prefix}-${width}-below@example.edu` } });
     expect(row.tags).toEqual(['below-hs']); expect(row.status).toBe('REJECTED');
     expect(row.userId).toBeNull(); expect(row.organizationId).toBeNull();
-    expect(await prisma.freeTierEmailLog.count({ where: { applicationId: row.id } })).toBe(0);
+    expect(await prisma.freeTierEmailLog.count({ where: { applicationId: row.id, kind: 'team_contact_below_hs', success: true } })).toBe(1);
     await page.goto('/free'); await fill(page, `${width}-organic`);
     await page.getByRole('button', { name: 'Join the waitlist' }).click();
     await expect(page.getByRole('heading', { name: "You're on the list!", exact: true })).toBeVisible();

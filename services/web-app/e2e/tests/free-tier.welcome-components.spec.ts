@@ -24,8 +24,8 @@ for (const width of [1280, 390]) {
       } else if (state === 'v2-decline') {
         await expect(page.getByRole('status')).toContainText('high school');
         await expect(page.getByText(/site license/)).toBeVisible();
-        await expect(page.getByRole('link', { name: 'hello@yawp.school' })).toHaveAttribute('href', 'mailto:hello@yawp.school');
-        await expect(page.getByRole('button')).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Talk with our team' })).toBeVisible();
+        await expect(page.getByRole('link', { name: 'hello@yawp.school' })).toHaveCount(0);
       } else if (state === 'v2-event-confirmation') {
         await expect(page.getByRole('status')).toContainText('Check your email');
         await expect(page.getByText('Your join link is on its way to ada@example.test.')).toBeVisible();

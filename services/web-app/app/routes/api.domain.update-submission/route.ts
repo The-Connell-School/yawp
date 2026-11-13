@@ -94,6 +94,7 @@ export async function action({ request }: ActionFunctionArgs) {
       unsubmittedAt: true,
       document: {
         select: {
+          artifactKind: true,
           membershipId: true,
           assignmentTypeId: true,
           membership: {
@@ -173,7 +174,8 @@ export async function action({ request }: ActionFunctionArgs) {
       actor.membershipId,
       submission.document.membershipId,
       actor.userId,
-      submission.document.membership?.userId
+      submission.document.membership?.userId,
+      { artifactKind: submission.document.artifactKind }
     )
   ) {
     return Response.json(

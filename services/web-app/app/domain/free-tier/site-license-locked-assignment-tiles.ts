@@ -3,7 +3,7 @@ import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-drive
 import {
   FREE_CLASSROOM_ASSIGNMENT_KINDS,
   type FreeClassroomAssignmentQuotaKind,
-} from '~/utils/entitlements.server';
+} from '~/domain/free-tier/free-classroom-assignment-kinds';
 import type { OrganizationPlan } from '@app/prisma';
 
 function isEntitledFreeAssignmentKind(kind: string | null | undefined) {
@@ -184,4 +184,26 @@ export function siteLicenseLockedAssignmentTilesForOrganization(
 ): SiteLicenseLockedAssignmentTile[] {
   if (organization.plan !== 'FREE_CLASSROOM') return [];
   return resolveSiteLicenseLockedAssignmentTiles(catalogTypes);
+}
+
+/** Whether an assignment type appears as a site-license-only locked carousel tile. */
+export function assignmentTypeMatchesSiteLicenseLockedTile(
+  type: Pick<
+    AssignmentTypeCatalogRow,
+    'title' | 'kind' | 'systemKey' | 'ownerOrgId' | 'ownerMembershipId'
+  >
+): boolean {
+  if (isEntitledFreeAssignmentKind(type.kind)) return false;
+  const row: AssignmentTypeCatalogRow = {
+    id: '',
+    title: type.title,
+    kind: type.kind,
+    systemKey: type.systemKey ?? null,
+    ownerOrgId: type.ownerOrgId ?? null,
+    ownerMembershipId: type.ownerMembershipId ?? null,
+  };
+  return LOCKED_ASSIGNMENT_SPECS.some((spec) => {
+    if (!spec.allowOrgOwned && !isPlatformOwned(row)) return false;
+    return spec.matches(row);
+  });
 }

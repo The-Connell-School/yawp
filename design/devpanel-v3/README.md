@@ -1,25 +1,15 @@
-# Dev panel v3 — Claude Design implementation source
+# Dev panel v3 — design exports
 
 ## Source of truth (required)
 
-Implementation markup follows **`.dc.html` Claude Design sources** under `html/` (hard rule). Use `*.rendered.html` only to cross-check DOM:
+**PE3 HTML exports** under `html/pe3/*.pe3.html` (exported inline styles; not screenshots). See `html/pe3/README.md`.
 
-- `html/DevPanel.dc.html` — Developer tools panel
-- `html/FeedbackSheet.dc.html` — Give feedback flyout
-- `html/StatesSheet.dc.html` — Free-tier states flyout
-- `html/AppScreen.dc.html` — App shell wrapper (frames)
-- `html/*.rendered.html` — Rendered dumps for re-diff
+Stale pre-PE3 Claude Design sources (do not use for parity):
 
-Artifact: https://claude.ai/artifact/1pByUxigJ5SjW5AzqryTHj
+- `html/DevPanel.dc.html`
+- `html/FeedbackSheet.dc.html`
+- `html/StatesSheet.dc.html`
 
-PNGs (`01`–`05`) are QA-only for side-by-side MATCH/PARTIAL/MISS after HTML-driven implementation.
+Evidence doc: `docs/design/evidence/devpanel-v3/PE3-SOURCE-OF-TRUTH.md`
 
-## QA frames (1280×800)
-
-- `01-locked-beaker-desktop-1280.png`
-- `02-unlocked-default-desktop-1280.png`
-- `03-give-feedback-flyout-desktop-1280.png`
-- `04-free-tier-flyout-desktop-1280.png`
-- `05-signed-out-free-feedback-desktop-1280.png`
-
-See `docs/design/evidence/devpanel-v3/GAP-ANALYSIS.md` and PR checklist §(d).
+PNGs under `impl-2026-10-26/` are QA-only after HTML-driven implementation.

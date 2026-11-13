@@ -86,9 +86,10 @@ import {
 } from '~/components/class-manage-sheet';
 import { DocumentLink } from '~/components/document-link';
 import { Checkbox } from '~/components/ui/checkbox';
-import { HandleStudentPasswordResetButton } from './handle-student-password-reset';
+import { HandleStudentPasswordReset } from './handle-student-password-reset';
 import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
 import { UnsubmitSubmissionsSheet } from '~/components/teacher-document-work/unsubmit-submissions-sheet';
+import { ArchiveTeacherPreviewDocumentsSheet } from '~/components/teacher-document-work/archive-teacher-preview-documents-sheet';
 import {
   ArrowDown,
   ArrowUp,
@@ -109,6 +110,7 @@ import {
 } from '~/components/ui/select';
 import { studentModuleSessionSingleSelect } from './module-session-select.server';
 import { buildClassDocumentScope } from './class-document-where.server';
+import { TEACHER_ASSIGNMENT_PREVIEW_SUBJECT_LABEL } from '~/domain/assignments/teacher-assignment-preview';
 import { parseDocumentGroupMode } from './class-documents-grouping';
 import {
   getStoredCollapsedDocumentGroups,
@@ -147,9 +149,11 @@ import {
 } from '~/utils/teacher-document-status';
 import {
   buildReleaseGradeRows,
+  buildTeacherPreviewArchiveRows,
   buildTeacherUnsubmitRows,
   countTeacherDocumentWorkStatuses,
   type ReleaseGradeRow,
+  type TeacherPreviewArchiveRow,
   type TeacherUnsubmitRow,
   type TeacherDocumentWorkRow,
 } from '~/utils/teacher-document-work-utils';
@@ -192,8 +196,8 @@ import {
   ensureClassStudentJoinToken,
   teacherResetStudentPassword,
 } from '~/domain/free-tier/student-join.server';
-import { FreeClassStudentJoinCard } from '~/components/free-class-student-join-card';
 import { getDomainUrl } from '~/utils/misc';
+import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -1146,6 +1150,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: {
           id: true,
           title: true,
+          artifactKind: true,
           assignment: {
             select: {
               id: true,
@@ -1212,6 +1217,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: true,
       title: true,
       updatedAt: true,
+      artifactKind: true,
       assignment: {
         select: {
           id: true,
@@ -1256,6 +1262,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       updatedAt: 'desc',
     },
   });
+
+  const { loadTeacherPreviewDocumentsForClass } = await import(
+    './class-teacher-preview-documents.server'
+  );
+  const teacherPreviewDocuments = await loadTeacherPreviewDocumentsForClass({
+    classId,
+    teacherMembershipId: profile.id,
+  });
+
+  const inProgressDocumentsForClass = [
+    ...inProgressDocuments,
+    ...teacherPreviewDocuments.inProgressDocuments,
+  ];
+  const submissionsForClass = [
+    ...submissions,
+    ...teacherPreviewDocuments.submissions,
+  ];
 
   const [classAssignments, availableAssignmentTypes] = await Promise.all([
     prisma.classAssignment.findMany({
@@ -1341,6 +1364,28 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
         })
       : [];
+  const studentDocumentCountByClassAssignmentId = new Map(
+    classAssignmentIds.length > 0
+      ? (
+          await prisma.document.groupBy({
+            by: ['classAssignmentId'],
+            where: {
+              classAssignmentId: { in: classAssignmentIds },
+              deletedAt: null,
+              OR: [
+                { artifactKind: 'ASSIGNMENT_GROUP' },
+                {
+                  artifactKind: 'STUDENT',
+                  membership: { is: { role: 'STUDENT' } },
+                },
+              ],
+            },
+            _count: { _all: true },
+          })
+        ).map((row) => [row.classAssignmentId!, row._count._all])
+      : []
+  );
+
   const insightByClassAssignmentId = new Map(
     (await currentClassInsightRows(insightRows))
       .filter((row) => row.status === 'ready' && row.summaryJson)
@@ -1370,7 +1415,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       classAssignment.assignment._count.classAssignments - 1,
       0
     ),
-    _count: classAssignment._count,
+    _count: {
+      documents:
+        studentDocumentCountByClassAssignmentId.get(classAssignment.id) ?? 0,
+    },
     insight: insightByClassAssignmentId.get(classAssignment.id) ?? null,
     hasSharedWork: classAssignment.documentGroups.length > 0,
   }));
@@ -1471,12 +1519,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     role: 'TEACHER' as const,
+    exitTicketBuilderV3Enabled: await isExitTicketBuilderV3Enabled(
+      klass.school.organizationId
+    ),
     classCodeUniqueEnabled: await classCodeUniquenessEnabled(prisma),
     classCodeHidden: hideTeachingSecrets,
     studentJoinUrl,
     klass: klassForClient,
-    submissions,
-    inProgressDocuments,
+    submissions: submissionsForClass,
+    inProgressDocuments: inProgressDocumentsForClass,
     assignments,
     assignmentTypes: creationTypeRows.map(
       ({ id, title, kind, collaborationSupported, rubric }) => ({
@@ -1522,10 +1573,49 @@ type ClassDocumentSubmission = {
   gradedAt?: Date | string | null;
 };
 
+function classDocumentSubjectForRow(params: {
+  membership:
+    | {
+        id: string;
+        user: {
+          name: string | null;
+          email: string | null;
+          username?: string | null;
+        };
+      }
+    | null
+    | undefined;
+  group: TeacherDocumentWorkRow['group'];
+  documentId: string;
+  artifactKind?: string | null;
+}): ClassDocumentRow['membership'] {
+  if (
+    params.artifactKind === 'TEACHER_ASSIGNMENT_PREVIEW' &&
+    params.membership
+  ) {
+    return {
+      ...params.membership,
+      user: {
+        ...params.membership.user,
+        name: TEACHER_ASSIGNMENT_PREVIEW_SUBJECT_LABEL,
+      },
+    };
+  }
+  if (params.membership) return params.membership;
+  return {
+    id: `group:${params.group?.id ?? params.documentId}`,
+    user: {
+      name: params.group?.label ?? 'Collaborative group',
+      email: '',
+    },
+  };
+}
+
 type ClassDocumentRow = {
   id: string;
   title: string | null;
   updatedAt: Date;
+  isTeacherAssignmentPreview?: boolean;
   membership: {
     id: string;
     user: {
@@ -1576,6 +1666,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
   const location = useLocation();
   const revalidator = useRevalidator();
   const studentFetcher = useFetcher();
+  const pendingRemoveStudentsRef = useRef(false);
   // Non-null when a nested detail route matches — either the assignment
   // detail route (app.my-classes.$classId.assignment.$assignmentId) or the
   // class summary route (app.my-classes.$classId.summary.$assignmentId).
@@ -1621,6 +1712,8 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
   const [isReleaseGradesSheetOpen, setIsReleaseGradesSheetOpen] =
     useState(false);
   const [isUnsubmitSheetOpen, setIsUnsubmitSheetOpen] = useState(false);
+  const [isArchivePreviewSheetOpen, setIsArchivePreviewSheetOpen] =
+    useState(false);
   const [studentNameSortDirection, setStudentNameSortDirection] =
     useState<SortDirection>('asc');
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
@@ -1629,6 +1722,9 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
   >([]);
   const [unsubmitRowsForSheet, setUnsubmitRowsForSheet] = useState<
     TeacherUnsubmitRow[]
+  >([]);
+  const [archivePreviewRowsForSheet, setArchivePreviewRowsForSheet] = useState<
+    TeacherPreviewArchiveRow[]
   >([]);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [growthPlanStudent, setGrowthPlanStudent] = useState<{
@@ -1866,17 +1962,19 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
     const byDocumentId = new Map<string, ClassDocumentRow>();
 
     for (const document of data.inProgressDocuments) {
-      const subject = document.membership ?? {
-        id: `group:${document.group?.id ?? document.id}`,
-        user: {
-          name: document.group?.label ?? 'Collaborative group',
-          email: '',
-        },
-      };
+      const isTeacherAssignmentPreview =
+        document.artifactKind === 'TEACHER_ASSIGNMENT_PREVIEW';
+      const subject = classDocumentSubjectForRow({
+        membership: document.membership,
+        group: document.group,
+        documentId: document.id,
+        artifactKind: document.artifactKind,
+      });
       byDocumentId.set(document.id, {
         id: document.id,
         title: document.title,
         updatedAt: new Date(document.updatedAt),
+        isTeacherAssignmentPreview,
         membership: subject,
         group: document.group,
         assignment: document.assignment,
@@ -1887,17 +1985,19 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
 
     for (const submission of allSubmissions) {
       const existing = byDocumentId.get(submission.documentId);
-      const subject = submission.document.membership ?? {
-        id: `group:${submission.document.group?.id ?? submission.documentId}`,
-        user: {
-          name: submission.document.group?.label ?? 'Collaborative group',
-          email: '',
-        },
-      };
+      const isTeacherAssignmentPreview =
+        submission.document.artifactKind === 'TEACHER_ASSIGNMENT_PREVIEW';
+      const subject = classDocumentSubjectForRow({
+        membership: submission.document.membership,
+        group: submission.document.group,
+        documentId: submission.documentId,
+        artifactKind: submission.document.artifactKind,
+      });
       const row: ClassDocumentRow = existing ?? {
         id: submission.documentId,
         title: submission.document.title,
         updatedAt: new Date(submission.submittedAt ?? submission.createdAt),
+        isTeacherAssignmentPreview,
         membership: subject,
         group: submission.document.group,
         assignment: submission.document.assignment,
@@ -1982,6 +2082,11 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
     [selectedDocuments]
   );
 
+  const archivePreviewRows = useMemo(
+    () => buildTeacherPreviewArchiveRows(selectedDocuments),
+    [selectedDocuments]
+  );
+
   // Handle URL param for to-release action (legacy deep link)
   useEffect(() => {
     const tab = searchParams.get('tab');
@@ -2019,6 +2124,18 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
     setUnsubmitRowsForSheet([]);
     setSelectedDocumentIds([]);
     window.location.reload();
+  };
+
+  const openArchivePreviewSheet = () => {
+    if (archivePreviewRows.length === 0) return;
+    setArchivePreviewRowsForSheet(archivePreviewRows);
+    setIsArchivePreviewSheetOpen(true);
+  };
+
+  const handleArchivePreviewSuccess = () => {
+    setArchivePreviewRowsForSheet([]);
+    setSelectedDocumentIds([]);
+    revalidator.revalidate();
   };
 
   const documentWorkStatusCounts = useMemo(
@@ -2062,6 +2179,15 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
 
   useEffect(() => {
     if (studentFetcher.state !== 'idle' || !studentFetcher.data) {
+      return;
+    }
+
+    if (pendingRemoveStudentsRef.current) {
+      pendingRemoveStudentsRef.current = false;
+      if ('success' in studentFetcher.data && studentFetcher.data.success) {
+        setSelectedStudentIds([]);
+        revalidator.revalidate();
+      }
       return;
     }
 
@@ -2305,6 +2431,18 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
               disabled: unsubmitRows.length === 0,
               onSelect: openUnsubmitSheet,
             },
+            {
+              id: 'archive-preview',
+              label: 'Archive preview',
+              count:
+                archivePreviewRows.length > 0
+                  ? archivePreviewRows.length
+                  : undefined,
+              disabled:
+                selectedDocumentIds.length === 0 ||
+                archivePreviewRows.length === 0,
+              onSelect: openArchivePreviewSheet,
+            },
           ]}
           selection={{
             selectedDocumentIds,
@@ -2365,16 +2503,6 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                 full." Remove a student to open a seat.
               </p>
             )}
-          {freeUsage &&
-          (data.studentJoinUrl || data.classCodeHidden) ? (
-            <FreeClassStudentJoinCard
-              joinUrl={data.studentJoinUrl ?? ''}
-              classCode={data.klass.code}
-              compact
-              teachingLocked={teachingLocked || data.classCodeHidden}
-              adminName={teachingAccessAdminName}
-            />
-          ) : null}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="relative min-w-0 w-full max-w-sm flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -2423,7 +2551,9 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                             e.preventDefault();
                             return;
                           }
-                          setSelectedStudentIds([]);
+                          // Clear selection only after the POST succeeds (see effect);
+                          // clearing here unmounts the form before it submits.
+                          pendingRemoveStudentsRef.current = true;
                         }}
                       >
                         <UserMinus className="h-4 w-4" />
@@ -2779,18 +2909,34 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                             onCheckedChange={() => handleSelectStudent(s.id)}
                           />
                         </TableCell>
-                        <TableCell className="font-medium">
-                          {s.user.name ?? 'Unnamed Student'}
+                        <TableCell className="max-h-[37px] font-medium">
+                          <button
+                            type="button"
+                            className="cursor-pointer text-left font-medium hover:underline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setGrowthPlanStudent({
+                                id: s.id,
+                                name: s.user.name ?? s.user.email,
+                                email: s.user.email,
+                              });
+                            }}
+                          >
+                            {s.user.name ?? 'Unnamed Student'}
+                          </button>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          <div className="flex flex-col gap-1">
-                            <span>{formatUserContactLabel(s.user)}</span>
+                          <div className="flex items-center gap-0.5">
+                            <span className="truncate">
+                              {formatUserContactLabel(s.user)}
+                            </span>
                             {!s.user.email ? (
-                              <HandleStudentPasswordResetButton
+                              <HandleStudentPasswordReset
                                 studentMembershipId={s.id}
                                 studentName={
                                   s.user.name?.trim() || 'this student'
                                 }
+                                trigger="icon"
                               />
                             ) : null}
                           </div>
@@ -2956,6 +3102,13 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
         onSuccess={handleUnsubmitSuccess}
       />
 
+      <ArchiveTeacherPreviewDocumentsSheet
+        documents={archivePreviewRowsForSheet}
+        isOpen={isArchivePreviewSheetOpen}
+        onClose={() => setIsArchivePreviewSheetOpen(false)}
+        onSuccess={handleArchivePreviewSuccess}
+      />
+
       <StudentGrowthPlansSheet
         open={growthPlanStudent !== null}
         onOpenChange={(open) => {
@@ -2981,6 +3134,9 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
         }
         pasteAlertsExitTo={classDetailExitTo}
         showGrowthPlans={reporterEnabled}
+        showHandlePasswordReset={
+          growthPlanStudent ? !growthPlanStudent.email : false
+        }
       />
     </section>
   );

@@ -45,6 +45,10 @@ const {
   EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
   EXIT_TICKET_ELABORATION_NOTE,
   EXIT_TICKET_FOCUS_OPTIONS,
+  EXIT_TICKET_ACTIVITIES,
+  EXIT_TICKET_EXPLAIN_CLOSER,
+  EXIT_TICKET_POLISH_CLOSER,
+  exitTicketStarterOption,
 } = await import('~/domain/assignment-types/exit-ticket');
 
 describe('assignmentCreationClassLabel', () => {
@@ -131,6 +135,12 @@ const exitTicketAssignmentTypes = [
 const teacherClasses = [
   { id: 'class-1', name: 'English 9' },
   { id: 'class-2', name: 'English 10' },
+];
+
+const threeTeacherClasses = [
+  { id: 'class-1', name: 'English 9' },
+  { id: 'class-2', name: 'English 10' },
+  { id: 'class-3', name: 'English 11' },
 ];
 
 function render(element: ReactElement) {
@@ -511,6 +521,45 @@ describe('AssignmentCreationSheetContent', () => {
     expectText('Could not create the assignment.');
   });
 
+  it('shows the assignment created success view when create returns assignmentId', () => {
+    root = renderSheet({
+      createFetcher: idleFetcher({
+        success: true,
+        assignmentId: 'asgn-123',
+      }),
+      initialClassIds: ['class-1'],
+      initialTitle: 'Community Gardens — Thesis',
+      initialAssignmentTypeId: 'type-2',
+    }).root;
+
+    expect(
+      document.querySelector('[data-testid="assignment-created-success"]')
+    ).not.toBeNull();
+    expectText('Assignment created');
+    expectText('Community Gardens — Thesis');
+    expect(
+      document.querySelector('[data-testid="assignment-created-share-url"]')
+    ).not.toBeNull();
+    expectNoText('Create Assignment');
+  });
+
+  it('shows duplicate assign-to counter with none preselected and blocks submit', () => {
+    root = renderSheet({
+      assignToVariant: 'duplicate',
+      initialClassIds: [],
+      duplicateClasses: teacherClasses,
+      initialTitle: 'Copy of Essay',
+      initialAssignmentTypeId: 'type-2',
+      initialPrompt: 'Duplicate prompt',
+    }).root;
+
+    expectText(`0 of ${teacherClasses.length} selected`);
+    expect(
+      document.querySelector<HTMLButtonElement>('button[type="submit"]')!
+        .disabled
+    ).toBe(true);
+  });
+
   it('names a tutor-off assignment a cold write', () => {
     root = renderSheet().root;
     expectNoText('Cold write');
@@ -655,6 +704,39 @@ describe('AssignmentCreationSheetContent', () => {
 
     const classIds = allInputsByName('classIds').map((input) => input.value);
     expect(classIds).toEqual(['class-1']);
+  });
+
+  it('enables every class checkbox when no class is fixed', () => {
+    root = renderSheet({
+      teacherClasses: threeTeacherClasses,
+      initialClassIds: [],
+    }).root;
+
+    for (const classId of ['class-1', 'class-2', 'class-3']) {
+      const control = controlById(`assignment-create-class-${classId}`);
+      expect((control as HTMLButtonElement).disabled).toBe(false);
+    }
+
+    act(() => {
+      controlById('assignment-create-class-class-1').click();
+      controlById('assignment-create-class-class-2').click();
+    });
+
+    expect(allInputsByName('classIds').map((input) => input.value).sort()).toEqual(
+      ['class-1', 'class-2']
+    );
+  });
+
+  it('disables class checkboxes when fixedClassId is set', () => {
+    root = renderSheet({
+      teacherClasses: threeTeacherClasses,
+      fixedClassId: 'class-1',
+    }).root;
+
+    for (const classId of ['class-1', 'class-2', 'class-3']) {
+      const control = controlById(`assignment-create-class-${classId}`);
+      expect((control as HTMLButtonElement).disabled).toBe(true);
+    }
   });
 
   it('keeps extracted PDF fields when route data refreshes while the sheet stays open', () => {
@@ -1007,6 +1089,137 @@ describe('AssignmentCreationSheetContent', () => {
 
   // The original builder, kept as the flag-off path. These pin it so
   // switching the new builder off always lands on exactly what shipped.
+  describe('exit tickets (v3 builder)', () => {
+    function renderV3Sheet(
+      props: Partial<Parameters<typeof AssignmentCreationSheetContent>[0]> = {}
+    ) {
+      return renderSheet({
+        assignmentTypes: exitTicketAssignmentTypes,
+        fixedAssignmentTypeId: 'exit-1',
+        fixedClassId: 'class-1',
+        exitTicketBuilderV3Enabled: true,
+        ...props,
+      });
+    }
+
+    function submitButton() {
+      return document.querySelector<HTMLButtonElement>(
+        'button[type="submit"]'
+      )!;
+    }
+
+    it('stays on the quick builder while the flag is off', () => {
+      root = renderV3Sheet({ exitTicketBuilderV3Enabled: false }).root;
+      controlById('assignment-create-exit-ticket-kind-reflection');
+      expect(document.querySelector('input[name="promptAttachment"]')).not.toBeNull();
+      expect(document.querySelector('input[name="exitTicketActivity"]')).toBeNull();
+    });
+
+    it('drops the attachment and opens on a reflection ready to create', () => {
+      root = renderV3Sheet().root;
+
+      expect(document.querySelector('input[name="promptAttachment"]')).toBeNull();
+      expectNoText('Attachment (optional)');
+      expectNoText('Is there a correct answer?');
+      expectNoText('Walk me through it');
+      for (const activity of EXIT_TICKET_ACTIVITIES) {
+        controlById(`assignment-create-exit-ticket-activity-${activity}`);
+      }
+      expect(
+        isChecked(controlById('assignment-create-exit-ticket-activity-reflect'))
+      ).toBe(true);
+
+      const learned = exitTicketStarterOption('learned')!.prompt;
+      expect(textareaByName('exitTicketPromptText').value).toBe(learned);
+      expect(inputByName('exitTicketActivity').value).toBe('reflect');
+      expect(inputByName('exitTicketKind').value).toBe('reflection');
+      expect(inputByName('exitTicketMode').value).toBe('basic');
+      expect(inputByName('exitTicketStarter').value).toBe('learned');
+      expect(inputByName('prompt').value).toBe(
+        `${learned}\n\n${EXIT_TICKET_EXPLAIN_CLOSER}`
+      );
+      expect(submitButton().disabled).toBe(false);
+      expectText('tends to hand in six words');
+    });
+
+    it('a check starts empty, asks for key points, and needs a prompt', () => {
+      root = renderV3Sheet().root;
+
+      act(() => {
+        controlById(
+          'assignment-create-exit-ticket-activity-answer-question'
+        ).click();
+      });
+
+      expect(textareaByName('exitTicketPromptText').value).toBe('');
+      expect(submitButton().disabled).toBe(true);
+      textareaByName('exitTicketLessonMustMention');
+      // Asked once: the notes section does not repeat the key points.
+      expect(
+        document.querySelectorAll('textarea[name="exitTicketLessonMustMention"]')
+      ).toHaveLength(1);
+
+      act(() => {
+        setTextareaValue(textareaByName('exitTicketPromptText'), 'Who is Allie?');
+      });
+      expect(submitButton().disabled).toBe(false);
+      expect(inputByName('exitTicketKind').value).toBe('check');
+      expect(inputByName('exitTicketMode').value).toBe('specific');
+      expect(inputByName('prompt').value).toBe(
+        `Who is Allie?\n\n${EXIT_TICKET_POLISH_CLOSER}`
+      );
+      expect(document.querySelector('input[name="exitTicketStarter"]')).toBeNull();
+    });
+
+    it('reopens a stored v3 ticket on its activity and prompt', () => {
+      root = renderV3Sheet({
+        initialExitTicketConfig: {
+          schemaVersion: 1,
+          mode: 'specific',
+          kind: 'check',
+          activity: 'engage-text',
+          promptText: 'Find the volta.',
+          focus: 'understand-text',
+          topic: 'Find the volta',
+          answerType: 'subjective',
+        },
+      }).root;
+      expect(
+        isChecked(
+          controlById('assignment-create-exit-ticket-activity-engage-text')
+        )
+      ).toBe(true);
+      expect(textareaByName('exitTicketPromptText').value).toBe(
+        'Find the volta.'
+      );
+    });
+
+    it('reads a planner hand-off in the quick builder’s terms', () => {
+      root = renderV3Sheet({
+        initialExitTicketMode: 'specific',
+        initialExitTicketFocus: 'explain-concept',
+        initialExitTicketTopic: 'weathering and erosion',
+        initialExitTicketAnswerType: 'objective',
+      }).root;
+      expect(
+        isChecked(
+          controlById('assignment-create-exit-ticket-activity-explain-concept')
+        )
+      ).toBe(true);
+      expect(textareaByName('exitTicketPromptText').value).toBe(
+        'In your own words, explain weathering and erosion.'
+      );
+    });
+
+    it('still lets a teacher remove a file attached before v3', () => {
+      root = renderV3Sheet({
+        editingAssignment: { id: 'a-1', promptAttachmentName: 'old.pdf' },
+      }).root;
+      expectText('old.pdf');
+      expect(document.querySelector('input[name="promptAttachment"]')).toBeNull();
+    });
+  });
+
   describe('exit tickets (quick builder)', () => {
     function renderQuickExitTicketSheet(
       props: Partial<Parameters<typeof AssignmentCreationSheetContent>[0]> = {}

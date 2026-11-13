@@ -15,7 +15,7 @@ const prisma = {
   documentGroupMember: { updateMany: mock() },
   pasteAlert: { findMany: mock() },
   submission: { findMany: mock() },
-  document: { findMany: mock() },
+  document: { findMany: mock(), groupBy: mock() },
   documentGroup: { findFirst: mock() },
   assignment: {
     findFirst: mock(),
@@ -95,6 +95,8 @@ afterAll(() => {
   );
 });
 
+import { buildClassStudentWorkOnAssignmentBranches } from '~/utils/class-assignment-scope';
+
 describe('class detail loader document visibility', () => {
   beforeEach(() => {
     for (const model of Object.values(prisma)) {
@@ -147,6 +149,7 @@ describe('class detail loader document visibility', () => {
     prisma.pasteAlert.findMany.mockResolvedValue([]);
     prisma.submission.findMany.mockResolvedValue([]);
     prisma.document.findMany.mockResolvedValue([]);
+    prisma.document.groupBy.mockResolvedValue([]);
     prisma.documentGroup.findFirst.mockResolvedValue(null);
     prisma.classAssignment.findMany.mockResolvedValue([]);
     prisma.classAssignmentInsight.findMany.mockResolvedValue([]);
@@ -173,7 +176,7 @@ describe('class detail loader document visibility', () => {
 
     const expectedScope = {
       OR: [
-        { classAssignment: { classId: 'class-1' } },
+        ...buildClassStudentWorkOnAssignmentBranches('class-1'),
         { id: { in: ['legacy-doc-1', 'legacy-doc-2'] } },
       ],
     };
@@ -197,12 +200,15 @@ describe('class detail loader document visibility', () => {
       archivedAt: null,
       submissions: { none: {} },
     });
+    expect(prisma.document.findMany).toHaveBeenCalledTimes(2);
   });
 
   test('keeps existing submissions visible for teachers', async () => {
-    prisma.submission.findMany.mockResolvedValue([
-      { id: 'submission-1', title: 'Submitted essay' },
-    ]);
+    prisma.submission.findMany
+      .mockResolvedValueOnce([
+        { id: 'submission-1', title: 'Submitted essay' },
+      ])
+      .mockResolvedValueOnce([]);
 
     const response = await loader({
       request: new Request('https://example.test/app/my-classes/class-1'),
@@ -214,7 +220,7 @@ describe('class detail loader document visibility', () => {
     expect(data.submissions).toEqual([
       { id: 'submission-1', title: 'Submitted essay' },
     ]);
-    expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.submission.findMany).toHaveBeenCalledTimes(2);
   });
 
   test('loads growth plans even when the organization previously had reporter disabled', async () => {
@@ -1097,7 +1103,11 @@ describe('class detail loader for students', () => {
       deletedAt: null,
       archivedAt: null,
       OR: [
-        { classAssignment: { classId: 'class-1' }, membershipId: 'student-1' },
+        {
+          classAssignment: { classId: 'class-1' },
+          artifactKind: 'STUDENT',
+          membershipId: 'student-1',
+        },
         {
           classAssignment: {
             classId: 'class-1',

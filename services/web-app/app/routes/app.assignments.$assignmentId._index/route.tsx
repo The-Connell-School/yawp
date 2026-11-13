@@ -1,5 +1,10 @@
 import { currentClassInsightRows } from '~/domain/assignment-insights/class-insight-inputs.server';
 import { useFreeAccountUsage } from '~/components/free-account-usage';
+import {
+  freeTierStandardPageBodyClassName,
+  freeTierStandardPageShellClassName,
+  useFreeTierStandardPageShell,
+} from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { ExitTicketClassReadPanel } from '~/components/assignments/exit-ticket-class-read-panel';
 import { buildExitTicketClassRead } from '~/domain/assignment-types/exit-ticket-class-read';
 import { loadExitTicketResponses } from '~/domain/assignment-types/exit-ticket-class-read.server';
@@ -15,10 +20,11 @@ import {
   redirect,
   useLoaderData,
   useNavigate,
+  useLocation,
   useSearchParams,
 } from 'react-router';
 import { toCollaborationGroupMode } from '~/domain/assignments/collaboration';
-import { Copy, Pencil, UsersIcon } from 'lucide-react';
+import { AssignmentDetailHeaderActions } from '~/components/assignments/assignment-detail-header-actions';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
@@ -33,14 +39,21 @@ import {
   SelectValue,
 } from '~/components/ui/select';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { buildNewAssignmentPageHref } from '~/domain/free-tier/new-assignment-page-url';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { TutorOffBadge } from '~/components/assignments/tutor-off-badge';
+import { AssignmentTryItPill } from '~/components/assignments/assignment-try-it-pill';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   parseGradingAssistantStrictnessLevel,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
 import { formatClassLabel } from '~/utils/class-display';
+import {
+  resolveTeacherSchoolYearScope,
+  schoolYearWhere,
+} from '~/utils/school-year-scope.server';
+import { buildClassAssignmentStudentDocumentCountWhere } from '~/utils/class-assignment-scope';
 import { dailyPagesEngagementPointValueError } from '~/domain/assignment-types/daily-pages-engagement-point-validation';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
@@ -87,6 +100,16 @@ import {
  * content's width or gutters.
  */
 function PageShell({ children }: { children: ReactNode }) {
+  const teacherPageShell = useFreeTierStandardPageShell();
+  if (teacherPageShell) {
+    return (
+      <section className={freeTierStandardPageShellClassName()}>
+        <div className={freeTierStandardPageBodyClassName()}>
+          {children}
+        </div>
+      </section>
+    );
+  }
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="mx-auto w-full max-w-screen-xl px-3 py-3 pb-24 sm:px-5">
@@ -116,6 +139,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const assignmentId = params.assignmentId!;
   const requestedClassId = new URL(request.url).searchParams.get('classId');
+  const schoolYearScope = await resolveTeacherSchoolYearScope(
+    request,
+    profile.id
+  );
 
   // Scoped to classes this teacher actually teaches, so the URL alone never
   // exposes another teacher's class.
@@ -187,7 +214,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const classInsightsEnabled =
     active.class.school.organization.classInsightsEnabled === true;
 
-  const [insightRow, gradedCount, assignmentTypes] = await Promise.all([
+  const [
+    insightRow,
+    gradedCount,
+    documentCount,
+    teacherPreviewDocumentId,
+    assignmentTypes,
+  ] = await Promise.all([
     classInsightsEnabled
       ? prisma.classAssignmentInsight.findUnique({
           where: { classAssignmentId: active.id },
@@ -203,9 +236,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       where: {
         gradedAt: { not: null },
         unsubmittedAt: null,
-        document: { is: { classAssignmentId: active.id, deletedAt: null } },
+        document: { is: buildClassAssignmentStudentDocumentCountWhere(active.id) },
       },
     }),
+    prisma.document.count({
+      where: buildClassAssignmentStudentDocumentCountWhere(active.id),
+    }),
+    import('~/domain/assignments/teacher-assignment-preview.server').then(
+      ({ findTeacherAssignmentPreviewDocumentId }) =>
+        findTeacherAssignmentPreviewDocumentId({
+          teacherMembershipId: profile.id,
+          classAssignmentId: active.id,
+        })
+    ),
     getAvailableAssignmentTypesForScopes<{
       id: string;
       title: string;
@@ -285,6 +328,26 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         }
       : null;
 
+  const duplicateClassRows = await prisma.class.findMany({
+    where: {
+      teachers: { some: { id: profile.id } },
+      isArchived: false,
+      ...schoolYearWhere(schoolYearScope),
+    },
+    select: {
+      id: true,
+      grade: true,
+      period: true,
+      title: true,
+    },
+  });
+  const duplicateClasses = duplicateClassRows
+    .map((klass) => ({
+      id: klass.id,
+      name: formatClassLabel(klass),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   return {
     found: true as const,
     classInsightsEnabled,
@@ -305,6 +368,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: deployment.classId,
       name: formatClassLabel(deployment.class),
     })),
+    duplicateClasses,
     assignment: {
       id: active.assignment.id,
       classAssignmentId: active.id,
@@ -329,7 +393,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       // default answers in both cases.
       exitTicket: exitTicketConfig,
       assignmentType: active.assignment.assignmentType,
-      documentCount: active._count.documents,
+      documentCount,
+      teacherPreviewDocumentId,
       gradedCount,
       insight,
       exitTicketClassRead,
@@ -797,10 +862,10 @@ export default function AssignmentDetailRoute() {
   const data = useLoaderData<typeof loader>();
   const freeUsage = useFreeAccountUsage();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [isEditSheetOpen, setIsEditSheetOpen] = useState(false);
-  const [isDuplicateSheetOpen, setIsDuplicateSheetOpen] = useState(false);
 
   const handleEditSheetOpenChange = (open: boolean) => {
     setIsEditSheetOpen(open);
@@ -900,9 +965,27 @@ export default function AssignmentDetailRoute() {
           <div className="mb-6 overflow-hidden rounded-xl border bg-white dark:bg-card">
             <div className="flex flex-wrap items-start justify-between gap-4 p-4 sm:p-5">
               <div className="min-w-0 flex-1">
-                <h1 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
-                  {assignment.title?.trim() || 'Untitled Assignment'}
-                </h1>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
+                    {assignment.title?.trim() || 'Untitled Assignment'}
+                  </h1>
+                  <AssignmentTryItPill
+                    assignment={{
+                      id: assignment.id,
+                      assignmentTypeId: assignment.assignmentType?.id,
+                      classId: activeClassId,
+                    }}
+                  />
+                  {assignment.teacherPreviewDocumentId ? (
+                    <Link
+                      to={`/app/documents/${assignment.teacherPreviewDocumentId}?spa=1&exitTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`}
+                      className="inline-flex h-6 shrink-0 items-center rounded-full border border-muted-foreground/30 bg-muted/40 px-2.5 text-xs font-medium text-foreground hover:bg-muted"
+                      data-testid="assignment-your-preview"
+                    >
+                      Your preview
+                    </Link>
+                  ) : null}
+                </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base/6 text-muted-foreground sm:text-sm/5">
                   {assignment.assignmentType ? (
                     <Badge variant="outline" size="sm">
@@ -921,81 +1004,81 @@ export default function AssignmentDetailRoute() {
                   </span>
                 </div>
               </div>
-              <div
-                className="flex shrink-0 items-center gap-2"
-                data-testid="assignment-detail-actions"
-              >
-                {classes.length > 1 ? (
-                  <Select
-                    value={activeClassId}
-                    onValueChange={handleClassChange}
-                  >
-                    <SelectTrigger
-                      className="w-[200px]"
-                      aria-label="Class"
+              <AssignmentDetailHeaderActions
+                assignmentId={assignment.id}
+                canEdit={canEdit}
+                collaboration={collaboration ?? undefined}
+                classAssignmentId={assignment.classAssignmentId}
+                onDuplicate={() => {
+                  void navigate(
+                    buildNewAssignmentPageHref({
+                      assignmentTypeId: assignment.assignmentTypeId,
+                      classId: activeClassId,
+                      title: `Copy of ${assignment.title?.trim() || 'Untitled Assignment'}`,
+                      prompt: assignment.prompt,
+                    })
+                  );
+                }}
+                onEdit={() => {
+                  if (isExitTicketAssignmentType(assignment.assignmentType)) {
+                    setIsEditSheetOpen(true);
+                    return;
+                  }
+                  void navigate(
+                    `/app/assignments/${assignment.id}/edit?classId=${activeClassId}`
+                  );
+                }}
+                collaborationEnabled={Boolean(collaboration)}
+                groupsNotOpened={Boolean(
+                  collaboration && !collaboration.groupsOpened
+                )}
+                duplicateDisabled={Boolean(
+                  !freeUsage?.monthly &&
+                    freeUsage?.assignments.find(
+                      (row) => row.kind === assignment.assignmentType.kind
+                    )?.remaining === 0
+                )}
+                duplicateDisabledNote={
+                  !freeUsage?.monthly &&
+                  freeUsage?.assignments.find(
+                    (row) => row.kind === assignment.assignmentType.kind
+                  )?.remaining === 0 ? (
+                    <span className="text-xs text-amber-800">
+                      No {assignment.assignmentType.title} left
+                    </span>
+                  ) : null
+                }
+                classPicker={
+                  classes.length > 1 ? (
+                    <Select
+                      value={activeClassId}
+                      onValueChange={handleClassChange}
+                    >
+                      <SelectTrigger
+                        className="w-[200px]"
+                        aria-label="Class"
+                        data-testid="assignment-detail-class-picker"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {classes.map((klass) => (
+                          <SelectItem key={klass.id} value={klass.id}>
+                            {klass.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : classes.length === 1 ? (
+                    <span
+                      className="hidden text-sm text-muted-foreground md:inline"
                       data-testid="assignment-detail-class-picker"
                     >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {classes.map((klass) => (
-                        <SelectItem key={klass.id} value={klass.id}>
-                          {klass.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : null}
-                {collaboration ? (
-                  <Button asChild variant="outline">
-                    <Link
-                      to={`/app/class-assignments/${assignment.classAssignmentId}/groups`}
-                      data-testid="assignment-detail-groups-link"
-                    >
-                      <UsersIcon className="mr-2 h-4 w-4" />
-                      {collaboration.groupsOpened
-                        ? 'Groups'
-                        : collaboration.groupCount > 0
-                          ? 'Finish setting up groups'
-                          : 'Set up groups'}
-                    </Link>
-                  </Button>
-                ) : null}
-                {canEdit ? (
-                  <>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setIsDuplicateSheetOpen(true)}
-                      disabled={Boolean(
-                        !freeUsage?.monthly &&
-                        freeUsage?.assignments.find(
-                          (row) => row.kind === assignment.assignmentType.kind
-                        )?.remaining === 0
-                      )}
-                    >
-                      <Copy className="mr-2 h-4 w-4" />
-                      Duplicate
-                    </Button>
-                    {!freeUsage?.monthly &&
-                      freeUsage?.assignments.find(
-                        (row) => row.kind === assignment.assignmentType.kind
-                      )?.remaining === 0 && (
-                        <span className="text-xs text-amber-800">
-                          No {assignment.assignmentType.title} left
-                        </span>
-                      )}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsEditSheetOpen(true)}
-                    >
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Edit
-                    </Button>
-                  </>
-                ) : null}
-              </div>
+                      {activeClassOption.name}
+                    </span>
+                  ) : null
+                }
+              />
             </div>
           </div>
 
@@ -1077,49 +1160,6 @@ export default function AssignmentDetailRoute() {
           initialExitTicketGrading={assignment.exitTicket?.grading ?? null}
         />
 
-        {/* Same sheet, same props as the class page's "Add assignment", so
-            the form reads identically from either entry point. Duplicate only
-            adds the starting values it copies forward. */}
-        <AssignmentCreationSheet
-          open={isDuplicateSheetOpen}
-          onOpenChange={setIsDuplicateSheetOpen}
-          entryPoint="class"
-          fixedClassId={activeClassId}
-          assignmentTypes={data.assignmentTypes}
-          teacherClasses={[activeClassOption]}
-          initialAssignmentTypeId={assignment.assignmentTypeId}
-          initialTitle={`Copy of ${assignment.title?.trim() || 'Untitled Assignment'}`}
-          initialPrompt={assignment.prompt}
-          initialRubricTotalPoints={assignment.rubricTotalPoints}
-          initialGradingMode={
-            assignment.gradingMode === 'bands' ? 'bands' : 'step'
-          }
-          initialExitTicketMode={assignment.exitTicket?.mode}
-          initialExitTicketFocus={
-            assignment.exitTicket?.mode === 'specific'
-              ? assignment.exitTicket.focus
-              : undefined
-          }
-          initialExitTicketTopic={
-            assignment.exitTicket?.mode === 'specific'
-              ? assignment.exitTicket.topic
-              : undefined
-          }
-          initialExitTicketAnswerType={
-            assignment.exitTicket?.mode === 'specific'
-              ? assignment.exitTicket.answerType
-              : undefined
-          }
-          initialExitTicketLessonNotes={
-            assignment.exitTicket?.lessonNotes ?? null
-          }
-          initialExitTicketReflectionPrompt={
-            assignment.exitTicket?.mode === 'basic'
-              ? (assignment.exitTicket.reflectionPrompt ?? null)
-              : null
-          }
-          initialExitTicketGrading={assignment.exitTicket?.grading ?? null}
-        />
       </div>
     </PageShell>
   );

@@ -99,6 +99,14 @@ export function buildGradeWriteSubjectWhere({
           },
         },
       },
+      {
+        artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW',
+        membership: {
+          is: {
+            userId: actorUserId,
+          },
+        },
+      },
     ],
   };
 }
@@ -151,6 +159,22 @@ export function buildTeacherDocumentAccessWhere({
           },
         },
       },
+      {
+        artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW',
+        teacherPreviewClassAssignment: {
+          is: {
+            class: {
+              school: { organizationId },
+              teachers: {
+                some: {
+                  id: membershipId,
+                  isActive: true,
+                },
+              },
+            },
+          },
+        },
+      },
     ],
   };
 }
@@ -160,8 +184,12 @@ export function isGradingOwnDocument(
   actorMembershipId: string,
   documentMembershipId: string | null,
   actorUserId?: string,
-  documentOwnerUserId?: string
+  documentOwnerUserId?: string,
+  options?: { artifactKind?: string | null }
 ): boolean {
+  if (options?.artifactKind === 'TEACHER_ASSIGNMENT_PREVIEW') {
+    return false;
+  }
   return (
     (documentMembershipId != null &&
       actorMembershipId === documentMembershipId) ||

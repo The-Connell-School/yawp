@@ -18,7 +18,7 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     // accessible name ("Select assignment E2E Class Assignment") contains the
     // title, and the default substring match picks up both.
     await expect(
-      page.getByRole('cell', { name: 'E2E Class Assignment', exact: true })
+      page.getByTestId(`my-assignment-open-${e2eContext.assignmentId}`)
     ).toBeVisible();
   });
 

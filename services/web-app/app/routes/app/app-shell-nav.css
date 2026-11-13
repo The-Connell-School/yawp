@@ -1,0 +1,149 @@
+/* App sidebar chrome — shared for every account under data-app-shell (not free-tier-only). */
+
+[data-app-shell] > nav:not(.items-center) {
+  width: 224px;
+  min-width: 224px;
+  background: hsl(53.3333 24.3243% 92.7451%);
+  border-right-color: hsl(51.4286 7.8652% 82.549%);
+  padding: 20px 12px 0;
+}
+
+[data-app-shell] > nav > div:first-child {
+  min-height: auto;
+  margin: 0 !important;
+  padding: 0 0 14px 8px !important;
+}
+
+[data-app-shell] > nav > div:first-child .app-nav-expanded-logo {
+  width: 72px;
+  height: 72px;
+  margin-left: 0;
+  padding: 0 !important;
+  object-fit: contain;
+}
+
+[data-app-shell] > nav.items-center {
+  padding: 20px 0 0;
+}
+
+[data-app-shell] > nav.items-center > div:first-child {
+  justify-content: center;
+  width: 100%;
+  padding: 0 0 14px 0 !important;
+}
+
+[data-app-shell] > nav.items-center .app-nav-collapsed-logo {
+  width: 44px;
+  height: 44px;
+  padding: 0 !important;
+  object-fit: contain;
+}
+
+[data-app-shell] > nav.items-center .app-nav-collapsed-logo-swap {
+  width: 44px;
+  height: 44px;
+}
+
+[data-app-shell] > nav .min-h-0.flex-1 {
+  padding: 0;
+}
+
+[data-app-shell] > nav .grid.gap-1 {
+  gap: 2px;
+}
+
+[data-app-shell] > nav .app-sidebar-row {
+  min-height: 34px;
+  padding: 0;
+  border-radius: 6px;
+  gap: 10px;
+}
+
+[data-app-shell] > nav .app-sidebar-row:has(a[aria-current='page']) {
+  background: hsl(var(--primary) / 0.1);
+}
+
+[data-app-shell] > nav .app-sidebar-link {
+  min-height: 34px;
+  box-sizing: border-box;
+  padding: 7px 12px;
+  border-radius: 6px;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+  box-shadow: none;
+  background: transparent !important;
+  color: hsl(50 2.4% 36%);
+}
+
+[data-app-shell] > nav .app-sidebar-link:hover {
+  color: #0f172a;
+}
+
+[data-app-shell] > nav .app-sidebar-link[aria-current='page'] {
+  color: hsl(var(--primary)) !important;
+  font-weight: 600;
+}
+
+[data-app-shell] > nav .app-sidebar-link svg {
+  width: 17px;
+  height: 17px;
+}
+
+[data-app-shell] > nav a span {
+  white-space: nowrap;
+}
+
+[data-app-shell] > nav > div.flex.shrink-0 > button:has([data-testid='free-tier-sidebar-usage']),
+[data-app-shell] > nav > div.flex.shrink-0 > button:has([data-testid='app-nav-settings']) {
+  display: flex;
+  width: 100%;
+  align-self: stretch;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+[data-app-shell] > nav > div.flex.shrink-0 .app-nav-footer-action,
+[data-app-shell] > nav > div.flex.shrink-0 [data-testid='free-tier-sidebar-usage'],
+[data-app-shell] > nav > div.flex.shrink-0 [data-testid='app-nav-settings'] {
+  box-sizing: border-box;
+  flex: 1 0 auto;
+  width: 100%;
+  margin: auto -12px 0;
+  min-height: 34px;
+  border-top: 1px solid hsl(51.4286 7.8652% 82.549%);
+  border-top-color: hsl(51.4286 7.8652% 82.549%);
+  padding: 12px 24px;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 20px;
+  border-radius: 0;
+  color: hsl(50 2.4% 36%);
+}
+
+[data-app-shell] > nav > div.flex.shrink-0 .app-nav-footer-action:hover,
+[data-app-shell] > nav > div.flex.shrink-0 [data-testid='app-nav-settings']:hover {
+  color: #0f172a;
+  background: transparent;
+}
+
+[data-app-shell] > nav > div.flex.shrink-0 [data-testid='app-nav-settings'] svg,
+[data-app-shell] > nav > div.flex.shrink-0 .app-nav-footer-action svg {
+  width: 17px;
+  height: 17px;
+}
+
+@media (max-width: 639px) {
+  [data-app-shell] > nav:not(.items-center) {
+    width: 224px;
+    min-width: 224px;
+  }
+}

@@ -12,6 +12,28 @@ export async function clearDevPanelStorageWhenStable(page: Page) {
   }).toPass({ timeout: 15_000 });
 }
 
+/** Dev panel feedback drafts persist via React state → `yawp-dev-panel` in localStorage. */
+export async function waitForDevPanelFeedbackNotePersisted(
+  page: Page,
+  note: string,
+  { timeout = 15_000 } = {}
+) {
+  await expect(async () => {
+    await page.waitForLoadState('domcontentloaded');
+    const stored = await page.evaluate((key: string) => {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw) as { forms?: { feedbackNote?: string } };
+        return parsed.forms?.feedbackNote ?? null;
+      } catch {
+        return null;
+      }
+    }, DEV_PANEL_STORAGE_KEY);
+    expect(stored).toBe(note);
+  }).toPass({ timeout });
+}
+
 export function devToolsPanel(page: Page) {
   return page.locator('#devtools');
 }
@@ -21,7 +43,11 @@ export function giveFeedbackDialog(page: Page) {
 }
 
 export function freeTierStatesDialog(page: Page) {
-  return page.getByRole('dialog', { name: 'Free-tier states' });
+  return devToolsPanel(page).locator('[data-testid="free-tier-session-runner"]');
+}
+
+export function devPanelFreeTierSectionTrigger(panel: ReturnType<typeof devToolsPanel>) {
+  return panel.getByRole('button', { name: /^Free-tier\b/ });
 }
 
 /** Dev panel pin row — accessible name includes the subtitle (Note, screenshot, URL / Writing…). */
@@ -146,12 +172,14 @@ export async function openDevPanelSection(page: Page, sectionName: string) {
   const expanded = await trigger.getAttribute('aria-expanded');
   if (expanded !== 'true') {
     await trigger.click();
-    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true', {
+      timeout: 15_000,
+    });
   }
   return panel;
 }
 
-/** Opens the class simulation flyout from the Tester tools section row (not the flyout action). */
+/** Opens class simulation inline under Tester tools (single 320px panel). */
 export async function openDevPanelClassSimulationFlyout(page: Page) {
   const panel = await openDevToolsPanel(page);
   const testerToolsTrigger = panel.getByRole('button', {
@@ -163,13 +191,15 @@ export async function openDevPanelClassSimulationFlyout(page: Page) {
     await testerToolsTrigger.click();
     await expect(testerToolsTrigger).toHaveAttribute('aria-expanded', 'true');
   }
-  await panel
-    .locator('.yawp-dev-panel-login-row')
-    .filter({ hasText: 'Populate class' })
-    .click();
-  await expect(
-    page.getByRole('dialog', { name: 'Class simulation' })
-  ).toBeVisible({ timeout: 15_000 });
+  const classSimTrigger = panel.getByRole('button', { name: /^Class simulation/ });
+  await expect(classSimTrigger).toBeVisible({ timeout: 15_000 });
+  if ((await classSimTrigger.getAttribute('aria-expanded')) !== 'true') {
+    await classSimTrigger.click();
+    await expect(classSimTrigger).toHaveAttribute('aria-expanded', 'true');
+  }
+  await expect(panel.getByRole('button', { name: 'Populate class' })).toBeVisible({
+    timeout: 15_000,
+  });
 }
 
 export async function expectGiveFeedbackAccessible(page: Page) {
@@ -186,6 +216,27 @@ export async function expectGiveFeedbackAccessible(page: Page) {
     return;
   }
   await expect(legacy).toBeVisible();
+}
+
+/** After a successful send the inline section collapses and the note is cleared in state. */
+export async function expectGiveFeedbackNoteCleared(page: Page) {
+  const tools = await openDevToolsPanel(page);
+  const feedbackRow = devPanelGiveFeedbackRow(tools);
+  await expect(feedbackRow).toHaveAttribute('aria-expanded', 'false', {
+    timeout: 15_000,
+  });
+  await feedbackRow.click();
+  await expect(feedbackRow).toHaveAttribute('aria-expanded', 'true', {
+    timeout: 15_000,
+  });
+  const inline = tools.locator('.yawp-dev-panel-give-feedback-inline');
+  await expect(inline).toBeVisible({ timeout: 15_000 });
+  await expect(inline.getByLabel('What happened?')).toHaveValue('');
+  return {
+    panel: inline,
+    noteLabel: 'What happened?' as const,
+    hasSeverity: false,
+  };
 }
 
 export async function openGiveFeedback(page: Page) {
@@ -211,12 +262,24 @@ export async function openGiveFeedback(page: Page) {
   const tools = await openDevToolsPanel(page);
   const feedbackRow = devPanelGiveFeedbackRow(tools);
   if (await feedbackRow.isVisible().catch(() => false)) {
-    await feedbackRow.click();
-  } else {
-    await expect(giveFeedbackDialog(page)).toBeVisible({ timeout: 60_000 });
+    const expanded = await feedbackRow.getAttribute('aria-expanded');
+    if (expanded !== 'true') {
+      await feedbackRow.click();
+      await expect(feedbackRow).toHaveAttribute('aria-expanded', 'true', {
+        timeout: 15_000,
+      });
+    }
+    const inline = tools.locator('.yawp-dev-panel-give-feedback-inline');
+    await expect(inline).toBeVisible({ timeout: 60_000 });
+    return {
+      panel: inline,
+      noteLabel: 'What happened?',
+      hasSeverity: false,
+    };
   }
+  await expect(giveFeedbackDialog(page)).toBeVisible({ timeout: 60_000 });
   return {
-    panel: page.getByRole('dialog', { name: 'Give feedback' }),
+    panel: giveFeedbackDialog(page),
     noteLabel: 'Note',
     hasSeverity: false,
   };

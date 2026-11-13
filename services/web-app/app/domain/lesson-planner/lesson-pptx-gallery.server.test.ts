@@ -140,3 +140,58 @@ describe('renderDeckPptxGallery (Deck spec v3)', () => {
     expect([...parts.keys()].some((name) => /^ppt\/media\/.+\.(jpe?g|png)$/.test(name))).toBe(false);
   });
 });
+
+describe('renderDeckPptxGallery (Deck spec v4)', () => {
+  const v4: SlideDeck = {
+    ...deck,
+    kit: 'v4',
+    slides: [
+      ...deck.slides.slice(0, 2),
+      { layout: 'steps', title: 'Draft your topic sentence', bullets: ['Reread your thesis', 'Pick one reason'], minutes: 6, ...notes },
+      ...deck.slides.slice(2),
+    ],
+  };
+
+  test('every slide is cream, with no full-color slides', async () => {
+    const parts = pptxParts(await renderDeckPptxGallery(v4));
+    for (let number = 1; number <= v4.slides.length; number += 1) {
+      const xml = parts.get(`ppt/slides/slide${number}.xml`)!;
+      expect(xml).toMatch(/<p:bg>[\s\S]*F3F0E8/);
+    }
+  });
+
+  test('labels, not italic mode words: no italics, no lines, Georgia never bold', async () => {
+    const parts = pptxParts(await renderDeckPptxGallery(v4));
+    for (let number = 1; number <= v4.slides.length; number += 1) {
+      const xml = parts.get(`ppt/slides/slide${number}.xml`)!;
+      expect(xml).not.toContain('i="1"');
+      expect(xml).not.toContain('prst="line"');
+      for (const run of xml.matchAll(/<a:rPr[^>]*b="1"[^>]*>[\s\S]*?<\/a:rPr>/g)) {
+        expect(run[0]).not.toContain('Georgia');
+      }
+      expect([...xml.matchAll(/typeface="([^"]+)"/g)].every((match) => ['Georgia', 'Arial'].includes(match[1]!))).toBe(true);
+    }
+    expect(slideText(parts, 3)).toContain('Do');
+    expect(slideText(parts, 3)).not.toContain('Do.');
+    expect(slideText(parts, 2)).toContain('Today');
+    expect(slideText(parts, 2)).not.toContain('program');
+  });
+
+  test('the split slide has its panel; the quiz names its question and bands the answer', async () => {
+    const parts = pptxParts(await renderDeckPptxGallery(v4));
+    expect(parts.get('ppt/slides/slide3.xml')).toContain('prst="rect"');
+    expect(slideText(parts, 6)).toContain('Question 1 of 1');
+    expect(parts.get('ppt/slides/slide6.xml')).toContain('prst="rect"');
+  });
+
+  test('the exit sends students to Yawp! in a line', async () => {
+    const parts = pptxParts(await renderDeckPptxGallery(v4));
+    expect(slideText(parts, 7)).toContain('Exit ticket: open it in Yawp!');
+    expect(slideText(parts, 7)).not.toContain('→');
+  });
+
+  test('an unmarked deck still exports in spec v3', async () => {
+    const parts = pptxParts(await renderDeckPptxGallery(deck));
+    expect(parts.get('ppt/slides/slide1.xml')).toContain('i="1"');
+  });
+});

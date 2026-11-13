@@ -63,6 +63,7 @@ import { ShortFormPromptGenerator } from './short-form-prompts-library/short-for
 import { ExitTicketPromptGenerator } from './exit-ticket-prompt-generator/exit-ticket-prompt-generator';
 import type { GeneratedExitTicketOption } from './exit-ticket-prompt-generator/prompt-generator';
 import { isTeacherPromptGeneratorEnabled } from '~/domain/teacher-prompt-generator/gate.server';
+import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
 import { AboutExitTicket } from './about-exit-ticket/about-exit-ticket';
@@ -480,6 +481,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: assignmentType.id,
       title: assignmentType.title,
       kind: assignmentType.kind,
+      systemKey: assignmentType.systemKey,
     },
   });
 
@@ -656,6 +658,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isTeacher
       ? await isTeacherPromptGeneratorEnabled(profile.organization.id)
       : false;
+  const exitTicketBuilderV3Enabled = isTeacher
+    ? await isExitTicketBuilderV3Enabled(profile.organization.id)
+    : false;
 
   return dataResponse({
     assignmentType,
@@ -680,6 +685,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     teacherPromptGeneratorEnabled,
     landingPageKey,
     landingVideos,
+    exitTicketBuilderV3Enabled,
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -781,7 +787,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
  * document is created from — but an exit ticket's is a single row whose
  * description restates the prompt, sitting directly under directions that
  * already explain the whole thing. Hidden there rather than deleted, because
- * the module itself is still what New -> Document builds from.
+ * the module itself is still what New -> Sample document builds from.
  */
 export function showModulesAccordion(
   assignmentType: { kind?: string | null },
@@ -921,7 +927,7 @@ export default function AppAssignmentTypesIdRoute() {
   // Daily Pages carries one module, whose blurb is freewrite-era copy telling
   // students to throw ideas around — which the about section directly above it
   // now contradicts. The module row itself stays: documents are created inside
-  // it, and `hasModules` still gates New → Document.
+  // it, and `hasModules` still gates New → Sample document.
   const showModules = modulesVisible && !showShortFormLibrary;
   // The same door, for the other end of the lesson: the planner sends a
   // teacher here with the exit ticket its plan ended on, already answered.
@@ -1038,12 +1044,6 @@ export default function AppAssignmentTypesIdRoute() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
-                          disabled={!hasModules || isLoading}
-                          onSelect={() => docFormRef.current?.requestSubmit()}
-                        >
-                          Document
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
                           disabled={data.teacherClasses.length === 0}
                           onSelect={() => {
                             setLibraryPrompt('');
@@ -1060,6 +1060,12 @@ export default function AppAssignmentTypesIdRoute() {
                             Generate a prompt
                           </DropdownMenuItem>
                         ) : null}
+                        <DropdownMenuItem
+                          disabled={!hasModules || isLoading}
+                          onSelect={() => docFormRef.current?.requestSubmit()}
+                        >
+                          Sample document
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
@@ -1117,10 +1123,8 @@ export default function AppAssignmentTypesIdRoute() {
                 onOpenChange={setIsAssignmentSheetOpen}
                 initialPrompt={libraryPrompt}
                 plannedExitTicket={plannedExitTicket}
-                titleRequired={
-                  showThesisLibrary &&
-                  isThesisDrivenEssayTitle(data.assignmentType.title)
-                }
+                exitTicketBuilderV3Enabled={data.exitTicketBuilderV3Enabled}
+                titleRequired={showThesisLibrary}
                 apHistoryEntry={apHistoryEntry}
                 teachingLocked={teachingLockedPreview}
                 onCreated={tellLessonCreated}

@@ -191,7 +191,7 @@ jobs:
       PREVIEW_SEAT_COUNT: ${{ vars.DEMO_SEAT_COUNT || '1' }}
       PREVIEW_ACCESS_MASTER_ORGANIZATION_ID: ${{ (vars.DEMO_DATA_MODE || 'seed') == 'sanitized-production' && 'default-org' || 'local-dev-org' }}
       PREVIEW_MASTER_ACCESS_CODE: ${{ secrets.PREVIEW_MASTER_ACCESS_CODE }}
-      PREVIEW_AI_MODEL: ${{ vars.DEMO_AI_MODEL || 'claude-sonnet-5-5' }}
+      PREVIEW_AI_MODEL: ${{ vars.DEMO_AI_MODEL || 'claude-sonnet-4-6' }}
       PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
       PREVIEW_UA_STUDENT_BILLING_ENABLED: ${{ vars.DEMO_UA_STUDENT_BILLING_ENABLED || 'false' }}
       PREVIEW_UA_ORGANIZATION_ID: ${{ vars.DEMO_UA_ORGANIZATION_ID }}
@@ -529,13 +529,7 @@ jobs:
             exit 1
           }
 
-          blocked="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
-            -X POST --data-urlencode 'email=dev.admin@yawp.local' \
-            "$url/auth/dev-login")"
-          test "$blocked" = "401" || {
-            echo "POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401" >&2
-            exit 1
-          }
+          node demo-control/scripts/preview/assert-anonymous-dev-login-blocked.mjs "$url"
 
           dev_options="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
             "$url/auth/dev-login/options?cursor=0")"

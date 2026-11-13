@@ -8,6 +8,7 @@
  * already decided: what is being checked, what today covered, and the mix-up
  * to watch for.
  */
+import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { CreatedInYawp } from '~/components/lesson-planner/created-in-yawp';
 import { withPiece } from '~/domain/lesson-planner/stack-create-link';
@@ -24,6 +25,21 @@ import {
   exitTicketReflectionPromptId,
   exitTicketReflectionPromptOption,
 } from '~/domain/assignment-types/exit-ticket';
+import {
+  exitTicketActivityOption,
+  exitTicketCloser,
+  type ExitTicketActivity,
+} from '~/domain/assignment-types/exit-ticket-activities';
+
+/**
+ * The activity in a few words, for the card's tag: the form's own label
+ * without its "Have the students" lead ("Answer a question").
+ */
+function activityTag(activity: ExitTicketActivity): string {
+  const label = exitTicketActivityOption(activity)?.label ?? '';
+  const short = label.replace(/^Have the students\s+/i, '');
+  return short ? short.charAt(0).toUpperCase() + short.slice(1) : 'Exit ticket';
+}
 
 export function ExitTicketCard({
   ticket,
@@ -55,6 +71,27 @@ export function ExitTicketCard({
   pieceRef?: string | null;
 }) {
   const { config } = ticket;
+  if (config.activity && config.promptText) {
+    return (
+      <PromptFirstCard
+        ticket={ticket}
+        activity={config.activity}
+        question={config.promptText}
+        footer={
+          <CardActions
+            ticket={ticket}
+            assignmentTypeId={assignmentTypeId}
+            conversationId={conversationId}
+            added={added}
+            onToggle={onToggle}
+            disabled={disabled}
+            created={created}
+            pieceRef={pieceRef}
+          />
+        }
+      />
+    );
+  }
   const focus =
     config.mode === 'specific' ? exitTicketFocusOption(config.focus) : null;
   // What kind of ticket this is, in the words the form will use.
@@ -123,41 +160,172 @@ export function ExitTicketCard({
         </dl>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-primary/15 bg-primary/[0.04] px-4 py-2.5">
-        {onToggle ? (
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => onToggle(!added)}
-            // Brian's review (B3): the toggle removes, and says so before the click.
-            title={added ? 'Click to remove from stack' : undefined}
-            data-testid="exit-ticket-stack-toggle"
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50',
-              added
-                ? 'bg-primary/10 text-primary hover:bg-primary/15'
-                : 'bg-primary text-primary-foreground hover:opacity-90'
-            )}
-          >
-            {added ? <Check size={14} /> : <Plus size={14} />}
-            {added ? 'In your lesson' : 'Add to lesson'}
-          </button>
-        ) : null}
-        {created ? (
-          <CreatedInYawp href={created.href} />
-        ) : assignmentTypeId ? (
-          <Link
-            to={withPiece(
-              exitTicketCreateHref(assignmentTypeId, ticket, conversationId),
-              pieceRef
-            )}
-            data-testid="exit-ticket-create"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-background px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/5"
-          >
-            Create this exit ticket for your class
-          </Link>
+      <CardActions
+        ticket={ticket}
+        assignmentTypeId={assignmentTypeId}
+        conversationId={conversationId}
+        added={added}
+        onToggle={onToggle}
+        disabled={disabled}
+        created={created}
+        pieceRef={pieceRef}
+      />
+    </div>
+  );
+}
+
+type CardActionsProps = {
+  ticket: PlannedExitTicket;
+  assignmentTypeId: string | null;
+  conversationId?: string | null;
+  added: boolean;
+  onToggle?: ((added: boolean) => void) | null;
+  disabled?: boolean;
+  created: { href: string } | null;
+  pieceRef: string | null;
+};
+
+/** Add to lesson, and create it in Yawp!: the same on every exit ticket card. */
+function CardActions({
+  ticket,
+  assignmentTypeId,
+  conversationId,
+  added,
+  onToggle,
+  disabled,
+  created,
+  pieceRef,
+}: CardActionsProps) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t border-primary/15 bg-primary/[0.04] px-4 py-2.5">
+      {onToggle ? (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onToggle(!added)}
+          // Brian's review (B3): the toggle removes, and says so before the click.
+          title={added ? 'Click to remove from stack' : undefined}
+          data-testid="exit-ticket-stack-toggle"
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50',
+            added
+              ? 'bg-primary/10 text-primary hover:bg-primary/15'
+              : 'bg-primary text-primary-foreground hover:opacity-90'
+          )}
+        >
+          {added ? <Check size={14} /> : <Plus size={14} />}
+          {added ? 'In your lesson' : 'Add to lesson'}
+        </button>
+      ) : null}
+      {created ? (
+        <CreatedInYawp href={created.href} />
+      ) : assignmentTypeId ? (
+        <Link
+          to={withPiece(
+            exitTicketCreateHref(assignmentTypeId, ticket, conversationId),
+            pieceRef
+          )}
+          data-testid="exit-ticket-create"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-background px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/5"
+        >
+          Create this exit ticket for your class
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A v3 ticket (the teacher's own question), shown the way students will get
+ * it. When the planner offers three side by side, the teacher picks one by
+ * reading what students would read, so that is what the card is: the
+ * question, then the closing line Yawp! adds. The activity is a short tag,
+ * grading shows only when the ticket is graded, and the key points the
+ * responses are read against stay one click away, since students never see
+ * them.
+ */
+function PromptFirstCard({
+  ticket,
+  activity,
+  question,
+  footer,
+}: {
+  ticket: PlannedExitTicket;
+  activity: ExitTicketActivity;
+  question: string;
+  footer: ReactNode;
+}) {
+  const { config } = ticket;
+  const closer = exitTicketCloser(activity, config.starter);
+  const notes = config.lessonNotes;
+  const filledNotes = notes
+    ? EXIT_TICKET_LESSON_NOTE_FIELDS.filter(
+        (field) => notes[field.key].trim().length > 0
+      )
+    : [];
+  const noteLabel = (key: string, label: string) =>
+    key === 'mustMention' ? 'Correct answer or key points' : label;
+
+  return (
+    <div
+      data-testid="exit-ticket-card"
+      className="mt-3 overflow-hidden rounded-xl border border-primary/25 bg-primary/[0.03]"
+    >
+      <div className="flex items-center gap-2 px-4 pt-3 text-xs text-muted-foreground">
+        <ClipboardCheck size={14} className="shrink-0 text-primary" />
+        <span data-testid="exit-ticket-activity">{activityTag(activity)}</span>
+        {ticket.graded ? (
+          <span data-testid="exit-ticket-grading" className="ml-auto">
+            {[
+              'Graded',
+              ticket.pointValue ? `${ticket.pointValue} points` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </span>
         ) : null}
       </div>
+
+      <div className="px-4 pb-3.5 pt-2">
+        <p
+          data-testid="exit-ticket-question"
+          className="whitespace-pre-wrap text-base leading-relaxed text-foreground"
+        >
+          {question}
+        </p>
+        <p
+          data-testid="exit-ticket-closer"
+          className="mt-2 text-sm leading-relaxed text-muted-foreground"
+        >
+          {closer}
+        </p>
+      </div>
+
+      {filledNotes.length > 0 ? (
+        <details
+          data-testid="exit-ticket-notes"
+          className="border-t border-primary/15 px-4 py-2.5 text-xs"
+        >
+          <summary className="cursor-pointer font-medium text-muted-foreground">
+            What responses are read against
+          </summary>
+          <p className="mt-2 text-muted-foreground">Students don’t see this.</p>
+          <dl className="mt-1.5 space-y-1.5">
+            {filledNotes.map((field) => (
+              <div key={field.key} className="flex gap-2">
+                <dt className="shrink-0 font-medium text-muted-foreground">
+                  {noteLabel(field.key, field.label)}:
+                </dt>
+                <dd className="min-w-0 text-foreground/80">
+                  {notes![field.key]}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+      ) : null}
+
+      {footer}
     </div>
   );
 }

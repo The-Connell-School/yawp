@@ -228,7 +228,7 @@ ${env.slug === 'demo' ? '      EMAIL_PROVIDER: "resend"\n' : ''}      RESEND_FRO
       YAWP_PREVIEW_AI_MODE: ${q(aiMode)}
       CLASS_INSIGHT_MOCK_MODE: ${q(aiMode === 'disabled' ? 'fixture' : optionalEnv('PREVIEW_CLASS_INSIGHT_MOCK_MODE'))}
       ANTHROPIC_API_KEY: ${q(anthropicApiKey)}
-      AI_MODEL: ${q(optionalEnv('PREVIEW_AI_MODEL', 'claude-sonnet-5-5'))}
+      AI_MODEL: ${q(optionalEnv('PREVIEW_AI_MODEL', 'claude-sonnet-4-6'))}
       BLACKBOARD_LTI_MOCK_URL: "http://blackboard-lti-mock:9473"${marketingStudioEnvironment}`;
   // Only the demo deploy supplies this key (Yawp Internal publishes rubrics to
   // demo through the Rubric Catalog API). It goes to the web app alone; without

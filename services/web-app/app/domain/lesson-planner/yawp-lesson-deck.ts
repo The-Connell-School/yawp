@@ -23,8 +23,7 @@ export type YawpDeckPicture = {
   byteSize: number;
   width: number | null;
   height: number | null;
-  /** Its own buffer, as Prisma's Bytes column takes it. */
-  blob: Uint8Array<ArrayBuffer>;
+  blob: Uint8Array;
 };
 
 /** The pictures the deck can show, in deck order. Skipped formats are left out. */
@@ -40,7 +39,7 @@ export function yawpDeckPictures(file: Uint8Array): YawpDeckPicture[] {
             byteSize: picture.bytes.byteLength,
             width: picture.width,
             height: picture.height,
-            blob: new Uint8Array(picture.bytes),
+            blob: picture.bytes,
           },
         ]
       : []

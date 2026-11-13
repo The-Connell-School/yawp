@@ -17,6 +17,7 @@ import {
   LlmFallbackRetrySignal,
 } from './llm-provider-errors.server';
 import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
+import { anthropicSamplingParams } from './anthropic-sampling-params.server';
 
 export enum AgentType {
   User = 'user',
@@ -263,7 +264,7 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
         model: params.model,
         system,
         messages: messages as any,
-        temperature: params.temperature ?? 0.6,
+        ...anthropicSamplingParams(params.model, params.temperature),
         ...(params.tools?.length ? { tools: params.tools as any } : {}),
       };
       const message = params.signal

@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
-import { openDevPanelClassSimulationFlyout } from '../helpers/dev-panel-feedback';
+import {
+  devToolsPanel,
+  openDevPanelClassSimulationFlyout,
+} from '../helpers/dev-panel-feedback';
+import { ensureDemoDevTeacherSession } from '../helpers/dev-panel-preview-access';
 
 const prisma = createE2EPrismaClient();
 
@@ -13,9 +17,7 @@ test.describe('Dev panel class simulation', () => {
     page,
   }) => {
     test.setTimeout(120_000);
-    await page.request.post('/auth/dev-login', {
-      form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/my-classes' },
-    });
+    await ensureDemoDevTeacherSession(page, '/app/my-classes');
 
     const membership = await prisma.orgMembership.findFirst({
       where: { user: { email: 'dev.teacher@yawp.local' }, role: 'TEACHER' },
@@ -31,32 +33,50 @@ test.describe('Dev panel class simulation', () => {
 
     await page.goto('/app/my-classes');
     await openDevPanelClassSimulationFlyout(page);
-    let simSheet = page.getByRole('dialog', { name: 'Class simulation' });
-    const classSelect = simSheet.locator('#dev-panel-simulation-class');
-    await expect(classSelect).toBeVisible({ timeout: 30_000 });
-    await classSelect.selectOption(klass!.id);
-    await simSheet.getByLabel('Student count').fill('3');
-    await simSheet.getByRole('button', { name: 'Populate class', exact: true }).click();
-    await expect(page.getByText(/Added 3 students/i)).toBeVisible({ timeout: 60_000 });
+    const panel = devToolsPanel(page);
+    await panel
+      .getByRole('listbox', { name: 'Class' })
+      .getByRole('option')
+      .filter({ hasText: klass!.title! })
+      .click();
+    await panel.locator('#dev-panel-sim-count').fill('3');
+    await panel.getByRole('button', { name: 'Populate class', exact: true }).click();
+    await expect(
+      panel.locator('.yawp-dev-panel-class-sim-success')
+    ).toContainText(/Added 3 students across/i, { timeout: 60_000 });
 
     await page.goto(`/app/my-classes/${klass!.id}?tab=students`);
     await expect(page.getByText('Alex Rivera')).toBeVisible({ timeout: 30_000 });
 
     await openDevPanelClassSimulationFlyout(page);
-    simSheet = page.getByRole('dialog', { name: 'Class simulation' });
-    await expect(simSheet.getByText('Loading your classes…')).toHaveCount(0, {
+    const panelAgain = devToolsPanel(page);
+    await panelAgain
+      .getByRole('listbox', { name: 'Class' })
+      .getByRole('option')
+      .filter({ hasText: klass!.title! })
+      .click();
+    await expect(panelAgain.getByText('Loading your classes…')).toHaveCount(0, {
       timeout: 30_000,
     });
-    await simSheet.locator('#dev-panel-simulation-class').selectOption(klass!.id);
-    const clearSimulated = simSheet.getByRole('button', {
+    const clearSimulated = panelAgain.getByRole('button', {
       name: 'Clear simulated data',
       exact: true,
     });
     await expect(clearSimulated).toBeEnabled({ timeout: 60_000 });
     await clearSimulated.click();
-    await expect(page.getByRole('alertdialog')).toBeVisible();
-    await page.getByRole('button', { name: 'Clear', exact: true }).click();
-    await expect(page.getByText(/Cleared 3 simulated/i)).toBeVisible({ timeout: 60_000 });
+    await expect(
+      panelAgain.getByRole('group', { name: 'Confirm clear' })
+    ).toBeVisible();
+    const clearPost = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/dev-panel/class-simulation') &&
+        response.request().method() === 'POST'
+    );
+    await panelAgain.getByRole('button', { name: 'Clear', exact: true }).click();
+    expect((await clearPost).ok()).toBeTruthy();
+    await expect(
+      panelAgain.locator('.yawp-dev-panel-class-sim-success')
+    ).toContainText(/Cleared 3 simulated students/i, { timeout: 60_000 });
     await page.goto(`/app/my-classes/${klass!.id}?tab=students`);
     await expect(page.getByText('Alex Rivera')).toHaveCount(0);
   });

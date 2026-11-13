@@ -141,7 +141,7 @@ function Words({
           (event.currentTarget as HTMLElement).blur();
         }
       }}
-      className={`${className ?? ''} cursor-text rounded-[0.15em] outline-none ring-[#D27151]/50 hover:ring-1 focus:ring-2`}
+      className={`${className ?? ''} cursor-text rounded-[0.15em] outline-none ring-[#1F4D3A]/50 hover:ring-1 focus:ring-2`}
       style={style}
     />
   );

@@ -58,8 +58,9 @@ export async function storeYawpLessonDeck(
   }
   const stored = [];
   for (const picture of pictures) {
+    const { blob, ...fields } = picture;
     const row = await tx.lessonPlanUploadPicture.create({
-      data: { conversationId, membershipId, ...picture },
+      data: { conversationId, membershipId, ...fields, blob: Buffer.from(blob) },
       select: { id: true },
     });
     stored.push({ id: row.id, position: picture.position, width: picture.width, height: picture.height });

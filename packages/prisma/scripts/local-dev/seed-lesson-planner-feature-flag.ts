@@ -80,6 +80,8 @@ export const LESSON_PLANNER_REVIEW_FLAG_SETTINGS = [
   'feature_flag.lesson_planner_active_time',
   // The teacher decides what counts as writing (Nov 4 follow-up).
   'feature_flag.lesson_planner_writing_override',
+  // The Lesson Deck Kit, spec v4 (Nov 6).
+  'feature_flag.lesson_planner_deck_kit_v4',
 ] as const;
 
 /**

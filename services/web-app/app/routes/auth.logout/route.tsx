@@ -1,8 +1,8 @@
-import { type ActionFunctionArgs } from 'react-router';
+import { type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
 import { signoutDestination } from '~/domain/unified-signon/teacher-prompts';
 import { logout } from '~/utils/auth.server.ts';
 
-const actionImpl = async ({ request }: ActionFunctionArgs) => {
+async function endSession({ request }: LoaderFunctionArgs | ActionFunctionArgs) {
   const requested = signoutDestination(
     new URL(request.url).searchParams.get('redirectTo')
   );
@@ -12,8 +12,13 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
     redirectTo,
     ...(redirectTo === '/free' ? { awaitSessionDeletion: true } : {}),
   });
-};
+}
+
+/** Bookmarked or linked GET /auth/logout (e.g. Stop impersonating) must sign out, not 400. */
+export async function loader(args: LoaderFunctionArgs) {
+  return endSession(args);
+}
 
 export async function action(args: ActionFunctionArgs) {
-  return actionImpl(args);
+  return endSession(args);
 }

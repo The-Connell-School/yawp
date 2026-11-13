@@ -138,14 +138,10 @@ for (const width of [1280, 390])
     await expect(
       page.getByText('Sent to Dr. Patel on October 14')
     ).toBeVisible();
-    const additionalAdmin = page.getByRole('link', {
-      name: 'Not the right person? / Send to an additional administrator',
+    const additionalAdmin = page.getByRole('button', {
+      name: 'Not the right person?',
     });
     await expect(additionalAdmin).toBeVisible();
-    await expect(additionalAdmin).toHaveAttribute(
-      'href',
-      '/app/free-tier/onboarding?additional=1'
-    );
     const explore = page.getByRole('link', { name: 'Explore my classroom' });
     await expect(explore).toBeVisible();
     await expect(explore).toHaveAttribute('href', '/app');
@@ -155,21 +151,18 @@ for (const width of [1280, 390])
     await page.goto('/app/free-tier/pending');
     await capture(page, `${width}-waiting`);
     await additionalAdmin.click();
-    await expect(page).toHaveURL(/\/app\/free-tier\/onboarding\?additional=1$/);
+    await expect(page.getByLabel('Administrator name')).toBeVisible();
     await capture(page, `${width}-forward`);
-    await page
-      .getByRole('button', { name: 'Send to additional administrator' })
-      .click();
+    await page.getByRole('button', { name: 'Forward request', exact: true }).click();
     await expect(page.getByLabel('Administrator name')).toHaveAttribute(
       'aria-invalid',
       'true'
     );
     await capture(page, `${width}-forward-validation`);
     await page.getByLabel('Administrator name').fill('Ms. Rivera');
-    await page.locator('#adminRole').fill('Principal');
     await page.getByLabel('Administrator email').fill(fixtureData.app.email);
     await page
-      .getByRole('button', { name: 'Send to additional administrator' })
+      .getByRole('button', { name: 'Forward request', exact: true })
       .click();
     await expect(
       page.getByText(
@@ -189,9 +182,9 @@ for (const width of [1280, 390])
     await capture(page, `${width}-teacher-self-forward-rejected`);
     await page.getByLabel('Administrator email').fill('rivera@example.org');
     await page
-      .getByRole('button', { name: 'Send to additional administrator' })
+      .getByRole('button', { name: 'Forward request', exact: true })
       .click();
-    await expect(page).toHaveURL(/\/app\/free-tier\/pending\?sentAdmin=/);
+    await expect(page).toHaveURL(/\/app\/free-tier\/pending$/);
     await expect(
       page.getByTestId('pending-forward-success')
     ).toContainText('Request forwarded to Ms. Rivera.');
@@ -219,9 +212,7 @@ test('flag-off and non-target controls', async ({ page }) => {
     await flag(mode);
     await page.goto('/app/free-tier/pending');
     await expect(
-      page.getByRole('link', {
-        name: 'Not the right person? / Send to an additional administrator',
-      })
+      page.getByTestId('pending-forward-disclosure')
     ).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Resend reminder' })
@@ -359,9 +350,7 @@ test('paid member remains on legacy waiting page with rollout on', async ({
     });
     await page.goto('/app/free-tier/pending');
     await expect(
-      page.getByRole('link', {
-        name: 'Not the right person? / Send to an additional administrator',
-      })
+      page.getByTestId('pending-forward-disclosure')
     ).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Resend reminder' })

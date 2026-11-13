@@ -1,12 +1,12 @@
 import {
-  buildClassAssignmentDocumentScope,
+  buildClassStudentWorkOnAssignmentBranches,
   buildEnrolledClassDocumentsScope,
   buildStudentClassDocumentsScope,
-} from '~/utils/class-assignment-scope.server';
+} from '~/utils/class-assignment-scope';
 
 type ClassDocumentScope = {
   OR: Array<
-    | ReturnType<typeof buildClassAssignmentDocumentScope>
+    | ReturnType<typeof buildClassStudentWorkOnAssignmentBranches>[number]
     | ReturnType<typeof buildEnrolledClassDocumentsScope>['OR'][number]
     | ReturnType<typeof buildStudentClassDocumentsScope>['OR'][number]
     | { id: { in: string[] } }

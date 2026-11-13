@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Form, Link } from 'react-router';
+import { useNavigateToNewAssignmentPage } from '~/domain/free-tier/navigate-to-new-assignment-page';
 import { ArrowDown, ArrowUp, Plus, Search, Trash2 } from 'lucide-react';
 import { Badge } from '~/components/ui/badge';
 import {
   teachingAccessMobileSheetBodySend,
   TEACHING_ACCESS_LOCKED_TOOLTIP,
 } from '~/domain/free-tier/teaching-access-copy';
-import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
 import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
 import type { AssignmentEditRecord } from '~/components/assignments/assignment-edit-sheet';
@@ -18,6 +18,7 @@ import { badgeVariants } from '~/components/ui/badge';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import { TutorOffBadge } from '~/components/assignments/tutor-off-badge';
+import { AssignmentTryItPill } from '~/components/assignments/assignment-try-it-pill';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
@@ -102,6 +103,7 @@ export function ClassAssignmentsTab({
   onViewDocuments,
   onSelectAssignment,
 }: ClassAssignmentsTabProps) {
+  const navigateToNewAssignmentPage = useNavigateToNewAssignmentPage();
   const sendLockProps = {
     locked: teachingLocked,
     adminName: teachingAccessAdminName,
@@ -111,8 +113,6 @@ export function ClassAssignmentsTab({
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
-  const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
-
   const collator = useMemo(
     () => new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }),
     []
@@ -169,10 +169,6 @@ export function ClassAssignmentsTab({
       (assignment) => assignment.id === id && assignment.hasSharedWork
     )
   );
-  const handleCreateSheetOpenChange = useCallback((open: boolean) => {
-    setIsCreateSheetOpen(open);
-  }, []);
-
   return (
     <div className="space-y-4 text-foreground">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -247,7 +243,9 @@ export function ClassAssignmentsTab({
                 size="sm"
                 className="shrink-0"
                 data-testid="new-assignment-button"
-                onClick={() => setIsCreateSheetOpen(true)}
+                onClick={() =>
+                  navigateToNewAssignmentPage({ classId: classOption.id })
+                }
               >
                 <Plus className="mr-2 h-4 w-4" />
                 New Assignment
@@ -369,6 +367,13 @@ export function ClassAssignmentsTab({
                         >
                           {title}
                         </span>
+                        <AssignmentTryItPill
+                          assignment={{
+                            id: assignment.id,
+                            assignmentTypeId: assignment.assignmentType.id,
+                            classId: classOption.id,
+                          }}
+                        />
                         {teachingLocked ? (
                           <Badge variant="secondary" className="font-normal">
                             Sample · Not sent
@@ -437,16 +442,6 @@ export function ClassAssignmentsTab({
         />
       ) : null}
 
-      <AssignmentCreationSheet
-        open={isCreateSheetOpen}
-        onOpenChange={handleCreateSheetOpenChange}
-        entryPoint="class"
-        fixedClassId={classOption.id}
-        assignmentTypes={assignmentTypes}
-        siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
-        teachingLocked={teachingLocked}
-        teacherClasses={[classOption]}
-      />
     </div>
   );
 }

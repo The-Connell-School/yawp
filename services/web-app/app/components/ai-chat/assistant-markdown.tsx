@@ -22,7 +22,7 @@ export const MARKDOWN_CLASS = cn(
   '[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:marker:text-muted-foreground',
   '[&_li]:my-1 [&_li]:pl-1',
   '[&_strong]:font-semibold [&_strong]:text-foreground [&_em]:italic',
-  '[&_a]:font-medium [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2',
+  '[&_a]:font-medium [&_a]:text-link [&_a]:underline [&_a]:underline-offset-2 hover:[&_a]:text-link-hover',
   '[&_hr]:my-4 [&_hr]:border-border',
   '[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/40 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground',
   '[&_code]:rounded [&_code]:bg-foreground/[0.06] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs',

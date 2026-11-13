@@ -80,7 +80,7 @@ export function DayLessonsCard({
               <Link
                 to={`/app/lesson-planner/${made[day.day]}/packet`}
                 data-testid="day-lesson-open"
-                className="text-xs font-semibold text-primary underline"
+                className="text-xs font-semibold text-link underline"
               >
                 Open Day {day.day}
               </Link>
@@ -141,7 +141,7 @@ export function DayLessonsCard({
               type="submit"
               data-testid="save-framework"
               disabled={disabled || framework.state !== 'idle'}
-              className="text-xs font-semibold text-primary underline disabled:opacity-60"
+              className="text-xs font-semibold text-link underline disabled:opacity-60"
             >
               Save this week as a framework
             </button>

@@ -31,6 +31,7 @@ type DevPanelContextValue = {
   updateForms: (forms: Partial<DevPanelPersistedState['forms']>) => void;
   setScroll: (scroll: DevPanelPersistedState['scroll']) => void;
   clearFeedbackForm: () => void;
+  dismissGiveFeedbackAfterSubmit: () => void;
   previewAccessSeatLabel: string | null;
   setPreviewAccessSeatLabel: (label: string | null) => void;
   previewAccessGateEnabled: boolean;
@@ -119,20 +120,17 @@ export function DevPanelProvider({
   }, [persist, state]);
 
   const closePanel = useCallback(() => {
-    document.documentElement.classList.add('yawp-dev-panel-closing');
-    window.setTimeout(() => {
-      clearDevPanelState(window.localStorage);
-      document.documentElement.classList.remove(
-        'yawp-dev-panel-open',
-        'yawp-dev-panel-restored',
-        'yawp-dev-panel-closing'
-      );
-      setState({ ...DEV_PANEL_DEFAULT_STATE });
-      const beaker = document.querySelector<HTMLButtonElement>(
-        '.yawp-dev-panel-beaker button'
-      );
-      beaker?.focus();
-    }, 180);
+    clearDevPanelState(window.localStorage);
+    document.documentElement.classList.remove(
+      'yawp-dev-panel-open',
+      'yawp-dev-panel-restored',
+      'yawp-dev-panel-closing'
+    );
+    setState({ ...DEV_PANEL_DEFAULT_STATE });
+    const beaker = document.querySelector<HTMLButtonElement>(
+      '.yawp-dev-panel-beaker button'
+    );
+    beaker?.focus();
   }, []);
 
   const togglePanel = useCallback(() => {
@@ -156,6 +154,25 @@ export function DevPanelProvider({
         persist({ ...state, openSections });
       },
       openSubSheet: (sheet) => {
+        if (
+          sheet === 'free-tier-states' ||
+          sheet === 'give-feedback' ||
+          sheet === 'class-simulation'
+        ) {
+          let openSections = state.openSections;
+          if (sheet === 'class-simulation') {
+            if (!openSections.includes('tester-tools')) {
+              openSections = [...openSections, 'tester-tools'];
+            }
+            if (!openSections.includes('class-simulation')) {
+              openSections = [...openSections, 'class-simulation'];
+            }
+          } else if (!openSections.includes(sheet)) {
+            openSections = [...openSections, sheet];
+          }
+          persist({ ...state, openSections, subSheet: null, restored: false });
+          return;
+        }
         setFlyoutSwitchInstant(
           Boolean(state.subSheet && sheet && state.subSheet !== sheet)
         );
@@ -170,6 +187,16 @@ export function DevPanelProvider({
           ...state,
           forms: { ...state.forms, feedbackNote: '' },
         }),
+      dismissGiveFeedbackAfterSubmit: () => {
+        const openSections = state.openSections.filter(
+          (sectionId) => sectionId !== 'give-feedback'
+        );
+        persist({
+          ...state,
+          openSections,
+          forms: { ...state.forms, feedbackNote: '' },
+        });
+      },
       previewAccessSeatLabel: seatLabel,
       setPreviewAccessSeatLabel: setSeatLabel,
       previewAccessGateEnabled,

@@ -98,6 +98,9 @@ mock.module('~/domain/free-tier/locked-preview.server', () => ({
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({
   getLessonPlannerReviewFlags,
 }));
+mock.module('~/domain/assignment-types/exit-ticket-builder-v3-gate.server', () => ({
+  isExitTicketBuilderV3Enabled: async () => false,
+}));
 mock.module('~/utils/lesson-planner/lesson-planner-access.server', () => ({
   requireLessonPlannerAccess,
 }));
@@ -1109,6 +1112,25 @@ describe('api.domain.lesson-planner action — the progress stream', () => {
     expect(done.payload.error).toBeTruthy();
     // The provider's words never reach a teacher.
     expect(JSON.stringify(events)).not.toContain('provider-secret');
+  });
+
+  test('returns planner failed copy for Anthropic invalid_request 400', async () => {
+    const invalidRequest = Object.assign(new Error('Bad Request'), {
+      name: 'BadRequestError',
+      status: 400,
+      error: { type: 'invalid_request_error' },
+    });
+    getLLMCompletion.mockRejectedValue(invalidRequest);
+
+    const { events } = await streamEvents({ message: 'plan it' });
+    const done = events.at(-1)!;
+
+    expect(done.type).toBe('done');
+    expect(done.status).toBe(500);
+    expect(done.payload.error).toBe(
+      'The lesson planner could not put that together. Please try again.'
+    );
+    expect(JSON.stringify(events)).not.toContain('invalid_request');
   });
 
   test('never asks the model anything when the stream was not requested', async () => {

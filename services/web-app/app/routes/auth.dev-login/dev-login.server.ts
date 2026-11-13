@@ -1,4 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
+import { safeRedirect } from 'remix-utils/safe-redirect';
 import { combineHeaders } from '~/utils/misc';
 import {
   LOCAL_DEV_PERSONA_EMAILS,
@@ -163,9 +164,14 @@ export function createDevLoginAction({
     authSession.unset('impersonationMode');
     authSession.unset('impersonatorUserId');
 
+    const redirectTo = safeRedirect(
+      String(formData.get('redirectTo') ?? ''),
+      '/app'
+    );
+
     return redirectResponse(
       combineHeaders(
-        { Location: '/app' },
+        { Location: redirectTo },
         {
           'set-cookie': await sessionStorage.commitSession(authSession, {
             expires: session.expirationDate,

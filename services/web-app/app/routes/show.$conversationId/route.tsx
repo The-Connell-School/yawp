@@ -4,6 +4,7 @@
  * it does not glare. The clock is off unless the teacher wants it, and
  * running long is calm: amber, "past the plan. No rush."
  */
+import { withDeckKit } from '~/domain/lesson-planner/deck-kit-v4';
 import { DeckPicturesProvider } from '~/components/lesson-planner/slide-picture';
 import { viewerDeckPictures } from '~/domain/lesson-planner/deck-pictures.server';
 import { useEffect, useMemo, useState } from 'react';
@@ -59,7 +60,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       notes: Object.fromEntries(
         blocks.map((block) => [block.id, stored[block.id] ?? notesFallback(byId.get(block.id)?.content ?? '')])
       ),
-      deck: found ? { id: found.id, ...found.deck } : null,
+      deck: found ? withDeckKit({ id: found.id, ...found.deck }, loaded.reviewFlags) : null,
       gallery: loaded.reviewFlags.deckGallery,
       pictures: await viewerDeckPictures(request, [found?.deck]),
       pending,
@@ -88,7 +89,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     blocks: loaded.v3.timing.blocks,
     notes: Object.fromEntries(loaded.v3.steps.map((step) => [step.id, step.excerpt])),
     labels: Object.fromEntries(loaded.v3.steps.map((step) => [step.id, step.label])),
-    deck: deck?.kind === 'deck' ? { id: deckRow!.id, ...syncAgendaToStack(deck.deck, loaded.v3.timing.blocks) } : null,
+    deck: deck?.kind === 'deck' ? withDeckKit({ id: deckRow!.id, ...syncAgendaToStack(deck.deck, loaded.v3.timing.blocks) }, loaded.reviewFlags) : null,
     gallery: loaded.reviewFlags.deckGallery,
     pictures: await viewerDeckPictures(request, [deck?.kind === 'deck' ? deck.deck : null]),
   };
@@ -373,7 +374,7 @@ function RunTheShow({
           ) : step ? (
             <section data-testid="show-now" className="flex flex-1 flex-col rounded-3xl bg-[#F3EDE4] p-6 text-[#1C1A17] sm:p-8">
               <div className="flex items-start justify-between gap-4">
-                <p className="text-sm font-bold uppercase tracking-[0.14em] text-[#A8482A]">
+                <p className="text-sm font-bold uppercase tracking-[0.14em] text-[#1F4D3A]">
                   Now · Step {current + 1} of {blocks.length}
                 </p>
                 <div className="text-right text-sm text-[#45403A]" data-testid="show-clock" hidden={roomView}>

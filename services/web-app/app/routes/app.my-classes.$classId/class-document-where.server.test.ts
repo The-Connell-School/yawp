@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test';
+import { buildClassStudentWorkOnAssignmentBranches } from '~/utils/class-assignment-scope';
 import { buildClassDocumentScope } from './class-document-where.server';
 
 describe('buildClassDocumentScope', () => {
   test('uses class assignment deployments for class work', () => {
     expect(buildClassDocumentScope('class-1', [])).toEqual({
-      OR: [{ classAssignment: { classId: 'class-1' } }],
+      OR: [...buildClassStudentWorkOnAssignmentBranches('class-1')],
     });
   });
 
@@ -15,7 +16,7 @@ describe('buildClassDocumentScope', () => {
       })
     ).toEqual({
       OR: [
-        { classAssignment: { classId: 'class-1' } },
+        ...buildClassStudentWorkOnAssignmentBranches('class-1'),
         {
           classAssignmentId: null,
           membershipId: { in: ['membership-1', 'membership-2'] },
@@ -30,9 +31,8 @@ describe('buildClassDocumentScope', () => {
     ).toEqual({
       OR: [
         {
-          classAssignment: {
-            classId: 'class-1',
-          },
+          classAssignment: { classId: 'class-1' },
+          artifactKind: 'STUDENT',
           membershipId: 'membership-1',
         },
         {
@@ -64,7 +64,7 @@ describe('buildClassDocumentScope', () => {
       buildClassDocumentScope('class-1', ['doc-legacy-1', 'doc-legacy-2'])
     ).toEqual({
       OR: [
-        { classAssignment: { classId: 'class-1' } },
+        ...buildClassStudentWorkOnAssignmentBranches('class-1'),
         { id: { in: ['doc-legacy-1', 'doc-legacy-2'] } },
       ],
     });

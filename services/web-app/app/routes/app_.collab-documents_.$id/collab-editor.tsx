@@ -254,7 +254,11 @@ export function CollabEditor({
         ) : null}
 
         {editable && editor ? (
-          <Bar editor={editor} documentId={docId} isEditable={editable} />
+          <Bar
+            editor={editor}
+            documentId={docId}
+            isEditable={editable}
+          />
         ) : null}
 
         <div

@@ -1,6 +1,11 @@
 import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import { getUserId } from '~/utils/auth.server';
+import { resolveClassCode } from '~/utils/class-code-write.server';
+import { generateClassCode } from '~/utils/class';
+import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
+import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
+import { currentSchoolYear } from '~/utils/school-year';
 import {
   lockClassCollaborationDeployments,
   lockStudentRosters,
@@ -22,6 +27,7 @@ import {
 
 export { CLASS_SIMULATION_MAX_STUDENTS };
 export const CLASS_SIMULATION_TRANSACTION_MS = 120_000;
+export const DEV_PANEL_SANDBOX_CLASS_TITLE = 'Simulation sandbox';
 
 export type ClassSimulationCounts = {
   students: number;
@@ -90,6 +96,65 @@ export async function listDevPanelTeacherClasses(request: Request) {
       ...entry,
       simulatedStudentCount: countByClass.get(entry.id) ?? 0,
     })),
+  };
+}
+
+export async function createDevPanelSandboxClass(params: { userId: string }) {
+  const membership = await prisma.orgMembership.findFirst({
+    where: { userId: params.userId, isActive: true, role: 'TEACHER' },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      organizationId: true,
+      schools: { select: { id: true }, take: 1 },
+    },
+  });
+  if (!membership) {
+    return { ok: false as const, status: 403 as const, error: 'Teacher sign-in required.' };
+  }
+
+  let schoolId = membership.schools[0]?.id ?? null;
+  if (!schoolId) {
+    const school = await prisma.school.findFirst({
+      where: { organizationId: membership.organizationId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (school) {
+      await prisma.orgMembership.update({
+        where: { id: membership.id },
+        data: { schools: { connect: { id: school.id } } },
+      });
+      schoolId = school.id;
+    }
+  }
+  if (!schoolId) {
+    return {
+      ok: false as const,
+      status: 400 as const,
+      error: 'No school is available for your account.',
+    };
+  }
+
+  const classCode = await resolveClassCode(prisma, generateClassCode(), {
+    generated: true,
+  });
+  const classArtKey = await pickClassArtKeyForOrganization(membership.organizationId);
+  const klass = await prisma.class.create({
+    data: {
+      schoolId,
+      schoolYear: currentSchoolYear(),
+      title: DEV_PANEL_SANDBOX_CLASS_TITLE,
+      code: classCode,
+      cardGradientKey: generateClassCardGradientKey(classCode),
+      classArtKey,
+      teachers: { connect: { id: membership.id } },
+    },
+    select: { id: true, title: true, code: true, schoolYear: true },
+  });
+  return {
+    ok: true as const,
+    class: { ...klass, simulatedStudentCount: 0 },
   };
 }
 

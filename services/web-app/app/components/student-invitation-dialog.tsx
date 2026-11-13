@@ -1,5 +1,5 @@
 import { useRef, useState, type RefObject } from 'react';
-import { Copy, Maximize, Minimize } from 'lucide-react';
+import { Check, Copy, Maximize, Minimize } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -27,6 +27,7 @@ export function StudentInvitationDialog({
   const previousFocus = useRef<HTMLElement | null>(null);
   const [present, setPresent] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [copied, setCopied] = useState(false);
   return (
     <Dialog
       open={open}
@@ -34,6 +35,7 @@ export function StudentInvitationDialog({
         if (!next) {
           setPresent(false);
           setFeedback('');
+          setCopied(false);
         }
         onOpenChange(next);
       }}
@@ -59,15 +61,19 @@ export function StudentInvitationDialog({
       >
         <DialogHeader>
           <DialogTitle className="pr-6 text-2xl">
-            {freeTierCopy && present ? 'Welcome to Yawp!' : 'Add your students to your class'}
+            {present
+              ? freeTierCopy
+                ? 'Welcome to Yawp!'
+                : 'Add your students to your class'
+              : 'To join this class…'}
           </DialogTitle>
-          <DialogDescription>
-            {freeTierCopy
-              ? present
+          {present ? (
+            <DialogDescription>
+              {freeTierCopy
                 ? 'Follow these steps to join your class.'
-                : 'Adding students is easy. Put these steps up on the board and walk your class through them together. It takes about five minutes.'
-              : 'Show these steps to your students to help them join your class.'}
-          </DialogDescription>
+                : 'Show these steps to your students to help them join your class.'}
+            </DialogDescription>
+          ) : null}
         </DialogHeader>
         <ol
           className={cn(
@@ -122,13 +128,19 @@ export function StudentInvitationDialog({
             onClick={async () => {
               try {
                 await navigator.clipboard.writeText(code);
+                setCopied(true);
                 setFeedback('Class code copied');
+                window.setTimeout(() => setCopied(false), 2000);
               } catch {
                 setFeedback('Select the class code above to copy it.');
               }
             }}
           >
-            <Copy className="mr-2 size-4" />
+            {copied ? (
+              <Check className="mr-2 size-4 text-green-600" />
+            ) : (
+              <Copy className="mr-2 size-4" />
+            )}
             Copy class code
           </Button>
           <Button

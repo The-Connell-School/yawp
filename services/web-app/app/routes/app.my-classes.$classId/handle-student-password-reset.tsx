@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { KeyRound } from 'lucide-react';
+import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import {
@@ -11,6 +12,7 @@ import {
 } from '~/components/ui/dialog';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
+import { Tooltip } from '~/components/ui/tooltip';
 
 type ResetResponse = {
   success?: boolean;
@@ -18,13 +20,17 @@ type ResetResponse = {
   message?: string;
 };
 
-export function HandleStudentPasswordResetButton({
-  studentMembershipId,
-  studentName,
-}: {
+type HandleStudentPasswordResetProps = {
   studentMembershipId: string;
   studentName: string;
-}) {
+  trigger: 'icon' | 'sheet';
+};
+
+export function HandleStudentPasswordReset({
+  studentMembershipId,
+  studentName,
+  trigger,
+}: HandleStudentPasswordResetProps) {
   const fetcher = useFetcher<ResetResponse>();
   const [open, setOpen] = useState(false);
   const [temporaryPassword, setTemporaryPassword] = useState('');
@@ -45,118 +51,174 @@ export function HandleStudentPasswordResetButton({
     setRevealedPassword(null);
   };
 
+  const openDialog = (e?: { stopPropagation?: () => void }) => {
+    e?.stopPropagation?.();
+    setOpen(true);
+  };
+
   return (
     <>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className="w-fit shrink-0"
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen(true);
-        }}
-      >
-        Reset login
-      </Button>
-      <Dialog
+      {trigger === 'icon' ? (
+        <Tooltip text="Reset login">
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            className="size-7 shrink-0 text-muted-foreground"
+            aria-label="Reset login"
+            onClick={openDialog}
+          >
+            <KeyRound className="size-3.5" aria-hidden="true" />
+          </Button>
+        </Tooltip>
+      ) : (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="w-fit"
+          onClick={openDialog}
+        >
+          Reset login
+        </Button>
+      )}
+      <HandleStudentPasswordResetDialog
         open={open}
         onOpenChange={(next) => {
           if (!next) closeDialog();
           else setOpen(true);
         }}
-      >
-        <DialogContent
-          className="sm:max-w-md"
-          data-testid="handle-student-password-reset-dialog"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {revealedPassword ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>Temporary password set</DialogTitle>
-                <DialogDescription>
-                  Share this password with {studentName} once. They must change
-                  it at next login.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="rounded-md border bg-muted/40 px-3 py-2 font-mono text-sm">
-                {revealedPassword}
-              </div>
-              <DialogFooter className="gap-2 sm:gap-0">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(revealedPassword);
-                  }}
-                >
-                  Copy password
-                </Button>
-                <Button type="button" onClick={closeDialog}>Done</Button>
-              </DialogFooter>
-            </>
-          ) : (
-            <fetcher.Form
-              method="post"
-              onSubmit={(e) => {
-                e.stopPropagation();
-                lastSubmittedPasswordRef.current = temporaryPassword;
-              }}
-            >
-              <DialogHeader>
-                <DialogTitle>Reset login for {studentName}</DialogTitle>
-                <DialogDescription>
-                  Set a temporary password. The student&apos;s current session
-                  will end immediately.
-                </DialogDescription>
-              </DialogHeader>
-              <input
-                type="hidden"
-                name="intent"
-                value="reset-student-password"
-              />
-              <input
-                type="hidden"
-                name="studentMembershipId"
-                value={studentMembershipId}
-              />
-              <div className="grid gap-2 py-4">
-                <Label htmlFor={`temp-pass-${studentMembershipId}`}>
-                  Temporary password
-                </Label>
-                <Input
-                  id={`temp-pass-${studentMembershipId}`}
-                  name="temporaryPassword"
-                  type="text"
-                  autoComplete="off"
-                  minLength={6}
-                  required
-                  value={temporaryPassword}
-                  onChange={(e) => setTemporaryPassword(e.target.value)}
-                />
-                {fetcher.data?.error ? (
-                  <p className="text-sm text-destructive" role="alert">
-                    {fetcher.data.error}
-                  </p>
-                ) : null}
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={closeDialog}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={fetcher.state !== 'idle'}>
-                  {fetcher.state !== 'idle' ? 'Saving…' : 'Set temporary password'}
-                </Button>
-              </DialogFooter>
-            </fetcher.Form>
-          )}
-        </DialogContent>
-      </Dialog>
+        studentMembershipId={studentMembershipId}
+        studentName={studentName}
+        fetcher={fetcher}
+        temporaryPassword={temporaryPassword}
+        onTemporaryPasswordChange={setTemporaryPassword}
+        revealedPassword={revealedPassword}
+        onClose={closeDialog}
+        lastSubmittedPasswordRef={lastSubmittedPasswordRef}
+      />
     </>
+  );
+}
+
+/** @deprecated Use `HandleStudentPasswordReset` with `trigger="icon"`. */
+export function HandleStudentPasswordResetButton(
+  props: Omit<HandleStudentPasswordResetProps, 'trigger'>
+) {
+  return <HandleStudentPasswordReset {...props} trigger="icon" />;
+}
+
+type HandleStudentPasswordResetDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  studentMembershipId: string;
+  studentName: string;
+  fetcher: ReturnType<typeof useFetcher<ResetResponse>>;
+  temporaryPassword: string;
+  onTemporaryPasswordChange: (value: string) => void;
+  revealedPassword: string | null;
+  onClose: () => void;
+  lastSubmittedPasswordRef: MutableRefObject<string>;
+};
+
+export function HandleStudentPasswordResetDialog({
+  open,
+  onOpenChange,
+  studentMembershipId,
+  studentName,
+  fetcher,
+  temporaryPassword,
+  onTemporaryPasswordChange,
+  revealedPassword,
+  onClose,
+  lastSubmittedPasswordRef,
+}: HandleStudentPasswordResetDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="sm:max-w-md"
+        data-testid="handle-student-password-reset-dialog"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {revealedPassword ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Temporary password set</DialogTitle>
+              <DialogDescription>
+                Share this password with {studentName} once. They must change it
+                at next login.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="rounded-md border bg-muted/40 px-3 py-2 font-mono text-sm">
+              {revealedPassword}
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  void navigator.clipboard.writeText(revealedPassword);
+                }}
+              >
+                Copy password
+              </Button>
+              <Button type="button" onClick={onClose}>
+                Done
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <fetcher.Form
+            method="post"
+            onSubmit={(e) => {
+              e.stopPropagation();
+              lastSubmittedPasswordRef.current = temporaryPassword;
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>Reset login for {studentName}</DialogTitle>
+              <DialogDescription>
+                Set a temporary password. The student&apos;s current session will
+                end immediately.
+              </DialogDescription>
+            </DialogHeader>
+            <input type="hidden" name="intent" value="reset-student-password" />
+            <input
+              type="hidden"
+              name="studentMembershipId"
+              value={studentMembershipId}
+            />
+            <div className="grid gap-2 py-4">
+              <Label htmlFor={`temp-pass-${studentMembershipId}`}>
+                Temporary password
+              </Label>
+              <Input
+                id={`temp-pass-${studentMembershipId}`}
+                name="temporaryPassword"
+                type="text"
+                autoComplete="off"
+                minLength={6}
+                required
+                value={temporaryPassword}
+                onChange={(e) => onTemporaryPasswordChange(e.target.value)}
+              />
+              {fetcher.data?.error ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {fetcher.data.error}
+                </p>
+              ) : null}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={fetcher.state !== 'idle'}>
+                {fetcher.state !== 'idle' ? 'Saving…' : 'Set temporary password'}
+              </Button>
+            </DialogFooter>
+          </fetcher.Form>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

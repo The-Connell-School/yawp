@@ -55,6 +55,7 @@ import { requireUserId, requireMembership } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 import { buildTeacherDocumentAccessWhere } from '~/utils/grading-auth.server';
+import { isTeacherAssignmentPreviewSelfGrading } from '~/domain/assignments/teacher-assignment-preview-grading';
 import { redirectWithToast } from '~/utils/toast.server';
 import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import { hasRecordedGrade } from '~/domain/grading/recorded-grade';
@@ -203,6 +204,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       document: {
         select: {
           id: true,
+          artifactKind: true,
           title: true,
           assignmentTypeId: true,
           assignmentType: {
@@ -223,6 +225,24 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                 select: {
                   id: true,
                   schoolId: true,
+                  school: {
+                    select: {
+                      organizationId: true,
+                      organization: {
+                        select: { submissionActivityEnabled: true },
+                      },
+                    },
+                  },
+                  teachers: { select: { id: true } },
+                },
+              },
+            },
+          },
+          teacherPreviewClassAssignment: {
+            select: {
+              class: {
+                select: {
+                  id: true,
                   school: {
                     select: {
                       organizationId: true,
@@ -337,7 +357,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           klass.teachers.some((teacher) => teacher.id === profile.id)
       )
     );
-  const isTeacher =
+  const isClassTeacher =
     !isOwner &&
     profile.role === 'TEACHER' &&
     (submission.document.classAssignment?.class?.school?.organizationId ??
@@ -345,9 +365,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       profile.organization.id &&
     (isCurrentClassTeacher || isLegacyClassTeacher);
 
+  const previewClassTeachers =
+    submission.document.teacherPreviewClassAssignment?.class?.teachers ?? [];
+  const isTeacherPreviewSelfGrading = isTeacherAssignmentPreviewSelfGrading({
+    artifactKind: submission.document.artifactKind,
+    viewerMembershipId: profile.id,
+    viewerRole: profile.role,
+    documentOwnerMembershipId: submission.document.membership?.id ?? null,
+    previewClassTeacherMembershipIds: previewClassTeachers.map(
+      (teacher) => teacher.id
+    ),
+  });
+  const isTeacherViewer =
+    isClassTeacher || isAdmin || isTeacherPreviewSelfGrading;
+
   const submissionActivityEnabled =
     (submission.document.classAssignment?.class?.school?.organization
       ?.submissionActivityEnabled ??
+      submission.document.teacherPreviewClassAssignment?.class?.school
+        ?.organization?.submissionActivityEnabled ??
       submission.document.membership?.organization
         ?.submissionActivityEnabled) === true;
 
@@ -401,7 +437,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ]);
 
   const activityPage =
-    !isOwner && (isTeacher || isAdmin)
+    !isOwner && isTeacherViewer
       ? await prisma.submissionActivity.findMany({
           where: {
             submissionId: submission.id,
@@ -461,13 +497,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // Direct links fall back to this submission's class. Student owners never
   // receive the queue, and every row is checked against teacher access.
   const gradingQueueScope =
-    (isTeacher || isAdmin) && !isOwner
+    isTeacherViewer && (!isOwner || isTeacherPreviewSelfGrading)
       ? (parseGradingQueueScope(
           sanitizeExitTarget(url.searchParams.get('exitTo'))
         ) ??
         parseGradingQueueScope(
-          submission.document.classAssignment?.class?.id
-            ? `/app/my-classes/${submission.document.classAssignment.class.id}?tab=documents&status=needs-grading`
+          (
+            submission.document.classAssignment?.class?.id ??
+            submission.document.teacherPreviewClassAssignment?.class?.id
+          )
+            ? `/app/my-classes/${
+                submission.document.classAssignment?.class?.id ??
+                submission.document.teacherPreviewClassAssignment?.class?.id
+              }?tab=documents&status=needs-grading`
             : '/app/documents?status=needs-grading'
         ))
       : null;
@@ -501,8 +543,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     : null;
 
   const hideUnreleasedGrade = shouldHideUnreleasedGradeFromStudent({
-    isOwner,
-    isTeacher,
+    isOwner: isOwner && !isTeacherPreviewSelfGrading,
+    isTeacher: isTeacherViewer,
     isAdmin,
   });
 
@@ -541,7 +583,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     submission: submissionForResponse,
     ...staffTeacherNoteLoaderField({
       isOwner,
-      isTeacher,
+      isTeacher: isTeacherViewer,
       isAdmin,
       runs: gradingAssistantRuns,
       assignmentTypeSystemKey:
@@ -551,7 +593,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ),
     }),
     isOwner,
-    isTeacher: isTeacher || isAdmin,
+    isTeacher: isTeacherViewer,
+    isTeacherPreviewSelfGrading,
     submissionActivityEnabled,
     ...(activities == null ? {} : { activities, activityHasMore }),
   };
@@ -577,6 +620,7 @@ function SubmissionDetail({
     submission,
     isOwner,
     isTeacher,
+    isTeacherPreviewSelfGrading,
     submissionActivityEnabled,
     revisionFlowEnabled,
   } = loaderData;
@@ -598,7 +642,8 @@ function SubmissionDetail({
   const location = useLocation();
   const revalidator = useRevalidator();
   const titleFetcher = useFetcher();
-  const isGradingOther = isTeacher && !isOwner;
+  const isGradingOther =
+    isTeacher && (!isOwner || isTeacherPreviewSelfGrading);
   const [gradingNavigationState, setGradingNavigationState] = useState({
     hasUnsavedChanges: false,
     isBusy: false,

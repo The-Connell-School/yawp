@@ -34,8 +34,18 @@ export function parseAssignmentExitTicket(
   // Only the quick builder knows about grading criteria, and it always posts
   // a kind. A form without one is from the original builder, which is never
   // held to criteria it had no way to collect.
-  const fromQuickBuilder = formData.has('exitTicketKind');
+  // The v3 builder posts an activity; it is held to its own (lighter) rules
+  // and, like the quick builder, its grading is read from the gradebook field.
+  const fromV3Builder = formData.has('exitTicketActivity');
+  const fromQuickBuilder = fromV3Builder || formData.has('exitTicketKind');
   const parsed = parseExitTicketConfigInput({
+    ...(fromV3Builder
+      ? {
+          activity: formData.get('exitTicketActivity')?.toString(),
+          promptText: formData.get('exitTicketPromptText')?.toString(),
+          starter: formData.get('exitTicketStarter')?.toString(),
+        }
+      : {}),
     // Posted only by the quick builder, always beside the mode it names.
     kind: formData.get('exitTicketKind')?.toString(),
     mode: formData.get('exitTicketMode')?.toString(),
@@ -148,7 +158,7 @@ export function exitTicketGradingModeFor({
 }): AssignmentGradingMode {
   if (
     isExitTicketAssignmentType({ kind: assignmentTypeKind }) &&
-    formData.has('exitTicketKind')
+    (formData.has('exitTicketKind') || formData.has('exitTicketActivity'))
   ) {
     return 'bands';
   }

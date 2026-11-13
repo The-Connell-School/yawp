@@ -1,3 +1,4 @@
+import { SITE_LICENSE_LOCKED_TILE_LABELS } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 import { howItWorksGuideFor } from './how-it-works-guide';
 import { EXIT_TICKET_ASSIGNMENT_TYPE_KIND } from './exit-ticket';
 import { isWritingStepKind } from '~/routes/app.assignment-types.$id/about-writing-step/content';
@@ -28,4 +29,9 @@ export function assignmentTypeHasHowItWorksGuide(
   // Class Starter, the thesis essay, the writing-step and Exit Ticket guides.
   // A button for Daily Pages would open a page that redirects home.
   return guide === 'class-starter' || guide === 'thesis-essay';
+}
+
+/** Site-license carousel tiles use keys, not assignment type titles. */
+export function siteLicenseLockedTileHasHowItWorksGuide(tileKey: string) {
+  return tileKey in SITE_LICENSE_LOCKED_TILE_LABELS;
 }

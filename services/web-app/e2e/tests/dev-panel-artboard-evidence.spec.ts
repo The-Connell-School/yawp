@@ -6,10 +6,15 @@ import {
   clearDevPanelStorageWhenStable,
   devPanelFreeTierGroupTrigger,
   devPanelFreeTierStateOption,
+  devToolsPanel,
+  expectGiveFeedbackNoteCleared,
   openDevPanelClassSimulationFlyout,
   openDevToolsPanel,
   openGiveFeedback,
+  waitForDevPanelFeedbackNotePersisted,
+  waitForDeveloperToolsPageReady,
 } from '../helpers/dev-panel-feedback';
+import { ensureDemoDevTeacherSession } from '../helpers/dev-panel-preview-access';
 
 const evidenceRoot =
   process.env.DEV_PANEL_EVIDENCE_DIR ??
@@ -30,9 +35,7 @@ test.describe('Dev panel artboard evidence', () => {
   });
 
   test.beforeEach(async ({ page }) => {
-    await page.request.post('/auth/dev-login', {
-      form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
-    });
+    await ensureDemoDevTeacherSession(page);
     await prisma.setting.upsert({
       where: { name: 'feature_flag.demo-feedback-widget' },
       create: {
@@ -64,6 +67,7 @@ test.describe('Dev panel artboard evidence', () => {
     await page.goto('/app/assignments', { waitUntil: 'domcontentloaded' });
     await clearDevPanelStorageWhenStable(page);
     await page.reload({ waitUntil: 'domcontentloaded' });
+    await waitForDeveloperToolsPageReady(page);
     await openDevToolsPanel(page);
     await shot(page, '01');
 
@@ -78,11 +82,7 @@ test.describe('Dev panel artboard evidence', () => {
     await shot(page, '06');
 
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.context().clearCookies();
-    await page.request.post('/auth/dev-login', {
-      form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
-    });
-    await page.goto('/app/assignments');
+    await ensureDemoDevTeacherSession(page, '/app/assignments');
     await openDevToolsPanel(page);
     if (await page.getByRole('button', { name: 'Enter access code' }).count()) {
       await shot(page, '34');
@@ -92,27 +92,18 @@ test.describe('Dev panel artboard evidence', () => {
     }
 
     const tools = await openDevToolsPanel(page);
-    await tools.getByRole('button', { name: /^Free-tier states/ }).click();
-    const stateSheet = page.getByRole('dialog', { name: 'Free-tier states' });
+    await tools.getByRole('button', { name: /^Free-tier\b/ }).click();
+    const stateSheet = page.getByTestId('free-tier-session-runner');
     await expect(stateSheet).toBeVisible({ timeout: 15_000 });
     await shot(page, '19');
 
-    await devPanelFreeTierGroupTrigger(stateSheet, 'Teacher signup').click();
-    await devPanelFreeTierStateOption(stateSheet, 'Waitlist submitted').click();
-    await stateSheet
-      .getByRole('switch', { name: 'Use a throwaway test account' })
-      .setChecked(false);
-    await stateSheet.getByRole('button', { name: 'Jump to this state' }).click();
-    await expect(
-      page.getByRole('alertdialog', { name: /Change .+'s test data\?/ })
-    ).toBeVisible();
+    await tools.getByRole('button', { name: 'Jump to state (advanced)' }).click();
+    await stateSheet.getByRole('button', { name: /^Waitlisted\b/ }).click();
+    await expect(stateSheet.getByText('Jump to this state?')).toBeVisible();
     await shot(page, '20');
 
-    await page.getByRole('button', { name: 'Cancel' }).click();
-    await stateSheet
-      .getByRole('switch', { name: 'Use a throwaway test account' })
-      .setChecked(true);
-    await devPanelFreeTierStateOption(stateSheet, 'Waitlist submitted').click();
+    await stateSheet.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await stateSheet.getByRole('button', { name: /^Waitlisted\b/ }).click();
     await page.route('**/api/dev-panel/free-tier-jump', async (route) => {
       await route.fulfill({
         status: 200,
@@ -140,48 +131,53 @@ test.describe('Dev panel artboard evidence', () => {
           locationRef.assign = original;
         };
     });
-    await stateSheet.getByRole('button', { name: 'Jump to this state' }).click();
-    await expect(
-      stateSheet.getByRole('button', { name: 'Jumping…' })
-    ).toBeVisible();
+    await page.getByRole('button', { name: 'Jump', exact: true }).click();
+    await page
+      .waitForURL(
+        (url) =>
+          url.pathname === '/app' ||
+          url.pathname === '/app/' ||
+          url.searchParams.has('devPanelJumpToast'),
+        { timeout: 15_000 }
+      )
+      .catch(async () => {
+        await expect(page.getByText(/Jumping to/i)).toBeVisible({ timeout: 5_000 });
+      });
     await shot(page, '21');
     await page
       .evaluate(() => {
         (window as unknown as { __restoreJumpAssign?: () => void }).__restoreJumpAssign?.();
       })
       .catch(() => undefined);
-    // Client schedules location.assign 350ms after a successful jump; wait for
-    // that navigation before loading another route (avoids goto interruptions).
     await page.waitForURL(
       (url) => url.pathname === '/app' || url.pathname === '/app/',
       { timeout: 10_000 }
     );
     await page.waitForLoadState('domcontentloaded');
     await page.unroute('**/api/dev-panel/free-tier-jump');
-    await page.request.post('/auth/dev-login', {
-      form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
-    });
-    await page.goto('/app/assignments', { waitUntil: 'domcontentloaded' });
+    await ensureDemoDevTeacherSession(page, '/app/assignments');
     await clearDevPanelStorageWhenStable(page);
 
     let { panel: feedbackDialog } = await openGiveFeedback(page);
     await shot(page, '55');
 
-    await feedbackDialog.getByRole('button', { name: 'Send feedback' }).click();
-    await expect(feedbackDialog.getByRole('alert')).toHaveText(/Add a note/);
+  const sendFeedback = feedbackDialog.getByRole('button', { name: 'Send feedback' });
+    await expect(sendFeedback).toBeDisabled();
     await shot(page, '57');
 
-    await feedbackDialog.getByLabel('Note').fill('Evidence note for sent state');
-    await feedbackDialog.getByRole('button', { name: 'Send feedback' }).click();
-    await expect(feedbackDialog.getByRole('heading', { name: 'Feedback sent' })).toBeVisible();
-    await expect(feedbackDialog.getByRole('status')).toContainText(
-      'Thanks. The Yawp! team has your note, screenshot and page URL.'
+    await feedbackDialog.getByLabel('What happened?').fill('Evidence note for sent state');
+    const feedbackPost = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/dev-panel/feedback') &&
+        response.request().method() === 'POST'
     );
+    await sendFeedback.click();
+    expect((await feedbackPost).ok()).toBeTruthy();
+    ({ panel: feedbackDialog } = await expectGiveFeedbackNoteCleared(page));
     await shot(page, '59');
 
-    await feedbackDialog.getByRole('button', { name: 'Send another' }).click();
-
-    await feedbackDialog.getByLabel('Note').fill('Evidence note kept on error');
+    ({ panel: feedbackDialog } = await openGiveFeedback(page));
+    await feedbackDialog.getByLabel('What happened?').fill('Evidence note kept on error');
     await page.route('**/api/dev-panel/feedback', async (route) => {
       await route.fulfill({
         status: 503,
@@ -190,11 +186,11 @@ test.describe('Dev panel artboard evidence', () => {
       });
     });
     await feedbackDialog.getByRole('button', { name: 'Send feedback' }).click();
-    await expect(feedbackDialog.getByRole('alert')).toContainText(
-      "Couldn't send your feedback"
+    await expect(feedbackDialog.locator('.yawp-dev-panel-pe3-error')).toContainText(
+      /Could not save feedback|Could not send feedback/i
     );
-    await expect(feedbackDialog.getByRole('alert')).toContainText(
-      'Your note is still here; nothing was lost'
+    await expect(feedbackDialog.getByLabel('What happened?')).toHaveValue(
+      'Evidence note kept on error'
     );
     await shot(page, '60');
 
@@ -214,14 +210,18 @@ test.describe('Dev panel artboard evidence', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/app/assignments');
     ({ panel: feedbackDialog } = await openGiveFeedback(page));
-    await feedbackDialog.getByLabel('Note').fill('Mobile footer evidence');
+    await feedbackDialog.getByLabel('What happened?').fill('Mobile footer evidence');
     await shot(page, '72');
 
-    await feedbackDialog.getByLabel('Note').fill('Partly typed note before reload');
+    await feedbackDialog.getByLabel('What happened?').fill('Partly typed note before reload');
+    await waitForDevPanelFeedbackNotePersisted(
+      page,
+      'Partly typed note before reload'
+    );
     await page.reload();
     await openDevToolsPanel(page);
     ({ panel: feedbackDialog } = await openGiveFeedback(page));
-    await expect(feedbackDialog.getByLabel('Note')).toHaveValue(
+    await expect(feedbackDialog.getByLabel('What happened?')).toHaveValue(
       'Partly typed note before reload',
       { timeout: 15_000 }
     );
@@ -246,8 +246,8 @@ test.describe('Dev panel artboard evidence', () => {
     });
     await page.goto('/app/assignments');
     await openDevPanelClassSimulationFlyout(page);
-    const simSheet = page.getByRole('dialog', { name: 'Class simulation' });
-    await expect(simSheet).toBeVisible();
+    const simSheet = devToolsPanel(page);
+    await expect(simSheet.getByRole('listbox', { name: 'Class' })).toBeVisible();
     await shot(page, 'class-sim-selected');
 
     await page.route('**/api/dev-panel/class-simulation', async (route) => {

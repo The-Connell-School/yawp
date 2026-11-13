@@ -260,7 +260,7 @@ export function TeacherNotesShow({
           ) : step ? (
             <section data-testid="show-now" className="flex flex-1 flex-col rounded-3xl bg-[#F3EDE4] p-6 text-[#1C1A17] sm:p-8">
               <div className="flex flex-wrap items-start justify-between gap-4">
-                <p data-testid="show-step-of" className="text-sm font-bold uppercase tracking-[0.14em] text-[#A8482A]">
+                <p data-testid="show-step-of" className="text-sm font-bold uppercase tracking-[0.14em] text-[#1F4D3A]">
                   Now · Step {current + 1} of {steps.length} · {step.minutes} min
                 </p>
                 {clock === 'off' ? null : (
@@ -353,7 +353,7 @@ export function TeacherNotesShow({
                     {noteSections(stepNotes).map((section, index) => (
                       <div key={index} data-testid="notes-section">
                         {section.heading ? (
-                          <dt className="text-xs font-bold uppercase tracking-[0.12em] text-[#A8482A]">{section.heading}</dt>
+                          <dt className="text-xs font-bold uppercase tracking-[0.12em] text-[#1F4D3A]">{section.heading}</dt>
                         ) : null}
                         <dd className="whitespace-pre-line">{section.body}</dd>
                       </div>

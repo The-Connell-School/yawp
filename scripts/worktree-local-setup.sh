@@ -168,6 +168,8 @@ CLASS_INSIGHT_MOCK_MODE=fixture
 AI_MODEL="claude-sonnet-4-5"
 ANTHROPIC_API_KEY=""
 BLACKBOARD_LTI_MOCK_URL="http://127.0.0.1:${LTI_MOCK_PORT}"
+PRIMARY_APP_URL="http://localhost:${DEV_PORT}"
+FREE_TIER_LINK_HMAC_SECRET="${SLUG}-worktree-free-tier-hmac"
 EOF
   chmod 600 "$CONFIG_FILE" "$ROOT/packages/prisma/.env" "$ROOT/services/web-app/.env"
 
@@ -245,7 +247,19 @@ smoke_dev_login() {
   )"
 
   if [[ "$status" != "302" && "$status" != "303" ]]; then
-    echo "Dev login smoke test failed (HTTP ${status}). Check DATABASE_URL and seed data." >&2
+    echo "Dev login smoke test failed for admin (HTTP ${status}). Check DATABASE_URL and seed data." >&2
+    exit 1
+  fi
+
+  status="$(
+    curl -sS -o /dev/null -w '%{http_code}' \
+      -X POST "http://localhost:${dev_port}/auth/dev-login" \
+      -H 'content-type: application/x-www-form-urlencoded' \
+      --data 'email=dev.student@yawp.local&redirectTo=/app'
+  )"
+
+  if [[ "$status" != "302" && "$status" != "303" ]]; then
+    echo "Dev login smoke test failed for student (HTTP ${status}). Check DATABASE_URL and seed data." >&2
     exit 1
   fi
 }

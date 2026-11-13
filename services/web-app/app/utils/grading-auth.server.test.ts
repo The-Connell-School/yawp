@@ -66,6 +66,22 @@ describe('grading auth helpers', () => {
             },
           },
         },
+        {
+          artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW',
+          teacherPreviewClassAssignment: {
+            is: {
+              class: {
+                school: { organizationId: 'org-1' },
+                teachers: {
+                  some: {
+                    id: 'teacher-membership-1',
+                    isActive: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       ],
     });
   });
@@ -132,6 +148,11 @@ describe('grading auth helpers', () => {
 
   test('prevents grading own document', () => {
     expect(isGradingOwnDocument('membership-1', 'membership-1')).toBe(true);
+    expect(
+      isGradingOwnDocument('membership-1', 'membership-1', undefined, undefined, {
+        artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW',
+      })
+    ).toBe(false);
     expect(isGradingOwnDocument('membership-1', 'membership-2')).toBe(false);
     expect(
       isGradingOwnDocument(
@@ -167,6 +188,10 @@ describe('grading auth helpers', () => {
         },
       })
     );
+    expect(where.OR).toContainEqual({
+      artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW',
+      membership: { is: { userId: 'teacher-user-1' } },
+    });
   });
 
   test('rechecks the activity-ledger feature before changing a released shared grade', () => {

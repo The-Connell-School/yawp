@@ -52,7 +52,7 @@ export default function UnitRoute() {
     <section className="h-full w-full overflow-y-auto bg-[#F6F1EA]">
       <div data-testid="unit-view" className="mx-auto max-w-6xl px-4 pb-32 pt-6 sm:px-8">
         <nav aria-label="Breadcrumb" className="text-sm text-[#6E665C]">
-          <Link to="/app/lesson-planner/library" className="font-medium text-[#A8482A] hover:underline">
+          <Link to="/app/lesson-planner/library" className="font-medium text-[#1F4D3A] hover:underline">
             Library
           </Link>
           <span className="mx-2">/</span>
@@ -500,11 +500,11 @@ function UnitPlan({ plan, planningHref }: { plan: NonNullable<UnitView['unit']['
               <span className="block text-xs text-muted-foreground">{day.objective}</span>
             </span>
             {day.builtHref ? (
-              <Link to={day.builtHref} className="text-xs font-semibold text-primary hover:underline">
+              <Link to={day.builtHref} className="text-xs font-semibold text-link hover:text-link-hover hover:underline">
                 Open
               </Link>
             ) : day.buildHref ? (
-              <Link to={day.buildHref} data-testid="unit-plan-build" className="text-xs font-semibold text-primary hover:underline">
+              <Link to={day.buildHref} data-testid="unit-plan-build" className="text-xs font-semibold text-link hover:text-link-hover hover:underline">
                 Build this day
               </Link>
             ) : null}

@@ -377,7 +377,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                 type="button"
                 data-testid="packet-publish"
                 onClick={() => post(packetFetcher, PACKET_API, { intent: published ? 'unpublish' : 'publish' })}
-                className="inline-flex items-center gap-1 rounded-full bg-[#FBE5DC] px-3 py-1.5 text-xs font-semibold text-[var(--sv-primary)]"
+                className="inline-flex items-center gap-1 rounded-full bg-[var(--sv-brand-wash)] px-3 py-1.5 text-xs font-semibold text-[var(--sv-primary)]"
               >
                 <BookMarked size={13} /> {published ? 'In my library' : 'Save to my library'}
               </button>

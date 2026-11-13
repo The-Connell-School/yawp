@@ -258,8 +258,9 @@ enum StudentLicenseSource {
 /// to a teacher-created group inside one ClassAssignment; group membership is
 /// access, not ownership.
 enum DocumentArtifactKind {
-  STUDENT          @map("student")
-  ASSIGNMENT_GROUP @map("assignment-group")
+  STUDENT                    @map("student")
+  ASSIGNMENT_GROUP           @map("assignment-group")
+  TEACHER_ASSIGNMENT_PREVIEW @map("teacher-assignment-preview")
 }
 
 model Class {
@@ -565,9 +566,12 @@ model ClassAssignment {
   postAt         DateTime?                @db.Timestamptz(6)
   /// Optional due date for this class's deployment of the assignment.
   dueAt          DateTime?                @db.Timestamptz(6)
-  documents      Document[]
-  insight        ClassAssignmentInsight?
-  documentGroups DocumentGroup[]
+  documents               Document[]
+  teacherPreviewDocuments Document[]               @relation("TeacherPreviewDocuments")
+  insight                 ClassAssignmentInsight?
+  /// The model-written summary of an exit ticket's responses (v3 plan, phase 5).
+  exitTicketSummary       ExitTicketClassSummary?
+  documentGroups          DocumentGroup[]
   lessonPlans    LessonPlanConversation[]
   studentFirstOpens ClassAssignmentStudentFirstOpen[]
 
@@ -796,6 +800,25 @@ model DocumentGroupMember {
   @@unique([groupId, membershipId])
   @@index([membershipId])
   @@index([groupId, removedAt])
+}
+
+/// What a class's exit tickets said, written by the model when the teacher
+/// asks: what landed, the shared confusion, and whether to reteach. One per
+/// class assignment, replaced on each generation. `inputFingerprint` names the
+/// set of responses it read, so the page can tell when new ones have arrived.
+/// Never holds student names.
+model ExitTicketClassSummary {
+  id                      String          @id @default(cuid())
+  createdAt               DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime        @default(now()) @updatedAt @db.Timestamptz(6)
+  classAssignmentId       String          @unique
+  classAssignment         ClassAssignment @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  model                   String?
+  responseCount           Int             @default(0)
+  inputFingerprint        String
+  summaryJson             Json
+  generatedByMembershipId String?
+  generatedAt             DateTime        @default(now()) @db.Timestamptz(6)
 }
 
 /// Class-wide, assignment-level feedback for the teacher: an AI summary of how
@@ -1078,6 +1101,9 @@ model Document {
   assignment               Assignment?               @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   classAssignmentId        String?
   classAssignment          ClassAssignment?          @relation(fields: [classAssignmentId], references: [id], onDelete: SetNull)
+  /// Try-it previews: tied to a class deployment for reuse and breadcrumbs, but not class student work.
+  teacherPreviewClassAssignmentId String?
+  teacherPreviewClassAssignment   ClassAssignment?   @relation("TeacherPreviewDocuments", fields: [teacherPreviewClassAssignmentId], references: [id], onDelete: SetNull)
   assignmentModuleSessions AssignmentModuleSession[]
   comments                 DocumentComment[]
   writeJournals            DocumentWriteJournal[]
@@ -1093,6 +1119,7 @@ model Document {
 
   @@index([assignmentId])
   @@index([classAssignmentId])
+  @@index([teacherPreviewClassAssignmentId])
   @@index([assignmentTypeId])
   @@index([membershipId])
 }
@@ -1703,6 +1730,7 @@ model LessonPlanConversation {
   @@index([membershipId, updatedAt(sort: Desc)])
   @@index([membershipId, starredAt(sort: Desc)])
   @@index([membershipId, publishedAt(sort: Desc)])
+  @@index([membershipId, yawpLessonSlug])
   @@index([organizationId])
   @@index([originClassAssignmentId])
   @@index([unitId, unitDay])

@@ -1,8 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
+
+const browserGateDeferred = process.env.DEMO_FEEDBACK_BROWSER_DEFERRED === '1';
+const deferredMatch = /demo-feedback-browser-deferred\.spec\.ts/;
+const fullBrowserMatch =
+  /(?:demo-feedback|dev-panel-artboard-evidence|dev-panel-free-tier-jumps|dev-panel-class-simulation)\.spec\.ts/;
+
 export default defineConfig({
   testDir: './e2e/tests',
-  testMatch:
-    /demo-feedback\.spec\.ts|dev-panel-artboard-evidence\.spec\.ts|dev-panel-free-tier-jumps\.spec\.ts|dev-panel-class-simulation\.spec\.ts/,
+  testMatch: browserGateDeferred ? deferredMatch : fullBrowserMatch,
   workers: 1,
   fullyParallel: false,
   retries: 0,

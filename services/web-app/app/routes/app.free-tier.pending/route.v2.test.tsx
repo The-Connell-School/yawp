@@ -93,6 +93,8 @@ mock.module('react-router', () => ({
     },
   }),
   useActionData: () => undefined,
+  useFetcher: () => ({ state: 'idle', data: undefined, submit: () => {} }),
+  useRevalidator: () => ({ revalidate: () => {} }),
   useNavigation: () => ({ state: 'idle' }),
   Form: ({ children, ...props }: any) => <form {...props}>{children}</form>,
   Link: ({ children, ...props }: any) => <a {...props}>{children}</a>,
@@ -118,6 +120,7 @@ test('forward action passes authenticated owner and expected current approval', 
     applicationId: 'app',
     currentApprovalId: 'current',
     newAdminName: 'Patel',
+    keepPreviousPending: true,
   });
 });
 test('crafted forward is refused when rollout is off', async () => {
@@ -128,26 +131,24 @@ test('crafted forward is refused when rollout is off', async () => {
   expect(forward).not.toHaveBeenCalled();
 });
 
-test('pending page offers additional administrator link and explore without legacy resend', () => {
+test('pending page offers additional administrator disclosure and explore without legacy resend', () => {
   stopped = false;
   const html = renderWithCardPageChrome(<Page />);
   expect(html).toContain('Explore my classroom');
-  expect(html).toContain(
-    'Not the right person? / Send to an additional administrator'
-  );
-  expect(html).toContain('data-testid="pending-additional-administrator-link"');
-  expect(html).toContain('/app/free-tier/onboarding?additional=1');
+  expect(html).toContain('Not the right person?');
+  expect(html).toContain('data-testid="pending-forward-disclosure"');
+  expect(html).not.toContain('pending-additional-administrator-link');
+  expect(html).not.toContain('/app/free-tier/onboarding?additional=1');
   expect(html).not.toContain('Draft a Request');
-  expect(html).not.toContain('pending-forward-disclosure');
   expect(html).not.toContain('mailto:');
   const progressIdx = html.indexOf('aria-label="Approval progress"');
   const personIdx = html.indexOf('free-tier-person-email');
-  const linkIdx = html.indexOf('pending-additional-administrator-link');
+  const forwardIdx = html.indexOf('pending-forward-disclosure');
   const exploreIdx = html.indexOf('locked-preview-explore');
   expect(progressIdx).toBeGreaterThan(-1);
   expect(personIdx).toBeGreaterThan(progressIdx);
-  expect(linkIdx).toBeGreaterThan(personIdx);
-  expect(exploreIdx).toBeGreaterThan(linkIdx);
+  expect(forwardIdx).toBeGreaterThan(personIdx);
+  expect(exploreIdx).toBeGreaterThan(forwardIdx);
   expect(html).not.toContain('Resend reminder');
   expect(html).not.toContain('Draft an email');
   expect(html).not.toContain('Take a look around');

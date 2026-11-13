@@ -61,6 +61,7 @@ export type TeacherDocumentWorkRow = {
   submissionCount: number;
   /** True when the document has recorded external-paste activity. */
   hasPasteActivity?: boolean;
+  isTeacherAssignmentPreview?: boolean;
 };
 
 export type ReleaseGradeRow = {
@@ -280,4 +281,26 @@ export function buildTeacherUnsubmitRows(
       },
     ];
   });
+}
+
+export type TeacherPreviewArchiveRow = {
+  id: string;
+  title: string;
+  assignmentTitle: string | null;
+};
+
+/** Teacher-owned assignment preview documents from the current selection. */
+export function buildTeacherPreviewArchiveRows(
+  documents: TeacherDocumentWorkRow[]
+): TeacherPreviewArchiveRow[] {
+  return documents
+    .filter((document) => document.isTeacherAssignmentPreview)
+    .map((document) => ({
+      id: document.id,
+      title:
+        document.title?.trim() ||
+        document.latestSubmission?.title?.trim() ||
+        getDraftDisplayTitle(document),
+      assignmentTitle: document.assignment?.title ?? null,
+    }));
 }

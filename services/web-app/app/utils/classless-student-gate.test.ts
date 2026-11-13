@@ -13,6 +13,17 @@ describe('classless student app gate', () => {
     ).toBe(true);
   });
 
+  test('allows the assignment open link so classless students see the not-in-class page', () => {
+    expect(
+      shouldRedirectClasslessStudent({
+        role: 'STUDENT',
+        isOrgOwner: false,
+        classCount: 0,
+        pathname: '/app/assignments/asgn-1/open',
+      })
+    ).toBe(false);
+  });
+
   test('allows the dashboard itself so the class-code dialog can render', () => {
     expect(
       shouldRedirectClasslessStudent({

@@ -69,7 +69,7 @@ describe('DevPanelProvider', () => {
       org: null,
       subSheet: null,
       scroll: {},
-      forms: { throwawaySwitch: true, blackboardRole: 'teacher' },
+      forms: { throwawaySwitch: true },
     });
     const container = document.createElement('div');
     const root = createRoot(container);
@@ -101,7 +101,7 @@ describe('DevPanelProvider', () => {
     root.unmount();
   });
 
-  test('marks flyout switches as instant when swapping sheets', () => {
+  test('openSubSheet for inline sections expands accordion without subSheet', () => {
     const container = document.createElement('div');
     const root = createRoot(container);
     let api: ReturnType<typeof useDevPanel> | null = null;
@@ -125,11 +125,17 @@ describe('DevPanelProvider', () => {
     act(() => {
       api!.openSubSheet('give-feedback');
     });
+    expect(api!.state.openSections).toContain('give-feedback');
+    expect(api!.state.subSheet).toBe(null);
+
     act(() => {
-      api!.openSubSheet('free-tier-states');
+      api!.openSubSheet('class-simulation');
     });
+    expect(api!.state.openSections).toContain('tester-tools');
+    expect(api!.state.openSections).toContain('class-simulation');
+    expect(api!.state.subSheet).toBe(null);
     expect(container.querySelector('[data-instant]')?.getAttribute('data-instant')).toBe(
-      'yes'
+      'no'
     );
     root.unmount();
   });

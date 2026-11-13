@@ -4,7 +4,6 @@ import {
   mockCardPageChromeForSsr,
   renderWithCardPageChrome,
 } from '~/components/card-page-chrome.ssr-test-setup';
-import { PENDING_ADDITIONAL_ADMINISTRATOR_COPY } from '../free-tier/PendingAdditionalAdministratorLink';
 
 afterAll(() => mock.restore());
 
@@ -36,6 +35,8 @@ function mockPage() {
       additionalSentAdmin: null,
     }),
     useActionData: () => undefined,
+    useFetcher: () => ({ state: 'idle', data: undefined, submit: () => {} }),
+    useRevalidator: () => ({ revalidate: () => {} }),
     useNavigation: () => ({ state: 'idle' }),
     Form: ({ children, ...props }: any) => <form {...props}>{children}</form>,
     Link: ({ children, ...props }: any) => <a {...props}>{children}</a>,
@@ -49,10 +50,10 @@ test('pending v2 shows additional administrator link under admin, not draft mail
   expect(html).toContain(
     'It may be a good idea to give Dr. Patel a quick heads-up'
   );
-  expect(html).toContain(PENDING_ADDITIONAL_ADMINISTRATOR_COPY);
-  expect(html).toContain('to="/app/free-tier/onboarding?additional=1"');
+  expect(html).toContain('Not the right person?');
+  expect(html).toContain('pending-forward-disclosure');
+  expect(html).not.toContain('to="/app/free-tier/onboarding?additional=1"');
   expect(html).not.toContain('Draft a Request');
   expect(html).not.toContain('pending-draft-request');
-  expect(html).not.toContain('pending-forward-disclosure');
   expect(html).not.toContain('mailto:');
 });

@@ -14,7 +14,7 @@ export function PendingAdditionalAdministratorLink({
       type="button"
       variant="link"
       asChild
-      className={`h-auto min-h-0 justify-start p-0 text-left text-sm font-normal underline${
+      className={`h-auto min-h-0 w-full max-w-full justify-start whitespace-normal p-0 text-left text-sm font-normal underline${
         disabled ? ' pointer-events-none opacity-50' : ''
       }`}
       data-testid="pending-additional-administrator-link"

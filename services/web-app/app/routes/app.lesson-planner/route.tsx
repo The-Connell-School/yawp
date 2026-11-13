@@ -6,6 +6,7 @@ import { picturedDecks, viewerDeckPictures } from '~/domain/lesson-planner/deck-
 import {
   LessonPlannerMonthlyLimitNotice,
   lessonPlannerPausedPlaceholder,
+  MonthlyUsageNotice,
   useFreeAccountUsage,
 } from '~/components/free-account-usage';
 import { previewLine } from '~/domain/lesson-planner/plain-preview';
@@ -20,7 +21,7 @@ import {
 import { groupOptionParts } from '~/domain/lesson-planner/option-groups';
 import type { ReplyPart } from '~/domain/lesson-planner/reply-parts';
 import { OptionRow } from '~/components/ai-chat/option-row';
-import { isLessonPlannerMonthlyExhausted } from '~/domain/free-tier/inapp-usage';
+import { isLessonPlannerMonthlyExhausted, lessonPlannerMonthlyUsage } from '~/domain/free-tier/inapp-usage';
 import { useEffect, useRef, useState } from 'react';
 import {
   Link,
@@ -33,6 +34,10 @@ import {
   type LoaderFunctionArgs,
 } from 'react-router';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import {
+  FreeTierLockedPageHeader,
+  useFreeTierLockedB2PageChrome,
+} from '~/components/free-tier/free-tier-teacher-page-chrome';
 import { TeachingAccessLessonPlannerSkeleton } from '~/components/free-tier/teaching-access-lesson-planner-skeleton';
 import {
   BookmarkCheck,
@@ -61,7 +66,8 @@ import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { formatClassCardTitle } from '~/utils/class-display';
-import { RECOMMENDED_LESSON_PLANNER_PROMPTS } from '~/routes/api.domain.lesson-planner/build-system-prompt';
+import { recommendedLessonPlannerPrompts } from '~/routes/api.domain.lesson-planner/build-system-prompt';
+import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
 import { parseAssistantMessage } from '~/components/ai-chat/parse-assistant-message';
 import {
   LessonIntakeCard,
@@ -102,6 +108,7 @@ import { UnitPlanCard } from '~/components/ai-chat/unit-plan-card';
 import { buildDayDisplay, buildDayRequest, readUnitPlan } from '~/domain/lesson-planner/unit-plan';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
 import { hidePromptIds } from '~/domain/lesson-planner/prompt-ids';
+import { teacherFacingMarkdown } from '~/domain/lesson-planner/step-type-tags';
 import { overTime, planMinutes } from '~/domain/lesson-planner/plan-timing';
 import { readPlanSteps, readStepHeading, splitAtStepHeadings } from '~/domain/lesson-planner/plan-steps';
 import { SegmentToggle } from '~/components/lesson-planner/segment-toggle';
@@ -313,6 +320,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const reviewFlags = await getLessonPlannerReviewFlags(
     access.membership.organization.id
   );
+  // The v3 exit ticket starter tile, under the same condition as the planner's
+  // v3 hand-off: the school has the Exit Ticket type and the v3 builder.
+  const exitTicketBuilderV3 =
+    Boolean(exitTicketTypeId) &&
+    (await isExitTicketBuilderV3Enabled(access.membership.organization.id));
 
   // Intake v2 (A1): the classes come from the teacher's real class list, not
   // from whatever the model guessed. Same scope as list_classes.
@@ -459,7 +471,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         }
       : null,
-    recommendedPrompts: RECOMMENDED_LESSON_PLANNER_PROMPTS,
+    recommendedPrompts: recommendedLessonPlannerPrompts({ exitTicketBuilderV3 }),
     seed,
   };
 }
@@ -482,6 +494,7 @@ export default function LessonPlannerRoute() {
   const navigation = useNavigation();
   const { locked: teachingLocked, loading: teachingLoading } =
     useTeachingAccess();
+  const freeTierB2 = useFreeTierLockedB2PageChrome();
   const freeUsage = useFreeAccountUsage();
   const {
     conversations,
@@ -1133,6 +1146,87 @@ export default function LessonPlannerRoute() {
 
       {/* Chat */}
       <div className="flex h-full min-w-0 flex-1 flex-col">
+        {freeTierB2 ? (
+          <div className="free-tier-b2-page-shell shrink-0 !pb-0 !pt-4">
+            <FreeTierLockedPageHeader
+              title="Lesson Planner"
+              actions={
+                <>
+                  <Link
+                    to="/app/lesson-planner/how-it-works"
+                    aria-label="See how it works"
+                    data-tour="planner-guide"
+                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-primary/40 bg-background px-2.5 text-sm font-medium text-primary transition hover:bg-primary/10 sm:px-3"
+                  >
+                    <CirclePlay size={16} />
+                    <span className="hidden sm:inline">See how it works</span>
+                  </Link>
+                  <div className="flex shrink-0 items-center gap-2 md:hidden">
+                    <label
+                      className="sr-only"
+                      htmlFor="lesson-planner-mobile-history"
+                    >
+                      Switch lesson
+                    </label>
+                    <select
+                      id="lesson-planner-mobile-history"
+                      aria-label="Switch lesson"
+                      value={selectedConversation?.id ?? ''}
+                      onChange={(event) => {
+                        if (!event.target.value) return;
+                        const next = new URLSearchParams(searchParams);
+                        next.set('c', event.target.value);
+                        next.delete('from');
+                        next.delete('step');
+                        setSearchParams(next);
+                      }}
+                      className="h-9 max-w-32 rounded-md border bg-background px-2 text-sm"
+                    >
+                      <option value="">Switch lesson</option>
+                      {conversations.map((conversation) => (
+                        <option
+                          key={conversation.id}
+                          value={conversation.id}
+                        >
+                          {conversation.title}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      aria-label="New lesson"
+                      onClick={startNewLesson}
+                    >
+                      <Plus size={16} />
+                    </Button>
+                  </div>
+                </>
+              }
+            />
+            {selectedConversation?.unitDay != null && unitMapConversation ? (
+              <p
+                className="mt-1 truncate text-sm text-muted-foreground"
+                data-testid="unit-day-breadcrumb"
+              >
+                Day {selectedConversation.unitDay} ·{' '}
+                <button
+                  type="button"
+                  data-testid="back-to-unit-map"
+                  onClick={() => {
+                    const next = new URLSearchParams(searchParams);
+                    next.set('c', unitMapConversation);
+                    setSearchParams(next);
+                  }}
+                  className="text-link underline hover:text-link-hover"
+                >
+                  Back to the unit map
+                </button>
+              </p>
+            ) : null}
+          </div>
+        ) : (
         <div className="border-b bg-secondary px-4 py-3">
           <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
             <Lightbulb size={20} className="shrink-0 text-primary" />
@@ -1157,7 +1251,7 @@ export default function LessonPlannerRoute() {
                       next.set('c', unitMapConversation);
                       setSearchParams(next);
                     }}
-                    className="underline hover:text-primary"
+                    className="text-link underline hover:text-link-hover"
                   >
                     Back to the unit map
                   </button>
@@ -1224,6 +1318,7 @@ export default function LessonPlannerRoute() {
             </div>
           </div>
         </div>
+        )}
 
         <div
           ref={transcriptRef}
@@ -1240,6 +1335,9 @@ export default function LessonPlannerRoute() {
               hasMessages ? 'max-w-3xl' : 'max-w-4xl py-6 sm:py-10'
             )}
           >
+            {freeUsage?.monthly && freeUsage.reporter ? (
+              <MonthlyUsageNotice usage={freeUsage} feature="lesson-planner" />
+            ) : null}
             {!hasMessages ? (
               <LessonPlannerEmptyState
                 prompts={recommendedPrompts}
@@ -1281,6 +1379,7 @@ export default function LessonPlannerRoute() {
                   intakeV2={reviewFlags.intakeV2}
                   deckV2={reviewFlags.deckV2}
                   deckGallery={reviewFlags.deckGallery}
+                  deckKitV4={reviewFlags.deckKitV4}
                   editedDeck={selectedConversation?.editedDeck ?? null}
                   periodMinutes={selectedConversation?.periodMinutes ?? null}
                   previousUserText={
@@ -1349,7 +1448,7 @@ export default function LessonPlannerRoute() {
                     writeStackPanelClosed(false);
                     setPanelClosed(false);
                   }}
-                  className="ml-auto hidden text-sm font-medium text-primary hover:underline lg:inline"
+                  className="ml-auto hidden text-sm font-medium text-link hover:text-link-hover hover:underline lg:inline"
                 >
                   Show the stack here
                 </button>
@@ -1357,7 +1456,7 @@ export default function LessonPlannerRoute() {
               <Link
                 to={`/app/lesson-planner/${conversationId}/packet`}
                 className={cn(
-                  'text-sm font-medium text-primary hover:underline',
+                  'text-sm font-medium text-link hover:text-link-hover hover:underline',
                   !(reviewFlags.stackPanel && panelClosed) && 'ml-auto'
                 )}
               >
@@ -1515,12 +1614,15 @@ function LessonPlannerEmptyState({
 }) {
   const [showTemplates, setShowTemplates] = useState(false);
   const freeUsage = useFreeAccountUsage();
+  const monthlyLpUsage =
+    freeUsage &&
+    (freeUsage.monthly || freeUsage.lessonPlannerMonthlyMetering)
+      ? lessonPlannerMonthlyUsage(freeUsage)
+      : null;
   const exhausted =
-    freeUsage && isLessonPlannerMonthlyExhausted(freeUsage);
-  const pausedPlaceholder =
-    exhausted && freeUsage
-      ? lessonPlannerPausedPlaceholder(freeUsage)
-      : undefined;
+    monthlyLpUsage != null
+      ? monthlyLpUsage.remaining === 0
+      : Boolean(freeUsage && isLessonPlannerMonthlyExhausted(freeUsage));
   return (
     <div className="flex flex-col items-center gap-8">
       <div className="flex w-full max-w-3xl flex-col items-center gap-5 text-center">
@@ -1539,7 +1641,11 @@ function LessonPlannerEmptyState({
           onChange={onInput}
           onSend={onSend}
           disabled={disabled || Boolean(exhausted)}
-          placeholderOverride={pausedPlaceholder}
+          {...(exhausted && freeUsage
+            ? {
+                placeholderOverride: lessonPlannerPausedPlaceholder(freeUsage),
+              }
+            : {})}
           sources={sources}
           chip={
             template && onTemplate ? (
@@ -1574,7 +1680,7 @@ function LessonPlannerEmptyState({
                   Delete one to plan another.
                 </p>
                 <Link
-                  className="mt-2 inline-block text-primary underline"
+                  className="mt-2 inline-block text-link underline"
                   to="/app/free-tier/status"
                 >
                   Need more? Talk to us
@@ -1643,6 +1749,7 @@ function MessageBubble({
   teacherClasses = [],
   deckV2 = false,
   deckGallery = false,
+  deckKitV4 = false,
   editedDeck = null,
   periodMinutes = null,
   previousUserText = null,
@@ -1707,6 +1814,8 @@ function MessageBubble({
   deckV2?: boolean;
   /** Lesson Deck Kit: gallery slide previews on the deck card. */
   deckGallery?: boolean;
+  /** Lesson Deck Kit v4: the deck card's slides in spec v4. */
+  deckKitV4?: boolean;
   editedDeck?: {
     materialId: string;
     sourceMessageId: string;
@@ -1888,7 +1997,7 @@ function MessageBubble({
   const renderPart = (part: ReplyPart, index: number) => {
     const key = `${message.id ?? 'pending'}:${index}`;
     if (part.kind === 'markdown') {
-      const raw = hidePromptIds(linkMaterialTitles(part.text, materials));
+      const raw = teacherFacingMarkdown(linkMaterialTitles(part.text, materials));
       // No "I have everything I need" above a plan (Brian's run 3).
       const text = framePlan && index === 0 ? stripPlanPreamble(raw) : raw;
       if (!planSteps.length) {
@@ -2096,7 +2205,7 @@ function MessageBubble({
                     Saved to your library as <strong className="font-semibold text-foreground">{savedUnit.title}</strong>. Build the days
                     whenever you're ready.
                   </span>
-                  <Link to={`/app/lesson-planner/library/unit/${savedUnit.id}`} className="font-medium text-primary underline underline-offset-2">
+                  <Link to={`/app/lesson-planner/library/unit/${savedUnit.id}`} className="font-medium text-link underline underline-offset-2">
                     Open the unit
                   </Link>
                 </p>
@@ -2168,6 +2277,7 @@ function MessageBubble({
                     }
                     periodMinutes={deckV2 ? periodMinutes : null}
                     deckGallery={deckGallery}
+                    deckKitV4={deckKitV4}
                     onFit={
                       deckV2 && periodMinutes
                         ? () =>
@@ -2336,7 +2446,7 @@ function MessageBubble({
             <button
               type="button"
               onClick={() =>
-                printAssistantMessage(body, 'Yawp! Lesson Planner')
+                printAssistantMessage(teacherFacingMarkdown(body), 'Yawp! Lesson Planner')
               }
               className="ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
             >

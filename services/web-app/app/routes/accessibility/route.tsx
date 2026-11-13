@@ -164,7 +164,7 @@ export default function AccessibilityRoute() {
             To report an accessibility barrier or request accommodation support,
             contact{' '}
             <a
-              className="font-medium text-primary underline-offset-4 hover:underline"
+              className="font-medium text-link underline-offset-4 hover:underline"
               href={supportHref}
             >
               {supportEmail}
@@ -185,7 +185,7 @@ export default function AccessibilityRoute() {
             Last updated June 29, 2026. For product or institutional questions,
             contact{' '}
             <a
-              className="font-medium text-primary underline-offset-4 hover:underline"
+              className="font-medium text-link underline-offset-4 hover:underline"
               href={supportHref}
             >
               {supportEmail}

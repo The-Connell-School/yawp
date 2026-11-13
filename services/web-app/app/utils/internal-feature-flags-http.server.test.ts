@@ -132,6 +132,7 @@ describe('internal feature-flag endpoints', () => {
       'lesson_planner_refresh_my_deck',
       'lesson_planner_active_time',
       'lesson_planner_writing_override',
+      'lesson_planner_deck_kit_v4',
       'classcode-unique',
       'demo-feedback-widget',
       'guided-tours',
@@ -140,6 +141,11 @@ describe('internal feature-flag endpoints', () => {
       'assignment-type-landing-thesis-essay',
       'assignment-type-lesson-plans',
       'teacher-lounge',
+      'exit-ticket-builder-v3',
+      'exit-ticket-class-summary',
+      'assignment-type-landing-v2',
+      'assignment-type-landing-thesis-essay',
+      'assignment-type-lesson-plans',
     ]);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
@@ -227,6 +233,7 @@ describe('internal feature-flag endpoints', () => {
       'lesson_planner_refresh_my_deck',
       'lesson_planner_active_time',
       'lesson_planner_writing_override',
+      'lesson_planner_deck_kit_v4',
       'classcode-unique',
       'demo-feedback-widget',
       'guided-tours',
@@ -235,6 +242,11 @@ describe('internal feature-flag endpoints', () => {
       'assignment-type-landing-thesis-essay',
       'assignment-type-lesson-plans',
       'teacher-lounge',
+      'exit-ticket-builder-v3',
+      'exit-ticket-class-summary',
+      'assignment-type-landing-v2',
+      'assignment-type-landing-thesis-essay',
+      'assignment-type-lesson-plans',
     ]);
   });
 

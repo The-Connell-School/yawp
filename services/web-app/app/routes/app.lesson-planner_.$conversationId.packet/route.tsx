@@ -615,7 +615,7 @@ function LessonPacketRouteV2() {
                       <button
                         type="button"
                         onClick={() => jumpTo(entry.anchor)}
-                        className="text-left font-medium hover:text-primary hover:underline print:no-underline"
+                        className="text-left font-medium hover:text-link hover:text-link-hover hover:underline print:no-underline"
                       >
                         {entry.title}
                       </button>
@@ -772,6 +772,7 @@ function LessonPacketRouteV2() {
                         conversationId={conversationId}
                         deckV2={reviewFlags.deckV2}
                         deckGallery={reviewFlags.deckGallery}
+                        deckKitV4={reviewFlags.deckKitV4}
                         periodMinutes={periodMinutes}
                       />
                     )}
@@ -796,6 +797,7 @@ function SectionContent({
   conversationId,
   deckV2 = false,
   deckGallery = false,
+  deckKitV4 = false,
   periodMinutes = null,
 }: {
   section: {
@@ -810,6 +812,7 @@ function SectionContent({
   conversationId: string;
   deckV2?: boolean;
   deckGallery?: boolean;
+  deckKitV4?: boolean;
   periodMinutes?: number | null;
 }) {
   // The packet already took the deck out of the prose and parsed it, so there
@@ -839,6 +842,7 @@ function SectionContent({
             edited={Boolean(section.edited)}
             periodMinutes={deckV2 ? periodMinutes : null}
             deckGallery={deckGallery}
+            deckKitV4={deckKitV4}
           />
         </div>
       ) : null}
@@ -931,7 +935,7 @@ function MakeUpLink({ conversationId }: { conversationId: string }) {
   return (
     <Link
       to={`/app/lesson-planner?c=${conversationId}&build=makeup`}
-      className="mt-2 block text-xs font-medium text-primary hover:underline print:hidden"
+      className="mt-2 block text-xs font-medium text-link hover:text-link-hover hover:underline print:hidden"
     >
       Send this lesson to a student who missed class
     </Link>

@@ -1,6 +1,8 @@
 import { Link } from 'react-router';
 import { ClipboardCheck, Sparkles } from 'lucide-react';
 import type { ExitTicketClassRead } from '~/domain/assignment-types/exit-ticket-class-read';
+import type { ExitTicketSummaryPanelData } from '~/domain/assignment-types/exit-ticket-class-summary';
+import { ExitTicketSummarySection } from './exit-ticket-summary-section';
 
 /**
  * What a class's exit tickets said, on one card: how many landed in each
@@ -11,10 +13,16 @@ import type { ExitTicketClassRead } from '~/domain/assignment-types/exit-ticket-
 export function ExitTicketClassReadPanel({
   read,
   planHref,
+  classAssignmentId,
+  summary = null,
 }: {
   read: ExitTicketClassRead;
   /** Null where the Lesson Planner is not on for this school. */
   planHref: string | null;
+  /** Needed only with a summary, which posts it. */
+  classAssignmentId?: string;
+  /** Null while the class summary flag is off. */
+  summary?: ExitTicketSummaryPanelData | null;
 }) {
   const widest = Math.max(1, ...read.bands.map((band) => band.count));
 
@@ -83,6 +91,13 @@ export function ExitTicketClassReadPanel({
               </span>{' '}
               {read.needsFollowUp.join(', ')}
             </p>
+          ) : null}
+
+          {summary && classAssignmentId ? (
+            <ExitTicketSummarySection
+              classAssignmentId={classAssignmentId}
+              data={summary}
+            />
           ) : null}
 
           {planHref ? (

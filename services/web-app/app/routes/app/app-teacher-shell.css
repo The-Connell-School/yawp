@@ -1,0 +1,174 @@
+/* Teacher app shell + home dashboard chrome — same look for every account (visibility is gated in React, not CSS). */
+
+.free-tier-b2-page-shell {
+  box-sizing: border-box;
+  padding: 28px 40px 0;
+}
+
+.free-tier-b2-page-body {
+  padding-top: 20px;
+  padding-bottom: 6rem;
+}
+
+@media (max-width: 1023px) {
+  .free-tier-b2-page-shell {
+    padding: 16px 16px 0;
+  }
+}
+
+.free-dashboard h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.free-dashboard [data-testid='teacher-classes-grid'] > div:last-child {
+  align-content: start;
+}
+
+.free-dashboard [data-testid='teacher-grading-grid'] > div:nth-child(2) {
+  border-radius: 12px;
+}
+
+.free-tier-assignment-carousel-track > a,
+.free-tier-assignment-carousel-track > button {
+  flex: 0 0 auto;
+}
+
+.locked-home-b2 {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+[data-testid='app._index'].free-tier-b2-page-shell {
+  padding: 0;
+}
+
+.locked-home-b2.free-dashboard {
+  padding: 28px 40px 48px;
+}
+
+.locked-home-welcome {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: normal;
+  color: #0f172a;
+}
+
+.locked-home-b2.free-dashboard h2 {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #0f172a;
+}
+
+.locked-home-b2 .locked-home-sections h2 {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.locked-home-main {
+  container-type: inline-size;
+  container-name: locked-home-main;
+  flex: 999 1 420px;
+  min-width: 0;
+  gap: 20px;
+}
+
+.locked-home-columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 28px;
+}
+
+.locked-home-rail-desktop {
+  display: none;
+  flex: 1 1 300px;
+  min-width: 0;
+  max-width: 320px;
+  width: auto;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 24px;
+  align-self: flex-start;
+}
+
+/* Narrow class stack only when the getting-started rail shares the row (free-tier home). */
+.locked-home-b2--with-rail [data-testid='teacher-classes-grid'] > div:last-child {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 300px;
+}
+
+.locked-home-b2
+  [data-testid='teacher-grading-grid']
+  .grid.grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@container locked-home-main (min-width: 520px) {
+  .locked-home-b2
+    [data-testid='teacher-grading-grid']
+    .grid.grid-cols-2 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .locked-home-rail-desktop {
+    display: flex;
+  }
+
+  .locked-home-rail-mobile {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .locked-home-b2.free-dashboard {
+    padding: 16px 16px 48px;
+  }
+
+  .locked-home-main {
+    gap: 16px;
+  }
+
+  .locked-home-welcome {
+    font-size: 28px;
+  }
+
+  .locked-home-rail-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  [data-testid='app._index'] > div:first-child:not(.locked-home-b2) > div {
+    max-width: 1236px;
+    padding: 24px 48px;
+  }
+}
+
+@media (max-width: 639px) {
+  .free-dashboard [data-testid='teacher-classes-grid'] > div:last-child {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+[data-testid='app._index'] > div:first-child:not(.locked-home-b2) h2 {
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+[data-testid='app._index'] > div:first-child p {
+  margin-top: 8px;
+  max-width: none;
+}
