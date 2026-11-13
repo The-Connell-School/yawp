@@ -15,6 +15,17 @@ import {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
+  const { recoverPendingLockedPreviewAccess } =
+    await import('~/domain/free-tier/locked-preview.server');
+  const recovery = await recoverPendingLockedPreviewAccess(request, userId);
+  if (recovery?.kind === 'pending') {
+    throw redirect('/app/free-tier/pending');
+  }
+  if (recovery?.kind === 'membership') {
+    throw redirect('/app', {
+      headers: { 'set-cookie': await setMembershipId(recovery.membershipId) },
+    });
+  }
   const prompt = await signedInTeacherPromptEntry(request, userId, 'inactive');
   if (prompt) return prompt;
 

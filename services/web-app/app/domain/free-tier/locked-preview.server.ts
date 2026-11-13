@@ -1,5 +1,6 @@
 import type { Prisma } from '@app/prisma';
 import { redirect } from 'react-router';
+import { getMembershipId } from '~/cookies/membership-id.server';
 import { prisma } from '~/utils/db.server';
 import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
@@ -181,11 +182,109 @@ export function organizationClassListTableState(options: {
   };
 }
 
+async function ensureLockedPreviewTeacherMembership(
+  userId: string,
+  organizationId: string
+): Promise<string | null> {
+  const existing = await prisma.orgMembership.findFirst({
+    where: { userId, organizationId, role: 'TEACHER' },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, isActive: true },
+  });
+  if (existing) {
+    if (!existing.isActive) {
+      await prisma.orgMembership.update({
+        where: { id: existing.id },
+        data: { isActive: true },
+      });
+    }
+    return existing.id;
+  }
+  const school = await prisma.school.findFirst({
+    where: { organizationId },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  if (!school) return null;
+  const klass = await prisma.class.findFirst({
+    where: { schoolId: school.id, isArchived: false },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  const created = await prisma.orgMembership.create({
+    data: {
+      userId,
+      organizationId,
+      role: 'TEACHER',
+      isOrgOwner: true,
+      schools: { connect: { id: school.id } },
+      ...(klass
+        ? { classesAsTeacher: { connect: { id: klass.id } } }
+        : undefined),
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+export async function resolveLockedPreviewTeacherMembershipId(
+  userId: string
+): Promise<string | null> {
+  const application = await prisma.freeTierApplication.findFirst({
+    where: { userId, status: { in: ['SENT', 'MANUAL_REVIEW'] } },
+    orderBy: { updatedAt: 'desc' },
+    select: { organizationId: true },
+  });
+  if (!application?.organizationId) return null;
+  if (
+    !(await isFeatureFlagEnabled(FREE_TIER_FLAG, application.organizationId))
+  ) {
+    return null;
+  }
+  return ensureLockedPreviewTeacherMembership(
+    userId,
+    application.organizationId
+  );
+}
+
+/** Recovers a pending free-tier teacher who should browse the locked app but lacks membership scope. */
+export async function recoverPendingLockedPreviewAccess(
+  request: Request,
+  userId: string
+): Promise<
+  | { kind: 'membership'; membershipId: string; repairCookie: boolean }
+  | { kind: 'pending' }
+  | null
+> {
+  if (!(await userHasPendingFreeTierTeachingLock(userId))) return null;
+  let provision: Awaited<ReturnType<typeof ensureLockedPreviewClassroomForUser>> =
+    null;
+  try {
+    provision = await ensureLockedPreviewClassroomForUser(userId);
+  } catch {
+    return { kind: 'pending' };
+  }
+  if (
+    provision &&
+    provision.status !== 'provisioned' &&
+    provision.status !== 'already_provisioned'
+  ) {
+    return { kind: 'pending' };
+  }
+  const membershipId = await resolveLockedPreviewTeacherMembershipId(userId);
+  if (!membershipId) return { kind: 'pending' };
+  const cookieMembershipId = await getMembershipId(request);
+  return {
+    kind: 'membership',
+    membershipId,
+    repairCookie: cookieMembershipId !== membershipId,
+  };
+}
+
 export async function ensureLockedPreviewClassroomForUser(userId: string) {
   const application = await prisma.freeTierApplication.findFirst({
     where: {
       userId,
-      organizationId: null,
       status: { in: ['SENT', 'MANUAL_REVIEW'] },
     },
     orderBy: { updatedAt: 'desc' },
@@ -198,8 +297,9 @@ export async function ensureLockedPreviewClassroomForUser(userId: string) {
   const organizationId =
     result.status === 'provisioned' || result.status === 'already_provisioned'
       ? result.organizationId
-      : null;
+      : application.organizationId;
   if (organizationId) {
+    await ensureLockedPreviewTeacherMembership(userId, organizationId);
     const { ensureLockedPreviewSampleAssignments } =
       await import('./locked-preview-class-seed.server');
     const klass = await prisma.class.findFirst({
