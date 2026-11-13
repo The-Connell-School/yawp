@@ -34,8 +34,12 @@ const linkReplacedGate = mock(
 );
 
 const findUnique = mock(async () => null as null | { name: string; schoolName: string; email?: string });
+const findFirstEmailLog = mock(async () => null);
 mock.module('~/utils/db.server', () => ({
-  prisma: { freeTierApplication: { findUnique } },
+  prisma: {
+    freeTierApplication: { findUnique },
+    freeTierEmailLog: { findFirst: findFirstEmailLog },
+  },
 }));
 
 mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({

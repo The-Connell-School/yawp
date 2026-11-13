@@ -33,10 +33,7 @@ test('My Assignments scrolls at short and tall viewports while navigation stays 
           : page
               .getByRole('heading', { name: 'My Assignments', exact: true })
               .locator('..');
-      const nav = page.getByRole('link', {
-        name: 'My Assignments',
-        exact: true,
-      });
+      const nav = page.locator('[data-app-shell] > nav').first();
       const before = await nav.boundingBox();
       await expect
         .poll(() => scroll.evaluate((el) => el.scrollHeight > el.clientHeight))

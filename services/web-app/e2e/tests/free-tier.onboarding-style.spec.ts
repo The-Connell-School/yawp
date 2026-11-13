@@ -351,9 +351,7 @@ for (const viewport of [
         data: { adminRedirectCount: 100 },
       });
       await admin.getByRole('button', { name: 'Forward request' }).click();
-      await expect(admin.getByRole('alert')).toContainText(
-        'forwarded too many times'
-      );
+      await expect(admin.getByText(/forwarded too many times/i)).toBeVisible();
       await capture('forward-error', admin);
       await prisma.freeTierApplication.update({
         where: { id: app.id },
