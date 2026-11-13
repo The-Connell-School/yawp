@@ -26,7 +26,7 @@ SELECT
   'cfreeprewriting000000001',
   CURRENT_TIMESTAMP,
   CURRENT_TIMESTAMP,
-  'Prewriting',
+  'Pre-writing',
   'Explore the prompt and find a specific focus before writing a thesis.',
   52,
   'prewriting'
@@ -41,7 +41,7 @@ SELECT
   'cfreethesisstatement00001',
   CURRENT_TIMESTAMP,
   CURRENT_TIMESTAMP,
-  'Thesis Statement',
+  'Thesis Builder',
   'Develop a single clear, arguable thesis sentence.',
   53,
   'thesis_statement'

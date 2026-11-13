@@ -1,8 +1,9 @@
 /* eslint-disable no-console */
 /**
- * Creates Class Starter, Prewriting, and Thesis Statement assignment types for
- * the free classroom bundle. Does not link them to any existing organization —
- * free orgs receive them via provisioning only.
+ * Creates and maintains the five free-classroom bundle assignment types
+ * (Class Starter, Exit Ticket, 5-Paragraph Essay, Pre-writing, Thesis Builder).
+ * Does not link them to school org catalogs — FREE_CLASSROOM orgs receive them
+ * via provisioning and the idempotent org-grant backfill below.
  *
  *   bun run --cwd packages/prisma seed-free-tier-bundle-assignment-types
  */
@@ -18,7 +19,26 @@ import {
   CLASS_STARTER_RETIRED_ARTWORK_MD5S,
   readClassStarterImage,
 } from './seed-class-starter-assignment-type';
-import { DEFAULT_OUTPUT_SCHEMA_JSON } from '../../../services/web-app/app/domain/assignment-types/assignment-type-rubric.shared';
+import {
+  DEFAULT_OUTPUT_SCHEMA_JSON,
+  parseScoringScale,
+} from '../../../services/web-app/app/domain/assignment-types/assignment-type-rubric.shared';
+import { rubricCategories } from '../../../services/web-app/app/domain/grading/rubric';
+import {
+  EXIT_TICKET_PROMPT_CONFIG,
+  EXIT_TICKET_RUBRIC,
+  EXIT_TICKET_SCORING_SCALE,
+} from '../../../services/web-app/app/domain/assignment-types/exit-ticket-rubric';
+import {
+  EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
+  EXIT_TICKET_ASSIGNMENT_TYPE_ID,
+  EXIT_TICKET_ASSIGNMENT_TYPE_DATA,
+  EXIT_TICKET_INSTRUCTION_DATA,
+  EXIT_TICKET_MODULE_DATA,
+} from './exit-ticket-assignment-type-data';
+import { EXIT_TICKET_RETIRED_ARTWORK_MD5S } from './bootstrap-exit-ticket-assignment-type';
+import { FREE_CLASSROOM_ASSIGNMENT_KINDS } from '../../../services/web-app/app/utils/entitlements.server';
+import assignmentTypeImages from '../fixtures/prod-fidelity/assignment-type-images.json';
 import {
   CLASS_STARTER_PROMPT_CONFIG,
   CLASS_STARTER_RUBRIC,
@@ -38,6 +58,11 @@ import {
 
 const PREWRITING_KIND = 'prewriting';
 const THESIS_STATEMENT_KIND = 'thesis_statement';
+const FIVE_PARAGRAPH_ESSAY_KIND = 'five_paragraph_essay';
+const FIVE_PARAGRAPH_ESSAY_PROD_ID = 'cmamr5eai08sl82y6dsr4ymxo';
+const FIVE_PARAGRAPH_FIRST_MODULE_ID = 'cmamr5eai08sn82y6vxdz4ua7';
+
+const BUNDLE_ASSIGNMENT_KINDS = [...FREE_CLASSROOM_ASSIGNMENT_KINDS];
 
 const fixturesDir = join(import.meta.dir, '../fixtures/prod-fidelity');
 const modules = JSON.parse(
@@ -116,6 +141,27 @@ const RUBRIC_DEFAULTS_BY_KIND: Record<
     promptConfig: THESIS_STATEMENT_PROMPT_CONFIG,
     calibrationNotes:
       'Standalone thesis statement: one arguable sentence with observation and analysis.',
+  },
+  [EXIT_TICKET_ASSIGNMENT_TYPE_KIND]: {
+    scoringScale: EXIT_TICKET_SCORING_SCALE,
+    rubric: EXIT_TICKET_RUBRIC,
+    promptConfig: EXIT_TICKET_PROMPT_CONFIG,
+    calibrationNotes:
+      'Exit Tickets judge understanding only, with overall feedback and no grammar highlighting.',
+  },
+  [FIVE_PARAGRAPH_ESSAY_KIND]: {
+    scoringScale: parseScoringScale(null),
+    rubric: {
+      categories: rubricCategories.map((category) => ({
+        key: category.key,
+        label: category.label,
+        description: category.description,
+        weight: category.weight,
+      })),
+    },
+    promptConfig: { instructionsPreset: 'legacy_thesis_driven_essay' },
+    calibrationNotes:
+      'The platform 5-Paragraph Essay uses the thesis-driven essay grading assistant path.',
   },
 };
 
@@ -228,7 +274,7 @@ export const BUNDLE_TILE_IMAGES: Record<
   [THESIS_STATEMENT_KIND]: {
     file: 'thesis-statement.jpg',
     altText:
-      'A scratchy ink drawing of a dog in a beret and striped shirt saying yawp! in a speech bubble, above the words Thesis Statement, on torn white paper.',
+      'A scratchy ink drawing of a dog in a beret and striped shirt saying yawp! in a speech bubble, above the words Thesis Builder, on torn white paper.',
   },
 };
 
@@ -269,10 +315,44 @@ export async function ensureBundleTypeImage(
   );
 }
 
+function fixtureImageForAssignmentType(assignmentTypeId: string) {
+  const row = assignmentTypeImages.find(
+    (image) => image.assignmentTypeId === assignmentTypeId
+  );
+  if (!row) return null;
+  return {
+    blob: Buffer.from(row.blob.base64, 'base64'),
+    contentType: row.contentType,
+    altText: row.altText ?? '',
+  };
+}
+
+export async function ensureBundleTypeFixtureImage(
+  prisma: Pick<PrismaClient, 'assignmentTypeImage'>,
+  assignmentTypeId: string,
+  fixtureAssignmentTypeId: string,
+  altText: string,
+  retiredMd5s: string[] = []
+) {
+  const fixture = fixtureImageForAssignmentType(fixtureAssignmentTypeId);
+  if (!fixture) {
+    throw new Error(`free_tier_bundle_fixture_image_missing:${fixtureAssignmentTypeId}`);
+  }
+  await syncSeedArtwork(
+    prisma,
+    assignmentTypeId,
+  {
+      ...fixture,
+      altText: altText || fixture.altText,
+    },
+    retiredMd5s
+  );
+}
+
 export async function assertFreeTierBundleAssignmentTypeParity(
   prisma: PrismaClient
 ) {
-  const kinds = [CLASS_STARTER_KIND, PREWRITING_KIND, THESIS_STATEMENT_KIND];
+  const kinds = BUNDLE_ASSIGNMENT_KINDS;
   const types = await prisma.assignmentType.findMany({
     where: { kind: { in: kinds } },
     select: {
@@ -325,6 +405,16 @@ async function upsertStandaloneType(
       },
       select: { id: true, kind: true },
     }));
+  if (existing) {
+    await prisma.assignmentType.update({
+      where: { id: assignmentType.id },
+      data: {
+        title: args.title,
+        description: args.description,
+        position: args.position,
+      },
+    });
+  }
   await ensureAssignmentModules(prisma, assignmentType.id, {
     title: mod.title,
     position: mod.position,
@@ -341,6 +431,195 @@ async function upsertStandaloneType(
   await applyBundleRubricDefaults(prisma, assignmentType.id, args.kind);
   await ensureBundleTypeImage(prisma, assignmentType.id, args.kind);
   return assignmentType;
+}
+
+async function ensureExitTicketBundleType(prisma: PrismaClient) {
+  let assignmentType = await prisma.assignmentType.findUnique({
+    where: { kind: EXIT_TICKET_ASSIGNMENT_TYPE_KIND },
+    select: { id: true, kind: true },
+  });
+  if (!assignmentType) {
+    assignmentType = await prisma.assignmentType.create({
+      data: {
+        id: EXIT_TICKET_ASSIGNMENT_TYPE_ID,
+        kind: EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
+        ...EXIT_TICKET_ASSIGNMENT_TYPE_DATA,
+        position: 52,
+        ownerOrgId: null,
+        ownerMembershipId: null,
+      },
+      select: { id: true, kind: true },
+    });
+    await ensureAssignmentModules(prisma, assignmentType.id, {
+      title: EXIT_TICKET_MODULE_DATA.title,
+      position: EXIT_TICKET_MODULE_DATA.position,
+      description: EXIT_TICKET_MODULE_DATA.description ?? null,
+      steps: [
+        {
+          position: EXIT_TICKET_INSTRUCTION_DATA.position,
+          title: EXIT_TICKET_INSTRUCTION_DATA.title,
+          prompt: EXIT_TICKET_INSTRUCTION_DATA.prompt,
+          showChatButton: EXIT_TICKET_INSTRUCTION_DATA.showChatButton,
+        },
+      ],
+    });
+  } else {
+    await prisma.assignmentType.update({
+      where: { id: assignmentType.id },
+      data: {
+        title: EXIT_TICKET_ASSIGNMENT_TYPE_DATA.title,
+        description: EXIT_TICKET_ASSIGNMENT_TYPE_DATA.description,
+        position: 52,
+      },
+    });
+  }
+  await applyBundleRubricDefaults(
+    prisma,
+    assignmentType.id,
+    EXIT_TICKET_ASSIGNMENT_TYPE_KIND
+  );
+  await ensureBundleTypeFixtureImage(
+    prisma,
+    assignmentType.id,
+    EXIT_TICKET_ASSIGNMENT_TYPE_ID,
+    'A black-and-white drawing of a torn admission ticket stub stamped Exit Ticket, tilted on a yellow background.',
+    EXIT_TICKET_RETIRED_ARTWORK_MD5S
+  );
+  return assignmentType;
+}
+
+async function ensureFiveParagraphEssayBundleType(prisma: PrismaClient) {
+  const title = 'The 5-Paragraph Essay';
+  const description =
+    'In this course, students learn the basic, fundamental form for academic writing.';
+  let assignmentType = await prisma.assignmentType.findUnique({
+    where: { kind: FIVE_PARAGRAPH_ESSAY_KIND },
+    select: { id: true, kind: true },
+  });
+  if (!assignmentType) {
+    const byProdId = await prisma.assignmentType.findUnique({
+      where: { id: FIVE_PARAGRAPH_ESSAY_PROD_ID },
+      select: { id: true, kind: true },
+    });
+    if (byProdId) {
+      assignmentType = await prisma.assignmentType.update({
+        where: { id: byProdId.id },
+        data: {
+          kind: FIVE_PARAGRAPH_ESSAY_KIND,
+          title,
+          description,
+          position: 53,
+        },
+        select: { id: true, kind: true },
+      });
+    } else {
+      const byTitle = await prisma.assignmentType.findFirst({
+        where: {
+          title: { equals: title, mode: 'insensitive' },
+          ownerOrgId: null,
+          ownerMembershipId: null,
+        },
+        select: { id: true, kind: true },
+      });
+      if (byTitle) {
+        assignmentType = await prisma.assignmentType.update({
+          where: { id: byTitle.id },
+          data: {
+            kind: FIVE_PARAGRAPH_ESSAY_KIND,
+            title,
+            description,
+            position: 53,
+          },
+          select: { id: true, kind: true },
+        });
+      } else {
+        assignmentType = await prisma.assignmentType.create({
+          data: {
+            id: FIVE_PARAGRAPH_ESSAY_PROD_ID,
+            kind: FIVE_PARAGRAPH_ESSAY_KIND,
+            title,
+            description,
+            position: 53,
+          },
+          select: { id: true, kind: true },
+        });
+      }
+    }
+  } else {
+    await prisma.assignmentType.update({
+      where: { id: assignmentType.id },
+      data: { title, description, position: 53 },
+    });
+  }
+
+  const moduleCount = await prisma.assignmentModule.count({
+    where: { assignmentTypeId: assignmentType.id },
+  });
+  if (moduleCount === 0) {
+    const { mod, steps } = moduleFromProd(FIVE_PARAGRAPH_FIRST_MODULE_ID);
+    await ensureAssignmentModules(prisma, assignmentType.id, {
+      title: mod.title,
+      position: mod.position,
+      description: mod.description,
+      tutorInstructions: mod.tutorInstructions,
+      rubricAlignmentJson: mod.rubricAlignmentJson,
+      steps: steps.map((step) => ({
+        position: step.position,
+        title: step.title,
+        prompt: step.prompt,
+        showChatButton: step.showChatButton ?? false,
+      })),
+    });
+  }
+
+  await applyBundleRubricDefaults(
+    prisma,
+    assignmentType.id,
+    FIVE_PARAGRAPH_ESSAY_KIND
+  );
+  await ensureBundleTypeFixtureImage(
+    prisma,
+    assignmentType.id,
+    FIVE_PARAGRAPH_ESSAY_PROD_ID,
+    'Course artwork for the 5-Paragraph Essay assignment type.',
+    []
+  );
+  return assignmentType;
+}
+
+/** Idempotent: every FREE_CLASSROOM org receives every bundle type grant. */
+export async function backfillFreeClassroomBundleOrganizationGrants(
+  prisma: PrismaClient
+) {
+  const types = await prisma.assignmentType.findMany({
+    where: { kind: { in: [...BUNDLE_ASSIGNMENT_KINDS] } },
+    select: { id: true, kind: true },
+  });
+  if (types.length !== BUNDLE_ASSIGNMENT_KINDS.length) {
+    throw new Error('free_tier_bundle_types_missing');
+  }
+  const organizations = await prisma.organization.findMany({
+    where: { plan: 'FREE_CLASSROOM' },
+    select: { id: true },
+  });
+  for (const organization of organizations) {
+    for (const type of types) {
+      await prisma.organizationAssignmentType.upsert({
+        where: {
+          organizationId_assignmentTypeId: {
+            organizationId: organization.id,
+            assignmentTypeId: type.id,
+          },
+        },
+        create: {
+          organizationId: organization.id,
+          assignmentTypeId: type.id,
+        },
+        update: {},
+      });
+    }
+  }
+  return { organizations: organizations.length, types: types.length };
 }
 
 export async function seedFreeTierBundleAssignmentTypes(prisma: PrismaClient) {
@@ -360,6 +639,15 @@ export async function seedFreeTierBundleAssignmentTypes(prisma: PrismaClient) {
       },
       select: { id: true, kind: true },
     }));
+  await prisma.assignmentType.update({
+    where: { id: classStarter.id },
+    data: {
+      title: 'Class Starter',
+      description:
+        'Open-ended writing to begin class. Graded on engagement: did the student write, and did they reflect.',
+      position: 51,
+    },
+  });
   await ensureAssignmentModules(prisma, classStarter.id, {
     title: CLASS_STARTER_MODULE.title,
     position: CLASS_STARTER_MODULE.position,
@@ -369,26 +657,36 @@ export async function seedFreeTierBundleAssignmentTypes(prisma: PrismaClient) {
   await applyBundleRubricDefaults(prisma, classStarter.id, CLASS_STARTER_KIND);
   await ensureBundleTypeImage(prisma, classStarter.id, CLASS_STARTER_KIND);
 
+  const exitTicket = await ensureExitTicketBundleType(prisma);
+  const fiveParagraphEssay = await ensureFiveParagraphEssayBundleType(prisma);
+
   const prewriting = await upsertStandaloneType(prisma, {
     kind: PREWRITING_KIND,
-    title: 'Prewriting',
+    title: 'Pre-writing',
     description:
       'Explore the prompt and find a specific focus before writing a thesis.',
-    position: 52,
+    position: 54,
     moduleId: PREWRITING_MODULE_ID,
   });
 
   const thesis = await upsertStandaloneType(prisma, {
     kind: THESIS_STATEMENT_KIND,
-    title: 'Thesis Statement',
+    title: 'Thesis Builder',
     description: 'Develop a single clear, arguable thesis sentence.',
-    position: 53,
+    position: 55,
     moduleId: THESIS_MODULE_ID,
   });
 
   await assertFreeTierBundleAssignmentTypeParity(prisma);
+  await backfillFreeClassroomBundleOrganizationGrants(prisma);
 
-  return { classStarter, prewriting, thesis };
+  return {
+    classStarter,
+    exitTicket,
+    fiveParagraphEssay,
+    prewriting,
+    thesis,
+  };
 }
 
 if (import.meta.main) {

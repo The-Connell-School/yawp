@@ -40,7 +40,6 @@ export const SITE_LICENSE_LOCKED_TILE_LABELS = {
   act_writing: 'ACT Writing Practice',
   ap_english_language: 'AP English Language',
   ap_english_literature: 'AP English Literature',
-  'exit-ticket': 'Exit Ticket',
 } as const;
 
 /** Canonical platform ACT assignment type titles (prod-fidelity + migration). */

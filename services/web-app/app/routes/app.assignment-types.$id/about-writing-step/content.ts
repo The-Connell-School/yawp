@@ -89,7 +89,7 @@ export const WRITING_STEP_COPY: Record<WritingStepKind, WritingStepCopy> = {
       'Spelling, grammar, and polish are not graded. Honest exploration that lands a usable focus scores well.',
   },
   thesis_statement: {
-    title: 'Thesis Statement',
+    title: 'Thesis Builder',
     lede: 'A great thesis statement leads to a great essay. Students start from the focus they found in prewriting, add two to four pieces of analysis to it, and shape that into one sentence that takes a clear position, is complex, and contains both observation and analysis.',
     steps: [
       {

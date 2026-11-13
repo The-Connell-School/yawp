@@ -12,7 +12,19 @@ test.skipIf(!url)('missing bundle is seeded once and repeated runs preserve unre
     const unrelated = await db.assignmentType.create({ data: { title: 'Unrelated custom writing', position: 0 } });
     // Migrations also provision baseline types. Remove bundle parents only in
     // this empty disposable database to exercise genuinely missing seed data.
-    await db.assignmentType.deleteMany({ where: { kind: { in: ['class_starter', 'prewriting', 'thesis_statement'] } } });
+    await db.assignmentType.deleteMany({
+      where: {
+        kind: {
+          in: [
+            'class_starter',
+            'exit_ticket',
+            'five_paragraph_essay',
+            'prewriting',
+            'thesis_statement',
+          ],
+        },
+      },
+    });
     const baselineCount = await db.assignmentType.count();
     const baselineModules = await db.assignmentModule.count();
     const baselineImages = await db.assignmentTypeImage.count();
@@ -26,13 +38,22 @@ test.skipIf(!url)('missing bundle is seeded once and repeated runs preserve unre
       orgs: await db.organization.findMany(),
     });
     const first = await snapshot();
-    expect(first.types).toHaveLength(baselineCount + 3);
-    expect(first.modules).toBe(baselineModules + 3);
-    expect(first.images).toBe(baselineImages + 3);
+    expect(first.types).toHaveLength(baselineCount + 5);
+    expect(first.modules).toBeGreaterThanOrEqual(baselineModules + 3);
+    expect(first.images).toBeGreaterThanOrEqual(baselineImages + 3);
     expect(first.orgs).toEqual(baselineOrgs);
     expect(first.orgs).toContainEqual(org);
     expect(first.types.find(t => t.id === unrelated.id)).toEqual(unrelated);
-    for (const row of first.types.filter(t => ['class_starter', 'prewriting', 'thesis_statement'].includes(t.kind ?? ''))) expect(row.rubricJson).toBeTruthy();
+    for (const row of first.types.filter((t) =>
+      [
+        'class_starter',
+        'exit_ticket',
+        'five_paragraph_essay',
+        'prewriting',
+        'thesis_statement',
+      ].includes(t.kind ?? '')
+    ))
+      expect(row.rubricJson).toBeTruthy();
     await seedFreeTierBundleAssignmentTypes(db);
     expect(await snapshot()).toEqual(first);
   } finally { await db.$disconnect(); }

@@ -8,6 +8,7 @@ import { seedSiteLicenseLockedCatalogForE2E } from '../helpers/seed-site-license
 import { dashboardAssignmentTileOverlapIssues } from '../helpers/dashboard-assignment-tile-overlap';
 import { expectGiveFeedbackAccessible } from '../helpers/dev-panel-feedback';
 import { expectNewAssignmentBuilderPage } from '../helpers/assignment-builder-v3-page';
+import { FREE_CLASSROOM_BUNDLE_TILE_LABELS } from '../../app/domain/free-tier/inapp-usage';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
     'Run class-step tests with ./bin/project test --profile free-tier-locked-preview-browser'
@@ -283,18 +284,19 @@ async function capture(page: import('@playwright/test').Page, state: string) {
   }
 }
 
-/** Pending and approved free dashboards expose exactly three entitled assignment kinds. */
+/** Pending and approved free dashboards expose the five entitled bundle kinds. */
 async function expectFreeDashboardAssignmentTiles(
   page: import('@playwright/test').Page
 ) {
   const tiles = page.getByTestId('free-assignment-tiles');
-  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(3);
+  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(5);
   await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
     0
   );
-  await expect(tiles.getByText('Class Starter', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('Prewriting', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('Thesis Statement', { exact: true })).toBeVisible();
+  const tileNames = await tiles
+    .getByTestId('assignment-type-tile-name')
+    .allTextContents();
+  expect(tileNames).toEqual([...FREE_CLASSROOM_BUNDLE_TILE_LABELS]);
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -418,12 +420,12 @@ for (const width of [390, 1440]) {
     await page.goto('/app');
     await expectFreeDashboardAssignmentTiles(page);
     await page
-      .getByRole('link', { name: /New Prewriting assignment/i })
+      .getByRole('link', { name: /New Pre-writing assignment/i })
       .click();
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     await page.goto('/app');
     await page
-      .getByRole('link', { name: /New Thesis Statement assignment/i })
+      .getByRole('link', { name: /New Thesis Builder assignment/i })
       .click();
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     const thesisTypeId = page.url().match(/assignment-types\/([^/]+)/)?.[1];
@@ -511,7 +513,7 @@ for (const width of [390, 1440]) {
     );
     await expect(
       page.getByTestId('free-assignment-tiles').locator('img')
-    ).toHaveCount(3);
+    ).toHaveCount(5);
     if (width === 390) {
       await capture(page, 'dashboard-approved-390');
     }
