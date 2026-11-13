@@ -4,6 +4,7 @@ import {
   enterPreviewAccess,
   isAnonymousDevLoginAcceptablyBlocked,
   isAnonymousDevLoginPreviewAccessRedirect,
+  probeAnonymousDevLoginBlocked,
   isDemoEnvironment,
   isPreviewAccessGateEnabled,
   logPreviewLoginSmokeFailure,
@@ -136,6 +137,32 @@ describe('isAnonymousDevLoginPreviewAccessRedirect', () => {
         headers: {},
       })
     ).toBe(false);
+  });
+});
+
+describe('probeAnonymousDevLoginBlocked', () => {
+  test('accepts HTTP 401 from a live-style POST probe', async () => {
+    const requestFn = async (url, options = {}) => {
+      expect(options.method).toBe('POST');
+      expect(new URL(url).pathname).toBe('/auth/dev-login');
+      return { status: 401, headers: {}, body: '' };
+    };
+    await expect(
+      probeAnonymousDevLoginBlocked('https://demo.yawp.school', { requestFn })
+    ).resolves.toMatchObject({ status: 401 });
+  });
+
+  test('accepts a sessionless preview-access redirect from a POST probe', async () => {
+    const requestFn = async () => ({
+      status: 302,
+      headers: {
+        location: '/auth/preview-access?returnTo=/auth/dev-login',
+      },
+      body: '',
+    });
+    await expect(
+      probeAnonymousDevLoginBlocked('https://demo.yawp.school', { requestFn })
+    ).resolves.toMatchObject({ status: 302 });
   });
 });
 

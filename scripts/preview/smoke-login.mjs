@@ -131,6 +131,23 @@ function assertAnonymousDevLoginProbeBlocked(baseUrl, response) {
   );
 }
 
+/** Anonymous POST /auth/dev-login used by deploy smoke and workflow gate checks. */
+export async function probeAnonymousDevLoginBlocked(
+  baseUrl,
+  { email = 'dev.admin@yawp.local', requestFn = request } = {}
+) {
+  const devLoginProbeBody = new URLSearchParams({ email }).toString();
+  const response = await requestFn(appendPath(baseUrl, '/auth/dev-login'), {
+    method: 'POST',
+    body: devLoginProbeBody,
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+  });
+  assertAnonymousDevLoginProbeBlocked(baseUrl, response);
+  return response;
+}
+
 async function assertNoSiteGatePublicEndpoints({ baseUrl, requestFn }) {
   const anonymousPage = await requestFn(baseUrl);
   if (anonymousPage.status !== 200) {
