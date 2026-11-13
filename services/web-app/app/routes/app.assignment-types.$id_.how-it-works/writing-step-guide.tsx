@@ -53,7 +53,7 @@ export function WritingStepGuide({
   backTo: string;
   backLabel: string;
   pagePath: string;
-  teachingLocked: boolean;
+  teachingLocked?: boolean;
   lesson: LessonMaterials | null;
   /** Brian's landing pages are on: the video at the top and How to Teach It. */
   v2?: boolean;

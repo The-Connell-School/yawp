@@ -1407,6 +1407,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     _count: {
       documents:
         studentDocumentCountByClassAssignmentId.get(classAssignment.id) ?? 0,
+      teacherPreviewDocuments:
+        classAssignment._count.teacherPreviewDocuments,
     },
     insight: insightByClassAssignmentId.get(classAssignment.id) ?? null,
     hasSharedWork: classAssignment.documentGroups.length > 0,
