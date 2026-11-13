@@ -366,7 +366,7 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
       page
         .getByTestId('teacher-assignments-grid')
         .getByRole('link', { name: /New .* assignment/ })
-    ).toHaveCount(3);
+    ).toHaveCount(5);
     for (const link of await page
       .getByTestId('teacher-assignments-grid')
       .getByRole('link', { name: /New .* assignment/ })
