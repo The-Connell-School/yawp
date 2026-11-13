@@ -13,6 +13,27 @@ export async function clearDevPanelStorageWhenStable(page: Page) {
 }
 
 /** Dev panel feedback drafts persist via React state → `yawp-dev-panel` in localStorage. */
+/**
+ * After reload, React restores open-panel state on the next animation frames. Opening
+ * the panel before that runs can persist the empty default over a saved draft.
+ */
+export async function waitForDevPanelRestoredFromStorage(page: Page) {
+  const shouldRestore = await page.evaluate((key: string) => {
+    const raw = localStorage.getItem(key);
+    if (!raw) return false;
+    try {
+      return JSON.parse(raw).open === true;
+    } catch {
+      return false;
+    }
+  }, DEV_PANEL_STORAGE_KEY);
+  if (!shouldRestore) return;
+  await expect(page.locator('html')).toHaveClass(/yawp-dev-panel-open/, {
+    timeout: 15_000,
+  });
+  await waitForDevPanelReady(page);
+}
+
 export async function waitForDevPanelFeedbackNotePersisted(
   page: Page,
   note: string,

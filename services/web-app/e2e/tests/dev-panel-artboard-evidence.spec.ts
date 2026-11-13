@@ -12,6 +12,7 @@ import {
   openDevToolsPanel,
   openGiveFeedback,
   waitForDevPanelFeedbackNotePersisted,
+  waitForDevPanelRestoredFromStorage,
   waitForDeveloperToolsPageReady,
 } from '../helpers/dev-panel-feedback';
 import { ensureDemoDevTeacherSession } from '../helpers/dev-panel-preview-access';
@@ -219,7 +220,12 @@ test.describe('Dev panel artboard evidence', () => {
       'Partly typed note before reload'
     );
     await page.reload();
-    await openDevToolsPanel(page);
+    await waitForDeveloperToolsPageReady(page);
+    await waitForDevPanelFeedbackNotePersisted(
+      page,
+      'Partly typed note before reload'
+    );
+    await waitForDevPanelRestoredFromStorage(page);
     ({ panel: feedbackDialog } = await openGiveFeedback(page));
     await expect(feedbackDialog.getByLabel('What happened?')).toHaveValue(
       'Partly typed note before reload',
