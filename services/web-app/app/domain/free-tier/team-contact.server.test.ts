@@ -114,9 +114,11 @@ describe('team-contact.server', () => {
         }),
       })
     );
-    expect(findFirstLog.mock.calls.length).toBeGreaterThan(0);
-    const calledAt = findFirstLog.mock.calls[0]?.[0]?.where.createdAt
-      .gte as Date;
+    const firstCall = findFirstLog.mock.calls[0] as
+      | [{ where: { createdAt: { gte: Date } } }]
+      | undefined;
+    if (!firstCall) throw new Error('expected findFirstLog call');
+    const calledAt = firstCall[0].where.createdAt.gte;
     const delta = Date.now() - calledAt.getTime();
     expect(delta).toBeGreaterThanOrEqual(TEAM_CONTACT_ADMIN_LEARN_MORE_COOLDOWN_MS - 50);
     expect(delta).toBeLessThanOrEqual(TEAM_CONTACT_ADMIN_LEARN_MORE_COOLDOWN_MS + 50);
