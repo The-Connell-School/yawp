@@ -286,7 +286,7 @@ function FreeTierCarouselTileCaption({
       )}
     >
       <span
-        className="text-sm font-medium leading-snug text-foreground"
+        className="hyphens-none text-sm font-medium leading-snug text-foreground"
         data-testid={assignmentTypeTileNameTestId}
       >
         {label}

@@ -8,6 +8,7 @@ import { seedSiteLicenseLockedCatalogForE2E } from '../helpers/seed-site-license
 import { dashboardAssignmentTileOverlapIssues } from '../helpers/dashboard-assignment-tile-overlap';
 import { expectGiveFeedbackAccessible } from '../helpers/dev-panel-feedback';
 import { expectNewAssignmentBuilderPage } from '../helpers/assignment-builder-v3-page';
+import { FREE_CLASSROOM_BUNDLE_TILE_LABELS } from '../../app/domain/free-tier/inapp-usage';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
     'Run class-step tests with ./bin/project test --profile free-tier-locked-preview-browser'
@@ -283,14 +284,6 @@ async function capture(page: import('@playwright/test').Page, state: string) {
   }
 }
 
-const FREE_DASHBOARD_BUNDLE_TILE_LABELS = [
-  'Class Starter',
-  'Exit Ticket',
-  '5-Paragraph Essay',
-  'Pre-writing',
-  'Thesis Builder',
-] as const;
-
 /** Pending and approved free dashboards expose the five entitled bundle kinds. */
 async function expectFreeDashboardAssignmentTiles(
   page: import('@playwright/test').Page
@@ -303,7 +296,7 @@ async function expectFreeDashboardAssignmentTiles(
   const tileNames = await tiles
     .getByTestId('assignment-type-tile-name')
     .allTextContents();
-  expect(tileNames).toEqual([...FREE_DASHBOARD_BUNDLE_TILE_LABELS]);
+  expect(tileNames).toEqual([...FREE_CLASSROOM_BUNDLE_TILE_LABELS]);
 }
 
 test.describe.configure({ mode: 'serial' });

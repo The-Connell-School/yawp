@@ -2,13 +2,20 @@ import { FREE_CLASSROOM_BUNDLE_KIND_ORDER } from './free-classroom-assignment-ki
 
 /** Read-only presentation model. Caps and counts are supplied by existing policy readers. */
 export type UsageCount = { used: number; total: number; remaining: number };
+/** Non-breaking hyphen keeps narrow tile captions from wrapping mid-label (E2E + mobile). */
+const NB_HYPHEN = '\u2011';
+
 export const FREE_ASSIGNMENT_LABELS: Record<string, string> = {
   class_starter: 'Class Starter',
   exit_ticket: 'Exit Ticket',
-  five_paragraph_essay: '5-Paragraph Essay',
+  five_paragraph_essay: `5${NB_HYPHEN}Paragraph Essay`,
   prewriting: 'Pre-writing',
   thesis_statement: 'Thesis Builder',
 };
+
+export const FREE_CLASSROOM_BUNDLE_TILE_LABELS = FREE_CLASSROOM_BUNDLE_KIND_ORDER.map(
+  (kind) => FREE_ASSIGNMENT_LABELS[kind]
+);
 export function buildFreeAccountUsage(input: {
   monthly?: boolean;
   seatCap: number;
