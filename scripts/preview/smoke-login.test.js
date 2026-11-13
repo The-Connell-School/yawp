@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import http from 'node:http';
 import {
   enterPreviewAccess,
+  isAnonymousDevLoginPreviewAccessRedirect,
   isDemoEnvironment,
   isPreviewAccessGateEnabled,
   logPreviewLoginSmokeFailure,
@@ -99,6 +100,43 @@ function gateAwareRequest(handler, { onRequest = () => {} } = {}) {
     return handler(url, options);
   };
 }
+
+describe('isAnonymousDevLoginPreviewAccessRedirect', () => {
+  const baseUrl = 'https://demo.yawp.school';
+
+  test('matches relative and same-origin preview-access redirects', () => {
+    expect(
+      isAnonymousDevLoginPreviewAccessRedirect(baseUrl, {
+        status: 302,
+        headers: { location: '/auth/preview-access?returnTo=/auth/dev-login' },
+      })
+    ).toBe(true);
+    expect(
+      isAnonymousDevLoginPreviewAccessRedirect(baseUrl, {
+        status: 302,
+        headers: {
+          Location:
+            'https://demo.yawp.school/auth/preview-access?returnTo=%2Fauth%2Fdev-login',
+        },
+      })
+    ).toBe(true);
+  });
+
+  test('rejects non-preview redirects and non-redirect success', () => {
+    expect(
+      isAnonymousDevLoginPreviewAccessRedirect(baseUrl, {
+        status: 302,
+        headers: { location: '/app' },
+      })
+    ).toBe(false);
+    expect(
+      isAnonymousDevLoginPreviewAccessRedirect(baseUrl, {
+        status: 200,
+        headers: {},
+      })
+    ).toBe(false);
+  });
+});
 
 describe('isPreviewAccessGateEnabled', () => {
   const saved = {};
@@ -229,6 +267,83 @@ describe('enterPreviewAccess', () => {
         requestFn,
       })
     ).resolves.toBe('');
+  });
+
+  test('without a site gate, accepts GET /auth/dev-login redirect to preview-access', async () => {
+    for (const location of [
+      '/auth/preview-access?returnTo=/auth/dev-login',
+      'https://demo.yawp.school/auth/preview-access?returnTo=%2Fauth%2Fdev-login',
+    ]) {
+      const requestFn = async (url, options = {}) => {
+        const pathname = new URL(url).pathname;
+        if (pathname === '/' && isGet(options)) {
+          return { status: 200, headers: {}, body: 'home' };
+        }
+        if (pathname === '/api/healthcheck' && isGet(options)) {
+          return { status: 200, headers: {}, body: 'ok' };
+        }
+        if (pathname === '/auth/dev-login' && isGet(options)) {
+          return { status: 302, headers: { location }, body: '' };
+        }
+        if (pathname === '/auth/dev-login' && options.method === 'POST') {
+          return { status: 401, headers: {}, body: '' };
+        }
+        if (pathname === '/auth/dev-login/options' && isGet(options)) {
+          return { status: 401, headers: {}, body: '' };
+        }
+        if (pathname === '/lti/launch' && options.method === 'POST') {
+          return { status: 401, headers: {}, body: '' };
+        }
+        return { status: 404, headers: {}, body: '' };
+      };
+
+      await expect(
+        enterPreviewAccess({
+          baseUrl: 'https://demo.yawp.school',
+          accessCode,
+          gateEnabled: false,
+          obtainAccessCookie: false,
+          requestFn,
+        })
+      ).resolves.toBe('');
+    }
+  });
+
+  test('without a site gate, rejects anonymous GET /auth/dev-login HTTP 200', async () => {
+    const requestFn = async (url, options = {}) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === '/' && isGet(options)) {
+        return { status: 200, headers: {}, body: 'home' };
+      }
+      if (pathname === '/api/healthcheck' && isGet(options)) {
+        return { status: 200, headers: {}, body: 'ok' };
+      }
+      if (pathname === '/auth/dev-login' && isGet(options)) {
+        return { status: 200, headers: {}, body: 'dev login page' };
+      }
+      if (pathname === '/auth/dev-login' && options.method === 'POST') {
+        return { status: 401, headers: {}, body: '' };
+      }
+      if (pathname === '/auth/dev-login/options' && isGet(options)) {
+        return { status: 401, headers: {}, body: '' };
+      }
+      if (pathname === '/lti/launch' && options.method === 'POST') {
+        return { status: 401, headers: {}, body: '' };
+      }
+      return { status: 404, headers: {}, body: '' };
+    };
+
+    await expect(
+      enterPreviewAccess({
+        baseUrl: 'https://demo.yawp.school',
+        accessCode,
+        gateEnabled: false,
+        obtainAccessCookie: false,
+        requestFn,
+      })
+    ).rejects.toThrow(
+      'Expected anonymous GET /auth/dev-login not to succeed, got HTTP 200'
+    );
   });
 
   test('without a site gate, rejects a successful GET /auth/dev-login response', async () => {
