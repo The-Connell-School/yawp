@@ -8,6 +8,7 @@ import { seedSiteLicenseLockedCatalogForE2E } from '../helpers/seed-site-license
 import { dashboardAssignmentTileOverlapIssues } from '../helpers/dashboard-assignment-tile-overlap';
 import { expectGiveFeedbackAccessible } from '../helpers/dev-panel-feedback';
 import { expectNewAssignmentBuilderPage } from '../helpers/assignment-builder-v3-page';
+import { ensureLockedPreviewSampleAssignmentsForE2E } from '../helpers/ensure-locked-preview-sample-assignments-for-e2e';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
     'Run class-step tests with ./bin/project test --profile free-tier-locked-preview-browser'
@@ -880,13 +881,7 @@ test('locked assignments tab shows sample rows and locked documents pill', async
     where: { teachers: { some: { user: { id: user.id } } } },
     select: { id: true, school: { select: { organizationId: true } } },
   });
-  const { ensureLockedPreviewSampleAssignments } = await import(
-    '~/domain/free-tier/locked-preview-class-seed.server'
-  );
-  await ensureLockedPreviewSampleAssignments(
-    klass.school.organizationId,
-    klass.id
-  );
+  await ensureLockedPreviewSampleAssignmentsForE2E(prisma, klass.id);
   await exploreLockedApp(page, user.email!);
   await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
   await expect(page.getByText('Sample · Not sent').first()).toBeVisible();
