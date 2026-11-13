@@ -44,8 +44,18 @@ const actualAssignmentPromptAttachment =
 // before any file could mock.module() this path (see comment there).
 const actualAssignmentTypeAccess =
   globalThis.__realModules['~/utils/assignment-type-access.server'];
+const actualTeachingApproval = await import(
+  '~/domain/free-tier/teaching-approval-required.server'
+);
+const guardTeachingFormAction = mock<
+  typeof actualTeachingApproval.guardTeachingFormAction
+>();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
+mock.module('~/domain/free-tier/teaching-approval-required.server', () => ({
+  ...actualTeachingApproval,
+  guardTeachingFormAction,
+}));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
@@ -150,6 +160,7 @@ describe('api.assignments.create', () => {
       .mockResolvedValue([{ id: 'ca-1', classId: 'class-1' }]);
     requireUserId.mockReset();
     requireMembership.mockReset();
+    guardTeachingFormAction.mockReset().mockResolvedValue(null);
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
