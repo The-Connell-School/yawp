@@ -284,6 +284,19 @@ async function capture(page: import('@playwright/test').Page, state: string) {
 }
 
 /** Pending and approved free dashboards expose exactly three entitled assignment kinds. */
+async function openLockedEntitledHowItWorks(
+  page: import('@playwright/test').Page,
+  label: string
+) {
+  const tile = page
+    .getByTestId('dashboard-assignment-tile')
+    .filter({ hasText: new RegExp(label) });
+  await tile.scrollIntoViewIfNeeded();
+  const href = await tile.getAttribute('href');
+  expect(href).toMatch(/how-it-works/);
+  await page.goto(href!);
+}
+
 async function expectFreeDashboardAssignmentTiles(
   page: import('@playwright/test').Page,
   options?: { teachingApproved?: boolean }
@@ -410,9 +423,7 @@ for (const width of [390, 1440]) {
     if (width === 1440) {
       await capture(page, 'dashboard-pending-1440');
     }
-    await page
-      .getByRole('link', { name: /New Class Starter assignment/i })
-      .click();
+    await openLockedEntitledHowItWorks(page, 'Class Starter');
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     await expect(page.getByRole('button', { name: 'Prompt Library' })).toHaveCount(
       0
@@ -425,14 +436,10 @@ for (const width of [390, 1440]) {
     }
     await page.goto('/app');
     await expectFreeDashboardAssignmentTiles(page);
-    await page
-      .getByRole('link', { name: /New Prewriting assignment/i })
-      .click();
+    await openLockedEntitledHowItWorks(page, 'Prewriting');
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     await page.goto('/app');
-    await page
-      .getByRole('link', { name: /New Thesis Statement assignment/i })
-      .click();
+    await openLockedEntitledHowItWorks(page, 'Thesis Statement');
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     const thesisTypeId = page.url().match(/assignment-types\/([^/]+)/)?.[1];
     expect(thesisTypeId).toBeTruthy();
