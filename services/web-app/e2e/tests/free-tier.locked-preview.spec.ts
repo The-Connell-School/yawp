@@ -294,11 +294,12 @@ async function expectFreeDashboardAssignmentTiles(
     options?.teachingApproved ? 5 : 0
   );
   for (const label of ['Class Starter', 'Prewriting', 'Thesis Statement'] as const) {
-    const name = tiles
-      .getByTestId('assignment-type-tile-name')
-      .filter({ hasText: new RegExp(`^${label}$`) });
-    await name.first().scrollIntoViewIfNeeded();
-    await expect(name.first()).toBeVisible();
+    const tile = tiles
+      .getByTestId('dashboard-assignment-tile')
+      .filter({ hasText: new RegExp(label) });
+    await expect(tile).toHaveCount(1);
+    await tile.scrollIntoViewIfNeeded();
+    await expect(tile).toBeVisible();
   }
 }
 

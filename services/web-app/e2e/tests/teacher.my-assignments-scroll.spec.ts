@@ -48,8 +48,11 @@ test('My Assignments scrolls at short and tall viewports while navigation stays 
       ).toBeVisible({ timeout: 15_000 });
       const after = await nav.boundingBox();
       expect(after?.y).toBe(before?.y);
-      // The remaining ten rows stay reachable through the existing pagination.
+      // The remaining rows stay reachable through the existing pagination.
       await page.getByRole('button', { name: 'go forward' }).click();
+      await expect(
+        page.getByTestId(`my-assignment-open-${ids[20]}`)
+      ).toBeVisible({ timeout: 15_000 });
       await scroll.evaluate((el) => {
         el.scrollTop = el.scrollHeight;
       });
