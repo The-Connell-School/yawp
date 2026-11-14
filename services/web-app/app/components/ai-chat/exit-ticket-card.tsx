@@ -10,6 +10,7 @@
  */
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
+import { Button } from '~/components/ui/button';
 import { CreatedInYawp } from '~/components/lesson-planner/created-in-yawp';
 import { withPiece } from '~/domain/lesson-planner/stack-create-link';
 import { Check, ClipboardCheck, Plus } from 'lucide-react';
@@ -199,37 +200,33 @@ function CardActions({
   return (
     <div className="flex flex-wrap items-center gap-2 border-t border-primary/15 bg-primary/[0.04] px-4 py-2.5">
       {onToggle ? (
-        <button
+        <Button
           type="button"
+          size="sm"
+          variant={added ? 'outline-primary' : 'default'}
           disabled={disabled}
           onClick={() => onToggle(!added)}
           // Brian's review (B3): the toggle removes, and says so before the click.
           title={added ? 'Click to remove from stack' : undefined}
           data-testid="exit-ticket-stack-toggle"
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50',
-            added
-              ? 'bg-primary/10 text-primary hover:bg-primary/15'
-              : 'bg-primary text-primary-foreground hover:opacity-90'
-          )}
         >
           {added ? <Check size={14} /> : <Plus size={14} />}
           {added ? 'In your lesson' : 'Add to lesson'}
-        </button>
+        </Button>
       ) : null}
       {created ? (
         <CreatedInYawp href={created.href} />
       ) : assignmentTypeId ? (
-        <Link
-          to={withPiece(
-            exitTicketCreateHref(assignmentTypeId, ticket, conversationId),
-            pieceRef
-          )}
-          data-testid="exit-ticket-create"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-background px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/5"
-        >
-          Create this exit ticket for your class
-        </Link>
+        <Button asChild size="sm" variant="outline-primary" data-testid="exit-ticket-create">
+          <Link
+            to={withPiece(
+              exitTicketCreateHref(assignmentTypeId, ticket, conversationId),
+              pieceRef
+            )}
+          >
+            Create this exit ticket for your class
+          </Link>
+        </Button>
       ) : null}
     </div>
   );

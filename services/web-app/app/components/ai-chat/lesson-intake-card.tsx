@@ -18,6 +18,7 @@
  * is about to be sent shown above the Send button, as before.
  */
 import { useState } from 'react';
+import { Button } from '~/components/ui/button';
 import {
   ChevronRight,
   Clock,
@@ -462,29 +463,31 @@ export function LessonIntakeCard({
           {message || 'Answer each question to send.'}
         </p>
         {onLastStep ? (
-          <button
+          <Button
             type="button"
+            size="sm"
+            className="shrink-0"
             data-testid="lesson-ask-send"
             disabled={disabled || !ready || !message}
             onClick={send}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
           >
             <Send size={13} />
             Send
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
             type="button"
+            size="sm"
+            className="shrink-0"
             data-testid="lesson-ask-next"
             disabled={disabled || !current || !answered[current]}
             onClick={() =>
               setReached((at) => Math.min(at + 1, steps.length - 1))
             }
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
           >
             Next
             <ChevronRight size={13} />
-          </button>
+          </Button>
         )}
       </div>
     </div>

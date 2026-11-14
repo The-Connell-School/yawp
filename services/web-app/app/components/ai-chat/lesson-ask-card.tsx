@@ -14,6 +14,7 @@ import {
   Send,
   Shapes,
 } from 'lucide-react';
+import { Button } from '~/components/ui/button';
 import {
   composeAskReply,
   LESSON_ACTIVITIES,
@@ -268,27 +269,29 @@ export function LessonAskCard({
           {message || 'Pick an option, set the length, choose some activities.'}
         </p>
         {onLastStep ? (
-          <button
+          <Button
             type="button"
+            size="sm"
+            className="shrink-0"
             data-testid="lesson-ask-send"
             disabled={disabled || !message}
             onClick={() => onSend(message)}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
           >
             <Send size={13} />
             Send
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
             type="button"
+            size="sm"
+            className="shrink-0"
             data-testid="lesson-ask-next"
             disabled={disabled}
             onClick={advance}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
           >
             Next
             <ChevronRight size={13} />
-          </button>
+          </Button>
         )}
       </div>
     </div>

@@ -8,6 +8,7 @@
  */
 import { CalendarRange, Hammer, Flag, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router';
+import { Button } from '~/components/ui/button';
 import {
   buildDayDisplay,
   buildDayRequest,
@@ -91,17 +92,18 @@ export function UnitPlanCard({
               ) : null}
             </div>
             {builtDays?.[day.day] ? (
-              <Link
-                to={`/app/lesson-planner?c=${builtDays[day.day]}`}
-                data-testid="unit-open-day"
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition hover:bg-primary/20"
-              >
-                Open this day
-                <ArrowRight size={12} />
-              </Link>
+              <Button asChild size="sm" variant="outline-primary" className="shrink-0" data-testid="unit-open-day">
+                <Link to={`/app/lesson-planner?c=${builtDays[day.day]}`}>
+                  Open this day
+                  <ArrowRight size={12} />
+                </Link>
+              </Button>
             ) : onBuildDay ? (
-              <button
+              <Button
                 type="button"
+                size="sm"
+                variant="outline-primary"
+                className="shrink-0"
                 data-testid="unit-build-day"
                 onClick={() =>
                   onBuildDay(buildDayRequest(unit, day), {
@@ -112,11 +114,10 @@ export function UnitPlanCard({
                   })
                 }
                 disabled={disabled}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-primary/30 bg-background px-2.5 py-1 text-xs font-medium text-primary transition hover:bg-primary/10 disabled:opacity-50"
               >
                 <Hammer size={12} />
                 Build this day
-              </button>
+              </Button>
             ) : null}
           </li>
         ))}

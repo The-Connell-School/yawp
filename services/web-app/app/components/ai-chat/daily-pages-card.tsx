@@ -15,6 +15,7 @@
  * says which one it is and sends it where it belongs.
  */
 import { Link } from 'react-router';
+import { Button } from '~/components/ui/button';
 import { CreatedInYawp } from '~/components/lesson-planner/created-in-yawp';
 import { withPiece } from '~/domain/lesson-planner/stack-create-link';
 import { Check, PenLine, Plus, Repeat } from 'lucide-react';
@@ -104,51 +105,48 @@ export function DailyPagesCard({
       {targetTypeId || onToggle ? (
         <div className="flex flex-wrap items-center gap-2 border-t border-primary/15 bg-primary/[0.04] px-4 py-2.5">
           {onToggle ? (
-            <button
+            <Button
               type="button"
+              size="sm"
+              variant={added ? 'outline-primary' : 'outline-primary'}
               disabled={disabled}
               onClick={() => onToggle(!added)}
               data-testid="daily-pages-stack-toggle"
               title={added ? 'Click to remove from stack' : undefined}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50',
-                added
-                  ? 'bg-primary/10 text-primary hover:bg-primary/15'
-                  : 'border border-primary/40 text-primary hover:bg-primary/5'
-              )}
             >
               {added ? <Check size={14} /> : <Plus size={14} />}
               {added ? 'In your lesson' : 'Add to lesson'}
-            </button>
+            </Button>
           ) : null}
           {onReplace ? (
-            <button
+            <Button
               type="button"
+              size="sm"
+              variant="outline-primary"
               disabled={disabled || added}
               onClick={onReplace}
               data-testid="daily-pages-replace"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/5 disabled:opacity-50"
             >
               <Repeat size={14} />
               Replace existing {isStarter ? 'class starter' : 'Daily Pages prompt'} with
               this one
-            </button>
+            </Button>
           ) : null}
           {created ? (
             <CreatedInYawp href={created.href} />
           ) : targetTypeId ? (
-          <Link
-            to={withPiece(
-              dailyPagesCreateHref(targetTypeId, exercise.prompt, conversationId),
-              pieceRef
-            )}
-            data-testid="daily-pages-create"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-          >
-            {onReplace
-              ? `Create ${targetLabel === 'Class Starter' ? 'class starter' : 'Daily Pages'} assignment`
-              : `Create this ${targetLabel} exercise for your class`}
-          </Link>
+          <Button asChild size="sm" data-testid="daily-pages-create">
+            <Link
+              to={withPiece(
+                dailyPagesCreateHref(targetTypeId, exercise.prompt, conversationId),
+                pieceRef
+              )}
+            >
+              {onReplace
+                ? `Create ${targetLabel === 'Class Starter' ? 'class starter' : 'Daily Pages'} assignment`
+                : `Create this ${targetLabel} exercise for your class`}
+            </Link>
+          </Button>
           ) : null}
         </div>
       ) : null}
