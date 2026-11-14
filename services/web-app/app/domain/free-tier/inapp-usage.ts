@@ -9,7 +9,7 @@ export const FREE_ASSIGNMENT_LABELS: Record<string, string> = {
   class_starter: 'Class Starter',
   exit_ticket: 'Exit Ticket',
   five_paragraph_essay: `5${NB_HYPHEN}Paragraph Essay`,
-  prewriting: 'Pre-writing',
+  prewriting: `Pre${NB_HYPHEN}writing`,
   thesis_statement: 'Thesis Builder',
 };
 
