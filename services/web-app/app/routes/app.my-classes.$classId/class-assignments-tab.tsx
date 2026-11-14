@@ -40,7 +40,6 @@ import { useTable } from '~/hooks/useTable';
 import { filterClassAssignmentsByQuery } from './class-assignments-search';
 import { CollapsibleGroupSection } from '~/components/collapsible-group-section';
 import { groupByAssignmentType } from '~/utils/group-by-assignment-type';
-import type { AssignmentCreationLibraryType } from '~/components/assignments/assignment-creation-sheet';
 import type { ClassInsight } from '../app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel';
 import type { SiteLicenseLockedAssignmentTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 
