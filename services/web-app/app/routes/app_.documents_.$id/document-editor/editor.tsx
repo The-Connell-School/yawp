@@ -5,9 +5,14 @@ import TextAlign from '@tiptap/extension-text-align';
 import TextStyle from '@tiptap/extension-text-style';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { EditorChromeProvider } from './editor-chrome-context';
 import { useCommentsSelection } from '../comments/selection-context';
 import { Bar } from './editor-bar';
+import {
+  AssignmentPromptBanner,
+  type AssignmentPrompt,
+} from './assignment-prompt-banner';
 import { ErrorBoundary } from './error-boundry';
 import { Comment, CommentExtension } from './extensions/comment';
 import {
@@ -62,6 +67,8 @@ type Props = {
   onSubmittableContentChange?: (submittable: boolean) => void;
   onEditorDomReady?: (root: HTMLElement | null) => void;
   onCommentCreated?: (comment: unknown) => void;
+  assignment?: AssignmentPrompt | null;
+  marginComments?: React.ReactNode;
 };
 
 export function Editor({
@@ -75,8 +82,15 @@ export function Editor({
   onSubmittableContentChange,
   onEditorDomReady,
   onCommentCreated,
+  assignment,
+  marginComments,
 }: Props) {
   const [imageStatus, setImageStatus] = useState<DocumentImageStatus>({ state: 'idle' });
+  const [contentRoot, setContentRoot] = useState<HTMLElement | null>(null);
+  const [scrollRoot, setScrollRoot] = useState<HTMLElement | null>(null);
+  const bindScrollRef = useCallback((node: HTMLDivElement | null) => {
+    setScrollRoot(node);
+  }, []);
 
   // Paste and drop upload straight into this document, so the extension has to
   // be built per document rather than shared at module scope. Both deps are
@@ -148,9 +162,17 @@ export function Editor({
 
   // Expose editor DOM root to siblings (used by teacher grade-highlights overlay)
   useEffect(() => {
-    if (!editor || !onEditorDomReady) return;
-    onEditorDomReady(editor.view.dom as HTMLElement);
-    return () => onEditorDomReady(null);
+    if (!editor) {
+      setContentRoot(null);
+      return;
+    }
+    const root = editor.view.dom as HTMLElement;
+    setContentRoot(root);
+    onEditorDomReady?.(root);
+    return () => {
+      setContentRoot(null);
+      onEditorDomReady?.(null);
+    };
   }, [editor, onEditorDomReady]);
 
   // Comment mark hover/active state (student-side comments — preserved from old editor)
@@ -227,8 +249,14 @@ export function Editor({
             .join('\n')}
         </style>
       ) : null}
-      <div className="flex w-full flex-col overflow-hidden border-r md:h-full">
-        {isEditable && editor ? (
+      <EditorChromeProvider
+        value={{
+          contentRoot,
+          scrollRoot,
+        }}
+      >
+      <div className="flex h-full w-full min-w-0 flex-col overflow-hidden md:h-full">
+        {editor ? (
           <Bar
             editor={editor}
             documentId={docId}
@@ -237,6 +265,7 @@ export function Editor({
             onCommentCreated={onCommentCreated}
           />
         ) : null}
+        <AssignmentPromptBanner docId={docId} assignment={assignment} />
         {imageStatus.state !== 'idle' ? (
           <div
             role="status"
@@ -244,8 +273,8 @@ export function Editor({
             data-testid="editor-image-status"
             className={
               imageStatus.state === 'error'
-                ? 'border-b bg-destructive/10 text-destructive px-4 py-2 text-sm'
-                : 'border-b bg-muted px-4 py-2 text-muted-foreground text-sm'
+                ? 'mx-4 mt-2 rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive'
+                : 'mx-4 mt-2 rounded-lg bg-muted px-4 py-2 text-sm text-muted-foreground'
             }
           >
             {imageStatus.state === 'uploading'
@@ -254,22 +283,25 @@ export function Editor({
           </div>
         ) : null}
         <div
-          className="no-scrollbar grow overflow-y-scroll p-5"
+          ref={bindScrollRef}
+          className="doc-editor-scroll no-scrollbar"
           data-testid="document-editor-scroll"
           key={`${docId}-editor`}
           onMouseDown={focusEditorFromPaneClick}
         >
-          <div
-            className="mx-auto w-full min-h-full max-w-[920px] cursor-text font-times"
+          <article
+            className="doc-editor-page cursor-text"
             data-testid="document-editor-surface"
           >
             <EditorContent
               editor={editor}
-              className="h-full pb-5 [&>div]:h-full [&>div]:outline-none [&_.ProseMirror]:min-h-full"
+              className="h-full [&>div]:h-full [&>div]:outline-none [&_.ProseMirror]:min-h-full"
             />
-          </div>
+          </article>
+          {marginComments}
         </div>
       </div>
+      </EditorChromeProvider>
     </ErrorBoundary>
   );
 }

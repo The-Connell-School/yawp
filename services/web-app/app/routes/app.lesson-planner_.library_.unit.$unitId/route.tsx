@@ -78,7 +78,7 @@ export default function UnitRoute() {
             >
               Add an existing lesson
             </Button>
-            <Button data-testid="plan-another" className={cn(PILL, CORAL)} onClick={() => setAdding({ mode: 'plan', index: lessons.length })}>
+            <Button data-testid="plan-another" className={PILL} onClick={() => setAdding({ mode: 'plan', index: lessons.length })}>
               Plan another lesson
             </Button>
           </div>
@@ -175,8 +175,6 @@ export default function UnitRoute() {
 
 /** The design's pill buttons, and its coral. */
 const PILL = 'h-10 rounded-full px-4 text-sm font-semibold';
-const CORAL = 'bg-[#D9714F] text-white hover:bg-[#C8603F]';
-
 function InsertLine({ onClick, label }: { onClick: () => void; label: string }) {
   return (
     <div className="group relative h-1.5">
@@ -227,9 +225,9 @@ function DayTabs({ lessons, selected, onSelect }: { lessons: Lesson[]; selected:
   const scroll = (by: number) => strip.current?.scrollBy({ left: by * 72 * 4, behavior: 'smooth' });
   return (
     <div className="flex items-end gap-1">
-      <button type="button" aria-label="Earlier days" onClick={() => scroll(-1)} className="mb-2 rounded-md p-0.5 text-[#45403A] hover:bg-[#EAE3D8]">
+      <Button type="button" variant="ghost" size="icon-sm" aria-label="Earlier days" onClick={() => scroll(-1)} className="mb-2">
         <ChevronLeft size={16} />
-      </button>
+      </Button>
       <div ref={strip} role="tablist" aria-label="Days" data-testid="day-tabs" className="-mb-px flex min-w-0 flex-1 items-end gap-1 overflow-x-auto scroll-smooth">
         {lessons.map((lesson, index) => {
           const chosen = index === selected;
@@ -254,9 +252,9 @@ function DayTabs({ lessons, selected, onSelect }: { lessons: Lesson[]; selected:
           );
         })}
       </div>
-      <button type="button" aria-label="Later days" onClick={() => scroll(1)} className="mb-2 rounded-md p-0.5 text-[#45403A] hover:bg-[#EAE3D8]">
+      <Button type="button" variant="ghost" size="icon-sm" aria-label="Later days" onClick={() => scroll(1)} className="mb-2">
         <ChevronRight size={16} />
-      </button>
+      </Button>
     </div>
   );
 }
@@ -292,7 +290,7 @@ function Preview({
           </span>
         </div>
         {lesson.empty ? (
-          <Button asChild data-testid="preview-open" className={cn(PILL, CORAL)}>
+          <Button asChild data-testid="preview-open" className={PILL}>
             <Link to={lesson.planHref}>Start planning</Link>
           </Button>
         ) : (
@@ -307,7 +305,7 @@ function Preview({
                 Open slide deck
               </Button>
             )}
-            <Button asChild data-testid="preview-open" className={cn(PILL, CORAL)}>
+            <Button asChild data-testid="preview-open" className={PILL}>
               <Link to={lesson.stackHref}>Open the stack</Link>
             </Button>
           </div>

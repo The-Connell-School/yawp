@@ -15,6 +15,7 @@ import type { SlideDeck } from '~/domain/lesson-planner/slide-deck';
 import { TileSlideCanvas } from '../present.$conversationId.$messageId/tile-slide-canvas';
 import { GALLERY_FONTS_HREF, GallerySlideCanvas } from '../present.$conversationId.$messageId/gallery-slide-canvas';
 import { HEADING_FONT, STACK_FONTS_HREF, typeChipStyle } from '../app.lesson-planner_.$conversationId.packet/v3/theme';
+import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
 
 const STACK_API = '/api/domain/lesson-planner/stack';
@@ -249,12 +250,12 @@ export function TeacherNotesShow({
                 That’s the show.
               </h1>
               <div className="mt-6 flex flex-wrap justify-center gap-3">
-                <Link to={backTo} className="rounded-xl border border-[#1C1A17]/20 px-5 py-3 font-semibold">
-                  Back to your lesson
-                </Link>
-                <button type="button" data-testid="run-again" onClick={() => go(0)} className="rounded-xl bg-[#D9714F] px-5 py-3 font-semibold text-white">
+                <Button asChild variant="secondary">
+                  <Link to={backTo}>Back to your lesson</Link>
+                </Button>
+                <Button type="button" data-testid="run-again" onClick={() => go(0)}>
                   Run it again
-                </button>
+                </Button>
               </div>
             </section>
           ) : step ? (
@@ -375,22 +376,23 @@ export function TeacherNotesShow({
                 </span>
                 {next ? <span className="text-xs text-white/60">{next.minutes} min</span> : null}
               </div>
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="lg"
                 disabled={current === 0}
                 onClick={() => go(current - 1)}
-                className="rounded-2xl border border-white/20 px-6 py-3 font-semibold disabled:opacity-40"
               >
                 Back
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                size="lg"
                 data-testid="show-next"
                 onClick={() => go(current + 1)}
-                className="inline-flex items-center gap-2 rounded-2xl bg-[#D9714F] px-6 py-3 text-lg font-semibold text-[#1C1A17]"
               >
                 Next step <ArrowRight size={18} />
-              </button>
+              </Button>
             </div>
           ) : null}
         </main>

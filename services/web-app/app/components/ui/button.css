@@ -1,0 +1,198 @@
+/* Yawp! Button — Letterpress
+   Source of truth for the new button. All values are tokens; change them here, not in components.
+   Surfaces: cream page (#F8F5EE family) and white cards. Not designed for dark surfaces yet. */
+
+:root {
+  /* Brand green (yawp.school) */
+  --btn-primary-bg: #1f4d3a;            /* hsl(155 43% 21%) */
+  --btn-primary-bg-hover: #245a44;      /* hsl(155 43% 25%) */
+  --btn-primary-bg-active: #1b4433;     /* hsl(155 43% 19%) */
+  --btn-primary-fg: #fffcf2;            /* cream, 9.4:1 on default */
+  --btn-primary-rim: #11291f;           /* hsl(155 43% 12%) */
+
+  /* Secondary (outline) */
+  --btn-secondary-bg: #ffffff;
+  --btn-secondary-bg-hover: #f1ede3;    /* sand */
+  --btn-secondary-bg-active: #e9e4d7;
+  --btn-secondary-fg: #1b1b1b;
+  --btn-secondary-rim: #aaa79c;         /* input border */
+
+  /* Ghost */
+  --btn-ghost-fg: #1b1b1b;
+  --btn-ghost-bg-hover: #ece7da;
+  --btn-ghost-bg-active: #e3ddce;
+
+  /* Destructive */
+  --btn-danger-bg: #9c3a2e;             /* hsl(7 55% 40%) */
+  --btn-danger-bg-hover: #ab4134;
+  --btn-danger-bg-active: #8d3429;
+  --btn-danger-fg: #fffcf2;             /* 6.6:1 */
+  --btn-danger-rim: #5c2119;
+
+  /* Link */
+  --btn-link-fg: #1f4d3a;
+
+  /* Shared */
+  --btn-radius: 9999px;
+  --btn-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --btn-weight: 600;
+  --btn-focus-ring: hsl(210 75% 49%);   /* existing app ring */
+  --btn-focus-gap: #fffdf9;             /* matches cream/white surfaces */
+  --btn-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  --btn-press-edge: inset 0 -2px 0 rgba(0, 0, 0, 0.28);
+  --btn-pressed-inset: inset 0 2px 3px rgba(0, 0, 0, 0.22);
+  --btn-duration: 120ms;
+  --btn-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Sizes: height / horizontal padding / font / icon / gap */
+  --btn-sm-h: 32px; --btn-sm-px: 12px; --btn-sm-fs: 13px; --btn-sm-icon: 14px;
+  --btn-md-h: 36px; --btn-md-px: 16px; --btn-md-fs: 14px; --btn-md-icon: 16px;
+  --btn-lg-h: 44px; --btn-lg-px: 20px; --btn-lg-fs: 15px; --btn-lg-icon: 18px;
+}
+
+.btn {
+  --h: var(--btn-md-h); --px: var(--btn-md-px); --fs: var(--btn-md-fs); --icon: var(--btn-md-icon);
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: var(--h); min-width: var(--h); padding: 0 var(--px);
+  border: 0; border-radius: var(--btn-radius);
+  font: var(--btn-weight) var(--fs)/1 var(--btn-font);
+  letter-spacing: 0.005em; white-space: nowrap; text-decoration: none;
+  cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--btn-duration) var(--btn-ease),
+              box-shadow var(--btn-duration) var(--btn-ease),
+              transform 60ms var(--btn-ease), color var(--btn-duration) var(--btn-ease);
+}
+.btn svg { width: var(--icon); height: var(--icon); flex-shrink: 0; }
+
+/* Sizes */
+.btn--sm { --h: var(--btn-sm-h); --px: var(--btn-sm-px); --fs: var(--btn-sm-fs); --icon: var(--btn-sm-icon); gap: 6px; }
+.btn--lg { --h: var(--btn-lg-h); --px: var(--btn-lg-px); --fs: var(--btn-lg-fs); --icon: var(--btn-lg-icon); }
+.btn--block { display: flex; width: 100%; }
+.btn--icon { padding: 0; width: var(--h); }
+
+/* Primary — Letterpress green */
+.btn--primary {
+  background: var(--btn-primary-bg); color: var(--btn-primary-fg);
+  box-shadow: inset 0 0 0 1px var(--btn-primary-rim), var(--btn-highlight), var(--btn-press-edge);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.3);
+}
+.btn--primary:hover, .btn--primary.is-hover { background: var(--btn-primary-bg-hover); }
+.btn--primary:active, .btn--primary.is-active {
+  background: var(--btn-primary-bg-active);
+  box-shadow: inset 0 0 0 1px var(--btn-primary-rim), var(--btn-pressed-inset);
+  transform: translateY(1px);
+}
+
+/* Secondary — outline Letterpress */
+.btn--secondary {
+  background: var(--btn-secondary-bg); color: var(--btn-secondary-fg);
+  box-shadow: inset 0 0 0 1px var(--btn-secondary-rim), inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+}
+.btn--secondary:hover, .btn--secondary.is-hover { background: var(--btn-secondary-bg-hover); }
+.btn--secondary:active, .btn--secondary.is-active {
+  background: var(--btn-secondary-bg-active);
+  box-shadow: inset 0 0 0 1px var(--btn-secondary-rim), inset 0 2px 2px rgba(0, 0, 0, 0.08);
+  transform: translateY(1px);
+}
+
+/* Ghost */
+.btn--ghost { background: transparent; color: var(--btn-ghost-fg); }
+.btn--ghost:hover, .btn--ghost.is-hover { background: var(--btn-ghost-bg-hover); }
+.btn--ghost:active, .btn--ghost.is-active { background: var(--btn-ghost-bg-active); transform: translateY(1px); }
+
+/* Destructive */
+.btn--danger {
+  background: var(--btn-danger-bg); color: var(--btn-danger-fg);
+  box-shadow: inset 0 0 0 1px var(--btn-danger-rim), var(--btn-highlight), var(--btn-press-edge);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.3);
+}
+.btn--danger:hover, .btn--danger.is-hover { background: var(--btn-danger-bg-hover); }
+.btn--danger:active, .btn--danger.is-active {
+  background: var(--btn-danger-bg-active);
+  box-shadow: inset 0 0 0 1px var(--btn-danger-rim), var(--btn-pressed-inset);
+  transform: translateY(1px);
+}
+
+/* Link */
+.btn--link {
+  height: auto; min-width: 0; padding: 0; border-radius: 4px;
+  background: none; color: var(--btn-link-fg); font-weight: 500;
+  text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px;
+}
+.btn--link:hover, .btn--link.is-hover { text-decoration-thickness: 2px; }
+
+/* Legacy shadcn variants (call-site compat) */
+.btn--success {
+  background: var(--btn-primary-bg); color: var(--btn-primary-fg);
+  box-shadow: inset 0 0 0 1px var(--btn-primary-rim), var(--btn-highlight), var(--btn-press-edge);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.3);
+}
+.btn--success:hover { background: var(--btn-primary-bg-hover); }
+.btn--sidebar {
+  background: rgba(27, 27, 27, 0.15); color: var(--btn-ghost-fg);
+}
+.btn--sidebar:hover { background: rgba(27, 27, 27, 0.1); }
+.btn--outline-primary {
+  background: var(--btn-secondary-bg); color: var(--btn-link-fg);
+  box-shadow: inset 0 0 0 1px var(--btn-primary-rim);
+}
+.btn--outline-primary:hover { background: #eef5f0; }
+.btn--destructive-outline {
+  background: var(--btn-secondary-bg); color: var(--btn-danger-bg);
+  box-shadow: inset 0 0 0 1px var(--btn-danger-rim);
+}
+.btn--destructive-outline:hover { background: #fdf6f5; }
+
+/* Focus (keyboard only) */
+.btn:focus-visible, .btn.is-focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--btn-focus-gap), 0 0 0 4px var(--btn-focus-ring);
+}
+.btn--primary:focus-visible, .btn--primary.is-focus,
+.btn--success:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--btn-primary-rim), var(--btn-highlight), var(--btn-press-edge),
+              0 0 0 2px var(--btn-focus-gap), 0 0 0 4px var(--btn-focus-ring);
+}
+.btn--secondary:focus-visible, .btn--secondary.is-focus,
+.btn--outline-primary:focus-visible, .btn--destructive-outline:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--btn-secondary-rim), 0 0 0 2px var(--btn-focus-gap), 0 0 0 4px var(--btn-focus-ring);
+}
+.btn--danger:focus-visible, .btn--danger.is-focus {
+  box-shadow: inset 0 0 0 1px var(--btn-danger-rim), var(--btn-highlight), var(--btn-press-edge),
+              0 0 0 2px var(--btn-focus-gap), 0 0 0 4px var(--btn-focus-ring);
+}
+
+/* Disabled — use aria-disabled so the button stays focusable for its tooltip */
+.btn:disabled, .btn[aria-disabled="true"] {
+  cursor: not-allowed; opacity: 0.45; transform: none !important; text-shadow: none;
+}
+.btn--primary:disabled, .btn--primary[aria-disabled="true"],
+.btn--danger:disabled, .btn--danger[aria-disabled="true"],
+.btn--success:disabled, .btn--success[aria-disabled="true"] {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+.btn--primary:disabled:hover, .btn--primary[aria-disabled="true"]:hover,
+.btn--success:disabled:hover, .btn--success[aria-disabled="true"]:hover { background: var(--btn-primary-bg); }
+.btn--secondary:disabled:hover, .btn--secondary[aria-disabled="true"]:hover { background: var(--btn-secondary-bg); }
+.btn--ghost:disabled:hover, .btn--ghost[aria-disabled="true"]:hover { background: transparent; }
+.btn--danger:disabled:hover, .btn--danger[aria-disabled="true"]:hover { background: var(--btn-danger-bg); }
+
+/* Loading — label changes to the -ing form, spinner leads, width never shrinks */
+.btn[aria-busy="true"], .btn[aria-busy="true"][aria-disabled="true"] { cursor: progress; opacity: 1; }
+.btn[aria-busy="true"] .btn__spinner { animation: btn-spin 0.8s linear infinite; }
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+
+/* Success (transient, 2 s) — e.g. Copied, Saved */
+.btn.is-success.btn--secondary { background: #eef5f0; color: #1f4d3a; box-shadow: inset 0 0 0 1px #9cc0ad; }
+.btn.is-success.btn--primary { background: var(--btn-primary-bg-active); }
+
+@media (prefers-reduced-motion: reduce) {
+  .btn { transition: none; }
+  .btn:active, .btn.is-active { transform: none; }
+  .btn[aria-busy="true"] .btn__spinner { animation-duration: 2.4s; }
+}
+@media (forced-colors: active) {
+  .btn { border: 1px solid ButtonText; }
+  .btn:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+}

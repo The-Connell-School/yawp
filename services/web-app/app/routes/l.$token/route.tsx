@@ -14,6 +14,7 @@ import {
   GallerySlideThumbnail,
 } from '../present.$conversationId.$messageId/gallery-slide-canvas';
 import { MarkdownContent } from '~/components/ai-chat/assistant-markdown';
+import { Button } from '~/components/ui/button';
 import { loadSharedLesson } from '~/domain/lesson-planner/load-shared-lesson.server';
 import { handoutHeading, inYawpLead, writingPromptsHeading } from '~/domain/lesson-planner/lesson-share';
 import { HEADING_FONT, STACK_FONTS_HREF, STACK_THEME } from '../app.lesson-planner_.$conversationId.packet/v3/theme';
@@ -152,23 +153,19 @@ export default function SharedLessonRoute() {
         {/* Every page prints, or saves as a PDF from the print dialog; a sub
             can also present the slides (Brian's run 4). */}
         <div className="mt-4 flex flex-wrap gap-2 print:hidden">
-          <button
+          <Button
             type="button"
+            size="sm"
+            variant="secondary"
             data-testid="shared-print"
             onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--sv-line)] bg-[var(--sv-card)] px-3 py-1.5 text-sm font-semibold"
           >
             <Printer size={14} /> Print or save as PDF
-          </button>
+          </Button>
           {lesson.audience === 'sub' && lesson.deck ? (
-            <button
-              type="button"
-              data-testid="shared-present"
-              onClick={() => setPresenting(0)}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[var(--sv-primary)] px-3 py-1.5 text-sm font-semibold text-white"
-            >
+            <Button type="button" size="sm" data-testid="shared-present" onClick={() => setPresenting(0)}>
               <MonitorPlay size={14} /> Present the slides
-            </button>
+            </Button>
           ) : null}
         </div>
 

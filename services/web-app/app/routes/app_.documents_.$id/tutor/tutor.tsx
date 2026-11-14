@@ -264,6 +264,35 @@ export const Tutor = ({
     ]
   );
 
+  const instructionStepNumber = cms.instructionsCompleted + 1;
+  const instructionStepTotal = cms.assignmentModule.instructions.length;
+
+  const setInstructionStep = useCallback(
+    async (index: number) => {
+      if (isSessionLocked) return;
+      const next = Math.max(
+        0,
+        Math.min(index, cms.assignmentModule.instructions.length)
+      );
+      if (next === cms.instructionsCompleted) return;
+      const formData = new FormData();
+      formData.append('instructionsCompleted', String(next));
+      try {
+        const res = await fetch(
+          `/api/model/assignment-module-session/${cms.id}`,
+          { method: 'POST', body: formData }
+        );
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.cms) onCmsUpdate?.(json.cms);
+        }
+      } catch {
+        // user can retry
+      }
+    },
+    [isSessionLocked, cms.id, cms.instructionsCompleted, cms.assignmentModule.instructions.length, onCmsUpdate]
+  );
+
   const incrementInstruction = useCallback(
     async (label?: string) => {
       if (isSessionLocked) return;
@@ -338,79 +367,88 @@ export const Tutor = ({
   return (
     <div
       data-tour="doc-tutor"
-      className={cn(
-        'flex w-full flex-col border-r bg-muted/30 pb-2 md:w-3/5',
-        className
-      )}
+      className={cn('doc-editor-tutor flex w-full flex-col pb-2', className)}
     >
       <div
-        className={cn(
-          'flex items-center justify-between gap-8 py-1 pl-4 pr-2',
-          cms.assignmentModule.isSelfGuided ? '' : 'border-b'
-        )}
+        className="doc-editor-tutor-header"
         data-testid="tutor-module-header"
       >
-        <div className="flex h-[32px] w-full items-center gap-1">
-          <div className="flex flex-grow items-center gap-2">
-            <Tooltip text="Previous step" delayDuration={0}>
-              <Button
-                variant="secondary"
-                size="icon-sm"
-                aria-label="Previous tutor step"
-                data-testid="tutor-previous-module"
-                disabled={prevCmsIdx === undefined}
-                onClick={() =>
-                  !isSessionLocked &&
-                  prevCmsIdx !== undefined &&
-                  void activateCmsIdx(prevCmsIdx)
-                }
-              >
-                <ChevronLeftIcon size={20} />
-              </Button>
-            </Tooltip>
-            <p className="text-sm font-bold text-foreground/80">
-              {cms.assignmentModule.title}
-            </p>
-            <Tooltip text="Next step" delayDuration={0}>
-              <Button
-                variant="secondary"
-                size="icon-sm"
-                aria-label="Next tutor step"
-                data-testid="tutor-next-module"
-                disabled={!liveNextModuleId || isSessionLocked}
-                onClick={advanceToNextCourseModule}
-              >
-                <ChevronRightIcon size={20} />
-              </Button>
-            </Tooltip>
-          </div>
-          {cms.assignmentModule.isSelfGuided ? null : (
-            <Tooltip
-              text={messagesExpanded ? 'Hide messages' : 'Show messages'}
-              delayDuration={0}
+        <img
+          src="/img/landing/yawp-logo-circle.jpg"
+          alt=""
+          width={24}
+          height={24}
+          className="h-6 w-6 shrink-0 rounded-full"
+        />
+        <b className="text-sm text-[#0f172a]">Tutor</b>
+        <span className="ml-auto inline-flex items-center gap-1">
+          <Tooltip text="Previous step" delayDuration={0}>
+            <button
+              type="button"
+              className="doc-editor-tutor-step-btn"
+              aria-label="Previous step"
+              data-testid="tutor-previous-instruction"
+              disabled={isSessionLocked || cms.instructionsCompleted <= 0}
+              onClick={() => void setInstructionStep(cms.instructionsCompleted - 1)}
             >
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="min-w-8"
-                aria-label={
-                  messagesExpanded
-                    ? 'Hide tutor messages'
-                    : 'Show tutor messages'
-                }
-                disabled={isSessionLocked}
-                onClick={() => setMessagesExpanded(!messagesExpanded)}
-              >
-                {messagesExpanded ? (
-                  <MessageSquareOff size={20} />
-                ) : (
-                  <MessageSquareText size={20} />
-                )}
-              </Button>
-            </Tooltip>
-          )}
-        </div>
+              <ChevronLeftIcon size={14} />
+            </button>
+          </Tooltip>
+          <span
+            className="px-1 text-xs text-[hsl(50_2.4%_36%)]"
+            data-testid="tutor-step-indicator"
+          >
+            Step {instructionStepNumber} of {instructionStepTotal}
+          </span>
+          <Tooltip text="Next step" delayDuration={0}>
+            <button
+              type="button"
+              className="doc-editor-tutor-step-btn"
+              aria-label="Next step"
+              data-testid="tutor-next-instruction"
+              disabled={
+                isSessionLocked ||
+                cms.instructionsCompleted >= instructionStepTotal - 1
+              }
+              onClick={() => void setInstructionStep(cms.instructionsCompleted + 1)}
+            >
+              <ChevronRightIcon size={14} />
+            </button>
+          </Tooltip>
+        </span>
+        {cms.assignmentModule.isSelfGuided ? null : (
+          <Tooltip
+            text={messagesExpanded ? 'Hide messages' : 'Show messages'}
+            delayDuration={0}
+          >
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="min-w-8 shrink-0"
+              aria-label={
+                messagesExpanded ? 'Hide tutor messages' : 'Show tutor messages'
+              }
+              disabled={isSessionLocked}
+              onClick={() => setMessagesExpanded(!messagesExpanded)}
+            >
+              {messagesExpanded ? (
+                <MessageSquareOff size={18} />
+              ) : (
+                <MessageSquareText size={18} />
+              )}
+            </Button>
+          </Tooltip>
+        )}
       </div>
+      {!cms.assignmentModule.isSelfGuided ? (
+        <div className="doc-editor-tutor-instruction-title" data-testid="tutor-instruction-title">
+          <b>{instruction.title?.trim() || cms.assignmentModule.title}</b>
+        </div>
+      ) : (
+        <div className="doc-editor-tutor-instruction-title" data-testid="tutor-module-title">
+          <b>{cms.assignmentModule.title}</b>
+        </div>
+      )}
       {cms.assignmentModule.isSelfGuided ? (
         <div className="flex items-center justify-center gap-4 p-4">
           <p className="text-sm text-muted-foreground">
@@ -441,11 +479,10 @@ export const Tutor = ({
           {messages.map((message) => (
             <div
               key={message.id}
-              className={cn('w-auto max-w-[92%] rounded-xl px-3 py-2', {
-                'mr-auto rounded-bl-none bg-ring/20':
+              className={cn({
+                'doc-editor-tutor-message mr-auto w-auto max-w-[92%]':
                   message.agent === 'assistant',
-                'ml-auto rounded-br-none bg-stone-200':
-                  message.agent === 'user',
+                'doc-editor-tutor-student ml-auto': message.agent === 'user',
               })}
             >
               <div className="mt-1 flex items-center gap-2">

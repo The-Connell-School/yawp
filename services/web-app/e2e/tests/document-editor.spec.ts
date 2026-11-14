@@ -17,6 +17,12 @@ async function expectExitControlVisible(page: import('@playwright/test').Page) {
     return;
   }
 
+  const backToClass = page.getByTestId('document-exit-button');
+  if ((await backToClass.count()) > 0) {
+    await expect(backToClass.first()).toBeVisible({ timeout: 10000 });
+    return;
+  }
+
   await expect(page.getByRole('link', { name: /^exit$/i }).first()).toBeVisible({
     timeout: 10000,
   });

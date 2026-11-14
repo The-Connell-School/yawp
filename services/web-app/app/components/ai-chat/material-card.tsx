@@ -7,6 +7,7 @@
  * and an exit ticket should still read as a lesson.
  */
 import { useState } from 'react';
+import { Button } from '~/components/ui/button';
 import {
   ChevronDown,
   ClipboardCheck,
@@ -92,23 +93,20 @@ export function MaterialCard({
           )}
         />
         {onToggle ? (
-          <button
+          <Button
             type="button"
+            size="sm"
+            variant={added ? 'outline-primary' : 'default'}
+            className="shrink-0"
             disabled={disabled}
             onClick={() => onToggle(!added)}
             // Brian's review (B3): the toggle removes, and says so before the click.
             title={added ? 'Click to remove from stack' : undefined}
             data-testid="material-toggle"
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50',
-              added
-                ? 'bg-primary/10 text-primary hover:bg-primary/15'
-                : 'bg-primary text-primary-foreground hover:opacity-90'
-            )}
           >
             {added ? <Check size={14} /> : <Plus size={14} />}
             {added ? 'In your lesson' : 'Add to lesson'}
-          </button>
+          </Button>
         ) : null}
       </div>
       {open ? (

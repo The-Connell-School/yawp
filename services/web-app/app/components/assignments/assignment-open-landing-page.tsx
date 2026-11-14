@@ -103,11 +103,7 @@ export function AssignmentOpenLandingPage({
           )}
         >
           {content.primary ? (
-            <Button
-              asChild
-              className="bg-[#c85b3d] hover:bg-[#b45237]"
-              data-testid="assignment-open-join-class"
-            >
+            <Button asChild data-testid="assignment-open-join-class">
               <Link to={content.primary.to}>{content.primary.label}</Link>
             </Button>
           ) : null}

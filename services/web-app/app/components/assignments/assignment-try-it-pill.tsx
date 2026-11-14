@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router';
 import { buildAssignmentTryItHref } from '~/domain/assignments/teacher-assignment-try-it-href';
+import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
 
 export { buildAssignmentTryItHref } from '~/domain/assignments/teacher-assignment-try-it-href';
@@ -15,19 +16,21 @@ export function AssignmentTryItPill({
   const href = buildAssignmentTryItHref(assignment, {
     returnTo: `${location.pathname}${location.search}`,
   });
-  const pillClassName = cn(
-    'inline-flex h-6 shrink-0 items-center rounded-full border border-primary/40 bg-background px-2.5 text-xs font-medium text-primary hover:bg-primary/10',
-    className
-  );
 
   return (
-    <Link
-      to={href}
-      className={pillClassName}
-      data-testid="assignment-try-it-pill"
-      onClick={(event) => event.stopPropagation()}
+    <Button
+      asChild
+      size="sm"
+      variant="outline-primary"
+      className={cn('h-6 shrink-0 rounded-full px-2.5 text-xs', className)}
     >
-      Try it
-    </Link>
+      <Link
+        to={href}
+        data-testid="assignment-try-it-pill"
+        onClick={(event) => event.stopPropagation()}
+      >
+        Try it
+      </Link>
+    </Button>
   );
 }

@@ -12,6 +12,7 @@ import {
   Presentation,
   type LucideIcon,
 } from 'lucide-react';
+import { Button } from '~/components/ui/button';
 import type {
   LessonResource,
   ResourceKind,
@@ -46,15 +47,11 @@ export function LessonResourceCard({ resource }: { resource: LessonResource }) {
         </span>
         {/* A new tab, because a teacher opening material mid-plan is looking
             something up rather than leaving. */}
-        <a
-          href={resource.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          data-testid="lesson-resource-open"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary transition hover:border-primary hover:bg-primary/10"
-        >
-          {VERBS[resource.kind]}
-        </a>
+        <Button asChild size="sm" variant="outline-primary" className="shrink-0" data-testid="lesson-resource-open">
+          <a href={resource.href} target="_blank" rel="noopener noreferrer">
+            {VERBS[resource.kind]}
+          </a>
+        </Button>
       </div>
       {resource.note ? (
         <p className="border-t px-4 py-2.5 text-sm text-muted-foreground">

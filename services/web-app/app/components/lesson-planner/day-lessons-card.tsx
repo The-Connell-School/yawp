@@ -9,6 +9,7 @@
 import { useEffect, useRef } from 'react';
 import { Link, useFetcher } from 'react-router';
 import { CalendarDays, Check, Loader2, RefreshCw } from 'lucide-react';
+import { Button } from '~/components/ui/button';
 import type { PlanDay } from '~/domain/lesson-planner/plan-days';
 
 type Made = { ok?: boolean; error?: string; days?: Array<{ day: number; conversationId: string; kept?: boolean; title: string }> };
@@ -94,15 +95,16 @@ export function DayLessonsCard({
           <Loader2 size={13} className="animate-spin" /> Making the day lessons…
         </p>
       ) : allMade ? null : (
-        <button
+        <Button
           type="button"
+          size="sm"
+          className="mt-3"
           data-testid="make-day-lessons"
           disabled={disabled}
           onClick={() => submit('make-days')}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
           <CalendarDays size={14} /> Make each day its own lesson
-        </button>
+        </Button>
       )}
 
       {otherVersion && !busy ? (
