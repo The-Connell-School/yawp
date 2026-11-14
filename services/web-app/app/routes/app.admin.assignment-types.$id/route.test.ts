@@ -884,7 +884,7 @@ describe('admin assignment type detail action', () => {
     expect(data.currentPromptLabel).toBe('7.14.2026 B');
   });
 
-  test('does not present the standard prompt as the exact AP History invocation', async () => {
+  test('returns 404 for retired AP History assignment types', async () => {
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'at-ap-history',
       title: 'AP History Essay',
@@ -905,19 +905,15 @@ describe('admin assignment type detail action', () => {
       image: null,
     });
 
-    const result = await loader({
-      request: new Request(
-        'https://example.test/app/admin/assignment-types/at-ap-history'
-      ),
-      params: { id: 'at-ap-history' },
-      context: {} as never,
-    });
-
-    const data = (result as { data: any }).data;
-    expect(data.gradingAssistantPromptPreview).toBeNull();
-    expect(data.gradingAssistantPromptPreviewUnavailableReason).toContain(
-      'assignment snapshot'
-    );
+    await expect(
+      loader({
+        request: new Request(
+          'https://example.test/app/admin/assignment-types/at-ap-history'
+        ),
+        params: { id: 'at-ap-history' },
+        context: {} as never,
+      })
+    ).rejects.toMatchObject({ status: 404 });
     expect(prisma.assignmentType.findUnique).toHaveBeenCalledTimes(1);
   });
 });

@@ -341,7 +341,7 @@ describe('internal assignment type read APIs', () => {
     const secondPage = await secondResponse.json();
     expect(secondPage.assignmentTypes.map((row: { id: string }) => row.id)).toEqual(['type-a']);
     expect(secondPage.nextCursor).toBeNull();
-    expect((reads[1] as { where?: AssignmentTypeWhere }).where?.AND).toHaveLength(3);
+    expect((reads[1] as { where?: AssignmentTypeWhere }).where?.AND).toHaveLength(4);
   });
 
   test('returns detail rows with modules and organization assignments', async () => {
