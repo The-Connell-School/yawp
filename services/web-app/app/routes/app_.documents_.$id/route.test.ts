@@ -74,6 +74,15 @@ mock.module('~/domain/grading/grading-queue.server', () => ({
 mock.module('./comments', () => ({ Comments: () => null }));
 mock.module('./comments/selection-context', () => ({
   CommentsSelectionProvider: ({ children }: { children: unknown }) => children,
+  useCommentsSelection: () => ({
+    activeCommentId: null,
+    setActiveCommentId: () => {},
+    hoveredCommentId: null,
+    setHoveredCommentId: () => {},
+  }),
+}));
+mock.module('./comments/margin-comments-rail', () => ({
+  MarginCommentsRail: () => null,
 }));
 // Loader tests do not mount rich-text editing. Stub that leaf while retaining
 // DocumentEditor's hydration boundary for the tests that run later in this process.
