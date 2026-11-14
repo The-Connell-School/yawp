@@ -39,8 +39,8 @@ describe('assignment-quota helpers', () => {
 
   test('Exit Ticket is a free classroom kind with its own label', () => {
     expect(isFreeClassroomAssignmentKind('exit_ticket')).toBe(true);
-    expect(freeClassroomQuotaMessage('exit_ticket', 5)).toBe(
-      '5 of 12 Exit Tickets left'
+    expect(freeClassroomQuotaMessage('exit_ticket', 2)).toBe(
+      '2 of 3 Exit Ticket assignments left'
     );
     const fields = buildAssignmentCreationQuotaFields(
       'FREE_CLASSROOM',
@@ -48,7 +48,7 @@ describe('assignment-quota helpers', () => {
       0
     );
     expect(fields.unavailableReason).toBeUndefined();
-    expect(fields.quotaRemaining).toBe(12);
+    expect(fields.quotaRemaining).toBe(3);
   });
 
   test('builds quota fields only for free classroom kinds', () => {
