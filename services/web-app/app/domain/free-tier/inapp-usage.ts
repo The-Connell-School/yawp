@@ -1,10 +1,21 @@
+import { FREE_CLASSROOM_BUNDLE_KIND_ORDER } from './free-classroom-assignment-kinds';
+
 /** Read-only presentation model. Caps and counts are supplied by existing policy readers. */
 export type UsageCount = { used: number; total: number; remaining: number };
+/** Non-breaking hyphen keeps narrow tile captions from wrapping mid-label (E2E + mobile). */
+const NB_HYPHEN = '\u2011';
+
 export const FREE_ASSIGNMENT_LABELS: Record<string, string> = {
   class_starter: 'Class Starter',
-  prewriting: 'Prewriting',
-  thesis_statement: 'Thesis Statement',
+  exit_ticket: 'Exit Ticket',
+  five_paragraph_essay: `5${NB_HYPHEN}Paragraph Essay`,
+  prewriting: 'Pre-writing',
+  thesis_statement: 'Thesis Builder',
 };
+
+export const FREE_CLASSROOM_BUNDLE_TILE_LABELS = FREE_CLASSROOM_BUNDLE_KIND_ORDER.map(
+  (kind) => FREE_ASSIGNMENT_LABELS[kind]
+);
 export function buildFreeAccountUsage(input: {
   monthly?: boolean;
   seatCap: number;
@@ -21,13 +32,13 @@ export function buildFreeAccountUsage(input: {
     remaining: Math.max(0, total - used),
   });
   const students = count(input.students + input.pendingInvites, input.seatCap);
-  const assignments = Object.entries(input.assignmentCaps).map(
-    ([kind, total]) => ({
-      kind,
-      label: FREE_ASSIGNMENT_LABELS[kind] ?? kind,
-      ...count(input.assignmentCounts[kind] ?? 0, total),
-    })
-  );
+  const assignments = FREE_CLASSROOM_BUNDLE_KIND_ORDER.filter(
+    (kind) => kind in input.assignmentCaps
+  ).map((kind) => ({
+    kind,
+    label: FREE_ASSIGNMENT_LABELS[kind] ?? kind,
+    ...count(input.assignmentCounts[kind] ?? 0, input.assignmentCaps[kind]),
+  }));
   const lessonPlans = count(input.lessonPlans, input.lessonPlanCap);
   const allAssignmentsUsed =
     !input.monthly && assignments.every((a) => a.remaining === 0);
@@ -126,7 +137,7 @@ export function isLessonPlannerMonthlyExhausted(
   return !usage.monthly && usage.lessonPlans.remaining === 0;
 }
 
-/** Tile / picker copy for Class Starter, Prewriting, and Thesis (no N-of-N counters). */
+/** Tile / picker copy for free-bundle assignment kinds (no N-of-N counters when unlimited). */
 export function freeAssignmentKindUsageMeta(
   usage: Pick<FreeAccountUsage, 'monthly' | 'unlimitedFreeAssignmentTiles'>,
   row: UsageCount

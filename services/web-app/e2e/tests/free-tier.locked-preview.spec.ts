@@ -9,6 +9,7 @@ import { dashboardAssignmentTileOverlapIssues } from '../helpers/dashboard-assig
 import { expectGiveFeedbackAccessible } from '../helpers/dev-panel-feedback';
 import { expectNewAssignmentBuilderPage } from '../helpers/assignment-builder-v3-page';
 import { ensureLockedPreviewSampleAssignmentsForE2E } from '../helpers/ensure-locked-preview-sample-assignments-for-e2e';
+import { FREE_CLASSROOM_BUNDLE_TILE_LABELS } from '../../app/domain/free-tier/inapp-usage';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
     'Run class-step tests with ./bin/project test --profile free-tier-locked-preview-browser'
@@ -284,7 +285,7 @@ async function capture(page: import('@playwright/test').Page, state: string) {
   }
 }
 
-/** Pending and approved free dashboards expose exactly three entitled assignment kinds. */
+/** Pending and approved free dashboards expose the five entitled bundle kinds. */
 async function openLockedEntitledHowItWorks(
   page: import('@playwright/test').Page,
   label: string
@@ -303,18 +304,14 @@ async function expectFreeDashboardAssignmentTiles(
   options?: { teachingApproved?: boolean }
 ) {
   const tiles = page.getByTestId('free-assignment-tiles');
-  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(3);
+  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(5);
   await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
     options?.teachingApproved ? 5 : 0
   );
-  for (const label of ['Class Starter', 'Prewriting', 'Thesis Statement'] as const) {
-    const tile = tiles
-      .getByTestId('dashboard-assignment-tile')
-      .filter({ hasText: new RegExp(label) });
-    await expect(tile).toHaveCount(1);
-    await tile.scrollIntoViewIfNeeded();
-    await expect(tile).toBeVisible();
-  }
+  const tileNames = await tiles
+    .getByTestId('assignment-type-tile-name')
+    .allTextContents();
+  expect(tileNames).toEqual([...FREE_CLASSROOM_BUNDLE_TILE_LABELS]);
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -437,10 +434,14 @@ for (const width of [390, 1440]) {
     }
     await page.goto('/app');
     await expectFreeDashboardAssignmentTiles(page);
-    await openLockedEntitledHowItWorks(page, 'Prewriting');
+    await page
+      .getByRole('link', { name: /New Pre-writing assignment/i })
+      .click();
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     await page.goto('/app');
-    await openLockedEntitledHowItWorks(page, 'Thesis Statement');
+    await page
+      .getByRole('link', { name: /New Thesis Builder assignment/i })
+      .click();
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     const thesisTypeId = page.url().match(/assignment-types\/([^/]+)/)?.[1];
     expect(thesisTypeId).toBeTruthy();
@@ -527,7 +528,7 @@ for (const width of [390, 1440]) {
     );
     await expect(
       page.getByTestId('free-assignment-tiles').locator('img')
-    ).toHaveCount(8);
+    ).toHaveCount(10);
     if (width === 390) {
       await capture(page, 'dashboard-approved-390');
     }
