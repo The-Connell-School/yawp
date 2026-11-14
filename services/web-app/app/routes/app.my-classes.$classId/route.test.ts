@@ -189,20 +189,27 @@ describe('class detail loader document visibility', () => {
       where: { oldClassId: 'class-1' },
       select: { documentId: true },
     });
+    const { HIDE_AP_HISTORY_DOCUMENT_WHERE } = actualAssignmentTypeAccess;
     expect(prisma.submission.findMany.mock.calls[0][0].where.document).toEqual({
       is: {
-        ...expectedScope,
-        deletedAt: null,
+        AND: [
+          expectedScope,
+          { deletedAt: null },
+          HIDE_AP_HISTORY_DOCUMENT_WHERE,
+        ],
       },
     });
     expect(
       prisma.submission.findMany.mock.calls[0][0].where.unsubmittedAt
     ).toBe(null);
     expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
-      ...expectedScope,
-      deletedAt: null,
-      archivedAt: null,
-      submissions: { none: {} },
+      AND: [
+        expectedScope,
+        { deletedAt: null },
+        { archivedAt: null },
+        { submissions: { none: {} } },
+        HIDE_AP_HISTORY_DOCUMENT_WHERE,
+      ],
     });
     expect(prisma.document.findMany).toHaveBeenCalledTimes(1);
   });
@@ -1147,6 +1154,7 @@ describe('class detail loader for students', () => {
     expect(
       prisma.class.findFirst.mock.calls[0][0].select.students
     ).toBeUndefined();
+    const { HIDE_AP_HISTORY_DOCUMENT_WHERE } = actualAssignmentTypeAccess;
     expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
       deletedAt: null,
       archivedAt: null,
@@ -1171,6 +1179,7 @@ describe('class detail loader for students', () => {
         },
         { classAssignmentId: null, membershipId: 'student-1' },
       ],
+      ...HIDE_AP_HISTORY_DOCUMENT_WHERE,
     });
   });
 });
