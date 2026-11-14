@@ -3,6 +3,7 @@ import {
   ChevronLeft,
   ChevronRightIcon,
   MessageCircleIcon,
+  Send,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { RichTextarea } from '~/components/rich-textarea';
@@ -58,22 +59,22 @@ export const ResponseBar = ({
   }, [isDisabled]);
 
   return isAskingQuestion ? (
-    <div
-      className={cn('flex w-full items-center justify-center gap-2 px-3', className)}
-    >
-      <Button
-        size="lg"
-        variant="secondary"
-        className="shrink-0 px-2"
-        aria-label="Return to tutor choices"
-        data-testid="tutor-chat-back"
-        disabled={isDisabled}
-        onClick={() => setIsAskingQuestion(false)}
-      >
-        <ChevronLeft />
-      </Button>
-      <div className="flex w-full max-w-[700px] items-center justify-center">
+  <div className={cn('flex flex-col', className)}>
+      <div className="doc-editor-tutor-input-shell flex items-center gap-2">
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          className="ml-1 shrink-0"
+          aria-label="Return to tutor choices"
+          data-testid="tutor-chat-back"
+          disabled={isDisabled}
+          onClick={() => setIsAskingQuestion(false)}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
         <RichTextarea
+          className="border-0 bg-transparent shadow-none"
+          placeholder="Ask your tutor…"
           onCmdEnter={(message) => {
             if (isDisabled) return;
             void respond(message);
@@ -81,12 +82,27 @@ export const ResponseBar = ({
           submitOnEnter
           textareaTestId="tutor-chat-input"
           sendButtonTestId="tutor-chat-send"
-          aria-label="Ask tutor a question"
+          aria-label="Ask your tutor"
           disabled={isDisabled}
         />
       </div>
     </div>
   ) : (
+    <>
+      {showChatButton ? (
+        <button
+          type="button"
+          className="doc-editor-tutor-ask-row"
+          data-testid="tutor-ask-open"
+          disabled={isDisabled}
+          onClick={() => setIsAskingQuestion(true)}
+        >
+          <span>Ask your tutor…</span>
+          <span className="doc-editor-tutor-ask-row-send" aria-hidden>
+            <Send size={15} />
+          </span>
+        </button>
+      ) : null}
     <div
       className={cn('doc-editor-tutor-footer flex-wrap', className)}
     >
@@ -158,5 +174,6 @@ export const ResponseBar = ({
         </Tooltip>
       ) : null}
     </div>
+    </>
   );
 };

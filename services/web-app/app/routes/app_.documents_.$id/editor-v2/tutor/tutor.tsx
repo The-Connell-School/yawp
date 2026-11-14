@@ -15,6 +15,7 @@ import { cn } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo/timeAgo';
 import { Loading } from './loading';
 import { ResponseBar } from './response-bar';
+import { TutorStepProgress } from './tutor-step-progress';
 import { compareTutorMessagesByTimeThenId } from './tutor-message-sort';
 import {
   getAssignmentModuleIdForCmsIdx,
@@ -367,7 +368,7 @@ export const Tutor = ({
   return (
     <div
       data-tour="doc-tutor"
-      className={cn('doc-editor-tutor flex w-full flex-col pb-2', className)}
+      className={cn('doc-editor-tutor flex h-full w-full flex-col', className)}
     >
       <div
         className="doc-editor-tutor-header"
@@ -376,12 +377,16 @@ export const Tutor = ({
         <img
           src="/img/landing/yawp-logo-circle.jpg"
           alt=""
-          width={24}
-          height={24}
-          className="h-6 w-6 shrink-0 rounded-full"
+          width={22}
+          height={22}
+          className="h-[22px] w-[22px] shrink-0 rounded-full"
         />
         <b className="text-sm text-[#0f172a]">Tutor</b>
-        <span className="ml-auto inline-flex items-center gap-1">
+        <span
+          role="group"
+          aria-label="Tutor steps"
+          className="doc-editor-tutor-step-group"
+        >
           <Tooltip text="Previous step" delayDuration={0}>
             <button
               type="button"
@@ -395,8 +400,9 @@ export const Tutor = ({
             </button>
           </Tooltip>
           <span
-            className="px-1 text-xs text-[hsl(50_2.4%_36%)]"
+            className="doc-editor-tutor-step-indicator"
             data-testid="tutor-step-indicator"
+            aria-live="polite"
           >
             Step {instructionStepNumber} of {instructionStepTotal}
           </span>
@@ -443,10 +449,18 @@ export const Tutor = ({
       {!cms.assignmentModule.isSelfGuided ? (
         <div className="doc-editor-tutor-instruction-title" data-testid="tutor-instruction-title">
           <b>{instruction.title?.trim() || cms.assignmentModule.title}</b>
+          <TutorStepProgress
+            instructionsCompleted={cms.instructionsCompleted}
+            totalSteps={instructionStepTotal}
+          />
         </div>
       ) : (
         <div className="doc-editor-tutor-instruction-title" data-testid="tutor-module-title">
           <b>{cms.assignmentModule.title}</b>
+          <TutorStepProgress
+            instructionsCompleted={cms.instructionsCompleted}
+            totalSteps={instructionStepTotal}
+          />
         </div>
       )}
       {cms.assignmentModule.isSelfGuided ? (
@@ -468,10 +482,8 @@ export const Tutor = ({
       ) : (
         <div
           className={cn(
-            'no-scrollbar flex grow flex-col gap-3 px-3 transition-all duration-300 md:h-full',
-            messagesExpanded
-              ? 'max-h-full overflow-scroll py-2'
-              : 'max-h-0 overflow-hidden'
+            'doc-editor-tutor-messages no-scrollbar transition-all duration-300',
+            messagesExpanded ? 'max-h-full' : 'max-h-0 overflow-hidden'
           )}
           ref={messagesRef}
           id="assignment-module-session-messages"
@@ -480,21 +492,18 @@ export const Tutor = ({
             <div
               key={message.id}
               className={cn({
-                'doc-editor-tutor-message mr-auto w-auto max-w-[92%]':
+                'doc-editor-tutor-message mr-auto w-auto':
                   message.agent === 'assistant',
                 'doc-editor-tutor-student ml-auto': message.agent === 'user',
               })}
             >
-              <div className="mt-1 flex items-center gap-2">
-                <p className="text-xs font-bold">
-                  {message.agent === 'assistant' ? 'Tutor' : 'You'}
-                </p>
-                <p className="text-xs text-muted-foreground/80">
-                  {timeAgo(new Date(message.createdAt))}
-                </p>
+              <div className="doc-editor-tutor-message-meta">
+                <b>{message.agent === 'assistant' ? 'Tutor' : 'You'}</b>
+                {' · '}
+                {timeAgo(new Date(message.createdAt))}
               </div>
               <p
-                className="whitespace-pre-wrap"
+                className="m-0 whitespace-pre-wrap"
                 data-tutor-message={
                   message.agent === 'assistant' ? 'true' : undefined
                 }
