@@ -29,12 +29,9 @@ test.describe('teacher assignment-level class insights', () => {
     // link — which opens the dedicated class summary full page (nested
     // under the class detail route), not the old standalone
     // /assignments/:id page.
-    await page.goto(
-      `/app/my-classes/${e2eContext.classId}/summary/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
-    );
-    await expect(page).toHaveURL(
-      new RegExp(`/summary/${e2eContext.assignmentId}`)
-    );
+    const assignmentUrl = `/app/my-classes/${e2eContext.classId}/assignments/${e2eContext.assignmentId}`;
+    await page.goto(assignmentUrl);
+    await expect(page).toHaveURL(new RegExp(`/assignments/${e2eContext.assignmentId}`));
 
     // The panel is present but empty until the teacher asks for a summary.
     const panel = page.getByRole('heading', {

@@ -118,14 +118,14 @@ test.describe('Free-tier handle student', () => {
       });
       await submitFreeTierJoinAndExpectApp(page);
 
-      await page.goto(`/app/my-classes/${klass.id}`, {
+      await page.goto(`/app/my-classes/${klass.id}?tab=assignments`, {
         waitUntil: 'domcontentloaded',
       });
       await expect(page.getByTestId('student-class-detail')).toBeVisible();
-      await page.getByRole('tab', { name: 'Assignments' }).click();
-      const startButton = page.locator(
-        `form[action="/app/class-assignments/${classAssignment.id}/start"] button`
-      );
+      const startButton = page.getByRole('button', {
+        name: 'Free tier writing',
+        exact: true,
+      });
       await expect(startButton).toBeVisible({ timeout: 15000 });
       await startButton.click();
       await page.waitForURL('**/app/documents/**', { timeout: 30000 });

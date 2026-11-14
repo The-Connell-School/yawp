@@ -182,12 +182,16 @@ test.describe.serial('holistic Cristo Rey points-only grading', () => {
   }, testInfo) => {
     test.setTimeout(120_000);
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    await page.goto(
-      `/app/my-classes/${holisticClassId}?tab=documents&status=released`
-    );
+    await page.goto(`/app/my-classes/${holisticClassId}?tab=documents`);
     const documentsTable = page.getByRole('table', { name: /class documents/i });
     await expect(documentsTable).toBeVisible({ timeout: 15_000 });
-    await expect(documentsTable.getByText(/6\s*\/\s*20/).first()).toBeVisible();
+    await page
+      .getByRole('button', { name: /^Released/i })
+      .first()
+      .click();
+    await expect(documentsTable.getByText(/6\s*\/\s*20/).first()).toBeVisible({
+      timeout: 15_000,
+    });
     await page.screenshot({
       path: testInfo.outputPath('holistic-gradebook-row.png'),
       fullPage: true,

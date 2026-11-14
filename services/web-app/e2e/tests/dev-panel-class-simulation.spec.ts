@@ -39,7 +39,11 @@ test.describe('Dev panel class simulation', () => {
       .getByRole('option')
       .filter({ hasText: klass!.title! })
       .click();
-    await panel.locator('#dev-panel-sim-count').fill('3');
+    const countInput = panel.locator('#dev-panel-sim-count');
+    await countInput.click();
+    await countInput.fill('');
+    await countInput.pressSequentially('3');
+    await expect(countInput).toHaveValue('3');
     await panel.getByRole('button', { name: 'Populate class', exact: true }).click();
     await expect(
       panel.locator('.yawp-dev-panel-class-sim-success')

@@ -254,10 +254,14 @@ function PageTourController({
       findTarget(step.target)?.scrollIntoView({
         block: 'nearest',
         inline: 'nearest',
-        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+        // Instant scroll so step resolution runs after targets are in view
+        // (smooth scrolling left wide layouts with only one tour step).
+        behavior: 'auto',
       });
     }
-    setPhase({ kind: 'touring', steps: resolveSteps(tour), index: 0 });
+    window.requestAnimationFrame(() => {
+      setPhase({ kind: 'touring', steps: resolveSteps(tour), index: 0 });
+    });
   }, [tour]);
 
   useEffect(() => {

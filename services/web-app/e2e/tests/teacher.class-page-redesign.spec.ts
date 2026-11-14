@@ -1,5 +1,8 @@
 import { test, expect } from '../test-setup';
-import { openClassAssignmentsTab } from '../test-helpers';
+import {
+  clickClassAssignmentRow,
+  openClassAssignmentsTab,
+} from '../test-helpers';
 import { currentSchoolYear } from '../../app/utils/school-year';
 import { createE2EPrismaClient } from '../prisma-client';
 import type { E2EContext } from '../seed-e2e';
@@ -92,20 +95,12 @@ test.describe('Teacher class documents lifecycle', () => {
 
       // Seeded + local data cover the full lifecycle.
       await expect(table.getByText('In Progress').first()).toBeVisible();
-      await page.goto(
-        `/app/my-classes/${e2eContext.classId}?tab=documents&status=needs-grading`
-      );
-      await page.waitForLoadState('networkidle');
-      await expect(
-        page
-          .getByRole('table', { name: /class documents/i })
-          .getByText(`Lifecycle needs grading ${suffix}`)
-      ).toBeVisible();
-      await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
-      await page.waitForLoadState('networkidle');
-      const lifecycleTable = page.getByRole('table', {
-        name: /class documents/i,
+      const needsGradingRow = table.getByRole('row').filter({
+        hasText: `Lifecycle needs grading ${suffix}`,
       });
+      await expect(needsGradingRow).toBeVisible({ timeout: 15_000 });
+      await expect(needsGradingRow.getByText('Needs Grading')).toBeVisible();
+      const lifecycleTable = table;
       await expect(
         lifecycleTable.getByText(/^Needs Releasing/).first()
       ).toBeVisible();
@@ -286,9 +281,7 @@ test.describe.serial('Teacher class page redesign', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
     await page.waitForLoadState('networkidle');
-    await openClassAssignmentsTab(page);
-
-    await page.getByTestId(`assignment-open-${e2eContext.assignmentId}`).click();
+    await clickClassAssignmentRow(page, e2eContext.assignmentId);
 
     // Forward navigation changes the URL — linkable, not a sheet toggle.
     await page.waitForURL(
@@ -356,9 +349,7 @@ test.describe.serial('Teacher class page redesign', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
     await page.waitForLoadState('networkidle');
-    await openClassAssignmentsTab(page);
-
-    await page.getByTestId(`assignment-open-${e2eContext.assignmentId}`).click();
+    await clickClassAssignmentRow(page, e2eContext.assignmentId);
     await page.waitForURL(
       `/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
     );

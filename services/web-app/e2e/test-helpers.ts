@@ -401,6 +401,7 @@ export async function fillMyAssignmentsSearch(
   await page.getByTestId('my-assignments-filter').click();
   const search = page.getByTestId('my-assignments-search');
   await expect(search).toBeVisible({ timeout: 15_000 });
+  await search.click();
   await search.fill(query);
   const trimmed = query.trim();
   const visibilityTarget = options?.assignmentId
@@ -413,6 +414,10 @@ export async function fillMyAssignmentsSearch(
       : null;
   if (visibilityTarget) {
     await expect(visibilityTarget).toBeVisible({ timeout: 15_000 });
+    await page.keyboard.press('Escape');
+    await expect(search).toBeHidden({ timeout: 5_000 });
+    await expect(visibilityTarget).toBeVisible({ timeout: 15_000 });
+    return;
   }
   await page.keyboard.press('Escape');
   await expect(search).toBeHidden({ timeout: 5_000 });
@@ -429,6 +434,16 @@ export async function openClassAssignmentsTab(page: Page) {
   await expect(
     page.getByRole('textbox', { name: 'Search assignments' })
   ).toBeVisible({ timeout: 15_000 });
+}
+
+/** Class assignments rows open the assignment detail via the table row click handler. */
+export async function clickClassAssignmentRow(page: Page, assignmentId: string) {
+  await openClassAssignmentsTab(page);
+  const row = page
+    .getByRole('row')
+    .filter({ has: page.getByTestId(`assignment-open-${assignmentId}`) });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await row.click();
 }
 
 /** Submit join form and wait until the student lands in the authenticated app shell. */
