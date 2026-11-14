@@ -1,0 +1,16 @@
+/*
+ * Stand-ins for the Thesis-Driven Essay decks' faces, for screens that lack
+ * them (Chromebooks have no Georgia or Calibri). Each shares the metrics of
+ * the face it stands in for, so lines wrap as they do in PowerPoint:
+ * Gelasio for Georgia, Carlito for Calibri; Cousine for the mono labels.
+ * Latin subsets, from Fontsource; licences next to this file.
+ */
+@font-face { font-family: 'YAWP Deck Serif'; font-style: normal; font-weight: 400; font-display: swap; src: url('./gelasio-latin-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'YAWP Deck Serif'; font-style: italic; font-weight: 400; font-display: swap; src: url('./gelasio-latin-400-italic.woff2') format('woff2'); }
+@font-face { font-family: 'YAWP Deck Serif'; font-style: normal; font-weight: 700; font-display: swap; src: url('./gelasio-latin-700-normal.woff2') format('woff2'); }
+@font-face { font-family: 'YAWP Deck Serif'; font-style: italic; font-weight: 700; font-display: swap; src: url('./gelasio-latin-700-italic.woff2') format('woff2'); }
+@font-face { font-family: 'YAWP Deck Sans'; font-style: normal; font-weight: 400; font-display: swap; src: url('./carlito-latin-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'YAWP Deck Sans'; font-style: italic; font-weight: 400; font-display: swap; src: url('./carlito-latin-400-italic.woff2') format('woff2'); }
+@font-face { font-family: 'YAWP Deck Sans'; font-style: normal; font-weight: 700; font-display: swap; src: url('./carlito-latin-700-normal.woff2') format('woff2'); }
+@font-face { font-family: 'YAWP Deck Sans'; font-style: italic; font-weight: 700; font-display: swap; src: url('./carlito-latin-700-italic.woff2') format('woff2'); }
+@font-face { font-family: 'YAWP Deck Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('./cousine-latin-700-normal.woff2') format('woff2'); }

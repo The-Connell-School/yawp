@@ -10,6 +10,7 @@ const {
   isFreeTierCapabilityEnabled,
   isFreeTierEnabled,
   isLessonPlannerEnabled,
+  isLoungeCommunityEnabled,
   listFeatureFlags,
   setFeatureFlag,
   findUnknownOrganizationIds,
@@ -30,6 +31,8 @@ const {
   HOW_TO_TEACH_IT_FLAG,
   ASSIGNMENTS_GROUPED_BY_TYPE_FLAG,
   AP_HISTORY_IN_NEW_ASSIGNMENT_FLAG,
+  LOUNGE_COMMUNITY_FLAG,
+  THESIS_ESSAY_DECKS_FLAG,
   FOLDED_FREE_TIER_LEGACY_SETTINGS,
 } = await import('./feature-flags');
 
@@ -214,6 +217,18 @@ describe('feature flags (server)', () => {
     }
   });
 
+  test("Teacher's Lounge community is off with no row and follows per-school targeting", async () => {
+    prisma.setting.findUnique.mockResolvedValue(null);
+    expect(await isLoungeCommunityEnabled('org-1')).toBe(false);
+    expect(prisma.setting.findUnique.mock.calls[0]?.[0]).toMatchObject({
+      where: { name: 'feature_flag.teacher_lounge_community' },
+    });
+    prisma.setting.findUnique.mockResolvedValue({ value: '{"mode":"targeted","orgIds":["org-1"]}' });
+    expect(await isLoungeCommunityEnabled('org-1')).toBe(true);
+    expect(await isLoungeCommunityEnabled('org-2')).toBe(false);
+    expect(await isLoungeCommunityEnabled(null)).toBe(false);
+  });
+
   test('defaults off when no row exists', async () => {
     prisma.setting.findUnique.mockResolvedValue(null);
     expect(await isFeatureFlagEnabled(LESSON_PLANNER_FLAG)).toBe(false);
@@ -370,6 +385,8 @@ describe('feature flags (server)', () => {
       'lesson_planner_writing_override',
       'lesson_planner_deck_kit_v4',
       'classcode-unique',
+      LOUNGE_COMMUNITY_FLAG,
+      THESIS_ESSAY_DECKS_FLAG,
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       TEACHER_PROMPT_GENERATOR_FLAG,
@@ -384,6 +401,7 @@ describe('feature flags (server)', () => {
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
+    expect(flags.find((flag) => flag.key === THESIS_ESSAY_DECKS_FLAG)).toMatchObject({ mode: 'off', enabled: false });
     expect(flags[0]).toMatchObject({
       key: LESSON_PLANNER_FLAG,
       mode: 'off',
@@ -424,6 +442,8 @@ describe('feature flags (server)', () => {
       'lesson_planner_writing_override',
       'lesson_planner_deck_kit_v4',
       'classcode-unique',
+      LOUNGE_COMMUNITY_FLAG,
+      THESIS_ESSAY_DECKS_FLAG,
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       TEACHER_PROMPT_GENERATOR_FLAG,

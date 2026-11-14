@@ -2,6 +2,7 @@ import { writeAdminConfigAudit } from '~/domain/admin-config/admin-config-audit.
 import { prisma } from '~/utils/db.server';
 import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import {
+  LOUNGE_COMMUNITY_FLAG,
   LESSON_PLANNER_INTAKE_V2_FLAG,
   LESSON_PLANNER_STACK_V2_FLAG,
   LESSON_PLANNER_DECK_V2_FLAG,
@@ -382,6 +383,13 @@ export async function isLessonPlannerEnabled(
   orgId: string | null | undefined
 ): Promise<boolean> {
   return isFeatureFlagEnabled(LESSON_PLANNER_FLAG, orgId);
+}
+
+/** Teacher's Lounge community board for teachers at the given school. */
+export function isLoungeCommunityEnabled(
+  orgId: string | null | undefined
+): Promise<boolean> {
+  return isFeatureFlagEnabled(LOUNGE_COMMUNITY_FLAG, orgId);
 }
 
 /**
