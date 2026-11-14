@@ -5,7 +5,8 @@ import TextAlign from '@tiptap/extension-text-align';
 import TextStyle from '@tiptap/extension-text-style';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { EditorChromeProvider } from './editor-chrome-context';
 import { useCommentsSelection } from '../comments/selection-context';
 import { Bar } from './editor-bar';
 import {
@@ -85,6 +86,11 @@ export function Editor({
   marginComments,
 }: Props) {
   const [imageStatus, setImageStatus] = useState<DocumentImageStatus>({ state: 'idle' });
+  const [contentRoot, setContentRoot] = useState<HTMLElement | null>(null);
+  const [scrollRoot, setScrollRoot] = useState<HTMLElement | null>(null);
+  const bindScrollRef = useCallback((node: HTMLDivElement | null) => {
+    setScrollRoot(node);
+  }, []);
 
   // Paste and drop upload straight into this document, so the extension has to
   // be built per document rather than shared at module scope. Both deps are
@@ -156,9 +162,17 @@ export function Editor({
 
   // Expose editor DOM root to siblings (used by teacher grade-highlights overlay)
   useEffect(() => {
-    if (!editor || !onEditorDomReady) return;
-    onEditorDomReady(editor.view.dom as HTMLElement);
-    return () => onEditorDomReady(null);
+    if (!editor) {
+      setContentRoot(null);
+      return;
+    }
+    const root = editor.view.dom as HTMLElement;
+    setContentRoot(root);
+    onEditorDomReady?.(root);
+    return () => {
+      setContentRoot(null);
+      onEditorDomReady?.(null);
+    };
   }, [editor, onEditorDomReady]);
 
   // Comment mark hover/active state (student-side comments — preserved from old editor)
@@ -235,8 +249,14 @@ export function Editor({
             .join('\n')}
         </style>
       ) : null}
+      <EditorChromeProvider
+        value={{
+          contentRoot,
+          scrollRoot,
+        }}
+      >
       <div className="flex h-full w-full min-w-0 flex-col overflow-hidden md:h-full">
-        {isEditable && editor ? (
+        {editor ? (
           <Bar
             editor={editor}
             documentId={docId}
@@ -263,6 +283,7 @@ export function Editor({
           </div>
         ) : null}
         <div
+          ref={bindScrollRef}
           className="doc-editor-scroll no-scrollbar"
           data-testid="document-editor-scroll"
           key={`${docId}-editor`}
@@ -277,13 +298,10 @@ export function Editor({
               className="h-full [&>div]:h-full [&>div]:outline-none [&_.ProseMirror]:min-h-full"
             />
           </article>
-          {marginComments ? (
-            <aside aria-label="Comments" className="doc-editor-margin hidden lg:block">
-              {marginComments}
-            </aside>
-          ) : null}
+          {marginComments}
         </div>
       </div>
+      </EditorChromeProvider>
     </ErrorBoundary>
   );
 }

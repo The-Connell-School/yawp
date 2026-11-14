@@ -183,6 +183,55 @@
   min-height: 100%;
 }
 
+.doc-editor-comment-card {
+  box-sizing: border-box;
+  background: rgba(255, 253, 249, 0.62);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.6),
+    0 0 0 1px rgba(31, 53, 50, 0.06),
+    0 12px 32px rgba(31, 53, 50, 0.1);
+  padding: 12px;
+}
+
+.doc-editor-mobile-tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  display: flex;
+  border-top: 1px solid var(--doc-glass-border);
+  background: var(--doc-glass-bg);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0));
+  gap: 4px;
+}
+
+.doc-editor-mobile-tabbar button {
+  flex: 1;
+  height: 40px;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1b1b1b;
+}
+
+.doc-editor-mobile-tabbar button[aria-selected='true'] {
+  background: hsl(45 24.2424% 87.0588%);
+}
+
+@media (min-width: 768px) {
+  .doc-editor-mobile-tabbar {
+    display: none;
+  }
+}
+
 .doc-editor-view-banner {
   margin: 0 16px 8px;
   padding: 8px 12px;
@@ -201,6 +250,30 @@
   gap: 8px;
   padding: 0 12px 0 16px;
   border-bottom: 1px solid rgba(31, 53, 50, 0.08);
+}
+
+.doc-editor-tutor-step-btn {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.8);
+  color: #1b1b1b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.doc-editor-tutor-step-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.doc-editor-tutor-instruction-title {
+  padding: 14px 16px 6px;
+  font-size: 15px;
+  line-height: 1.25;
+  color: #1b1b1b;
 }
 
 .doc-editor-tutor-message {
@@ -236,6 +309,9 @@
 }
 
 @media (max-width: 767px) {
+  .doc-editor-frame {
+    padding-bottom: 56px;
+  }
   .doc-editor-tutor {
     width: 100%;
     box-shadow: none;

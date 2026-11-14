@@ -43,7 +43,6 @@ import {
 } from '~/components/ui/dropdown-menu';
 import { Tooltip } from '~/components/ui/tooltip';
 import { Input } from '~/components/ui/input.js';
-import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -71,6 +70,7 @@ import { ensureAssignmentModuleSessionsForDocument } from '~/domain/documents.se
 import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
 import { documentReadWhere } from '~/utils/document-access.server';
 import { Comments } from './comments';
+import { MarginCommentsRail } from './comments/margin-comments-rail';
 import { TeacherPasteReport } from '~/components/teacher-paste-report';
 import { CommentsSelectionProvider } from './comments/selection-context';
 import { DocumentEditor } from './document-editor/document-editor';
@@ -770,8 +770,10 @@ export default function Route() {
     data.isTeacherAssignmentPreview && user.id === data.doc.membership.userId
   );
   const showSubmitControls = !isViewingAsTeacher || isOwnTeacherPreview;
-  // Owner or class teacher (loader); api.model.document allows both to persist edits.
-  const isDocumentEditable = true;
+  const isDocumentOwner = user.id === data.doc.membership.userId;
+  // Students and teachers in "Try it" preview edit; grading teachers view-only.
+  const isDocumentEditable =
+    isDocumentOwner || isOwnTeacherPreview;
   const assignment = data.doc.assignment;
   // A student practice document carries its own snapshot; a teacher-assigned
   // document inherits it from the assignment.
@@ -872,6 +874,7 @@ export default function Route() {
 
   const isEditorEditable =
     isDocumentEditable && !auth.isLocked && auth.isInitialCheckComplete;
+  const commentsReadOnly = !isViewingAsTeacher && !isEditorEditable;
 
   // ── Derived UI data ────────────────────────────────────────────────
   // Re-sort by document-mark order whenever the comments list changes,
@@ -1014,7 +1017,7 @@ export default function Route() {
         {apHistorySnapshot && !showDbqWorkspace ? (
           <ApHistoryAssignmentPanel snapshot={apHistorySnapshot} />
         ) : null}
-        {isViewingAsTeacher && !isEditorEditable ? (
+        {isViewingAsTeacher && !isOwnTeacherPreview ? (
           <p
             className="doc-editor-view-banner"
             data-testid="document-view-only-banner"
@@ -1051,19 +1054,21 @@ export default function Route() {
                 className="h-auto border-0 bg-transparent p-0 text-[15px] font-semibold leading-5 text-[#0f172a] shadow-none focus-visible:ring-0"
                 defaultValue={data.doc.title}
                 placeholder="Untitled document"
-                onBlur={(e) =>
-                  e.target.value !== data.doc.title
-                    ? fetcher.submit(
-                        {
-                          title: e.target.value,
-                        },
-                        {
-                          method: 'POST',
-                          action: `/api/model/document/${data.doc.id}?from=title-input`,
-                        }
-                      )
-                    : undefined
-                }
+                readOnly={!isDocumentEditable}
+                onBlur={(e) => {
+                  if (!isDocumentEditable) return;
+                  if (e.target.value !== data.doc.title) {
+                    fetcher.submit(
+                      {
+                        title: e.target.value,
+                      },
+                      {
+                        method: 'POST',
+                        action: `/api/model/document/${data.doc.id}?from=title-input`,
+                      }
+                    );
+                  }
+                }}
               />
               {classSubtitle ? (
                 <span className="truncate text-xs text-[hsl(50_2.4%_36%)]">
@@ -1458,7 +1463,7 @@ export default function Route() {
                       className="md:w-full"
                       showCollapsibleHeader={!isViewingAsTeacher}
                       comments={visibleComments as any}
-                      readOnly={!isDocumentEditable}
+                      readOnly={commentsReadOnly}
                       onCommentRemoved={commentsState.removeComment}
                       onResponseAdded={commentsState.addResponse}
                       autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
@@ -1470,21 +1475,6 @@ export default function Route() {
           </>
         ) : (
           <>
-        <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
-          <TabsList className="w-full rounded-none border-b px-3">
-            {tutorEnabled ? (
-              <TabsTrigger value="tutor" className="w-full">
-                Tutor
-              </TabsTrigger>
-            ) : null}
-            <TabsTrigger value="editor" className="w-full">
-              Editor
-            </TabsTrigger>
-            <TabsTrigger value="comments" className="w-full">
-              Comments
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
         <CommentsSelectionProvider>
           <div className="doc-editor-body min-h-0 flex-1 overflow-hidden">
             {!tutorEnabled && !(isMobile && tab !== 'editor') ? (
@@ -1544,11 +1534,9 @@ export default function Route() {
                           if (isMobile) changeTab('editor');
                         }}
                       >
-                        <Comments
-                          showCollapsibleHeader={false}
-                          showCollapseControl={false}
+                        <MarginCommentsRail
                           comments={visibleComments as any}
-                          readOnly={!isDocumentEditable}
+                          readOnly={commentsReadOnly}
                           onCommentRemoved={commentsState.removeComment}
                           onResponseAdded={commentsState.addResponse}
                           autoFocusReplyCommentId={
@@ -1580,7 +1568,7 @@ export default function Route() {
                   <Comments
                     showCollapsibleHeader={!isViewingAsTeacher}
                     comments={visibleComments as any}
-                    readOnly={!isDocumentEditable}
+                    readOnly={commentsReadOnly}
                     onCommentRemoved={commentsState.removeComment}
                     onResponseAdded={commentsState.addResponse}
                     autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
@@ -1590,6 +1578,42 @@ export default function Route() {
             )}
           </div>
         </CommentsSelectionProvider>
+        {isMobile && !showDbqWorkspace ? (
+          <nav
+            className="doc-editor-mobile-tabbar"
+            role="tablist"
+            aria-label="Document panels"
+            data-testid="document-mobile-tabbar"
+          >
+            {tutorEnabled ? (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'tutor'}
+                onClick={() => changeTab('tutor')}
+              >
+                Tutor
+              </button>
+            ) : null}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'editor'}
+              onClick={() => changeTab('editor')}
+            >
+              Editor
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'comments'}
+              onClick={() => changeTab('comments')}
+            >
+              Comments
+              {visibleComments.length > 0 ? ` (${visibleComments.length})` : ''}
+            </button>
+          </nav>
+        ) : null}
           </>
         )}
       </main>
