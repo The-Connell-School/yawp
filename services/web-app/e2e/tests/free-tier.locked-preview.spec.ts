@@ -840,6 +840,103 @@ test('approved teacher sees the real class code on the dashboard card', async ({
   await expect(trigger).toContainText(klass.code);
 });
 
+async function guidedToursFlag(enabled: boolean) {
+  const name = 'feature_flag.guided-tours';
+  await prisma.setting.upsert({
+    where: { name },
+    create: { name, value: String(enabled), valueType: 'boolean' },
+    update: { value: String(enabled) },
+  });
+}
+
+async function tourRows(userId: string) {
+  return prisma.userTour.findMany({
+    where: { userId },
+    select: { tourId: true, status: true },
+  });
+}
+
+for (const width of [390, 1440]) {
+  test(`waiting teacher gets a short dashboard tour they can finish at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await guidedToursFlag(true);
+    try {
+      const { user, app } = await fixture('11', 'SENT');
+      await provisionPendingClassroom(app.id, user.id!);
+      await login(page, user.email!);
+      await page.goto('/app');
+      await expectLockedAppHome(page);
+
+      const welcome = page.getByRole('dialog', { name: /Welcome to Yawp!/i });
+      await expect(welcome).toBeVisible();
+      await expect(welcome).toContainText(/approv/i);
+      await capture(page, `waiting-tour-welcome-${width}`);
+      await welcome.getByRole('button', { name: 'Take a tour' }).click();
+
+      const step = page.getByTestId('guided-tour-step');
+      await expect(step).toContainText('Step 1 of 3');
+      await expect(page.locator('[data-tour="dashboard-classes"]')).toHaveAttribute(
+        'data-tour-active',
+        'true'
+      );
+      await step.getByRole('button', { name: 'Next' }).click();
+      await expect(step).toContainText('Step 2 of 3');
+      await expect(page.getByTestId('free-assignment-tiles')).toHaveAttribute(
+        'data-tour-active',
+        'true'
+      );
+      await expect(step).toContainText(/approv/i);
+      await capture(page, `waiting-tour-tiles-${width}`);
+      await step.getByRole('button', { name: 'Next' }).click();
+      // Grading is hidden until approval, so the last step is the banner
+      // that says what unlocks next.
+      await expect(step).toContainText('Step 3 of 3');
+      await expect(page.getByTestId('teaching-access-banner')).toHaveAttribute(
+        'data-tour-active',
+        'true'
+      );
+      await capture(page, `waiting-tour-banner-${width}`);
+      await step.getByRole('button', { name: 'Finish' }).click();
+      await expect(step).toBeHidden();
+
+      // Saved as the waiting tour, the one tour a waiting teacher may record.
+      await expect.poll(() => tourRows(user.id)).toEqual([
+        { tourId: 'waiting-preview', status: 'completed' },
+      ]);
+      await page.reload();
+      await expect(page.getByTestId('guided-tour-welcome')).toHaveCount(0);
+
+      // Other pages have no tour, and nothing that would be refused is offered.
+      await page.goto('/app/my-classes');
+      await page.waitForTimeout(600);
+      await expect(page.getByTestId('guided-tour-welcome')).toHaveCount(0);
+      if (width === 1440) {
+        await page.getByRole('button', { name: 'Settings' }).click();
+        await expect(
+          page.getByRole('button', { name: 'Restart all tours' })
+        ).toHaveCount(0);
+        await page.keyboard.press('Escape');
+      }
+
+      // Approval opens the full dashboard tour, now with grading.
+      await prisma.freeTierApplication.update({
+        where: { id: app.id },
+        data: { status: 'APPROVED' },
+      });
+      await page.goto('/app');
+      const approved = page.getByRole('dialog', { name: /Welcome to Yawp!/i });
+      await expect(approved).toBeVisible();
+      await approved.getByRole('button', { name: 'Take a tour' }).click();
+      await expect(step).toContainText('Step 1 of 3');
+    } finally {
+      await guidedToursFlag(false);
+    }
+  });
+}
+
 test('locked class surfaces hide the real class code and lock invite controls', async ({
   page,
 }) => {

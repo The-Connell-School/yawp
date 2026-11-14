@@ -168,10 +168,107 @@ describe('validators', () => {
   });
 });
 
+describe('first dashboard tour', () => {
+  const firstTours = ['dashboard', 'waiting-preview'] as const;
 
-test('waiting preview tour only explains read-only content and locked actions', () => {
+  test('an approved teacher sees their class, the assignment tiles, then grading', () => {
+    expect(getTour('dashboard').steps.map((step) => step.target)).toEqual([
+      'dashboard-classes',
+      'dashboard-assignments',
+      'dashboard-grading',
+    ]);
+  });
+
+  test('a teacher waiting for approval sees their class, the tiles, then the approval banner', () => {
+    expect(getTour('waiting-preview').steps.map((step) => step.target)).toEqual([
+      'dashboard-classes',
+      'dashboard-assignments',
+      'teaching-access-banner',
+    ]);
+  });
+
+  test('the assignment step explains the tile and quick create for each state', () => {
+    const approved = getTour('dashboard').steps[1].body;
+    expect(approved).toMatch(/tile/i);
+    expect(approved).toContain('New assignment');
+    const waiting = getTour('waiting-preview').steps[1].body;
+    expect(waiting).toMatch(/tile/i);
+    expect(waiting).toMatch(/approv/i);
+  });
+
+  test('copy is short, plain, and has no em dashes, all-caps eyebrows, or video', () => {
+    for (const id of firstTours) {
+      const tour = getTour(id);
+      expect(tour.steps.length).toBeLessThanOrEqual(3);
+      const texts = [
+        tour.welcome.title,
+        tour.welcome.body,
+        ...tour.steps.flatMap((step) => [step.title, step.body]),
+      ];
+      for (const text of texts) {
+        expect(text).not.toContain('\u2014');
+        expect(text).not.toMatch(/\b[A-Z]{2,}\b/);
+        expect(text).not.toMatch(/video|clip|watch/i);
+      }
+      for (const step of tour.steps) {
+        expect(step.title.split(' ').length).toBeLessThanOrEqual(4);
+        expect(step.body.length).toBeLessThanOrEqual(170);
+      }
+    }
+  });
+
+  test('no tour copy uses an em dash', () => {
+    for (const id of TOUR_IDS) {
+      const tour = getTour(id);
+      for (const text of [
+        tour.welcome.title,
+        tour.welcome.body,
+        ...tour.steps.flatMap((step) => [step.title, step.body]),
+      ]) {
+        expect(text).not.toContain('\u2014');
+      }
+    }
+  });
+});
+
+describe('teachers waiting for approval', () => {
+  const waiting = { waitingForApproval: true };
+
+  test('their dashboard shows the waiting tour, the only tour they can save', () => {
+    expect(tourForPage('/app', null, waiting)?.id).toBe('waiting-preview');
+    expect(tourForPage('/app/', null, waiting)?.id).toBe('waiting-preview');
+    expect(tourForPage('/app/free-tier/preview', null, waiting)?.id).toBe(
+      'waiting-preview'
+    );
+  });
+
+  test('other pages show no tour until approval', () => {
+    for (const path of [
+      '/app/my-classes',
+      '/app/my-classes/cls_123',
+      '/app/assignments',
+      '/app/documents',
+      '/app/lesson-planner',
+      '/app/organization',
+      '/app/free-tier/pending',
+    ]) {
+      expect(tourForPage(path, null, waiting)).toBeNull();
+    }
+    expect(
+      tourForPage('/app/assignment-types/at_123', 'class_starter', waiting)
+    ).toBeNull();
+  });
+
+  test('approved teachers get the full dashboard tour on the same page', () => {
+    expect(tourForPage('/app', null)?.id).toBe('dashboard');
+    expect(tourForPage('/app', null, { waitingForApproval: false })?.id).toBe(
+      'dashboard'
+    );
+  });
+});
+
+test('the old preview URL still maps to the waiting tour', () => {
   expect(tourForPathname('/app/free-tier/preview')?.id).toBe('waiting-preview');
   expect(tourForPathname('/app/free-tier/pending')).toBeNull();
   expect(tourForPathname('/app/free-tier/onboarding')).toBeNull();
-  expect(getTour('waiting-preview').steps.map(step => step.target)).toEqual(['preview-content-nav', 'preview-content', 'preview-locked-actions']);
 });

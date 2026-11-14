@@ -170,7 +170,12 @@ function recordOutcome(tourId: TourId, status: TourStatus) {
  * Everything here is position:fixed against the window, so it renders on
  * <body>: inside the app shell, a transformed ancestor would offset it.
  */
-export function GuidedTour(props: { finishedTourIds: readonly string[]; storageScope: string }) {
+export function GuidedTour(props: {
+  finishedTourIds: readonly string[];
+  storageScope: string;
+  /** Not yet approved: only the waiting tour, on the dashboard. */
+  waitingForApproval?: boolean;
+}) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
@@ -182,7 +187,7 @@ export function GuidedTour(props: { finishedTourIds: readonly string[]; storageS
  * is not enough (an assignment type page) names itself with
  * `data-tour-variant`, read once the page has rendered.
  */
-function usePageTour() {
+function usePageTour(waitingForApproval: boolean) {
   const location = useLocation();
   const [variant, setVariant] = useState<string | null>(null);
   useEffect(() => {
@@ -192,17 +197,19 @@ function usePageTour() {
         ?.getAttribute('data-tour-variant') ?? null
     );
   }, [location.pathname, location.key]);
-  return tourForPage(location.pathname, variant);
+  return tourForPage(location.pathname, variant, { waitingForApproval });
 }
 
 function PageTourController({
   finishedTourIds,
   storageScope,
+  waitingForApproval = false,
 }: {
   finishedTourIds: readonly string[];
   storageScope: string;
+  waitingForApproval?: boolean;
 }) {
-  const tour = usePageTour();
+  const tour = usePageTour(waitingForApproval);
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   // Finished or skipped during this session, so a card stays closed before
   // the server's list catches up, and skips last until the next login.
@@ -359,11 +366,13 @@ export function startPageTour() {
 export function TourThisPageButton({
   navExpanded,
   onClick,
+  waitingForApproval = false,
 }: {
   navExpanded: boolean;
   onClick?: () => void;
+  waitingForApproval?: boolean;
 }) {
-  const tour = usePageTour();
+  const tour = usePageTour(waitingForApproval);
   if (!tour) return null;
   return (
     <button

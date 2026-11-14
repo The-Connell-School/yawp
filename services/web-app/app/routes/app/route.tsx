@@ -541,6 +541,7 @@ export default function Route() {
             <TourThisPageButton
               navExpanded={navExpanded}
               onClick={() => setIsMobileNavOpen(false)}
+              waitingForApproval={guidedTours.waitingForApproval}
             />
           ) : null}
           <Popover>
@@ -636,7 +637,10 @@ export default function Route() {
                   </p>
                 </div>
               ) : null}
-              {guidedTours && !isReadOnlyImpersonation ? (
+              {/* Reset is refused until approval: only the waiting tour is saved. */}
+              {guidedTours &&
+              !guidedTours.waitingForApproval &&
+              !isReadOnlyImpersonation ? (
                 <div className="border-b p-1">
                   <RestartToursButton className="w-full justify-start gap-2 rounded-lg" />
                 </div>
