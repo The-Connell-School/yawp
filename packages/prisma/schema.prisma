@@ -1006,6 +1006,9 @@ model AssignmentModule {
   tutorInstructionsVariantsJson Json?
   isSelfGuided                  Boolean                       @default(false)
   rubricAlignmentJson           Json?
+  /// Teacher-facing How to Teach It links (Nov 2026). Null hides that link.
+  lessonUrl                     String?
+  tutorialVideoUrl              String?
   assignmentTypeId              String
   assignmentType                AssignmentType                @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
   instructions                  AssignmentModuleInstruction[]

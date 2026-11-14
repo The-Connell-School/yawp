@@ -47,6 +47,7 @@ const getAssignmentTypeLandingFlags = mock(async () => ({
   thesisEssay: false,
   lessonPlans: false,
 }));
+const isHowToTeachItEnabled = mock(async () => true);
 
 // bun's module mocks are global to the test run and mock.restore() does not
 // undo mock.module — restore from the pristine copy test-preload.ts captured
@@ -94,6 +95,9 @@ mock.module(
     redirectLockedPreviewAssignmentTypeHomeToGuide,
   })
 );
+mock.module('~/domain/assignment-types/how-to-teach-it.server', () => ({
+  isHowToTeachItEnabled,
+}));
 
 const { action, loader, showModulesAccordion } = await import('./route');
 
@@ -373,6 +377,55 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
 
   test('still hides the modules list when there are no modules at all', () => {
     expect(showModulesAccordion({ kind: null }, 0)).toBe(false);
+  });
+
+  test('teachers get How to Teach It, with only safe module links', async () => {
+    isHowToTeachItEnabled.mockClear();
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      withOrganizationAssignment(
+        makeAssignmentType({
+          title: 'The Thesis-Driven Essay',
+          assignmentModules: [
+            {
+              id: 'module-1',
+              title: 'Pre-Writing',
+              description: 'Students brainstorm.',
+              lessonUrl: '/app/lesson-planner/library',
+              tutorialVideoUrl: 'javascript:alert(1)',
+            },
+          ],
+        })
+      ),
+    ]);
+
+    const response = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(isHowToTeachItEnabled).toHaveBeenCalledWith('org-1');
+    expect(response.data.howToTeachItEnabled).toBe(true);
+    expect(response.data.assignmentType.assignmentModules[0]).toMatchObject({
+      lessonUrl: '/app/lesson-planner/library',
+      tutorialVideoUrl: null,
+    });
+  });
+
+  test('students never get How to Teach It and skip the flag read', async () => {
+    isHowToTeachItEnabled.mockClear();
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+
+    const response = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(isHowToTeachItEnabled).not.toHaveBeenCalled();
+    expect(response.data.howToTeachItEnabled).toBe(false);
   });
 
   test('provides prompt library data for teachers viewing Class Starter', async () => {

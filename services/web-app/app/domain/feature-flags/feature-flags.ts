@@ -180,6 +180,14 @@ export const ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG =
 export const ASSIGNMENT_TYPE_LESSON_PLANS_FLAG = 'assignment-type-lesson-plans' as const;
 
 /**
+ * Assignment-type pages: teachers see each module as a How to Teach It row
+ * (description, lesson link, tutorial link) instead of the Modules dropdown.
+ * Students keep the dropdown. Default off on production; on by default on
+ * demo and PR previews.
+ */
+export const HOW_TO_TEACH_IT_FLAG = 'assignment-type-how-to-teach-it' as const;
+
+/**
  * Teacher's Lounge (`/app/teacher-trainings`). Off: hidden and redirected except
  * for emails on the `teacher_lounge` access list. Everyone: on for all teachers
  * (role checks unchanged). Targeted: on for listed schools only, with the same
@@ -377,6 +385,11 @@ export const FEATURE_FLAGS = {
     label: 'Assignment type pages: lesson plans in the Lesson Planner',
     description:
       "How to Teach It's \"Lesson plan\" links open Brian's Thesis-Driven Essay lessons as ready-built stacks in the teacher's own Lesson Planner (one copy per teacher per lesson). Off: the links are the lesson plan PDFs. Needs the teacher-facing copy flag and the Lesson Planner. Default off on production; on by default on demo and PR previews.",
+  },
+  [HOW_TO_TEACH_IT_FLAG]: {
+    label: 'How to Teach It on assignment types',
+    description:
+      'Teachers see each module on an assignment-type page as a How to Teach It row with its lesson and tutorial links, in place of the Modules dropdown. Students keep the dropdown. Default off on production; on by default on demo and PR previews.',
   },
   [TEACHER_LOUNGE_FLAG]: {
     label: "Teacher's Lounge",

@@ -28,6 +28,7 @@ import {
   ASSIGNMENT_TYPE_LANDING_V2_FLAG,
   ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG,
   ASSIGNMENT_TYPE_LESSON_PLANS_FLAG,
+  HOW_TO_TEACH_IT_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
   type FeatureFlagKey,
@@ -85,7 +86,8 @@ function runtimeDefaultOn(key: FeatureFlagKey, env: Record<string, string | unde
     key === TEACHER_PROMPT_GENERATOR_FLAG ||
     key === ASSIGNMENT_TYPE_LANDING_V2_FLAG ||
     key === ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG ||
-    key === ASSIGNMENT_TYPE_LESSON_PLANS_FLAG
+    key === ASSIGNMENT_TYPE_LESSON_PLANS_FLAG ||
+    key === HOW_TO_TEACH_IT_FLAG
   );
 }
 
@@ -233,7 +235,8 @@ export async function isFeatureFlagEnabled(
   if (
     key === ASSIGNMENT_TYPE_LANDING_V2_FLAG ||
     key === ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG ||
-    key === ASSIGNMENT_TYPE_LESSON_PLANS_FLAG
+    key === ASSIGNMENT_TYPE_LESSON_PLANS_FLAG ||
+    key === HOW_TO_TEACH_IT_FLAG
   ) {
     if (isDemoDeployment(process.env)) return true;
     try {
