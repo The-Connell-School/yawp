@@ -79,6 +79,11 @@
   gap: 28px;
   container-type: inline-size;
   container-name: locked-home-columns;
+  pointer-events: none;
+}
+
+.locked-home-columns > * {
+  pointer-events: auto;
 }
 
 .locked-home-main {

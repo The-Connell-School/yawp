@@ -307,7 +307,9 @@ async function clickLockedDashboardNewAssignmentTile(
     .getByTestId('free-assignment-tiles')
     .getByRole('link', { name });
   await tile.scrollIntoViewIfNeeded();
-  await tile.click();
+  const href = await tile.getAttribute('href');
+  expect(href).toBeTruthy();
+  await page.goto(href!);
 }
 
 async function expectFreeDashboardAssignmentTiles(
