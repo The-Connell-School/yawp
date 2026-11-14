@@ -73,7 +73,7 @@ export const Bar = ({
   return (
     <div
       data-tour="doc-toolbar"
-      className="doc-editor-toolbar-glass"
+      className="bg-muted-background flex w-full items-center gap-0.5 border-b p-1"
       ref={containerRef}
     >
       {isEditable

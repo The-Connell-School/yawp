@@ -36,6 +36,7 @@ import {
   TEACHER_LOUNGE_FLAG,
   EXIT_TICKET_BUILDER_V3_FLAG,
   EXIT_TICKET_CLASS_SUMMARY_FLAG,
+  DOCUMENT_EDITOR_V2_FLAG,
   FOLDED_FREE_TIER_LEGACY_SETTINGS,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
@@ -121,6 +122,7 @@ describe('feature flag registry', () => {
       TEACHER_LOUNGE_FLAG,
       EXIT_TICKET_BUILDER_V3_FLAG,
       EXIT_TICKET_CLASS_SUMMARY_FLAG,
+      DOCUMENT_EDITOR_V2_FLAG,
     ]);
   });
 

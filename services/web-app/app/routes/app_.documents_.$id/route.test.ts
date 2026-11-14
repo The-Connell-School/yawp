@@ -71,6 +71,20 @@ mock.module('~/domain/grading/grading-queue.server', () => ({
   loadDocumentNavigationNeighbors,
 }));
 
+mock.module('~/domain/document-editor/document-editor-v2-gate.server', () => ({
+  resolveDocumentEditorV2Enabled: mock(async () => false),
+  isStaffForDocumentEditorOverride: () => false,
+  documentEditorV2ForceCookie: {
+    serialize: mock(async () => 'yawp_document_editor_v2=1; Path=/'),
+    parse: mock(async () => null),
+  },
+}));
+mock.module('./editor-v1/document-editor-v1-page', () => ({
+  DocumentEditorV1Page: () => null,
+}));
+mock.module('./editor-v2/document-editor-v2-page', () => ({
+  DocumentEditorV2Page: () => null,
+}));
 mock.module('./comments', () => ({ Comments: () => null }));
 mock.module('./comments/selection-context', () => ({
   CommentsSelectionProvider: ({ children }: { children: unknown }) => children,
