@@ -7,6 +7,7 @@ type Props = {
   readOnly?: boolean;
   onCommentRemoved?: (commentId: string) => void;
   onResponseAdded?: (commentId: string, response: unknown) => void;
+  onArchiveChange?: (commentId: string, archivedAt: Date | null) => void;
   autoFocusReplyCommentId?: string | null;
 };
 
@@ -15,6 +16,7 @@ export function MarginCommentsRail({
   readOnly = false,
   onCommentRemoved,
   onResponseAdded,
+  onArchiveChange,
   autoFocusReplyCommentId,
 }: Props) {
   const { contentRoot, scrollRoot } = useEditorChrome();
@@ -37,6 +39,7 @@ export function MarginCommentsRail({
             readOnly={readOnly}
             onDelete={onCommentRemoved}
             onResponseAdded={onResponseAdded}
+            onArchiveChange={onArchiveChange}
             autoFocusReply={autoFocusReplyCommentId === comment.id}
           />
         );

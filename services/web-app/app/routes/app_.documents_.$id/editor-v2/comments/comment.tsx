@@ -6,6 +6,7 @@ import {
 } from '@app/prisma';
 import { useFetcher } from 'react-router';
 import { useEffect, useRef, type MouseEvent } from 'react';
+import { MarginCommentCard } from './margin-comment-card';
 import { useCommentsSelection } from '../comments/selection-context';
 import { CheckIcon, TrashIcon } from '~/components/icons';
 import { RichTextarea } from '~/components/rich-textarea.js';
@@ -29,6 +30,7 @@ type CommentProps = Comment & {
   layout?: 'sidebar' | 'margin';
   onDelete?: (commentId: string) => void;
   onResponseAdded?: (commentId: string, response: unknown) => void;
+  onArchiveChange?: (commentId: string, archivedAt: Date | null) => void;
   autoFocusReply?: boolean;
 };
 
@@ -37,6 +39,7 @@ export const Comment = ({
   layout = 'sidebar',
   onDelete,
   onResponseAdded,
+  onArchiveChange,
   autoFocusReply = false,
   ...comment
 }: CommentProps) => {
@@ -147,21 +150,24 @@ export const Comment = ({
     });
   };
 
+  if (layout === 'margin') {
+    return (
+      <MarginCommentCard
+        {...comment}
+        readOnly={readOnly}
+        onDelete={onDelete}
+        onResponseAdded={onResponseAdded}
+        onArchiveChange={onArchiveChange}
+        autoFocusReply={autoFocusReply}
+      />
+    );
+  }
+
   return (
     <div
       className={cn(
-        'relative flex flex-col gap-2 transition-all duration-200 ease-in-out',
-        layout === 'margin'
-          ? 'doc-editor-comment-card'
-          : 'rounded-lg p-3',
-        layout === 'margin'
-          ? isFocused
-            ? 'ring-2 ring-[hsl(210_75%_49%)]'
-            : ''
-          : isFocused
-            ? 'bg-ring/20 shadow-lg'
-            : 'bg-stone-200',
-        layout === 'margin' ? '' : 'p-3'
+        'relative flex flex-col gap-2 rounded-lg p-3 transition-all duration-200 ease-in-out',
+        isFocused ? 'bg-ring/20 shadow-lg' : 'bg-stone-200'
       )}
       id={`comment-${comment.id}`}
       data-comment-card={comment.id}

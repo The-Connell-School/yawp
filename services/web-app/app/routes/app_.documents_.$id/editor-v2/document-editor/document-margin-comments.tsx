@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { stackMarginCommentTops } from '../comments/margin-comment-layout';
 
 type Props = {
   contentRoot: HTMLElement | null;
@@ -18,15 +19,17 @@ export function DocumentMarginComments({
   children,
 }: Props) {
   const asideRef = useRef<HTMLElement>(null);
-  const [tops, setTops] = useState<Record<string, number>>({});
+  const cardRefs = useRef(new Map<string, HTMLDivElement>());
+  const [anchorTops, setAnchorTops] = useState<Record<string, number>>({});
+  const [cardHeights, setCardHeights] = useState<Record<string, number>>({});
 
   useLayoutEffect(() => {
     if (!contentRoot || !scrollRoot || !asideRef.current) {
-      setTops({});
+      setAnchorTops({});
       return;
     }
 
-    const measure = () => {
+    const measureAnchors = () => {
       const scrollRect = scrollRoot.getBoundingClientRect();
       const scrollTop = scrollRoot.scrollTop;
       const next: Record<string, number> = {};
@@ -40,22 +43,46 @@ export function DocumentMarginComments({
         const top = markRect.top - scrollRect.top + scrollTop;
         next[id] = Math.max(0, Math.round(top));
       }
-      setTops(next);
+      setAnchorTops(next);
     };
 
-    measure();
-    const ro = new ResizeObserver(measure);
+    measureAnchors();
+    const ro = new ResizeObserver(measureAnchors);
     ro.observe(contentRoot);
     ro.observe(scrollRoot);
-    scrollRoot.addEventListener('scroll', measure, { passive: true });
-    window.addEventListener('resize', measure);
+    scrollRoot.addEventListener('scroll', measureAnchors, { passive: true });
+    window.addEventListener('resize', measureAnchors);
 
     return () => {
       ro.disconnect();
-      scrollRoot.removeEventListener('scroll', measure);
-      window.removeEventListener('resize', measure);
+      scrollRoot.removeEventListener('scroll', measureAnchors);
+      window.removeEventListener('resize', measureAnchors);
     };
   }, [contentRoot, scrollRoot, commentIds]);
+
+  useLayoutEffect(() => {
+    const measureHeights = () => {
+      const next: Record<string, number> = {};
+      for (const id of commentIds) {
+        const node = cardRefs.current.get(id);
+        if (node) next[id] = Math.round(node.offsetHeight);
+      }
+      setCardHeights(next);
+    };
+
+    measureHeights();
+    const ro = new ResizeObserver(measureHeights);
+    for (const id of commentIds) {
+      const node = cardRefs.current.get(id);
+      if (node) ro.observe(node);
+    }
+    return () => ro.disconnect();
+  }, [commentIds, anchorTops]);
+
+  const sortIds = [...commentIds]
+    .filter((id) => anchorTops[id] !== undefined)
+    .sort((a, b) => (anchorTops[a] ?? 0) - (anchorTops[b] ?? 0));
+  const stackedTops = stackMarginCommentTops(sortIds, anchorTops, cardHeights);
 
   return (
     <aside
@@ -64,11 +91,15 @@ export function DocumentMarginComments({
       className="doc-editor-margin hidden lg:block"
     >
       {commentIds.map((id) => {
-        const top = tops[id];
+        const top = stackedTops[id] ?? anchorTops[id];
         if (top === undefined) return null;
         return (
           <div
             key={id}
+            ref={(node) => {
+              if (node) cardRefs.current.set(id, node);
+              else cardRefs.current.delete(id);
+            }}
             className="absolute left-0 w-[260px]"
             style={{ top }}
             data-margin-comment-for={id}

@@ -60,4 +60,26 @@ describe('document editor v2 gate', () => {
       await resolveDocumentEditorV2Enabled({ request, isStaff: false })
     ).toBe(false);
   });
+
+  test('staff ?editor=v1 opts out even when rollout is on', async () => {
+    process.env.YAWP_ENVIRONMENT = 'preview';
+    isFeatureFlagEnabled.mockResolvedValue(true);
+    const request = new Request(
+      'https://yawp.school/app/documents/doc-1?editor=v1'
+    );
+    expect(
+      await resolveDocumentEditorV2Enabled({ request, isStaff: true })
+    ).toBe(false);
+  });
+
+  test('students cannot use ?editor=v1 to opt out of v2', async () => {
+    process.env.YAWP_ENVIRONMENT = 'preview';
+    isFeatureFlagEnabled.mockResolvedValue(true);
+    const request = new Request(
+      'https://yawp.school/app/documents/doc-1?editor=v1'
+    );
+    expect(
+      await resolveDocumentEditorV2Enabled({ request, isStaff: false })
+    ).toBe(true);
+  });
 });

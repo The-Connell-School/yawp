@@ -102,6 +102,8 @@ import {
   documentEditorV2ForceCookie,
   isStaffForDocumentEditorOverride,
   resolveDocumentEditorV2Enabled,
+  shouldClearDocumentEditorV2ForceCookie,
+  shouldSetDocumentEditorV2ForceCookie,
 } from '~/domain/document-editor/document-editor-v2-gate.server';
 import {
   GuidedTour,
@@ -522,10 +524,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isStaff: isPlatformAdmin,
   });
 
-  const headers =
-    url.searchParams.get('editor') === 'v2' && isPlatformAdmin
+  const headers = shouldSetDocumentEditorV2ForceCookie(request, isPlatformAdmin)
+    ? {
+        'Set-Cookie': await documentEditorV2ForceCookie.serialize('1'),
+      }
+    : shouldClearDocumentEditorV2ForceCookie(request, isPlatformAdmin)
       ? {
-          'Set-Cookie': await documentEditorV2ForceCookie.serialize('1'),
+          'Set-Cookie': await documentEditorV2ForceCookie.serialize('', {
+            maxAge: 0,
+          }),
         }
       : undefined;
 

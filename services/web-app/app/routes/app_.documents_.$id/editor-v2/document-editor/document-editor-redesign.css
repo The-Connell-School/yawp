@@ -1,6 +1,12 @@
 /* Student document editor — Letterpress glass chrome (design export Nov 13). */
 
 .doc-editor-frame {
+  --v2-tutor-msg-bg: linear-gradient(
+    160deg,
+    hsl(210 60% 96% / 0.9),
+    hsl(170 30% 94% / 0.8)
+  );
+  --v2-student-msg-bg: hsl(45 28% 88%);
   --doc-glass-bg: rgba(255, 253, 249, 0.62);
   --doc-glass-border: hsl(51.4286 7.8652% 82.549%);
   --doc-workspace-bg: hsl(45 18% 92%);
@@ -183,6 +189,16 @@
   min-height: 100%;
 }
 
+.doc-editor-comment-reply {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 4px 4px 10px;
+  border-radius: 9999px;
+  background: hsl(45 24.2424% 90%);
+  margin-top: 4px;
+}
+
 .doc-editor-comment-card {
   box-sizing: border-box;
   background: rgba(255, 253, 249, 0.62);
@@ -279,11 +295,7 @@
 .doc-editor-tutor-message {
   padding: 12px 14px;
   border-radius: 16px;
-  background: linear-gradient(
-    160deg,
-    hsl(210 60% 96% / 0.9),
-    hsl(170 30% 94% / 0.8)
-  );
+  background: var(--v2-tutor-msg-bg);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7);
   font-size: 14px;
   line-height: 1.55;
@@ -295,7 +307,7 @@
   max-width: 85%;
   padding: 12px 14px;
   border-radius: 16px;
-  background: hsl(45 28% 88%);
+  background: var(--v2-student-msg-bg);
   font-size: 14px;
   line-height: 1.55;
 }

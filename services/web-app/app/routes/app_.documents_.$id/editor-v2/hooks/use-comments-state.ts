@@ -49,11 +49,21 @@ export function useCommentsState(initialComments: DocComment[]) {
     );
   }, []);
 
+  const setCommentArchived = useCallback(
+    (commentId: string, archivedAt: Date | null) => {
+      setComments((prev) =>
+        prev.map((c) => (c.id === commentId ? { ...c, archivedAt } : c))
+      );
+    },
+    []
+  );
+
   return {
     comments,
     addComment,
     removeComment,
     addResponse,
+    setCommentArchived,
     pendingFocusCommentId,
   };
 }
