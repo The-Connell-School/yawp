@@ -895,6 +895,12 @@ for (const width of [390, 1440]) {
         .locator('[data-tour="dashboard-assignments"]');
       // Welcome card is open; at wide viewports Playwright can treat dashboard
       // targets as non-visible until the tour scrolls them into view.
+      for (const target of ['dashboard-classes', 'dashboard-assignments'] as const) {
+        await page
+          .locator('.locked-home-main')
+          .locator(`[data-tour="${target}"]`)
+          .scrollIntoViewIfNeeded();
+      }
       await welcome.getByRole('button', { name: 'Take a tour' }).click();
 
       const step = page.getByTestId('guided-tour-step');

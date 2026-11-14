@@ -473,26 +473,16 @@ export async function fillMyAssignmentsSearch(
           .first()
       : null;
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) {
-      await page.reload({ waitUntil: 'networkidle' });
-    }
-    if (options?.assignmentTypeTitle) {
-      await selectMyAssignmentsTypePill(page, options.assignmentTypeTitle);
-    }
-    await setMyAssignmentsSearchQuery(page, query);
-    if (!visibilityTarget) return;
-    const located = await findMyAssignmentRow(page, {
-      assignmentId: options?.assignmentId,
-      title: trimmed,
-    });
-    try {
-      await expect(located).toBeVisible({ timeout: 5_000 });
-      return;
-    } catch (error) {
-      if (attempt === 2) throw error;
-    }
+  if (options?.assignmentTypeTitle) {
+    await selectMyAssignmentsTypePill(page, options.assignmentTypeTitle);
   }
+  await setMyAssignmentsSearchQuery(page, query);
+  if (!visibilityTarget) return;
+  const located = await findMyAssignmentRow(page, {
+    assignmentId: options?.assignmentId,
+    title: trimmed,
+  });
+  await expect(located).toBeVisible({ timeout: 30_000 });
 }
 
 /** Class documents status chip (FilterPills may scroll horizontally). */
