@@ -276,7 +276,9 @@ function PageTourController({
       });
     }
     window.requestAnimationFrame(() => {
-      setPhase({ kind: 'touring', steps: resolveSteps(tour), index: 0 });
+      window.requestAnimationFrame(() => {
+        setPhase({ kind: 'touring', steps: resolveSteps(tour), index: 0 });
+      });
     });
   }, [tour]);
 

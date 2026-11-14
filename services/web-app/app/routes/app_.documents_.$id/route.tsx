@@ -98,6 +98,7 @@ import {
 import { loadDocumentNavigationNeighbors } from '~/domain/grading/grading-queue.server';
 import { redactGradedAtFromStudentDocumentSubmissions } from '~/domain/submissions/student-submission-grade-visibility.server';
 import { loadGuidedTours } from '~/domain/guided-tours/guided-tours.server';
+import { assertNotRetiredApHistoryDocument } from '~/utils/retired-ap-history-access.server';
 import {
   documentEditorV2ForceCookie,
   isStaffForDocumentEditorOverride,
@@ -294,6 +295,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: {
           id: true,
           title: true,
+          systemKey: true,
           allowsImageUploads: true,
           rubric: { select: { name: true } },
         },
@@ -306,6 +308,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           promptAttachmentName: true,
           apHistorySnapshot: true,
           tutorEnabled: true,
+          assignmentType: { select: { systemKey: true } },
         },
       },
       classAssignment: {
@@ -373,6 +376,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       type: 'error',
     });
   }
+  assertNotRetiredApHistoryDocument(doc);
   const ownerMembership = doc.membership;
 
   const submissions = doc.submissions;
