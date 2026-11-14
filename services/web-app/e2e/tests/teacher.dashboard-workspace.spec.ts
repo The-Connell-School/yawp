@@ -225,6 +225,9 @@ test.describe.serial('Teacher dashboard workspace', () => {
 
     try {
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.addInitScript(() => {
+        localStorage.removeItem('yawp.student-work-view');
+      });
       await page.goto('/app');
       await page.waitForLoadState('networkidle');
 
@@ -276,7 +279,10 @@ test.describe.serial('Teacher dashboard workspace', () => {
         .locator('..')
         .click();
       await page.waitForURL(/\/app\/documents\?status=needs-grading/);
-      await expect(page.getByText(title, { exact: true })).toHaveCount(1);
+      await page.waitForLoadState('networkidle');
+      await expect(page.getByText(title, { exact: true })).toHaveCount(1, {
+        timeout: 15_000,
+      });
     } finally {
       if (documentId) {
         await prisma.submission.deleteMany({ where: { documentId } });
