@@ -7,6 +7,8 @@ const prisma = {
   // The loader reads the creation types' rubrics and kinds, to know which
   // offer the grammar toggle.
   assignmentType: { findMany: mock(async () => []) },
+  // Feature flag rows (`isFeatureFlagEnabled`); none stored reads as off.
+  setting: { findUnique: mock(async (_args: any): Promise<unknown> => null) },
 };
 const requireUserId = mock();
 const requireMembership = mock();
@@ -116,6 +118,8 @@ describe('My Assignments loader', () => {
         assignment: {
           id: 'assignment-1',
           title: 'Essay One',
+          tutorEnabled: true,
+          assignmentTypeId: 'type-essay',
           assignmentType: { title: 'Essay' },
           createdAt: new Date('2026-11-01T00:00:00.000Z'),
         },
@@ -131,16 +135,25 @@ describe('My Assignments loader', () => {
 
     expect(prisma.classAssignment.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {
+        where: expect.objectContaining({
           class: {
             teachers: { some: { id: 'profile-1' } },
             isArchived: false,
             // Scoped to the teacher's school year, like every other surface.
             schoolYear: expect.any(String),
           },
-        },
+        }),
       })
     );
+    const findManyWhere = prisma.classAssignment.findMany.mock.calls[0]![0]
+      .where as Record<string, unknown>;
+    expect(findManyWhere).toMatchObject({
+      NOT: {
+        assignment: {
+          assignmentType: { systemKey: 'ap_history_essay' },
+        },
+      },
+    });
     expect(result).toMatchObject({
       assignments: [
         {
@@ -169,6 +182,8 @@ describe('My Assignments loader', () => {
     const assignment = {
       id: 'assignment-1',
       title: 'Essay One',
+      tutorEnabled: true,
+      assignmentTypeId: 'type-essay',
       assignmentType: { title: 'Essay' },
       createdAt: new Date('2026-11-01T00:00:00.000Z'),
     };
@@ -394,6 +409,81 @@ describe('My Assignments loader', () => {
     } as any);
 
     expect(listSavedAssignments).not.toHaveBeenCalled();
+  });
+
+  test('carries each row\'s assignment type id, so the list can group by type', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', plan: 'SCHOOL' },
+    });
+    prisma.classAssignment.findMany.mockResolvedValue([
+      {
+        id: 'ca-1',
+        class: { id: 'class-1', grade: '9th', period: '1st', title: null },
+        assignment: {
+          id: 'assignment-1',
+          title: 'Thursday',
+          tutorEnabled: true,
+          assignmentTypeId: 'type-exit',
+          assignmentType: { title: 'Exit Ticket' },
+          createdAt: new Date('2026-11-01T00:00:00.000Z'),
+        },
+        _count: { documents: 0 },
+      },
+    ]);
+
+    const result = (await loader({
+      request: makeRequest(),
+      params: {},
+      context: {},
+    } as any)) as any;
+
+    expect(prisma.classAssignment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          assignment: {
+            select: expect.objectContaining({
+              assignmentTypeId: true,
+              assignmentType: { select: { title: true } },
+            }),
+          },
+        }),
+      })
+    );
+    expect(result.assignments[0]).toMatchObject({
+      assignmentTypeId: 'type-exit',
+      assignmentTypeTitle: 'Exit Ticket',
+    });
+  });
+
+  test('reads the assignments-grouped-by-type flag for the teacher\'s school', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', plan: 'SCHOOL' },
+    });
+    prisma.classAssignment.findMany.mockResolvedValue([]);
+
+    prisma.setting.findUnique.mockImplementation(async ({ where }: any) =>
+      where.name === 'feature_flag.assignments-grouped-by-type'
+        ? { value: JSON.stringify({ mode: 'targeted', orgIds: ['org-1'] }) }
+        : null
+    );
+    const on = (await loader({
+      request: makeRequest(),
+      params: {},
+      context: {},
+    } as any)) as any;
+    expect(on.assignmentsGroupedByTypeEnabled).toBe(true);
+
+    prisma.setting.findUnique.mockImplementation(async () => null);
+    const off = (await loader({
+      request: makeRequest(),
+      params: {},
+      context: {},
+    } as any)) as any;
+    expect(off.assignmentsGroupedByTypeEnabled).toBe(false);
   });
 
   test('carries the tutor setting so cold writes can be marked in the list', async () => {

@@ -1,3 +1,4 @@
+import { RETIRED_ASSIGNMENT_TYPE_WHERE } from '~/utils/assignment-type-access.server';
 import {
   type ActionFunctionArgs,
   data as dataResponse,
@@ -68,7 +69,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       listAdminOwnerInvitations(prisma, params.id),
       prisma.organization.count(),
       prisma.assignmentType.findMany({
-        where: { archivedAt: null },
+        where: { archivedAt: null, ...RETIRED_ASSIGNMENT_TYPE_WHERE },
         select: { id: true, title: true, description: true },
         orderBy: { position: 'asc' },
       }),
@@ -165,7 +166,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     if (assignmentTypeIds.length > 0) {
       const validAssignmentTypes = await prisma.assignmentType.findMany({
-        where: { id: { in: assignmentTypeIds }, archivedAt: null },
+        where: {
+          id: { in: assignmentTypeIds },
+          archivedAt: null,
+          ...RETIRED_ASSIGNMENT_TYPE_WHERE,
+        },
         select: { id: true },
       });
       if (validAssignmentTypes.length !== assignmentTypeIds.length) {

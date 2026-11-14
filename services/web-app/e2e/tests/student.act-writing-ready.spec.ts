@@ -1,6 +1,7 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
+import { clickStudentClassAssignmentRow } from '../test-helpers';
 
 test.describe.serial('ACT Writing Ready advancement', () => {
   test('Ready advances to the next ordered instruction without duplicating the opening prompt', async ({
@@ -82,12 +83,15 @@ test.describe.serial('ACT Writing Ready advancement', () => {
       });
 
       await signIn(e2eContext.userEmail, 'johndoe');
-      await page.goto(`/app/my-classes/${e2eContext.classId}`);
+      await page.goto(
+        `/app/my-classes/${e2eContext.classId}?tab=assignments`
+      );
       await expect(page.getByTestId('student-class-detail')).toBeVisible();
 
-      await page
-        .getByRole('button', { name: `ACT Writing Ready E2E ${suffix}` })
-        .click();
+      await clickStudentClassAssignmentRow(page, {
+        assignmentId: assignment.id,
+        title: `ACT Writing Ready E2E ${suffix}`,
+      });
       await page.waitForURL('**/app/documents/**', { timeout: 15000 });
 
       const tutorMessages = page.locator('[data-tutor-message="true"]');

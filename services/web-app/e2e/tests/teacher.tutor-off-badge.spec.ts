@@ -1,4 +1,5 @@
 import { test, expect } from '../test-setup';
+import { fillMyAssignmentsSearch } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
 
@@ -32,8 +33,14 @@ test.describe.serial('Tutor off badge', () => {
       createdAssignmentId = assignment.id;
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.addInitScript(() => {
+        localStorage.removeItem('yawp.student-work-view');
+      });
       await page.goto('/app/assignments');
       await page.waitForLoadState('networkidle');
+      await fillMyAssignmentsSearch(page, COLD_WRITE_TITLE, {
+        assignmentId: createdAssignmentId!,
+      });
 
       const coldRow = page
         .getByRole('row')
@@ -91,12 +98,16 @@ test.describe.serial('Tutor off badge', () => {
       // page without this parameter.
       await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
       await page.waitForLoadState('networkidle');
+      await page
+        .getByRole('textbox', { name: 'Search assignments' })
+        .fill(COLD_WRITE_TITLE);
 
       const coldRow = page
         .getByRole('row')
         .filter({ hasText: COLD_WRITE_TITLE });
       await expect(coldRow.getByTestId('tutor-off-badge')).toHaveText(
-        'Tutor off'
+        'Tutor off',
+        { timeout: 15_000 }
       );
     } finally {
       if (createdAssignmentId) {

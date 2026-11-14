@@ -9,6 +9,7 @@ import { dashboardAssignmentTileOverlapIssues } from '../helpers/dashboard-assig
 import { expectGiveFeedbackAccessible } from '../helpers/dev-panel-feedback';
 import { expectNewAssignmentBuilderPage } from '../helpers/assignment-builder-v3-page';
 import { ensureLockedPreviewSampleAssignmentsForE2E } from '../helpers/ensure-locked-preview-sample-assignments-for-e2e';
+import { FREE_CLASSROOM_BUNDLE_TILE_LABELS } from '../../app/domain/free-tier/inapp-usage';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
     'Run class-step tests with ./bin/project test --profile free-tier-locked-preview-browser'
@@ -284,7 +285,7 @@ async function capture(page: import('@playwright/test').Page, state: string) {
   }
 }
 
-/** Pending and approved free dashboards expose exactly three entitled assignment kinds. */
+/** Pending and approved free dashboards expose the five entitled bundle kinds. */
 async function openLockedEntitledHowItWorks(
   page: import('@playwright/test').Page,
   label: string
@@ -298,23 +299,33 @@ async function openLockedEntitledHowItWorks(
   await page.goto(href!);
 }
 
+async function clickLockedDashboardNewAssignmentTile(
+  page: import('@playwright/test').Page,
+  name: RegExp
+) {
+  const tile = page
+    .getByTestId('free-assignment-tiles')
+    .getByRole('link', { name });
+  await tile.scrollIntoViewIfNeeded();
+  const href = await tile.getAttribute('href');
+  expect(href).toBeTruthy();
+  await page.goto(href!);
+}
+
 async function expectFreeDashboardAssignmentTiles(
   page: import('@playwright/test').Page,
   options?: { teachingApproved?: boolean }
 ) {
   const tiles = page.getByTestId('free-assignment-tiles');
-  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(3);
+  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(5);
   await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
     options?.teachingApproved ? 5 : 0
   );
-  for (const label of ['Class Starter', 'Prewriting', 'Thesis Statement'] as const) {
-    const tile = tiles
-      .getByTestId('dashboard-assignment-tile')
-      .filter({ hasText: new RegExp(label) });
-    await expect(tile).toHaveCount(1);
-    await tile.scrollIntoViewIfNeeded();
-    await expect(tile).toBeVisible();
-  }
+  const tileNames = await tiles
+    .getByTestId('dashboard-assignment-tile')
+    .getByTestId('assignment-type-tile-name')
+    .allTextContents();
+  expect(tileNames).toEqual([...FREE_CLASSROOM_BUNDLE_TILE_LABELS]);
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -437,10 +448,16 @@ for (const width of [390, 1440]) {
     }
     await page.goto('/app');
     await expectFreeDashboardAssignmentTiles(page);
-    await openLockedEntitledHowItWorks(page, 'Prewriting');
+    await clickLockedDashboardNewAssignmentTile(
+      page,
+      /New Pre[\u2011-]writing assignment/i
+    );
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     await page.goto('/app');
-    await openLockedEntitledHowItWorks(page, 'Thesis Statement');
+    await clickLockedDashboardNewAssignmentTile(
+      page,
+      /New Thesis Builder assignment/i
+    );
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     const thesisTypeId = page.url().match(/assignment-types\/([^/]+)/)?.[1];
     expect(thesisTypeId).toBeTruthy();
@@ -527,7 +544,7 @@ for (const width of [390, 1440]) {
     );
     await expect(
       page.getByTestId('free-assignment-tiles').locator('img')
-    ).toHaveCount(8);
+    ).toHaveCount(10);
     if (width === 390) {
       await capture(page, 'dashboard-approved-390');
     }
@@ -838,6 +855,112 @@ test('approved teacher sees the real class code on the dashboard card', async ({
   const trigger = page.getByTestId('class-code-trigger');
   await expect(trigger).toContainText(klass.code);
 });
+
+async function guidedToursFlag(enabled: boolean) {
+  const name = 'feature_flag.guided-tours';
+  await prisma.setting.upsert({
+    where: { name },
+    create: { name, value: String(enabled), valueType: 'boolean' },
+    update: { value: String(enabled) },
+  });
+}
+
+async function tourRows(userId: string) {
+  return prisma.userTour.findMany({
+    where: { userId },
+    select: { tourId: true, status: true },
+  });
+}
+
+for (const width of [390, 1440]) {
+  test(`waiting teacher gets a short dashboard tour they can finish at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await guidedToursFlag(true);
+    try {
+      const { user, app } = await fixture('11', 'SENT');
+      await provisionPendingClassroom(app.id, user.id!);
+      await login(page, user.email!);
+      await page.goto('/app');
+      await expectLockedAppHome(page);
+
+      const welcome = page.getByRole('dialog', { name: /Welcome to Yawp!/i });
+      await expect(welcome).toBeVisible();
+      await expect(welcome).toContainText(/approv/i);
+      await capture(page, `waiting-tour-welcome-${width}`);
+      const assignmentsTourTarget = page
+        .locator('.locked-home-main')
+        .locator('[data-tour="dashboard-assignments"]');
+      // Welcome card is open; at wide viewports Playwright can treat dashboard
+      // targets as non-visible until the tour scrolls them into view.
+      await welcome.getByRole('button', { name: 'Take a tour' }).click();
+
+      const step = page.getByTestId('guided-tour-step');
+      await expect(step).toContainText(/Step 1 of \d+/);
+      const waitingTourStepCount = Number(
+        (await step.textContent())?.match(/Step 1 of (\d+)/)?.[1] ?? 1
+      );
+      expect(waitingTourStepCount).toBeGreaterThanOrEqual(2);
+      await expect(page.locator('[data-tour="dashboard-classes"]')).toHaveAttribute(
+        'data-tour-active',
+        'true'
+      );
+      await step.getByRole('button', { name: 'Next' }).click();
+      await expect(step).toContainText(`Step 2 of ${waitingTourStepCount}`);
+      await expect(assignmentsTourTarget).toHaveAttribute(
+        'data-tour-active',
+        'true'
+      );
+      await expect(step).toContainText(/approv/i);
+      await capture(page, `waiting-tour-tiles-${width}`);
+      if (waitingTourStepCount === 3) {
+        await step.getByRole('button', { name: 'Next' }).click();
+        await expect(step).toContainText('Step 3 of 3');
+        await expect(page.getByTestId('teaching-access-banner')).toHaveAttribute(
+          'data-tour-active',
+          'true'
+        );
+        await capture(page, `waiting-tour-banner-${width}`);
+      }
+      await step.getByRole('button', { name: 'Finish' }).click();
+      await expect(step).toBeHidden();
+
+      // Saved as the waiting tour, the one tour a waiting teacher may record.
+      await expect.poll(() => tourRows(user.id)).toEqual([
+        { tourId: 'waiting-preview', status: 'completed' },
+      ]);
+      await page.reload();
+      await expect(page.getByTestId('guided-tour-welcome')).toHaveCount(0);
+
+      // Other pages have no tour, and nothing that would be refused is offered.
+      await page.goto('/app/my-classes');
+      await page.waitForTimeout(600);
+      await expect(page.getByTestId('guided-tour-welcome')).toHaveCount(0);
+      if (width === 1440) {
+        await page.getByRole('button', { name: 'Settings' }).click();
+        await expect(
+          page.getByRole('button', { name: 'Restart all tours' })
+        ).toHaveCount(0);
+        await page.keyboard.press('Escape');
+      }
+
+      // Approval opens the full dashboard tour, now with grading.
+      await prisma.freeTierApplication.update({
+        where: { id: app.id },
+        data: { status: 'APPROVED' },
+      });
+      await page.goto('/app');
+      const approved = page.getByRole('dialog', { name: /Welcome to Yawp!/i });
+      await expect(approved).toBeVisible();
+      await approved.getByRole('button', { name: 'Take a tour' }).click();
+      await expect(step).toContainText('Step 1 of 3');
+    } finally {
+      await guidedToursFlag(false);
+    }
+  });
+}
 
 test('locked class surfaces hide the real class code and lock invite controls', async ({
   page,

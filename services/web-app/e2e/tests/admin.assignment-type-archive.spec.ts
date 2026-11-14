@@ -5,6 +5,7 @@ import {
   expectTypeAbsentInPicker,
   expectTypePresentInPicker,
 } from '../helpers/assignment-builder-v3-page';
+import { openClassAssignmentsTab } from '../test-helpers';
 
 test.describe.serial('Admin assignment type archive', () => {
   test.setTimeout(60_000);
@@ -45,11 +46,13 @@ test.describe.serial('Admin assignment type archive', () => {
       await page.context().clearCookies();
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
+      await openClassAssignmentsTab(page);
+      await page
+        .getByRole('textbox', { name: 'Search assignments' })
+        .fill('E2E Class Assignment');
       await expect(
-        page.getByRole('tab', { name: /assignments/i })
-      ).toHaveAttribute('data-state', 'active');
-      // Existing assignments keep their archived type label...
-      await expect(page.getByText('E2E Class Assignment')).toBeVisible();
+        page.getByTestId(`assignment-open-${e2eContext.assignmentId}`)
+      ).toBeVisible({ timeout: 30_000 });
       await expect(page.getByText('E2E Course').first()).toBeVisible();
 
       await clickClassNewAssignment(page);
@@ -73,6 +76,7 @@ test.describe.serial('Admin assignment type archive', () => {
       await page.context().clearCookies();
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
+      await openClassAssignmentsTab(page);
       await clickClassNewAssignment(page);
       await expectTypePresentInPicker(page, 'E2E Course');
     } finally {

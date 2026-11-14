@@ -132,6 +132,12 @@ import {
   type DocumentWorkSort,
 } from '~/utils/teacher-document-work-sort';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { ASSIGNMENTS_GROUPED_BY_TYPE_FLAG } from '~/domain/feature-flags/feature-flags';
+import {
+  HIDE_AP_HISTORY_CLASS_ASSIGNMENT_WHERE,
+  HIDE_AP_HISTORY_DOCUMENT_WHERE,
+} from '~/utils/assignment-type-access.server';
+import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   parseGradingAssistantStrictnessLevel,
@@ -1118,8 +1124,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     where: {
       document: {
         is: {
-          ...classDocumentScope,
-          deletedAt: null,
+          AND: [
+            classDocumentScope,
+            { deletedAt: null },
+            HIDE_AP_HISTORY_DOCUMENT_WHERE,
+          ],
         },
       },
       // A teacher-unsubmitted submission is withdrawn, not just archived —
@@ -1205,10 +1214,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // Get in-progress documents (all unsubmitted drafts for this class)
   const inProgressDocuments = await prisma.document.findMany({
     where: {
-      ...classDocumentScope,
-      deletedAt: null,
-      archivedAt: null,
-      submissions: { none: {} },
+      AND: [
+        classDocumentScope,
+        { deletedAt: null },
+        { archivedAt: null },
+        { submissions: { none: {} } },
+        HIDE_AP_HISTORY_DOCUMENT_WHERE,
+      ],
     },
     select: {
       id: true,
@@ -1265,7 +1277,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const [classAssignments, availableAssignmentTypes] = await Promise.all([
     prisma.classAssignment.findMany({
-      where: { classId },
+      where: { classId, ...HIDE_AP_HISTORY_CLASS_ASSIGNMENT_WHERE },
       select: {
         id: true,
         assignment: {
@@ -1513,6 +1525,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     exitTicketBuilderV3Enabled: await isExitTicketBuilderV3Enabled(
       klass.school.organizationId
     ),
+    assignmentsGroupedByTypeEnabled: await isFeatureFlagEnabled(
+      ASSIGNMENTS_GROUPED_BY_TYPE_FLAG,
+      klass.school.organizationId
+    ),
     classCodeUniqueEnabled: await classCodeUniquenessEnabled(prisma),
     classCodeHidden: hideTeachingSecrets,
     studentJoinUrl,
@@ -1532,11 +1548,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       })
     ),
     siteLicenseLockedAssignmentTiles,
-    apHistoryAssignmentTypeId:
-      availableAssignmentTypes.find(
-        (assignmentType) =>
-          assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY
-      )?.id ?? null,
     assignmentsEnabled: true,
     manageSchools: manageSchools?.schools ?? [],
     teacherClasses,
@@ -2463,11 +2474,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
             name: classAssignmentOptionLabel(data.klass),
           }}
           assignments={managedAssignments}
-          assignmentTypes={data.assignmentTypes}
-          siteLicenseLockedAssignmentTiles={
-            data.siteLicenseLockedAssignmentTiles
-          }
-          apHistoryAssignmentTypeId={data.apHistoryAssignmentTypeId}
+          groupedByType={data.assignmentsGroupedByTypeEnabled}
           classInsightsEnabled={classInsightsEnabled}
           teachingLocked={teachingLocked}
           teachingAccessAdminName={teachingAccessAdminName}

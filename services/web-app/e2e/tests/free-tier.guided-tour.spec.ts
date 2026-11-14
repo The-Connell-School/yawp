@@ -198,28 +198,43 @@ test.describe.serial('Free tier guided tour', () => {
 
     const step = page.getByTestId('guided-tour-step');
     await expect(step).toBeVisible();
-    await expect(step).toContainText('Step 1 of');
     await expect(page.getByTestId('guided-tour-spotlight')).toBeVisible();
     await shot(page, 'spotlight');
-    // The first step points at the class card section.
+
+    // Three steps, dashboard only: the class, the assignment tiles, grading.
+    await expect(step).toContainText('Step 1 of 3');
+    await expect(step.getByRole('heading', { name: 'Your class' })).toBeVisible();
     await expect(
       page.locator('[data-tour="dashboard-classes"]')
     ).toHaveAttribute('data-tour-active', 'true');
 
     await step.getByRole('button', { name: 'Next' }).click();
-    await expect(step).toContainText('Step 2 of');
+    await expect(step).toContainText('Step 2 of 3');
+    await expect(step.getByRole('heading', { name: 'Assignment types' })).toBeVisible();
+    await expect(step).toContainText('New assignment');
+    // The free classroom tiles, not a centered fallback card.
+    await expect(
+      page.getByTestId('free-assignment-tiles')
+    ).toHaveAttribute('data-tour-active', 'true');
+    await shot(page, 'spotlight-assignments');
     await step.getByRole('button', { name: 'Previous step' }).click();
-    await expect(step).toContainText('Step 1 of');
+    await expect(step).toContainText('Step 1 of 3');
+    await step.getByRole('button', { name: 'Next' }).click();
 
-    // Walk to the end; the last button finishes the tour.
-    for (let i = 0; i < 10; i++) {
-      const finish = step.getByRole('button', { name: 'Finish' });
-      if (await finish.isVisible()) {
-        await finish.click();
-        break;
-      }
-      await step.getByRole('button', { name: 'Next' }).click();
-    }
+    await step.getByRole('button', { name: 'Next' }).click();
+    await expect(step).toContainText('Step 3 of 3');
+    await expect(step.getByRole('heading', { name: 'Grading' })).toBeVisible();
+    await expect(
+      page.locator('[data-tour="dashboard-grading"]')
+    ).toHaveAttribute('data-tour-active', 'true');
+    // The sidebar is not part of the first tour.
+    await expect(page.locator('[data-tour="app-nav"]')).not.toHaveAttribute(
+      'data-tour-active',
+      'true'
+    );
+    await shot(page, 'spotlight-grading');
+
+    await step.getByRole('button', { name: 'Finish' }).click();
     await expect(step).toBeHidden();
     await expect(page.getByTestId('guided-tour-spotlight')).toBeHidden();
     await expect.poll(() => tourOutcome('dashboard')).toBe('completed');
@@ -351,13 +366,19 @@ test.describe.serial('Free tier guided tour', () => {
     });
   }
 
-  for (const type of ['Class Starter', 'Prewriting', 'Thesis Statement']) {
+  for (const type of [
+    'Class Starter',
+    'Exit Ticket',
+    '5-Paragraph Essay',
+    'Pre-writing',
+    'Thesis Builder',
+  ]) {
     test(`clicking into ${type} shows that type's tour`, async ({ page }) => {
       await logInAsFreeTeacher(page);
       await page.goto('/app');
       await page.getByRole('button', { name: 'Skip' }).click();
       await page
-        .getByTestId('teacher-assignments-grid')
+        .locator('[data-tour="dashboard-assignments"]')
         .getByText(type, { exact: true })
         .first()
         .click();
@@ -391,38 +412,36 @@ test.describe.serial('Free tier guided tour', () => {
   test('opening a document for the first time shows the writing page tour', async ({
     page,
   }) => {
-    const scratch = await createFreeTeacherScratchDocument();
-    try {
-      await logInAsFreeTeacher(page);
-      await page.goto('/app');
-      await page.getByRole('button', { name: 'Skip' }).click();
-      await page.goto(`/app/documents/${scratch.id}`);
-      await page.waitForURL(new RegExp(`/app/documents/${scratch.id}`));
+    await logInAsFreeTeacher(page);
+    await page.goto('/app');
+    await page.getByRole('button', { name: 'Skip' }).click();
+    await page
+      .locator('[data-tour="dashboard-assignments"]')
+      .getByText('Class Starter', { exact: true })
+      .first()
+      .click();
+    await page.waitForURL(/\/app\/assignment-types\/[^/]+$/);
+    await page.getByRole('button', { name: 'Skip' }).click();
+    await page.getByRole('button', { name: /^New/ }).click();
+    await page.getByRole('menuitem', { name: 'Document' }).click();
+    await page.waitForURL(/\/app\/documents\/[^/?]+/);
 
-      const card = page.getByRole('dialog', {
-        name: /Welcome to the writing page/i,
-      });
-      await expect(card).toBeVisible();
-      await capturePair(page, 'document');
-      await card.getByRole('button', { name: 'Take a tour' }).click();
-      const step = page.getByTestId('guided-tour-step');
-      await expect(step).toContainText('Step 1 of');
-      await expect(page.locator('[data-tour-active="true"]')).toHaveCount(1);
-      await page.keyboard.press('Escape');
-      await expect(page.getByTestId('document-actions-menu')).toBeFocused();
+    const card = page.getByRole('dialog', {
+      name: /Welcome to the writing page/i,
+    });
+    await expect(card).toBeVisible();
+    await capturePair(page, 'document');
+    await card.getByRole('button', { name: 'Take a tour' }).click();
+    const step = page.getByTestId('guided-tour-step');
+    await expect(step).toContainText('Step 1 of');
+    await expect(page.locator('[data-tour-active="true"]')).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('document-actions-menu')).toBeFocused();
 
-      // The page has no sidebar, so its menu offers the tour again.
-      await page.getByTestId('document-actions-menu').click();
-      await page.getByRole('menuitem', { name: 'Tour this page' }).click();
-      await expect(step).toContainText('Step 1 of');
-    } finally {
-      const prisma = createE2EPrismaClient();
-      try {
-        await prisma.document.delete({ where: { id: scratch.id } });
-      } finally {
-        await prisma.$disconnect();
-      }
-    }
+    // The page has no sidebar, so its menu offers the tour again.
+    await page.getByTestId('document-actions-menu').click();
+    await page.getByRole('menuitem', { name: 'Tour this page' }).click();
+    await expect(step).toContainText('Step 1 of');
   });
 
   test('Restart all tours brings every welcome card back', async ({ page }) => {

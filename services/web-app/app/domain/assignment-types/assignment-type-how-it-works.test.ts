@@ -23,20 +23,20 @@ describe('assignmentTypeHasHowItWorksGuide', () => {
     ).toBe(true);
     expect(
       assignmentTypeHasHowItWorksGuide({
-        title: 'Prewriting',
+        title: 'Pre-writing',
         kind: 'prewriting',
       })
     ).toBe(true);
     expect(
       assignmentTypeHasHowItWorksGuide({
-        title: 'Thesis Statement',
+        title: 'Thesis Builder',
         kind: 'thesis_statement',
       })
     ).toBe(true);
   });
 
   test('recognizes site-license locked carousel tile keys', () => {
-    expect(siteLicenseLockedTileHasHowItWorksGuide('exit-ticket')).toBe(true);
+    expect(siteLicenseLockedTileHasHowItWorksGuide('daily_pages')).toBe(true);
     expect(siteLicenseLockedTileHasHowItWorksGuide('not-a-tile')).toBe(false);
   });
 

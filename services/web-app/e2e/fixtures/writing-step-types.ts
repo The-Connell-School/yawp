@@ -1,6 +1,9 @@
 import { createE2EPrismaClient } from '../prisma-client';
 
-const TITLES = { prewriting: 'Pre-Writing', thesis_statement: 'Thesis Statement' } as const;
+const TITLES = {
+  prewriting: 'Pre-writing',
+  thesis_statement: 'Thesis Builder',
+} as const;
 
 /**
  * The Pre-Writing or Thesis Statement type (found by its unique `kind`, made

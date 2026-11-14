@@ -45,6 +45,8 @@ COPY --from=build /app/services/web-app/build/client ./build/client
 RUN mkdir -p services/web-app/node_modules
 COPY --from=build /app/services/web-app/package.json ./services/web-app/package.json
 COPY --from=build /app/services/web-app/start.sh ./services/web-app/start.sh
+# Thesis-Driven Essay lesson decks, served from the assignment type's Modules.
+COPY --from=build /app/services/web-app/resources ./services/web-app/resources
 COPY --from=build /app/scripts/preview ./scripts/preview
 
 RUN chmod +x services/web-app/start.sh

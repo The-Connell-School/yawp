@@ -30,8 +30,8 @@ The tours are defined in `services/web-app/app/domain/guided-tours/tours.ts`:
 
 | Tour | Page | Steps point at |
 | --- | --- | --- |
-| `waiting-preview` | `/app/free-tier/preview` | Permitted content, read-only guidance, locked actions |
-| `dashboard` | `/app` | Classes, Assignments, Grading, sidebar |
+| `waiting-preview` | `/app` while waiting for approval | Your class, assignment type tiles, the approval banner |
+| `dashboard` | `/app` once approved | Your class, assignment type tiles, Grading |
 | `my-classes` | `/app/my-classes` | Class grid, Create Class (one-class limit) |
 | `class` | `/app/my-classes/:id` | Student join link, roster, tabs |
 | `my-assignments` | `/app/assignments` | New Assignment, assigned list |
@@ -44,6 +44,27 @@ The tours are defined in `services/web-app/app/domain/guided-tours/tours.ts`:
 | `type-prewriting` | `/app/assignment-types/:id` (Prewriting) | New menu, modules, your drafts |
 | `type-thesis-statement` | `/app/assignment-types/:id` (Thesis Statement) | New menu, modules, your drafts |
 | `document` | `/app/documents/:id` | Tutor, editor toolbar, comments, Submit, saved/history/print (Tour this page is in the ⋮ menu) |
+
+### The first tour: the dashboard
+
+The dashboard tour is the first one a new teacher sees, so it stays short
+and covers only the dashboard, in three steps:
+
+1. **Your class.** It fills in once students join.
+2. **Assignment types.** Click a tile to open that type's page and read how
+   it works. **New assignment** makes a quick assignment from the dashboard.
+3. **Grading**, further down. Submitted work shows up there to grade.
+
+A teacher still waiting for their administrator's approval lands on the
+same dashboard in locked mode, and grading is hidden until approval. They
+get `waiting-preview` instead: their class, the tiles (which open How It
+Works; creating unlocks after approval), and the approval banner, which says
+what unlocks next. After approval the full `dashboard` tour greets them.
+While waiting, no other page has a tour, and Restart all tours is hidden,
+because the server records only `waiting-preview` for them.
+
+Copy rules for tours: plain teacher language, no em dashes, no all-caps
+eyebrows, no video. `tours.test.ts` checks these for the first tour.
 
 An assignment type page's URL doesn't say which type it is, so the page
 names its kind with `data-tour-variant`, and `tourForPage` picks that
@@ -94,10 +115,12 @@ processes and remove test resources after QA.
 
 ## Approval waiting integration
 
-The existing approval gate identifies waiting free-classroom teachers before a
-membership is provisioned. With both tour flags enabled locally, the permitted
-read-only preview offers its own tour. It does not grant access to dashboard
-routes, teaching tools, assignments, or student invitations. Only the exact tour
+The existing approval gate identifies waiting free-classroom teachers. Their
+locked preview classroom is provisioned and `/app/free-tier/preview` redirects
+to the locked dashboard at `/app`. `loadGuidedTours` reports
+`waitingForApproval` (application `SENT` or `MANUAL_REVIEW`), and with both
+tour flags on, the dashboard offers the `waiting-preview` tour. It does not
+grant access to teaching tools, assignments, or student invitations. Only the exact tour
 POST reaches the action; waiting teachers can record only `waiting-preview`
 completion or dismissal. Normal page-tour writes and reset remain forbidden.
 Class preparation and administrator details still have no tours. Read-only

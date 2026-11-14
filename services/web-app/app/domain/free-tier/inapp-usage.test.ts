@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import {
+  FREE_ASSIGNMENT_LABELS,
   formatUsageRenewsLabel,
   freeAssignmentKindUsageMeta,
   isLessonPlannerMonthlyExhausted,
@@ -68,4 +69,8 @@ test('freeAssignmentKindUsageMeta hides unlimited copy and shows quotas when cap
       { used: 12, total: 12, remaining: 0 }
     )
   ).toBe('None left');
+});
+
+test('labels Exit Ticket usage', () => {
+  expect(FREE_ASSIGNMENT_LABELS.exit_ticket).toBe('Exit Ticket');
 });

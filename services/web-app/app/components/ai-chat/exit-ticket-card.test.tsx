@@ -3,7 +3,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router';
 import { ExitTicketCard } from './exit-ticket-card';
 import { readPlannedExitTickets } from '~/domain/lesson-planner/exit-ticket-block';
-import { EXIT_TICKET_POLISH_CLOSER } from '~/domain/assignment-types/exit-ticket-activities';
+import {
+  EXIT_TICKET_EXPLAIN_CLOSER,
+  EXIT_TICKET_QUESTIONS_LINE,
+} from '~/domain/assignment-types/exit-ticket-activities';
 
 function ticketFrom(block: string) {
   const [ticket] = readPlannedExitTickets(
@@ -38,69 +41,71 @@ const v3Check = [
   'watchFor: Mixing Allie up with D.B.',
 ].join('\n');
 
-describe('ExitTicketCard: a v3 ticket shows mainly the prompt students see', () => {
-  test('the question students answer is the first thing on the card, with its closing line', () => {
+describe('ExitTicketCard: a v3 ticket shows only what students read', () => {
+  test('the question students answer is the first thing on the card', () => {
     const html = render(v3Check);
     expect(textOf(html, 'exit-ticket-question')).toBe(
       'Who is Allie in The Catcher in the Rye, and why does Holden keep thinking about him?'
     );
-    expect(textOf(html, 'exit-ticket-closer')).toBe(EXIT_TICKET_POLISH_CLOSER);
-    // Nothing about the ticket comes before the prompt but its short tag.
-    const question = html.indexOf('data-testid="exit-ticket-question"');
-    expect(html.indexOf('data-testid="exit-ticket-notes"')).toBeGreaterThan(
-      question
+    // A question gets no closing line.
+    expect(html).not.toContain('data-testid="exit-ticket-closer"');
+  });
+
+  test('an explain ticket shows the closing line Yawp! adds', () => {
+    const html = render('activity: explain-concept\ntopic: photosynthesis');
+    expect(textOf(html, 'exit-ticket-question')).toBe(
+      'In your own words, explain photosynthesis.'
+    );
+    expect(textOf(html, 'exit-ticket-closer')).toBe(EXIT_TICKET_EXPLAIN_CLOSER);
+  });
+
+  test('shows the questions line when the planner switched it on', () => {
+    const html = render('activity: reflect\nstarter: learned\nquestions: yes');
+    expect(textOf(html, 'exit-ticket-questions-line')).toBe(
+      EXIT_TICKET_QUESTIONS_LINE
+    );
+    expect(render('activity: reflect\nstarter: learned')).not.toContain(
+      'data-testid="exit-ticket-questions-line"'
     );
   });
 
   test('names the activity in a few words, not the form’s full sentence', () => {
     const html = render(v3Check);
     expect(textOf(html, 'exit-ticket-activity')).toBe('Answer a question');
-    expect(html).not.toContain('Have the students answer a question');
+    expect(html).not.toContain('Have students');
     // A v3 check dual-writes the legacy explain-concept focus; it must not
     // show as the wrong activity.
     expect(html).not.toContain('Explain a concept');
   });
 
-  test('keeps the key points behind a disclosure, closed', () => {
+  test('leaves the instructional notes off the card', () => {
     const html = render(v3Check);
-    expect(html).toMatch(/<details[^>]*data-testid="exit-ticket-notes"/);
-    expect(html).not.toMatch(/<details[^>]*open/);
-    expect(textOf(html, 'exit-ticket-notes')).toContain(
-      'Allie is Holden’s younger brother'
-    );
-    expect(textOf(html, 'exit-ticket-notes')).toContain(
-      'Students don’t see this'
-    );
+    expect(html).not.toContain('data-testid="exit-ticket-notes"');
+    expect(html).not.toContain('Allie is Holden’s younger brother');
+    expect(html).not.toContain('Mixing Allie up with D.B.');
   });
 
-  test('says nothing about grading when the ticket is ungraded', () => {
-    const html = render(v3Check);
-    expect(html).not.toContain('data-testid="exit-ticket-grading"');
-    expect(html).not.toContain('Ungraded');
+  test('says nothing about grading, even when the block asked for it', () => {
+    for (const block of [v3Check, `${v3Check}\ngraded: yes\npoints: 5`]) {
+      const html = render(block);
+      expect(html).not.toContain('data-testid="exit-ticket-grading"');
+      expect(html).not.toContain('Ungraded');
+    }
   });
 
-  test('a graded ticket says so in one short line', () => {
-    const html = render(`${v3Check}\ngraded: yes\npoints: 5`);
-    expect(textOf(html, 'exit-ticket-grading')).toBe('Graded · 5 points');
-  });
-
-  test('a reflection with no key points has no disclosure at all', () => {
-    const html = render(
-      'activity: reflect\nstarter: wondering\npromptText: What is one question you still have about today’s lesson?'
-    );
-    expect(textOf(html, 'exit-ticket-activity')).toBe(
-      'Reflect or ask a question'
-    );
+  test('a reflection is tagged as one', () => {
+    const html = render('activity: reflect\nstarter: wondering');
+    expect(textOf(html, 'exit-ticket-activity')).toBe('Reflection');
     expect(textOf(html, 'exit-ticket-question')).toBe(
       'What is one question you still have about today’s lesson?'
     );
-    expect(html).not.toContain('data-testid="exit-ticket-notes"');
   });
 
-  test('keeps the button that creates the ticket', () => {
+  test('keeps the button that creates the ticket, carrying the answer', () => {
     const html = render(v3Check);
     expect(html).toContain('data-testid="exit-ticket-create"');
     expect(html).toContain('exitTicketActivity=answer-question');
+    expect(html).toContain('exitTicketLessonMustMention=');
   });
 });
 

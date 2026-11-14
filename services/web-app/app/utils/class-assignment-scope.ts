@@ -1,4 +1,5 @@
 import type { Prisma } from '@app/prisma';
+import { HIDE_AP_HISTORY_DOCUMENT_WHERE } from '~/utils/assignment-type-access.server';
 
 export type ClassScopedDocumentWhere = {
   classAssignment: { classId: string };
@@ -190,7 +191,7 @@ export function buildTeacherClassWorkDocumentWhere(params: {
   const where: Prisma.DocumentWhereInput = {
     deletedAt: null,
     OR: [{ archivedAt: null }, { submissions: { some: {} } }],
-    AND: [classScope],
+    AND: [classScope, HIDE_AP_HISTORY_DOCUMENT_WHERE],
   };
 
   if (params.legacyDocumentIds && params.legacyDocumentIds.length > 0) {

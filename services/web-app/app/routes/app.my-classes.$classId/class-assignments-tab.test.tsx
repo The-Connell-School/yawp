@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
-let creationProps: any = null;
+const navigateToNewAssignmentPage = mock();
 
 const actualReactRouter = await import('react-router');
 mock.module('react-router', () => ({
@@ -22,11 +22,8 @@ mock.module('react-router', () => ({
   ),
 }));
 
-mock.module('~/components/assignments/assignment-creation-sheet', () => ({
-  AssignmentCreationSheet: (props: any) => {
-    creationProps = props;
-    return props.open ? <div data-testid="creation-sheet" /> : null;
-  },
+mock.module('~/domain/free-tier/navigate-to-new-assignment-page', () => ({
+  useNavigateToNewAssignmentPage: () => navigateToNewAssignmentPage,
 }));
 
 const { createMemoryRouter, RouterProvider } = actualReactRouter;
@@ -98,15 +95,6 @@ function renderTab(overrides: Record<string, unknown> = {}) {
     <ClassAssignmentsTab
       classOption={{ id: 'class-1', name: 'History · Grade 9 • Period 2' }}
       assignments={ASSIGNMENTS}
-      assignmentTypes={[
-        {
-          id: 'type-1',
-          title: 'DBQ',
-          collaborationSupported: false,
-          gradesGrammar: false,
-          kind: null,
-        },
-      ]}
       classInsightsEnabled
       onViewDocuments={() => {}}
       onSelectAssignment={() => {}}
@@ -124,7 +112,7 @@ function clickRow(el: HTMLElement, testId: string) {
 }
 
 beforeEach(() => {
-  creationProps = null;
+  navigateToNewAssignmentPage.mockReset();
 });
 
 afterEach(() => {
@@ -134,14 +122,18 @@ afterEach(() => {
 });
 
 describe('ClassAssignmentsTab', () => {
-  it('offers the AP History prompt library when the class can use that assignment type', () => {
-    const el = renderTab({ apHistoryAssignmentTypeId: 'type-apush' });
-    const link = el.querySelector('a[href="/app/assignment-types/type-apush?classId=class-1"]');
-
-    expect(link?.textContent).toContain('AP History Essay');
+  it('never shows an AP History Essay toolbar link', () => {
+    const el = renderTab({ assignments: [ASSIGNMENTS[0]] });
+    expect(
+      el.querySelector('a[href^="/app/assignment-types/"]')
+    ).toBeNull();
+    const toolbarControls = Array.from(el.querySelectorAll('a, button')).map(
+      (node) => node.textContent?.trim()
+    );
+    expect(toolbarControls).not.toContain('AP History Essay');
   });
 
-  it('opens class-scoped creation and keeps the class-detail columns', () => {
+  it('New Assignment opens the create flow for this class', () => {
     const el = renderTab();
 
     expect(el.textContent).toContain('Assignment');
@@ -154,11 +146,8 @@ describe('ClassAssignmentsTab', () => {
     )!;
     act(() => createButton.click());
 
-    expect(el.querySelector('[data-testid="creation-sheet"]')).toBeTruthy();
-    expect(creationProps).toMatchObject({
-      entryPoint: 'class',
-      fixedClassId: 'class-1',
-      teacherClasses: [{ id: 'class-1', name: 'History · Grade 9 • Period 2' }],
+    expect(navigateToNewAssignmentPage).toHaveBeenCalledWith({
+      classId: 'class-1',
     });
   });
 
@@ -280,16 +269,113 @@ describe('ClassAssignmentsTab', () => {
     expect(deleteButton.disabled).toBe(true);
   });
 
-  it('keeps the creation close handler stable across tab rerenders', () => {
-    const el = renderTab();
-    const initialOnOpenChange = creationProps.onOpenChange;
-    const createButton = Array.from(el.querySelectorAll('button')).find(
-      (button) => button.textContent?.includes('New Assignment')
-    )!;
 
-    act(() => createButton.click());
+  describe('assignments-grouped-by-type', () => {
+    const EXIT_TICKETS: ClassAssignmentsTabAssignment[] = [
+      {
+        ...ASSIGNMENTS[0],
+        id: 'exit-1',
+        classAssignmentId: 'ca-exit-1',
+        title: 'Exit ticket: Thursday',
+        assignmentTypeId: 'type-exit',
+        assignmentType: { id: 'type-exit', title: 'Exit Ticket', systemKey: null },
+      },
+      {
+        ...ASSIGNMENTS[0],
+        id: 'exit-2',
+        classAssignmentId: 'ca-exit-2',
+        title: 'Exit ticket: Friday',
+        assignmentTypeId: 'type-exit',
+        assignmentType: { id: 'type-exit', title: 'Exit Ticket', systemKey: null },
+      },
+    ];
+    const GROUPED = [...ASSIGNMENTS, ...EXIT_TICKETS];
 
-    expect(creationProps.onOpenChange).toBe(initialOnOpenChange);
+    function sections(el: HTMLElement) {
+      return Array.from(
+        el.querySelectorAll<HTMLElement>('[data-testid^="assignment-type-section-"]')
+      );
+    }
+
+    it('renders one section per assignment type, in alphabetical order, each headed with its title and count', () => {
+      const el = renderTab({ assignments: GROUPED, groupedByType: true });
+      const found = sections(el);
+
+      expect(found.map((node) => node.dataset.assignmentTypeTitle)).toEqual([
+        'AP History Essay',
+        'DBQ',
+        'Exit Ticket',
+      ]);
+      const exit = el.querySelector(
+        '[data-testid="assignment-type-section-type-exit"]'
+      )!;
+      const heading = exit.querySelector('button[aria-expanded]')!;
+      expect(heading.textContent).toBe('Exit Ticket2');
+      expect(heading.getAttribute('aria-expanded')).toBe('true');
+      expect(exit.textContent).toContain('Exit ticket: Thursday');
+      expect(exit.textContent).toContain('Exit ticket: Friday');
+      expect(exit.textContent).not.toContain('The Gilded Age DBQ');
+    });
+
+    it('drops the Type column inside sections — the heading already says it', () => {
+      const el = renderTab({ assignments: GROUPED, groupedByType: true });
+      const heads = Array.from(
+        sections(el)[0].querySelectorAll('th')
+      ).map((th) => th.textContent?.trim());
+      expect(heads).not.toContain('Type');
+      expect(heads).toContain('Documents');
+    });
+
+    it('collapses a section from its heading', () => {
+      const el = renderTab({ assignments: GROUPED, groupedByType: true });
+      const exit = el.querySelector(
+        '[data-testid="assignment-type-section-type-exit"]'
+      )!;
+      const heading = exit.querySelector(
+        'button[aria-expanded]'
+      ) as HTMLButtonElement;
+
+      act(() => heading.click());
+
+      expect(heading.getAttribute('aria-expanded')).toBe('false');
+      const content = document.getElementById(
+        heading.getAttribute('aria-controls')!
+      );
+      expect(
+        content === null || content.getAttribute('data-state') === 'closed'
+      ).toBe(true);
+    });
+
+    it("a section's select-all checkbox selects just that section", () => {
+      const el = renderTab({ assignments: GROUPED, groupedByType: true });
+      const exit = el.querySelector(
+        '[data-testid="assignment-type-section-type-exit"]'
+      )!;
+      const selectAll = exit.querySelector(
+        '[aria-label="Select all Exit Ticket assignments"]'
+      ) as HTMLButtonElement;
+
+      act(() => selectAll.click());
+
+      expect(el.querySelector('[aria-label="Delete 2 assignment(s)"]')).toBeTruthy();
+    });
+
+    it('still opens an assignment from a row inside a section', () => {
+      const onSelectAssignment = mock();
+      const el = renderTab({
+        assignments: GROUPED,
+        groupedByType: true,
+        onSelectAssignment,
+      });
+      clickRow(el, 'assignment-open-exit-2');
+      expect(onSelectAssignment).toHaveBeenCalledWith('exit-2');
+    });
+
+    it('flag off renders the single flat table', () => {
+      const el = renderTab({ assignments: GROUPED });
+      expect(sections(el)).toHaveLength(0);
+      expect(el.querySelectorAll('table')).toHaveLength(1);
+    });
   });
 
   it('clamps pagination to the last populated page after rows are removed', () => {

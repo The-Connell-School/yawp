@@ -113,7 +113,8 @@ test.describe('Teacher class documents filter counts', () => {
 
       expect(unfilteredAllCount).toBe(unfilteredRowCount);
       expect(filteredAllCount).toBe(filteredRowCount);
-      expect(filteredRowCount).toBe(5);
+      // Practice docs without class work stay out of the student-scoped list.
+      expect(filteredRowCount).toBe(3);
     } finally {
       if (documentIds.length > 0) {
         await prisma.submission

@@ -198,15 +198,22 @@ function makeDocument({
     createdAt: new Date('2026-05-01T00:00:00.000Z'),
     updatedAt: new Date('2026-05-01T00:00:00.000Z'),
     revision: 1,
-    title: 'APUSH DBQ',
+    title: 'Daily draft',
     html: '<p>Draft</p>',
     text: 'Draft',
-    assignmentType: { id: 'type-1', title: 'AP History Essay' },
+    assignmentType: {
+      id: 'type-1',
+      title: 'Daily Pages',
+      systemKey: null,
+    },
     assignment: {
       id: 'assignment-1',
-      title: 'Revolutionary Ideals DBQ',
-      prompt: apHistorySnapshot.prompt,
-      ...(includeSnapshot ? { apHistorySnapshot } : {}),
+      title: 'Friday writing',
+      prompt: 'Write about your week.',
+      assignmentType: { systemKey: null },
+      ...(includeSnapshot
+        ? { apHistorySnapshot, prompt: apHistorySnapshot.prompt }
+        : {}),
     },
     classAssignment: {
       class: {
@@ -298,10 +305,7 @@ describe('app_.documents_.$id loader', () => {
         // are ordinary documents, so it finds nothing.
         args?.where?.artifactKind === 'ASSIGNMENT_GROUP'
           ? null
-          : makeDocument({
-              includeSnapshot:
-                args?.select?.assignment?.select?.apHistorySnapshot === true,
-            })
+          :         makeDocument({ includeSnapshot: false })
       )
     );
     prisma.documentRevision.create.mockResolvedValue({});
@@ -340,34 +344,27 @@ describe('app_.documents_.$id loader', () => {
     } as never)) as any;
   });
 
-  test('selects and returns immutable AP History assignment snapshots', async () => {
-    const response = (await loader({
-      request: new Request('https://example.test/app/documents/doc-1'),
-      params: { id: 'doc-1' },
-    } as never)) as any;
-
-    expect(prisma.document.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        select: expect.objectContaining({
-          assignment: expect.objectContaining({
-            select: expect.objectContaining({
-              apHistorySnapshot: true,
-              promptAttachmentName: true,
-            }),
-          }),
-        }),
-      })
+  test('returns not found for retired AP History documents', async () => {
+    prisma.document.findFirst.mockImplementation((args: any) =>
+      Promise.resolve(
+        args?.where?.artifactKind === 'ASSIGNMENT_GROUP'
+          ? null
+          : makeDocument({ includeSnapshot: true })
+      )
     );
-    expect(prisma.document.findFirst.mock.calls.at(-1)![0].select.assignmentModuleSessions.include.assignmentModule.include.instructions.omit).toEqual({ answerKey: true });
-    expect(response.data.doc.assignment.apHistorySnapshot).toEqual(
-      apHistorySnapshot
-    );
+    await expect(
+      loader({
+        request: new Request('https://example.test/app/documents/doc-1'),
+        params: { id: 'doc-1' },
+      } as never)
+    ).rejects.toMatchObject({ status: 404 });
+    expect(prisma.assignmentModuleSession.findMany).not.toHaveBeenCalled();
   });
 
   test('resumes the first incomplete tutor module when reopening without cmsIdx', async () => {
     documentOnce(
       makeDocument({
-        includeSnapshot: true,
+        includeSnapshot: false,
         assignmentModuleSessions: [
           makeModuleSession({
             id: 'cms-prewriting',
@@ -404,7 +401,7 @@ describe('app_.documents_.$id loader', () => {
   test('keeps an untouched empty first module selected when reopening without cmsIdx', async () => {
     documentOnce(
       makeDocument({
-        includeSnapshot: true,
+        includeSnapshot: false,
         assignmentModuleSessions: [
           makeModuleSession({
             id: 'cms-prewriting',
@@ -436,7 +433,7 @@ describe('app_.documents_.$id loader', () => {
 
   test('backfills missing module sessions instead of dead-ending when a document has none', async () => {
     documentOnce(
-      makeDocument({ includeSnapshot: true, assignmentModuleSessions: [] })
+      makeDocument({ includeSnapshot: false, assignmentModuleSessions: [] })
     );
     ensureAssignmentModuleSessionsForDocument.mockResolvedValueOnce(true);
     prisma.assignmentModuleSession.findMany.mockResolvedValueOnce([
@@ -469,7 +466,7 @@ describe('app_.documents_.$id loader', () => {
 
   test('redirects with an actionable message when the assignment type has no modules to backfill', async () => {
     documentOnce(
-      makeDocument({ includeSnapshot: true, assignmentModuleSessions: [] })
+      makeDocument({ includeSnapshot: false, assignmentModuleSessions: [] })
     );
     ensureAssignmentModuleSessionsForDocument.mockResolvedValueOnce(false);
 

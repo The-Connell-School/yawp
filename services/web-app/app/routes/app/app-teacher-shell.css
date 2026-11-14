@@ -79,6 +79,11 @@
   gap: 28px;
   container-type: inline-size;
   container-name: locked-home-columns;
+  pointer-events: none;
+}
+
+.locked-home-columns > * {
+  pointer-events: auto;
 }
 
 .locked-home-main {
@@ -88,6 +93,13 @@
   grid-row: 1;
   min-width: 0;
   gap: 20px;
+  position: relative;
+  z-index: 1;
+}
+
+.locked-home-main [data-testid='dashboard-assignment-tile'] {
+  position: relative;
+  z-index: 1;
 }
 
 .locked-home-rail-desktop {

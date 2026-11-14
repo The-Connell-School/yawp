@@ -10,6 +10,7 @@ import {
 import { requiredAppSidebarIcon } from '~/components/app-sidebar-icons';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
+import { LOUNGE_NAME } from '~/domain/lounge/launch';
 import type { useUser } from '~/hooks/useUser';
 
 type User = ReturnType<typeof useUser>;
@@ -24,6 +25,8 @@ export type SidebarNavLink = {
   end?: boolean;
   icon: React.ReactNode;
   requires?: { OR: RequiresFn[] } | { AND: RequiresFn[] } | RequiresFn;
+  /** Other paths that should also highlight this item. */
+  alsoActiveFor?: string[];
 };
 
 export type SidebarNavSection = {
@@ -123,6 +126,40 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
   },
 ];
 
+const LOUNGE_TRAININGS_PATH = '/app/teacher-trainings';
+const LOUNGE_COMMUNITY_PATH = '/app/lounge';
+
+/**
+ * With the Lounge community flag on, the existing Lounge item becomes the
+ * Faculty Lounge: it opens the community feed and stays highlighted on the course grid, which
+ * keeps its URL one tab away. Off: the item is untouched.
+ */
+export function applyLoungeCommunityLink(
+  sections: SidebarNavSection[],
+  enabled: boolean,
+): SidebarNavSection[] {
+  if (!enabled) return sections;
+  return sections.map((section) => ({
+    ...section,
+    links: section.links.map((link) =>
+      link.to === LOUNGE_TRAININGS_PATH
+        ? { ...link, label: LOUNGE_NAME, to: LOUNGE_COMMUNITY_PATH, alsoActiveFor: [LOUNGE_TRAININGS_PATH] }
+        : link,
+    ),
+  }));
+}
+
+export function isSidebarLinkActive(
+  link: Pick<SidebarNavLink, 'to' | 'alsoActiveFor'>,
+  pathname: string,
+  isAppNavLinkActive: (linkTo: string, pathname: string) => boolean,
+) {
+  return (
+    isAppNavLinkActive(link.to, pathname) ||
+    (link.alsoActiveFor ?? []).some((path) => isAppNavLinkActive(path, pathname))
+  );
+}
+
 function linkIsVisible(
   link: SidebarNavLink,
   user: User,
@@ -193,12 +230,16 @@ export function SidebarNavLinks({
   renderLinkTrailing,
   renderNavRow,
 }: SidebarNavLinksProps) {
-  const lessonPlannerFlagOn =
-    useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root')
-      ?.lessonPlannerEnabled ?? false;
-  const visibleSections = getVisibleSidebarSections(sections, user, {
-    teacherLoungeNavVisible,
-  })
+  const rootData =
+    useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
+  const lessonPlannerFlagOn = rootData?.lessonPlannerEnabled ?? false;
+  const loungeCommunityOn = rootData?.loungeCommunityEnabled ?? false;
+  // The `teacher-lounge` gate decides whether the item shows at all; only
+  // then does the community flag turn it into the Faculty Lounge.
+  const visibleSections = applyLoungeCommunityLink(
+    getVisibleSidebarSections(sections, user, { teacherLoungeNavVisible }),
+    loungeCommunityOn,
+  )
     .map((section) => ({
       ...section,
       links: section.links.filter(

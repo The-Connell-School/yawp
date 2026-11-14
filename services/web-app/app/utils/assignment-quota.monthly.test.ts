@@ -24,7 +24,13 @@ beforeEach(() => {
   enabled = true;
   increment.mockClear();
 });
-for (const kind of ['class_starter', 'prewriting', 'thesis_statement'])
+for (const kind of [
+  'class_starter',
+  'exit_ticket',
+  'five_paragraph_essay',
+  'prewriting',
+  'thesis_statement',
+])
   test(`${kind} remains creatable above old cap, with lifetime compatibility writes`, async () => {
     await assertCanCreateAssignmentOfKindInTransaction(tx, organization, kind);
     expect(increment).toHaveBeenCalledTimes(1);

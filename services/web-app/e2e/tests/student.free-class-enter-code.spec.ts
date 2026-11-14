@@ -143,6 +143,9 @@ test('existing student joins a separate free classroom and retains access after 
         title: 'Local Prior Class',
       },
     });
+    await page.addInitScript(() => {
+      localStorage.removeItem('yawp.class-documents-view');
+    });
     await page.goto('/auth/login');
     await page.waitForLoadState('networkidle');
     await submitUnifiedLogin(page, student.email!, 'local-fixture-pass');
@@ -218,10 +221,13 @@ test('existing student joins a separate free classroom and retains access after 
     await shot('desktop-reloaded-class');
     await page.getByRole('link', { name: /Local Joined Class/ }).click();
     await expect(page).toHaveURL(new RegExp(`/app/my-classes/${klass.id}`));
-    await page.reload();
-    await expect(
-      page.getByText('Local Permitted Assignment', { exact: true }).first()
-    ).toBeVisible();
+    await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
+    await expect(page.getByTestId('student-class-detail')).toBeVisible();
+    const assignmentStart = page.getByRole('button', {
+      name: 'Local Permitted Assignment',
+      exact: true,
+    });
+    await expect(assignmentStart).toBeVisible({ timeout: 15_000 });
     await shot('desktop-reloaded-assignment');
     await page.setViewportSize({ width: 390, height: 844 });
     await shot('mobile-reloaded-assignment');
@@ -266,9 +272,10 @@ test('existing student joins a separate free classroom and retains access after 
       await expect(signup).toHaveURL(/\/app(?:\?|$)/);
       await signup.goto(`/app/my-classes/${klass.id}`);
       await signup.reload();
+      await expect(signup.getByTestId('student-class-detail')).toBeVisible();
       await expect(
-        signup.getByText('Local Permitted Assignment', { exact: true }).first()
-      ).toBeVisible();
+        signup.getByRole('button', { name: /Local Permitted Assignment/i })
+      ).toBeVisible({ timeout: 15_000 });
       if (shots) {
         await signup.screenshot({
           path: `${shots}/desktop-new-student-control.png`,
