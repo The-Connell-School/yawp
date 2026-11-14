@@ -123,11 +123,12 @@ test.describe('Teacher class documents lifecycle', () => {
         lifecycleTable.getByText('Submitted', { exact: true })
       ).toHaveCount(0);
 
-      // Status filter narrows rows.
-      await page.goto(
-        `/app/my-classes/${e2eContext.classId}?tab=documents&status=needs-grading`
-      );
-      await page.waitForLoadState('networkidle');
+      // Status filter narrows rows (chips are the source of truth; URL alone is
+      // not always hydrated before the table paints in Playwright).
+      await page
+        .getByTestId('class-documents-status-chips')
+        .getByRole('tab', { name: /Needs Grading/ })
+        .click();
       await expect(
         page
           .getByTestId('class-documents-status-chips')

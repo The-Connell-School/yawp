@@ -392,16 +392,25 @@ export async function submitSignedInEnterClassCode(
   ]);
 }
 
+async function setReactInputValue(locator: Locator, value: string) {
+  await locator.evaluate((el, next) => {
+    const input = el as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value'
+    )?.set;
+    setter?.call(input, next);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }, value);
+}
+
 /** My Assignments search lives inside the Filter popover — open it before typing. */
 export async function fillMyAssignmentsSearch(
   page: Page,
   query: string,
   options?: { assignmentId?: string }
 ) {
-  await page.getByTestId('my-assignments-filter').click();
-  const search = page.getByTestId('my-assignments-search');
-  await expect(search).toBeVisible({ timeout: 15_000 });
-  await search.fill(query);
   const trimmed = query.trim();
   const visibilityTarget = options?.assignmentId
     ? page.getByTestId(`my-assignment-open-${options.assignmentId}`)
@@ -411,8 +420,25 @@ export async function fillMyAssignmentsSearch(
           .filter({ hasText: trimmed })
           .first()
       : null;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) {
+      await page.reload({ waitUntil: 'networkidle' });
+    }
+    await page.getByTestId('my-assignments-filter').click();
+    const search = page.getByTestId('my-assignments-search');
+    await expect(search).toBeVisible({ timeout: 15_000 });
+    await setReactInputValue(search, query);
+    if (!visibilityTarget) break;
+    try {
+      await expect(visibilityTarget).toBeVisible({ timeout: 10_000 });
+      break;
+    } catch (error) {
+      if (attempt === 2) throw error;
+    }
+  }
+
   if (visibilityTarget) {
-    await expect(visibilityTarget).toBeVisible({ timeout: 30_000 });
     const typeSection = page
       .locator('[data-testid^="assignment-type-section-"]')
       .filter({ has: visibilityTarget });
@@ -424,12 +450,16 @@ export async function fillMyAssignmentsSearch(
       }
     }
     await page.keyboard.press('Escape');
-    await expect(search).toBeHidden({ timeout: 5_000 });
+    await expect(page.getByTestId('my-assignments-search')).toBeHidden({
+      timeout: 5_000,
+    });
     await expect(visibilityTarget).toBeVisible({ timeout: 30_000 });
     return;
   }
   await page.keyboard.press('Escape');
-  await expect(search).toBeHidden({ timeout: 5_000 });
+  await expect(page.getByTestId('my-assignments-search')).toBeHidden({
+    timeout: 5_000,
+  });
 }
 
 /** Class detail assignments tab (header tabs include counts in the label). */

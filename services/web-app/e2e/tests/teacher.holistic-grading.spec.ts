@@ -186,6 +186,7 @@ test.describe.serial('holistic Cristo Rey points-only grading', () => {
     const documentsTable = page.getByRole('table', { name: /class documents/i });
     await expect(documentsTable).toBeVisible({ timeout: 15_000 });
     await page
+      .getByTestId('class-documents-status-chips')
       .getByRole('tab', { name: /^Released/i })
       .click();
     await expect(documentsTable.getByText(/6\s*\/\s*20/).first()).toBeVisible({
