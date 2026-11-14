@@ -1750,6 +1750,7 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
   align-items: center;
   justify-content: center;
   padding: 24px 20px 32px;
+}
 .free-tier-admin-approve-shell .auth-page-logo {
   position: absolute;
   top: 20px;
