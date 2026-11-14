@@ -37,7 +37,12 @@ test.describe.serial('Tutor off badge', () => {
       });
       await page.goto('/app/assignments');
       await page.waitForLoadState('networkidle');
-      await page.getByTestId('my-assignments-search').fill(COLD_WRITE_TITLE);
+      await expect(
+        page.getByRole('textbox', { name: /Search assignments/i })
+      ).toBeVisible({ timeout: 15_000 });
+      await page
+        .getByRole('textbox', { name: /Search assignments/i })
+        .fill(COLD_WRITE_TITLE);
 
       const coldRow = page
         .getByRole('row')

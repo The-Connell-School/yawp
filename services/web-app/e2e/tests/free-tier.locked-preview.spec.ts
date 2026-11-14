@@ -902,10 +902,9 @@ for (const width of [390, 1440]) {
       );
       await step.getByRole('button', { name: 'Next' }).click();
       await expect(step).toContainText(`Step 2 of ${waitingTourStepCount}`);
-      await expect(page.getByTestId('free-assignment-tiles')).toHaveAttribute(
-        'data-tour-active',
-        'true'
-      );
+      await expect(
+        page.locator('[data-tour="dashboard-assignments"]')
+      ).toHaveAttribute('data-tour-active', 'true');
       await expect(step).toContainText(/approv/i);
       await capture(page, `waiting-tour-tiles-${width}`);
       if (waitingTourStepCount === 3) {

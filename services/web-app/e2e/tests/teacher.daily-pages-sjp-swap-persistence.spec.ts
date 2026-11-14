@@ -195,10 +195,12 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
       `/app/my-classes/${e2eContext.classId}?tab=documents&documentGroup=none`
     );
     await page.waitForLoadState('networkidle');
-    await expect(page.getByText(seeded.documentTitle).first()).toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(page.getByText(/10\s*\/\s*12/).first()).toBeVisible();
+    const classDocuments = page.getByRole('table', { name: /class documents/i });
+    await expect(classDocuments).toBeVisible({ timeout: 15_000 });
+    await expect(
+      classDocuments.getByRole('row', { name: new RegExp(seeded.documentTitle) })
+    ).toBeVisible();
+    await expect(classDocuments.getByText(/10\s*\/\s*12/).first()).toBeVisible();
   });
 
   test('student still sees documents, assignments, and grades after the swap', async ({

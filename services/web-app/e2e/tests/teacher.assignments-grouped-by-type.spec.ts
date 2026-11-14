@@ -153,6 +153,15 @@ test.describe.serial('Assignments grouped by assignment type', () => {
 
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
     await page.waitForLoadState('networkidle');
+    await page
+      .getByRole('textbox', { name: 'Search assignments' })
+      .fill('');
+    await expect(
+      page.getByRole('tab', { name: 'Assignments', exact: true })
+    ).toHaveAttribute('aria-selected', 'true');
+    await expect(
+      page.locator('[data-testid^="assignment-type-section-"]')
+    ).toHaveCount(0, { timeout: 15_000 });
     await expect(page.getByRole('table', { name: 'Assignments' })).toHaveCount(
       1,
       { timeout: 15_000 }
