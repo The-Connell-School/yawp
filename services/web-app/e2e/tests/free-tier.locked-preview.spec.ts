@@ -299,6 +299,18 @@ async function openLockedEntitledHowItWorks(
   await page.goto(href!);
 }
 
+async function clickLockedDashboardNewAssignmentTile(
+  page: import('@playwright/test').Page,
+  name: RegExp
+) {
+  const tile = page
+    .getByTestId('free-assignment-tiles')
+    .getByTestId('dashboard-assignment-tile')
+    .getByRole('link', { name });
+  await tile.scrollIntoViewIfNeeded();
+  await tile.click();
+}
+
 async function expectFreeDashboardAssignmentTiles(
   page: import('@playwright/test').Page,
   options?: { teachingApproved?: boolean }
@@ -435,14 +447,16 @@ for (const width of [390, 1440]) {
     }
     await page.goto('/app');
     await expectFreeDashboardAssignmentTiles(page);
-    await page
-      .getByRole('link', { name: /New Pre[\u2011-]writing assignment/i })
-      .click();
+    await clickLockedDashboardNewAssignmentTile(
+      page,
+      /New Pre[\u2011-]writing assignment/i
+    );
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     await page.goto('/app');
-    await page
-      .getByRole('link', { name: /New Thesis Builder assignment/i })
-      .click();
+    await clickLockedDashboardNewAssignmentTile(
+      page,
+      /New Thesis Builder assignment/i
+    );
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     const thesisTypeId = page.url().match(/assignment-types\/([^/]+)/)?.[1];
     expect(thesisTypeId).toBeTruthy();
