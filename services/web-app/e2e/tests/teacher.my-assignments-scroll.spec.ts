@@ -1,4 +1,5 @@
 import { test, expect } from '../test-setup';
+import { fillMyAssignmentsSearch } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 
 test('My Assignments scrolls at short and tall viewports while navigation stays fixed', async ({
@@ -24,9 +25,7 @@ test('My Assignments scrolls at short and tall viewports while navigation stays 
     for (const height of [400, 900]) {
       await page.setViewportSize({ width: 1280, height });
       await page.goto('/app/assignments');
-      await page.getByTestId('my-assignments-filter').click();
-      await page.getByTestId('my-assignments-search').fill('Scroll regression');
-      await page.keyboard.press('Escape');
+      await fillMyAssignmentsSearch(page, 'Scroll regression');
       const scroll =
         (await page.locator('section.free-tier-b2-page-shell').count()) > 0
           ? page.locator('section.free-tier-b2-page-shell')

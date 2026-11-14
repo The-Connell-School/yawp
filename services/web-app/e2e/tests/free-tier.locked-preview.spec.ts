@@ -890,12 +890,14 @@ for (const width of [390, 1440]) {
       await expect(welcome).toBeVisible();
       await expect(welcome).toContainText(/approv/i);
       await capture(page, `waiting-tour-welcome-${width}`);
+      const assignmentsTourTarget = page
+        .locator('.locked-home-main')
+        .locator('[data-tour="dashboard-assignments"]');
       await page
         .locator('[data-tour="dashboard-classes"]')
         .scrollIntoViewIfNeeded();
-      await expect(
-        page.locator('[data-tour="dashboard-assignments"]')
-      ).toBeVisible({ timeout: 15_000 });
+      await assignmentsTourTarget.scrollIntoViewIfNeeded();
+      await expect(assignmentsTourTarget).toBeVisible({ timeout: 15_000 });
       await welcome.getByRole('button', { name: 'Take a tour' }).click();
 
       const step = page.getByTestId('guided-tour-step');
@@ -910,9 +912,10 @@ for (const width of [390, 1440]) {
       );
       await step.getByRole('button', { name: 'Next' }).click();
       await expect(step).toContainText(`Step 2 of ${waitingTourStepCount}`);
-      await expect(
-        page.locator('[data-tour="dashboard-assignments"]')
-      ).toHaveAttribute('data-tour-active', 'true');
+      await expect(assignmentsTourTarget).toHaveAttribute(
+        'data-tour-active',
+        'true'
+      );
       await expect(step).toContainText(/approv/i);
       await capture(page, `waiting-tour-tiles-${width}`);
       if (waitingTourStepCount === 3) {

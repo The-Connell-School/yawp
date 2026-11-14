@@ -49,7 +49,9 @@ test.describe.serial('Admin assignment type archive', () => {
         page.getByRole('tab', { name: /assignments/i })
       ).toHaveAttribute('data-state', 'active');
       // Existing assignments keep their archived type label...
-      await expect(page.getByText('E2E Class Assignment')).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: 'E2E Class Assignment' })
+      ).toBeVisible();
       await expect(page.getByText('E2E Course').first()).toBeVisible();
 
       await clickClassNewAssignment(page);

@@ -392,6 +392,13 @@ export async function submitSignedInEnterClassCode(
   ]);
 }
 
+/** My Assignments search lives inside the Filter popover — open it before typing. */
+export async function fillMyAssignmentsSearch(page: Page, query: string) {
+  await page.getByTestId('my-assignments-filter').click();
+  await page.getByTestId('my-assignments-search').fill(query);
+  await page.keyboard.press('Escape');
+}
+
 /** Submit join form and wait until the student lands in the authenticated app shell. */
 export async function submitFreeTierJoinAndExpectApp(
   page: Page,

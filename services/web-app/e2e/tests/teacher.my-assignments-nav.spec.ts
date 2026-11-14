@@ -1,4 +1,5 @@
 import { test, expect } from '../test-setup';
+import { fillMyAssignmentsSearch } from '../test-helpers';
 
 test.describe('Teacher "My Assignments" sidebar navigation', () => {
   test('teacher can open My Assignments from the sidebar and see their assignments', async ({
@@ -16,7 +17,7 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     await page.waitForURL('**/app/assignments**', { timeout: 15000 });
     // Pagination is 20 per page, and other shards share the E2E database, so
     // the seeded title may sit off the first page unless we narrow the list.
-    await page.getByTestId('my-assignments-search').fill('E2E Class Assignment');
+    await fillMyAssignmentsSearch(page, 'E2E Class Assignment');
     // Exact, because the row's selection checkbox is itself a cell whose
     // accessible name ("Select assignment E2E Class Assignment") contains the
     // title, and the default substring match picks up both.
@@ -33,7 +34,7 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app/assignments');
     await page.waitForLoadState('networkidle');
-    await page.getByTestId('my-assignments-search').fill('E2E Class Assignment');
+    await fillMyAssignmentsSearch(page, 'E2E Class Assignment');
 
     await page
       .getByRole('link', { name: 'E2E Class Assignment', exact: true })

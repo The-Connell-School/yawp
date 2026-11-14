@@ -1,4 +1,5 @@
 import { test, expect } from '../test-setup';
+import { fillMyAssignmentsSearch } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
 
@@ -37,12 +38,7 @@ test.describe.serial('Tutor off badge', () => {
       });
       await page.goto('/app/assignments');
       await page.waitForLoadState('networkidle');
-      await expect(
-        page.getByRole('textbox', { name: /Search assignments/i })
-      ).toBeVisible({ timeout: 15_000 });
-      await page
-        .getByRole('textbox', { name: /Search assignments/i })
-        .fill(COLD_WRITE_TITLE);
+      await fillMyAssignmentsSearch(page, COLD_WRITE_TITLE);
 
       const coldRow = page
         .getByRole('row')

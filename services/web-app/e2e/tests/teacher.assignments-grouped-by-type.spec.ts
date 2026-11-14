@@ -157,7 +157,7 @@ test.describe.serial('Assignments grouped by assignment type', () => {
       .getByRole('textbox', { name: 'Search assignments' })
       .fill('');
     await expect(
-      page.getByRole('tab', { name: 'Assignments', exact: true })
+      page.locator('[data-header-tab="assignments"]')
     ).toHaveAttribute('aria-selected', 'true');
     await expect(
       page.locator('[data-testid^="assignment-type-section-"]')
