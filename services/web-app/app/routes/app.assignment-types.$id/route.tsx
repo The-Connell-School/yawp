@@ -57,6 +57,7 @@ import {
 } from '~/domain/thesis-essay-decks/thesis-essay-decks';
 import { availableDeckLinks } from '~/domain/thesis-essay-decks/thesis-essay-decks.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { isRetiredApHistoryAssignmentType } from '~/utils/retired-ap-history-access.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { AboutDailyPages } from './about-daily-pages/about-daily-pages';
@@ -489,6 +490,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const assignmentType = assignmentTypes.find((type) => type.id === params.id);
 
   if (!assignmentType) {
+    const direct = await prisma.assignmentType.findUnique({
+      where: { id: params.id },
+      select: { systemKey: true },
+    });
+    if (isRetiredApHistoryAssignmentType(direct?.systemKey)) {
+      throw new Response(null, { status: 404 });
+    }
     return redirectWithToast('/app', {
       type: 'error',
       description: 'Assignment type not found',
