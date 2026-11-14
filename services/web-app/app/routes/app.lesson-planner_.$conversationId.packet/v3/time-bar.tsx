@@ -8,6 +8,7 @@
 import { PenLine } from 'lucide-react';
 import type { StackTiming, TimeFix } from '~/domain/lesson-planner/stack-timing';
 import { STEP_TYPE_COLORS, STEP_TYPE_LABELS, STEP_TYPES } from '~/domain/lesson-planner/step-types';
+import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
 import { HEADING_FONT, typeBlockStyle } from './theme';
 
@@ -129,27 +130,17 @@ export function TimeBar({
             {extend?.step ? (
               <li data-testid="time-fix-extend" className="flex items-center justify-between gap-3 text-sm">
                 <span>Save “{extend.step.title}” for extra time, after the closing</span>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => extend.onMove(extend.step!.id)}
-                  className="shrink-0 rounded-full bg-[var(--sv-ink)] px-3 py-1 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-                >
+                <Button type="button" size="sm" variant="secondary" className="shrink-0" disabled={busy} onClick={() => extend.onMove(extend.step!.id)}>
                   Move to extensions
-                </button>
+                </Button>
               </li>
             ) : null}
             {fixes.map((fix) => (
               <li key={fix.id} data-testid="time-fix" className="flex items-center justify-between gap-3 text-sm">
                 <span>{fix.text}</span>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onApplyFix(fix)}
-                  className="shrink-0 rounded-full bg-[var(--sv-ink)] px-3 py-1 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-                >
+                <Button type="button" size="sm" variant="secondary" className="shrink-0" disabled={busy} onClick={() => onApplyFix(fix)}>
                   Apply
-                </button>
+                </Button>
               </li>
             ))}
           </ul>

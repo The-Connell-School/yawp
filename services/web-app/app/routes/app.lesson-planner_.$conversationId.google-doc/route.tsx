@@ -5,6 +5,7 @@
  * why and offers the Word file, which Google Docs opens too.
  */
 import { Link, useLoaderData, type LoaderFunctionArgs, type MetaFunction } from 'react-router';
+import { Button } from '~/components/ui/button';
 import { openGoogleDoc, type GoogleDocProblem } from '~/domain/lesson-planner/google-doc.server';
 
 export const meta: MetaFunction = () => [{ title: 'Google Docs · Yawp!' }];
@@ -38,17 +39,17 @@ export default function GoogleDocRoute() {
         {MESSAGES[problem]}
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
-        <a href={word} data-testid="google-doc-word" className="rounded-xl bg-[#1C1A17] px-5 py-3 font-semibold text-white">
-          Download Word
-        </a>
+        <Button asChild variant="secondary" data-testid="google-doc-word">
+          <a href={word}>Download Word</a>
+        </Button>
         {problem === 'unconfigured' ? null : (
-          <a href={retry} className="rounded-xl border border-[#1C1A17]/20 px-5 py-3 font-semibold">
-            Try again
-          </a>
+          <Button asChild variant="secondary">
+            <a href={retry}>Try again</a>
+          </Button>
         )}
-        <Link to={`/app/lesson-planner/${conversationId}/packet`} className="rounded-xl border border-[#1C1A17]/20 px-5 py-3 font-semibold">
-          Back to your lesson
-        </Link>
+        <Button asChild variant="secondary">
+          <Link to={`/app/lesson-planner/${conversationId}/packet`}>Back to your lesson</Link>
+        </Button>
       </div>
     </main>
   );

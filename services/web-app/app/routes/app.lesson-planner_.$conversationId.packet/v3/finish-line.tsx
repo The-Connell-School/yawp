@@ -5,6 +5,7 @@
  */
 import { useState } from 'react';
 import { Link, useFetcher } from 'react-router';
+import { Button } from '~/components/ui/button';
 import { Check, MonitorPlay, NotebookText, Play } from 'lucide-react';
 import type { StackStep } from '~/domain/lesson-planner/stack-steps';
 import type { StackTiming } from '~/domain/lesson-planner/stack-timing';
@@ -145,15 +146,17 @@ export function FinishLine({
         </p>
         <YawpChecklist missing={missing} onPaper={onPaper} />
         {beforeClass ? <BeforeClass list={beforeClass} /> : null}
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          block
+          className="mt-4"
           data-testid="set-lesson"
           disabled={busy || timing.blocks.length === 0}
           onClick={onSet}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--sv-ink)] py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
         >
           <Check size={16} /> Set this lesson
-        </button>
+        </Button>
       </section>
     );
   }
@@ -203,64 +206,62 @@ export function FinishLine({
         <div data-testid="teach-it" className="mt-4">
           <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--sv-primary)]">Teach it</p>
           {teach.slideshowHref ? (
-            <Link
-              to={teach.slideshowHref}
-              data-testid="open-slideshow"
-              className="flex w-full items-center gap-3 rounded-xl bg-[var(--sv-primary)] px-4 py-3 text-left text-white transition hover:opacity-90"
-            >
-              <MonitorPlay size={18} className="shrink-0" />
-              <span>
-                <span className="block text-sm font-bold">Open slideshow</span>
-                <span className="block text-xs text-white/80">For the smartboard or projector</span>
-              </span>
-            </Link>
+            <Button asChild block className="h-auto justify-start gap-3 px-4 py-3 text-left" data-testid="open-slideshow">
+              <Link to={teach.slideshowHref}>
+                <MonitorPlay size={18} className="shrink-0" />
+                <span>
+                  <span className="block text-sm font-bold">Open slideshow</span>
+                  <span className="block text-xs text-white/80">For the smartboard or projector</span>
+                </span>
+              </Link>
+            </Button>
           ) : teach.ownDeckHref ? (
-            <a
-              href={teach.ownDeckHref}
-              download
-              data-testid="open-own-deck"
-              className="flex w-full items-center gap-3 rounded-xl bg-[var(--sv-primary)] px-4 py-3 text-left text-white transition hover:opacity-90"
-            >
-              <MonitorPlay size={18} className="shrink-0" />
-              <span>
-                <span className="block text-sm font-bold">Open your slides</span>
-                <span className="block text-xs text-white/80">Your own deck, as you uploaded it</span>
-              </span>
-            </a>
+            <Button asChild block className="h-auto justify-start gap-3 px-4 py-3 text-left" data-testid="open-own-deck">
+              <a href={teach.ownDeckHref} download>
+                <MonitorPlay size={18} className="shrink-0" />
+                <span>
+                  <span className="block text-sm font-bold">Open your slides</span>
+                  <span className="block text-xs text-white/80">Your own deck, as you uploaded it</span>
+                </span>
+              </a>
+            </Button>
           ) : (
-            <button
+            <Button
               type="button"
+              block
+              className="h-auto justify-start gap-3 px-4 py-3 text-left"
               data-testid="open-slideshow"
               onClick={teach.onBuildDeck}
-              className="flex w-full items-center gap-3 rounded-xl bg-[var(--sv-primary)] px-4 py-3 text-left text-white transition hover:opacity-90"
             >
               <MonitorPlay size={18} className="shrink-0" />
               <span>
                 <span className="block text-sm font-bold">Open slideshow</span>
                 <span className="block text-xs text-white/80">No deck yet: build it first, right here</span>
               </span>
-            </button>
+            </Button>
           )}
-          <Link
-            to={teach.notesHref}
+          <Button
+            asChild
+            block
+            variant="secondary"
+            className="mt-2 h-auto justify-start gap-3 px-4 py-3 text-left"
             data-testid="run-of-show-notes"
-            className="mt-2 flex w-full items-center gap-3 rounded-xl border-2 border-[var(--sv-ink)] px-4 py-3 text-left transition hover:bg-[#F1EBE2]"
           >
-            <NotebookText size={18} className="shrink-0" />
-            <span>
-              <span className="block text-sm font-bold">Run of show with teacher notes</span>
-              <span className="block text-xs text-[var(--sv-muted)]">For your laptop at the podium</span>
-            </span>
-          </Link>
+            <Link to={teach.notesHref}>
+              <NotebookText size={18} className="shrink-0" />
+              <span>
+                <span className="block text-sm font-bold">Run of show with teacher notes</span>
+                <span className="block text-xs text-[var(--sv-muted)]">For your laptop at the podium</span>
+              </span>
+            </Link>
+          </Button>
         </div>
       ) : runShow ? (
-        <Link
-          to={`/show/${conversationId}?from=stack`}
-          data-testid="run-the-show"
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--sv-primary)] py-3 text-sm font-semibold text-white transition hover:opacity-90"
-        >
-          <Play size={15} /> Run the show
-        </Link>
+        <Button asChild block className="mt-4" data-testid="run-the-show">
+          <Link to={`/show/${conversationId}?from=stack`}>
+            <Play size={15} /> Run the show
+          </Link>
+        </Button>
       ) : null}
       {templates ? (
         naming ? (

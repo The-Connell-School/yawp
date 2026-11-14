@@ -11,6 +11,7 @@ import { GripVertical, Lightbulb, Loader2, Plus, Send, X } from 'lucide-react';
 import type { SuggestedPiece } from '~/domain/lesson-planner/stack-suggestions';
 import { stackTiming, type StackTiming, type TimedStep } from '~/domain/lesson-planner/stack-timing';
 import { DEFAULT_STEP_MINUTES } from '~/domain/lesson-planner/step-types';
+import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
 import { MarkdownContent } from '~/components/ai-chat/assistant-markdown';
 import { HEADING_FONT } from './theme';
@@ -107,23 +108,19 @@ function PieceCard({
             </span>
             <span className="flex items-center gap-1.5">
             {/* Read the whole piece first (Brian's run 5, item 5). */}
-            <button
+            <Button
               type="button"
+              size="sm"
+              variant="secondary"
               data-testid="suggestion-preview-toggle"
               aria-expanded={previewing}
               onClick={() => setPreviewing((open) => !open)}
-              className="rounded-full border border-[var(--sv-line)] px-3 py-1 text-xs font-semibold transition hover:bg-[#F1EBE2]"
             >
               {previewing ? 'Hide' : 'Preview'}
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={onAdd}
-              className="inline-flex items-center gap-1 rounded-full bg-[var(--sv-primary)] px-3 py-1 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-            >
+            </Button>
+            <Button type="button" size="sm" disabled={busy} onClick={onAdd}>
               <Plus size={12} /> Add
-            </button>
+            </Button>
             </span>
           </div>
         </div>
@@ -367,14 +364,9 @@ export function AddPanel({
               placeholder="Describe what you need…"
               className="min-w-0 flex-1 rounded-full border border-[var(--sv-line)] bg-[var(--sv-card)] px-4 py-2 text-sm outline-none focus:border-[var(--sv-coral)]"
             />
-            <button
-              type="submit"
-              aria-label="Send"
-              disabled={askBusy || !line.trim()}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--sv-primary)] text-white transition disabled:opacity-50"
-            >
+            <Button type="submit" size="icon" aria-label="Send" disabled={askBusy || !line.trim()}>
               <Send size={14} />
-            </button>
+            </Button>
           </form>
         </div>
       )}
