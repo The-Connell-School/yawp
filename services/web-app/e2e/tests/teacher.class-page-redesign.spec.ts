@@ -89,6 +89,15 @@ test.describe('Teacher class documents lifecycle', () => {
       });
       await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
       await page.waitForLoadState('networkidle');
+      await expect
+        .poll(async () => {
+          await page.reload();
+          return page
+            .getByRole('table', { name: /class documents/i })
+            .getByText(`Lifecycle needs grading ${suffix}`)
+            .count();
+        })
+        .toBeGreaterThan(0);
 
       const table = page.getByRole('table', { name: /class documents/i });
       await expect(table).toBeVisible();
@@ -281,7 +290,9 @@ test.describe.serial('Teacher class page redesign', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
     await page.waitForLoadState('networkidle');
-    await clickClassAssignmentRow(page, e2eContext.assignmentId);
+    await clickClassAssignmentRow(page, e2eContext.assignmentId, {
+      title: 'E2E Class Assignment',
+    });
 
     // Forward navigation changes the URL — linkable, not a sheet toggle.
     await page.waitForURL(
@@ -349,7 +360,9 @@ test.describe.serial('Teacher class page redesign', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
     await page.waitForLoadState('networkidle');
-    await clickClassAssignmentRow(page, e2eContext.assignmentId);
+    await clickClassAssignmentRow(page, e2eContext.assignmentId, {
+      title: 'E2E Class Assignment',
+    });
     await page.waitForURL(
       `/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
     );

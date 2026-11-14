@@ -402,7 +402,7 @@ export async function fillMyAssignmentsSearch(
   const search = page.getByTestId('my-assignments-search');
   await expect(search).toBeVisible({ timeout: 15_000 });
   await search.click();
-  await search.fill(query);
+  await search.pressSequentially(query, { delay: 25 });
   const trimmed = query.trim();
   const visibilityTarget = options?.assignmentId
     ? page.getByTestId(`my-assignment-open-${options.assignmentId}`)
@@ -437,8 +437,17 @@ export async function openClassAssignmentsTab(page: Page) {
 }
 
 /** Class assignments rows open the assignment detail via the table row click handler. */
-export async function clickClassAssignmentRow(page: Page, assignmentId: string) {
+export async function clickClassAssignmentRow(
+  page: Page,
+  assignmentId: string,
+  options?: { title?: string }
+) {
   await openClassAssignmentsTab(page);
+  if (options?.title) {
+    await page
+      .getByRole('textbox', { name: 'Search assignments' })
+      .fill(options.title);
+  }
   const row = page
     .getByRole('row')
     .filter({ has: page.getByTestId(`assignment-open-${assignmentId}`) });

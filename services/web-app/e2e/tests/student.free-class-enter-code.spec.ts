@@ -223,9 +223,11 @@ test('existing student joins a separate free classroom and retains access after 
     await expect(page).toHaveURL(new RegExp(`/app/my-classes/${klass.id}`));
     await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
     await expect(page.getByTestId('student-class-detail')).toBeVisible();
-    await expect(
-      page.getByRole('button', { name: /Local Permitted Assignment/i })
-    ).toBeVisible({ timeout: 15_000 });
+    const assignmentStart = page.getByRole('button', {
+      name: 'Local Permitted Assignment',
+      exact: true,
+    });
+    await expect(assignmentStart).toBeVisible({ timeout: 15_000 });
     await shot('desktop-reloaded-assignment');
     await page.setViewportSize({ width: 390, height: 844 });
     await shot('mobile-reloaded-assignment');

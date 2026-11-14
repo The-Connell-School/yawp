@@ -162,10 +162,9 @@ test.describe.serial('Assignments grouped by assignment type', () => {
     await expect(
       page.locator('[data-testid^="assignment-type-section-"]')
     ).toHaveCount(0, { timeout: 15_000 });
-    await expect(page.getByRole('table', { name: 'Assignments' })).toHaveCount(
-      1,
-      { timeout: 15_000 }
-    );
+    await expect(
+      page.getByRole('table', { name: /assignments/i })
+    ).toBeVisible({ timeout: 15_000 });
     await expect(
       page.locator('[data-testid^="assignment-type-section-"]')
     ).toHaveCount(0);

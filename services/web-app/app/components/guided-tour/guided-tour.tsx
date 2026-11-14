@@ -148,9 +148,25 @@ function prefersReducedMotion() {
   );
 }
 
+/** In-page with layout, even if clipped horizontally (wide dashboard grids). */
+function isPresentForTour(el: HTMLElement | null): el is HTMLElement {
+  if (!el) return false;
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
 /** Steps whose element is on this page right now; a centered card if none are. */
 function resolveSteps(tour: PageTour): ActiveStep[] {
-  const shown = tour.steps.filter((step) => isShown(findTarget(step.target)));
+  for (const step of tour.steps) {
+    findTarget(step.target)?.scrollIntoView({
+      block: 'center',
+      inline: 'center',
+      behavior: 'auto',
+    });
+  }
+  const shown = tour.steps.filter((step) =>
+    isPresentForTour(findTarget(step.target))
+  );
   if (shown.length) return shown;
   return [{ target: null, title: tour.welcome.title, body: tour.welcome.body }];
 }
