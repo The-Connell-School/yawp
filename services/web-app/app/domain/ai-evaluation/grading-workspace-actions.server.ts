@@ -977,9 +977,7 @@ export async function prepareWorkspaceEvaluationRun(
     assignmentTypeTitle: assignmentType.title,
   });
   if (assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
-    return errorResponse(
-      'AP History suite runs require an assignment snapshot.'
-    );
+    return errorResponse('Assignment type not found.', 404);
   }
   const runningRun = await db.assignmentTypeEvaluationRun.findFirst({
     where: {

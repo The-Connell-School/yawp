@@ -31,6 +31,7 @@ import {
   type ClassInsight,
   type ClassInsightSummary,
 } from './class-insights-panel';
+import { assertNotRetiredApHistoryAssignmentType } from '~/utils/retired-ap-history-access.server';
 
 type StatusFilter = 'submitted' | 'graded' | 'released' | 'in-progress';
 
@@ -84,12 +85,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           title: true,
           submitForGrade: true,
           pointValue: true,
-          assignmentType: { select: { title: true } },
+          assignmentType: { select: { title: true, systemKey: true } },
         },
       },
     },
   });
   if (!classAssignment) throw new Response('Not Found', { status: 404 });
+  assertNotRetiredApHistoryAssignmentType(
+    classAssignment.assignment.assignmentType.systemKey
+  );
   const assignment = classAssignment.assignment;
 
   const classInsightsEnabled = profile.organization.classInsightsEnabled;

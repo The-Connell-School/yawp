@@ -18,7 +18,6 @@ import { prisma } from '~/utils/db.server';
 import { archiveAssignmentType, restoreAssignmentType, updateAssignmentType, replaceAssignmentTypeImage, removeAssignmentTypeImage, parseAdminUpdateGradingConfig, withGradingInstructionsOverride } from '~/domain/assignment-types/assignment-type-admin-writes.server';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
-import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { computePromptVersionLabels } from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
 import { isPromptVersionControlEnabled } from '~/domain/ai-evaluation/prompt-version-control.server';
 import {
@@ -60,29 +59,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   if (!course) {
     throw new Response('Not Found', { status: 404 });
   }
+  if (course.systemKey === 'ap_history_essay') {
+    throw new Response('Not Found', { status: 404 });
+  }
 
   const rubrics = (await listLiveRubricsForAdminPicker()).map(
     ({ id, name, title, json }) => ({ id, name, title, json })
   );
   const currentPromptLabel = await resolveCurrentPromptLabel(course.id);
-  if (course.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
-    const lastEditLine = formatLastAdminEditLine(
-      course.updatedAt,
-      readLastAdminEdit(course.gradingPromptConfigJson)
-    );
-
-    return dataResponse({
-      course,
-      rubrics,
-      lastEditLine,
-      scoringScale: parseScoringScale(course.scoringScaleJson),
-      rubric: parseRubric(course.rubricJson),
-      gradingAssistantPromptPreview: null,
-      gradingAssistantPromptPreviewUnavailableReason:
-        'The AP History prompt is built from the assignment snapshot. Open a graded submission to inspect the full prompt.',
-      currentPromptLabel,
-    });
-  }
 
   const resolvedGradingConfig = await resolveAssignmentTypeGradingConfig({
     assignmentTypeId: course.id,

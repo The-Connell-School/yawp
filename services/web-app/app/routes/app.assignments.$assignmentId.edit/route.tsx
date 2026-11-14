@@ -16,6 +16,7 @@ import {
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { toDateInputValue } from '~/utils/date-only';
+import { assertNotRetiredApHistoryAssignmentType } from '~/utils/retired-ap-history-access.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -50,7 +51,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           collaborationEnabled: true,
           gradingAssistantStrictnessLevel: true,
           assignmentTypeId: true,
-          assignmentType: { select: { title: true } },
+          assignmentType: { select: { title: true, systemKey: true } },
         },
       },
     },
@@ -64,6 +65,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const active =
     deployments.find((row) => row.classId === requestedClassId) ??
     deployments[0]!;
+
+  assertNotRetiredApHistoryAssignmentType(
+    active.assignment.assignmentType.systemKey
+  );
 
   const v3 = await loadAssignmentBuilderV3Data(request);
 

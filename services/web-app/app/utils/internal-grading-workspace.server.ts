@@ -763,13 +763,7 @@ export function createInternalGradingWorkspaceHandlers(input: {
               if (!row)
                 return response({ error: 'Prompt version not found' }, 404);
               if (parent?.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY)
-                return response(
-                  {
-                    error:
-                      'AP History scratch tests require an assignment snapshot.',
-                  },
-                  400
-                );
+                return response({ error: 'Assignment type not found' }, 404);
               const config = await resolveAssignmentTypeGradingConfig({
                 assignmentTypeId: id!,
                 assignmentTypeKind: parent!.kind,
