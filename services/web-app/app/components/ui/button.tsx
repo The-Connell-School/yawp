@@ -124,7 +124,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
   const innerRef = React.useRef<HTMLButtonElement | null>(null);
   const [minWidth, setMinWidth] = React.useState<number | undefined>();
 
-  React.useLayoutEffect(() => {
+  React.useEffect(() => {
     if ((busy || success) && innerRef.current && minWidth === undefined) {
       setMinWidth(innerRef.current.offsetWidth);
     }

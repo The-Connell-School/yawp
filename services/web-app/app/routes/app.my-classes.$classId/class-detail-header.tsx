@@ -2,7 +2,6 @@ import {
   Fragment,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -321,7 +320,7 @@ function ClassHeaderTabBar({
     });
   }, [activeTab]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     updateIndicator();
   }, [updateIndicator, tabs]);
 
