@@ -919,8 +919,8 @@ for (const width of [390, 1440]) {
         await step.getByRole('button', { name: 'Next' }).click();
         await expect(step).toContainText('Step 3 of 3');
         await expect(
-          page.getByTestId('locked-dashboard-pending-card')
-        ).toHaveAttribute('data-tour-active', 'true');
+          page.locator('[data-tour="teaching-access-banner"][data-tour-active="true"]')
+        ).toBeVisible();
         await capture(page, `waiting-tour-banner-${width}`);
       }
       await step.getByRole('button', { name: 'Finish' }).click();

@@ -153,6 +153,8 @@ test.describe.serial('Assignments grouped by assignment type', () => {
     await seedGroupedAssignments(e2eContext);
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
 
+    await page.goto('/app/assignments');
+    await page.waitForLoadState('networkidle');
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments&_=${Date.now()}`);
     await page.waitForLoadState('networkidle');
     await openClassAssignmentsTab(page);

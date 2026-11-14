@@ -404,6 +404,45 @@ export async function expandAssignmentTypeSections(page: Page) {
   }
 }
 
+async function setMyAssignmentsSearchQuery(page: Page, query: string) {
+  await page.getByTestId('my-assignments-filter').click();
+  const search = page.getByTestId('my-assignments-search');
+  await expect(search).toBeVisible({ timeout: 15_000 });
+  await search.click();
+  await search.fill('');
+  await search.pressSequentially(query, { delay: 15 });
+  await expect(search).toHaveValue(query);
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('my-assignments-search')).toBeHidden({
+    timeout: 5_000,
+  });
+}
+
+async function findMyAssignmentRow(
+  page: Page,
+  options: { assignmentId?: string; title?: string }
+) {
+  await expandAssignmentTypeSections(page);
+  const target =
+    options.assignmentId != null
+      ? page.getByTestId(`my-assignment-open-${options.assignmentId}`)
+      : page
+          .locator('[data-testid^="my-assignment-open-"]')
+          .filter({ hasText: options.title ?? '' })
+          .first();
+  const forward = page.getByRole('button', { name: 'go forward' });
+  for (let pageIndex = 0; pageIndex < 25; pageIndex++) {
+    if (await target.isVisible().catch(() => false)) {
+      return target;
+    }
+    if (!(await forward.isEnabled().catch(() => false))) {
+      break;
+    }
+    await forward.click();
+  }
+  return target;
+}
+
 /** My Assignments search lives inside the Filter popover — open it before typing. */
 export async function fillMyAssignmentsSearch(
   page: Page,
@@ -424,19 +463,14 @@ export async function fillMyAssignmentsSearch(
     if (attempt > 0) {
       await page.reload({ waitUntil: 'networkidle' });
     }
-    await page.getByTestId('my-assignments-filter').click();
-    const search = page.getByTestId('my-assignments-search');
-    await expect(search).toBeVisible({ timeout: 15_000 });
-    await search.fill('');
-    await search.fill(query);
-    await page.keyboard.press('Escape');
-    await expect(page.getByTestId('my-assignments-search')).toBeHidden({
-      timeout: 5_000,
-    });
-    await expandAssignmentTypeSections(page);
+    await setMyAssignmentsSearchQuery(page, query);
     if (!visibilityTarget) return;
+    const located = await findMyAssignmentRow(page, {
+      assignmentId: options?.assignmentId,
+      title: trimmed,
+    });
     try {
-      await expect(visibilityTarget).toBeVisible({ timeout: 15_000 });
+      await expect(located).toBeVisible({ timeout: 5_000 });
       return;
     } catch (error) {
       if (attempt === 2) throw error;
