@@ -242,6 +242,13 @@ export const EXIT_TICKET_CLASS_SUMMARY_FLAG = 'exit-ticket-class-summary' as con
 export const ASSIGNMENTS_GROUPED_BY_TYPE_FLAG = 'assignments-grouped-by-type' as const;
 
 /**
+ * Student document editor v2 (glass chrome, margin comments, tutor header).
+ * Global only: off or everyone — no per-school targeting. Default off on
+ * production; demo and PR previews default on for QA.
+ */
+export const DOCUMENT_EDITOR_V2_FLAG = 'document-editor-v2' as const;
+
+/**
  * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
  * reads only `feature_flag.free_tier`; these rows are not OR-merged.
  */
@@ -430,6 +437,11 @@ export const FEATURE_FLAGS = {
     label: 'Assignments grouped by type',
     description:
       'My Assignments and each class’s Assignments tab show one collapsible section per assignment type (Exit Ticket, Daily Pages, The Thesis-Driven Essay…), with the same headings and counts as the grouped Documents page. Search, sort and delete work inside the sections. Off: one flat, paginated table. No data changes either way.',
+  },
+  [DOCUMENT_EDITOR_V2_FLAG]: {
+    label: 'Document editor v2',
+    description:
+      'Shows the redesigned student document editor (glass chrome, margin comments, tutor step header). Global only: off or everyone — no school targeting. Off on production by default; demo and PR previews default on. Staff can force v2 on production with ?editor=v2 when signed in as a platform admin.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

@@ -22,6 +22,7 @@ const {
   LESSON_PLANNER_FLAG,
   FREE_TIER_FLAG,
   TEACHER_PROMPT_GENERATOR_FLAG,
+  DOCUMENT_EDITOR_V2_FLAG,
   TEACHER_LOUNGE_FLAG,
   EXIT_TICKET_BUILDER_V3_FLAG,
   EXIT_TICKET_CLASS_SUMMARY_FLAG,
@@ -228,6 +229,38 @@ describe('feature flags (server)', () => {
     expect(await isLoungeCommunityEnabled(null)).toBe(false);
   });
 
+  test('document editor v2 defaults on for demo and preview, off on production', async () => {
+    const previous = process.env.YAWP_ENVIRONMENT;
+    const flagName = 'feature_flag.document-editor-v2';
+    try {
+      for (const environment of ['demo', 'preview']) {
+        process.env.YAWP_ENVIRONMENT = environment;
+        prisma.setting.findUnique.mockResolvedValue(null);
+        expect(await isFeatureFlagEnabled(DOCUMENT_EDITOR_V2_FLAG)).toBe(true);
+      }
+      process.env.YAWP_ENVIRONMENT = 'production';
+      prisma.setting.findUnique.mockResolvedValue(null);
+      expect(await isFeatureFlagEnabled(DOCUMENT_EDITOR_V2_FLAG)).toBe(false);
+      prisma.setting.findUnique.mockResolvedValue({
+        value: '{"mode":"everyone","orgIds":[]}',
+      });
+      expect(await isFeatureFlagEnabled(DOCUMENT_EDITOR_V2_FLAG)).toBe(true);
+      prisma.setting.findUnique.mockResolvedValue({
+        value: '{"mode":"targeted","orgIds":["org-1"]}',
+      });
+      expect(await isFeatureFlagEnabled(DOCUMENT_EDITOR_V2_FLAG, 'org-1')).toBe(
+        false
+      );
+      expect(prisma.setting.findUnique).toHaveBeenCalledWith({
+        where: { name: flagName },
+        select: { value: true },
+      });
+    } finally {
+      if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
+      else process.env.YAWP_ENVIRONMENT = previous;
+    }
+  });
+
   test('defaults off when no row exists', async () => {
     prisma.setting.findUnique.mockResolvedValue(null);
     expect(await isFeatureFlagEnabled(LESSON_PLANNER_FLAG)).toBe(false);
@@ -397,6 +430,7 @@ describe('feature flags (server)', () => {
       EXIT_TICKET_BUILDER_V3_FLAG,
       EXIT_TICKET_CLASS_SUMMARY_FLAG,
       ASSIGNMENTS_GROUPED_BY_TYPE_FLAG,
+      DOCUMENT_EDITOR_V2_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -454,6 +488,7 @@ describe('feature flags (server)', () => {
       EXIT_TICKET_BUILDER_V3_FLAG,
       EXIT_TICKET_CLASS_SUMMARY_FLAG,
       ASSIGNMENTS_GROUPED_BY_TYPE_FLAG,
+      DOCUMENT_EDITOR_V2_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;

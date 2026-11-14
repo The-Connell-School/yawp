@@ -88,17 +88,16 @@ export const ResponseBar = ({
     </div>
   ) : (
     <div
-      className={cn('doc-editor-tutor-footer flex-wrap', className)}
+      className={cn(
+        'flex flex-wrap items-center justify-center gap-2 border-t p-2 pb-5 md:pb-4',
+        className
+      )}
     >
-      {buttons?.map((button, index) => {
-        const isReady = button.label.trim() === 'Ready!';
-        return (
+      {buttons?.map((button, index) => (
         <Button
           key={index}
-          variant={isReady ? 'default' : 'secondary'}
-          size={isReady ? 'lg' : 'default'}
-          block={isReady}
-          className={cn('flex items-center gap-1', isReady ? '' : 'text-lg')}
+          variant="secondary"
+          className={cn('flex items-center gap-1 text-lg')}
           disabled={isDisabled}
           onClick={() => {
             if (isDisabled) return;
@@ -110,12 +109,11 @@ export const ResponseBar = ({
               throw new Error('Invalid button action');
             }
           }}
-          loading={isPending}
+          isLoading={isPending}
         >
           {button.label}
         </Button>
-      );
-      })}
+      ))}
       {showChatButton ? (
         <Button
           variant="secondary"
@@ -150,7 +148,7 @@ export const ResponseBar = ({
             }}
             onBlur={() => check && setCheck(false)}
             disabled={isDisabled}
-            loading={isPending}
+            isLoading={isPending}
           >
             {check ? 'You sure?' : <ChevronRightIcon />}
             {check ? <CheckIcon /> : null}
