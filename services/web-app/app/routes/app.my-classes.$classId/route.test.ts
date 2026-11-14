@@ -1154,10 +1154,14 @@ describe('class detail loader for students', () => {
     expect(
       prisma.class.findFirst.mock.calls[0][0].select.students
     ).toBeUndefined();
-    const { HIDE_AP_HISTORY_DOCUMENT_WHERE } = actualAssignmentTypeAccess;
     expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
       deletedAt: null,
       archivedAt: null,
+      NOT: {
+        assignment: {
+          assignmentType: { systemKey: 'ap_history_essay' },
+        },
+      },
       OR: [
         {
           classAssignment: { classId: 'class-1' },
@@ -1179,7 +1183,6 @@ describe('class detail loader for students', () => {
         },
         { classAssignmentId: null, membershipId: 'student-1' },
       ],
-      ...HIDE_AP_HISTORY_DOCUMENT_WHERE,
     });
   });
 });
