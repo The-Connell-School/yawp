@@ -10,7 +10,6 @@ import { expectGiveFeedbackAccessible } from '../helpers/dev-panel-feedback';
 import { expectNewAssignmentBuilderPage } from '../helpers/assignment-builder-v3-page';
 import { ensureLockedPreviewSampleAssignmentsForE2E } from '../helpers/ensure-locked-preview-sample-assignments-for-e2e';
 import { FREE_CLASSROOM_BUNDLE_TILE_LABELS } from '../../app/domain/free-tier/inapp-usage';
-import { SITE_LICENSE_LOCKED_TILE_LABELS } from '../../app/domain/free-tier/site-license-locked-assignment-tiles';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
     'Run class-step tests with ./bin/project test --profile free-tier-locked-preview-browser'
@@ -305,31 +304,15 @@ async function expectFreeDashboardAssignmentTiles(
   options?: { teachingApproved?: boolean }
 ) {
   const tiles = page.getByTestId('free-assignment-tiles');
-  const siteLicenseLabels = Object.values(SITE_LICENSE_LOCKED_TILE_LABELS);
-  if (options?.teachingApproved) {
-    await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(5);
-    await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
-      siteLicenseLabels.length
-    );
-    const tileNames = await tiles
-      .getByTestId('dashboard-assignment-tile')
-      .getByTestId('assignment-type-tile-name')
-      .allTextContents();
-    expect(tileNames).toEqual([...FREE_CLASSROOM_BUNDLE_TILE_LABELS]);
-    return;
-  }
-
-  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(
-    FREE_CLASSROOM_BUNDLE_TILE_LABELS.length + siteLicenseLabels.length
+  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(5);
+  await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
+    options?.teachingApproved ? 5 : 0
   );
-  await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(0);
   const tileNames = await tiles
+    .getByTestId('dashboard-assignment-tile')
     .getByTestId('assignment-type-tile-name')
     .allTextContents();
-  expect(tileNames).toEqual([
-    ...FREE_CLASSROOM_BUNDLE_TILE_LABELS,
-    ...siteLicenseLabels,
-  ]);
+  expect(tileNames).toEqual([...FREE_CLASSROOM_BUNDLE_TILE_LABELS]);
 }
 
 test.describe.configure({ mode: 'serial' });
