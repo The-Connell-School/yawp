@@ -22,7 +22,6 @@ const getAvailableAssignmentTypesForScopes = mock();
 // before any file could mock.module() this path (see comment there).
 const actualAssignmentTypeAccess =
   globalThis.__realModules['~/utils/assignment-type-access.server'];
-const { HIDE_AP_HISTORY_CLASS_ASSIGNMENT_WHERE } = actualAssignmentTypeAccess;
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/assignment-deployment.server', () => ({
@@ -136,17 +135,25 @@ describe('My Assignments loader', () => {
 
     expect(prisma.classAssignment.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {
-          ...HIDE_AP_HISTORY_CLASS_ASSIGNMENT_WHERE,
+        where: expect.objectContaining({
           class: {
             teachers: { some: { id: 'profile-1' } },
             isArchived: false,
             // Scoped to the teacher's school year, like every other surface.
             schoolYear: expect.any(String),
           },
-        },
+        }),
       })
     );
+    const findManyWhere = prisma.classAssignment.findMany.mock.calls[0]![0]
+      .where as Record<string, unknown>;
+    expect(findManyWhere).toMatchObject({
+      NOT: {
+        assignment: {
+          assignmentType: { systemKey: 'ap_history_essay' },
+        },
+      },
+    });
     expect(result).toMatchObject({
       assignments: [
         {
