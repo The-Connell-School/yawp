@@ -1,3 +1,4 @@
+import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 import { MadeNotice } from '~/components/lesson-planner/made-notice';
 import { DeckAskCard } from '~/components/lesson-planner/deck-ask-card';
 import { useActiveTime } from '~/components/lesson-planner/use-active-time';
@@ -1152,15 +1153,7 @@ export default function LessonPlannerRoute() {
               title="Lesson Planner"
               actions={
                 <>
-                  <Link
-                    to="/app/lesson-planner/how-it-works"
-                    aria-label="See how it works"
-                    data-tour="planner-guide"
-                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-primary/40 bg-background px-2.5 text-sm font-medium text-primary transition hover:bg-primary/10 sm:px-3"
-                  >
-                    <CirclePlay size={16} />
-                    <span className="hidden sm:inline">See how it works</span>
-                  </Link>
+                  <SeeHowItWorksLink to="/app/lesson-planner/how-it-works" data-tour="planner-guide" />
                   <div className="flex shrink-0 items-center gap-2 md:hidden">
                     <label
                       className="sr-only"
@@ -1264,15 +1257,7 @@ export default function LessonPlannerRoute() {
             </div>
             {/* The way into the guide stays in the header, where a teacher who
                 is new here looks first, and shrinks to its icon on a phone. */}
-            <Link
-              to="/app/lesson-planner/how-it-works"
-              aria-label="See how it works"
-              data-tour="planner-guide"
-              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-primary/40 bg-background px-2.5 text-sm font-medium text-primary transition hover:bg-primary/10 sm:px-3"
-            >
-              <CirclePlay size={16} />
-              <span className="hidden sm:inline">See how it works</span>
-            </Link>
+            <SeeHowItWorksLink to="/app/lesson-planner/how-it-works" data-tour="planner-guide" />
             <div className="flex shrink-0 items-center gap-2 md:hidden">
               {/* "Switch lesson", not "Your lessons": the rail's link to the
                   full list is called "All your lessons", and one accessible
@@ -2477,30 +2462,33 @@ function MessageBubble({
             gone — sending those words does nothing — and the stack, where the
             real downloads are, is offered instead (Brian's run 2, S2). */}
         {isLast && conversationId && modelSuggestions.some(isFileActionSuggestion) ? (
-          <Link
-            to={`/app/lesson-planner/${conversationId}/packet`}
-            data-testid="open-stack-for-files"
-            className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-background px-3 py-1.5 text-sm font-medium text-primary transition hover:border-primary hover:bg-primary/10"
-          >
-            <FileText size={13} className="opacity-70" />
-            Open the stack to download the lesson plan
-          </Link>
+          <Button asChild size="sm" variant="outline-primary" className="mt-2 rounded-full">
+            <Link
+              to={`/app/lesson-planner/${conversationId}/packet`}
+              data-testid="open-stack-for-files"
+            >
+              <FileText size={13} className="opacity-70" />
+              Open the stack to download the lesson plan
+            </Link>
+          </Button>
         ) : null}
         {/* The chips move inside the card when there is one, so a turn never
             has two send buttons racing to consume it. */}
         {suggestions.length > 0 && isLast && asks.length === 0 ? (
           <div className="mt-2 flex flex-wrap gap-2">
             {suggestions.map((suggestion) => (
-              <button
+              <Button
                 key={suggestion}
                 type="button"
+                size="sm"
+                variant="outline-primary"
+                className="rounded-full"
                 disabled={disabled}
                 onClick={() => onSuggestion(suggestion)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-sm font-medium text-primary transition hover:border-primary hover:bg-primary/10 disabled:opacity-50"
               >
                 <CornerDownRight size={13} className="opacity-60" />
                 {suggestion}
-              </button>
+              </Button>
             ))}
           </div>
         ) : null}

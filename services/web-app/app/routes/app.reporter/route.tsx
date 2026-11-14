@@ -653,16 +653,18 @@ function MessageBubble({
         {suggestions.length > 0 && isLast ? (
           <div className="mt-2 flex flex-wrap gap-2">
             {suggestions.map((suggestion) => (
-              <button
+              <Button
                 key={suggestion}
                 type="button"
+                size="sm"
+                variant="outline-primary"
+                className="rounded-full"
                 disabled={disabled}
                 onClick={() => onSuggestion(suggestion)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-sm font-medium text-primary transition hover:border-primary hover:bg-primary/10 disabled:opacity-50"
               >
                 <CornerDownRight size={13} className="opacity-60" />
                 {suggestion}
-              </button>
+              </Button>
             ))}
           </div>
         ) : null}
