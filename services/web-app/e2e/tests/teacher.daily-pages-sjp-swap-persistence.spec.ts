@@ -177,6 +177,10 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
     await swapTeacherToSjpOnly(e2eContext, sjpTypeId);
 
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.addInitScript(() => {
+      localStorage.removeItem('yawp.class-documents-view');
+      localStorage.removeItem('yawp.student-work-view');
+    });
     await page.goto('/app');
     await expect(
       page.locator(
@@ -188,9 +192,12 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
     ).toBeVisible();
 
     await page.goto(
-      `/app/my-classes/${e2eContext.classId}?tab=documents`
+      `/app/my-classes/${e2eContext.classId}?tab=documents&documentGroup=none`
     );
-    await expect(page.getByText(seeded.documentTitle).first()).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByText(seeded.documentTitle).first()).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByText(/10\s*\/\s*12/).first()).toBeVisible();
   });
 

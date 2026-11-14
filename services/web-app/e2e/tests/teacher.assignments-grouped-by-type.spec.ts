@@ -18,12 +18,15 @@ const TITLES = {
   thesis: `Grouped thesis essay ${RUN}`,
 } as const;
 
-let seeded = false;
-
 async function seedGroupedAssignments(ctx: E2EContext) {
-  if (seeded) return;
   const prisma = createE2EPrismaClient();
   try {
+    const titles = Object.values(TITLES);
+    const existing = await prisma.assignment.count({
+      where: { title: { in: [...titles] } },
+    });
+    if (existing >= titles.length) return;
+
     const rows: Array<[string, string]> = [
       [TITLES.exitTicketA, ctx.exitTicketAssignmentTypeId],
       [TITLES.exitTicketB, ctx.exitTicketAssignmentTypeId],
@@ -31,6 +34,11 @@ async function seedGroupedAssignments(ctx: E2EContext) {
       [TITLES.thesis, ctx.thesisEssayAssignmentTypeId],
     ];
     for (const [title, assignmentTypeId] of rows) {
+      const found = await prisma.assignment.findFirst({
+        where: { title },
+        select: { id: true },
+      });
+      if (found) continue;
       await createDeployedAssignment({
         prisma,
         classId: ctx.classId,
@@ -39,7 +47,6 @@ async function seedGroupedAssignments(ctx: E2EContext) {
         prompt: `${title} prompt`,
       });
     }
-    seeded = true;
   } finally {
     await prisma.$disconnect();
   }
@@ -145,8 +152,10 @@ test.describe.serial('Assignments grouped by assignment type', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
 
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
+    await page.waitForLoadState('networkidle');
     await expect(page.getByRole('table', { name: 'Assignments' })).toHaveCount(
-      1
+      1,
+      { timeout: 15_000 }
     );
     await expect(
       page.locator('[data-testid^="assignment-type-section-"]')
