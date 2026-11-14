@@ -279,7 +279,7 @@ function PageTourController({
       window.requestAnimationFrame(() => {
         window.setTimeout(() => {
           setPhase({ kind: 'touring', steps: resolveSteps(tour), index: 0 });
-        }, 150);
+        }, 400);
       });
     });
   }, [tour]);

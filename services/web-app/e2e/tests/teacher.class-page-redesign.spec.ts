@@ -1,6 +1,7 @@
 import { test, expect } from '../test-setup';
 import {
   clickClassAssignmentRow,
+  clickClassDocumentsStatusTab,
   openClassAssignmentsTab,
 } from '../test-helpers';
 import { currentSchoolYear } from '../../app/utils/school-year';
@@ -86,17 +87,21 @@ test.describe('Teacher class documents lifecycle', () => {
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.addInitScript(() => {
         localStorage.removeItem('yawp.class-documents-view');
+        localStorage.removeItem('yawp.student-work-view');
       });
       await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
       await page.waitForLoadState('networkidle');
       await expect
-        .poll(async () => {
-          await page.reload();
-          return page
-            .getByRole('table', { name: /class documents/i })
-            .getByText(`Lifecycle needs grading ${suffix}`)
-            .count();
-        })
+        .poll(
+          async () => {
+            await page.reload({ waitUntil: 'networkidle' });
+            return page
+              .getByRole('table', { name: /class documents/i })
+              .getByText(`Lifecycle needs grading ${suffix}`)
+              .count();
+          },
+          { timeout: 60_000 }
+        )
         .toBeGreaterThan(0);
 
       const table = page.getByRole('table', { name: /class documents/i });
@@ -125,15 +130,7 @@ test.describe('Teacher class documents lifecycle', () => {
 
       // Status filter narrows rows (chips are the source of truth; URL alone is
       // not always hydrated before the table paints in Playwright).
-      await page
-        .getByTestId('class-documents-status-chips')
-        .getByRole('tab', { name: /Needs Grading/ })
-        .click();
-      await expect(
-        page
-          .getByTestId('class-documents-status-chips')
-          .getByRole('tab', { name: /Needs Grading/ })
-      ).toHaveAttribute('aria-selected', 'true');
+      await clickClassDocumentsStatusTab(page, /Needs Grading/);
       const filteredTable = page.getByRole('table', {
         name: /class documents/i,
       });

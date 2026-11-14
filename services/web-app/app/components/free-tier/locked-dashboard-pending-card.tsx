@@ -92,6 +92,7 @@ export function LockedDashboardPendingCard() {
     <section
       className="rounded-xl border bg-popover p-5 shadow-sm"
       data-testid="locked-dashboard-pending-card"
+      data-tour="teaching-access-banner"
       aria-label="Approval request"
     >
       <div className="flex items-start gap-2">

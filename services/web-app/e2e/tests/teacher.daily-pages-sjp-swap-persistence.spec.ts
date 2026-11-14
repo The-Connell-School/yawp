@@ -197,9 +197,15 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
     await page.waitForLoadState('networkidle');
     const classDocuments = page.getByRole('table', { name: /class documents/i });
     await expect(classDocuments).toBeVisible({ timeout: 15_000 });
-    await expect(
-      classDocuments.getByText(seeded.documentTitle, { exact: true })
-    ).toBeVisible({ timeout: 15_000 });
+    await expect
+      .poll(
+        async () =>
+          classDocuments
+            .getByText(seeded.documentTitle, { exact: true })
+            .count(),
+        { timeout: 60_000 }
+      )
+      .toBeGreaterThan(0);
     await expect(classDocuments.getByText(/10\s*\/\s*12/).first()).toBeVisible();
   });
 

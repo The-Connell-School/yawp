@@ -5,7 +5,10 @@ import {
   expectTypeAbsentInPicker,
   expectTypePresentInPicker,
 } from '../helpers/assignment-builder-v3-page';
-import { openClassAssignmentsTab } from '../test-helpers';
+import {
+  expandAssignmentTypeSections,
+  openClassAssignmentsTab,
+} from '../test-helpers';
 
 test.describe.serial('Admin assignment type archive', () => {
   test.setTimeout(60_000);
@@ -50,6 +53,7 @@ test.describe.serial('Admin assignment type archive', () => {
       await page
         .getByRole('textbox', { name: 'Search assignments' })
         .fill('E2E Class Assignment');
+      await expandAssignmentTypeSections(page);
       await expect(
         page.getByTestId(`assignment-open-${e2eContext.assignmentId}`)
       ).toBeVisible({ timeout: 30_000 });

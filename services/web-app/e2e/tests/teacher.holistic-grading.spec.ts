@@ -1,5 +1,6 @@
 /** Holistic Cristo Rey smoke: grade-essay-ai on a 20-point assignment type. */
 import { test, expect } from '../test-setup';
+import { clickClassDocumentsStatusTab } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
 
@@ -185,10 +186,7 @@ test.describe.serial('holistic Cristo Rey points-only grading', () => {
     await page.goto(`/app/my-classes/${holisticClassId}?tab=documents`);
     const documentsTable = page.getByRole('table', { name: /class documents/i });
     await expect(documentsTable).toBeVisible({ timeout: 15_000 });
-    await page
-      .getByTestId('class-documents-status-chips')
-      .getByRole('tab', { name: /^Released/i })
-      .click();
+    await clickClassDocumentsStatusTab(page, /^Released/i);
     await expect(documentsTable.getByText(/6\s*\/\s*20/).first()).toBeVisible({
       timeout: 15_000,
     });

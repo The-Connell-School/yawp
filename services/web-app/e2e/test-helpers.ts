@@ -392,17 +392,16 @@ export async function submitSignedInEnterClassCode(
   ]);
 }
 
-async function setReactInputValue(locator: Locator, value: string) {
-  await locator.evaluate((el, next) => {
-    const input = el as HTMLInputElement;
-    const setter = Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      'value'
-    )?.set;
-    setter?.call(input, next);
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-  }, value);
+/** Expand every grouped-by-type section so rows stay reachable under the flag. */
+export async function expandAssignmentTypeSections(page: Page) {
+  const sections = page.locator('[data-testid^="assignment-type-section-"]');
+  const count = await sections.count();
+  for (let index = 0; index < count; index++) {
+    const heading = sections.nth(index).getByRole('button').first();
+    if ((await heading.getAttribute('aria-expanded')) === 'false') {
+      await heading.click();
+    }
+  }
 }
 
 /** My Assignments search lives inside the Filter popover — open it before typing. */
@@ -428,38 +427,53 @@ export async function fillMyAssignmentsSearch(
     await page.getByTestId('my-assignments-filter').click();
     const search = page.getByTestId('my-assignments-search');
     await expect(search).toBeVisible({ timeout: 15_000 });
-    await setReactInputValue(search, query);
-    if (!visibilityTarget) break;
-    try {
-      await expect(visibilityTarget).toBeVisible({ timeout: 10_000 });
-      break;
-    } catch (error) {
-      if (attempt === 2) throw error;
-    }
-  }
-
-  if (visibilityTarget) {
-    const typeSection = page
-      .locator('[data-testid^="assignment-type-section-"]')
-      .filter({ has: visibilityTarget });
-    if ((await typeSection.count()) > 0) {
-      const sectionToggle = typeSection.getByRole('button').first();
-      const expanded = await sectionToggle.getAttribute('aria-expanded');
-      if (expanded === 'false') {
-        await sectionToggle.click();
-      }
-    }
+    await search.fill('');
+    await search.fill(query);
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('my-assignments-search')).toBeHidden({
       timeout: 5_000,
     });
-    await expect(visibilityTarget).toBeVisible({ timeout: 30_000 });
-    return;
+    await expandAssignmentTypeSections(page);
+    if (!visibilityTarget) return;
+    try {
+      await expect(visibilityTarget).toBeVisible({ timeout: 15_000 });
+      return;
+    } catch (error) {
+      if (attempt === 2) throw error;
+    }
   }
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId('my-assignments-search')).toBeHidden({
-    timeout: 5_000,
-  });
+}
+
+/** Class documents status chip (FilterPills may scroll horizontally). */
+export async function clickClassDocumentsStatusTab(
+  page: Page,
+  name: string | RegExp
+) {
+  const chips = page.getByTestId('class-documents-status-chips');
+  await expect(chips).toBeVisible({ timeout: 15_000 });
+  const tab = chips.getByRole('tab', { name });
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await tab.scrollIntoViewIfNeeded();
+    if (await tab.isVisible()) {
+      await tab.click();
+      try {
+        await expect(tab).toHaveAttribute('aria-selected', 'true', {
+          timeout: 5_000,
+        });
+        return;
+      } catch {
+        // Chip can sit under overflow chevrons until the track scrolls.
+      }
+    }
+    const scrollRight = page.getByTestId(
+      'class-documents-status-chips-scroll-right'
+    );
+    if (await scrollRight.isVisible()) {
+      await scrollRight.click();
+    }
+  }
+  await tab.click();
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
 }
 
 /** Class detail assignments tab (header tabs include counts in the label). */
@@ -487,6 +501,7 @@ export async function clickClassAssignmentRow(
     await searchBox.fill('');
     await searchBox.fill(options.title);
   }
+  await expandAssignmentTypeSections(page);
   const row = page
     .getByRole('row')
     .filter({ has: page.getByTestId(`assignment-open-${assignmentId}`) });
@@ -502,6 +517,7 @@ export async function clickStudentClassAssignmentRow(
   await expect(page.getByTestId('student-class-detail')).toBeVisible({
     timeout: 15_000,
   });
+  await expandAssignmentTypeSections(page);
   const row =
     options.assignmentId != null
       ? page
