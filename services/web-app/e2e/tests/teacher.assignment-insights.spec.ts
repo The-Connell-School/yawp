@@ -32,9 +32,11 @@ test.describe('teacher assignment-level class insights', () => {
     await page.goto(
       `/app/my-classes/${e2eContext.classId}?tab=documents&classAssignmentId=${e2eContext.classAssignmentId}`
     );
-    await page
-      .getByRole('link', { name: /class performance summary/i })
-      .click();
+    const summaryLink = page.getByRole('link', {
+      name: /class performance summary/i,
+    });
+    await expect(summaryLink).toBeVisible({ timeout: 15_000 });
+    await summaryLink.click();
     await expect(page).toHaveURL(
       new RegExp(`/summary/${e2eContext.assignmentId}`)
     );

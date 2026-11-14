@@ -395,8 +395,36 @@ export async function submitSignedInEnterClassCode(
 /** My Assignments search lives inside the Filter popover — open it before typing. */
 export async function fillMyAssignmentsSearch(page: Page, query: string) {
   await page.getByTestId('my-assignments-filter').click();
-  await page.getByTestId('my-assignments-search').fill(query);
+  const search = page.getByTestId('my-assignments-search');
+  await expect(search).toBeVisible({ timeout: 15_000 });
+  await search.fill(query);
+  const trimmed = query.trim();
+  if (trimmed) {
+    await expect
+      .poll(
+        async () =>
+          page.locator('[data-testid^="my-assignment-open-"]').filter({
+            hasText: trimmed,
+          }).count(),
+        { timeout: 15_000 }
+      )
+      .toBeGreaterThan(0);
+  }
   await page.keyboard.press('Escape');
+  await expect(search).toBeHidden({ timeout: 5_000 });
+}
+
+/** Class detail assignments tab (header tabs include counts in the label). */
+export async function openClassAssignmentsTab(page: Page) {
+  const tab = page.locator('[data-header-tab="assignments"]');
+  await expect(tab).toBeVisible({ timeout: 15_000 });
+  if ((await tab.getAttribute('aria-selected')) !== 'true') {
+    await tab.click();
+  }
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
+  await expect(
+    page.getByRole('textbox', { name: 'Search assignments' })
+  ).toBeVisible({ timeout: 15_000 });
 }
 
 /** Submit join form and wait until the student lands in the authenticated app shell. */

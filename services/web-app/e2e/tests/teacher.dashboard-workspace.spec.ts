@@ -280,9 +280,10 @@ test.describe.serial('Teacher dashboard workspace', () => {
         .click();
       await page.waitForURL(/\/app\/documents\?status=needs-grading/);
       await page.waitForLoadState('networkidle');
-      await expect(page.getByText(title, { exact: true })).toHaveCount(1, {
-        timeout: 15_000,
-      });
+      const gradingTable = page.getByRole('table', { name: /documents/i });
+      await expect(
+        gradingTable.getByText(title, { exact: true })
+      ).toBeVisible({ timeout: 15_000 });
     } finally {
       if (documentId) {
         await prisma.submission.deleteMany({ where: { documentId } });

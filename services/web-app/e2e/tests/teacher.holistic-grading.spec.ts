@@ -185,7 +185,9 @@ test.describe.serial('holistic Cristo Rey points-only grading', () => {
     await page.goto(
       `/app/my-classes/${holisticClassId}?tab=documents&status=released`
     );
-    await expect(page.getByText(/6\s*\/\s*20/)).toBeVisible();
+    const documentsTable = page.getByRole('table', { name: /class documents/i });
+    await expect(documentsTable).toBeVisible({ timeout: 15_000 });
+    await expect(documentsTable.getByText(/6\s*\/\s*20/).first()).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('holistic-gradebook-row.png'),
       fullPage: true,

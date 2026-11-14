@@ -198,8 +198,8 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
     const classDocuments = page.getByRole('table', { name: /class documents/i });
     await expect(classDocuments).toBeVisible({ timeout: 15_000 });
     await expect(
-      classDocuments.getByRole('row', { name: new RegExp(seeded.documentTitle) })
-    ).toBeVisible();
+      classDocuments.getByText(seeded.documentTitle, { exact: true })
+    ).toBeVisible({ timeout: 15_000 });
     await expect(classDocuments.getByText(/10\s*\/\s*12/).first()).toBeVisible();
   });
 

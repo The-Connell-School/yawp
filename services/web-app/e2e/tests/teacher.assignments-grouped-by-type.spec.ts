@@ -3,6 +3,7 @@ import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
 import { setFeatureFlag } from '../feature-flags';
+import { openClassAssignmentsTab } from '../test-helpers';
 import type { E2EContext } from '../seed-e2e';
 
 // `assignments-grouped-by-type`: My Assignments and a class's Assignments tab
@@ -70,6 +71,7 @@ function section(page: Page, assignmentTypeId: string) {
 }
 
 async function expectGroupedByType(page: Page, ctx: E2EContext) {
+  await openClassAssignmentsTab(page);
   const exitTicketTitle = await assignmentTypeTitle(
     ctx.exitTicketAssignmentTypeId
   );
@@ -153,12 +155,10 @@ test.describe.serial('Assignments grouped by assignment type', () => {
 
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
     await page.waitForLoadState('networkidle');
+    await openClassAssignmentsTab(page);
     await page
       .getByRole('textbox', { name: 'Search assignments' })
       .fill('');
-    await expect(
-      page.locator('[data-header-tab="assignments"]')
-    ).toHaveAttribute('aria-selected', 'true');
     await expect(
       page.locator('[data-testid^="assignment-type-section-"]')
     ).toHaveCount(0, { timeout: 15_000 });

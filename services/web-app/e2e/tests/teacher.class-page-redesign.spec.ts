@@ -91,7 +91,9 @@ test.describe('Teacher class documents lifecycle', () => {
 
       // Seeded + local data cover the full lifecycle.
       await expect(table.getByText('In Progress').first()).toBeVisible();
-      await expect(table.getByText('Needs Grading').first()).toBeVisible();
+      await expect(
+        table.getByText(`Lifecycle needs grading ${suffix}`)
+      ).toBeVisible();
       await expect(table.getByText(/^Needs Releasing/).first()).toBeVisible();
       await expect(table.getByText(/^Released/).first()).toBeVisible();
 
@@ -268,7 +270,7 @@ test.describe.serial('Teacher class page redesign', () => {
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByText('E2E Class Assignment', { exact: true }).click();
+    await page.getByTestId(`assignment-open-${e2eContext.assignmentId}`).click();
 
     // Forward navigation changes the URL — linkable, not a sheet toggle.
     await page.waitForURL(
@@ -337,7 +339,7 @@ test.describe.serial('Teacher class page redesign', () => {
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByText('E2E Class Assignment', { exact: true }).click();
+    await page.getByTestId(`assignment-open-${e2eContext.assignmentId}`).click();
     await page.waitForURL(
       `/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
     );

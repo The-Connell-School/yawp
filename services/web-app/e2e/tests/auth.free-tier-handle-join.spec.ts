@@ -122,6 +122,7 @@ test.describe('Free-tier handle student', () => {
         waitUntil: 'domcontentloaded',
       });
       await expect(page.getByTestId('student-class-detail')).toBeVisible();
+      await page.getByRole('tab', { name: 'Assignments' }).click();
       const startButton = page.locator(
         `form[action="/app/class-assignments/${classAssignment.id}/start"] button`
       );

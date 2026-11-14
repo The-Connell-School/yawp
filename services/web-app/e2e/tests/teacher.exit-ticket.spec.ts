@@ -103,7 +103,9 @@ test.describe.serial('Exit tickets', () => {
     // Editing must not quietly turn a specific exit ticket back into the
     // generic one, which is what a form that reset to Basic would do.
     await page
-      .getByRole('link', { name: 'Exit ticket: erosion', exact: true })
+      .locator('[data-testid^="my-assignment-open-"]')
+      .filter({ hasText: 'Exit ticket: erosion' })
+      .first()
       .click();
     await page
       .getByRole('button', { name: /^Edit$/ })

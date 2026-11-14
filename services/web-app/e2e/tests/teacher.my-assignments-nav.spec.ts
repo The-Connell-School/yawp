@@ -36,9 +36,7 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     await page.waitForLoadState('networkidle');
     await fillMyAssignmentsSearch(page, 'E2E Class Assignment');
 
-    await page
-      .getByRole('link', { name: 'E2E Class Assignment', exact: true })
-      .click();
+    await page.getByTestId(`my-assignment-open-${e2eContext.assignmentId}`).click();
 
     await page.waitForURL(
       `**/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`,
