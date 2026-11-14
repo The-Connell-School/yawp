@@ -292,6 +292,160 @@ describe('ClassAssignmentsTab', () => {
     expect(creationProps.onOpenChange).toBe(initialOnOpenChange);
   });
 
+  describe('ap-history-in-new-assignment', () => {
+    it('drops the AP History Essay toolbar link: the type is not a property of the class', () => {
+      const el = renderTab({
+        apHistoryAssignmentTypeId: 'type-apush',
+        apHistoryInNewAssignment: true,
+      });
+
+      expect(el.querySelector('a[href^="/app/assignment-types/"]')).toBeNull();
+      const toolbarLabels = Array.from(el.querySelectorAll('a,button')).map(
+        (node) => node.textContent?.trim()
+      );
+      expect(toolbarLabels).not.toContain('AP History Essay');
+    });
+
+    it('hands the New Assignment sheet AP History as a library type that opens the library for this class', () => {
+      renderTab({
+        apHistoryAssignmentTypeId: 'type-apush',
+        apHistoryInNewAssignment: true,
+      });
+
+      expect(creationProps.libraryAssignmentTypes).toEqual([
+        {
+          id: 'type-apush',
+          title: 'AP History Essay',
+          description: 'Opens the AP prompt library',
+          href: '/app/assignment-types/type-apush?classId=class-1',
+        },
+      ]);
+    });
+
+    it('offers nothing extra when AP History is not available to the class', () => {
+      renderTab({ apHistoryInNewAssignment: true });
+      expect(creationProps.libraryAssignmentTypes ?? []).toEqual([]);
+    });
+
+    it('flag off keeps the legacy toolbar link and adds nothing to the sheet', () => {
+      const el = renderTab({ apHistoryAssignmentTypeId: 'type-apush' });
+      expect(
+        el.querySelector(
+          'a[href="/app/assignment-types/type-apush?classId=class-1"]'
+        )
+      ).toBeTruthy();
+      expect(creationProps.libraryAssignmentTypes ?? []).toEqual([]);
+    });
+  });
+
+  describe('assignments-grouped-by-type', () => {
+    const EXIT_TICKETS: ClassAssignmentsTabAssignment[] = [
+      {
+        ...ASSIGNMENTS[0],
+        id: 'exit-1',
+        classAssignmentId: 'ca-exit-1',
+        title: 'Exit ticket: Thursday',
+        assignmentTypeId: 'type-exit',
+        assignmentType: { id: 'type-exit', title: 'Exit Ticket', systemKey: null },
+      },
+      {
+        ...ASSIGNMENTS[0],
+        id: 'exit-2',
+        classAssignmentId: 'ca-exit-2',
+        title: 'Exit ticket: Friday',
+        assignmentTypeId: 'type-exit',
+        assignmentType: { id: 'type-exit', title: 'Exit Ticket', systemKey: null },
+      },
+    ];
+    const GROUPED = [...ASSIGNMENTS, ...EXIT_TICKETS];
+
+    function sections(el: HTMLElement) {
+      return Array.from(
+        el.querySelectorAll<HTMLElement>('[data-testid^="assignment-type-section-"]')
+      );
+    }
+
+    it('renders one section per assignment type, in alphabetical order, each headed with its title and count', () => {
+      const el = renderTab({ assignments: GROUPED, groupedByType: true });
+      const found = sections(el);
+
+      expect(found.map((node) => node.dataset.assignmentTypeTitle)).toEqual([
+        'AP History Essay',
+        'DBQ',
+        'Exit Ticket',
+      ]);
+      const exit = el.querySelector(
+        '[data-testid="assignment-type-section-type-exit"]'
+      )!;
+      const heading = exit.querySelector('button[aria-expanded]')!;
+      expect(heading.textContent).toBe('Exit Ticket2');
+      expect(heading.getAttribute('aria-expanded')).toBe('true');
+      expect(exit.textContent).toContain('Exit ticket: Thursday');
+      expect(exit.textContent).toContain('Exit ticket: Friday');
+      expect(exit.textContent).not.toContain('The Gilded Age DBQ');
+    });
+
+    it('drops the Type column inside sections — the heading already says it', () => {
+      const el = renderTab({ assignments: GROUPED, groupedByType: true });
+      const heads = Array.from(
+        sections(el)[0].querySelectorAll('th')
+      ).map((th) => th.textContent?.trim());
+      expect(heads).not.toContain('Type');
+      expect(heads).toContain('Documents');
+    });
+
+    it('collapses a section from its heading', () => {
+      const el = renderTab({ assignments: GROUPED, groupedByType: true });
+      const exit = el.querySelector(
+        '[data-testid="assignment-type-section-type-exit"]'
+      )!;
+      const heading = exit.querySelector(
+        'button[aria-expanded]'
+      ) as HTMLButtonElement;
+
+      act(() => heading.click());
+
+      expect(heading.getAttribute('aria-expanded')).toBe('false');
+      const content = document.getElementById(
+        heading.getAttribute('aria-controls')!
+      );
+      expect(
+        content === null || content.getAttribute('data-state') === 'closed'
+      ).toBe(true);
+    });
+
+    it("a section's select-all checkbox selects just that section", () => {
+      const el = renderTab({ assignments: GROUPED, groupedByType: true });
+      const exit = el.querySelector(
+        '[data-testid="assignment-type-section-type-exit"]'
+      )!;
+      const selectAll = exit.querySelector(
+        '[aria-label="Select all Exit Ticket assignments"]'
+      ) as HTMLButtonElement;
+
+      act(() => selectAll.click());
+
+      expect(el.querySelector('[aria-label="Delete 2 assignment(s)"]')).toBeTruthy();
+    });
+
+    it('still opens an assignment from a row inside a section', () => {
+      const onSelectAssignment = mock();
+      const el = renderTab({
+        assignments: GROUPED,
+        groupedByType: true,
+        onSelectAssignment,
+      });
+      clickRow(el, 'assignment-open-exit-2');
+      expect(onSelectAssignment).toHaveBeenCalledWith('exit-2');
+    });
+
+    it('flag off renders the single flat table', () => {
+      const el = renderTab({ assignments: GROUPED });
+      expect(sections(el)).toHaveLength(0);
+      expect(el.querySelectorAll('table')).toHaveLength(1);
+    });
+  });
+
   it('clamps pagination to the last populated page after rows are removed', () => {
     expect(clampAssignmentPaginationSkip(40, 20, 21)).toBe(20);
     expect(clampAssignmentPaginationSkip(20, 20, 20)).toBe(0);

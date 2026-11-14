@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Form, Link } from 'react-router';
 import { useNavigateToNewAssignmentPage } from '~/domain/free-tier/navigate-to-new-assignment-page';
 import { ArrowDown, ArrowUp, Plus, Search, Trash2 } from 'lucide-react';
@@ -10,6 +10,10 @@ import {
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
 import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
 import type { AssignmentEditRecord } from '~/components/assignments/assignment-edit-sheet';
+import {
+  AssignmentCreationSheet,
+  type AssignmentCreationLibraryType,
+} from '~/components/assignments/assignment-creation-sheet';
 import {
   AssignmentDocumentsPill,
   assignmentDocumentsLabel,
@@ -34,6 +38,9 @@ import { Pagination } from '~/components/table/pagination';
 import { Tooltip } from '~/components/ui/tooltip';
 import { useTable } from '~/hooks/useTable';
 import { filterClassAssignmentsByQuery } from './class-assignments-search';
+import { CollapsibleGroupSection } from '~/components/collapsible-group-section';
+import { groupByAssignmentType } from '~/utils/group-by-assignment-type';
+import type { AssignmentCreationLibraryType } from '~/components/assignments/assignment-creation-sheet';
 import type { ClassInsight } from '../app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel';
 import type { SiteLicenseLockedAssignmentTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 
@@ -64,6 +71,19 @@ type ClassAssignmentsTabProps = {
   }[];
   siteLicenseLockedAssignmentTiles?: SiteLicenseLockedAssignmentTile[];
   apHistoryAssignmentTypeId?: string | null;
+  /**
+   * Flag `ap-history-in-new-assignment`: AP History is offered in the New
+   * Assignment sheet instead of as a toolbar button. Off: the button.
+   */
+  apHistoryInNewAssignment?: boolean;
+  /**
+   * Flag `assignments-grouped-by-type`: one collapsible section per
+   * assignment type, as the grouped Documents page. Off: one flat table.
+   */
+  groupedByType?: boolean;
+  /** The v3 exit ticket builder; off renders the quick builder. */
+  exitTicketBuilderV3Enabled?: boolean;
+
   /** Gated on the organization's classInsightsEnabled flag. */
   classInsightsEnabled: boolean;
   teachingLocked?: boolean;
@@ -97,6 +117,10 @@ export function ClassAssignmentsTab({
   assignmentTypes,
   siteLicenseLockedAssignmentTiles = [],
   apHistoryAssignmentTypeId,
+  apHistoryInNewAssignment = false,
+  groupedByType = false,
+  exitTicketBuilderV3Enabled = false,
+
   classInsightsEnabled,
   teachingLocked = false,
   teachingAccessAdminName = 'your administrator',
@@ -113,6 +137,7 @@ export function ClassAssignmentsTab({
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
+  const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
   const collator = useMemo(
     () => new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }),
     []
@@ -169,6 +194,223 @@ export function ClassAssignmentsTab({
       (assignment) => assignment.id === id && assignment.hasSharedWork
     )
   );
+  const handleCreateSheetOpenChange = useCallback((open: boolean) => {
+    setIsCreateSheetOpen(open);
+  }, []);
+
+  const [collapsedTypeIds, setCollapsedTypeIds] = useState<Set<string>>(
+    () => new Set()
+  );
+  const typeGroups = useMemo(
+    () =>
+      groupedByType
+        ? groupByAssignmentType({
+            items: filteredAssignments,
+            getAssignmentType: (assignment) => assignment.assignmentType,
+            collator,
+          })
+        : [],
+    [collator, filteredAssignments, groupedByType]
+  );
+
+  // Where AP History is started from. Behind the flag it is one of the types
+  // in New Assignment; the toolbar button it replaces showed in every class
+  // of a school with AP History, whatever the class taught.
+  const libraryAssignmentTypes: AssignmentCreationLibraryType[] =
+    apHistoryInNewAssignment && apHistoryAssignmentTypeId
+      ? [
+          {
+            id: apHistoryAssignmentTypeId,
+            title: 'AP History Essay',
+            description: 'Opens the AP prompt library',
+            href: `/app/assignment-types/${apHistoryAssignmentTypeId}?classId=${encodeURIComponent(classOption.id)}`,
+          },
+        ]
+      : [];
+  const showApHistoryToolbarLink =
+    Boolean(apHistoryAssignmentTypeId) && !apHistoryInNewAssignment;
+
+  const toggleSelectedGroup = (ids: string[], checked: boolean) => {
+    setSelectedAssignmentIds((current) => {
+      const next = new Set(current);
+      for (const id of ids) {
+        if (checked) next.add(id);
+        else next.delete(id);
+      }
+      return Array.from(next);
+    });
+  };
+
+  const renderAssignmentsTable = ({
+    rows,
+    tableLabel,
+    selectAllLabel,
+    allRowsSelected,
+    onSelectAll,
+    showTypeColumn,
+  }: {
+    rows: ClassAssignmentsTabAssignment[];
+    tableLabel: string;
+    selectAllLabel: string;
+    allRowsSelected: boolean;
+    onSelectAll: (checked: boolean) => void;
+    showTypeColumn: boolean;
+  }) => (
+    <Table aria-label={tableLabel}>
+      <TableHeader className="rounded-t-lg">
+        <TableRow className="rounded-t-lg bg-muted/50">
+          {!teachingLocked ? (
+            <TableHead className="w-[50px] rounded-tl-lg pl-4">
+              <Checkbox
+                aria-label={selectAllLabel}
+                checked={allRowsSelected}
+                onCheckedChange={onSelectAll}
+              />
+            </TableHead>
+          ) : null}
+          <TableHead className={teachingLocked ? 'rounded-tl-lg pl-4' : undefined}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="-ml-2 h-8 gap-2 px-2"
+              aria-label={`Sort assignments by title ${
+                sortDirection === 'asc' ? 'descending' : 'ascending'
+              }`}
+              onClick={() =>
+                setSortDirection((current) =>
+                  current === 'asc' ? 'desc' : 'asc'
+                )
+              }
+            >
+              Assignment
+              {sortDirection === 'asc' ? (
+                <ArrowUp className="h-4 w-4" />
+              ) : (
+                <ArrowDown className="h-4 w-4" />
+              )}
+            </Button>
+          </TableHead>
+          {showTypeColumn ? (
+            <TableHead className="whitespace-nowrap">Type</TableHead>
+          ) : null}
+          {teachingLocked ? (
+            <TableHead className="whitespace-nowrap">Status</TableHead>
+          ) : (
+            <TableHead className="whitespace-nowrap">Graded</TableHead>
+          )}
+          <TableHead className="whitespace-nowrap pr-4">
+            Documents
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((assignment) => {
+          const title = assignmentTitle(assignment);
+
+          return (
+            <TableRow
+              key={assignment.classAssignmentId}
+              className={teachingLocked ? undefined : 'cursor-pointer'}
+              data-state={
+                selectedAssignmentIds.includes(assignment.id)
+                  ? 'selected'
+                  : undefined
+              }
+              onClick={
+                teachingLocked
+                  ? undefined
+                  : () => onSelectAssignment(assignment.id)
+              }
+            >
+              {!teachingLocked ? (
+                <TableCell
+                  className="max-h-[37px] pl-4"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <Checkbox
+                    aria-label={`Select assignment ${title}`}
+                    checked={selectedAssignmentIds.includes(assignment.id)}
+                    onCheckedChange={() => handleSelect(assignment.id)}
+                  />
+                </TableCell>
+              ) : null}
+              <TableCell className="font-medium">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    data-testid={`assignment-open-${assignment.id}`}
+                    className="[overflow-wrap:anywhere]"
+                  >
+                    {title}
+                  </span>
+                  <AssignmentTryItPill
+                    assignment={{
+                      id: assignment.id,
+                      assignmentTypeId: assignment.assignmentType.id,
+                      classId: classOption.id,
+                    }}
+                  />
+                  {teachingLocked ? (
+                    <Badge variant="secondary" className="font-normal">
+                      Sample · Not sent
+                    </Badge>
+                  ) : (
+                    <TutorOffBadge tutorEnabled={assignment.tutorEnabled} />
+                  )}
+                </div>
+              </TableCell>
+              {showTypeColumn ? (
+                <TableCell className="text-muted-foreground">
+                  {assignment.assignmentType.title}
+                </TableCell>
+              ) : null}
+              {teachingLocked ? (
+                <TableCell className="text-muted-foreground">
+                  Not sent
+                </TableCell>
+              ) : (
+                <TableCell className="text-muted-foreground">
+                  {assignment.gradedCount}
+                </TableCell>
+              )}
+              <TableCell className="pr-4">
+                {teachingLocked ? (
+                  <LockedTeachingControl {...sendLockProps}>
+                    <button
+                      type="button"
+                      className={cn(
+                        badgeVariants({ variant: 'secondary' }),
+                        'cursor-pointer gap-1 py-1 pl-2 pr-1 opacity-60'
+                      )}
+                      aria-label={`View documents for ${title}`}
+                      data-testid={`assignment-documents-${assignment.id}`}
+                    >
+                      {assignmentDocumentsLabel(assignment.documentCount)}
+                      <ChevronRight
+                        className="size-3 shrink-0"
+                        aria-hidden="true"
+                      />
+                    </button>
+                  </LockedTeachingControl>
+                ) : (
+                  <AssignmentDocumentsPill
+                    documentCount={assignment.documentCount}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onViewDocuments(assignment.id);
+                    }}
+                    ariaLabel={`View documents for ${title}`}
+                  />
+                )}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
+
+
   return (
     <div className="space-y-4 text-foreground">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -185,7 +427,7 @@ export function ClassAssignmentsTab({
           />
         </div>
         <div className="ml-auto flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
-          {apHistoryAssignmentTypeId ? (
+          {showApHistoryToolbarLink ? (
             <Button asChild size="sm" variant="outline" className="shrink-0">
               <Link
                 to={`/app/assignment-types/${apHistoryAssignmentTypeId}?classId=${encodeURIComponent(classOption.id)}`}
@@ -243,9 +485,13 @@ export function ClassAssignmentsTab({
                 size="sm"
                 className="shrink-0"
                 data-testid="new-assignment-button"
-                onClick={() =>
-                  navigateToNewAssignmentPage({ classId: classOption.id })
-                }
+                onClick={() => {
+                  if (apHistoryInNewAssignment) {
+                    setIsCreateSheetOpen(true);
+                    return;
+                  }
+                  navigateToNewAssignmentPage({ classId: classOption.id });
+                }}
               >
                 <Plus className="mr-2 h-4 w-4" />
                 New Assignment
@@ -275,6 +521,42 @@ export function ClassAssignmentsTab({
           <span className="text-base/7 text-muted-foreground sm:text-sm/6">
             Try a different search term
           </span>
+        </div>
+      ) : groupedByType ? (
+        <div className="space-y-3">
+          {typeGroups.map((group) => {
+            const ids = group.items.map((assignment) => assignment.id);
+            return (
+              <CollapsibleGroupSection
+                key={group.key}
+                label={group.label}
+                count={group.items.length}
+                open={!collapsedTypeIds.has(group.key)}
+                onOpenChange={(open) =>
+                  setCollapsedTypeIds((current) => {
+                    const next = new Set(current);
+                    if (open) next.delete(group.key);
+                    else next.add(group.key);
+                    return next;
+                  })
+                }
+                data-testid={`assignment-type-section-${group.key}`}
+                data-assignment-type-title={group.label}
+              >
+                {renderAssignmentsTable({
+                  rows: group.items,
+                  tableLabel: `${group.label} assignments`,
+                  selectAllLabel: `Select all ${group.label} assignments`,
+                  allRowsSelected: ids.every((id) =>
+                    selectedAssignmentIds.includes(id)
+                  ),
+                  onSelectAll: (checked) => toggleSelectedGroup(ids, checked),
+                  // The section heading already names the type.
+                  showTypeColumn: false,
+                })}
+              </CollapsibleGroupSection>
+            );
+          })}
         </div>
       ) : (
         <div className="rounded-lg bg-muted/50">
@@ -430,10 +712,11 @@ export function ClassAssignmentsTab({
               })}
             </TableBody>
           </Table>
+
         </div>
       )}
 
-      {filteredAssignments.length > 0 ? (
+      {filteredAssignments.length > 0 && !groupedByType ? (
         <Pagination
           totalCount={filteredAssignments.length}
           skip={pagination.skip}
@@ -441,6 +724,19 @@ export function ClassAssignmentsTab({
           onChange={(skip, take) => setPagination({ skip, take })}
         />
       ) : null}
+
+      <AssignmentCreationSheet
+        open={isCreateSheetOpen}
+        onOpenChange={handleCreateSheetOpenChange}
+        entryPoint="class"
+        exitTicketBuilderV3Enabled={exitTicketBuilderV3Enabled}
+        fixedClassId={classOption.id}
+        assignmentTypes={assignmentTypes}
+        libraryAssignmentTypes={libraryAssignmentTypes}
+        siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
+        teachingLocked={teachingLocked}
+        teacherClasses={[classOption]}
+      />
 
     </div>
   );
