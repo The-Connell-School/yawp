@@ -257,9 +257,9 @@ export async function action({ request }: ActionFunctionArgs) {
       }
       return result;
     }
-    const { ensureLockedPreviewClassroomForUser } =
+    const { ensureLockedPreviewClassroomForUserBestEffort } =
       await import('~/domain/free-tier/locked-preview.server');
-    await ensureLockedPreviewClassroomForUser(userId);
+    await ensureLockedPreviewClassroomForUserBestEffort(userId);
     const nextStatus = result.status;
     const nextDestination = onboardingV2
       ? await progressedDestination(nextStatus)
@@ -445,6 +445,22 @@ export default function FreeTierOnboardingRoute() {
             />
           </>
         ) : null}
+        <FreeTierFieldLabel label={onboardingV2 ? 'Title' : 'Administrator role'} htmlFor="adminRole">
+          <FreeTierTextInput
+            id="adminRole"
+            name="adminRole"
+            placeholder={
+              onboardingV2
+                ? 'Principal, Assistant Principal, Director of Curriculum and Instruction'
+                : 'Principal, Technology Director'
+            }
+            required
+            maxLength={100}
+            defaultValue={
+              additionalAdministrator ? '' : (pending?.adminRole ?? '')
+            }
+          />
+        </FreeTierFieldLabel>
         <FreeTierFieldLabel label={onboardingV2 ? 'Administrator’s name' : 'Administrator name'} htmlFor="adminName">
           <FreeTierTextInput
             id="adminName"
@@ -480,18 +496,6 @@ export default function FreeTierOnboardingRoute() {
             {adminEmailError}
           </p>
         ) : null}
-        <FreeTierFieldLabel label={onboardingV2 ? 'Title' : 'Administrator role'} htmlFor="adminRole">
-          <FreeTierTextInput
-            id="adminRole"
-            name="adminRole"
-            placeholder={onboardingV2 ? 'Principal, Assistant Principal, Director of Curriculum and Instruction' : 'Principal, Technology Director'}
-            required
-            maxLength={100}
-            defaultValue={
-              additionalAdministrator ? '' : (pending?.adminRole ?? '')
-            }
-          />
-        </FreeTierFieldLabel>
         {onboardingV2 ? null : (
           <FreeTierProgress
             steps={[

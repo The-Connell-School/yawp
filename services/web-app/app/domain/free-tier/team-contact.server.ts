@@ -11,6 +11,7 @@ import type { EmailSendResult } from './email.server';
 export const TEAM_CONTACT_BELOW_HS_KIND = 'team_contact_below_hs';
 export const TEAM_CONTACT_ADMIN_LEARN_MORE_KIND = 'team_contact_admin_learn_more';
 export const TEAM_CONTACT_IDEMPOTENCY_MS = 10 * 60 * 1000;
+export const TEAM_CONTACT_ADMIN_LEARN_MORE_COOLDOWN_MS = 30 * 60 * 1000;
 
 type ApplicationContactFields = {
   id: string;
@@ -24,9 +25,10 @@ type ApplicationContactFields = {
 
 async function recentSuccessfulTeamContact(
   applicationId: string,
-  kind: string
+  kind: string,
+  withinMs = TEAM_CONTACT_IDEMPOTENCY_MS
 ): Promise<boolean> {
-  const since = new Date(Date.now() - TEAM_CONTACT_IDEMPOTENCY_MS);
+  const since = new Date(Date.now() - withinMs);
   const row = await prisma.freeTierEmailLog.findFirst({
     where: {
       applicationId,
@@ -79,8 +81,10 @@ async function deliverTeamContactEmail(args: {
   kind: string;
   subject: string;
   text: string;
+  idempotencyMs?: number;
 }): Promise<EmailSendResult> {
-  if (await recentSuccessfulTeamContact(args.applicationId, args.kind)) {
+  const windowMs = args.idempotencyMs ?? TEAM_CONTACT_IDEMPOTENCY_MS;
+  if (await recentSuccessfulTeamContact(args.applicationId, args.kind, windowMs)) {
     return { ok: true };
   }
   try {
@@ -119,6 +123,16 @@ async function deliverTeamContactEmail(args: {
     });
     return { ok: false, error: message };
   }
+}
+
+export async function adminLearnMoreInCooldown(
+  applicationId: string
+): Promise<boolean> {
+  return recentSuccessfulTeamContact(
+    applicationId,
+    TEAM_CONTACT_ADMIN_LEARN_MORE_KIND,
+    TEAM_CONTACT_ADMIN_LEARN_MORE_COOLDOWN_MS
+  );
 }
 
 export async function sendBelowHsTeamContact(args: {
@@ -213,6 +227,7 @@ export async function sendAdminLearnMoreTeamContact(args: {
     kind: TEAM_CONTACT_ADMIN_LEARN_MORE_KIND,
     subject: 'Free tier: admin wants to learn more before approving',
     text,
+    idempotencyMs: TEAM_CONTACT_ADMIN_LEARN_MORE_COOLDOWN_MS,
   });
   if (!delivered.ok) {
     return { ok: false, reason: 'email_failed', error: delivered.error };

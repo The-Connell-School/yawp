@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   buildClassStudentWorkOnAssignmentBranches,
+  buildClassTeacherAssignmentTestDocumentBranch,
   buildTeacherClassWorkDocumentWhere,
 } from './class-assignment-scope';
 
@@ -17,7 +18,9 @@ describe('buildTeacherClassWorkDocumentWhere', () => {
         {
           OR: [
             ...buildClassStudentWorkOnAssignmentBranches('class-a'),
+            buildClassTeacherAssignmentTestDocumentBranch('class-a'),
             ...buildClassStudentWorkOnAssignmentBranches('class-b'),
+            buildClassTeacherAssignmentTestDocumentBranch('class-b'),
             {
               classAssignmentId: null,
               membership: {
@@ -56,6 +59,7 @@ describe('buildTeacherClassWorkDocumentWhere', () => {
         {
           OR: [
             ...buildClassStudentWorkOnAssignmentBranches('class-a'),
+            buildClassTeacherAssignmentTestDocumentBranch('class-a'),
             {
               classAssignmentId: null,
               membership: {

@@ -10,12 +10,12 @@ const prisma = {
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { createOrReuseTeacherAssignmentPreviewDocument } = await import(
+const { createTeacherAssignmentTestDocument } = await import(
   './teacher-assignment-preview.server'
 );
 const { DocumentCreationError } = await import('../documents.server');
 
-describe('createOrReuseTeacherAssignmentPreviewDocument', () => {
+describe('createTeacherAssignmentTestDocument', () => {
   beforeEach(() => {
     prisma.assignmentType.findFirst.mockReset().mockResolvedValue({
       id: 'at-1',
@@ -34,34 +34,34 @@ describe('createOrReuseTeacherAssignmentPreviewDocument', () => {
       },
     ]);
     prisma.document.findFirst.mockReset().mockResolvedValue(null);
-    prisma.document.create.mockReset().mockResolvedValue({ id: 'preview-1' });
+    prisma.document.create.mockReset().mockResolvedValue({ id: 'test-1' });
   });
 
-  test('reuses an existing teacher preview for the same class deployment', async () => {
-    prisma.document.findFirst.mockResolvedValue({ id: 'existing-preview' });
-
-    const result = await createOrReuseTeacherAssignmentPreviewDocument({
+  test('always creates a new teacher test document', async () => {
+    const first = await createTeacherAssignmentTestDocument({
       membershipId: 'teacher-1',
       assignmentTypeId: 'at-1',
       assignmentId: 'a-1',
       teacherPreviewClassAssignmentId: 'ca-1',
     });
 
-    expect(result.documentId).toBe('existing-preview');
-    expect(prisma.document.create).not.toHaveBeenCalled();
-    expect(prisma.document.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          membershipId: 'teacher-1',
-          artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW',
-          teacherPreviewClassAssignmentId: 'ca-1',
-        }),
-      })
-    );
+    prisma.document.create.mockResolvedValueOnce({ id: 'test-2' });
+
+    const second = await createTeacherAssignmentTestDocument({
+      membershipId: 'teacher-1',
+      assignmentTypeId: 'at-1',
+      assignmentId: 'a-1',
+      teacherPreviewClassAssignmentId: 'ca-1',
+    });
+
+    expect(first.documentId).toBe('test-1');
+    expect(second.documentId).toBe('test-2');
+    expect(prisma.document.create).toHaveBeenCalledTimes(2);
+    expect(prisma.document.findFirst).not.toHaveBeenCalled();
   });
 
-  test('creates a preview without classAssignmentId', async () => {
-    await createOrReuseTeacherAssignmentPreviewDocument({
+  test('creates a test document without classAssignmentId', async () => {
+    await createTeacherAssignmentTestDocument({
       membershipId: 'teacher-1',
       assignmentTypeId: 'at-1',
       assignmentId: 'a-1',
@@ -82,7 +82,7 @@ describe('createOrReuseTeacherAssignmentPreviewDocument', () => {
     });
 
     await expect(
-      createOrReuseTeacherAssignmentPreviewDocument({
+      createTeacherAssignmentTestDocument({
         membershipId: 'teacher-1',
         assignmentTypeId: 'at-1',
         assignmentId: 'a-1',

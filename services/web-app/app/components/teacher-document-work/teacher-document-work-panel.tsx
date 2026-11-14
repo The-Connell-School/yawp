@@ -1,12 +1,12 @@
 import { Link, useNavigate } from 'react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SortableTableHeadButton } from '~/components/ui/sortable-table-head-button';
+import { FilterPills } from '~/components/ui/filter-pills';
 import {
   ChevronDown,
   ChevronRight,
   Filter,
   Search,
-  ArrowUp,
-  ArrowDown,
   Users,
   TriangleAlert,
 } from 'lucide-react';
@@ -418,25 +418,14 @@ export function TeacherDocumentWorkPanel({
 
     return (
       <TableHead className={className}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="-ml-1 h-auto min-h-8 gap-1 whitespace-normal px-1 py-1 text-left"
-          aria-label={`Sort by ${label} ${
+        <SortableTableHeadButton
+          label={label}
+          arrow={isActive ? (sort.direction === 'asc' ? 'up' : 'down') : null}
+          ariaLabel={`Sort by ${label} ${
             isActive && sort.direction === 'asc' ? 'descending' : 'ascending'
           }`}
           onClick={() => onSortChange(toggleDocumentWorkSort(sort, field))}
-        >
-          {label}
-          {isActive ? (
-            sort.direction === 'asc' ? (
-              <ArrowUp className="h-4 w-4" />
-            ) : (
-              <ArrowDown className="h-4 w-4" />
-            )
-          ) : null}
-        </Button>
+        />
       </TableHead>
     );
   };
@@ -940,66 +929,22 @@ function DocumentWorkStatusPills({
   | 'onFiltersChange'
   | 'testIds'
 >) {
-  const testId = testIds?.statusChips ?? 'teacher-document-work-status-chips';
-
-  const pillClass = (isActive: boolean) =>
-    cn(
-      'inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-sm/5 font-medium sm:text-sm/5',
-      isActive
-        ? 'bg-popover text-foreground shadow-sm ring-1 ring-black/10'
-        : 'text-foreground/80 hover:bg-popover/70 hover:text-foreground'
-    );
-
-  const countClass = (isActive: boolean) =>
-    cn(
-      'tabular-nums',
-      isActive ? 'text-muted-foreground' : 'text-foreground/60'
-    );
-
   return (
-    <div
-      className="overflow-x-auto no-scrollbar"
-      data-testid={testId}
-      role="tablist"
-      aria-label="Filter by status"
-    >
-      <div className="inline-flex w-max max-w-none flex-nowrap items-center gap-0.5 rounded-full border border-border bg-secondary p-1 shadow-xs">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={filters.status === 'all'}
-          onClick={() => onFiltersChange({ status: 'all' })}
-          className={pillClass(filters.status === 'all')}
-        >
-          All
-          <span className={countClass(filters.status === 'all')}>
-            {totalDocumentCount}
-          </span>
-        </button>
-        {statusChips.map(({ status, count }) => (
-          <button
-            key={status}
-            type="button"
-            role="tab"
-            aria-selected={filters.status === status}
-            onClick={() => onFiltersChange({ status })}
-            className={pillClass(filters.status === status)}
-          >
-            <span
-              className={cn(
-                'size-2 shrink-0 rounded-full',
-                STATUS_DOT_CLASSES[status]
-              )}
-              aria-hidden
-            />
-            {TEACHER_DOCUMENT_STATUS_LABELS[status]}
-            <span className={countClass(filters.status === status)}>
-              {count}
-            </span>
-          </button>
-        ))}
-      </div>
-    </div>
+    <FilterPills
+      ariaLabel="Filter by status"
+      testId={testIds?.statusChips ?? 'teacher-document-work-status-chips'}
+      value={filters.status}
+      onChange={(status) => onFiltersChange({ status })}
+      options={[
+        { value: 'all' as const, label: 'All', count: totalDocumentCount },
+        ...statusChips.map(({ status, count }) => ({
+          value: status,
+          label: TEACHER_DOCUMENT_STATUS_LABELS[status],
+          count,
+          dotClassName: STATUS_DOT_CLASSES[status],
+        })),
+      ]}
+    />
   );
 }
 
@@ -1241,10 +1186,9 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
           <DocumentWorkStatusPills {...props} />
         </div>
         <div
-          className="flex shrink-0 flex-nowrap items-center gap-2"
+          className="flex shrink-0 flex-nowrap items-center justify-end gap-2"
           data-tour="documents-tools"
         >
-          <DocumentWorkActionsMenu actions={props.actions} />
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -1271,6 +1215,8 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
           </Popover>
           {props.headerActions}
           <DocumentWorkGroupSelect {...props} triggerClassName="w-[10.5rem]" />
+          {/* Actions sit at the far right, after the view controls. */}
+          <DocumentWorkActionsMenu actions={props.actions} />
         </div>
       </div>
       <DocumentWorkSelectionToolbar

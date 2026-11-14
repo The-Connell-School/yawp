@@ -8,6 +8,7 @@ import { seedSiteLicenseLockedCatalogForE2E } from '../helpers/seed-site-license
 import { dashboardAssignmentTileOverlapIssues } from '../helpers/dashboard-assignment-tile-overlap';
 import { expectGiveFeedbackAccessible } from '../helpers/dev-panel-feedback';
 import { expectNewAssignmentBuilderPage } from '../helpers/assignment-builder-v3-page';
+import { ensureLockedPreviewSampleAssignmentsForE2E } from '../helpers/ensure-locked-preview-sample-assignments-for-e2e';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
     'Run class-step tests with ./bin/project test --profile free-tier-locked-preview-browser'
@@ -98,7 +99,7 @@ async function expectLockedPendingDashboardCard(
     .first();
   await expect(card).toBeVisible();
   await expect(
-    card.getByText(new RegExp(`Request sent to ${adminName}`))
+    card.getByText(new RegExp(`Awaiting approval from ${adminName}`))
   ).toBeVisible();
 }
 
@@ -284,17 +285,36 @@ async function capture(page: import('@playwright/test').Page, state: string) {
 }
 
 /** Pending and approved free dashboards expose exactly three entitled assignment kinds. */
+async function openLockedEntitledHowItWorks(
+  page: import('@playwright/test').Page,
+  label: string
+) {
+  const tile = page
+    .getByTestId('dashboard-assignment-tile')
+    .filter({ hasText: new RegExp(label) });
+  await tile.scrollIntoViewIfNeeded();
+  const href = await tile.getAttribute('href');
+  expect(href).toMatch(/how-it-works/);
+  await page.goto(href!);
+}
+
 async function expectFreeDashboardAssignmentTiles(
-  page: import('@playwright/test').Page
+  page: import('@playwright/test').Page,
+  options?: { teachingApproved?: boolean }
 ) {
   const tiles = page.getByTestId('free-assignment-tiles');
   await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(3);
   await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
-    0
+    options?.teachingApproved ? 5 : 0
   );
-  await expect(tiles.getByText('Class Starter', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('Prewriting', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('Thesis Statement', { exact: true })).toBeVisible();
+  for (const label of ['Class Starter', 'Prewriting', 'Thesis Statement'] as const) {
+    const tile = tiles
+      .getByTestId('dashboard-assignment-tile')
+      .filter({ hasText: new RegExp(label) });
+    await expect(tile).toHaveCount(1);
+    await tile.scrollIntoViewIfNeeded();
+    await expect(tile).toBeVisible();
+  }
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -360,7 +380,9 @@ for (const width of [390, 1440]) {
     await expect(page).toHaveURL(/\/app\/free-tier\/pending$/);
     await expect(page.getByText(/Sent to Dr\. Patel on/)).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'Not the right person?' })
+      page.getByRole('button', {
+        name: /Not the right person\?|Send to another administrator/,
+      })
     ).toBeVisible();
     await capture(page, `waiting-${width}`);
     const exploreLink = page.getByRole('link', { name: 'Explore my classroom' });
@@ -402,9 +424,7 @@ for (const width of [390, 1440]) {
     if (width === 1440) {
       await capture(page, 'dashboard-pending-1440');
     }
-    await page
-      .getByRole('link', { name: /New Class Starter assignment/i })
-      .click();
+    await openLockedEntitledHowItWorks(page, 'Class Starter');
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     await expect(page.getByRole('button', { name: 'Prompt Library' })).toHaveCount(
       0
@@ -417,14 +437,10 @@ for (const width of [390, 1440]) {
     }
     await page.goto('/app');
     await expectFreeDashboardAssignmentTiles(page);
-    await page
-      .getByRole('link', { name: /New Prewriting assignment/i })
-      .click();
+    await openLockedEntitledHowItWorks(page, 'Prewriting');
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     await page.goto('/app');
-    await page
-      .getByRole('link', { name: /New Thesis Statement assignment/i })
-      .click();
+    await openLockedEntitledHowItWorks(page, 'Thesis Statement');
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     const thesisTypeId = page.url().match(/assignment-types\/([^/]+)/)?.[1];
     expect(thesisTypeId).toBeTruthy();
@@ -500,7 +516,7 @@ for (const width of [390, 1440]) {
     await page.reload();
     await expectNoLockedPendingDashboardCard(page);
     await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible();
-    await expectFreeDashboardAssignmentTiles(page);
+    await expectFreeDashboardAssignmentTiles(page, { teachingApproved: true });
     await expectDashboardAssignmentTileNameMetaNoOverlap(
       page,
       page.getByTestId('free-assignment-tiles')
@@ -511,7 +527,7 @@ for (const width of [390, 1440]) {
     );
     await expect(
       page.getByTestId('free-assignment-tiles').locator('img')
-    ).toHaveCount(3);
+    ).toHaveCount(8);
     if (width === 390) {
       await capture(page, 'dashboard-approved-390');
     }
@@ -519,16 +535,14 @@ for (const width of [390, 1440]) {
       await expectGiveFeedbackAccessible(page);
       await capture(page, 'approval-toast-above-feedback-1440');
     }
-    await page
-      .getByTestId('teaching-access-approval-toast')
-      .getByRole('button', { name: 'Dismiss' })
-      .click();
-    await expect(page.getByTestId('teaching-access-approval-toast')).toHaveCount(0);
     await page.reload();
     await expect(page.getByTestId('teaching-access-approval-toast')).toHaveCount(0);
-    await page
-      .getByRole('link', { name: /Open Class Starter assignment type/i })
-      .click();
+    const openStarter = page.getByRole('link', {
+      name: /Open Class Starter assignment type/i,
+    });
+    const starterHome = await openStarter.getAttribute('href');
+    expect(starterHome).toMatch(/assignment-types/);
+    await page.goto(starterHome!);
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+$/);
     await expect(page).not.toHaveURL(/\/how-it-works$/);
     const seeHowItWorks = page.getByRole('link', { name: /See how it works/i });
@@ -865,8 +879,9 @@ test('locked assignments tab shows sample rows and locked documents pill', async
   await provisionPendingClassroom(app.id, user.id!);
   const klass = await prisma.class.findFirstOrThrow({
     where: { teachers: { some: { user: { id: user.id } } } },
-    select: { id: true },
+    select: { id: true, school: { select: { organizationId: true } } },
   });
+  await ensureLockedPreviewSampleAssignmentsForE2E(prisma, klass.id);
   await exploreLockedApp(page, user.email!);
   await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
   await expect(page.getByText('Sample · Not sent').first()).toBeVisible();

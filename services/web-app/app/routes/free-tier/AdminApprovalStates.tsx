@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import {
   CircleAlert,
   CircleCheck,
@@ -7,7 +8,13 @@ import {
   Shield,
   UserRound,
 } from 'lucide-react';
-import { Link } from 'react-router';
+import {
+  Form,
+  Link,
+  useActionData,
+  useNavigation,
+  useSearchParams,
+} from 'react-router';
 import { buildAdminForwardPageSearch } from '~/domain/free-tier/admin-approve-forward-link';
 import {
   alreadyApprovedBody,
@@ -31,36 +38,81 @@ import { useFreeTierEnabled } from './useFreeTierLayoutContext';
 import {
   adminDenyAlreadyAnsweredBody,
   adminDenyAlreadyAnsweredTitle,
-  adminDenyReopenHint,
+  adminDenyReopenError,
+  adminDenyReopenLabel,
   adminDenyThanksBody,
   adminDenyThanksTitle,
 } from '~/domain/free-tier/admin-deny-copy';
 import {
   FreeTierAuthCard,
+  FreeTierButton,
   FreeTierPerson,
 } from './FreeTierAuthCard';
 
+/**
+ * Takes a deny back: posts the admin's own link token (the `t` on this page)
+ * to the deny route, which reopens the request and redirects to the approval
+ * screen with a fresh link.
+ */
+function ReopenRequestForm({ teacherName }: { teacherName: string }) {
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('t') ?? '';
+  const navigation = useNavigation();
+  const actionData = useActionData() as
+    | { reopenFailed?: boolean; reason?: string }
+    | undefined;
+  const reopening =
+    navigation.state !== 'idle' &&
+    navigation.formData?.get('intent') === 'reopen';
+  if (!token) return null;
+  return (
+    <Form
+      method="post"
+      action={`/free/admin/approve/deny?t=${encodeURIComponent(token)}`}
+      className="flex flex-col gap-2"
+    >
+      <input type="hidden" name="token" value={token} />
+      <input type="hidden" name="intent" value="reopen" />
+      {actionData?.reopenFailed ? (
+        <p role="alert" className="text-sm text-destructive">
+          {adminDenyReopenError(actionData.reason ?? '', teacherName)}
+        </p>
+      ) : null}
+      <FreeTierButton
+        type="submit"
+        variant="outline"
+        isLoading={reopening}
+        disabled={reopening}
+      >
+        {reopening ? 'Reopening…' : adminDenyReopenLabel}
+      </FreeTierButton>
+    </Form>
+  );
+}
+
+const adminApproveIntroTextClass = 'text-sm text-card-foreground';
+
 export function AdminApprovalFeatureList() {
   return (
-    <ul className="flex flex-col gap-2.5 text-sm text-card-foreground">
+    <ul className={`flex flex-col gap-2.5 ${adminApproveIntroTextClass}`}>
       <li className="flex items-start gap-2.5">
         <PencilLine
           aria-hidden="true"
-          className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+          className="mt-0.5 h-4 w-4 shrink-0 text-card-foreground"
         />
         Students draft essays with feedback as they write.
       </li>
       <li className="flex items-start gap-2.5">
         <UserRound
           aria-hidden="true"
-          className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+          className="mt-0.5 h-4 w-4 shrink-0 text-card-foreground"
         />
         Teachers control assignments and grading.
       </li>
       <li className="flex items-start gap-2.5">
         <Shield
           aria-hidden="true"
-          className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+          className="mt-0.5 h-4 w-4 shrink-0 text-card-foreground"
         />
         {FREE_TIER_ADMIN_MODEL_TRAINING_LINE}
       </li>
@@ -128,7 +180,7 @@ export function AdminDenyThanksCard({
       <p className="text-sm text-muted-foreground">
         {adminDenyThanksBody(teacherName, schoolName)}
       </p>
-      <p className="text-sm text-muted-foreground">{adminDenyReopenHint}</p>
+      <ReopenRequestForm teacherName={teacherName} />
     </FreeTierAuthCard>
   );
 }
@@ -147,7 +199,7 @@ export function AdminDenyAlreadyAnsweredCard({
       <p className="text-sm text-muted-foreground">
         {adminDenyAlreadyAnsweredBody(teacherName, schoolName, decidedAt)}
       </p>
-      <p className="text-sm text-muted-foreground">{adminDenyReopenHint}</p>
+      <ReopenRequestForm teacherName={teacherName} />
     </FreeTierAuthCard>
   );
 }
@@ -263,7 +315,7 @@ export function AdminApprovePageIntro({
   return (
     <>
       {pass1 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className={adminApproveIntroTextClass}>
           {approvePageIntro(teacherName, schoolName)}
         </p>
       ) : (
@@ -274,7 +326,7 @@ export function AdminApprovePageIntro({
         />
       )}
       {showIfApprovedCopy ? (
-        <p className="text-base text-card-foreground">
+        <p className={adminApproveIntroTextClass}>
           If approved,{' '}
           <span
             className="font-medium underline decoration-primary decoration-dotted underline-offset-[3px]"
@@ -283,8 +335,8 @@ export function AdminApprovePageIntro({
             {teacherName}
           </span>{' '}
           will have a free Yawp! license for one class of up to 35 students.
-          There&apos;s no cost to the teacher or the school, no credit card, and
-          nothing to purchase.
+          There&apos;s no cost to the teacher or the school, no credit card,
+          and nothing to purchase.
         </p>
       ) : null}
       <AdminApprovalFeatureList />
@@ -348,6 +400,11 @@ export function AdminForwardLink({
       </Link>
     </p>
   );
+}
+
+/** Wraps `/free/admin/approve` only — scopes compact top-left logo chrome. */
+export function AdminApprovePageShell({ children }: { children: ReactNode }) {
+  return <div className="free-tier-admin-approve-shell">{children}</div>;
 }
 
 export {

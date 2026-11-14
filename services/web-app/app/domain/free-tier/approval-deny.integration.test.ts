@@ -18,6 +18,8 @@ describe.skipIf(!enabled)('admin deny approval', () => {
   let denySchoolAdminApproval: typeof import('./approval-deny.server').denySchoolAdminApproval;
   let loadTeacherDeniedSurface: typeof import('./approval-deny.server').loadTeacherDeniedSurface;
   let resolveAdminDenyAnsweredGate: typeof import('./approval-deny.server').resolveAdminDenyAnsweredGate;
+  let reopenDeniedSchoolAdminApproval: typeof import('./approval-deny.server').reopenDeniedSchoolAdminApproval;
+  let TEACHER_DENY_EMAIL_DELAY_MS: number;
     let forwardApprovalRequest: typeof import('./approval-v2.server').forwardApprovalRequest;
     let runApprovalJobs: typeof import('./approval-v2.server').runApprovalJobs;
   const orgId = `deny-suite-${crypto.randomUUID()}`;
@@ -32,8 +34,10 @@ describe.skipIf(!enabled)('admin deny approval', () => {
       denySchoolAdminApproval,
       loadTeacherDeniedSurface,
       resolveAdminDenyAnsweredGate,
+      reopenDeniedSchoolAdminApproval,
     } = await import('./approval-deny.server'));
-    ({ forwardApprovalRequest, runApprovalJobs } = await import('./approval-v2.server'));
+    ({ forwardApprovalRequest, runApprovalJobs, TEACHER_DENY_EMAIL_DELAY_MS } =
+      await import('./approval-v2.server'));
     sendEmailMock.mockClear();
     await prisma.setting.upsert({
       where: { name: 'feature_flag.free_tier' },
@@ -132,7 +136,16 @@ describe.skipIf(!enabled)('admin deny approval', () => {
         .filter((d) => d.kind === 'admin_reminder')
         .every((d) => d.state === 'CANCELLED')
     ).toBe(true);
-    expect(deliveries.find((d) => d.kind === 'teacher_deny')?.state).toBe('SENT');
+    // The teacher's email is held back so a quick reopen can cancel it.
+    const held = deliveries.find((d) => d.kind === 'teacher_deny');
+    expect(held?.state).toBe('QUEUED');
+    expect(+held!.availableAt).toBeGreaterThan(Date.now() + TEACHER_DENY_EMAIL_DELAY_MS - 60_000);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    await runApprovalJobs(new Date(Date.now() + TEACHER_DENY_EMAIL_DELAY_MS + 1000));
+    const sentDeny = await prisma.freeTierApprovalDelivery.findUniqueOrThrow({
+      where: { id: held!.id },
+    });
+    expect(sentDeny.state).toBe('SENT');
     expect(sendEmailMock).toHaveBeenCalled();
     const calls = sendEmailMock.mock.calls as unknown as Array<
       [{ text?: string; html?: string }]
@@ -182,18 +195,23 @@ describe.skipIf(!enabled)('admin deny approval', () => {
   });
 
   test('teacher deny email retries from outbox after first send fails', async () => {
-    let attempts = 0;
-    sendEmailMock.mockImplementation(async () => {
-      attempts += 1;
-      if (attempts === 1) {
+    const { app, approval, token } = await seedSentApp('email-retry');
+    // The jobs runner also sends other requests' admin emails, so only count
+    // (and fail) sends to this teacher.
+    let teacherAttempts = 0;
+    sendEmailMock.mockImplementation((async (message: { to?: string }) => {
+      if (message?.to !== app.email) return { status: 'success' as const };
+      teacherAttempts += 1;
+      if (teacherAttempts === 1) {
         return { status: 'error' as const, error: { statusCode: 429 } };
       }
       return { status: 'success' as const };
-    });
-    const { app, approval, token } = await seedSentApp('email-retry');
+    }) as never);
     const req = new Request('http://localhost/deny', { method: 'POST' });
     expect((await denySchoolAdminApproval({ token, request: req })).ok).toBe(true);
-    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    expect(teacherAttempts).toBe(0);
+    await runApprovalJobs(new Date(Date.now() + TEACHER_DENY_EMAIL_DELAY_MS + 1000));
+    expect(teacherAttempts).toBe(1);
     const delivery = await prisma.freeTierApprovalDelivery.findUnique({
       where: {
         approvalId_kind_sequence: {
@@ -209,7 +227,7 @@ describe.skipIf(!enabled)('admin deny approval', () => {
       data: { availableAt: new Date() },
     });
     await runApprovalJobs(new Date());
-    expect(sendEmailMock).toHaveBeenCalledTimes(2);
+    expect(teacherAttempts).toBe(2);
     const successLogs = await prisma.freeTierEmailLog.findMany({
       where: { applicationId: app.id, kind: 'teacher_deny', success: true },
     });
@@ -218,6 +236,7 @@ describe.skipIf(!enabled)('admin deny approval', () => {
       where: { id: delivery!.id },
     });
     expect(sent.state).toBe('SENT');
+    sendEmailMock.mockImplementation(async () => ({ status: 'success' as const }));
   });
 
   test('teacher ask after deny counts toward cap', async () => {
@@ -243,5 +262,95 @@ describe.skipIf(!enabled)('admin deny approval', () => {
       where: { id: app.id },
     });
     expect(updated.adminRedirectCount).toBe(1);
+  });
+
+  test('reopen puts the request back to pending with a fresh approve link and cancels the held email', async () => {
+    const { app, approval, token } = await seedSentApp('reopen');
+    await denySchoolAdminApproval({ token, request: new Request('http://localhost') });
+
+    const reopened = await reopenDeniedSchoolAdminApproval({ token });
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    expect(reopened.approveToken).not.toBe(token);
+
+    const row = await prisma.freeTierAdminApproval.findUniqueOrThrow({
+      where: { id: approval.id },
+    });
+    expect(row.status).toBe('PENDING');
+    expect(row.decidedAt).toBeNull();
+    expect(row.denyReason).toBeNull();
+    expect(row.autoRemindersStopped).toBe(false);
+
+    const deny = await prisma.freeTierApprovalDelivery.findUniqueOrThrow({
+      where: {
+        approvalId_kind_sequence: { approvalId: approval.id, kind: 'teacher_deny', sequence: 1 },
+      },
+    });
+    expect(deny.state).toBe('CANCELLED');
+    await runApprovalJobs(new Date(Date.now() + TEACHER_DENY_EMAIL_DELAY_MS + 1000));
+    const denyEmails = await prisma.freeTierEmailLog.findMany({
+      where: { applicationId: app.id, kind: 'teacher_deny' },
+    });
+    expect(denyEmails).toHaveLength(0);
+
+    // The fresh link is the one the approval now owns, so the approve page accepts it.
+    const linkId = JSON.parse(
+      Buffer.from(reopened.approveToken.split('.')[0]!, 'base64url').toString()
+    ).linkId;
+    expect(row.signedLinkId).toBe(linkId);
+    expect(await loadTeacherDeniedSurface({ applicationId: app.id })).toBeNull();
+  });
+
+  test('reopen refuses a forged or unrelated token', async () => {
+    const { token } = await seedSentApp('reopen-forged');
+    await denySchoolAdminApproval({ token, request: new Request('http://localhost') });
+    const [body, sig, opaque] = token.split('.');
+    const forged = `${body}.${sig}.${opaque!.slice(0, -2)}xx`;
+    expect(await reopenDeniedSchoolAdminApproval({ token: forged })).toEqual({
+      ok: false,
+      reason: 'invalid',
+    });
+    expect(await reopenDeniedSchoolAdminApproval({ token: 'nope' })).toEqual({
+      ok: false,
+      reason: 'invalid',
+    });
+  });
+
+  test('reopen only applies to a denied approval', async () => {
+    const { token } = await seedSentApp('reopen-not-denied');
+    expect(await reopenDeniedSchoolAdminApproval({ token })).toEqual({
+      ok: false,
+      reason: 'not_denied',
+    });
+  });
+
+  test('reopen is refused once the teacher has asked another administrator', async () => {
+    const { app, token } = await seedSentApp('reopen-superseded');
+    await denySchoolAdminApproval({ token, request: new Request('http://localhost') });
+    await prisma.freeTierAdminApproval.create({
+      data: {
+        applicationId: app.id,
+        adminName: 'Ms. Okafor',
+        adminEmail: 'okafor@lincolnusd.org',
+        emailCopyVersionHash: 'test',
+      },
+    });
+    expect(await reopenDeniedSchoolAdminApproval({ token })).toEqual({
+      ok: false,
+      reason: 'superseded',
+    });
+  });
+
+  test('reopen is refused once the request has closed', async () => {
+    const { app, token } = await seedSentApp('reopen-closed');
+    await denySchoolAdminApproval({ token, request: new Request('http://localhost') });
+    await prisma.freeTierApplication.update({
+      where: { id: app.id },
+      data: { status: 'REJECTED' },
+    });
+    expect(await reopenDeniedSchoolAdminApproval({ token })).toEqual({
+      ok: false,
+      reason: 'closed',
+    });
   });
 });

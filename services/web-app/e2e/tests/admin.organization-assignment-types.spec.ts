@@ -76,9 +76,7 @@ test.describe.serial('Admin organization assignment types', () => {
       await clickClassNewAssignment(page);
       await openAssignmentTypePicker(page);
       await expect(
-        page.getByRole('dialog', { name: 'Assignment type' }).getByRole('button', {
-          name: title,
-        })
+        page.getByRole('option', { name: new RegExp(title.slice(0, 40)) })
       ).toBeVisible();
     } finally {
       await prisma.organizationAssignmentType.deleteMany({

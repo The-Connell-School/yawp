@@ -7,7 +7,7 @@ export function adminDenyConfirmTitle() {
 }
 
 export function adminDenyConfirmBody(teacherName: string, schoolName: string) {
-  return `${teacherAtSchool(teacherName, schoolName)} won't get a free classroom from this request. We'll let ${teacherName.split(/\s+/)[0] ?? teacherName} know, and they can ask another administrator.`;
+  return `${teacherAtSchool(teacherName, schoolName)} won't get a free classroom from this request. We'll let ${teacherName.split(/\s+/)[0] ?? teacherName} know.`;
 }
 
 export function adminDenyReasonHint(teacherName: string) {
@@ -24,11 +24,24 @@ export function adminDenyThanksTitle() {
 }
 
 export function adminDenyThanksBody(teacherName: string, schoolName: string) {
-  return `You declined the free classroom request from ${teacherAtSchool(teacherName, schoolName)}. We'll let them know they can ask another administrator at their school.`;
+  return `You declined the free classroom request from ${teacherAtSchool(teacherName, schoolName)}.`;
 }
 
-export const adminDenyReopenHint =
-  "Changed your mind? Email support@yawp.school and we'll reopen the request.";
+export const adminDenyReopenLabel = 'Reopen request';
+
+export function adminDenyReopenError(
+  reason: string,
+  teacherName: string
+): string {
+  const first = teacherName.split(/\s+/)[0] ?? teacherName;
+  if (reason === 'superseded') {
+    return `${first} has already asked another administrator, so this request can't be reopened here.`;
+  }
+  if (reason === 'closed') {
+    return 'This request is already closed, so it can’t be reopened.';
+  }
+  return "We couldn't reopen the request. Try again, or email support@yawp.school.";
+}
 
 export function adminDenyAlreadyAnsweredTitle() {
   return "You've already answered this request.";

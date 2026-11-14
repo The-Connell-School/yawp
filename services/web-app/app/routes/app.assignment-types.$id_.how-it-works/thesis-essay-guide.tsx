@@ -110,16 +110,22 @@ function clip(name: string, label: string) {
 }
 
 export function ThesisEssayGuide({
+  backTo,
+  backLabel,
   pagePath,
+  teachingLocked = false,
   coursePath,
 }: {
+  backTo: string;
+  backLabel: string;
   pagePath: string;
+  teachingLocked?: boolean;
   coursePath: string | null;
 }) {
   return (
     <GuidePage
-      backTo={pagePath}
-      backLabel="Back to The Thesis-Driven Essay"
+      backTo={backTo}
+      backLabel={backLabel}
       accent={guideAccentFor('thesis-driven-essay')}
     >
       <GuideHero
@@ -340,11 +346,13 @@ export function ThesisEssayGuide({
 
       <WillWont will={WILL} wont={WONT} />
 
-      <GuideFooter
-        note="Clips use demo classes. The Tutor’s replies, the Grading Assistant’s suggestions, and Reporter’s answer in them were scripted for the recording. Reporter’s numbers are the demo class’s grades."
-        startTo={pagePath}
-        startLabel="Create an assignment"
-      />
+      {!teachingLocked ? (
+        <GuideFooter
+          note="Clips use demo classes. The Tutor’s replies, the Grading Assistant’s suggestions, and Reporter’s answer in them were scripted for the recording. Reporter’s numbers are the demo class’s grades."
+          startTo={pagePath}
+          startLabel="Create an assignment"
+        />
+      ) : null}
     </GuidePage>
   );
 }

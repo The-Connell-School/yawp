@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import {
   buildNewAssignmentPageHref,
   type NewAssignmentPageHrefOptions,
@@ -8,8 +8,11 @@ export type { NewAssignmentPageHrefOptions as NavigateToNewAssignmentPageOptions
 
 export function useNavigateToNewAssignmentPage() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   return (options: NewAssignmentPageHrefOptions = {}) => {
-    void navigate(buildNewAssignmentPageHref(options));
+    const exitTo =
+      options.exitTo ?? `${location.pathname}${location.search}`;
+    void navigate(buildNewAssignmentPageHref({ ...options, exitTo }));
   };
 }

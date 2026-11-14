@@ -27,7 +27,7 @@ const loadFreeTierGateApplication = mock(async () => ({
 }));
 const enforceFreeTierTeacherGate = mock(async () => null);
 const retryFreeClassroomProvisioningForUser = mock(async () => {});
-const ensureLockedPreviewClassroomForUser = mock(async () => {});
+const ensureLockedPreviewClassroomForUserBestEffort = mock(async () => {});
 const isDevPanelRuntimeEnabled = mock(() => false);
 
 mock.module('~/dev-panel/dev-panel-runtime.server', () => ({
@@ -58,7 +58,7 @@ mock.module('~/domain/free-tier/provision-free-classroom.server', () => ({
   retryFreeClassroomProvisioningForUser,
 }));
 mock.module('~/domain/free-tier/locked-preview.server', () => ({
-  ensureLockedPreviewClassroomForUser,
+  ensureLockedPreviewClassroomForUserBestEffort,
 }));
 
 const { loader } = await import('./route');
@@ -81,7 +81,7 @@ describe('app parent free-tier loader gate', () => {
     loadFreeTierGateApplication.mockClear();
     enforceFreeTierTeacherGate.mockClear();
     retryFreeClassroomProvisioningForUser.mockClear();
-    ensureLockedPreviewClassroomForUser.mockClear();
+    ensureLockedPreviewClassroomForUserBestEffort.mockClear();
     isDevPanelRuntimeEnabled.mockReset().mockReturnValue(false);
     if (oldPreviewSlug === undefined) delete process.env.PREVIEW_SLUG;
     else process.env.PREVIEW_SLUG = oldPreviewSlug;
@@ -100,7 +100,7 @@ describe('app parent free-tier loader gate', () => {
     } as any);
 
     expect(loadFreeTierGateApplication).toHaveBeenCalledWith('user-1');
-    expect(ensureLockedPreviewClassroomForUser).toHaveBeenCalledWith('user-1');
+    expect(ensureLockedPreviewClassroomForUserBestEffort).toHaveBeenCalledWith('user-1');
     expect(retryFreeClassroomProvisioningForUser).toHaveBeenCalledWith('user-1');
     expect(enforceFreeTierTeacherGate).toHaveBeenCalledWith({
       userId: 'user-1',

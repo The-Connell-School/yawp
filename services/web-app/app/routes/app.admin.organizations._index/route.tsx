@@ -1,3 +1,4 @@
+import { SortableTableHeadButton } from '~/components/ui/sortable-table-head-button';
 import {
   useFetcher,
   type LoaderFunctionArgs,
@@ -17,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import { ArrowDown, ArrowUp, ArrowUpDown, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Pagination } from '~/components/table/pagination';
 import { CookieColumns, useTable } from '~/hooks/useTable';
 import { cn } from '~/utils/misc';
@@ -340,12 +341,16 @@ export default function OrganizationsRoute() {
                 <TableRow className="bg-muted/50 rounded-t-lg">
                   {Object.entries(COLUMNS).map(([key, { label, value }]) => (
                     <TableHead key={key}>
-                      <Button
-                        variant="unstyled"
-                        className={cn(
-                          'h-8 p-0',
-                          !value ? 'pointer-events-none' : ''
-                        )}
+                      <SortableTableHeadButton
+                        label={label}
+                        disabled={!value}
+                        arrow={
+                          table.sort === value
+                            ? table.direction === 'desc'
+                              ? 'up'
+                              : 'down'
+                            : null
+                        }
                         onClick={() =>
                           value
                             ? handleSort(
@@ -354,24 +359,7 @@ export default function OrganizationsRoute() {
                               )
                             : undefined
                         }
-                      >
-                        {label}
-                        {!value ? null : table.sort === value ? (
-                          table.direction === 'desc' ? (
-                            <ArrowUp
-                              className="ml-2 h-4 w-4 text-primary"
-                              strokeWidth={3}
-                            />
-                          ) : (
-                            <ArrowDown
-                              className="ml-2 h-4 w-4 text-primary"
-                              strokeWidth={3}
-                            />
-                          )
-                        ) : (
-                          <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
-                        )}
-                      </Button>
+                      />
                     </TableHead>
                   ))}
                   {previewSeatMode ? <TableHead>Access Code</TableHead> : null}

@@ -53,10 +53,16 @@ function clip(name: string, label: string) {
 }
 
 export function ClassStarterGuide({
+  backTo,
+  backLabel,
   pagePath,
+  teachingLocked = false,
   v2 = false,
 }: {
+  backTo: string;
+  backLabel: string;
   pagePath: string;
+  teachingLocked?: boolean;
   /**
    * Brian's landing pages are on (`assignment-type-landing-v2`): the overview
    * video goes at the top in place of the picture, then How to Teach It
@@ -70,8 +76,8 @@ export function ClassStarterGuide({
 
   return (
     <GuidePage
-      backTo={pagePath}
-      backLabel="Back to Class Starter"
+      backTo={backTo}
+      backLabel={backLabel}
       accent={guideAccentFor('class-starter')}
     >
       <GuideHero
@@ -225,11 +231,13 @@ export function ClassStarterGuide({
 
       <WillWont will={WILL} wont={WONT} />
 
-      <GuideFooter
-        note="Clips use demo classes. The prompt generator’s reply and the Grading Assistant’s suggestion in them were scripted for the recording."
-        startTo={pagePath}
-        startLabel="Go to Class Starter"
-      />
+      {!teachingLocked ? (
+        <GuideFooter
+          note="Clips use demo classes. The prompt generator’s reply and the Grading Assistant’s suggestion in them were scripted for the recording."
+          startTo={pagePath}
+          startLabel="Go to Class Starter"
+        />
+      ) : null}
     </GuidePage>
   );
 }

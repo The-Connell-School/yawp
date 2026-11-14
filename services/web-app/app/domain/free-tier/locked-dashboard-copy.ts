@@ -7,8 +7,6 @@ export const UNLOCKED_FIRST_RUN_WELCOME_SUBTITLE =
 export const UNLOCKED_IN_USE_WELCOME_SUBTITLE =
   'Your classes, assignments, and grading in one place.';
 
-export const FREE_TIER_UNLIMITED_TILE_LABEL = 'Unlimited with free tier';
-
 export const SITE_LICENSE_ONLY_TILE_LABEL = 'Site license only';
 
 export const LOCKED_DASHBOARD_GETTING_STARTED_TITLE = 'Getting started';

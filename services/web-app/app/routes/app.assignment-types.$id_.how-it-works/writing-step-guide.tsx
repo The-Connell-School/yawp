@@ -39,7 +39,10 @@ import { GUIDE_OVERVIEW_VIDEOS } from './overview-videos';
 export function WritingStepGuide({
   kind,
   copy,
+  backTo,
+  backLabel,
   pagePath,
+  teachingLocked,
   lesson,
   v2 = false,
   lessonVideos = {},
@@ -47,7 +50,10 @@ export function WritingStepGuide({
   /** Which step: picks the page's accent (Brian, Nov 5). */
   kind: WritingStepKind;
   copy: WritingStepCopy;
+  backTo: string;
+  backLabel: string;
   pagePath: string;
+  teachingLocked?: boolean;
   lesson: LessonMaterials | null;
   /** Brian's landing pages are on: the video at the top and How to Teach It. */
   v2?: boolean;
@@ -57,8 +63,8 @@ export function WritingStepGuide({
   const guideKey = kind === PREWRITING_ASSIGNMENT_TYPE_KIND ? 'prewriting' : 'thesis-statement';
   return (
     <GuidePage
-      backTo={pagePath}
-      backLabel={`Back to ${copy.title}`}
+      backTo={backTo}
+      backLabel={backLabel}
       accent={guideAccentFor(guideKey)}
     >
       <GuideHero
@@ -114,11 +120,13 @@ export function WritingStepGuide({
 
       <WillWont will={WRITING_STEP_WILL} wont={WRITING_STEP_WONT} />
 
-      <GuideFooter
-        note={`${copy.title} is one step of the thesis-driven essay, assigned on its own.`}
-        startTo={pagePath}
-        startLabel="Create an assignment"
-      />
+      {!teachingLocked ? (
+        <GuideFooter
+          note={`${copy.title} is one step of the thesis-driven essay, assigned on its own.`}
+          startTo={pagePath}
+          startLabel="Create an assignment"
+        />
+      ) : null}
     </GuidePage>
   );
 }

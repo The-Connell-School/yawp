@@ -1,4 +1,3 @@
-import { Card } from '~/components/ui/card';
 import { CircularProgress } from '~/components/ui/circular-progress';
 import { cn } from '~/utils/misc';
 
@@ -19,13 +18,16 @@ export function FreeTierSetupTimelineCard({
   const adminProgress = phase === 'admin-approval' ? 50 : 0;
 
   return (
-    <Card
-      className={cn('px-5 py-3 max-sm:px-3.5 max-sm:py-2.5', className)}
+    <div
       data-testid="free-tier-setup-timeline-card"
+      className={cn(
+        'free-tier-setup-timeline-card w-full rounded-xl bg-white px-5 py-3 shadow-sm ring-1 ring-black/5 max-sm:px-3.5 max-sm:py-2.5',
+        className
+      )}
     >
       <ol
         aria-label="Setup steps"
-        className="flex items-center gap-0 max-sm:divide-x max-sm:divide-border"
+        className="m-0 flex list-none items-center gap-0 p-0 max-sm:divide-x max-sm:divide-border"
       >
         <li
           className={cn(
@@ -64,6 +66,6 @@ export function FreeTierSetupTimelineCard({
           <span className="min-w-0 text-pretty">{STEP_ADMIN}</span>
         </li>
       </ol>
-    </Card>
+    </div>
   );
 }

@@ -25,7 +25,12 @@ function render() {
   act(() => {
     root.render(
       <MemoryRouter>
-        <ThesisEssayGuide pagePath="/app/assignment-types/at-1" coursePath="/app/teacher-trainings/t-1" />
+        <ThesisEssayGuide
+          backTo="/app/assignment-types/at-1"
+          backLabel="Back to The Thesis-Driven Essay"
+          pagePath="/app/assignment-types/at-1"
+          coursePath="/app/teacher-trainings/t-1"
+        />
       </MemoryRouter>
     );
   });

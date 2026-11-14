@@ -175,12 +175,17 @@ for (const width of [1440, 390]) {
     await page.getByRole('checkbox').check();
     await capture(page, `${width}-02b-approve-filled`);
 
-    // 02c — validation errors
-    await page.locator('input[name="adminRole"]').fill('');
+    // 02c — validation errors. Approve stays disabled until the checkbox is
+    // ticked, so the reachable error is a missing role.
     await page.getByRole('checkbox').uncheck();
+    await expect(
+      page.getByRole('button', { name: 'Approve Yawp!', exact: true })
+    ).toBeDisabled();
+    await page.locator('input[name="adminRole"]').fill('');
+    await page.getByRole('checkbox').check();
     await page.getByRole('button', { name: 'Approve Yawp!', exact: true }).click();
     await expect(page.getByRole('alert')).toContainText(
-      'Two things need your attention before you can approve.'
+      'One thing needs your attention before you can approve.'
     );
     await capture(page, `${width}-02c-approve-validation`);
 

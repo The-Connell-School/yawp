@@ -66,16 +66,17 @@ export function DashboardAssignmentTileFooter({
         </span>
         <span className="shrink-0 self-start leading-none">{trailing}</span>
       </div>
-      <span
-        className={cn(
-          'mt-1 block text-left text-[13px] font-normal leading-snug text-muted-foreground',
-          meta == null || meta === '' ? 'sr-only' : undefined,
-          metaClassName
-        )}
-        data-testid={assignmentTypeTileMetaTestId}
-      >
-        {meta ?? ''}
-      </span>
+      {meta != null && meta !== '' ? (
+        <span
+          className={cn(
+            'mt-1 block text-left text-[13px] font-normal leading-snug text-muted-foreground',
+            metaClassName
+          )}
+          data-testid={assignmentTypeTileMetaTestId}
+        >
+          {meta}
+        </span>
+      ) : null}
     </>
   );
 }

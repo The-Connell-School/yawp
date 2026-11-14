@@ -52,6 +52,7 @@ mock.module('~/domain/free-tier/admin-link-gate.server', () => ({
 mock.module('~/domain/free-tier/approval-deny.server', () => ({
   resolveAdminDenyAnsweredGate: denyAnsweredGate,
   denySchoolAdminApproval: async () => ({ ok: false, reason: 'invalid' }),
+  reopenDeniedSchoolAdminApproval: async () => ({ ok: false, reason: 'invalid' }),
 }));
 
 const { loader } = await import('./route');

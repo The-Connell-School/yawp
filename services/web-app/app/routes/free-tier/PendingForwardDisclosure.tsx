@@ -1,19 +1,13 @@
-import { ChevronDown } from 'lucide-react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useRef } from 'react';
 import type { FetcherWithComponents } from 'react-router';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '~/components/ui/dialog';
 import { PendingApprovalForwardForm } from './PendingApprovalForwardForm';
-
-function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => setReduced(mq.matches);
-    update();
-    mq.addEventListener('change', update);
-    return () => mq.removeEventListener('change', update);
-  }, []);
-  return reduced;
-}
 
 export function PendingForwardDisclosure({
   currentAdminName,
@@ -38,116 +32,66 @@ export function PendingForwardDisclosure({
   serverAlert?: string | null;
   forwardRetry?: boolean;
   schoolName: string;
-  triggerVariant?: 'pending-page' | 'dashboard-rail';
+  triggerVariant?: 'pending-page' | 'dashboard-rail' | 'timeline';
   fetcher?: FetcherWithComponents<unknown>;
   formAction?: string;
 }) {
-  const panelId = useId();
-  const buttonId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const reducedMotion = usePrefersReducedMotion();
-  const durationMs = open ? 200 : 160;
-  const closedInert = !open && !reducedMotion;
 
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onOpenChange(false);
-        triggerRef.current?.focus();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, onOpenChange]);
+  const triggerLabel =
+    triggerVariant === 'timeline'
+      ? 'Send to another administrator'
+      : triggerVariant === 'dashboard-rail'
+        ? 'Send to an additional administrator'
+        : 'Not the right person?';
 
   return (
     <div
-      className="free-tier-pending-forward"
+      className={`free-tier-pending-forward${
+        triggerVariant === 'timeline' ? ' free-tier-pending-forward-timeline' : ''
+      }`}
       data-testid="pending-forward-disclosure"
     >
-      {triggerVariant === 'dashboard-rail' ? (
-        <p className="mt-4 text-[13px] text-muted-foreground">
-          Not the right person?{' '}
-          <button
-            type="button"
-            id={buttonId}
-            ref={triggerRef}
-            className="free-tier-pending-forward-trigger font-medium underline-offset-2"
-            aria-expanded={open}
-            aria-controls={panelId}
-            onClick={() => onOpenChange(!open)}
-          >
-            Send to an additional administrator
-          </button>
-        </p>
-      ) : (
-        <button
-          type="button"
-          id={buttonId}
-          ref={triggerRef}
-          className="free-tier-pending-forward-trigger"
-          aria-expanded={open}
-          aria-controls={panelId}
-          onClick={() => onOpenChange(!open)}
-        >
-          <span>Not the right person?</span>
-          <span
-            aria-hidden
-            className={`free-tier-pending-forward-chevron-wrap${
-              open ? ' free-tier-pending-forward-chevron-wrap-open' : ''
-            }${reducedMotion ? ' free-tier-pending-forward-chevron-wrap-reduced' : ''}`}
-            style={
-              reducedMotion ? undefined : { transitionDuration: `${durationMs}ms` }
-            }
-          >
-            <ChevronDown className="free-tier-pending-forward-chevron" />
-          </span>
-        </button>
-      )}
-      <div
-        id={panelId}
-        role="region"
-        aria-labelledby={buttonId}
-        {...(closedInert ? ({ inert: '' } as Record<string, string>) : {})}
-        className={`free-tier-pending-forward-panel${
-          open ? ' free-tier-pending-forward-panel-open' : ''
-        }${reducedMotion ? ' free-tier-pending-forward-panel-reduced' : ''}`}
-        style={
-          reducedMotion
-            ? { display: open ? 'block' : 'none' }
-            : { transitionDuration: `${durationMs}ms` }
-        }
+      <button
+        type="button"
+        ref={triggerRef}
+        className="free-tier-pending-forward-trigger"
+        aria-haspopup="dialog"
+        onClick={() => onOpenChange(true)}
       >
-        <div className="free-tier-pending-forward-panel-inner">
-          <div className="free-tier-pending-forward-panel-surface">
-            <h2 className="text-sm font-semibold text-card-foreground">
-              Send to a different administrator
-            </h2>
-            <p className="text-sm text-muted-foreground">
+        <span>{triggerLabel}</span>
+      </button>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          className="sm:max-w-md"
+          data-testid="pending-forward-modal"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            triggerRef.current?.focus();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Send to a different administrator</DialogTitle>
+            <DialogDescription>
               We&apos;ll forward your request and stop reminders to{' '}
               {currentAdminName}.
-            </p>
-            <PendingApprovalForwardForm
-              approvalId={approvalId}
-              forwarding={forwarding}
-              currentAdminEmail={currentAdminEmail}
-              currentAdminName={currentAdminName}
-              schoolName={schoolName}
-              serverAlert={serverAlert}
-              forwardRetry={forwardRetry}
-              fetcher={fetcher}
-              formAction={formAction}
-              onCancel={() => {
-                onOpenChange(false);
-                triggerRef.current?.focus();
-              }}
-              focusNameOnMount={open}
-            />
-          </div>
-        </div>
-      </div>
+            </DialogDescription>
+          </DialogHeader>
+          <PendingApprovalForwardForm
+            approvalId={approvalId}
+            forwarding={forwarding}
+            currentAdminEmail={currentAdminEmail}
+            currentAdminName={currentAdminName}
+            schoolName={schoolName}
+            serverAlert={serverAlert}
+            forwardRetry={forwardRetry}
+            fetcher={fetcher}
+            formAction={formAction}
+            onCancel={() => onOpenChange(false)}
+            focusNameOnMount={open}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

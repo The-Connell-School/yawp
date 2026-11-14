@@ -366,7 +366,11 @@ export async function forwardApprovalRequest(args: {
   /** When true (teacher additional-administrator flow), prior pending rows stay open. */
   keepPreviousPending?: boolean;
 }) {
-  const parsed = forwardApprovalSchema.safeParse(args);
+  const parsed = forwardApprovalSchema.safeParse({
+    newAdminName: args.newAdminName,
+    newAdminEmail: args.newAdminEmail,
+    newAdminRole: args.newAdminRole?.trim() || 'Administrator',
+  });
   if (!parsed.success)
     return {
       ...fail('validation'),
@@ -421,7 +425,7 @@ export async function forwardApprovalRequest(args: {
       return fail('not_allowed');
     if (app.adminRedirectCount >= ADMIN_REDIRECT_CHAIN_CAP)
       return fail('chain_cap');
-    const { newAdminEmail, newAdminName } = parsed.data;
+    const { newAdminEmail, newAdminName, newAdminRole } = parsed.data;
     // Reject the teacher mailbox before demo's review bypass or any token claim.
     if (selfAdminEmailError(app.email, newAdminEmail))
       return fail('same_as_teacher');
@@ -486,7 +490,7 @@ export async function forwardApprovalRequest(args: {
         applicationId: app.id,
         adminName: newAdminName,
         adminEmail: newAdminEmail,
-        adminRole: args.newAdminRole?.trim() || null,
+        adminRole: newAdminRole,
         redirectedFromId: pending.id,
         forwardedByRole: args.userId ? 'teacher' : 'admin',
         emailCopyVersionHash: copyHash,
@@ -547,11 +551,13 @@ export async function forwardApprovalByToken(args: {
   purpose?: 'ADMIN_APPROVE' | 'ADMIN_NOT_RIGHT_PERSON';
   newAdminName: string;
   newAdminEmail: string;
+  newAdminRole?: string;
   request: Request;
 }) {
   const parsed = forwardApprovalSchema.safeParse({
     newAdminName: args.newAdminName,
     newAdminEmail: args.newAdminEmail,
+    newAdminRole: args.newAdminRole?.trim() || 'Administrator',
   });
   if (!parsed.success) {
     return {
@@ -627,6 +633,7 @@ export async function forwardApprovalByToken(args: {
     ...args,
     newAdminName: parsed.data.newAdminName,
     newAdminEmail: parsed.data.newAdminEmail,
+    newAdminRole: parsed.data.newAdminRole,
     tokenPurpose: args.purpose,
     applicationId: peek.applicationId,
     currentApprovalId: pending.id,
@@ -894,6 +901,9 @@ async function allowedToDeliver(
   );
 }
 
+/** How long a teacher's denial email waits before it goes out. */
+export const TEACHER_DENY_EMAIL_DELAY_MS = 60 * 60 * 1000;
+
 export async function queueTeacherDenyEmailInTransaction(
   tx: Tx,
   args: {
@@ -914,7 +924,10 @@ export async function queueTeacherDenyEmailInTransaction(
     statusUrl,
     chainCapReached: args.chainCapReached,
   });
-  return queue(tx, args.approvalId, 'teacher_deny', 1, args.now, {
+  // Held back so an admin who reopens the request soon after denying it
+  // (see reopenDeniedSchoolAdminApproval) never sends the teacher a denial.
+  const sendAt = new Date(+args.now + TEACHER_DENY_EMAIL_DELAY_MS);
+  return queue(tx, args.approvalId, 'teacher_deny', 1, sendAt, {
     to: args.teacherEmail,
     subject: designed.subject,
     text: designed.text,

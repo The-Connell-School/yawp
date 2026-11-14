@@ -44,6 +44,7 @@ afterEach(() => {
 
 const PAGE = '/app/assignment-types/at-1';
 const VIDEOS = { 2: `${PAGE}/tutorial/2`, 3: `${PAGE}/tutorial/3` };
+const GUIDE_BACK = { backTo: PAGE, backLabel: 'Back to assignment type' };
 
 const GUIDES: {
   name: string;
@@ -55,7 +56,9 @@ const GUIDES: {
     name: 'Class Starter',
     media: '/img/class-starter-guide/overview.mp4',
     accent: GUIDE_ACCENTS.maroon,
-    element: (v2) => <ClassStarterGuide pagePath={PAGE} v2={v2} />,
+    element: (v2) => (
+      <ClassStarterGuide {...GUIDE_BACK} pagePath={PAGE} v2={v2} />
+    ),
   },
   {
     name: 'Pre-Writing',
@@ -63,6 +66,7 @@ const GUIDES: {
     accent: GUIDE_ACCENTS.navy,
     element: (v2) => (
       <WritingStepGuide
+        {...GUIDE_BACK}
         kind="prewriting"
         copy={WRITING_STEP_COPY.prewriting}
         pagePath={PAGE}
@@ -78,6 +82,7 @@ const GUIDES: {
     accent: GUIDE_ACCENTS.petrol,
     element: (v2) => (
       <WritingStepGuide
+        {...GUIDE_BACK}
         kind="thesis_statement"
         copy={WRITING_STEP_COPY.thesis_statement}
         pagePath={PAGE}
@@ -141,6 +146,7 @@ describe('the lesson on Pre-Writing and Thesis Statement', () => {
     ] as const) {
       const root = render(
         <WritingStepGuide
+          {...GUIDE_BACK}
           kind={kind}
           copy={WRITING_STEP_COPY[kind]}
           pagePath={PAGE}
@@ -162,7 +168,9 @@ describe('the lesson on Pre-Writing and Thesis Statement', () => {
 
 describe('with assignment-type-landing-v2 off, the guides stay as they were', () => {
   it('Class Starter keeps its hero picture, and has no video at the top or How to Teach It', () => {
-    const root = render(<ClassStarterGuide pagePath={PAGE} v2={false} />);
+    const root = render(
+      <ClassStarterGuide {...GUIDE_BACK} pagePath={PAGE} v2={false} />
+    );
     expect(root.querySelector('[data-testid="guide-overview-video"]')).toBeNull();
     expect(root.querySelector('[data-testid="how-to-teach-spotlight"]')).toBeNull();
     expect(root.querySelector('header img')?.getAttribute('src')).toBe('/img/class-starter-guide/hero.jpg');
@@ -171,6 +179,7 @@ describe('with assignment-type-landing-v2 off, the guides stay as they were', ()
   it('Pre-Writing has no video at the top or How to Teach It', () => {
     const root = render(
       <WritingStepGuide
+        {...GUIDE_BACK}
         kind="prewriting"
         copy={WRITING_STEP_COPY.prewriting}
         pagePath={PAGE}

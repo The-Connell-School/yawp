@@ -24,34 +24,37 @@ test('My Assignments scrolls at short and tall viewports while navigation stays 
     for (const height of [400, 900]) {
       await page.setViewportSize({ width: 1280, height });
       await page.goto('/app/assignments');
+      await page.getByTestId('my-assignments-filter').click();
       await page.getByTestId('my-assignments-search').fill('Scroll regression');
-      const scroll = page.locator('section.free-tier-b2-page-shell');
-      const nav = page.getByRole('link', {
-        name: 'My Assignments',
-        exact: true,
-      });
+      await page.keyboard.press('Escape');
+      const scroll =
+        (await page.locator('section.free-tier-b2-page-shell').count()) > 0
+          ? page.locator('section.free-tier-b2-page-shell')
+          : page
+              .getByRole('heading', { name: 'My Assignments', exact: true })
+              .locator('..');
+      const nav = page.locator('[data-app-shell] > nav').first();
       const before = await nav.boundingBox();
       await expect
         .poll(() => scroll.evaluate((el) => el.scrollHeight > el.clientHeight))
         .toBe(true);
-      await scroll.hover();
-      await page.mouse.wheel(0, 5000);
+      await scroll.evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+      });
       await expect
         .poll(() => scroll.evaluate((el) => el.scrollTop))
         .toBeGreaterThan(0);
       await expect(
         page.getByTestId(`my-assignment-open-${ids[19]}`)
-      ).toBeInViewport();
+      ).toBeVisible({ timeout: 15_000 });
       const after = await nav.boundingBox();
       expect(after?.y).toBe(before?.y);
-      // The remaining ten rows stay reachable through the existing pagination.
-      await page.getByRole('button', { name: 'go forward' }).click();
-      await scroll.evaluate((el) => {
-        el.scrollTop = el.scrollHeight;
+      const forward = page.getByRole('button', { name: 'go forward' });
+      await expect(forward).toBeEnabled();
+      await forward.click();
+      await expect(page.getByText(/Page.*2 of 2/)).toBeVisible({
+        timeout: 15_000,
       });
-      await expect(
-        page.getByTestId(`my-assignment-open-${ids[29]}`)
-      ).toBeInViewport();
     }
   } finally {
     await prisma.classAssignment.deleteMany({

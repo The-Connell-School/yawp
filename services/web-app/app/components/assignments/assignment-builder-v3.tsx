@@ -4,18 +4,18 @@ import {
   useBlocker,
   useFetcher,
   useNavigate,
+  useSearchParams,
 } from 'react-router';
 import {
   Calendar,
-  Check,
   ChevronDown,
   ChevronLeft,
   FileUp,
-  Link2,
   Lock,
   X,
 } from 'lucide-react';
 import type { AssignmentCreationAssignmentType } from '~/components/assignments/assignment-creation-sheet';
+import { AssignmentTypeSearchSelect } from '~/components/assignments/assignment-type-search-select';
 import type { SiteLicenseLockedAssignmentTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 import {
   DEFAULT_COLLABORATION_GROUP_MODE,
@@ -30,14 +30,17 @@ import {
   resolveNewAssignmentPointValue,
 } from '~/domain/assignments/new-assignment-defaults';
 import { isExitTicketAssignmentType } from '~/domain/assignment-types/exit-ticket';
-import {
-  FREE_TIER_UNLIMITED_TILE_LABEL,
-  SITE_LICENSE_ONLY_TILE_LABEL,
-} from '~/domain/free-tier/locked-dashboard-copy';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { TeachingApprovalRequiredAlert } from '~/components/free-tier/teaching-approval-required-alert';
 import { isTeachingApprovalRequiredActionData } from '~/domain/free-tier/teaching-approval-required';
 import { toDateInputValue } from '~/utils/date-only';
+import { assignmentBuilderV3ShowGroupProjectToggle } from '~/domain/assignments/assignment-builder-v3-group-project';
+import { resolvePostCreateAssignmentNavigation } from '~/domain/assignments/post-create-assignment-navigation';
+import {
+  canBrowserHistoryGoBack,
+  handleHistoryBackClick,
+  navigateBackOr,
+} from '~/utils/browser-history-back.client';
 import { cn } from '~/utils/misc';
 import type { AssignmentBuilderV3Class } from './assignment-builder-v3-loader.server';
 import './assignment-builder-v3.css';
@@ -113,21 +116,42 @@ function Abv3Switch({
   onChange,
   disabled,
   label,
+  description,
 }: {
   id: string;
   checked: boolean;
   onChange: (next: boolean) => void;
   disabled?: boolean;
   label: string;
+  /** One line under the label saying what the setting does. */
+  description?: string;
 }) {
+  const descriptionId = description ? `${id}-description` : undefined;
   return (
     <div className="abv3-switch-row">
-      <label htmlFor={id}>{label}</label>
+      <div className="abv3-switch-text">
+        <label htmlFor={id} className="abv3-switch-label">
+          {label}
+        </label>
+        {description ? (
+          <p id={descriptionId} className="abv3-switch-description">
+            {description}
+          </p>
+        ) : null}
+      </div>
+      <span
+        className="abv3-switch-state"
+        data-on={checked ? 'true' : 'false'}
+        aria-hidden
+      >
+        {checked ? 'On' : 'Off'}
+      </span>
       <button
         id={id}
         type="button"
         role="switch"
         aria-checked={checked}
+        aria-describedby={descriptionId}
         data-on={checked ? 'true' : 'false'}
         className="abv3-switch"
         disabled={disabled}
@@ -152,6 +176,7 @@ export function AssignmentBuilderV3({
   priorAssignmentCount = 1,
 }: AssignmentBuilderV3Props) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const createFetcher = useFetcher<CreateApiResponse>();
   const updateFetcher = useFetcher<UpdateApiResponse>();
   const extractFetcher = useFetcher<{
@@ -167,8 +192,6 @@ export function AssignmentBuilderV3({
   const isSaving =
     createFetcher.state !== 'idle' || updateFetcher.state !== 'idle';
 
-  const [typeOpen, setTypeOpen] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [classMenuOpen, setClassMenuOpen] = useState(false);
   const [localApprovalRequired, setLocalApprovalRequired] = useState(false);
 
@@ -220,23 +243,15 @@ export function AssignmentBuilderV3({
   const [grammarGradingEnabled, setGrammarGradingEnabled] = useState(
     editing?.grammarGradingEnabled ?? true
   );
-  const [ownDocument, setOwnDocument] = useState(
-    editing ? !editing.collaborationEnabled : true
+  const [groupProjectEnabled, setGroupProjectEnabled] = useState(
+    editing?.collaborationEnabled ?? false
   );
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [removePdf, setRemovePdf] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
-  const [createdView, setCreatedView] = useState<{
-    assignmentId: string;
-    title: string;
-    typeTitle: string;
-    classLabels: string[];
-    sharePath: string;
-  } | null>(null);
 
-  const typePopoverRef = useRef<HTMLDivElement>(null);
   const classPickerRef = useRef<HTMLDivElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const extractInputRef = useRef<HTMLInputElement>(null);
@@ -245,20 +260,28 @@ export function AssignmentBuilderV3({
     () => assignmentTypes.find((t) => t.id === assignmentTypeId),
     [assignmentTypes, assignmentTypeId]
   );
+  const remainingClassOptions = useMemo(
+    () => classes.filter((klass) => !classIds.includes(klass.id)),
+    [classes, classIds]
+  );
   const isExitTicket = isExitTicketAssignmentType(selectedType);
   const gradesGrammar = Boolean(selectedType?.gradesGrammar);
+  const showGroupProjectToggle = assignmentBuilderV3ShowGroupProjectToggle({
+    collaborationSupported: Boolean(selectedType?.collaborationSupported),
+    isEdit,
+    editingCollaborationEnabled: Boolean(editing?.collaborationEnabled),
+  });
 
   const markDirty = useCallback(() => setDirty(true), []);
 
   useEffect(() => {
+    if (!selectedType?.collaborationSupported && !isEdit) {
+      setGroupProjectEnabled(false);
+    }
+  }, [assignmentTypeId, isEdit, selectedType?.collaborationSupported]);
+
+  useEffect(() => {
     const onDoc = (event: MouseEvent) => {
-      if (
-        typeOpen &&
-        typePopoverRef.current &&
-        !typePopoverRef.current.contains(event.target as Node)
-      ) {
-        setTypeOpen(false);
-      }
       if (
         classMenuOpen &&
         classPickerRef.current &&
@@ -269,7 +292,7 @@ export function AssignmentBuilderV3({
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [typeOpen, classMenuOpen]);
+  }, [classMenuOpen]);
 
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
@@ -283,28 +306,6 @@ export function AssignmentBuilderV3({
   const approvalBlocked = isTeachingApprovalRequiredActionData(
     createFetcher.data
   );
-
-  const advancedSummary = useMemo(() => {
-    const parts: string[] = [];
-    parts.push(submitForGrade ? 'Graded' : 'Ungraded');
-    if (submitForGrade && pointValue.trim()) {
-      parts.push(`${pointValue.trim()} pts`);
-    }
-    parts.push(tutorEnabled ? 'Tutor on' : 'Tutor off');
-    if (editing?.promptAttachmentName && !removePdf) {
-      parts.push('1 PDF');
-    } else if (pdfFile) {
-      parts.push('1 PDF');
-    }
-    return parts.join(' · ');
-  }, [
-    submitForGrade,
-    pointValue,
-    tutorEnabled,
-    editing?.promptAttachmentName,
-    removePdf,
-    pdfFile,
-  ]);
 
   const canCreate =
     !isEdit &&
@@ -321,13 +322,7 @@ export function AssignmentBuilderV3({
 
   const tutorLocked = isEdit;
   const grammarLocked = isEdit;
-  const ownDocLocked = isEdit && Boolean(editing?.collaborationEnabled);
 
-  useEffect(() => {
-    if (formError && advancedOpen === false) {
-      setAdvancedOpen(true);
-    }
-  }, [formError, advancedOpen]);
 
   useEffect(() => {
     const data = createFetcher.data;
@@ -337,29 +332,19 @@ export function AssignmentBuilderV3({
       return;
     }
     if (data.success && data.assignmentId) {
-      if (priorAssignmentCount === 0 && classIds[0]) {
-        const params = new URLSearchParams({
-          firstAssignment: data.assignmentId,
-          firstAssignmentClassId: classIds[0],
-        });
-        void navigate(`/app?${params.toString()}`);
-        return;
-      }
-      const path = `/app/assignments/${data.assignmentId}`;
-      const host =
-        typeof window !== 'undefined' ? window.location.host : 'localhost';
-      setCreatedView({
+      const destination = resolvePostCreateAssignmentNavigation({
         assignmentId: data.assignmentId,
-        title: data.title?.trim() || title.trim() || 'Untitled assignment',
-        typeTitle: data.typeTitle ?? selectedType?.title ?? 'Assignment',
-        classLabels:
-          data.classLabels ??
-          classIds.map(
-            (id) => classes.find((c) => c.id === id)?.label ?? id
-          ),
-        sharePath: `${host}${path}`,
+        priorAssignmentCount,
+        classId: classIds[0] ?? null,
+        exitTo: searchParams.get('exitTo'),
+        canGoBack: canBrowserHistoryGoBack(),
       });
       setDirty(false);
+      if (destination.kind === 'back') {
+        void navigate(-1);
+      } else {
+        void navigate(destination.url);
+      }
       return;
     }
     if (isTeachingApprovalRequiredActionData(data)) {
@@ -380,9 +365,7 @@ export function AssignmentBuilderV3({
     priorAssignmentCount,
     classIds,
     navigate,
-    title,
-    selectedType?.title,
-    classes,
+    searchParams,
   ]);
 
   useEffect(() => {
@@ -436,7 +419,7 @@ export function AssignmentBuilderV3({
     fd.set('gradingAssistantStrictnessLevel', strictness);
     fd.set('tutorEnabled', tutorEnabled ? 'true' : 'false');
     fd.set('grammarGradingEnabled', grammarGradingEnabled ? 'true' : 'false');
-    const collaborationEnabled = !ownDocument;
+    const collaborationEnabled = groupProjectEnabled;
     fd.set('collaborationEnabled', collaborationEnabled ? 'true' : 'false');
     if (collaborationEnabled) {
       fd.set('collaborationGroupMode', DEFAULT_COLLABORATION_GROUP_MODE);
@@ -505,108 +488,17 @@ export function AssignmentBuilderV3({
     });
   }
 
-  function quotaMeta(type: AssignmentCreationAssignmentType) {
-    if (type.quotaLabel) return type.quotaLabel;
-    if (type.unavailableReason) return type.unavailableReason;
-    if (type.quotaExhausted) return type.quotaExhaustedMessage ?? 'No remaining';
-    return FREE_TIER_UNLIMITED_TILE_LABEL;
-  }
-
-  if (createdView) {
-    return (
-      <div className="abv3-root" data-testid="assignment-builder-v3-created">
-        <div className="abv3-scroll">
-          <div className="abv3-inner">
-            <Link to="/app/assignments" className="abv3-breadcrumb">
-              <ChevronLeft size={14} aria-hidden />
-              My Assignments
-            </Link>
-            <div className="abv3-success-head">
-              <span className="abv3-success-icon" aria-hidden>
-                <Check size={15} strokeWidth={2.25} />
-              </span>
-              <h1 className="abv3-h1" style={{ margin: 0 }}>
-                Assignment created
-              </h1>
-            </div>
-            <div className="abv3-created-meta">
-              <p className="abv3-created-type">{createdView.typeTitle}</p>
-              <p className="abv3-created-title">{createdView.title}</p>
-              {createdView.classLabels.map((label) => (
-                <span key={label} className="abv3-class-badge">
-                  {label}
-                </span>
-              ))}
-            </div>
-            <div style={{ marginTop: 28 }}>
-              <label
-                htmlFor="abv3-share-link"
-                className="abv3-field-label"
-                style={{ marginBottom: 6 }}
-              >
-                Share with students
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <input
-                    id="abv3-share-link"
-                    type="text"
-                    readOnly
-                    className={cn('abv3-input', 'abv3-mono-input')}
-                    value={createdView.sharePath}
-                  />
-                </div>
-                <button
-                  type="button"
-                  className="abv3-btn-outline"
-                  onClick={() => {
-                    const full =
-                      typeof window !== 'undefined'
-                        ? `${window.location.protocol}//${createdView.sharePath}`
-                        : createdView.sharePath;
-                    void navigator.clipboard?.writeText(full);
-                  }}
-                >
-                  <Link2 size={14} aria-hidden />
-                  Copy link
-                </button>
-              </div>
-              <p className="abv3-helper-tight" style={{ marginTop: 8 }}>
-                Paste it into Google Classroom or your class page.
-              </p>
-            </div>
-          </div>
-        </div>
-        <footer className="abv3-footer">
-          <div className="abv3-footer-inner">
-            <div className="abv3-footer-status" />
-            <button
-              type="button"
-              className="abv3-btn-primary"
-              onClick={() =>
-                void navigate(`/app/assignments/${createdView.assignmentId}`)
-              }
-            >
-              Done
-            </button>
-          </div>
-        </footer>
-      </div>
-    );
-  }
-
   const pageTitle = isFirstAssignment
     ? (firstAssignmentPageTitle ?? 'Create your first assignment')
     : isEdit
       ? 'Edit assignment'
       : 'New assignment';
 
+  const newAssignmentBackFallback = '/app/assignments';
   const breadcrumbHref = isEdit
     ? `/app/assignments/${editing!.assignmentId}?classId=${editing!.classId}`
-    : '/app/assignments';
-  const breadcrumbLabel = isEdit
-    ? editing!.breadcrumbTitle
-    : 'My Assignments';
+    : newAssignmentBackFallback;
+  const breadcrumbLabel = isEdit ? editing!.breadcrumbTitle : 'Back';
 
   const footerStatus = (() => {
     if (updateFetcher.state !== 'idle') return 'Saving…';
@@ -620,7 +512,15 @@ export function AssignmentBuilderV3({
     <div className="abv3-root" data-testid="assignment-builder-v3">
       <div className="abv3-scroll">
         <div className="abv3-inner">
-          <Link to={breadcrumbHref} className="abv3-breadcrumb">
+          <Link
+            to={breadcrumbHref}
+            className="abv3-breadcrumb"
+            onClick={(event) => {
+              if (!isEdit) {
+                handleHistoryBackClick(event, navigate);
+              }
+            }}
+          >
             <ChevronLeft size={14} aria-hidden />
             {breadcrumbLabel}
           </Link>
@@ -634,144 +534,35 @@ export function AssignmentBuilderV3({
             </p>
           ) : null}
 
-          <div
-            className="abv3-type-line"
-            ref={!isEdit ? typePopoverRef : undefined}
-          >
-            <span className="abv3-type-label">Type</span>
-            <span className="abv3-type-name">
-              {selectedType?.title ?? 'Choose a type'}
-            </span>
-            {isEdit || editing?.assignmentTypeLocked ? null : (
-              <button
-                type="button"
-                className="abv3-text-link"
-                aria-expanded={typeOpen}
-                aria-haspopup="dialog"
-                onClick={() => setTypeOpen((open) => !open)}
+          <div>
+            {isEdit ? (
+              <span className="abv3-field-label">Type</span>
+            ) : (
+              <label
+                htmlFor="abv3-assignment-type"
+                className="abv3-field-label"
               >
-                Change
-              </button>
+                Type
+              </label>
             )}
-            {typeOpen && !isEdit ? (
-              <div
-                role="dialog"
-                aria-label="Assignment type"
-                className="abv3-type-popover"
-              >
-                {assignmentTypes.map((type) => {
-                  const disabled =
-                    Boolean(type.quotaExhausted) ||
-                    Boolean(type.unavailableReason);
-                  const selected = type.id === assignmentTypeId;
-                  return (
-                    <button
-                      key={type.id}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => {
-                        setAssignmentTypeId(type.id);
-                        setTypeOpen(false);
-                        markDirty();
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        width: '100%',
-                        padding: '8px 10px',
-                        border: 0,
-                        borderRadius: 8,
-                        background: selected ? '#f1efe8' : 'transparent',
-                        font: 'inherit',
-                        textAlign: 'left',
-                        cursor: disabled ? 'default' : 'pointer',
-                        color: '#1b1b1b',
-                        opacity: disabled ? 0.55 : 1,
-                      }}
-                    >
-                      <span
-                        style={{
-                          visibility: selected ? 'visible' : 'hidden',
-                          display: 'flex',
-                        }}
-                      >
-                        <Check size={14} strokeWidth={2.25} />
-                      </span>
-                      <span style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span
-                          style={{
-                            fontSize: 14,
-                            fontWeight: 500,
-                            lineHeight: '20px',
-                          }}
-                        >
-                          {type.title}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 12,
-                            lineHeight: '16px',
-                            color: 'hsl(50 2.4% 36%)',
-                          }}
-                        >
-                          {quotaMeta(type)}
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })}
-                {siteLicenseLockedAssignmentTiles.length ? (
-                  <>
-                    <div
-                      style={{
-                        height: 1,
-                        background: '#e2e0d8',
-                        margin: '6px 4px',
-                      }}
-                    />
-                    {siteLicenseLockedAssignmentTiles.map((row) => (
-                      <button
-                        key={row.key}
-                        type="button"
-                        disabled
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 10,
-                          width: '100%',
-                          padding: '6px 10px',
-                          border: 0,
-                          borderRadius: 8,
-                          background: 'transparent',
-                          font: 'inherit',
-                          textAlign: 'left',
-                          cursor: 'default',
-                          color: 'hsl(50 2.4% 36%)',
-                        }}
-                      >
-                        <span style={{ width: 14, flex: 'none' }} />
-                        <span
-                          style={{
-                            flex: 1,
-                            display: 'flex',
-                            flexDirection: 'column',
-                          }}
-                        >
-                          <span style={{ fontSize: 14, lineHeight: '20px' }}>
-                            {row.label}
-                          </span>
-                          <span style={{ fontSize: 12, lineHeight: '16px' }}>
-                            {SITE_LICENSE_ONLY_TILE_LABEL}
-                          </span>
-                        </span>
-                        <Lock size={13} aria-hidden />
-                      </button>
-                    ))}
-                  </>
-                ) : null}
+            {isEdit ? (
+              <div className="abv3-input abv3-input--locked" aria-readonly>
+                {selectedType?.title ?? 'Assignment type'}
               </div>
-            ) : null}
+            ) : (
+              <AssignmentTypeSearchSelect
+                id="abv3-assignment-type"
+                assignmentTypes={assignmentTypes}
+                value={assignmentTypeId}
+                lockedTiles={siteLicenseLockedAssignmentTiles}
+                disabled={Boolean(editing?.assignmentTypeLocked)}
+                triggerClassName="abv3-type-select-trigger"
+                onValueChange={(nextTypeId) => {
+                  setAssignmentTypeId(nextTypeId);
+                  markDirty();
+                }}
+              />
+            )}
           </div>
 
           {approvalBlocked || localApprovalRequired ? (
@@ -803,7 +594,11 @@ export function AssignmentBuilderV3({
                 </label>
               )}
               <div
+                id="abv3-class-input"
                 ref={!isEdit ? classPickerRef : undefined}
+                role={isEdit ? undefined : 'combobox'}
+                aria-expanded={isEdit ? undefined : classMenuOpen}
+                aria-haspopup={isEdit ? undefined : 'listbox'}
                 className={cn(
                   'abv3-class-chips',
                   isEdit && 'abv3-class-chips--locked'
@@ -839,22 +634,12 @@ export function AssignmentBuilderV3({
                         </span>
                       );
                     })}
-                {!isEdit ? (
-                  <input
-                    id="abv3-class-input"
-                    type="text"
-                    readOnly
-                    tabIndex={-1}
-                    style={{
-                      flex: 1,
-                      minWidth: 40,
-                      height: 26,
-                      border: 0,
-                      background: 'transparent',
-                      outline: 'none',
-                      padding: 0,
-                    }}
-                  />
+                {!isEdit && classIds.length > 0 ? (
+                  remainingClassOptions.length === 0 ? (
+                    <span className="abv3-class-empty-hint">No more classes</span>
+                  ) : (
+                    <span className="abv3-class-input-spacer" aria-hidden />
+                  )
                 ) : null}
                 <span
                   style={{
@@ -874,9 +659,10 @@ export function AssignmentBuilderV3({
                 </span>
                 {!isEdit && classMenuOpen ? (
                   <div className="abv3-class-menu">
-                    {classes
-                      .filter((klass) => !classIds.includes(klass.id))
-                      .map((klass) => (
+                    {remainingClassOptions.length === 0 ? (
+                      <p className="abv3-class-menu-empty">No more classes</p>
+                    ) : (
+                      remainingClassOptions.map((klass) => (
                         <button
                           key={klass.id}
                           type="button"
@@ -888,7 +674,8 @@ export function AssignmentBuilderV3({
                         >
                           {klass.label}
                         </button>
-                      ))}
+                      ))
+                    )}
                   </div>
                 ) : null}
               </div>
@@ -994,191 +781,149 @@ export function AssignmentBuilderV3({
                   </span>
                 </div>
               </div>
-              <div>
-                <span className="abv3-field-label">Rubric</span>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    height: 40,
-                    fontSize: 14,
-                  }}
-                >
-                  <span>
-                    {selectedType?.rubricName
-                      ? `${selectedType.rubricName}`
-                      : 'Default rubric for this type'}
+              <div className="abv3-due">
+                <label htmlFor="abv3-post" className="abv3-field-label">
+                  Post date{' '}
+                  <span className="abv3-field-label-muted">(optional)</span>
+                </label>
+                <div className="abv3-input-wrap">
+                  <input
+                    id="abv3-post"
+                    type="date"
+                    className={cn('abv3-input', 'abv3-input-with-icon')}
+                    value={postAt}
+                    onChange={(e) => {
+                      setPostAt(e.target.value);
+                      markDirty();
+                    }}
+                  />
+                  <span className="abv3-input-icon">
+                    <Calendar size={16} aria-hidden />
                   </span>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="abv3-advanced">
-            <button
-              type="button"
-              className="abv3-advanced-toggle"
-              aria-expanded={advancedOpen}
-              onClick={() => setAdvancedOpen((open) => !open)}
-            >
-              <span className="abv3-advanced-title">Advanced options</span>
-              {!advancedOpen ? (
-                <span className="abv3-advanced-summary">{advancedSummary}</span>
-              ) : (
-                <span style={{ flex: 1 }} />
-              )}
-              <span style={{ color: 'hsl(50 2.4% 36%)', display: 'flex' }}>
-                <ChevronDown
-                  size={16}
-                  style={{
-                    transform: advancedOpen ? 'rotate(180deg)' : undefined,
-                  }}
-                  aria-hidden
-                />
-              </span>
-            </button>
-            {advancedOpen ? (
-              <div className="abv3-advanced-body">
-                <div>
-                  <label htmlFor="abv3-post" className="abv3-field-label">
-                    Post date{' '}
-                    <span className="abv3-field-label-muted">(optional)</span>
-                  </label>
-                  <div className="abv3-due abv3-input-wrap">
-                    <input
-                      id="abv3-post"
-                      type="date"
-                      className={cn('abv3-input', 'abv3-input-with-icon')}
-                      value={postAt}
-                      onChange={(e) => {
-                        setPostAt(e.target.value);
-                        markDirty();
-                      }}
-                    />
-                    <span className="abv3-input-icon">
-                      <Calendar size={16} aria-hidden />
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <span className="abv3-field-label">
+          {/* Always shown: these are part of every assignment, not extras.
+              One rounded group, a divider between sections, even padding. */}
+          <div className="abv3-settings">
+            <section className="abv3-settings-section" aria-label="PDF attachment">
+              <div className="abv3-settings-row">
+                <div className="abv3-settings-text">
+                  <span className="abv3-field-label abv3-settings-title">
                     PDF attachment{' '}
                     <span className="abv3-field-label-muted">(optional)</span>
                   </span>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      minHeight: 36,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 14,
-                        color: 'hsl(50 2.4% 36%)',
-                        flex: 1,
-                      }}
-                    >
-                      {pdfFile
-                        ? pdfFile.name
-                        : editing?.promptAttachmentName && !removePdf
-                          ? editing.promptAttachmentName
-                          : 'No PDF attached'}
-                    </span>
-                    {editing?.promptAttachmentName && !removePdf && !pdfFile ? (
-                      <button
-                        type="button"
-                        className="abv3-btn-outline"
-                        onClick={() => {
-                          setRemovePdf(true);
-                          markDirty();
-                        }}
-                      >
-                        Remove
-                      </button>
-                    ) : null}
+                  <span className="abv3-settings-status">
+                    {pdfFile
+                      ? pdfFile.name
+                      : editing?.promptAttachmentName && !removePdf
+                        ? editing.promptAttachmentName
+                        : 'No PDF attached'}
+                  </span>
+                </div>
+                <div className="abv3-settings-actions">
+                  {editing?.promptAttachmentName && !removePdf && !pdfFile ? (
                     <button
                       type="button"
                       className="abv3-btn-outline"
-                      onClick={() => pdfInputRef.current?.click()}
-                    >
-                      Choose PDF
-                    </button>
-                    <input
-                      ref={pdfInputRef}
-                      type="file"
-                      accept="application/pdf,.pdf"
-                      className="hidden"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0] ?? null;
-                        event.target.value = '';
-                        setPdfFile(file);
-                        setRemovePdf(false);
+                      onClick={() => {
+                        setRemovePdf(true);
                         markDirty();
                       }}
-                    />
-                  </div>
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="abv3-btn-outline"
+                    onClick={() => pdfInputRef.current?.click()}
+                  >
+                    Choose PDF
+                  </button>
                 </div>
-                <hr className="abv3-hr" />
-                <SnapshotAdvancedGrading
-                  submitForGrade={submitForGrade}
-                  onSubmitForGrade={(v) => {
-                    setSubmitForGrade(v);
-                    markDirty();
-                  }}
-                  pointValue={pointValue}
-                  onPointValue={(v) => {
-                    setPointValue(v);
-                    markDirty();
-                  }}
-                  strictness={strictness}
-                  onStrictness={(v) => {
-                    setStrictness(v);
+                <input
+                  ref={pdfInputRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null;
+                    event.target.value = '';
+                    setPdfFile(file);
+                    setRemovePdf(false);
                     markDirty();
                   }}
                 />
-                <hr className="abv3-hr" />
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <Abv3Switch
-                    id="abv3-tutor"
-                    label="Tutor"
-                    checked={tutorEnabled}
-                    disabled={tutorLocked}
-                    onChange={(v) => {
-                      setTutorEnabled(v);
-                      markDirty();
-                    }}
-                  />
-                  {gradesGrammar ? (
-                    <Abv3Switch
-                      id="abv3-grammar"
-                      label="Grade for grammar and syntax"
-                      checked={grammarGradingEnabled}
-                      disabled={grammarLocked}
-                      onChange={(v) => {
-                        setGrammarGradingEnabled(v);
-                        markDirty();
-                      }}
-                    />
-                  ) : null}
-                  <Abv3Switch
-                    id="abv3-own"
-                    label="Each student gets their own document"
-                    checked={ownDocument}
-                    disabled={ownDocLocked || isEdit}
-                    onChange={(v) => {
-                      setOwnDocument(v);
-                      markDirty();
-                    }}
-                  />
-                  <p className="abv3-helper-tight">
-                    Turn off to have students write in groups.
-                  </p>
-                </div>
               </div>
-            ) : null}
+              <p className="abv3-settings-helper">
+                Any documents uploaded here will be attached to the prompt and
+                available to be viewed by students as they are working on their
+                assignment.
+              </p>
+            </section>
+
+            <section className="abv3-settings-section" aria-label="Grading">
+              <SnapshotAdvancedGrading
+                submitForGrade={submitForGrade}
+                onSubmitForGrade={(v) => {
+                  setSubmitForGrade(v);
+                  markDirty();
+                }}
+                pointValue={pointValue}
+                onPointValue={(v) => {
+                  setPointValue(v);
+                  markDirty();
+                }}
+                strictness={strictness}
+                onStrictness={(v) => {
+                  setStrictness(v);
+                  markDirty();
+                }}
+              />
+            </section>
+
+            <section className="abv3-settings-section" aria-label="Tutor and documents">
+              <Abv3Switch
+                id="abv3-tutor"
+                label="Tutor enabled"
+                description="Students can ask the Yawp! tutor for help while they write. It never writes for them. Turning it off removes it from students' documents. Great for in-class essays or checking to see how a student does on their own."
+                checked={tutorEnabled}
+                disabled={tutorLocked}
+                onChange={(v) => {
+                  setTutorEnabled(v);
+                  markDirty();
+                }}
+              />
+              {gradesGrammar ? (
+                <Abv3Switch
+                  id="abv3-grammar"
+                  label="Grammar and syntax grading"
+                  description="Grading also scores grammar and syntax."
+                  checked={grammarGradingEnabled}
+                  disabled={grammarLocked}
+                  onChange={(v) => {
+                    setGrammarGradingEnabled(v);
+                    markDirty();
+                  }}
+                />
+              ) : null}
+              {showGroupProjectToggle ? (
+                <Abv3Switch
+                  id="abv3-group-project"
+                  label="Group project"
+                  description="Turn on for a collaborative document."
+                  checked={groupProjectEnabled}
+                  disabled={isEdit}
+                  onChange={(v) => {
+                    setGroupProjectEnabled(v);
+                    markDirty();
+                  }}
+                />
+              ) : null}
+            </section>
           </div>
         </div>
       </div>
@@ -1191,7 +936,9 @@ export function AssignmentBuilderV3({
               <button
                 type="button"
                 className="abv3-btn-outline"
-                onClick={() => void navigate('/app/assignments')}
+                onClick={() =>
+                  navigateBackOr(navigate, newAssignmentBackFallback)
+                }
               >
                 Cancel
               </button>
@@ -1304,21 +1051,21 @@ function SnapshotAdvancedGrading({
 }) {
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <Abv3Switch
-          id="abv3-graded"
-          label="Submit for a grade"
-          checked={submitForGrade}
-          onChange={onSubmitForGrade}
-        />
-        {submitForGrade ? (
+      <Abv3Switch
+        id="abv3-graded"
+        label="Submit for a grade"
+        description="Students turn this in for points and feedback."
+        checked={submitForGrade}
+        onChange={onSubmitForGrade}
+      />
+      {/* Points and grading assistance only mean something for graded work. */}
+      {submitForGrade ? (
+        <>
           <div>
             <label htmlFor="abv3-points" className="abv3-field-label">
               Point value
             </label>
-            <div
-              style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-            >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <PointValueInput
                 id="abv3-points"
                 value={pointValue}
@@ -1329,29 +1076,29 @@ function SnapshotAdvancedGrading({
               </span>
             </div>
           </div>
-        ) : null}
-      </div>
-      <div>
-        <span className="abv3-field-label">Grading assistance</span>
-        <div
-          role="group"
-          aria-label="Grading assistance"
-          className="abv3-segment"
-        >
-          {gradingAssistantStrictnessOptions.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={strictness === option.value}
-              data-pressed={strictness === option.value ? 'true' : 'false'}
-              onClick={() => onStrictness(option.value)}
+          <div>
+            <span className="abv3-field-label">Grading assistance</span>
+            <div
+              role="group"
+              aria-label="Grading assistance"
+              className="abv3-segment"
             >
-              {option.label}
-            </button>
-          ))}
-        </div>
-        <p className="abv3-helper">{strictnessHelper(strictness)}</p>
-      </div>
+              {gradingAssistantStrictnessOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={strictness === option.value}
+                  data-pressed={strictness === option.value ? 'true' : 'false'}
+                  onClick={() => onStrictness(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <p className="abv3-helper">{strictnessHelper(strictness)}</p>
+          </div>
+        </>
+      ) : null}
     </>
   );
 }

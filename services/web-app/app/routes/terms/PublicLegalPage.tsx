@@ -42,10 +42,14 @@ function PublicLegalHeader() {
 
 export function PublicLegalSection(props: {
   title: string;
+  id?: string;
   children: ReactNode;
 }) {
   return (
-    <section className="border-t py-8 first:border-t-0">
+    <section
+      id={props.id}
+      className="border-t py-8 first:border-t-0"
+    >
       <h2 className="text-2xl font-semibold tracking-normal text-foreground">
         {props.title}
       </h2>

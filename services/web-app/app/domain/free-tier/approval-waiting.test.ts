@@ -32,16 +32,30 @@ test('mailto encodes recipient, reserved characters, and line breaks as values',
 
 test('forward input rejects missing, malformed, overlong and injected fields', () => {
   for (const fields of [
-    { newAdminName: '', newAdminEmail: 'a@b.org' },
-    { newAdminName: 'Name', newAdminEmail: 'bad' },
-    { newAdminName: 'a'.repeat(121), newAdminEmail: 'a@b.org' },
-    { newAdminName: 'Name\r\nInjected', newAdminEmail: 'a@b.org' },
+    { newAdminRole: '', newAdminName: 'Name', newAdminEmail: 'a@b.org' },
+    { newAdminRole: 'Principal', newAdminName: '', newAdminEmail: 'a@b.org' },
+    { newAdminRole: 'Principal', newAdminName: 'Name', newAdminEmail: 'bad' },
+    {
+      newAdminRole: 'Principal',
+      newAdminName: 'a'.repeat(121),
+      newAdminEmail: 'a@b.org',
+    },
+    {
+      newAdminRole: 'Principal',
+      newAdminName: 'Name\r\nInjected',
+      newAdminEmail: 'a@b.org',
+    },
   ])
     expect(forwardApprovalSchema.safeParse(fields).success).toBe(false);
   expect(
     forwardApprovalSchema.parse({
+      newAdminRole: ' Principal ',
       newAdminName: ' Dr. Patel ',
       newAdminEmail: 'PATEL@EXAMPLE.ORG',
     })
-  ).toEqual({ newAdminName: 'Dr. Patel', newAdminEmail: 'patel@example.org' });
+  ).toEqual({
+    newAdminRole: 'Principal',
+    newAdminName: 'Dr. Patel',
+    newAdminEmail: 'patel@example.org',
+  });
 });

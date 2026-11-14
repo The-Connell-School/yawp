@@ -3,7 +3,7 @@ import {
   DocumentCreationError,
   documentCreationErrorTextForClient,
 } from '~/domain/documents.server';
-import { createOrReuseTeacherAssignmentPreviewDocument } from '~/domain/assignments/teacher-assignment-preview.server';
+import { createTeacherAssignmentTestDocument } from '~/domain/assignments/teacher-assignment-preview.server';
 import { resolveTeacherTryItClassAssignment } from '~/domain/assignments/teacher-assignment-try-it.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -50,7 +50,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   let documentId = '';
   try {
-    const created = await createOrReuseTeacherAssignmentPreviewDocument({
+    const created = await createTeacherAssignmentTestDocument({
       membershipId: profile.id,
       assignmentTypeId: classAssignment.assignment.assignmentTypeId,
       assignmentId: classAssignment.assignmentId,
@@ -63,7 +63,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         type: 'error',
         description: documentCreationErrorTextForClient(
           creationError,
-          'Could not open this assignment preview.',
+          'Could not open a new test document.',
         ),
       });
     }

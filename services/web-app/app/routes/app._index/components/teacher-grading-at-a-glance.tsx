@@ -6,7 +6,6 @@ import {
   Users,
 } from 'lucide-react';
 import { Link } from 'react-router';
-import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 import { cn } from '~/utils/misc';
 
 // `reset=1` tells the documents page to drop the teacher's stored filters
@@ -69,7 +68,10 @@ function GradingQueueStatStrip({
   readyToReleaseCount: number;
 }) {
   return (
-    <div className="mt-3 grid grid-cols-2 overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5">
+    <div
+      data-testid="teacher-grading-queue-stats"
+      className="teacher-grading-queue-stats mt-3 grid grid-cols-2 overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5"
+    >
       <Link
         to={GRADING_LINKS.needsGrading}
         className="border-r border-black/5 p-3 transition-colors hover:bg-muted/40"
@@ -95,13 +97,13 @@ function GradingQueueStatStrip({
 export function TeacherGradingAtAGlance({
   freeAccount = false,
   licensedGradingBand = false,
-  seeHowItWorksTo,
+  teachingLocked = false,
   needsGradingCount,
   readyToReleaseCount,
 }: {
   freeAccount?: boolean;
   licensedGradingBand?: boolean;
-  seeHowItWorksTo?: string;
+  teachingLocked?: boolean;
   needsGradingCount: number;
   readyToReleaseCount: number;
 }) {
@@ -114,16 +116,14 @@ export function TeacherGradingAtAGlance({
     <div data-testid="teacher-grading-grid" data-tour="dashboard-grading">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2>Grading</h2>
-        {seeHowItWorksTo ? (
-          <SeeHowItWorksLink to={seeHowItWorksTo} />
-        ) : (
+        {!teachingLocked ? (
           <Link
             to={GRADING_LINKS.all}
             className="teacher-grading-view-all text-sm text-muted-foreground hover:text-foreground"
           >
             View all
           </Link>
-        )}
+        ) : null}
       </div>
 
       {allCaughtUp ? (
@@ -144,7 +144,7 @@ export function TeacherGradingAtAGlance({
             needsGradingCount={needsGradingCount}
             readyToReleaseCount={readyToReleaseCount}
           />
-          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="teacher-grading-mode-cards mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <GradingModeCard
               to={GRADING_LINKS.byStudent}
               title="By student"

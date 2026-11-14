@@ -192,7 +192,7 @@ export const FreeTierTextInput = React.forwardRef<
       <Input
         ref={ref}
         {...props}
-        className={`text-base ${props.className ?? ''}`}
+        className={`text-base placeholder:text-muted-foreground/50 ${props.className ?? ''}`}
         aria-invalid={error ? true : props['aria-invalid']}
         aria-describedby={
           error
@@ -227,9 +227,12 @@ export const FreeTierTextInput = React.forwardRef<
 export function FreeTierProgress({
   steps,
   current,
+  currentStepAccessory,
 }: {
   steps: string[];
   current: number;
+  /** Shown indented under the active step (e.g. forward to another admin). */
+  currentStepAccessory?: ReactNode;
 }) {
   return (
     <ol
@@ -239,17 +242,27 @@ export function FreeTierProgress({
       {steps.map((step, index) => {
         const Icon =
           index < current ? Check : index === current ? CircleDot : Circle;
+        const isCurrent = index === current;
         return (
           <li
             key={step}
-            aria-current={index === current ? 'step' : undefined}
-            className={`flex items-center gap-2.5 ${index === current ? 'font-semibold text-card-foreground' : 'text-muted-foreground'}`}
+            aria-current={isCurrent ? 'step' : undefined}
+            className={
+              isCurrent ? 'font-semibold text-card-foreground' : 'text-muted-foreground'
+            }
           >
-            <Icon
-              aria-hidden="true"
-              className={`h-5 w-5 shrink-0 ${index < current ? 'rounded-full bg-emerald-800 p-0.5 text-white' : index === current ? 'text-primary' : 'text-border'}`}
-            />
-            {step}
+            <div className="flex items-center gap-2.5">
+              <Icon
+                aria-hidden="true"
+                className={`h-5 w-5 shrink-0 ${index < current ? 'rounded-full bg-emerald-800 p-0.5 text-white' : isCurrent ? 'text-primary' : 'text-border'}`}
+              />
+              {step}
+            </div>
+            {isCurrent && currentStepAccessory ? (
+              <div className="free-tier-getting-started-step-accessory mt-2 font-normal [margin-inline-start:30px]">
+                {currentStepAccessory}
+              </div>
+            ) : null}
           </li>
         );
       })}

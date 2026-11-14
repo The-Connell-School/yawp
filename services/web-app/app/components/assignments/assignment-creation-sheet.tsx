@@ -9,21 +9,13 @@ import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import {
-  COLLABORATION_GROUP_MODE_OPTIONS,
-  COLLABORATION_GROUP_SIZE_OPTIONS,
   DEFAULT_COLLABORATION_GROUP_MODE,
   DEFAULT_COLLABORATION_GROUP_SIZE,
   collaborationModeNeedsGroupSize,
   type CollaborationGroupMode,
 } from '~/domain/assignments/collaboration';
+import { assignmentBuilderV3ShowGroupProjectToggle } from '~/domain/assignments/assignment-builder-v3-group-project';
 import { RadioGroup, RadioGroupItem } from '~/components/ui/radio-group';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '~/components/ui/select';
 import {
   DEFAULT_EXIT_TICKET_MODE,
   DEFAULT_EXIT_TICKET_REFLECTION_PROMPT,
@@ -96,6 +88,7 @@ import { ExitTicketBuilderV3 } from './exit-ticket-builder-v3';
 import { cn } from '~/utils/misc';
 import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
+import { AssignmentTypeSearchSelect } from '~/components/assignments/assignment-type-search-select';
 import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
 import { toDateInputValue } from '~/utils/date-only';
 import {
@@ -645,6 +638,7 @@ export function AssignmentCreationSheet({
               const selected =
                 type?.id ===
                 initialAssignmentTypeSelection(props.assignmentTypes);
+              const usageMeta = freeAssignmentKindUsageMeta(usage, row);
               return (
                 <button
                   type="button"
@@ -670,14 +664,16 @@ export function AssignmentCreationSheet({
                   </span>
                   <span className="flex flex-1 flex-col gap-1">
                     <span>{row.label}</span>
-                    <span
-                      className={cn(
-                        'text-xs text-muted-foreground',
-                        row.remaining === 0 && 'text-amber-800'
-                      )}
-                    >
-                      {freeAssignmentKindUsageMeta(usage, row)}
-                    </span>
+                    {usageMeta ? (
+                      <span
+                        className={cn(
+                          'text-xs text-muted-foreground',
+                          row.remaining === 0 && 'text-amber-800'
+                        )}
+                      >
+                        {usageMeta}
+                      </span>
+                    ) : null}
                   </span>
                   {!usage.unlimitedFreeAssignmentTiles &&
                     row.remaining === 0 && <Lock size={14} />}
@@ -908,11 +904,20 @@ export function AssignmentCreationSheetContent({
       selectedType.quotaExhausted)
       ? ''
       : requestedTypeId;
-  const showIndividualDocumentNotice =
-    !isEditing && Boolean(assignmentTypeId);
-  // New assignments are always solo; only show the frozen control when editing
-  // an assignment that was already collaborative.
-  const showCollaborationToggle = isEditing && collaborationEnabled;
+  const showGroupProjectToggle = assignmentBuilderV3ShowGroupProjectToggle({
+    collaborationSupported: Boolean(selectedType?.collaborationSupported),
+    isEdit: isEditing,
+    editingCollaborationEnabled: isEditing
+      ? initialCollaborationEnabled
+      : false,
+  });
+
+  useEffect(() => {
+    if (!isEditing && !selectedType?.collaborationSupported) {
+      setCollaborationEnabled(false);
+    }
+  }, [assignmentTypeId, isEditing, selectedType?.collaborationSupported]);
+
   // Offered only where there is something to turn off. Switching it on cannot
   // invent a grammar category for a rubric that has none.
   const selectedTypeGradesGrammar = Boolean(
@@ -1449,13 +1454,18 @@ export function AssignmentCreationSheetContent({
         )}
 
         <div className="space-y-2">
-          <Label>Assignment type</Label>
-          <Select
+          <Label htmlFor="assignment-create-type">Assignment type</Label>
+          <AssignmentTypeSearchSelect
+            id="assignment-create-type"
+            assignmentTypes={assignmentTypes}
             value={assignmentTypeId}
+            disabled={
+              isSaving ||
+              Boolean(fixedAssignmentTypeId) ||
+              Boolean(editingAssignment?.assignmentTypeLocked)
+            }
             onValueChange={(nextTypeId) => {
               setSelectedAssignmentTypeId(nextTypeId);
-              // Type-dependent defaults follow the type. Editing never reaches
-              // here for the tutor: the toggle is frozen after creation.
               const nextIsExitTicket = isExitTicketTypeId(
                 assignmentTypes,
                 nextTypeId
@@ -1480,42 +1490,7 @@ export function AssignmentCreationSheetContent({
               setSubmitForGrade(grading.submitForGrade);
               setPointValue(pointValueFieldValue(grading.pointValue));
             }}
-            disabled={
-              isSaving ||
-              Boolean(fixedAssignmentTypeId) ||
-              Boolean(editingAssignment?.assignmentTypeLocked)
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select an assignment type" />
-            </SelectTrigger>
-            <SelectContent>
-              {assignmentTypes.map((assignmentType) => (
-                <SelectItem
-                  key={assignmentType.id}
-                  value={assignmentType.id}
-                  textValue={assignmentType.title}
-                  triggerLabel={assignmentType.title}
-                  disabled={
-                    Boolean(assignmentType.unavailableReason) ||
-                    assignmentType.quotaExhausted
-                  }
-                >
-                  {assignmentType.unavailableReason ? (
-                    <span className="text-xs text-muted-foreground">
-                      {assignmentType.unavailableReason}
-                    </span>
-                  ) : assignmentType.quotaLabel ? (
-                    <span className="text-xs text-muted-foreground">
-                      {assignmentType.quotaExhausted
-                        ? assignmentType.quotaExhaustedMessage
-                        : assignmentType.quotaLabel}
-                    </span>
-                  ) : null}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          />
           {!isEditing &&
           !assignmentTypes.some(
             (type) => !type.unavailableReason && !type.quotaExhausted
@@ -2138,16 +2113,6 @@ export function AssignmentCreationSheetContent({
           <BooleanFormValue name="submitForGrade" value={submitForGrade} />
         </div>
 
-        {showIndividualDocumentNotice ? (
-          <div className="pt-6">
-            <p className="text-sm text-muted-foreground">
-              Each student receives their own document when they start this
-              assignment. Yawp! does not create a shared group document, and
-              you do not need to set up groups.
-            </p>
-          </div>
-        ) : null}
-
         {/* The quick builder keeps a default exit ticket to one screen:
             everything a teacher rarely changes waits in here, still posting
             its value, until they open it. */}
@@ -2272,7 +2237,7 @@ export function AssignmentCreationSheetContent({
           {/* Frozen after creation for assignments that were already
             collaborative: students may already have group drafts built around
             it. */}
-          {showCollaborationToggle ? (
+          {showGroupProjectToggle ? (
             <div className="pt-6">
               {isEditing ? null : (
                 <BooleanFormValue
@@ -2280,6 +2245,22 @@ export function AssignmentCreationSheetContent({
                   value={collaborationEnabled}
                 />
               )}
+              {collaborationEnabled && !isEditing ? (
+                <>
+                  <input
+                    type="hidden"
+                    name="collaborationGroupMode"
+                    value={collaborationGroupMode}
+                  />
+                  {collaborationModeNeedsGroupSize(collaborationGroupMode) ? (
+                    <input
+                      type="hidden"
+                      name="collaborationGroupSize"
+                      value={collaborationGroupSize}
+                    />
+                  ) : null}
+                </>
+              ) : null}
               <div className="flex items-center gap-2.5">
                 <Checkbox
                   id="assignment-create-collaboration-enabled"
@@ -2298,89 +2279,14 @@ export function AssignmentCreationSheetContent({
                       : 'cursor-pointer font-normal leading-none'
                   }
                 >
-                  Is this a collaborative assignment?
+                  Group project
                 </Label>
               </div>
               <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
                 {isEditing
                   ? 'Collaboration cannot be switched on or off after an assignment is created — groups may already be writing in shared drafts.'
-                  : 'You must assign every student to a group before students can open this assignment. You can arrange groups yourself, shuffle automatically, or use the whole class. Students cannot create groups, move themselves, or create shared documents. When you finalize the groups, Yawp! creates one shared document for each group.'}
+                  : 'Turn on for a collaborative document.'}
               </p>
-              {collaborationEnabled && !isEditing ? (
-                <div className="mt-3 space-y-3 pl-[calc(1rem+0.625rem)]">
-                  <input
-                    type="hidden"
-                    name="collaborationGroupMode"
-                    value={collaborationGroupMode}
-                  />
-                  <div className="space-y-2">
-                    <Label>How should groups be made?</Label>
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      {COLLABORATION_GROUP_MODE_OPTIONS.map((option) => {
-                        const selected =
-                          collaborationGroupMode === option.value;
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            className={`h-full rounded-md border px-3 py-2 text-left text-sm transition ${
-                              selected
-                                ? 'border-primary bg-primary text-primary-foreground'
-                                : 'border-border bg-background hover:bg-muted'
-                            }`}
-                            aria-pressed={selected}
-                            onClick={() =>
-                              setCollaborationGroupMode(option.value)
-                            }
-                            disabled={isSaving}
-                          >
-                            <span className="block font-medium">
-                              {option.label}
-                            </span>
-                            <span
-                              className={`mt-1 block text-xs ${
-                                selected
-                                  ? 'text-primary-foreground/80'
-                                  : 'text-muted-foreground'
-                              }`}
-                            >
-                              {option.description}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Whole class has no size to choose: the group is the roster. */}
-                  {collaborationModeNeedsGroupSize(collaborationGroupMode) ? (
-                    <div>
-                      <Label
-                        htmlFor="assignment-create-collaboration-group-size"
-                        className="font-normal leading-none"
-                      >
-                        Students per group
-                      </Label>
-                      <select
-                        id="assignment-create-collaboration-group-size"
-                        name="collaborationGroupSize"
-                        value={collaborationGroupSize}
-                        onChange={(event) =>
-                          setCollaborationGroupSize(Number(event.target.value))
-                        }
-                        disabled={isSaving}
-                        className="mt-1 block rounded border px-2 py-1 text-sm"
-                      >
-                        {COLLABORATION_GROUP_SIZE_OPTIONS.map((size) => (
-                          <option key={size} value={size}>
-                            {size}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
             </div>
           ) : null}
         </MoreOptions>

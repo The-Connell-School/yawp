@@ -92,12 +92,13 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
       continue;
     }
     await expect(
-      page.getByTestId('free-account-rail').getByTestId('free-account-checklist')
+      // Beside the first class card, same slot as in locked preview.
+      page.getByTestId('teacher-classes-grid').getByTestId('free-account-checklist')
     ).toContainText('Step 3 of 4');
     await expect(
       page.getByText("You're approved. Your classroom is ready.")
     ).toHaveCount(0);
-    const rail = page.getByTestId('free-account-rail');
+    const rail = page.getByTestId('free-account-checklist');
     await expect(rail.getByText('Class ready')).toBeVisible();
     await expect(
       rail.getByRole('link', { name: 'Share with a colleague' })
@@ -147,6 +148,7 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
     ).toBeFocused();
     await page.goto('/app/assignments');
     await shot(page, `assignments-${label}`);
+    await page.getByTestId('my-assignments-actions').click();
     await page.getByTestId('my-assignments-new-assignment').click();
     await expect(page).toHaveURL(/\/app\/assignments\/new/);
     await expect(page.getByTestId('assignment-builder-v3')).toBeVisible();

@@ -607,11 +607,13 @@ export async function redirectSchoolAdmin(args: {
   token: string;
   newAdminName: string;
   newAdminEmail: string;
+  newAdminRole?: string;
   request: Request;
 }) {
   const parsed = forwardApprovalSchema.safeParse({
     newAdminName: args.newAdminName,
     newAdminEmail: args.newAdminEmail,
+    newAdminRole: args.newAdminRole?.trim() || 'Administrator',
   });
   if (!parsed.success) {
     return {
@@ -688,6 +690,7 @@ export async function redirectSchoolAdmin(args: {
       token: args.token,
       newAdminName: parsed.data.newAdminName,
       newAdminEmail: parsed.data.newAdminEmail,
+      newAdminRole: parsed.data.newAdminRole,
       request: args.request,
     });
   }

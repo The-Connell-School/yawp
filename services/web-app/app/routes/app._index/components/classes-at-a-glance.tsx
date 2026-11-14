@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Badge } from '~/components/ui/badge';
 import {
@@ -15,10 +15,13 @@ export function ClassesAtAGlance({
   totalClassCount,
   showAssignmentsTab = true,
   firstAssignmentCelebration,
+  afterFirstClassTile,
 }: {
   classes: TeacherClassCardData[];
   totalClassCount: number;
   showAssignmentsTab?: boolean;
+  /** Rendered immediately after the first class card (e.g. locked getting-started). */
+  afterFirstClassTile?: ReactNode;
   firstAssignmentCelebration?: {
     open: boolean;
     preview: FirstAssignmentCelebrationPreview | null;
@@ -47,15 +50,18 @@ export function ClassesAtAGlance({
         </div>
       </div>
 
-      {classes.length === 0 ? (
+      {classes.length === 0 && !afterFirstClassTile ? (
         <div className="rounded-lg border border-dashed p-6 text-center">
           <p className="text-sm text-muted-foreground">
             No classes yet. Create one from My Classes.
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {classes.map((klass) => {
+        <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {classes.length === 0 && afterFirstClassTile ? (
+            <div className="w-full max-w-[320px]">{afterFirstClassTile}</div>
+          ) : null}
+          {classes.flatMap((klass, index) => {
             const isCelebrationClass =
               firstAssignmentCelebration?.open &&
               celebrationClassId === klass.id &&
@@ -82,8 +88,10 @@ export function ClassesAtAGlance({
               />
             );
 
+            const nodes: ReactNode[] = [];
+
             if (isCelebrationClass) {
-              return (
+              nodes.push(
                 <FirstAssignmentCelebrationAnchor
                   key={klass.id}
                   open={firstAssignmentCelebration.open}
@@ -94,9 +102,19 @@ export function ClassesAtAGlance({
                   {card}
                 </FirstAssignmentCelebrationAnchor>
               );
+            } else {
+              nodes.push(<div key={klass.id}>{card}</div>);
             }
 
-            return <div key={klass.id}>{card}</div>;
+            if (index === 0 && afterFirstClassTile) {
+              nodes.push(
+                <div key="after-first-class-tile" className="w-full max-w-[320px]">
+                  {afterFirstClassTile}
+                </div>
+              );
+            }
+
+            return nodes;
           })}
         </div>
       )}

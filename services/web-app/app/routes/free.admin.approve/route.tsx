@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -18,7 +19,10 @@ import {
   resolveAdminLinkReplacedGate,
 } from '~/domain/free-tier/admin-link-gate.server';
 import { completeSchoolAdminApproval } from '~/domain/free-tier/approval-flow.server';
-import { sendAdminLearnMoreTeamContact } from '~/domain/free-tier/team-contact.server';
+import {
+  adminLearnMoreInCooldown,
+  sendAdminLearnMoreTeamContact,
+} from '~/domain/free-tier/team-contact.server';
 import { prisma } from '~/utils/db.server';
 import { FreeTierAuthCard } from '../free-tier/FreeTierAuthCard';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
@@ -28,6 +32,7 @@ import { resolveAdminDenyAnsweredGate } from '~/domain/free-tier/approval-deny.s
 import {
   AdminAlreadyApprovedCard,
   AdminApprovePageIntro,
+  AdminApprovePageShell,
   AdminDeclinedCard,
   AdminDenyAlreadyAnsweredCard,
   AdminLinkExpiredCard,
@@ -59,6 +64,7 @@ type LoaderData =
       teacherName: string;
       teacherEmail?: string;
       showDenyAndQa: boolean;
+      learnMoreRecentlySent: boolean;
     };
 
 async function applicationFromVerifiedToken(
@@ -127,6 +133,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     } catch {
       forwardToken = undefined;
     }
+    const learnMoreRecentlySent = await adminLearnMoreInCooldown(
+      peek.applicationId
+    );
     return {
       ok: true as const,
       token,
@@ -135,6 +144,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       teacherName: app?.name ?? 'A teacher',
       teacherEmail: app?.email,
       showDenyAndQa,
+      learnMoreRecentlySent,
     };
   }
   if (peek.reason === 'expired') {
@@ -362,94 +372,99 @@ export default function FreeAdminApproveRoute() {
   const actionData = useActionData<typeof action>();
   const pass1 = useFreeTierEnabled();
 
+  let content: ReactNode;
+
   if (actionData?.ok && 'idempotent' in actionData && actionData.idempotent) {
     const teacherName = data.ok ? data.teacherName : 'A teacher';
     const schoolName = data.ok ? data.schoolName : 'your school';
-    return (
+    content = (
       <AdminAlreadyApprovedCard
         teacherName={teacherName}
         schoolName={schoolName}
       />
     );
-  }
-
-  if (actionData?.ok && 'app' in actionData && actionData.app) {
+  } else if (actionData?.ok && 'app' in actionData && actionData.app) {
     const app = actionData.app as { name: string; schoolName: string };
-    return (
+    content = (
       <AdminThankYouCard teacherName={app.name} schoolName={app.schoolName} />
     );
-  }
-
-  if (!data.ok) {
+  } else if (!data.ok) {
     const terminal = terminalFromLoader(data);
-    if (terminal) return terminal;
-    return <AdminLinkInvalidCard />;
+    content = terminal ?? <AdminLinkInvalidCard />;
+  } else {
+    const actionTerminal = actionData ? terminalFromAction(actionData) : null;
+    if (actionTerminal) {
+      content = actionTerminal;
+    } else if (actionData && !actionData.ok && actionData.reason !== 'validation') {
+      const declined =
+        actionData.reason === 'illegal_state' &&
+        'status' in actionData &&
+        (actionData.status === 'REJECTED' || actionData.status === 'EXPIRED');
+      if (declined) {
+        content = (
+          <AdminDeclinedCard
+            teacherName={data.teacherName}
+            schoolName={data.schoolName}
+          />
+        );
+      } else if (actionData.reason === 'email_failed') {
+        content = (
+          <FreeTierAuthCard title="Thank you" icon={<CircleCheck />} status>
+            <p className="text-sm text-muted-foreground">
+              {thankYouTeacherEmailFailedBody(
+                data.teacherName,
+                data.schoolName,
+                pass1
+              )}
+            </p>
+          </FreeTierAuthCard>
+        );
+      } else if (
+        actionData.reason === 'link_replaced' ||
+        actionData.reason === 'superseded'
+      ) {
+        content = (
+          <AdminLinkReplacedCard
+            teacherName={data.teacherName}
+            schoolName={data.schoolName}
+            variant={
+              'variant' in actionData
+                ? (actionData as { variant?: FreeTierAdminLinkReplacedVariant })
+                    .variant ?? 'forwarded'
+                : 'forwarded'
+            }
+          />
+        );
+      } else if (actionData.reason === 'budget_exceeded') {
+        content = (
+          <FreeTierAuthCard
+            title="Free classrooms are paused"
+            icon={<CircleAlert />}
+          >
+            <p className="text-sm text-muted-foreground">
+              {freeClassroomsPausedBody(
+                data.teacherName,
+                data.schoolName,
+                pass1
+              )}
+            </p>
+          </FreeTierAuthCard>
+        );
+      } else {
+        content = renderApproveForm(data, actionData);
+      }
+    } else {
+      content = renderApproveForm(data, actionData);
+    }
   }
 
-  const actionTerminal = actionData ? terminalFromAction(actionData) : null;
-  if (actionTerminal) return actionTerminal;
+  return <AdminApprovePageShell>{content}</AdminApprovePageShell>;
+}
 
-  if (actionData && !actionData.ok && actionData.reason !== 'validation') {
-    const declined =
-      actionData.reason === 'illegal_state' &&
-      'status' in actionData &&
-      (actionData.status === 'REJECTED' || actionData.status === 'EXPIRED');
-    if (declined) {
-      return (
-        <AdminDeclinedCard
-          teacherName={data.teacherName}
-          schoolName={data.schoolName}
-        />
-      );
-    }
-    if (actionData.reason === 'email_failed') {
-      return (
-        <FreeTierAuthCard title="Thank you" icon={<CircleCheck />} status>
-          <p className="text-sm text-muted-foreground">
-            {thankYouTeacherEmailFailedBody(
-              data.teacherName,
-              data.schoolName,
-              pass1
-            )}
-          </p>
-        </FreeTierAuthCard>
-      );
-    }
-    if (
-      actionData.reason === 'link_replaced' ||
-      actionData.reason === 'superseded'
-    ) {
-      return (
-        <AdminLinkReplacedCard
-          teacherName={data.teacherName}
-          schoolName={data.schoolName}
-          variant={
-            'variant' in actionData
-              ? (actionData as { variant?: FreeTierAdminLinkReplacedVariant })
-                  .variant ?? 'forwarded'
-              : 'forwarded'
-          }
-        />
-      );
-    }
-    if (actionData.reason === 'budget_exceeded') {
-      return (
-        <FreeTierAuthCard
-          title="Free classrooms are paused"
-          icon={<CircleAlert />}
-        >
-          <p className="text-sm text-muted-foreground">
-            {freeClassroomsPausedBody(
-              data.teacherName,
-              data.schoolName,
-              pass1
-            )}
-          </p>
-        </FreeTierAuthCard>
-      );
-    }
-  }
-
+function renderApproveForm(
+  data: Extract<LoaderData, { ok: true }>,
+  actionData: ReturnType<typeof useActionData<typeof action>>
+) {
   return (
     <FreeTierAuthCard
       title={adminApprovePageTitle(data.teacherName, data.schoolName)}
@@ -479,6 +494,7 @@ export default function FreeAdminApproveRoute() {
         schoolName={data.schoolName}
         teacherName={data.teacherName}
         showDenyAndQa={data.showDenyAndQa}
+        learnMoreRecentlySent={data.learnMoreRecentlySent}
         serverErrors={
           actionData && !actionData.ok && actionData.reason === 'validation'
             ? {

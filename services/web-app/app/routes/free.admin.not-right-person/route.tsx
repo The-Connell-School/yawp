@@ -180,10 +180,12 @@ export async function action({ request }: ActionFunctionArgs) {
   const token = String(formData.get('token') ?? '');
   const newAdminName = String(formData.get('adminName') ?? '');
   const newAdminEmail = String(formData.get('adminEmail') ?? '');
+  const newAdminRole = String(formData.get('adminRole') ?? '');
   const result = await redirectSchoolAdmin({
     token,
     newAdminName,
     newAdminEmail,
+    newAdminRole,
     request,
   });
   if (!result.ok && result.reason === 'link_replaced') {

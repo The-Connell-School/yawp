@@ -1,5 +1,11 @@
 import { z } from 'zod';
 export const forwardApprovalSchema = z.object({
+  newAdminRole: z
+    .string()
+    .trim()
+    .min(1, 'Enter their title.')
+    .max(120, 'Use 120 characters or fewer.')
+    .refine((v) => !/[\r\n\x00]/.test(v), 'Enter their title.'),
   newAdminName: z
     .string()
     .trim()

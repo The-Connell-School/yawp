@@ -234,7 +234,7 @@ function StudentClassDocumentsTable({
       </div>
 
       {filteredDocuments.length > 0 ? (
-        <div className="overflow-hidden rounded-xl border bg-background">
+        <div className="overflow-hidden rounded-xl border bg-white">
           <table className="w-full border-collapse">
             <thead>
               <tr>
@@ -438,7 +438,7 @@ export function StudentClassDetailView({
                         </p>
                       </div>
                     </div>
-                    <div className="overflow-hidden rounded-xl border bg-background">
+                    <div className="overflow-hidden rounded-xl border bg-white">
                       <table className="w-full table-fixed border-collapse">
                         <tbody>
                           {rows.map((classAssignment) => (

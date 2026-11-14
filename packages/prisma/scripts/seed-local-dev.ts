@@ -28,6 +28,7 @@ import {
   UA_PREVIEW_ORG_NAME,
 } from './local-dev/dev-personas';
 import { seedFreeTierShipReview } from './local-dev/seed-free-tier-ship-review';
+import { seedFreeTierBundleAssignmentTypes } from './seed-free-tier-bundle-assignment-types';
 import { logScriptError } from '../../../services/web-app/app/utils/log-script-error.server';
 
 assertLocalSeedTarget();
@@ -109,6 +110,10 @@ try {
     personas: LOCAL_DEV_PERSONAS,
   });
   console.timeEnd('collaboration');
+
+  console.time('free-tier-bundle-types');
+  await seedFreeTierBundleAssignmentTypes(prisma);
+  console.timeEnd('free-tier-bundle-types');
 
   const databaseName = process.env.DATABASE_URL?.split('/').pop()?.split('?')[0] ?? '';
   const { shouldRunFreeTierShipReviewSeed } = await import(

@@ -19,7 +19,7 @@ mock.module('~/domain/free-tier/class-preparation.server', () => ({
   saveClassPreparation: async () => ({ ok: true as const }),
 }));
 mock.module('~/domain/free-tier/locked-preview.server', () => ({
-  ensureLockedPreviewClassroomForUser: async () => null,
+  ensureLockedPreviewClassroomForUserBestEffort: async () => null,
 }));
 
 test('onboarding action redirects without returning approval tokens', async () => {
@@ -57,4 +57,30 @@ test('onboarding action redirects without returning approval tokens', async () =
   const body = await res.text();
   expect(body).not.toContain('approveToken');
   expect(body).not.toContain('declineToken');
+});
+
+test('onboarding action still redirects when locked preview provisioning fails', async () => {
+  mock.module('~/domain/free-tier/locked-preview.server', () => ({
+    ensureLockedPreviewClassroomForUserBestEffort: async () => null,
+  }));
+  const { action } = await import('./route');
+  let res: Response;
+  try {
+    await action({
+      request: new Request('https://yawp.test/app/free-tier/onboarding', {
+        method: 'POST',
+        body: new URLSearchParams({
+          adminName: 'Pat',
+          adminEmail: 'pat@school.edu',
+          adminRole: 'Principal',
+        }),
+      }),
+    } as never);
+    throw new Error('expected redirect');
+  } catch (response) {
+    expect(response).toBeInstanceOf(Response);
+    res = response as Response;
+  }
+  expect(res.status).toBe(302);
+  expect(res.headers.get('location')).toBe('/app/free-tier/pending');
 });

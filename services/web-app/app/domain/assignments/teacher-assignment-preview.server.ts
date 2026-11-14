@@ -34,7 +34,7 @@ export async function findTeacherAssignmentPreviewDocumentId({
   return row?.id ?? null;
 }
 
-export async function createOrReuseTeacherAssignmentPreviewDocument(
+export async function createTeacherAssignmentTestDocument(
   input: CreateTeacherPreviewInput
 ): Promise<{ documentId: string }> {
   const assignmentType = await prisma.assignmentType.findFirst({
@@ -66,21 +66,6 @@ export async function createOrReuseTeacherAssignmentPreviewDocument(
     throw new DocumentCreationError(
       'assignmentId does not match ClassAssignment.assignmentId'
     );
-  }
-
-  const existing = await prisma.document.findFirst({
-    where: {
-      membershipId: input.membershipId,
-      artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW',
-      teacherPreviewClassAssignmentId: input.teacherPreviewClassAssignmentId,
-      deletedAt: null,
-      archivedAt: null,
-    },
-    orderBy: { createdAt: 'asc' },
-    select: { id: true },
-  });
-  if (existing) {
-    return { documentId: existing.id };
   }
 
   const assignmentModules = await prisma.assignmentModule.findMany({
@@ -115,4 +100,11 @@ export async function createOrReuseTeacherAssignmentPreviewDocument(
   });
 
   return { documentId: document.id };
+}
+
+/** @deprecated Each Try it opens a new test document; use createTeacherAssignmentTestDocument. */
+export async function createOrReuseTeacherAssignmentPreviewDocument(
+  input: CreateTeacherPreviewInput
+): Promise<{ documentId: string }> {
+  return createTeacherAssignmentTestDocument(input);
 }

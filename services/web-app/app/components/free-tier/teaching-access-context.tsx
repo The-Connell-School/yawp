@@ -1,6 +1,5 @@
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -9,11 +8,13 @@ import {
   type ReactNode,
 } from 'react';
 import { useFetchers, useFetcher } from 'react-router';
+import { toast } from 'sonner';
 import type { TeachingAccessShellState } from '~/domain/free-tier/teaching-access-shell.server';
+import { ApprovalRequiredToast } from './teaching-access-toasts';
 import {
-  ApprovalRequiredToast,
-  ApprovalSuccessToast,
-} from './teaching-access-toasts';
+  TEACHING_ACCESS_APPROVAL_TOAST_BODY,
+  TEACHING_ACCESS_APPROVAL_TOAST_TITLE,
+} from '~/domain/free-tier/teaching-access-copy';
 import useBreakpoint from '~/hooks/useBreakpoint';
 
 type TeachingAccessContextValue = {
@@ -51,11 +52,7 @@ export function TeachingAccessProvider({
   const fetchers = useFetchers();
   const dismissFetcher = useFetcher();
   const [errorToastOpen, setErrorToastOpen] = useState(false);
-  const [approvalToastOpen, setApprovalToastOpen] = useState(
-    state.variant === 'unlocked' && state.showApprovalToast
-  );
-  const approvalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const approvalPausedRef = useRef(false);
+  const approvalToastShownRef = useRef(false);
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'base' || breakpoint === 'sm';
   const loading = state.variant === 'loading';
@@ -94,39 +91,27 @@ export function TeachingAccessProvider({
     };
   }, []);
 
-  const dismissApprovalToast = useCallback(() => {
-    setApprovalToastOpen(false);
-    if (state.variant === 'unlocked') {
-      dismissFetcher.submit(null, {
-        method: 'POST',
-        action: '/app/teaching-access/dismiss-approval-toast',
+  // The "you're approved" note is a standard app toast (Sonner, default
+  // duration). It is marked seen as soon as it shows so it appears once.
+  useEffect(() => {
+    if (approvalToastShownRef.current) return;
+    if (state.variant !== 'unlocked' || !state.showApprovalToast) return;
+    approvalToastShownRef.current = true;
+    // Deferred like the root Toaster's own server toasts: this effect runs
+    // before the root <Toaster> subscribes, and Sonner drops toasts sent
+    // before then.
+    setTimeout(() => {
+      toast.success(TEACHING_ACCESS_APPROVAL_TOAST_TITLE, {
+        id: 'teaching-access-approval',
+        description: TEACHING_ACCESS_APPROVAL_TOAST_BODY,
+        testId: 'teaching-access-approval-toast',
       });
-    }
+    }, 0);
+    dismissFetcher.submit(null, {
+      method: 'POST',
+      action: '/app/teaching-access/dismiss-approval-toast',
+    });
   }, [dismissFetcher, state]);
-
-  useEffect(() => {
-    if (
-      approvalToastOpen &&
-      state.variant === 'unlocked' &&
-      state.showApprovalToast
-    ) {
-      dismissFetcher.submit(null, {
-        method: 'POST',
-        action: '/app/teaching-access/dismiss-approval-toast',
-      });
-    }
-  }, [approvalToastOpen, dismissFetcher, state]);
-
-  useEffect(() => {
-    if (!approvalToastOpen) return;
-    if (approvalPausedRef.current) return;
-    approvalTimerRef.current = setTimeout(() => {
-      dismissApprovalToast();
-    }, 8000);
-    return () => {
-      if (approvalTimerRef.current) clearTimeout(approvalTimerRef.current);
-    };
-  }, [approvalToastOpen, dismissApprovalToast]);
 
   const value = useMemo(
     () => ({ state, locked, loading }),
@@ -142,43 +127,6 @@ export function TeachingAccessProvider({
           mobilePinned={isMobile}
           onDismiss={() => setErrorToastOpen(false)}
         />
-      ) : null}
-      {approvalToastOpen ? (
-        <div
-          onMouseEnter={() => {
-            approvalPausedRef.current = true;
-            if (approvalTimerRef.current) clearTimeout(approvalTimerRef.current);
-          }}
-          onMouseLeave={() => {
-            approvalPausedRef.current = false;
-            approvalTimerRef.current = setTimeout(
-              () => dismissApprovalToast(),
-              8000
-            );
-          }}
-          onFocusCapture={() => {
-            approvalPausedRef.current = true;
-            if (approvalTimerRef.current) clearTimeout(approvalTimerRef.current);
-          }}
-          onBlurCapture={() => {
-            approvalPausedRef.current = false;
-            if (approvalToastOpen) {
-              approvalTimerRef.current = setTimeout(
-                () => dismissApprovalToast(),
-                8000
-              );
-            }
-          }}
-        >
-          <ApprovalSuccessToast
-            className={
-              isMobile
-                ? 'left-3 right-3 bottom-[var(--teaching-access-toast-bottom,1.5rem)]'
-                : undefined
-            }
-            onDismiss={dismissApprovalToast}
-          />
-        </div>
       ) : null}
     </TeachingAccessContext.Provider>
   );

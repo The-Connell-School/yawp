@@ -72,61 +72,81 @@
   font-weight: 600;
 }
 
+.locked-home-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 28px;
+  container-type: inline-size;
+  container-name: locked-home-columns;
+}
+
 .locked-home-main {
   container-type: inline-size;
   container-name: locked-home-main;
-  flex: 999 1 420px;
+  grid-column: 1;
+  grid-row: 1;
   min-width: 0;
   gap: 20px;
 }
 
-.locked-home-columns {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 28px;
-}
-
 .locked-home-rail-desktop {
   display: none;
-  flex: 1 1 300px;
-  min-width: 0;
-  max-width: 320px;
-  width: auto;
+  grid-column: 2;
+  grid-row: 1;
+  width: 100%;
   flex-direction: column;
   gap: 16px;
-  position: sticky;
-  top: 24px;
-  align-self: flex-start;
 }
 
-/* Narrow class stack only when the getting-started rail shares the row (free-tier home). */
-.locked-home-b2--with-rail [data-testid='teacher-classes-grid'] > div:last-child {
-  grid-template-columns: minmax(0, 1fr);
-  max-width: 300px;
+/* Side rail only when the dashboard content column is genuinely wide (sidebar open stays stacked). */
+@container locked-home-columns (min-width: 1120px) {
+  .locked-home-columns {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
+  }
+
+  .locked-home-rail-desktop {
+    display: flex;
+    position: sticky;
+    top: 24px;
+    justify-self: stretch;
+  }
+
+  .locked-home-rail-mobile {
+    display: none !important;
+  }
+
+  .locked-home-b2--with-rail [data-testid='teacher-classes-grid'] > div:last-child {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 300px;
+  }
+}
+
+.locked-home-b2 [data-testid='teacher-grading-queue-stats'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .locked-home-b2
   [data-testid='teacher-grading-grid']
-  .grid.grid-cols-2 {
+  .teacher-grading-mode-cards {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 @container locked-home-main (min-width: 520px) {
   .locked-home-b2
     [data-testid='teacher-grading-grid']
-    .grid.grid-cols-2 {
+    .teacher-grading-mode-cards {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 1024px) {
-  .locked-home-rail-desktop {
-    display: flex;
-  }
-
   .locked-home-rail-mobile {
-    display: none;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    max-width: none;
   }
 }
 

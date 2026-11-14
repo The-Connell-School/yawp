@@ -190,11 +190,12 @@ describe('the Class Starter assignment type image', () => {
     expect(image.altText?.length).toBeGreaterThan(0);
   });
 
-  test('describes the drawing: a cat with a coffee above the words Class Starter', () => {
+  test('describes the drawing: a cat with a coffee, and no wordmark', () => {
     const image = readClassStarterImage();
 
     expect(image.altText).toMatch(/cat/);
-    expect(image.altText).toMatch(/Class Starter/);
+    expect(image.altText).toMatch(/coffee/);
+    expect(image.altText).not.toMatch(/Class Starter/);
   });
 
   test('attaches the image to the assignment type it just seeded', async () => {
@@ -270,9 +271,12 @@ describe('the Class Starter assignment type image', () => {
     }
   });
 
-  test('retires the rooster card and not the current one', () => {
+  test('retires the rooster and wordmark cards and not the current one', () => {
     expect(CLASS_STARTER_RETIRED_ARTWORK_MD5S).toContain(
       '429eac2e3a0b56f3140f6a8da4382101'
+    );
+    expect(CLASS_STARTER_RETIRED_ARTWORK_MD5S).toContain(
+      'f902670ff70ebcee17a0a733c5ad0248'
     );
     expect(CLASS_STARTER_RETIRED_ARTWORK_MD5S).not.toContain(
       artworkMd5(readFileSync(CLASS_STARTER_IMAGE_PATH))

@@ -7,7 +7,7 @@ import { TeachingAccessClassPageSkeleton } from '~/components/free-tier/teaching
 import {
   shouldHideFreeTierTeachingSecrets,
 } from '~/domain/free-tier/locked-preview.server';
-import { ensureLockedPreviewSampleAssignments } from '~/domain/free-tier/locked-preview-class-seed.server';
+import { removeLockedPreviewSampleAssignments } from '~/domain/free-tier/locked-preview-class-seed.server';
 import { teachingAccessMobileSheetBodyInvite } from '~/domain/free-tier/teaching-access-copy';
 import { Prisma } from '@app/prisma';
 import {
@@ -110,7 +110,7 @@ import {
 } from '~/components/ui/select';
 import { studentModuleSessionSingleSelect } from './module-session-select.server';
 import { buildClassDocumentScope } from './class-document-where.server';
-import { TEACHER_ASSIGNMENT_PREVIEW_SUBJECT_LABEL } from '~/domain/assignments/teacher-assignment-preview';
+import { TEACHER_ASSIGNMENT_TEST_SUBJECT_LABEL } from '~/domain/assignments/teacher-assignment-preview';
 import { parseDocumentGroupMode } from './class-documents-grouping';
 import {
   getStoredCollapsedDocumentGroups,
@@ -1083,10 +1083,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     hideTeachingSecrets &&
     klass.school.organization.plan === 'FREE_CLASSROOM'
   ) {
-    await ensureLockedPreviewSampleAssignments(
-      klass.school.organizationId,
-      classId
-    );
+    await removeLockedPreviewSampleAssignments(classId);
   }
 
   const classInsightsEnabled = klass.school.organization.classInsightsEnabled;
@@ -1263,22 +1260,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   });
 
-  const { loadTeacherPreviewDocumentsForClass } = await import(
-    './class-teacher-preview-documents.server'
-  );
-  const teacherPreviewDocuments = await loadTeacherPreviewDocumentsForClass({
-    classId,
-    teacherMembershipId: profile.id,
-  });
-
-  const inProgressDocumentsForClass = [
-    ...inProgressDocuments,
-    ...teacherPreviewDocuments.inProgressDocuments,
-  ];
-  const submissionsForClass = [
-    ...submissions,
-    ...teacherPreviewDocuments.submissions,
-  ];
+  const inProgressDocumentsForClass = inProgressDocuments;
+  const submissionsForClass = submissions;
 
   const [classAssignments, availableAssignmentTypes] = await Promise.all([
     prisma.classAssignment.findMany({
@@ -1308,7 +1291,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
         _count: {
           select: {
-            documents: true,
+            documents: { where: { deletedAt: null } },
+            teacherPreviewDocuments: {
+              where: {
+                deletedAt: null,
+                artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW',
+              },
+            },
           },
         },
         documentGroups: {
@@ -1418,6 +1407,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     _count: {
       documents:
         studentDocumentCountByClassAssignmentId.get(classAssignment.id) ?? 0,
+      teacherPreviewDocuments:
+        classAssignment._count.teacherPreviewDocuments,
     },
     insight: insightByClassAssignmentId.get(classAssignment.id) ?? null,
     hasSharedWork: classAssignment.documentGroups.length > 0,
@@ -1597,7 +1588,7 @@ function classDocumentSubjectForRow(params: {
       ...params.membership,
       user: {
         ...params.membership.user,
-        name: TEACHER_ASSIGNMENT_PREVIEW_SUBJECT_LABEL,
+        name: TEACHER_ASSIGNMENT_TEST_SUBJECT_LABEL,
       },
     };
   }
@@ -1953,7 +1944,9 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
       data.assignments.map((assignment) => ({
         ...assignment,
         gradedCount: gradedCountByAssignmentId.get(assignment.id) ?? 0,
-        documentCount: assignment._count.documents,
+        documentCount:
+          assignment._count.documents +
+          assignment._count.teacherPreviewDocuments,
       })),
     [data.assignments, gradedCountByAssignmentId]
   );

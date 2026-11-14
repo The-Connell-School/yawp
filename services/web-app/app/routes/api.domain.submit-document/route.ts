@@ -70,6 +70,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       title: true,
       revision: true,
       updatedAt: true,
+      artifactKind: true,
       classAssignment: {
         select: {
           class: {
@@ -125,8 +126,12 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   const backfillDocumentTitle =
     Boolean(data.title?.trim()) && !document.title?.trim();
   const documentOrganizationId = document.membership.organizationId;
+  // A teacher's "Try it" preview submits like student work, but it is never
+  // a free classroom's first student essay, so it skips that bookkeeping.
+  const isTeacherPreview = document.artifactKind === 'TEACHER_ASSIGNMENT_PREVIEW';
   const freeTierOrganizationId =
-    document.membership.organization.plan === 'FREE_CLASSROOM'
+    document.membership.organization.plan === 'FREE_CLASSROOM' &&
+    !isTeacherPreview
       ? documentOrganizationId
       : null;
 

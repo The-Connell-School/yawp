@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { Check } from 'lucide-react';
 import { Form, Link, useActionData, useNavigation } from 'react-router';
 import { Checkbox } from '~/components/ui/checkbox';
 import {
@@ -55,6 +56,23 @@ function ValidationSummary({
 const LEARN_MORE_CONFIRMATION =
   'Message sent, someone will be in touch shortly.';
 
+function AdminLearnMoreSentCallout() {
+  return (
+    <div
+      role="status"
+      data-testid="admin-learn-more-sent"
+      className="flex items-center justify-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-sm text-card-foreground"
+    >
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+        <Check aria-hidden className="h-3 w-3" />
+      </span>
+      <p className="text-balance font-medium leading-snug">
+        {LEARN_MORE_CONFIRMATION}
+      </p>
+    </div>
+  );
+}
+
 export function AdminApproveForm({
   token,
   forwardToken,
@@ -62,6 +80,7 @@ export function AdminApproveForm({
   teacherName,
   serverErrors,
   showDenyAndQa = false,
+  learnMoreRecentlySent = false,
 }: {
   token: string;
   forwardToken?: string;
@@ -69,6 +88,7 @@ export function AdminApproveForm({
   teacherName: string;
   serverErrors?: FieldErrors;
   showDenyAndQa?: boolean;
+  learnMoreRecentlySent?: boolean;
 }) {
   const navigation = useNavigation();
   const actionData = useActionData<{
@@ -76,7 +96,9 @@ export function AdminApproveForm({
     learnMoreSent?: boolean;
     reason?: string;
   }>();
-  const learnMoreSent = Boolean(actionData?.ok && actionData.learnMoreSent);
+  const learnMoreSent =
+    learnMoreRecentlySent ||
+    Boolean(actionData?.ok && actionData.learnMoreSent);
   const submitting =
     navigation.state === 'submitting' &&
     navigation.formData?.get('intent') === 'approve';
@@ -159,7 +181,7 @@ export function AdminApproveForm({
             if (clientErrors.adminRole)
               setClientErrors((current) => ({ ...current, adminRole: undefined }));
           }}
-          placeholder="Principal, Technology Director"
+          placeholder="Principal, Technology Director, or Superintendent"
           aria-invalid={errors.adminRole ? true : undefined}
           aria-describedby={errors.adminRole ? roleErrorId : undefined}
         />
@@ -203,13 +225,15 @@ export function AdminApproveForm({
           name="intent"
           value="approve"
           isLoading={submitting}
-          disabled={submitting || learnMoreSubmitting}
+          // Muted until the admin confirms they can approve, so the box right
+          // above is the obvious next step rather than an error after clicking.
+          disabled={!authorized || submitting || learnMoreSubmitting}
         >
           {submitting ? 'Approving…' : 'Approve Yawp!'}
         </FreeTierButton>
         {showDenyAndQa ? (
           learnMoreSent ? (
-            <p className="text-sm text-muted-foreground">{LEARN_MORE_CONFIRMATION}</p>
+            <AdminLearnMoreSentCallout />
           ) : (
             <FreeTierButton
               type="submit"

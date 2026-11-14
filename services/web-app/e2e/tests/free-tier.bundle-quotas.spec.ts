@@ -16,10 +16,8 @@ test.describe('Free classroom bundle quotas', () => {
 
     await page.goto('/app/assignments');
     await page.waitForLoadState('networkidle');
-    const newAssignment = page.getByRole('button', {
-      name: 'New Assignment',
-      exact: true,
-    });
+    await page.getByTestId('my-assignments-actions').click();
+    const newAssignment = page.getByTestId('my-assignments-new-assignment');
     await expect(newAssignment).toBeVisible({ timeout: 20_000 });
     await newAssignment.click();
     await expect(page).toHaveURL(/\/app\/assignments\/new/, {
@@ -28,16 +26,15 @@ test.describe('Free classroom bundle quotas', () => {
     await expect(page.getByTestId('assignment-builder-v3')).toBeVisible({
       timeout: 20_000,
     });
-    await page.getByRole('button', { name: 'Change' }).click();
-    const picker = page.getByRole('dialog', { name: 'Assignment type' });
-    await expect(picker).toBeVisible({ timeout: 20_000 });
-    const prewritingTile = picker.getByRole('button', { name: /Prewriting/i });
+    await page.locator('.abv3-type-select-trigger').click();
+    await expect(
+      page.getByPlaceholder('Search assignment types…')
+    ).toBeVisible({ timeout: 20_000 });
+    const prewritingTile = page.getByRole('option', { name: /Prewriting/i });
     if (await prewritingTile.count()) {
-      await expect(prewritingTile).toContainText(
-        /Unlimited|\d+ of \d+|None left|No remaining/
-      );
+      await expect(prewritingTile).not.toContainText(/\d+ of \d+/);
     }
-    const classStarterTile = picker.getByRole('button', {
+    const classStarterTile = page.getByRole('option', {
       name: /Class Starter/i,
     });
     await expect(classStarterTile).toBeVisible({ timeout: 20_000 });

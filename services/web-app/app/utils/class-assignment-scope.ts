@@ -40,7 +40,14 @@ export function buildClassAssignmentDocumentScope(
   };
 }
 
-/** Class assignment work that counts as student work (excludes teacher try-it previews). */
+export function buildClassTeacherAssignmentTestDocumentBranch(classId: string) {
+  return {
+    teacherPreviewClassAssignment: { classId },
+    artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW' as const,
+  };
+}
+
+/** Class assignment work that counts as student work (excludes teacher test documents). */
 export function buildClassStudentWorkOnAssignmentBranches(
   classId: string
 ): Array<
@@ -67,13 +74,21 @@ export function buildClassAssignmentStudentDocumentCountWhere(
   classAssignmentId: string
 ): Prisma.DocumentWhereInput {
   return {
-    classAssignmentId,
     deletedAt: null,
     OR: [
-      { artifactKind: 'ASSIGNMENT_GROUP' },
       {
-        artifactKind: 'STUDENT',
-        membership: { is: { role: 'STUDENT' } },
+        classAssignmentId,
+        OR: [
+          { artifactKind: 'ASSIGNMENT_GROUP' },
+          {
+            artifactKind: 'STUDENT',
+            membership: { is: { role: 'STUDENT' } },
+          },
+        ],
+      },
+      {
+        teacherPreviewClassAssignmentId: classAssignmentId,
+        artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW',
       },
     ],
   };
@@ -82,6 +97,7 @@ export function buildClassAssignmentStudentDocumentCountWhere(
 export type EnrolledClassDocumentsWhere = {
   OR: Array<
     | ClassScopedDocumentWhere
+    | ReturnType<typeof buildClassTeacherAssignmentTestDocumentBranch>
     | {
         classAssignmentId: null;
         membershipId: { in: string[] };
@@ -103,6 +119,7 @@ export function buildEnrolledClassDocumentsScope(
 ): EnrolledClassDocumentsWhere {
   const scope: EnrolledClassDocumentsWhere['OR'] = [
     ...buildClassStudentWorkOnAssignmentBranches(classId),
+    buildClassTeacherAssignmentTestDocumentBranch(classId),
   ];
 
   if (enrolledMembershipIds.length > 0) {
@@ -157,9 +174,10 @@ export function buildTeacherClassWorkDocumentWhere(params: {
 }): Prisma.DocumentWhereInput {
   const classScope: Prisma.DocumentWhereInput = {
     OR: [
-      ...params.classIds.flatMap((classId) =>
-        buildClassStudentWorkOnAssignmentBranches(classId)
-      ),
+      ...params.classIds.flatMap((classId) => [
+        ...buildClassStudentWorkOnAssignmentBranches(classId),
+        buildClassTeacherAssignmentTestDocumentBranch(classId),
+      ]),
       {
         classAssignmentId: null,
         membership: {

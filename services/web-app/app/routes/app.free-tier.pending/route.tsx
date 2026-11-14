@@ -43,7 +43,6 @@ import {
   FreeTierButton,
   FreeTierSignOut,
   FreeTierProgress,
-  FreeTierPerson,
 } from '../free-tier/FreeTierAuthCard';
 import { freeTierConfigErrorMessage } from '~/domain/free-tier/free-tier-config.server';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
@@ -221,6 +220,7 @@ export async function action({ request }: ActionFunctionArgs) {
         currentApprovalId,
         newAdminName: String(form.get('adminName') ?? ''),
         newAdminEmail: String(form.get('adminEmail') ?? ''),
+        newAdminRole: String(form.get('adminRole') ?? ''),
         request,
         keepPreviousPending: true,
       });
@@ -425,7 +425,7 @@ export default function FreeTierPendingRoute() {
             : app?.status === 'MANUAL_REVIEW'
               ? "We're reviewing your request"
               : app?.status === 'SENT' && current
-                ? `Request sent to ${current.adminName}!`
+                ? `Awaiting approval from ${current.adminName}`
                 : 'Waiting for your administrator';
     return (
       <FreeTierAuthCard
@@ -470,7 +470,8 @@ export default function FreeTierPendingRoute() {
               <p className="text-sm text-muted-foreground">
                 You’re almost there! It may be a good idea to give{' '}
                 {current.adminName} a quick heads-up so the email doesn’t get
-                buried. We’ll let you know the moment they approve.
+                buried. We’ll let you know the moment they approve. In the
+                meantime, feel free to explore your classroom!
               </p>
             ) : null}
             <FreeTierProgress
@@ -483,38 +484,37 @@ export default function FreeTierPendingRoute() {
                 'Start teaching',
               ]}
               current={2}
+              currentStepAccessory={
+                current && app?.status === 'SENT' ? (
+                  <PendingForwardDisclosure
+                    triggerVariant="timeline"
+                    currentAdminName={current.adminName}
+                    currentAdminEmail={current.adminEmail}
+                    approvalId={current.id}
+                    open={forwardOpen}
+                    onOpenChange={setForwardOpen}
+                    forwarding={forwarding}
+                    schoolName={app?.schoolName ?? 'your school'}
+                    fetcher={forwardFetcher}
+                    serverAlert={
+                      isForwardActionError(forwardActionData)
+                        ? pendingForwardAlertMessage(forwardActionData.reason, {
+                            schoolName: app?.schoolName ?? 'your school',
+                            adminName: current.adminName,
+                          })
+                        : null
+                    }
+                    forwardRetry={
+                      isForwardActionError(forwardActionData) &&
+                      (forwardActionData.reason === 'unavailable' ||
+                        forwardActionData.reason === 'email_failed')
+                    }
+                  />
+                ) : undefined
+              }
             />
-            {current && app?.status === 'SENT' ? (
-              <>
-                <FreeTierPerson
-                  name={current.adminName}
-                  email={current.adminEmail}
-                />
-                <PendingForwardDisclosure
-                  currentAdminName={current.adminName}
-                  currentAdminEmail={current.adminEmail}
-                  approvalId={current.id}
-                  open={forwardOpen}
-                  onOpenChange={setForwardOpen}
-                  forwarding={forwarding}
-                  schoolName={app?.schoolName ?? 'your school'}
-                  fetcher={forwardFetcher}
-                  serverAlert={
-                    isForwardActionError(forwardActionData)
-                      ? pendingForwardAlertMessage(forwardActionData.reason, {
-                          schoolName: app?.schoolName ?? 'your school',
-                          adminName: current.adminName,
-                        })
-                      : null
-                  }
-                  forwardRetry={
-                    isForwardActionError(forwardActionData) &&
-                    (forwardActionData.reason === 'unavailable' ||
-                      forwardActionData.reason === 'email_failed')
-                  }
-                />
-                {showExploreClassroom ? <LockedPreviewExploreButton /> : null}
-              </>
+            {current && app?.status === 'SENT' && showExploreClassroom ? (
+              <LockedPreviewExploreButton />
             ) : null}
             {showExploreClassroom && app?.status === 'MANUAL_REVIEW' ? (
               <LockedPreviewExploreButton />
@@ -576,11 +576,8 @@ export default function FreeTierPendingRoute() {
         ]}
         current={2}
       />
-      {pending && app?.status === 'SENT' ? (
-        <>
-          <FreeTierPerson name={adminName} email={pending.adminEmail} />
-          {showExploreClassroom ? <LockedPreviewExploreButton /> : null}
-        </>
+      {pending && app?.status === 'SENT' && showExploreClassroom ? (
+        <LockedPreviewExploreButton />
       ) : null}
       {showExploreClassroom && app?.status === 'MANUAL_REVIEW' ? (
         <LockedPreviewExploreButton />

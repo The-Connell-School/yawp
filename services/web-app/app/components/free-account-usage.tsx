@@ -6,7 +6,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '~/components/ui/sheet';
-import { Link, useRouteLoaderData } from 'react-router';
+import { Link, useLocation, useRouteLoaderData } from 'react-router';
 import {
   AlertTriangle,
   ChartNoAxesColumn,
@@ -64,6 +64,7 @@ import {
   freeTierShowAdvocatePack,
   freeTierShowGettingStartedChecklist,
 } from '~/domain/free-tier/getting-started-grade';
+import { buildNewAssignmentPageHref } from '~/domain/free-tier/new-assignment-page-url';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import {
   FreeTierLockedPageHeader,
@@ -75,11 +76,11 @@ import {
   teachingAccessMobileSheetBodyInvite,
   TEACHING_ACCESS_LOCKED_TOOLTIP,
 } from '~/domain/free-tier/teaching-access-copy';
+import type { SiteLicenseLockedAssignmentTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 import {
-  FREE_TIER_UNLIMITED_TILE_LABEL,
   LOCKED_DASHBOARD_GETTING_STARTED_TITLE,
+  SITE_LICENSE_ONLY_TILE_LABEL,
 } from '~/domain/free-tier/locked-dashboard-copy';
-import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 
 export function useFreeAccountUsage() {
   return (
@@ -265,7 +266,7 @@ function FreeAccountUsageDetails({ usage }: { usage: FreeAccountUsage }) {
     </>
   );
 }
-const freeTierAssignmentTileImageClassName = 'size-[168px] object-cover';
+const freeTierAssignmentTileImageClassName = 'h-full w-full object-cover';
 
 /** Carousel tiles share name/meta test ids with dashboard rows for E2E geometry checks. */
 function FreeTierCarouselTileCaption({
@@ -281,26 +282,27 @@ function FreeTierCarouselTileCaption({
   return (
     <span
       className={cn(
-        'flex flex-col gap-0.5 px-3 py-2.5',
+        'flex shrink-0 flex-col gap-0.5 p-3.5',
         hasVisibleMeta ? 'min-h-[58px]' : 'min-h-[44px] justify-center'
       )}
     >
       <span
-        className="text-sm font-medium leading-snug text-foreground"
+        className="line-clamp-2 text-sm font-medium leading-snug text-foreground"
         data-testid={assignmentTypeTileNameTestId}
       >
         {label}
       </span>
-      <span
-        className={cn(
-          'text-xs leading-snug',
-          !hasVisibleMeta && 'sr-only',
-          hasVisibleMeta && (metaClassName ?? 'font-semibold text-[#1f3532]')
-        )}
-        data-testid={assignmentTypeTileMetaTestId}
-      >
-        {meta ?? ''}
-      </span>
+      {hasVisibleMeta ? (
+        <span
+          className={cn(
+            'line-clamp-1 text-xs leading-snug',
+            metaClassName ?? 'font-semibold text-[#1f3532]'
+          )}
+          data-testid={assignmentTypeTileMetaTestId}
+        >
+          {meta}
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -478,7 +480,9 @@ function FreeTierCarouselTile({
     >
       <Link
         to={`/app/assignment-types/${assignmentTypeId}`}
-        className="block"
+        // A flex column like the tile shell, so the image shrinks to leave the
+        // caption its full padding instead of pushing it past the tile's edge.
+        className="flex min-h-0 flex-1 flex-col"
         aria-label={`Open ${label} assignment type`}
       >
         <FreeTierCarouselTileImage
@@ -507,7 +511,7 @@ function FreeTierCarouselTile({
 export function FreeAssignmentTiles({
   usage = null,
   types,
-  assignmentsSeeHowItWorksTo,
+  siteLicenseLockedAssignmentTiles = [],
   teachingLocked: teachingLockedProp = false,
   onCreate,
   createTriggerRef,
@@ -520,7 +524,7 @@ export function FreeAssignmentTiles({
     imageId?: string | null;
     imageTitle?: string | null;
   }>;
-  assignmentsSeeHowItWorksTo?: string;
+  siteLicenseLockedAssignmentTiles?: SiteLicenseLockedAssignmentTile[];
   teachingLocked?: boolean;
   onCreate: (id?: string) => void;
   createTriggerRef?: RefObject<HTMLButtonElement | null>;
@@ -530,11 +534,7 @@ export function FreeAssignmentTiles({
   const carousel = useFreeTierAssignmentCarousel();
   const quotaMode = Boolean(usage);
 
-  const headerActions = teachingLocked ? (
-    assignmentsSeeHowItWorksTo ? (
-      <SeeHowItWorksLink to={assignmentsSeeHowItWorksTo} />
-    ) : null
-  ) : (
+  const headerActions = teachingLocked ? null : (
     <button
       ref={createTriggerRef as RefObject<HTMLButtonElement> | undefined}
       type="button"
@@ -557,8 +557,7 @@ export function FreeAssignmentTiles({
           const type = types.find((t) => t.kind === row.kind);
           if (!type) return null;
           const meta = freeAssignmentKindUsageMeta(usage!, row);
-          const unlimitedMeta =
-            meta === 'Unlimited' || meta === FREE_TIER_UNLIMITED_TILE_LABEL;
+          const unlimitedMeta = meta === '';
           return (
             <FreeTierCarouselTile
               key={row.kind}
@@ -566,7 +565,7 @@ export function FreeAssignmentTiles({
               meta={meta}
               metaClassName={
                 unlimitedMeta
-                  ? 'font-semibold text-[#1f3532]'
+                  ? undefined
                   : row.remaining === 0
                     ? 'font-normal text-amber-800'
                     : undefined
@@ -627,6 +626,19 @@ export function FreeAssignmentTiles({
         onScroll={carousel.updateScrollState}
       >
         {entitledTiles}
+        {siteLicenseLockedAssignmentTiles.map((tile) => (
+          <FreeTierCarouselTile
+            key={tile.key}
+            label={tile.label}
+            meta={SITE_LICENSE_ONLY_TILE_LABEL}
+            metaClassName="font-normal text-muted-foreground"
+            imageId={tile.imageId}
+            siteLicense
+            teachingLocked={teachingLocked}
+            assignmentTypeId={tile.assignmentTypeId}
+            siteLicenseTileKey={tile.key}
+          />
+        ))}
       </FreeTierAssignmentCarouselTrack>
     </div>
     </div>
@@ -673,16 +685,13 @@ export function FreeAccountChecklist({
 }) {
   const [invitationOpen, setInvitationOpen] = useState(false);
   const invitationTriggerRef = useRef<HTMLButtonElement>(null);
-  const createFirstAssignmentTo = (() => {
-    const params = new URLSearchParams({ first: '1' });
-    if (classStarterAssignmentTypeId) {
-      params.set('assignmentTypeId', classStarterAssignmentTypeId);
-    }
-    if (usage.classId) {
-      params.set('classId', usage.classId);
-    }
-    return `/app/assignments/new?${params.toString()}`;
-  })();
+  const location = useLocation();
+  const createFirstAssignmentTo = buildNewAssignmentPageHref({
+    first: true,
+    assignmentTypeId: classStarterAssignmentTypeId ?? undefined,
+    classId: usage.classId,
+    exitTo: `${location.pathname}${location.search}`,
+  });
   const { locked: teachingLocked, state: teachingAccessState } =
     useTeachingAccess();
   const teachingAccessAdminName =

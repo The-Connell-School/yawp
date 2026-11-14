@@ -39,7 +39,7 @@ import {
   SelectValue,
 } from '~/components/ui/select';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
-import { buildNewAssignmentPageHref } from '~/domain/free-tier/new-assignment-page-url';
+import { useNavigateToNewAssignmentPage } from '~/domain/free-tier/navigate-to-new-assignment-page';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { TutorOffBadge } from '~/components/assignments/tutor-off-badge';
 import { AssignmentTryItPill } from '~/components/assignments/assignment-try-it-pill';
@@ -214,13 +214,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const classInsightsEnabled =
     active.class.school.organization.classInsightsEnabled === true;
 
-  const [
-    insightRow,
-    gradedCount,
-    documentCount,
-    teacherPreviewDocumentId,
-    assignmentTypes,
-  ] = await Promise.all([
+  const [insightRow, gradedCount, documentCount, assignmentTypes] =
+    await Promise.all([
     classInsightsEnabled
       ? prisma.classAssignmentInsight.findUnique({
           where: { classAssignmentId: active.id },
@@ -242,13 +237,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     prisma.document.count({
       where: buildClassAssignmentStudentDocumentCountWhere(active.id),
     }),
-    import('~/domain/assignments/teacher-assignment-preview.server').then(
-      ({ findTeacherAssignmentPreviewDocumentId }) =>
-        findTeacherAssignmentPreviewDocumentId({
-          teacherMembershipId: profile.id,
-          classAssignmentId: active.id,
-        })
-    ),
     getAvailableAssignmentTypesForScopes<{
       id: string;
       title: string;
@@ -394,7 +382,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       exitTicket: exitTicketConfig,
       assignmentType: active.assignment.assignmentType,
       documentCount,
-      teacherPreviewDocumentId,
       gradedCount,
       insight,
       exitTicketClassRead,
@@ -862,6 +849,7 @@ export default function AssignmentDetailRoute() {
   const data = useLoaderData<typeof loader>();
   const freeUsage = useFreeAccountUsage();
   const navigate = useNavigate();
+  const navigateToNewAssignmentPage = useNavigateToNewAssignmentPage();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -976,15 +964,6 @@ export default function AssignmentDetailRoute() {
                       classId: activeClassId,
                     }}
                   />
-                  {assignment.teacherPreviewDocumentId ? (
-                    <Link
-                      to={`/app/documents/${assignment.teacherPreviewDocumentId}?spa=1&exitTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`}
-                      className="inline-flex h-6 shrink-0 items-center rounded-full border border-muted-foreground/30 bg-muted/40 px-2.5 text-xs font-medium text-foreground hover:bg-muted"
-                      data-testid="assignment-your-preview"
-                    >
-                      Your preview
-                    </Link>
-                  ) : null}
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base/6 text-muted-foreground sm:text-sm/5">
                   {assignment.assignmentType ? (
@@ -1010,14 +989,12 @@ export default function AssignmentDetailRoute() {
                 collaboration={collaboration ?? undefined}
                 classAssignmentId={assignment.classAssignmentId}
                 onDuplicate={() => {
-                  void navigate(
-                    buildNewAssignmentPageHref({
-                      assignmentTypeId: assignment.assignmentTypeId,
-                      classId: activeClassId,
-                      title: `Copy of ${assignment.title?.trim() || 'Untitled Assignment'}`,
-                      prompt: assignment.prompt,
-                    })
-                  );
+                  navigateToNewAssignmentPage({
+                    assignmentTypeId: assignment.assignmentTypeId,
+                    classId: activeClassId,
+                    title: `Copy of ${assignment.title?.trim() || 'Untitled Assignment'}`,
+                    prompt: assignment.prompt,
+                  });
                 }}
                 onEdit={() => {
                   if (isExitTicketAssignmentType(assignment.assignmentType)) {

@@ -740,6 +740,12 @@ export default function Route() {
       (data.isTeacherAssignmentPreview ||
         user.id !== data.doc.membership.userId)
   );
+  // A teacher working through their own "Try it" preview does what a student
+  // does: write, then submit. Grading it happens from the submission page.
+  const isOwnTeacherPreview = Boolean(
+    data.isTeacherAssignmentPreview && user.id === data.doc.membership.userId
+  );
+  const showSubmitControls = !isViewingAsTeacher || isOwnTeacherPreview;
   // Owner or class teacher (loader); api.model.document allows both to persist edits.
   const isDocumentEditable = true;
   const assignment = data.doc.assignment;
@@ -1206,7 +1212,7 @@ export default function Route() {
                 <span>{apHistoryTimingLabel}</span>
               </div>
             ) : null}
-            {!isViewingAsTeacher && (
+            {showSubmitControls && (
               <>
                 {cannotSubmitEmpty && !isSubmitting ? (
                   <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
@@ -1307,15 +1313,6 @@ export default function Route() {
             />
           </div>
         </nav>
-        {data.isTeacherAssignmentPreview ? (
-          <div
-            className="border-b border-amber-200/80 bg-amber-50 px-3 py-2 text-center text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
-            data-testid="teacher-assignment-preview-banner"
-          >
-            Assignment preview — students do not see this document or your test
-            submissions in the class.
-          </div>
-        ) : null}
         {showDbqWorkspace && apHistorySnapshot ? (
           <>
             <AssignmentPromptStrip

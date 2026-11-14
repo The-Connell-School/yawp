@@ -351,9 +351,7 @@ for (const viewport of [
         data: { adminRedirectCount: 100 },
       });
       await admin.getByRole('button', { name: 'Forward request' }).click();
-      await expect(admin.getByRole('alert')).toContainText(
-        'forwarded too many times'
-      );
+      await expect(admin.getByText(/forwarded too many times/i)).toBeVisible();
       await capture('forward-error', admin);
       await prisma.freeTierApplication.update({
         where: { id: app.id },
@@ -407,25 +405,33 @@ for (const viewport of [
         admin.getByRole('heading', { name: /Approve Yawp! for/i })
       ).toBeVisible({ timeout: 30_000 });
       await capture('administrator-approval', admin);
+      const approve = admin.getByRole('button', {
+        name: 'Approve Yawp!',
+        exact: true,
+      });
+      await expect(approve).toBeDisabled();
       await admin
-        .getByRole('button', { name: 'Approve Yawp!', exact: true })
-        .click();
+        .getByRole('checkbox', {
+          name: before ? /authorized/i : /I can approve classroom software/i,
+        })
+        .check();
+      await expect(approve).toBeEnabled();
       if (before) {
-        await expect(
-          admin.locator('input[name="adminRole"]:invalid')
-        ).toHaveCount(1);
+        await approve.click();
+        await expect(admin.locator('input[name="adminRole"]:invalid')).toHaveCount(
+          1
+        );
+        await admin.locator('input[name="adminRole"]').fill('Principal');
       } else {
+        await approve.click();
         const validation = admin.getByRole('alert');
         await expect(validation).toContainText(
-          'Two things need your attention before you can approve.'
+          /need(s)? your attention before you can approve/i
         );
         await expect(validation).toContainText('Enter your role.');
+        await admin.locator('input[name="adminRole"]').fill('Principal');
       }
-      await admin.locator('input[name="adminRole"]').fill('Principal');
-      await admin.getByRole('checkbox', { name: before ? /authorized/i : /I can approve classroom software/i }).check();
-      await admin
-        .getByRole('button', { name: 'Approve Yawp!', exact: true })
-        .click();
+      await approve.click();
       await expect(
         admin.getByRole('heading', { name: 'Thank you', exact: true })
       ).toBeVisible({ timeout: 30_000 });
