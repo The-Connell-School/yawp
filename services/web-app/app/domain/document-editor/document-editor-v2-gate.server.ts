@@ -37,13 +37,37 @@ export async function isDocumentEditorV2StaffOverride(
   return value === '1';
 }
 
+export function isDocumentEditorV2StaffOptOut(
+  request: Request,
+  isPlatformAdmin: boolean
+): boolean {
+  if (!isPlatformAdmin) return false;
+  return new URL(request.url).searchParams.get('editor') === 'v1';
+}
+
 /** Whether the document route should render editor v2 for this request. */
 export async function resolveDocumentEditorV2Enabled({
   request,
   isStaff: isPlatformAdmin,
 }: DocumentEditorV2GateInput): Promise<boolean> {
+  if (isDocumentEditorV2StaffOptOut(request, isPlatformAdmin)) return false;
   if (await isDocumentEditorV2RolloutEnabled()) return true;
   return isDocumentEditorV2StaffOverride(request, isPlatformAdmin);
+}
+
+export function shouldSetDocumentEditorV2ForceCookie(
+  request: Request,
+  isPlatformAdmin: boolean
+): boolean {
+  if (!isPlatformAdmin) return false;
+  return new URL(request.url).searchParams.get('editor') === 'v2';
+}
+
+export function shouldClearDocumentEditorV2ForceCookie(
+  request: Request,
+  isPlatformAdmin: boolean
+): boolean {
+  return isDocumentEditorV2StaffOptOut(request, isPlatformAdmin);
 }
 
 export function isStaffForDocumentEditorOverride(isAdmin?: boolean | null) {

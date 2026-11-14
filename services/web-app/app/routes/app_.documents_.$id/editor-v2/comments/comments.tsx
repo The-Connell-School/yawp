@@ -14,6 +14,7 @@ type Props = {
   showCollapsibleHeader?: boolean;
   onCommentRemoved?: (commentId: string) => void;
   onResponseAdded?: (commentId: string, response: unknown) => void;
+  onArchiveChange?: (commentId: string, archivedAt: Date | null) => void;
   autoFocusReplyCommentId?: string | null;
   showCollapseControl?: boolean;
 };
@@ -27,6 +28,7 @@ export const Comments = ({
   className,
   onCommentRemoved,
   onResponseAdded,
+  onArchiveChange,
   autoFocusReplyCommentId,
   showCollapseControl,
 }: ExtendedProps) => {
@@ -124,6 +126,7 @@ export const Comments = ({
                 readOnly={readOnly}
                 onDelete={onCommentRemoved}
                 onResponseAdded={onResponseAdded}
+                onArchiveChange={onArchiveChange}
                 autoFocusReply={autoFocusReplyCommentId === comment.id}
               />
             ))}

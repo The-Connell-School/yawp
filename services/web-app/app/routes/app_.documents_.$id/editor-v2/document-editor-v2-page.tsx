@@ -75,12 +75,6 @@ import {
   partitionSubmissionsByArchive,
   versionLabelForActiveSubmission,
 } from '~/utils/submission-versions';
-import {
-  isApHistorySnapshot,
-  type ApHistorySnapshot,
-} from '~/domain/ap-history/schema';
-import { ApHistoryAssignmentPanel } from './ap-history-assignment-panel';
-import { DbqLayout } from './_components/dbq-layout';
 import { AssignmentPromptPanel } from './assignment-prompt-panel';
 import { pickLatestReleasedSubmission } from '~/utils/document-link-target';
 import { cn } from '~/utils/misc';
@@ -100,22 +94,12 @@ import {
   STUDENT_UNSUBMIT_BLOCKED_TOOLTIP,
   AssignmentPromptStrip,
   getGenericAssignmentPromptForEditor,
-  getRenderableApHistorySnapshot,
   isTutorEnabledForAssignment,
-  shouldRenderDbqWorkspace,
 } from '../route';
 import './document-editor/document-editor-redesign.css';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
-
-function titleCase(value: string) {
-  return value
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
 
 function escapePrintHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => {
@@ -280,14 +264,9 @@ export function DocumentEditorV2Page() {
   const assignment = data.doc.assignment;
   // A student practice document carries its own snapshot; a teacher-assigned
   // document inherits it from the assignment.
-  const apHistorySnapshot = getRenderableApHistorySnapshot({
-    apHistorySnapshot:
-      data.doc.apHistorySnapshot ?? assignment?.apHistorySnapshot,
-  });
-  const showDbqWorkspace = shouldRenderDbqWorkspace(apHistorySnapshot);
   const editorAssignmentPrompt = getGenericAssignmentPromptForEditor(
     assignment,
-    apHistorySnapshot
+    null
   );
 
   // Merge server + optimistic submissions
@@ -396,14 +375,6 @@ export function DocumentEditorV2Page() {
       ? allComments
       : activeComments
     : activeComments;
-  const apHistoryTimingLabel = apHistorySnapshot
-    ? apHistorySnapshot.timing.mode === 'timed'
-      ? `Timed · ${apHistorySnapshot.timing.durationMinutes}m`
-      : 'Untimed'
-    : null;
-  const apHistoryContextLabel = apHistorySnapshot
-    ? `${apHistorySnapshot.essayType.toUpperCase()} · ${apHistorySnapshot.course.toUpperCase()}`
-    : null;
   const studentName =
     data.doc.membership.user.name?.trim() || 'Unknown student';
   const cannotSubmitEmpty = !editorSubmittable;
@@ -520,9 +491,6 @@ export function DocumentEditorV2Page() {
         {showGuidedTour ? (
           <GuidedTour {...data.guidedTours!} />
         ) : null}
-        {apHistorySnapshot && !showDbqWorkspace ? (
-          <ApHistoryAssignmentPanel snapshot={apHistorySnapshot} />
-        ) : null}
         {isViewingAsTeacher && !isOwnTeacherPreview ? (
           <p
             className="doc-editor-view-banner"
@@ -579,13 +547,6 @@ export function DocumentEditorV2Page() {
               {classSubtitle ? (
                 <span className="truncate text-xs text-[hsl(50_2.4%_36%)]">
                   {classSubtitle}
-                </span>
-              ) : apHistoryContextLabel ? (
-                <span
-                  data-testid="ap-history-context-pill"
-                  className="truncate text-xs text-[hsl(50_2.4%_36%)]"
-                >
-                  {apHistoryContextLabel}
                 </span>
               ) : null}
             </div>
@@ -761,16 +722,7 @@ export function DocumentEditorV2Page() {
             />
           ) : null}
           <div className="doc-editor-header__actions">
-            {apHistoryTimingLabel ? (
-              <div
-                data-testid="ap-history-timing-pill"
-                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground"
-              >
-                <Clock className="h-3.5 w-3.5" />
-                <span>{apHistoryTimingLabel}</span>
-              </div>
-            ) : null}
-            {!isMobile && !showDbqWorkspace ? (
+            {!isMobile ? (
               <div
                 role="group"
                 aria-label="Panels"
@@ -900,87 +852,6 @@ export function DocumentEditorV2Page() {
             />
           </div>
         </header>
-        {showDbqWorkspace && apHistorySnapshot ? (
-          <>
-            <AssignmentPromptStrip
-              label={`${apHistorySnapshot.essayType.toUpperCase()} · ${apHistorySnapshot.course.toUpperCase()}`}
-              title={assignment?.title?.trim() || 'AP History Essay'}
-              prompt={apHistorySnapshot.prompt}
-              metadata={[
-                `Period ${apHistorySnapshot.periodNumber}`,
-                titleCase(apHistorySnapshot.reasoningSkill),
-                `${apHistorySnapshot.sources.length} ${
-                  apHistorySnapshot.sources.length === 1 ? 'source' : 'sources'
-                }`,
-              ]}
-            />
-            <CommentsSelectionProvider>
-              <DbqLayout
-                snapshot={apHistorySnapshot}
-                tutor={
-                  tutorEnabled ? (
-                    <Tutor
-                      className="h-full border-r-0 md:w-full"
-                      docId={data.doc.id}
-                      cms={(tutor.cms ?? data.currentCms) as any}
-                      cmsIdx={cmsIdx}
-                      nextCmId={data.nextCmId}
-                      hasPreviousCms={tutorHasPreviousCms}
-                      isSessionLocked={auth.isLocked}
-                      beforeRespond={handleTutorBeforeRespond}
-                      onCmsUpdate={tutor.updateCms}
-                      getCurrentDocumentText={() =>
-                        editorBridgeRef.current?.getContent().text ??
-                        data.doc.text ??
-                        ''
-                      }
-                    />
-                  ) : (
-                    <AssignmentPromptPanel assignment={editorAssignmentPrompt} />
-                  )
-                }
-                editor={
-                  <DocumentEditor
-                    docId={data.doc.id}
-                    assignment={editorAssignmentPrompt}
-                    serverHtml={editorServerHtml}
-                    serverText={editorServerText}
-                    serverUpdatedAt={data.doc.updatedAt}
-                    initialRevision={data.doc.revision}
-                    isEditable={isEditorEditable}
-                    canUploadImages={data.canUploadImages}
-                    onBridgeReady={handleEditorBridgeReady}
-                    onSyncStatusChange={setSyncStatus}
-                    onSubmittableContentChange={handleSubmittableContentChange}
-                    onCommentCreated={(c) => commentsState.addComment(c as any)}
-                  />
-                }
-                comments={
-                  <TeacherPasteReport
-                    key={data.doc.id}
-                    enabled={isViewingAsTeacher}
-                    documentId={data.doc.id}
-                    contentRoot={editorRoot}
-                    onSelectEvent={() => {
-                      if (isMobile) changeTab('editor');
-                    }}
-                  >
-                    <Comments
-                      className="md:w-full"
-                      showCollapsibleHeader={!isViewingAsTeacher}
-                      comments={visibleComments as any}
-                      readOnly={commentsReadOnly}
-                      onCommentRemoved={commentsState.removeComment}
-                      onResponseAdded={commentsState.addResponse}
-                      autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
-                    />
-                  </TeacherPasteReport>
-                }
-              />
-            </CommentsSelectionProvider>
-          </>
-        ) : (
-          <>
         <CommentsSelectionProvider>
           <div className="doc-editor-body min-h-0 flex-1 overflow-hidden">
             {!tutorEnabled && !(isMobile && tab !== 'editor') ? (
@@ -1045,6 +916,7 @@ export function DocumentEditorV2Page() {
                           readOnly={commentsReadOnly}
                           onCommentRemoved={commentsState.removeComment}
                           onResponseAdded={commentsState.addResponse}
+                          onArchiveChange={commentsState.setCommentArchived}
                           autoFocusReplyCommentId={
                             commentsState.pendingFocusCommentId
                           }
@@ -1077,6 +949,7 @@ export function DocumentEditorV2Page() {
                     readOnly={commentsReadOnly}
                     onCommentRemoved={commentsState.removeComment}
                     onResponseAdded={commentsState.addResponse}
+                    onArchiveChange={commentsState.setCommentArchived}
                     autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
                   />
                 </TeacherPasteReport>
@@ -1084,7 +957,7 @@ export function DocumentEditorV2Page() {
             )}
           </div>
         </CommentsSelectionProvider>
-        {isMobile && !showDbqWorkspace ? (
+        {isMobile ? (
           <nav
             className="doc-editor-mobile-tabbar"
             role="tablist"
@@ -1120,8 +993,6 @@ export function DocumentEditorV2Page() {
             </button>
           </nav>
         ) : null}
-          </>
-        )}
       </main>
       <Dialog
         open={isFinalizeDialogOpen}

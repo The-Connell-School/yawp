@@ -617,6 +617,28 @@ test.describe.serial('Document Editor E2E Tests', () => {
     }
   });
 
+  test('staff ?editor=v1 opts out of v2 when rollout is on', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('admin@brock.software', 'adminadmin');
+    await helpers.openDocument(
+      `${e2eContext.editedDocumentId}?editor=v1`,
+      { retry: true }
+    );
+    const expectV2 =
+      process.env.YAWP_ENVIRONMENT === 'preview' ||
+      process.env.YAWP_ENVIRONMENT === 'demo';
+    if (!expectV2) {
+      test.skip();
+    }
+    await expect(
+      page.locator('[data-document-editor-version="v1"]')
+    ).toBeVisible({ timeout: 10000 });
+  });
+
   test('v2 chrome shows tutor step header when v2 is active', async ({
     page,
     signIn,
@@ -636,5 +658,27 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await expect(page.getByTestId('tutor-step-indicator')).toBeVisible({
       timeout: 10000,
     });
+  });
+
+  test('v2 margin comments support resolve on desktop', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('teacher@brock.software', 'teacherteacher');
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const v2 = page.locator('[data-document-editor-version="v2"]');
+    if ((await v2.count()) === 0) {
+      test.skip();
+    }
+  const resolveButton = page
+      .locator('[data-testid^="comment-resolve-"]')
+      .first();
+    if ((await resolveButton.count()) === 0) {
+      test.skip();
+    }
+    await resolveButton.click();
+    await expect(resolveButton).toBeHidden({ timeout: 10000 });
   });
 });
