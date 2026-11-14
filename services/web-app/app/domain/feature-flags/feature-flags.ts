@@ -206,6 +206,13 @@ export const EXIT_TICKET_BUILDER_V3_FLAG = 'exit-ticket-builder-v3' as const;
 export const EXIT_TICKET_CLASS_SUMMARY_FLAG = 'exit-ticket-class-summary' as const;
 
 /**
+ * Student document editor v2 (glass chrome, margin comments, tutor header).
+ * Global only: off or everyone — no per-school targeting. Default off on
+ * production; demo and PR previews default on for QA.
+ */
+export const DOCUMENT_EDITOR_V2_FLAG = 'document-editor-v2' as const;
+
+/**
  * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
  * reads only `feature_flag.free_tier`; these rows are not OR-merged.
  */
@@ -374,6 +381,11 @@ export const FEATURE_FLAGS = {
     label: 'Exit ticket class summary',
     description:
       'On an exit ticket’s Class read, teachers can ask for a summary of the responses: what the class understood, where the confusion is, whether to reteach, and a suggested opening block for tomorrow, which "Plan tomorrow from this" passes to the planner. One model call per request, only when new responses have arrived. Off: the Class read only.',
+  },
+  [DOCUMENT_EDITOR_V2_FLAG]: {
+    label: 'Document editor v2',
+    description:
+      'Shows the redesigned student document editor (glass chrome, margin comments, tutor step header). Global only: off or everyone — no school targeting. Off on production by default; demo and PR previews default on. Staff can force v2 on production with ?editor=v2 when signed in as a platform admin.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

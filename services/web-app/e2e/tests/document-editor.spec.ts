@@ -594,4 +594,47 @@ test.describe.serial('Document Editor E2E Tests', () => {
       page.getByRole('textbox', { name: /^submission title$/i })
     ).toHaveValue(liveTitle);
   });
+
+  test('document editor version matches rollout (v1 production default, v2 preview default)', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('jdoe@brock.software', 'johndoe');
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+  const expectV2 =
+      process.env.YAWP_ENVIRONMENT === 'preview' ||
+      process.env.YAWP_ENVIRONMENT === 'demo';
+    if (expectV2) {
+      await expect(
+        page.locator('[data-document-editor-version="v2"]')
+      ).toBeVisible({ timeout: 10000 });
+    } else {
+      await expect(
+        page.locator('[data-document-editor-version="v1"]')
+      ).toBeVisible({ timeout: 10000 });
+    }
+  });
+
+  test('v2 chrome shows tutor step header when v2 is active', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('jdoe@brock.software', 'johndoe');
+    const query =
+      process.env.YAWP_ENVIRONMENT === 'production' ? '?editor=v2' : '';
+    await helpers.openDocument(`${e2eContext.editedDocumentId}${query}`, {
+      retry: true,
+    });
+    const v2 = page.locator('[data-document-editor-version="v2"]');
+    if ((await v2.count()) === 0) {
+      test.skip();
+    }
+    await expect(page.getByTestId('tutor-step-indicator')).toBeVisible({
+      timeout: 10000,
+    });
+  });
 });
