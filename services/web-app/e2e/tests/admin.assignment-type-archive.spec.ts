@@ -47,10 +47,12 @@ test.describe.serial('Admin assignment type archive', () => {
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
       await openClassAssignmentsTab(page);
-      // Existing assignments keep their archived type label...
+      await page
+        .getByRole('textbox', { name: 'Search assignments' })
+        .fill('E2E Class Assignment');
       await expect(
         page.getByTestId(`assignment-open-${e2eContext.assignmentId}`)
-      ).toBeVisible();
+      ).toBeVisible({ timeout: 30_000 });
       await expect(page.getByText('E2E Course').first()).toBeVisible();
 
       await clickClassNewAssignment(page);

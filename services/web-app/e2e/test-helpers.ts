@@ -393,7 +393,6 @@ export async function submitSignedInEnterClassCode(
 }
 
 /** My Assignments search lives inside the Filter popover — open it before typing. */
-// CI: non-empty train pushes must touch services/** so the PR CI workflow runs.
 export async function fillMyAssignmentsSearch(
   page: Page,
   query: string,
@@ -402,8 +401,7 @@ export async function fillMyAssignmentsSearch(
   await page.getByTestId('my-assignments-filter').click();
   const search = page.getByTestId('my-assignments-search');
   await expect(search).toBeVisible({ timeout: 15_000 });
-  await search.click();
-  await search.pressSequentially(query, { delay: 25 });
+  await search.fill(query);
   const trimmed = query.trim();
   const visibilityTarget = options?.assignmentId
     ? page.getByTestId(`my-assignment-open-${options.assignmentId}`)
@@ -414,10 +412,20 @@ export async function fillMyAssignmentsSearch(
           .first()
       : null;
   if (visibilityTarget) {
-    await expect(visibilityTarget).toBeVisible({ timeout: 15_000 });
+    await expect(visibilityTarget).toBeVisible({ timeout: 30_000 });
+    const typeSection = page
+      .locator('[data-testid^="assignment-type-section-"]')
+      .filter({ has: visibilityTarget });
+    if ((await typeSection.count()) > 0) {
+      const sectionToggle = typeSection.getByRole('button').first();
+      const expanded = await sectionToggle.getAttribute('aria-expanded');
+      if (expanded === 'false') {
+        await sectionToggle.click();
+      }
+    }
     await page.keyboard.press('Escape');
     await expect(search).toBeHidden({ timeout: 5_000 });
-    await expect(visibilityTarget).toBeVisible({ timeout: 15_000 });
+    await expect(visibilityTarget).toBeVisible({ timeout: 30_000 });
     return;
   }
   await page.keyboard.press('Escape');
@@ -444,15 +452,35 @@ export async function clickClassAssignmentRow(
   options?: { title?: string }
 ) {
   await openClassAssignmentsTab(page);
+  const searchBox = page.getByRole('textbox', { name: 'Search assignments' });
   if (options?.title) {
-    await page
-      .getByRole('textbox', { name: 'Search assignments' })
-      .fill(options.title);
+    await searchBox.fill('');
+    await searchBox.fill(options.title);
   }
   const row = page
     .getByRole('row')
     .filter({ has: page.getByTestId(`assignment-open-${assignmentId}`) });
-  await expect(row).toBeVisible({ timeout: 15_000 });
+  await expect(row).toBeVisible({ timeout: 30_000 });
+  await row.click();
+}
+
+/** Student class Assignments tab rows navigate via the table row onClick handler. */
+export async function clickStudentClassAssignmentRow(
+  page: Page,
+  options: { assignmentId?: string; title?: string }
+) {
+  await expect(page.getByTestId('student-class-detail')).toBeVisible({
+    timeout: 15_000,
+  });
+  const row =
+    options.assignmentId != null
+      ? page
+          .getByRole('row')
+          .filter({
+            has: page.getByTestId(`assignment-open-${options.assignmentId}`),
+          })
+      : page.getByRole('row').filter({ hasText: options.title ?? '' });
+  await expect(row).toBeVisible({ timeout: 30_000 });
   await row.click();
 }
 

@@ -1,5 +1,6 @@
 import { test, expect } from '../test-setup';
 import {
+  clickStudentClassAssignmentRow,
   fillFreeTierJoinForm,
   submitFreeTierJoinAndExpectApp,
 } from '../test-helpers';
@@ -122,12 +123,10 @@ test.describe('Free-tier handle student', () => {
         waitUntil: 'domcontentloaded',
       });
       await expect(page.getByTestId('student-class-detail')).toBeVisible();
-      const startButton = page.getByRole('button', {
-        name: 'Free tier writing',
-        exact: true,
+      await clickStudentClassAssignmentRow(page, {
+        assignmentId: assignment.id,
+        title: 'Free tier writing',
       });
-      await expect(startButton).toBeVisible({ timeout: 15000 });
-      await startButton.click();
       await page.waitForURL('**/app/documents/**', { timeout: 30000 });
 
       await helpers.waitForEditorReady();
