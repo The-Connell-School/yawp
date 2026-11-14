@@ -17,7 +17,9 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     await page.waitForURL('**/app/assignments**', { timeout: 15000 });
     // Pagination is 20 per page, and other shards share the E2E database, so
     // the seeded title may sit off the first page unless we narrow the list.
-    await fillMyAssignmentsSearch(page, 'E2E Class Assignment');
+    await fillMyAssignmentsSearch(page, 'E2E Class Assignment', {
+      assignmentId: e2eContext.assignmentId,
+    });
     // Exact, because the row's selection checkbox is itself a cell whose
     // accessible name ("Select assignment E2E Class Assignment") contains the
     // title, and the default substring match picks up both.
@@ -34,7 +36,9 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app/assignments');
     await page.waitForLoadState('networkidle');
-    await fillMyAssignmentsSearch(page, 'E2E Class Assignment');
+    await fillMyAssignmentsSearch(page, 'E2E Class Assignment', {
+      assignmentId: e2eContext.assignmentId,
+    });
 
     await page.getByTestId(`my-assignment-open-${e2eContext.assignmentId}`).click();
 

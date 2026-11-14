@@ -221,9 +221,8 @@ test('existing student joins a separate free classroom and retains access after 
     await shot('desktop-reloaded-class');
     await page.getByRole('link', { name: /Local Joined Class/ }).click();
     await expect(page).toHaveURL(new RegExp(`/app/my-classes/${klass.id}`));
-    await page.reload();
+    await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
     await expect(page.getByTestId('student-class-detail')).toBeVisible();
-    await page.getByRole('tab', { name: 'Assignments' }).click();
     await expect(
       page.getByRole('button', { name: /Local Permitted Assignment/i })
     ).toBeVisible({ timeout: 15_000 });

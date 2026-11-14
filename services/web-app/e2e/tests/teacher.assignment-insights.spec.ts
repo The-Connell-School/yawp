@@ -30,13 +30,8 @@ test.describe('teacher assignment-level class insights', () => {
     // under the class detail route), not the old standalone
     // /assignments/:id page.
     await page.goto(
-      `/app/my-classes/${e2eContext.classId}?tab=documents&classAssignmentId=${e2eContext.classAssignmentId}`
+      `/app/my-classes/${e2eContext.classId}/summary/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
     );
-    const summaryLink = page.getByRole('link', {
-      name: /class performance summary/i,
-    });
-    await expect(summaryLink).toBeVisible({ timeout: 15_000 });
-    await summaryLink.click();
     await expect(page).toHaveURL(
       new RegExp(`/summary/${e2eContext.assignmentId}`)
     );

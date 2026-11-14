@@ -250,6 +250,13 @@ function PageTourController({
 
   const start = useCallback(() => {
     if (!tour) return;
+    for (const step of tour.steps) {
+      findTarget(step.target)?.scrollIntoView({
+        block: 'nearest',
+        inline: 'nearest',
+        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+      });
+    }
     setPhase({ kind: 'touring', steps: resolveSteps(tour), index: 0 });
   }, [tour]);
 

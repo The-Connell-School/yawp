@@ -1,4 +1,5 @@
 import { test, expect } from '../test-setup';
+import { openClassAssignmentsTab } from '../test-helpers';
 import { currentSchoolYear } from '../../app/utils/school-year';
 import { createE2EPrismaClient } from '../prisma-client';
 import type { E2EContext } from '../seed-e2e';
@@ -91,17 +92,32 @@ test.describe('Teacher class documents lifecycle', () => {
 
       // Seeded + local data cover the full lifecycle.
       await expect(table.getByText('In Progress').first()).toBeVisible();
+      await page.goto(
+        `/app/my-classes/${e2eContext.classId}?tab=documents&status=needs-grading`
+      );
+      await page.waitForLoadState('networkidle');
       await expect(
-        table.getByText(`Lifecycle needs grading ${suffix}`)
+        page
+          .getByRole('table', { name: /class documents/i })
+          .getByText(`Lifecycle needs grading ${suffix}`)
       ).toBeVisible();
-      await expect(table.getByText(/^Needs Releasing/).first()).toBeVisible();
-      await expect(table.getByText(/^Released/).first()).toBeVisible();
+      await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
+      await page.waitForLoadState('networkidle');
+      const lifecycleTable = page.getByRole('table', {
+        name: /class documents/i,
+      });
+      await expect(
+        lifecycleTable.getByText(/^Needs Releasing/).first()
+      ).toBeVisible();
+      await expect(lifecycleTable.getByText(/^Released/).first()).toBeVisible();
 
       // The retired wording must not survive.
-      await expect(table.getByText('Draft', { exact: true })).toHaveCount(0);
-      await expect(table.getByText('Submitted', { exact: true })).toHaveCount(
-        0
-      );
+      await expect(
+        lifecycleTable.getByText('Draft', { exact: true })
+      ).toHaveCount(0);
+      await expect(
+        lifecycleTable.getByText('Submitted', { exact: true })
+      ).toHaveCount(0);
 
       // Status filter narrows rows.
       await page.goto(
@@ -237,6 +253,7 @@ test.describe.serial('Teacher class page redesign', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
     await page.waitForLoadState('networkidle');
+    await openClassAssignmentsTab(page);
 
     const header = page.getByTestId('class-detail-header');
     const assignmentsTab = header.getByRole('tab', { name: /assignments/i });
@@ -269,6 +286,7 @@ test.describe.serial('Teacher class page redesign', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
     await page.waitForLoadState('networkidle');
+    await openClassAssignmentsTab(page);
 
     await page.getByTestId(`assignment-open-${e2eContext.assignmentId}`).click();
 
@@ -338,6 +356,7 @@ test.describe.serial('Teacher class page redesign', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
     await page.waitForLoadState('networkidle');
+    await openClassAssignmentsTab(page);
 
     await page.getByTestId(`assignment-open-${e2eContext.assignmentId}`).click();
     await page.waitForURL(

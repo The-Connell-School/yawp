@@ -38,7 +38,9 @@ test.describe.serial('Tutor off badge', () => {
       });
       await page.goto('/app/assignments');
       await page.waitForLoadState('networkidle');
-      await fillMyAssignmentsSearch(page, COLD_WRITE_TITLE);
+      await fillMyAssignmentsSearch(page, COLD_WRITE_TITLE, {
+        assignmentId: createdAssignmentId!,
+      });
 
       const coldRow = page
         .getByRole('row')

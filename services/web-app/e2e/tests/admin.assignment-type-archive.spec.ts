@@ -74,6 +74,7 @@ test.describe.serial('Admin assignment type archive', () => {
       await page.context().clearCookies();
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
+      await openClassAssignmentsTab(page);
       await clickClassNewAssignment(page);
       await expectTypePresentInPicker(page, 'E2E Course');
     } finally {

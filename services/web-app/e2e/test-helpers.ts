@@ -393,22 +393,26 @@ export async function submitSignedInEnterClassCode(
 }
 
 /** My Assignments search lives inside the Filter popover — open it before typing. */
-export async function fillMyAssignmentsSearch(page: Page, query: string) {
+export async function fillMyAssignmentsSearch(
+  page: Page,
+  query: string,
+  options?: { assignmentId?: string }
+) {
   await page.getByTestId('my-assignments-filter').click();
   const search = page.getByTestId('my-assignments-search');
   await expect(search).toBeVisible({ timeout: 15_000 });
   await search.fill(query);
   const trimmed = query.trim();
-  if (trimmed) {
-    await expect
-      .poll(
-        async () =>
-          page.locator('[data-testid^="my-assignment-open-"]').filter({
-            hasText: trimmed,
-          }).count(),
-        { timeout: 15_000 }
-      )
-      .toBeGreaterThan(0);
+  const visibilityTarget = options?.assignmentId
+    ? page.getByTestId(`my-assignment-open-${options.assignmentId}`)
+    : trimmed
+      ? page
+          .locator('[data-testid^="my-assignment-open-"]')
+          .filter({ hasText: trimmed })
+          .first()
+      : null;
+  if (visibilityTarget) {
+    await expect(visibilityTarget).toBeVisible({ timeout: 15_000 });
   }
   await page.keyboard.press('Escape');
   await expect(search).toBeHidden({ timeout: 5_000 });
