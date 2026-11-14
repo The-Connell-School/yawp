@@ -1113,12 +1113,9 @@ export function AdvocatePackEntry() {
         Loving what Yawp! is doing for your students? Tell a colleague. They can
         start their own free classroom.
       </p>
-      <Link
-        to="/app/advocate-pack"
-        className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-full border text-sm font-medium text-foreground hover:bg-muted/50"
-      >
-        Share with a colleague
-      </Link>
+      <Button asChild variant="secondary" block className="mt-4">
+        <Link to="/app/advocate-pack">Share with a colleague</Link>
+      </Button>
     </section>
   );
 }
