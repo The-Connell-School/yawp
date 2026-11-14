@@ -12,13 +12,13 @@ import {
   type StudentDocumentFilterOption,
   type StudentDocumentFilters,
 } from '~/utils/student-document-filters';
+import { FilterPills } from '~/components/ui/filter-pills';
 import {
   STUDENT_DOCUMENT_STATUSES,
   STUDENT_DOCUMENT_STATUS_DOT_CLASSES,
   STUDENT_DOCUMENT_STATUS_LABELS,
   type StudentDocumentStatus,
 } from '~/utils/student-document-status';
-import { cn } from '~/utils/misc';
 
 export type StudentDocumentFiltersBarProps = {
   filters: StudentDocumentFilters;
@@ -40,64 +40,22 @@ function StatusPills({
   StudentDocumentFiltersBarProps,
   'filters' | 'statusCounts' | 'totalCount' | 'onFiltersChange'
 >) {
-  const pillClass = (isActive: boolean) =>
-    cn(
-      'inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-sm/5 font-medium sm:text-sm/5',
-      isActive
-        ? 'bg-popover text-foreground shadow-sm ring-1 ring-black/10'
-        : 'text-foreground/80 hover:bg-popover/70 hover:text-foreground'
-    );
-
-  const countClass = (isActive: boolean) =>
-    cn(
-      'tabular-nums',
-      isActive ? 'text-muted-foreground' : 'text-foreground/60'
-    );
-
   return (
-    <div
-      className="no-scrollbar overflow-x-auto"
-      data-testid="my-documents-status-chips"
-      role="tablist"
-      aria-label="Filter by status"
-    >
-      <div className="inline-flex w-max max-w-none flex-nowrap items-center gap-0.5 rounded-full border border-border bg-secondary p-1 shadow-xs">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={filters.status === 'all'}
-          onClick={() => onFiltersChange({ status: 'all' })}
-          className={pillClass(filters.status === 'all')}
-        >
-          All
-          <span className={countClass(filters.status === 'all')}>
-            {totalCount}
-          </span>
-        </button>
-        {STUDENT_DOCUMENT_STATUSES.map((status) => (
-          <button
-            key={status}
-            type="button"
-            role="tab"
-            aria-selected={filters.status === status}
-            onClick={() => onFiltersChange({ status })}
-            className={pillClass(filters.status === status)}
-          >
-            <span
-              className={cn(
-                'size-2 shrink-0 rounded-full',
-                STUDENT_DOCUMENT_STATUS_DOT_CLASSES[status]
-              )}
-              aria-hidden
-            />
-            {STUDENT_DOCUMENT_STATUS_LABELS[status]}
-            <span className={countClass(filters.status === status)}>
-              {statusCounts[status]}
-            </span>
-          </button>
-        ))}
-      </div>
-    </div>
+    <FilterPills
+      ariaLabel="Filter by status"
+      testId="my-documents-status-chips"
+      value={filters.status}
+      onChange={(status) => onFiltersChange({ status })}
+      options={[
+        { value: 'all', label: 'All', count: totalCount },
+        ...STUDENT_DOCUMENT_STATUSES.map((status) => ({
+          value: status,
+          label: STUDENT_DOCUMENT_STATUS_LABELS[status],
+          count: statusCounts[status],
+          dotClassName: STUDENT_DOCUMENT_STATUS_DOT_CLASSES[status],
+        })),
+      ]}
+    />
   );
 }
 
