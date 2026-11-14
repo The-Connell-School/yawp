@@ -265,7 +265,7 @@ describe('the grading context for a v3 ticket', () => {
     gradingBasis: 'bands',
   });
 
-  test('reads the activity’s criteria, not the legacy focus or answer type', () => {
+  test('reads the activity’s criteria, not the legacy focus', () => {
     const context = buildExitTicketGradingContext(answerQuestion)!;
     expect(context).toContain(
       exitTicketActivityOptionForTest('answer-question')!.gradingCriteria
@@ -284,8 +284,51 @@ describe('the grading context for a v3 ticket', () => {
   test('calls the answer key what the form called it', () => {
     const context = buildExitTicketGradingContext(answerQuestion)!;
     expect(context).toContain(
-      '- Correct answer or key points: Holden’s younger brother, who died.'
+      '- The correct answer, with the teacher’s context: Holden’s younger brother, who died.'
     );
+  });
+
+  test('names the activity by its short tag, not the form’s sentence', () => {
+    const context = buildExitTicketGradingContext(answerQuestion)!;
+    expect(context).toContain(
+      'What this ticket asks the students to do: answer a question.'
+    );
+    expect(context).not.toContain('a question you ask');
+  });
+
+  test('reads the correct answer on an ungraded ticket too', () => {
+    const ungraded = parseExitTicketConfigInputForTest({
+      activity: 'answer-question',
+      promptText: 'Who is Allie?',
+      answerType: 'objective',
+      lessonMustMention: 'Holden’s younger brother, who died.',
+    });
+    expect(ungraded.grading).toBeUndefined();
+    expect(buildExitTicketGradingContext(ungraded)).toContain(
+      '- The correct answer, with the teacher’s context: Holden’s younger brother, who died.'
+    );
+  });
+
+  test('reads what the teacher wants Yawp! to know', () => {
+    const withNote = parseExitTicketConfigInputForTest({
+      activity: 'reflect',
+      starter: 'learned',
+      lessonMainPoints: 'We read chapters 1 to 3 today.',
+    });
+    expect(buildExitTicketGradingContext(withNote)).toContain(
+      '- What the teacher wants Yawp! to know: We read chapters 1 to 3 today.'
+    );
+  });
+
+  test('a check with no correct answer is read as having none', () => {
+    const open = parseExitTicketConfigInputForTest({
+      activity: 'engage-text',
+      promptText: 'What is the speaker saying in stanza two?',
+      answerType: 'subjective',
+    });
+    const context = buildExitTicketGradingContext(open)!;
+    expect(context).toContain(EXIT_TICKET_ANSWER_TYPE_GUIDANCE.subjective);
+    expect(context).not.toContain(EXIT_TICKET_FLEXIBLE_ANSWER_GUIDANCE);
   });
 
   test('a v3 reflection is read as a reflection, not a teacher-written custom question', () => {
