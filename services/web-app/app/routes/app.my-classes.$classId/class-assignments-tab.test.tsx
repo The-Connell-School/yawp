@@ -123,11 +123,14 @@ afterEach(() => {
 
 describe('ClassAssignmentsTab', () => {
   it('never shows an AP History Essay toolbar link', () => {
-    const el = renderTab();
+    const el = renderTab({ assignments: [ASSIGNMENTS[0]] });
     expect(
       el.querySelector('a[href^="/app/assignment-types/"]')
     ).toBeNull();
-    expect(el.textContent).not.toContain('AP History Essay');
+    const toolbarControls = Array.from(el.querySelectorAll('a, button')).map(
+      (node) => node.textContent?.trim()
+    );
+    expect(toolbarControls).not.toContain('AP History Essay');
   });
 
   it('New Assignment opens the create flow for this class', () => {
