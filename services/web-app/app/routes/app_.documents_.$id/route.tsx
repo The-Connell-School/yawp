@@ -26,8 +26,11 @@ import {
   EllipsisVertical,
   Printer,
   Compass,
+  MessageCircle,
+  PanelLeft,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocalStorage } from 'usehooks-ts';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { SaveStatusIndicator } from '~/components/save-status-indicator';
 import { Badge } from '~/components/ui/badge';
@@ -99,6 +102,7 @@ import { ApHistoryAssignmentPanel } from './ap-history-assignment-panel';
 import { DbqLayout } from './_components/dbq-layout';
 import { AssignmentPromptPanel } from './assignment-prompt-panel';
 import { pickLatestReleasedSubmission } from '~/utils/document-link-target';
+import { cn } from '~/utils/misc';
 import { TeacherDocumentNavigation } from '~/components/teacher-document-navigation';
 import {
   buildDocumentNavigationHref,
@@ -113,6 +117,7 @@ import {
   GuidedTour,
   startPageTour,
 } from '~/components/guided-tour/guided-tour';
+import './document-editor/document-editor-redesign.css';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
@@ -319,6 +324,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           class: {
             select: {
               id: true,
+              title: true,
+              period: true,
               schoolId: true,
               teachers: { select: { id: true } },
               school: { select: { organizationId: true } },
@@ -726,6 +733,23 @@ export default function Route() {
     Set<string>
   >(new Set());
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
+  const [desktopTutorOpen, setDesktopTutorOpen] = useLocalStorage(
+    `doc-${data.doc.id}-panel-tutor`,
+    true
+  );
+  const [desktopCommentsOpen, setDesktopCommentsOpen] = useLocalStorage(
+    `doc-${data.doc.id}-panel-comments`,
+    true
+  );
+  const classSubtitle = useMemo(() => {
+    const cls = data.doc.classAssignment?.class;
+    if (!cls) return null;
+    const parts = [
+      cls.title?.trim(),
+      cls.period?.trim() ? `Period ${cls.period.trim()}` : null,
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(' · ') : null;
+  }, [data.doc.classAssignment?.class]);
   const [searchParams, setSearchParams] = useSearchParams();
   const fallbackCmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
   const cmsIdx =
@@ -983,29 +1007,48 @@ export default function Route() {
 
   return (
     <>
-      <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
+      <main className="doc-editor-frame flex h-screen w-screen flex-col overflow-hidden">
         {showGuidedTour ? (
           <GuidedTour {...data.guidedTours!} />
         ) : null}
         {apHistorySnapshot && !showDbqWorkspace ? (
           <ApHistoryAssignmentPanel snapshot={apHistorySnapshot} />
         ) : null}
-        <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-4 border-b px-3 py-2">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => navigate(exitTarget)}
-            >
-              <ArrowLeft className="h-4" />
-              Exit
-            </Button>
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5 md:flex-row md:items-center md:gap-4">
+        {isViewingAsTeacher && !isEditorEditable ? (
+          <p
+            className="doc-editor-view-banner"
+            data-testid="document-view-only-banner"
+          >
+            Viewing only. Select text to comment.
+          </p>
+        ) : null}
+        <header
+          className="doc-editor-header"
+          data-testid="document-editor-header"
+        >
+          <div className="doc-editor-header__title-block">
+            <Tooltip text="Back to class" delayDuration={0}>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Back to class"
+                data-testid="document-exit-button"
+                onClick={() => navigate(exitTarget)}
+              >
+                <ArrowLeft className="h-[18px] w-[18px]" />
+              </Button>
+            </Tooltip>
+            <p className="sr-only">
+              <button type="button" onClick={() => navigate(exitTarget)}>
+                Exit
+              </button>
+            </p>
+            <div className="flex min-w-0 flex-col gap-0.5">
               <Input
                 ref={titleInputRef}
                 data-testid="document-title-input"
                 size="sm"
-                className="rounded-lg border border-transparent font-bold transition hover:border-border"
+                className="h-auto border-0 bg-transparent p-0 text-[15px] font-semibold leading-5 text-[#0f172a] shadow-none focus-visible:ring-0"
                 defaultValue={data.doc.title}
                 placeholder="Untitled document"
                 onBlur={(e) =>
@@ -1022,13 +1065,17 @@ export default function Route() {
                     : undefined
                 }
               />
-              {apHistoryContextLabel ? (
-                <div
+              {classSubtitle ? (
+                <span className="truncate text-xs text-[hsl(50_2.4%_36%)]">
+                  {classSubtitle}
+                </span>
+              ) : apHistoryContextLabel ? (
+                <span
                   data-testid="ap-history-context-pill"
-                  className="hidden h-8 shrink-0 items-center rounded-full border bg-white px-2.5 text-xs font-semibold text-muted-foreground md:flex"
+                  className="truncate text-xs text-[hsl(50_2.4%_36%)]"
                 >
                   {apHistoryContextLabel}
-                </div>
+                </span>
               ) : null}
             </div>
           </div>
@@ -1202,7 +1249,7 @@ export default function Route() {
               disabled={false}
             />
           ) : null}
-          <div className="ml-auto flex items-center gap-4">
+          <div className="doc-editor-header__actions">
             {apHistoryTimingLabel ? (
               <div
                 data-testid="ap-history-timing-pill"
@@ -1210,6 +1257,42 @@ export default function Route() {
               >
                 <Clock className="h-3.5 w-3.5" />
                 <span>{apHistoryTimingLabel}</span>
+              </div>
+            ) : null}
+            {!isMobile && !showDbqWorkspace ? (
+              <div
+                role="group"
+                aria-label="Panels"
+                className="doc-editor-panel-group"
+                data-testid="document-panel-toggles"
+              >
+                {tutorEnabled ? (
+                  <button
+                    type="button"
+                    className="doc-editor-panel-btn"
+                    aria-label="Tutor"
+                    title="Tutor"
+                    aria-pressed={desktopTutorOpen}
+                    onClick={() => setDesktopTutorOpen((open) => !open)}
+                  >
+                    <PanelLeft className="h-4 w-4" />
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="doc-editor-panel-btn"
+                  aria-label="Comments"
+                  title="Comments"
+                  aria-pressed={desktopCommentsOpen}
+                  onClick={() => setDesktopCommentsOpen((open) => !open)}
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  {visibleComments.length > 0 ? (
+                    <span className="doc-editor-panel-badge">
+                      {visibleComments.length}
+                    </span>
+                  ) : null}
+                </button>
               </div>
             ) : null}
             {showSubmitControls && (
@@ -1222,8 +1305,7 @@ export default function Route() {
                     >
                       <Button
                         size="sm"
-                        variant="outline"
-                        disabled
+                        softDisabled
                         data-testid="document-submit-button"
                         data-tour="doc-submit"
                       >
@@ -1234,8 +1316,9 @@ export default function Route() {
                 ) : (
                   <Button
                     size="sm"
-                    variant="outline"
-                    disabled={submitActionDisabled}
+                    disabled={submitActionDisabled && !isSubmitting}
+                    loading={isSubmitting}
+                    loadingLabel="Submitting…"
                     data-testid="document-submit-button"
                     data-tour="doc-submit"
                     onClick={() => {
@@ -1243,14 +1326,7 @@ export default function Route() {
                       setIsFinalizeDialogOpen(true);
                     }}
                   >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Submitting...
-                      </>
-                    ) : (
-                      'Submit'
-                    )}
+                    Submit
                   </Button>
                 )}
               </>
@@ -1312,7 +1388,7 @@ export default function Route() {
               onOpenChange={setHistoryOpen}
             />
           </div>
-        </nav>
+        </header>
         {showDbqWorkspace && apHistorySnapshot ? (
           <>
             <AssignmentPromptStrip
@@ -1410,12 +1486,16 @@ export default function Route() {
           </TabsList>
         </Tabs>
         <CommentsSelectionProvider>
-          <div className="mx-auto flex min-h-0 flex-1 w-full max-w-screen-2xl overflow-hidden">
+          <div className="doc-editor-body min-h-0 flex-1 overflow-hidden">
             {!tutorEnabled && !(isMobile && tab !== 'editor') ? (
               <AssignmentPromptPanel assignment={editorAssignmentPrompt} />
             ) : null}
             {!tutorEnabled || (isMobile && tab !== 'tutor') ? null : (
               <Tutor
+                className={cn(
+                  'doc-editor-tutor md:w-[340px]',
+                  !isMobile && !desktopTutorOpen && 'hidden'
+                )}
                 docId={data.doc.id}
                 cms={(tutor.cms ?? data.currentCms) as any}
                 cmsIdx={cmsIdx}
@@ -1433,14 +1513,15 @@ export default function Route() {
             )}
             {isMobile && tab !== 'editor' && !isViewingAsTeacher ? null : (
               <div
-                className={isMobile && tab !== 'editor'
-                  ? 'hidden'
-                  : 'flex h-full min-w-0 w-full flex-col'}
+                className={cn(
+                  'doc-editor-workspace',
+                  isMobile && tab !== 'editor'
+                    ? 'hidden'
+                    : 'flex h-full min-w-0 w-full flex-col'
+                )}
               >
                 <DocumentEditor
                   docId={data.doc.id}
-                  // With the tutor off the prompt has its own column, so the
-                  // banner over the document would only repeat it.
                   assignment={tutorEnabled ? editorAssignmentPrompt : null}
                   serverHtml={editorServerHtml}
                   serverText={editorServerText}
@@ -1452,21 +1533,49 @@ export default function Route() {
                   onSyncStatusChange={setSyncStatus}
                   onSubmittableContentChange={handleSubmittableContentChange}
                   onCommentCreated={(c) => commentsState.addComment(c as any)}
+                  marginComments={
+                    !isMobile && desktopCommentsOpen ? (
+                      <TeacherPasteReport
+                        key={data.doc.id}
+                        enabled={isViewingAsTeacher}
+                        documentId={data.doc.id}
+                        contentRoot={editorRoot}
+                        onSelectEvent={() => {
+                          if (isMobile) changeTab('editor');
+                        }}
+                      >
+                        <Comments
+                          showCollapsibleHeader={false}
+                          showCollapseControl={false}
+                          comments={visibleComments as any}
+                          readOnly={!isDocumentEditable}
+                          onCommentRemoved={commentsState.removeComment}
+                          onResponseAdded={commentsState.addResponse}
+                          autoFocusReplyCommentId={
+                            commentsState.pendingFocusCommentId
+                          }
+                        />
+                      </TeacherPasteReport>
+                    ) : null
+                  }
                 />
               </div>
             )}
             {isMobile && tab !== 'comments' && !isViewingAsTeacher ? null : (
               <div
-                className={isMobile && tab !== 'comments'
-                  ? 'hidden'
-                  : 'h-full min-w-0 w-full md:w-3/5'}
+                className={cn(
+                  isMobile && tab !== 'comments' ? 'hidden' : 'h-full min-w-0 w-full',
+                  !isMobile && 'hidden'
+                )}
               >
                 <TeacherPasteReport
-                  key={data.doc.id}
+                  key={`${data.doc.id}-mobile-comments`}
                   enabled={isViewingAsTeacher}
                   documentId={data.doc.id}
                   contentRoot={editorRoot}
-                  onSelectEvent={() => { if (isMobile) changeTab('editor'); }}
+                  onSelectEvent={() => {
+                    if (isMobile) changeTab('editor');
+                  }}
                 >
                   <Comments
                     showCollapsibleHeader={!isViewingAsTeacher}

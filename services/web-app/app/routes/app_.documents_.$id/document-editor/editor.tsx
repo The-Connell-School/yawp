@@ -8,6 +8,10 @@ import StarterKit from '@tiptap/starter-kit';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useCommentsSelection } from '../comments/selection-context';
 import { Bar } from './editor-bar';
+import {
+  AssignmentPromptBanner,
+  type AssignmentPrompt,
+} from './assignment-prompt-banner';
 import { ErrorBoundary } from './error-boundry';
 import { Comment, CommentExtension } from './extensions/comment';
 import {
@@ -62,6 +66,8 @@ type Props = {
   onSubmittableContentChange?: (submittable: boolean) => void;
   onEditorDomReady?: (root: HTMLElement | null) => void;
   onCommentCreated?: (comment: unknown) => void;
+  assignment?: AssignmentPrompt | null;
+  marginComments?: React.ReactNode;
 };
 
 export function Editor({
@@ -75,6 +81,8 @@ export function Editor({
   onSubmittableContentChange,
   onEditorDomReady,
   onCommentCreated,
+  assignment,
+  marginComments,
 }: Props) {
   const [imageStatus, setImageStatus] = useState<DocumentImageStatus>({ state: 'idle' });
 
@@ -227,7 +235,7 @@ export function Editor({
             .join('\n')}
         </style>
       ) : null}
-      <div className="flex w-full flex-col overflow-hidden border-r md:h-full">
+      <div className="flex h-full w-full min-w-0 flex-col overflow-hidden md:h-full">
         {isEditable && editor ? (
           <Bar
             editor={editor}
@@ -237,6 +245,7 @@ export function Editor({
             onCommentCreated={onCommentCreated}
           />
         ) : null}
+        <AssignmentPromptBanner docId={docId} assignment={assignment} />
         {imageStatus.state !== 'idle' ? (
           <div
             role="status"
@@ -244,8 +253,8 @@ export function Editor({
             data-testid="editor-image-status"
             className={
               imageStatus.state === 'error'
-                ? 'border-b bg-destructive/10 text-destructive px-4 py-2 text-sm'
-                : 'border-b bg-muted px-4 py-2 text-muted-foreground text-sm'
+                ? 'mx-4 mt-2 rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive'
+                : 'mx-4 mt-2 rounded-lg bg-muted px-4 py-2 text-sm text-muted-foreground'
             }
           >
             {imageStatus.state === 'uploading'
@@ -254,20 +263,25 @@ export function Editor({
           </div>
         ) : null}
         <div
-          className="no-scrollbar grow overflow-y-scroll p-5"
+          className="doc-editor-scroll no-scrollbar"
           data-testid="document-editor-scroll"
           key={`${docId}-editor`}
           onMouseDown={focusEditorFromPaneClick}
         >
-          <div
-            className="mx-auto w-full min-h-full max-w-[920px] cursor-text font-times"
+          <article
+            className="doc-editor-page cursor-text"
             data-testid="document-editor-surface"
           >
             <EditorContent
               editor={editor}
-              className="h-full pb-5 [&>div]:h-full [&>div]:outline-none [&_.ProseMirror]:min-h-full"
+              className="h-full [&>div]:h-full [&>div]:outline-none [&_.ProseMirror]:min-h-full"
             />
-          </div>
+          </article>
+          {marginComments ? (
+            <aside aria-label="Comments" className="doc-editor-margin hidden lg:block">
+              {marginComments}
+            </aside>
+          ) : null}
         </div>
       </div>
     </ErrorBoundary>

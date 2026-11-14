@@ -338,15 +338,12 @@ export const Tutor = ({
   return (
     <div
       data-tour="doc-tutor"
-      className={cn(
-        'flex w-full flex-col border-r bg-muted/30 pb-2 md:w-3/5',
-        className
-      )}
+      className={cn('doc-editor-tutor flex w-full flex-col pb-2', className)}
     >
       <div
         className={cn(
-          'flex items-center justify-between gap-8 py-1 pl-4 pr-2',
-          cms.assignmentModule.isSelfGuided ? '' : 'border-b'
+          'doc-editor-tutor-header',
+          cms.assignmentModule.isSelfGuided ? '' : 'border-b-0'
         )}
         data-testid="tutor-module-header"
       >
@@ -441,11 +438,10 @@ export const Tutor = ({
           {messages.map((message) => (
             <div
               key={message.id}
-              className={cn('w-auto max-w-[92%] rounded-xl px-3 py-2', {
-                'mr-auto rounded-bl-none bg-ring/20':
+              className={cn({
+                'doc-editor-tutor-message mr-auto w-auto max-w-[92%]':
                   message.agent === 'assistant',
-                'ml-auto rounded-br-none bg-stone-200':
-                  message.agent === 'user',
+                'doc-editor-tutor-student ml-auto': message.agent === 'user',
               })}
             >
               <div className="mt-1 flex items-center gap-2">
