@@ -393,6 +393,7 @@ export async function submitSignedInEnterClassCode(
 }
 
 /** My Assignments search lives inside the Filter popover — open it before typing. */
+// CI: non-empty train pushes must touch services/** so the PR CI workflow runs.
 export async function fillMyAssignmentsSearch(
   page: Page,
   query: string,
