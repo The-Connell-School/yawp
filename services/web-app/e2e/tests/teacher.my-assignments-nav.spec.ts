@@ -19,6 +19,7 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     // the seeded title may sit off the first page unless we narrow the list.
     await fillMyAssignmentsSearch(page, 'E2E Class Assignment', {
       assignmentId: e2eContext.assignmentId,
+      assignmentTypeTitle: 'E2E Course',
     });
     // Exact, because the row's selection checkbox is itself a cell whose
     // accessible name ("Select assignment E2E Class Assignment") contains the
@@ -38,6 +39,7 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     await page.waitForLoadState('networkidle');
     await fillMyAssignmentsSearch(page, 'E2E Class Assignment', {
       assignmentId: e2eContext.assignmentId,
+      assignmentTypeTitle: 'E2E Course',
     });
 
     await page.getByTestId(`my-assignment-open-${e2eContext.assignmentId}`).click();

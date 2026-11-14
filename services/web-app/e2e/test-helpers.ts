@@ -404,6 +404,20 @@ export async function expandAssignmentTypeSections(page: Page) {
   }
 }
 
+async function selectMyAssignmentsTypePill(
+  page: Page,
+  typeTitle: string
+) {
+  const pills = page.getByTestId('my-assignments-type-pills');
+  if ((await pills.count()) === 0) return;
+  const pill = pills.getByRole('tab', {
+    name: new RegExp(`^${typeTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+  });
+  await pill.scrollIntoViewIfNeeded();
+  await pill.click();
+  await expect(pill).toHaveAttribute('aria-selected', 'true');
+}
+
 async function setMyAssignmentsSearchQuery(page: Page, query: string) {
   await page.getByTestId('my-assignments-filter').click();
   const search = page.getByTestId('my-assignments-search');
@@ -431,7 +445,7 @@ async function findMyAssignmentRow(
           .filter({ hasText: options.title ?? '' })
           .first();
   const forward = page.getByRole('button', { name: 'go forward' });
-  for (let pageIndex = 0; pageIndex < 25; pageIndex++) {
+  for (let pageIndex = 0; pageIndex < 5; pageIndex++) {
     if (await target.isVisible().catch(() => false)) {
       return target;
     }
@@ -447,7 +461,7 @@ async function findMyAssignmentRow(
 export async function fillMyAssignmentsSearch(
   page: Page,
   query: string,
-  options?: { assignmentId?: string }
+  options?: { assignmentId?: string; assignmentTypeTitle?: string }
 ) {
   const trimmed = query.trim();
   const visibilityTarget = options?.assignmentId
@@ -462,6 +476,9 @@ export async function fillMyAssignmentsSearch(
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) {
       await page.reload({ waitUntil: 'networkidle' });
+    }
+    if (options?.assignmentTypeTitle) {
+      await selectMyAssignmentsTypePill(page, options.assignmentTypeTitle);
     }
     await setMyAssignmentsSearchQuery(page, query);
     if (!visibilityTarget) return;

@@ -152,7 +152,10 @@ function prefersReducedMotion() {
 function isPresentForTour(el: HTMLElement | null): el is HTMLElement {
   if (!el) return false;
   const rect = el.getBoundingClientRect();
-  return rect.width > 0 && rect.height > 0;
+  if (rect.width > 0 && rect.height > 0) return true;
+  // Nested rails and carousels sometimes report 0 getBoundingClientRect at
+  // wide breakpoints while still occupying space in the layout tree.
+  return el.offsetWidth > 0 && el.offsetHeight > 0;
 }
 
 /** Steps whose element is on this page right now; a centered card if none are. */
@@ -279,7 +282,7 @@ function PageTourController({
       window.requestAnimationFrame(() => {
         window.setTimeout(() => {
           setPhase({ kind: 'touring', steps: resolveSteps(tour), index: 0 });
-        }, 400);
+        }, 600);
       });
     });
   }, [tour]);
