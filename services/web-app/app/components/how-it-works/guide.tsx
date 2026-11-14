@@ -14,7 +14,7 @@
  * headings and white cards inside. The fixed colors are for the cream page;
  * the dark theme keeps its own tokens.
  */
-import { createContext, useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ComponentProps, type CSSProperties } from 'react';
 import { Link } from 'react-router';
 import { Check, ChevronLeft, CirclePlay, Pause, Play, X } from 'lucide-react';
 import { Button } from '~/components/ui/button';
@@ -36,16 +36,17 @@ const BODY = 'text-[#3A3F4B] dark:text-muted-foreground';
  * The way into a guide, for a feature's page header. It shrinks to its icon
  * on a phone and keeps its name for screen readers.
  */
-export function SeeHowItWorksLink({ to }: { to: string }) {
+export function SeeHowItWorksLink({
+  to,
+  ...linkProps
+}: { to: string } & Omit<ComponentProps<typeof Link>, 'to' | 'children'>) {
   return (
-    <Link
-      to={to}
-      aria-label="See how it works"
-      className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-primary/40 bg-background px-2.5 text-sm font-medium text-primary transition hover:bg-primary/10 sm:px-3"
-    >
-      <CirclePlay size={16} />
-      <span className="hidden sm:inline">See how it works</span>
-    </Link>
+    <Button asChild variant="outline-primary" size="sm" className="h-9 shrink-0 gap-1.5 sm:px-3">
+      <Link to={to} aria-label="See how it works" {...linkProps}>
+        <CirclePlay size={16} />
+        <span className="hidden sm:inline">See how it works</span>
+      </Link>
+    </Button>
   );
 }
 

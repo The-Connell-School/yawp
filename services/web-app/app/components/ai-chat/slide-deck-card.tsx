@@ -6,6 +6,7 @@
  */
 import { withDeckKit } from '~/domain/lesson-planner/deck-kit-v4';
 import { Link } from 'react-router';
+import { Button } from '~/components/ui/button';
 import { Check, Download, PenLine, Play, Plus, Presentation } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import {
@@ -117,23 +118,20 @@ export function SlideDeckCard({
           ) : null}
         </div>
         {onToggle ? (
-          <button
+          <Button
             type="button"
+            size="sm"
+            variant="outline-primary"
+            className="shrink-0"
             disabled={disabled}
             onClick={() => onToggle(!added)}
             // Brian's review (B3): the toggle removes, and says so before the click.
             title={added ? 'Click to remove from stack' : undefined}
             data-testid="deck-toggle"
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50',
-              added
-                ? 'bg-primary/10 text-primary hover:bg-primary/15'
-                : 'border border-primary/40 text-primary hover:bg-primary/5'
-            )}
           >
             {added ? <Check size={14} /> : <Plus size={14} />}
             {added ? 'In your lesson' : 'Add to lesson'}
-          </button>
+          </Button>
         ) : null}
         {downloadHref ? (
           <a
@@ -147,23 +145,20 @@ export function SlideDeckCard({
           </a>
         ) : null}
         {editHref ? (
-          <Link
-            to={editHref}
-            data-testid="deck-edit"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-primary/40 px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/5"
-          >
-            <PenLine size={14} />
-            Edit
-          </Link>
+          <Button asChild size="sm" variant="outline-primary" className="shrink-0" data-testid="deck-edit">
+            <Link to={editHref}>
+              <PenLine size={14} />
+              Edit
+            </Link>
+          </Button>
         ) : null}
         {presentHref ? (
-          <Link
-            to={presentHref}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-          >
-            <Play size={14} />
-            Present
-          </Link>
+          <Button asChild size="sm" className="shrink-0">
+            <Link to={presentHref}>
+              <Play size={14} />
+              Present
+            </Link>
+          </Button>
         ) : (
           <span className="shrink-0 text-xs text-muted-foreground">
             Add this to the lesson to present it

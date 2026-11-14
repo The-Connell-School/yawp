@@ -4,6 +4,7 @@ import { CitedSources } from './cited-sources';
 import { PlanningSidebar } from './planning-sidebar';
 import type { DbqState } from './use-dbq-state';
 import { cn } from '~/utils/misc';
+import { Button } from '~/components/ui/button';
 
 export function EditorColumn({
   state,
@@ -91,14 +92,16 @@ export function EditorColumn({
             Cite
           </span>
           {prompt.sources.map((s) => (
-            <button
+            <Button
               key={s.id}
               type="button"
+              variant="outline-primary"
+              size="sm"
+              className="h-auto min-h-0 px-2 py-0.5 text-[11px] font-medium"
               onClick={() => insertCitation(s.label)}
-              className="rounded-full border border-primary/40 bg-background px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10"
             >
               Doc {s.label}
-            </button>
+            </Button>
           ))}
           <span className="ml-1 text-[10px] text-muted-foreground">
             inserts at cursor

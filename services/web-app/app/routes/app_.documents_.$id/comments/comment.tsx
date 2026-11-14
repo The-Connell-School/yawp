@@ -11,7 +11,7 @@ import { CheckIcon, TrashIcon } from '~/components/icons';
 import { RichTextarea } from '~/components/rich-textarea.js';
 import { Button } from '~/components/ui/button';
 import { useUser } from '~/hooks/useUser';
-import { useDoubleCheck } from '~/utils/misc';
+import { cn, useDoubleCheck } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo';
 import { buildSafeErrorScalarsForLog } from '~/utils/error-log-scalars';
 
@@ -26,6 +26,7 @@ export type Comment = DocumentComment & {
 
 type CommentProps = Comment & {
   readOnly?: boolean;
+  layout?: 'sidebar' | 'margin';
   onDelete?: (commentId: string) => void;
   onResponseAdded?: (commentId: string, response: unknown) => void;
   autoFocusReply?: boolean;
@@ -33,6 +34,7 @@ type CommentProps = Comment & {
 
 export const Comment = ({
   readOnly = false,
+  layout = 'sidebar',
   onDelete,
   onResponseAdded,
   autoFocusReply = false,
@@ -147,10 +149,20 @@ export const Comment = ({
 
   return (
     <div
-      className={
-        `relative flex flex-col rounded-lg p-3 transition-all duration-200 ease-in-out ` +
-        (isFocused ? 'bg-ring/20 shadow-lg' : 'bg-stone-200')
-      }
+      className={cn(
+        'relative flex flex-col gap-2 transition-all duration-200 ease-in-out',
+        layout === 'margin'
+          ? 'doc-editor-comment-card'
+          : 'rounded-lg p-3',
+        layout === 'margin'
+          ? isFocused
+            ? 'ring-2 ring-[hsl(210_75%_49%)]'
+            : ''
+          : isFocused
+            ? 'bg-ring/20 shadow-lg'
+            : 'bg-stone-200',
+        layout === 'margin' ? '' : 'p-3'
+      )}
       id={`comment-${comment.id}`}
       data-comment-card={comment.id}
       onMouseEnter={() => setHoveredCommentId(comment.id)}

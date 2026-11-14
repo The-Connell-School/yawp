@@ -10,8 +10,11 @@ export function SaveStatusIndicator({ status, onLoginClick }: Props) {
   switch (status) {
     case 'synced':
       return (
-        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-          <Check className="h-3 w-3" />
+        <span
+          role="status"
+          className="flex items-center gap-1 text-xs text-muted-foreground"
+        >
+          <Check className="h-3 w-3" aria-hidden />
           Saved
         </span>
       );

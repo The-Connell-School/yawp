@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { Copy, Link2, PenLine, Send } from 'lucide-react';
+import { Button } from '~/components/ui/button';
 import {
   AUDIENCE_SETUP,
   classroomShareUrl,
@@ -102,23 +103,18 @@ export function PostToClass({
           One link to a student page with the slides, handouts and Daily Pages prompt.
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <button
+          <Button
             type="button"
+            variant="secondary"
             data-testid="share-copy"
             disabled={fetcher.state !== 'idle'}
             onClick={() => share('copy')}
-            className="flex items-center justify-center gap-2 rounded-lg bg-[var(--sv-ink)] px-3 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
           >
             <Copy size={14} /> {copied ? 'Link copied' : 'Copy link'}
-          </button>
-          <button
-            type="button"
-            data-testid="share-classroom"
-            onClick={() => share('classroom')}
-            className="rounded-lg border border-[var(--sv-line)] px-3 py-2.5 text-sm font-semibold transition hover:bg-[#F1EBE2]"
-          >
+          </Button>
+          <Button type="button" variant="secondary" data-testid="share-classroom" onClick={() => share('classroom')}>
             Share to Google Classroom
-          </button>
+          </Button>
         </div>
         <p data-testid="share-paste-hint" className="mt-2 text-xs text-[var(--sv-muted)]">
           Using Canvas, Schoology or Teams? Paste the link there.
@@ -162,15 +158,17 @@ export function PostToClass({
           </label>
         ))}
       </div>
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        block
+        className="mt-3"
         data-testid="share-copy"
         disabled={!items.size || fetcher.state !== 'idle'}
         onClick={() => share('copy')}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-white py-2.5 text-sm font-semibold text-[var(--sv-ink)] transition hover:opacity-90 disabled:opacity-50"
       >
         <Copy size={14} /> {copied ? 'Link copied' : 'Copy link'}
-      </button>
+      </Button>
       <p data-testid="share-paste-hint" className="mt-2 text-xs text-white/60">
         Paste it into Google Classroom, Canvas, Schoology or wherever your students look.
       </p>
@@ -319,14 +317,14 @@ export function SendLesson({ conversationId, standards = [] }: { conversationId:
             className="mt-2 w-full rounded-lg border border-[var(--sv-line)] bg-white px-3 py-2 text-sm"
           />
         </div>
-        <button
+        <Button
           type="submit"
+          block
           data-testid="send-button"
           disabled={fetcher.state !== 'idle' || !items.size}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--sv-primary)] py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
         >
           <Send size={14} /> {fetcher.state !== 'idle' ? 'Writing it for them…' : setup.button}
-        </button>
+        </Button>
         {fetcher.data?.sentTo ? (
           <p
             data-testid="send-done"

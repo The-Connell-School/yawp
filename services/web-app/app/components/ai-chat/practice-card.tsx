@@ -12,6 +12,7 @@
  * not know is dropped, and a set left with none is not drawn at all.
  */
 import { useState } from 'react';
+import { Button } from '~/components/ui/button';
 import { Check, Dumbbell, Plus } from 'lucide-react';
 import type { PracticeSkillOption } from '~/components/writing-lessons/practice-skill-picker';
 import {
@@ -90,31 +91,28 @@ export function PracticeCard({
       {classes || onToggle ? (
         <div className="flex flex-wrap items-center gap-2 border-t border-primary/15 bg-primary/[0.04] px-4 py-2.5">
           {onToggle ? (
-            <button
+            <Button
               type="button"
+              size="sm"
+              variant="outline-primary"
               disabled={disabled}
               onClick={() => onToggle(!added)}
               data-testid="practice-stack-toggle"
               title={added ? 'Click to remove from stack' : undefined}
-              className={
-                added
-                  ? 'inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/15 disabled:opacity-50'
-                  : 'inline-flex items-center gap-1.5 rounded-lg border border-primary/40 px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/5 disabled:opacity-50'
-              }
             >
               {added ? <Check size={14} /> : <Plus size={14} />}
               {added ? 'In your lesson' : 'Add to lesson'}
-            </button>
+            </Button>
           ) : null}
           {classes ? (
-            <button
+            <Button
               type="button"
+              size="sm"
               data-testid="practice-assign"
               onClick={() => setOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
             >
               Assign this practice to your class
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}

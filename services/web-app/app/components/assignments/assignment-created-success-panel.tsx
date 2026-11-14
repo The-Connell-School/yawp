@@ -3,7 +3,6 @@ import { Check, Plus } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { assignmentStudentLink } from '~/utils/assignment-links';
-import { cn } from '~/utils/misc';
 import { AssignmentCopyLinkButton } from './assignment-copy-link-button';
 import { useAssignmentLinkCopy } from './assignment-link-copy';
 
@@ -151,7 +150,6 @@ export function AssignmentCreatedSuccessPanel({
         <Button
           type="button"
           variant={state.collaborationEnabled ? 'outline' : 'default'}
-          className={cn(!state.collaborationEnabled && 'bg-[#c85b3d] hover:bg-[#b45237]')}
           onClick={onDone}
           data-testid="assignment-created-done"
         >

@@ -1,77 +1,176 @@
-import { Slot } from '@radix-ui/react-slot';
-import { cva, type VariantProps } from 'class-variance-authority';
-import { Loader2 } from 'lucide-react';
+// Yawp! Button — Letterpress. Styles in button.css (imported from app.css).
 import * as React from 'react';
+import { Slot } from '@radix-ui/react-slot';
+import { Check, Loader2 } from 'lucide-react';
 import { cn } from '~/utils/misc.js';
 
-const button = cva(
-  'inline-flex items-center text-sm justify-center whitespace-nowrap rounded-full font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:pointer-events-none disabled:opacity-50 transition-opacity',
-  {
-    variants: {
-      variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-        destructive:
-          'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-        outline:
-          'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
-        secondary:
-          'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        ghost: 'hover:bg-accent hover:text-accent-foreground',
-        link: 'text-link underline-offset-4 hover:text-link-hover hover:underline px-0.5 py-0',
-        sidebar: 'bg-foreground/15 text-foreground hover:bg-foreground/10',
-        success: 'bg-success text-success-foreground hover:bg-success/90',
-        'outline-primary':
-          'border border-primary text-primary hover:bg-primary/10',
-        'destructive-outline':
-          'border border-destructive text-destructive hover:bg-destructive/10',
-        unstyled: '',
-      },
-      size: {
-        default: 'h-10 px-4',
-        sm: 'h-8 px-3',
-        lg: 'h-11 px-5 text-md',
-        icon: 'h-10 w-10',
-        'icon-sm': 'h-8 w-8',
-      },
-    },
-    defaultVariants: {
-      variant: 'default',
-      size: 'default',
-    },
-  }
-);
+export type ButtonVariant =
+  | 'default'
+  | 'primary'
+  | 'secondary'
+  | 'outline'
+  | 'ghost'
+  | 'destructive'
+  | 'link'
+  | 'sidebar'
+  | 'success'
+  | 'outline-primary'
+  | 'destructive-outline'
+  | 'unstyled';
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof button> {
+export type ButtonSize = 'sm' | 'default' | 'lg' | 'icon' | 'icon-sm';
+
+const variantClass: Record<ButtonVariant, string> = {
+  default: 'btn--primary',
+  primary: 'btn--primary',
+  secondary: 'btn--secondary',
+  outline: 'btn--secondary',
+  ghost: 'btn--ghost',
+  destructive: 'btn--danger',
+  link: 'btn--link',
+  sidebar: 'btn--sidebar',
+  success: 'btn--success',
+  'outline-primary': 'btn--outline-primary',
+  'destructive-outline': 'btn--destructive-outline',
+  unstyled: '',
+};
+
+const sizeClass: Record<ButtonSize, string> = {
+  sm: 'btn--sm',
+  default: '',
+  lg: 'btn--lg',
+  icon: 'btn--icon',
+  'icon-sm': 'btn--sm btn--icon',
+};
+
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  block?: boolean;
   asChild?: boolean;
+  loading?: boolean;
+  /** @deprecated Use `loading` */
   isLoading?: boolean;
+  loadingLabel?: React.ReactNode;
+  success?: boolean;
+  successLabel?: React.ReactNode;
+  softDisabled?: boolean;
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ isLoading, className, variant, size, asChild = false, ...props }, ref) => {
-    return asChild ? (
-      <Slot
-        className={cn(button({ variant, size }), className)}
-        ref={ref}
-        disabled={isLoading}
-        {...props}
-      />
-    ) : (
-      <button
-        className={cn(button({ variant, size }), className)}
-        ref={ref}
-        disabled={isLoading}
-        {...props}
-      >
-        <>
-          {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          {props.children}
-        </>
-      </button>
-    );
+export function buttonClassNames({
+  variant = 'default',
+  size = 'default',
+  block,
+  success,
+  className,
+}: {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  block?: boolean;
+  success?: boolean;
+  className?: string;
+}) {
+  if (variant === 'unstyled') {
+    return cn(className);
   }
-);
+  return cn(
+    'btn',
+    variantClass[variant],
+    sizeClass[size],
+    block && 'btn--block',
+    success && 'is-success',
+    className
+  );
+}
+
+/** CVA-compatible helper for login links, alert dialogs, etc. */
+export function button(
+  options: {
+    variant?: ButtonVariant;
+    size?: ButtonSize;
+    block?: boolean;
+    success?: boolean;
+    className?: string;
+  } = {}
+) {
+  return buttonClassNames(options);
+}
+
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  {
+    className,
+    variant = 'default',
+    size = 'default',
+    block,
+    asChild,
+    loading,
+    isLoading,
+    loadingLabel,
+    success,
+    successLabel,
+    softDisabled,
+    disabled,
+    children,
+    onClick,
+    style,
+    type,
+    ...props
+  },
+  ref
+) {
+  const busy = loading ?? isLoading ?? false;
+  const Comp = asChild ? Slot : 'button';
+  const inert = busy || softDisabled;
+  const innerRef = React.useRef<HTMLButtonElement | null>(null);
+  const [minWidth, setMinWidth] = React.useState<number | undefined>();
+
+  React.useLayoutEffect(() => {
+    if ((busy || success) && innerRef.current && minWidth === undefined) {
+      setMinWidth(innerRef.current.offsetWidth);
+    }
+    if (!busy && !success) setMinWidth(undefined);
+  }, [busy, success, minWidth]);
+
+  return (
+    <Comp
+      ref={(node: HTMLButtonElement) => {
+        innerRef.current = node;
+        if (typeof ref === 'function') ref(node);
+        else if (ref) ref.current = node;
+      }}
+      type={asChild ? undefined : (type ?? 'button')}
+      className={buttonClassNames({ variant, size, block, success, className })}
+      style={minWidth ? { ...style, minWidth } : style}
+      disabled={disabled}
+      aria-disabled={inert || undefined}
+      aria-busy={busy || undefined}
+      onClick={inert ? (e: React.MouseEvent<HTMLButtonElement>) => e.preventDefault() : onClick}
+      {...props}
+    >
+      {busy ? (
+        <>
+          <Loader2 className="btn__spinner" aria-hidden />
+          {loadingLabel ?? children}
+        </>
+      ) : success ? (
+        <>
+          <Check aria-hidden />
+          {successLabel ?? children}
+        </>
+      ) : (
+        children
+      )}
+    </Comp>
+  );
+});
 Button.displayName = 'Button';
 
-export { Button, button };
+export function useTransientSuccess(ms = 2000) {
+  const [on, setOn] = React.useState(false);
+  React.useEffect(() => {
+    if (!on) return;
+    const t = window.setTimeout(() => setOn(false), ms);
+    return () => window.clearTimeout(t);
+  }, [on, ms]);
+  return [on, () => setOn(true)] as const;
+}
