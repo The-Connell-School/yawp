@@ -22,6 +22,7 @@ const getAvailableAssignmentTypesForScopes = mock();
 // before any file could mock.module() this path (see comment there).
 const actualAssignmentTypeAccess =
   globalThis.__realModules['~/utils/assignment-type-access.server'];
+const { HIDE_AP_HISTORY_CLASS_ASSIGNMENT_WHERE } = actualAssignmentTypeAccess;
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/assignment-deployment.server', () => ({
@@ -118,6 +119,8 @@ describe('My Assignments loader', () => {
         assignment: {
           id: 'assignment-1',
           title: 'Essay One',
+          tutorEnabled: true,
+          assignmentTypeId: 'type-essay',
           assignmentType: { title: 'Essay' },
           createdAt: new Date('2026-11-01T00:00:00.000Z'),
         },
@@ -134,6 +137,7 @@ describe('My Assignments loader', () => {
     expect(prisma.classAssignment.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          ...HIDE_AP_HISTORY_CLASS_ASSIGNMENT_WHERE,
           class: {
             teachers: { some: { id: 'profile-1' } },
             isArchived: false,
@@ -171,6 +175,8 @@ describe('My Assignments loader', () => {
     const assignment = {
       id: 'assignment-1',
       title: 'Essay One',
+      tutorEnabled: true,
+      assignmentTypeId: 'type-essay',
       assignmentType: { title: 'Essay' },
       createdAt: new Date('2026-11-01T00:00:00.000Z'),
     };
@@ -412,7 +418,9 @@ describe('My Assignments loader', () => {
           id: 'assignment-1',
           title: 'Thursday',
           tutorEnabled: true,
-          assignmentType: { id: 'type-exit', title: 'Exit Ticket' },
+          assignmentTypeId: 'type-exit',
+          assignmentType: { title: 'Exit Ticket' },
+          createdAt: new Date('2026-11-01T00:00:00.000Z'),
         },
         _count: { documents: 0 },
       },
@@ -429,7 +437,8 @@ describe('My Assignments loader', () => {
         select: expect.objectContaining({
           assignment: {
             select: expect.objectContaining({
-              assignmentType: { select: { id: true, title: true } },
+              assignmentTypeId: true,
+              assignmentType: { select: { title: true } },
             }),
           },
         }),

@@ -436,7 +436,7 @@ for (const width of [390, 1440]) {
     await page.goto('/app');
     await expectFreeDashboardAssignmentTiles(page);
     await page
-      .getByRole('link', { name: /New Pre-writing assignment/i })
+      .getByRole('link', { name: /New Pre[\u2011-]writing assignment/i })
       .click();
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+\/how-it-works$/);
     await page.goto('/app');
