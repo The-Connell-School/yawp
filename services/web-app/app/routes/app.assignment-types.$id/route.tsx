@@ -495,6 +495,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
+  if (assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
+    throw new Response(null, { status: 404 });
+  }
+
   const { redirectLockedPreviewAssignmentTypeHomeToGuide } =
     await import('~/domain/free-tier/locked-preview-assignment-type-routing.server');
   await redirectLockedPreviewAssignmentTypeHomeToGuide({
@@ -794,10 +798,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   if (assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
-    return redirectWithToast(`/app/assignment-types/${params.id}`, {
-      type: 'error',
-      description: 'Choose an APUSH prompt from the library first.',
-    });
+    throw new Response(null, { status: 404 });
   }
 
   let documentId = '';

@@ -60,6 +60,7 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { HIDE_AP_HISTORY_CLASS_ASSIGNMENT_WHERE } from '~/utils/assignment-type-access.server';
 import { CollapsibleGroupSection } from '~/components/collapsible-group-section';
 import { ASSIGNMENTS_GROUPED_BY_TYPE_FLAG } from '~/domain/feature-flags/feature-flags';
 import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
@@ -115,6 +116,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const classAssignments = await prisma.classAssignment.findMany({
     where: {
+      ...HIDE_AP_HISTORY_CLASS_ASSIGNMENT_WHERE,
       class: {
         teachers: { some: { id: profile.id } },
         isArchived: false,

@@ -272,7 +272,7 @@ describe('app.assignment-types.$id action', () => {
     expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
   });
 
-  test('rejects direct document creation for AP History assignment types', async () => {
+  test('returns not found for AP History assignment types', async () => {
     requireMembership.mockResolvedValue({
       id: 'profile-1',
       role: 'TEACHER',
@@ -286,21 +286,15 @@ describe('app.assignment-types.$id action', () => {
       { organizationId: 'org-1', assignmentTypeId: 'ap-history-type' },
     ]);
 
-    const response = await action({
-      request: new Request(
-        'https://example.test/app/assignment-types/ap-history-type',
-        { method: 'POST' }
-      ),
-      params: { id: 'ap-history-type' },
-    } as never);
-
-    expect(response as unknown).toEqual({
-      redirectedTo: '/app/assignment-types/ap-history-type',
-      toast: {
-        type: 'error',
-        description: 'Choose an APUSH prompt from the library first.',
-      },
-    });
+    await expect(
+      action({
+        request: new Request(
+          'https://example.test/app/assignment-types/ap-history-type',
+          { method: 'POST' }
+        ),
+        params: { id: 'ap-history-type' },
+      } as never)
+    ).rejects.toMatchObject({ status: 404 });
     expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
   });
 });
@@ -733,7 +727,7 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     expect(otherTypeResponse.data.promptLibrary).toBeNull();
   });
 
-  test('provides AP History library entries for teachers', async () => {
+  test('returns not found for retired AP History assignment types', async () => {
     getAvailableAssignmentTypesForScopes.mockResolvedValue([
       withOrganizationAssignment(
         makeAssignmentType({
@@ -743,155 +737,15 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
         })
       ),
     ]);
-    prisma.apHistoryPromptLibraryEntry.findMany.mockResolvedValue([
-      {
-        id: 'entry-1',
-        externalKey: 'apush-dbq-period-3',
-        title: 'Revolutionary Ideals DBQ',
-        prompt:
-          'Evaluate the extent to which revolutionary ideals changed American society.',
-        essayType: 'dbq',
-        period: 'Period 3: 1754-1800',
-        periodNumber: 3,
-        reasoningSkill: 'Causation',
-        difficulty: 'medium',
-        sources: [{ id: 'source-1' }, { id: 'source-2' }],
-      },
-    ]);
 
-    const response = (await loader({
-      request: new Request(
-        'https://example.test/app/assignment-types/ap-history-type'
-      ),
-      params: { id: 'ap-history-type' },
-    } as never)) as any;
-
-    expect(response.data.promptLibrary).toBeNull();
-    expect(response.data.apHistoryLibrary.entries).toHaveLength(1);
-    expect(response.data.apHistoryLibrary.entries[0]).toMatchObject({
-      externalKey: 'apush-dbq-period-3',
-      title: 'Revolutionary Ideals DBQ',
-      essayType: 'dbq',
-    });
-    expect(response.data.apHistoryLibrary.teacherClasses).toEqual([
-      {
-        id: 'class-1',
-        grade: '9th',
-        period: '1st',
-        title: null,
-        school: { id: 'school-1', organizationId: 'org-1' },
-        teachers: [{ id: 'teacher-1' }],
-      },
-    ]);
-  });
-
-  test('provides AP History library for all teacher classes', async () => {
-    getAvailableAssignmentTypesForScopes.mockResolvedValue([
-      withOrganizationAssignment(
-        makeAssignmentType({
-          id: 'ap-history-type',
-          title: 'AP History Essay',
-          systemKey: 'ap_history_essay',
-        })
-      ),
-    ]);
-    prisma.class.findMany.mockResolvedValue([
-      {
-        id: 'class-1',
-        grade: '9th',
-        period: '1st',
-        title: null,
-        school: { id: 'school-1', organizationId: 'org-1' },
-        teachers: [{ id: 'teacher-1' }],
-      },
-      {
-        id: 'class-2',
-        grade: '10th',
-        period: '2nd',
-        title: null,
-        school: { id: 'school-2', organizationId: 'org-1' },
-        teachers: [{ id: 'teacher-1' }],
-      },
-    ]);
-    prisma.apHistoryPromptLibraryEntry.findMany.mockResolvedValue([
-      {
-        id: 'entry-1',
-        externalKey: 'apush-dbq-period-3',
-        title: 'Revolutionary Ideals DBQ',
-        prompt:
-          'Evaluate the extent to which revolutionary ideals changed American society.',
-        essayType: 'dbq',
-        period: 'Period 3: 1754-1800',
-        periodNumber: 3,
-        reasoningSkill: 'Causation',
-        difficulty: 'medium',
-        sources: [],
-      },
-    ]);
-
-    const response = (await loader({
-      request: new Request(
-        'https://example.test/app/assignment-types/ap-history-type'
-      ),
-      params: { id: 'ap-history-type' },
-    } as never)) as any;
-
-    expect(response.data.apHistoryLibrary.entries).toHaveLength(1);
-    expect(response.data.apHistoryLibrary.teacherClasses).toEqual([
-      {
-        id: 'class-1',
-        grade: '9th',
-        period: '1st',
-        title: null,
-        school: { id: 'school-1', organizationId: 'org-1' },
-        teachers: [{ id: 'teacher-1' }],
-      },
-      {
-        id: 'class-2',
-        grade: '10th',
-        period: '2nd',
-        title: null,
-        school: { id: 'school-2', organizationId: 'org-1' },
-        teachers: [{ id: 'teacher-1' }],
-      },
-    ]);
-    expect(response.data.teacherClasses).toEqual([
-      {
-        id: 'class-1',
-        grade: '9th',
-        period: '1st',
-        title: null,
-        school: { id: 'school-1', organizationId: 'org-1' },
-        teachers: [{ id: 'teacher-1' }],
-      },
-      {
-        id: 'class-2',
-        grade: '10th',
-        period: '2nd',
-        title: null,
-        school: { id: 'school-2', organizationId: 'org-1' },
-        teachers: [{ id: 'teacher-1' }],
-      },
-    ]);
-  });
-
-  test('omits AP History library when teacher has no classes', async () => {
-    getAvailableAssignmentTypesForScopes.mockResolvedValue([
-      withOrganizationAssignment(
-        makeAssignmentType({
-          title: 'AP History Essay',
-          systemKey: 'ap_history_essay',
-        })
-      ),
-    ]);
-    prisma.class.findMany.mockResolvedValue([]);
-
-    const response = (await loader({
-      request: new Request('https://example.test/app/assignment-types/at-1'),
-      params: { id: 'at-1' },
-    } as never)) as any;
-
-    expect(response.data.apHistoryLibrary).toBeNull();
+    await expect(
+      loader({
+        request: new Request(
+          'https://example.test/app/assignment-types/ap-history-type'
+        ),
+        params: { id: 'ap-history-type' },
+      } as never)
+    ).rejects.toMatchObject({ status: 404 });
     expect(prisma.apHistoryPromptLibraryEntry.findMany).not.toHaveBeenCalled();
   });
 

@@ -278,3 +278,49 @@ describe('assignment type inheritance resolution', () => {
     expect(prisma.organizationAssignmentType.findMany).not.toHaveBeenCalled();
   });
 });
+
+describe('retired AP History (Nov 14 2026)', () => {
+  beforeEach(() => {
+    prisma.assignmentType.findFirst.mockReset();
+    prisma.assignmentType.findMany.mockReset();
+    prisma.organizationAssignmentType.findMany.mockReset();
+    prisma.school.findMany.mockReset().mockResolvedValue([]);
+    prisma.orgMembership.findMany.mockReset().mockResolvedValue([]);
+    mockOrgDefaults(['at-ap']);
+  });
+
+  test('listing excludes the ap_history_essay system type at the query', async () => {
+    prisma.assignmentType.findMany.mockResolvedValue([]);
+    await getAvailableAssignmentTypesForScopes({
+      scopes: [scope],
+      select: { id: true },
+    });
+    const where = prisma.assignmentType.findMany.mock.calls[0][0].where;
+    expect(where.OR).toEqual([
+      { systemKey: null },
+      { systemKey: { not: 'ap_history_essay' } },
+    ]);
+  });
+
+  test('availability checks exclude the ap_history_essay system type', async () => {
+    prisma.assignmentType.findFirst.mockResolvedValue(null);
+    await expect(
+      isAssignmentTypeAvailableForAnyScope({
+        assignmentTypeId: 'at-ap',
+        scopes: [scope],
+      })
+    ).resolves.toBe(false);
+    await expect(
+      isAssignmentTypeAvailableForEveryScope({
+        assignmentTypeId: 'at-ap',
+        scopes: [scope],
+      })
+    ).resolves.toBe(false);
+    for (const call of prisma.assignmentType.findFirst.mock.calls) {
+      expect(call[0].where.OR).toEqual([
+        { systemKey: null },
+        { systemKey: { not: 'ap_history_essay' } },
+      ]);
+    }
+  });
+});

@@ -428,10 +428,9 @@ describe('class detail loader document visibility', () => {
         gradesGrammar: false,
       },
     ]);
-    expect(data.apHistoryAssignmentTypeId).toBe('ap-history-type');
   });
 
-  test('reads the assignments-grouped-by-type and ap-history-in-new-assignment flags for the class school', async () => {
+  test('reads the assignments-grouped-by-type flag for the class school', async () => {
     getAvailableAssignmentTypesForScopes.mockResolvedValue([
       {
         id: 'ap-history-type',
@@ -443,8 +442,7 @@ describe('class detail loader document visibility', () => {
     ]);
     prisma.setting.findUnique.mockImplementation(
       async ({ where }: { where: { name: string } }) =>
-        where.name === 'feature_flag.assignments-grouped-by-type' ||
-        where.name === 'feature_flag.ap-history-in-new-assignment'
+        where.name === 'feature_flag.assignments-grouped-by-type'
           ? { value: JSON.stringify({ mode: 'targeted', orgIds: ['org-1'] }) }
           : null
     );
@@ -459,13 +457,9 @@ describe('class detail loader document visibility', () => {
     const data = (response as { data: any }).data;
 
     expect(data.assignmentsGroupedByTypeEnabled).toBe(true);
-    expect(data.apHistoryInNewAssignmentEnabled).toBe(true);
-    // The id still travels: the class tab turns it into a New Assignment
-    // choice rather than a toolbar button.
-    expect(data.apHistoryAssignmentTypeId).toBe('ap-history-type');
   });
 
-  test('both flags read off when no row is stored', async () => {
+  test('grouped-by-type flag reads off when no row is stored', async () => {
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
     prisma.setting.findUnique.mockResolvedValue(null);
 
@@ -479,7 +473,6 @@ describe('class detail loader document visibility', () => {
     const data = (response as { data: any }).data;
 
     expect(data.assignmentsGroupedByTypeEnabled).toBe(false);
-    expect(data.apHistoryInNewAssignmentEnabled).toBe(false);
   });
 
   test('loads compact cross-class deployment details for assignments', async () => {

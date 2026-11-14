@@ -1,3 +1,4 @@
+import { RETIRED_ASSIGNMENT_TYPE_WHERE } from '~/utils/assignment-type-access.server';
 import {
   data as dataResponse,
   redirect,
@@ -158,7 +159,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       orderBy: { position: 'asc' },
     }),
     prisma.assignmentType.findMany({
-      where: { archivedAt: null },
+      where: { archivedAt: null, ...RETIRED_ASSIGNMENT_TYPE_WHERE },
       select: { id: true, title: true },
       orderBy: { position: 'asc' },
     }),

@@ -32,7 +32,11 @@ const ExtractedApHistorySchema = z.object({
     .default([]),
 });
 
-export async function action({ request }: ActionFunctionArgs) {
+export async function action(_args: ActionFunctionArgs) {
+  throw new Response(null, { status: 404 });
+}
+
+async function retiredApHistoryExtractDocumentAction({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 

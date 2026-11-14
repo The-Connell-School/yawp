@@ -30,7 +30,6 @@ const {
   ASSIGNMENT_TYPE_LESSON_PLANS_FLAG,
   HOW_TO_TEACH_IT_FLAG,
   ASSIGNMENTS_GROUPED_BY_TYPE_FLAG,
-  AP_HISTORY_IN_NEW_ASSIGNMENT_FLAG,
   LOUNGE_COMMUNITY_FLAG,
   THESIS_ESSAY_DECKS_FLAG,
   FOLDED_FREE_TIER_LEGACY_SETTINGS,
@@ -397,7 +396,6 @@ describe('feature flags (server)', () => {
       EXIT_TICKET_BUILDER_V3_FLAG,
       EXIT_TICKET_CLASS_SUMMARY_FLAG,
       ASSIGNMENTS_GROUPED_BY_TYPE_FLAG,
-      AP_HISTORY_IN_NEW_ASSIGNMENT_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -454,7 +452,6 @@ describe('feature flags (server)', () => {
       EXIT_TICKET_BUILDER_V3_FLAG,
       EXIT_TICKET_CLASS_SUMMARY_FLAG,
       ASSIGNMENTS_GROUPED_BY_TYPE_FLAG,
-      AP_HISTORY_IN_NEW_ASSIGNMENT_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;

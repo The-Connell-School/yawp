@@ -7,7 +7,11 @@ import { prisma } from '~/utils/db.server.ts';
  * from our own origin, keyed by the upload key stored in the assignment
  * snapshot's imageUrl.
  */
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function loader(_args: LoaderFunctionArgs) {
+  throw new Response(null, { status: 404 });
+}
+
+async function retiredApHistoryUploadImageLoader({ params }: LoaderFunctionArgs) {
   invariantResponse(params.key, 'key is required', { status: 400 });
 
   const image = await prisma.apHistoryCustomSourceImage.findUnique({

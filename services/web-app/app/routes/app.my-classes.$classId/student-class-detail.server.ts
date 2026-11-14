@@ -1,4 +1,8 @@
 import { prisma } from '~/utils/db.server.js';
+import {
+  HIDE_AP_HISTORY_CLASS_ASSIGNMENT_WHERE,
+  HIDE_AP_HISTORY_DOCUMENT_WHERE,
+} from '~/utils/assignment-type-access.server';
 import { studentVisibleClassAssignmentWhere } from '~/domain/collaboration/visibility';
 import {
   isNewStudentClassAssignment,
@@ -112,6 +116,7 @@ export async function loadStudentClassDetail({
           // then rather than sitting there refusing the click.
           studentVisibleClassAssignmentWhere(membershipId),
           { OR: [{ postAt: null }, { postAt: { lte: new Date() } }] },
+          HIDE_AP_HISTORY_CLASS_ASSIGNMENT_WHERE,
         ],
       },
       select: {
@@ -155,6 +160,7 @@ export async function loadStudentClassDetail({
         deletedAt: null,
         archivedAt: null,
         ...buildStudentClassDocumentsScope({ classId: klass.id, membershipId }),
+        ...HIDE_AP_HISTORY_DOCUMENT_WHERE,
       },
       include: studentDocumentInclude(membershipId),
       orderBy: { createdAt: 'desc' },

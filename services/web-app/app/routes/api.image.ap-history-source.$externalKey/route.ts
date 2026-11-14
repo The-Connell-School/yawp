@@ -8,7 +8,11 @@ import { prisma } from '~/utils/db.server.ts';
  * environments with no open web egress). Keyed by the source's stable
  * externalKey, which the assignment snapshot carries for every source.
  */
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function loader(_args: LoaderFunctionArgs) {
+  throw new Response(null, { status: 404 });
+}
+
+async function retiredApHistorySourceImageLoader({ params }: LoaderFunctionArgs) {
   invariantResponse(params.externalKey, 'externalKey is required', {
     status: 400,
   });

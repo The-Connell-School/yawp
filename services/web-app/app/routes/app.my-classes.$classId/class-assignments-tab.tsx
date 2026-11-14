@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Form, Link } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Form } from 'react-router';
 import { useNavigateToNewAssignmentPage } from '~/domain/free-tier/navigate-to-new-assignment-page';
 import { ArrowDown, ArrowUp, Plus, Search, Trash2 } from 'lucide-react';
 import { Badge } from '~/components/ui/badge';
@@ -10,10 +10,6 @@ import {
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
 import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
 import type { AssignmentEditRecord } from '~/components/assignments/assignment-edit-sheet';
-import {
-  AssignmentCreationSheet,
-  type AssignmentCreationLibraryType,
-} from '~/components/assignments/assignment-creation-sheet';
 import {
   AssignmentDocumentsPill,
   assignmentDocumentsLabel,
@@ -41,8 +37,6 @@ import { filterClassAssignmentsByQuery } from './class-assignments-search';
 import { CollapsibleGroupSection } from '~/components/collapsible-group-section';
 import { groupByAssignmentType } from '~/utils/group-by-assignment-type';
 import type { ClassInsight } from '../app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel';
-import type { SiteLicenseLockedAssignmentTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
-
 export type ClassAssignmentsTabAssignment = AssignmentEditRecord & {
   classAssignmentId: string;
   /** False marks a cold write — the row gets a "Tutor off" badge. */
@@ -60,28 +54,11 @@ export type ClassAssignmentsTabAssignment = AssignmentEditRecord & {
 type ClassAssignmentsTabProps = {
   classOption: { id: string; name: string };
   assignments: ClassAssignmentsTabAssignment[];
-  assignmentTypes: {
-    id: string;
-    title: string;
-    kind: string | null;
-    rubricName?: string | null;
-    collaborationSupported: boolean;
-    gradesGrammar: boolean;
-  }[];
-  siteLicenseLockedAssignmentTiles?: SiteLicenseLockedAssignmentTile[];
-  apHistoryAssignmentTypeId?: string | null;
-  /**
-   * Flag `ap-history-in-new-assignment`: AP History is offered in the New
-   * Assignment sheet instead of as a toolbar button. Off: the button.
-   */
-  apHistoryInNewAssignment?: boolean;
   /**
    * Flag `assignments-grouped-by-type`: one collapsible section per
    * assignment type, as the grouped Documents page. Off: one flat table.
    */
   groupedByType?: boolean;
-  /** The v3 exit ticket builder; off renders the quick builder. */
-  exitTicketBuilderV3Enabled?: boolean;
 
   /** Gated on the organization's classInsightsEnabled flag. */
   classInsightsEnabled: boolean;
@@ -113,13 +90,7 @@ export function clampAssignmentPaginationSkip(
 export function ClassAssignmentsTab({
   classOption,
   assignments,
-  assignmentTypes,
-  siteLicenseLockedAssignmentTiles = [],
-  apHistoryAssignmentTypeId,
-  apHistoryInNewAssignment = false,
   groupedByType = false,
-  exitTicketBuilderV3Enabled = false,
-
   classInsightsEnabled,
   teachingLocked = false,
   teachingAccessAdminName = 'your administrator',
@@ -136,7 +107,6 @@ export function ClassAssignmentsTab({
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
-  const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
   const collator = useMemo(
     () => new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }),
     []
@@ -193,10 +163,6 @@ export function ClassAssignmentsTab({
       (assignment) => assignment.id === id && assignment.hasSharedWork
     )
   );
-  const handleCreateSheetOpenChange = useCallback((open: boolean) => {
-    setIsCreateSheetOpen(open);
-  }, []);
-
   const [collapsedTypeIds, setCollapsedTypeIds] = useState<Set<string>>(
     () => new Set()
   );
@@ -211,23 +177,6 @@ export function ClassAssignmentsTab({
         : [],
     [collator, filteredAssignments, groupedByType]
   );
-
-  // Where AP History is started from. Behind the flag it is one of the types
-  // in New Assignment; the toolbar button it replaces showed in every class
-  // of a school with AP History, whatever the class taught.
-  const libraryAssignmentTypes: AssignmentCreationLibraryType[] =
-    apHistoryInNewAssignment && apHistoryAssignmentTypeId
-      ? [
-          {
-            id: apHistoryAssignmentTypeId,
-            title: 'AP History Essay',
-            description: 'Opens the AP prompt library',
-            href: `/app/assignment-types/${apHistoryAssignmentTypeId}?classId=${encodeURIComponent(classOption.id)}`,
-          },
-        ]
-      : [];
-  const showApHistoryToolbarLink =
-    Boolean(apHistoryAssignmentTypeId) && !apHistoryInNewAssignment;
 
   const toggleSelectedGroup = (ids: string[], checked: boolean) => {
     setSelectedAssignmentIds((current) => {
@@ -426,15 +375,6 @@ export function ClassAssignmentsTab({
           />
         </div>
         <div className="ml-auto flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
-          {showApHistoryToolbarLink ? (
-            <Button asChild size="sm" variant="outline" className="shrink-0">
-              <Link
-                to={`/app/assignment-types/${apHistoryAssignmentTypeId}?classId=${encodeURIComponent(classOption.id)}`}
-              >
-                AP History Essay
-              </Link>
-            </Button>
-          ) : null}
           {hasSelection ? (
             <Form
               method="post"
@@ -484,13 +424,9 @@ export function ClassAssignmentsTab({
                 size="sm"
                 className="shrink-0"
                 data-testid="new-assignment-button"
-                onClick={() => {
-                  if (apHistoryInNewAssignment) {
-                    setIsCreateSheetOpen(true);
-                    return;
-                  }
-                  navigateToNewAssignmentPage({ classId: classOption.id });
-                }}
+                onClick={() =>
+                  navigateToNewAssignmentPage({ classId: classOption.id })
+                }
               >
                 <Plus className="mr-2 h-4 w-4" />
                 New Assignment
@@ -723,19 +659,6 @@ export function ClassAssignmentsTab({
           onChange={(skip, take) => setPagination({ skip, take })}
         />
       ) : null}
-
-      <AssignmentCreationSheet
-        open={isCreateSheetOpen}
-        onOpenChange={handleCreateSheetOpenChange}
-        entryPoint="class"
-        exitTicketBuilderV3Enabled={exitTicketBuilderV3Enabled}
-        fixedClassId={classOption.id}
-        assignmentTypes={assignmentTypes}
-        libraryAssignmentTypes={libraryAssignmentTypes}
-        siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
-        teachingLocked={teachingLocked}
-        teacherClasses={[classOption]}
-      />
 
     </div>
   );

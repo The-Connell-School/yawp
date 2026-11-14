@@ -17,7 +17,11 @@ const ALLOWED_CONTENT_TYPES = new Set([
  * URL for it. Used by the custom AP History assignment builder so uploaded
  * documents render reliably from our own origin.
  */
-export async function action({ request }: ActionFunctionArgs) {
+export async function action(_args: ActionFunctionArgs) {
+  throw new Response(null, { status: 404 });
+}
+
+async function retiredApHistoryUploadSourceImageAction({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 

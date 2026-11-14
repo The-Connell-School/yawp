@@ -242,15 +242,6 @@ export const EXIT_TICKET_CLASS_SUMMARY_FLAG = 'exit-ticket-class-summary' as con
 export const ASSIGNMENTS_GROUPED_BY_TYPE_FLAG = 'assignments-grouped-by-type' as const;
 
 /**
- * AP History Essay is started from a class's New Assignment sheet, like every
- * other assignment type: choosing it opens the AP prompt library with the
- * class already picked. The stray "AP History Essay" button that sat beside
- * New Assignment in every class of an AP-enabled school (English and business
- * classes included) is gone. Off: that button, as before.
- */
-export const AP_HISTORY_IN_NEW_ASSIGNMENT_FLAG = 'ap-history-in-new-assignment' as const;
-
-/**
  * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
  * reads only `feature_flag.free_tier`; these rows are not OR-merged.
  */
@@ -439,11 +430,6 @@ export const FEATURE_FLAGS = {
     label: 'Assignments grouped by type',
     description:
       'My Assignments and each class’s Assignments tab show one collapsible section per assignment type (Exit Ticket, Daily Pages, The Thesis-Driven Essay…), with the same headings and counts as the grouped Documents page. Search, sort and delete work inside the sections. Off: one flat, paginated table. No data changes either way.',
-  },
-  [AP_HISTORY_IN_NEW_ASSIGNMENT_FLAG]: {
-    label: 'AP History Essay in New Assignment',
-    description:
-      'A class’s New Assignment sheet lists AP History Essay with the other assignment types; choosing it opens the AP prompt library with that class picked. The separate “AP History Essay” button beside New Assignment, which showed in every class of a school with AP History, is removed. Off: that button, as before.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

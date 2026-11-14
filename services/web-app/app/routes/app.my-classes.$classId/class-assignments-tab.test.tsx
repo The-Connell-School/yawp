@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
-let creationProps: any = null;
+const navigateToNewAssignmentPage = mock();
 
 const actualReactRouter = await import('react-router');
 mock.module('react-router', () => ({
@@ -22,11 +22,8 @@ mock.module('react-router', () => ({
   ),
 }));
 
-mock.module('~/components/assignments/assignment-creation-sheet', () => ({
-  AssignmentCreationSheet: (props: any) => {
-    creationProps = props;
-    return props.open ? <div data-testid="creation-sheet" /> : null;
-  },
+mock.module('~/domain/free-tier/navigate-to-new-assignment-page', () => ({
+  useNavigateToNewAssignmentPage: () => navigateToNewAssignmentPage,
 }));
 
 const { createMemoryRouter, RouterProvider } = actualReactRouter;
@@ -98,15 +95,6 @@ function renderTab(overrides: Record<string, unknown> = {}) {
     <ClassAssignmentsTab
       classOption={{ id: 'class-1', name: 'History · Grade 9 • Period 2' }}
       assignments={ASSIGNMENTS}
-      assignmentTypes={[
-        {
-          id: 'type-1',
-          title: 'DBQ',
-          collaborationSupported: false,
-          gradesGrammar: false,
-          kind: null,
-        },
-      ]}
       classInsightsEnabled
       onViewDocuments={() => {}}
       onSelectAssignment={() => {}}
@@ -124,7 +112,7 @@ function clickRow(el: HTMLElement, testId: string) {
 }
 
 beforeEach(() => {
-  creationProps = null;
+  navigateToNewAssignmentPage.mockReset();
 });
 
 afterEach(() => {
@@ -134,14 +122,15 @@ afterEach(() => {
 });
 
 describe('ClassAssignmentsTab', () => {
-  it('offers the AP History prompt library when the class can use that assignment type', () => {
-    const el = renderTab({ apHistoryAssignmentTypeId: 'type-apush' });
-    const link = el.querySelector('a[href="/app/assignment-types/type-apush?classId=class-1"]');
-
-    expect(link?.textContent).toContain('AP History Essay');
+  it('never shows an AP History Essay toolbar link', () => {
+    const el = renderTab();
+    expect(
+      el.querySelector('a[href^="/app/assignment-types/"]')
+    ).toBeNull();
+    expect(el.textContent).not.toContain('AP History Essay');
   });
 
-  it('opens class-scoped creation and keeps the class-detail columns', () => {
+  it('New Assignment opens the create flow for this class', () => {
     const el = renderTab();
 
     expect(el.textContent).toContain('Assignment');
@@ -154,11 +143,8 @@ describe('ClassAssignmentsTab', () => {
     )!;
     act(() => createButton.click());
 
-    expect(el.querySelector('[data-testid="creation-sheet"]')).toBeTruthy();
-    expect(creationProps).toMatchObject({
-      entryPoint: 'class',
-      fixedClassId: 'class-1',
-      teacherClasses: [{ id: 'class-1', name: 'History · Grade 9 • Period 2' }],
+    expect(navigateToNewAssignmentPage).toHaveBeenCalledWith({
+      classId: 'class-1',
     });
   });
 
@@ -280,63 +266,6 @@ describe('ClassAssignmentsTab', () => {
     expect(deleteButton.disabled).toBe(true);
   });
 
-  it('keeps the creation close handler stable across tab rerenders', () => {
-    const el = renderTab();
-    const initialOnOpenChange = creationProps.onOpenChange;
-    const createButton = Array.from(el.querySelectorAll('button')).find(
-      (button) => button.textContent?.includes('New Assignment')
-    )!;
-
-    act(() => createButton.click());
-
-    expect(creationProps.onOpenChange).toBe(initialOnOpenChange);
-  });
-
-  describe('ap-history-in-new-assignment', () => {
-    it('drops the AP History Essay toolbar link: the type is not a property of the class', () => {
-      const el = renderTab({
-        apHistoryAssignmentTypeId: 'type-apush',
-        apHistoryInNewAssignment: true,
-      });
-
-      expect(el.querySelector('a[href^="/app/assignment-types/"]')).toBeNull();
-      const toolbarLabels = Array.from(el.querySelectorAll('a,button')).map(
-        (node) => node.textContent?.trim()
-      );
-      expect(toolbarLabels).not.toContain('AP History Essay');
-    });
-
-    it('hands the New Assignment sheet AP History as a library type that opens the library for this class', () => {
-      renderTab({
-        apHistoryAssignmentTypeId: 'type-apush',
-        apHistoryInNewAssignment: true,
-      });
-
-      expect(creationProps.libraryAssignmentTypes).toEqual([
-        {
-          id: 'type-apush',
-          title: 'AP History Essay',
-          description: 'Opens the AP prompt library',
-          href: '/app/assignment-types/type-apush?classId=class-1',
-        },
-      ]);
-    });
-
-    it('offers nothing extra when AP History is not available to the class', () => {
-      renderTab({ apHistoryInNewAssignment: true });
-      expect(creationProps.libraryAssignmentTypes ?? []).toEqual([]);
-    });
-
-    it('flag off keeps the legacy toolbar link and adds nothing to the sheet', () => {
-      const el = renderTab({ apHistoryAssignmentTypeId: 'type-apush' });
-      expect(
-        el.querySelector(
-          'a[href="/app/assignment-types/type-apush?classId=class-1"]'
-        )
-      ).toBeTruthy();
-      expect(creationProps.libraryAssignmentTypes ?? []).toEqual([]);
-    });
-  });
 
   describe('assignments-grouped-by-type', () => {
     const EXIT_TICKETS: ClassAssignmentsTabAssignment[] = [

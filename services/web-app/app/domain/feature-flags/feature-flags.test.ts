@@ -39,7 +39,6 @@ import {
   EXIT_TICKET_BUILDER_V3_FLAG,
   EXIT_TICKET_CLASS_SUMMARY_FLAG,
   ASSIGNMENTS_GROUPED_BY_TYPE_FLAG,
-  AP_HISTORY_IN_NEW_ASSIGNMENT_FLAG,
   FOLDED_FREE_TIER_LEGACY_SETTINGS,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
@@ -128,8 +127,13 @@ describe('feature flag registry', () => {
       EXIT_TICKET_BUILDER_V3_FLAG,
       EXIT_TICKET_CLASS_SUMMARY_FLAG,
       ASSIGNMENTS_GROUPED_BY_TYPE_FLAG,
-      AP_HISTORY_IN_NEW_ASSIGNMENT_FLAG,
     ]);
+  });
+
+  test('no longer has the retired AP History new-assignment flag', () => {
+    const removed = 'ap-history-in-new-assignment';
+    expect(FEATURE_FLAG_KEYS as readonly string[]).not.toContain(removed);
+    expect(isFeatureFlagKey(removed)).toBe(false);
   });
 
   test('has the Teacher\'s Lounge community flag, stored under its own row', () => {
