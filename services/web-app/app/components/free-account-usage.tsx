@@ -1,4 +1,5 @@
 import { StudentInvitationDialog } from '~/components/student-invitation-dialog';
+import { Button } from '~/components/ui/button';
 import { useRef, useState } from 'react';
 import {
   Sheet,
@@ -776,30 +777,36 @@ export function FreeAccountChecklist({
                     </span>
                   ) : null}
                   {isAssignmentStep && state === 'current' && !step.done ? (
-                    <Link
-                      to={
-                        'createTo' in step && step.createTo
-                          ? step.createTo
-                          : createFirstAssignmentTo
-                      }
+                    <Button
+                      asChild
+                      size="sm"
+                      className="mt-2"
                       data-testid="checklist-create-first-assignment"
-                      className="mt-2 inline-flex h-9 items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
                     >
-                      Create
-                    </Link>
+                      <Link
+                        to={
+                          'createTo' in step && step.createTo
+                            ? step.createTo
+                            : createFirstAssignmentTo
+                        }
+                      >
+                        Create
+                      </Link>
+                    </Button>
                   ) : null}
                   {isGradeStep &&
                   state === 'current' &&
                   !step.done &&
                   'to' in step &&
                   step.to ? (
-                    <Link
-                      to={step.to}
+                    <Button
+                      asChild
+                      size="sm"
+                      className="mt-2"
                       data-testid="checklist-grade-first-submission"
-                      className="mt-2 inline-flex h-9 items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
                     >
-                      Grade
-                    </Link>
+                      <Link to={step.to}>Grade</Link>
+                    </Button>
                   ) : null}
                   {showStudentsPanel ? (
                     <div className="mt-2 space-y-2 rounded-lg border bg-secondary/40 p-3">
@@ -808,14 +815,15 @@ export function FreeAccountChecklist({
                         minutes with your class in the room.
                       </p>
                       <FreeTierClassCodeChip code={usage.classCode!} />
-                      <button
+                      <Button
                         type="button"
                         ref={invitationTriggerRef}
+                        size="sm"
+                        block
                         onClick={() => setInvitationOpen(true)}
-                        className="inline-flex h-9 w-full items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
                       >
                         Invite students
-                      </button>
+                      </Button>
                     </div>
                   ) : null}
                   {isStudentsStep &&
@@ -978,12 +986,15 @@ export function FreeReporterLocked({
               </li>
             </ul>
           )}
-          <Link
-            to={variant === 'pending' ? '/app/free-tier/status' : '/app/free-tier/status'}
-            className="inline-flex h-10 items-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
-          >
-            Talk to us
-          </Link>
+          <Button asChild>
+            <Link
+              to={
+                variant === 'pending' ? '/app/free-tier/status' : '/app/free-tier/status'
+              }
+            >
+              Talk to us
+            </Link>
+          </Button>
         </section>
       </div>
     </section>
@@ -1015,12 +1026,9 @@ export function FreeReporterMonthlyLimit({
           <p className="text-[15px] text-muted-foreground">
             Renews {renews}. Unlimited with a site license.
           </p>
-          <a
-            href={FULL_ACCESS_CONTACT}
-            className="inline-flex h-10 items-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
-          >
-            Talk to us
-          </a>
+          <Button asChild>
+            <a href={FULL_ACCESS_CONTACT}>Talk to us</a>
+          </Button>
         </section>
       </div>
     </section>
@@ -1076,12 +1084,9 @@ export function LessonPlannerMonthlyLimitNotice({
       <p className="mt-2 text-sm text-muted-foreground">
         Renews {renews}. Unlimited with a site license.
       </p>
-      <a
-        href={FULL_ACCESS_CONTACT}
-        className="mt-3 inline-flex h-10 items-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
-      >
-        Talk to us
-      </a>
+      <Button asChild className="mt-3">
+        <a href={FULL_ACCESS_CONTACT}>Talk to us</a>
+      </Button>
     </div>
   );
 }

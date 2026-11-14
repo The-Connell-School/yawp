@@ -95,20 +95,18 @@ export function StudentPracticeBuilderContent({
             {PROBLEM_COUNT_PRESETS.map((preset) => {
               const isSelected = problemCount === String(preset);
               return (
-                <button
+                <Button
                   key={preset}
                   type="button"
+                  size="sm"
+                  variant={isSelected ? 'default' : 'outline'}
+                  className="h-9 w-12 min-w-12 rounded-md"
                   data-testid={`practice-count-${preset}`}
                   onClick={() => setProblemCount(String(preset))}
                   aria-pressed={isSelected}
-                  className={`h-9 w-12 rounded-md border text-sm transition ${
-                    isSelected
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border bg-background hover:bg-muted'
-                  }`}
                 >
                   {preset}
-                </button>
+                </Button>
               );
             })}
             {/* The ui Input is full-width by default, so the box that sits in

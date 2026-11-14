@@ -13,7 +13,7 @@ import { CornerDownRight, Presentation } from 'lucide-react';
 import { DECK_ASK, deckChoiceMessage } from '~/domain/lesson-planner/deck-choice';
 import type { DeckMode } from '~/domain/lesson-planner/lesson-uploads';
 import type { DeckChoices, SourceChip } from './source-documents';
-import { cn } from '~/utils/misc';
+import { Button } from '~/components/ui/button';
 
 export function DeckAskCard({
   decks,
@@ -49,9 +49,11 @@ export function DeckAskCard({
           <p className="mb-3 text-sm font-medium">{DECK_ASK.question}</p>
           <div className="flex flex-wrap items-center gap-2">
             {options.map((option, index) => (
-              <button
+              <Button
                 key={option.mode}
                 type="button"
+                size="sm"
+                variant={index === 0 ? 'default' : 'secondary'}
                 data-testid={`deck-ask-${option.mode}`}
                 disabled={disabled || busy}
                 onClick={async () => {
@@ -62,15 +64,9 @@ export function DeckAskCard({
                     setBusy(false);
                   }
                 }}
-                className={cn(
-                  'rounded-full border px-4 py-1.5 text-sm font-medium transition disabled:opacity-50',
-                  index === 0
-                    ? 'border-primary bg-primary text-primary-foreground hover:opacity-90'
-                    : 'border-border bg-background hover:bg-foreground/[0.03]'
-                )}
               >
                 {option.label}
-              </button>
+              </Button>
             ))}
             <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
               <CornerDownRight size={12} /> or type your answer below
