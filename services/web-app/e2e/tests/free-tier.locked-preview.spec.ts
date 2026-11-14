@@ -305,7 +305,6 @@ async function clickLockedDashboardNewAssignmentTile(
 ) {
   const tile = page
     .getByTestId('free-assignment-tiles')
-    .getByTestId('dashboard-assignment-tile')
     .getByRole('link', { name });
   await tile.scrollIntoViewIfNeeded();
   await tile.click();

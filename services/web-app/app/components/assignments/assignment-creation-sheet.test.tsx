@@ -842,7 +842,7 @@ describe('AssignmentCreationSheetContent', () => {
     expect((classControl as HTMLButtonElement).disabled).toBe(true);
   });
 
-  describe('library assignment types (AP History from a class)', () => {
+  describe('library assignment types (AP History retired)', () => {
     const apHistory = {
       id: 'type-apush',
       title: 'AP History Essay',
@@ -850,59 +850,39 @@ describe('AssignmentCreationSheetContent', () => {
       href: '/app/assignment-types/type-apush?classId=class-1',
     };
 
-    function nativeTypeSelect() {
-      const trigger = controlById('assignment-creation-type');
-      const select = trigger.parentElement?.querySelector('select');
-      expect(select).not.toBeNull();
-      return select!;
+    function openTypeSelect() {
+      act(() => {
+        controlById('assignment-create-type').click();
+      });
     }
 
-    function chooseType(value: string) {
-      const select = nativeTypeSelect();
+    function chooseTypeFromSearch(title: string) {
+      openTypeSelect();
+      const item = Array.from(
+        document.querySelectorAll('[role="option"]')
+      ).find((el) => el.textContent?.includes(title));
+      expect(item).not.toBeNull();
       act(() => {
-        select.value = value;
-        select.dispatchEvent(new Event('change', { bubbles: true }));
+        (item as HTMLElement).click();
       });
     }
 
     it('labels the type picker "Assignment type"', () => {
       root = renderSheet({ entryPoint: 'class', fixedClassId: 'class-1' }).root;
-      const trigger = controlById('assignment-creation-type');
-      const label = document.querySelector('label[for="assignment-creation-type"]');
+      const trigger = controlById('assignment-create-type');
+      const label = document.querySelector('label[for="assignment-create-type"]');
       expect(label?.textContent).toBe('Assignment type');
       expect(trigger.getAttribute('role')).toBe('combobox');
     });
 
-    it('lists a library type among the assignment types', () => {
+    it('does not list AP History among searchable assignment types', () => {
       root = renderSheet({
         entryPoint: 'class',
         fixedClassId: 'class-1',
         libraryAssignmentTypes: [apHistory],
       }).root;
-      const values = Array.from(nativeTypeSelect().options).map((o) => o.value);
-      expect(values).toContain('type-1');
-      expect(values).toContain('type-apush');
-    });
-
-    it('choosing a library type closes the sheet and opens its library instead of the form', () => {
-      const navigate = mock();
-      const onOpenChange = mock();
-      root = renderSheet({
-        entryPoint: 'class',
-        fixedClassId: 'class-1',
-        libraryAssignmentTypes: [apHistory],
-        navigate,
-        onOpenChange,
-      }).root;
-
-      chooseType('type-apush');
-
-      expect(navigate).toHaveBeenCalledWith(
-        '/app/assignment-types/type-apush?classId=class-1'
-      );
-      expect(onOpenChange).toHaveBeenCalledWith(false);
-      // The form keeps a real type: a library type is never submitted.
-      expect(inputByName('assignmentTypeId').value).toBe('type-1');
+      openTypeSelect();
+      expect(document.body.textContent).not.toContain('AP History Essay');
     });
 
     it('choosing an ordinary type still stays in the sheet', () => {
@@ -914,7 +894,7 @@ describe('AssignmentCreationSheetContent', () => {
         navigate,
       }).root;
 
-      chooseType('type-2');
+      chooseTypeFromSearch('Class Starter');
 
       expect(navigate).not.toHaveBeenCalled();
       expect(inputByName('assignmentTypeId').value).toBe('type-2');
@@ -929,8 +909,8 @@ describe('AssignmentCreationSheetContent', () => {
         initialAssignmentTypeId: 'type-1',
         initialPrompt: 'Prompt',
       }).root;
-      const values = Array.from(nativeTypeSelect().options).map((o) => o.value);
-      expect(values).not.toContain('type-apush');
+      openTypeSelect();
+      expect(document.body.textContent).not.toContain('AP History Essay');
     });
   });
 
