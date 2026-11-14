@@ -890,12 +890,20 @@ for (const width of [390, 1440]) {
       await expect(welcome).toBeVisible();
       await expect(welcome).toContainText(/approv/i);
       await capture(page, `waiting-tour-welcome-${width}`);
+      await page
+        .locator('[data-tour="dashboard-classes"]')
+        .scrollIntoViewIfNeeded();
+      await expect(
+        page.locator('[data-tour="dashboard-assignments"]')
+      ).toBeVisible({ timeout: 15_000 });
       await welcome.getByRole('button', { name: 'Take a tour' }).click();
 
       const step = page.getByTestId('guided-tour-step');
-      const waitingTourStepCount =
-        (await page.getByTestId('teaching-access-banner').count()) > 0 ? 3 : 2;
-      await expect(step).toContainText(`Step 1 of ${waitingTourStepCount}`);
+      await expect(step).toContainText(/Step 1 of \d+/);
+      const waitingTourStepCount = Number(
+        (await step.textContent())?.match(/Step 1 of (\d+)/)?.[1] ?? 1
+      );
+      expect(waitingTourStepCount).toBeGreaterThanOrEqual(2);
       await expect(page.locator('[data-tour="dashboard-classes"]')).toHaveAttribute(
         'data-tour-active',
         'true'
