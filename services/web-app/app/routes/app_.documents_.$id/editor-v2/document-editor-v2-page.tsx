@@ -66,7 +66,10 @@ import { Comments } from './comments';
 import { MarginCommentsRail } from './comments/margin-comments-rail';
 import { TeacherPasteReport } from '~/components/teacher-paste-report';
 import { CommentsSelectionProvider } from './comments/selection-context';
-import { DocumentEditor } from './document-editor/document-editor';
+import {
+  DocumentEditor,
+  EditorLoadingShell,
+} from './document-editor/document-editor';
 import type { EditorBridge } from './document-editor/use-editor-sync';
 import { Tutor } from './tutor/tutor';
 import { DocumentHistory } from './document-history/document-history';
@@ -204,6 +207,41 @@ const assignmentModuleSessionsInclude = {
 };
 
 export function DocumentEditorV2Page() {
+  const [interactive, setInteractive] = useState(false);
+  useEffect(() => {
+    scheduleAfterHydration(() => setInteractive(true));
+  }, []);
+  if (!interactive) {
+    return <DocumentEditorV2HydrationShell />;
+  }
+  return <DocumentEditorV2PageLoaded />;
+}
+
+function DocumentEditorV2HydrationShell() {
+  const data = useLoaderData<typeof loader>();
+  return (
+    <main
+      className="doc-editor-frame flex h-screen w-screen flex-col overflow-hidden"
+      data-document-editor-version="v2"
+    >
+      <header
+        className="doc-editor-header"
+        data-testid="document-editor-header"
+      >
+        <div className="doc-editor-header__title-block">
+          <p className="truncate p-0 text-[15px] font-semibold leading-5 text-[#0f172a]">
+            {data.doc.title?.trim() || 'Untitled document'}
+          </p>
+        </div>
+      </header>
+      <div className="doc-editor-body min-h-0 flex-1 overflow-hidden">
+        <EditorLoadingShell />
+      </div>
+    </main>
+  );
+}
+
+function DocumentEditorV2PageLoaded() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
   const isReadOnlyImpersonation =
