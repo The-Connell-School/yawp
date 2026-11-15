@@ -1003,52 +1003,42 @@ export function DocumentEditorV2Page() {
                   }}
                   marginComments={
                     showDesktopMarginComments ? (
-                      <TeacherPasteReport
-                        key={data.doc.id}
-                        enabled={isViewingAsTeacher}
+                      <MarginCommentsRail
                         documentId={data.doc.id}
-                        contentRoot={editorRoot}
-                        onSelectEvent={() => {
-                          if (isMobile) changeTab('editor');
+                        comments={visibleComments as any}
+                        pendingDraft={commentsState.pendingDraft}
+                        readOnly={commentsReadOnly}
+                        onCommentRemoved={commentsState.removeComment}
+                        onResponseAdded={commentsState.addResponse}
+                        onArchiveChange={commentsState.setCommentArchived}
+                        onCommentCreated={(c) =>
+                          commentsState.addComment(c as any)
+                        }
+                        onDraftCancel={() => {
+                          const draftId = commentsState.pendingDraft?.id;
+                          commentsState.clearPendingDraft();
+                          if (draftId) {
+                            document
+                              .querySelectorAll(
+                                `[data-comment-id="${draftId}"]`
+                              )
+                              .forEach((mark) => {
+                                const node = mark as HTMLElement;
+                                if (!node.parentNode) return;
+                                while (node.childNodes.length > 0) {
+                                  node.parentNode.insertBefore(
+                                    node.childNodes[0],
+                                    node
+                                  );
+                                }
+                                node.parentNode.removeChild(node);
+                              });
+                          }
                         }}
-                      >
-                        <MarginCommentsRail
-                          documentId={data.doc.id}
-                          comments={visibleComments as any}
-                          pendingDraft={commentsState.pendingDraft}
-                          readOnly={commentsReadOnly}
-                          onCommentRemoved={commentsState.removeComment}
-                          onResponseAdded={commentsState.addResponse}
-                          onArchiveChange={commentsState.setCommentArchived}
-                          onCommentCreated={(c) =>
-                            commentsState.addComment(c as any)
-                          }
-                          onDraftCancel={() => {
-                            const draftId = commentsState.pendingDraft?.id;
-                            commentsState.clearPendingDraft();
-                            if (draftId) {
-                              document
-                                .querySelectorAll(
-                                  `[data-comment-id="${draftId}"]`
-                                )
-                                .forEach((mark) => {
-                                  const node = mark as HTMLElement;
-                                  if (!node.parentNode) return;
-                                  while (node.childNodes.length > 0) {
-                                    node.parentNode.insertBefore(
-                                      node.childNodes[0],
-                                      node
-                                    );
-                                  }
-                                  node.parentNode.removeChild(node);
-                                });
-                            }
-                          }}
-                          autoFocusReplyCommentId={
-                            commentsState.pendingFocusCommentId
-                          }
-                        />
-                      </TeacherPasteReport>
+                        autoFocusReplyCommentId={
+                          commentsState.pendingFocusCommentId
+                        }
+                      />
                     ) : null
                   }
                 />

@@ -88,7 +88,8 @@ export function DocumentMarginComments({
     <aside
       ref={asideRef}
       aria-label="Comments"
-      className="doc-editor-margin max-lg:hidden"
+      className="doc-editor-margin hidden lg:block"
+      data-testid="document-margin-comments-aside"
     >
       {commentIds.map((id) => {
         const top = stackedTops[id] ?? anchorTops[id] ?? 8;

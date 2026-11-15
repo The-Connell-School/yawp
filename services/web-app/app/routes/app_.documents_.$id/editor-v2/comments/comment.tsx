@@ -10,7 +10,7 @@ import { MarginCommentCard } from './margin-comment-card';
 import { MarginCommentResolvedRow } from './margin-comment-resolved-row';
 import { useCommentsSelection } from '../comments/selection-context';
 import { CheckIcon, TrashIcon } from '~/components/icons';
-import { RichTextarea } from '~/components/rich-textarea.js';
+import { MarginCommentReply } from './margin-comment-reply';
 import { Button } from '~/components/ui/button';
 import { useUser } from '~/hooks/useUser';
 import { cn, useDoubleCheck } from '~/utils/misc';
@@ -238,14 +238,9 @@ export const Comment = ({
             </div>
           ))}
         {!readOnly ? (
-          <RichTextarea
-            placeholder="Reply..."
-            name="content"
-            size="sm"
-            onCmdEnter={reply}
-            textareaTestId={`comment-reply-input-${comment.id}`}
-            sendButtonTestId={`comment-reply-send-${comment.id}`}
-            className="mt-2 bg-muted"
+          <MarginCommentReply
+            commentId={comment.id}
+            onReply={reply}
             autoFocus={autoFocusReply}
           />
         ) : null}

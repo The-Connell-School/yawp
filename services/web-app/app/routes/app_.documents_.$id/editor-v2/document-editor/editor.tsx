@@ -5,7 +5,7 @@ import TextAlign from '@tiptap/extension-text-align';
 import TextStyle from '@tiptap/extension-text-style';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EditorChromeProvider } from './editor-chrome-context';
 import { useCommentsSelection } from '../comments/selection-context';
 import { Bar, beginCommentDraftFromEditor } from './editor-bar';
@@ -98,7 +98,6 @@ export function Editor({
   submissionViewBanner,
 }: Props) {
   const [imageStatus, setImageStatus] = useState<DocumentImageStatus>({ state: 'idle' });
-  const selectionDraftRef = useRef<string | null>(null);
   const [contentRoot, setContentRoot] = useState<HTMLElement | null>(null);
   const [scrollRoot, setScrollRoot] = useState<HTMLElement | null>(null);
   const bindScrollRef = useCallback((node: HTMLDivElement | null) => {
@@ -232,23 +231,6 @@ export function Editor({
       window.removeEventListener('document-comment-unhover', onUnhover);
     };
   }, [setActiveCommentId, setHoveredCommentId]);
-
-  useEffect(() => {
-    if (!editor || !teacherCommenting || !onCommentDraft) return;
-    const onMouseUp = () => {
-      const { from, to, empty } = editor.state.selection;
-      if (empty) return;
-      const excerpt = editor.state.doc.textBetween(from, to, ' ').trim();
-      if (!excerpt || excerpt === selectionDraftRef.current) return;
-      selectionDraftRef.current = excerpt;
-      beginCommentDraftFromEditor(editor, onCommentDraft);
-    };
-    const dom = editor.view.dom;
-    dom.addEventListener('mouseup', onMouseUp);
-    return () => {
-      dom.removeEventListener('mouseup', onMouseUp);
-    };
-  }, [editor, teacherCommenting, onCommentDraft]);
 
   // Scroll the active mark into view when selection changes.
   useEffect(() => {

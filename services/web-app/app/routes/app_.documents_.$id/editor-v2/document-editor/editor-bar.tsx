@@ -39,19 +39,21 @@ export function beginCommentDraftFromEditor(
   editor: Editor,
   onCommentDraft?: (draft: { id: string; excerpt: string }) => void
 ) {
-  if (editor.isActive('comment')) {
-    editor
-      .chain()
-      .focus()
-      .setMeta(USER_SOURCE_META, TOOLBAR_SOURCE)
-      .unsetComment()
-      .run();
+  const { from, to, empty } = editor.state.selection;
+  if (empty) {
+    if (editor.isActive('comment')) {
+      editor
+        .chain()
+        .focus()
+        .setMeta(USER_SOURCE_META, TOOLBAR_SOURCE)
+        .unsetComment()
+        .run();
+    }
     return;
   }
-  const id = v4();
-  const { from, to } = editor.state.selection;
   const excerpt = editor.state.doc.textBetween(from, to, ' ').trim();
   if (!excerpt) return;
+  const id = v4();
   editor
     .chain()
     .focus()
