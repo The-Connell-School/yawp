@@ -74,6 +74,8 @@ mock.module('~/domain/grading/grading-queue.server', () => ({
 mock.module('~/domain/document-editor/document-editor-v2-gate.server', () => ({
   resolveDocumentEditorV2Enabled: mock(async () => false),
   isStaffForDocumentEditorOverride: () => false,
+  shouldSetDocumentEditorV2ForceCookie: mock(() => false),
+  shouldClearDocumentEditorV2ForceCookie: mock(() => false),
   documentEditorV2ForceCookie: {
     serialize: mock(async () => 'yawp_document_editor_v2=1; Path=/'),
     parse: mock(async () => null),

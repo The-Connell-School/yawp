@@ -106,6 +106,10 @@ export type E2EContext = {
   /** Submission ID for the submitted document (use for grading flow tests) */
   submittedSubmissionId: string;
   gradedDocumentId: string;
+  /** Active inline comment on gradedDocumentId for v2 margin-comment E2E */
+  v2GradedCommentId: string;
+  /** Resolved inline comment on gradedDocumentId for v2 margin-comment E2E */
+  v2GradedResolvedCommentId: string;
   /** Submission ID for the graded document (alias: gradeId) */
   snapshotId: string;
   gradeId: string;
@@ -948,6 +952,38 @@ export async function seedE2E(): Promise<E2EContext> {
     },
     select: { id: true },
   });
+  const v2GradedCommentId = 'e2ee2eactivecomment00001';
+  const v2GradedResolvedCommentId = 'e2ee2eresolvedcomment01';
+  const gradedDocHtmlWithMarks = `<p><span class="comment-mark" data-comment-id="${v2GradedCommentId}">Education is the foundation of society</span>. Through learning, <span class="comment-mark" data-comment-id="${v2GradedResolvedCommentId}">students develop critical thinking skills</span> that serve them throughout life.</p>`;
+  await prisma.document.update({
+    where: { id: gradedDoc.id },
+    data: { html: gradedDocHtmlWithMarks },
+  });
+  await prisma.documentComment.create({
+    data: {
+      id: v2GradedCommentId,
+      documentId: gradedDoc.id,
+      membershipId: seededTeacherMembershipId,
+      content: 'Strong thesis in the opening sentence.',
+    },
+  });
+  await prisma.documentComment.create({
+    data: {
+      id: v2GradedResolvedCommentId,
+      documentId: gradedDoc.id,
+      membershipId: seededTeacherMembershipId,
+      content: 'Consider adding more specific examples to support your claims.',
+      archivedAt: new Date(),
+    },
+  });
+  await prisma.documentCommentResponse.create({
+    data: {
+      commentId: v2GradedCommentId,
+      membershipId: membership.id,
+      content: 'Thanks — I will expand this section.',
+    },
+  });
+
   await prisma.submissionComment.create({
     data: {
       submissionId: gradedSubmission.id,
@@ -1314,6 +1350,17 @@ export async function seedE2E(): Promise<E2EContext> {
     update: { value: 'true', updatedAt: new Date() },
   });
 
+  await prisma.setting.upsert({
+    where: { name: 'feature_flag.document-editor-v2' },
+    create: {
+      name: 'feature_flag.document-editor-v2',
+      value: 'true',
+      valueType: 'boolean',
+      description: 'Document editor v2 enabled for E2E smoke',
+    },
+    update: { value: 'true', updatedAt: new Date() },
+  });
+
   return {
     organizationId: org.id,
     schoolId: school.id,
@@ -1348,6 +1395,8 @@ export async function seedE2E(): Promise<E2EContext> {
     submittedDocumentId: submittedDoc.id,
     submittedSubmissionId: submittedSubmission.id,
     gradedDocumentId: gradedDoc.id,
+    v2GradedCommentId,
+    v2GradedResolvedCommentId,
     snapshotId: gradedSubmission.id,
     gradeId: gradedSubmission.id,
     unreleasedGradedSubmissionId: unreleasedGradedSubmission.id,

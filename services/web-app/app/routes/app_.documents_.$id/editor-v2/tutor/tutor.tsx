@@ -6,6 +6,7 @@ import {
   ChevronRightIcon,
   MessageSquareOff,
   MessageSquareText,
+  X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalStorage } from 'usehooks-ts';
@@ -15,6 +16,7 @@ import { cn } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo/timeAgo';
 import { Loading } from './loading';
 import { ResponseBar } from './response-bar';
+import { TutorStepProgress } from './tutor-step-progress';
 import { compareTutorMessagesByTimeThenId } from './tutor-message-sort';
 import {
   getAssignmentModuleIdForCmsIdx,
@@ -38,6 +40,10 @@ type Props = {
   isSessionLocked?: boolean;
   onCmsUpdate?: (cms: any) => void;
   cmsIdx?: number;
+  /** Teacher viewing a student document: read-only transcript, no input. */
+  readOnlyTeacherView?: boolean;
+  studentDisplayName?: string;
+  onClose?: () => void;
   /**
    * Route the module arrows navigate within. Defaults to the solo editor, which
    * is where this component has always lived; a shared draft passes its own so
@@ -79,6 +85,9 @@ export const Tutor = ({
   isSessionLocked = false,
   onCmsUpdate,
   cmsIdx: resolvedCmsIdx,
+  readOnlyTeacherView = false,
+  studentDisplayName,
+  onClose,
   basePath = '/app/documents',
 }: Props) => {
   const [messagesExpanded, setMessagesExpanded] = useLocalStorage(
@@ -367,7 +376,7 @@ export const Tutor = ({
   return (
     <div
       data-tour="doc-tutor"
-      className={cn('doc-editor-tutor flex w-full flex-col pb-2', className)}
+      className={cn('doc-editor-tutor flex h-full w-full flex-col', className)}
     >
       <div
         className="doc-editor-tutor-header"
@@ -376,12 +385,20 @@ export const Tutor = ({
         <img
           src="/img/landing/yawp-logo-circle.jpg"
           alt=""
-          width={24}
-          height={24}
-          className="h-6 w-6 shrink-0 rounded-full"
+          width={22}
+          height={22}
+          className="h-[22px] w-[22px] shrink-0 rounded-full"
         />
-        <b className="text-sm text-[#0f172a]">Tutor</b>
-        <span className="ml-auto inline-flex items-center gap-1">
+        <b className="text-sm text-[#0f172a]">
+          {readOnlyTeacherView
+            ? `${studentDisplayName?.trim() || 'Student'}'s tutor`
+            : 'Tutor'}
+        </b>
+        <span
+          role="group"
+          aria-label="Tutor steps"
+          className="doc-editor-tutor-step-group"
+        >
           <Tooltip text="Previous step" delayDuration={0}>
             <button
               type="button"
@@ -395,8 +412,9 @@ export const Tutor = ({
             </button>
           </Tooltip>
           <span
-            className="px-1 text-xs text-[hsl(50_2.4%_36%)]"
+            className="doc-editor-tutor-step-indicator"
             data-testid="tutor-step-indicator"
+            aria-live="polite"
           >
             Step {instructionStepNumber} of {instructionStepTotal}
           </span>
@@ -416,7 +434,17 @@ export const Tutor = ({
             </button>
           </Tooltip>
         </span>
-        {cms.assignmentModule.isSelfGuided ? null : (
+        {readOnlyTeacherView ? (
+          <button
+            type="button"
+            className="doc-editor-tutor-step-btn"
+            aria-label="Close tutor"
+            data-testid="tutor-close"
+            onClick={onClose}
+          >
+            <X size={15} />
+          </button>
+        ) : cms.assignmentModule.isSelfGuided ? null : (
           <Tooltip
             text={messagesExpanded ? 'Hide messages' : 'Show messages'}
             delayDuration={0}
@@ -443,10 +471,18 @@ export const Tutor = ({
       {!cms.assignmentModule.isSelfGuided ? (
         <div className="doc-editor-tutor-instruction-title" data-testid="tutor-instruction-title">
           <b>{instruction.title?.trim() || cms.assignmentModule.title}</b>
+          <TutorStepProgress
+            instructionsCompleted={cms.instructionsCompleted}
+            totalSteps={instructionStepTotal}
+          />
         </div>
       ) : (
         <div className="doc-editor-tutor-instruction-title" data-testid="tutor-module-title">
           <b>{cms.assignmentModule.title}</b>
+          <TutorStepProgress
+            instructionsCompleted={cms.instructionsCompleted}
+            totalSteps={instructionStepTotal}
+          />
         </div>
       )}
       {cms.assignmentModule.isSelfGuided ? (
@@ -468,10 +504,8 @@ export const Tutor = ({
       ) : (
         <div
           className={cn(
-            'no-scrollbar flex grow flex-col gap-3 px-3 transition-all duration-300 md:h-full',
-            messagesExpanded
-              ? 'max-h-full overflow-scroll py-2'
-              : 'max-h-0 overflow-hidden'
+            'doc-editor-tutor-messages no-scrollbar transition-all duration-300',
+            messagesExpanded ? 'max-h-full' : 'max-h-0 overflow-hidden'
           )}
           ref={messagesRef}
           id="assignment-module-session-messages"
@@ -480,21 +514,18 @@ export const Tutor = ({
             <div
               key={message.id}
               className={cn({
-                'doc-editor-tutor-message mr-auto w-auto max-w-[92%]':
+                'doc-editor-tutor-message mr-auto w-auto':
                   message.agent === 'assistant',
                 'doc-editor-tutor-student ml-auto': message.agent === 'user',
               })}
             >
-              <div className="mt-1 flex items-center gap-2">
-                <p className="text-xs font-bold">
-                  {message.agent === 'assistant' ? 'Tutor' : 'You'}
-                </p>
-                <p className="text-xs text-muted-foreground/80">
-                  {timeAgo(new Date(message.createdAt))}
-                </p>
+              <div className="doc-editor-tutor-message-meta">
+                <b>{message.agent === 'assistant' ? 'Tutor' : 'You'}</b>
+                {' · '}
+                {timeAgo(new Date(message.createdAt))}
               </div>
               <p
-                className="whitespace-pre-wrap"
+                className="m-0 whitespace-pre-wrap"
                 data-tutor-message={
                   message.agent === 'assistant' ? 'true' : undefined
                 }
@@ -509,8 +540,20 @@ export const Tutor = ({
               />
             </div>
           ))}
-          {isTutorResponding && optimisticMessage ? (
-            <Loading label={isTutorRetrying ? 'Retrying...' : undefined} />
+          {isTutorResponding ? (
+            optimisticMessage ? (
+              <Loading label={isTutorRetrying ? 'Retrying...' : undefined} />
+            ) : (
+              <div
+                className="doc-editor-tutor-reading-skeleton"
+                data-testid="tutor-reading-essay"
+              >
+                <p className="m-0 text-sm text-[hsl(50_2.4%_36%)]">
+                  Reading your essay…
+                </p>
+                <Loading />
+              </div>
+            )
           ) : null}
           {tutorError ? (
             <p className="w-full rounded-lg border-destructive bg-destructive/5 p-3 text-destructive">
@@ -550,6 +593,14 @@ export const Tutor = ({
           )}
         >
           You have completed all the modules in this course.
+        </p>
+      ) : readOnlyTeacherView ? (
+        <p
+          className="doc-editor-tutor-readonly-footer"
+          data-testid="tutor-readonly-footer"
+        >
+          Read only. {studentDisplayName?.trim() || 'The student'} sees this
+          conversation.
         </p>
       ) : (
         <ResponseBar

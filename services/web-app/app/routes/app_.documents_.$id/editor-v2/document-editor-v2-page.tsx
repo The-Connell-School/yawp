@@ -17,6 +17,9 @@ import {
   RotateCcw,
   Clock,
   EllipsisVertical,
+  MoreHorizontal,
+  PenLine,
+  Sparkles,
   Printer,
   Compass,
   MessageCircle,
@@ -45,6 +48,13 @@ import {
   DialogTitle,
 } from '~/components/ui/dialog';
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '~/components/ui/sheet';
+import type { PageWidthMode } from './document-editor/toolbar-controls';
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -55,7 +65,10 @@ import { Comments } from './comments';
 import { MarginCommentsRail } from './comments/margin-comments-rail';
 import { TeacherPasteReport } from '~/components/teacher-paste-report';
 import { CommentsSelectionProvider } from './comments/selection-context';
-import { DocumentEditor } from './document-editor/document-editor';
+import {
+  DocumentEditor,
+  EditorLoadingShell,
+} from './document-editor/document-editor';
 import type { EditorBridge } from './document-editor/use-editor-sync';
 import { Tutor } from './tutor/tutor';
 import { DocumentHistory } from './document-history/document-history';
@@ -75,12 +88,6 @@ import {
   partitionSubmissionsByArchive,
   versionLabelForActiveSubmission,
 } from '~/utils/submission-versions';
-import {
-  isApHistorySnapshot,
-  type ApHistorySnapshot,
-} from '~/domain/ap-history/schema';
-import { ApHistoryAssignmentPanel } from './ap-history-assignment-panel';
-import { DbqLayout } from './_components/dbq-layout';
 import { AssignmentPromptPanel } from './assignment-prompt-panel';
 import { pickLatestReleasedSubmission } from '~/utils/document-link-target';
 import { cn } from '~/utils/misc';
@@ -100,22 +107,12 @@ import {
   STUDENT_UNSUBMIT_BLOCKED_TOOLTIP,
   AssignmentPromptStrip,
   getGenericAssignmentPromptForEditor,
-  getRenderableApHistorySnapshot,
   isTutorEnabledForAssignment,
-  shouldRenderDbqWorkspace,
 } from '../route';
 import './document-editor/document-editor-redesign.css';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
-
-function titleCase(value: string) {
-  return value
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
 
 function escapePrintHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => {
@@ -219,8 +216,12 @@ export function DocumentEditorV2Page() {
   const submissionUnsubmitFetcher = useFetcher();
   const navigate = useNavigate();
   const breakpoint = useBreakpoint();
+  const [uiMounted, setUiMounted] = useState(false);
+  useEffect(() => setUiMounted(true), []);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
-  const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
+  const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
+  const [mobileTutorSheetOpen, setMobileTutorSheetOpen] = useState(false);
+  const [mobileCommentsSheetOpen, setMobileCommentsSheetOpen] = useState(false);
   const [submissionTitle, setSubmissionTitle] = useState('');
   const [showOldComments, setShowOldComments] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
@@ -235,7 +236,12 @@ export function DocumentEditorV2Page() {
   const [locallyUnsubmittedIds, setLocallyUnsubmittedIds] = useState<
     Set<string>
   >(new Set());
-  const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
+  const isMobile =
+    uiMounted && ['base', 'sm', 'md'].includes(breakpoint ?? '');
+  const [pageWidth, setPageWidth] = useLocalStorage<PageWidthMode>(
+    `doc-${data.doc.id}-page-width`,
+    'fit'
+  );
   const [desktopTutorOpen, setDesktopTutorOpen] = useLocalStorage(
     `doc-${data.doc.id}-panel-tutor`,
     true
@@ -247,11 +253,22 @@ export function DocumentEditorV2Page() {
   const classSubtitle = useMemo(() => {
     const cls = data.doc.classAssignment?.class;
     if (!cls) return null;
-    const parts = [
-      cls.title?.trim(),
-      cls.period?.trim() ? `Period ${cls.period.trim()}` : null,
-    ].filter(Boolean);
-    return parts.length > 0 ? parts.join(' · ') : null;
+    const title = cls.title?.trim() ?? '';
+    const periodLabel = cls.period?.trim()
+      ? `Period ${cls.period.trim()}`
+      : null;
+    let label = title;
+    if (periodLabel) {
+      const periodAlreadyInTitle =
+        title.includes(periodLabel) ||
+        title.toLowerCase().includes(cls.period!.trim().toLowerCase());
+      label = periodAlreadyInTitle
+        ? title
+        : title
+          ? `${title} · ${periodLabel}`
+          : periodLabel;
+    }
+    return label || null;
   }, [data.doc.classAssignment?.class]);
   const [searchParams, setSearchParams] = useSearchParams();
   const fallbackCmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
@@ -261,7 +278,10 @@ export function DocumentEditorV2Page() {
       : fallbackCmsIdx;
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const tutorEnabled = isTutorEnabledForAssignment(data.doc.assignment);
-  const tab = searchParams.get('tab') ?? (tutorEnabled ? 'tutor' : 'editor');
+  const defaultMobileTab = 'editor';
+  const defaultDesktopTab = tutorEnabled ? 'tutor' : 'editor';
+  const tab =
+    searchParams.get('tab') ?? (isMobile ? defaultMobileTab : defaultDesktopTab);
   const isViewingAsTeacher = Boolean(
     data.doc &&
       (data.isTeacherAssignmentPreview ||
@@ -272,6 +292,17 @@ export function DocumentEditorV2Page() {
   const isOwnTeacherPreview = Boolean(
     data.isTeacherAssignmentPreview && user.id === data.doc.membership.userId
   );
+  useEffect(() => {
+    if (!uiMounted) return;
+    if (isViewingAsTeacher && !isOwnTeacherPreview) {
+      setDesktopCommentsOpen(true);
+    }
+  }, [
+    uiMounted,
+    isViewingAsTeacher,
+    isOwnTeacherPreview,
+    setDesktopCommentsOpen,
+  ]);
   const showSubmitControls = !isViewingAsTeacher || isOwnTeacherPreview;
   const isDocumentOwner = user.id === data.doc.membership.userId;
   // Students and teachers in "Try it" preview edit; grading teachers view-only.
@@ -280,14 +311,9 @@ export function DocumentEditorV2Page() {
   const assignment = data.doc.assignment;
   // A student practice document carries its own snapshot; a teacher-assigned
   // document inherits it from the assignment.
-  const apHistorySnapshot = getRenderableApHistorySnapshot({
-    apHistorySnapshot:
-      data.doc.apHistorySnapshot ?? assignment?.apHistorySnapshot,
-  });
-  const showDbqWorkspace = shouldRenderDbqWorkspace(apHistorySnapshot);
   const editorAssignmentPrompt = getGenericAssignmentPromptForEditor(
     assignment,
-    apHistorySnapshot
+    null
   );
 
   // Merge server + optimistic submissions
@@ -316,8 +342,14 @@ export function DocumentEditorV2Page() {
   const hasAnySubmissionRecord = submissions.length > 0;
   const gradedCount = activeSubmissions.filter((s) => s.releasedAt).length;
   const versionNumber = activeSubmissions.length + 1;
-  const editorServerHtml = data.doc.html ?? '';
-  const editorServerText = data.doc.text ?? '';
+  const submissionPreview = data.submissionPreview ?? null;
+  const viewingSubmission = submissionPreview != null;
+  const editorServerHtml = viewingSubmission
+    ? submissionPreview.html
+    : (data.doc.html ?? '');
+  const editorServerText = viewingSubmission
+    ? submissionPreview.text
+    : (data.doc.text ?? '');
 
   // Exit target is computed once on mount (session-storage read is idempotent)
   const [exitTarget] = useState<string>(
@@ -351,7 +383,7 @@ export function DocumentEditorV2Page() {
     documentId: data.doc.id,
     editorBridgeRef,
     onSubmitted: (newSubmission) => {
-      setIsFinalizeDialogOpen(false);
+      setSubmitConfirmOpen(false);
       setSubmissionTitle('');
       if (titleInputRef.current && newSubmission.title.trim()) {
         titleInputRef.current.value = newSubmission.title;
@@ -376,7 +408,10 @@ export function DocumentEditorV2Page() {
   }, []);
 
   const isEditorEditable =
-    isDocumentEditable && !auth.isLocked && auth.isInitialCheckComplete;
+    isDocumentEditable &&
+    !viewingSubmission &&
+    !auth.isLocked &&
+    auth.isInitialCheckComplete;
   const commentsReadOnly = !isViewingAsTeacher && !isEditorEditable;
 
   // ── Derived UI data ────────────────────────────────────────────────
@@ -396,14 +431,29 @@ export function DocumentEditorV2Page() {
       ? allComments
       : activeComments
     : activeComments;
-  const apHistoryTimingLabel = apHistorySnapshot
-    ? apHistorySnapshot.timing.mode === 'timed'
-      ? `Timed · ${apHistorySnapshot.timing.durationMinutes}m`
-      : 'Untimed'
-    : null;
-  const apHistoryContextLabel = apHistorySnapshot
-    ? `${apHistorySnapshot.essayType.toUpperCase()} · ${apHistorySnapshot.course.toUpperCase()}`
-    : null;
+  const loaderComments = (data.doc.comments as typeof activeComments) ?? [];
+  const marginRailComments = useMemo(() => {
+    const teacherMarginSource =
+      isViewingAsTeacher && !isOwnTeacherPreview ? allComments : visibleComments;
+    const source =
+      teacherMarginSource.length > 0
+        ? teacherMarginSource
+        : loaderComments.filter((c) => !c.archivedAt);
+    return sortDocumentCommentsByMarkupOrder(source, editorServerHtml);
+  }, [
+    allComments,
+    visibleComments,
+    loaderComments,
+    editorServerHtml,
+    isViewingAsTeacher,
+    isOwnTeacherPreview,
+  ]);
+  const showDesktopMarginComments =
+    !isMobile &&
+    (desktopCommentsOpen ||
+      (isViewingAsTeacher && !isOwnTeacherPreview) ||
+      commentsState.pendingDraft != null ||
+      visibleComments.length > 0);
   const studentName =
     data.doc.membership.user.name?.trim() || 'Unknown student';
   const cannotSubmitEmpty = !editorSubmittable;
@@ -434,6 +484,24 @@ export function DocumentEditorV2Page() {
     );
     window.location.href = `/auth/login?redirectTo=${redirectTo}`;
   }, []);
+
+  const openSubmissionInEditor = useCallback(
+    (submissionId: string) => {
+      const next = new URLSearchParams(searchParams);
+      next.set('submission', submissionId);
+      next.set('tab', 'editor');
+      setSearchParams(next);
+    },
+    [searchParams, setSearchParams]
+  );
+
+  const clearSubmissionView = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('submission');
+    setSearchParams(next);
+  }, [searchParams, setSearchParams]);
+
+  const latestActiveSubmission = activeSubmissions[0] ?? null;
 
   const handlePrint = useCallback(() => {
     const liveContent = editorBridgeRef.current?.getContent();
@@ -520,17 +588,6 @@ export function DocumentEditorV2Page() {
         {showGuidedTour ? (
           <GuidedTour {...data.guidedTours!} />
         ) : null}
-        {apHistorySnapshot && !showDbqWorkspace ? (
-          <ApHistoryAssignmentPanel snapshot={apHistorySnapshot} />
-        ) : null}
-        {isViewingAsTeacher && !isOwnTeacherPreview ? (
-          <p
-            className="doc-editor-view-banner"
-            data-testid="document-view-only-banner"
-          >
-            Viewing only. Select text to comment.
-          </p>
-        ) : null}
         <header
           className="doc-editor-header"
           data-testid="document-editor-header"
@@ -576,166 +633,22 @@ export function DocumentEditorV2Page() {
                   }
                 }}
               />
-              {classSubtitle ? (
-                <span className="truncate text-xs text-[hsl(50_2.4%_36%)]">
-                  {classSubtitle}
-                </span>
-              ) : apHistoryContextLabel ? (
-                <span
-                  data-testid="ap-history-context-pill"
-                  className="truncate text-xs text-[hsl(50_2.4%_36%)]"
-                >
-                  {apHistoryContextLabel}
-                </span>
-              ) : null}
+              <div
+                className="flex min-w-0 items-center gap-2 text-xs text-[hsl(50_2.4%_36%)]"
+                data-tour="doc-status"
+              >
+                {classSubtitle ? (
+                  <span className="truncate">{classSubtitle}</span>
+                ) : null}
+                {classSubtitle ? (
+                  <span aria-hidden className="text-[hsl(51_7%_82%)]">
+                    ·
+                  </span>
+                ) : null}
+                <SaveStatusIndicator status={syncStatus} />
+              </div>
             </div>
           </div>
-          {hasAnySubmissionRecord && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5">
-                  <FileText className="h-3.5 w-3.5" />
-                  Submissions ({submissionCountForBadge})
-                  {gradedCount > 0 && (
-                    <Badge
-                      variant="success"
-                      className="ml-1 text-[10px] px-1.5 py-0"
-                    >
-                      {gradedCount} graded
-                    </Badge>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-80 p-0">
-                <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
-                  <p className="text-sm font-semibold">Submissions</p>
-                  {!isViewingAsTeacher && archivedSubmissions.length > 0 ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0"
-                      aria-label="View archived submissions"
-                      onClick={() => setArchiveDialogOpen(true)}
-                    >
-                      <Archive className="h-4 w-4" />
-                    </Button>
-                  ) : null}
-                </div>
-                <div className="max-h-64 overflow-y-auto">
-                  {studentList.length === 0 ? (
-                    <p className="px-3 py-4 text-center text-sm text-muted-foreground">
-                      No active submissions.
-                    </p>
-                  ) : (
-                    studentList.map((s) => {
-                      const isArchived = s.archivedAt != null;
-                      const v = !isArchived
-                        ? versionLabelForActiveSubmission(
-                            activeSubmissions,
-                            s.id
-                          )
-                        : null;
-                      const label = displaySubmissionTitle(
-                        s.title,
-                        v,
-                        'Untitled submission'
-                      );
-                      const isWithdrawn = s.unsubmittedAt != null;
-                      const isGraded = !isWithdrawn && s.releasedAt != null;
-                      return (
-                        <div
-                          key={s.id}
-                          className="flex items-stretch gap-1 border-b last:border-0"
-                        >
-                          <Link
-                            to={`/app/submissions/${s.id}`}
-                            className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2.5 text-sm hover:bg-muted/50"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate font-medium">{label}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {new Date(s.submittedAt).toLocaleDateString()}
-                              </p>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-1">
-                              {isArchived ? (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px]"
-                                >
-                                  Archived
-                                </Badge>
-                              ) : null}
-                              {isWithdrawn ? (
-                                <Badge
-                                  variant="secondary"
-                                  className="text-[10px]"
-                                >
-                                  Withdrawn
-                                </Badge>
-                              ) : (
-                                <Badge
-                                  variant={isGraded ? 'success' : 'secondary'}
-                                  className="text-[10px]"
-                                >
-                                  {isGraded ? 'Graded' : 'Submitted'}
-                                </Badge>
-                              )}
-                            </div>
-                          </Link>
-                          {!isViewingAsTeacher && !isArchived ? (
-                            <div className="flex items-center gap-1 pr-2">
-                              {data.canSelfUnsubmit ? (
-                                s.gradedAt != null || s.releasedAt != null ? (
-                                  <Tooltip
-                                    text={STUDENT_UNSUBMIT_BLOCKED_TOOLTIP}
-                                    delayDuration={0}
-                                  >
-                                    <span
-                                      className="inline-flex"
-                                      data-testid={`student-unsubmit-disabled-reason-${s.id}`}
-                                    >
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 shrink-0 text-muted-foreground"
-                                        aria-label="Cannot unsubmit graded submission"
-                                        data-testid={`student-unsubmit-${s.id}`}
-                                        disabled
-                                      >
-                                        <RotateCcw className="h-4 w-4" />
-                                      </Button>
-                                    </span>
-                                  </Tooltip>
-                                ) : (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 shrink-0 text-muted-foreground"
-                                    aria-label="Unsubmit submission"
-                                    data-testid={`student-unsubmit-${s.id}`}
-                                    disabled={
-                                      submissionUnsubmitFetcher.state !== 'idle'
-                                    }
-                                    onClick={() => setSubmissionToUnsubmit(s)}
-                                  >
-                                    <RotateCcw className="h-4 w-4" />
-                                  </Button>
-                                )
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </PopoverContent>
-            </Popover>
-          )}
           {isViewingAsTeacher ? (
             <p
               className="shrink-0 text-xs font-medium text-muted-foreground md:text-sm"
@@ -761,16 +674,7 @@ export function DocumentEditorV2Page() {
             />
           ) : null}
           <div className="doc-editor-header__actions">
-            {apHistoryTimingLabel ? (
-              <div
-                data-testid="ap-history-timing-pill"
-                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground"
-              >
-                <Clock className="h-3.5 w-3.5" />
-                <span>{apHistoryTimingLabel}</span>
-              </div>
-            ) : null}
-            {!isMobile && !showDbqWorkspace ? (
+            {!isMobile ? (
               <div
                 role="group"
                 aria-label="Panels"
@@ -806,93 +710,224 @@ export function DocumentEditorV2Page() {
                 </button>
               </div>
             ) : null}
-            {showSubmitControls && (
-              <>
-                {cannotSubmitEmpty && !isSubmitting ? (
-                  <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
-                    <span
-                      className="inline-flex"
-                      data-testid="document-submit-empty-trigger"
+            {isViewingAsTeacher && !isOwnTeacherPreview && latestActiveSubmission ? (
+              latestActiveSubmission.releasedAt ? (
+                <Badge variant="success" className="h-8 px-3 text-sm">
+                  Graded
+                </Badge>
+              ) : (
+                <Button size="sm" asChild data-testid="document-grade-button">
+                  <Link
+                    to={`/app/submissions/${latestActiveSubmission.id}`}
+                  >
+                    Grade
+                  </Link>
+                </Button>
+              )
+            ) : null}
+            {showSubmitControls && !viewingSubmission ? (
+              <Popover
+                open={submitConfirmOpen}
+                onOpenChange={(open) => {
+                  setSubmitConfirmOpen(open);
+                  if (open) {
+                    setSubmissionTitle(getLiveDocumentTitle());
+                  }
+                }}
+              >
+                <PopoverTrigger asChild>
+                  {cannotSubmitEmpty && !isSubmitting ? (
+                    <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
+                      <span
+                        className="inline-flex"
+                        data-testid="document-submit-empty-trigger"
+                      >
+                        <Button
+                          size="sm"
+                          softDisabled
+                          data-testid="document-submit-button"
+                          data-tour="doc-submit"
+                        >
+                          Submit
+                        </Button>
+                      </span>
+                    </Tooltip>
+                  ) : (
+                    <Button
+                      size="sm"
+                      disabled={submitActionDisabled && !isSubmitting}
+                      loading={isSubmitting}
+                      loadingLabel="Submitting…"
+                      data-testid="document-submit-button"
+                      data-tour="doc-submit"
                     >
+                      Submit
+                    </Button>
+                  )}
+                </PopoverTrigger>
+                <PopoverContent
+                  align="end"
+                  className="w-[min(380px,calc(100vw-2rem))] space-y-4 p-4"
+                  data-testid="document-submit-confirm-popover"
+                >
+                  <div className="space-y-1">
+                    <p className="flex items-center gap-2 text-sm font-semibold">
+                      <AlertCircle className="h-4 w-4 text-yellow-600" />
+                      Submit version {versionNumber}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Submitting creates a snapshot for your teacher. You can keep
+                      editing and submit again later.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="submission-title-popover"
+                      className="text-sm font-medium"
+                    >
+                      Submission title
+                    </label>
+                    <Input
+                      id="submission-title-popover"
+                      value={submissionTitle}
+                      onChange={(e) => setSubmissionTitle(e.target.value)}
+                      placeholder="Enter a title for this submission"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSubmitConfirmOpen(false)}
+                      disabled={isSubmitting}
+                    >
+                      Cancel
+                    </Button>
+                    {cannotSubmitEmpty && !isSubmitting ? (
+                      <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
+                        <span data-testid="document-finalize-submit-empty-trigger">
+                          <Button size="sm" softDisabled data-testid="document-finalize-submit">
+                            Submit
+                          </Button>
+                        </span>
+                      </Tooltip>
+                    ) : (
                       <Button
                         size="sm"
-                        softDisabled
-                        data-testid="document-submit-button"
-                        data-tour="doc-submit"
+                        disabled={submitActionDisabled || isSubmitting}
+                        loading={isSubmitting}
+                        data-testid="document-finalize-submit"
+                        onClick={() => {
+                          const title =
+                            submissionTitle.trim() || getLiveDocumentTitle().trim();
+                          void submit.submitNow(title);
+                        }}
                       >
                         Submit
                       </Button>
-                    </span>
-                  </Tooltip>
-                ) : (
-                  <Button
-                    size="sm"
-                    disabled={submitActionDisabled && !isSubmitting}
-                    loading={isSubmitting}
-                    loadingLabel="Submitting…"
-                    data-testid="document-submit-button"
-                    data-tour="doc-submit"
-                    onClick={() => {
-                      setSubmissionTitle(getLiveDocumentTitle());
-                      setIsFinalizeDialogOpen(true);
-                    }}
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            ) : null}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  aria-label="More document actions"
+                  data-testid="document-actions-menu"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {hasAnySubmissionRecord ? (
+                  <>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                      Submissions ({submissionCountForBadge})
+                    </div>
+                    <div className="max-h-48 overflow-y-auto border-y">
+                      {studentList.length === 0 ? (
+                        <p className="px-2 py-2 text-xs text-muted-foreground">
+                          No active submissions.
+                        </p>
+                      ) : (
+                        studentList.map((s) => {
+                          const isArchived = s.archivedAt != null;
+                          const v = !isArchived
+                            ? versionLabelForActiveSubmission(
+                                activeSubmissions,
+                                s.id
+                              )
+                            : null;
+                          const label = displaySubmissionTitle(
+                            s.title,
+                            v,
+                            'Untitled submission'
+                          );
+                          const isGraded =
+                            s.unsubmittedAt == null && s.releasedAt != null;
+                          return (
+                            <DropdownMenuItem
+                              key={s.id}
+                              className="flex items-center justify-between gap-2"
+                              onSelect={() => openSubmissionInEditor(s.id)}
+                            >
+                              <span className="truncate text-sm">{label}</span>
+                              <Badge
+                                variant={isGraded ? 'success' : 'secondary'}
+                                className="shrink-0 text-[10px]"
+                              >
+                                {isGraded ? 'Graded' : 'Submitted'}
+                              </Badge>
+                            </DropdownMenuItem>
+                          );
+                        })
+                      )}
+                    </div>
+                    {!isViewingAsTeacher && archivedSubmissions.length > 0 ? (
+                      <DropdownMenuItem onSelect={() => setArchiveDialogOpen(true)}>
+                        <Archive className="mr-2 h-4 w-4" />
+                        Archived submissions
+                      </DropdownMenuItem>
+                    ) : null}
+                  </>
+                ) : null}
+                {hasAnySubmissionRecord && archivedComments.length > 0 ? (
+                  <DropdownMenuItem
+                    onSelect={() => setShowOldComments((v) => !v)}
                   >
-                    Submit
-                  </Button>
-                )}
-              </>
-            )}
-            {hasAnySubmissionRecord && archivedComments.length > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShowOldComments((v) => !v)}
-              >
-                {showOldComments ? 'Hide old comments' : 'Show old comments'}
-              </Button>
-            )}
-            <div className="flex items-center gap-1.5" data-tour="doc-status">
-              <SaveStatusIndicator status={syncStatus} />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                    aria-label="Document actions"
-                    data-testid="document-actions-menu"
-                  >
-                    <EllipsisVertical className="h-4 w-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                    {showOldComments ? 'Hide old comments' : 'Show old comments'}
+                  </DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem
+                  className="gap-2"
+                  data-testid="document-action-history"
+                  onSelect={() => setHistoryOpen(true)}
+                >
+                  <Clock className="h-4 w-4" />
+                  History
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="gap-2"
+                  data-testid="document-action-print"
+                  onSelect={handlePrint}
+                >
+                  <Printer className="h-4 w-4" />
+                  Print
+                </DropdownMenuItem>
+                {showGuidedTour ? (
                   <DropdownMenuItem
                     className="gap-2"
-                    data-testid="document-action-history"
-                    onSelect={() => setHistoryOpen(true)}
+                    onSelect={() => startPageTour()}
                   >
-                    <Clock className="h-4 w-4" />
-                    History
+                    <Compass className="h-4 w-4" />
+                    Tour this page
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="gap-2"
-                    data-testid="document-action-print"
-                    onSelect={handlePrint}
-                  >
-                    <Printer className="h-4 w-4" />
-                    Print
-                  </DropdownMenuItem>
-                  {showGuidedTour ? (
-                    <DropdownMenuItem
-                      className="gap-2"
-                      onSelect={() => startPageTour()}
-                    >
-                      <Compass className="h-4 w-4" />
-                      Tour this page
-                    </DropdownMenuItem>
-                  ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <DocumentHistory
               documentId={data.doc.id}
               open={historyOpen}
@@ -900,87 +935,6 @@ export function DocumentEditorV2Page() {
             />
           </div>
         </header>
-        {showDbqWorkspace && apHistorySnapshot ? (
-          <>
-            <AssignmentPromptStrip
-              label={`${apHistorySnapshot.essayType.toUpperCase()} · ${apHistorySnapshot.course.toUpperCase()}`}
-              title={assignment?.title?.trim() || 'AP History Essay'}
-              prompt={apHistorySnapshot.prompt}
-              metadata={[
-                `Period ${apHistorySnapshot.periodNumber}`,
-                titleCase(apHistorySnapshot.reasoningSkill),
-                `${apHistorySnapshot.sources.length} ${
-                  apHistorySnapshot.sources.length === 1 ? 'source' : 'sources'
-                }`,
-              ]}
-            />
-            <CommentsSelectionProvider>
-              <DbqLayout
-                snapshot={apHistorySnapshot}
-                tutor={
-                  tutorEnabled ? (
-                    <Tutor
-                      className="h-full border-r-0 md:w-full"
-                      docId={data.doc.id}
-                      cms={(tutor.cms ?? data.currentCms) as any}
-                      cmsIdx={cmsIdx}
-                      nextCmId={data.nextCmId}
-                      hasPreviousCms={tutorHasPreviousCms}
-                      isSessionLocked={auth.isLocked}
-                      beforeRespond={handleTutorBeforeRespond}
-                      onCmsUpdate={tutor.updateCms}
-                      getCurrentDocumentText={() =>
-                        editorBridgeRef.current?.getContent().text ??
-                        data.doc.text ??
-                        ''
-                      }
-                    />
-                  ) : (
-                    <AssignmentPromptPanel assignment={editorAssignmentPrompt} />
-                  )
-                }
-                editor={
-                  <DocumentEditor
-                    docId={data.doc.id}
-                    assignment={editorAssignmentPrompt}
-                    serverHtml={editorServerHtml}
-                    serverText={editorServerText}
-                    serverUpdatedAt={data.doc.updatedAt}
-                    initialRevision={data.doc.revision}
-                    isEditable={isEditorEditable}
-                    canUploadImages={data.canUploadImages}
-                    onBridgeReady={handleEditorBridgeReady}
-                    onSyncStatusChange={setSyncStatus}
-                    onSubmittableContentChange={handleSubmittableContentChange}
-                    onCommentCreated={(c) => commentsState.addComment(c as any)}
-                  />
-                }
-                comments={
-                  <TeacherPasteReport
-                    key={data.doc.id}
-                    enabled={isViewingAsTeacher}
-                    documentId={data.doc.id}
-                    contentRoot={editorRoot}
-                    onSelectEvent={() => {
-                      if (isMobile) changeTab('editor');
-                    }}
-                  >
-                    <Comments
-                      className="md:w-full"
-                      showCollapsibleHeader={!isViewingAsTeacher}
-                      comments={visibleComments as any}
-                      readOnly={commentsReadOnly}
-                      onCommentRemoved={commentsState.removeComment}
-                      onResponseAdded={commentsState.addResponse}
-                      autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
-                    />
-                  </TeacherPasteReport>
-                }
-              />
-            </CommentsSelectionProvider>
-          </>
-        ) : (
-          <>
         <CommentsSelectionProvider>
           <div className="doc-editor-body min-h-0 flex-1 overflow-hidden">
             {!tutorEnabled && !(isMobile && tab !== 'editor') ? (
@@ -1005,6 +959,11 @@ export function DocumentEditorV2Page() {
                   data.doc.text ??
                   ''
                 }
+                readOnlyTeacherView={
+                  isViewingAsTeacher && !isOwnTeacherPreview
+                }
+                studentDisplayName={studentName}
+                onClose={() => setDesktopTutorOpen(false)}
               />
             )}
             {isMobile && tab !== 'editor' && !isViewingAsTeacher ? null : (
@@ -1016,59 +975,114 @@ export function DocumentEditorV2Page() {
                     : 'flex h-full min-w-0 w-full flex-col'
                 )}
               >
-                <DocumentEditor
-                  docId={data.doc.id}
-                  assignment={tutorEnabled ? editorAssignmentPrompt : null}
-                  serverHtml={editorServerHtml}
-                  serverText={editorServerText}
-                  serverUpdatedAt={data.doc.updatedAt}
-                  initialRevision={data.doc.revision}
-                  isEditable={isEditorEditable}
-                  canUploadImages={data.canUploadImages}
-                  onBridgeReady={handleEditorBridgeReady}
-                  onSyncStatusChange={setSyncStatus}
-                  onSubmittableContentChange={handleSubmittableContentChange}
-                  onCommentCreated={(c) => commentsState.addComment(c as any)}
-                  marginComments={
-                    !isMobile && desktopCommentsOpen ? (
-                      <TeacherPasteReport
-                        key={data.doc.id}
-                        enabled={isViewingAsTeacher}
-                        documentId={data.doc.id}
-                        contentRoot={editorRoot}
-                        onSelectEvent={() => {
-                          if (isMobile) changeTab('editor');
-                        }}
-                      >
+                {uiMounted ? (
+                  <DocumentEditor
+                    docId={data.doc.id}
+                    assignment={tutorEnabled ? editorAssignmentPrompt : null}
+                    serverHtml={editorServerHtml}
+                    serverText={editorServerText}
+                    serverUpdatedAt={data.doc.updatedAt}
+                    initialRevision={data.doc.revision}
+                    isEditable={isEditorEditable}
+                    teacherCommenting={
+                      isViewingAsTeacher && !isOwnTeacherPreview
+                    }
+                    canUploadImages={data.canUploadImages}
+                    pageWidth={pageWidth}
+                    onPageWidthChange={setPageWidth}
+                    snapshotContent={
+                      viewingSubmission
+                        ? {
+                            html: submissionPreview!.html,
+                            text: submissionPreview!.text,
+                          }
+                        : null
+                    }
+                    submissionViewBanner={
+                      viewingSubmission ? (
+                        <div
+                          className="doc-editor-view-banner"
+                          data-testid="document-submission-view-banner"
+                        >
+                          <span>
+                            Viewing submission {submissionPreview!.versionLabel}
+                          </span>
+                          <button
+                            type="button"
+                            className="font-semibold text-[hsl(210_50%_30%)] underline-offset-2 hover:underline"
+                            onClick={clearSubmissionView}
+                          >
+                            Back to current draft
+                          </button>
+                        </div>
+                      ) : null
+                    }
+                    onBridgeReady={handleEditorBridgeReady}
+                    onSyncStatusChange={setSyncStatus}
+                    onSubmittableContentChange={handleSubmittableContentChange}
+                    onCommentDraft={(draft) => {
+                      commentsState.setPendingDraft(draft);
+                      if (!isMobile) setDesktopCommentsOpen(true);
+                    }}
+                    onCommentCreated={(c) => {
+                      commentsState.addComment(c as any);
+                      if (!isMobile) setDesktopCommentsOpen(true);
+                    }}
+                    marginComments={
+                      showDesktopMarginComments ? (
                         <MarginCommentsRail
-                          comments={visibleComments as any}
+                          documentId={data.doc.id}
+                          comments={marginRailComments as any}
+                          pendingDraft={commentsState.pendingDraft}
                           readOnly={commentsReadOnly}
                           onCommentRemoved={commentsState.removeComment}
                           onResponseAdded={commentsState.addResponse}
+                          onArchiveChange={commentsState.setCommentArchived}
+                          onCommentCreated={(c) =>
+                            commentsState.addComment(c as any)
+                          }
+                          onDraftCancel={() => {
+                            const draftId = commentsState.pendingDraft?.id;
+                            commentsState.clearPendingDraft();
+                            if (draftId) {
+                              document
+                                .querySelectorAll(
+                                  `[data-comment-id="${draftId}"]`
+                                )
+                                .forEach((mark) => {
+                                  const node = mark as HTMLElement;
+                                  if (!node.parentNode) return;
+                                  while (node.childNodes.length > 0) {
+                                    node.parentNode.insertBefore(
+                                      node.childNodes[0],
+                                      node
+                                    );
+                                  }
+                                  node.parentNode.removeChild(node);
+                                });
+                            }
+                          }}
                           autoFocusReplyCommentId={
                             commentsState.pendingFocusCommentId
                           }
                         />
-                      </TeacherPasteReport>
-                    ) : null
-                  }
-                />
+                      ) : null
+                    }
+                  />
+                ) : (
+                  <EditorLoadingShell />
+                )}
               </div>
             )}
-            {isMobile && tab !== 'comments' && !isViewingAsTeacher ? null : (
-              <div
-                className={cn(
-                  isMobile && tab !== 'comments' ? 'hidden' : 'h-full min-w-0 w-full',
-                  !isMobile && 'hidden'
-                )}
-              >
+            {isMobile && tab === 'comments' ? (
+              <div className="h-full min-w-0 w-full">
                 <TeacherPasteReport
                   key={`${data.doc.id}-mobile-comments`}
                   enabled={isViewingAsTeacher}
                   documentId={data.doc.id}
                   contentRoot={editorRoot}
                   onSelectEvent={() => {
-                    if (isMobile) changeTab('editor');
+                    changeTab('editor');
                   }}
                 >
                   <Comments
@@ -1077,14 +1091,15 @@ export function DocumentEditorV2Page() {
                     readOnly={commentsReadOnly}
                     onCommentRemoved={commentsState.removeComment}
                     onResponseAdded={commentsState.addResponse}
+                    onArchiveChange={commentsState.setCommentArchived}
                     autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
                   />
                 </TeacherPasteReport>
               </div>
-            )}
+            ) : null}
           </div>
         </CommentsSelectionProvider>
-        {isMobile && !showDbqWorkspace ? (
+        {isMobile ? (
           <nav
             className="doc-editor-mobile-tabbar"
             role="tablist"
@@ -1095,158 +1110,119 @@ export function DocumentEditorV2Page() {
               <button
                 type="button"
                 role="tab"
+                className="doc-editor-mobile-tab"
                 aria-selected={tab === 'tutor'}
                 onClick={() => changeTab('tutor')}
               >
-                Tutor
+                <Sparkles className="h-4 w-4" aria-hidden />
+                <span>Tutor</span>
               </button>
             ) : null}
             <button
               type="button"
               role="tab"
+              className="doc-editor-mobile-tab"
               aria-selected={tab === 'editor'}
               onClick={() => changeTab('editor')}
             >
-              Editor
+              <PenLine className="h-4 w-4" aria-hidden />
+              <span>Write</span>
             </button>
             <button
               type="button"
               role="tab"
+              className="doc-editor-mobile-tab"
               aria-selected={tab === 'comments'}
-              onClick={() => changeTab('comments')}
+              onClick={() => {
+                if (isMobile) {
+                  setMobileCommentsSheetOpen(true);
+                }
+                changeTab('comments');
+              }}
             >
-              Comments
-              {visibleComments.length > 0 ? ` (${visibleComments.length})` : ''}
+              <MessageCircle className="h-4 w-4" aria-hidden />
+              <span>Comments</span>
+              {visibleComments.length > 0 ? (
+                <span className="doc-editor-mobile-tab-badge">
+                  {visibleComments.length}
+                </span>
+              ) : null}
             </button>
           </nav>
         ) : null}
-          </>
-        )}
+        {isMobile && tab === 'editor' && tutorEnabled && !isViewingAsTeacher ? (
+          <button
+            type="button"
+            className="doc-editor-mobile-tutor-peek"
+            data-testid="mobile-tutor-peek"
+            onClick={() => setMobileTutorSheetOpen(true)}
+          >
+            <Sparkles className="h-4 w-4 shrink-0" aria-hidden />
+            <span className="truncate">Tutor · tap to continue</span>
+            <span className="doc-editor-mobile-peek-chevron" aria-hidden>
+              ›
+            </span>
+          </button>
+        ) : null}
       </main>
-      <Dialog
-        open={isFinalizeDialogOpen}
-        onOpenChange={setIsFinalizeDialogOpen}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-yellow-600" />
-              Submit Version {versionNumber}
-            </DialogTitle>
-            <DialogDescription asChild>
-              <div className="space-y-4 pt-2">
-                <div className="space-y-2">
-                  <label
-                    htmlFor="submission-title"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Submission Title
-                  </label>
-                  <Input
-                    id="submission-title"
-                    value={submissionTitle}
-                    onChange={(e) => setSubmissionTitle(e.target.value)}
-                    placeholder="Enter a title for this submission"
-                  />
-                </div>
-                <ul className="list-disc space-y-1.5 pl-5 text-sm">
-                  <li>
-                    Submitting creates a snapshot of your essay for your teacher
-                    to grade.
-                  </li>
-                  <li>You can keep editing and submit again after this.</li>
-                </ul>
-                {activeSubmissions.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-foreground">
-                      Previous submissions
-                    </p>
-                    <div className="max-h-32 overflow-y-auto rounded-md border">
-                      {activeSubmissions.map((s) => {
-                        const v = versionLabelForActiveSubmission(
-                          activeSubmissions,
-                          s.id
-                        );
-                        const isGraded = s.releasedAt != null;
-                        const label = displaySubmissionTitle(
-                          s.title,
-                          v,
-                          'Untitled submission'
-                        );
-                        return (
-                          <a
-                            key={s.id}
-                            href={`/app/submissions/${s.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-between gap-2 border-b px-3 py-2 text-sm hover:bg-muted/50 last:border-0"
-                          >
-                            <div className="flex min-w-0 items-center gap-2">
-                              <span className="truncate">{label}</span>
-                              <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-                            </div>
-                            <Badge
-                              variant={isGraded ? 'success' : 'secondary'}
-                              className="shrink-0 text-[10px]"
-                            >
-                              {isGraded ? 'Graded' : 'Submitted'}
-                            </Badge>
-                          </a>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsFinalizeDialogOpen(false)}
-              disabled={isSubmitting}
+      {isMobile ? (
+        <>
+          <Sheet open={mobileTutorSheetOpen} onOpenChange={setMobileTutorSheetOpen}>
+            <SheetContent
+              side="bottom"
+              className="h-[min(72vh,560px)] overflow-hidden p-0"
+              data-testid="mobile-tutor-sheet"
             >
-              Cancel
-            </Button>
-            {cannotSubmitEmpty && !isSubmitting ? (
-              <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
-                <span
-                  className="inline-flex"
-                  data-testid="document-finalize-submit-empty-trigger"
-                >
-                  <Button
-                    variant="default"
-                    data-testid="document-finalize-submit"
-                    disabled
-                  >
-                    {`Submit Version ${versionNumber}`}
-                  </Button>
-                </span>
-              </Tooltip>
-            ) : (
-              <Button
-                variant="default"
-                data-testid="document-finalize-submit"
-                onClick={() => {
-                  const resolved =
-                    submissionTitle.trim() || getLiveDocumentTitle().trim();
-                  void submit.submitNow(resolved);
-                }}
-                disabled={submitActionDisabled}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Submitting...
-                  </>
-                ) : (
-                  `Submit Version ${versionNumber}`
-                )}
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              <SheetHeader className="sr-only">
+                <SheetTitle>Tutor</SheetTitle>
+              </SheetHeader>
+              <Tutor
+                className="doc-editor-tutor h-full w-full border-0"
+                docId={data.doc.id}
+                cms={(tutor.cms ?? data.currentCms) as any}
+                cmsIdx={cmsIdx}
+                nextCmId={data.nextCmId}
+                hasPreviousCms={tutorHasPreviousCms}
+                isSessionLocked={auth.isLocked}
+                beforeRespond={handleTutorBeforeRespond}
+                onCmsUpdate={tutor.updateCms}
+                getCurrentDocumentText={() =>
+                  editorBridgeRef.current?.getContent().text ??
+                  data.doc.text ??
+                  ''
+                }
+                readOnlyTeacherView={false}
+                studentDisplayName={studentName}
+              />
+            </SheetContent>
+          </Sheet>
+          <Sheet
+            open={mobileCommentsSheetOpen}
+            onOpenChange={setMobileCommentsSheetOpen}
+          >
+            <SheetContent
+              side="bottom"
+              className="h-[min(72vh,560px)] overflow-hidden p-0"
+              data-testid="mobile-comments-sheet"
+            >
+              <SheetHeader className="sr-only">
+                <SheetTitle>Comments</SheetTitle>
+              </SheetHeader>
+              <div className="h-full overflow-y-auto p-3">
+                <Comments
+                  showCollapsibleHeader
+                  comments={visibleComments as any}
+                  readOnly={commentsReadOnly}
+                  onCommentRemoved={commentsState.removeComment}
+                  onResponseAdded={commentsState.addResponse}
+                  onArchiveChange={commentsState.setCommentArchived}
+                  autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
+                />
+              </div>
+            </SheetContent>
+          </Sheet>
+        </>
+      ) : null}
       <Dialog
         open={submissionToUnsubmit != null}
         onOpenChange={(open) => {

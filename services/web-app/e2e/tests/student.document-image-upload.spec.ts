@@ -90,7 +90,8 @@ test.describe.serial('Student image upload (GBA 300 expansion report)', () => {
     await page.locator('#document-image-alt').fill(CHART_ALT);
     await page.getByTestId('editor-image-insert').click();
 
-    const figure = page.locator('figure.document-image img');
+    const editorSurface = page.getByTestId('document-editor-surface');
+    const figure = editorSurface.locator('figure.document-image img');
     await expect(figure).toHaveCount(1, { timeout: 20000 });
     await expect(figure).toHaveAttribute('alt', CHART_ALT);
     await expect(figure).toHaveAttribute('src', /^\/api\/image\/document\//);

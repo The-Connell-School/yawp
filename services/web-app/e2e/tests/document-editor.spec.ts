@@ -61,7 +61,9 @@ test.describe.serial('Document Editor E2E Tests', () => {
         timeout: 10000,
       });
       await page.getByTestId('document-submit-button').click();
-      await expect(page.getByRole('dialog')).toBeVisible();
+      await expect(
+        page.getByTestId('document-submit-confirm-popover')
+      ).toBeVisible();
       await page.getByTestId('document-finalize-submit').click();
       await expect(page.getByText('Submitted').first()).toBeVisible({
         timeout: 15000,
@@ -595,7 +597,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     ).toHaveValue(liveTitle);
   });
 
-  test('document editor version matches rollout (v1 production default, v2 preview default)', async ({
+  test('document editor version matches rollout (v2 on in E2E seed)', async ({
     page,
     signIn,
     e2eContext,
@@ -603,18 +605,25 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
     await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
-  const expectV2 =
-      process.env.YAWP_ENVIRONMENT === 'preview' ||
-      process.env.YAWP_ENVIRONMENT === 'demo';
-    if (expectV2) {
-      await expect(
-        page.locator('[data-document-editor-version="v2"]')
-      ).toBeVisible({ timeout: 10000 });
-    } else {
-      await expect(
-        page.locator('[data-document-editor-version="v1"]')
-      ).toBeVisible({ timeout: 10000 });
-    }
+    await expect(
+      page.locator('[data-document-editor-version="v2"]')
+    ).toBeVisible({ timeout: 10000 });
+  });
+
+  test('staff ?editor=v1 opts out of v2 when rollout is on', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
+    await helpers.openDocument(
+      `${e2eContext.editedDocumentId}?editor=v1`,
+      { retry: true }
+    );
+    await expect(
+      page.locator('[data-document-editor-version="v1"]')
+    ).toBeVisible({ timeout: 10000 });
   });
 
   test('v2 chrome shows tutor step header when v2 is active', async ({
@@ -624,17 +633,113 @@ test.describe.serial('Document Editor E2E Tests', () => {
     helpers,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
-    const query =
-      process.env.YAWP_ENVIRONMENT === 'production' ? '?editor=v2' : '';
-    await helpers.openDocument(`${e2eContext.editedDocumentId}${query}`, {
-      retry: true,
-    });
-    const v2 = page.locator('[data-document-editor-version="v2"]');
-    if ((await v2.count()) === 0) {
-      test.skip();
-    }
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
     await expect(page.getByTestId('tutor-step-indicator')).toBeVisible({
       timeout: 10000,
+    });
+  });
+
+  test('v2 student can add a margin comment from selection', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('jdoe@brock.software', 'johndoe');
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const editor = helpers.getEditor();
+    await editor.click();
+    await page.keyboard.press(SELECT_ALL_SHORTCUT);
+    await page.getByTestId('editor-add-comment').click();
+    await expect(page.getByTestId('margin-comment-draft-card')).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.getByTestId('margin-comment-draft-body').fill('Student E2E comment body');
+    await page.getByTestId('margin-comment-draft-submit').click();
+    await expect(page.locator('[id^="comment-"]').first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(
+      page.locator('[data-testid^="margin-comment-card-"]').first()
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('v2 teacher margin comments support reply and resolve', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await helpers.openDocument(
+      `${e2eContext.gradedDocumentId}?tab=editor`,
+      { retry: true }
+    );
+    const card = page.getByTestId(
+      `margin-comment-card-${e2eContext.v2GradedCommentId}`
+    );
+    await expect(card).toBeVisible({ timeout: 15_000 });
+    await expect(card).toContainText('Thanks — I will expand this section.');
+    await page
+      .getByTestId(`comment-reply-input-${e2eContext.v2GradedCommentId}`)
+      .click();
+    await page
+      .getByTestId(`comment-reply-body-${e2eContext.v2GradedCommentId}`)
+      .fill('Reply from teacher E2E.');
+    await page
+      .getByTestId(`comment-reply-send-${e2eContext.v2GradedCommentId}`)
+      .click();
+    await expect(card).toContainText('Reply from teacher E2E.', {
+      timeout: 10_000,
+    });
+    const resolveButton = page.getByTestId(
+      `comment-resolve-${e2eContext.v2GradedCommentId}`
+    );
+    await resolveButton.click();
+    await expect(resolveButton).toBeHidden({ timeout: 10_000 });
+  });
+
+  test('v2 teacher can open a comment draft from text selection', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await helpers.openDocument(
+      `${e2eContext.gradedDocumentId}?tab=editor`,
+      { retry: true }
+    );
+    await expect(page.getByTestId('document-view-only-banner')).toBeVisible({
+      timeout: 10_000,
+    });
+    const editor = helpers.getEditor();
+    await editor.click();
+    await page.keyboard.press(SELECT_ALL_SHORTCUT);
+    await page.getByTestId('editor-add-comment').click();
+    await expect(page.getByTestId('margin-comment-draft-card')).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByTestId('margin-comment-draft-body')).toBeVisible();
+  });
+
+  test('v2 shows mobile tab bar at 390px width', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('jdoe@brock.software', 'johndoe');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await helpers.openDocument(
+      `${e2eContext.editedDocumentId}?tab=editor`,
+      { retry: true }
+    );
+    await expect(page.getByTestId('document-mobile-tabbar')).toBeVisible({
+      timeout: 10_000,
     });
   });
 });

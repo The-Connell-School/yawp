@@ -102,6 +102,8 @@ import {
   documentEditorV2ForceCookie,
   isStaffForDocumentEditorOverride,
   resolveDocumentEditorV2Enabled,
+  shouldClearDocumentEditorV2ForceCookie,
+  shouldSetDocumentEditorV2ForceCookie,
 } from '~/domain/document-editor/document-editor-v2-gate.server';
 import {
   GuidedTour,
@@ -513,6 +515,51 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? redactGradedAtFromStudentDocumentSubmissions(submissions)
     : submissions;
 
+  const submissionPreviewId = url.searchParams.get('submission');
+  let submissionPreview: {
+    id: string;
+    html: string;
+    text: string;
+    title: string;
+    versionLabel: string;
+  } | null = null;
+  if (submissionPreviewId) {
+    const previewRow = await prisma.submission.findFirst({
+      where: {
+        id: submissionPreviewId,
+        documentId: doc.id,
+        unsubmittedAt: null,
+      },
+      select: {
+        id: true,
+        title: true,
+        html: true,
+        text: true,
+        archivedAt: true,
+      },
+    });
+    if (previewRow) {
+      const activeForVersion = submissionsForResponse.filter(
+        (s) => s.archivedAt == null && s.unsubmittedAt == null
+      );
+      const version = versionLabelForActiveSubmission(
+        activeForVersion,
+        previewRow.id
+      );
+      submissionPreview = {
+        id: previewRow.id,
+        html: previewRow.html ?? '',
+        text: previewRow.text ?? '',
+        title: previewRow.title,
+        versionLabel: displaySubmissionTitle(
+          previewRow.title,
+          version,
+          'Untitled submission'
+        ),
+      };
+    }
+  }
+
   // Free classroom teachers get a tour of the writing page.
   const guidedTours = await loadGuidedTours(userId, profile, request);
 
@@ -522,10 +569,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isStaff: isPlatformAdmin,
   });
 
-  const headers =
-    url.searchParams.get('editor') === 'v2' && isPlatformAdmin
+  const headers = shouldSetDocumentEditorV2ForceCookie(request, isPlatformAdmin)
+    ? {
+        'Set-Cookie': await documentEditorV2ForceCookie.serialize('1'),
+      }
+    : shouldClearDocumentEditorV2ForceCookie(request, isPlatformAdmin)
       ? {
-          'Set-Cookie': await documentEditorV2ForceCookie.serialize('1'),
+          'Set-Cookie': await documentEditorV2ForceCookie.serialize('', {
+            maxAge: 0,
+          }),
         }
       : undefined;
 
@@ -541,6 +593,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       comments: sortedComments,
     },
     submissions: submissionsForResponse,
+    submissionPreview,
     currentCms,
     currentCmsIdx,
     nextCmId,

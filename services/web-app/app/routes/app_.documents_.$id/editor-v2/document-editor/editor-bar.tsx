@@ -1,8 +1,7 @@
 import { type Editor } from '@tiptap/react';
-import { MessageCirclePlusIcon } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { MessageCirclePlusIcon, MoreHorizontal } from 'lucide-react';
+import { useMemo } from 'react';
 import { v4 } from 'uuid';
-import { DotsHorizontalIcon } from '~/components/icons';
 import { Button } from '~/components/ui/button';
 import {
   DropdownMenu,
@@ -12,177 +11,194 @@ import {
 } from '~/components/ui/dropdown-menu';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
-import { buildSafeErrorScalarsForLog } from '~/utils/error-log-scalars';
-import { type Command, commands, COMMAND_STYLE } from './commands';
+import { COMMAND_STYLE } from './commands';
+import { v2OverflowCommands, v2ToolbarCommands } from './commands/v2-commands';
 import { DocumentImageButton } from './document-image-button';
+import { USER_SOURCE_META } from './extensions/source-tracker';
+import { TOOLBAR_SOURCE } from './use-pm-tripwire';
+import {
+  ToolbarFitWidth,
+  ToolbarNormalText,
+  ToolbarUndoRedo,
+  type PageWidthMode,
+} from './toolbar-controls';
 import camelCase from 'lodash/camelCase';
-
-const DROPDOWN_WIDTH = 32;
-const BUTTON_WIDTH = 32;
-const GAP_WIDTH = 3;
-const PADDING = 8;
 
 export type BarProps = {
   editor: Editor | null;
   documentId: string;
   isEditable?: boolean;
+  teacherCommenting?: boolean;
   canUploadImages?: boolean;
-  onCommentCreated?: (comment: unknown) => void;
+  pageWidth: PageWidthMode;
+  onPageWidthChange: (mode: PageWidthMode) => void;
+  onCommentDraft?: (draft: { id: string; excerpt: string }) => void;
 };
+
+export function beginCommentDraftFromEditor(
+  editor: Editor,
+  onCommentDraft?: (draft: { id: string; excerpt: string }) => void
+) {
+  const { from, to, empty } = editor.state.selection;
+  if (empty) {
+    if (editor.isActive('comment')) {
+      editor
+        .chain()
+        .focus()
+        .setMeta(USER_SOURCE_META, TOOLBAR_SOURCE)
+        .unsetComment()
+        .run();
+    }
+    return;
+  }
+  const excerpt = editor.state.doc.textBetween(from, to, ' ').trim();
+  if (!excerpt) return;
+  const id = v4();
+  editor
+    .chain()
+    .focus()
+    .setMeta(USER_SOURCE_META, TOOLBAR_SOURCE)
+    .unsetComment()
+    .setComment(id)
+    .run();
+  onCommentDraft?.({ id, excerpt });
+}
 
 export const Bar = ({
   editor,
   documentId,
   isEditable = true,
+  teacherCommenting = false,
   canUploadImages = false,
-  onCommentCreated,
+  pageWidth,
+  onPageWidthChange,
+  onCommentDraft,
 }: BarProps) => {
-  const [visibleCommands, setVisibleCommands] = useState(commands);
-  const [hiddenCommands, setHiddenCommands] = useState<Command[]>([]);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const updateButtonVisibility = () => {
-      if (containerRef.current) {
-        const containerWidth = containerRef.current.offsetWidth;
-        const maxButtons =
-          Math.floor(
-            (containerWidth - PADDING - DROPDOWN_WIDTH) /
-              (BUTTON_WIDTH + GAP_WIDTH)
-          ) - 1;
-        if (commands.length > maxButtons) {
-          setVisibleCommands(commands.slice(0, maxButtons));
-          setHiddenCommands(commands.slice(maxButtons));
-        } else {
-          setVisibleCommands(commands);
-          setHiddenCommands([]);
-        }
-      }
-    };
-
-    // Delay to ensure the container has been rendered
-    setTimeout(() => updateButtonVisibility(), 100);
-
-    window.addEventListener('resize', updateButtonVisibility);
-
-    return () => window.removeEventListener('resize', updateButtonVisibility);
-  }, []);
+  const canAddComment = isEditable || teacherCommenting;
+  const formatCommands = useMemo(() => v2ToolbarCommands, []);
 
   if (!editor) return null;
 
+  const runCommand = (
+    command: string,
+    params?: Record<string, unknown>
+  ) => {
+    const chain = editor
+      .chain()
+      .focus()
+      .setMeta(USER_SOURCE_META, TOOLBAR_SOURCE) as any;
+    chain[command](params).run();
+  };
+
   return (
-    <div
-      data-tour="doc-toolbar"
-      className="doc-editor-toolbar-glass"
-      ref={containerRef}
-    >
-      {isEditable
-        ? visibleCommands.map(
+    <div data-tour="doc-toolbar" className="doc-editor-toolbar-glass">
+      {teacherCommenting ? (
+        <>
+          <span
+            className="shrink-0 text-[13px] text-[hsl(50_2.4%_36%)]"
+            data-testid="document-view-only-banner"
+          >
+            Viewing only. Select text to comment.
+          </span>
+          <span
+            aria-hidden
+            className="mx-1 h-[18px] w-px bg-[hsl(51.4286_7.8652%_82.549%)]"
+          />
+          <ToolbarFitWidth mode={pageWidth} onChange={onPageWidthChange} />
+          <span className="ml-auto" />
+        </>
+      ) : isEditable ? (
+        <>
+          <ToolbarUndoRedo editor={editor} />
+          <ToolbarFitWidth mode={pageWidth} onChange={onPageWidthChange} />
+          <span
+            aria-hidden
+            className="mx-1 h-[18px] w-px bg-[hsl(51.4286_7.8652%_82.549%)]"
+          />
+          <ToolbarNormalText editor={editor} />
+          <span
+            aria-hidden
+            className="mx-1 h-[18px] w-px bg-[hsl(51.4286_7.8652%_82.549%)]"
+          />
+          {formatCommands.map(
             ({ icon, label, command, params, activeId, isActive, override }) => {
               if (override) return override(editor);
               if (!command) return null;
-
               return (
                 <Tooltip text={label} delayDuration={300} key={label ?? command}>
-                  <div
-                    onClick={() => {
-                      const chain = editor.chain().focus() as any;
-                      chain[command](params).run();
-                    }}
+                  <button
+                    type="button"
+                    aria-label={label}
+                    onClick={() => runCommand(command, params)}
                     className={cn(COMMAND_STYLE, {
                       'bg-foreground/20 hover:bg-foreground/20': isActive
                         ? isActive(editor)
-                        : editor.isActive(activeId ?? camelCase(label ?? ''), params),
+                        : editor.isActive(
+                            activeId ?? camelCase(label ?? ''),
+                            params
+                          ),
                     })}
                   >
                     {icon ?? label}
-                  </div>
+                  </button>
                 </Tooltip>
               );
             }
-          )
-        : null}
-      {isEditable && canUploadImages ? (
-        <DocumentImageButton editor={editor} documentId={documentId} />
+          )}
+          {canUploadImages ? (
+            <DocumentImageButton editor={editor} documentId={documentId} />
+          ) : null}
+        </>
       ) : null}
-      {isEditable ? (
+      {canAddComment ? (
         <Tooltip text="Comment" delayDuration={300}>
-          <div
+          <button
+            type="button"
             data-testid="editor-add-comment"
-            onClick={() => {
-              if (editor.isActive('comment')) {
-                editor.chain().focus().unsetComment().run();
-              } else {
-                const id = v4();
-                const { from, to } = editor.state.selection;
-                const content = editor.state.doc.textBetween(from, to, ' ');
-                if (!content) return;
-                editor.chain().focus().setComment(id).run();
-                const formData = new FormData();
-                formData.append('id', id);
-                formData.append('content', content);
-                formData.append('documentId', documentId);
-                fetch('/api/model/document-comment', { method: 'POST', body: formData })
-                  .then((res) => res.json())
-                  .then((data) => {
-                    if (data?.id && onCommentCreated) {
-                      onCommentCreated(data);
-                    }
-                  })
-                  .catch((err) => {
-                    console.error(
-                      'document_comment_create_failed',
-                      buildSafeErrorScalarsForLog(err),
-                    );
-                  });
-              }
-            }}
+            aria-label="Add comment"
+            onClick={() => beginCommentDraftFromEditor(editor, onCommentDraft)}
             className={cn(COMMAND_STYLE, {
-              'bg-foreground/20 hover:bg-foreground/20': editor.isActive('comment'),
+              'bg-foreground/20 hover:bg-foreground/20':
+                editor.isActive('comment'),
             })}
           >
-            <MessageCirclePlusIcon className="h-5 w-5" />
-          </div>
+            <MessageCirclePlusIcon className="h-4 w-4" />
+          </button>
         </Tooltip>
       ) : null}
-      {isEditable && hiddenCommands.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="More editor formatting options"
-              onClick={(e) => e.preventDefault()}
-            >
-              <DotsHorizontalIcon />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="flex w-fit flex-col gap-1">
-            {hiddenCommands.map(
-              ({ icon, label, command, params, activeId, isActive }, idx) => (
-                <DropdownMenuItem
-                  key={`${label ?? command ?? 'command'}-${idx}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (!command) return;
-                    // @ts-ignore
-                    editor.chain().focus()[command](params).run();
-                  }}
-                  className={cn(COMMAND_STYLE, 'flex items-center gap-3', {
-                    'bg-foreground/20 hover:bg-foreground/20': isActive
-                      ? isActive(editor)
-                      : editor.isActive(activeId ?? camelCase(label ?? ''), params),
-                  })}
-                >
-                  <span>{icon ?? label}</span>
-                  <span>{label}</span>
-                </DropdownMenuItem>
-              )
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+      {isEditable ? (
+        <span className="ml-auto flex items-center">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="More formatting"
+                className="h-8 w-8"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="flex w-fit flex-col gap-1">
+              {v2OverflowCommands.map(
+                ({ icon, label, command, params }, idx) => (
+                  <DropdownMenuItem
+                    key={`${label}-${idx}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (command) runCommand(command, params);
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    {icon}
+                    <span>{label}</span>
+                  </DropdownMenuItem>
+                )
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </span>
+      ) : null}
     </div>
   );
 };
