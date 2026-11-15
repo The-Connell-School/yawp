@@ -83,6 +83,8 @@ mock.module('~/utils/assignment-quota.server', () => ({
   getFreeClassroomAssignmentQuotaUsage: async () =>
     new Map([
       ['class_starter', 3],
+      ['exit_ticket', 0],
+      ['five_paragraph_essay', 0],
       ['prewriting', 3],
       ['thesis_statement', 0],
     ]),
@@ -175,7 +177,9 @@ test('adapter reads authoritative usage, including invites and lifetime counts',
   const usage = await readFreeAccountUsage(profile, true, 'user-1');
   expect(usage!.students.total).toBe(10);
   expect(usage!.students.remaining).toBe(0);
-  expect(usage!.assignments.map((row) => row.remaining)).toEqual([9, 0, 3]);
+  expect(usage!.assignments.map((row) => row.remaining)).toEqual([
+    9, 3, 3, 0, 3,
+  ]);
   expect(usage!.lessonPlans.remaining).toBe(0);
   expect(classRead.mock.calls[0][0].where).toMatchObject({
     school: { organizationId: 'org' },

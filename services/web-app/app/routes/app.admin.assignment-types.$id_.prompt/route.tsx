@@ -120,6 +120,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: true,
       title: true,
       kind: true,
+      systemKey: true,
       scoringScaleJson: true,
       rubricJson: true,
       gradingPromptConfigJson: true,
@@ -138,6 +139,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 
   if (!assignmentType) {
+    throw new Response('Not Found', { status: 404 });
+  }
+  if (assignmentType.systemKey === 'ap_history_essay') {
     throw new Response('Not Found', { status: 404 });
   }
 

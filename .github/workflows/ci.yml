@@ -303,6 +303,9 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./packages/prisma/scripts/exit-ticket-bootstrap-migration.test.ts
+      - name: 🧪 Free classroom Exit Ticket link migration contract
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        run: bun test ./packages/prisma/migrations/20261111120000_free_classroom_exit_ticket/migration.test.ts
       - name: 🧪 yawp_admin internal SELECT revoke migration contract
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         run: bun test ./packages/prisma/migrations/20261011121500_revoke_yawp_admin_internal_select/migration.test.ts
@@ -1093,6 +1096,9 @@ jobs:
             'app/routes/app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel.test.tsx' \
             'app/routes/app.assignments.$assignmentId._index/route.test.ts' \
             'app/routes/app.my-classes.$classId/route.test.ts' \
+            'app/routes/app.my-classes.$classId/class-assignments-tab.test.tsx' \
+            app/utils/group-by-assignment-type.test.ts \
+            app/components/collapsible-group-section.test.tsx \
             'app/routes/app.my-classes.$classId/class-student-enrollment.server.test.ts' \
             'app/utils/impersonation-read-only.server.test.ts' \
             'app/utils/internal-management.server.test.ts' \

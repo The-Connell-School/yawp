@@ -57,7 +57,12 @@ function pendingForwardAlertMessage(
   }
 }
 
-export function LockedDashboardPendingCard() {
+export function LockedDashboardPendingCard({
+  includeTourAnchor = true,
+}: {
+  /** Mobile and desktop rails both mount this card; only one should expose `data-tour`. */
+  includeTourAnchor?: boolean;
+}) {
   const { state } = useTeachingAccess();
   const fetcher = useFetcher<ForwardActionData>();
   const revalidator = useRevalidator();
@@ -92,6 +97,9 @@ export function LockedDashboardPendingCard() {
     <section
       className="rounded-xl border bg-popover p-5 shadow-sm"
       data-testid="locked-dashboard-pending-card"
+      {...(includeTourAnchor
+        ? { 'data-tour': 'teaching-access-banner' as const }
+        : {})}
       aria-label="Approval request"
     >
       <div className="flex items-start gap-2">

@@ -6,6 +6,7 @@ import {
 } from '~/domain/documents.server';
 import { recordClassAssignmentFirstOpen } from '~/domain/student-class-assignment-first-open.server';
 import { prisma } from '~/utils/db.server';
+import { isRetiredApHistoryAssignmentType } from '~/utils/retired-ap-history-access.server';
 
 export type OpenClassAssignmentResult =
   | { ok: true; url: string }
@@ -31,12 +32,25 @@ export async function openClassAssignmentForStudent({
         select: {
           assignmentTypeId: true,
           collaborationEnabled: true,
+          assignmentType: { select: { systemKey: true } },
         },
       },
     },
   });
 
   if (!classAssignment) {
+    return {
+      ok: false,
+      reason: 'creation-failed',
+      message: 'Assignment not found.',
+    };
+  }
+
+  if (
+    isRetiredApHistoryAssignmentType(
+      classAssignment.assignment.assignmentType.systemKey
+    )
+  ) {
     return {
       ok: false,
       reason: 'creation-failed',
@@ -129,12 +143,25 @@ export async function openExistingClassAssignmentForStudent({
       assignment: {
         select: {
           collaborationEnabled: true,
+          assignmentType: { select: { systemKey: true } },
         },
       },
     },
   });
 
   if (!classAssignment) {
+    return {
+      ok: false,
+      reason: 'creation-failed',
+      message: 'Assignment not found.',
+    };
+  }
+
+  if (
+    isRetiredApHistoryAssignmentType(
+      classAssignment.assignment.assignmentType.systemKey
+    )
+  ) {
     return {
       ok: false,
       reason: 'creation-failed',

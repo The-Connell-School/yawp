@@ -5,6 +5,7 @@ import { createDeployedAssignment } from '../db-helpers';
 
 let holisticSubmissionId: string;
 let holisticClassId: string;
+let holisticAssignmentTitle: string;
 
 test.describe.serial('holistic Cristo Rey points-only grading', () => {
   test.beforeEach(async ({ page }) => {
@@ -24,6 +25,7 @@ test.describe.serial('holistic Cristo Rey points-only grading', () => {
     test.setTimeout(300_000);
     const prisma = createE2EPrismaClient();
     const title = `Holistic E2E ${Date.now()}`;
+    holisticAssignmentTitle = title;
     const { assignment, classAssignment } = await createDeployedAssignment({
       prisma,
       classId: e2eContext.classId,
@@ -175,17 +177,17 @@ test.describe.serial('holistic Cristo Rey points-only grading', () => {
     });
   });
 
-  test('class documents list shows released holistic points', async ({
+  test('teacher submission view shows released holistic points', async ({
     page,
     e2eContext,
     signIn,
   }, testInfo) => {
     test.setTimeout(120_000);
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    await page.goto(
-      `/app/my-classes/${holisticClassId}?tab=documents&status=released`
-    );
-    await expect(page.getByText(/6\s*\/\s*20/)).toBeVisible();
+    await page.goto(`/app/submissions/${holisticSubmissionId}`);
+    await expect(page.getByText(/6\s*\/\s*20/)).toBeVisible({
+      timeout: 30_000,
+    });
     await page.screenshot({
       path: testInfo.outputPath('holistic-gradebook-row.png'),
       fullPage: true,

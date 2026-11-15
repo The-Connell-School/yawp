@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@app/prisma';
+import { RETIRED_ASSIGNMENT_TYPE_WHERE } from '~/utils/assignment-type-access.server';
 import {
   authorizeInternalApiRequest,
   internalApiRawQueryString,
@@ -363,11 +364,13 @@ export function createInternalAssignmentTypeHandlers(input: {
         });
       }
 
+      whereClauses.unshift(RETIRED_ASSIGNMENT_TYPE_WHERE);
+
       const rows = await input.db.assignmentType.findMany({
         select: listSelect,
         take: limit + 1,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        where: whereClauses.length > 0 ? { AND: whereClauses } : {},
+        where: { AND: whereClauses },
       }) as AssignmentTypeListRow[];
       const page = rows.slice(0, limit);
       const releases = await releasesFor(input.db, page.map(releaseKey));
@@ -387,6 +390,9 @@ export function createInternalAssignmentTypeHandlers(input: {
         select: detailSelect,
       }) as AssignmentTypeDetailRow | null;
       if (!row) return response({ error: 'Assignment type not found' }, 404);
+      if (row.systemKey === 'ap_history_essay') {
+        return response({ error: 'Assignment type not found' }, 404);
+      }
       const releases = await releasesFor(input.db, [releaseKey(row)]);
       await auditRead(request, auth, input.auditRead, 'assignment-types.detail.success');
       return response({ assignmentType: mapDetail(row, releases) });

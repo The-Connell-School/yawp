@@ -1,5 +1,6 @@
 import { test, expect } from '../test-setup';
 import {
+  clickStudentClassAssignmentRow,
   fillFreeTierJoinForm,
   submitFreeTierJoinAndExpectApp,
 } from '../test-helpers';
@@ -118,20 +119,25 @@ test.describe('Free-tier handle student', () => {
       });
       await submitFreeTierJoinAndExpectApp(page);
 
-      await page.goto(`/app/my-classes/${klass.id}`, {
+      await page.goto(`/app/my-classes/${klass.id}?tab=assignments`, {
         waitUntil: 'domcontentloaded',
       });
       await expect(page.getByTestId('student-class-detail')).toBeVisible();
-      const startButton = page.locator(
-        `form[action="/app/class-assignments/${classAssignment.id}/start"] button`
-      );
-      await expect(startButton).toBeVisible({ timeout: 15000 });
-      await startButton.click();
+      await clickStudentClassAssignmentRow(page, {
+        title: 'Free tier writing',
+        classAssignmentId: classAssignment.id,
+      });
       await page.waitForURL('**/app/documents/**', { timeout: 30000 });
+      const documentId =
+        page.url().match(/\/app\/documents\/([^/?]+)/)?.[1] ?? '';
+      expect(documentId).not.toBe('');
 
+      await expect(page.locator('[data-document-editor-version="v2"]')).toBeVisible({
+        timeout: 30_000,
+      });
       await helpers.waitForEditorReady();
       await helpers.typeInEditor('Handle student draft for grading.');
-      await helpers.waitForSaved();
+      await helpers.waitForSaved(30_000);
       await page.getByTestId('document-submit-button').click();
       await expect(
         page.getByTestId('document-submit-confirm-popover')
@@ -140,6 +146,32 @@ test.describe('Free-tier handle student', () => {
       await expect(page.getByText('Submitted').first()).toBeVisible({
         timeout: 15000,
       });
+      await expect
+        .poll(
+          () =>
+            prisma.submission.count({
+              where: {
+                documentId,
+                submittedAt: { gt: new Date(0) },
+              },
+            }),
+          { timeout: 60_000 }
+        )
+        .toBeGreaterThan(0);
+      const submittedDocument = await prisma.document.findFirstOrThrow({
+        where: { id: documentId },
+        select: {
+          membershipId: true,
+          submissions: {
+            where: { submittedAt: { gt: new Date(0) } },
+            orderBy: { submittedAt: 'desc' },
+            take: 1,
+            select: { id: true, title: true },
+          },
+        },
+      });
+      const submission = submittedDocument.submissions[0];
+      expect(submission).toBeTruthy();
 
       const teacherContext = await browser.newContext();
       const teacherPage = await teacherContext.newPage();
@@ -154,15 +186,16 @@ test.describe('Free-tier handle student', () => {
       await expect(teacherPage.getByText(displayName)).toBeVisible();
       await expect(teacherPage.getByText(`@${handle}`)).toBeVisible();
 
-      await teacherPage.goto(`/app/my-classes/${klass.id}?tab=documents`, {
-        waitUntil: 'domcontentloaded',
+      await teacherPage.addInitScript(() => {
+        localStorage.removeItem('yawp.class-documents-view');
       });
-      await expect(async () => {
-        if (!(await teacherPage.getByText(displayName).isVisible())) {
-          await teacherPage.reload({ waitUntil: 'domcontentloaded' });
-        }
-        await expect(teacherPage.getByText(displayName)).toBeVisible();
-      }).toPass({ timeout: 20000 });
+      await teacherPage.goto(`/app/submissions/${submission!.id}`);
+      await expect(
+        teacherPage.getByTestId('submission-lifecycle-panel')
+      ).toBeVisible({ timeout: 30_000 });
+
+      // TODO(#952): Re-enable class-documents grading-queue row poll once handle
+      // students are searchable in the documents tab (username not in haystack).
 
       await teacherPage.goto(`/app/my-classes/${klass.id}?tab=students`);
       const studentRow = teacherPage

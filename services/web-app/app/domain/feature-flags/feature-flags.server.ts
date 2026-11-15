@@ -2,6 +2,7 @@ import { writeAdminConfigAudit } from '~/domain/admin-config/admin-config-audit.
 import { prisma } from '~/utils/db.server';
 import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
 import {
+  LOUNGE_COMMUNITY_FLAG,
   LESSON_PLANNER_INTAKE_V2_FLAG,
   LESSON_PLANNER_STACK_V2_FLAG,
   LESSON_PLANNER_DECK_V2_FLAG,
@@ -28,6 +29,7 @@ import {
   ASSIGNMENT_TYPE_LANDING_V2_FLAG,
   ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG,
   ASSIGNMENT_TYPE_LESSON_PLANS_FLAG,
+  HOW_TO_TEACH_IT_FLAG,
   DOCUMENT_EDITOR_V2_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
@@ -87,6 +89,7 @@ function runtimeDefaultOn(key: FeatureFlagKey, env: Record<string, string | unde
     key === ASSIGNMENT_TYPE_LANDING_V2_FLAG ||
     key === ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG ||
     key === ASSIGNMENT_TYPE_LESSON_PLANS_FLAG ||
+    key === HOW_TO_TEACH_IT_FLAG ||
     key === DOCUMENT_EDITOR_V2_FLAG
   );
 }
@@ -252,7 +255,8 @@ export async function isFeatureFlagEnabled(
   if (
     key === ASSIGNMENT_TYPE_LANDING_V2_FLAG ||
     key === ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG ||
-    key === ASSIGNMENT_TYPE_LESSON_PLANS_FLAG
+    key === ASSIGNMENT_TYPE_LESSON_PLANS_FLAG ||
+    key === HOW_TO_TEACH_IT_FLAG
   ) {
     if (isDemoDeployment(process.env)) return true;
     try {
@@ -398,6 +402,13 @@ export async function isLessonPlannerEnabled(
   orgId: string | null | undefined
 ): Promise<boolean> {
   return isFeatureFlagEnabled(LESSON_PLANNER_FLAG, orgId);
+}
+
+/** Teacher's Lounge community board for teachers at the given school. */
+export function isLoungeCommunityEnabled(
+  orgId: string | null | undefined
+): Promise<boolean> {
+  return isFeatureFlagEnabled(LOUNGE_COMMUNITY_FLAG, orgId);
 }
 
 /**

@@ -13,6 +13,7 @@ import {
 import { formatClassLabel } from '~/utils/class-display';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
+import { assertNotRetiredApHistoryAssignmentType } from '~/utils/retired-ap-history-access.server';
 
 const NO_STORE = { 'Cache-Control': 'private, no-store' } as const;
 
@@ -95,7 +96,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const assignment = await prisma.assignment.findUnique({
     where: { id: assignmentId },
-    select: { id: true },
+    select: {
+      id: true,
+      assignmentType: { select: { systemKey: true } },
+    },
   });
 
   if (!assignment) {
@@ -104,6 +108,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       { headers: NO_STORE }
     );
   }
+
+  assertNotRetiredApHistoryAssignmentType(assignment.assignmentType.systemKey);
 
   if (profile.role === 'TEACHER') {
     const teaches = await prisma.classAssignment.findFirst({

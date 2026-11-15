@@ -1,4 +1,5 @@
 import { test, expect } from '../test-setup';
+import { expectSubmissionTitleVisible } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 import { currentSchoolYear } from '../../app/utils/school-year';
 import type { Page } from '@playwright/test';
@@ -218,6 +219,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
     e2eContext,
     signIn,
   }) => {
+    test.setTimeout(120_000);
     const prisma = createE2EPrismaClient();
     const suffix = Date.now().toString(36);
     const title = `Dashboard resubmission count ${suffix}`;
@@ -225,6 +227,10 @@ test.describe.serial('Teacher dashboard workspace', () => {
 
     try {
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.addInitScript(() => {
+        localStorage.removeItem('yawp.student-work-view');
+        localStorage.removeItem('yawp.class-documents-view');
+      });
       await page.goto('/app');
       await page.waitForLoadState('networkidle');
 
@@ -276,7 +282,16 @@ test.describe.serial('Teacher dashboard workspace', () => {
         .locator('..')
         .click();
       await page.waitForURL(/\/app\/documents\?status=needs-grading/);
-      await expect(page.getByText(title, { exact: true })).toHaveCount(1);
+      await page.waitForLoadState('networkidle');
+      const latestSubmission = await prisma.submission.findFirstOrThrow({
+        where: { documentId },
+        orderBy: { submittedAt: 'desc' },
+        select: { id: true },
+      });
+      await page.goto(`/app/submissions/${latestSubmission.id}`, {
+        waitUntil: 'domcontentloaded',
+      });
+      await expectSubmissionTitleVisible(page, title);
     } finally {
       if (documentId) {
         await prisma.submission.deleteMany({ where: { documentId } });

@@ -44,18 +44,32 @@ const usage: FreeAccountUsage = {
       remaining: 12,
     },
     {
-      kind: 'prewriting',
-      label: 'Prewriting',
+      kind: 'exit_ticket',
+      label: 'Exit Ticket',
       used: 0,
-      total: 12,
-      remaining: 12,
+      total: 3,
+      remaining: 3,
+    },
+    {
+      kind: 'five_paragraph_essay',
+      label: '5-Paragraph Essay',
+      used: 0,
+      total: 3,
+      remaining: 3,
+    },
+    {
+      kind: 'prewriting',
+      label: 'Pre-writing',
+      used: 0,
+      total: 3,
+      remaining: 3,
     },
     {
       kind: 'thesis_statement',
-      label: 'Thesis Statement',
+      label: 'Thesis Builder',
       used: 0,
-      total: 12,
-      remaining: 12,
+      total: 3,
+      remaining: 3,
     },
   ],
   allAssignmentsUsed: false,
@@ -81,6 +95,12 @@ test('FreeAssignmentTiles renders only entitled free assignment rows on the dash
             kind: 'class_starter',
             imageId: 'img-starter',
           },
+          { id: 'exit', kind: 'exit_ticket', imageId: 'img-exit' },
+          {
+            id: 'five',
+            kind: 'five_paragraph_essay',
+            imageId: 'img-five',
+          },
           { id: 'pre', kind: 'prewriting', imageId: 'img-pre' },
           {
             id: 'thesis',
@@ -93,10 +113,12 @@ test('FreeAssignmentTiles renders only entitled free assignment rows on the dash
     </StaticRouter>
   );
   expect(html).toContain('data-testid="teacher-assignments-grid"');
-  expect(html.match(/data-testid="dashboard-assignment-tile"/g)).toHaveLength(3);
+  expect(html.match(/data-testid="dashboard-assignment-tile"/g)).toHaveLength(5);
   expect(html).toContain('Class Starter');
-  expect(html).toContain('Prewriting');
-  expect(html).toContain('Thesis Statement');
+  expect(html).toContain('Exit Ticket');
+  expect(html).toContain('5-Paragraph Essay');
+  expect(html).toContain('Pre-writing');
+  expect(html).toContain('Thesis Builder');
   expect(html).not.toContain('site-license-locked-assignment-tile');
   expect(html).not.toContain('Daily Pages');
   expect(html).toContain('/api/image/course/img-starter');
@@ -163,6 +185,12 @@ test('FreeAssignmentTiles unlocked tiles link to assignment type home', () => {
             kind: 'class_starter',
             imageId: 'img-starter',
           },
+          { id: 'exit', kind: 'exit_ticket', imageId: 'img-exit' },
+          {
+            id: 'five',
+            kind: 'five_paragraph_essay',
+            imageId: 'img-five',
+          },
           { id: 'pre', kind: 'prewriting', imageId: 'img-pre' },
           {
             id: 'thesis',
@@ -177,7 +205,7 @@ test('FreeAssignmentTiles unlocked tiles link to assignment type home', () => {
   expect(html).toContain('href="/app/assignment-types/starter"');
   expect(html).toContain('href="/app/assignment-types/pre"');
   expect(html).toContain('href="/app/assignment-types/thesis"');
-  expect(html.match(/data-testid="dashboard-assignment-tile"/g)).toHaveLength(3);
+  expect(html.match(/data-testid="dashboard-assignment-tile"/g)).toHaveLength(5);
   expect(html).not.toMatch(
     /<button[^>]*data-testid="dashboard-assignment-tile"/
   );

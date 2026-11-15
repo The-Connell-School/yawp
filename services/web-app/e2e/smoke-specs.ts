@@ -60,6 +60,7 @@ export const E2E_SMOKE_SPECS = [
   'e2e/tests/free-tier.trial-status.spec.ts',
   'e2e/tests/free-tier.legal.spec.ts',
   'e2e/tests/tester-feedback.spec.ts',
+  'e2e/tests/teacher.ap-history-new-assignment.spec.ts',
 ] as const;
 
 export type SmokeShard = 1 | 2 | 3 | 4 | 5 | 6;
@@ -78,7 +79,7 @@ export const E2E_SMOKE_SHARDS: Record<SmokeShard, readonly string[]> = {
   ],
   2: [
     'e2e/tests/document-editor.spec.ts',
-  'e2e/tests/document-editor-v2-margin.spec.ts',
+    'e2e/tests/document-editor-v2-margin.spec.ts',
     'e2e/tests/teacher.exit-ticket.spec.ts',
     'e2e/tests/auth.signin.spec.ts',
     'e2e/tests/document-local-first-persistence.spec.ts',
@@ -87,6 +88,7 @@ export const E2E_SMOKE_SHARDS: Record<SmokeShard, readonly string[]> = {
     'e2e/tests/admin.assignment-type-archive.spec.ts',
     'e2e/tests/teacher.my-assignments-scroll.spec.ts',
     'e2e/tests/teacher.staff-teacher-notes.spec.ts',
+    'e2e/tests/teacher.ap-history-new-assignment.spec.ts',
   ],
   3: [
     'e2e/tests/teacher.class-page-redesign.spec.ts',

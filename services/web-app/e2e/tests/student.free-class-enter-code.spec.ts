@@ -7,7 +7,10 @@ import bcrypt from 'bcryptjs';
 import { generateStudentJoinToken } from '../../app/utils/student-join-token';
 import { studentHandleBase } from '../../app/domain/unified-signon/student-handle';
 import { submitUnifiedLogin } from '../helpers/unified-login';
-import { submitSignedInEnterClassCode } from '../test-helpers';
+import {
+  clickStudentClassAssignmentRow,
+  submitSignedInEnterClassCode,
+} from '../test-helpers';
 
 test('existing student joins a separate free classroom and retains access after reload', async ({
   page,
@@ -129,6 +132,7 @@ test('existing student joins a separate free classroom and retains access after 
       prompt: 'Write a local fixture paragraph.',
     });
     assignmentId = deployed.assignment.id;
+    const localClassAssignmentId = deployed.classAssignment.id;
     const priorSchool = await db.school.create({
       data: {
         name: 'Local Prior Classroom',
@@ -142,6 +146,9 @@ test('existing student joins a separate free classroom and retains access after 
         code: `${tag}-prior`,
         title: 'Local Prior Class',
       },
+    });
+    await page.addInitScript(() => {
+      localStorage.removeItem('yawp.class-documents-view');
     });
     await page.goto('/auth/login');
     await page.waitForLoadState('networkidle');
@@ -218,10 +225,12 @@ test('existing student joins a separate free classroom and retains access after 
     await shot('desktop-reloaded-class');
     await page.getByRole('link', { name: /Local Joined Class/ }).click();
     await expect(page).toHaveURL(new RegExp(`/app/my-classes/${klass.id}`));
-    await page.reload();
-    await expect(
-      page.getByText('Local Permitted Assignment', { exact: true }).first()
-    ).toBeVisible();
+    await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
+    await clickStudentClassAssignmentRow(page, {
+      title: 'Local Permitted Assignment',
+      classAssignmentId: localClassAssignmentId,
+    });
+    await page.goBack({ waitUntil: 'domcontentloaded' });
     await shot('desktop-reloaded-assignment');
     await page.setViewportSize({ width: 390, height: 844 });
     await shot('mobile-reloaded-assignment');
@@ -266,9 +275,12 @@ test('existing student joins a separate free classroom and retains access after 
       await expect(signup).toHaveURL(/\/app(?:\?|$)/);
       await signup.goto(`/app/my-classes/${klass.id}`);
       await signup.reload();
-      await expect(
-        signup.getByText('Local Permitted Assignment', { exact: true }).first()
-      ).toBeVisible();
+      await expect(signup.getByTestId('student-class-detail')).toBeVisible();
+      await clickStudentClassAssignmentRow(signup, {
+        title: 'Local Permitted Assignment',
+        classAssignmentId: localClassAssignmentId,
+      });
+      await signup.goBack({ waitUntil: 'domcontentloaded' });
       if (shots) {
         await signup.screenshot({
           path: `${shots}/desktop-new-student-control.png`,

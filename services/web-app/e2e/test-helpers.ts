@@ -1,4 +1,5 @@
 import { Locator, Page, expect } from '@playwright/test';
+import { serializeDocumentWorkFilterIds } from '../app/utils/teacher-document-work-filter-options';
 
 /** Console noise from react-router when a new navigation aborts an in-flight /__manifest fetch. */
 const ABORTED_MANIFEST_PATCH_FIRST_LINE =
@@ -390,6 +391,590 @@ export async function submitSignedInEnterClassCode(
     ),
     page.getByRole('button', { name: 'Continue', exact: true }).click(),
   ]);
+}
+
+/** Expand every grouped-by-type section so rows stay reachable under the flag. */
+export async function expandAssignmentTypeSections(page: Page) {
+  const sections = page.locator('[data-testid^="assignment-type-section-"]');
+  const count = await sections.count();
+  for (let index = 0; index < count; index++) {
+    const heading = sections.nth(index).getByRole('button').first();
+    if ((await heading.getAttribute('aria-expanded')) === 'false') {
+      await heading.click();
+    }
+  }
+}
+
+async function selectMyAssignmentsTypePill(
+  page: Page,
+  typeTitle: string
+) {
+  const pills = page.getByTestId('my-assignments-type-pills');
+  if ((await pills.count()) === 0) return;
+  const pill = pills.getByRole('tab', {
+    name: new RegExp(`^${typeTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+  });
+  await pill.scrollIntoViewIfNeeded();
+  await pill.click();
+  await expect(pill).toHaveAttribute('aria-selected', 'true');
+}
+
+async function ensureMyAssignmentsFilterOpen(page: Page) {
+  const filter = page.getByTestId('my-assignments-filter');
+  if ((await filter.getAttribute('aria-expanded')) !== 'true') {
+    await filter.click();
+  }
+  await expect(page.getByTestId('my-assignments-search')).toBeVisible({
+    timeout: 15_000,
+  });
+}
+
+async function setMyAssignmentsClassFilter(
+  page: Page,
+  classOptionLabel: string | RegExp
+) {
+  await ensureMyAssignmentsFilterOpen(page);
+  const classTrigger = page
+    .getByText('Class', { exact: true })
+    .locator('..')
+    .getByRole('button')
+    .first();
+  await classTrigger.click();
+  const classSearch = page.getByPlaceholder('Search classes');
+  await expect(classSearch).toBeVisible({ timeout: 15_000 });
+  const filterText =
+    classOptionLabel instanceof RegExp
+      ? 'Period 1st'
+      : classOptionLabel;
+  await classSearch.fill(filterText);
+  const option = page
+    .locator('[cmdk-item]')
+    .filter({ hasText: classOptionLabel })
+    .first();
+  await expect(option).toBeVisible({ timeout: 15_000 });
+  await option.click();
+  await page.keyboard.press('Escape');
+}
+
+async function setMyAssignmentsSearchQuery(page: Page, query: string) {
+  await ensureMyAssignmentsFilterOpen(page);
+  const search = page.getByTestId('my-assignments-search');
+  await search.fill(query);
+  await expect(search).toHaveValue(query);
+  // Filtering is live while the popover stays open; avoid re-toggling Filter,
+  // which races closed on CI and hides the search field mid-assertion.
+  await page.keyboard.press('Escape');
+}
+
+/** Default seeded E2E class label (`Grade 9th • Period 1st`). */
+export const E2E_SEEDED_CLASS_LABEL = /Grade 9th.*Period 1st/i;
+
+async function findMyAssignmentRow(
+  page: Page,
+  options: { assignmentId?: string; title?: string }
+) {
+  await expandAssignmentTypeSections(page);
+  const target =
+    options.assignmentId != null
+      ? page.getByTestId(`my-assignment-open-${options.assignmentId}`)
+      : page
+          .locator('[data-testid^="my-assignment-open-"]')
+          .filter({ hasText: options.title ?? '' })
+          .first();
+  const forward = page.getByRole('button', { name: 'go forward' });
+  for (let pageIndex = 0; pageIndex < 25; pageIndex++) {
+    if (await target.isVisible().catch(() => false)) {
+      return target;
+    }
+    if (!(await forward.isEnabled().catch(() => false))) {
+      break;
+    }
+    await forward.click();
+  }
+  return target;
+}
+
+/** My Assignments search lives inside the Filter popover — open it before typing. */
+export async function fillMyAssignmentsSearch(
+  page: Page,
+  query: string,
+  options?: {
+    assignmentId?: string;
+    assignmentTypeTitle?: string;
+    classId?: string;
+    /** Visible class label in the My Assignments class multiselect. */
+    classLabel?: string | RegExp;
+    /** When false, keep polling the list instead of opening assignment detail. */
+    allowDetailFallback?: boolean;
+  }
+) {
+  const trimmed = query.trim();
+  const classLabel = options?.classLabel ?? E2E_SEEDED_CLASS_LABEL;
+
+  const rowVisibleTimeout = 20_000;
+
+  if (options?.assignmentId) {
+    const pollTimeoutMs = 90_000;
+    if (!page.url().includes('/app/assignments')) {
+      await page.goto('/app/assignments', { waitUntil: 'domcontentloaded' });
+    }
+    await expect(page.getByTestId('my-assignments-filter')).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect
+      .poll(
+        async () => {
+          if (!page.url().includes('/app/assignments')) {
+            await page.goto('/app/assignments', {
+              waitUntil: 'domcontentloaded',
+            });
+          }
+          await expect(page.getByTestId('my-assignments-filter')).toBeVisible({
+            timeout: 15_000,
+          });
+          await expandAssignmentTypeSections(page);
+          if (options.assignmentTypeTitle) {
+            await selectMyAssignmentsTypePill(page, options.assignmentTypeTitle);
+          }
+          if (options.classId) {
+            await setMyAssignmentsClassFilter(page, classLabel);
+          }
+          if (trimmed) {
+            await setMyAssignmentsSearchQuery(page, query);
+          }
+          const located = await findMyAssignmentRow(page, {
+            assignmentId: options.assignmentId,
+            title: trimmed || undefined,
+          });
+          return located.isVisible().catch(() => false);
+        },
+        { timeout: pollTimeoutMs }
+      )
+      .toBe(true);
+    return;
+  }
+
+  await expect(page.getByTestId('my-assignments-filter')).toBeVisible({
+    timeout: 30_000,
+  });
+  if (options?.assignmentTypeTitle) {
+    await selectMyAssignmentsTypePill(page, options.assignmentTypeTitle);
+  }
+  if (options?.classId) {
+    await setMyAssignmentsClassFilter(page, classLabel);
+  }
+  if (trimmed) {
+    await setMyAssignmentsSearchQuery(page, query);
+  }
+  if (!trimmed) return;
+  const located = await findMyAssignmentRow(page, { title: trimmed });
+  await expect(located).toBeVisible({ timeout: rowVisibleTimeout });
+}
+
+/** Navigates to assignment detail directly; avoids My Assignments list pagination on shared E2E DBs. */
+export async function openMyAssignmentDetail(
+  page: Page,
+  assignmentId: string,
+  classId: string
+) {
+  await page.goto(`/app/assignments/${assignmentId}?classId=${classId}`, {
+    waitUntil: 'domcontentloaded',
+  });
+  await expect(page.getByTestId('assignment-detail-page')).toBeVisible({
+    timeout: 30_000,
+  });
+}
+
+/** Editor v2 uses a title input; v1 used a page heading. */
+export async function expectDocumentTitleVisible(
+  page: Page,
+  title: string,
+  options?: { timeout?: number }
+) {
+  const timeout = options?.timeout ?? 30_000;
+  const titleInput = page.getByTestId('document-title-input');
+  if ((await titleInput.count()) > 0) {
+    await expect(titleInput).toBeVisible({ timeout });
+    await expect(titleInput).toHaveValue(title);
+    return;
+  }
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({
+    timeout,
+  });
+}
+
+/** Teacher submission grading shows the title in an input, not always as plain text. */
+export async function expectSubmissionTitleVisible(
+  page: Page,
+  title: string,
+  options?: { timeout?: number }
+) {
+  const timeout = options?.timeout ?? 30_000;
+  const titleInput = page.getByTestId('submission-title-input');
+  if ((await titleInput.count()) > 0) {
+    await expect(titleInput).toBeVisible({ timeout });
+    await expect(titleInput).toHaveValue(title);
+    return;
+  }
+  await expect(page.getByText(title).first()).toBeVisible({ timeout });
+}
+
+async function openTeacherDocumentWorkFilter(page: Page) {
+  const filter = page.getByRole('button', { name: /^Filter$/i }).first();
+  await expect(filter).toBeVisible({ timeout: 15_000 });
+  await filter.click();
+}
+
+/** Deep-link class documents (optional status / group / q query filters). */
+export function classDocumentsTabUrl(
+  classId: string,
+  params?: {
+    q?: string;
+    documentGroup?: string;
+    status?: string;
+    assignmentId?: string;
+    classAssignmentId?: string;
+    studentId?: string;
+  }
+) {
+  const search = new URLSearchParams({
+    tab: 'documents',
+    documentGroup: params?.documentGroup ?? 'none',
+    status: params?.status ?? 'all',
+  });
+  if (params?.q) search.set('q', params.q.trim().toLowerCase());
+  const assignmentParam = params?.assignmentId
+    ? serializeDocumentWorkFilterIds([params.assignmentId])
+    : null;
+  if (assignmentParam) search.set('assignmentId', assignmentParam);
+  if (params?.classAssignmentId) {
+    search.set('classAssignmentId', params.classAssignmentId);
+  }
+  const studentParam = params?.studentId
+    ? serializeDocumentWorkFilterIds([params.studentId])
+    : null;
+  if (studentParam) search.set('studentId', studentParam);
+  return `/app/my-classes/${classId}?${search.toString()}`;
+}
+
+async function isClassDocumentsTableVisible(page: Page) {
+  return page
+    .getByRole('table', { name: /class documents/i })
+    .isVisible()
+    .catch(() => false);
+}
+
+/** Exit ticket assignment detail opens the creation sheet, not the edit route. */
+export async function expectExitTicketEditSheetReady(
+  page: Page,
+  timeoutMs = 90_000
+) {
+  const sheet = page.getByRole('dialog');
+  await expect(sheet.getByLabel('Title (optional)')).toBeVisible({
+    timeout: timeoutMs,
+  });
+}
+
+export async function expectClassDocumentsTable(page: Page) {
+  await expect(
+    page.getByRole('table', { name: /class documents/i })
+  ).toBeVisible({ timeout: 30_000 });
+}
+
+export async function expectClassDocumentsTitleVisible(
+  page: Page,
+  title: string,
+  timeoutMs = 60_000
+) {
+  const table = page.getByRole('table', { name: /class documents/i });
+  await expect(table).toBeVisible({ timeout: 30_000 });
+  await expect(table.getByText(title, { exact: true })).toBeVisible({
+    timeout: timeoutMs,
+  });
+}
+
+/** Narrow the class documents table via the Filter popover (preferred on CI). */
+export async function filterClassDocumentsByTitle(
+  page: Page,
+  title: string,
+  options?: { useUrl?: boolean; classId?: string }
+) {
+  const normalized = title.trim().toLowerCase();
+  if (options?.useUrl) {
+    const classId =
+      options.classId ??
+      page.url().match(/\/app\/my-classes\/([^/?]+)/)?.[1];
+    if (!classId) {
+      throw new Error('filterClassDocumentsByTitle requires a class id for URL mode');
+    }
+    await page.goto(
+      classDocumentsTabUrl(classId, {
+        q: normalized,
+        status: 'all',
+        documentGroup: 'none',
+      })
+    );
+    await openClassDocumentsTab(page);
+    await expectClassDocumentsTitleVisible(page, title.trim());
+    return;
+  }
+  await fillTeacherDocumentWorkSearch(page, normalized);
+  await expectClassDocumentsTitleVisible(page, title.trim());
+}
+
+export async function waitForClassDocumentTitle(
+  page: Page,
+  classId: string,
+  title: string,
+  options?: {
+    assignmentId?: string;
+    classAssignmentId?: string;
+    studentId?: string;
+    status?: string;
+    q?: string;
+    timeoutMs?: number;
+  }
+) {
+  const timeoutMs = options?.timeoutMs ?? 90_000;
+  const preferredStatus = options?.status ?? 'all';
+  const statuses = preferredStatus === 'all' ? ['all'] : [preferredStatus, 'all'];
+  const tableTitle = () =>
+    page
+      .getByRole('table', { name: /class documents/i })
+      .getByText(title, { exact: true });
+  const tabParams = (status: string) => ({
+    status,
+    documentGroup: 'none' as const,
+    assignmentId: options?.assignmentId,
+    classAssignmentId: options?.classAssignmentId,
+    studentId: options?.studentId,
+    q: options?.q,
+  });
+  const titleQuery = title.trim().toLowerCase();
+  await expect
+    .poll(
+      async () => {
+        for (const status of statuses) {
+          await gotoClassDocumentsTab(page, classId, tabParams(status));
+          if (!(await isClassDocumentsTableVisible(page))) {
+            continue;
+          }
+          if (await tableTitle().isVisible().catch(() => false)) {
+            return true;
+          }
+          await fillTeacherDocumentWorkSearch(page, titleQuery);
+          if (await tableTitle().isVisible().catch(() => false)) {
+            return true;
+          }
+        }
+        return false;
+      },
+      { timeout: timeoutMs }
+    )
+    .toBe(true);
+}
+
+/** Filter popover search — use when URL `q` would hide rows the spec still needs visible. */
+export async function filterClassDocumentsByTitleInPopover(
+  page: Page,
+  title: string
+) {
+  await fillTeacherDocumentWorkSearch(page, title.trim().toLowerCase());
+  await expectClassDocumentsTitleVisible(page, title.trim());
+}
+
+/** Class detail documents tab (header tabs include counts in the label). */
+export async function openClassDocumentsTab(page: Page) {
+  const tab = page.locator('[data-header-tab="documents"]');
+  await expect(tab).toBeVisible({ timeout: 15_000 });
+  if ((await tab.getAttribute('aria-selected')) !== 'true') {
+    await tab.click();
+  }
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('class-documents-status-chips')).toBeVisible({
+    timeout: 15_000,
+  });
+}
+
+export async function gotoClassDocumentsTab(
+  page: Page,
+  classId: string,
+  params?: {
+    q?: string;
+    documentGroup?: string;
+    status?: string;
+    assignmentId?: string;
+    classAssignmentId?: string;
+    studentId?: string;
+  }
+) {
+  await page.goto(
+    classDocumentsTabUrl(classId, {
+      documentGroup: 'none',
+      ...params,
+    })
+  );
+  await openClassDocumentsTab(page);
+}
+
+/** Teacher document work search box (lives inside the Filter popover). */
+export async function fillTeacherDocumentWorkSearch(page: Page, query: string) {
+  await openTeacherDocumentWorkFilter(page);
+  const search = page.getByRole('textbox', {
+    name: /search (class )?documents/i,
+  });
+  await expect(search).toBeVisible({ timeout: 15_000 });
+  await search.fill(query);
+  await search.press('Enter');
+  await expect(search).toHaveValue(query);
+  await page.keyboard.press('Escape');
+}
+
+/** @deprecated Prefer classDocumentsTabUrl({ q }) — search is inside the Filter popover. */
+export async function fillClassDocumentsSearch(page: Page, query: string) {
+  await fillTeacherDocumentWorkSearch(page, query);
+}
+
+/** POST /start when the assignments list is slow to hydrate after join. */
+export async function startStudentClassAssignment(
+  page: Page,
+  classAssignmentId: string
+) {
+  await expect(page.getByTestId('student-class-detail')).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.evaluate((id) => {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/app/class-assignments/${id}/start`;
+    document.body.append(form);
+    form.requestSubmit();
+  }, classAssignmentId);
+  await page.waitForURL('**/app/documents/**', { timeout: 60_000 });
+}
+
+/** Class documents status chip (FilterPills may scroll horizontally). */
+export async function clickClassDocumentsStatusTab(
+  page: Page,
+  name: string | RegExp
+) {
+  const chips = page.getByTestId('class-documents-status-chips');
+  await expect(chips).toBeVisible({ timeout: 15_000 });
+  const tab = chips.getByRole('tab', { name });
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await tab.scrollIntoViewIfNeeded();
+    if (await tab.isVisible()) {
+      await tab.click();
+      try {
+        await expect(tab).toHaveAttribute('aria-selected', 'true', {
+          timeout: 5_000,
+        });
+        return;
+      } catch {
+        // Chip can sit under overflow chevrons until the track scrolls.
+      }
+    }
+    const scrollRight = page.getByTestId(
+      'class-documents-status-chips-scroll-right'
+    );
+    if (await scrollRight.isVisible()) {
+      await scrollRight.click();
+    }
+  }
+  await tab.click();
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
+}
+
+/** Class detail assignments tab (header tabs include counts in the label). */
+export async function openClassAssignmentsTab(page: Page) {
+  const tab = page.locator('[data-header-tab="assignments"]');
+  await expect(tab).toBeVisible({ timeout: 15_000 });
+  if ((await tab.getAttribute('aria-selected')) !== 'true') {
+    await tab.click();
+  }
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
+  await expect(
+    page.getByRole('textbox', { name: 'Search assignments' })
+  ).toBeVisible({ timeout: 15_000 });
+}
+
+/** Class assignments rows open the assignment detail via the table row click handler. */
+export async function clickClassAssignmentRow(
+  page: Page,
+  assignmentId: string,
+  options?: { title?: string; classId?: string }
+) {
+  await openClassAssignmentsTab(page);
+  const searchBox = page.getByTestId('class-assignments-search');
+  if (options?.title) {
+    await searchBox.fill('');
+    await searchBox.fill(options.title);
+    await expect(searchBox).toHaveValue(options.title);
+  } else {
+    await searchBox.fill('');
+  }
+  await expandAssignmentTypeSections(page);
+  const open = page.getByTestId(`assignment-open-${assignmentId}`);
+  const row = page.getByRole('row').filter({ has: open });
+  try {
+    await expect(open).toBeVisible({ timeout: 15_000 });
+    await row.click();
+  } catch (error) {
+    if (!options?.classId) throw error;
+    await page.goto(
+      `/app/assignments/${assignmentId}?classId=${options.classId}`
+    );
+  }
+}
+
+/** Student class detail: ensure the Assignments tab is active (Radix tabs, not header tabs). */
+export async function openStudentClassAssignmentsTab(page: Page) {
+  const tab = page.getByRole('tab', { name: 'Assignments', exact: true });
+  await expect(tab).toBeVisible({ timeout: 15_000 });
+  if ((await tab.getAttribute('aria-selected')) !== 'true') {
+    await tab.click();
+  }
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
+}
+
+/** Student class Assignments tab rows navigate via the table row onClick handler. */
+export async function clickStudentClassAssignmentRow(
+  page: Page,
+  options: {
+    assignmentId?: string;
+    title?: string;
+    classAssignmentId?: string;
+  }
+) {
+  await expect(page.getByTestId('student-class-detail')).toBeVisible({
+    timeout: 15_000,
+  });
+  await openStudentClassAssignmentsTab(page);
+  if (options.title) {
+    const startButton = page.getByRole('button', {
+      name: options.title,
+      exact: true,
+    });
+    try {
+      await expect(startButton).toBeVisible({ timeout: 15_000 });
+      await startButton.click();
+      return;
+    } catch (error) {
+      if (!options.classAssignmentId) throw error;
+      await startStudentClassAssignment(page, options.classAssignmentId);
+      return;
+    }
+  }
+  if (options.classAssignmentId) {
+    await startStudentClassAssignment(page, options.classAssignmentId);
+    return;
+  }
+  await expandAssignmentTypeSections(page);
+  const row = page
+    .getByRole('row')
+    .filter({ hasText: options.title ?? '' });
+  await expect(row).toBeVisible({ timeout: 30_000 });
+  await row.click();
 }
 
 /** Submit join form and wait until the student lands in the authenticated app shell. */

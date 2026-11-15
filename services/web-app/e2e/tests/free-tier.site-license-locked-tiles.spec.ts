@@ -41,7 +41,7 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
-test('free-tier flag on shows three dashboard tiles and locked tiles in picker', async ({
+test('free-tier flag on shows five dashboard tiles and locked tiles in picker', async ({
   page,
 }) => {
   await flag('free_tier', true);
@@ -50,15 +50,19 @@ test('free-tier flag on shows three dashboard tiles and locked tiles in picker',
   await loginFreeTeacher(page);
   await page.goto('/app');
   const tiles = page.getByTestId('teacher-assignments-grid');
-  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(3);
+  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(5);
   await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
     0
   );
   await expect(tiles).not.toContainText('Available with a site license.');
   await expect(tiles.locator('img')).toHaveCount(0);
-  await expect(tiles.getByText('Class Starter', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('Prewriting', { exact: true })).toBeVisible();
-  await expect(tiles.getByText('Thesis Statement', { exact: true })).toBeVisible();
+  const { FREE_CLASSROOM_BUNDLE_TILE_LABELS } = await import(
+    '../../app/domain/free-tier/inapp-usage'
+  );
+  const tileNames = await tiles
+    .getByTestId('assignment-type-tile-name')
+    .allTextContents();
+  expect(tileNames).toEqual([...FREE_CLASSROOM_BUNDLE_TILE_LABELS]);
   await page.getByRole('button', { name: 'New assignment' }).click();
   await expect(
     page.getByTestId('site-license-locked-assignment-tile').first()

@@ -22,6 +22,8 @@ const usage: FreeAccountUsage = {
     lessonPlanCap: 5,
     assignmentCaps: {
       class_starter: 12,
+      exit_ticket: 3,
+      five_paragraph_essay: 3,
       prewriting: 3,
       thesis_statement: 3,
     },

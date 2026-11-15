@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { exitTicketSheetPropsFromPrefill } from './exit-ticket-sheet-props';
 import { useFetcher } from 'react-router';
 import {
   AssignmentCreationSheet,
@@ -157,24 +158,7 @@ export function CreateAssignmentSheet({
         ]}
         teacherClasses={teacherClasses}
         initialPrompt={initialPrompt}
-        initialExitTicketMode={plannedExitTicket?.mode}
-        initialExitTicketFocus={plannedExitTicket?.focus ?? undefined}
-        initialExitTicketTopic={plannedExitTicket?.topic}
-        initialExitTicketAnswerType={plannedExitTicket?.answerType ?? null}
-        initialExitTicketLessonNotes={plannedExitTicket?.lessonNotes ?? null}
-        initialExitTicketReflectionPrompt={
-          plannedExitTicket?.reflectionPrompt ?? null
-        }
-        initialExitTicketGrading={plannedExitTicket?.grading ?? null}
-        initialExitTicketConfig={plannedExitTicket?.config ?? null}
-        initialExitTicketGradebook={
-          plannedExitTicket
-            ? {
-                submitForGrade: plannedExitTicket.graded,
-                pointValue: plannedExitTicket.pointValue,
-              }
-            : null
-        }
+        {...exitTicketSheetPropsFromPrefill(plannedExitTicket)}
         titleRequired={titleRequired}
       />
     );

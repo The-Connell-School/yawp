@@ -1232,22 +1232,29 @@ test('run supports archived parent, legacy-only snapshot and built-in kind', asy
 });
 
 test('run rejects empty snapshot and AP History assignment context without provider calls', async () => {
-  for (const apHistory of [false, true]) {
-    const f = runFixture();
-    if (apHistory) f.parent.systemKey = 'ap_history_essay';
-    else f.snapshot.snapshotJson.evaluations = [];
-    const res = await f.handlers.handle(
-      'runs',
-      req('POST', '/evaluation-runs', runBody, { key: 'guard' }),
-      'at-1'
-    );
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toContain(
-      apHistory ? 'assignment snapshot' : 'at least one'
-    );
-    expect(f.execute).not.toHaveBeenCalled();
-    expect(f.runs).toHaveLength(0);
-  }
+  const emptySnapshot = runFixture();
+  emptySnapshot.snapshot.snapshotJson.evaluations = [];
+  const emptyRes = await emptySnapshot.handlers.handle(
+    'runs',
+    req('POST', '/evaluation-runs', runBody, { key: 'guard-empty' }),
+    'at-1'
+  );
+  expect(emptyRes.status).toBe(400);
+  expect((await emptyRes.json()).error).toContain('at least one');
+  expect(emptySnapshot.execute).not.toHaveBeenCalled();
+  expect(emptySnapshot.runs).toHaveLength(0);
+
+  const apHistory = runFixture();
+  apHistory.parent.systemKey = 'ap_history_essay';
+  const apRes = await apHistory.handlers.handle(
+    'runs',
+    req('POST', '/evaluation-runs', runBody, { key: 'guard-ap' }),
+    'at-1'
+  );
+  expect(apRes.status).toBe(404);
+  expect((await apRes.json()).error).toContain('Assignment type not found');
+  expect(apHistory.execute).not.toHaveBeenCalled();
+  expect(apHistory.runs).toHaveLength(0);
 });
 
 test('run idempotency is scoped to the signed actor and signing key', async () => {

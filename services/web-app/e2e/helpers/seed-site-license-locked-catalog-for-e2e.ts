@@ -1,5 +1,4 @@
 import type { PrismaClient } from '@app/prisma';
-import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 
 const emptyJson = {};
 
@@ -59,22 +58,6 @@ export async function seedSiteLicenseLockedCatalogForE2E(
     update: { archivedAt: null, title: 'ACT Writing Section' },
   });
 
-  await prisma.assignmentType.upsert({
-    where: { kind: 'ap_history' },
-    create: {
-      ...base,
-      title: 'AP History Essay',
-      kind: 'ap_history',
-      systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY,
-      position: 913,
-    },
-    update: {
-      archivedAt: null,
-      systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY,
-      title: 'AP History Essay',
-    },
-  });
-
   const thesis = await prisma.assignmentType.findFirst({
     where: {
       title: { equals: 'The Thesis-Driven Essay', mode: 'insensitive' },
@@ -117,7 +100,15 @@ export async function seedSiteLicenseLockedCatalogForE2E(
       assignmentType: {
         ownerOrgId: null,
         ownerMembershipId: null,
-        kind: { in: ['class_starter', 'prewriting', 'thesis_statement'] },
+        kind: {
+          in: [
+            'class_starter',
+            'exit_ticket',
+            'five_paragraph_essay',
+            'prewriting',
+            'thesis_statement',
+          ],
+        },
       },
     },
     select: { contentType: true, blob: true, altText: true },
@@ -130,7 +121,7 @@ export async function seedSiteLicenseLockedCatalogForE2E(
       ownerMembershipId: null,
       archivedAt: null,
       OR: [
-        { kind: { in: ['daily_pages', 'act_writing', 'ap_history'] } },
+        { kind: { in: ['daily_pages', 'act_writing'] } },
         {
           title: {
             equals: 'The Thesis-Driven Essay',

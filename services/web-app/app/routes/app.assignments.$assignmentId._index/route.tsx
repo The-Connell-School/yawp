@@ -92,6 +92,7 @@ import {
   getGrammarGradingAssignmentTypeIds,
   resolveAssignmentTypeGradingConfig,
 } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { assertNotRetiredApHistoryAssignmentType } from '~/utils/retired-ap-history-access.server';
 
 /**
  * Page chrome the class route used to provide while this page was nested
@@ -210,6 +211,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const active =
     deployments.find((deployment) => deployment.classId === requestedClassId) ??
     deployments[0];
+
+  assertNotRetiredApHistoryAssignmentType(
+    active.assignment.assignmentType.systemKey
+  );
 
   const classInsightsEnabled =
     active.class.school.organization.classInsightsEnabled === true;

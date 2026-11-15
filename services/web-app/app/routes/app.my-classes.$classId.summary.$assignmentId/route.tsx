@@ -21,6 +21,7 @@ import { ClassInsightsPanel } from '../app.my-classes.$classId_.assignments.$ass
 import { buildGradedCountByAssignmentId } from '../app.my-classes.$classId/graded-count';
 import type { loader as classDetailLoader } from '../app.my-classes.$classId/route';
 import { AcrossSectionsPanel } from './across-sections-panel';
+import { assertNotRetiredApHistoryAssignmentType } from '~/utils/retired-ap-history-access.server';
 
 /** Search param that opts the page into the across-sections view. */
 export const ACROSS_SECTIONS_PARAM = 'sections';
@@ -51,6 +52,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const assignmentId = params.assignmentId!;
+
+  const assignmentType = await prisma.assignment.findFirst({
+    where: {
+      id: assignmentId,
+      classAssignments: {
+        some: { class: { teachers: { some: { id: profile.id } } } },
+      },
+    },
+    select: { assignmentType: { select: { systemKey: true } } },
+  });
+  if (!assignmentType) throw new Response('Not Found', { status: 404 });
+  assertNotRetiredApHistoryAssignmentType(
+    assignmentType.assignmentType.systemKey
+  );
 
   const classAssignments = await prisma.classAssignment.findMany({
     where: {

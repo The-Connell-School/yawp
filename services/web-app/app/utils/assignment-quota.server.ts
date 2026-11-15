@@ -33,8 +33,10 @@ export function freeClassroomQuotaMessage(
 ) {
   const labels: Record<FreeClassroomAssignmentQuotaKind, string> = {
     class_starter: 'Class Starters',
-    prewriting: 'Prewriting assignments',
-    thesis_statement: 'Thesis Statement assignments',
+    exit_ticket: 'Exit Ticket assignments',
+    five_paragraph_essay: '5-Paragraph Essay assignments',
+    prewriting: 'Pre-writing assignments',
+    thesis_statement: 'Thesis Builder assignments',
   };
   const cap = FREE_CLASSROOM_ASSIGNMENT_QUOTAS[kind];
   if (remaining <= 0) {
