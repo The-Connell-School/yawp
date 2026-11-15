@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
+import { startTransition, useCallback, useEffect, useState } from 'react';
+
+function afterHydration(callback: () => void) {
+  if (typeof window === 'undefined') return;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      startTransition(callback);
+    });
+  });
+}
 
 export type DocComment = {
   id: string;
@@ -31,13 +40,15 @@ export function useCommentsState(initialComments: DocComment[]) {
   // Resync if the loader-provided comments change wholesale
   // (typically happens on navigation to a different document)
   useEffect(() => {
-    setComments((prev) => {
-      const byId = new Map<string, DocComment>();
-      for (const c of initialComments) byId.set(c.id, c);
-      for (const c of prev) {
-        if (!byId.has(c.id)) byId.set(c.id, c);
-      }
-      return Array.from(byId.values());
+    afterHydration(() => {
+      setComments((prev) => {
+        const byId = new Map<string, DocComment>();
+        for (const c of initialComments) byId.set(c.id, c);
+        for (const c of prev) {
+          if (!byId.has(c.id)) byId.set(c.id, c);
+        }
+        return Array.from(byId.values());
+      });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialComments]);

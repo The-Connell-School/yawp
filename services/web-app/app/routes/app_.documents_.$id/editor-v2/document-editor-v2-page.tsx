@@ -311,9 +311,10 @@ export function DocumentEditorV2Page() {
   );
   useEffect(() => {
     if (!uiMounted) return;
-    if (isViewingAsTeacher && !isOwnTeacherPreview) {
+    if (!isViewingAsTeacher || isOwnTeacherPreview) return;
+    startTransition(() => {
       setDesktopCommentsOpen(true);
-    }
+    });
   }, [
     uiMounted,
     isViewingAsTeacher,
