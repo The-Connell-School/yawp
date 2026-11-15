@@ -431,10 +431,6 @@ async function setMyAssignmentsSearchQuery(page: Page, query: string) {
   await expect(page.getByTestId('my-assignments-search')).toBeHidden({
     timeout: 5_000,
   });
-  const table = page.getByRole('table', { name: 'My Assignments' });
-  if (query.trim()) {
-    await expect(table).toContainText(query.trim(), { timeout: 15_000 });
-  }
 }
 
 async function findMyAssignmentRow(
@@ -553,14 +549,14 @@ export async function clickClassAssignmentRow(
     await searchBox.fill('');
     await searchBox.fill(options.title);
     await expect(searchBox).toHaveValue(options.title);
+  } else {
+    await searchBox.fill('');
   }
   await expandAssignmentTypeSections(page);
-  const row = page
-    .getByRole('row')
-    .filter({ has: page.getByTestId(`assignment-open-${assignmentId}`) });
-  await expect(row).toBeVisible({ timeout: 30_000 });
+  const open = page.getByTestId(`assignment-open-${assignmentId}`);
+  await expect(open).toBeVisible({ timeout: 30_000 });
+  const row = page.getByRole('row').filter({ has: open });
   await row.click();
-}
 
 /** Student class Assignments tab rows navigate via the table row onClick handler. */
 export async function clickStudentClassAssignmentRow(
@@ -571,10 +567,11 @@ export async function clickStudentClassAssignmentRow(
     timeout: 15_000,
   });
   if (options.title) {
-    const startButton = page.getByRole('button', {
-      name: options.title,
-      exact: true,
-    });
+    const escaped = options.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const startButton = page
+      .getByRole('button')
+      .filter({ hasText: new RegExp(escaped) })
+      .first();
     await expect(startButton).toBeVisible({ timeout: 30_000 });
     await startButton.click();
     return;

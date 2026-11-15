@@ -164,7 +164,7 @@ function prefersReducedMotion() {
 
 /** In-page with layout, even if clipped horizontally (wide dashboard grids). */
 function isPresentForTour(el: HTMLElement | null): el is HTMLElement {
-  return targetHasLayout(el);
+  return targetHasLayout(el) || isShown(el);
 }
 
 /** Steps whose element is on this page right now; a centered card if none are. */
@@ -299,7 +299,7 @@ function PageTourController({
     const tryResolve = () => {
       const steps = resolveSteps(tour);
       const targetSteps = steps.filter((step) => step.target).length;
-      if (targetSteps >= 2 || attempts >= 15) {
+      if (targetSteps >= 2 || attempts >= 30) {
         setPhase({ kind: 'touring', steps, index: 0 });
         return;
       }
