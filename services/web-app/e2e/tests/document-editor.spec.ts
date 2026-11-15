@@ -623,7 +623,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     e2eContext,
     helpers,
   }) => {
-    await signIn('admin@brock.software', 'adminadmin');
+    await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
     await helpers.openDocument(
       `${e2eContext.editedDocumentId}?editor=v1`,
       { retry: true }
@@ -660,25 +660,81 @@ test.describe.serial('Document Editor E2E Tests', () => {
     });
   });
 
-  test('v2 margin comments support resolve on desktop', async ({
+  test('v2 student can add a margin comment from selection', async ({
     page,
     signIn,
     e2eContext,
     helpers,
   }) => {
-    await signIn('teacher@brock.software', 'teacherteacher');
+    await signIn('jdoe@brock.software', 'johndoe');
+    await page.setViewportSize({ width: 1280, height: 720 });
     await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
     const v2 = page.locator('[data-document-editor-version="v2"]');
     if ((await v2.count()) === 0) {
       test.skip();
     }
-  const resolveButton = page
-      .locator('[data-testid^="comment-resolve-"]')
-      .first();
-    if ((await resolveButton.count()) === 0) {
+    const editor = helpers.getEditor();
+    await editor.click();
+    await page.keyboard.press(SELECT_ALL_SHORTCUT);
+    await page.getByTestId('editor-add-comment').click();
+    await expect(page.locator('[id^="comment-"]').first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(
+      page.locator('[data-testid^="margin-comment-card-"]').first()
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('v2 teacher margin comments support reply and resolve', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await helpers.openDocument(e2eContext.gradedDocumentId, { retry: true });
+    const v2 = page.locator('[data-document-editor-version="v2"]');
+    if ((await v2.count()) === 0) {
       test.skip();
     }
+    const card = page.getByTestId(
+      `margin-comment-card-${e2eContext.v2GradedCommentId}`
+    );
+    await expect(card).toBeVisible({ timeout: 15_000 });
+    await expect(card).toContainText('Thanks — I will expand this section.');
+    const replyInput = page.getByTestId(
+      `comment-reply-input-${e2eContext.v2GradedCommentId}`
+    );
+    await replyInput.fill('Reply from teacher E2E.');
+    await page
+      .getByTestId(`comment-reply-send-${e2eContext.v2GradedCommentId}`)
+      .click();
+    await expect(card).toContainText('Reply from teacher E2E.', {
+      timeout: 10_000,
+    });
+    const resolveButton = page.getByTestId(
+      `comment-resolve-${e2eContext.v2GradedCommentId}`
+    );
     await resolveButton.click();
-    await expect(resolveButton).toBeHidden({ timeout: 10000 });
+    await expect(resolveButton).toBeHidden({ timeout: 10_000 });
+  });
+
+  test('v2 shows mobile tab bar at 390px width', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('jdoe@brock.software', 'johndoe');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const v2 = page.locator('[data-document-editor-version="v2"]');
+    if ((await v2.count()) === 0) {
+      test.skip();
+    }
+    await expect(page.getByTestId('document-mobile-tabbar')).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });

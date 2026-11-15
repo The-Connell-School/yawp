@@ -7,8 +7,12 @@ mock.module('~/domain/feature-flags/feature-flags.server', () => ({
   isFeatureFlagEnabled,
 }));
 
-const { resolveDocumentEditorV2Enabled, isDocumentEditorV2RolloutEnabled } =
-  await import('./document-editor-v2-gate.server');
+const {
+  resolveDocumentEditorV2Enabled,
+  isDocumentEditorV2RolloutEnabled,
+  shouldClearDocumentEditorV2ForceCookie,
+  shouldSetDocumentEditorV2ForceCookie,
+} = await import('./document-editor-v2-gate.server');
 
 describe('document editor v2 gate', () => {
   afterEach(() => {
@@ -81,5 +85,22 @@ describe('document editor v2 gate', () => {
     expect(
       await resolveDocumentEditorV2Enabled({ request, isStaff: false })
     ).toBe(true);
+  });
+
+  test('staff ?editor=v1 clears the v2 force cookie', () => {
+    const request = new Request(
+      'https://yawp.school/app/documents/doc-1?editor=v1'
+    );
+    expect(shouldClearDocumentEditorV2ForceCookie(request, true)).toBe(true);
+    expect(shouldClearDocumentEditorV2ForceCookie(request, false)).toBe(false);
+    expect(shouldSetDocumentEditorV2ForceCookie(request, true)).toBe(false);
+  });
+
+  test('staff ?editor=v2 sets the v2 force cookie', () => {
+    const request = new Request(
+      'https://yawp.school/app/documents/doc-1?editor=v2'
+    );
+    expect(shouldSetDocumentEditorV2ForceCookie(request, true)).toBe(true);
+    expect(shouldClearDocumentEditorV2ForceCookie(request, true)).toBe(false);
   });
 });
