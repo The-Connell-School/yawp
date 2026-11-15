@@ -20,9 +20,10 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     ).toBeVisible();
     // Pagination is 20 per page, and other shards share the E2E database, so
     // the seeded title may sit off the first page unless we narrow the list.
-    await fillMyAssignmentsSearch(page, 'E2E Class Assignment', {
+    await fillMyAssignmentsSearch(page, '', {
       assignmentId: e2eContext.assignmentId,
       classId: e2eContext.classId,
+      allowDetailFallback: false,
     });
     // Exact, because the row's selection checkbox is itself a cell whose
     // accessible name ("Select assignment E2E Class Assignment") contains the
@@ -43,6 +44,7 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     await fillMyAssignmentsSearch(page, 'E2E Class Assignment', {
       assignmentId: e2eContext.assignmentId,
       classId: e2eContext.classId,
+      allowDetailFallback: false,
     });
 
     await page.getByTestId(`my-assignment-open-${e2eContext.assignmentId}`).click();

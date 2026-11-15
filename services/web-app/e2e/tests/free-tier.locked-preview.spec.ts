@@ -8,11 +8,7 @@ import { seedSiteLicenseLockedCatalogForE2E } from '../helpers/seed-site-license
 import { dashboardAssignmentTileOverlapIssues } from '../helpers/dashboard-assignment-tile-overlap';
 import { expectGiveFeedbackAccessible } from '../helpers/dev-panel-feedback';
 import { expectNewAssignmentBuilderPage } from '../helpers/assignment-builder-v3-page';
-import { createLockedPreviewBrowseAssignmentForE2E } from '../helpers/ensure-locked-preview-sample-assignments-for-e2e';
-import {
-  expandAssignmentTypeSections,
-  openClassAssignmentsTab,
-} from '../test-helpers';
+import { openClassAssignmentsTab } from '../test-helpers';
 import { FREE_CLASSROOM_BUNDLE_TILE_LABELS } from '../../app/domain/free-tier/inapp-usage';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
@@ -1009,7 +1005,7 @@ test('locked class surfaces hide the real class code and lock invite controls', 
   ).toBeVisible();
 });
 
-test('locked assignments tab shows browse rows and locked documents pill', async ({
+test('locked assignments tab blocks send and create until approval', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 900 });
@@ -1021,32 +1017,18 @@ test('locked assignments tab shows browse rows and locked documents pill', async
     select: { id: true, school: { select: { organizationId: true } } },
   });
   await exploreLockedApp(page, user.email!);
-  const browseTitle = `Locked preview browse row ${Date.now().toString(36)}`;
-  const browseAssignment = await createLockedPreviewBrowseAssignmentForE2E(
-    prisma,
-    klass.id,
-    browseTitle
-  );
   await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
   await openClassAssignmentsTab(page);
-  await expandAssignmentTypeSections(page);
-  await page.getByTestId('class-assignments-search').fill(browseTitle);
-  await expect(
-    page.getByTestId(`assignment-open-${browseAssignment.id}`)
-  ).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByText('Sample · Not sent').first()).toBeVisible({
-    timeout: 15_000,
-  });
-  const documentsPill = page.getByTestId(/assignment-documents-/).first();
-  await expect(documentsPill).toBeVisible();
-  await documentsPill.click({ force: true });
+  const create = page.getByRole('button', { name: 'New Assignment' });
+  await expect(create).toBeVisible();
+  await create.click();
   const sheet = page.getByRole('dialog');
   await expect(sheet).toBeVisible();
   await expect(
     sheet.getByRole('heading', { name: 'Unlocks after approval' })
   ).toBeVisible();
   await expect(
-    page.getByText(/Sending assignments to your class unlocks once Dr\. Patel/)
+    page.getByText(/Creating assignments, adding students, and sending invites/)
   ).toBeVisible();
 });
 

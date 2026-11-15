@@ -448,6 +448,7 @@ test.describe.serial('Teacher class page redesign', () => {
       await gotoClassDocumentsTab(page, e2eContext.classId);
       await filterClassDocumentsByTitle(page, submittedTitle);
       const documentsTable = page.getByRole('table', { name: /class documents/i });
+      await expect(documentsTable).toBeVisible({ timeout: 30_000 });
       await expect(
         documentsTable.getByText(submittedTitle, { exact: true })
       ).toBeVisible({ timeout: 60_000 });

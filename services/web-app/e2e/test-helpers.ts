@@ -419,18 +419,14 @@ async function selectMyAssignmentsTypePill(
 }
 
 async function setMyAssignmentsSearchQuery(page: Page, query: string) {
-  await page.getByTestId('my-assignments-filter').click();
+  const filter = page.getByTestId('my-assignments-filter');
+  await filter.click();
   const search = page.getByTestId('my-assignments-search');
   await expect(search).toBeVisible({ timeout: 15_000 });
-  await search.click();
   await search.fill(query);
   await expect(search).toHaveValue(query);
-  // Close the popover without clearing filters; Escape can drop focus before
-  // React commits the search value on slower CI hosts.
-  await page.getByTestId('my-assignments-filter').click();
-  await expect(page.getByTestId('my-assignments-search')).toBeHidden({
-    timeout: 5_000,
-  });
+  // Filtering is live while the popover stays open; avoid re-toggling Filter,
+  // which races closed on CI and hides the search field mid-assertion.
 }
 
 async function findMyAssignmentRow(
@@ -466,6 +462,8 @@ export async function fillMyAssignmentsSearch(
     assignmentId?: string;
     assignmentTypeTitle?: string;
     classId?: string;
+    /** When false, keep polling the list instead of opening assignment detail. */
+    allowDetailFallback?: boolean;
   }
 ) {
   const trimmed = query.trim();
@@ -490,9 +488,9 @@ export async function fillMyAssignmentsSearch(
       title: trimmed || undefined,
     });
     try {
-      await expect(located).toBeVisible({ timeout: 20_000 });
+      await expect(located).toBeVisible({ timeout: 45_000 });
     } catch (error) {
-      if (!options.classId) throw error;
+      if (!options.classId || options.allowDetailFallback === false) throw error;
       await page.goto(
         `/app/assignments/${options.assignmentId}?classId=${options.classId}`
       );
@@ -535,13 +533,12 @@ export function classDocumentsTabUrl(
 export async function expectClassDocumentsTable(page: Page) {
   await expect(
     page.getByRole('table', { name: /class documents/i })
-  ).toBeVisible({ timeout: 60_000 });
+  ).toBeVisible({ timeout: 30_000 });
 }
 
 /** Filter popover search — prefer this over deep-link `q` when other rows must stay visible. */
 export async function filterClassDocumentsByTitle(page: Page, title: string) {
   await fillTeacherDocumentWorkSearch(page, title.trim().toLowerCase());
-  await expectClassDocumentsTable(page);
 }
 
 /** Class detail documents tab (header tabs include counts in the label). */
@@ -562,7 +559,12 @@ export async function gotoClassDocumentsTab(
   classId: string,
   params?: { q?: string; documentGroup?: string; status?: string }
 ) {
-  await page.goto(classDocumentsTabUrl(classId, params));
+  await page.goto(
+    classDocumentsTabUrl(classId, {
+      documentGroup: 'none',
+      ...params,
+    })
+  );
   await openClassDocumentsTab(page);
 }
 

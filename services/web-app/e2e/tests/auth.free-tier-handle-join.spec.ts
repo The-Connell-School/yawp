@@ -2,7 +2,6 @@ import { test, expect } from '../test-setup';
 import {
   clickStudentClassAssignmentRow,
   fillFreeTierJoinForm,
-  filterClassDocumentsByTitle,
   gotoClassDocumentsTab,
   submitFreeTierJoinAndExpectApp,
 } from '../test-helpers';
@@ -157,7 +156,6 @@ test.describe('Free-tier handle student', () => {
       await gotoClassDocumentsTab(teacherPage, klass.id, {
         status: 'needs-grading',
       });
-      await filterClassDocumentsByTitle(teacherPage, displayName);
       await expect(teacherPage.getByText(displayName)).toBeVisible({
         timeout: 60_000,
       });
