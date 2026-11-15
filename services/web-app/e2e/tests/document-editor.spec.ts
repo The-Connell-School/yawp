@@ -638,6 +638,15 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await signIn('jdoe@brock.software', 'johndoe');
     await page.setViewportSize({ width: 1280, height: 720 });
     await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const editor = helpers.getEditor();
+    await editor.click();
+    await page.keyboard.press(SELECT_ALL_SHORTCUT);
+    await page.getByTestId('editor-add-comment').click();
+    await page.getByTestId('margin-comment-draft-body').fill('Panel toggle E2E');
+    await page.getByTestId('margin-comment-draft-submit').click();
+    await expect(page.getByTestId('document-margin-comments-aside')).toBeVisible({
+      timeout: 15_000,
+    });
     const commentsToggle = page.getByRole('button', { name: 'Comments' });
     await commentsToggle.click();
     await expect(page.getByTestId('document-margin-comments-aside')).toBeHidden({
