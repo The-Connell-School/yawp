@@ -669,11 +669,16 @@ export default function TeacherTrainingModuleRoute() {
                         </Link>
 
                         <DropdownMenu>
-                          <DropdownMenuTrigger>
+                          {/* asChild: the trigger is this button, not a
+                              button around it. A button inside a button is
+                              not valid HTML, so the browser moved it and the
+                              page failed to hydrate. */}
+                          <DropdownMenuTrigger asChild>
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-6 w-6 p-0"
+                              aria-label="Module options"
                             >
                               <MoreVertical className="h-4 w-4" />
                             </Button>

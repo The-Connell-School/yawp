@@ -155,6 +155,34 @@ test.describe.serial("Brian's tutorials in the Lounge's Thesis-Driven Essay cour
     );
   });
 
+  test('a lesson page hydrates cleanly: the browser takes over the page the server drew', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    // A button inside a button (each module's menu) made the browser redraw
+    // the whole page on arrival, which crashed it outright in some browsers.
+    const problems: string[] = [];
+    page.on('pageerror', (error) => problems.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() === 'error') problems.push(message.text());
+    });
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(
+      `/app/teacher-trainings/${course.courseId}/modules/${course.modules['Lesson 2: Pre-writing']!}`
+    );
+    await expect(page.getByText('Lesson 2: Pre-writing').first()).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    expect(
+      problems.filter((problem) =>
+        /Hydration failed|validateDOMNesting|Expected server HTML|error while hydrating/i.test(problem)
+      )
+    ).toEqual([]);
+    // The menu still opens.
+    await page.getByRole('button', { name: 'Module options' }).first().click();
+    await expect(page.getByRole('menuitem').filter({ hasText: 'Restart Module' })).toBeVisible();
+  });
+
   test('a module that is not a lesson keeps its own video', async ({ page, signIn, e2eContext }) => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(
