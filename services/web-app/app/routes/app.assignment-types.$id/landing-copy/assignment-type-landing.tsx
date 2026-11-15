@@ -18,10 +18,11 @@ import {
 import { YAWP_LESSONS } from '~/domain/lesson-planner/yawp-lessons';
 
 /**
- * Each lesson's tutorial video, by lesson number: its module in the
- * Teachers' Lounge course, where this teacher can open it. A lesson with no
- * entry shows no video link (Brian, Nov 6: the rows are the slide deck and
- * the video, nothing else).
+ * Each lesson's tutorial page, by lesson number: Brian's own video for the
+ * lesson, or its module in the Teachers' Lounge course where he has not
+ * recorded one and this teacher can open it. A lesson with no entry shows no
+ * video link (Brian, Nov 6: the rows are the slide deck and the video,
+ * nothing else).
  */
 export type LessonVideos = Record<number, string>;
 type LessonLinks = { lessonVideos: LessonVideos };

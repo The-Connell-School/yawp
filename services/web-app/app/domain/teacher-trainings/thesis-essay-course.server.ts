@@ -10,7 +10,12 @@
  * The Lounge's own pages are temporarily disabled for all but a few teachers
  * (teacher-lounge-temporary-disable.ts), so a lesson's video is watched on
  * the assignment type's own tutorial page, never by a link into the Lounge.
+ *
+ * Brian's own tutorial videos (Nov 14, thesis-essay-course.ts) come with the
+ * app, so the lessons that have one need no Lounge course at all. The Lounge
+ * module is only the video for a lesson he has not recorded.
  */
+import { THESIS_ESSAY_COURSE } from '~/routes/app.assignment-types.$id/landing-copy/thesis-essay-course';
 import { prisma } from '~/utils/db.server';
 
 export const THESIS_ESSAY_COURSE_TITLE = 'The Thesis-Driven Essay';
@@ -64,12 +69,21 @@ export function tutorialHref(assignmentTypeId: string, lessonNumber: number): st
   return `/app/assignment-types/${encodeURIComponent(assignmentTypeId)}/tutorial/${lessonNumber}`;
 }
 
-/** The tutorial links for a type's How to Teach It rows, by lesson number. */
+/**
+ * The tutorial links for a type's How to Teach It rows, by lesson number:
+ * every lesson with one of Brian's videos, and any other lesson whose Lounge
+ * module this teacher can reach.
+ */
 export function tutorialHrefs(
   assignmentTypeId: string,
   course: ThesisEssayCourseLinks | null
 ): Record<number, string> {
+  const lessons = new Set<number>();
+  THESIS_ESSAY_COURSE.forEach((lesson, index) => {
+    if (lesson.tutorials.length > 0) lessons.add(index + 1);
+  });
+  for (const number of Object.keys(course?.videoModules ?? {})) lessons.add(Number(number));
   return Object.fromEntries(
-    Object.keys(course?.videoModules ?? {}).map((number) => [number, tutorialHref(assignmentTypeId, Number(number))])
+    [...lessons].sort((a, b) => a - b).map((number) => [number, tutorialHref(assignmentTypeId, number)])
   );
 }

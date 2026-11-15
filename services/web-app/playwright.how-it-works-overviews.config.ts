@@ -1,9 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Records the overview video at the top of each How It Works page (Class
- * Starter, Pre-Writing, Thesis Statement, Exit Ticket) from the real app with
- * demo data (e2e/tools). Not a test run, and it leaves the e2e database up:
+ * Records the overview video at the top of the How It Works pages that have
+ * no tutorial from Brian yet (Class Starter, Exit Ticket) from the real app
+ * with demo data (e2e/tools). Not a test run, and it leaves the e2e database up:
  * start the e2e dev server on :5173 first, then
  *   bunx playwright test -c playwright.how-it-works-overviews.config.ts
  */
