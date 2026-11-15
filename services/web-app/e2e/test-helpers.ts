@@ -557,6 +557,7 @@ export async function clickClassAssignmentRow(
   await expect(open).toBeVisible({ timeout: 30_000 });
   const row = page.getByRole('row').filter({ has: open });
   await row.click();
+}
 
 /** Student class Assignments tab rows navigate via the table row onClick handler. */
 export async function clickStudentClassAssignmentRow(
