@@ -218,6 +218,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
     e2eContext,
     signIn,
   }) => {
+    test.setTimeout(120_000);
     const prisma = createE2EPrismaClient();
     const suffix = Date.now().toString(36);
     const title = `Dashboard resubmission count ${suffix}`;
@@ -284,12 +285,9 @@ test.describe.serial('Teacher dashboard workspace', () => {
         `/app/documents?status=needs-grading&q=${encodeURIComponent(title)}&reset=1`
       );
       await page.waitForLoadState('networkidle');
-      await expect
-        .poll(
-          async () => page.getByText(title, { exact: true }).count(),
-          { timeout: 60_000 }
-        )
-        .toBeGreaterThan(0);
+      await expect(page.getByText(title, { exact: true }).first()).toBeVisible({
+        timeout: 90_000,
+      });
     } finally {
       if (documentId) {
         await prisma.submission.deleteMany({ where: { documentId } });

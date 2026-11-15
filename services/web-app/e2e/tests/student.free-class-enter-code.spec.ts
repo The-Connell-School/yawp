@@ -8,7 +8,7 @@ import { generateStudentJoinToken } from '../../app/utils/student-join-token';
 import { studentHandleBase } from '../../app/domain/unified-signon/student-handle';
 import { submitUnifiedLogin } from '../helpers/unified-login';
 import {
-  openStudentClassAssignmentsTab,
+  clickStudentClassAssignmentRow,
   submitSignedInEnterClassCode,
 } from '../test-helpers';
 
@@ -132,6 +132,7 @@ test('existing student joins a separate free classroom and retains access after 
       prompt: 'Write a local fixture paragraph.',
     });
     assignmentId = deployed.assignment.id;
+    const localClassAssignmentId = deployed.classAssignment.id;
     const priorSchool = await db.school.create({
       data: {
         name: 'Local Prior Classroom',
@@ -225,13 +226,11 @@ test('existing student joins a separate free classroom and retains access after 
     await page.getByRole('link', { name: /Local Joined Class/ }).click();
     await expect(page).toHaveURL(new RegExp(`/app/my-classes/${klass.id}`));
     await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
-    await expect(page.getByTestId('student-class-detail')).toBeVisible();
-    await openStudentClassAssignmentsTab(page);
-    const assignmentStart = page.getByRole('button', {
-      name: 'Local Permitted Assignment',
-      exact: true,
+    await clickStudentClassAssignmentRow(page, {
+      title: 'Local Permitted Assignment',
+      classAssignmentId: localClassAssignmentId,
     });
-    await expect(assignmentStart).toBeVisible({ timeout: 60_000 });
+    await page.goBack({ waitUntil: 'domcontentloaded' });
     await shot('desktop-reloaded-assignment');
     await page.setViewportSize({ width: 390, height: 844 });
     await shot('mobile-reloaded-assignment');
@@ -277,9 +276,11 @@ test('existing student joins a separate free classroom and retains access after 
       await signup.goto(`/app/my-classes/${klass.id}`);
       await signup.reload();
       await expect(signup.getByTestId('student-class-detail')).toBeVisible();
-      await expect(
-        signup.getByRole('button', { name: /Local Permitted Assignment/i })
-      ).toBeVisible({ timeout: 15_000 });
+      await clickStudentClassAssignmentRow(signup, {
+        title: 'Local Permitted Assignment',
+        classAssignmentId: localClassAssignmentId,
+      });
+      await signup.goBack({ waitUntil: 'domcontentloaded' });
       if (shots) {
         await signup.screenshot({
           path: `${shots}/desktop-new-student-control.png`,

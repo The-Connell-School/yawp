@@ -74,7 +74,7 @@ test.describe.serial('ACT Writing Ready advancement', () => {
       });
       assignmentTypeId = assignmentType.id;
 
-      const { assignment } = await createDeployedAssignment({
+      const { assignment, classAssignment } = await createDeployedAssignment({
         prisma,
         classId: e2eContext.classId,
         assignmentTypeId: assignmentType.id,
@@ -89,10 +89,9 @@ test.describe.serial('ACT Writing Ready advancement', () => {
       await expect(page.getByTestId('student-class-detail')).toBeVisible();
 
       await clickStudentClassAssignmentRow(page, {
-        assignmentId: assignment.id,
         title: `ACT Writing Ready E2E ${suffix}`,
+        classAssignmentId: classAssignment.id,
       });
-      await page.waitForURL('**/app/documents/**', { timeout: 15000 });
 
       const tutorMessages = page.locator('[data-tutor-message="true"]');
       await expect(tutorMessages.filter({ hasText: firstPrompt })).toHaveCount(

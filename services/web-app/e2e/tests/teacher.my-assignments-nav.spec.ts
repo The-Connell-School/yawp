@@ -15,6 +15,9 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     await navLink.click();
 
     await page.waitForURL('**/app/assignments**', { timeout: 15000 });
+    await expect(
+      page.getByRole('heading', { name: 'My Assignments', exact: true })
+    ).toBeVisible();
     // Pagination is 20 per page, and other shards share the E2E database, so
     // the seeded title may sit off the first page unless we narrow the list.
     await fillMyAssignmentsSearch(page, 'E2E Class Assignment', {

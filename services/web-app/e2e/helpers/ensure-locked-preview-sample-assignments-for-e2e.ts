@@ -13,10 +13,33 @@ export async function ensureLockedPreviewSampleAssignmentsForE2E(
   prisma: PrismaClient,
   classId: string
 ) {
+  const klass = await prisma.class.findUniqueOrThrow({
+    where: { id: classId },
+    select: { school: { select: { organizationId: true } } },
+  });
+  const organizationId = klass.school?.organizationId ?? null;
+
   const bundleTypes = await prisma.assignmentType.findMany({
     where: { kind: { in: [...FREE_CLASSROOM_ASSIGNMENT_KINDS] } },
     select: { id: true, kind: true },
   });
+  if (organizationId) {
+    for (const bundleType of bundleTypes) {
+      await prisma.organizationAssignmentType.upsert({
+        where: {
+          organizationId_assignmentTypeId: {
+            organizationId,
+            assignmentTypeId: bundleType.id,
+          },
+        },
+        create: {
+          organizationId,
+          assignmentTypeId: bundleType.id,
+        },
+        update: {},
+      });
+    }
+  }
   const classStarterTypeId = bundleTypes.find((t) => t.kind === 'class_starter')
     ?.id;
   const prewritingTypeId = bundleTypes.find((t) => t.kind === 'prewriting')?.id;

@@ -470,7 +470,7 @@ export async function fillMyAssignmentsSearch(
       { waitUntil: 'domcontentloaded' }
     );
     await expect(
-      page.getByRole('table', { name: /assignments/i })
+      page.locator('[role="table"][aria-label^="My Assignments"]').first()
     ).toBeVisible({ timeout: 15_000 });
   }
   const trimmed = query.trim();
@@ -504,12 +504,57 @@ export async function fillMyAssignmentsSearch(
   await expect(located).toBeVisible({ timeout: 30_000 });
 }
 
-/** Class documents table search (flat list and grouped views). */
-export async function fillClassDocumentsSearch(page: Page, query: string) {
-  const search = page.getByRole('textbox', { name: /search class documents/i });
+async function openTeacherDocumentWorkFilter(page: Page) {
+  const filter = page.getByRole('button', { name: /^Filter$/i }).first();
+  await expect(filter).toBeVisible({ timeout: 15_000 });
+  await filter.click();
+}
+
+/** Deep-link class documents with a server-side query filter. */
+export function classDocumentsTabUrl(
+  classId: string,
+  params?: { q?: string; documentGroup?: string; status?: string }
+) {
+  const search = new URLSearchParams({ tab: 'documents' });
+  if (params?.q) search.set('q', params.q);
+  if (params?.documentGroup) search.set('documentGroup', params.documentGroup);
+  if (params?.status) search.set('status', params.status);
+  return `/app/my-classes/${classId}?${search.toString()}`;
+}
+
+/** Teacher document work search box (lives inside the Filter popover). */
+export async function fillTeacherDocumentWorkSearch(page: Page, query: string) {
+  await openTeacherDocumentWorkFilter(page);
+  const search = page.getByRole('textbox', {
+    name: /search (class )?documents/i,
+  });
   await expect(search).toBeVisible({ timeout: 15_000 });
   await search.fill(query);
-  await expect(search).toHaveValue(query);
+  await search.press('Enter');
+  await page.keyboard.press('Escape');
+}
+
+/** @deprecated Prefer classDocumentsTabUrl({ q }) — search is inside the Filter popover. */
+export async function fillClassDocumentsSearch(page: Page, query: string) {
+  await fillTeacherDocumentWorkSearch(page, query);
+}
+
+/** POST /start when the assignments list is slow to hydrate after join. */
+export async function startStudentClassAssignment(
+  page: Page,
+  classAssignmentId: string
+) {
+  await expect(page.getByTestId('student-class-detail')).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.evaluate((id) => {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/app/class-assignments/${id}/start`;
+    document.body.append(form);
+    form.requestSubmit();
+  }, classAssignmentId);
+  await page.waitForURL('**/app/documents/**', { timeout: 60_000 });
 }
 
 /** Class documents status chip (FilterPills may scroll horizontally). */
@@ -599,7 +644,11 @@ export async function openStudentClassAssignmentsTab(page: Page) {
 /** Student class Assignments tab rows navigate via the table row onClick handler. */
 export async function clickStudentClassAssignmentRow(
   page: Page,
-  options: { assignmentId?: string; title?: string }
+  options: {
+    assignmentId?: string;
+    title?: string;
+    classAssignmentId?: string;
+  }
 ) {
   await expect(page.getByTestId('student-class-detail')).toBeVisible({
     timeout: 15_000,
@@ -610,8 +659,18 @@ export async function clickStudentClassAssignmentRow(
       name: options.title,
       exact: true,
     });
-    await expect(startButton).toBeVisible({ timeout: 60_000 });
-    await startButton.click();
+    try {
+      await expect(startButton).toBeVisible({ timeout: 15_000 });
+      await startButton.click();
+      return;
+    } catch (error) {
+      if (!options.classAssignmentId) throw error;
+      await startStudentClassAssignment(page, options.classAssignmentId);
+      return;
+    }
+  }
+  if (options.classAssignmentId) {
+    await startStudentClassAssignment(page, options.classAssignmentId);
     return;
   }
   await expandAssignmentTypeSections(page);

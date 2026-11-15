@@ -1,8 +1,8 @@
 import { test, expect } from '../test-setup';
 import {
+  classDocumentsTabUrl,
   clickClassAssignmentRow,
   clickClassDocumentsStatusTab,
-  fillClassDocumentsSearch,
   openClassAssignmentsTab,
 } from '../test-helpers';
 import { currentSchoolYear } from '../../app/utils/school-year';
@@ -91,22 +91,17 @@ test.describe('Teacher class documents lifecycle', () => {
         localStorage.removeItem('yawp.class-documents-view');
         localStorage.removeItem('yawp.student-work-view');
       });
-      await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
+      await page.goto(
+        classDocumentsTabUrl(e2eContext.classId, {
+          q: `Lifecycle needs grading ${suffix}`,
+        })
+      );
       await page.waitForLoadState('networkidle');
       const table = page.getByRole('table', { name: /class documents/i });
       await expect(table).toBeVisible({ timeout: 15_000 });
-      await expect
-        .poll(
-          async () => {
-            await fillClassDocumentsSearch(
-              page,
-              `Lifecycle needs grading ${suffix}`
-            );
-            return table.getByText(`Lifecycle needs grading ${suffix}`).count();
-          },
-          { timeout: 60_000 }
-        )
-        .toBeGreaterThan(0);
+      await expect(
+        table.getByText(`Lifecycle needs grading ${suffix}`, { exact: true })
+      ).toBeVisible({ timeout: 60_000 });
 
       // Seeded + local data cover the full lifecycle.
       await expect(table.getByText('In Progress').first()).toBeVisible();
@@ -453,20 +448,14 @@ test.describe.serial('Teacher class page redesign', () => {
       documentIds.push(inProgressDoc.id);
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
+      await page.goto(classDocumentsTabUrl(e2eContext.classId, { q: submittedTitle }));
       await page.waitForLoadState('networkidle');
 
       const documentsTable = page.getByRole('table', { name: /class documents/i });
       await expect(documentsTable).toBeVisible({ timeout: 15_000 });
-      await expect
-        .poll(
-          async () => {
-            await fillClassDocumentsSearch(page, submittedTitle);
-            return documentsTable.getByText(submittedTitle, { exact: true }).count();
-          },
-          { timeout: 60_000 }
-        )
-        .toBeGreaterThan(0);
+      await expect(
+        documentsTable.getByText(submittedTitle, { exact: true })
+      ).toBeVisible({ timeout: 60_000 });
 
       const submittedRow = page
         .getByRole('row', {

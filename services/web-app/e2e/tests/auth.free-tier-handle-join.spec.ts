@@ -124,8 +124,8 @@ test.describe('Free-tier handle student', () => {
       });
       await expect(page.getByTestId('student-class-detail')).toBeVisible();
       await clickStudentClassAssignmentRow(page, {
-        assignmentId: assignment.id,
         title: 'Free tier writing',
+        classAssignmentId: classAssignment.id,
       });
       await page.waitForURL('**/app/documents/**', { timeout: 30000 });
 
