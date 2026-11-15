@@ -61,6 +61,7 @@ import {
 import { useDeferredBreakpoint } from './hooks/use-deferred-breakpoint';
 import { useDeferredLocalStorage } from './hooks/use-deferred-local-storage';
 import { scheduleAfterHydration } from '~/utils/schedule-after-hydration';
+import { clearRadixScrollLockCleanup } from '~/utils/radix-scroll-lock-cleanup';
 import { useUser } from '~/hooks/useUser';
 import { Comments } from './comments';
 import { MarginCommentsRail } from './comments/margin-comments-rail';
@@ -236,6 +237,15 @@ export function DocumentEditorV2Page() {
   const [locallyUnsubmittedIds, setLocallyUnsubmittedIds] = useState<
     Set<string>
   >(new Set());
+  useEffect(() => {
+    return () => {
+      setMobileCommentsSheetOpen(false);
+      setMobileTutorSheetOpen(false);
+      setSubmitConfirmOpen(false);
+      setArchiveDialogOpen(false);
+      clearRadixScrollLockCleanup();
+    };
+  }, []);
   const isMobile =
     uiMounted && ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [pageWidth, setPageWidth] = useDeferredLocalStorage<PageWidthMode>(
@@ -1180,14 +1190,20 @@ export function DocumentEditorV2Page() {
           <Sheet
             open={mobileCommentsSheetOpen}
             onOpenChange={setMobileCommentsSheetOpen}
-            modal={false}
           >
             <SheetContent
               side="bottom"
               includeOverlay={false}
+              dimBehind
               showCloseButton={false}
               className="doc-editor-mobile-comments-sheet z-30 h-[min(60vh,520px)] overflow-hidden border-t p-0"
               data-testid="mobile-comments-sheet"
+              onInteractOutside={(event) => {
+                const target = event.target as HTMLElement | null;
+                if (target?.closest('[data-testid="document-mobile-tabbar"]')) {
+                  event.preventDefault();
+                }
+              }}
             >
               <SheetHeader className="sr-only">
                 <SheetTitle>Comments</SheetTitle>
