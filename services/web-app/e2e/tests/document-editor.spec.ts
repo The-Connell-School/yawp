@@ -10,6 +10,34 @@ const SELECT_ALL_SHORTCUT = process.platform === 'darwin' ? 'Meta+A' : 'Control+
 const COPY_SHORTCUT = process.platform === 'darwin' ? 'Meta+C' : 'Control+C';
 const CUT_SHORTCUT = process.platform === 'darwin' ? 'Meta+X' : 'Control+X';
 
+async function selectWordInEditor(
+  page: import('@playwright/test').Page,
+  word: string
+) {
+  await page.evaluate((target) => {
+    const root = document.querySelector<HTMLElement>(
+      '[contenteditable="true"]'
+    );
+    if (!root) throw new Error('Editor surface not found');
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node: Text | null = null;
+    while ((node = walker.nextNode() as Text | null)) {
+      const text = node.textContent ?? '';
+      const index = text.indexOf(target);
+      if (index === -1) continue;
+      const range = document.createRange();
+      range.setStart(node, index);
+      range.setEnd(node, index + target.length);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      root.dispatchEvent(new Event('selectionchange', { bubbles: true }));
+      return;
+    }
+    throw new Error(`Could not select "${target}" in editor`);
+  }, word);
+}
+
 async function expectExitControlVisible(page: import('@playwright/test').Page) {
   const exitButton = page.getByRole('button', { name: /^exit$/i });
   if ((await exitButton.count()) > 0) {
@@ -658,30 +686,6 @@ test.describe.serial('Document Editor E2E Tests', () => {
     );
   });
 
-  test('v2 student can cancel an expanded comment reply', async ({
-    page,
-    signIn,
-    e2eContext,
-    helpers,
-  }) => {
-    await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
-    await page.setViewportSize({ width: 1280, height: 720 });
-    await helpers.openDocument(
-      `${e2eContext.gradedDocumentId}?tab=editor`,
-      { retry: true }
-    );
-    const commentId = e2eContext.v2GradedCommentId;
-    await page.getByTestId(`comment-reply-input-${commentId}`).click();
-    await page.getByTestId(`comment-reply-body-${commentId}`).fill('Draft only');
-    await page.getByRole('button', { name: 'Cancel' }).click();
-    await expect(
-      page.getByTestId(`comment-reply-input-${commentId}`)
-    ).toBeVisible({ timeout: 10_000 });
-    await expect(
-      page.getByTestId(`comment-reply-expanded-${commentId}`)
-    ).toBeHidden();
-  });
-
   test('v2 chrome shows tutor step header when v2 is active', async ({
     page,
     signIn,
@@ -733,28 +737,38 @@ test.describe.serial('Document Editor E2E Tests', () => {
       `${e2eContext.gradedDocumentId}?tab=editor`,
       { retry: true }
     );
-    const card = page.getByTestId(
-      `margin-comment-card-${e2eContext.v2GradedCommentId}`
-    );
+    await expect(page.getByTestId('document-margin-comments-aside')).toBeVisible({
+      timeout: 20_000,
+    });
+    const commentId = e2eContext.v2GradedCommentId;
+    const card = page.getByTestId(`margin-comment-card-${commentId}`);
     await expect(card).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId(`comment-body-${commentId}`)).toContainText(
+      'Strong thesis in the opening sentence.'
+    );
+    await expect(
+      page.getByTestId(`comment-anchor-excerpt-${commentId}`)
+    ).toContainText('Education');
     await expect(card).toContainText('Thanks — I will expand this section.');
-    await page
-      .getByTestId(`comment-reply-input-${e2eContext.v2GradedCommentId}`)
-      .click();
-    await page
-      .getByTestId(`comment-reply-body-${e2eContext.v2GradedCommentId}`)
-      .fill('Reply from teacher E2E.');
-    await page
-      .getByTestId(`comment-reply-send-${e2eContext.v2GradedCommentId}`)
-      .click();
+    await page.getByTestId(`comment-reply-input-${commentId}`).click();
+    await expect(page.getByTestId(`comment-reply-expanded-${commentId}`)).toBeVisible();
+    await expect(page.getByTestId(`comment-reply-input-${commentId}`)).toHaveCount(0);
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByTestId(`comment-reply-input-${commentId}`)).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.getByTestId(`comment-reply-input-${commentId}`).click();
+    await page.getByTestId(`comment-reply-body-${commentId}`).fill('Reply from teacher E2E.');
+    await page.getByTestId(`comment-reply-send-${commentId}`).click();
     await expect(card).toContainText('Reply from teacher E2E.', {
       timeout: 10_000,
     });
-    const resolveButton = page.getByTestId(
-      `comment-resolve-${e2eContext.v2GradedCommentId}`
-    );
+    const resolveButton = page.getByTestId(`comment-resolve-${commentId}`);
     await resolveButton.click();
     await expect(resolveButton).toBeHidden({ timeout: 10_000 });
+    await expect(
+      page.locator(`.comment-mark[data-comment-id="${commentId}"]`)
+    ).toHaveCount(0, { timeout: 10_000 });
   });
 
   test('v2 teacher can open a comment draft from text selection', async ({
@@ -797,5 +811,188 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await expect(page.getByTestId('document-mobile-tabbar')).toBeVisible({
       timeout: 10_000,
     });
+  });
+
+  test('v2 mobile comments sheet does not throw selection provider errors', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    test.setTimeout(60_000);
+    const consoleErrors: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
+    });
+    await signIn('jdoe@brock.software', 'johndoe');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await helpers.openDocument(
+      `${e2eContext.editedDocumentId}?tab=editor`,
+      { retry: true }
+    );
+    await page.getByTestId('document-mobile-tabbar').getByText('Comments').click();
+    await expect(page.getByTestId('mobile-comments-sheet')).toBeVisible({
+      timeout: 10_000,
+    });
+    expect(
+      consoleErrors.some((line) =>
+        line.includes('useCommentsSelection must be used within')
+      )
+    ).toBe(false);
+  });
+
+  test('v2 mobile comments sheet shows anchor excerpt and keeps tab bar usable', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    test.setTimeout(90_000);
+    await signIn('jdoe@brock.software', 'johndoe');
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const editor = helpers.getEditor();
+    await editor.click();
+    await selectWordInEditor(page, 'grammar');
+    await page.getByTestId('editor-add-comment').click();
+    await expect(page.getByTestId('margin-comment-draft-card')).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.getByTestId('margin-comment-draft-body').fill('Mobile sheet anchor body.');
+    await page.getByTestId('margin-comment-draft-submit').click();
+    await expect(page.getByTestId('margin-comment-draft-card')).toHaveCount(0, {
+      timeout: 15_000,
+    });
+    const draftId = await page
+      .locator('[data-comment-card]')
+      .last()
+      .getAttribute('data-comment-card');
+    expect(draftId).toBeTruthy();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByTestId('document-mobile-tabbar').getByText('Comments').click();
+    await expect(page.getByTestId('mobile-comments-sheet')).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(
+      page.getByTestId(`comment-anchor-excerpt-${draftId}`)
+    ).toContainText('grammar');
+    await expect(page.getByTestId(`comment-body-${draftId}`)).toContainText(
+      'Mobile sheet anchor body.'
+    );
+    await page.getByTestId('document-mobile-tabbar').getByText('Tutor').click();
+    await expect(page.getByTestId('tutor-module-header')).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+
+  test('v2 desktop comments panel is closed by default on reload', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('jdoe@brock.software', 'johndoe');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const commentsToggle = page
+      .getByTestId('document-panel-toggles')
+      .getByRole('button', { name: 'Comments' });
+    await expect(commentsToggle).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('document-margin-comments-aside')).toHaveCount(
+      0
+    );
+    await commentsToggle.click();
+    await expect(commentsToggle).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('v2 each comment keeps exactly one highlight and margin cards do not overlap', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await helpers.openDocument(
+      `${e2eContext.gradedDocumentId}?tab=editor`,
+      { retry: true }
+    );
+    await expect(page.getByTestId('document-margin-comments-aside')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const activeIds = [
+      e2eContext.v2GradedCommentId,
+      e2eContext.v2GradedResolvedCommentId,
+    ];
+
+    for (const id of activeIds) {
+      const marks = page.locator(
+        `.comment-mark[data-comment-id="${id}"]`
+      );
+      await expect(marks).toHaveCount(1, { timeout: 10_000 });
+    }
+
+    const tops = await page
+      .locator('[data-margin-comment-for]')
+      .evaluateAll((nodes) =>
+        nodes.map((node) =>
+          Math.round(Number.parseFloat(getComputedStyle(node).top || '0'))
+        )
+      );
+    expect(tops.length).toBeGreaterThan(1);
+    expect(new Set(tops).size).toBe(tops.length);
+  });
+
+  test('v2 canceling a comment draft removes the transient highlight', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('jdoe@brock.software', 'johndoe');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const editor = helpers.getEditor();
+    await editor.click();
+    await page.keyboard.press(SELECT_ALL_SHORTCUT);
+    await page.getByTestId('editor-add-comment').click();
+    const draftId = await page
+      .getByTestId('margin-comment-draft-card')
+      .getAttribute('data-comment-card');
+    expect(draftId).toBeTruthy();
+    await expect(
+      page.locator(`.comment-mark[data-comment-id="${draftId}"]`)
+    ).toHaveCount(1);
+    await page.getByRole('button', { name: 'Cancel' }).first().click();
+    await expect(
+      page.locator(`.comment-mark[data-comment-id="${draftId}"]`)
+    ).toHaveCount(0, { timeout: 10_000 });
+  });
+
+  test('v2 creating a comment keeps the highlight on the selection', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('jdoe@brock.software', 'johndoe');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const editor = helpers.getEditor();
+    await editor.click();
+    await page.keyboard.press(SELECT_ALL_SHORTCUT);
+    await page.getByTestId('editor-add-comment').click();
+    const draftId = await page
+      .getByTestId('margin-comment-draft-card')
+      .getAttribute('data-comment-card');
+    await page.getByTestId('margin-comment-draft-body').fill('Highlight must persist');
+    await page.getByTestId('margin-comment-draft-submit').click();
+    await expect(
+      page.locator(`.comment-mark[data-comment-id="${draftId}"]`)
+    ).toHaveCount(1, { timeout: 15_000 });
+    await expect(page.getByTestId(`comment-body-${draftId}`)).toContainText(
+      'Highlight must persist'
+    );
   });
 });

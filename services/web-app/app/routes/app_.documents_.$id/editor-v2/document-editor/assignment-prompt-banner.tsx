@@ -1,6 +1,8 @@
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { useLocalStorage } from 'usehooks-ts';
+import { useEffect, useState } from 'react';
 import { Button } from '~/components/ui/button';
+import { useDeferredLocalStorage } from '../hooks/use-deferred-local-storage';
+import { scheduleAfterHydration } from '~/utils/schedule-after-hydration';
 import { AssignmentPromptAttachment } from '~/components/assignments/assignment-prompt-attachment';
 
 const PROMPT_EXPANDED_MAX_HEIGHT = 'calc(50vh - 28px)';
@@ -20,10 +22,15 @@ export function AssignmentPromptBanner({
   docId: string;
   assignment?: AssignmentPrompt | null;
 }) {
-  const [isCollapsed, setIsCollapsed] = useLocalStorage(
+  const [uiMounted, setUiMounted] = useState(false);
+  useEffect(() => {
+    scheduleAfterHydration(() => setUiMounted(true));
+  }, []);
+  const [isCollapsed, setIsCollapsed] = useDeferredLocalStorage(
     `assignmentPromptCollapsed-${docId}`,
     true
   );
+  const collapsed = uiMounted ? isCollapsed : true;
 
   if (!assignment?.prompt?.trim()) return null;
 
@@ -42,25 +49,25 @@ export function AssignmentPromptBanner({
         className="min-w-0 flex-1 truncate text-[13px] text-[hsl(48_20%_19.6078%)]"
         data-testid="assignment-prompt-header"
       >
-        {isCollapsed ? assignment.prompt.trim().slice(0, 120) : assignment.prompt}
+        {collapsed ? assignment.prompt.trim().slice(0, 120) : assignment.prompt}
       </span>
       <Button
         type="button"
         variant="ghost"
         size="icon"
         aria-label={
-          isCollapsed ? 'Show full prompt' : 'Collapse assignment prompt'
+          collapsed ? 'Show full prompt' : 'Collapse assignment prompt'
         }
-        aria-expanded={!isCollapsed}
+        aria-expanded={uiMounted ? !isCollapsed : false}
         onClick={() => setIsCollapsed((value) => !value)}
       >
-        {isCollapsed ? (
+        {collapsed ? (
           <ChevronDown className="h-4 w-4" />
         ) : (
           <ChevronUp className="h-4 w-4" />
         )}
       </Button>
-      {!isCollapsed ? (
+      {!collapsed ? (
         <div className="w-full basis-full">
           <div
             className="overflow-y-auto whitespace-pre-wrap text-[13px] leading-relaxed text-[hsl(48_20%_19.6078%)]"

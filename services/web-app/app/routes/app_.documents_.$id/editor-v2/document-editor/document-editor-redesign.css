@@ -5,8 +5,10 @@
   --tutor-panel-bg: #fcfaf5;
   --tutor-rim: #e3ded2;
   --tutor-bubble-bg: #ffffff;
+  --tutor-bubble-text: #1b1b1b;
   --tutor-meta: #5f5b52;
   --tutor-name: #1f4d3a;
+  --student-bubble-text: #1b1b1b;
   --student-bubble-bg: #e8f0eb;
   --student-bubble-rim: #c9dbd0;
   --tutor-input-rim: #d6d1c4;
@@ -110,8 +112,10 @@
   display: flex;
   flex-direction: column;
   background: var(--tutor-panel-bg);
-  border-right: 1px solid var(--doc-glass-border);
+  border-right: 1px solid var(--tutor-rim);
   box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .doc-editor-workspace {
@@ -251,6 +255,11 @@
     0 0 0 1px rgba(31, 53, 50, 0.06),
     0 12px 32px rgba(31, 53, 50, 0.1);
   padding: 12px;
+}
+
+.doc-editor-mobile-comments-sheet {
+  bottom: calc(52px + env(safe-area-inset-bottom, 0));
+  max-height: min(60vh, 520px);
 }
 
 .doc-editor-mobile-tabbar {
@@ -397,7 +406,7 @@
     0 1px 2px rgba(31, 53, 50, 0.06);
   font-size: 14px;
   line-height: 1.55;
-  color: #1b1b1b;
+  color: var(--tutor-bubble-text);
   max-width: 92%;
 }
 
@@ -421,11 +430,15 @@
   box-shadow: inset 0 0 0 1px var(--student-bubble-rim);
   font-size: 14px;
   line-height: 1.5;
-  color: #1b1b1b;
+  color: var(--student-bubble-text);
+}
+
+.doc-editor-tutor-student .doc-editor-tutor-message-meta {
+  color: var(--tutor-meta);
 }
 
 .doc-editor-tutor-student .doc-editor-tutor-message-meta b {
-  color: #1b1b1b;
+  color: var(--student-bubble-text);
 }
 
 .doc-editor-tutor-ask-row {
@@ -596,6 +609,15 @@
   box-shadow: 0 0 0 1px rgba(31, 53, 50, 0.06);
 }
 
+.doc-editor-comment-resolve {
+  opacity: 1;
+}
+
+.doc-editor-comment-resolve:focus-visible {
+  outline: 2px solid hsl(210 75% 49%);
+  outline-offset: 2px;
+}
+
 .doc-editor-view-banner {
   display: flex;
   flex-wrap: wrap;
@@ -660,11 +682,20 @@
   color: hsl(50 2.4% 36%);
 }
 
-.doc-editor-tutor-reading-skeleton {
+.doc-editor-tutor-reading-skeleton,
+.doc-editor-tutor-message-loading {
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: 4px 14px 14px 14px;
   background: var(--tutor-bubble-bg);
-  box-shadow: inset 0 0 0 1px var(--tutor-rim);
+  box-shadow:
+    inset 0 0 0 1px var(--tutor-rim),
+    0 1px 2px rgba(31, 53, 50, 0.06);
+  color: var(--tutor-bubble-text);
+  max-width: 92%;
+}
+
+.doc-editor-tutor-reading-skeleton > p {
+  color: var(--tutor-meta);
 }
 
 .doc-editor-tutor-footer .doc-editor-tutor-ready-btn {

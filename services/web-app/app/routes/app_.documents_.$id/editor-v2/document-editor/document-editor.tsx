@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { scheduleAfterHydration } from '~/utils/schedule-after-hydration';
 import { documentStore } from '~/utils/document-store';
 import type { SyncStatus } from '~/utils/sync-service';
 import { Editor } from './editor';
@@ -93,18 +94,22 @@ export function DocumentEditor({
 
   useEffect(() => {
     if (snapshotContent) {
-      setHydrated({
-        html: snapshotContent.html,
-        text: snapshotContent.text,
-        source: 'snapshot',
+      scheduleAfterHydration(() => {
+        setHydrated({
+          html: snapshotContent.html,
+          text: snapshotContent.text,
+          source: 'snapshot',
+        });
       });
       return;
     }
     if (teacherCommenting) {
-      setHydrated({
-        html: serverHtml,
-        text: serverText,
-        source: 'server',
+      scheduleAfterHydration(() => {
+        setHydrated({
+          html: serverHtml,
+          text: serverText,
+          source: 'server',
+        });
       });
       return;
     }
@@ -113,15 +118,25 @@ export function DocumentEditor({
       .get(docId)
       .then((entry) => {
         if (cancelled) return;
-        if (entry && entry.updatedAt > new Date(serverUpdatedAt).getTime()) {
-          setHydrated({ html: entry.html, text: entry.text, source: 'local' });
-        } else {
-          setHydrated({ html: serverHtml, text: serverText, source: 'server' });
-        }
+        scheduleAfterHydration(() => {
+          if (cancelled) return;
+          if (entry && entry.updatedAt > new Date(serverUpdatedAt).getTime()) {
+            setHydrated({ html: entry.html, text: entry.text, source: 'local' });
+          } else {
+            setHydrated({
+              html: serverHtml,
+              text: serverText,
+              source: 'server',
+            });
+          }
+        });
       })
       .catch(() => {
         if (!cancelled) {
-          setHydrated({ html: serverHtml, text: serverText, source: 'server' });
+          scheduleAfterHydration(() => {
+            if (cancelled) return;
+            setHydrated({ html: serverHtml, text: serverText, source: 'server' });
+          });
         }
       });
     return () => {

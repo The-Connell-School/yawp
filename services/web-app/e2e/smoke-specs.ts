@@ -36,6 +36,7 @@ export const E2E_SMOKE_SPECS = [
   'e2e/tests/student.act-writing-ready.spec.ts',
   'e2e/tests/student.unreleased-grade-loader-privacy.spec.ts',
   'e2e/tests/document-editor.spec.ts',
+  'e2e/tests/document-editor-v2-margin.spec.ts',
   'e2e/tests/document-regression.spec.ts',
   'e2e/tests/document-editor-invariants.spec.ts',
   'e2e/tests/document-local-first-persistence.spec.ts',
@@ -78,6 +79,7 @@ export const E2E_SMOKE_SHARDS: Record<SmokeShard, readonly string[]> = {
   ],
   2: [
     'e2e/tests/document-editor.spec.ts',
+    'e2e/tests/document-editor-v2-margin.spec.ts',
     'e2e/tests/teacher.exit-ticket.spec.ts',
     'e2e/tests/auth.signin.spec.ts',
     'e2e/tests/document-local-first-persistence.spec.ts',

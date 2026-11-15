@@ -9,11 +9,12 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocalStorage } from 'usehooks-ts';
+import { useDeferredLocalStorage } from '../hooks/use-deferred-local-storage';
+import { scheduleAfterHydration } from '~/utils/schedule-after-hydration';
 import { Button } from '~/components/ui/button';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
-import { timeAgo } from '~/utils/timeAgo/timeAgo';
+import { RelativeTime } from '../_components/relative-time';
 import { Loading } from './loading';
 import { ResponseBar } from './response-bar';
 import { TutorStepProgress } from './tutor-step-progress';
@@ -90,14 +91,20 @@ export const Tutor = ({
   onClose,
   basePath = '/app/documents',
 }: Props) => {
-  const [messagesExpanded, setMessagesExpanded] = useLocalStorage(
+  const [uiMounted, setUiMounted] = useState(false);
+  useEffect(() => {
+    scheduleAfterHydration(() => setUiMounted(true));
+  }, []);
+  const [messagesExpanded, setMessagesExpanded] = useDeferredLocalStorage(
     `doc-${docId}-tutor-messages-expanded`,
     true
   );
+  const showMessages = uiMounted ? messagesExpanded : true;
   const [isTutorResponding, setIsTutorResponding] = useState(false);
   const [isTutorRetrying, setIsTutorRetrying] = useState(false);
   const [tutorError, setTutorError] = useState<string | null>(null);
   const [optimisticMessage, setOptimisticMessage] = useState<{
+    id: string;
     agent: string;
     createdAt: Date;
     content: string;
@@ -190,6 +197,7 @@ export const Tutor = ({
       setTutorError(null);
       setIsTutorRetrying(false);
       setOptimisticMessage({
+        id: `optimistic-user-${Date.now()}`,
         agent: 'user',
         createdAt: new Date(),
         content: response,
@@ -446,7 +454,7 @@ export const Tutor = ({
           </button>
         ) : cms.assignmentModule.isSelfGuided ? null : (
           <Tooltip
-            text={messagesExpanded ? 'Hide messages' : 'Show messages'}
+            text={showMessages ? 'Hide messages' : 'Show messages'}
             delayDuration={0}
           >
             <Button
@@ -454,12 +462,12 @@ export const Tutor = ({
               size="icon-sm"
               className="min-w-8 shrink-0"
               aria-label={
-                messagesExpanded ? 'Hide tutor messages' : 'Show tutor messages'
+                showMessages ? 'Hide tutor messages' : 'Show tutor messages'
               }
               disabled={isSessionLocked}
               onClick={() => setMessagesExpanded(!messagesExpanded)}
             >
-              {messagesExpanded ? (
+              {showMessages ? (
                 <MessageSquareOff size={18} />
               ) : (
                 <MessageSquareText size={18} />
@@ -505,7 +513,7 @@ export const Tutor = ({
         <div
           className={cn(
             'doc-editor-tutor-messages no-scrollbar transition-all duration-300',
-            messagesExpanded ? 'max-h-full' : 'max-h-0 overflow-hidden'
+            showMessages ? 'max-h-full' : 'max-h-0 overflow-hidden'
           )}
           ref={messagesRef}
           id="assignment-module-session-messages"
@@ -522,7 +530,7 @@ export const Tutor = ({
               <div className="doc-editor-tutor-message-meta">
                 <b>{message.agent === 'assistant' ? 'Tutor' : 'You'}</b>
                 {' · '}
-                {timeAgo(new Date(message.createdAt))}
+                <RelativeTime value={message.createdAt} />
               </div>
               <p
                 className="m-0 whitespace-pre-wrap"
@@ -542,16 +550,17 @@ export const Tutor = ({
           ))}
           {isTutorResponding ? (
             optimisticMessage ? (
-              <Loading label={isTutorRetrying ? 'Retrying...' : undefined} />
+              <Loading
+                tutorBubble
+                label={isTutorRetrying ? 'Retrying...' : undefined}
+              />
             ) : (
               <div
                 className="doc-editor-tutor-reading-skeleton"
                 data-testid="tutor-reading-essay"
               >
-                <p className="m-0 text-sm text-[hsl(50_2.4%_36%)]">
-                  Reading your essay…
-                </p>
-                <Loading />
+                <p className="m-0 text-sm">Reading your essay…</p>
+                <Loading tutorBubble />
               </div>
             )
           ) : null}
@@ -566,7 +575,7 @@ export const Tutor = ({
         <div
           className={cn(
             'flex items-center justify-end gap-2 border-t p-2 px-4',
-            messagesExpanded && !cms.assignmentModule.isSelfGuided
+            showMessages && !cms.assignmentModule.isSelfGuided
               ? 'border-t'
               : undefined
           )}
@@ -587,7 +596,7 @@ export const Tutor = ({
         <p
           className={cn(
             'p-2 text-center text-sm text-muted-foreground',
-            messagesExpanded && !cms.assignmentModule.isSelfGuided
+            showMessages && !cms.assignmentModule.isSelfGuided
               ? 'border-t'
               : undefined
           )}
@@ -605,7 +614,7 @@ export const Tutor = ({
       ) : (
         <ResponseBar
           className={
-            messagesExpanded && !cms.assignmentModule.isSelfGuided
+            showMessages && !cms.assignmentModule.isSelfGuided
               ? undefined
               : 'border-t-0'
           }

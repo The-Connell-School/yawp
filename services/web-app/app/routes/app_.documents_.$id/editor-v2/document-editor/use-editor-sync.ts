@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { scheduleAfterHydration } from '~/utils/schedule-after-hydration';
 import type { Editor } from '@tiptap/core';
+import { removeCommentMarkFromEditor } from './comment-mark-editor';
 import { documentStore } from '~/utils/document-store';
 import { SyncService, type SyncStatus } from '~/utils/sync-service';
 import { contentHash } from '~/utils/content-hash';
@@ -11,6 +13,7 @@ export type EditorBridge = {
   getContentElement?: () => HTMLElement;
   getContent: () => { html: string; text: string };
   saveNow: (options?: { source?: string }) => Promise<SyncStatus>;
+  removeCommentMark: (commentId: string) => boolean;
 };
 
 type RevisionSchedulerOptions = {
@@ -202,7 +205,7 @@ export function useEditorSync(
       const { html, text } = getSnapshot();
       onSubmittableContentChange(isDocumentSubmittableContent(html, text));
     };
-    emit();
+    scheduleAfterHydration(emit);
     editor.on('update', emit);
     return () => {
       editor.off('update', emit);
@@ -219,6 +222,8 @@ export function useEditorSync(
     const bridge: EditorBridge = {
       getContentElement: () => editor.view.dom as HTMLElement,
       getContent: getSnapshot,
+      removeCommentMark: (commentId: string) =>
+        removeCommentMarkFromEditor(editor, commentId),
       saveNow: async (options) => {
         const { html, text } = getSnapshot();
         const hash = await contentHash(html, text);
@@ -241,7 +246,9 @@ export function useEditorSync(
       },
     };
 
-    onBridgeReady(bridge);
-    return () => onBridgeReady(null);
+    scheduleAfterHydration(() => onBridgeReady(bridge));
+    return () => {
+      scheduleAfterHydration(() => onBridgeReady(null));
+    };
   }, [editor, docId, getSnapshot, onBridgeReady]);
 }

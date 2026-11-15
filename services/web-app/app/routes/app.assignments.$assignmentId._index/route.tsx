@@ -11,7 +11,7 @@ import { loadExitTicketResponses } from '~/domain/assignment-types/exit-ticket-c
 import { EXIT_TICKET_SEED_STEP } from '~/domain/lesson-planner/lesson-seed';
 import { Prisma } from '@app/prisma';
 import { isLessonPlannerEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { useState, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import {
   type LoaderFunctionArgs,
   type ActionFunctionArgs,
@@ -93,6 +93,8 @@ import {
   resolveAssignmentTypeGradingConfig,
 } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { assertNotRetiredApHistoryAssignmentType } from '~/utils/retired-ap-history-access.server';
+import { DEV_PANEL_DISMISS_EVENT } from '~/utils/dev-panel-dismiss-event';
+import { prepareAppShellForRadixSheet } from '~/utils/radix-scroll-lock-cleanup';
 
 /**
  * Page chrome the class route used to provide while this page was nested
@@ -859,10 +861,34 @@ export default function AssignmentDetailRoute() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [isEditSheetOpen, setIsEditSheetOpen] = useState(false);
+  const ignoreEditSheetCloseUntilRef = useRef(0);
 
   const handleEditSheetOpenChange = (open: boolean) => {
+    if (
+      !open &&
+      typeof performance !== 'undefined' &&
+      performance.now() < ignoreEditSheetCloseUntilRef.current
+    ) {
+      return;
+    }
     setIsEditSheetOpen(open);
   };
+
+  const openExitTicketEditSheet = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event(DEV_PANEL_DISMISS_EVENT));
+    }
+    prepareAppShellForRadixSheet();
+    if (typeof performance !== 'undefined') {
+      ignoreEditSheetCloseUntilRef.current = performance.now() + 750;
+    }
+    setIsEditSheetOpen(true);
+  };
+
+  useEffect(() => {
+    if (!data.found) return;
+    prepareAppShellForRadixSheet();
+  }, [data.found, data.found ? data.assignment.id : null, data.found ? data.activeClassId : null]);
 
   if (!data.found) {
     return (
@@ -1003,7 +1029,7 @@ export default function AssignmentDetailRoute() {
                 }}
                 onEdit={() => {
                   if (isExitTicketAssignmentType(assignment.assignmentType)) {
-                    setIsEditSheetOpen(true);
+                    openExitTicketEditSheet();
                     return;
                   }
                   void navigate(
