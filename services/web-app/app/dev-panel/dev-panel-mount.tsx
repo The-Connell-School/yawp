@@ -1,4 +1,3 @@
-import { useAfterHydration } from '~/utils/schedule-after-hydration';
 import { DevPanelBeaker } from './dev-panel-beaker';
 import { DevPanelNavigationSync } from './dev-panel-navigation-sync';
 import { DevPanelDismissListener } from './dev-panel-dismiss-listener';
@@ -33,11 +32,6 @@ export function DevPanelMount({
   previewAccessGateEnabled: boolean;
   previewAccessSeatLabel: string | null;
 }) {
-  const hydrated = useAfterHydration();
-  // #958 eager-mounted the panel with the login shell; that raced unified-signon
-  // fetchers during slow hydration (membership choice stuck in pending).
-  if (!hydrated) return null;
-
   return (
     <DevPanelProvider
       envBadge={envBadge}
