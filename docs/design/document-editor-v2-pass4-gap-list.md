@@ -15,7 +15,11 @@ Branch: `cursor/document-editor-v2-pass4-parity-168b` (preview: `pr-N.preview.ya
 | PM tripwire | Bootstrap/normalize transactions on server HTML lacked `recovery-on-mount` | fixed |
 | Staff `?editor=v1` | Opt-out worked but was not exposed for capture/analytics | fixed (`data-document-editor-staff-opt-out="v1"`) |
 | Tutor polish | Minor spacing/token alignment vs states board | remaining (no regressions found in pass) |
-| Full states board | Automated side-by-side for loading/error/saving/submitted on preview | remaining (preview capture when deploy ready) |
+| Full states board | Automated side-by-side for loading/error/saving/submitted on preview | remaining (preview DB had no document deep links for Casey/Alex; need overlay creds or seeded doc id) |
+
+## CI
+
+- Green: https://github.com/The-Connell-School/yawp/actions/runs/43686218920 (`3b543f8c`)
 
 ## Design reference paths (uploaded)
 
