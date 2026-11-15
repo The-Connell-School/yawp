@@ -658,39 +658,6 @@ test.describe.serial('Document Editor E2E Tests', () => {
     );
   });
 
-  test('v2 student can cancel an expanded comment reply', async ({
-    page,
-    signIn,
-    e2eContext,
-    helpers,
-  }) => {
-    await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
-    await page.setViewportSize({ width: 1280, height: 720 });
-    await helpers.openDocument(
-      `${e2eContext.gradedDocumentId}?tab=editor`,
-      { retry: true }
-    );
-    const commentId = e2eContext.v2GradedCommentId;
-    await expect(
-      page.getByTestId(`margin-comment-card-${commentId}`)
-    ).toBeVisible({ timeout: 15_000 });
-    const replyPill = page.getByTestId(`comment-reply-input-${commentId}`);
-    const replyExpanded = page.getByTestId(`comment-reply-expanded-${commentId}`);
-    if (await replyExpanded.isVisible().catch(() => false)) {
-      await page.getByTestId(`comment-reply-body-${commentId}`).fill('Draft only');
-    } else {
-      await replyPill.click();
-      await page.getByTestId(`comment-reply-body-${commentId}`).fill('Draft only');
-    }
-    await page.getByRole('button', { name: 'Cancel' }).click();
-    await expect(
-      page.getByTestId(`comment-reply-input-${commentId}`)
-    ).toBeVisible({ timeout: 10_000 });
-    await expect(
-      page.getByTestId(`comment-reply-expanded-${commentId}`)
-    ).toBeHidden();
-  });
-
   test('v2 chrome shows tutor step header when v2 is active', async ({
     page,
     signIn,
@@ -742,26 +709,24 @@ test.describe.serial('Document Editor E2E Tests', () => {
       `${e2eContext.gradedDocumentId}?tab=editor`,
       { retry: true }
     );
-    const card = page.getByTestId(
-      `margin-comment-card-${e2eContext.v2GradedCommentId}`
-    );
+    const commentId = e2eContext.v2GradedCommentId;
+    const card = page.getByTestId(`margin-comment-card-${commentId}`);
     await expect(card).toBeVisible({ timeout: 15_000 });
     await expect(card).toContainText('Thanks — I will expand this section.');
-    await page
-      .getByTestId(`comment-reply-input-${e2eContext.v2GradedCommentId}`)
-      .click();
-    await page
-      .getByTestId(`comment-reply-body-${e2eContext.v2GradedCommentId}`)
-      .fill('Reply from teacher E2E.');
-    await page
-      .getByTestId(`comment-reply-send-${e2eContext.v2GradedCommentId}`)
-      .click();
+    await page.getByTestId(`comment-reply-input-${commentId}`).click();
+    await expect(page.getByTestId(`comment-reply-expanded-${commentId}`)).toBeVisible();
+    await expect(page.getByTestId(`comment-reply-input-${commentId}`)).toHaveCount(0);
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByTestId(`comment-reply-input-${commentId}`)).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.getByTestId(`comment-reply-input-${commentId}`).click();
+    await page.getByTestId(`comment-reply-body-${commentId}`).fill('Reply from teacher E2E.');
+    await page.getByTestId(`comment-reply-send-${commentId}`).click();
     await expect(card).toContainText('Reply from teacher E2E.', {
       timeout: 10_000,
     });
-    const resolveButton = page.getByTestId(
-      `comment-resolve-${e2eContext.v2GradedCommentId}`
-    );
+    const resolveButton = page.getByTestId(`comment-resolve-${commentId}`);
     await resolveButton.click();
     await expect(resolveButton).toBeHidden({ timeout: 10_000 });
   });
@@ -906,7 +871,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
     const editor = helpers.getEditor();
     await editor.click();
-    await page.keyboard.press('Control+a');
+    await page.keyboard.press(SELECT_ALL_SHORTCUT);
     await page.getByTestId('editor-add-comment').click();
     const draftId = await page
       .getByTestId('margin-comment-draft-card')
@@ -932,7 +897,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
     const editor = helpers.getEditor();
     await editor.click();
-    await page.keyboard.press('Control+a');
+    await page.keyboard.press(SELECT_ALL_SHORTCUT);
     await page.getByTestId('editor-add-comment').click();
     const draftId = await page
       .getByTestId('margin-comment-draft-card')
@@ -944,28 +909,4 @@ test.describe.serial('Document Editor E2E Tests', () => {
     ).toHaveCount(1, { timeout: 15_000 });
   });
 
-  test('v2 auto-focused reply shows a single reply field', async ({
-    page,
-    signIn,
-    e2eContext,
-    helpers,
-  }) => {
-    await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await helpers.openDocument(
-      `${e2eContext.gradedDocumentId}?tab=editor`,
-      { retry: true }
-    );
-    const commentId = e2eContext.v2GradedCommentId;
-    await page.getByTestId(`margin-comment-card-${commentId}`).click();
-    await page
-      .getByTestId(`comment-reply-input-${commentId}`)
-      .click();
-    await expect(
-      page.getByTestId(`comment-reply-expanded-${commentId}`)
-    ).toBeVisible();
-    await expect(
-      page.getByTestId(`comment-reply-input-${commentId}`)
-    ).toHaveCount(0);
-  });
 });
