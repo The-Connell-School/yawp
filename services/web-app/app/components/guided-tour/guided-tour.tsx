@@ -73,9 +73,23 @@ type Phase =
   | { kind: 'welcome' }
   | { kind: 'touring'; steps: ActiveStep[]; index: number };
 
+function targetHasLayout(el: HTMLElement | null): el is HTMLElement {
+  if (!el) return false;
+  const rect = el.getBoundingClientRect();
+  if (rect.width > 0 && rect.height > 0) return true;
+  // Nested rails and carousels sometimes report 0 getBoundingClientRect at
+  // wide breakpoints while still occupying space in the layout tree.
+  return el.offsetWidth > 0 && el.offsetHeight > 0;
+}
+
+/** Prefer a visible target when responsive layout renders duplicates (e.g. mobile + desktop rails). */
 function findTarget(target: string | null) {
   if (!target || typeof document === 'undefined') return null;
-  return document.querySelector<HTMLElement>(`[data-tour="${target}"]`);
+  const nodes = document.querySelectorAll<HTMLElement>(`[data-tour="${target}"]`);
+  for (const el of nodes) {
+    if (targetHasLayout(el)) return el;
+  }
+  return nodes[0] ?? null;
 }
 
 /** On screen at all: not display:none, not slid off the side like the phone nav. */
@@ -150,12 +164,7 @@ function prefersReducedMotion() {
 
 /** In-page with layout, even if clipped horizontally (wide dashboard grids). */
 function isPresentForTour(el: HTMLElement | null): el is HTMLElement {
-  if (!el) return false;
-  const rect = el.getBoundingClientRect();
-  if (rect.width > 0 && rect.height > 0) return true;
-  // Nested rails and carousels sometimes report 0 getBoundingClientRect at
-  // wide breakpoints while still occupying space in the layout tree.
-  return el.offsetWidth > 0 && el.offsetHeight > 0;
+  return targetHasLayout(el);
 }
 
 /** Steps whose element is on this page right now; a centered card if none are. */
