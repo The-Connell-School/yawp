@@ -39,9 +39,9 @@ describe("fileableMaterial (Brian's run 3, item 9)", () => {
     expect(stepColumns(note)).toEqual({ minutes: 4, stepType: 'context' });
   });
 
-  test('Daily Pages has a short real title and its step’s minutes', () => {
+  test('a Short Response has a short real title and its step’s minutes', () => {
     const daily = fileableMaterial(REPLY, 'dp')!;
-    expect(daily.title).toBe('Daily Pages: What one item reveals (8 min)');
+    expect(daily.title).toBe('Short Response: What one item reveals (8 min)');
     expect(daily.minutes).toBe(8);
   });
 });

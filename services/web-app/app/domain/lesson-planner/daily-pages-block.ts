@@ -38,7 +38,7 @@ export type WritingExerciseKind = (typeof WRITING_EXERCISE_KINDS)[number];
 /** What the card calls each of them, in the teacher's words. */
 export const WRITING_EXERCISE_LABELS: Record<WritingExerciseKind, string> = {
   'class-starter': 'Class Starter',
-  'daily-pages': 'Daily Pages',
+  'daily-pages': 'Short Response',
 };
 
 export type DailyPagesExercise = {
@@ -136,6 +136,9 @@ const KIND_ALIASES: Record<string, WritingExerciseKind> = {
   'daily-page': 'daily-pages',
   dp: 'daily-pages',
   reflection: 'daily-pages',
+  // Daily Pages is called Short Response now (Brian, Nov 15).
+  'short-response': 'daily-pages',
+  'short-responses': 'daily-pages',
 };
 
 /**

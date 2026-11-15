@@ -21,7 +21,7 @@ describe('planningProgressForTool', () => {
     ).toBe('Searching Class Starter prompts');
     expect(
       planningProgressForTool('search_short_form_prompts', {}, 1).label
-    ).toBe('Searching Daily Pages prompts');
+    ).toBe('Searching Short Response prompts');
     expect(
       planningProgressForTool('list_lounge_materials', {}, 1).label
     ).toBe("Looking through the Teacher's Lounge");

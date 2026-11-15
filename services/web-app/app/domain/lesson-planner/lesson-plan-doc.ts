@@ -148,7 +148,7 @@ function firstSentences(markdown: string): string {
 function afterLabel(title: string): string {
   return title
     .replace(
-      /^(Class Starter|Daily Pages|Exit ticket|Writing practice)\s*:\s*/i,
+      /^(Class Starter|Daily Pages|Short Response|Exit ticket|Writing practice)\s*:\s*/i,
       ''
     )
     .trim();
@@ -156,7 +156,7 @@ function afterLabel(title: string): string {
 
 const STEP_TITLE: Record<string, string> = {
   'class-starter': 'Class starter',
-  'daily-pages': 'Daily Pages reflection',
+  'daily-pages': 'Short Response',
   'exit-ticket': 'Exit ticket',
 };
 
@@ -393,7 +393,7 @@ function assessmentFrom(entries: LessonPlanEntry[]): string | null {
   const ticket = entries.find((entry) => entry.kind === 'exit-ticket');
   if (ticket) return `The exit ticket: ${firstSentences(ticket.content)}`;
   const daily = entries.find((entry) => entry.kind === 'daily-pages');
-  if (daily) return `Daily Pages: ${firstSentences(daily.content)}`;
+  if (daily) return `Short Response: ${firstSentences(daily.content)}`;
   return null;
 }
 

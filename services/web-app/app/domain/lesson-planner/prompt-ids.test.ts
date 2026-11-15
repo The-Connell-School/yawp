@@ -9,12 +9,19 @@ describe("hidePromptIds (Brian's run 2, items 17, 21, 26)", () => {
     expect(hidePromptIds('Explain your claim.\n\n_Daily Pages prompt sf-ev-03_')).toBe(
       'Explain your claim.'
     );
+    // Daily Pages is called Short Response now (Brian, Nov 15).
+    expect(hidePromptIds('Explain your claim.\n\n_Short Response prompt sf-ev-03_')).toBe(
+      'Explain your claim.'
+    );
   });
 
   test('takes an inline id out of plan prose and keeps the sentence', () => {
     expect(
       hidePromptIds('**Class starter (5 min)** — Daily Pages prompt FW-001: "What do you carry?"')
     ).toBe('**Class starter (5 min)** — "What do you carry?"');
+    expect(
+      hidePromptIds('**Reflection (10 min)** — Short Response prompt sf-ev-03: "Explain it."')
+    ).toBe('**Reflection (10 min)** — "Explain it."');
     expect(hidePromptIds('Use prompt FW-093 here.')).toBe('Use this prompt here.');
     expect(hidePromptIds('- FW-024: "Name a weight."')).toBe('- "Name a weight."');
     expect(hidePromptIds('A prompt (FW-024) to open.')).toBe('A prompt to open.');

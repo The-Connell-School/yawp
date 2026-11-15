@@ -21,7 +21,8 @@ export const STEP_TYPE_LABELS: Record<StepType, string> = {
   activity: 'Activity',
   context: 'Context',
   read_aloud: 'Read aloud',
-  daily_pages: 'Daily Pages',
+  // Daily Pages until Nov 15 (Brian): the key stays, the name changed.
+  daily_pages: 'Short Response',
   thesis_essay: 'Thesis Essay',
   closing: 'Closing',
 };
@@ -48,6 +49,7 @@ export function parseStepType(value: unknown): StepType | null {
   if (normalized === 'starter' || normalized === 'warm_up') return 'class_starter';
   if (normalized === 'reading' || normalized === 'readaloud') return 'read_aloud';
   if (normalized === 'thesis' || normalized === 'essay') return 'thesis_essay';
+  if (normalized === 'short_response' || normalized === 'short_responses') return 'daily_pages';
   if (normalized === 'framing' || normalized === 'background') return 'context';
   return null;
 }
@@ -57,7 +59,7 @@ const WRITING_KINDS = new Set(['class-starter', 'daily-pages', 'exit-ticket', 't
 
 const TITLE_TYPES: [RegExp, StepType][] = [
   [/\bthesis\b/i, 'thesis_essay'],
-  [/\bdaily pages\b/i, 'daily_pages'],
+  [/\bdaily pages\b|\bshort responses?\b/i, 'daily_pages'],
   [/\bclass starter\b|\bwarm[- ]?up\b|\bbell ?ringer\b|\bdo now\b/i, 'class_starter'],
   [/\bread(?:ing)?[- ]?aloud\b|\bread the\b|\breading\b/i, 'read_aloud'],
   [/\bclos(?:e|ing)\b|\bexit\b|\bwrap[- ]?up\b/i, 'closing'],
@@ -97,7 +99,7 @@ export function stepTypeFor({
 
 /** A title that names a Yawp! assignment type (Brian's round 3, 1.3). */
 const ASSIGNMENT_TITLE =
-  /\b(?:class starter|daily pages|exit (?:ticket|slip)s?|thesis|five[- ]paragraph essay|ap (?:essay|writing)|act writing)\b/i;
+  /\b(?:class starter|daily pages|short responses?|exit (?:ticket|slip)s?|thesis|five[- ]paragraph essay|ap (?:essay|writing)|act writing)\b/i;
 const EXIT_TICKET = /\bexit (?:ticket|slip)s?\b/i;
 
 /**
@@ -117,7 +119,7 @@ const TEACHER_TALK =
  * ("Deck: What Pre-Writing Is") is not.
  */
 const WRITING_ACT_TITLE =
-  /^\s*(?:(?:students )?(?:pre[- ]?write|quick[- ]?write|free[- ]?write|journal|draft|write|essay drafting|drafting)|class starter|daily pages)\b/i;
+  /^\s*(?:(?:students )?(?:pre[- ]?write|quick[- ]?write|free[- ]?write|journal|draft|write|essay drafting|drafting)|class starter|daily pages|short responses?)\b/i;
 /** "Deck:", "Slides:" and the like name the medium, not the step; what follows decides. */
 const MEDIUM_PREFIX = /^\s*(?:slide deck|slides?|deck|handout|video)\s*[:—–-]\s*/i;
 /** Talk, reading and closings (Brian, Nov 4): writing only with a prompt line in them. */
@@ -234,7 +236,7 @@ export function writingName({
 }): string {
   const text = `${title}\n${content}`;
   if (kind === 'class-starter' || stepType === 'class_starter') return 'Class Starter';
-  if (kind === 'daily-pages' || stepType === 'daily_pages') return 'Daily Pages';
+  if (kind === 'daily-pages' || stepType === 'daily_pages') return 'Short Response';
   if (kind === 'thesis-module' || stepType === 'thesis_essay') return 'Thesis Essay';
   if (kind === 'exit-ticket' || /\bexit (?:ticket|slip)/i.test(text)) return 'Exit Ticket';
   if (/\bfive[- ]paragraph essay/i.test(text)) return 'Five-Paragraph Essay';
