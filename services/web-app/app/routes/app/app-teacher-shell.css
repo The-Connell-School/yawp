@@ -102,6 +102,11 @@
   z-index: 1;
 }
 
+/* Carousel shells can report 0 height before tiles paint; tours need a stable anchor. */
+.locked-home-b2 [data-tour='dashboard-assignments'] {
+  min-height: 8rem;
+}
+
 .locked-home-rail-desktop {
   display: none;
   grid-column: 2;

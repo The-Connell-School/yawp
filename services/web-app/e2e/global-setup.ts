@@ -3,12 +3,18 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setFeatureFlag } from './feature-flags';
 import { createE2EPrismaClient } from './prisma-client';
+import { loadE2eEnvFromFile } from './test-setup';
 
 /**
  * Smoke shards share one Postgres database across parallel CI jobs. Reset
  * cross-spec pollution before each shard's run starts.
  */
 export default async function globalSetup() {
+  loadE2eEnvFromFile();
+  if (!process.env.E2E_DATABASE_URL && process.env.DATABASE_URL) {
+    process.env.E2E_DATABASE_URL = process.env.DATABASE_URL;
+  }
+
   await setFeatureFlag('assignments-grouped-by-type', false);
 
   const e2eDir = path.dirname(fileURLToPath(import.meta.url));

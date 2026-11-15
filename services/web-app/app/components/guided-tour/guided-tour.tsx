@@ -279,13 +279,21 @@ function PageTourController({
   const start = useCallback(() => {
     if (!tour) return;
     for (const step of tour.steps) {
-      findTarget(step.target)?.scrollIntoView({
-        block: 'nearest',
-        inline: 'nearest',
-        // Instant scroll so step resolution runs after targets are in view
-        // (smooth scrolling left wide layouts with only one tour step).
-        behavior: 'auto',
-      });
+      if (!step.target) continue;
+      const targets = document.querySelectorAll<HTMLElement>(
+        `[data-tour="${step.target}"]`
+      );
+      for (const el of targets) {
+        if (targetHasLayout(el)) {
+          el.scrollIntoView({
+            block: 'nearest',
+            inline: 'nearest',
+            // Instant scroll so step resolution runs after targets are in view
+            // (smooth scrolling left wide layouts with only one tour step).
+            behavior: 'auto',
+          });
+        }
+      }
     }
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
