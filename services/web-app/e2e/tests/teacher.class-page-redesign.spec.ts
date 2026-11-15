@@ -1,8 +1,8 @@
 import { test, expect } from '../test-setup';
 import {
-  classDocumentsTabUrl,
   clickClassAssignmentRow,
   clickClassDocumentsStatusTab,
+  gotoClassDocumentsTab,
   openClassAssignmentsTab,
 } from '../test-helpers';
 import { currentSchoolYear } from '../../app/utils/school-year';
@@ -91,12 +91,9 @@ test.describe('Teacher class documents lifecycle', () => {
         localStorage.removeItem('yawp.class-documents-view');
         localStorage.removeItem('yawp.student-work-view');
       });
-      await page.goto(
-        classDocumentsTabUrl(e2eContext.classId, {
-          q: `Lifecycle needs grading ${suffix}`,
-        })
-      );
-      await page.waitForLoadState('networkidle');
+      await gotoClassDocumentsTab(page, e2eContext.classId, {
+        q: `Lifecycle needs grading ${suffix}`,
+      });
       const table = page.getByRole('table', { name: /class documents/i });
       await expect(table).toBeVisible({ timeout: 15_000 });
       await expect(
@@ -448,8 +445,9 @@ test.describe.serial('Teacher class page redesign', () => {
       documentIds.push(inProgressDoc.id);
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto(classDocumentsTabUrl(e2eContext.classId, { q: submittedTitle }));
-      await page.waitForLoadState('networkidle');
+      await gotoClassDocumentsTab(page, e2eContext.classId, {
+        q: submittedTitle,
+      });
 
       const documentsTable = page.getByRole('table', { name: /class documents/i });
       await expect(documentsTable).toBeVisible({ timeout: 15_000 });
@@ -473,8 +471,7 @@ test.describe.serial('Teacher class page redesign', () => {
       await submittedRow.click();
       await page.waitForURL(/\/app\/submissions\//);
 
-      await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
-      await page.waitForLoadState('networkidle');
+      await gotoClassDocumentsTab(page, e2eContext.classId);
       const inProgressRow = page
         .getByRole('row', {
           name: new RegExp(inProgressTitle),

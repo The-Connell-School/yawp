@@ -8,7 +8,7 @@ import { seedSiteLicenseLockedCatalogForE2E } from '../helpers/seed-site-license
 import { dashboardAssignmentTileOverlapIssues } from '../helpers/dashboard-assignment-tile-overlap';
 import { expectGiveFeedbackAccessible } from '../helpers/dev-panel-feedback';
 import { expectNewAssignmentBuilderPage } from '../helpers/assignment-builder-v3-page';
-import { ensureLockedPreviewSampleAssignmentsForE2E } from '../helpers/ensure-locked-preview-sample-assignments-for-e2e';
+import { createLockedPreviewBrowseAssignmentForE2E } from '../helpers/ensure-locked-preview-sample-assignments-for-e2e';
 import {
   expandAssignmentTypeSections,
   openClassAssignmentsTab,
@@ -1009,7 +1009,7 @@ test('locked class surfaces hide the real class code and lock invite controls', 
   ).toBeVisible();
 });
 
-test('locked assignments tab shows sample rows and locked documents pill', async ({
+test('locked assignments tab shows browse rows and locked documents pill', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 900 });
@@ -1020,18 +1020,20 @@ test('locked assignments tab shows sample rows and locked documents pill', async
     where: { teachers: { some: { user: { id: user.id } } } },
     select: { id: true, school: { select: { organizationId: true } } },
   });
-  await ensureLockedPreviewSampleAssignmentsForE2E(prisma, klass.id);
+  const browseTitle = `Locked preview browse row ${Date.now().toString(36)}`;
+  await createLockedPreviewBrowseAssignmentForE2E(
+    prisma,
+    klass.id,
+    browseTitle
+  );
   await exploreLockedApp(page, user.email!);
   await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
   await openClassAssignmentsTab(page);
   await expandAssignmentTypeSections(page);
-  await page.getByTestId('class-assignments-search').fill('Opening');
-  await expect
-    .poll(
-      async () => page.getByText('Opening Lines').count(),
-      { timeout: 60_000 }
-    )
-    .toBeGreaterThan(0);
+  await page.getByTestId('class-assignments-search').fill(browseTitle);
+  await expect(page.getByText(browseTitle, { exact: true })).toBeVisible({
+    timeout: 60_000,
+  });
   await expect(page.getByText('Sample · Not sent').first()).toBeVisible({
     timeout: 15_000,
   });

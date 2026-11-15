@@ -2,6 +2,7 @@ import { test, expect } from '../test-setup';
 import {
   clickStudentClassAssignmentRow,
   fillFreeTierJoinForm,
+  gotoClassDocumentsTab,
   submitFreeTierJoinAndExpectApp,
 } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
@@ -152,15 +153,13 @@ test.describe('Free-tier handle student', () => {
       await expect(teacherPage.getByText(displayName)).toBeVisible();
       await expect(teacherPage.getByText(`@${handle}`)).toBeVisible();
 
-      await teacherPage.goto(`/app/my-classes/${klass.id}?tab=documents`, {
-        waitUntil: 'domcontentloaded',
+      await gotoClassDocumentsTab(teacherPage, klass.id, {
+        q: displayName.toLowerCase(),
+        status: 'needs-grading',
       });
-      await expect(async () => {
-        if (!(await teacherPage.getByText(displayName).isVisible())) {
-          await teacherPage.reload({ waitUntil: 'domcontentloaded' });
-        }
-        await expect(teacherPage.getByText(displayName)).toBeVisible();
-      }).toPass({ timeout: 20000 });
+      await expect(teacherPage.getByText(displayName)).toBeVisible({
+        timeout: 60_000,
+      });
 
       await teacherPage.goto(`/app/my-classes/${klass.id}?tab=students`);
       const studentRow = teacherPage

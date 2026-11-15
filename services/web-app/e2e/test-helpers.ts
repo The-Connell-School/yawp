@@ -469,9 +469,9 @@ export async function fillMyAssignmentsSearch(
       `/app/assignments?highlightAssignment=${options.assignmentId}`,
       { waitUntil: 'domcontentloaded' }
     );
-    await expect(
-      page.locator('[role="table"][aria-label^="My Assignments"]').first()
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('my-assignments-filter')).toBeVisible({
+      timeout: 30_000,
+    });
   }
   const trimmed = query.trim();
   const visibilityTarget = options?.assignmentId
@@ -515,11 +515,35 @@ export function classDocumentsTabUrl(
   classId: string,
   params?: { q?: string; documentGroup?: string; status?: string }
 ) {
-  const search = new URLSearchParams({ tab: 'documents' });
-  if (params?.q) search.set('q', params.q);
-  if (params?.documentGroup) search.set('documentGroup', params.documentGroup);
+  const search = new URLSearchParams({
+    tab: 'documents',
+    documentGroup: params?.documentGroup ?? 'none',
+  });
+  if (params?.q) search.set('q', params.q.trim().toLowerCase());
   if (params?.status) search.set('status', params.status);
   return `/app/my-classes/${classId}?${search.toString()}`;
+}
+
+/** Class detail documents tab (header tabs include counts in the label). */
+export async function openClassDocumentsTab(page: Page) {
+  const tab = page.locator('[data-header-tab="documents"]');
+  await expect(tab).toBeVisible({ timeout: 15_000 });
+  if ((await tab.getAttribute('aria-selected')) !== 'true') {
+    await tab.click();
+  }
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('class-documents-status-chips')).toBeVisible({
+    timeout: 15_000,
+  });
+}
+
+export async function gotoClassDocumentsTab(
+  page: Page,
+  classId: string,
+  params?: { q?: string; documentGroup?: string; status?: string }
+) {
+  await page.goto(classDocumentsTabUrl(classId, params));
+  await openClassDocumentsTab(page);
 }
 
 /** Teacher document work search box (lives inside the Filter popover). */

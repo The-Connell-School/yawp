@@ -1,7 +1,7 @@
 /** Holistic Cristo Rey smoke: grade-essay-ai on a 20-point assignment type. */
 import { test, expect } from '../test-setup';
 import {
-  classDocumentsTabUrl,
+  gotoClassDocumentsTab,
   clickClassDocumentsStatusTab,
 } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
@@ -188,12 +188,10 @@ test.describe.serial('holistic Cristo Rey points-only grading', () => {
   }, testInfo) => {
     test.setTimeout(120_000);
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    await page.goto(
-      classDocumentsTabUrl(holisticClassId, {
-        q: holisticAssignmentTitle,
-        status: 'released',
-      })
-    );
+    await gotoClassDocumentsTab(page, holisticClassId, {
+      q: holisticAssignmentTitle,
+      status: 'released',
+    });
     const documentsTable = page.getByRole('table', { name: /class documents/i });
     await expect(documentsTable).toBeVisible({ timeout: 15_000 });
     await clickClassDocumentsStatusTab(page, /^Released/i);

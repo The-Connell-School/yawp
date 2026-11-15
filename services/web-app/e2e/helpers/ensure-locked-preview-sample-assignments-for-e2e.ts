@@ -8,6 +8,34 @@ const PREVIEW_PREWRITING_PROMPT =
 const PREVIEW_THESIS_PROMPT =
   'Draft one arguable thesis sentence about whether cities should require community gardens in new developments.';
 
+/** Pending-class loader strips LOCKED_PREVIEW_SAMPLE_TITLES; use a distinct title. */
+export async function createLockedPreviewBrowseAssignmentForE2E(
+  prisma: PrismaClient,
+  classId: string,
+  title: string
+) {
+  const classStarterType = await prisma.assignmentType.findFirst({
+    where: { kind: 'class_starter' },
+    select: { id: true },
+  });
+  if (!classStarterType) {
+    throw new Error('class_starter assignment type is missing from the E2E database');
+  }
+  return prisma.assignment.create({
+    data: {
+      assignmentTypeId: classStarterType.id,
+      title,
+      prompt: 'Write an opening line that pulls a reader into your topic.',
+      submitForGrade: true,
+      pointValue: defaultPointValueForNewAssignment({ kind: 'class_starter' }),
+      gradingAssistantStrictnessLevel:
+        DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+      classAssignments: { create: { classId } },
+    },
+    select: { id: true, title: true },
+  });
+}
+
 /** Playwright-safe copy of ensureLockedPreviewSampleAssignments (no ~/utils/db.server). */
 export async function ensureLockedPreviewSampleAssignmentsForE2E(
   prisma: PrismaClient,

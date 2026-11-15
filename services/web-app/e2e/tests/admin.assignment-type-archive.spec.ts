@@ -86,11 +86,12 @@ test.describe.serial('Admin assignment type archive', () => {
       await openClassAssignmentsTab(page);
       await expandAssignmentTypeSections(page);
       const classSearch = page.getByTestId('class-assignments-search');
-      await classSearch.fill('E2E Class Assignment');
+      await classSearch.fill('e2e class assignment');
       await expect(
         page.getByTestId(`assignment-open-${e2eContext.assignmentId}`)
       ).toBeVisible({ timeout: 30_000 });
-      await classSearch.fill(`Archive smoke assignment ${suffix}`);
+      await classSearch.fill('');
+      await classSearch.fill(`archive smoke assignment ${suffix}`);
       await expect(
         page.getByTestId(`assignment-open-${archiveAssignmentId}`)
       ).toBeVisible({ timeout: 30_000 });
