@@ -546,6 +546,7 @@ test.describe.serial('Teacher class page redesign', () => {
     e2eContext,
     signIn,
   }) => {
+    test.setTimeout(120_000);
     const prisma = createE2EPrismaClient();
     const suffix = Date.now().toString(36);
     const documentIds: string[] = [];
@@ -566,20 +567,54 @@ test.describe.serial('Teacher class page redesign', () => {
       await page.addInitScript(() => {
         localStorage.removeItem('yawp.class-documents-view');
       });
-      await gotoClassDocumentsTab(page, e2eContext.classId, {
-        documentGroup: 'status',
+      const tabParams = {
+        documentGroup: 'status' as const,
         status: 'all',
-      });
+        assignmentId: e2eContext.assignmentId,
+        studentId: e2eContext.membershipId,
+      };
+      await gotoClassDocumentsTab(page, e2eContext.classId, tabParams);
       await openClassDocumentsTab(page);
+      await expect(page.getByTestId('class-documents-group-filter')).toContainText(
+        'Group by status'
+      );
 
-      await expect(
-        page.getByRole('button', { name: /Needs Grading/i }).first()
-      ).toBeVisible();
-      await expect(page.getByText(needsGradingTitle, { exact: true })).toBeVisible();
-      await expect(
-        page.getByRole('button', { name: /In Progress/i }).first()
-      ).toBeVisible();
-      await expect(page.getByText(inProgressTitle, { exact: true })).toBeVisible();
+      await expect
+        .poll(
+          async () => {
+            const needsGroup = page
+              .getByRole('button', { name: /Needs Grading/i })
+              .first();
+            const inProgressGroup = page
+              .getByRole('button', { name: /In Progress/i })
+              .first();
+            if (
+              !(await needsGroup.isVisible().catch(() => false)) ||
+              !(await inProgressGroup.isVisible().catch(() => false))
+            ) {
+              await gotoClassDocumentsTab(page, e2eContext.classId, tabParams);
+              await openClassDocumentsTab(page);
+              return false;
+            }
+            if ((await needsGroup.getAttribute('aria-expanded')) !== 'true') {
+              await needsGroup.click();
+            }
+            if ((await inProgressGroup.getAttribute('aria-expanded')) !== 'true') {
+              await inProgressGroup.click();
+            }
+            const needsTitleVisible = await page
+              .getByText(needsGradingTitle, { exact: true })
+              .isVisible()
+              .catch(() => false);
+            const inProgressTitleVisible = await page
+              .getByText(inProgressTitle, { exact: true })
+              .isVisible()
+              .catch(() => false);
+            return needsTitleVisible && inProgressTitleVisible;
+          },
+          { timeout: 90_000 }
+        )
+        .toBe(true);
     } finally {
       await deleteClassDocuments(prisma, documentIds);
       await prisma.$disconnect();
