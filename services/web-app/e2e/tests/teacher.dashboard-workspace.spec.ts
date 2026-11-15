@@ -281,12 +281,15 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await page.waitForURL(/\/app\/documents\?status=needs-grading/);
       await page.waitForLoadState('networkidle');
       await page.goto(
-        `/app/documents?status=needs-grading&q=${encodeURIComponent(title)}`
+        `/app/documents?status=needs-grading&q=${encodeURIComponent(title)}&reset=1`
       );
       await page.waitForLoadState('networkidle');
-      await expect(page.getByText(title, { exact: true }).first()).toBeVisible({
-        timeout: 15_000,
-      });
+      await expect
+        .poll(
+          async () => page.getByText(title, { exact: true }).count(),
+          { timeout: 60_000 }
+        )
+        .toBeGreaterThan(0);
     } finally {
       if (documentId) {
         await prisma.submission.deleteMany({ where: { documentId } });

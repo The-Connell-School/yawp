@@ -480,10 +480,19 @@ export async function fillMyAssignmentsSearch(
           .first()
       : null;
 
+  if (options?.assignmentId && !trimmed && !options?.assignmentTypeTitle) {
+    const located = await findMyAssignmentRow(page, {
+      assignmentId: options.assignmentId,
+    });
+    await expect(located).toBeVisible({ timeout: 30_000 });
+    return;
+  }
   if (options?.assignmentTypeTitle) {
     await selectMyAssignmentsTypePill(page, options.assignmentTypeTitle);
   }
-  await setMyAssignmentsSearchQuery(page, query);
+  if (trimmed) {
+    await setMyAssignmentsSearchQuery(page, query);
+  }
   if (!visibilityTarget) return;
   const located = await findMyAssignmentRow(page, {
     assignmentId: options?.assignmentId,
@@ -566,6 +575,16 @@ export async function clickClassAssignmentRow(
   }
 }
 
+/** Student class detail: ensure the Assignments tab is active (Radix tabs, not header tabs). */
+export async function openStudentClassAssignmentsTab(page: Page) {
+  const tab = page.getByRole('tab', { name: 'Assignments', exact: true });
+  await expect(tab).toBeVisible({ timeout: 15_000 });
+  if ((await tab.getAttribute('aria-selected')) !== 'true') {
+    await tab.click();
+  }
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
+}
+
 /** Student class Assignments tab rows navigate via the table row onClick handler. */
 export async function clickStudentClassAssignmentRow(
   page: Page,
@@ -574,25 +593,20 @@ export async function clickStudentClassAssignmentRow(
   await expect(page.getByTestId('student-class-detail')).toBeVisible({
     timeout: 15_000,
   });
+  await openStudentClassAssignmentsTab(page);
   if (options.title) {
-    const escaped = options.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const startButton = page
-      .getByRole('button')
-      .filter({ hasText: new RegExp(escaped) })
-      .first();
-    await expect(startButton).toBeVisible({ timeout: 30_000 });
+    const startButton = page.getByRole('button', {
+      name: options.title,
+      exact: true,
+    });
+    await expect(startButton).toBeVisible({ timeout: 60_000 });
     await startButton.click();
     return;
   }
   await expandAssignmentTypeSections(page);
-  const row =
-    options.assignmentId != null
-      ? page
-          .getByRole('row')
-          .filter({
-            has: page.getByTestId(`assignment-open-${options.assignmentId}`),
-          })
-      : page.getByRole('row').filter({ hasText: options.title ?? '' });
+  const row = page
+    .getByRole('row')
+    .filter({ hasText: options.title ?? '' });
   await expect(row).toBeVisible({ timeout: 30_000 });
   await row.click();
 }

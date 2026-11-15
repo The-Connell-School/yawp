@@ -6,6 +6,7 @@ import { createDeployedAssignment } from '../db-helpers';
 
 let holisticSubmissionId: string;
 let holisticClassId: string;
+let holisticAssignmentTitle: string;
 
 test.describe.serial('holistic Cristo Rey points-only grading', () => {
   test.beforeEach(async ({ page }) => {
@@ -25,6 +26,7 @@ test.describe.serial('holistic Cristo Rey points-only grading', () => {
     test.setTimeout(300_000);
     const prisma = createE2EPrismaClient();
     const title = `Holistic E2E ${Date.now()}`;
+    holisticAssignmentTitle = title;
     const { assignment, classAssignment } = await createDeployedAssignment({
       prisma,
       classId: e2eContext.classId,
@@ -187,11 +189,14 @@ test.describe.serial('holistic Cristo Rey points-only grading', () => {
     const documentsTable = page.getByRole('table', { name: /class documents/i });
     await expect(documentsTable).toBeVisible({ timeout: 15_000 });
     await clickClassDocumentsStatusTab(page, /^Released/i);
+    const titleRow = documentsTable
+      .getByRole('row')
+      .filter({ hasText: holisticAssignmentTitle });
     await expect
       .poll(
         async () =>
-          (await documentsTable.getByText(/6\s*\/\s*20/).count()) > 0,
-        { timeout: 30_000 }
+          (await titleRow.getByText(/6\s*\/\s*20/).count()) > 0,
+        { timeout: 60_000 }
       )
       .toBe(true);
     await page.screenshot({

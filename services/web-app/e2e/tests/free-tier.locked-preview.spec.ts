@@ -9,6 +9,10 @@ import { dashboardAssignmentTileOverlapIssues } from '../helpers/dashboard-assig
 import { expectGiveFeedbackAccessible } from '../helpers/dev-panel-feedback';
 import { expectNewAssignmentBuilderPage } from '../helpers/assignment-builder-v3-page';
 import { ensureLockedPreviewSampleAssignmentsForE2E } from '../helpers/ensure-locked-preview-sample-assignments-for-e2e';
+import {
+  expandAssignmentTypeSections,
+  openClassAssignmentsTab,
+} from '../test-helpers';
 import { FREE_CLASSROOM_BUNDLE_TILE_LABELS } from '../../app/domain/free-tier/inapp-usage';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
@@ -1018,7 +1022,11 @@ test('locked assignments tab shows sample rows and locked documents pill', async
   await ensureLockedPreviewSampleAssignmentsForE2E(prisma, klass.id);
   await exploreLockedApp(page, user.email!);
   await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
-  await expect(page.getByText('Sample · Not sent').first()).toBeVisible();
+  await openClassAssignmentsTab(page);
+  await expandAssignmentTypeSections(page);
+  await expect(page.getByText('Sample · Not sent').first()).toBeVisible({
+    timeout: 30_000,
+  });
   const documentsPill = page.getByTestId(/assignment-documents-/).first();
   await expect(documentsPill).toBeVisible();
   await documentsPill.click({ force: true });

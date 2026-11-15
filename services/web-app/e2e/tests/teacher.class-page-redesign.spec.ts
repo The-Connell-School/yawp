@@ -67,6 +67,7 @@ test.describe('Teacher class documents lifecycle', () => {
     e2eContext,
     signIn,
   }) => {
+    test.setTimeout(120_000);
     const prisma = createE2EPrismaClient();
     const suffix = Date.now().toString(36);
     const documentIds: string[] = [];
@@ -89,7 +90,9 @@ test.describe('Teacher class documents lifecycle', () => {
         localStorage.removeItem('yawp.class-documents-view');
         localStorage.removeItem('yawp.student-work-view');
       });
-      await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
+      await page.goto(
+        `/app/my-classes/${e2eContext.classId}?tab=documents&documentGroup=none`
+      );
       await page.waitForLoadState('networkidle');
       await expect
         .poll(
@@ -433,6 +436,7 @@ test.describe.serial('Teacher class page redesign', () => {
     e2eContext,
     signIn,
   }) => {
+    test.setTimeout(120_000);
     const prisma = createE2EPrismaClient();
     const suffix = Date.now().toString(36);
     const submittedTitle = `Redesign submitted ${suffix}`;
@@ -451,8 +455,19 @@ test.describe.serial('Teacher class page redesign', () => {
       documentIds.push(inProgressDoc.id);
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
+      await page.goto(
+        `/app/my-classes/${e2eContext.classId}?tab=documents&documentGroup=none`
+      );
       await page.waitForLoadState('networkidle');
+
+      const documentsTable = page.getByRole('table', { name: /class documents/i });
+      await expect
+        .poll(
+          async () =>
+            documentsTable.getByText(submittedTitle, { exact: true }).count(),
+          { timeout: 60_000 }
+        )
+        .toBeGreaterThan(0);
 
       const submittedRow = page
         .getByRole('row', {

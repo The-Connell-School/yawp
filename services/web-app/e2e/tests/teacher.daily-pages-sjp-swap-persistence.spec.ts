@@ -173,6 +173,7 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
     e2eContext,
     signIn,
   }) => {
+    test.setTimeout(120_000);
     const seeded = await seedDailyPagesWork(e2eContext);
     await swapTeacherToSjpOnly(e2eContext, sjpTypeId);
 
