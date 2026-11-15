@@ -56,6 +56,11 @@ export function useDevPanel() {
   return value;
 }
 
+/** No-op when the dev panel bundle is stubbed out (production). */
+export function useOptionalDevPanel() {
+  return useContext(DevPanelContext);
+}
+
 export function DevPanelProvider({
   children,
   envBadge,
