@@ -1,4 +1,9 @@
-import { DevPanelMount as DevPanelMountImpl } from './dev-panel-mount';
+import {
+  startTransition,
+  useEffect,
+  useState,
+  type ComponentType,
+} from 'react';
 import type { DevPanelEnvBadge } from './dev-panel-types';
 
 type DevPanelMountProps = {
@@ -8,11 +13,23 @@ type DevPanelMountProps = {
 };
 
 export function DevPanelMount(props: DevPanelMountProps) {
+  const [MountImpl, setMountImpl] = useState<ComponentType<
+    DevPanelMountProps
+  > | null>(null);
+
+  useEffect(() => {
+    void import('./dev-panel-mount').then((module) => {
+      startTransition(() => {
+        setMountImpl(() => module.DevPanelMount);
+      });
+    });
+  }, []);
+
   if (typeof __YAWP_DEV_PANEL_BUILD__ === 'undefined' || !__YAWP_DEV_PANEL_BUILD__) {
     return null;
   }
-  // Eager import (no React.lazy/Suspense): a hydrating Suspense sibling was
-  // receiving Outlet updates from document routes and tripping React’s hydration
-  // pageerror in Playwright. Production swaps this module for a stub via Vite.
-  return <DevPanelMountImpl {...props} />;
+  if (!MountImpl) {
+    return null;
+  }
+  return <MountImpl {...props} />;
 }
