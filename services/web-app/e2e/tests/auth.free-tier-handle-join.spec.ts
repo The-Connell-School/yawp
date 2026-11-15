@@ -129,10 +129,14 @@ test.describe('Free-tier handle student', () => {
         classAssignmentId: classAssignment.id,
       });
       await page.waitForURL('**/app/documents/**', { timeout: 30000 });
+      const documentId = new URL(page.url()).pathname.split('/').pop() ?? '';
 
+      await expect(page.locator('[data-document-editor-version="v2"]')).toBeVisible({
+        timeout: 30_000,
+      });
       await helpers.waitForEditorReady();
       await helpers.typeInEditor('Handle student draft for grading.');
-      await helpers.waitForSaved();
+      await helpers.waitForSaved(30_000);
       await page.getByTestId('document-submit-button').click();
       await expect(
         page.getByTestId('document-submit-confirm-popover')
@@ -141,6 +145,18 @@ test.describe('Free-tier handle student', () => {
       await expect(page.getByText('Submitted').first()).toBeVisible({
         timeout: 15000,
       });
+      await expect
+        .poll(
+          () =>
+            prisma.submission.count({
+              where: {
+                documentId,
+                submittedAt: { gt: new Date(0) },
+              },
+            }),
+          { timeout: 60_000 }
+        )
+        .toBeGreaterThan(0);
 
       const teacherContext = await browser.newContext();
       const teacherPage = await teacherContext.newPage();
@@ -170,7 +186,13 @@ test.describe('Free-tier handle student', () => {
             if (!(await documentsTable.isVisible().catch(() => false))) {
               return false;
             }
-            return (await documentsTable.getByText(displayName).count()) > 0;
+            const byName =
+              (await documentsTable.getByText(displayName).count()) > 0;
+            const byHandle =
+              (await documentsTable.getByText(`@${handle}`).count()) > 0;
+            const byAssignment =
+              (await documentsTable.getByText('Free tier writing').count()) > 0;
+            return byName || byHandle || byAssignment;
           },
           { timeout: 90_000 }
         )

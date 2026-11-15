@@ -585,6 +585,40 @@ export async function openMyAssignmentDetail(
   });
 }
 
+/** Editor v2 uses a title input; v1 used a page heading. */
+export async function expectDocumentTitleVisible(
+  page: Page,
+  title: string,
+  options?: { timeout?: number }
+) {
+  const timeout = options?.timeout ?? 30_000;
+  const titleInput = page.getByTestId('document-title-input');
+  if ((await titleInput.count()) > 0) {
+    await expect(titleInput).toBeVisible({ timeout });
+    await expect(titleInput).toHaveValue(title);
+    return;
+  }
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({
+    timeout,
+  });
+}
+
+/** Teacher submission grading shows the title in an input, not always as plain text. */
+export async function expectSubmissionTitleVisible(
+  page: Page,
+  title: string,
+  options?: { timeout?: number }
+) {
+  const timeout = options?.timeout ?? 30_000;
+  const titleInput = page.getByTestId('submission-title-input');
+  if ((await titleInput.count()) > 0) {
+    await expect(titleInput).toBeVisible({ timeout });
+    await expect(titleInput).toHaveValue(title);
+    return;
+  }
+  await expect(page.getByText(title).first()).toBeVisible({ timeout });
+}
+
 async function openTeacherDocumentWorkFilter(page: Page) {
   const filter = page.getByRole('button', { name: /^Filter$/i }).first();
   await expect(filter).toBeVisible({ timeout: 15_000 });

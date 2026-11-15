@@ -1,4 +1,5 @@
 import { test, expect } from '../test-setup';
+import { expectSubmissionTitleVisible } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
 import type { E2EContext } from '../seed-e2e';
@@ -199,7 +200,7 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
     await expect(page.getByTestId('submission-lifecycle-panel')).toBeVisible({
       timeout: 30_000,
     });
-    await expect(page.getByText(seeded.documentTitle).first()).toBeVisible();
+    await expectSubmissionTitleVisible(page, seeded.documentTitle);
   });
 
   test('student still sees documents, assignments, and grades after the swap', async ({

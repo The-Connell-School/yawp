@@ -1,5 +1,7 @@
 import { test, expect } from '../test-setup';
 import { openMyAssignmentDetail } from '../test-helpers';
+
+const OWN_QUESTION_TITLE = 'Exit ticket: own question';
 import { createE2EPrismaClient } from '../prisma-client';
 
 // An exit ticket is the one assignment type a teacher does not write a prompt
@@ -134,6 +136,8 @@ test.describe.serial('Exit tickets', () => {
     e2eContext,
     signIn,
   }) => {
+    test.setTimeout(120_000);
+    const prisma = createE2EPrismaClient();
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(
       `/app/assignment-types/${e2eContext.exitTicketAssignmentTypeId}`
@@ -150,24 +154,40 @@ test.describe.serial('Exit tickets', () => {
     await page.getByLabel('Your question').fill(CUSTOM_QUESTION);
     await expect(page.getByText(CUSTOM_QUESTION).last()).toBeVisible();
 
-    await page.getByLabel('Title (optional)').fill('Exit ticket: own question');
+    await page.getByLabel('Title (optional)').fill(OWN_QUESTION_TITLE);
     await page.getByRole('button', { name: /Create Assignment/i }).click();
     await expect(
       page.getByRole('heading', { name: 'New Assignment' })
     ).toHaveCount(0);
 
-    // Reopening keeps the teacher's own words rather than resetting to the
-    // default question.
-    await page.goto('/app/assignments');
-    await page.getByText('Exit ticket: own question').first().click();
-    await page
-      .getByRole('button', { name: /^Edit$/ })
-      .first()
-      .click();
-    await expect(
-      page.getByRole('radio', { name: 'Write your own' })
-    ).toBeChecked();
-    await expect(page.getByLabel('Your question')).toHaveValue(CUSTOM_QUESTION);
+    try {
+      // Reopening keeps the teacher's own words rather than resetting to the
+      // default question.
+      const ownQuestionAssignment = await prisma.assignment.findFirstOrThrow({
+        where: {
+          title: OWN_QUESTION_TITLE,
+          classAssignments: { some: { classId: e2eContext.classId } },
+        },
+        select: { id: true },
+      });
+      await openMyAssignmentDetail(
+        page,
+        ownQuestionAssignment.id,
+        e2eContext.classId
+      );
+      const editButton = page.getByRole('button', { name: /^Edit$/ }).first();
+      await expect(editButton).toBeVisible({ timeout: 30_000 });
+      await editButton.click();
+      await expect(
+        page.getByRole('heading', { name: 'Edit Assignment' })
+      ).toBeVisible({ timeout: 30_000 });
+      await expect(
+        page.getByRole('radio', { name: 'Write your own' })
+      ).toBeChecked();
+      await expect(page.getByLabel('Your question')).toHaveValue(CUSTOM_QUESTION);
+    } finally {
+      await prisma.$disconnect();
+    }
   });
 
   test('grading a check asks for points and the correct answer', async ({

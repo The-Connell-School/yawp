@@ -3,6 +3,7 @@ import {
   clickClassAssignmentRow,
   clickClassDocumentsStatusTab,
   expectClassDocumentsTable,
+  expectDocumentTitleVisible,
   filterClassDocumentsByTitle,
   gotoClassDocumentsTab,
   openClassAssignmentsTab,
@@ -458,9 +459,7 @@ test.describe.serial('Teacher class page redesign', () => {
 
       await page.goto(`/app/documents/${inProgressDoc.id}`);
       await page.waitForURL(/\/app\/documents\//);
-      await expect(page.getByRole('heading', { name: inProgressTitle })).toBeVisible({
-        timeout: 30_000,
-      });
+      await expectDocumentTitleVisible(page, inProgressTitle);
     } finally {
       await deleteClassDocuments(prisma, documentIds);
       await prisma.$disconnect();

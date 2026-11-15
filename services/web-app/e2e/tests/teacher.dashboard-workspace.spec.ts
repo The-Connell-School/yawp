@@ -1,4 +1,5 @@
 import { test, expect } from '../test-setup';
+import { expectSubmissionTitleVisible } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 import { currentSchoolYear } from '../../app/utils/school-year';
 import type { Page } from '@playwright/test';
@@ -290,9 +291,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await page.goto(`/app/submissions/${latestSubmission.id}`, {
         waitUntil: 'domcontentloaded',
       });
-      await expect(page.getByText(title).first()).toBeVisible({
-        timeout: 30_000,
-      });
+      await expectSubmissionTitleVisible(page, title);
     } finally {
       if (documentId) {
         await prisma.submission.deleteMany({ where: { documentId } });
