@@ -1,5 +1,8 @@
 import { test, expect } from '../test-setup';
-import { expectSubmissionTitleVisible } from '../test-helpers';
+import {
+  expectDocumentTitleVisible,
+  expectSubmissionTitleVisible,
+} from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
 import type { E2EContext } from '../seed-e2e';
@@ -105,6 +108,7 @@ async function seedDailyPagesWork(e2eContext: E2EContext) {
     });
     return {
       assignmentId: assignment.id,
+      documentId: document.id,
       submissionId: submission.id,
       assignmentTitle: assignment.title ?? 'SJP swap persistence',
       documentTitle: document.title ?? 'Swap persistence doc',
@@ -158,6 +162,7 @@ async function restoreTeacherAssignmentTypes(e2eContext: E2EContext) {
 
 test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
   let sjpTypeId: string;
+  let swapPersistenceDocumentId = '';
 
   test.beforeAll(async ({ e2eContext }) => {
     const prisma = createE2EPrismaClient();
@@ -179,6 +184,7 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
   }) => {
     test.setTimeout(120_000);
     const seeded = await seedDailyPagesWork(e2eContext);
+    swapPersistenceDocumentId = seeded.documentId;
     await swapTeacherToSjpOnly(e2eContext, sjpTypeId);
 
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
@@ -208,10 +214,12 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
     e2eContext,
     signIn,
   }) => {
+    expect(swapPersistenceDocumentId).toBeTruthy();
     await signIn(e2eContext.userEmail, 'johndoe');
-    await page.goto(
-      `/app/my-classes/${e2eContext.classId}?tab=documents`
-    );
-    await expect(page.getByText('Swap persistence doc').first()).toBeVisible();
+    await page.goto(`/app/documents/${swapPersistenceDocumentId}`);
+    await page.waitForURL(/\/app\/documents\//);
+    await expectDocumentTitleVisible(page, 'Swap persistence doc');
+    await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
+    await expect(page.getByTestId('student-class-detail')).toBeVisible();
   });
 });

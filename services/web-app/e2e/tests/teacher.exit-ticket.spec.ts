@@ -14,6 +14,8 @@ const TOPIC = 'the difference between weathering and erosion';
 const CORRECT_ANSWER = 'Weathering breaks rock down; erosion carries it away.';
 const CUSTOM_QUESTION = 'What would you teach a friend who missed today?';
 
+let erosionExitTicketAssignmentId = '';
+
 async function openNewAssignmentSheet(page: import('@playwright/test').Page) {
   await page.getByRole('button', { name: /^New/ }).click();
   await page.getByRole('menuitem', { name: 'Assignment' }).click();
@@ -91,6 +93,21 @@ test.describe.serial('Exit tickets', () => {
     await expect(
       page.getByRole('heading', { name: 'New Assignment' })
     ).toHaveCount(0);
+
+    const prisma = createE2EPrismaClient();
+    try {
+      const created = await prisma.assignment.findFirstOrThrow({
+        where: {
+          title: 'Exit ticket: erosion',
+          classAssignments: { some: { classId: e2eContext.classId } },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      });
+      erosionExitTicketAssignmentId = created.id;
+    } finally {
+      await prisma.$disconnect();
+    }
   });
 
   test('reopening a check keeps what it was checking for', async ({
@@ -98,19 +115,16 @@ test.describe.serial('Exit tickets', () => {
     e2eContext,
     signIn,
   }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(120_000);
+    expect(erosionExitTicketAssignmentId).toBeTruthy();
     const prisma = createE2EPrismaClient();
-    const exitTicket = await prisma.assignment.findFirstOrThrow({
-      where: {
-        title: 'Exit ticket: erosion',
-        classAssignments: { some: { classId: e2eContext.classId } },
-      },
-      select: { id: true },
-    });
     try {
-      test.setTimeout(120_000);
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await openMyAssignmentDetail(page, exitTicket.id, e2eContext.classId);
+      await openMyAssignmentDetail(
+        page,
+        erosionExitTicketAssignmentId,
+        e2eContext.classId
+      );
 
       // Editing must not quietly turn a specific exit ticket back into the
       // generic one, which is what a form that reset to Basic would do.

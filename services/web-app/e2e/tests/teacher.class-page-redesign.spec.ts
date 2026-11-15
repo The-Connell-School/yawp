@@ -471,28 +471,67 @@ test.describe.serial('Teacher class page redesign', () => {
     e2eContext,
     signIn,
   }) => {
-    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
-    await page.waitForLoadState('networkidle');
+    test.setTimeout(120_000);
+    const prisma = createE2EPrismaClient();
+    const suffix = Date.now().toString(36);
+    const title = `Release grades menu ${suffix}`;
+    let documentId = '';
+    try {
+      const doc = await prisma.document.create({
+        data: {
+          ...classDocumentBaseData(e2eContext, title),
+          submissions: {
+            create: {
+              title,
+              text: classDocumentBaseData(e2eContext, title).text,
+              html: classDocumentBaseData(e2eContext, title).html,
+              submittedAt: new Date(),
+              gradedAt: new Date(),
+              gradedByMembershipId: e2eContext.teacherMembershipId,
+              overallScore: 4,
+              numericPercentage: 80,
+              score: '4/5',
+              releasedAt: null,
+            },
+          },
+        },
+        select: { id: true },
+      });
+      documentId = doc.id;
 
-    await page
-      .getByRole('checkbox', { name: 'Select visible documents' })
-      .check();
-    const actionsButton = page.getByTestId('teacher-document-work-actions');
-    await expect(actionsButton).toBeVisible();
-    await expect(actionsButton).toHaveText(/Actions/);
-    await expect(actionsButton.locator('.lucide-chevron-down')).toBeVisible();
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.addInitScript(() => {
+        localStorage.removeItem('yawp.class-documents-view');
+      });
+      await filterClassDocumentsByTitle(page, title, {
+        useUrl: true,
+        classId: e2eContext.classId,
+      });
 
-    await actionsButton.click();
-    const releaseGradesAction = page.getByRole('menuitem', {
-      name: /Release grades\s+\d+/i,
-    });
-    await expect(releaseGradesAction).toBeVisible();
-    await releaseGradesAction.click();
+      await page
+        .getByRole('checkbox', { name: 'Select visible documents' })
+        .check();
+      const actionsButton = page.getByTestId('teacher-document-work-actions');
+      await expect(actionsButton).toBeVisible();
+      await expect(actionsButton).toHaveText(/Actions/);
+      await expect(actionsButton.locator('.lucide-chevron-down')).toBeVisible();
 
-    await expect(
-      page.getByRole('dialog', { name: /release grades to students/i })
-    ).toBeVisible();
+      await actionsButton.click();
+      const releaseGradesAction = page.getByRole('menuitem', {
+        name: /Release grades\s+[1-9]/i,
+      });
+      await expect(releaseGradesAction).toBeVisible();
+      await releaseGradesAction.click();
+
+      await expect(
+        page.getByRole('dialog', { name: /release grades to students/i })
+      ).toBeVisible();
+    } finally {
+      if (documentId) {
+        await deleteClassDocuments(prisma, [documentId]);
+      }
+      await prisma.$disconnect();
+    }
   });
 
   test('documents tab can group by status', async ({

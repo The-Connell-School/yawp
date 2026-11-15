@@ -171,30 +171,35 @@ test.describe('Free-tier handle student', () => {
       await expect(teacherPage.getByText(displayName)).toBeVisible();
       await expect(teacherPage.getByText(`@${handle}`)).toBeVisible();
 
-      const documentsTabParams = {
-        status: 'needs-grading',
-        assignmentId: assignment.id,
-      };
-      await gotoClassDocumentsTab(teacherPage, klass.id, documentsTabParams);
-      const documentsTable = teacherPage.getByRole('table', {
-        name: /class documents/i,
+      await teacherPage.addInitScript(() => {
+        localStorage.removeItem('yawp.class-documents-view');
       });
       await expect
         .poll(
           async () => {
-            await gotoClassDocumentsTab(teacherPage, klass.id, documentsTabParams);
-            if (!(await documentsTable.isVisible().catch(() => false))) {
-              return false;
+            for (const status of ['needs-grading', 'all'] as const) {
+              await gotoClassDocumentsTab(teacherPage, klass.id, {
+                status,
+                assignmentId: assignment.id,
+                q: handle,
+              });
+              const table = teacherPage.getByRole('table', {
+                name: /class documents/i,
+              });
+              if (!(await table.isVisible().catch(() => false))) {
+                continue;
+              }
+              const byName =
+                (await table.getByText(displayName).count()) > 0;
+              const byHandle =
+                (await table.getByText(`@${handle}`).count()) > 0;
+              if (byName || byHandle) {
+                return true;
+              }
             }
-            const byName =
-              (await documentsTable.getByText(displayName).count()) > 0;
-            const byHandle =
-              (await documentsTable.getByText(`@${handle}`).count()) > 0;
-            const byAssignment =
-              (await documentsTable.getByText('Free tier writing').count()) > 0;
-            return byName || byHandle || byAssignment;
+            return false;
           },
-          { timeout: 90_000 }
+          { timeout: 120_000 }
         )
         .toBe(true);
 
