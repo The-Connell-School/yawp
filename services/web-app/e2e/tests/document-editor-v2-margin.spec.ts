@@ -1,5 +1,33 @@
 import { test, expect } from '../test-setup';
 
+async function selectWordInEditor(
+  page: import('@playwright/test').Page,
+  word: string
+) {
+  await page.evaluate((target) => {
+    const root = document.querySelector<HTMLElement>(
+      '[contenteditable="true"]'
+    );
+    if (!root) throw new Error('Editor surface not found');
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node: Text | null = null;
+    while ((node = walker.nextNode() as Text | null)) {
+      const text = node.textContent ?? '';
+      const index = text.indexOf(target);
+      if (index === -1) continue;
+      const range = document.createRange();
+      range.setStart(node, index);
+      range.setEnd(node, index + target.length);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      root.dispatchEvent(new Event('selectionchange', { bubbles: true }));
+      return;
+    }
+    throw new Error(`Could not select "${target}" in editor`);
+  }, word);
+}
+
 test.describe('Document editor v2 margin comments', () => {
   test('v2 load does not raise Suspense hydration pageerrors', async ({
     page,
@@ -49,7 +77,7 @@ test.describe('Document editor v2 margin comments', () => {
 
     for (const [index, word] of words.entries()) {
       await editor.click();
-      await editor.getByText(word, { exact: true }).dblclick();
+      await selectWordInEditor(page, word);
       await page.getByTestId('editor-add-comment').click();
       await expect(page.getByTestId('margin-comment-draft-card')).toBeVisible({
         timeout: 10_000,
