@@ -95,7 +95,10 @@ test.describe.serial('Assignment type landing pages (v2)', () => {
     await page.getByRole('button', { name: /Prompt Library/i }).click();
     await expect(page.getByPlaceholder('Search prompts')).toBeVisible();
 
-    await expect(page.locator('main')).not.toContainText(/daily pages/i);
+    // The page itself, not the app shell around it.
+    await expect(page.locator('[data-tour-variant="daily_pages"]')).not.toContainText(
+      /daily pages/i
+    );
   });
 
   test('Pre-Writing: boxed sections in order, How to Teach It open, the YAWP! philosophy box, nothing loose', async ({
