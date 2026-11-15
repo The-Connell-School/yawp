@@ -96,7 +96,13 @@ export function MarginCommentCard({
   ]);
 
   useEffect(() => {
-    const data = archiveFetcher.data as { archivedAt?: string | null } | undefined;
+    const data = archiveFetcher.data as
+      | { archivedAt?: string | null; error?: string }
+      | undefined;
+    if (archiveFetcher.state === 'idle' && data?.error) {
+      onArchiveChange?.(comment.id, null);
+      return;
+    }
     if (archiveFetcher.state === 'idle' && data && 'archivedAt' in data) {
       onArchiveChange?.(
         comment.id,
@@ -153,6 +159,7 @@ export function MarginCommentCard({
   };
 
   const resolveComment = () => {
+    onArchiveChange?.(comment.id, new Date());
     archiveFetcher.submit(
       { intent: 'resolve' },
       {
