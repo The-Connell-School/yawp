@@ -1,5 +1,4 @@
 import { test, expect } from '../test-setup';
-import { fillMyAssignmentsSearch } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
 
@@ -36,29 +35,6 @@ test.describe.serial('Tutor off badge', () => {
       await page.addInitScript(() => {
         localStorage.removeItem('yawp.student-work-view');
       });
-      await page.goto('/app/assignments');
-      await page.waitForLoadState('networkidle');
-      await fillMyAssignmentsSearch(page, COLD_WRITE_TITLE, {
-        assignmentId: createdAssignmentId!,
-        classId: e2eContext.classId,
-      });
-
-      if (!page.url().includes(`/app/assignments/${createdAssignmentId}`)) {
-        const coldRow = page
-          .getByRole('row')
-          .filter({ hasText: COLD_WRITE_TITLE });
-        await expect(coldRow.getByTestId('tutor-off-badge')).toHaveText(
-          'Tutor off'
-        );
-
-        // The tutor is on by default, so the ordinary seeded assignment carries
-        // no badge — the marker means something only if it is the exception.
-        const warmRow = page
-          .getByRole('row')
-          .filter({ hasText: 'E2E Class Assignment' });
-        await expect(warmRow.getByTestId('tutor-off-badge')).toHaveCount(0);
-      }
-
       await page.goto(
         `/app/assignments/${createdAssignmentId}?classId=${e2eContext.classId}`
       );

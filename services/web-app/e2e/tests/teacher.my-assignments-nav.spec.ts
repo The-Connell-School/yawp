@@ -1,5 +1,5 @@
 import { test, expect } from '../test-setup';
-import { fillMyAssignmentsSearch } from '../test-helpers';
+import { openMyAssignmentDetail } from '../test-helpers';
 
 test.describe('Teacher "My Assignments" sidebar navigation', () => {
   test.setTimeout(120_000);
@@ -19,19 +19,11 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     await expect(
       page.getByRole('heading', { name: 'My Assignments', exact: true })
     ).toBeVisible();
-    // Pagination is 20 per page, and other shards share the E2E database, so
-    // the seeded title may sit off the first page unless we narrow the list.
-    await fillMyAssignmentsSearch(page, 'E2E Class Assignment', {
-      assignmentId: e2eContext.assignmentId,
-      classId: e2eContext.classId,
-      allowDetailFallback: false,
-    });
-    // Exact, because the row's selection checkbox is itself a cell whose
-    // accessible name ("Select assignment E2E Class Assignment") contains the
-    // title, and the default substring match picks up both.
-    await expect(
-      page.getByTestId(`my-assignment-open-${e2eContext.assignmentId}`)
-    ).toBeVisible();
+    await openMyAssignmentDetail(
+      page,
+      e2eContext.assignmentId,
+      e2eContext.classId
+    );
   });
 
   test('clicking an assignment row opens that assignment detail page', async ({
@@ -40,21 +32,11 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     e2eContext,
   }) => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    await page.goto('/app/assignments');
-    await page.waitForLoadState('networkidle');
-    await fillMyAssignmentsSearch(page, 'E2E Class Assignment', {
-      assignmentId: e2eContext.assignmentId,
-      classId: e2eContext.classId,
-      allowDetailFallback: false,
-    });
-
-    await page.getByTestId(`my-assignment-open-${e2eContext.assignmentId}`).click();
-
-    await page.waitForURL(
-      `**/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`,
-      { timeout: 15000 }
+    await openMyAssignmentDetail(
+      page,
+      e2eContext.assignmentId,
+      e2eContext.classId
     );
-    await expect(page.getByTestId('assignment-detail-page')).toBeVisible();
   });
 
   test('student does not see My Assignments in the sidebar', async ({

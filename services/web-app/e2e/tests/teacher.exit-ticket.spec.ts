@@ -1,5 +1,5 @@
 import { test, expect } from '../test-setup';
-import { fillMyAssignmentsSearch } from '../test-helpers';
+import { openMyAssignmentDetail } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 
 // An exit ticket is the one assignment type a teacher does not write a prompt
@@ -104,14 +104,10 @@ test.describe.serial('Exit tickets', () => {
     });
     try {
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await fillMyAssignmentsSearch(page, 'Exit ticket: erosion', {
-        assignmentId: exitTicket.id,
-        classId: e2eContext.classId,
-      });
+      await openMyAssignmentDetail(page, exitTicket.id, e2eContext.classId);
 
       // Editing must not quietly turn a specific exit ticket back into the
       // generic one, which is what a form that reset to Basic would do.
-      await page.getByTestId(`my-assignment-open-${exitTicket.id}`).click();
       await page
         .getByRole('button', { name: /^Edit$/ })
         .first()

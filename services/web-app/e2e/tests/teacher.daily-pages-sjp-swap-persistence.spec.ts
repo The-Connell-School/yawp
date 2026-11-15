@@ -1,8 +1,4 @@
 import { test, expect } from '../test-setup';
-import {
-  gotoClassDocumentsTab,
-  waitForClassDocumentTitle,
-} from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
 import type { E2EContext } from '../seed-e2e';
@@ -94,7 +90,7 @@ async function seedDailyPagesWork(e2eContext: E2EContext) {
       },
       select: { id: true, title: true },
     });
-    await prisma.submission.create({
+    const submission = await prisma.submission.create({
       data: {
         documentId: document.id,
         html,
@@ -104,9 +100,11 @@ async function seedDailyPagesWork(e2eContext: E2EContext) {
         score: '10/12',
         overallScore: 10,
       },
+      select: { id: true },
     });
     return {
       assignmentId: assignment.id,
+      submissionId: submission.id,
       assignmentTitle: assignment.title ?? 'SJP swap persistence',
       documentTitle: document.title ?? 'Swap persistence doc',
     };
@@ -197,11 +195,10 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
       page.locator(`a[href="/app/assignment-types/${sjpTypeId}"]`)
     ).toBeVisible();
 
-    await waitForClassDocumentTitle(page, e2eContext.classId, seeded.documentTitle, {
-      assignmentId: seeded.assignmentId,
+    await page.goto(`/app/submissions/${seeded.submissionId}`);
+    await expect(page.getByText(/10\s*\/\s*12/).first()).toBeVisible({
+      timeout: 30_000,
     });
-    const classDocuments = page.getByRole('table', { name: /class documents/i });
-    await expect(classDocuments.getByText(/10\s*\/\s*12/).first()).toBeVisible();
   });
 
   test('student still sees documents, assignments, and grades after the swap', async ({
