@@ -58,6 +58,7 @@ export function beginCommentDraftFromEditor(
     .chain()
     .focus()
     .setMeta(USER_SOURCE_META, TOOLBAR_SOURCE)
+    .unsetComment()
     .setComment(id)
     .run();
   onCommentDraft?.({ id, excerpt });

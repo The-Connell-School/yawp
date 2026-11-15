@@ -40,8 +40,8 @@ describe('beginCommentDraftFromEditor', () => {
 
     beginCommentDraftFromEditor(editor, onCommentDraft);
 
+    expect(runs.filter((r) => r === 'unsetComment').length).toBe(1);
     expect(runs.some((r) => r.startsWith('setComment:'))).toBe(true);
-    expect(runs).not.toContain('unsetComment');
     expect(onCommentDraft).toHaveBeenCalledTimes(1);
   });
 
