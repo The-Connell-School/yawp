@@ -12,6 +12,7 @@ import { EXIT_TICKET_SEED_STEP } from '~/domain/lesson-planner/lesson-seed';
 import { Prisma } from '@app/prisma';
 import { isLessonPlannerEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { useState, type MouseEvent, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import {
   type LoaderFunctionArgs,
   type ActionFunctionArgs,
@@ -93,7 +94,7 @@ import {
   resolveAssignmentTypeGradingConfig,
 } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { assertNotRetiredApHistoryAssignmentType } from '~/utils/retired-ap-history-access.server';
-import { DEV_PANEL_DISMISS_EVENT } from '~/dev-panel/dev-panel-dismiss-listener';
+import { DEV_PANEL_DISMISS_EVENT } from '~/utils/dev-panel-dismiss-event';
 import { clearRadixScrollLockCleanup } from '~/utils/radix-scroll-lock-cleanup';
 
 /**
@@ -876,7 +877,7 @@ export default function AssignmentDetailRoute() {
       'yawp-dev-panel-restored',
       'yawp-dev-panel-closing'
     );
-    setIsEditSheetOpen(true);
+    flushSync(() => setIsEditSheetOpen(true));
   };
 
   if (!data.found) {

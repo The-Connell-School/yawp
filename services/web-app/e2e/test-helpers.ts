@@ -669,7 +669,11 @@ export async function expectExitTicketEditSheetReady(
   page: Page,
   timeoutMs = 90_000
 ) {
-  const sheet = page.getByRole('dialog');
+  const sheet = page.getByTestId('assignment-creation-sheet');
+  await expect(sheet).toBeVisible({ timeout: timeoutMs });
+  await expect(
+    sheet.getByRole('heading', { name: /Edit Assignment/i })
+  ).toBeVisible({ timeout: timeoutMs });
   await expect(sheet.getByLabel('Title (optional)')).toBeVisible({
     timeout: timeoutMs,
   });

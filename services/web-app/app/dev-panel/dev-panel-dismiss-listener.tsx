@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
+import { DEV_PANEL_DISMISS_EVENT } from '~/utils/dev-panel-dismiss-event';
 import { useDevPanel } from './dev-panel-provider';
-
-export const DEV_PANEL_DISMISS_EVENT = 'yawp:dismiss-dev-panel';
 
 /** Lets non-descendant routes (sibling of DevPanelMount in root) close the panel before opening their own sheets. */
 export function DevPanelDismissListener() {
