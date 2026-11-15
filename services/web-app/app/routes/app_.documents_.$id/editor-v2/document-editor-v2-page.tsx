@@ -289,6 +289,11 @@ export function DocumentEditorV2Page() {
   const isOwnTeacherPreview = Boolean(
     data.isTeacherAssignmentPreview && user.id === data.doc.membership.userId
   );
+  useEffect(() => {
+    if (isViewingAsTeacher && !isOwnTeacherPreview) {
+      setDesktopCommentsOpen(true);
+    }
+  }, [isViewingAsTeacher, isOwnTeacherPreview, setDesktopCommentsOpen]);
   const showSubmitControls = !isViewingAsTeacher || isOwnTeacherPreview;
   const isDocumentOwner = user.id === data.doc.membership.userId;
   // Students and teachers in "Try it" preview edit; grading teachers view-only.

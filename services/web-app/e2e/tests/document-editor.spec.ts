@@ -673,11 +673,10 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
     await page.setViewportSize({ width: 1280, height: 720 });
-    await helpers.openDocument(e2eContext.gradedDocumentId, { retry: true });
-    await page
-      .getByTestId('document-panel-toggles')
-      .getByRole('button', { name: 'Comments' })
-      .click();
+    await helpers.openDocument(
+      `${e2eContext.gradedDocumentId}?tab=editor`,
+      { retry: true }
+    );
     const card = page.getByTestId(
       `margin-comment-card-${e2eContext.v2GradedCommentId}`
     );
@@ -710,8 +709,11 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
     await page.setViewportSize({ width: 1280, height: 720 });
-    await helpers.openDocument(e2eContext.gradedDocumentId, { retry: true });
-  await expect(page.getByTestId('document-view-only-banner')).toBeVisible({
+    await helpers.openDocument(
+      `${e2eContext.gradedDocumentId}?tab=editor`,
+      { retry: true }
+    );
+    await expect(page.getByTestId('document-view-only-banner')).toBeVisible({
       timeout: 10_000,
     });
     const editor = helpers.getEditor();
