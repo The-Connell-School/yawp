@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { cn } from '~/utils/misc';
+import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
 
 type LoadingProps = {
   label?: string;
@@ -11,14 +12,18 @@ export const Loading = ({ label, tutorBubble = false }: LoadingProps) => {
 	const [activeDot, setActiveDot] = useState(0)
 
 	useEffect(() => {
-		const interval = setInterval(() => {
-			setActiveDot(prevActiveDot =>
-				prevActiveDot === 2 ? 0 : prevActiveDot + 1,
-			)
-		}, 500)
-
-		return () => clearInterval(interval)
-	}, [])
+		let interval: ReturnType<typeof setInterval> | undefined;
+		scheduleAfterHydration(() => {
+			interval = setInterval(() => {
+				setActiveDot((prevActiveDot) =>
+					prevActiveDot === 2 ? 0 : prevActiveDot + 1
+				);
+			}, 500);
+		});
+		return () => {
+			if (interval) clearInterval(interval);
+		};
+	}, []);
 
 	return (
 		<div

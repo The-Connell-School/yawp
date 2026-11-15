@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { timeAgo } from '~/utils/timeAgo';
+import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
 
 type Props = {
   value: Date | string;
@@ -12,8 +13,8 @@ export function RelativeTime({ value, className }: Props) {
 
   useEffect(() => {
     const refresh = () => setLabel(timeAgo(new Date(value)));
-    refresh();
-    const id = window.setInterval(refresh, 60_000);
+    scheduleAfterHydration(refresh);
+    const id = window.setInterval(() => scheduleAfterHydration(refresh), 60_000);
     return () => window.clearInterval(id);
   }, [value]);
 
