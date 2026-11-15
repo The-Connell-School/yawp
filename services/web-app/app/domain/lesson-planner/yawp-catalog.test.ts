@@ -295,6 +295,9 @@ describe('telling the two short-writing types apart by title', () => {
     expect(isClassStarterTitle('Daily Pages')).toBe(false);
     expect(isDailyPagesTitle('Class Starter')).toBe(false);
     expect(isDailyPagesTitle('Daily Pages')).toBe(true);
+    // Renamed Short Response (Brian, Nov 15); both titles are the same type.
+    expect(isDailyPagesTitle(' Short Response ')).toBe(true);
+    expect(isClassStarterTitle('Short Response')).toBe(false);
   });
 
   test('does not claim an unrelated type', () => {

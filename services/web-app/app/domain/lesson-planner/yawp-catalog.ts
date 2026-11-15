@@ -231,11 +231,17 @@ export function listWritingLessonCatalog({
 /**
  * Daily Pages is identified by its title rather than a system key, the same way
  * the assignment type page decides whether to show the prompt library.
+ *
+ * The type is called Short Response now (Brian, Nov 15). Both titles are the
+ * same type: a database that has not been renamed, and a school's own copy,
+ * still say Daily Pages.
  */
 export const DAILY_PAGES_TITLE = 'daily pages';
+export const SHORT_RESPONSE_TITLE = 'short response';
 
 export function isDailyPagesTitle(title: string): boolean {
-  return title.trim().toLowerCase() === DAILY_PAGES_TITLE;
+  const normalized = title.trim().toLowerCase();
+  return normalized === DAILY_PAGES_TITLE || normalized === SHORT_RESPONSE_TITLE;
 }
 
 /**

@@ -15,8 +15,10 @@
 //
 // Short Response is the type that used to be called Daily Pages (Brian, Nov
 // 15). Class Starter and Exit Ticket took over the daily writing, so the old
-// name confused teachers. Only the words a teacher reads changed: the key,
-// the `daily_pages` kind and the type's stored title are what they were.
+// name confused teachers. Only the words a teacher reads changed: the key
+// and the `daily_pages` kind are what they were. A migration retitles the
+// type itself; a database it has not reached, and a school's own copy, still
+// say Daily Pages, and this page reads Short Response either way.
 //
 // Text uses a small inline markup: **bold** and *italic*. See rich-text.tsx.
 //

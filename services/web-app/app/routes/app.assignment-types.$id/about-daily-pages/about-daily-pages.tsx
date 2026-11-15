@@ -120,7 +120,7 @@ export function AboutDailyPages() {
           </p>
           <table className="w-full table-fixed border-separate border-spacing-y-1 text-left text-sm">
             <caption className="sr-only">
-              What each Daily Pages category is worth and what it reads
+              What each Short Response category is worth and what it reads
             </caption>
             <thead>
               <tr className="text-xs uppercase tracking-wide text-muted-foreground">

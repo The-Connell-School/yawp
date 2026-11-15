@@ -5,7 +5,7 @@ import {
   TEACHING_NOTES,
 } from './data';
 
-export const SHORT_FORM_LIBRARY_HEADING = 'How the Daily Pages library works';
+export const SHORT_FORM_LIBRARY_HEADING = 'How the Short Response library works';
 
 /**
  * How to use the library, and only that. What Daily Pages is, how it is
