@@ -433,12 +433,21 @@ export function DocumentEditorV2Page() {
     : activeComments;
   const loaderComments = (data.doc.comments as typeof activeComments) ?? [];
   const marginRailComments = useMemo(() => {
+    const teacherMarginSource =
+      isViewingAsTeacher && !isOwnTeacherPreview ? allComments : visibleComments;
     const source =
-      activeComments.length > 0
-        ? activeComments
+      teacherMarginSource.length > 0
+        ? teacherMarginSource
         : loaderComments.filter((c) => !c.archivedAt);
-  return sortDocumentCommentsByMarkupOrder(source, editorServerHtml);
-  }, [activeComments, loaderComments, editorServerHtml]);
+    return sortDocumentCommentsByMarkupOrder(source, editorServerHtml);
+  }, [
+    allComments,
+    visibleComments,
+    loaderComments,
+    editorServerHtml,
+    isViewingAsTeacher,
+    isOwnTeacherPreview,
+  ]);
   const showDesktopMarginComments =
     !isMobile &&
     (desktopCommentsOpen ||
