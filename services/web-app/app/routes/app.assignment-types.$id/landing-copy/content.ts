@@ -7,11 +7,16 @@
 // Thesis-Driven Essay, Class Starter, Exit Ticket, Pre-Writing and Thesis
 // Statement. Keep them exact. `content.test.ts` pins each one to the doc.
 //
-// The rest (Daily Pages, AP History, The 5-Paragraph Essay, ACT Writing and
+// The rest (Short Response, AP History, The 5-Paragraph Essay, ACT Writing and
 // Welcome to Yawp!) are written to the same model: a short description, How
 // it works with the same bold leads (New, Tutor on or off?, Grading is ...),
 // and the Prompt Library intro. Their claims about grading have to hold
 // against the rubric each type actually grades with.
+//
+// Short Response is the type that used to be called Daily Pages (Brian, Nov
+// 15). Class Starter and Exit Ticket took over the daily writing, so the old
+// name confused teachers. Only the words a teacher reads changed: the key,
+// the `daily_pages` kind and the type's stored title are what they were.
 //
 // Text uses a small inline markup: **bold** and *italic*. See rich-text.tsx.
 //
@@ -378,12 +383,16 @@ const THESIS_STATEMENT: LandingPage = {
 // The pages Brian did not write, modeled on the five above.
 // ---------------------------------------------------------------------------
 
-/** Engagement rubric: Excellent is the full total; grammar is never scored. */
+/**
+ * Short Response, previously Daily Pages. The description is Brian's, word
+ * for word (Nov 15). Engagement rubric: Excellent is the full total; grammar
+ * is never scored.
+ */
 const DAILY_PAGES: LandingPage = {
   key: 'daily-pages',
   description: [
     p(
-      'Daily Pages is short, regular writing that keeps students in shape between the big essays: a reaction, an opinion, a reflection, a quick argument about something that matters to them. Use it a few times a week, in class or as homework, so writing becomes a habit instead of an event.'
+      'Students write one or two paragraphs that argue, explain, analyze, or reflect on a specific passage, question, or topic. More than a Class Starter, less than an essay.'
     ),
   ],
   sections: [
@@ -568,6 +577,23 @@ export const LANDING_PAGES: Record<LandingPageKey, LandingPage> = {
 
 const normalize = (title: string) => title.trim().toLowerCase();
 
+/** What Daily Pages is called now. */
+export const SHORT_RESPONSE_TITLE = 'Short Response';
+
+/**
+ * The title at the top of a landing page. A type still titled Daily Pages
+ * reads Short Response; a title a school chose for it, and every other
+ * type's title, is shown as it is.
+ */
+export function landingPageHeading(
+  key: LandingPageKey | null,
+  title: string
+): string {
+  return key === 'daily-pages' && normalize(title) === 'daily pages'
+    ? SHORT_RESPONSE_TITLE
+    : title;
+}
+
 /**
  * Which landing page an assignment type gets. Matched on the same things the
  * route already keys on: kind and systemKey where a type has them, and the
@@ -600,6 +626,7 @@ export function resolveLandingPageKey(type: {
     case 'class starter':
       return 'class-starter';
     case 'daily pages':
+    case 'short response':
       return 'daily-pages';
     case 'the 5-paragraph essay':
       return 'five-paragraph-essay';

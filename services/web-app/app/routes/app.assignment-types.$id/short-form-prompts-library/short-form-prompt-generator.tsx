@@ -229,7 +229,7 @@ export function ShortFormPromptGenerator({
         <SheetHeader>
           <SheetTitle>Generate a prompt</SheetTitle>
           <SheetDescription>
-            Describe the Daily Pages prompt you have in mind and work with the
+            Describe the Short Response prompt you have in mind and work with the
             assistant to draft short, gradable prompts in the style of the
             library. When you like one, use it to start an assignment.
           </SheetDescription>

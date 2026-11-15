@@ -13,6 +13,8 @@
  */
 export const CLASS_STARTER_TITLE = 'class starter';
 export const DAILY_PAGES_TITLE = 'daily pages';
+/** What Daily Pages is called now (Brian, Nov 15). Both titles are the same type. */
+export const SHORT_RESPONSE_TITLE = 'short response';
 
 export type PromptLibraryVariant = 'class-starter' | 'daily-pages-graded';
 
@@ -45,6 +47,8 @@ export function resolvePromptLibraryVariant({
   const normalized = title.trim().toLowerCase();
 
   if (normalized === CLASS_STARTER_TITLE) return 'class-starter';
-  if (normalized === DAILY_PAGES_TITLE) return 'daily-pages-graded';
+  if (normalized === DAILY_PAGES_TITLE || normalized === SHORT_RESPONSE_TITLE) {
+    return 'daily-pages-graded';
+  }
   return null;
 }

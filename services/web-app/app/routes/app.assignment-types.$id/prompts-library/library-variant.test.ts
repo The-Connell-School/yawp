@@ -47,6 +47,15 @@ describe('which library a variant gets', () => {
     expect(usesOpenEndedLibrary('daily-pages-graded')).toBe(false);
   });
 
+  test('Short Response, the new name for Daily Pages, keeps the short-form library', () => {
+    expect(resolvePromptLibraryVariant({ title: 'Short Response' })).toBe(
+      'daily-pages-graded'
+    );
+    expect(resolvePromptLibraryVariant({ title: ' short response ' })).toBe(
+      'daily-pages-graded'
+    );
+  });
+
   test('Daily Pages is the only reader of the short-form corpus', () => {
     expect(usesShortFormLibrary('daily-pages-graded')).toBe(true);
     expect(usesShortFormLibrary('class-starter')).toBe(false);
