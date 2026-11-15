@@ -2403,7 +2403,10 @@ export function AssignmentCreationSheetContent({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-[520px]">
+      <SheetContent
+        className="z-[60] w-full overflow-y-auto sm:max-w-[520px]"
+        data-testid="assignment-creation-sheet"
+      >
         {sheetBody}
       </SheetContent>
     </Sheet>
