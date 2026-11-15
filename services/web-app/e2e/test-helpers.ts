@@ -571,6 +571,7 @@ export async function fillMyAssignmentsSearch(
   await expect(located).toBeVisible({ timeout: rowVisibleTimeout });
 }
 
+/** Navigates to assignment detail directly; avoids My Assignments list pagination on shared E2E DBs. */
 export async function openMyAssignmentDetail(
   page: Page,
   assignmentId: string,
