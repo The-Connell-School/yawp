@@ -7,6 +7,7 @@ import {
   expectTypePresentInPicker,
 } from '../helpers/assignment-builder-v3-page';
 import {
+  clickClassAssignmentRow,
   expandAssignmentTypeSections,
   openClassAssignmentsTab,
 } from '../test-helpers';
@@ -83,18 +84,18 @@ test.describe.serial('Admin assignment type archive', () => {
       await page.context().clearCookies();
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
-      await openClassAssignmentsTab(page);
-      await expandAssignmentTypeSections(page);
-      const classSearch = page.getByTestId('class-assignments-search');
-      await classSearch.fill('e2e class assignment');
-      await expect(
-        page.getByTestId(`assignment-open-${e2eContext.assignmentId}`)
-      ).toBeVisible({ timeout: 30_000 });
-      await classSearch.fill('');
-      await classSearch.fill(`archive smoke assignment ${suffix}`);
-      await expect(
-        page.getByTestId(`assignment-open-${archiveAssignmentId}`)
-      ).toBeVisible({ timeout: 30_000 });
+      await clickClassAssignmentRow(page, e2eContext.assignmentId, {
+        title: 'E2E Class Assignment',
+        classId: e2eContext.classId,
+      });
+      await expect(page.getByTestId('assignment-detail-page')).toBeVisible();
+      await page.goBack();
+      await clickClassAssignmentRow(page, archiveAssignmentId, {
+        title: `Archive smoke assignment ${suffix}`,
+        classId: e2eContext.classId,
+      });
+      await expect(page.getByTestId('assignment-detail-page')).toBeVisible();
+      await page.goBack();
 
       await clickClassNewAssignment(page);
       await expectTypeAbsentInPicker(page, archiveTypeTitle);

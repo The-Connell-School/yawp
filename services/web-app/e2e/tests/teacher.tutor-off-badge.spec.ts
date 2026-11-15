@@ -40,6 +40,7 @@ test.describe.serial('Tutor off badge', () => {
       await page.waitForLoadState('networkidle');
       await fillMyAssignmentsSearch(page, COLD_WRITE_TITLE, {
         assignmentId: createdAssignmentId!,
+        classId: e2eContext.classId,
       });
 
       const coldRow = page

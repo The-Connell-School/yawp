@@ -2,6 +2,8 @@ import { test, expect } from '../test-setup';
 import {
   clickClassAssignmentRow,
   clickClassDocumentsStatusTab,
+  expectClassDocumentsTable,
+  filterClassDocumentsByTitle,
   gotoClassDocumentsTab,
   openClassAssignmentsTab,
 } from '../test-helpers';
@@ -91,11 +93,9 @@ test.describe('Teacher class documents lifecycle', () => {
         localStorage.removeItem('yawp.class-documents-view');
         localStorage.removeItem('yawp.student-work-view');
       });
-      await gotoClassDocumentsTab(page, e2eContext.classId, {
-        q: `Lifecycle needs grading ${suffix}`,
-      });
+      await gotoClassDocumentsTab(page, e2eContext.classId);
+      await expectClassDocumentsTable(page);
       const table = page.getByRole('table', { name: /class documents/i });
-      await expect(table).toBeVisible({ timeout: 15_000 });
       await expect(
         table.getByText(`Lifecycle needs grading ${suffix}`, { exact: true })
       ).toBeVisible({ timeout: 60_000 });
@@ -445,12 +445,9 @@ test.describe.serial('Teacher class page redesign', () => {
       documentIds.push(inProgressDoc.id);
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await gotoClassDocumentsTab(page, e2eContext.classId, {
-        q: submittedTitle,
-      });
-
+      await gotoClassDocumentsTab(page, e2eContext.classId);
+      await filterClassDocumentsByTitle(page, submittedTitle);
       const documentsTable = page.getByRole('table', { name: /class documents/i });
-      await expect(documentsTable).toBeVisible({ timeout: 15_000 });
       await expect(
         documentsTable.getByText(submittedTitle, { exact: true })
       ).toBeVisible({ timeout: 60_000 });

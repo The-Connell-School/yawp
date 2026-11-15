@@ -1020,20 +1020,20 @@ test('locked assignments tab shows browse rows and locked documents pill', async
     where: { teachers: { some: { user: { id: user.id } } } },
     select: { id: true, school: { select: { organizationId: true } } },
   });
+  await exploreLockedApp(page, user.email!);
   const browseTitle = `Locked preview browse row ${Date.now().toString(36)}`;
-  await createLockedPreviewBrowseAssignmentForE2E(
+  const browseAssignment = await createLockedPreviewBrowseAssignmentForE2E(
     prisma,
     klass.id,
     browseTitle
   );
-  await exploreLockedApp(page, user.email!);
   await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
   await openClassAssignmentsTab(page);
   await expandAssignmentTypeSections(page);
   await page.getByTestId('class-assignments-search').fill(browseTitle);
-  await expect(page.getByText(browseTitle, { exact: true })).toBeVisible({
-    timeout: 60_000,
-  });
+  await expect(
+    page.getByTestId(`assignment-open-${browseAssignment.id}`)
+  ).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText('Sample · Not sent').first()).toBeVisible({
     timeout: 15_000,
   });

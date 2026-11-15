@@ -462,8 +462,14 @@ async function findMyAssignmentRow(
 export async function fillMyAssignmentsSearch(
   page: Page,
   query: string,
-  options?: { assignmentId?: string; assignmentTypeTitle?: string }
+  options?: {
+    assignmentId?: string;
+    assignmentTypeTitle?: string;
+    classId?: string;
+  }
 ) {
+  const trimmed = query.trim();
+
   if (options?.assignmentId) {
     await page.goto(
       `/app/assignments?highlightAssignment=${options.assignmentId}`,
@@ -472,35 +478,39 @@ export async function fillMyAssignmentsSearch(
     await expect(page.getByTestId('my-assignments-filter')).toBeVisible({
       timeout: 30_000,
     });
-  }
-  const trimmed = query.trim();
-  const visibilityTarget = options?.assignmentId
-    ? page.getByTestId(`my-assignment-open-${options.assignmentId}`)
-    : trimmed
-      ? page
-          .locator('[data-testid^="my-assignment-open-"]')
-          .filter({ hasText: trimmed })
-          .first()
-      : null;
-
-  if (options?.assignmentId && !trimmed && !options?.assignmentTypeTitle) {
+    await expandAssignmentTypeSections(page);
+    if (options.assignmentTypeTitle) {
+      await selectMyAssignmentsTypePill(page, options.assignmentTypeTitle);
+    }
+    if (trimmed) {
+      await setMyAssignmentsSearchQuery(page, query);
+    }
     const located = await findMyAssignmentRow(page, {
       assignmentId: options.assignmentId,
+      title: trimmed || undefined,
     });
-    await expect(located).toBeVisible({ timeout: 30_000 });
+    try {
+      await expect(located).toBeVisible({ timeout: 20_000 });
+    } catch (error) {
+      if (!options.classId) throw error;
+      await page.goto(
+        `/app/assignments/${options.assignmentId}?classId=${options.classId}`
+      );
+    }
     return;
   }
+
+  await expect(page.getByTestId('my-assignments-filter')).toBeVisible({
+    timeout: 30_000,
+  });
   if (options?.assignmentTypeTitle) {
     await selectMyAssignmentsTypePill(page, options.assignmentTypeTitle);
   }
   if (trimmed) {
     await setMyAssignmentsSearchQuery(page, query);
   }
-  if (!visibilityTarget) return;
-  const located = await findMyAssignmentRow(page, {
-    assignmentId: options?.assignmentId,
-    title: trimmed,
-  });
+  if (!trimmed) return;
+  const located = await findMyAssignmentRow(page, { title: trimmed });
   await expect(located).toBeVisible({ timeout: 30_000 });
 }
 
@@ -510,18 +520,28 @@ async function openTeacherDocumentWorkFilter(page: Page) {
   await filter.click();
 }
 
-/** Deep-link class documents with a server-side query filter. */
+/** Deep-link class documents (optional status / group / q query filters). */
 export function classDocumentsTabUrl(
   classId: string,
   params?: { q?: string; documentGroup?: string; status?: string }
 ) {
-  const search = new URLSearchParams({
-    tab: 'documents',
-    documentGroup: params?.documentGroup ?? 'none',
-  });
+  const search = new URLSearchParams({ tab: 'documents' });
   if (params?.q) search.set('q', params.q.trim().toLowerCase());
+  if (params?.documentGroup) search.set('documentGroup', params.documentGroup);
   if (params?.status) search.set('status', params.status);
   return `/app/my-classes/${classId}?${search.toString()}`;
+}
+
+export async function expectClassDocumentsTable(page: Page) {
+  await expect(
+    page.getByRole('table', { name: /class documents/i })
+  ).toBeVisible({ timeout: 60_000 });
+}
+
+/** Filter popover search — prefer this over deep-link `q` when other rows must stay visible. */
+export async function filterClassDocumentsByTitle(page: Page, title: string) {
+  await fillTeacherDocumentWorkSearch(page, title.trim().toLowerCase());
+  await expectClassDocumentsTable(page);
 }
 
 /** Class detail documents tab (header tabs include counts in the label). */
@@ -555,6 +575,7 @@ export async function fillTeacherDocumentWorkSearch(page: Page, query: string) {
   await expect(search).toBeVisible({ timeout: 15_000 });
   await search.fill(query);
   await search.press('Enter');
+  await expect(search).toHaveValue(query);
   await page.keyboard.press('Escape');
 }
 

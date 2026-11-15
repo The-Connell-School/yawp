@@ -281,12 +281,10 @@ test.describe.serial('Teacher dashboard workspace', () => {
         .click();
       await page.waitForURL(/\/app\/documents\?status=needs-grading/);
       await page.waitForLoadState('networkidle');
-      await page.goto(
-        `/app/documents?status=needs-grading&group=none&q=${encodeURIComponent(
-          title.toLowerCase()
-        )}&reset=1`
-      );
+      await page.goto('/app/documents?status=needs-grading&reset=1');
       await page.waitForLoadState('networkidle');
+      const { fillTeacherDocumentWorkSearch } = await import('../test-helpers');
+      await fillTeacherDocumentWorkSearch(page, title.toLowerCase());
       await expect(page.getByText(title, { exact: true }).first()).toBeVisible({
         timeout: 90_000,
       });

@@ -1,5 +1,8 @@
 import { test, expect } from '../test-setup';
-import { gotoClassDocumentsTab } from '../test-helpers';
+import {
+  filterClassDocumentsByTitle,
+  gotoClassDocumentsTab,
+} from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
 import type { E2EContext } from '../seed-e2e';
@@ -193,11 +196,9 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
       page.locator(`a[href="/app/assignment-types/${sjpTypeId}"]`)
     ).toBeVisible();
 
-    await gotoClassDocumentsTab(page, e2eContext.classId, {
-      q: seeded.documentTitle,
-    });
+    await gotoClassDocumentsTab(page, e2eContext.classId);
+    await filterClassDocumentsByTitle(page, seeded.documentTitle);
     const classDocuments = page.getByRole('table', { name: /class documents/i });
-    await expect(classDocuments).toBeVisible({ timeout: 15_000 });
     await expect(
       classDocuments.getByText(seeded.documentTitle, { exact: true })
     ).toBeVisible({ timeout: 60_000 });
