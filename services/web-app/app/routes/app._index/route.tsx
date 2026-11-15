@@ -598,15 +598,21 @@ export default function AppRoute() {
     // the pending card while locked and the advocate pack once approved.
     const freeAccountRail = !freeUsage
       ? null
-      : locked ? (
-          <div className="space-y-5" data-testid="free-account-rail">
-            <LockedDashboardPendingCard />
-          </div>
-        ) : freeTierShowAdvocatePack(freeUsage) ? (
+      : locked ? null : freeTierShowAdvocatePack(freeUsage) ? (
           <div className="space-y-5" data-testid="free-account-rail">
             <AdvocatePackEntry />
           </div>
         ) : null;
+    const lockedPendingRailMobile = locked ? (
+      <div className="space-y-5" data-testid="free-account-rail">
+        <LockedDashboardPendingCard includeTourAnchor={false} />
+      </div>
+    ) : null;
+    const lockedPendingRailDesktop = locked ? (
+      <div className="space-y-5" data-testid="free-account-rail">
+        <LockedDashboardPendingCard includeTourAnchor />
+      </div>
+    ) : null;
 
     const gettingStartedTile = !freeUsage ? null : locked ? (
       <LockedDashboardGettingStarted />
@@ -705,7 +711,8 @@ export default function AppRoute() {
         <div
           className={cn(
             'locked-home-b2 free-dashboard w-full pb-24',
-            freeAccountRail && 'locked-home-b2--with-rail'
+            (freeAccountRail || lockedPendingRailDesktop) &&
+              'locked-home-b2--with-rail'
           )}
         >
           <div className="mx-auto w-full max-w-screen-xl">
@@ -728,24 +735,24 @@ export default function AppRoute() {
                     />
                   </span>
                 </h1>
-                {freeAccountRail ? (
+                {lockedPendingRailMobile ?? freeAccountRail ? (
                   <aside
                     className="locked-home-rail-mobile"
                     aria-label="Your request and next steps"
                   >
-                    {freeAccountRail}
+                    {lockedPendingRailMobile ?? freeAccountRail}
                   </aside>
                 ) : null}
                 <div className="locked-home-sections flex flex-col gap-4">
                   {dashboardSections}
                 </div>
               </ContentColumn>
-              {freeAccountRail ? (
+              {lockedPendingRailDesktop ?? freeAccountRail ? (
                 <aside
                   className="locked-home-rail-desktop"
                   aria-label="Your request and next steps"
                 >
-                  {freeAccountRail}
+                  {lockedPendingRailDesktop ?? freeAccountRail}
                 </aside>
               ) : null}
             </div>

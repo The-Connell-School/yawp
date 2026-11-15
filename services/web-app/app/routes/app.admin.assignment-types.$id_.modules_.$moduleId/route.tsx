@@ -66,6 +66,7 @@ import {
 } from '~/domain/assignment-types/assignment-type-rubric-config';
 import { ModuleRubricAlignmentEditor } from '~/components/admin/module-rubric-alignment-editor';
 import { parseRubricSchema } from '~/domain/rubrics/rubric-schema';
+import { normalizeTeachLink } from '~/domain/assignment-types/how-to-teach-it';
 import {
   TUTOR_VARIANT_FIELD_PREFIX,
   TUTOR_VARIANT_KEYS_FIELD,
@@ -127,11 +128,20 @@ export function parseTutorInstructionVariantsJson(
   return Object.fromEntries(entries);
 }
 
+const teachLinkField = z
+  .string()
+  .optional()
+  .refine((value) => !value?.trim() || normalizeTeachLink(value) !== null, {
+    message: 'Use a full https:// link, or an in-app path starting with /',
+  });
+
 const moduleSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
   isSelfGuided: z.union([z.literal('on'), z.literal(undefined)]),
   tutorInstructions: z.string().optional(),
+  lessonUrl: teachLinkField,
+  tutorialVideoUrl: teachLinkField,
 });
 
 const instructionSchema = z.object({
@@ -217,6 +227,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
       tutorInstructions: data.tutorInstructions || null,
       ...(variantsJson ? { tutorInstructionsVariantsJson: variantsJson } : {}),
       rubricAlignmentJson: parseRubricAlignmentJson(formData),
+      // Only written when the form carries them, so an older form cannot
+      // blank links it never showed.
+      ...(formData.has('lessonUrl')
+        ? { lessonUrl: normalizeTeachLink(data.lessonUrl) }
+        : {}),
+      ...(formData.has('tutorialVideoUrl')
+        ? { tutorialVideoUrl: normalizeTeachLink(data.tutorialVideoUrl) }
+        : {}),
     });
 
     return dataResponse({ status: 'success' });
@@ -317,6 +335,9 @@ export default function AssignmentModuleRoute() {
     setIsMounted(true);
   }, []);
 
+  // Set when the module sheet submits; see the sheet close effect below.
+  const moduleSavePending = React.useRef(false);
+
   // Module form
   const moduleForm = useForm({
     id: 'edit-module-form',
@@ -326,8 +347,11 @@ export default function AssignmentModuleRoute() {
       description: module.description || '',
       isSelfGuided: module.isSelfGuided ? 'on' : undefined,
       tutorInstructions: module.tutorInstructions || '',
+      lessonUrl: module.lessonUrl || '',
+      tutorialVideoUrl: module.tutorialVideoUrl || '',
     },
     handleSubmit: (_data, formData) => {
+      moduleSavePending.current = true;
       moduleFetcher.submit(formData, {
         method: 'post',
         action: `/app/admin/assignment-types/${course.id}/modules/${module.id}`,
@@ -335,13 +359,17 @@ export default function AssignmentModuleRoute() {
     },
   });
 
-  // Sheet close effect for module
+  // Sheet close effect for module. Only a save made from this opening closes
+  // it: the fetcher keeps the last save's `success`, which would otherwise
+  // snap the sheet shut the moment it is reopened for a second edit.
   React.useEffect(() => {
     if (
       moduleFetcher.state === 'idle' &&
       moduleFetcher.data?.status === 'success' &&
-      isModuleSheetOpen
+      isModuleSheetOpen &&
+      moduleSavePending.current
     ) {
+      moduleSavePending.current = false;
       setIsModuleSheetOpen(false);
     }
   }, [moduleFetcher.state, moduleFetcher.data, isModuleSheetOpen]);
@@ -589,6 +617,16 @@ export default function AssignmentModuleRoute() {
                   label="Description"
                   rows={3}
                 />
+                <FormInput
+                  scope={moduleForm.scope('lessonUrl')}
+                  label="How to Teach It: lesson link"
+                  placeholder="https://… or /app/…"
+                />
+                <FormInput
+                  scope={moduleForm.scope('tutorialVideoUrl')}
+                  label="How to Teach It: tutorial video link"
+                  placeholder="https://…"
+                />
                 <FormSwitch
                   scope={moduleForm.scope('isSelfGuided')}
                   label="Self-guided module"
@@ -676,6 +714,22 @@ export default function AssignmentModuleRoute() {
                 </dt>
                 <dd className="text-base">
                   {module.description || 'No description'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">
+                  Lesson link
+                </dt>
+                <dd className="text-base break-all">
+                  {module.lessonUrl || 'None'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">
+                  Tutorial video link
+                </dt>
+                <dd className="text-base break-all">
+                  {module.tutorialVideoUrl || 'None'}
                 </dd>
               </div>
               <div>

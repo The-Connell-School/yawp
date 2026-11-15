@@ -91,9 +91,7 @@ test.describe.serial('Organization assignment type inheritance', () => {
       await manager
         .getByLabel('Daily Pages')
         .setChecked(false, { force: true });
-      await manager
-        .getByLabel('AP History Essay')
-        .setChecked(false, { force: true });
+      await expect(manager.getByLabel('AP History Essay')).toHaveCount(0);
       await page.getByRole('button', { name: 'Update School' }).click();
       await expect(page.getByRole('button', { name: 'Edit' })).toBeVisible();
 
@@ -152,9 +150,7 @@ test.describe.serial('Organization assignment type inheritance', () => {
       await manager
         .getByLabel('Daily Pages')
         .setChecked(false, { force: true });
-      await manager
-        .getByLabel('AP History Essay')
-        .setChecked(false, { force: true });
+      await expect(manager.getByLabel('AP History Essay')).toHaveCount(0);
       await page.getByRole('button', { name: 'Update Teacher' }).click();
       await expect(
         teacherRow.getByRole('button', { name: 'Edit' })

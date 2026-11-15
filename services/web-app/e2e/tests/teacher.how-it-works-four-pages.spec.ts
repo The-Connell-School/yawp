@@ -31,9 +31,9 @@ const GUIDES: Guide[] = [
     video: '/img/prewriting-guide/overview.mp4',
   },
   {
-    name: 'Thesis Statement',
+    name: 'Thesis Builder',
     typeId: (ctx) => ensureWritingStepType(ctx.organizationId, 'thesis_statement'),
-    heading: /teach thesis statement/i,
+    heading: /teach thesis builder/i,
     video: '/img/thesis-statement-guide/overview.mp4',
   },
   {

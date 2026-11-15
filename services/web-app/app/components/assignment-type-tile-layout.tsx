@@ -59,7 +59,7 @@ export function DashboardAssignmentTileFooter({
     <>
       <div className="flex w-full min-w-0 items-start justify-between gap-2">
         <span
-          className="min-w-0 flex-1 text-left text-[15px] font-medium leading-snug"
+          className="min-w-0 flex-1 hyphens-none text-left text-[15px] font-medium leading-snug"
           data-testid={assignmentTypeTileNameTestId}
         >
           {label}

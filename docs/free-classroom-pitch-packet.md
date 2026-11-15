@@ -26,7 +26,7 @@ are controls only and are excluded from the copied/printed packet.
 
 - Seat and active-class limits come from `getEntitlementsForPlan('FREE_CLASSROOM')`
   in `app/utils/entitlements.server.ts`, rather than duplicated numbers.
-- The three bundle kinds are defined by `FREE_CLASSROOM_ASSIGNMENT_QUOTAS`,
+- The five bundle kinds are defined by `FREE_CLASSROOM_ASSIGNMENT_QUOTAS`,
   provisioned by `app/domain/free-tier/provision-free-classroom.server.ts` and
   seeded by `packages/prisma/scripts/seed-free-tier-bundle-assignment-types.ts`.
 - Per-type creation limits and remaining allowances use

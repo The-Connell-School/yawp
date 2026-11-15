@@ -11,7 +11,7 @@ import {
   EXIT_TICKET_CONFIG_SCHEMA_VERSION,
   EXIT_TICKET_ELABORATION_NOTE,
   EXIT_TICKET_EXPLAIN_CLOSER,
-  EXIT_TICKET_POLISH_CLOSER,
+  EXIT_TICKET_QUESTIONS_LINE,
   exitTicketStarterOption,
 } from '~/domain/assignment-types/exit-ticket';
 
@@ -284,43 +284,49 @@ describe('a v3 exit ticket block', () => {
       promptText: QUESTION,
       lessonNotes: { mustMention: 'His younger brother, who died.' },
     });
-    expect(tickets[0]!.prompt).toBe(
-      `${QUESTION}\n\n${EXIT_TICKET_POLISH_CLOSER}`
-    );
+    // There is a correct answer: the planner gave it.
+    expect(tickets[0]!.config).toMatchObject({ answerType: 'objective' });
+    expect(tickets[0]!.prompt).toBe(QUESTION);
     expect(tickets[0]!.title).toBe('Exit ticket: Allie');
   });
 
-  it('a reflection starter keeps the starter’s closer', () => {
-    const learned = exitTicketStarterOption('learned')!;
+  it('a fixed reflection needs only its name', () => {
     const { tickets } = readPlannedExitTickets(
-      fenced(
-        [
-          'activity: reflect',
-          `promptText: ${learned.prompt}`,
-          'starter: learned',
-        ].join('\n')
-      )
+      fenced(['activity: reflect', 'starter: learned'].join('\n'))
     );
     expect(tickets[0]!.prompt).toBe(
-      `${learned.prompt}\n\n${EXIT_TICKET_EXPLAIN_CLOSER}`
+      `${exitTicketStarterOption('learned')!.prompt}\n\n${EXIT_TICKET_EXPLAIN_CLOSER}`
     );
   });
 
-  it('a graded block with no basis is graded for completion', () => {
+  it('“explain a concept” takes the concept', () => {
     const { tickets } = readPlannedExitTickets(
-      fenced(
-        [
-          'activity: explain-concept',
-          'promptText: Explain irony.',
-          'graded: yes',
-        ].join('\n')
-      )
+      fenced(['activity: explain-concept', 'topic: dramatic irony'].join('\n'))
     );
-    expect(tickets[0]!.graded).toBe(true);
-    expect(tickets[0]!.config.grading).toEqual({ basis: 'completion' });
+    expect(tickets[0]!.prompt).toBe(
+      `In your own words, explain dramatic irony.\n\n${EXIT_TICKET_EXPLAIN_CLOSER}`
+    );
   });
 
-  it('“quality” still means understanding', () => {
+  it('reads `answer: yes` and `answer: no`', () => {
+    for (const [answer, answerType] of [
+      ['yes', 'objective'],
+      ['no', 'subjective'],
+    ] as const) {
+      const { tickets } = readPlannedExitTickets(
+        fenced(
+          [
+            'activity: engage-text',
+            'promptText: Find the volta.',
+            `answer: ${answer}`,
+          ].join('\n')
+        )
+      );
+      expect(tickets[0]!.config).toMatchObject({ answerType });
+    }
+  });
+
+  it('a v3 block is never graded, even when it asks to be', () => {
     const { tickets } = readPlannedExitTickets(
       fenced(
         [
@@ -328,24 +334,14 @@ describe('a v3 exit ticket block', () => {
           'promptText: Find the volta.',
           'graded: yes',
           'basis: quality',
+          'points: 5',
         ].join('\n')
       )
     );
-    expect(tickets[0]!.config.grading).toEqual({ basis: 'bands' });
-  });
-
-  it('“understanding” is the v3 name for the same basis', () => {
-    const { tickets } = readPlannedExitTickets(
-      fenced(
-        [
-          'activity: reflect',
-          'promptText: What surprised you?',
-          'graded: yes',
-          'basis: understanding',
-        ].join('\n')
-      )
-    );
-    expect(tickets[0]!.config.grading).toEqual({ basis: 'bands' });
+    expect(tickets).toHaveLength(1);
+    expect(tickets[0]!.graded).toBe(false);
+    expect(tickets[0]!.pointValue).toBeNull();
+    expect(tickets[0]!.config.grading).toBeUndefined();
   });
 
   it('drops a block with an activity but no prompt', () => {
@@ -361,10 +357,8 @@ describe('a v3 exit ticket block', () => {
         [
           'activity: answer-question',
           `promptText: ${QUESTION}`,
+          'answer: yes',
           'mustMention: His younger brother.',
-          'graded: yes',
-          'basis: completion',
-          'points: 5',
         ].join('\n')
       )
     );
@@ -373,11 +367,62 @@ describe('a v3 exit ticket block', () => {
       new URL(href, 'http://x').searchParams
     );
     expect(prefill?.config).toEqual(tickets[0]!.config);
-    expect(prefill?.graded).toBe(true);
-    expect(prefill?.pointValue).toBe(5);
+    expect(prefill?.graded).toBe(false);
     // The legacy fields still ride along for the quick builder.
     expect(prefill?.mode).toBe('specific');
     expect(prefill?.lessonNotes?.mustMention).toBe('His younger brother.');
+  });
+
+  it('carries a concept through the create link', () => {
+    const { tickets } = readPlannedExitTickets(
+      fenced(['activity: explain-concept', 'topic: irony'].join('\n'))
+    );
+    const prefill = readExitTicketPrefill(
+      new URL(exitTicketCreateHref('type-1', tickets[0]!), 'http://x')
+        .searchParams
+    );
+    expect(prefill?.config).toEqual(tickets[0]!.config);
+  });
+
+  it('reads `questions: yes` and `context:` and carries them to the sheet', () => {
+    const { tickets } = readPlannedExitTickets(
+      fenced(
+        [
+          'activity: answer-question',
+          `promptText: ${QUESTION}`,
+          'questions: yes',
+          'context: We read chapters 1 to 3 today.',
+        ].join('\n')
+      )
+    );
+    expect(tickets[0]!.config).toMatchObject({
+      invitesQuestions: true,
+      lessonNotes: { mainPoints: 'We read chapters 1 to 3 today.' },
+    });
+    expect(tickets[0]!.prompt).toBe(
+      `${QUESTION}\n\n${EXIT_TICKET_QUESTIONS_LINE}`
+    );
+    const prefill = readExitTicketPrefill(
+      new URL(exitTicketCreateHref('type-1', tickets[0]!), 'http://x')
+        .searchParams
+    );
+    expect(prefill?.config).toEqual(tickets[0]!.config);
+  });
+
+  it('leaves the questions line off unless the block asks for it', () => {
+    const { tickets } = readPlannedExitTickets(
+      fenced(['activity: reflect', 'starter: learned', 'questions: no'].join('\n'))
+    );
+    expect(tickets[0]!.config.invitesQuestions).toBeUndefined();
+    expect(tickets[0]!.prompt).not.toContain(EXIT_TICKET_QUESTIONS_LINE);
+  });
+
+  it('a printed ticket carries the questions line too', () => {
+    expect(
+      inlinePlannedExitTickets(
+        fenced(['activity: reflect', 'starter: learned', 'questions: yes'].join('\n'))
+      )
+    ).toContain(EXIT_TICKET_QUESTIONS_LINE);
   });
 
   it('a legacy link has no v3 config', () => {

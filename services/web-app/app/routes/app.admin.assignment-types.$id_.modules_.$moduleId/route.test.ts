@@ -281,6 +281,56 @@ describe('admin assignment module action', () => {
     const updateData = prisma.assignmentModule.update.mock.calls[0][0].data;
     expect('tutorInstructionsVariantsJson' in updateData).toBe(false);
   });
+
+  async function submitModuleForm(fields: Record<string, string>) {
+    const form = new FormData();
+    form.set('intent', 'updateModule');
+    form.set('title', 'Draft Thesis');
+    for (const [key, value] of Object.entries(fields)) form.set(key, value);
+    return action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1/modules/mod-1',
+        { method: 'POST', body: form }
+      ),
+      params: { id: 'at-1', moduleId: 'mod-1' },
+      context: {} as never,
+    } as never);
+  }
+
+  test('saves the How to Teach It lesson and tutorial links, trimmed', async () => {
+    await submitModuleForm({
+      lessonUrl: ' /app/lesson-planner/library ',
+      tutorialVideoUrl: 'https://youtu.be/abc',
+    });
+
+    const updateData = prisma.assignmentModule.update.mock.calls[0][0].data;
+    expect(updateData.lessonUrl).toBe('/app/lesson-planner/library');
+    expect(updateData.tutorialVideoUrl).toBe('https://youtu.be/abc');
+  });
+
+  test('a cleared link box clears that link', async () => {
+    // Whitespace, not '': happy-dom (registered globally by component tests in
+    // the same bun run) drops empty-string FormData entries in transit.
+    await submitModuleForm({ lessonUrl: ' ', tutorialVideoUrl: '  ' });
+
+    const updateData = prisma.assignmentModule.update.mock.calls[0][0].data;
+    expect(updateData.lessonUrl).toBeNull();
+    expect(updateData.tutorialVideoUrl).toBeNull();
+  });
+
+  test('a form without link fields leaves the stored links untouched', async () => {
+    await submitModuleForm({});
+
+    const updateData = prisma.assignmentModule.update.mock.calls[0][0].data;
+    expect('lessonUrl' in updateData).toBe(false);
+    expect('tutorialVideoUrl' in updateData).toBe(false);
+  });
+
+  test('rejects a link that is not https or an in-app path', async () => {
+    await submitModuleForm({ tutorialVideoUrl: 'javascript:alert(1)' });
+
+    expect(prisma.assignmentModule.update).not.toHaveBeenCalled();
+  });
 });
 
 for (const intent of ['createInstruction', 'updateInstruction']) {

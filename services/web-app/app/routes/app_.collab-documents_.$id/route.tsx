@@ -39,6 +39,7 @@ import {
 } from '~/domain/collaboration/author-colors';
 import type { CollabPresence } from '~/domain/collaboration/http-provider';
 import type { PresenceActivity } from '~/domain/collaboration/presence';
+import { assertNotRetiredApHistoryDocument } from '~/utils/retired-ap-history-access.server';
 
 type RosterPresence = PresenceActivity | 'offline';
 
@@ -156,6 +157,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: true,
       title: true,
       assignmentTypeId: true,
+      apHistorySnapshot: true,
+      assignmentType: { select: { systemKey: true } },
       submissions: {
         where: { unsubmittedAt: null },
         orderBy: { submittedAt: 'desc' },
@@ -172,6 +175,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           prompt: true,
           promptAttachmentName: true,
           tutorEnabled: true,
+          apHistorySnapshot: true,
+          assignmentType: { select: { systemKey: true } },
         },
       },
       group: {
@@ -201,6 +206,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       { status: 404, statusText: 'Not Found' }
     );
   }
+  assertNotRetiredApHistoryDocument(doc);
 
   const asAuthor = await prisma.document.findFirst({
     where: {

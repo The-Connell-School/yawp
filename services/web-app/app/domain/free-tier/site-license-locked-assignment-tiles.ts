@@ -34,12 +34,10 @@ export type SiteLicenseLockedAssignmentTile = {
 /** User-facing labels for locked tiles (never sourced from assignment type titles). */
 export const SITE_LICENSE_LOCKED_TILE_LABELS = {
   thesis_driven_essay: 'Thesis-Driven Essay',
-  ap_history_essay: 'AP History Essay',
   daily_pages: 'Daily Pages',
   act_writing: 'ACT Writing Practice',
   ap_english_language: 'AP English Language',
   ap_english_literature: 'AP English Literature',
-  'exit-ticket': 'Exit Ticket',
 } as const;
 
 /** Canonical platform ACT assignment type titles (prod-fidelity + migration). */

@@ -44,6 +44,9 @@ export function parseAssignmentExitTicket(
           activity: formData.get('exitTicketActivity')?.toString(),
           promptText: formData.get('exitTicketPromptText')?.toString(),
           starter: formData.get('exitTicketStarter')?.toString(),
+          invitesQuestions: formData
+            .get('exitTicketInvitesQuestions')
+            ?.toString(),
         }
       : {}),
     // Posted only by the quick builder, always beside the mode it names.

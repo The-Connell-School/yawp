@@ -11,6 +11,13 @@ Authoritative spec: `FREE_TIER_SPEC.md` v2 — see §5.1 (contents) and §5.3 (e
   - Reporter: gated off
   - Class Insights: on
   - Lesson Planner quota: 5
+  - Assignment types (lifetime caps, `FREE_CLASSROOM_ASSIGNMENT_QUOTAS`):
+    Class Starter 12, Prewriting 3, Thesis Statement 3, Exit Ticket 12.
+    Exit Ticket was added for launch (Nov 2026). New free classrooms are
+    linked to it at provisioning; migration
+    `20261111120000_free_classroom_exit_ticket` links existing ones. Only
+    `FREE_CLASSROOM` orgs are affected, and they only exist through the
+    `free_tier` flow.
 
 Editable seat and monthly limits, including their default-off rollout policy,
 are documented in [the I5 API contract](../internal-free-tier-limits.md).

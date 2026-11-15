@@ -100,46 +100,61 @@ const DOCUMENT_TOUR: PageTour = {
 };
 
 const TOURS: Record<TourId, PageTour> = {
+  // The first tour a teacher sees while their administrator has not yet
+  // approved their classroom. They land on the dashboard in locked mode (the
+  // old /app/free-tier/preview page now redirects there), and this is the only
+  // tour the server lets them record, so it stands in for `dashboard` until
+  // approval. Grading is hidden while locked; the approval banner takes its
+  // place.
   'waiting-preview': {
     id: 'waiting-preview',
     welcome: {
-      title: 'Welcome to your preview',
-      body: 'Take a quick look at the content you can explore while your administrator reviews your request.',
-      icon: 'home',
-    },
-    steps: [
-      { target: 'preview-content-nav', title: 'Explore the preview', body: 'Browse Class Starter prompts, Pre-writing guidance, Thesis prompts, and the Lesson Planner overview here.' },
-      { target: 'preview-content', title: 'Look around', body: 'Read the prompts and guidance at your own pace. This preview does not create classroom work.' },
-      { target: 'preview-locked-actions', title: 'After approval', body: 'Assignment creation, student invitations, Reporter, and Lesson Planner tools remain locked until your administrator approves your classroom.' },
-    ],
-  },
-  dashboard: {
-    id: 'dashboard',
-    welcome: {
       title: 'Welcome to Yawp!',
-      body: 'This is your home base: your class, your assignments, and the work waiting for you, all in one place.',
+      body: 'Your classroom is ready to look around while your administrator approves it. Here is a quick look at your dashboard.',
       icon: 'home',
     },
     steps: [
       {
         target: 'dashboard-classes',
         title: 'Your class',
-        body: 'We set up your class for you. Open it to invite students and see their writing.',
+        body: 'This is your class. Once your administrator approves it, students can join, and it fills in as they do.',
       },
       {
         target: 'dashboard-assignments',
-        title: 'Assignments',
-        body: 'Pick an assignment type to create one for your class. Your free classroom shows how many of each type you have left.',
+        title: 'Assignment types',
+        body: 'Each tile is a type of assignment. Click a tile to see how it works. You can create assignments once your classroom is approved.',
+      },
+      {
+        target: 'teaching-access-banner',
+        title: 'Waiting for approval',
+        body: 'This shows where your request stands. After approval, you can add students, create assignments, and grade their work here.',
+      },
+    ],
+  },
+  // The first tour an approved teacher sees. Dashboard only: the rest of the
+  // app has its own page tours.
+  dashboard: {
+    id: 'dashboard',
+    welcome: {
+      title: 'Welcome to Yawp!',
+      body: 'Here is a quick look at your dashboard: your class, your assignments, and your grading.',
+      icon: 'home',
+    },
+    steps: [
+      {
+        target: 'dashboard-classes',
+        title: 'Your class',
+        body: 'This is your class. It fills in once your students join.',
+      },
+      {
+        target: 'dashboard-assignments',
+        title: 'Assignment types',
+        body: 'Each tile is a type of assignment. Click a tile to see its page and how it works. To make a quick assignment from here, click New assignment.',
       },
       {
         target: 'dashboard-grading',
-        title: 'Grading at a glance',
-        body: 'When students submit, the work that needs grading and the grades ready to release to students show up here.',
-      },
-      {
-        target: 'app-nav',
-        title: 'Getting around',
-        body: 'Use this menu to reach your classes, assignments, documents, and more from any page.',
+        title: 'Grading',
+        body: 'When your students turn in work, it shows up down here, ready for you to grade.',
       },
     ],
   },
@@ -433,16 +448,26 @@ export function isTourStatus(value: unknown): value is TourStatus {
 /**
  * The tour for a page, or null for pages without one. `variant` is the page's
  * own `data-tour-variant`, for pages whose URL does not say enough: an
- * assignment type page names its kind there.
+ * assignment type page names its kind there. `waitingForApproval` is true
+ * while the teacher's administrator has not yet approved their classroom.
  */
 export function tourForPage(
   pathname: string,
-  variant: string | null | undefined
+  variant: string | null | undefined,
+  { waitingForApproval = false }: { waitingForApproval?: boolean } = {}
 ): PageTour | null {
   const path =
     pathname.length > 1 && pathname.endsWith('/')
       ? pathname.slice(0, -1)
       : pathname;
+  // A teacher waiting for approval can only record the waiting tour, so that
+  // is the one tour they get, on their dashboard. Page tours start after
+  // approval.
+  if (waitingForApproval) {
+    return path === '/app' || path === '/app/free-tier/preview'
+      ? TOURS['waiting-preview']
+      : null;
+  }
   if (/^\/app\/assignment-types\/[^/]+$/.test(path)) {
     const id = variant ? ASSIGNMENT_TYPE_TOURS[variant] : undefined;
     return id ? TOURS[id] : null;

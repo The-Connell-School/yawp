@@ -6,6 +6,7 @@ export function TeachingAccessBanner({ adminName }: { adminName: string }) {
   return (
     <div
       data-testid="teaching-access-banner"
+      data-tour="teaching-access-banner"
       role="status"
       className="border-b bg-secondary/60 px-3 py-2.5 sm:px-5"
     >

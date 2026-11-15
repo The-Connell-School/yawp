@@ -8,15 +8,66 @@ const PREVIEW_PREWRITING_PROMPT =
 const PREVIEW_THESIS_PROMPT =
   'Draft one arguable thesis sentence about whether cities should require community gardens in new developments.';
 
+/** Pending-class loader strips LOCKED_PREVIEW_SAMPLE_TITLES; use a distinct title. */
+export async function createLockedPreviewBrowseAssignmentForE2E(
+  prisma: PrismaClient,
+  classId: string,
+  title: string
+) {
+  const classStarterType = await prisma.assignmentType.findFirst({
+    where: { kind: 'class_starter' },
+    select: { id: true },
+  });
+  if (!classStarterType) {
+    throw new Error('class_starter assignment type is missing from the E2E database');
+  }
+  return prisma.assignment.create({
+    data: {
+      assignmentTypeId: classStarterType.id,
+      title,
+      prompt: 'Write an opening line that pulls a reader into your topic.',
+      submitForGrade: true,
+      pointValue: defaultPointValueForNewAssignment({ kind: 'class_starter' }),
+      gradingAssistantStrictnessLevel:
+        DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+      classAssignments: { create: { classId } },
+    },
+    select: { id: true, title: true },
+  });
+}
+
 /** Playwright-safe copy of ensureLockedPreviewSampleAssignments (no ~/utils/db.server). */
 export async function ensureLockedPreviewSampleAssignmentsForE2E(
   prisma: PrismaClient,
   classId: string
 ) {
+  const klass = await prisma.class.findUniqueOrThrow({
+    where: { id: classId },
+    select: { school: { select: { organizationId: true } } },
+  });
+  const organizationId = klass.school?.organizationId ?? null;
+
   const bundleTypes = await prisma.assignmentType.findMany({
     where: { kind: { in: [...FREE_CLASSROOM_ASSIGNMENT_KINDS] } },
     select: { id: true, kind: true },
   });
+  if (organizationId) {
+    for (const bundleType of bundleTypes) {
+      await prisma.organizationAssignmentType.upsert({
+        where: {
+          organizationId_assignmentTypeId: {
+            organizationId,
+            assignmentTypeId: bundleType.id,
+          },
+        },
+        create: {
+          organizationId,
+          assignmentTypeId: bundleType.id,
+        },
+        update: {},
+      });
+    }
+  }
   const classStarterTypeId = bundleTypes.find((t) => t.kind === 'class_starter')
     ?.id;
   const prewritingTypeId = bundleTypes.find((t) => t.kind === 'prewriting')?.id;

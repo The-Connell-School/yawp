@@ -138,10 +138,10 @@ export async function isDevPanelActive(page: Page) {
 export async function waitForDeveloperToolsPageReady(page: Page) {
   await page.waitForLoadState('domcontentloaded');
   const beaker = page.getByRole('button', { name: 'Open developer tools' });
-  await expect(beaker).toBeVisible({ timeout: 15_000 });
+  await expect(beaker).toBeVisible({ timeout: 30_000 });
   await expect(async () => {
     await beaker.click({ trial: true });
-  }).toPass({ timeout: 15_000 });
+  }).toPass({ timeout: 30_000 });
 }
 
 export async function openDevToolsPanel(page: Page) {

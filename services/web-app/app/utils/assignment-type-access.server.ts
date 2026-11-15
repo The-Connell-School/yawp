@@ -1,4 +1,37 @@
+import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
+
+/**
+ * AP History is retired from prod (Bryant, Nov 14 2026): no teacher, student,
+ * admin or Lesson Planner surface may offer it. Closed PRs keep the feature for
+ * a later revival; until then every availability check excludes it here.
+ * `systemKey` is nullable, so the OR keeps rows with no system key.
+ */
+export const RETIRED_ASSIGNMENT_TYPE_WHERE = {
+  OR: [
+    { systemKey: null },
+    { systemKey: { not: AP_HISTORY_ASSIGNMENT_TYPE_KEY } },
+  ],
+} satisfies Prisma.AssignmentTypeWhereInput;
+
+/** List UIs hide AP History assignments; rows stay in the database. */
+export const HIDE_AP_HISTORY_CLASS_ASSIGNMENT_WHERE = {
+  NOT: {
+    assignment: {
+      assignmentType: { systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY },
+    },
+  },
+} satisfies Prisma.ClassAssignmentWhereInput;
+
+/** List UIs hide student/teacher documents tied to AP History assignments. */
+export const HIDE_AP_HISTORY_DOCUMENT_WHERE = {
+  NOT: {
+    assignment: {
+      assignmentType: { systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY },
+    },
+  },
+} satisfies Prisma.DocumentWhereInput;
 
 export type AssignmentTypeAccessScope = {
   organizationId: string | null | undefined;
@@ -204,6 +237,7 @@ export async function getAvailableAssignmentTypesForScopes<
     where: {
       archivedAt: null,
       id: { in: effectiveTypeIds },
+      ...RETIRED_ASSIGNMENT_TYPE_WHERE,
     },
     select: {
       ...select,
@@ -237,7 +271,11 @@ export async function isAssignmentTypeAvailableForEveryScope({
 
   const [assignmentType, configuration] = await Promise.all([
     prisma.assignmentType.findFirst({
-      where: { id: assignmentTypeId, archivedAt: null },
+      where: {
+        id: assignmentTypeId,
+        archivedAt: null,
+        ...RETIRED_ASSIGNMENT_TYPE_WHERE,
+      },
       select: { id: true },
     }),
     loadScopeConfiguration(normalizedScopes),
@@ -266,7 +304,11 @@ export async function isAssignmentTypeAvailableForAnyScope({
 
   const [assignmentType, configuration] = await Promise.all([
     prisma.assignmentType.findFirst({
-      where: { id: assignmentTypeId, archivedAt: null },
+      where: {
+        id: assignmentTypeId,
+        archivedAt: null,
+        ...RETIRED_ASSIGNMENT_TYPE_WHERE,
+      },
       select: { id: true },
     }),
     loadScopeConfiguration(normalizedScopes),

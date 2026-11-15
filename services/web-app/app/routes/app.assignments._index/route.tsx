@@ -60,6 +60,11 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { HIDE_AP_HISTORY_CLASS_ASSIGNMENT_WHERE } from '~/utils/assignment-type-access.server';
+import { CollapsibleGroupSection } from '~/components/collapsible-group-section';
+import { ASSIGNMENTS_GROUPED_BY_TYPE_FLAG } from '~/domain/feature-flags/feature-flags';
+import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { groupByAssignmentType } from '~/utils/group-by-assignment-type';
 // The flag is read by the component, so it has to come from the client-safe module.
 // Importing it through saved-assignments.server (which merely re-exports it) makes the
 // component depend on server-only code, and React Router can only strip server code from
@@ -111,6 +116,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const classAssignments = await prisma.classAssignment.findMany({
     where: {
+      ...HIDE_AP_HISTORY_CLASS_ASSIGNMENT_WHERE,
       class: {
         teachers: { some: { id: profile.id } },
         isArchived: false,
@@ -262,6 +268,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return {
     assignments,
     savedAssignments,
+    assignmentsGroupedByTypeEnabled: await isFeatureFlagEnabled(
+      ASSIGNMENTS_GROUPED_BY_TYPE_FLAG,
+      profile.organization.id
+    ),
     assignmentCreationClasses: teacherClasses.map((klass) => ({
       id: klass.id,
       name: formatClassLabel(klass),
@@ -529,6 +539,7 @@ export default function MyAssignmentsRoute() {
     assignmentCreationClasses,
     assignmentCreationTypes,
     siteLicenseLockedAssignmentTiles,
+    assignmentsGroupedByTypeEnabled: groupedByTypeFlag,
   } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const highlightAssignmentId = searchParams.get('highlightAssignment');
@@ -544,6 +555,10 @@ export default function MyAssignmentsRoute() {
     []
   );
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
+  const groupedByType = groupedByTypeFlag;
+  const [collapsedTypeIds, setCollapsedTypeIds] = useState<Set<string>>(
+    () => new Set()
+  );
 
   const newestFirst = useMemo(() => {
     const byCreated = (a: (typeof assignments)[number], b: (typeof assignments)[number]) =>
@@ -662,8 +677,23 @@ export default function MyAssignmentsRoute() {
   );
 
   // Grouped views show every match; the list view pages.
+  const typeGroups = useMemo(
+    () =>
+      groupedByType
+        ? groupByAssignmentType({
+            items: filteredAssignments,
+            getAssignmentType: (assignment) => ({
+              id: assignment.assignmentTypeId,
+              title: assignment.assignmentTypeTitle,
+            }),
+            collator,
+          })
+        : [],
+    [collator, filteredAssignments, groupedByType]
+  );
+
   const assignmentGroups = useMemo(() => {
-    if (groupMode === 'none') return null;
+    if (groupedByType || groupMode === 'none') return null;
     const groups = new Map<
       string,
       { key: string; label: string; rows: typeof filteredAssignments }
@@ -705,6 +735,17 @@ export default function MyAssignmentsRoute() {
       [filteredAssignments]
     ),
   });
+
+  const toggleSelectedGroup = (ids: string[], checked: boolean) => {
+    setSelectedAssignmentIds((current) => {
+      const next = new Set(current);
+      for (const id of ids) {
+        if (checked) next.add(id);
+        else next.delete(id);
+      }
+      return Array.from(next);
+    });
+  };
 
   useEffect(() => {
     setPagination((current) => ({ ...current, skip: 0 }));
@@ -991,22 +1032,24 @@ export default function MyAssignmentsRoute() {
                 </div>
               </PopoverContent>
             </Popover>
-            <Select
-              value={groupMode}
-              onValueChange={(value) => setGroupMode(value as AssignmentGroupMode)}
-            >
-              <SelectTrigger
-                className="h-9 w-[10.5rem] rounded-full bg-background"
-                data-testid="my-assignments-group-select"
+            {!groupedByType ? (
+              <Select
+                value={groupMode}
+                onValueChange={(value) => setGroupMode(value as AssignmentGroupMode)}
               >
-                <SelectValue placeholder="List" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">List</SelectItem>
-                <SelectItem value="class">Group by class</SelectItem>
-                <SelectItem value="type">Group by type</SelectItem>
-              </SelectContent>
-            </Select>
+                <SelectTrigger
+                  className="h-9 w-[10.5rem] rounded-full bg-background"
+                  data-testid="my-assignments-group-select"
+                >
+                  <SelectValue placeholder="List" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">List</SelectItem>
+                  <SelectItem value="class">Group by class</SelectItem>
+                  <SelectItem value="type">Group by type</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : null}
             {/* Actions sit at the far right, after the view controls. */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -1059,6 +1102,44 @@ export default function MyAssignmentsRoute() {
               Try a different filter or search
             </span>
           </div>
+        ) : groupedByType ? (
+          <div data-tour="my-assignments-list" className="space-y-3">
+            {typeGroups.map((group) => {
+              const ids = group.items.map((assignment) => assignment.assignmentId);
+              return (
+                <CollapsibleGroupSection
+                  key={group.key}
+                  label={group.label}
+                  count={group.items.length}
+                  open={!collapsedTypeIds.has(group.key)}
+                  onOpenChange={(open) =>
+                    setCollapsedTypeIds((current) => {
+                      const next = new Set(current);
+                      if (open) next.delete(group.key);
+                      else next.add(group.key);
+                      return next;
+                    })
+                  }
+                  data-testid={`assignment-type-section-${group.key}`}
+                  data-assignment-type-title={group.label}
+                >
+                  <div className="min-w-0 overflow-hidden rounded-lg border bg-muted/50">
+                    <Table
+                      aria-label={`My Assignments: ${group.label}`}
+                      containerClassName="border-0 rounded-none"
+                    >
+                      {tableHeader}
+                      <TableBody>
+                        {group.items.map((assignment) =>
+                          renderRow(assignment, `${group.key}:`)
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CollapsibleGroupSection>
+              );
+            })}
+          </div>
         ) : assignmentGroups ? (
           <div data-tour="my-assignments-list" className="flex flex-col gap-4">
             {assignmentGroups.map((group) => (
@@ -1106,7 +1187,7 @@ export default function MyAssignmentsRoute() {
           </div>
         )}
 
-        {filteredAssignments.length > 0 && !assignmentGroups ? (
+        {filteredAssignments.length > 0 && !assignmentGroups && !groupedByType ? (
           <div className="w-full min-w-0">
             <Pagination
               totalCount={filteredAssignments.length}

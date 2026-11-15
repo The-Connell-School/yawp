@@ -1,6 +1,8 @@
 import { test, expect } from '../test-setup';
+import { openMyAssignmentDetail } from '../test-helpers';
 
 test.describe('Teacher "My Assignments" sidebar navigation', () => {
+  test.setTimeout(120_000);
   test('teacher can open My Assignments from the sidebar and see their assignments', async ({
     page,
     signIn,
@@ -14,12 +16,14 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     await navLink.click();
 
     await page.waitForURL('**/app/assignments**', { timeout: 15000 });
-    // Exact, because the row's selection checkbox is itself a cell whose
-    // accessible name ("Select assignment E2E Class Assignment") contains the
-    // title, and the default substring match picks up both.
     await expect(
-      page.getByTestId(`my-assignment-open-${e2eContext.assignmentId}`)
+      page.getByRole('heading', { name: 'My Assignments', exact: true })
     ).toBeVisible();
+    await openMyAssignmentDetail(
+      page,
+      e2eContext.assignmentId,
+      e2eContext.classId
+    );
   });
 
   test('clicking an assignment row opens that assignment detail page', async ({
@@ -28,18 +32,11 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     e2eContext,
   }) => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    await page.goto('/app/assignments');
-    await page.waitForLoadState('networkidle');
-
-    await page
-      .getByRole('link', { name: /E2E Class Assignment/i })
-      .click();
-
-    await page.waitForURL(
-      `**/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`,
-      { timeout: 15000 }
+    await openMyAssignmentDetail(
+      page,
+      e2eContext.assignmentId,
+      e2eContext.classId
     );
-    await expect(page.getByTestId('assignment-detail-page')).toBeVisible();
   });
 
   test('student does not see My Assignments in the sidebar', async ({

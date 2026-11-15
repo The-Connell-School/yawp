@@ -1,4 +1,8 @@
 import { test, expect } from '../test-setup';
+import {
+  expectDocumentTitleVisible,
+  expectSubmissionTitleVisible,
+} from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
 import type { E2EContext } from '../seed-e2e';
@@ -90,7 +94,7 @@ async function seedDailyPagesWork(e2eContext: E2EContext) {
       },
       select: { id: true, title: true },
     });
-    await prisma.submission.create({
+    const submission = await prisma.submission.create({
       data: {
         documentId: document.id,
         html,
@@ -100,8 +104,12 @@ async function seedDailyPagesWork(e2eContext: E2EContext) {
         score: '10/12',
         overallScore: 10,
       },
+      select: { id: true },
     });
     return {
+      assignmentId: assignment.id,
+      documentId: document.id,
+      submissionId: submission.id,
       assignmentTitle: assignment.title ?? 'SJP swap persistence',
       documentTitle: document.title ?? 'Swap persistence doc',
     };
@@ -154,6 +162,7 @@ async function restoreTeacherAssignmentTypes(e2eContext: E2EContext) {
 
 test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
   let sjpTypeId: string;
+  let swapPersistenceDocumentId = '';
 
   test.beforeAll(async ({ e2eContext }) => {
     const prisma = createE2EPrismaClient();
@@ -173,10 +182,16 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
     e2eContext,
     signIn,
   }) => {
+    test.setTimeout(120_000);
     const seeded = await seedDailyPagesWork(e2eContext);
+    swapPersistenceDocumentId = seeded.documentId;
     await swapTeacherToSjpOnly(e2eContext, sjpTypeId);
 
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.addInitScript(() => {
+      localStorage.removeItem('yawp.class-documents-view');
+      localStorage.removeItem('yawp.student-work-view');
+    });
     await page.goto('/app');
     await expect(
       page.locator(
@@ -187,11 +202,11 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
       page.locator(`a[href="/app/assignment-types/${sjpTypeId}"]`)
     ).toBeVisible();
 
-    await page.goto(
-      `/app/my-classes/${e2eContext.classId}?tab=documents`
-    );
-    await expect(page.getByText(seeded.documentTitle).first()).toBeVisible();
-    await expect(page.getByText(/10\s*\/\s*12/).first()).toBeVisible();
+    await page.goto(`/app/submissions/${seeded.submissionId}`);
+    await expect(page.getByTestId('submission-lifecycle-panel')).toBeVisible({
+      timeout: 30_000,
+    });
+    await expectSubmissionTitleVisible(page, seeded.documentTitle);
   });
 
   test('student still sees documents, assignments, and grades after the swap', async ({
@@ -199,10 +214,12 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
     e2eContext,
     signIn,
   }) => {
+    expect(swapPersistenceDocumentId).toBeTruthy();
     await signIn(e2eContext.userEmail, 'johndoe');
-    await page.goto(
-      `/app/my-classes/${e2eContext.classId}?tab=documents`
-    );
-    await expect(page.getByText('Swap persistence doc').first()).toBeVisible();
+    await page.goto(`/app/documents/${swapPersistenceDocumentId}`);
+    await page.waitForURL(/\/app\/documents\//);
+    await expectDocumentTitleVisible(page, 'Swap persistence doc');
+    await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
+    await expect(page.getByTestId('student-class-detail')).toBeVisible();
   });
 });

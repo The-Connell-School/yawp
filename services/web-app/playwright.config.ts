@@ -21,6 +21,7 @@ export default defineConfig({
     '**/free-tier.create-class.spec.ts',
     '**/free-tier.locked-preview.spec.ts',
   ],
+  globalSetup: './e2e/global-setup.ts',
   globalTeardown: './e2e/global-teardown.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,

@@ -189,20 +189,27 @@ describe('class detail loader document visibility', () => {
       where: { oldClassId: 'class-1' },
       select: { documentId: true },
     });
+    const { HIDE_AP_HISTORY_DOCUMENT_WHERE } = actualAssignmentTypeAccess;
     expect(prisma.submission.findMany.mock.calls[0][0].where.document).toEqual({
       is: {
-        ...expectedScope,
-        deletedAt: null,
+        AND: [
+          expectedScope,
+          { deletedAt: null },
+          HIDE_AP_HISTORY_DOCUMENT_WHERE,
+        ],
       },
     });
     expect(
       prisma.submission.findMany.mock.calls[0][0].where.unsubmittedAt
     ).toBe(null);
     expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
-      ...expectedScope,
-      deletedAt: null,
-      archivedAt: null,
-      submissions: { none: {} },
+      AND: [
+        expectedScope,
+        { deletedAt: null },
+        { archivedAt: null },
+        { submissions: { none: {} } },
+        HIDE_AP_HISTORY_DOCUMENT_WHERE,
+      ],
     });
     expect(prisma.document.findMany).toHaveBeenCalledTimes(1);
   });
@@ -428,7 +435,51 @@ describe('class detail loader document visibility', () => {
         gradesGrammar: false,
       },
     ]);
-    expect(data.apHistoryAssignmentTypeId).toBe('ap-history-type');
+  });
+
+  test('reads the assignments-grouped-by-type flag for the class school', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      {
+        id: 'ap-history-type',
+        title: 'AP History Essay',
+        systemKey: 'ap_history_essay',
+        kind: null,
+        rubric: null,
+      },
+    ]);
+    prisma.setting.findUnique.mockImplementation(
+      async ({ where }: { where: { name: string } }) =>
+        where.name === 'feature_flag.assignments-grouped-by-type'
+          ? { value: JSON.stringify({ mode: 'targeted', orgIds: ['org-1'] }) }
+          : null
+    );
+
+    const response = await loader({
+      request: new Request(
+        'https://example.test/app/my-classes/class-1?tab=assignments'
+      ),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(data.assignmentsGroupedByTypeEnabled).toBe(true);
+  });
+
+  test('grouped-by-type flag reads off when no row is stored', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
+    prisma.setting.findUnique.mockResolvedValue(null);
+
+    const response = await loader({
+      request: new Request(
+        'https://example.test/app/my-classes/class-1?tab=assignments'
+      ),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(data.assignmentsGroupedByTypeEnabled).toBe(false);
   });
 
   test('loads compact cross-class deployment details for assignments', async () => {
@@ -1106,6 +1157,11 @@ describe('class detail loader for students', () => {
     expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
       deletedAt: null,
       archivedAt: null,
+      NOT: {
+        assignment: {
+          assignmentType: { systemKey: 'ap_history_essay' },
+        },
+      },
       OR: [
         {
           classAssignment: { classId: 'class-1' },

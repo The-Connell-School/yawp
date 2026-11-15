@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { OrganizationPlan } from '@app/prisma';
 import {
   FREE_CLASSROOM_ACTIVE_CLASS_CAP,
+  FREE_CLASSROOM_ASSIGNMENT_KINDS,
   FREE_CLASSROOM_ASSIGNMENT_QUOTAS,
   FREE_CLASSROOM_LESSON_PLAN_QUOTA,
   FREE_CLASSROOM_STUDENT_SEAT_CAP,
@@ -40,6 +41,28 @@ describe('entitlements: shape and caps', () => {
     expect(e.canCreateAssignmentOfKind({ kind: 'daily_pages', createdCount: 0 })).toBe(
       false
     );
+  });
+
+  test('FREE_CLASSROOM includes Exit Ticket for launch, with its own quota', () => {
+    expect(FREE_CLASSROOM_ASSIGNMENT_KINDS).toEqual([
+      'class_starter',
+      'exit_ticket',
+      'five_paragraph_essay',
+      'prewriting',
+      'thesis_statement',
+    ]);
+    const e = getEntitlementsForPlan('FREE_CLASSROOM');
+    expect(e.assignmentQuotaForKind('exit_ticket')).toBe(3);
+    expect(
+      e.canCreateAssignmentOfKind({ kind: 'exit_ticket', createdCount: 2 })
+    ).toBe(true);
+    expect(
+      e.canCreateAssignmentOfKind({ kind: 'exit_ticket', createdCount: 3 })
+    ).toBe(false);
+    // The paid types stay paid.
+    expect(
+      e.canCreateAssignmentOfKind({ kind: 'daily_pages', createdCount: 0 })
+    ).toBe(false);
   });
 
   test('SCHOOL short-circuits assignment quotas without extra work', () => {

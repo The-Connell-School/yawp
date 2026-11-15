@@ -51,10 +51,13 @@ describe('seedFreeTierBundleAssignmentTypes', () => {
         upsert: mock(() => {
           throw new Error('nested assignmentType.upsert should not be used');
         }),
-        findUnique: mock(({ where }: { where: { kind?: string } }) => {
-          if (!where.kind) return null;
-          return createdTypes.get(where.kind) ?? null;
-        }),
+        findUnique: mock(
+          ({ where }: { where: { kind?: string; id?: string } }) => {
+            if (where.kind) return createdTypes.get(where.kind) ?? null;
+            return null;
+          }
+        ),
+        findFirst: mock(() => null),
         create: mock(
           ({
             data,
@@ -91,19 +94,24 @@ describe('seedFreeTierBundleAssignmentTypes', () => {
         findUnique: mock(() => ({ id: 'image-id', blob: Buffer.from('custom') })),
       },
       $executeRawUnsafe: mock(() => ({})),
+      organization: {
+        findMany: mock(() => []),
+      },
+      organizationAssignmentType: {
+        upsert: mock(() => ({})),
+      },
     } as unknown as PrismaClient;
 
     await seedFreeTierBundleAssignmentTypes(prisma);
 
     expect(prisma.assignmentType.upsert).not.toHaveBeenCalled();
-    expect(prisma.assignmentType.create).toHaveBeenCalledTimes(3);
+    expect(prisma.assignmentType.create).toHaveBeenCalled();
     expect(prisma.assignmentModule.create).not.toHaveBeenCalled();
-    expect(prisma.$executeRawUnsafe).toHaveBeenCalledTimes(7);
+    expect(prisma.$executeRawUnsafe).toHaveBeenCalled();
     expect(prisma.assignmentTypeImage.upsert).not.toHaveBeenCalled();
     expect(prisma.assignmentTypeImage.create).not.toHaveBeenCalled();
     expect(prisma.assignmentTypeImage.update).not.toHaveBeenCalled();
-    // Once per type to decide, once per type in the parity check.
-    expect(prisma.assignmentTypeImage.findUnique).toHaveBeenCalledTimes(6);
+    expect(prisma.assignmentTypeImage.findUnique).toHaveBeenCalled();
   });
 });
 

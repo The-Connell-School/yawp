@@ -138,6 +138,25 @@ export const FREE_TIER_FLAG_LEGACY_KEY = 'free_tier' as const;
 /** Global class-code validation and Generate code controls. Default off. */
 export const CLASS_CODE_UNIQUE_FLAG = 'classcode-unique' as const;
 
+/**
+ * Teacher's Lounge community board. On for a school: the Teacher's Lounge nav
+ * item opens the community feed (/app/lounge), with the existing course grid
+ * one tab away at its old URL. Off: the nav item opens the course grid as
+ * before and every /app/lounge route returns 404. Posts are never deleted by
+ * turning it off.
+ */
+export const LOUNGE_COMMUNITY_FLAG = 'teacher_lounge_community' as const;
+
+/**
+ * Thesis-Driven Essay slide decks and lesson plans (#452). On: each lesson
+ * offers its deck three ways (present on YAWP!, copy to Google Slides,
+ * download for PowerPoint) and its lesson plan, in the assignment type's
+ * Modules and in the Faculty Lounge's Thesis-Driven Essay training; Day 1
+ * adds the student handouts. Off: both pages are as before, and the deck,
+ * presenter and asset routes return 404.
+ */
+export const THESIS_ESSAY_DECKS_FLAG = 'thesis_essay_decks' as const;
+
 /** Demo feedback. Default off everywhere; only demo seed code opts in. */
 export const DEMO_FEEDBACK_FLAG = 'demo-feedback-widget' as const;
 
@@ -180,6 +199,14 @@ export const ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG =
 export const ASSIGNMENT_TYPE_LESSON_PLANS_FLAG = 'assignment-type-lesson-plans' as const;
 
 /**
+ * Assignment-type pages: teachers see each module as a How to Teach It row
+ * (description, lesson link, tutorial link) instead of the Modules dropdown.
+ * Students keep the dropdown. Default off on production; on by default on
+ * demo and PR previews.
+ */
+export const HOW_TO_TEACH_IT_FLAG = 'assignment-type-how-to-teach-it' as const;
+
+/**
  * Teacher's Lounge (`/app/teacher-trainings`). Off: hidden and redirected except
  * for emails on the `teacher_lounge` access list. Everyone: on for all teachers
  * (role checks unchanged). Targeted: on for listed schools only, with the same
@@ -189,10 +216,11 @@ export const TEACHER_LOUNGE_FLAG = 'teacher-lounge' as const;
 
 /**
  * Exit ticket builder v3 (docs/plans/2026-11-02-exit-ticket-builder-v3.md):
- * no attachment, four "Have the students…" activities in two groups, a
- * teacher-written prompt, optional key points instead of a right-answer
- * question, completion or understanding grading. Off: the quick builder.
- * Tickets written by either builder open in both.
+ * no attachment and no grading; "What will students do?" with four
+ * reflections (three fixed, one the teacher writes) and three checks
+ * (explain a concept, answer a question, grapple with a text or source),
+ * and a box for the correct answer when there is one. Off: the quick
+ * builder. Tickets written by either builder open in both.
  */
 export const EXIT_TICKET_BUILDER_V3_FLAG = 'exit-ticket-builder-v3' as const;
 
@@ -204,6 +232,14 @@ export const EXIT_TICKET_BUILDER_V3_FLAG = 'exit-ticket-builder-v3' as const;
  * deterministic Class read only. Stored summaries are kept either way.
  */
 export const EXIT_TICKET_CLASS_SUMMARY_FLAG = 'exit-ticket-class-summary' as const;
+
+/**
+ * My Assignments and a class's Assignments tab list assignments in sections,
+ * one per assignment type (every exit ticket together, every Daily Pages
+ * together), with the same collapsible headings the Documents page uses when
+ * it is grouped. Off: the single flat table, as before.
+ */
+export const ASSIGNMENTS_GROUPED_BY_TYPE_FLAG = 'assignments-grouped-by-type' as const;
 
 /**
  * Student document editor v2 (glass chrome, margin comments, tutor header).
@@ -337,6 +373,16 @@ export const FEATURE_FLAGS = {
     description:
       'Enforces global class-code availability and shows Generate code. Default off on demo and production. Only everyone mode is supported; targeted mode stays off because uniqueness spans all organizations.',
   },
+  [LOUNGE_COMMUNITY_FLAG]: {
+    label: "Teacher's Lounge community",
+    description:
+      "Teachers at these schools get the community board in the Teacher's Lounge: posts, replies, helpful votes, and questions for Brian. Off: the Lounge shows only the course grid and community pages return 404; posts are kept.",
+  },
+  [THESIS_ESSAY_DECKS_FLAG]: {
+    label: 'Thesis-Driven Essay slide decks',
+    description:
+      "Each Thesis-Driven Essay lesson offers its slide deck (present on YAWP!, Google Slides, PowerPoint) and lesson plan, in the assignment's Modules and in the Faculty Lounge's Thesis-Driven Essay training. Off: both pages are as before and the deck pages return 404.",
+  },
   [DEMO_FEEDBACK_FLAG]: {
     label: 'Demo feedback widget',
     description:
@@ -367,6 +413,11 @@ export const FEATURE_FLAGS = {
     description:
       "How to Teach It's \"Lesson plan\" links open Brian's Thesis-Driven Essay lessons as ready-built stacks in the teacher's own Lesson Planner (one copy per teacher per lesson). Off: the links are the lesson plan PDFs. Needs the teacher-facing copy flag and the Lesson Planner. Default off on production; on by default on demo and PR previews.",
   },
+  [HOW_TO_TEACH_IT_FLAG]: {
+    label: 'How to Teach It on assignment types',
+    description:
+      'Teachers see each module on an assignment-type page as a How to Teach It row with its lesson and tutorial links, in place of the Modules dropdown. Students keep the dropdown. Default off on production; on by default on demo and PR previews.',
+  },
   [TEACHER_LOUNGE_FLAG]: {
     label: "Teacher's Lounge",
     description:
@@ -375,12 +426,17 @@ export const FEATURE_FLAGS = {
   [EXIT_TICKET_BUILDER_V3_FLAG]: {
     label: 'Exit ticket builder v3',
     description:
-      'The simpler exit ticket form: no attachment, "Have the students…" activities (reflect or ask; explain a concept; answer a question; engage with a text or source), a prompt the teacher writes, and optional key points instead of "Is there a correct answer?". Off: the current quick builder. Tickets made with either open in both.',
+      'The simpler exit ticket form: no attachment and no grading. "What will students do?" offers What I learned, Most interesting, Still wondering, or the teacher\'s own question; or a check: explain a concept in their own words, answer a question, or grapple with a text or source, with a box for the correct answer when there is one. Off: the current quick builder. Tickets made with either open in both.',
   },
   [EXIT_TICKET_CLASS_SUMMARY_FLAG]: {
     label: 'Exit ticket class summary',
     description:
       'On an exit ticket’s Class read, teachers can ask for a summary of the responses: what the class understood, where the confusion is, whether to reteach, and a suggested opening block for tomorrow, which "Plan tomorrow from this" passes to the planner. One model call per request, only when new responses have arrived. Off: the Class read only.',
+  },
+  [ASSIGNMENTS_GROUPED_BY_TYPE_FLAG]: {
+    label: 'Assignments grouped by type',
+    description:
+      'My Assignments and each class’s Assignments tab show one collapsible section per assignment type (Exit Ticket, Daily Pages, The Thesis-Driven Essay…), with the same headings and counts as the grouped Documents page. Search, sort and delete work inside the sections. Off: one flat, paginated table. No data changes either way.',
   },
   [DOCUMENT_EDITOR_V2_FLAG]: {
     label: 'Document editor v2',

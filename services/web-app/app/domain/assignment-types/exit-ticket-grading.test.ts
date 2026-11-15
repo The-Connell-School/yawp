@@ -82,13 +82,14 @@ describe('a graded reflection', () => {
     });
   });
 
-  test('graded for quality needs the main points or a length', () => {
+  // The form shows main points and a minimum length as optional. Requiring
+  // one of them kept Create disabled with every visible field filled in.
+  test('graded for quality needs nothing the form shows as optional', () => {
     expect(
       parse({ kind: 'reflection', graded: true, gradingBasis: 'bands' })
-    ).toEqual({
-      success: false,
-      message:
-        'Add the main points of the lesson or a minimum length, so there is something to grade against.',
+    ).toMatchObject({
+      success: true,
+      config: { grading: { basis: 'bands' } },
     });
 
     expect(
@@ -135,10 +136,10 @@ describe('a graded check', () => {
     });
   });
 
-  test('without a single right answer needs what to assess', () => {
-    expect(parse({ ...SUBJECTIVE_CHECK, graded: true })).toEqual({
-      success: false,
-      message: 'Say what to assess, since there is no single right answer.',
+  test('without a single right answer, what to assess is optional', () => {
+    expect(parse({ ...SUBJECTIVE_CHECK, graded: true })).toMatchObject({
+      success: true,
+      config: { grading: { basis: 'bands' } },
     });
 
     expect(

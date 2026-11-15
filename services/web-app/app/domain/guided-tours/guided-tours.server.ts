@@ -57,7 +57,11 @@ export async function loadGuidedTours(
   userId: string,
   membership: { role: string; organization?: { id?: string; plan?: string | null } | null },
   request: Request
-): Promise<{ finishedTourIds: TourId[]; storageScope: string } | null> {
+): Promise<{
+  finishedTourIds: TourId[];
+  storageScope: string;
+  waitingForApproval: boolean;
+} | null> {
   const plan = membership.organization?.plan;
   // Only free classroom teachers can see tours; skip the flag read otherwise.
   if (
@@ -75,7 +79,26 @@ export async function loadGuidedTours(
   const sessionId = session.get('sessionId');
   if (typeof sessionId !== 'string') return null;
   const storageScope = createHash('sha256').update(`${userId}:${sessionId}`).digest('hex');
-  return { finishedTourIds: await loadFinishedTourIds(userId), storageScope };
+  return {
+    finishedTourIds: await loadFinishedTourIds(userId),
+    storageScope,
+    waitingForApproval: await isWaitingForApproval(userId),
+  };
+}
+
+/**
+ * Sent to the administrator and not yet approved: the teacher browses a locked
+ * dashboard and can record only the `waiting-preview` tour. Same statuses as
+ * the locked teaching-access banner and the tour API's waiting branch.
+ */
+async function isWaitingForApproval(userId: string) {
+  const application = await prisma.freeTierApplication.findFirst({
+    where: { userId },
+    select: { status: true },
+  });
+  return (
+    application != null && ['SENT', 'MANUAL_REVIEW'].includes(application.status)
+  );
 }
 
 

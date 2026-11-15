@@ -1,10 +1,16 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { createDeployedAssignment } from '../db-helpers';
 import {
   clickClassNewAssignment,
   expectTypeAbsentInPicker,
   expectTypePresentInPicker,
 } from '../helpers/assignment-builder-v3-page';
+import {
+  clickClassAssignmentRow,
+  expandAssignmentTypeSections,
+  openClassAssignmentsTab,
+} from '../test-helpers';
 
 test.describe.serial('Admin assignment type archive', () => {
   test.setTimeout(60_000);
@@ -15,15 +21,49 @@ test.describe.serial('Admin assignment type archive', () => {
     signIn,
   }) => {
     const prisma = createE2EPrismaClient();
+    const suffix = Date.now();
+    const archiveTypeTitle = `Archive smoke ${suffix}`;
+    let archiveTypeId: string | undefined;
+    let archiveAssignmentId: string | undefined;
 
     try {
-      await prisma.assignmentType.update({
-        where: { id: e2eContext.assignmentTypeId },
-        data: { archivedAt: null },
+      const archiveType = await prisma.assignmentType.create({
+        data: {
+          title: archiveTypeTitle,
+          description: 'Disposable type for archive smoke.',
+          position: 9500,
+          ownerOrgId: e2eContext.organizationId,
+          organizationAssignments: {
+            create: { organizationId: e2eContext.organizationId },
+          },
+          assignmentModules: {
+            create: {
+              title: 'Archive module',
+              position: 1,
+              instructions: {
+                create: {
+                  title: 'Write',
+                  prompt: 'Archive smoke prompt',
+                  position: 1,
+                },
+              },
+            },
+          },
+        },
+        select: { id: true },
       });
+      archiveTypeId = archiveType.id;
+      const { assignment } = await createDeployedAssignment({
+        prisma,
+        classId: e2eContext.classId,
+        assignmentTypeId: archiveType.id,
+        title: `Archive smoke assignment ${suffix}`,
+        prompt: 'Archive smoke',
+      });
+      archiveAssignmentId = assignment.id;
 
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
-      await page.goto(`/app/admin/assignment-types/${e2eContext.assignmentTypeId}`);
+      await page.goto(`/app/admin/assignment-types/${archiveType.id}`);
       await expect(
         page.getByRole('heading', { name: 'Edit assignment type' })
       ).toBeVisible();
@@ -33,39 +73,44 @@ test.describe.serial('Admin assignment type archive', () => {
       await page.waitForURL('**/app/admin/assignments');
 
       const archived = await prisma.assignmentType.findUnique({
-        where: { id: e2eContext.assignmentTypeId },
-        select: { id: true, archivedAt: true },
+        where: { id: archiveType.id },
+        select: { archivedAt: true },
       });
-      expect(archived?.id).toBe(e2eContext.assignmentTypeId);
       expect(archived?.archivedAt).toBeInstanceOf(Date);
 
-      await page.goto(`/app/admin/assignment-types/${e2eContext.assignmentTypeId}`);
+      await page.goto(`/app/admin/assignment-types/${archiveType.id}`);
       await expect(page.getByRole('button', { name: 'Restore' })).toBeVisible();
 
       await page.context().clearCookies();
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
-      await expect(
-        page.getByRole('tab', { name: /assignments/i })
-      ).toHaveAttribute('data-state', 'active');
-      // Existing assignments keep their archived type label...
-      await expect(page.getByText('E2E Class Assignment')).toBeVisible();
-      await expect(page.getByText('E2E Course').first()).toBeVisible();
+      await clickClassAssignmentRow(page, e2eContext.assignmentId, {
+        title: 'E2E Class Assignment',
+        classId: e2eContext.classId,
+      });
+      await expect(page.getByTestId('assignment-detail-page')).toBeVisible();
+      await page.goBack();
+      await clickClassAssignmentRow(page, archiveAssignmentId, {
+        title: `Archive smoke assignment ${suffix}`,
+        classId: e2eContext.classId,
+      });
+      await expect(page.getByTestId('assignment-detail-page')).toBeVisible();
+      await page.goBack();
 
       await clickClassNewAssignment(page);
-      // ...but the archived type no longer appears as a selectable option.
-      await expectTypeAbsentInPicker(page, 'E2E Course');
+      await expectTypeAbsentInPicker(page, archiveTypeTitle);
+      await expectTypePresentInPicker(page, 'E2E Course');
       await page.goBack();
       await expect(page).toHaveURL(/tab=assignments/);
 
       await page.context().clearCookies();
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
-      await page.goto(`/app/admin/assignment-types/${e2eContext.assignmentTypeId}`);
+      await page.goto(`/app/admin/assignment-types/${archiveType.id}`);
       await page.getByRole('button', { name: 'Restore' }).click();
       await expect(page.getByRole('button', { name: 'Restore' })).toHaveCount(0);
 
       const restored = await prisma.assignmentType.findUnique({
-        where: { id: e2eContext.assignmentTypeId },
+        where: { id: archiveType.id },
         select: { archivedAt: true },
       });
       expect(restored?.archivedAt).toBeNull();
@@ -73,13 +118,21 @@ test.describe.serial('Admin assignment type archive', () => {
       await page.context().clearCookies();
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
+      await openClassAssignmentsTab(page);
       await clickClassNewAssignment(page);
-      await expectTypePresentInPicker(page, 'E2E Course');
+      await expectTypePresentInPicker(page, archiveTypeTitle);
     } finally {
-      await prisma.assignmentType.update({
-        where: { id: e2eContext.assignmentTypeId },
-        data: { archivedAt: null },
-      });
+      if (archiveAssignmentId) {
+        await prisma.classAssignment.deleteMany({
+          where: { assignmentId: archiveAssignmentId },
+        });
+        await prisma.assignment.deleteMany({
+          where: { id: archiveAssignmentId },
+        });
+      }
+      if (archiveTypeId) {
+        await prisma.assignmentType.deleteMany({ where: { id: archiveTypeId } });
+      }
       await prisma.$disconnect();
     }
   });

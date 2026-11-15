@@ -36,7 +36,21 @@ for (const width of [1280, 390]) test(`teacher packet, content, copy recovery an
   await expect(page).toHaveURL(new RegExp(`${packetUrl}$`));
   const packet = page.getByTestId('pitch-packet');
   await expect(packet.getByRole('heading', { name: 'Free classroom trial pitch packet', exact: true })).toBeVisible();
-  for (const fragment of ['1 teacher seat', '35 student seats', '1 active class', 'Class Starter', 'Prewriting', 'Thesis Statement', 'Evaluation checklist', 'Submitted writing: 3', 'all years', 'not evidence of learning gains']) await expect(packet).toContainText(fragment);
+  for (const fragment of [
+    '1 teacher seat',
+    '35 student seats',
+    '1 active class',
+    'Class Starter',
+    'Exit Ticket',
+    '5-Paragraph Essay',
+    'Pre-writing',
+    'Thesis Builder',
+    'Evaluation checklist',
+    'Submitted writing: 3',
+    'all years',
+    'not evidence of learning gains',
+  ])
+    await expect(packet).toContainText(fragment);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await capture(page, 'packet');
   const text = await page.getByLabel('Plain-text packet').inputValue();
