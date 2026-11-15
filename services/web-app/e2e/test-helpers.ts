@@ -446,7 +446,7 @@ async function findMyAssignmentRow(
           .filter({ hasText: options.title ?? '' })
           .first();
   const forward = page.getByRole('button', { name: 'go forward' });
-  for (let pageIndex = 0; pageIndex < 5; pageIndex++) {
+  for (let pageIndex = 0; pageIndex < 25; pageIndex++) {
     if (await target.isVisible().catch(() => false)) {
       return target;
     }
@@ -466,9 +466,12 @@ export async function fillMyAssignmentsSearch(
 ) {
   if (options?.assignmentId) {
     await page.goto(
-      `/app/assignments?highlightAssignment=${options.assignmentId}`
+      `/app/assignments?highlightAssignment=${options.assignmentId}`,
+      { waitUntil: 'domcontentloaded' }
     );
-    await page.waitForLoadState('networkidle');
+    await expect(
+      page.getByRole('table', { name: /assignments/i })
+    ).toBeVisible({ timeout: 15_000 });
   }
   const trimmed = query.trim();
   const visibilityTarget = options?.assignmentId
@@ -499,6 +502,14 @@ export async function fillMyAssignmentsSearch(
     title: trimmed,
   });
   await expect(located).toBeVisible({ timeout: 30_000 });
+}
+
+/** Class documents table search (flat list and grouped views). */
+export async function fillClassDocumentsSearch(page: Page, query: string) {
+  const search = page.getByRole('textbox', { name: /search class documents/i });
+  await expect(search).toBeVisible({ timeout: 15_000 });
+  await search.fill(query);
+  await expect(search).toHaveValue(query);
 }
 
 /** Class documents status chip (FilterPills may scroll horizontally). */

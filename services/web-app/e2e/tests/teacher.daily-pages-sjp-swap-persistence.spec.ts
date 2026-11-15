@@ -1,4 +1,5 @@
 import { test, expect } from '../test-setup';
+import { fillClassDocumentsSearch } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
 import type { E2EContext } from '../seed-e2e';
@@ -200,10 +201,10 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
     await expect(classDocuments).toBeVisible({ timeout: 15_000 });
     await expect
       .poll(
-        async () =>
-          classDocuments
-            .getByText(seeded.documentTitle, { exact: true })
-            .count(),
+        async () => {
+          await fillClassDocumentsSearch(page, seeded.documentTitle);
+          return classDocuments.getByText(seeded.documentTitle, { exact: true }).count();
+        },
         { timeout: 60_000 }
       )
       .toBeGreaterThan(0);

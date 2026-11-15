@@ -83,6 +83,7 @@ async function fixture(
         adminEmail: 'principal@example.test',
         emailCopyVersionHash: 'local-locked-preview',
         firstSentAt: new Date('2026-10-14T15:00:00Z'),
+        status: 'PENDING',
       },
     });
   }
@@ -1024,8 +1025,15 @@ test('locked assignments tab shows sample rows and locked documents pill', async
   await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
   await openClassAssignmentsTab(page);
   await expandAssignmentTypeSections(page);
+  await page.getByTestId('class-assignments-search').fill('Opening');
+  await expect
+    .poll(
+      async () => page.getByText('Opening Lines').count(),
+      { timeout: 60_000 }
+    )
+    .toBeGreaterThan(0);
   await expect(page.getByText('Sample · Not sent').first()).toBeVisible({
-    timeout: 30_000,
+    timeout: 15_000,
   });
   const documentsPill = page.getByTestId(/assignment-documents-/).first();
   await expect(documentsPill).toBeVisible();
