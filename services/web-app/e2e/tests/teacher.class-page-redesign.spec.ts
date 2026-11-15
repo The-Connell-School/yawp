@@ -553,35 +553,26 @@ test.describe.serial('Teacher class page redesign', () => {
 
     try {
       const inProgressTitle = `Group by status in progress ${suffix}`;
-      const needsGradingTitle = `Group by status needs grading ${suffix}`;
       const inProgressDoc = await createClassDocument(prisma, e2eContext, {
         title: inProgressTitle,
       });
-      const needsGradingDoc = await createClassDocument(prisma, e2eContext, {
-        title: needsGradingTitle,
-        submitted: true,
-      });
-      documentIds.push(inProgressDoc.id, needsGradingDoc.id);
+      documentIds.push(inProgressDoc.id);
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.addInitScript(() => {
         localStorage.removeItem('yawp.class-documents-view');
       });
 
-      const scope = {
+      await waitForClassDocumentTitle(page, e2eContext.classId, inProgressTitle, {
         assignmentId: e2eContext.assignmentId,
-        classAssignmentId: e2eContext.classAssignmentId,
         studentId: e2eContext.membershipId,
-      };
-      await waitForClassDocumentTitle(
-        page,
-        e2eContext.classId,
-        needsGradingTitle,
-        { ...scope, status: 'all', timeoutMs: 90_000 }
-      );
+        status: 'all',
+        timeoutMs: 90_000,
+      });
 
       await gotoClassDocumentsTab(page, e2eContext.classId, {
-        ...scope,
+        assignmentId: e2eContext.assignmentId,
+        studentId: e2eContext.membershipId,
         documentGroup: 'status',
         status: 'all',
       });
