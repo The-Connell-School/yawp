@@ -22,7 +22,7 @@ export function AssignmentPromptBanner({
 }) {
   const [isCollapsed, setIsCollapsed] = useLocalStorage(
     `assignmentPromptCollapsed-${docId}`,
-    false
+    true
   );
 
   if (!assignment?.prompt?.trim()) return null;

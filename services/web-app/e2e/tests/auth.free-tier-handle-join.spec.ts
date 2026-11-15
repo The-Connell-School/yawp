@@ -134,7 +134,9 @@ test.describe('Free-tier handle student', () => {
       await helpers.typeInEditor('Handle student draft for grading.');
       await helpers.waitForSaved();
       await page.getByTestId('document-submit-button').click();
-      await expect(page.getByRole('dialog')).toBeVisible();
+      await expect(
+        page.getByTestId('document-submit-confirm-popover')
+      ).toBeVisible();
       await page.getByTestId('document-finalize-submit').click();
       await expect(page.getByText('Submitted').first()).toBeVisible({
         timeout: 15000,

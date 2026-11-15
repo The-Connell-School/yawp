@@ -5,10 +5,11 @@ import TextAlign from '@tiptap/extension-text-align';
 import TextStyle from '@tiptap/extension-text-style';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EditorChromeProvider } from './editor-chrome-context';
 import { useCommentsSelection } from '../comments/selection-context';
-import { Bar } from './editor-bar';
+import { Bar, beginCommentDraftFromEditor } from './editor-bar';
+import type { PageWidthMode } from './toolbar-controls';
 import {
   AssignmentPromptBanner,
   type AssignmentPrompt,
@@ -29,6 +30,7 @@ import { usePmTripwire } from './use-pm-tripwire';
 import { useEditorSync, type EditorBridge } from './use-editor-sync';
 import { usePasteAlert } from './use-paste-alert';
 import type { SyncStatus } from '~/utils/sync-service';
+import { cn } from '~/utils/misc';
 
 const baseExtensions = [
   TabIndent,
@@ -61,14 +63,19 @@ type Props = {
   initialHtml: string;
   initialRevision: number;
   isEditable: boolean;
+  teacherCommenting?: boolean;
   canUploadImages?: boolean;
   onBridgeReady: (bridge: EditorBridge | null) => void;
   onSyncStatusChange?: (status: SyncStatus) => void;
   onSubmittableContentChange?: (submittable: boolean) => void;
   onEditorDomReady?: (root: HTMLElement | null) => void;
+  onCommentDraft?: (draft: { id: string; excerpt: string }) => void;
   onCommentCreated?: (comment: unknown) => void;
   assignment?: AssignmentPrompt | null;
   marginComments?: React.ReactNode;
+  pageWidth?: PageWidthMode;
+  onPageWidthChange?: (mode: PageWidthMode) => void;
+  submissionViewBanner?: React.ReactNode;
 };
 
 export function Editor({
@@ -76,14 +83,19 @@ export function Editor({
   initialHtml,
   initialRevision,
   isEditable,
+  teacherCommenting = false,
   canUploadImages = false,
   onBridgeReady,
   onSyncStatusChange,
   onSubmittableContentChange,
   onEditorDomReady,
+  onCommentDraft,
   onCommentCreated,
   assignment,
   marginComments,
+  pageWidth = 'fit',
+  onPageWidthChange,
+  submissionViewBanner,
 }: Props) {
   const [imageStatus, setImageStatus] = useState<DocumentImageStatus>({ state: 'idle' });
   const [contentRoot, setContentRoot] = useState<HTMLElement | null>(null);
@@ -121,23 +133,42 @@ export function Editor({
     [docId, canUploadImages]
   );
 
+  const allowCommentMarks = isEditable || teacherCommenting;
   const editor = useEditor({
     extensions,
     content: initialHtml,
     immediatelyRender: false,
-    editable: isEditable,
+    editable: allowCommentMarks,
     editorProps: {
       attributes: {
         'aria-label': 'Student document editor',
+        ...(teacherCommenting
+          ? { class: 'doc-editor-prosemirror-teacher' }
+          : {}),
       },
+      handleTextInput: () => !isEditable && teacherCommenting,
+      handlePaste: () => !isEditable && teacherCommenting,
+      handleDrop: () => !isEditable && teacherCommenting,
     },
   });
+
+  useEffect(() => {
+    if (!editor || !teacherCommenting) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey && event.altKey && event.key.toLowerCase() === 'm') {
+        event.preventDefault();
+        beginCommentDraftFromEditor(editor, onCommentDraft);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [editor, teacherCommenting, onCommentDraft]);
 
   // Reflect prop changes to the editor's editable state
   useEffect(() => {
     if (!editor) return;
-    editor.setEditable(isEditable);
-  }, [editor, isEditable]);
+    editor.setEditable(isEditable || teacherCommenting);
+  }, [editor, isEditable, teacherCommenting]);
 
   // Expose editor for E2E test helpers (flush domObserver after typing)
   useEffect(() => {
@@ -241,8 +272,8 @@ export function Editor({
             .map(
               (id) =>
                 `.comment-mark[data-comment-id="${CSS.escape(id)}"] {` +
-                ` background-color: #fde047;` +
-                ` border-bottom: 2px solid #ca8a04;` +
+                ` background-color: hsl(48 95% 82%);` +
+                ` border-bottom: 2px solid hsl(40 90% 55%);` +
                 ` box-shadow: 0 2px 6px -1px rgba(202, 138, 4, 0.35);` +
                 ` }`
             )
@@ -261,10 +292,14 @@ export function Editor({
             editor={editor}
             documentId={docId}
             isEditable={isEditable}
+            teacherCommenting={teacherCommenting}
             canUploadImages={canUploadImages}
-            onCommentCreated={onCommentCreated}
+            pageWidth={pageWidth}
+            onPageWidthChange={onPageWidthChange ?? (() => {})}
+            onCommentDraft={onCommentDraft}
           />
         ) : null}
+        {submissionViewBanner}
         <AssignmentPromptBanner docId={docId} assignment={assignment} />
         {imageStatus.state !== 'idle' ? (
           <div
@@ -290,7 +325,12 @@ export function Editor({
           onMouseDown={focusEditorFromPaneClick}
         >
           <article
-            className="doc-editor-page cursor-text"
+            className={cn(
+              'doc-editor-page cursor-text',
+              pageWidth === 'fit' && 'doc-editor-page--fit',
+              pageWidth === 'fixed' && 'doc-editor-page--fixed',
+              teacherCommenting && 'doc-editor-page--teacher-commenting'
+            )}
             data-testid="document-editor-surface"
           >
             <EditorContent
