@@ -48,6 +48,7 @@ import { getMembershipId } from './cookies/membership-id.server.ts';
 import { LocalDevEnvironmentBar } from './components/local-dev-environment-bar.tsx';
 import { DevPanelMount } from './dev-panel/dev-panel-entry.tsx';
 import { consumeDevPanelJumpToast } from './dev-panel/dev-panel-jump-toast';
+import { scheduleAfterHydration } from './utils/schedule-after-hydration';
 import { devPanelRestoreInlineScript } from './dev-panel/dev-panel-restore-inline.ts';
 import { formatDevPanelBuildFooter } from './dev-panel/dev-panel-build-footer.ts';
 import {
@@ -453,7 +454,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
 
   useEffect(() => {
     if (!data.devPanelEnabled || data.internalImpersonation) return;
-    consumeDevPanelJumpToast();
+    scheduleAfterHydration(() => consumeDevPanelJumpToast());
   }, [data.devPanelEnabled, data.internalImpersonation, location.pathname, location.search]);
 
   // Copy/cut provenance for the paste alert. It has to live at the root,

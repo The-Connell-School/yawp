@@ -37,7 +37,6 @@ import { DevPanelOrgPicker } from './dev-panel-org-picker';
 import { createDevPanelFeedbackContext } from './dev-panel-feedback-context';
 import { DevPanelGiveFeedbackInline } from './dev-panel-give-feedback-inline';
 import { DevPanelFreeTierInline } from './dev-panel-free-tier-inline';
-import { consumeDevPanelJumpToast } from './dev-panel-jump-toast';
 import { DevPanelClassSimulationInline } from './dev-panel-class-simulation-inline';
 import { DevPanelMobileBottomSheet } from './dev-panel-mobile-bottom-sheet';
 
@@ -210,10 +209,6 @@ export function DevPanelShell() {
     : 'Signed out';
   const feedbackContext = useRef(createDevPanelFeedbackContext());
   const buildFooterLabel = rootData?.devPanelBuildFooter ?? '';
-
-  useEffect(() => {
-    consumeDevPanelJumpToast();
-  }, []);
 
   useEffect(() => {
     if (!state.open) return;
