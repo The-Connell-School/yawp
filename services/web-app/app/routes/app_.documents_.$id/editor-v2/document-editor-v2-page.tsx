@@ -982,9 +982,10 @@ export function DocumentEditorV2Page() {
                   onBridgeReady={handleEditorBridgeReady}
                   onSyncStatusChange={setSyncStatus}
                   onSubmittableContentChange={handleSubmittableContentChange}
-                  onCommentDraft={(draft) =>
-                    commentsState.setPendingDraft(draft)
-                  }
+                  onCommentDraft={(draft) => {
+                    commentsState.setPendingDraft(draft);
+                    if (!isMobile) setDesktopCommentsOpen(true);
+                  }}
                   onCommentCreated={(c) => commentsState.addComment(c as any)}
                   marginComments={
                     !isMobile &&
