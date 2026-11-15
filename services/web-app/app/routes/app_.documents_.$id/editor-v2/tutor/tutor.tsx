@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDeferredLocalStorage } from '../hooks/use-deferred-local-storage';
-import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
+import { scheduleAfterHydration } from '~/utils/schedule-after-hydration';
 import { Button } from '~/components/ui/button';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';

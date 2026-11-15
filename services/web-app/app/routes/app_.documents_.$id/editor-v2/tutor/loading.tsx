@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { cn } from '~/utils/misc';
-import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
+import { scheduleAfterHydration } from '~/utils/schedule-after-hydration';
 
 type LoadingProps = {
   label?: string;

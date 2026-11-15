@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
+import { scheduleAfterHydration } from '~/utils/schedule-after-hydration';
 
 function readStoredValue<T>(key: string, initialValue: T): T {
   try {

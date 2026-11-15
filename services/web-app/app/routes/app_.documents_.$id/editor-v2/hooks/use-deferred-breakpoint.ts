@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
+import { scheduleAfterHydration } from '~/utils/schedule-after-hydration';
 
 export type DeferredBreakpoint =
   | 'base'

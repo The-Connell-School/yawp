@@ -1,6 +1,7 @@
 import { useNavigation } from 'react-router';
 import * as React from 'react';
 import { useDebounce } from '~/hooks/useDebounce';
+import { scheduleAfterHydration } from '~/utils/schedule-after-hydration';
 import { cn } from '~/utils/misc';
 
 function GlobalLoading() {
@@ -12,11 +13,18 @@ function GlobalLoading() {
 
   React.useEffect(() => {
     if (!ref.current) return;
-    if (active) setAnimationComplete(false);
+    if (active) {
+      scheduleAfterHydration(() => setAnimationComplete(false));
+      return;
+    }
 
     Promise.allSettled(
       ref.current.getAnimations().map(({ finished }) => finished)
-    ).then(() => !active && setAnimationComplete(true));
+    ).then(() => {
+      if (!active) {
+        scheduleAfterHydration(() => setAnimationComplete(true));
+      }
+    });
   }, [active]);
 
   return (

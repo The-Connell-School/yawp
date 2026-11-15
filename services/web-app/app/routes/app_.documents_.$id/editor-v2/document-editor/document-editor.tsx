@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
+import { scheduleAfterHydration } from '~/utils/schedule-after-hydration';
 import { documentStore } from '~/utils/document-store';
 import type { SyncStatus } from '~/utils/sync-service';
 import { Editor } from './editor';

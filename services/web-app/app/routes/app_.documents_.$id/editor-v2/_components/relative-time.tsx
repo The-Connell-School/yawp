@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { timeAgo } from '~/utils/timeAgo';
-import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
+import { scheduleAfterHydration } from '~/utils/schedule-after-hydration';
 
 type Props = {
   value: Date | string;

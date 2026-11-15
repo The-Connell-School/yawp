@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
+import { scheduleAfterHydration } from '~/utils/schedule-after-hydration';
 
 const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
 

@@ -63,7 +63,7 @@ import { useDeferredLocalStorage } from './hooks/use-deferred-local-storage';
 import {
   scheduleAfterHydration,
   useAfterHydration,
-} from './utils/schedule-after-hydration';
+} from '~/utils/schedule-after-hydration';
 import { useUser } from '~/hooks/useUser';
 import { Comments } from './comments';
 import { MarginCommentsRail } from './comments/margin-comments-rail';

@@ -2,7 +2,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '~/components/ui/button';
 import { useDeferredLocalStorage } from '../hooks/use-deferred-local-storage';
-import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
+import { scheduleAfterHydration } from '~/utils/schedule-after-hydration';
 import { AssignmentPromptAttachment } from '~/components/assignments/assignment-prompt-attachment';
 
 const PROMPT_EXPANDED_MAX_HEIGHT = 'calc(50vh - 28px)';

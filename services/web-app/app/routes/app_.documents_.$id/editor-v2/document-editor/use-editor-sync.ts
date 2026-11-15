@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
+import { scheduleAfterHydration } from '~/utils/schedule-after-hydration';
 import type { Editor } from '@tiptap/core';
 import { removeCommentMarkFromEditor } from './comment-mark-editor';
 import { documentStore } from '~/utils/document-store';

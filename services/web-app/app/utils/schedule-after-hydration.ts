@@ -3,17 +3,11 @@ import { startTransition, useSyncExternalStore } from 'react';
 /** Wait for the SSR shell to finish hydrating before scheduling a state update. */
 export function scheduleAfterHydration(callback: () => void) {
   if (typeof window === 'undefined') return;
-  const run = () =>
+  requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        startTransition(callback);
-      });
+      startTransition(callback);
     });
-  if (document.readyState === 'complete') {
-    run();
-    return;
-  }
-  window.addEventListener('load', () => run(), { once: true });
+  });
 }
 
 let hydrationComplete = false;
