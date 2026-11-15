@@ -91,8 +91,7 @@ export function DocumentMarginComments({
       className="doc-editor-margin hidden lg:block"
     >
       {commentIds.map((id) => {
-        const top = stackedTops[id] ?? anchorTops[id];
-        if (top === undefined) return null;
+        const top = stackedTops[id] ?? anchorTops[id] ?? 8;
         return (
           <div
             key={id}
