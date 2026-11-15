@@ -93,7 +93,9 @@ test.describe('Teacher class documents lifecycle', () => {
         localStorage.removeItem('yawp.class-documents-view');
         localStorage.removeItem('yawp.student-work-view');
       });
-      await gotoClassDocumentsTab(page, e2eContext.classId);
+      await gotoClassDocumentsTab(page, e2eContext.classId, {
+        q: `lifecycle ${suffix}`,
+      });
       await expectClassDocumentsTable(page);
       const table = page.getByRole('table', { name: /class documents/i });
       await expect(
@@ -469,7 +471,9 @@ test.describe.serial('Teacher class page redesign', () => {
       await submittedRow.click();
       await page.waitForURL(/\/app\/submissions\//);
 
-      await gotoClassDocumentsTab(page, e2eContext.classId);
+      await gotoClassDocumentsTab(page, e2eContext.classId, {
+        q: inProgressTitle.toLowerCase(),
+      });
       const inProgressRow = page
         .getByRole('row', {
           name: new RegExp(inProgressTitle),

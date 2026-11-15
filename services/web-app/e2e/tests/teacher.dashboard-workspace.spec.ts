@@ -228,6 +228,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.addInitScript(() => {
         localStorage.removeItem('yawp.student-work-view');
+        localStorage.removeItem('yawp.class-documents-view');
       });
       await page.goto('/app');
       await page.waitForLoadState('networkidle');

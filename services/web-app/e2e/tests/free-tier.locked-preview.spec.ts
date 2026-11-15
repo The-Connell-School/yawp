@@ -1022,14 +1022,12 @@ test('locked assignments tab blocks send and create until approval', async ({
   const create = page.getByRole('button', { name: 'New Assignment' });
   await expect(create).toBeVisible();
   await create.click();
-  const sheet = page.getByRole('dialog');
-  await expect(sheet).toBeVisible();
+  // Narrow viewports use a tap tooltip instead of opening the approval sheet.
   await expect(
-    sheet.getByRole('heading', { name: 'Unlocks after approval' })
-  ).toBeVisible();
-  await expect(
-    page.getByText(/Creating assignments, adding students, and sending invites/)
-  ).toBeVisible();
+    page.getByRole('tooltip', {
+      name: /Creating assignments is turned off in this preview/i,
+    })
+  ).toBeVisible({ timeout: 15_000 });
 });
 
 test('full-page assignment form keeps draft when create stays teaching-locked', async ({

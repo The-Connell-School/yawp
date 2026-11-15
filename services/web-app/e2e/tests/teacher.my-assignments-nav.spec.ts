@@ -20,7 +20,7 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     ).toBeVisible();
     // Pagination is 20 per page, and other shards share the E2E database, so
     // the seeded title may sit off the first page unless we narrow the list.
-    await fillMyAssignmentsSearch(page, '', {
+    await fillMyAssignmentsSearch(page, 'E2E Class Assignment', {
       assignmentId: e2eContext.assignmentId,
       classId: e2eContext.classId,
       allowDetailFallback: false,

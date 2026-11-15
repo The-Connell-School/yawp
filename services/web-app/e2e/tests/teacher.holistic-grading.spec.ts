@@ -189,7 +189,9 @@ test.describe.serial('holistic Cristo Rey points-only grading', () => {
   }, testInfo) => {
     test.setTimeout(120_000);
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    await gotoClassDocumentsTab(page, holisticClassId, { status: 'released' });
+    await gotoClassDocumentsTab(page, holisticClassId, {
+      q: holisticAssignmentTitle.toLowerCase(),
+    });
     const documentsTable = page.getByRole('table', { name: /class documents/i });
     await expectClassDocumentsTable(page);
     await clickClassDocumentsStatusTab(page, /^Released/i);

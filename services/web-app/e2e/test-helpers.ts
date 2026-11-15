@@ -418,16 +418,44 @@ async function selectMyAssignmentsTypePill(
   await expect(pill).toHaveAttribute('aria-selected', 'true');
 }
 
-async function setMyAssignmentsSearchQuery(page: Page, query: string) {
+async function ensureMyAssignmentsFilterOpen(page: Page) {
   const filter = page.getByTestId('my-assignments-filter');
-  await filter.click();
+  if ((await filter.getAttribute('aria-expanded')) !== 'true') {
+    await filter.click();
+  }
+  await expect(page.getByTestId('my-assignments-search')).toBeVisible({
+    timeout: 15_000,
+  });
+}
+
+async function setMyAssignmentsClassFilter(
+  page: Page,
+  classOptionLabel: string | RegExp
+) {
+  await ensureMyAssignmentsFilterOpen(page);
+  const classTrigger = page
+    .getByText('Class', { exact: true })
+    .locator('..')
+    .getByRole('button')
+    .first();
+  await classTrigger.click();
+  const option = page.getByRole('option', { name: classOptionLabel }).first();
+  await option.scrollIntoViewIfNeeded();
+  await option.click();
+  await page.keyboard.press('Escape');
+}
+
+async function setMyAssignmentsSearchQuery(page: Page, query: string) {
+  await ensureMyAssignmentsFilterOpen(page);
   const search = page.getByTestId('my-assignments-search');
-  await expect(search).toBeVisible({ timeout: 15_000 });
   await search.fill(query);
   await expect(search).toHaveValue(query);
   // Filtering is live while the popover stays open; avoid re-toggling Filter,
   // which races closed on CI and hides the search field mid-assertion.
 }
+
+/** Default seeded E2E class label (Grade 9th · Period 1st). */
+export const E2E_SEEDED_CLASS_LABEL = /Grade 9th.*Period 1st/i;
 
 async function findMyAssignmentRow(
   page: Page,
@@ -462,11 +490,14 @@ export async function fillMyAssignmentsSearch(
     assignmentId?: string;
     assignmentTypeTitle?: string;
     classId?: string;
+    /** Visible class label in the My Assignments class multiselect. */
+    classLabel?: string | RegExp;
     /** When false, keep polling the list instead of opening assignment detail. */
     allowDetailFallback?: boolean;
   }
 ) {
   const trimmed = query.trim();
+  const classLabel = options?.classLabel ?? E2E_SEEDED_CLASS_LABEL;
 
   if (options?.assignmentId) {
     await page.goto(
@@ -479,6 +510,9 @@ export async function fillMyAssignmentsSearch(
     await expandAssignmentTypeSections(page);
     if (options.assignmentTypeTitle) {
       await selectMyAssignmentsTypePill(page, options.assignmentTypeTitle);
+    }
+    if (options?.classId) {
+      await setMyAssignmentsClassFilter(page, classLabel);
     }
     if (trimmed) {
       await setMyAssignmentsSearchQuery(page, query);
@@ -503,6 +537,9 @@ export async function fillMyAssignmentsSearch(
   });
   if (options?.assignmentTypeTitle) {
     await selectMyAssignmentsTypePill(page, options.assignmentTypeTitle);
+  }
+  if (options?.classId) {
+    await setMyAssignmentsClassFilter(page, classLabel);
   }
   if (trimmed) {
     await setMyAssignmentsSearchQuery(page, query);
@@ -536,9 +573,47 @@ export async function expectClassDocumentsTable(page: Page) {
   ).toBeVisible({ timeout: 30_000 });
 }
 
-/** Filter popover search — prefer this over deep-link `q` when other rows must stay visible. */
-export async function filterClassDocumentsByTitle(page: Page, title: string) {
+export async function expectClassDocumentsTitleVisible(
+  page: Page,
+  title: string,
+  timeoutMs = 60_000
+) {
+  const table = page.getByRole('table', { name: /class documents/i });
+  await expect(table).toBeVisible({ timeout: 30_000 });
+  await expect(table.getByText(title, { exact: true })).toBeVisible({
+    timeout: timeoutMs,
+  });
+}
+
+/** Deep-link search is more reliable than the filter popover on shared CI databases. */
+export async function filterClassDocumentsByTitle(
+  page: Page,
+  title: string,
+  options?: { usePopover?: boolean }
+) {
+  const normalized = title.trim().toLowerCase();
+  if (options?.usePopover) {
+    await fillTeacherDocumentWorkSearch(page, normalized);
+    return;
+  }
+  const url = new URL(page.url());
+  url.searchParams.set('tab', 'documents');
+  url.searchParams.set('q', normalized);
+  if (!url.searchParams.has('documentGroup')) {
+    url.searchParams.set('documentGroup', 'none');
+  }
+  await page.goto(`${url.pathname}?${url.searchParams.toString()}`);
+  await openClassDocumentsTab(page);
+  await expectClassDocumentsTitleVisible(page, title.trim());
+}
+
+/** Filter popover search — use when URL `q` would hide rows the spec still needs visible. */
+export async function filterClassDocumentsByTitleInPopover(
+  page: Page,
+  title: string
+) {
   await fillTeacherDocumentWorkSearch(page, title.trim().toLowerCase());
+  await expectClassDocumentsTitleVisible(page, title.trim());
 }
 
 /** Class detail documents tab (header tabs include counts in the label). */

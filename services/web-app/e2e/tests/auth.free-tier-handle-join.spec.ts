@@ -155,6 +155,7 @@ test.describe('Free-tier handle student', () => {
 
       await gotoClassDocumentsTab(teacherPage, klass.id, {
         status: 'needs-grading',
+        q: displayName.toLowerCase(),
       });
       await expect(teacherPage.getByText(displayName)).toBeVisible({
         timeout: 60_000,

@@ -98,7 +98,9 @@ test.describe.serial('Exit tickets', () => {
   }) => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app/assignments');
-    await fillMyAssignmentsSearch(page, 'Exit ticket: erosion');
+    await fillMyAssignmentsSearch(page, 'Exit ticket: erosion', {
+      classId: e2eContext.classId,
+    });
 
     // Editing must not quietly turn a specific exit ticket back into the
     // generic one, which is what a form that reset to Basic would do.
