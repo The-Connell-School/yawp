@@ -596,6 +596,15 @@
   box-shadow: 0 0 0 1px rgba(31, 53, 50, 0.06);
 }
 
+.doc-editor-comment-resolve {
+  opacity: 1;
+}
+
+.doc-editor-comment-resolve:focus-visible {
+  outline: 2px solid hsl(210 75% 49%);
+  outline-offset: 2px;
+}
+
 .doc-editor-view-banner {
   display: flex;
   flex-wrap: wrap;

@@ -32,6 +32,7 @@ const hydratedBridge: EditorBridge = {
     text: 'newer local draft',
   }),
   saveNow: mock(async () => 'synced' as const),
+  removeCommentMark: () => false,
 };
 
 mock.module('./editor', () => ({

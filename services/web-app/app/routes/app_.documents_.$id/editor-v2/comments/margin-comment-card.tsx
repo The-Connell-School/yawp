@@ -12,7 +12,7 @@ import {
 } from '~/components/ui/dropdown-menu';
 import { useUser } from '~/hooks/useUser';
 import { cn } from '~/utils/misc';
-import { timeAgo } from '~/utils/timeAgo';
+import { RelativeTime } from '../_components/relative-time';
 import { buildSafeErrorScalarsForLog } from '~/utils/error-log-scalars';
 import { useEditorChrome } from '../document-editor/editor-chrome-context';
 import {
@@ -199,16 +199,17 @@ export function MarginCommentCard({
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
           <b className="text-[13px] text-[#1b1b1b]">{authorName}</b>
-          <span className="text-[11px] text-[hsl(50_2.4%_36%)]">
-            {timeAgo(new Date(comment.createdAt))}
-          </span>
+          <RelativeTime
+            value={comment.createdAt}
+            className="text-[11px] text-[hsl(50_2.4%_36%)]"
+          />
         </span>
         {canModerate ? (
           <Button
             type="button"
             size="icon-sm"
             variant="ghost"
-            className="h-7 w-7 rounded-full"
+            className="doc-editor-comment-resolve h-7 w-7 shrink-0 rounded-full opacity-100"
             aria-label="Resolve comment"
             data-testid={`comment-resolve-${comment.id}`}
             loading={archiveFetcher.state !== 'idle'}
@@ -265,7 +266,7 @@ export function MarginCommentCard({
             {response.membership?.user?.name ? (
               <p className="mt-1 text-[11px] text-[hsl(50_2.4%_36%)]">
                 {response.membership.user.name} ·{' '}
-                {timeAgo(new Date(response.createdAt))}
+                <RelativeTime value={response.createdAt} />
               </p>
             ) : null}
           </div>

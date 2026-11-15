@@ -13,6 +13,7 @@ type Props = {
   onResponseAdded?: (commentId: string, response: unknown) => void;
   onArchiveChange?: (commentId: string, archivedAt: Date | null) => void;
   onCommentCreated?: (comment: unknown) => void;
+  onDraftCommitted?: () => void;
   onDraftCancel?: () => void;
   autoFocusReplyCommentId?: string | null;
 };
@@ -26,6 +27,7 @@ export function MarginCommentsRail({
   onResponseAdded,
   onArchiveChange,
   onCommentCreated,
+  onDraftCommitted,
   onDraftCancel,
   autoFocusReplyCommentId,
 }: Props) {
@@ -54,7 +56,7 @@ export function MarginCommentsRail({
               onCancel={() => onDraftCancel?.()}
               onCreated={(c) => {
                 onCommentCreated?.(c);
-                onDraftCancel?.();
+                onDraftCommitted?.();
               }}
             />
           );

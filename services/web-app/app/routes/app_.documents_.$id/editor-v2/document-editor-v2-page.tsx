@@ -262,7 +262,7 @@ export function DocumentEditorV2Page() {
   );
   const [desktopCommentsOpen, setDesktopCommentsOpen] = useLocalStorage(
     `doc-${data.doc.id}-panel-comments`,
-    true
+    false
   );
   const classSubtitle = useMemo(() => {
     const cls = data.doc.classAssignment?.class;
@@ -1054,25 +1054,14 @@ export function DocumentEditorV2Page() {
                           onCommentCreated={(c) =>
                             commentsState.addComment(c as any)
                           }
+                          onDraftCommitted={() => {
+                            commentsState.clearPendingDraft();
+                          }}
                           onDraftCancel={() => {
                             const draftId = commentsState.pendingDraft?.id;
                             commentsState.clearPendingDraft();
                             if (draftId) {
-                              document
-                                .querySelectorAll(
-                                  `[data-comment-id="${draftId}"]`
-                                )
-                                .forEach((mark) => {
-                                  const node = mark as HTMLElement;
-                                  if (!node.parentNode) return;
-                                  while (node.childNodes.length > 0) {
-                                    node.parentNode.insertBefore(
-                                      node.childNodes[0],
-                                      node
-                                    );
-                                  }
-                                  node.parentNode.removeChild(node);
-                                });
+                              editorBridgeRef.current?.removeCommentMark(draftId);
                             }
                           }}
                           autoFocusReplyCommentId={
@@ -1112,7 +1101,6 @@ export function DocumentEditorV2Page() {
               </div>
             ) : null}
           </div>
-        </CommentsSelectionProvider>
         {isMobile ? (
           <nav
             className="doc-editor-mobile-tabbar"
@@ -1178,8 +1166,7 @@ export function DocumentEditorV2Page() {
             </span>
           </button>
         ) : null}
-      </main>
-      {isMobile ? (
+        {isMobile ? (
         <>
           <Sheet open={mobileTutorSheetOpen} onOpenChange={setMobileTutorSheetOpen}>
             <SheetContent
@@ -1249,6 +1236,8 @@ export function DocumentEditorV2Page() {
           </Sheet>
         </>
       ) : null}
+        </CommentsSelectionProvider>
+      </main>
       <Dialog
         open={submissionToUnsubmit != null}
         onOpenChange={(open) => {

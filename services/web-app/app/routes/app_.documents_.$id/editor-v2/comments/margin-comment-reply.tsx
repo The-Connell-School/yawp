@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
 
@@ -18,6 +18,13 @@ export function MarginCommentReply({
   const [expanded, setExpanded] = useState(autoFocus);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [draft, setDraft] = useState('');
+
+  useEffect(() => {
+    if (autoFocus) {
+      setExpanded(true);
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+  }, [autoFocus, commentId]);
 
   const submit = () => {
     const text = draft.trim();

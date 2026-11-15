@@ -13,7 +13,7 @@ import { useLocalStorage } from 'usehooks-ts';
 import { Button } from '~/components/ui/button';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
-import { timeAgo } from '~/utils/timeAgo/timeAgo';
+import { RelativeTime } from '../_components/relative-time';
 import { Loading } from './loading';
 import { ResponseBar } from './response-bar';
 import { TutorStepProgress } from './tutor-step-progress';
@@ -522,7 +522,7 @@ export const Tutor = ({
               <div className="doc-editor-tutor-message-meta">
                 <b>{message.agent === 'assistant' ? 'Tutor' : 'You'}</b>
                 {' · '}
-                {timeAgo(new Date(message.createdAt))}
+                <RelativeTime value={message.createdAt} />
               </div>
               <p
                 className="m-0 whitespace-pre-wrap"
