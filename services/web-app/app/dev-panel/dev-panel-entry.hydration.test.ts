@@ -8,6 +8,6 @@ describe('DevPanelMount hydration', () => {
     expect(source).toContain("import('./dev-panel-mount')");
     expect(source).not.toMatch(/\blazy\s*\(/);
     expect(source).not.toContain('<Suspense');
-    expect(source).toContain('startTransition');
+    expect(source).toContain('useEffect');
   });
 });

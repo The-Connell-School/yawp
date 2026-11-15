@@ -1,9 +1,4 @@
-import {
-  startTransition,
-  useEffect,
-  useState,
-  type ComponentType,
-} from 'react';
+import { useEffect, useState, type ComponentType } from 'react';
 import type { DevPanelEnvBadge } from './dev-panel-types';
 
 type DevPanelMountProps = {
@@ -12,16 +7,20 @@ type DevPanelMountProps = {
   previewAccessSeatLabel: string | null;
 };
 
+const devPanelMountChunkPromise =
+  typeof __YAWP_DEV_PANEL_BUILD__ !== 'undefined' && __YAWP_DEV_PANEL_BUILD__
+    ? import('./dev-panel-mount')
+    : null;
+
 export function DevPanelMount(props: DevPanelMountProps) {
   const [MountImpl, setMountImpl] = useState<ComponentType<
     DevPanelMountProps
   > | null>(null);
 
   useEffect(() => {
-    void import('./dev-panel-mount').then((module) => {
-      startTransition(() => {
-        setMountImpl(() => module.DevPanelMount);
-      });
+    if (!devPanelMountChunkPromise) return;
+    void devPanelMountChunkPromise.then((module) => {
+      setMountImpl(() => module.DevPanelMount);
     });
   }, []);
 
