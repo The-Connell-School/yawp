@@ -9,9 +9,8 @@ test.describe('Document editor v2 margin comments', () => {
   }) => {
     const pageErrors: string[] = [];
     page.on('pageerror', (err) => pageErrors.push(err.message));
-    await page.goto('about:blank');
-    await page.evaluate(() => window.localStorage.clear());
     await signIn('jdoe@brock.software', 'johndoe');
+    await page.evaluate(() => window.localStorage.clear());
     await page.setViewportSize({ width: 1440, height: 900 });
     await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
     await page.waitForTimeout(1500);
@@ -38,6 +37,8 @@ test.describe('Document editor v2 margin comments', () => {
     await signIn('jdoe@brock.software', 'johndoe');
     await page.setViewportSize({ width: 1440, height: 900 });
     await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const editor = helpers.getEditor();
+    await expect(editor).toBeVisible({ timeout: 15_000 });
     await page
       .getByTestId('document-panel-toggles')
       .getByRole('button', { name: 'Comments' })
@@ -47,8 +48,8 @@ test.describe('Document editor v2 margin comments', () => {
     const createdIds: string[] = [];
 
     for (const [index, word] of words.entries()) {
-      const surface = page.getByTestId('document-editor-surface');
-      await surface.getByText(word, { exact: true }).dblclick();
+      await editor.click();
+      await editor.getByText(word, { exact: true }).dblclick();
       await page.getByTestId('editor-add-comment').click();
       await expect(page.getByTestId('margin-comment-draft-card')).toBeVisible({
         timeout: 10_000,
