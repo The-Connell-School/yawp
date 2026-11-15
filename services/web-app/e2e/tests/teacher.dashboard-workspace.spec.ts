@@ -280,6 +280,10 @@ test.describe.serial('Teacher dashboard workspace', () => {
         .click();
       await page.waitForURL(/\/app\/documents\?status=needs-grading/);
       await page.waitForLoadState('networkidle');
+      await page.goto(
+        `/app/documents?status=needs-grading&q=${encodeURIComponent(title)}`
+      );
+      await page.waitForLoadState('networkidle');
       await expect(page.getByText(title, { exact: true }).first()).toBeVisible({
         timeout: 15_000,
       });

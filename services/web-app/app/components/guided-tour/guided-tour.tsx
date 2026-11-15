@@ -295,11 +295,21 @@ function PageTourController({
         }
       }
     }
+    let attempts = 0;
+    const tryResolve = () => {
+      const steps = resolveSteps(tour);
+      const targetSteps = steps.filter((step) => step.target).length;
+      if (targetSteps >= 2 || attempts >= 15) {
+        setPhase({ kind: 'touring', steps, index: 0 });
+        return;
+      }
+      attempts += 1;
+      window.setTimeout(tryResolve, 200);
+    };
+
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
-        window.setTimeout(() => {
-          setPhase({ kind: 'touring', steps: resolveSteps(tour), index: 0 });
-        }, 600);
+        window.setTimeout(tryResolve, 600);
       });
     });
   }, [tour]);

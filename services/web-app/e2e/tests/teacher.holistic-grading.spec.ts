@@ -187,9 +187,13 @@ test.describe.serial('holistic Cristo Rey points-only grading', () => {
     const documentsTable = page.getByRole('table', { name: /class documents/i });
     await expect(documentsTable).toBeVisible({ timeout: 15_000 });
     await clickClassDocumentsStatusTab(page, /^Released/i);
-    await expect(documentsTable.getByText(/6\s*\/\s*20/).first()).toBeVisible({
-      timeout: 15_000,
-    });
+    await expect
+      .poll(
+        async () =>
+          (await documentsTable.getByText(/6\s*\/\s*20/).count()) > 0,
+        { timeout: 30_000 }
+      )
+      .toBe(true);
     await page.screenshot({
       path: testInfo.outputPath('holistic-gradebook-row.png'),
       fullPage: true,

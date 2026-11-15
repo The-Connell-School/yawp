@@ -427,7 +427,7 @@ async function setMyAssignmentsSearchQuery(page: Page, query: string) {
   await expect(search).toHaveValue(query);
   // Close the popover without clearing filters; Escape can drop focus before
   // React commits the search value on slower CI hosts.
-  await page.getByTestId('my-assignments-type-pills').click({ force: true });
+  await page.getByTestId('my-assignments-filter').click();
   await expect(page.getByTestId('my-assignments-search')).toBeHidden({
     timeout: 5_000,
   });
@@ -468,6 +468,12 @@ export async function fillMyAssignmentsSearch(
   query: string,
   options?: { assignmentId?: string; assignmentTypeTitle?: string }
 ) {
+  if (options?.assignmentId) {
+    await page.goto(
+      `/app/assignments?highlightAssignment=${options.assignmentId}`
+    );
+    await page.waitForLoadState('networkidle');
+  }
   const trimmed = query.trim();
   const visibilityTarget = options?.assignmentId
     ? page.getByTestId(`my-assignment-open-${options.assignmentId}`)
@@ -565,10 +571,13 @@ export async function clickStudentClassAssignmentRow(
     timeout: 15_000,
   });
   if (options.title) {
-    const search = page.getByTestId('class-assignments-search');
-    if (await search.isVisible().catch(() => false)) {
-      await search.fill(options.title);
-    }
+    const startButton = page.getByRole('button', {
+      name: options.title,
+      exact: true,
+    });
+    await expect(startButton).toBeVisible({ timeout: 30_000 });
+    await startButton.click();
+    return;
   }
   await expandAssignmentTypeSections(page);
   const row =
