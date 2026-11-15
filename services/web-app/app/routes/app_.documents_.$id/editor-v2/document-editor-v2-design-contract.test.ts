@@ -37,7 +37,9 @@ describe('document editor v2 design contract', () => {
     );
     expect(css).toContain('--tutor-panel-bg: #fcfaf5');
     expect(css).toContain('--tutor-rim: #e3ded2');
-    expect(css).toContain('--tutor-bubble-bg: #fff');
+    expect(css).toContain('--tutor-bubble-bg: #ffffff');
+    expect(css).toContain('--tutor-name: #1f4d3a');
+    expect(css).toContain('--tutor-meta: #5f5b52');
     expect(css).toContain('--student-bubble-bg: #e8f0eb');
     expect(css).toContain('--doc-glass-bg:');
     expect(css).toContain('--doc-workspace-bg:');

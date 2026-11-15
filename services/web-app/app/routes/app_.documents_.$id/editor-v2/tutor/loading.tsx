@@ -1,7 +1,13 @@
-import { useState, useEffect } from 'react'
-import { cn } from '~/utils/misc'
+import { useState, useEffect } from 'react';
+import { cn } from '~/utils/misc';
 
-export const Loading = ({ label }: { label?: string }) => {
+type LoadingProps = {
+  label?: string;
+  /** When true, uses v2 tutor bubble chrome from redesign CSS. */
+  tutorBubble?: boolean;
+};
+
+export const Loading = ({ label, tutorBubble = false }: LoadingProps) => {
 	const [activeDot, setActiveDot] = useState(0)
 
 	useEffect(() => {
@@ -15,7 +21,14 @@ export const Loading = ({ label }: { label?: string }) => {
 	}, [])
 
 	return (
-		<div className="flex w-fit items-center space-x-2 rounded-full rounded-bl-none bg-muted p-4">
+		<div
+			className={cn(
+				'flex w-fit items-center space-x-2',
+				tutorBubble
+					? 'doc-editor-tutor-message-loading mr-auto'
+					: 'rounded-full rounded-bl-none bg-muted p-4'
+			)}
+		>
 			{[...Array(3)].map((_, index) => (
 				<span
 					key={index}

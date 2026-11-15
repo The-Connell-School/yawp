@@ -548,16 +548,17 @@ export const Tutor = ({
           ))}
           {isTutorResponding ? (
             optimisticMessage ? (
-              <Loading label={isTutorRetrying ? 'Retrying...' : undefined} />
+              <Loading
+                tutorBubble
+                label={isTutorRetrying ? 'Retrying...' : undefined}
+              />
             ) : (
               <div
                 className="doc-editor-tutor-reading-skeleton"
                 data-testid="tutor-reading-essay"
               >
-                <p className="m-0 text-sm text-[hsl(50_2.4%_36%)]">
-                  Reading your essay…
-                </p>
-                <Loading />
+                <p className="m-0 text-sm">Reading your essay…</p>
+                <Loading tutorBubble />
               </div>
             )
           ) : null}
