@@ -1,13 +1,5 @@
-import { startTransition, useCallback, useEffect, useState } from 'react';
-
-function afterHydration(callback: () => void) {
-  if (typeof window === 'undefined') return;
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      startTransition(callback);
-    });
-  });
-}
+import { useCallback, useEffect, useState } from 'react';
+import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
 
 export type DocComment = {
   id: string;
@@ -40,7 +32,7 @@ export function useCommentsState(initialComments: DocComment[]) {
   // Resync if the loader-provided comments change wholesale
   // (typically happens on navigation to a different document)
   useEffect(() => {
-    afterHydration(() => {
+    scheduleAfterHydration(() => {
       setComments((prev) => {
         const byId = new Map<string, DocComment>();
         for (const c of initialComments) byId.set(c.id, c);

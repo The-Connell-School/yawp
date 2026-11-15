@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
 import type { Editor } from '@tiptap/core';
 import { removeCommentMarkFromEditor } from './comment-mark-editor';
 import { documentStore } from '~/utils/document-store';
@@ -204,7 +205,7 @@ export function useEditorSync(
       const { html, text } = getSnapshot();
       onSubmittableContentChange(isDocumentSubmittableContent(html, text));
     };
-    emit();
+    scheduleAfterHydration(emit);
     editor.on('update', emit);
     return () => {
       editor.off('update', emit);
@@ -245,7 +246,9 @@ export function useEditorSync(
       },
     };
 
-    onBridgeReady(bridge);
-    return () => onBridgeReady(null);
+    scheduleAfterHydration(() => onBridgeReady(bridge));
+    return () => {
+      scheduleAfterHydration(() => onBridgeReady(null));
+    };
   }, [editor, docId, getSnapshot, onBridgeReady]);
 }

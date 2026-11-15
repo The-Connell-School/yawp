@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
 
 const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -51,21 +52,23 @@ export function useAuthHeartbeat({ documentId, isEditable, onLockTriggered }: Op
 
   // Reset lock when documentId changes (e.g., navigated to a different doc)
   useEffect(() => {
-    setIsLocked(false);
+    scheduleAfterHydration(() => setIsLocked(false));
   }, [documentId]);
 
   // Initial auth check + focus/visibility re-check listeners
   useEffect(() => {
     if (!isEditable) {
-      setIsInitialCheckComplete(true);
+      scheduleAfterHydration(() => setIsInitialCheckComplete(true));
       return;
     }
     let cancelled = false;
-    setIsInitialCheckComplete(false);
+    scheduleAfterHydration(() => setIsInitialCheckComplete(false));
 
     const runInitialCheck = async () => {
       await checkAuthSession();
-      if (!cancelled) setIsInitialCheckComplete(true);
+      if (!cancelled) {
+        scheduleAfterHydration(() => setIsInitialCheckComplete(true));
+      }
     };
 
     const onFocus = () => {

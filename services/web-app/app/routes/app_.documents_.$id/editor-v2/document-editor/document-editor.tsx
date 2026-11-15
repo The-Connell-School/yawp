@@ -1,13 +1,5 @@
-import { startTransition, useEffect, useState, type ReactNode } from 'react';
-
-function afterHydration(callback: () => void) {
-  if (typeof window === 'undefined') return;
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      startTransition(callback);
-    });
-  });
-}
+import { useEffect, useState, type ReactNode } from 'react';
+import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
 import { documentStore } from '~/utils/document-store';
 import type { SyncStatus } from '~/utils/sync-service';
 import { Editor } from './editor';
@@ -102,7 +94,7 @@ export function DocumentEditor({
 
   useEffect(() => {
     if (snapshotContent) {
-      afterHydration(() => {
+      scheduleAfterHydration(() => {
         setHydrated({
           html: snapshotContent.html,
           text: snapshotContent.text,
@@ -112,7 +104,7 @@ export function DocumentEditor({
       return;
     }
     if (teacherCommenting) {
-      afterHydration(() => {
+      scheduleAfterHydration(() => {
         setHydrated({
           html: serverHtml,
           text: serverText,
@@ -126,7 +118,7 @@ export function DocumentEditor({
       .get(docId)
       .then((entry) => {
         if (cancelled) return;
-        afterHydration(() => {
+        scheduleAfterHydration(() => {
           if (cancelled) return;
           if (entry && entry.updatedAt > new Date(serverUpdatedAt).getTime()) {
             setHydrated({ html: entry.html, text: entry.text, source: 'local' });
@@ -141,7 +133,7 @@ export function DocumentEditor({
       })
       .catch(() => {
         if (!cancelled) {
-          afterHydration(() => {
+          scheduleAfterHydration(() => {
             if (cancelled) return;
             setHydrated({ html: serverHtml, text: serverText, source: 'server' });
           });

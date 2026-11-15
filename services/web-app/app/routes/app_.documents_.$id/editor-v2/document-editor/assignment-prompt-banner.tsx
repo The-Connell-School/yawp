@@ -1,7 +1,8 @@
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useLocalStorage } from 'usehooks-ts';
 import { Button } from '~/components/ui/button';
+import { useDeferredLocalStorage } from '../hooks/use-deferred-local-storage';
+import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
 import { AssignmentPromptAttachment } from '~/components/assignments/assignment-prompt-attachment';
 
 const PROMPT_EXPANDED_MAX_HEIGHT = 'calc(50vh - 28px)';
@@ -23,12 +24,11 @@ export function AssignmentPromptBanner({
 }) {
   const [uiMounted, setUiMounted] = useState(false);
   useEffect(() => {
-    setUiMounted(true);
+    scheduleAfterHydration(() => setUiMounted(true));
   }, []);
-  const [isCollapsed, setIsCollapsed] = useLocalStorage(
+  const [isCollapsed, setIsCollapsed] = useDeferredLocalStorage(
     `assignmentPromptCollapsed-${docId}`,
-    true,
-    { initializeWithValue: false }
+    true
   );
   const collapsed = uiMounted ? isCollapsed : true;
 

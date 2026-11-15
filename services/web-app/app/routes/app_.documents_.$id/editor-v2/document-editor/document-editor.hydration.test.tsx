@@ -102,6 +102,11 @@ describe('DocumentEditor hydration boundary', () => {
         lastSyncError: null,
         contentHash: 'local-hash',
       });
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve());
+        });
+      });
       await Promise.resolve();
     });
 

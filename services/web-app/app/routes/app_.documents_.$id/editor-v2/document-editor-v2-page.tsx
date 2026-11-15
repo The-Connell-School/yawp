@@ -25,15 +25,7 @@ import {
   MessageCircle,
   PanelLeft,
 } from 'lucide-react';
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  startTransition,
-} from 'react';
-import { useLocalStorage } from 'usehooks-ts';
+import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { SaveStatusIndicator } from '~/components/save-status-indicator';
 import { Badge } from '~/components/ui/badge';
@@ -66,7 +58,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '~/components/ui/popover';
-import useBreakpoint from '~/hooks/useBreakpoint';
+import { useDeferredBreakpoint } from './hooks/use-deferred-breakpoint';
+import { useDeferredLocalStorage } from './hooks/use-deferred-local-storage';
+import { scheduleAfterHydration } from './utils/schedule-after-hydration';
 import { useUser } from '~/hooks/useUser';
 import { Comments } from './comments';
 import { MarginCommentsRail } from './comments/margin-comments-rail';
@@ -222,15 +216,10 @@ export function DocumentEditorV2Page() {
   const fetcher = useFetcher();
   const submissionUnsubmitFetcher = useFetcher();
   const navigate = useNavigate();
-  const breakpoint = useBreakpoint();
+  const breakpoint = useDeferredBreakpoint();
   const [uiMounted, setUiMounted] = useState(false);
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        startTransition(() => setUiMounted(true));
-      });
-    });
+    scheduleAfterHydration(() => setUiMounted(true));
   }, []);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
@@ -252,20 +241,17 @@ export function DocumentEditorV2Page() {
   >(new Set());
   const isMobile =
     uiMounted && ['base', 'sm', 'md'].includes(breakpoint ?? '');
-  const [pageWidth, setPageWidth] = useLocalStorage<PageWidthMode>(
+  const [pageWidth, setPageWidth] = useDeferredLocalStorage<PageWidthMode>(
     `doc-${data.doc.id}-page-width`,
-    'fit',
-    { initializeWithValue: false }
+    'fit'
   );
-  const [desktopTutorOpen, setDesktopTutorOpen] = useLocalStorage(
+  const [desktopTutorOpen, setDesktopTutorOpen] = useDeferredLocalStorage(
     `doc-${data.doc.id}-panel-tutor`,
-    true,
-    { initializeWithValue: false }
+    true
   );
-  const [desktopCommentsOpen, setDesktopCommentsOpen] = useLocalStorage(
+  const [desktopCommentsOpen, setDesktopCommentsOpen] = useDeferredLocalStorage(
     `doc-${data.doc.id}-panel-comments`,
-    false,
-    { initializeWithValue: false }
+    false
   );
   const classSubtitle = useMemo(() => {
     const cls = data.doc.classAssignment?.class;
@@ -379,7 +365,9 @@ export function DocumentEditorV2Page() {
   const [editorRoot, setEditorRoot] = useState<HTMLElement | null>(null);
   const handleEditorBridgeReady = useCallback((bridge: EditorBridge | null) => {
     editorBridgeRef.current = bridge;
-    setEditorRoot(bridge?.getContentElement?.() ?? null);
+    scheduleAfterHydration(() => {
+      setEditorRoot(bridge?.getContentElement?.() ?? null);
+    });
   }, []);
   const titleInputRef = useRef<HTMLInputElement>(null);
 

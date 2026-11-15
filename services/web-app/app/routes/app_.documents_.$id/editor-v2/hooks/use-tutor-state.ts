@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
 
 export type TutorCms = {
   id: string;
@@ -25,8 +26,8 @@ export function useTutorState(initialCms: TutorCms | null, cmsIdx = 0) {
   const [cms, setCms] = useState<TutorCms | null>(initialCms);
 
   useEffect(() => {
-    setCms(initialCms);
-  }, [initialCms?.id, cmsIdx]);
+    scheduleAfterHydration(() => setCms(initialCms));
+  }, [initialCms?.id, cmsIdx, initialCms]);
 
   const updateCms = useCallback((next: TutorCms) => {
     setCms(next);

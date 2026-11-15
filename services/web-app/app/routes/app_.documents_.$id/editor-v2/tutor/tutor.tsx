@@ -9,7 +9,8 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocalStorage } from 'usehooks-ts';
+import { useDeferredLocalStorage } from '../hooks/use-deferred-local-storage';
+import { scheduleAfterHydration } from '../utils/schedule-after-hydration';
 import { Button } from '~/components/ui/button';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
@@ -92,12 +93,11 @@ export const Tutor = ({
 }: Props) => {
   const [uiMounted, setUiMounted] = useState(false);
   useEffect(() => {
-    setUiMounted(true);
+    scheduleAfterHydration(() => setUiMounted(true));
   }, []);
-  const [messagesExpanded, setMessagesExpanded] = useLocalStorage(
+  const [messagesExpanded, setMessagesExpanded] = useDeferredLocalStorage(
     `doc-${docId}-tutor-messages-expanded`,
-    true,
-    { initializeWithValue: false }
+    true
   );
   const showMessages = uiMounted ? messagesExpanded : true;
   const [isTutorResponding, setIsTutorResponding] = useState(false);
