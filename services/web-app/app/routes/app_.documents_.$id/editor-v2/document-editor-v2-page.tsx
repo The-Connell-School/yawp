@@ -987,7 +987,9 @@ export function DocumentEditorV2Page() {
                   }
                   onCommentCreated={(c) => commentsState.addComment(c as any)}
                   marginComments={
-                    !isMobile && desktopCommentsOpen ? (
+                    !isMobile &&
+                    (desktopCommentsOpen ||
+                      (isViewingAsTeacher && !isOwnTeacherPreview)) ? (
                       <TeacherPasteReport
                         key={data.doc.id}
                         enabled={isViewingAsTeacher}
