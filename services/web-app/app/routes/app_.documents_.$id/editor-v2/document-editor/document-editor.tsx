@@ -15,10 +15,12 @@ type Props = {
   serverUpdatedAt: string | Date;
   initialRevision: number;
   isEditable: boolean;
+  teacherCommenting?: boolean;
   canUploadImages?: boolean;
   onBridgeReady: (bridge: EditorBridge | null) => void;
   onSyncStatusChange?: (status: SyncStatus) => void;
   onSubmittableContentChange?: (submittable: boolean) => void;
+  onCommentDraft?: (draft: { id: string; excerpt: string }) => void;
   onCommentCreated?: (comment: unknown) => void;
   marginComments?: ReactNode;
 };
@@ -37,10 +39,12 @@ export function DocumentEditor({
   serverUpdatedAt,
   initialRevision,
   isEditable,
+  teacherCommenting = false,
   canUploadImages = false,
   onBridgeReady,
   onSyncStatusChange,
   onSubmittableContentChange,
+  onCommentDraft,
   onCommentCreated,
   marginComments,
 }: Props) {
@@ -82,10 +86,12 @@ export function DocumentEditor({
             initialHtml={hydrated.html}
             initialRevision={initialRevision}
             isEditable={isEditable}
+            teacherCommenting={teacherCommenting}
             canUploadImages={canUploadImages}
             onBridgeReady={onBridgeReady}
             onSyncStatusChange={onSyncStatusChange}
             onSubmittableContentChange={onSubmittableContentChange}
+            onCommentDraft={onCommentDraft}
             onCommentCreated={onCommentCreated}
             assignment={assignment}
             marginComments={marginComments}

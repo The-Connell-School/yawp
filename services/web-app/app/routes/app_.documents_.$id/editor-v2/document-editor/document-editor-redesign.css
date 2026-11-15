@@ -34,7 +34,7 @@
 }
 
 .doc-editor-header__title-block {
-  width: min(340px, 38vw);
+  width: min(420px, 48vw);
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -487,4 +487,19 @@
   .doc-editor-page {
     padding: 48px 32px;
   }
+}
+
+.comment-mark--resolved {
+  background-color: transparent !important;
+  border-bottom-color: hsl(51.4286 7.8652% 82.549%) !important;
+  opacity: 0.45;
+}
+
+.doc-editor-tutor-readonly-footer {
+  flex-shrink: 0;
+  padding: 12px 16px 14px;
+  border-top: 1px solid var(--tutor-rim);
+  font-size: 13px;
+  color: var(--doc-ink-muted);
+  text-align: center;
 }

@@ -16,6 +16,8 @@ import { buildSafeErrorScalarsForLog } from '~/utils/error-log-scalars';
 import { type Command, commands, COMMAND_STYLE } from './commands';
 import { DocumentImageButton } from './document-image-button';
 import camelCase from 'lodash/camelCase';
+import { USER_SOURCE_META } from './extensions/source-tracker';
+import { TOOLBAR_SOURCE } from './use-pm-tripwire';
 
 const DROPDOWN_WIDTH = 32;
 const BUTTON_WIDTH = 32;
@@ -26,7 +28,9 @@ export type BarProps = {
   editor: Editor | null;
   documentId: string;
   isEditable?: boolean;
+  teacherCommenting?: boolean;
   canUploadImages?: boolean;
+  onCommentDraft?: (draft: { id: string; excerpt: string }) => void;
   onCommentCreated?: (comment: unknown) => void;
 };
 
@@ -34,7 +38,9 @@ export const Bar = ({
   editor,
   documentId,
   isEditable = true,
+  teacherCommenting = false,
   canUploadImages = false,
+  onCommentDraft,
   onCommentCreated,
 }: BarProps) => {
   const [visibleCommands, setVisibleCommands] = useState(commands);
@@ -70,12 +76,49 @@ export const Bar = ({
 
   if (!editor) return null;
 
+  const canAddComment = isEditable || teacherCommenting;
+
+  const beginCommentDraft = () => {
+    if (!editor) return;
+    if (editor.isActive('comment')) {
+      editor
+        .chain()
+        .focus()
+        .setMeta(USER_SOURCE_META, TOOLBAR_SOURCE)
+        .unsetComment()
+        .run();
+      return;
+    }
+    const id = v4();
+    const { from, to } = editor.state.selection;
+    const excerpt = editor.state.doc.textBetween(from, to, ' ').trim();
+    if (!excerpt) return;
+    editor
+      .chain()
+      .focus()
+      .setMeta(USER_SOURCE_META, TOOLBAR_SOURCE)
+      .setComment(id)
+      .run();
+    onCommentDraft?.({ id, excerpt });
+  };
+
   return (
     <div
       data-tour="doc-toolbar"
       className="doc-editor-toolbar-glass"
       ref={containerRef}
     >
+      {teacherCommenting ? (
+        <>
+          <span
+            className="shrink-0 text-[13px] text-[hsl(50_2.4%_36%)]"
+            data-testid="document-view-only-banner"
+          >
+            Viewing only. Select text to comment.
+          </span>
+          <span aria-hidden className="mx-1 h-[18px] w-px bg-[hsl(51.4286_7.8652%_82.549%)]" />
+        </>
+      ) : null}
       {isEditable
         ? visibleCommands.map(
             ({ icon, label, command, params, activeId, isActive, override }) => {
@@ -105,38 +148,11 @@ export const Bar = ({
       {isEditable && canUploadImages ? (
         <DocumentImageButton editor={editor} documentId={documentId} />
       ) : null}
-      {isEditable ? (
+      {canAddComment ? (
         <Tooltip text="Comment" delayDuration={300}>
           <div
             data-testid="editor-add-comment"
-            onClick={() => {
-              if (editor.isActive('comment')) {
-                editor.chain().focus().unsetComment().run();
-              } else {
-                const id = v4();
-                const { from, to } = editor.state.selection;
-                const content = editor.state.doc.textBetween(from, to, ' ');
-                if (!content) return;
-                editor.chain().focus().setComment(id).run();
-                const formData = new FormData();
-                formData.append('id', id);
-                formData.append('content', content);
-                formData.append('documentId', documentId);
-                fetch('/api/model/document-comment', { method: 'POST', body: formData })
-                  .then((res) => res.json())
-                  .then((data) => {
-                    if (data?.id && onCommentCreated) {
-                      onCommentCreated(data);
-                    }
-                  })
-                  .catch((err) => {
-                    console.error(
-                      'document_comment_create_failed',
-                      buildSafeErrorScalarsForLog(err),
-                    );
-                  });
-              }
-            }}
+            onClick={beginCommentDraft}
             className={cn(COMMAND_STYLE, {
               'bg-foreground/20 hover:bg-foreground/20': editor.isActive('comment'),
             })}

@@ -102,6 +102,15 @@ export function MarginCommentCard({
         comment.id,
         data.archivedAt ? new Date(data.archivedAt) : null
       );
+      if (data.archivedAt) {
+        contentRoot
+          ?.querySelectorAll<HTMLElement>(
+            `.comment-mark[data-comment-id="${CSS.escape(comment.id)}"]`
+          )
+          .forEach((mark) => {
+            mark.classList.add('comment-mark--resolved');
+          });
+      }
     }
   }, [archiveFetcher.state, archiveFetcher.data, comment.id, onArchiveChange]);
 
@@ -157,7 +166,7 @@ export function MarginCommentCard({
     <div
       className={cn(
         'doc-editor-comment-card relative flex flex-col gap-2 transition-all duration-200 ease-in-out',
-        isFocused ? 'ring-2 ring-[hsl(210_75%_49%)]' : ''
+        isFocused ? 'ring-2 ring-[hsl(40_90%_55%)]' : ''
       )}
       id={`comment-${comment.id}`}
       data-comment-card={comment.id}

@@ -231,12 +231,30 @@ export function DocumentEditorV2Page() {
   const classSubtitle = useMemo(() => {
     const cls = data.doc.classAssignment?.class;
     if (!cls) return null;
-    const parts = [
-      cls.title?.trim(),
-      cls.period?.trim() ? `Period ${cls.period.trim()}` : null,
-    ].filter(Boolean);
-    return parts.length > 0 ? parts.join(' · ') : null;
-  }, [data.doc.classAssignment?.class]);
+    const title = cls.title?.trim() ?? '';
+    const periodLabel = cls.period?.trim()
+      ? `Period ${cls.period.trim()}`
+      : null;
+    let label = title;
+    if (periodLabel) {
+      const periodAlreadyInTitle =
+        title.includes(periodLabel) ||
+        title.toLowerCase().includes(cls.period!.trim().toLowerCase());
+      label = periodAlreadyInTitle
+        ? title
+        : title
+          ? `${title} · ${periodLabel}`
+          : periodLabel;
+    }
+    if (!label) return null;
+    const saveLabel =
+      syncStatus === 'saving'
+        ? 'Saving…'
+        : syncStatus === 'error'
+          ? 'Save failed'
+          : '✓ Saved';
+    return `${label} · ${saveLabel}`;
+  }, [data.doc.classAssignment?.class, syncStatus]);
   const [searchParams, setSearchParams] = useSearchParams();
   const fallbackCmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
   const cmsIdx =
@@ -245,7 +263,10 @@ export function DocumentEditorV2Page() {
       : fallbackCmsIdx;
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const tutorEnabled = isTutorEnabledForAssignment(data.doc.assignment);
-  const tab = searchParams.get('tab') ?? (tutorEnabled ? 'tutor' : 'editor');
+  const defaultMobileTab = 'editor';
+  const defaultDesktopTab = tutorEnabled ? 'tutor' : 'editor';
+  const tab =
+    searchParams.get('tab') ?? (isMobile ? defaultMobileTab : defaultDesktopTab);
   const isViewingAsTeacher = Boolean(
     data.doc &&
       (data.isTeacherAssignmentPreview ||
@@ -490,14 +511,6 @@ export function DocumentEditorV2Page() {
       >
         {showGuidedTour ? (
           <GuidedTour {...data.guidedTours!} />
-        ) : null}
-        {isViewingAsTeacher && !isOwnTeacherPreview ? (
-          <p
-            className="doc-editor-view-banner"
-            data-testid="document-view-only-banner"
-          >
-            Viewing only. Select text to comment.
-          </p>
         ) : null}
         <header
           className="doc-editor-header"
@@ -876,6 +889,11 @@ export function DocumentEditorV2Page() {
                   data.doc.text ??
                   ''
                 }
+                readOnlyTeacherView={
+                  isViewingAsTeacher && !isOwnTeacherPreview
+                }
+                studentDisplayName={studentName}
+                onClose={() => setDesktopTutorOpen(false)}
               />
             )}
             {isMobile && tab !== 'editor' && !isViewingAsTeacher ? null : (
@@ -895,10 +913,16 @@ export function DocumentEditorV2Page() {
                   serverUpdatedAt={data.doc.updatedAt}
                   initialRevision={data.doc.revision}
                   isEditable={isEditorEditable}
+                  teacherCommenting={
+                    isViewingAsTeacher && !isOwnTeacherPreview
+                  }
                   canUploadImages={data.canUploadImages}
                   onBridgeReady={handleEditorBridgeReady}
                   onSyncStatusChange={setSyncStatus}
                   onSubmittableContentChange={handleSubmittableContentChange}
+                  onCommentDraft={(draft) =>
+                    commentsState.setPendingDraft(draft)
+                  }
                   onCommentCreated={(c) => commentsState.addComment(c as any)}
                   marginComments={
                     !isMobile && desktopCommentsOpen ? (
@@ -912,11 +936,37 @@ export function DocumentEditorV2Page() {
                         }}
                       >
                         <MarginCommentsRail
+                          documentId={data.doc.id}
                           comments={visibleComments as any}
+                          pendingDraft={commentsState.pendingDraft}
                           readOnly={commentsReadOnly}
                           onCommentRemoved={commentsState.removeComment}
                           onResponseAdded={commentsState.addResponse}
                           onArchiveChange={commentsState.setCommentArchived}
+                          onCommentCreated={(c) =>
+                            commentsState.addComment(c as any)
+                          }
+                          onDraftCancel={() => {
+                            const draftId = commentsState.pendingDraft?.id;
+                            commentsState.clearPendingDraft();
+                            if (draftId) {
+                              document
+                                .querySelectorAll(
+                                  `[data-comment-id="${draftId}"]`
+                                )
+                                .forEach((mark) => {
+                                  const node = mark as HTMLElement;
+                                  if (!node.parentNode) return;
+                                  while (node.childNodes.length > 0) {
+                                    node.parentNode.insertBefore(
+                                      node.childNodes[0],
+                                      node
+                                    );
+                                  }
+                                  node.parentNode.removeChild(node);
+                                });
+                            }
+                          }}
                           autoFocusReplyCommentId={
                             commentsState.pendingFocusCommentId
                           }
@@ -927,20 +977,15 @@ export function DocumentEditorV2Page() {
                 />
               </div>
             )}
-            {isMobile && tab !== 'comments' && !isViewingAsTeacher ? null : (
-              <div
-                className={cn(
-                  isMobile && tab !== 'comments' ? 'hidden' : 'h-full min-w-0 w-full',
-                  !isMobile && 'hidden'
-                )}
-              >
+            {isMobile && tab === 'comments' ? (
+              <div className="h-full min-w-0 w-full">
                 <TeacherPasteReport
                   key={`${data.doc.id}-mobile-comments`}
                   enabled={isViewingAsTeacher}
                   documentId={data.doc.id}
                   contentRoot={editorRoot}
                   onSelectEvent={() => {
-                    if (isMobile) changeTab('editor');
+                    changeTab('editor');
                   }}
                 >
                   <Comments
@@ -954,7 +999,7 @@ export function DocumentEditorV2Page() {
                   />
                 </TeacherPasteReport>
               </div>
-            )}
+            ) : null}
           </div>
         </CommentsSelectionProvider>
         {isMobile ? (
@@ -980,7 +1025,7 @@ export function DocumentEditorV2Page() {
               aria-selected={tab === 'editor'}
               onClick={() => changeTab('editor')}
             >
-              Editor
+              Write
             </button>
             <button
               type="button"

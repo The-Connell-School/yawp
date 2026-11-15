@@ -595,7 +595,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     ).toHaveValue(liveTitle);
   });
 
-  test('document editor version matches rollout (v1 production default, v2 preview default)', async ({
+  test('document editor version matches rollout (v2 on in E2E seed)', async ({
     page,
     signIn,
     e2eContext,
@@ -603,18 +603,9 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
     await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
-  const expectV2 =
-      process.env.YAWP_ENVIRONMENT === 'preview' ||
-      process.env.YAWP_ENVIRONMENT === 'demo';
-    if (expectV2) {
-      await expect(
-        page.locator('[data-document-editor-version="v2"]')
-      ).toBeVisible({ timeout: 10000 });
-    } else {
-      await expect(
-        page.locator('[data-document-editor-version="v1"]')
-      ).toBeVisible({ timeout: 10000 });
-    }
+    await expect(
+      page.locator('[data-document-editor-version="v2"]')
+    ).toBeVisible({ timeout: 10000 });
   });
 
   test('staff ?editor=v1 opts out of v2 when rollout is on', async ({
@@ -628,12 +619,6 @@ test.describe.serial('Document Editor E2E Tests', () => {
       `${e2eContext.editedDocumentId}?editor=v1`,
       { retry: true }
     );
-    const expectV2 =
-      process.env.YAWP_ENVIRONMENT === 'preview' ||
-      process.env.YAWP_ENVIRONMENT === 'demo';
-    if (!expectV2) {
-      test.skip();
-    }
     await expect(
       page.locator('[data-document-editor-version="v1"]')
     ).toBeVisible({ timeout: 10000 });
@@ -646,15 +631,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     helpers,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
-    const query =
-      process.env.YAWP_ENVIRONMENT === 'production' ? '?editor=v2' : '';
-    await helpers.openDocument(`${e2eContext.editedDocumentId}${query}`, {
-      retry: true,
-    });
-    const v2 = page.locator('[data-document-editor-version="v2"]');
-    if ((await v2.count()) === 0) {
-      test.skip();
-    }
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
     await expect(page.getByTestId('tutor-step-indicator')).toBeVisible({
       timeout: 10000,
     });
@@ -669,14 +646,15 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await signIn('jdoe@brock.software', 'johndoe');
     await page.setViewportSize({ width: 1280, height: 720 });
     await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
-    const v2 = page.locator('[data-document-editor-version="v2"]');
-    if ((await v2.count()) === 0) {
-      test.skip();
-    }
     const editor = helpers.getEditor();
     await editor.click();
     await page.keyboard.press(SELECT_ALL_SHORTCUT);
     await page.getByTestId('editor-add-comment').click();
+    await expect(page.getByTestId('margin-comment-draft-card')).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.getByTestId('margin-comment-draft-body').fill('Student E2E comment body');
+    await page.getByTestId('margin-comment-draft-submit').click();
     await expect(page.locator('[id^="comment-"]').first()).toBeVisible({
       timeout: 10_000,
     });
@@ -694,10 +672,6 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
     await page.setViewportSize({ width: 1280, height: 720 });
     await helpers.openDocument(e2eContext.gradedDocumentId, { retry: true });
-    const v2 = page.locator('[data-document-editor-version="v2"]');
-    if ((await v2.count()) === 0) {
-      test.skip();
-    }
     const card = page.getByTestId(
       `margin-comment-card-${e2eContext.v2GradedCommentId}`
     );
@@ -720,6 +694,28 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await expect(resolveButton).toBeHidden({ timeout: 10_000 });
   });
 
+  test('v2 teacher can open a comment draft from text selection', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await helpers.openDocument(e2eContext.gradedDocumentId, { retry: true });
+  await expect(page.getByTestId('document-view-only-banner')).toBeVisible({
+      timeout: 10_000,
+    });
+    const editor = helpers.getEditor();
+    await editor.click();
+    await page.keyboard.press(SELECT_ALL_SHORTCUT);
+    await page.getByTestId('editor-add-comment').click();
+    await expect(page.getByTestId('margin-comment-draft-card')).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByTestId('margin-comment-draft-body')).toBeVisible();
+  });
+
   test('v2 shows mobile tab bar at 390px width', async ({
     page,
     signIn,
@@ -728,11 +724,10 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
     await page.setViewportSize({ width: 390, height: 844 });
-    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
-    const v2 = page.locator('[data-document-editor-version="v2"]');
-    if ((await v2.count()) === 0) {
-      test.skip();
-    }
+    await helpers.openDocument(
+      `${e2eContext.editedDocumentId}?tab=editor`,
+      { retry: true }
+    );
     await expect(page.getByTestId('document-mobile-tabbar')).toBeVisible({
       timeout: 10_000,
     });

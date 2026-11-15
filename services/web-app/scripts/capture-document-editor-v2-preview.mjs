@@ -51,6 +51,12 @@ async function passGate(context) {
   await context.addCookies(cookies);
 }
 
+async function loginDev(page, personaButtonName) {
+  await page.goto(`${BASE}/auth/dev-login`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: personaButtonName }).click();
+  await page.waitForURL(/\/app(\/|$)/, { timeout: 60_000 });
+}
+
 async function login(page, email, password) {
   await runLoginSmoke({
     baseUrl: BASE,
@@ -58,6 +64,20 @@ async function login(page, email, password) {
     password,
     accessCode: ACCESS_CODE,
   });
+  const devPersonaByEmail = {
+    [STUDENT_EMAIL]: /casey student/i,
+    [TEACHER_EMAIL]: /alex teacher/i,
+    [ADMIN_EMAIL]: /dev admin/i,
+  };
+  const persona = devPersonaByEmail[email];
+  if (persona) {
+    try {
+      await loginDev(page, persona);
+      return;
+    } catch {
+      // Fall back to password login when dev-login is unavailable.
+    }
+  }
   await page.goto(`${BASE}/auth/login`, { waitUntil: 'networkidle' });
   await page.getByLabel(/email/i).fill(email);
   await page.locator('input[type="password"]').fill(password);

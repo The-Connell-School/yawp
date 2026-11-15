@@ -6,6 +6,7 @@ import {
   ChevronRightIcon,
   MessageSquareOff,
   MessageSquareText,
+  X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalStorage } from 'usehooks-ts';
@@ -39,6 +40,10 @@ type Props = {
   isSessionLocked?: boolean;
   onCmsUpdate?: (cms: any) => void;
   cmsIdx?: number;
+  /** Teacher viewing a student document: read-only transcript, no input. */
+  readOnlyTeacherView?: boolean;
+  studentDisplayName?: string;
+  onClose?: () => void;
   /**
    * Route the module arrows navigate within. Defaults to the solo editor, which
    * is where this component has always lived; a shared draft passes its own so
@@ -80,6 +85,9 @@ export const Tutor = ({
   isSessionLocked = false,
   onCmsUpdate,
   cmsIdx: resolvedCmsIdx,
+  readOnlyTeacherView = false,
+  studentDisplayName,
+  onClose,
   basePath = '/app/documents',
 }: Props) => {
   const [messagesExpanded, setMessagesExpanded] = useLocalStorage(
@@ -381,7 +389,11 @@ export const Tutor = ({
           height={22}
           className="h-[22px] w-[22px] shrink-0 rounded-full"
         />
-        <b className="text-sm text-[#0f172a]">Tutor</b>
+        <b className="text-sm text-[#0f172a]">
+          {readOnlyTeacherView
+            ? `${studentDisplayName?.trim() || 'Student'}'s tutor`
+            : 'Tutor'}
+        </b>
         <span
           role="group"
           aria-label="Tutor steps"
@@ -422,7 +434,17 @@ export const Tutor = ({
             </button>
           </Tooltip>
         </span>
-        {cms.assignmentModule.isSelfGuided ? null : (
+        {readOnlyTeacherView ? (
+          <button
+            type="button"
+            className="doc-editor-tutor-step-btn"
+            aria-label="Close tutor"
+            data-testid="tutor-close"
+            onClick={onClose}
+          >
+            <X size={15} />
+          </button>
+        ) : cms.assignmentModule.isSelfGuided ? null : (
           <Tooltip
             text={messagesExpanded ? 'Hide messages' : 'Show messages'}
             delayDuration={0}
@@ -559,6 +581,14 @@ export const Tutor = ({
           )}
         >
           You have completed all the modules in this course.
+        </p>
+      ) : readOnlyTeacherView ? (
+        <p
+          className="doc-editor-tutor-readonly-footer"
+          data-testid="tutor-readonly-footer"
+        >
+          Read only. {studentDisplayName?.trim() || 'The student'} sees this
+          conversation.
         </p>
       ) : (
         <ResponseBar

@@ -61,11 +61,13 @@ type Props = {
   initialHtml: string;
   initialRevision: number;
   isEditable: boolean;
+  teacherCommenting?: boolean;
   canUploadImages?: boolean;
   onBridgeReady: (bridge: EditorBridge | null) => void;
   onSyncStatusChange?: (status: SyncStatus) => void;
   onSubmittableContentChange?: (submittable: boolean) => void;
   onEditorDomReady?: (root: HTMLElement | null) => void;
+  onCommentDraft?: (draft: { id: string; excerpt: string }) => void;
   onCommentCreated?: (comment: unknown) => void;
   assignment?: AssignmentPrompt | null;
   marginComments?: React.ReactNode;
@@ -76,11 +78,13 @@ export function Editor({
   initialHtml,
   initialRevision,
   isEditable,
+  teacherCommenting = false,
   canUploadImages = false,
   onBridgeReady,
   onSyncStatusChange,
   onSubmittableContentChange,
   onEditorDomReady,
+  onCommentDraft,
   onCommentCreated,
   assignment,
   marginComments,
@@ -241,8 +245,8 @@ export function Editor({
             .map(
               (id) =>
                 `.comment-mark[data-comment-id="${CSS.escape(id)}"] {` +
-                ` background-color: #fde047;` +
-                ` border-bottom: 2px solid #ca8a04;` +
+                ` background-color: hsl(48 95% 82%);` +
+                ` border-bottom: 2px solid hsl(40 90% 55%);` +
                 ` box-shadow: 0 2px 6px -1px rgba(202, 138, 4, 0.35);` +
                 ` }`
             )
@@ -261,7 +265,9 @@ export function Editor({
             editor={editor}
             documentId={docId}
             isEditable={isEditable}
+            teacherCommenting={teacherCommenting}
             canUploadImages={canUploadImages}
+            onCommentDraft={onCommentDraft}
             onCommentCreated={onCommentCreated}
           />
         ) : null}

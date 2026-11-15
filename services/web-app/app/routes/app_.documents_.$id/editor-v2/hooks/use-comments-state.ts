@@ -14,11 +14,19 @@ export type DocComment = {
  *
  * Resyncs if the document id changes (e.g., navigating to a different doc).
  */
+export type PendingCommentDraft = {
+  id: string;
+  excerpt: string;
+};
+
 export function useCommentsState(initialComments: DocComment[]) {
   const [comments, setComments] = useState<DocComment[]>(initialComments);
   const [pendingFocusCommentId, setPendingFocusCommentId] = useState<
     string | null
   >(null);
+  const [pendingDraft, setPendingDraft] = useState<PendingCommentDraft | null>(
+    null
+  );
 
   // Resync if the loader-provided comments change wholesale
   // (typically happens on navigation to a different document)
@@ -58,6 +66,10 @@ export function useCommentsState(initialComments: DocComment[]) {
     []
   );
 
+  const clearPendingDraft = useCallback(() => {
+    setPendingDraft(null);
+  }, []);
+
   return {
     comments,
     addComment,
@@ -65,5 +77,8 @@ export function useCommentsState(initialComments: DocComment[]) {
     addResponse,
     setCommentArchived,
     pendingFocusCommentId,
+    pendingDraft,
+    setPendingDraft,
+    clearPendingDraft,
   };
 }

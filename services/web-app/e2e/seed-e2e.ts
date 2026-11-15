@@ -1350,6 +1350,17 @@ export async function seedE2E(): Promise<E2EContext> {
     update: { value: 'true', updatedAt: new Date() },
   });
 
+  await prisma.setting.upsert({
+    where: { name: 'feature_flag.document-editor-v2' },
+    create: {
+      name: 'feature_flag.document-editor-v2',
+      value: 'true',
+      valueType: 'boolean',
+      description: 'Document editor v2 enabled for E2E smoke',
+    },
+    update: { value: 'true', updatedAt: new Date() },
+  });
+
   return {
     organizationId: org.id,
     schoolId: school.id,
