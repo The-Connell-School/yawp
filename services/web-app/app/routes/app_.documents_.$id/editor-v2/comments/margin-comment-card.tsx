@@ -24,6 +24,8 @@ import type { Comment as CommentType } from './comment';
 
 type Props = CommentType & {
   readOnly?: boolean;
+  surface?: 'margin' | 'sheet';
+  testIdPrefix?: string;
   onDelete?: (commentId: string) => void;
   onResponseAdded?: (commentId: string, response: unknown) => void;
   onArchiveChange?: (commentId: string, archivedAt: Date | null) => void;
@@ -32,6 +34,8 @@ type Props = CommentType & {
 
 export function MarginCommentCard({
   readOnly = false,
+  surface = 'margin',
+  testIdPrefix = 'margin-comment-card',
   onDelete,
   onResponseAdded,
   onArchiveChange,
@@ -173,11 +177,12 @@ export function MarginCommentCard({
     <div
       className={cn(
         'doc-editor-comment-card relative flex flex-col gap-2 transition-all duration-200 ease-in-out',
+        surface === 'sheet' && 'doc-editor-comment-card--sheet',
         isFocused ? 'ring-2 ring-[hsl(40_90%_55%)]' : ''
       )}
       id={`comment-${comment.id}`}
       data-comment-card={comment.id}
-      data-testid={`margin-comment-card-${comment.id}`}
+      data-testid={`${testIdPrefix}-${comment.id}`}
       onMouseEnter={() => setHoveredCommentId(comment.id)}
       onMouseLeave={() => setHoveredCommentId(null)}
       onClick={(e) => {

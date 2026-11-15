@@ -45,6 +45,7 @@ export function EditorLoadingShell() {
       data-testid="document-editor-loading"
       aria-busy="true"
     >
+      <p className="sr-only">Loading editor…</p>
       <div className="doc-editor-toolbar-glass mx-4 mt-2 h-[42px] opacity-60" />
       <div className="doc-editor-scroll flex-1">
         <article className="doc-editor-loading-page opacity-70">

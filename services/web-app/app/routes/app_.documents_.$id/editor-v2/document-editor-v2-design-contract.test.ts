@@ -37,8 +37,12 @@ describe('document editor v2 design contract', () => {
     );
     expect(css).toContain('--tutor-panel-bg: #fcfaf5');
     expect(css).toContain('--tutor-rim: #e3ded2');
+    expect(css).toContain('--tutor-bubble-bg: #fff');
+    expect(css).toContain('--student-bubble-bg: #e8f0eb');
     expect(css).toContain('--doc-glass-bg:');
     expect(css).toContain('--doc-workspace-bg:');
+    expect(css).toContain('.doc-editor-comments-sheet');
+    expect(css).toContain('.doc-editor-comment-card--sheet');
   });
 
   test('each states-board surface maps to v2 CSS or components', () => {

@@ -1,5 +1,6 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from 'prosemirror-state';
+import { RECOVERY_SOURCE } from '../use-pm-tripwire';
 
 export const USER_SOURCE_META = 'yawp-pm-source';
 
@@ -16,6 +17,8 @@ export const SourceTracker = Extension.create({
 
   addProseMirrorPlugins() {
     let userEventActive = false;
+    /** TipTap/PM may normalize parsed HTML on mount without a user event. */
+    let bootstrapTransactionsRemaining = 4;
 
     const view = this.editor.view;
     const dom = view.dom as HTMLElement;
@@ -45,6 +48,13 @@ export const SourceTracker = Extension.create({
           // so setting meta here makes it visible to all downstream consumers.
           if (userEventActive && tr.docChanged) {
             tr.setMeta(USER_SOURCE_META, 'user');
+          } else if (
+            bootstrapTransactionsRemaining > 0 &&
+            tr.docChanged &&
+            !tr.getMeta(USER_SOURCE_META)
+          ) {
+            tr.setMeta(USER_SOURCE_META, RECOVERY_SOURCE);
+            bootstrapTransactionsRemaining -= 1;
           }
           return true; // never block
         },
