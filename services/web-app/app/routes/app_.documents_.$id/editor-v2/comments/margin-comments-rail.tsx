@@ -3,6 +3,7 @@ import { DocumentMarginComments } from '../document-editor/document-margin-comme
 import { useEditorChrome } from '../document-editor/editor-chrome-context';
 import { MarginCommentDraftCard } from './margin-comment-draft-card';
 import type { PendingCommentDraft } from '../hooks/use-comments-state';
+import { uniqueMarginCommentIds } from './margin-comment-ids';
 
 type Props = {
   comments: CommentType[];
@@ -13,6 +14,7 @@ type Props = {
   onResponseAdded?: (commentId: string, response: unknown) => void;
   onArchiveChange?: (commentId: string, archivedAt: Date | null) => void;
   onCommentCreated?: (comment: unknown) => void;
+  onDraftCommitted?: () => void;
   onDraftCancel?: () => void;
   autoFocusReplyCommentId?: string | null;
 };
@@ -26,15 +28,16 @@ export function MarginCommentsRail({
   onResponseAdded,
   onArchiveChange,
   onCommentCreated,
+  onDraftCommitted,
   onDraftCancel,
   autoFocusReplyCommentId,
 }: Props) {
   const { contentRoot, scrollRoot } = useEditorChrome();
 
-  const commentIds = [
-    ...(pendingDraft ? [pendingDraft.id] : []),
-    ...comments.map((c) => c.id),
-  ];
+  const commentIds = uniqueMarginCommentIds(
+    comments.map((c) => c.id),
+    pendingDraft?.id
+  );
 
   if (commentIds.length === 0) return null;
 
@@ -53,8 +56,8 @@ export function MarginCommentsRail({
               excerpt={pendingDraft.excerpt}
               onCancel={() => onDraftCancel?.()}
               onCreated={(c) => {
+                onDraftCommitted?.();
                 onCommentCreated?.(c);
-                onDraftCancel?.();
               }}
             />
           );

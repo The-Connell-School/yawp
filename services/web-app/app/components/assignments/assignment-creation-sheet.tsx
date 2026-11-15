@@ -1245,9 +1245,18 @@ export function AssignmentCreationSheetContent({
   ]);
 
   const toldCreated = useRef<unknown>(null);
+  const editSaveInFlightRef = useRef(false);
+  useEffect(() => {
+    if (createFetcher.state === 'submitting' && editingAssignment) {
+      editSaveInFlightRef.current = true;
+    }
+  }, [createFetcher.state, editingAssignment]);
+
   useEffect(() => {
     if (createFetcher.state !== 'idle' || !createFetcher.data?.success) return;
     if (editingAssignment) {
+      if (!editSaveInFlightRef.current) return;
+      editSaveInFlightRef.current = false;
       onOpenChange(false);
       return;
     }
@@ -2403,7 +2412,10 @@ export function AssignmentCreationSheetContent({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-[520px]">
+      <SheetContent
+        className="z-[60] w-full overflow-y-auto sm:max-w-[520px]"
+        data-testid="assignment-creation-sheet"
+      >
         {sheetBody}
       </SheetContent>
     </Sheet>

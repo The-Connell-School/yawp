@@ -1,4 +1,6 @@
 import { DevPanelBeaker } from './dev-panel-beaker';
+import { DevPanelNavigationSync } from './dev-panel-navigation-sync';
+import { DevPanelDismissListener } from './dev-panel-dismiss-listener';
 import { DevPanelProvider, useDevPanel } from './dev-panel-provider';
 import { DevPanelShell } from './dev-panel-shell';
 import { DevPanelShellBoundary } from './dev-panel-shell-boundary';
@@ -37,6 +39,8 @@ export function DevPanelMount({
       previewAccessSeatLabel={previewAccessSeatLabel}
     >
       <DevPanelShortcutBridge />
+      <DevPanelNavigationSync />
+      <DevPanelDismissListener />
       <DevPanelBeaker />
       <DevPanelShellWithBoundary />
     </DevPanelProvider>

@@ -25,15 +25,7 @@ import {
   MessageCircle,
   PanelLeft,
 } from 'lucide-react';
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  startTransition,
-} from 'react';
-import { useLocalStorage } from 'usehooks-ts';
+import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { SaveStatusIndicator } from '~/components/save-status-indicator';
 import { Badge } from '~/components/ui/badge';
@@ -66,16 +58,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '~/components/ui/popover';
-import useBreakpoint from '~/hooks/useBreakpoint';
+import { useDeferredBreakpoint } from './hooks/use-deferred-breakpoint';
+import { useDeferredLocalStorage } from './hooks/use-deferred-local-storage';
+import { scheduleAfterHydration } from '~/utils/schedule-after-hydration';
+import { clearRadixScrollLockCleanup } from '~/utils/radix-scroll-lock-cleanup';
 import { useUser } from '~/hooks/useUser';
 import { Comments } from './comments';
 import { MarginCommentsRail } from './comments/margin-comments-rail';
 import { TeacherPasteReport } from '~/components/teacher-paste-report';
 import { CommentsSelectionProvider } from './comments/selection-context';
-import {
-  DocumentEditor,
-  EditorLoadingShell,
-} from './document-editor/document-editor';
+import { DocumentEditor } from './document-editor/document-editor';
 import type { EditorBridge } from './document-editor/use-editor-sync';
 import { Tutor } from './tutor/tutor';
 import { DocumentHistory } from './document-history/document-history';
@@ -222,15 +214,10 @@ export function DocumentEditorV2Page() {
   const fetcher = useFetcher();
   const submissionUnsubmitFetcher = useFetcher();
   const navigate = useNavigate();
-  const breakpoint = useBreakpoint();
+  const breakpoint = useDeferredBreakpoint();
   const [uiMounted, setUiMounted] = useState(false);
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        startTransition(() => setUiMounted(true));
-      });
-    });
+    scheduleAfterHydration(() => setUiMounted(true));
   }, []);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
@@ -250,19 +237,28 @@ export function DocumentEditorV2Page() {
   const [locallyUnsubmittedIds, setLocallyUnsubmittedIds] = useState<
     Set<string>
   >(new Set());
+  useEffect(() => {
+    return () => {
+      setMobileCommentsSheetOpen(false);
+      setMobileTutorSheetOpen(false);
+      setSubmitConfirmOpen(false);
+      setArchiveDialogOpen(false);
+      clearRadixScrollLockCleanup();
+    };
+  }, []);
   const isMobile =
     uiMounted && ['base', 'sm', 'md'].includes(breakpoint ?? '');
-  const [pageWidth, setPageWidth] = useLocalStorage<PageWidthMode>(
+  const [pageWidth, setPageWidth] = useDeferredLocalStorage<PageWidthMode>(
     `doc-${data.doc.id}-page-width`,
     'fit'
   );
-  const [desktopTutorOpen, setDesktopTutorOpen] = useLocalStorage(
+  const [desktopTutorOpen, setDesktopTutorOpen] = useDeferredLocalStorage(
     `doc-${data.doc.id}-panel-tutor`,
     true
   );
-  const [desktopCommentsOpen, setDesktopCommentsOpen] = useLocalStorage(
+  const [desktopCommentsOpen, setDesktopCommentsOpen] = useDeferredLocalStorage(
     `doc-${data.doc.id}-panel-comments`,
-    true
+    false
   );
   const classSubtitle = useMemo(() => {
     const cls = data.doc.classAssignment?.class;
@@ -308,9 +304,10 @@ export function DocumentEditorV2Page() {
   );
   useEffect(() => {
     if (!uiMounted) return;
-    if (isViewingAsTeacher && !isOwnTeacherPreview) {
+    if (!isViewingAsTeacher || isOwnTeacherPreview) return;
+    startTransition(() => {
       setDesktopCommentsOpen(true);
-    }
+    });
   }, [
     uiMounted,
     isViewingAsTeacher,
@@ -375,7 +372,9 @@ export function DocumentEditorV2Page() {
   const [editorRoot, setEditorRoot] = useState<HTMLElement | null>(null);
   const handleEditorBridgeReady = useCallback((bridge: EditorBridge | null) => {
     editorBridgeRef.current = bridge;
-    setEditorRoot(bridge?.getContentElement?.() ?? null);
+    scheduleAfterHydration(() => {
+      setEditorRoot(bridge?.getContentElement?.() ?? null);
+    });
   }, []);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
@@ -393,6 +392,24 @@ export function DocumentEditorV2Page() {
   });
   const tutor = useTutorState(data.currentCms as any, cmsIdx);
   const commentsState = useCommentsState((data.doc.comments as any[]) ?? []);
+  const { setCommentArchived } = commentsState;
+  const handleCommentArchive = useCallback(
+    (commentId: string, archivedAt: Date | null) => {
+      if (archivedAt) {
+        editorBridgeRef.current?.removeCommentMark(commentId);
+      }
+      setCommentArchived(commentId, archivedAt);
+    },
+    [setCommentArchived]
+  );
+  const { clearPendingFocusCommentId, pendingFocusCommentId } = commentsState;
+  useEffect(() => {
+    if (!pendingFocusCommentId) return;
+    const handle = window.requestAnimationFrame(() => {
+      clearPendingFocusCommentId();
+    });
+    return () => window.cancelAnimationFrame(handle);
+  }, [pendingFocusCommentId, clearPendingFocusCommentId]);
   const submit = useDocumentSubmit({
     documentId: data.doc.id,
     editorBridgeRef,
@@ -631,6 +648,7 @@ export function DocumentEditorV2Page() {
                 defaultValue={data.doc.title}
                 placeholder="Untitled document"
                 readOnly={!isDocumentEditable}
+                suppressHydrationWarning
                 onBlur={(e) => {
                   if (!isDocumentEditable) return;
                   if (e.target.value !== data.doc.title) {
@@ -700,7 +718,7 @@ export function DocumentEditorV2Page() {
                     className="doc-editor-panel-btn"
                     aria-label="Tutor"
                     title="Tutor"
-                    aria-pressed={desktopTutorOpen}
+                    aria-pressed={uiMounted ? desktopTutorOpen : true}
                     onClick={() => setDesktopTutorOpen((open) => !open)}
                   >
                     <PanelLeft className="h-4 w-4" />
@@ -711,7 +729,7 @@ export function DocumentEditorV2Page() {
                   className="doc-editor-panel-btn"
                   aria-label="Comments"
                   title="Comments"
-                  aria-pressed={desktopCommentsOpen}
+                  aria-pressed={uiMounted ? desktopCommentsOpen : false}
                   onClick={() => setDesktopCommentsOpen((open) => !open)}
                 >
                   <MessageCircle className="h-4 w-4" />
@@ -988,131 +1006,87 @@ export function DocumentEditorV2Page() {
                     : 'flex h-full min-w-0 w-full flex-col'
                 )}
               >
-                {uiMounted ? (
-                  <DocumentEditor
-                    docId={data.doc.id}
-                    assignment={tutorEnabled ? editorAssignmentPrompt : null}
-                    serverHtml={editorServerHtml}
-                    serverText={editorServerText}
-                    serverUpdatedAt={data.doc.updatedAt}
-                    initialRevision={data.doc.revision}
-                    isEditable={isEditorEditable}
-                    teacherCommenting={
-                      isViewingAsTeacher && !isOwnTeacherPreview
-                    }
-                    canUploadImages={data.canUploadImages}
-                    pageWidth={pageWidth}
-                    onPageWidthChange={setPageWidth}
-                    snapshotContent={
-                      viewingSubmission
-                        ? {
-                            html: submissionPreview!.html,
-                            text: submissionPreview!.text,
-                          }
-                        : null
-                    }
-                    submissionViewBanner={
-                      viewingSubmission ? (
-                        <div
-                          className="doc-editor-view-banner"
-                          data-testid="document-submission-view-banner"
+                <DocumentEditor
+                  docId={data.doc.id}
+                  assignment={tutorEnabled ? editorAssignmentPrompt : null}
+                  serverHtml={editorServerHtml}
+                  serverText={editorServerText}
+                  serverUpdatedAt={data.doc.updatedAt}
+                  initialRevision={data.doc.revision}
+                  isEditable={isEditorEditable}
+                  teacherCommenting={
+                    isViewingAsTeacher && !isOwnTeacherPreview
+                  }
+                  canUploadImages={data.canUploadImages}
+                  pageWidth={pageWidth}
+                  onPageWidthChange={setPageWidth}
+                  snapshotContent={
+                    viewingSubmission
+                      ? {
+                          html: submissionPreview!.html,
+                          text: submissionPreview!.text,
+                        }
+                      : null
+                  }
+                  submissionViewBanner={
+                    viewingSubmission ? (
+                      <div
+                        className="doc-editor-view-banner"
+                        data-testid="document-submission-view-banner"
+                      >
+                        <span>
+                          Viewing submission {submissionPreview!.versionLabel}
+                        </span>
+                        <button
+                          type="button"
+                          className="font-semibold text-[hsl(210_50%_30%)] underline-offset-2 hover:underline"
+                          onClick={clearSubmissionView}
                         >
-                          <span>
-                            Viewing submission {submissionPreview!.versionLabel}
-                          </span>
-                          <button
-                            type="button"
-                            className="font-semibold text-[hsl(210_50%_30%)] underline-offset-2 hover:underline"
-                            onClick={clearSubmissionView}
-                          >
-                            Back to current draft
-                          </button>
-                        </div>
-                      ) : null
-                    }
-                    onBridgeReady={handleEditorBridgeReady}
-                    onSyncStatusChange={setSyncStatus}
-                    onSubmittableContentChange={handleSubmittableContentChange}
-                    onCommentDraft={(draft) => {
-                      commentsState.setPendingDraft(draft);
-                      if (!isMobile) setDesktopCommentsOpen(true);
-                    }}
-                    onCommentCreated={(c) => {
-                      commentsState.addComment(c as any);
-                      if (!isMobile) setDesktopCommentsOpen(true);
-                    }}
-                    marginComments={
-                      showDesktopMarginComments ? (
-                        <MarginCommentsRail
-                          documentId={data.doc.id}
-                          comments={marginRailComments as any}
-                          pendingDraft={commentsState.pendingDraft}
-                          readOnly={commentsReadOnly}
-                          onCommentRemoved={commentsState.removeComment}
-                          onResponseAdded={commentsState.addResponse}
-                          onArchiveChange={commentsState.setCommentArchived}
-                          onCommentCreated={(c) =>
-                            commentsState.addComment(c as any)
+                          Back to current draft
+                        </button>
+                      </div>
+                    ) : null
+                  }
+                  onBridgeReady={handleEditorBridgeReady}
+                  onSyncStatusChange={setSyncStatus}
+                  onSubmittableContentChange={handleSubmittableContentChange}
+                  onCommentDraft={(draft) => {
+                    commentsState.setPendingDraft(draft);
+                    if (!isMobile) setDesktopCommentsOpen(true);
+                  }}
+                  marginComments={
+                    showDesktopMarginComments ? (
+                      <MarginCommentsRail
+                        documentId={data.doc.id}
+                        comments={marginRailComments as any}
+                        pendingDraft={commentsState.pendingDraft}
+                        readOnly={commentsReadOnly}
+                        onCommentRemoved={commentsState.removeComment}
+                        onResponseAdded={commentsState.addResponse}
+                        onArchiveChange={handleCommentArchive}
+                        onCommentCreated={(c) =>
+                          commentsState.addComment(c as any)
+                        }
+                        onDraftCommitted={() => {
+                          commentsState.clearPendingDraft();
+                        }}
+                        onDraftCancel={() => {
+                          const draftId = commentsState.pendingDraft?.id;
+                          commentsState.clearPendingDraft();
+                          if (draftId) {
+                            editorBridgeRef.current?.removeCommentMark(draftId);
                           }
-                          onDraftCancel={() => {
-                            const draftId = commentsState.pendingDraft?.id;
-                            commentsState.clearPendingDraft();
-                            if (draftId) {
-                              document
-                                .querySelectorAll(
-                                  `[data-comment-id="${draftId}"]`
-                                )
-                                .forEach((mark) => {
-                                  const node = mark as HTMLElement;
-                                  if (!node.parentNode) return;
-                                  while (node.childNodes.length > 0) {
-                                    node.parentNode.insertBefore(
-                                      node.childNodes[0],
-                                      node
-                                    );
-                                  }
-                                  node.parentNode.removeChild(node);
-                                });
-                            }
-                          }}
-                          autoFocusReplyCommentId={
-                            commentsState.pendingFocusCommentId
-                          }
-                        />
-                      ) : null
-                    }
-                  />
-                ) : (
-                  <EditorLoadingShell />
-                )}
+                        }}
+                        autoFocusReplyCommentId={
+                          commentsState.pendingFocusCommentId
+                        }
+                      />
+                    ) : null
+                  }
+                />
               </div>
             )}
-            {isMobile && tab === 'comments' ? (
-              <div className="h-full min-w-0 w-full">
-                <TeacherPasteReport
-                  key={`${data.doc.id}-mobile-comments`}
-                  enabled={isViewingAsTeacher}
-                  documentId={data.doc.id}
-                  contentRoot={editorRoot}
-                  onSelectEvent={() => {
-                    changeTab('editor');
-                  }}
-                >
-                  <Comments
-                    variant="sheet"
-                    comments={visibleComments as any}
-                    openCommentCount={activeComments.length}
-                    readOnly={commentsReadOnly}
-                    onCommentRemoved={commentsState.removeComment}
-                    onResponseAdded={commentsState.addResponse}
-                    onArchiveChange={commentsState.setCommentArchived}
-                    autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
-                  />
-                </TeacherPasteReport>
-              </div>
-            ) : null}
           </div>
-        </CommentsSelectionProvider>
         {isMobile ? (
           <nav
             className="doc-editor-mobile-tabbar"
@@ -1126,7 +1100,10 @@ export function DocumentEditorV2Page() {
                 role="tab"
                 className="doc-editor-mobile-tab"
                 aria-selected={tab === 'tutor'}
-                onClick={() => changeTab('tutor')}
+                onClick={() => {
+                  if (isMobile) setMobileCommentsSheetOpen(false);
+                  changeTab('tutor');
+                }}
               >
                 <Sparkles className="h-4 w-4" aria-hidden />
                 <span>Tutor</span>
@@ -1150,6 +1127,7 @@ export function DocumentEditorV2Page() {
               onClick={() => {
                 if (isMobile) {
                   setMobileCommentsSheetOpen(true);
+                  return;
                 }
                 changeTab('comments');
               }}
@@ -1178,8 +1156,7 @@ export function DocumentEditorV2Page() {
             </span>
           </button>
         ) : null}
-      </main>
-      {isMobile ? (
+        {isMobile ? (
         <>
           <Sheet open={mobileTutorSheetOpen} onOpenChange={setMobileTutorSheetOpen}>
             <SheetContent
@@ -1213,10 +1190,13 @@ export function DocumentEditorV2Page() {
           <Sheet
             open={mobileCommentsSheetOpen}
             onOpenChange={setMobileCommentsSheetOpen}
+            modal={false}
           >
             <SheetContent
               side="bottom"
-              className="h-[min(72vh,560px)] overflow-hidden p-0"
+              includeOverlay={false}
+              showCloseButton={false}
+              className="doc-editor-mobile-comments-sheet z-30 h-[min(60vh,520px)] overflow-hidden border-t p-0"
               data-testid="mobile-comments-sheet"
             >
               <SheetHeader className="sr-only">
@@ -1240,7 +1220,7 @@ export function DocumentEditorV2Page() {
                     readOnly={commentsReadOnly}
                     onCommentRemoved={commentsState.removeComment}
                     onResponseAdded={commentsState.addResponse}
-                    onArchiveChange={commentsState.setCommentArchived}
+                    onArchiveChange={handleCommentArchive}
                     autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
                   />
                 </div>
@@ -1249,6 +1229,8 @@ export function DocumentEditorV2Page() {
           </Sheet>
         </>
       ) : null}
+        </CommentsSelectionProvider>
+      </main>
       <Dialog
         open={submissionToUnsubmit != null}
         onOpenChange={(open) => {

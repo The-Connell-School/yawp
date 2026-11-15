@@ -32,6 +32,7 @@ const hydratedBridge: EditorBridge = {
     text: 'newer local draft',
   }),
   saveNow: mock(async () => 'synced' as const),
+  removeCommentMark: () => false,
 };
 
 mock.module('./editor', () => ({
@@ -100,6 +101,11 @@ describe('DocumentEditor hydration boundary', () => {
         lastSyncedAt: null,
         lastSyncError: null,
         contentHash: 'local-hash',
+      });
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve());
+        });
       });
       await Promise.resolve();
     });

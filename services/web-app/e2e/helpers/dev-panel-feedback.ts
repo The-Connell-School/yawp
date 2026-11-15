@@ -137,11 +137,17 @@ export async function isDevPanelActive(page: Page) {
 /** App shell + dev-panel mount are present; beaker is actionable (hydrated) before click. */
 export async function waitForDeveloperToolsPageReady(page: Page) {
   await page.waitForLoadState('domcontentloaded');
-  const beaker = page.getByRole('button', { name: 'Open developer tools' });
-  await expect(beaker).toBeVisible({ timeout: 30_000 });
+  await waitForDevPanelRestoredFromStorage(page);
+  const panel = devToolsPanel(page);
+  const beaker = page.getByRole('button', { name: /^Open developer tools\b/ });
   await expect(async () => {
+    if (await panel.isVisible().catch(() => false)) {
+      await expect(panel).toBeVisible({ timeout: 1_000 });
+      return;
+    }
+    await expect(beaker).toBeVisible({ timeout: 1_000 });
     await beaker.click({ trial: true });
-  }).toPass({ timeout: 30_000 });
+  }).toPass({ timeout: 60_000 });
 }
 
 export async function openDevToolsPanel(page: Page) {

@@ -83,6 +83,7 @@ describe('useDocumentSubmit', () => {
           : {
               getContent: () => ({ html: '<p>latest</p>', text: 'latest' }),
               saveNow,
+              removeCommentMark: () => false,
             },
     } as RefObject<EditorBridge>;
     const onSubmitted = mock();
@@ -159,7 +160,11 @@ describe('useDocumentSubmit', () => {
   it('redacts unknown submit API error messages in toasts', async () => {
     const saveNow = mock(async () => 'synced' as const);
     const editorBridgeRef = {
-      current: { getContent: () => ({ html: '<p>x</p>', text: 'x' }), saveNow },
+      current: {
+        getContent: () => ({ html: '<p>x</p>', text: 'x' }),
+        saveNow,
+        removeCommentMark: () => false,
+      },
     } as RefObject<EditorBridge>;
     const onSubmitted = mock();
     globalThis.fetch = mock(async () =>
@@ -197,7 +202,11 @@ describe('useDocumentSubmit', () => {
   it('shows whitelisted conflict copy from the submit API', async () => {
     const saveNow = mock(async () => 'synced' as const);
     const editorBridgeRef = {
-      current: { getContent: () => ({ html: '<p>x</p>', text: 'x' }), saveNow },
+      current: {
+        getContent: () => ({ html: '<p>x</p>', text: 'x' }),
+        saveNow,
+        removeCommentMark: () => false,
+      },
     } as RefObject<EditorBridge>;
     const onSubmitted = mock();
     globalThis.fetch = mock(async () =>
