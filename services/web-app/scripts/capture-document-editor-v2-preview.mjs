@@ -58,12 +58,6 @@ async function loginDev(page, personaButtonName) {
 }
 
 async function login(page, email, password) {
-  await runLoginSmoke({
-    baseUrl: BASE,
-    email,
-    password,
-    accessCode: ACCESS_CODE,
-  });
   const devPersonaByEmail = {
     [STUDENT_EMAIL]: /casey student/i,
     [TEACHER_EMAIL]: /alex teacher/i,
@@ -74,10 +68,16 @@ async function login(page, email, password) {
     try {
       await loginDev(page, persona);
       return;
-    } catch {
-      // Fall back to password login when dev-login is unavailable.
+    } catch (err) {
+      console.warn('dev-login failed, falling back to password login', err);
     }
   }
+  await runLoginSmoke({
+    baseUrl: BASE,
+    email,
+    password,
+    accessCode: ACCESS_CODE,
+  });
   await page.goto(`${BASE}/auth/login`, { waitUntil: 'networkidle' });
   await page.getByLabel(/email/i).fill(email);
   await page.locator('input[type="password"]').fill(password);
