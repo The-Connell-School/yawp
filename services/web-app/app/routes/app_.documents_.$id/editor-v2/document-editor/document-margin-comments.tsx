@@ -88,7 +88,7 @@ export function DocumentMarginComments({
     <aside
       ref={asideRef}
       aria-label="Comments"
-      className="doc-editor-margin hidden lg:block"
+      className="doc-editor-margin"
       data-testid="document-margin-comments-aside"
     >
       {commentIds.map((id) => {

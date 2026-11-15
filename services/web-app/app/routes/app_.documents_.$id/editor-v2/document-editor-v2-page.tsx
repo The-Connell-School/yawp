@@ -431,6 +431,14 @@ export function DocumentEditorV2Page() {
       ? allComments
       : activeComments
     : activeComments;
+  const loaderComments = (data.doc.comments as typeof activeComments) ?? [];
+  const marginRailComments = useMemo(() => {
+    const source =
+      activeComments.length > 0
+        ? activeComments
+        : loaderComments.filter((c) => !c.archivedAt);
+  return sortDocumentCommentsByMarkupOrder(source, editorServerHtml);
+  }, [activeComments, loaderComments, editorServerHtml]);
   const showDesktopMarginComments =
     !isMobile &&
     (desktopCommentsOpen ||
@@ -1015,7 +1023,7 @@ export function DocumentEditorV2Page() {
                       showDesktopMarginComments ? (
                         <MarginCommentsRail
                           documentId={data.doc.id}
-                          comments={visibleComments as any}
+                          comments={marginRailComments as any}
                           pendingDraft={commentsState.pendingDraft}
                           readOnly={commentsReadOnly}
                           onCommentRemoved={commentsState.removeComment}

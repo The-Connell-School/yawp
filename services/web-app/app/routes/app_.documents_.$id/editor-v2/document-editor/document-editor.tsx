@@ -16,6 +16,7 @@ type Props = {
   serverUpdatedAt: string | Date;
   initialRevision: number;
   isEditable: boolean;
+  /** Grading teachers always load server HTML so comment marks match the DB. */
   teacherCommenting?: boolean;
   canUploadImages?: boolean;
   onBridgeReady: (bridge: EditorBridge | null) => void;
@@ -98,6 +99,14 @@ export function DocumentEditor({
       });
       return;
     }
+    if (teacherCommenting) {
+      setHydrated({
+        html: serverHtml,
+        text: serverText,
+        source: 'server',
+      });
+      return;
+    }
     let cancelled = false;
     documentStore
       .get(docId)
@@ -118,7 +127,14 @@ export function DocumentEditor({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [docId, snapshotContent?.html, snapshotContent?.text]);
+  }, [
+    docId,
+    teacherCommenting,
+    serverHtml,
+    serverText,
+    snapshotContent?.html,
+    snapshotContent?.text,
+  ]);
 
   return (
     <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
