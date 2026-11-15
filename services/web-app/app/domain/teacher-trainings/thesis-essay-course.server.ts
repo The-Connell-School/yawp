@@ -17,6 +17,7 @@
  */
 import { THESIS_ESSAY_COURSE } from '~/routes/app.assignment-types.$id/landing-copy/thesis-essay-course';
 import { prisma } from '~/utils/db.server';
+import { lessonNumberOfTrainingModule } from './lounge-lesson-tutorials';
 
 export const THESIS_ESSAY_COURSE_TITLE = 'The Thesis-Driven Essay';
 
@@ -29,7 +30,6 @@ export type ThesisEssayCourseLinks = {
   videoModules: Record<number, string>;
 };
 
-const LESSON_NUMBER = /^\s*lesson\s+(\d{1,2})\b/i;
 
 export async function findThesisEssayCourse(
   membershipId: string
@@ -57,7 +57,7 @@ export async function findThesisEssayCourse(
   if (!course) return null;
   const videoModules: Record<number, string> = {};
   for (const module of course.teacherTrainingModules) {
-    const number = Number(LESSON_NUMBER.exec(module.title)?.[1]);
+    const number = lessonNumberOfTrainingModule(module.title);
     // The first module for a lesson number wins.
     if (number && !videoModules[number]) videoModules[number] = module.id;
   }

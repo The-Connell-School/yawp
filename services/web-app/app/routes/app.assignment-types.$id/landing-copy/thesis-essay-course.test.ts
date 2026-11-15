@@ -16,6 +16,20 @@ function publicFile(href: string) {
   return join(PUBLIC_DIR, href);
 }
 
+/** An MP4's length, read from its movie header (the `mvhd` box). */
+function mp4Seconds(file: Buffer): number {
+  const at = file.indexOf('mvhd', 0, 'latin1');
+  expect(at).toBeGreaterThan(0);
+  const body = at + 4;
+  const version = file.readUInt8(body);
+  // After version and flags: created and modified (4 bytes each, 8 in
+  // version 1), then the timescale and the duration in that timescale.
+  if (version === 1) {
+    return Number(file.readBigUInt64BE(body + 24)) / file.readUInt32BE(body + 20);
+  }
+  return file.readUInt32BE(body + 16) / file.readUInt32BE(body + 12);
+}
+
 describe('The Thesis-Driven Essay course', () => {
   test("has Brian's eight lessons, in order, titled as in his mock-up", () => {
     expect(THESIS_ESSAY_COURSE_TITLE).toBe('The Thesis-Driven Essay course');
@@ -141,6 +155,16 @@ describe("Brian's tutorial videos", () => {
       expect(statSync(path).size).toBeLessThan(40_000_000);
       expect(tutorial.minutes).toBeGreaterThanOrEqual(4);
       expect(tutorial.minutes).toBeLessThanOrEqual(15);
+    }
+  );
+
+  // The Lounge counts a lesson as watched when the teacher reaches `seconds`,
+  // so it has to be the file's real length, rounded down as an upload's is.
+  test.each(tutorials.map((tutorial) => [tutorial.title, tutorial]))(
+    '%s: `seconds` is how long the file really runs, and `minutes` rounds it',
+    (_title, tutorial) => {
+      expect(tutorial.seconds).toBe(Math.floor(mp4Seconds(readFileSync(publicFile(tutorial.src)))));
+      expect(tutorial.minutes).toBe(Math.round(tutorial.seconds / 60));
     }
   );
 

@@ -51,7 +51,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const page = { pagePath, lessonNumber, lessonTitle: lesson.title };
 
   if (lesson.tutorials.length > 0) {
-    const videos: TutorialVideo[] = lesson.tutorials.map((tutorial) => ({ ...tutorial }));
+    const videos: TutorialVideo[] = lesson.tutorials.map(({ title, src, poster, captions, minutes }) => ({
+      title,
+      src,
+      poster,
+      captions,
+      minutes,
+    }));
     return {
       ...page,
       moduleTitle: null as string | null,
