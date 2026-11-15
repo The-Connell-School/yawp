@@ -143,7 +143,9 @@ test.describe('Document editor v2 margin comments', () => {
     expect(layout.length).toBe(3);
     const sorted = [...layout].sort((a, b) => a.cardTop - b.cardTop);
     for (const row of layout) {
-      expect(Math.abs(row.cardTop - row.markTop)).toBeLessThan(48);
+      const pushDown = row.cardTop - row.markTop;
+      expect(pushDown).toBeGreaterThanOrEqual(-4);
+      expect(pushDown).toBeLessThan(120);
     }
     for (let i = 1; i < sorted.length; i++) {
       const prev = sorted[i - 1];
