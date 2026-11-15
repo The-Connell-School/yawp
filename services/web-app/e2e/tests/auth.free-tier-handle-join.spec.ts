@@ -153,23 +153,22 @@ test.describe('Free-tier handle student', () => {
       await expect(teacherPage.getByText(displayName)).toBeVisible();
       await expect(teacherPage.getByText(`@${handle}`)).toBeVisible();
 
-      await gotoClassDocumentsTab(teacherPage, klass.id, {
+      const documentsTabParams = {
         status: 'needs-grading',
-      });
+        assignmentId: assignment.id,
+      };
+      await gotoClassDocumentsTab(teacherPage, klass.id, documentsTabParams);
       const documentsTable = teacherPage.getByRole('table', {
         name: /class documents/i,
       });
       await expect
         .poll(
           async () => {
-            if (await documentsTable.isVisible().catch(() => false)) {
-              return (await documentsTable.getByText(displayName).count()) > 0;
+            await gotoClassDocumentsTab(teacherPage, klass.id, documentsTabParams);
+            if (!(await documentsTable.isVisible().catch(() => false))) {
+              return false;
             }
-            await teacherPage.reload();
-            await gotoClassDocumentsTab(teacherPage, klass.id, {
-              status: 'needs-grading',
-            });
-            return false;
+            return (await documentsTable.getByText(displayName).count()) > 0;
           },
           { timeout: 90_000 }
         )

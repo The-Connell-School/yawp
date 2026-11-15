@@ -282,10 +282,15 @@ test.describe.serial('Teacher dashboard workspace', () => {
         .click();
       await page.waitForURL(/\/app\/documents\?status=needs-grading/);
       await page.waitForLoadState('networkidle');
-      await page.goto(`/app/documents/${documentId}`, {
+      const latestSubmission = await prisma.submission.findFirstOrThrow({
+        where: { documentId },
+        orderBy: { submittedAt: 'desc' },
+        select: { id: true },
+      });
+      await page.goto(`/app/submissions/${latestSubmission.id}`, {
         waitUntil: 'domcontentloaded',
       });
-      await expect(page.getByRole('heading', { name: title })).toBeVisible({
+      await expect(page.getByText(title).first()).toBeVisible({
         timeout: 30_000,
       });
     } finally {

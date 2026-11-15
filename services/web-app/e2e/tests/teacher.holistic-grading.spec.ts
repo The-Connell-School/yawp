@@ -1,12 +1,5 @@
 /** Holistic Cristo Rey smoke: grade-essay-ai on a 20-point assignment type. */
 import { test, expect } from '../test-setup';
-import {
-  clickClassDocumentsStatusTab,
-  expectClassDocumentsTable,
-  filterClassDocumentsByTitle,
-  gotoClassDocumentsTab,
-  openClassDocumentsTab,
-} from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
 
@@ -184,41 +177,17 @@ test.describe.serial('holistic Cristo Rey points-only grading', () => {
     });
   });
 
-  test('class documents list shows released holistic points', async ({
+  test('teacher submission view shows released holistic points', async ({
     page,
     e2eContext,
     signIn,
   }, testInfo) => {
     test.setTimeout(120_000);
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    await gotoClassDocumentsTab(page, holisticClassId, { status: 'released' });
-    await expect
-      .poll(
-        async () => {
-          const table = page.getByRole('table', { name: /class documents/i });
-          if (await table.isVisible().catch(() => false)) {
-            return true;
-          }
-          await page.reload();
-          await openClassDocumentsTab(page);
-          return table.isVisible().catch(() => false);
-        },
-        { timeout: 90_000 }
-      )
-      .toBe(true);
-    await filterClassDocumentsByTitle(page, holisticAssignmentTitle);
-    const documentsTable = page.getByRole('table', { name: /class documents/i });
-    await clickClassDocumentsStatusTab(page, /^Released/i);
-    const titleRow = documentsTable
-      .getByRole('row')
-      .filter({ hasText: holisticAssignmentTitle });
-    await expect
-      .poll(
-        async () =>
-          (await titleRow.getByText(/6\s*\/\s*20/).count()) > 0,
-        { timeout: 60_000 }
-      )
-      .toBe(true);
+    await page.goto(`/app/submissions/${holisticSubmissionId}`);
+    await expect(page.getByText(/6\s*\/\s*20/)).toBeVisible({
+      timeout: 30_000,
+    });
     await page.screenshot({
       path: testInfo.outputPath('holistic-gradebook-row.png'),
       fullPage: true,

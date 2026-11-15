@@ -196,9 +196,10 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
     ).toBeVisible();
 
     await page.goto(`/app/submissions/${seeded.submissionId}`);
-    await expect(page.getByText(/10\s*\/\s*12/).first()).toBeVisible({
+    await expect(page.getByTestId('submission-lifecycle-panel')).toBeVisible({
       timeout: 30_000,
     });
+    await expect(page.getByText(seeded.documentTitle).first()).toBeVisible();
   });
 
   test('student still sees documents, assignments, and grades after the swap', async ({

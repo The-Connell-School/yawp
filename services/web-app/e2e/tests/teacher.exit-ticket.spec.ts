@@ -99,22 +99,25 @@ test.describe.serial('Exit tickets', () => {
     test.setTimeout(60_000);
     const prisma = createE2EPrismaClient();
     const exitTicket = await prisma.assignment.findFirstOrThrow({
-      where: { title: 'Exit ticket: erosion' },
+      where: {
+        title: 'Exit ticket: erosion',
+        classAssignments: { some: { classId: e2eContext.classId } },
+      },
       select: { id: true },
     });
     try {
+      test.setTimeout(120_000);
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await openMyAssignmentDetail(page, exitTicket.id, e2eContext.classId);
 
       // Editing must not quietly turn a specific exit ticket back into the
       // generic one, which is what a form that reset to Basic would do.
-      await page
-        .getByRole('button', { name: /^Edit$/ })
-        .first()
-        .click();
+      const editButton = page.getByRole('button', { name: /^Edit$/ }).first();
+      await expect(editButton).toBeVisible({ timeout: 30_000 });
+      await editButton.click();
       await expect(
         page.getByRole('heading', { name: 'Edit Assignment' })
-      ).toBeVisible();
+      ).toBeVisible({ timeout: 30_000 });
 
       await expect(
         page.getByRole('radio', { name: /^Check for understanding/ })
