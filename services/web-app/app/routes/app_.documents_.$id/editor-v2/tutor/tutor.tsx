@@ -540,8 +540,20 @@ export const Tutor = ({
               />
             </div>
           ))}
-          {isTutorResponding && optimisticMessage ? (
-            <Loading label={isTutorRetrying ? 'Retrying...' : undefined} />
+          {isTutorResponding ? (
+            optimisticMessage ? (
+              <Loading label={isTutorRetrying ? 'Retrying...' : undefined} />
+            ) : (
+              <div
+                className="doc-editor-tutor-reading-skeleton"
+                data-testid="tutor-reading-essay"
+              >
+                <p className="m-0 text-sm text-[hsl(50_2.4%_36%)]">
+                  Reading your essay…
+                </p>
+                <Loading />
+              </div>
+            )
           ) : null}
           {tutorError ? (
             <p className="w-full rounded-lg border-destructive bg-destructive/5 p-3 text-destructive">

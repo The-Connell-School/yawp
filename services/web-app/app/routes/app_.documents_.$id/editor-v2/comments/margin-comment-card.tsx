@@ -2,7 +2,7 @@ import { Check, EllipsisVertical } from 'lucide-react';
 import { type MouseEvent, useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { TrashIcon } from '~/components/icons';
-import { RichTextarea } from '~/components/rich-textarea.js';
+import { MarginCommentReply } from './margin-comment-reply';
 import { Button } from '~/components/ui/button';
 import {
   DropdownMenu,
@@ -260,14 +260,10 @@ export function MarginCommentCard({
         ))}
       </div>
       {!readOnly ? (
-        <RichTextarea
-          placeholder="Reply…"
-          name="content"
-          size="sm"
-          onCmdEnter={reply}
-          textareaTestId={`comment-reply-input-${comment.id}`}
-          sendButtonTestId={`comment-reply-send-${comment.id}`}
-          className="doc-editor-comment-reply"
+        <MarginCommentReply
+          commentId={comment.id}
+          onReply={reply}
+          disabled={createCommentResponseFetcher.state !== 'idle'}
           autoFocus={autoFocusReply}
         />
       ) : null}

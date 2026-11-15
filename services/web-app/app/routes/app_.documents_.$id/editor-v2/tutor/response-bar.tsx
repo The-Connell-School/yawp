@@ -114,7 +114,10 @@ export const ResponseBar = ({
           variant={isReady ? 'default' : 'secondary'}
           size={isReady ? 'lg' : 'default'}
           block={isReady}
-          className={cn('flex items-center gap-1', isReady ? '' : 'text-lg')}
+          className={cn(
+            'flex items-center gap-1',
+            isReady ? 'doc-editor-tutor-ready-btn w-full' : 'text-lg'
+          )}
           disabled={isDisabled}
           onClick={() => {
             if (isDisabled) return;
@@ -147,13 +150,17 @@ export const ResponseBar = ({
       ) : null}
       {showNextButton ? (
         <Tooltip
-          text="Next step"
+          text={check ? 'Confirm next step' : 'Next step'}
           delayDuration={200}
           open={check === true || undefined}
         >
           <Button
             variant={check ? 'default' : 'secondary'}
-            className={cn('flex items-center gap-1 text-lg', {})}
+            size="icon"
+            className={cn(
+              'doc-editor-tutor-next-round h-11 w-11 rounded-full shrink-0',
+              check && 'w-auto rounded-full px-4'
+            )}
             aria-label={check ? 'Confirm next tutor step' : 'Next tutor step'}
             onClick={() => {
               if (isDisabled) return;
@@ -166,10 +173,15 @@ export const ResponseBar = ({
             }}
             onBlur={() => check && setCheck(false)}
             disabled={isDisabled}
-            loading={isPending}
+            loading={isPending && check}
           >
-            {check ? 'You sure?' : <ChevronRightIcon />}
-            {check ? <CheckIcon /> : null}
+            {check ? (
+              <>
+                You sure? <CheckIcon className="ml-1 h-4 w-4" />
+              </>
+            ) : (
+              <ChevronRightIcon className="h-5 w-5" />
+            )}
           </Button>
         </Tooltip>
       ) : null}

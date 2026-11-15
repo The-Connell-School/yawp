@@ -7,6 +7,7 @@ import {
 import { useFetcher } from 'react-router';
 import { useEffect, useRef, type MouseEvent } from 'react';
 import { MarginCommentCard } from './margin-comment-card';
+import { MarginCommentResolvedRow } from './margin-comment-resolved-row';
 import { useCommentsSelection } from '../comments/selection-context';
 import { CheckIcon, TrashIcon } from '~/components/icons';
 import { RichTextarea } from '~/components/rich-textarea.js';
@@ -149,6 +150,18 @@ export const Comment = ({
       }
     });
   };
+
+  if (layout === 'margin' && comment.archivedAt) {
+    return (
+      <MarginCommentResolvedRow
+        {...comment}
+        readOnly={readOnly}
+        onDelete={onDelete}
+        onResponseAdded={onResponseAdded}
+        onArchiveChange={onArchiveChange}
+      />
+    );
+  }
 
   if (layout === 'margin') {
     return (
