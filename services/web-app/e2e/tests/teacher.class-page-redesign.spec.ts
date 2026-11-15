@@ -6,6 +6,7 @@ import {
   expectDocumentTitleVisible,
   gotoClassDocumentsTab,
   openClassAssignmentsTab,
+  openClassDocumentsTab,
   waitForClassDocumentTitle,
 } from '../test-helpers';
 import { currentSchoolYear } from '../../app/utils/school-year';
@@ -550,26 +551,35 @@ test.describe.serial('Teacher class page redesign', () => {
     const documentIds: string[] = [];
 
     try {
+      const inProgressTitle = `Group by status in progress ${suffix}`;
+      const needsGradingTitle = `Group by status needs grading ${suffix}`;
       const inProgressDoc = await createClassDocument(prisma, e2eContext, {
-        title: `Group by status in progress ${suffix}`,
+        title: inProgressTitle,
       });
-      documentIds.push(inProgressDoc.id);
+      const needsGradingDoc = await createClassDocument(prisma, e2eContext, {
+        title: needsGradingTitle,
+        submitted: true,
+      });
+      documentIds.push(inProgressDoc.id, needsGradingDoc.id);
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.addInitScript(() => {
         localStorage.removeItem('yawp.class-documents-view');
       });
-      await page.goto(
-        `/app/my-classes/${e2eContext.classId}?tab=documents&documentGroup=status`
-      );
-      await page.waitForLoadState('networkidle');
+      await gotoClassDocumentsTab(page, e2eContext.classId, {
+        documentGroup: 'status',
+        status: 'all',
+      });
+      await openClassDocumentsTab(page);
 
       await expect(
         page.getByRole('button', { name: /Needs Grading/i }).first()
       ).toBeVisible();
+      await expect(page.getByText(needsGradingTitle, { exact: true })).toBeVisible();
       await expect(
         page.getByRole('button', { name: /In Progress/i }).first()
       ).toBeVisible();
+      await expect(page.getByText(inProgressTitle, { exact: true })).toBeVisible();
     } finally {
       await deleteClassDocuments(prisma, documentIds);
       await prisma.$disconnect();
