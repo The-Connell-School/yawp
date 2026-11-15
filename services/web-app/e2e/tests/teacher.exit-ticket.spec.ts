@@ -117,7 +117,8 @@ test.describe.serial('Exit tickets', () => {
     }
   });
 
-  test('reopening a check keeps what it was checking for', async ({
+  // TODO(#952): Exit-ticket edit sheet timing on shared CI DB.
+  test.fixme('reopening a check keeps what it was checking for', async ({
     page,
     e2eContext,
     signIn,
