@@ -61,7 +61,9 @@ test.describe.serial('Document Editor E2E Tests', () => {
         timeout: 10000,
       });
       await page.getByTestId('document-submit-button').click();
-      await expect(page.getByRole('dialog')).toBeVisible();
+      await expect(
+        page.getByTestId('document-submit-confirm-popover')
+      ).toBeVisible();
       await page.getByTestId('document-finalize-submit').click();
       await expect(page.getByText('Submitted').first()).toBeVisible({
         timeout: 15000,
@@ -677,10 +679,12 @@ test.describe.serial('Document Editor E2E Tests', () => {
     );
     await expect(card).toBeVisible({ timeout: 15_000 });
     await expect(card).toContainText('Thanks — I will expand this section.');
-    const replyInput = page.getByTestId(
-      `comment-reply-input-${e2eContext.v2GradedCommentId}`
-    );
-    await replyInput.fill('Reply from teacher E2E.');
+    await page
+      .getByTestId(`comment-reply-input-${e2eContext.v2GradedCommentId}`)
+      .click();
+    await page
+      .getByTestId(`comment-reply-body-${e2eContext.v2GradedCommentId}`)
+      .fill('Reply from teacher E2E.');
     await page
       .getByTestId(`comment-reply-send-${e2eContext.v2GradedCommentId}`)
       .click();

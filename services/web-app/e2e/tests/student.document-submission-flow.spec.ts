@@ -162,6 +162,9 @@ test.describe.serial('Student onboarding, document, tutor, comments, and submiss
         timeout: 10000,
       });
       await page.getByTestId('document-submit-button').click();
+      await expect(
+        page.getByTestId('document-submit-confirm-popover')
+      ).toBeVisible({ timeout: 10_000 });
       await expect(page.getByRole('dialog')).toBeVisible();
       await page.getByTestId('document-finalize-submit').click();
 
