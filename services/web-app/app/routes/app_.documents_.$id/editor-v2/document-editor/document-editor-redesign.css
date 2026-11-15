@@ -34,7 +34,7 @@
 }
 
 .doc-editor-header__title-block {
-  width: min(420px, 48vw);
+  width: min(480px, 52vw);
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -502,4 +502,135 @@
   font-size: 13px;
   color: var(--doc-ink-muted);
   text-align: center;
+}
+
+.doc-editor-page--fit {
+  width: min(680px, 100%);
+}
+
+.doc-editor-page--fixed {
+  width: 680px;
+  max-width: none;
+}
+
+.doc-editor-page--teacher-commenting .ProseMirror ::selection {
+  background: hsl(210 100% 88%);
+}
+
+.doc-editor-prosemirror-teacher ::selection {
+  background: hsl(210 100% 88%);
+}
+
+.doc-editor-comment-reply-pill {
+  width: 100%;
+  border: 0;
+  cursor: text;
+  font: inherit;
+  color: hsl(50 2.4% 36%);
+}
+
+.doc-editor-comment-reply-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: hsl(45 24.2424% 90%);
+}
+
+.doc-editor-comment-reply-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 56px;
+  border: 0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.doc-editor-comment-resolved-row {
+  background: rgba(255, 253, 249, 0.62);
+  box-shadow: 0 0 0 1px rgba(31, 53, 50, 0.06);
+}
+
+.doc-editor-view-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.doc-editor-mobile-tab {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 11px !important;
+}
+
+.doc-editor-mobile-tab-badge {
+  position: absolute;
+  top: 4px;
+  right: calc(50% - 28px);
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  background: #1b1b1b;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.doc-editor-mobile-tutor-peek {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(56px + env(safe-area-inset-bottom, 0) + 8px);
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--tutor-panel-bg);
+  box-shadow:
+    0 0 0 1px var(--tutor-rim),
+    0 8px 24px rgba(31, 53, 50, 0.12);
+  font-size: 13px;
+  font-weight: 600;
+  color: #1b1b1b;
+}
+
+.doc-editor-mobile-peek-chevron {
+  margin-left: auto;
+  font-size: 18px;
+  line-height: 1;
+  color: hsl(50 2.4% 36%);
+}
+
+.doc-editor-tutor-reading-skeleton {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--tutor-bubble-bg);
+  box-shadow: inset 0 0 0 1px var(--tutor-rim);
+}
+
+.doc-editor-tutor-footer .doc-editor-tutor-ready-btn {
+  flex: 1 1 100%;
+}
+
+.doc-editor-tutor-next-round {
+  margin-left: auto;
 }

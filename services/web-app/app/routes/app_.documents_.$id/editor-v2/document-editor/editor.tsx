@@ -8,7 +8,8 @@ import StarterKit from '@tiptap/starter-kit';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EditorChromeProvider } from './editor-chrome-context';
 import { useCommentsSelection } from '../comments/selection-context';
-import { Bar } from './editor-bar';
+import { Bar, beginCommentDraftFromEditor } from './editor-bar';
+import type { PageWidthMode } from './toolbar-controls';
 import {
   AssignmentPromptBanner,
   type AssignmentPrompt,
@@ -29,6 +30,7 @@ import { usePmTripwire } from './use-pm-tripwire';
 import { useEditorSync, type EditorBridge } from './use-editor-sync';
 import { usePasteAlert } from './use-paste-alert';
 import type { SyncStatus } from '~/utils/sync-service';
+import { cn } from '~/utils/misc';
 
 const baseExtensions = [
   TabIndent,
@@ -71,6 +73,9 @@ type Props = {
   onCommentCreated?: (comment: unknown) => void;
   assignment?: AssignmentPrompt | null;
   marginComments?: React.ReactNode;
+  pageWidth?: PageWidthMode;
+  onPageWidthChange?: (mode: PageWidthMode) => void;
+  submissionViewBanner?: React.ReactNode;
 };
 
 export function Editor({
@@ -88,8 +93,12 @@ export function Editor({
   onCommentCreated,
   assignment,
   marginComments,
+  pageWidth = 'fit',
+  onPageWidthChange,
+  submissionViewBanner,
 }: Props) {
   const [imageStatus, setImageStatus] = useState<DocumentImageStatus>({ state: 'idle' });
+  const selectionDraftRef = useRef<string | null>(null);
   const [contentRoot, setContentRoot] = useState<HTMLElement | null>(null);
   const [scrollRoot, setScrollRoot] = useState<HTMLElement | null>(null);
   const bindScrollRef = useCallback((node: HTMLDivElement | null) => {
@@ -133,9 +142,24 @@ export function Editor({
     editorProps: {
       attributes: {
         'aria-label': 'Student document editor',
+        ...(teacherCommenting
+          ? { class: 'doc-editor-prosemirror-teacher' }
+          : {}),
       },
     },
   });
+
+  useEffect(() => {
+    if (!editor || !teacherCommenting) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey && event.altKey && event.key.toLowerCase() === 'm') {
+        event.preventDefault();
+        beginCommentDraftFromEditor(editor, onCommentDraft);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [editor, teacherCommenting, onCommentDraft]);
 
   // Reflect prop changes to the editor's editable state
   useEffect(() => {
@@ -209,6 +233,26 @@ export function Editor({
     };
   }, [setActiveCommentId, setHoveredCommentId]);
 
+  useEffect(() => {
+    if (!editor || !teacherCommenting || !onCommentDraft) return;
+    const onSelectionUpdate = () => {
+      const { from, to, empty } = editor.state.selection;
+      if (empty) return;
+      const excerpt = editor.state.doc.textBetween(from, to, ' ').trim();
+      if (!excerpt || excerpt === selectionDraftRef.current) return;
+      selectionDraftRef.current = excerpt;
+      beginCommentDraftFromEditor(editor, onCommentDraft);
+    };
+    const onMouseUp = () => onSelectionUpdate();
+    editor.on('selectionUpdate', onSelectionUpdate);
+    const dom = editor.view.dom;
+    dom.addEventListener('mouseup', onMouseUp);
+    return () => {
+      editor.off('selectionUpdate', onSelectionUpdate);
+      dom.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [editor, teacherCommenting, onCommentDraft]);
+
   // Scroll the active mark into view when selection changes.
   useEffect(() => {
     if (!activeCommentId) return;
@@ -267,10 +311,12 @@ export function Editor({
             isEditable={isEditable}
             teacherCommenting={teacherCommenting}
             canUploadImages={canUploadImages}
+            pageWidth={pageWidth}
+            onPageWidthChange={onPageWidthChange ?? (() => {})}
             onCommentDraft={onCommentDraft}
-            onCommentCreated={onCommentCreated}
           />
         ) : null}
+        {submissionViewBanner}
         <AssignmentPromptBanner docId={docId} assignment={assignment} />
         {imageStatus.state !== 'idle' ? (
           <div
@@ -296,7 +342,12 @@ export function Editor({
           onMouseDown={focusEditorFromPaneClick}
         >
           <article
-            className="doc-editor-page cursor-text"
+            className={cn(
+              'doc-editor-page cursor-text',
+              pageWidth === 'fit' && 'doc-editor-page--fit',
+              pageWidth === 'fixed' && 'doc-editor-page--fixed',
+              teacherCommenting && 'doc-editor-page--teacher-commenting'
+            )}
             data-testid="document-editor-surface"
           >
             <EditorContent
