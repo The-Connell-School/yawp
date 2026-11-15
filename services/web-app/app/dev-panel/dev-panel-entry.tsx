@@ -7,6 +7,7 @@ type DevPanelMountProps = {
   previewAccessSeatLabel: string | null;
 };
 
+// Dynamic import avoids a hydrating React Suspense sibling of the document Outlet.
 const devPanelMountChunkPromise =
   typeof __YAWP_DEV_PANEL_BUILD__ !== 'undefined' && __YAWP_DEV_PANEL_BUILD__
     ? import('./dev-panel-mount')
