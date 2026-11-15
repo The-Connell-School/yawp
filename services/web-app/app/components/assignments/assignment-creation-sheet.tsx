@@ -1245,9 +1245,18 @@ export function AssignmentCreationSheetContent({
   ]);
 
   const toldCreated = useRef<unknown>(null);
+  const editSaveInFlightRef = useRef(false);
+  useEffect(() => {
+    if (createFetcher.state === 'submitting' && editingAssignment) {
+      editSaveInFlightRef.current = true;
+    }
+  }, [createFetcher.state, editingAssignment]);
+
   useEffect(() => {
     if (createFetcher.state !== 'idle' || !createFetcher.data?.success) return;
     if (editingAssignment) {
+      if (!editSaveInFlightRef.current) return;
+      editSaveInFlightRef.current = false;
       onOpenChange(false);
       return;
     }

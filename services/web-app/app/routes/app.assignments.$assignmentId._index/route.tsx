@@ -11,8 +11,7 @@ import { loadExitTicketResponses } from '~/domain/assignment-types/exit-ticket-c
 import { EXIT_TICKET_SEED_STEP } from '~/domain/lesson-planner/lesson-seed';
 import { Prisma } from '@app/prisma';
 import { isLessonPlannerEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { useState, type MouseEvent, type ReactNode } from 'react';
-import { flushSync } from 'react-dom';
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import {
   type LoaderFunctionArgs,
   type ActionFunctionArgs,
@@ -862,8 +861,16 @@ export default function AssignmentDetailRoute() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [isEditSheetOpen, setIsEditSheetOpen] = useState(false);
+  const ignoreEditSheetCloseUntilRef = useRef(0);
 
   const handleEditSheetOpenChange = (open: boolean) => {
+    if (
+      !open &&
+      typeof performance !== 'undefined' &&
+      performance.now() < ignoreEditSheetCloseUntilRef.current
+    ) {
+      return;
+    }
     setIsEditSheetOpen(open);
   };
 
@@ -872,8 +879,16 @@ export default function AssignmentDetailRoute() {
       window.dispatchEvent(new Event(DEV_PANEL_DISMISS_EVENT));
     }
     prepareAppShellForRadixSheet();
-    flushSync(() => setIsEditSheetOpen(true));
+    if (typeof performance !== 'undefined') {
+      ignoreEditSheetCloseUntilRef.current = performance.now() + 750;
+    }
+    setIsEditSheetOpen(true);
   };
+
+  useEffect(() => {
+    if (!data.found) return;
+    prepareAppShellForRadixSheet();
+  }, [data.found, data.found ? data.assignment.id : null, data.found ? data.activeClassId : null]);
 
   if (!data.found) {
     return (

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router';
 import { useDevPanel } from './dev-panel-provider';
-import { clearRadixScrollLockCleanup } from '~/utils/radix-scroll-lock-cleanup';
+import { prepareAppShellForRadixSheet } from '~/utils/radix-scroll-lock-cleanup';
 
 /**
  * Eager dev-panel mount + inline restore classes can leave `html.yawp-dev-panel-open`
@@ -21,7 +21,7 @@ export function DevPanelNavigationSync() {
         'yawp-dev-panel-closing'
       );
     }
-    clearRadixScrollLockCleanup();
+    prepareAppShellForRadixSheet();
   }, [location.pathname, location.search, state.open]);
 
   return null;
