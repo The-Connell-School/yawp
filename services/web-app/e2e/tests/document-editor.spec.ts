@@ -671,12 +671,9 @@ test.describe.serial('Document Editor E2E Tests', () => {
       { retry: true }
     );
     const commentId = e2eContext.v2GradedCommentId;
-    await expect(page.getByTestId('document-margin-comments-aside')).toBeVisible({
-      timeout: 15_000,
-    });
     await expect(
       page.getByTestId(`margin-comment-card-${commentId}`)
-    ).toBeVisible({ timeout: 10_000 });
+    ).toBeVisible({ timeout: 15_000 });
     const replyPill = page.getByTestId(`comment-reply-input-${commentId}`);
     const replyExpanded = page.getByTestId(`comment-reply-expanded-${commentId}`);
     if (await replyExpanded.isVisible().catch(() => false)) {
@@ -839,7 +836,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     ).toBe(false);
   });
 
-  test('v2 desktop margin rail is hidden by default on reload', async ({
+  test('v2 desktop comments panel is closed by default on reload', async ({
     page,
     signIn,
     e2eContext,
@@ -847,17 +844,16 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
     await page.setViewportSize({ width: 1440, height: 900 });
-    await helpers.openDocument(
-      `${e2eContext.gradedDocumentId}?tab=editor`,
-      { retry: true }
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const commentsToggle = page
+      .getByTestId('document-panel-toggles')
+      .getByRole('button', { name: 'Comments' });
+    await expect(commentsToggle).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('document-margin-comments-aside')).toHaveCount(
+      0
     );
-    await expect(page.getByTestId('document-margin-comments-aside')).toBeHidden({
-      timeout: 10_000,
-    });
-    await page.getByRole('button', { name: 'Comments' }).click();
-    await expect(page.getByTestId('document-margin-comments-aside')).toBeVisible({
-      timeout: 10_000,
-    });
+    await commentsToggle.click();
+    await expect(commentsToggle).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('v2 each comment keeps exactly one highlight and margin cards do not overlap', async ({
