@@ -189,31 +189,29 @@ test.describe('Free-tier handle student', () => {
         .poll(
           async () => {
             for (const status of ['needs-grading', 'all'] as const) {
-              for (const q of [handle, displayName.toLowerCase(), 'free tier']) {
-                await gotoClassDocumentsTab(teacherPage, klass.id, {
-                  status,
-                  assignmentId: assignment.id,
-                  q,
-                });
-                const table = teacherPage.getByRole('table', {
-                  name: /class documents/i,
-                });
-                if (!(await table.isVisible().catch(() => false))) {
-                  continue;
-                }
-                const byName =
-                  (await table.getByText(displayName).count()) > 0;
-                const byHandle =
-                  (await table.getByText(`@${handle}`).count()) > 0 ||
-                  (await table.getByText(handle).count()) > 0;
-                const byAssignment =
-                  (await table.getByText('Free tier writing').count()) > 0;
-                const bySubmissionTitle =
-                  submission.title.trim().length > 0 &&
-                  (await table.getByText(submission.title).count()) > 0;
-                if (byName || byHandle || byAssignment || bySubmissionTitle) {
-                  return true;
-                }
+              // Do not put handle in URL `q` — username is not in the search haystack.
+              await gotoClassDocumentsTab(teacherPage, klass.id, {
+                status,
+                assignmentId: assignment.id,
+              });
+              const table = teacherPage.getByRole('table', {
+                name: /class documents/i,
+              });
+              if (!(await table.isVisible().catch(() => false))) {
+                continue;
+              }
+              const byName =
+                (await table.getByText(displayName).count()) > 0;
+              const byHandle =
+                (await table.getByText(`@${handle}`).count()) > 0 ||
+                (await table.getByText(handle).count()) > 0;
+              const byAssignment =
+                (await table.getByText('Free tier writing').count()) > 0;
+              const bySubmissionTitle =
+                submission.title.trim().length > 0 &&
+                (await table.getByText(submission.title).count()) > 0;
+              if (byName || byHandle || byAssignment || bySubmissionTitle) {
+                return true;
               }
             }
             return false;

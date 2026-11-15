@@ -1,8 +1,12 @@
 import { test, expect } from '../test-setup';
 import { openMyAssignmentDetail } from '../test-helpers';
 
-const OWN_QUESTION_TITLE = 'Exit ticket: own question';
 import { createE2EPrismaClient } from '../prisma-client';
+
+const exitTicketE2eId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+const EROSION_EXIT_TICKET_TITLE = `Exit ticket: erosion ${exitTicketE2eId}`;
+const OWN_QUESTION_TITLE = `Exit ticket: own question ${exitTicketE2eId}`;
+const GRADED_CHECK_EXIT_TICKET_TITLE = `Exit ticket: graded check ${exitTicketE2eId}`;
 
 // An exit ticket is the one assignment type a teacher does not write a prompt
 // for: they answer the form and the product composes what students read. These
@@ -87,7 +91,7 @@ test.describe.serial('Exit tickets', () => {
     await expect(page.getByText(TOPIC).last()).toBeVisible();
     await expect(page.getByText(BASIC_OPENING)).toHaveCount(0);
 
-    await page.getByLabel('Title (optional)').fill('Exit ticket: erosion');
+    await page.getByLabel('Title (optional)').fill(EROSION_EXIT_TICKET_TITLE);
     await page.getByRole('button', { name: /Create Assignment/i }).click();
 
     await expect(
@@ -98,7 +102,7 @@ test.describe.serial('Exit tickets', () => {
     try {
       const created = await prisma.assignment.findFirstOrThrow({
         where: {
-          title: 'Exit ticket: erosion',
+          title: EROSION_EXIT_TICKET_TITLE,
           classAssignments: { some: { classId: e2eContext.classId } },
         },
         orderBy: { createdAt: 'desc' },
@@ -235,7 +239,7 @@ test.describe.serial('Exit tickets', () => {
 
     // Points without an answer key is not something that can be graded.
     const create = page.getByRole('button', { name: /Create Assignment/i });
-    await page.getByLabel('Title (optional)').fill('Exit ticket: graded check');
+    await page.getByLabel('Title (optional)').fill(GRADED_CHECK_EXIT_TICKET_TITLE);
     await expect(create).toBeDisabled();
     await page.getByLabel('Correct answer or key points').fill(CORRECT_ANSWER);
     await expect(create).toBeEnabled();
@@ -247,7 +251,7 @@ test.describe.serial('Exit tickets', () => {
     try {
       const gradedCheck = await prisma.assignment.findFirstOrThrow({
         where: {
-          title: 'Exit ticket: graded check',
+          title: GRADED_CHECK_EXIT_TICKET_TITLE,
           classAssignments: { some: { classId: e2eContext.classId } },
         },
         orderBy: { createdAt: 'desc' },

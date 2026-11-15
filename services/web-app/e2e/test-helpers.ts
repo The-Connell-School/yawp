@@ -720,6 +720,7 @@ export async function waitForClassDocumentTitle(
   });
   await gotoClassDocumentsTab(page, classId, tabParams());
   await expectClassDocumentsTable(page);
+  const titleQuery = title.trim().toLowerCase();
   await expect
     .poll(
       async () => {
@@ -727,6 +728,8 @@ export async function waitForClassDocumentTitle(
           return true;
         }
         await gotoClassDocumentsTab(page, classId, tabParams());
+        await expectClassDocumentsTable(page);
+        await fillTeacherDocumentWorkSearch(page, titleQuery);
         return tableTitle().isVisible().catch(() => false);
       },
       { timeout: timeoutMs }
