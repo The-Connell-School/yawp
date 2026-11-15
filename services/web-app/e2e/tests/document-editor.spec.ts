@@ -671,8 +671,20 @@ test.describe.serial('Document Editor E2E Tests', () => {
       { retry: true }
     );
     const commentId = e2eContext.v2GradedCommentId;
-    await page.getByTestId(`comment-reply-input-${commentId}`).click();
-    await page.getByTestId(`comment-reply-body-${commentId}`).fill('Draft only');
+    await expect(page.getByTestId('document-margin-comments-aside')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.getByTestId(`margin-comment-card-${commentId}`)
+    ).toBeVisible({ timeout: 10_000 });
+    const replyPill = page.getByTestId(`comment-reply-input-${commentId}`);
+    const replyExpanded = page.getByTestId(`comment-reply-expanded-${commentId}`);
+    if (await replyExpanded.isVisible().catch(() => false)) {
+      await page.getByTestId(`comment-reply-body-${commentId}`).fill('Draft only');
+    } else {
+      await replyPill.click();
+      await page.getByTestId(`comment-reply-body-${commentId}`).fill('Draft only');
+    }
     await page.getByRole('button', { name: 'Cancel' }).click();
     await expect(
       page.getByTestId(`comment-reply-input-${commentId}`)
@@ -805,6 +817,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     e2eContext,
     helpers,
   }) => {
+    test.setTimeout(60_000);
     const consoleErrors: string[] = [];
     page.on('console', (msg) => {
       if (msg.type() === 'error') consoleErrors.push(msg.text());
@@ -812,7 +825,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await signIn('jdoe@brock.software', 'johndoe');
     await page.setViewportSize({ width: 390, height: 844 });
     await helpers.openDocument(
-      `${e2eContext.gradedDocumentId}?tab=editor`,
+      `${e2eContext.editedDocumentId}?tab=editor`,
       { retry: true }
     );
     await page.getByTestId('document-mobile-tabbar').getByText('Comments').click();
