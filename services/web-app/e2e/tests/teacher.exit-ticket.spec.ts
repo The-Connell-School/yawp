@@ -1,7 +1,9 @@
 import { test, expect } from '../test-setup';
 import {
+  clickAssignmentDetailEdit,
   expectExitTicketEditSheetReady,
   openMyAssignmentDetail,
+  stabilizeTeacherSheetShell,
 } from '../test-helpers';
 
 import { createE2EPrismaClient } from '../prisma-client';
@@ -34,6 +36,10 @@ async function openNewAssignmentSheet(page: import('@playwright/test').Page) {
 }
 
 test.describe.serial('Exit tickets', () => {
+  test.beforeEach(async ({ page }) => {
+    await stabilizeTeacherSheetShell(page);
+  });
+
   test('a reflection is the default and needs only a title', async ({
     page,
     e2eContext,
@@ -136,9 +142,7 @@ test.describe.serial('Exit tickets', () => {
 
       // Editing must not quietly turn a specific exit ticket back into the
       // generic one, which is what a form that reset to Basic would do.
-      const editButton = page.getByRole('button', { name: /^Edit$/ }).first();
-      await expect(editButton).toBeVisible({ timeout: 30_000 });
-      await editButton.click();
+      await clickAssignmentDetailEdit(page);
       await expectExitTicketEditSheetReady(page);
 
       await expect(
@@ -196,9 +200,7 @@ test.describe.serial('Exit tickets', () => {
         ownQuestionAssignment.id,
         e2eContext.classId
       );
-      const editButton = page.getByRole('button', { name: /^Edit$/ }).first();
-      await expect(editButton).toBeVisible({ timeout: 30_000 });
-      await editButton.click();
+      await clickAssignmentDetailEdit(page);
       await expectExitTicketEditSheetReady(page);
       await expect(
         page.getByRole('radio', { name: 'Write your own' })
@@ -262,9 +264,7 @@ test.describe.serial('Exit tickets', () => {
         gradedCheck.id,
         e2eContext.classId
       );
-      const editButton = page.getByRole('button', { name: /^Edit$/ }).first();
-      await expect(editButton).toBeVisible({ timeout: 30_000 });
-      await editButton.click();
+      await clickAssignmentDetailEdit(page);
       await expectExitTicketEditSheetReady(page);
       await expect(page.getByLabel('Grade this ticket')).toBeChecked();
       await expect(page.getByLabel('How many points?')).toHaveValue('5');

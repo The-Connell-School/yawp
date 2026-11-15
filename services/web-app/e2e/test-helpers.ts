@@ -571,6 +571,38 @@ export async function fillMyAssignmentsSearch(
   await expect(located).toBeVisible({ timeout: rowVisibleTimeout });
 }
 
+const DEV_PANEL_DISMISS_EVENT = 'yawp:dismiss-dev-panel';
+
+/** Clear dev-panel layout and Radix scroll-lock leftovers before teacher sheets (E2E). */
+export async function stabilizeTeacherSheetShell(page: Page) {
+  await page.evaluate((eventName: string) => {
+    window.dispatchEvent(new Event(eventName));
+    document.documentElement.style.removeProperty('pointer-events');
+    document.body.style.removeProperty('pointer-events');
+    document.body.removeAttribute('data-scroll-locked');
+    const prefix = String.fromCharCode(
+      121,
+      97,
+      119,
+      112,
+      45,
+      100,
+      101,
+      118,
+      45,
+      112,
+      97,
+      110,
+      101,
+      108,
+      45
+    );
+    for (const suffix of ['open', 'restored', 'closing']) {
+      document.documentElement.classList.remove(`${prefix}${suffix}`);
+    }
+  }, DEV_PANEL_DISMISS_EVENT);
+}
+
 /** Navigates to assignment detail directly; avoids My Assignments list pagination on shared E2E DBs. */
 export async function openMyAssignmentDetail(
   page: Page,
@@ -583,6 +615,14 @@ export async function openMyAssignmentDetail(
   await expect(page.getByTestId('assignment-detail-page')).toBeVisible({
     timeout: 30_000,
   });
+  await stabilizeTeacherSheetShell(page);
+}
+
+export async function clickAssignmentDetailEdit(page: Page) {
+  await stabilizeTeacherSheetShell(page);
+  const edit = page.getByTestId('assignment-detail-edit');
+  await expect(edit).toBeVisible({ timeout: 30_000 });
+  await edit.click();
 }
 
 /** Editor v2 uses a title input; v1 used a page heading. */
