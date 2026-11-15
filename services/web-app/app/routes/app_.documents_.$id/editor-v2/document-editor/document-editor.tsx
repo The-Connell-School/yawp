@@ -37,7 +37,7 @@ type HydratedContent = {
   source: 'server' | 'local' | 'snapshot';
 };
 
-function EditorLoadingShell() {
+export function EditorLoadingShell() {
   return (
     <div
       className="flex h-full w-full min-w-0 flex-col overflow-hidden"

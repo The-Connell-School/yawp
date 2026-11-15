@@ -65,7 +65,10 @@ import { Comments } from './comments';
 import { MarginCommentsRail } from './comments/margin-comments-rail';
 import { TeacherPasteReport } from '~/components/teacher-paste-report';
 import { CommentsSelectionProvider } from './comments/selection-context';
-import { DocumentEditor } from './document-editor/document-editor';
+import {
+  DocumentEditor,
+  EditorLoadingShell,
+} from './document-editor/document-editor';
 import type { EditorBridge } from './document-editor/use-editor-sync';
 import { Tutor } from './tutor/tutor';
 import { DocumentHistory } from './document-history/document-history';
@@ -290,10 +293,16 @@ export function DocumentEditorV2Page() {
     data.isTeacherAssignmentPreview && user.id === data.doc.membership.userId
   );
   useEffect(() => {
+    if (!uiMounted) return;
     if (isViewingAsTeacher && !isOwnTeacherPreview) {
       setDesktopCommentsOpen(true);
     }
-  }, [isViewingAsTeacher, isOwnTeacherPreview, setDesktopCommentsOpen]);
+  }, [
+    uiMounted,
+    isViewingAsTeacher,
+    isOwnTeacherPreview,
+    setDesktopCommentsOpen,
+  ]);
   const showSubmitControls = !isViewingAsTeacher || isOwnTeacherPreview;
   const isDocumentOwner = user.id === data.doc.membership.userId;
   // Students and teachers in "Try it" preview edit; grading teachers view-only.
@@ -949,99 +958,103 @@ export function DocumentEditorV2Page() {
                     : 'flex h-full min-w-0 w-full flex-col'
                 )}
               >
-                <DocumentEditor
-                  docId={data.doc.id}
-                  assignment={tutorEnabled ? editorAssignmentPrompt : null}
-                  serverHtml={editorServerHtml}
-                  serverText={editorServerText}
-                  serverUpdatedAt={data.doc.updatedAt}
-                  initialRevision={data.doc.revision}
-                  isEditable={isEditorEditable}
-                  teacherCommenting={
-                    isViewingAsTeacher && !isOwnTeacherPreview
-                  }
-                  canUploadImages={data.canUploadImages}
-                  pageWidth={pageWidth}
-                  onPageWidthChange={setPageWidth}
-                  snapshotContent={
-                    viewingSubmission
-                      ? {
-                          html: submissionPreview!.html,
-                          text: submissionPreview!.text,
-                        }
-                      : null
-                  }
-                  submissionViewBanner={
-                    viewingSubmission ? (
-                      <div
-                        className="doc-editor-view-banner"
-                        data-testid="document-submission-view-banner"
-                      >
-                        <span>
-                          Viewing submission {submissionPreview!.versionLabel}
-                        </span>
-                        <button
-                          type="button"
-                          className="font-semibold text-[hsl(210_50%_30%)] underline-offset-2 hover:underline"
-                          onClick={clearSubmissionView}
-                        >
-                          Back to current draft
-                        </button>
-                      </div>
-                    ) : null
-                  }
-                  onBridgeReady={handleEditorBridgeReady}
-                  onSyncStatusChange={setSyncStatus}
-                  onSubmittableContentChange={handleSubmittableContentChange}
-                  onCommentDraft={(draft) => {
-                    commentsState.setPendingDraft(draft);
-                    if (!isMobile) setDesktopCommentsOpen(true);
-                  }}
-                  onCommentCreated={(c) => {
-                    commentsState.addComment(c as any);
-                    if (!isMobile) setDesktopCommentsOpen(true);
-                  }}
-                  marginComments={
-                    showDesktopMarginComments ? (
-                      <MarginCommentsRail
-                        documentId={data.doc.id}
-                        comments={visibleComments as any}
-                        pendingDraft={commentsState.pendingDraft}
-                        readOnly={commentsReadOnly}
-                        onCommentRemoved={commentsState.removeComment}
-                        onResponseAdded={commentsState.addResponse}
-                        onArchiveChange={commentsState.setCommentArchived}
-                        onCommentCreated={(c) =>
-                          commentsState.addComment(c as any)
-                        }
-                        onDraftCancel={() => {
-                          const draftId = commentsState.pendingDraft?.id;
-                          commentsState.clearPendingDraft();
-                          if (draftId) {
-                            document
-                              .querySelectorAll(
-                                `[data-comment-id="${draftId}"]`
-                              )
-                              .forEach((mark) => {
-                                const node = mark as HTMLElement;
-                                if (!node.parentNode) return;
-                                while (node.childNodes.length > 0) {
-                                  node.parentNode.insertBefore(
-                                    node.childNodes[0],
-                                    node
-                                  );
-                                }
-                                node.parentNode.removeChild(node);
-                              });
+                {uiMounted ? (
+                  <DocumentEditor
+                    docId={data.doc.id}
+                    assignment={tutorEnabled ? editorAssignmentPrompt : null}
+                    serverHtml={editorServerHtml}
+                    serverText={editorServerText}
+                    serverUpdatedAt={data.doc.updatedAt}
+                    initialRevision={data.doc.revision}
+                    isEditable={isEditorEditable}
+                    teacherCommenting={
+                      isViewingAsTeacher && !isOwnTeacherPreview
+                    }
+                    canUploadImages={data.canUploadImages}
+                    pageWidth={pageWidth}
+                    onPageWidthChange={setPageWidth}
+                    snapshotContent={
+                      viewingSubmission
+                        ? {
+                            html: submissionPreview!.html,
+                            text: submissionPreview!.text,
                           }
-                        }}
-                        autoFocusReplyCommentId={
-                          commentsState.pendingFocusCommentId
-                        }
-                      />
-                    ) : null
-                  }
-                />
+                        : null
+                    }
+                    submissionViewBanner={
+                      viewingSubmission ? (
+                        <div
+                          className="doc-editor-view-banner"
+                          data-testid="document-submission-view-banner"
+                        >
+                          <span>
+                            Viewing submission {submissionPreview!.versionLabel}
+                          </span>
+                          <button
+                            type="button"
+                            className="font-semibold text-[hsl(210_50%_30%)] underline-offset-2 hover:underline"
+                            onClick={clearSubmissionView}
+                          >
+                            Back to current draft
+                          </button>
+                        </div>
+                      ) : null
+                    }
+                    onBridgeReady={handleEditorBridgeReady}
+                    onSyncStatusChange={setSyncStatus}
+                    onSubmittableContentChange={handleSubmittableContentChange}
+                    onCommentDraft={(draft) => {
+                      commentsState.setPendingDraft(draft);
+                      if (!isMobile) setDesktopCommentsOpen(true);
+                    }}
+                    onCommentCreated={(c) => {
+                      commentsState.addComment(c as any);
+                      if (!isMobile) setDesktopCommentsOpen(true);
+                    }}
+                    marginComments={
+                      showDesktopMarginComments ? (
+                        <MarginCommentsRail
+                          documentId={data.doc.id}
+                          comments={visibleComments as any}
+                          pendingDraft={commentsState.pendingDraft}
+                          readOnly={commentsReadOnly}
+                          onCommentRemoved={commentsState.removeComment}
+                          onResponseAdded={commentsState.addResponse}
+                          onArchiveChange={commentsState.setCommentArchived}
+                          onCommentCreated={(c) =>
+                            commentsState.addComment(c as any)
+                          }
+                          onDraftCancel={() => {
+                            const draftId = commentsState.pendingDraft?.id;
+                            commentsState.clearPendingDraft();
+                            if (draftId) {
+                              document
+                                .querySelectorAll(
+                                  `[data-comment-id="${draftId}"]`
+                                )
+                                .forEach((mark) => {
+                                  const node = mark as HTMLElement;
+                                  if (!node.parentNode) return;
+                                  while (node.childNodes.length > 0) {
+                                    node.parentNode.insertBefore(
+                                      node.childNodes[0],
+                                      node
+                                    );
+                                  }
+                                  node.parentNode.removeChild(node);
+                                });
+                            }
+                          }}
+                          autoFocusReplyCommentId={
+                            commentsState.pendingFocusCommentId
+                          }
+                        />
+                      ) : null
+                    }
+                  />
+                ) : (
+                  <EditorLoadingShell />
+                )}
               </div>
             )}
             {isMobile && tab === 'comments' ? (
