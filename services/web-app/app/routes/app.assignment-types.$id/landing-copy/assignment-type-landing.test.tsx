@@ -343,25 +343,27 @@ describe('Section consistency (Kevin and Brian, Nov 11: the Thesis Statement pag
     expect(unlinked.querySelectorAll('a')).toHaveLength(0);
   });
 
-  it('The Thesis-Driven Essay puts the YAWP! philosophy box under the Pre-writing lesson, closed', () => {
+  it('The Thesis-Driven Essay has the YAWP! philosophy in its own box after How to Teach It, closed', () => {
     const root = render(
       <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} />
     );
-    const rows = [...root.querySelectorAll('[data-testid="course-lesson"]')];
-    const withBox = rows.filter((row) =>
-      row.querySelector('[data-testid="landing-section-philosophy"]')
+    // Its own box, after How to Teach It, and no longer under a lesson's row.
+    const boxes = [...root.querySelectorAll('[data-landing-box]')].map((box) =>
+      box.getAttribute('data-testid')
     );
-    expect(withBox).toHaveLength(1);
-    expect(withBox[0]!.querySelector('[data-lesson-title]')?.textContent).toBe('Pre-writing');
-    const box = withBox[0]!.querySelector('[data-testid="landing-section-philosophy"]')!;
-    expect(box.querySelector('h4')?.textContent).toBe('YAWP! philosophy on essay prompts');
+    expect(boxes).toEqual(['how-to-teach-spotlight', 'landing-section-philosophy']);
+    expect(
+      root.querySelector('[data-testid="course-lesson"] [data-testid="landing-section-philosophy"]')
+    ).toBeNull();
+    const box = root.querySelector('[data-testid="landing-section-philosophy"]')!;
+    expect(box.querySelector('h2')?.textContent).toBe('YAWP! philosophy on essay prompts');
     const button = toggle(root, 'YAWP! philosophy on essay prompts')!;
     expect(button.getAttribute('aria-expanded')).toBe('false');
     expect(box.textContent).not.toContain('75 essays');
     open(button);
     expect(box.textContent).toContain('75 essays with 75 different angles');
     expect(box.textContent).not.toContain('Note:');
-    // Nothing loose between How to Teach It and the library.
+    // Nothing loose between the boxes and the library.
     expect(root.querySelector('[data-testid="landing-section-prompt-library"]')).toBeNull();
     expect(root.textContent).not.toContain('Have your own prompt?');
   });

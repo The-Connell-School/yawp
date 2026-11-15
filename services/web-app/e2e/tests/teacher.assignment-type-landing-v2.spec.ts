@@ -179,7 +179,7 @@ test.describe.serial('Assignment type landing pages (v2)', () => {
     await expect(page.getByRole('heading', { name: 'How to Teach It' })).toHaveCount(0);
   });
 
-  test('The Thesis-Driven Essay: How to Teach It, the YAWP! philosophy box under Pre-writing, and the library intro inside the library', async ({
+  test('The Thesis-Driven Essay: How to Teach It, then the YAWP! philosophy box, and the library intro inside the library', async ({
     page,
     e2eContext,
     signIn,
@@ -237,14 +237,16 @@ test.describe.serial('Assignment type landing pages (v2)', () => {
       })
     ).toHaveCount(0);
 
-    // Brian's note is the YAWP! philosophy box under the Pre-writing lesson,
-    // closed until a teacher opens it (Nov 11).
-    const prewritingRow = course
-      .getByTestId('course-lesson')
-      .filter({ hasText: 'Pre-writing' })
-      .first();
-    const philosophy = prewritingRow.getByTestId('landing-section-philosophy');
+    // Brian's note is its own box under How to Teach It and above the
+    // library, closed until a teacher opens it (Kevin, Nov 15).
+    const philosophy = page.getByTestId('landing-section-philosophy');
     await expect(philosophy.getByRole('heading', { name: 'YAWP! philosophy on essay prompts' })).toBeVisible();
+    await expect(course.getByTestId('landing-section-philosophy')).toHaveCount(0);
+    const howToBox = await page.getByTestId('how-to-teach-spotlight').boundingBox();
+    const philosophyBox = await philosophy.boundingBox();
+    const libraryButton = await page.getByRole('button', { name: /Prompt Library/i }).boundingBox();
+    expect(philosophyBox!.y).toBeGreaterThan(howToBox!.y + howToBox!.height);
+    expect(libraryButton!.y).toBeGreaterThan(philosophyBox!.y + philosophyBox!.height);
     await expect(philosophy).not.toContainText('75 essays');
     await philosophy.getByRole('button', { name: 'Show YAWP! philosophy on essay prompts' }).click();
     await expect(philosophy).toContainText('75 essays with 75 different angles');
