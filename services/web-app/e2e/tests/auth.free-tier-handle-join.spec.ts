@@ -159,10 +159,20 @@ test.describe('Free-tier handle student', () => {
           { timeout: 60_000 }
         )
         .toBeGreaterThan(0);
-      const submission = await prisma.submission.findFirstOrThrow({
-        where: { documentId, submittedAt: { gt: new Date(0) } },
-        select: { id: true, title: true },
+      const submittedDocument = await prisma.document.findFirstOrThrow({
+        where: { id: documentId },
+        select: {
+          membershipId: true,
+          submissions: {
+            where: { submittedAt: { gt: new Date(0) } },
+            orderBy: { submittedAt: 'desc' },
+            take: 1,
+            select: { id: true, title: true },
+          },
+        },
       });
+      const submission = submittedDocument.submissions[0];
+      expect(submission).toBeTruthy();
 
       const teacherContext = await browser.newContext();
       const teacherPage = await teacherContext.newPage();
@@ -180,7 +190,7 @@ test.describe('Free-tier handle student', () => {
       await teacherPage.addInitScript(() => {
         localStorage.removeItem('yawp.class-documents-view');
       });
-      await teacherPage.goto(`/app/submissions/${submission.id}`);
+      await teacherPage.goto(`/app/submissions/${submission!.id}`);
       await expect(
         teacherPage.getByTestId('submission-lifecycle-panel')
       ).toBeVisible({ timeout: 30_000 });
@@ -192,7 +202,8 @@ test.describe('Free-tier handle student', () => {
               // Do not put handle in URL `q` — username is not in the search haystack.
               await gotoClassDocumentsTab(teacherPage, klass.id, {
                 status,
-                assignmentId: assignment.id,
+                classAssignmentId: classAssignment.id,
+                studentId: submittedDocument.membershipId,
               });
               const table = teacherPage.getByRole('table', {
                 name: /class documents/i,
@@ -208,8 +219,8 @@ test.describe('Free-tier handle student', () => {
               const byAssignment =
                 (await table.getByText('Free tier writing').count()) > 0;
               const bySubmissionTitle =
-                submission.title.trim().length > 0 &&
-                (await table.getByText(submission.title).count()) > 0;
+                submission!.title.trim().length > 0 &&
+                (await table.getByText(submission!.title).count()) > 0;
               if (byName || byHandle || byAssignment || bySubmissionTitle) {
                 return true;
               }

@@ -504,7 +504,8 @@ test.describe.serial('Teacher class page redesign', () => {
       });
       await waitForClassDocumentTitle(page, e2eContext.classId, title, {
         assignmentId: e2eContext.assignmentId,
-        status: 'graded',
+        studentId: e2eContext.membershipId,
+        status: 'all',
         timeoutMs: 90_000,
       });
 

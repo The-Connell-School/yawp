@@ -633,6 +633,8 @@ export function classDocumentsTabUrl(
     documentGroup?: string;
     status?: string;
     assignmentId?: string;
+    classAssignmentId?: string;
+    studentId?: string;
   }
 ) {
   const search = new URLSearchParams({
@@ -645,7 +647,32 @@ export function classDocumentsTabUrl(
     ? serializeDocumentWorkFilterIds([params.assignmentId])
     : null;
   if (assignmentParam) search.set('assignmentId', assignmentParam);
+  if (params?.classAssignmentId) {
+    search.set('classAssignmentId', params.classAssignmentId);
+  }
+  const studentParam = params?.studentId
+    ? serializeDocumentWorkFilterIds([params.studentId])
+    : null;
+  if (studentParam) search.set('studentId', studentParam);
   return `/app/my-classes/${classId}?${search.toString()}`;
+}
+
+async function isClassDocumentsTableVisible(page: Page) {
+  return page
+    .getByRole('table', { name: /class documents/i })
+    .isVisible()
+    .catch(() => false);
+}
+
+/** Exit ticket assignment detail opens the creation sheet, not the edit route. */
+export async function expectExitTicketEditSheetReady(
+  page: Page,
+  timeoutMs = 60_000
+) {
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('Edit Assignment', { exact: true })).toBeVisible({
+    timeout: timeoutMs,
+  });
 }
 
 export async function expectClassDocumentsTable(page: Page) {
@@ -701,36 +728,46 @@ export async function waitForClassDocumentTitle(
   title: string,
   options?: {
     assignmentId?: string;
+    classAssignmentId?: string;
+    studentId?: string;
     status?: string;
     q?: string;
     timeoutMs?: number;
   }
 ) {
   const timeoutMs = options?.timeoutMs ?? 90_000;
-  const status = options?.status ?? 'all';
+  const preferredStatus = options?.status ?? 'all';
+  const statuses = preferredStatus === 'all' ? ['all'] : [preferredStatus, 'all'];
   const tableTitle = () =>
     page
       .getByRole('table', { name: /class documents/i })
       .getByText(title, { exact: true });
-  const tabParams = () => ({
+  const tabParams = (status: string) => ({
     status,
     documentGroup: 'none' as const,
     assignmentId: options?.assignmentId,
+    classAssignmentId: options?.classAssignmentId,
+    studentId: options?.studentId,
     q: options?.q,
   });
-  await gotoClassDocumentsTab(page, classId, tabParams());
-  await expectClassDocumentsTable(page);
   const titleQuery = title.trim().toLowerCase();
   await expect
     .poll(
       async () => {
-        if (await tableTitle().isVisible().catch(() => false)) {
-          return true;
+        for (const status of statuses) {
+          await gotoClassDocumentsTab(page, classId, tabParams(status));
+          if (!(await isClassDocumentsTableVisible(page))) {
+            continue;
+          }
+          if (await tableTitle().isVisible().catch(() => false)) {
+            return true;
+          }
+          await fillTeacherDocumentWorkSearch(page, titleQuery);
+          if (await tableTitle().isVisible().catch(() => false)) {
+            return true;
+          }
         }
-        await gotoClassDocumentsTab(page, classId, tabParams());
-        await expectClassDocumentsTable(page);
-        await fillTeacherDocumentWorkSearch(page, titleQuery);
-        return tableTitle().isVisible().catch(() => false);
+        return false;
       },
       { timeout: timeoutMs }
     )
@@ -767,6 +804,8 @@ export async function gotoClassDocumentsTab(
     documentGroup?: string;
     status?: string;
     assignmentId?: string;
+    classAssignmentId?: string;
+    studentId?: string;
   }
 ) {
   await page.goto(

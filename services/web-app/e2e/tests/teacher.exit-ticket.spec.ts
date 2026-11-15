@@ -1,5 +1,8 @@
 import { test, expect } from '../test-setup';
-import { openMyAssignmentDetail } from '../test-helpers';
+import {
+  expectExitTicketEditSheetReady,
+  openMyAssignmentDetail,
+} from '../test-helpers';
 
 import { createE2EPrismaClient } from '../prisma-client';
 
@@ -135,9 +138,7 @@ test.describe.serial('Exit tickets', () => {
       const editButton = page.getByRole('button', { name: /^Edit$/ }).first();
       await expect(editButton).toBeVisible({ timeout: 30_000 });
       await editButton.click();
-      await expect(
-        page.getByRole('heading', { name: 'Edit Assignment' })
-      ).toBeVisible({ timeout: 30_000 });
+      await expectExitTicketEditSheetReady(page);
 
       await expect(
         page.getByRole('radio', { name: /^Check for understanding/ })
@@ -197,9 +198,7 @@ test.describe.serial('Exit tickets', () => {
       const editButton = page.getByRole('button', { name: /^Edit$/ }).first();
       await expect(editButton).toBeVisible({ timeout: 30_000 });
       await editButton.click();
-      await expect(
-        page.getByRole('heading', { name: 'Edit Assignment' })
-      ).toBeVisible({ timeout: 30_000 });
+      await expectExitTicketEditSheetReady(page);
       await expect(
         page.getByRole('radio', { name: 'Write your own' })
       ).toBeChecked();
@@ -265,9 +264,7 @@ test.describe.serial('Exit tickets', () => {
       const editButton = page.getByRole('button', { name: /^Edit$/ }).first();
       await expect(editButton).toBeVisible({ timeout: 30_000 });
       await editButton.click();
-      await expect(
-        page.getByRole('heading', { name: 'Edit Assignment' })
-      ).toBeVisible({ timeout: 30_000 });
+      await expectExitTicketEditSheetReady(page);
       await expect(page.getByLabel('Grade this ticket')).toBeChecked();
       await expect(page.getByLabel('How many points?')).toHaveValue('5');
       await expect(page.getByLabel('Correct answer or key points')).toHaveValue(
