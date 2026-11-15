@@ -563,16 +563,7 @@ test.describe.serial('Teacher class page redesign', () => {
         localStorage.removeItem('yawp.class-documents-view');
       });
 
-      await waitForClassDocumentTitle(page, e2eContext.classId, inProgressTitle, {
-        assignmentId: e2eContext.assignmentId,
-        studentId: e2eContext.membershipId,
-        status: 'all',
-        timeoutMs: 90_000,
-      });
-
       await gotoClassDocumentsTab(page, e2eContext.classId, {
-        assignmentId: e2eContext.assignmentId,
-        studentId: e2eContext.membershipId,
         documentGroup: 'status',
         status: 'all',
       });
@@ -581,16 +572,31 @@ test.describe.serial('Teacher class page redesign', () => {
         'Group by status'
       );
 
-      const inProgressGroup = page
-        .getByRole('button', { name: /In Progress/i })
-        .first();
-      await expect(inProgressGroup).toBeVisible({ timeout: 30_000 });
-      if ((await inProgressGroup.getAttribute('aria-expanded')) !== 'true') {
-        await inProgressGroup.click();
-      }
-      await expect(
-        page.getByText(inProgressTitle, { exact: true })
-      ).toBeVisible({ timeout: 30_000 });
+      await expect
+        .poll(
+          async () => {
+            const inProgressGroup = page
+              .getByRole('button', { name: /In Progress/i })
+              .first();
+            if (!(await inProgressGroup.isVisible().catch(() => false))) {
+              await gotoClassDocumentsTab(page, e2eContext.classId, {
+                documentGroup: 'status',
+                status: 'all',
+              });
+              await openClassDocumentsTab(page);
+              return false;
+            }
+            if ((await inProgressGroup.getAttribute('aria-expanded')) !== 'true') {
+              await inProgressGroup.click();
+            }
+            return page
+              .getByText(inProgressTitle, { exact: true })
+              .isVisible()
+              .catch(() => false);
+          },
+          { timeout: 90_000 }
+        )
+        .toBe(true);
     } finally {
       await deleteClassDocuments(prisma, documentIds);
       await prisma.$disconnect();

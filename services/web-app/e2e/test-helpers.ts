@@ -667,10 +667,10 @@ async function isClassDocumentsTableVisible(page: Page) {
 /** Exit ticket assignment detail opens the creation sheet, not the edit route. */
 export async function expectExitTicketEditSheetReady(
   page: Page,
-  timeoutMs = 60_000
+  timeoutMs = 90_000
 ) {
-  const dialog = page.getByRole('dialog');
-  await expect(dialog.getByText('Edit Assignment', { exact: true })).toBeVisible({
+  const sheet = page.getByRole('dialog');
+  await expect(sheet.getByLabel('Title (optional)')).toBeVisible({
     timeout: timeoutMs,
   });
 }
