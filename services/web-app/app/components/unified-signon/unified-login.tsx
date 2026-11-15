@@ -28,12 +28,20 @@ export function UnifiedLogin({
   const [resetError, setResetError] = useState<string>();
   const fetcher = useFetcher<SignonResult>();
   const completion = useRef<((result: SignonResult) => void) | null>(null);
+  /** Safe destination from the in-flight operation; used when the action returns redirect. */
+  const pendingRedirectTo = useRef<string | null>(null);
   useEffect(() => {
-    if (fetcher.state !== 'idle' || !fetcher.data || !completion.current)
-      return;
+    if (fetcher.state !== 'idle' || !completion.current) return;
     const resolve = completion.current;
     completion.current = null;
-    resolve(fetcher.data);
+    if (fetcher.data) {
+      pendingRedirectTo.current = null;
+      resolve(fetcher.data);
+      return;
+    }
+    const redirectTo = pendingRedirectTo.current;
+    pendingRedirectTo.current = null;
+    if (redirectTo) resolve({ redirectTo });
   }, [fetcher.state, fetcher.data]);
   const transport: SignonTransport = async (intent, values, context) => {
     const form = new FormData();
@@ -44,6 +52,7 @@ export function UnifiedLogin({
     // Only server responses determine the next step.
     return new Promise<SignonResult>((resolve) => {
       completion.current = resolve;
+      pendingRedirectTo.current = context.redirectTo;
       void fetcher.submit(form, { method: 'POST', action: '/auth/login' });
     });
   };
