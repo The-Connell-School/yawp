@@ -133,11 +133,12 @@ export function Editor({
     [docId, canUploadImages]
   );
 
+  const allowCommentMarks = isEditable || teacherCommenting;
   const editor = useEditor({
     extensions,
     content: initialHtml,
     immediatelyRender: false,
-    editable: isEditable,
+    editable: allowCommentMarks,
     editorProps: {
       attributes: {
         'aria-label': 'Student document editor',
@@ -145,6 +146,9 @@ export function Editor({
           ? { class: 'doc-editor-prosemirror-teacher' }
           : {}),
       },
+      handleTextInput: () => !isEditable && teacherCommenting,
+      handlePaste: () => !isEditable && teacherCommenting,
+      handleDrop: () => !isEditable && teacherCommenting,
     },
   });
 
@@ -163,8 +167,8 @@ export function Editor({
   // Reflect prop changes to the editor's editable state
   useEffect(() => {
     if (!editor) return;
-    editor.setEditable(isEditable);
-  }, [editor, isEditable]);
+    editor.setEditable(isEditable || teacherCommenting);
+  }, [editor, isEditable, teacherCommenting]);
 
   // Expose editor for E2E test helpers (flush domObserver after typing)
   useEffect(() => {
