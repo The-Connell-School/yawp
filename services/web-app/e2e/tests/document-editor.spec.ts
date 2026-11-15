@@ -674,6 +674,10 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
     await page.setViewportSize({ width: 1280, height: 720 });
     await helpers.openDocument(e2eContext.gradedDocumentId, { retry: true });
+    await page
+      .getByTestId('document-panel-toggles')
+      .getByRole('button', { name: 'Comments' })
+      .click();
     const card = page.getByTestId(
       `margin-comment-card-${e2eContext.v2GradedCommentId}`
     );
