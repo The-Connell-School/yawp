@@ -76,6 +76,7 @@ mock.module('~/domain/document-editor/document-editor-v2-gate.server', () => ({
   isStaffForDocumentEditorOverride: () => false,
   shouldSetDocumentEditorV2ForceCookie: mock(() => false),
   shouldClearDocumentEditorV2ForceCookie: mock(() => false),
+  isDocumentEditorV2StaffOptOut: mock(() => false),
   documentEditorV2ForceCookie: {
     serialize: mock(async () => 'yawp_document_editor_v2=1; Path=/'),
     parse: mock(async () => null),
