@@ -18,7 +18,9 @@ const LESSONS = YAWP_LESSON_SLUGS.map((slug) => {
 describe("Brian's deck as the lesson's deck", () => {
   test.each(LESSONS)('$slug: every picture in the deck is one the planner can show', ({ file }) => {
     const pictures = yawpDeckPictures(file);
-    expect(pictures.length).toBeGreaterThanOrEqual(4);
+    // The shortest on pictures (Introduction Paragraph) has three: its
+    // painting, the essay form and the Yawp! screenshot.
+    expect(pictures.length).toBeGreaterThanOrEqual(3);
     expect(pictures.map((picture) => picture.position)).toEqual(pictures.map((_, index) => index + 1));
     for (const picture of pictures) {
       expect(['image/png', 'image/jpeg', 'image/gif', 'image/webp']).toContain(picture.contentType);

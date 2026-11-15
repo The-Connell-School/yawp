@@ -109,17 +109,23 @@ describe('The Thesis-Driven Essay course', () => {
   });
 });
 
-// Teachers open these decks in PowerPoint, Google Slides and Keynote. Keynote
-// ignores fonts embedded in a .pptx and swaps in a wider face, so a deck set
-// in a web font (Cormorant Garamond, Libre Franklin) wraps and overlaps there.
-// Every deck uses fonts all three apps have: Georgia and Arial.
-const FONTS_EVERY_APP_HAS = new Set(['Georgia', 'Arial']);
+// The decks are in the Lesson Deck Kit, spec v4.1 (Nov 11): Fraunces Bold for
+// titles and headlines, Georgia and Arial for everything else. Georgia and
+// Arial come with PowerPoint and Google Slides; Fraunces is a free Google
+// Font that Google Slides has, and each .pptx embeds it so PowerPoint shows it
+// on a computer that does not have it installed.
+//
+// Keynote ignores fonts embedded in a .pptx and swaps in another face, which
+// is why these decks were Georgia and Arial only before v4.1. The kit now
+// asks for Fraunces and was tested in PowerPoint and Google Slides; in
+// Keynote the headlines fall back unless Fraunces is installed.
+const KIT_FONTS = new Set(['Fraunces', 'Georgia', 'Arial']);
 
-describe('the slide decks open cleanly in PowerPoint, Google Slides and Keynote', () => {
+describe('the slide decks are set in the Lesson Deck Kit’s fonts (spec v4.1)', () => {
   const decks = THESIS_ESSAY_COURSE.flatMap((lesson) => lesson.decks);
 
   test.each(decks.map((deck) => [deck.fileName, deck.href]))(
-    '%s uses only Georgia and Arial on its slides, and embeds no fonts',
+    '%s uses only Fraunces, Georgia and Arial on its slides, and embeds Fraunces Bold and nothing else',
     (_name, href) => {
       const parts = readZipEntries(readFileSync(publicFile(href)));
       const used = new Set<string>();
@@ -129,11 +135,15 @@ describe('the slide decks open cleanly in PowerPoint, Google Slides and Keynote'
           used.add(m[1]!);
         }
       }
-      expect([...used].filter((font) => !FONTS_EVERY_APP_HAS.has(font))).toEqual([]);
-      expect([...parts.keys()].filter((name) => name.startsWith('ppt/fonts/'))).toEqual([]);
-      expect(parts.get('ppt/presentation.xml')!.read().toString('utf8')).not.toContain(
-        'embeddedFontLst'
-      );
+      expect([...used].filter((font) => !KIT_FONTS.has(font))).toEqual([]);
+      expect(used.has('Fraunces')).toBe(true);
+      // Embedded: Fraunces, its bold among the faces, and no other family.
+      const embedded = [...parts.keys()].filter((name) => name.startsWith('ppt/fonts/'));
+      expect(embedded).toContain('ppt/fonts/Fraunces-bold.fntdata');
+      expect(embedded.filter((name) => !name.startsWith('ppt/fonts/Fraunces-'))).toEqual([]);
+      const presentation = parts.get('ppt/presentation.xml')!.read().toString('utf8');
+      const families = [...presentation.matchAll(/<p:embeddedFont><p:font typeface="([^"]*)"/g)].map((m) => m[1]);
+      expect(families).toEqual(['Fraunces']);
     }
   );
 });
