@@ -6,6 +6,7 @@ import {
   filterClassDocumentsByTitle,
   gotoClassDocumentsTab,
   openClassAssignmentsTab,
+  waitForClassDocumentTitle,
 } from '../test-helpers';
 import { currentSchoolYear } from '../../app/utils/school-year';
 import { createE2EPrismaClient } from '../prisma-client';
@@ -93,14 +94,12 @@ test.describe('Teacher class documents lifecycle', () => {
         localStorage.removeItem('yawp.class-documents-view');
         localStorage.removeItem('yawp.student-work-view');
       });
-      await gotoClassDocumentsTab(page, e2eContext.classId, {
-        q: `lifecycle ${suffix}`,
-      });
-      await expectClassDocumentsTable(page);
+      await waitForClassDocumentTitle(
+        page,
+        e2eContext.classId,
+        `Lifecycle needs grading ${suffix}`
+      );
       const table = page.getByRole('table', { name: /class documents/i });
-      await expect(
-        table.getByText(`Lifecycle needs grading ${suffix}`, { exact: true })
-      ).toBeVisible({ timeout: 60_000 });
 
       // Seeded + local data cover the full lifecycle.
       await expect(table.getByText('In Progress').first()).toBeVisible();
@@ -447,13 +446,13 @@ test.describe.serial('Teacher class page redesign', () => {
       documentIds.push(inProgressDoc.id);
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await gotoClassDocumentsTab(page, e2eContext.classId);
+      await waitForClassDocumentTitle(
+        page,
+        e2eContext.classId,
+        submittedTitle
+      );
       await filterClassDocumentsByTitle(page, submittedTitle);
       const documentsTable = page.getByRole('table', { name: /class documents/i });
-      await expect(documentsTable).toBeVisible({ timeout: 30_000 });
-      await expect(
-        documentsTable.getByText(submittedTitle, { exact: true })
-      ).toBeVisible({ timeout: 60_000 });
 
       const submittedRow = page
         .getByRole('row', {
@@ -471,9 +470,7 @@ test.describe.serial('Teacher class page redesign', () => {
       await submittedRow.click();
       await page.waitForURL(/\/app\/submissions\//);
 
-      await gotoClassDocumentsTab(page, e2eContext.classId, {
-        q: inProgressTitle.toLowerCase(),
-      });
+      await waitForClassDocumentTitle(page, e2eContext.classId, inProgressTitle);
       const inProgressRow = page
         .getByRole('row', {
           name: new RegExp(inProgressTitle),

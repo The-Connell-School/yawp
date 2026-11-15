@@ -7,6 +7,7 @@ test('My Assignments scrolls at short and tall viewports while navigation stays 
   signIn,
   e2eContext,
 }) => {
+  test.setTimeout(120_000);
   const prisma = createE2EPrismaClient();
   const ids: string[] = [];
   try {

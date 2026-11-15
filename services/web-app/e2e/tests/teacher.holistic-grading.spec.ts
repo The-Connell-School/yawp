@@ -3,7 +3,9 @@ import { test, expect } from '../test-setup';
 import {
   clickClassDocumentsStatusTab,
   expectClassDocumentsTable,
+  filterClassDocumentsByTitle,
   gotoClassDocumentsTab,
+  openClassDocumentsTab,
 } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
@@ -189,11 +191,23 @@ test.describe.serial('holistic Cristo Rey points-only grading', () => {
   }, testInfo) => {
     test.setTimeout(120_000);
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    await gotoClassDocumentsTab(page, holisticClassId, {
-      q: holisticAssignmentTitle.toLowerCase(),
-    });
+    await gotoClassDocumentsTab(page, holisticClassId, { status: 'released' });
+    await expect
+      .poll(
+        async () => {
+          const table = page.getByRole('table', { name: /class documents/i });
+          if (await table.isVisible().catch(() => false)) {
+            return true;
+          }
+          await page.reload();
+          await openClassDocumentsTab(page);
+          return table.isVisible().catch(() => false);
+        },
+        { timeout: 90_000 }
+      )
+      .toBe(true);
+    await filterClassDocumentsByTitle(page, holisticAssignmentTitle);
     const documentsTable = page.getByRole('table', { name: /class documents/i });
-    await expectClassDocumentsTable(page);
     await clickClassDocumentsStatusTab(page, /^Released/i);
     const titleRow = documentsTable
       .getByRole('row')

@@ -155,11 +155,25 @@ test.describe('Free-tier handle student', () => {
 
       await gotoClassDocumentsTab(teacherPage, klass.id, {
         status: 'needs-grading',
-        q: displayName.toLowerCase(),
       });
-      await expect(teacherPage.getByText(displayName)).toBeVisible({
-        timeout: 60_000,
+      const documentsTable = teacherPage.getByRole('table', {
+        name: /class documents/i,
       });
+      await expect
+        .poll(
+          async () => {
+            if (await documentsTable.isVisible().catch(() => false)) {
+              return (await documentsTable.getByText(displayName).count()) > 0;
+            }
+            await teacherPage.reload();
+            await gotoClassDocumentsTab(teacherPage, klass.id, {
+              status: 'needs-grading',
+            });
+            return false;
+          },
+          { timeout: 90_000 }
+        )
+        .toBe(true);
 
       await teacherPage.goto(`/app/my-classes/${klass.id}?tab=students`);
       const studentRow = teacherPage

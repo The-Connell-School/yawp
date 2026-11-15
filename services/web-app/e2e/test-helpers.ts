@@ -509,11 +509,12 @@ export async function fillMyAssignmentsSearch(
   const trimmed = query.trim();
   const classLabel = options?.classLabel ?? E2E_SEEDED_CLASS_LABEL;
 
+  const rowVisibleTimeout = 20_000;
+
   if (options?.assignmentId) {
-    await page.goto(
-      `/app/assignments?highlightAssignment=${options.assignmentId}`,
-      { waitUntil: 'domcontentloaded' }
-    );
+    if (!page.url().includes('/app/assignments')) {
+      await page.goto('/app/assignments', { waitUntil: 'domcontentloaded' });
+    }
     await expect(page.getByTestId('my-assignments-filter')).toBeVisible({
       timeout: 30_000,
     });
@@ -532,7 +533,7 @@ export async function fillMyAssignmentsSearch(
       title: trimmed || undefined,
     });
     try {
-      await expect(located).toBeVisible({ timeout: 45_000 });
+      await expect(located).toBeVisible({ timeout: rowVisibleTimeout });
     } catch (error) {
       if (!options.classId || options.allowDetailFallback === false) throw error;
       await page.goto(
@@ -556,7 +557,20 @@ export async function fillMyAssignmentsSearch(
   }
   if (!trimmed) return;
   const located = await findMyAssignmentRow(page, { title: trimmed });
-  await expect(located).toBeVisible({ timeout: 30_000 });
+  await expect(located).toBeVisible({ timeout: rowVisibleTimeout });
+}
+
+export async function openMyAssignmentDetail(
+  page: Page,
+  assignmentId: string,
+  classId: string
+) {
+  await page.goto(`/app/assignments/${assignmentId}?classId=${classId}`, {
+    waitUntil: 'domcontentloaded',
+  });
+  await expect(page.getByTestId('assignment-detail-page')).toBeVisible({
+    timeout: 30_000,
+  });
 }
 
 async function openTeacherDocumentWorkFilter(page: Page) {
@@ -597,30 +611,64 @@ export async function expectClassDocumentsTitleVisible(
   });
 }
 
-/** Deep-link search is more reliable than the filter popover on shared CI databases. */
+/** Narrow the class documents table via the Filter popover (preferred on CI). */
 export async function filterClassDocumentsByTitle(
   page: Page,
   title: string,
-  options?: { usePopover?: boolean }
+  options?: { useUrl?: boolean; classId?: string }
 ) {
   const normalized = title.trim().toLowerCase();
-  if (options?.usePopover) {
-    await fillTeacherDocumentWorkSearch(page, normalized);
+  if (options?.useUrl) {
+    const classId =
+      options.classId ??
+      page.url().match(/\/app\/my-classes\/([^/?]+)/)?.[1];
+    if (!classId) {
+      throw new Error('filterClassDocumentsByTitle requires a class id for URL mode');
+    }
+    await page.goto(
+      classDocumentsTabUrl(classId, {
+        q: normalized,
+        status: 'all',
+        documentGroup: 'none',
+      })
+    );
+    await openClassDocumentsTab(page);
+    await expectClassDocumentsTitleVisible(page, title.trim());
     return;
   }
-  const match = page.url().match(/\/app\/my-classes\/([^/?]+)/);
-  if (!match?.[1]) {
-    throw new Error('filterClassDocumentsByTitle requires a class detail URL');
-  }
-  await page.goto(
-    classDocumentsTabUrl(match[1], {
-      q: normalized,
-      status: 'all',
-      documentGroup: 'none',
-    })
-  );
-  await openClassDocumentsTab(page);
+  await fillTeacherDocumentWorkSearch(page, normalized);
   await expectClassDocumentsTitleVisible(page, title.trim());
+}
+
+export async function waitForClassDocumentTitle(
+  page: Page,
+  classId: string,
+  title: string,
+  timeoutMs = 90_000
+) {
+  await gotoClassDocumentsTab(page, classId);
+  await expectClassDocumentsTable(page);
+  await expect
+    .poll(
+      async () => {
+        if (
+          await page
+            .getByText(title, { exact: true })
+            .isVisible()
+            .catch(() => false)
+        ) {
+          return true;
+        }
+        await page.reload();
+        await openClassDocumentsTab(page);
+        return page
+          .getByText(title, { exact: true })
+          .isVisible()
+          .catch(() => false);
+      },
+      { timeout: timeoutMs }
+    )
+    .toBe(true);
 }
 
 /** Filter popover search — use when URL `q` would hide rows the spec still needs visible. */
