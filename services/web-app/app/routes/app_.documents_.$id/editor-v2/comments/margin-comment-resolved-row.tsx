@@ -6,12 +6,18 @@ import type { Comment as CommentType } from './comment';
 
 type Props = CommentType & {
   readOnly?: boolean;
+  surface?: 'margin' | 'sheet';
+  testIdPrefix?: string;
   onDelete?: (commentId: string) => void;
   onResponseAdded?: (commentId: string, response: unknown) => void;
   onArchiveChange?: (commentId: string, archivedAt: Date | null) => void;
 };
 
-export function MarginCommentResolvedRow(props: Props) {
+export function MarginCommentResolvedRow({
+  surface = 'margin',
+  testIdPrefix = 'margin-comment-resolved',
+  ...props
+}: Props) {
   const [expanded, setExpanded] = useState(false);
   const authorUser = (
     props.membership as { user?: { name: string | null; email: string | null } }
@@ -21,9 +27,11 @@ export function MarginCommentResolvedRow(props: Props) {
 
   if (expanded) {
     return (
-      <div data-testid={`margin-comment-resolved-${props.id}`}>
-        <MarginCommentCard {...props} />
-      </div>
+      <MarginCommentCard
+        {...props}
+        surface={surface}
+        testIdPrefix={`${testIdPrefix}-expanded`}
+      />
     );
   }
 
@@ -34,7 +42,7 @@ export function MarginCommentResolvedRow(props: Props) {
         'doc-editor-comment-resolved-row',
         'flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[13px]'
       )}
-      data-testid={`margin-comment-resolved-${props.id}`}
+      data-testid={`${testIdPrefix}-${props.id}`}
       onClick={(e) => {
         e.stopPropagation();
         setExpanded(true);

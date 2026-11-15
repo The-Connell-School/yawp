@@ -25,7 +25,14 @@ import {
   MessageCircle,
   PanelLeft,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  startTransition,
+} from 'react';
 import { useLocalStorage } from 'usehooks-ts';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { SaveStatusIndicator } from '~/components/save-status-indicator';
@@ -217,7 +224,14 @@ export function DocumentEditorV2Page() {
   const navigate = useNavigate();
   const breakpoint = useBreakpoint();
   const [uiMounted, setUiMounted] = useState(false);
-  useEffect(() => setUiMounted(true), []);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        startTransition(() => setUiMounted(true));
+      });
+    });
+  }, []);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
   const [mobileTutorSheetOpen, setMobileTutorSheetOpen] = useState(false);
@@ -452,8 +466,7 @@ export function DocumentEditorV2Page() {
     !isMobile &&
     (desktopCommentsOpen ||
       (isViewingAsTeacher && !isOwnTeacherPreview) ||
-      commentsState.pendingDraft != null ||
-      visibleComments.length > 0);
+      commentsState.pendingDraft != null);
   const studentName =
     data.doc.membership.user.name?.trim() || 'Unknown student';
   const cannotSubmitEmpty = !editorSubmittable;
@@ -1086,8 +1099,9 @@ export function DocumentEditorV2Page() {
                   }}
                 >
                   <Comments
-                    showCollapsibleHeader={!isViewingAsTeacher}
+                    variant="sheet"
                     comments={visibleComments as any}
+                    openCommentCount={activeComments.length}
                     readOnly={commentsReadOnly}
                     onCommentRemoved={commentsState.removeComment}
                     onResponseAdded={commentsState.addResponse}
@@ -1208,16 +1222,28 @@ export function DocumentEditorV2Page() {
               <SheetHeader className="sr-only">
                 <SheetTitle>Comments</SheetTitle>
               </SheetHeader>
-              <div className="h-full overflow-y-auto p-3">
-                <Comments
-                  showCollapsibleHeader
-                  comments={visibleComments as any}
-                  readOnly={commentsReadOnly}
-                  onCommentRemoved={commentsState.removeComment}
-                  onResponseAdded={commentsState.addResponse}
-                  onArchiveChange={commentsState.setCommentArchived}
-                  autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
-                />
+              <div className="doc-editor-comments-sheet flex h-full min-h-0 flex-col">
+                <div className="doc-editor-comments-sheet__header px-4">
+                  <span className="doc-editor-comments-sheet__title">
+                    Comments
+                  </span>
+                  <span className="doc-editor-comments-sheet__meta">
+                    {activeComments.length}{' '}
+                    {activeComments.length === 1 ? 'open' : 'open'}
+                  </span>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  <Comments
+                    variant="sheet"
+                    comments={visibleComments as any}
+                    openCommentCount={activeComments.length}
+                    readOnly={commentsReadOnly}
+                    onCommentRemoved={commentsState.removeComment}
+                    onResponseAdded={commentsState.addResponse}
+                    onArchiveChange={commentsState.setCommentArchived}
+                    autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
+                  />
+                </div>
               </div>
             </SheetContent>
           </Sheet>

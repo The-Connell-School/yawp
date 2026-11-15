@@ -9,6 +9,7 @@ try {
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import { RECOVERY_SOURCE } from '../use-pm-tripwire';
 import { SourceTracker, USER_SOURCE_META } from './source-tracker';
 
 describe('SourceTracker extension', () => {
@@ -38,7 +39,7 @@ describe('SourceTracker extension', () => {
     expect(captured.meta).toBe('user');
   });
 
-  it('does NOT tag transactions originating from explicit code', () => {
+  it('tags programmatic mount transactions as recovery-on-mount', () => {
     const captured: { meta: string | null } = { meta: null };
     editor.on('transaction', ({ transaction }) => {
       if (transaction.docChanged) {
@@ -49,6 +50,6 @@ describe('SourceTracker extension', () => {
     // No DOM event — pure code-initiated transaction
     editor.commands.insertContent('hello world');
 
-    expect(captured.meta).toBeNull();
+    expect(captured.meta).toBe(RECOVERY_SOURCE);
   });
 });

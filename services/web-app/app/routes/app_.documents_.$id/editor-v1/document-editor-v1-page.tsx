@@ -502,6 +502,9 @@ export function DocumentEditorV1Page() {
       <main
         className="flex h-screen w-screen flex-col overflow-hidden bg-white"
         data-document-editor-version="v1"
+        data-document-editor-staff-opt-out={
+          data.documentEditorStaffOptOut ? 'v1' : undefined
+        }
       >
         {showGuidedTour ? (
           <GuidedTour {...data.guidedTours!} />

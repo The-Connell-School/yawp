@@ -76,9 +76,11 @@ describe('installPmTripwire (with real Editor)', () => {
     try {
       installPmTripwire(editor, { dev: true });
 
+      // Exhaust mount/bootstrap recovery slots first.
+      for (let i = 0; i < 4; i++) {
+        editor.commands.insertContent(`boot-${i}`);
+      }
       // Programmatic insert with no user DOM event → no source tag → tripwire fires
-      // Implementation intentionally logs + increments instead of throwing to avoid
-      // silently breaking the editor persistence pipeline.
       expect(() => {
         editor.commands.insertContent('untagged');
       }).not.toThrow();
@@ -96,6 +98,9 @@ describe('installPmTripwire (with real Editor)', () => {
 
     try {
       installPmTripwire(editor, { dev: false });
+      for (let i = 0; i < 4; i++) {
+        editor.commands.insertContent(`boot-${i}`);
+      }
       expect(() => {
         editor.commands.insertContent('untagged');
       }).not.toThrow();

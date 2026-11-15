@@ -624,6 +624,53 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await expect(
       page.locator('[data-document-editor-version="v1"]')
     ).toBeVisible({ timeout: 10000 });
+    await expect(
+      page.locator('[data-document-editor-staff-opt-out="v1"]')
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('v2 desktop margin rail hides when Comments panel is toggled off', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('jdoe@brock.software', 'johndoe');
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const commentsToggle = page.getByRole('button', { name: 'Comments' });
+    await commentsToggle.click();
+    await expect(page.getByTestId('document-margin-comments-aside')).toBeHidden({
+      timeout: 10_000,
+    });
+    await commentsToggle.click();
+    await expect(page.getByTestId('document-margin-comments-aside')).toBeVisible(
+      { timeout: 10_000 }
+    );
+  });
+
+  test('v2 student can cancel an expanded comment reply', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await helpers.openDocument(
+      `${e2eContext.gradedDocumentId}?tab=editor`,
+      { retry: true }
+    );
+    const commentId = e2eContext.v2GradedCommentId;
+    await page.getByTestId(`comment-reply-input-${commentId}`).click();
+    await page.getByTestId(`comment-reply-body-${commentId}`).fill('Draft only');
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect(
+      page.getByTestId(`comment-reply-input-${commentId}`)
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.getByTestId(`comment-reply-expanded-${commentId}`)
+    ).toBeHidden();
   });
 
   test('v2 chrome shows tutor step header when v2 is active', async ({

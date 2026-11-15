@@ -101,6 +101,7 @@ import { loadGuidedTours } from '~/domain/guided-tours/guided-tours.server';
 import {
   documentEditorV2ForceCookie,
   isStaffForDocumentEditorOverride,
+  isDocumentEditorV2StaffOptOut,
   resolveDocumentEditorV2Enabled,
   shouldClearDocumentEditorV2ForceCookie,
   shouldSetDocumentEditorV2ForceCookie,
@@ -564,6 +565,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const guidedTours = await loadGuidedTours(userId, profile, request);
 
   const isPlatformAdmin = isStaffForDocumentEditorOverride(user?.isAdmin);
+  const documentEditorStaffOptOut = isDocumentEditorV2StaffOptOut(
+    request,
+    isPlatformAdmin
+  );
   const documentEditorV2 = await resolveDocumentEditorV2Enabled({
     request,
     isStaff: isPlatformAdmin,
@@ -584,6 +589,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return dataResponse(
     {
     documentEditorV2,
+    documentEditorStaffOptOut,
     guidedTours,
     doc: {
       ...doc,
