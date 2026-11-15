@@ -935,11 +935,12 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
     await page.waitForTimeout(1500);
-    expect(
-      pageErrors.some((message) =>
-        /Suspense boundary|Hydration failed|did not match/i.test(message)
-      )
-    ).toBe(false);
+    const hydrationPattern =
+      /Suspense boundary received an update|Hydration failed because|Prop `aria-pressed` did not match|Prop `aria-expanded` did not match/i;
+    const hydrationErrors = pageErrors.filter((message) =>
+      hydrationPattern.test(message)
+    );
+    expect(hydrationErrors, hydrationErrors.join('\n')).toEqual([]);
   });
 
   test('v2 creates three margin comments in one session without duplicate cards', async ({

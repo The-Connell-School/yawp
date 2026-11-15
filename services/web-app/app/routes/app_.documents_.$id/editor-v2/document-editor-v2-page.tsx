@@ -711,7 +711,7 @@ export function DocumentEditorV2Page() {
                     className="doc-editor-panel-btn"
                     aria-label="Tutor"
                     title="Tutor"
-                    aria-pressed={desktopTutorOpen}
+                    aria-pressed={uiMounted ? desktopTutorOpen : true}
                     onClick={() => setDesktopTutorOpen((open) => !open)}
                   >
                     <PanelLeft className="h-4 w-4" />

@@ -90,10 +90,16 @@ export const Tutor = ({
   onClose,
   basePath = '/app/documents',
 }: Props) => {
+  const [uiMounted, setUiMounted] = useState(false);
+  useEffect(() => {
+    setUiMounted(true);
+  }, []);
   const [messagesExpanded, setMessagesExpanded] = useLocalStorage(
     `doc-${docId}-tutor-messages-expanded`,
-    true
+    true,
+    { initializeWithValue: false }
   );
+  const showMessages = uiMounted ? messagesExpanded : true;
   const [isTutorResponding, setIsTutorResponding] = useState(false);
   const [isTutorRetrying, setIsTutorRetrying] = useState(false);
   const [tutorError, setTutorError] = useState<string | null>(null);
@@ -446,7 +452,7 @@ export const Tutor = ({
           </button>
         ) : cms.assignmentModule.isSelfGuided ? null : (
           <Tooltip
-            text={messagesExpanded ? 'Hide messages' : 'Show messages'}
+            text={showMessages ? 'Hide messages' : 'Show messages'}
             delayDuration={0}
           >
             <Button
@@ -454,12 +460,12 @@ export const Tutor = ({
               size="icon-sm"
               className="min-w-8 shrink-0"
               aria-label={
-                messagesExpanded ? 'Hide tutor messages' : 'Show tutor messages'
+                showMessages ? 'Hide tutor messages' : 'Show tutor messages'
               }
               disabled={isSessionLocked}
               onClick={() => setMessagesExpanded(!messagesExpanded)}
             >
-              {messagesExpanded ? (
+              {showMessages ? (
                 <MessageSquareOff size={18} />
               ) : (
                 <MessageSquareText size={18} />
@@ -505,7 +511,7 @@ export const Tutor = ({
         <div
           className={cn(
             'doc-editor-tutor-messages no-scrollbar transition-all duration-300',
-            messagesExpanded ? 'max-h-full' : 'max-h-0 overflow-hidden'
+            showMessages ? 'max-h-full' : 'max-h-0 overflow-hidden'
           )}
           ref={messagesRef}
           id="assignment-module-session-messages"
@@ -566,7 +572,7 @@ export const Tutor = ({
         <div
           className={cn(
             'flex items-center justify-end gap-2 border-t p-2 px-4',
-            messagesExpanded && !cms.assignmentModule.isSelfGuided
+            showMessages && !cms.assignmentModule.isSelfGuided
               ? 'border-t'
               : undefined
           )}
@@ -587,7 +593,7 @@ export const Tutor = ({
         <p
           className={cn(
             'p-2 text-center text-sm text-muted-foreground',
-            messagesExpanded && !cms.assignmentModule.isSelfGuided
+            showMessages && !cms.assignmentModule.isSelfGuided
               ? 'border-t'
               : undefined
           )}
@@ -605,7 +611,7 @@ export const Tutor = ({
       ) : (
         <ResponseBar
           className={
-            messagesExpanded && !cms.assignmentModule.isSelfGuided
+            showMessages && !cms.assignmentModule.isSelfGuided
               ? undefined
               : 'border-t-0'
           }
