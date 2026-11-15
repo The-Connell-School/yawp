@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
@@ -26,8 +26,19 @@ export function MarginCommentDraftCard({
   const authorName =
     user.name?.trim() || user.email?.trim() || 'New comment';
 
+  const lastCreatedIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (fetcher.state === 'idle' && fetcher.data?.id) {
+    const createdId =
+      fetcher.state === 'idle' &&
+      fetcher.data &&
+      typeof fetcher.data === 'object' &&
+      'id' in fetcher.data &&
+      typeof (fetcher.data as { id?: string }).id === 'string'
+        ? (fetcher.data as { id: string }).id
+        : null;
+    if (createdId && createdId !== lastCreatedIdRef.current) {
+      lastCreatedIdRef.current = createdId;
       onCreated(fetcher.data);
     }
   }, [fetcher.state, fetcher.data, onCreated]);

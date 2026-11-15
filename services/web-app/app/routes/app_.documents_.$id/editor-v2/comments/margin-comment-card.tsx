@@ -71,8 +71,7 @@ export function MarginCommentCard({
   useEffect(() => {
     const refresh = () => {
       setHighlightExcerpt(
-        readCommentHighlightExcerpt(contentRoot, comment.id) ??
-          comment.content
+        readCommentHighlightExcerpt(contentRoot, comment.id)
       );
     };
     refresh();
@@ -164,6 +163,13 @@ export function MarginCommentCard({
 
   const resolveComment = () => {
     onArchiveChange?.(comment.id, new Date());
+    contentRoot
+      ?.querySelectorAll<HTMLElement>(
+        `.comment-mark[data-comment-id="${CSS.escape(comment.id)}"]`
+      )
+      .forEach((mark) => {
+        mark.classList.add('comment-mark--resolved');
+      });
     archiveFetcher.submit(
       { intent: 'resolve' },
       {
@@ -251,11 +257,22 @@ export function MarginCommentCard({
         ) : null}
       </div>
       {highlightExcerpt ? (
-        <span className="border-l-2 border-[hsl(40_90%_55%)] pl-2 text-xs italic text-[hsl(50_2.4%_36%)]">
+        <span
+          className="border-l-2 border-[hsl(40_90%_55%)] pl-2 text-xs italic text-[hsl(50_2.4%_36%)]"
+          data-testid={`comment-anchor-excerpt-${comment.id}`}
+        >
           {highlightExcerpt.length > 120
             ? `${highlightExcerpt.slice(0, 120)}…`
             : highlightExcerpt}
         </span>
+      ) : null}
+      {comment.content?.trim() ? (
+        <p
+          className="m-0 text-[13px] leading-[1.45] text-[#1b1b1b] whitespace-pre-line"
+          data-testid={`comment-body-${comment.id}`}
+        >
+          {comment.content}
+        </p>
       ) : null}
       <div className="flex flex-col gap-2">
         {comment.responses.map((response) => (

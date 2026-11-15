@@ -61,6 +61,34 @@ export function DocumentMarginComments({
   }, [contentRoot, scrollRoot, commentIds]);
 
   useLayoutEffect(() => {
+    if (!contentRoot || !scrollRoot || !asideRef.current) return;
+    const remeasure = () => {
+      const scrollRect = scrollRoot.getBoundingClientRect();
+      const scrollTop = scrollRoot.scrollTop;
+      const next: Record<string, number> = {};
+      for (const id of commentIds) {
+        const mark = contentRoot.querySelector<HTMLElement>(
+          `.comment-mark[data-comment-id="${CSS.escape(id)}"]`
+        );
+        if (!mark) continue;
+        const markRect = mark.getBoundingClientRect();
+        const top = markRect.top - scrollRect.top + scrollTop;
+        next[id] = Math.max(0, Math.round(top));
+      }
+      setAnchorTops(next);
+    };
+    remeasure();
+    let innerRaf = 0;
+    const outerRaf = requestAnimationFrame(() => {
+      innerRaf = requestAnimationFrame(remeasure);
+    });
+    return () => {
+      cancelAnimationFrame(outerRaf);
+      if (innerRaf) cancelAnimationFrame(innerRaf);
+    };
+  }, [commentIds, contentRoot, scrollRoot]);
+
+  useLayoutEffect(() => {
     const measureHeights = () => {
       const next: Record<string, number> = {};
       for (const id of commentIds) {

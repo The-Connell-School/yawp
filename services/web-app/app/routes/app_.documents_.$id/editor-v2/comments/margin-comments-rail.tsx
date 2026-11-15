@@ -3,6 +3,7 @@ import { DocumentMarginComments } from '../document-editor/document-margin-comme
 import { useEditorChrome } from '../document-editor/editor-chrome-context';
 import { MarginCommentDraftCard } from './margin-comment-draft-card';
 import type { PendingCommentDraft } from '../hooks/use-comments-state';
+import { uniqueMarginCommentIds } from './margin-comment-ids';
 
 type Props = {
   comments: CommentType[];
@@ -33,10 +34,10 @@ export function MarginCommentsRail({
 }: Props) {
   const { contentRoot, scrollRoot } = useEditorChrome();
 
-  const commentIds = [
-    ...(pendingDraft ? [pendingDraft.id] : []),
-    ...comments.map((c) => c.id),
-  ];
+  const commentIds = uniqueMarginCommentIds(
+    comments.map((c) => c.id),
+    pendingDraft?.id
+  );
 
   if (commentIds.length === 0) return null;
 
@@ -55,8 +56,8 @@ export function MarginCommentsRail({
               excerpt={pendingDraft.excerpt}
               onCancel={() => onDraftCancel?.()}
               onCreated={(c) => {
-                onCommentCreated?.(c);
                 onDraftCommitted?.();
+                onCommentCreated?.(c);
               }}
             />
           );

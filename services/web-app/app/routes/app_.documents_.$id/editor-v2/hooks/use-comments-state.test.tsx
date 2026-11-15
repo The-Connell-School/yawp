@@ -60,6 +60,12 @@ describe('useCommentsState (v2)', () => {
     expect(p.get().pendingFocusCommentId).toBe('c-2');
 
     p.run(() => {
+      p.get().addComment({ id: 'c-2', content: 'Dup', responses: [] });
+    });
+    expect(p.get().comments.map((c) => c.id)).toEqual(['c-1', 'c-2']);
+    expect(p.get().comments.find((c) => c.id === 'c-2')?.content).toBe('Dup');
+
+    p.run(() => {
       p.get().addResponse('c-1', { id: 'r-1', content: 'Reply body' });
     });
     expect(p.get().comments[0].responses).toHaveLength(1);

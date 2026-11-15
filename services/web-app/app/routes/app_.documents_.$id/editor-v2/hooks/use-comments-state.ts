@@ -31,16 +31,30 @@ export function useCommentsState(initialComments: DocComment[]) {
   // Resync if the loader-provided comments change wholesale
   // (typically happens on navigation to a different document)
   useEffect(() => {
-    setComments(initialComments);
-    // We intentionally only re-run when the array reference changes,
-    // not on every render — react will only call this effect when
-    // the prop reference changes.
+    setComments((prev) => {
+      const byId = new Map<string, DocComment>();
+      for (const c of initialComments) byId.set(c.id, c);
+      for (const c of prev) {
+        if (!byId.has(c.id)) byId.set(c.id, c);
+      }
+      return Array.from(byId.values());
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialComments]);
 
   const addComment = useCallback((comment: DocComment) => {
-    setComments((prev) => [...prev, comment]);
+    setComments((prev) => {
+      const index = prev.findIndex((c) => c.id === comment.id);
+      if (index === -1) return [...prev, comment];
+      const next = [...prev];
+      next[index] = { ...next[index], ...comment };
+      return next;
+    });
     setPendingFocusCommentId(comment.id);
+  }, []);
+
+  const clearPendingFocusCommentId = useCallback(() => {
+    setPendingFocusCommentId(null);
   }, []);
 
   const removeComment = useCallback((commentId: string) => {
@@ -80,5 +94,6 @@ export function useCommentsState(initialComments: DocComment[]) {
     pendingDraft,
     setPendingDraft,
     clearPendingDraft,
+    clearPendingFocusCommentId,
   };
 }

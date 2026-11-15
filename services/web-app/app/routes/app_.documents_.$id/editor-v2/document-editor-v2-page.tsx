@@ -254,15 +254,18 @@ export function DocumentEditorV2Page() {
     uiMounted && ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [pageWidth, setPageWidth] = useLocalStorage<PageWidthMode>(
     `doc-${data.doc.id}-page-width`,
-    'fit'
+    'fit',
+    { initializeWithValue: false }
   );
   const [desktopTutorOpen, setDesktopTutorOpen] = useLocalStorage(
     `doc-${data.doc.id}-panel-tutor`,
-    true
+    true,
+    { initializeWithValue: false }
   );
   const [desktopCommentsOpen, setDesktopCommentsOpen] = useLocalStorage(
     `doc-${data.doc.id}-panel-comments`,
-    false
+    false,
+    { initializeWithValue: false }
   );
   const classSubtitle = useMemo(() => {
     const cls = data.doc.classAssignment?.class;
@@ -393,6 +396,14 @@ export function DocumentEditorV2Page() {
   });
   const tutor = useTutorState(data.currentCms as any, cmsIdx);
   const commentsState = useCommentsState((data.doc.comments as any[]) ?? []);
+  const { clearPendingFocusCommentId, pendingFocusCommentId } = commentsState;
+  useEffect(() => {
+    if (!pendingFocusCommentId) return;
+    const handle = window.requestAnimationFrame(() => {
+      clearPendingFocusCommentId();
+    });
+    return () => window.cancelAnimationFrame(handle);
+  }, [pendingFocusCommentId, clearPendingFocusCommentId]);
   const submit = useDocumentSubmit({
     documentId: data.doc.id,
     editorBridgeRef,
@@ -711,7 +722,7 @@ export function DocumentEditorV2Page() {
                   className="doc-editor-panel-btn"
                   aria-label="Comments"
                   title="Comments"
-                  aria-pressed={desktopCommentsOpen}
+                  aria-pressed={uiMounted ? desktopCommentsOpen : false}
                   onClick={() => setDesktopCommentsOpen((open) => !open)}
                 >
                   <MessageCircle className="h-4 w-4" />
@@ -1037,10 +1048,6 @@ export function DocumentEditorV2Page() {
                       commentsState.setPendingDraft(draft);
                       if (!isMobile) setDesktopCommentsOpen(true);
                     }}
-                    onCommentCreated={(c) => {
-                      commentsState.addComment(c as any);
-                      if (!isMobile) setDesktopCommentsOpen(true);
-                    }}
                     marginComments={
                       showDesktopMarginComments ? (
                         <MarginCommentsRail
@@ -1200,6 +1207,7 @@ export function DocumentEditorV2Page() {
           <Sheet
             open={mobileCommentsSheetOpen}
             onOpenChange={setMobileCommentsSheetOpen}
+            modal={false}
           >
             <SheetContent
               side="bottom"

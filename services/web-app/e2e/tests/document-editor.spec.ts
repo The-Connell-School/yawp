@@ -712,6 +712,12 @@ test.describe.serial('Document Editor E2E Tests', () => {
     const commentId = e2eContext.v2GradedCommentId;
     const card = page.getByTestId(`margin-comment-card-${commentId}`);
     await expect(card).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId(`comment-body-${commentId}`)).toContainText(
+      'Strong thesis in the opening sentence.'
+    );
+    await expect(
+      page.getByTestId(`comment-anchor-excerpt-${commentId}`)
+    ).toContainText('Education');
     await expect(card).toContainText('Thanks — I will expand this section.');
     await page.getByTestId(`comment-reply-input-${commentId}`).click();
     await expect(page.getByTestId(`comment-reply-expanded-${commentId}`)).toBeVisible();
@@ -729,6 +735,11 @@ test.describe.serial('Document Editor E2E Tests', () => {
     const resolveButton = page.getByTestId(`comment-resolve-${commentId}`);
     await resolveButton.click();
     await expect(resolveButton).toBeHidden({ timeout: 10_000 });
+    await expect(
+      page.locator(
+        `.comment-mark[data-comment-id="${commentId}"].comment-mark--resolved`
+      )
+    ).toHaveCount(1, { timeout: 10_000 });
   });
 
   test('v2 teacher can open a comment draft from text selection', async ({
@@ -907,6 +918,129 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await expect(
       page.locator(`.comment-mark[data-comment-id="${draftId}"]`)
     ).toHaveCount(1, { timeout: 15_000 });
+    await expect(page.getByTestId(`comment-body-${draftId}`)).toContainText(
+      'Highlight must persist'
+    );
   });
 
+  test('v2 load does not raise Suspense hydration pageerrors', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+    await signIn('jdoe@brock.software', 'johndoe');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    await page.waitForTimeout(1500);
+    expect(
+      pageErrors.some((message) =>
+        /Suspense boundary|Hydration failed|did not match/i.test(message)
+      )
+    ).toBe(false);
+  });
+
+  test('v2 creates three margin comments in one session without duplicate cards', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    test.setTimeout(90_000);
+    const consoleWarnings: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'warning') consoleWarnings.push(msg.text());
+    });
+
+    await signIn('jdoe@brock.software', 'johndoe');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    await page
+      .getByTestId('document-panel-toggles')
+      .getByRole('button', { name: 'Comments' })
+      .click();
+
+    const words = ['grammar', 'students', 'writing'] as const;
+    const createdIds: string[] = [];
+
+    for (const [index, word] of words.entries()) {
+      const surface = page.getByTestId('document-editor-surface');
+      await surface.getByText(word, { exact: true }).dblclick();
+      await page.getByTestId('editor-add-comment').click();
+      await expect(page.getByTestId('margin-comment-draft-card')).toBeVisible({
+        timeout: 10_000,
+      });
+      const draftId = await page
+        .getByTestId('margin-comment-draft-card')
+        .getAttribute('data-comment-card');
+      expect(draftId).toBeTruthy();
+      createdIds.push(draftId!);
+      await page
+        .getByTestId('margin-comment-draft-body')
+        .fill(`Session comment ${index + 1} on ${word}.`);
+      await page.getByTestId('margin-comment-draft-submit').click();
+      await expect(
+        page.getByTestId(`margin-comment-card-${draftId}`)
+      ).toHaveCount(1, { timeout: 15_000 });
+      await expect(page.getByTestId(`comment-body-${draftId}`)).toContainText(
+        `Session comment ${index + 1}`
+      );
+    }
+
+    for (const id of createdIds) {
+      await expect(page.locator(`[data-comment-card="${id}"]`)).toHaveCount(1);
+      await expect(
+        page.locator(`.comment-mark[data-comment-id="${id}"]`)
+      ).toHaveCount(1);
+    }
+
+    expect(
+      consoleWarnings.some((line) => line.includes('same key'))
+    ).toBe(false);
+
+    const layout = await page.evaluate((ids) => {
+      const scroll = document.querySelector(
+        '[data-testid="document-editor-scroll"]'
+      ) as HTMLElement | null;
+      if (!scroll) return [];
+      const scrollRect = scroll.getBoundingClientRect();
+      const scrollTop = scroll.scrollTop;
+      return ids
+        .map((id) => {
+          const mark = document.querySelector(
+            `.comment-mark[data-comment-id="${CSS.escape(id)}"]`
+          ) as HTMLElement | null;
+          const cardHost = document.querySelector(
+            `[data-margin-comment-for="${CSS.escape(id)}"]`
+          ) as HTMLElement | null;
+          if (!mark || !cardHost) return null;
+          const markTop =
+            mark.getBoundingClientRect().top - scrollRect.top + scrollTop;
+          const cardTop = parseFloat(getComputedStyle(cardHost).top || '0');
+          const cardHeight = cardHost.offsetHeight;
+          return { id, markTop, cardTop, cardHeight };
+        })
+        .filter(Boolean) as {
+        id: string;
+        markTop: number;
+        cardTop: number;
+        cardHeight: number;
+      }[];
+    }, createdIds);
+
+    expect(layout.length).toBe(3);
+    const sorted = [...layout].sort((a, b) => a.cardTop - b.cardTop);
+    for (const row of layout) {
+      expect(Math.abs(row.cardTop - row.markTop)).toBeLessThan(48);
+    }
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1];
+      const cur = sorted[i];
+      expect(cur.cardTop).toBeGreaterThanOrEqual(
+        prev.cardTop + prev.cardHeight - 4
+      );
+    }
+  });
 });
