@@ -6,15 +6,16 @@ Branch: `cursor/document-editor-v2-pass4-parity-168b` (preview: `pr-N.preview.ya
 
 | State | Gap | Status |
 | --- | --- | --- |
-| Student desktop | Margin comments always visible when count > 0; design ties visibility to Comments panel toggle | fixing |
-| Comments sheet (mobile) | Legacy sidebar styling (stone cards, Hide Comments); design uses sheet header, count, white cards, footer hint | fixing |
-| Comments sidebar list | Sidebar layout did not reuse margin card chrome / reply UX | fixing |
-| Resolved row (expanded) | Duplicate `margin-comment-card-*` test ids when expanded | fixing |
-| Loading shell | Hydration test expects “Loading editor…” copy; shell was skeleton-only | fixing |
-| Teacher load | Suspense hydration warning from post-mount state before paint | fixing |
-| PM tripwire | Bootstrap/normalize transactions on server HTML lacked `recovery-on-mount` | fixing |
-| Staff `?editor=v1` | Opt-out worked but was not exposed for capture/analytics | fixing |
-| Tutor polish | Minor spacing/token alignment (ongoing in pass 4) | in progress |
+| Student desktop | Margin comments always visible when count > 0; design ties visibility to Comments panel toggle | fixed |
+| Comments sheet (mobile) | Legacy sidebar styling (stone cards, Hide Comments); design uses sheet header, count, white cards, footer hint | fixed |
+| Comments sidebar list | Sidebar layout did not reuse margin card chrome / reply UX | fixed |
+| Resolved row (expanded) | Duplicate `margin-comment-card-*` test ids when expanded | fixed |
+| Loading shell | Hydration test expects “Loading editor…” copy; shell was skeleton-only | fixed |
+| Teacher load | Suspense hydration warning from post-mount state before paint | fixed (deferred mount via `startTransition`) — preview verify pending |
+| PM tripwire | Bootstrap/normalize transactions on server HTML lacked `recovery-on-mount` | fixed |
+| Staff `?editor=v1` | Opt-out worked but was not exposed for capture/analytics | fixed (`data-document-editor-staff-opt-out="v1"`) |
+| Tutor polish | Minor spacing/token alignment vs states board | remaining (no regressions found in pass) |
+| Full states board | Automated side-by-side for loading/error/saving/submitted on preview | remaining (preview capture when deploy ready) |
 
 ## Design reference paths (uploaded)
 
