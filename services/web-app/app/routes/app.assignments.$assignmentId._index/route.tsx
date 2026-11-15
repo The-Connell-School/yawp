@@ -872,11 +872,6 @@ export default function AssignmentDetailRoute() {
       window.dispatchEvent(new Event(DEV_PANEL_DISMISS_EVENT));
     }
     clearRadixScrollLockCleanup();
-    document.documentElement.classList.remove(
-      'yawp-dev-panel-open',
-      'yawp-dev-panel-restored',
-      'yawp-dev-panel-closing'
-    );
     flushSync(() => setIsEditSheetOpen(true));
   };
 
