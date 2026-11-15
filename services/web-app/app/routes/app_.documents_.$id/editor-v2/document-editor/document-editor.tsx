@@ -46,7 +46,7 @@ function EditorLoadingShell() {
     >
       <div className="doc-editor-toolbar-glass mx-4 mt-2 h-[42px] opacity-60" />
       <div className="doc-editor-scroll flex-1">
-        <article className="doc-editor-page doc-editor-page--fit opacity-70">
+        <article className="doc-editor-loading-page opacity-70">
           <div className="space-y-3" aria-hidden>
             <div className="h-3 w-[92%] rounded bg-muted" />
             <div className="h-3 w-[88%] rounded bg-muted" />

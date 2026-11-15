@@ -28,6 +28,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalStorage } from 'usehooks-ts';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
+import { SaveStatusIndicator } from '~/components/save-status-indicator';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import {
@@ -264,15 +265,8 @@ export function DocumentEditorV2Page() {
           ? `${title} · ${periodLabel}`
           : periodLabel;
     }
-    if (!label) return null;
-    const saveLabel =
-      syncStatus === 'saving'
-        ? 'Saving…'
-        : syncStatus === 'error'
-          ? 'Save failed'
-          : '✓ Saved';
-    return `${label} · ${saveLabel}`;
-  }, [data.doc.classAssignment?.class, syncStatus]);
+    return label || null;
+  }, [data.doc.classAssignment?.class]);
   const [searchParams, setSearchParams] = useSearchParams();
   const fallbackCmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
   const cmsIdx =
@@ -602,11 +596,20 @@ export function DocumentEditorV2Page() {
                   }
                 }}
               />
-              {classSubtitle ? (
-                <span className="truncate text-xs text-[hsl(50_2.4%_36%)]">
-                  {classSubtitle}
-                </span>
-              ) : null}
+              <div
+                className="flex min-w-0 items-center gap-2 text-xs text-[hsl(50_2.4%_36%)]"
+                data-tour="doc-status"
+              >
+                {classSubtitle ? (
+                  <span className="truncate">{classSubtitle}</span>
+                ) : null}
+                {classSubtitle ? (
+                  <span aria-hidden className="text-[hsl(51_7%_82%)]">
+                    ·
+                  </span>
+                ) : null}
+                <SaveStatusIndicator status={syncStatus} />
+              </div>
             </div>
           </div>
           {isViewingAsTeacher ? (

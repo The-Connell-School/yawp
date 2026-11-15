@@ -235,7 +235,7 @@ export function Editor({
 
   useEffect(() => {
     if (!editor || !teacherCommenting || !onCommentDraft) return;
-    const onSelectionUpdate = () => {
+    const onMouseUp = () => {
       const { from, to, empty } = editor.state.selection;
       if (empty) return;
       const excerpt = editor.state.doc.textBetween(from, to, ' ').trim();
@@ -243,12 +243,9 @@ export function Editor({
       selectionDraftRef.current = excerpt;
       beginCommentDraftFromEditor(editor, onCommentDraft);
     };
-    const onMouseUp = () => onSelectionUpdate();
-    editor.on('selectionUpdate', onSelectionUpdate);
     const dom = editor.view.dom;
     dom.addEventListener('mouseup', onMouseUp);
     return () => {
-      editor.off('selectionUpdate', onSelectionUpdate);
       dom.removeEventListener('mouseup', onMouseUp);
     };
   }, [editor, teacherCommenting, onCommentDraft]);
