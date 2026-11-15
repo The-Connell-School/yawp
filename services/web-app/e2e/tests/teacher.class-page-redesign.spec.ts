@@ -4,7 +4,6 @@ import {
   clickClassDocumentsStatusTab,
   expectClassDocumentsTable,
   expectDocumentTitleVisible,
-  filterClassDocumentsByTitle,
   gotoClassDocumentsTab,
   openClassAssignmentsTab,
   waitForClassDocumentTitle,
@@ -503,9 +502,10 @@ test.describe.serial('Teacher class page redesign', () => {
       await page.addInitScript(() => {
         localStorage.removeItem('yawp.class-documents-view');
       });
-      await filterClassDocumentsByTitle(page, title, {
-        useUrl: true,
-        classId: e2eContext.classId,
+      await waitForClassDocumentTitle(page, e2eContext.classId, title, {
+        assignmentId: e2eContext.assignmentId,
+        status: 'graded',
+        timeoutMs: 90_000,
       });
 
       await page

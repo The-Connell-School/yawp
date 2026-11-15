@@ -699,18 +699,26 @@ export async function waitForClassDocumentTitle(
   page: Page,
   classId: string,
   title: string,
-  options?: { assignmentId?: string; timeoutMs?: number }
+  options?: {
+    assignmentId?: string;
+    status?: string;
+    q?: string;
+    timeoutMs?: number;
+  }
 ) {
   const timeoutMs = options?.timeoutMs ?? 90_000;
+  const status = options?.status ?? 'all';
   const tableTitle = () =>
     page
       .getByRole('table', { name: /class documents/i })
       .getByText(title, { exact: true });
-  await gotoClassDocumentsTab(page, classId, {
-    status: 'all',
-    documentGroup: 'none',
+  const tabParams = () => ({
+    status,
+    documentGroup: 'none' as const,
     assignmentId: options?.assignmentId,
+    q: options?.q,
   });
+  await gotoClassDocumentsTab(page, classId, tabParams());
   await expectClassDocumentsTable(page);
   await expect
     .poll(
@@ -718,11 +726,7 @@ export async function waitForClassDocumentTitle(
         if (await tableTitle().isVisible().catch(() => false)) {
           return true;
         }
-        await gotoClassDocumentsTab(page, classId, {
-          status: 'all',
-          documentGroup: 'none',
-          assignmentId: options?.assignmentId,
-        });
+        await gotoClassDocumentsTab(page, classId, tabParams());
         return tableTitle().isVisible().catch(() => false);
       },
       { timeout: timeoutMs }

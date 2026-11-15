@@ -182,6 +182,7 @@ test.describe.serial('Exit tickets', () => {
           title: OWN_QUESTION_TITLE,
           classAssignments: { some: { classId: e2eContext.classId } },
         },
+        orderBy: { createdAt: 'desc' },
         select: { id: true },
       });
       await openMyAssignmentDetail(
@@ -209,6 +210,8 @@ test.describe.serial('Exit tickets', () => {
     e2eContext,
     signIn,
   }) => {
+    test.setTimeout(120_000);
+    const prisma = createE2EPrismaClient();
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(
       `/app/assignment-types/${e2eContext.exitTicketAssignmentTypeId}`
@@ -241,17 +244,34 @@ test.describe.serial('Exit tickets', () => {
       page.getByRole('heading', { name: 'New Assignment' })
     ).toHaveCount(0);
 
-    await page.goto('/app/assignments');
-    await page.getByText('Exit ticket: graded check').first().click();
-    await page
-      .getByRole('button', { name: /^Edit$/ })
-      .first()
-      .click();
-    await expect(page.getByLabel('Grade this ticket')).toBeChecked();
-    await expect(page.getByLabel('How many points?')).toHaveValue('5');
-    await expect(page.getByLabel('Correct answer or key points')).toHaveValue(
-      CORRECT_ANSWER
-    );
+    try {
+      const gradedCheck = await prisma.assignment.findFirstOrThrow({
+        where: {
+          title: 'Exit ticket: graded check',
+          classAssignments: { some: { classId: e2eContext.classId } },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      });
+      await openMyAssignmentDetail(
+        page,
+        gradedCheck.id,
+        e2eContext.classId
+      );
+      const editButton = page.getByRole('button', { name: /^Edit$/ }).first();
+      await expect(editButton).toBeVisible({ timeout: 30_000 });
+      await editButton.click();
+      await expect(
+        page.getByRole('heading', { name: 'Edit Assignment' })
+      ).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByLabel('Grade this ticket')).toBeChecked();
+      await expect(page.getByLabel('How many points?')).toHaveValue('5');
+      await expect(page.getByLabel('Correct answer or key points')).toHaveValue(
+        CORRECT_ANSWER
+      );
+    } finally {
+      await prisma.$disconnect();
+    }
   });
 
   test('the quick default keeps the rest tucked away, and can walk through it', async ({

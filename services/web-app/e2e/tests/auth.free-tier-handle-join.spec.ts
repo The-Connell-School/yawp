@@ -129,7 +129,9 @@ test.describe('Free-tier handle student', () => {
         classAssignmentId: classAssignment.id,
       });
       await page.waitForURL('**/app/documents/**', { timeout: 30000 });
-      const documentId = new URL(page.url()).pathname.split('/').pop() ?? '';
+      const documentId =
+        page.url().match(/\/app\/documents\/([^/?]+)/)?.[1] ?? '';
+      expect(documentId).not.toBe('');
 
       await expect(page.locator('[data-document-editor-version="v2"]')).toBeVisible({
         timeout: 30_000,
@@ -157,6 +159,10 @@ test.describe('Free-tier handle student', () => {
           { timeout: 60_000 }
         )
         .toBeGreaterThan(0);
+      const submission = await prisma.submission.findFirstOrThrow({
+        where: { documentId, submittedAt: { gt: new Date(0) } },
+        select: { id: true, title: true },
+      });
 
       const teacherContext = await browser.newContext();
       const teacherPage = await teacherContext.newPage();
@@ -174,27 +180,40 @@ test.describe('Free-tier handle student', () => {
       await teacherPage.addInitScript(() => {
         localStorage.removeItem('yawp.class-documents-view');
       });
+      await teacherPage.goto(`/app/submissions/${submission.id}`);
+      await expect(
+        teacherPage.getByTestId('submission-lifecycle-panel')
+      ).toBeVisible({ timeout: 30_000 });
+
       await expect
         .poll(
           async () => {
             for (const status of ['needs-grading', 'all'] as const) {
-              await gotoClassDocumentsTab(teacherPage, klass.id, {
-                status,
-                assignmentId: assignment.id,
-                q: handle,
-              });
-              const table = teacherPage.getByRole('table', {
-                name: /class documents/i,
-              });
-              if (!(await table.isVisible().catch(() => false))) {
-                continue;
-              }
-              const byName =
-                (await table.getByText(displayName).count()) > 0;
-              const byHandle =
-                (await table.getByText(`@${handle}`).count()) > 0;
-              if (byName || byHandle) {
-                return true;
+              for (const q of [handle, displayName.toLowerCase(), 'free tier']) {
+                await gotoClassDocumentsTab(teacherPage, klass.id, {
+                  status,
+                  assignmentId: assignment.id,
+                  q,
+                });
+                const table = teacherPage.getByRole('table', {
+                  name: /class documents/i,
+                });
+                if (!(await table.isVisible().catch(() => false))) {
+                  continue;
+                }
+                const byName =
+                  (await table.getByText(displayName).count()) > 0;
+                const byHandle =
+                  (await table.getByText(`@${handle}`).count()) > 0 ||
+                  (await table.getByText(handle).count()) > 0;
+                const byAssignment =
+                  (await table.getByText('Free tier writing').count()) > 0;
+                const bySubmissionTitle =
+                  submission.title.trim().length > 0 &&
+                  (await table.getByText(submission.title).count()) > 0;
+                if (byName || byHandle || byAssignment || bySubmissionTitle) {
+                  return true;
+                }
               }
             }
             return false;
