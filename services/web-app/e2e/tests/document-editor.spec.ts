@@ -849,22 +849,26 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     test.setTimeout(90_000);
     await signIn('jdoe@brock.software', 'johndoe');
-    await page.setViewportSize({ width: 390, height: 844 });
-    await helpers.openDocument(
-      `${e2eContext.editedDocumentId}?tab=editor`,
-      { retry: true }
-    );
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
     const editor = helpers.getEditor();
     await editor.click();
     await selectWordInEditor(page, 'grammar');
     await page.getByTestId('editor-add-comment').click();
+    await expect(page.getByTestId('margin-comment-draft-card')).toBeVisible({
+      timeout: 10_000,
+    });
     await page.getByTestId('margin-comment-draft-body').fill('Mobile sheet anchor body.');
     await page.getByTestId('margin-comment-draft-submit').click();
+    await expect(page.getByTestId('margin-comment-draft-card')).toHaveCount(0, {
+      timeout: 15_000,
+    });
     const draftId = await page
       .locator('[data-comment-card]')
       .last()
       .getAttribute('data-comment-card');
     expect(draftId).toBeTruthy();
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.getByTestId('document-mobile-tabbar').getByText('Comments').click();
     await expect(page.getByTestId('mobile-comments-sheet')).toBeVisible({
       timeout: 10_000,
