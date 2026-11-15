@@ -423,13 +423,18 @@ async function setMyAssignmentsSearchQuery(page: Page, query: string) {
   const search = page.getByTestId('my-assignments-search');
   await expect(search).toBeVisible({ timeout: 15_000 });
   await search.click();
-  await search.fill('');
-  await search.pressSequentially(query, { delay: 15 });
+  await search.fill(query);
   await expect(search).toHaveValue(query);
-  await page.keyboard.press('Escape');
+  // Close the popover without clearing filters; Escape can drop focus before
+  // React commits the search value on slower CI hosts.
+  await page.getByTestId('my-assignments-type-pills').click({ force: true });
   await expect(page.getByTestId('my-assignments-search')).toBeHidden({
     timeout: 5_000,
   });
+  const table = page.getByRole('table', { name: 'My Assignments' });
+  if (query.trim()) {
+    await expect(table).toContainText(query.trim(), { timeout: 15_000 });
+  }
 }
 
 async function findMyAssignmentRow(
@@ -537,10 +542,11 @@ export async function clickClassAssignmentRow(
   options?: { title?: string }
 ) {
   await openClassAssignmentsTab(page);
-  const searchBox = page.getByRole('textbox', { name: 'Search assignments' });
+  const searchBox = page.getByTestId('class-assignments-search');
   if (options?.title) {
     await searchBox.fill('');
     await searchBox.fill(options.title);
+    await expect(searchBox).toHaveValue(options.title);
   }
   await expandAssignmentTypeSections(page);
   const row = page
@@ -558,6 +564,12 @@ export async function clickStudentClassAssignmentRow(
   await expect(page.getByTestId('student-class-detail')).toBeVisible({
     timeout: 15_000,
   });
+  if (options.title) {
+    const search = page.getByTestId('class-assignments-search');
+    if (await search.isVisible().catch(() => false)) {
+      await search.fill(options.title);
+    }
+  }
   await expandAssignmentTypeSections(page);
   const row =
     options.assignmentId != null
