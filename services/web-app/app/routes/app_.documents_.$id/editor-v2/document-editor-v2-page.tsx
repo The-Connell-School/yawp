@@ -60,7 +60,10 @@ import {
 } from '~/components/ui/popover';
 import { useDeferredBreakpoint } from './hooks/use-deferred-breakpoint';
 import { useDeferredLocalStorage } from './hooks/use-deferred-local-storage';
-import { scheduleAfterHydration } from './utils/schedule-after-hydration';
+import {
+  scheduleAfterHydration,
+  useAfterHydration,
+} from './utils/schedule-after-hydration';
 import { useUser } from '~/hooks/useUser';
 import { Comments } from './comments';
 import { MarginCommentsRail } from './comments/margin-comments-rail';
@@ -207,10 +210,7 @@ const assignmentModuleSessionsInclude = {
 };
 
 export function DocumentEditorV2Page() {
-  const [interactive, setInteractive] = useState(false);
-  useEffect(() => {
-    scheduleAfterHydration(() => setInteractive(true));
-  }, []);
+  const interactive = useAfterHydration();
   if (!interactive) {
     return <DocumentEditorV2HydrationShell />;
   }
