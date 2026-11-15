@@ -167,6 +167,11 @@ function isPresentForTour(el: HTMLElement | null): el is HTMLElement {
   return targetHasLayout(el) || isShown(el);
 }
 
+function targetExistsInDom(target: string | null) {
+  if (!target || typeof document === 'undefined') return false;
+  return document.querySelector(`[data-tour="${target}"]`) !== null;
+}
+
 /** Steps whose element is on this page right now; a centered card if none are. */
 function resolveSteps(tour: PageTour): ActiveStep[] {
   for (const step of tour.steps) {
@@ -176,9 +181,15 @@ function resolveSteps(tour: PageTour): ActiveStep[] {
       behavior: 'auto',
     });
   }
-  const shown = tour.steps.filter((step) =>
+  let shown = tour.steps.filter((step) =>
     isPresentForTour(findTarget(step.target))
   );
+  if (shown.length < 2 && tour.id === 'waiting-preview') {
+    const inDom = tour.steps.filter(
+      (step) => step.target && targetExistsInDom(step.target)
+    );
+    if (inDom.length >= 2) shown = inDom;
+  }
   if (shown.length) return shown;
   return [{ target: null, title: tour.welcome.title, body: tour.welcome.body }];
 }

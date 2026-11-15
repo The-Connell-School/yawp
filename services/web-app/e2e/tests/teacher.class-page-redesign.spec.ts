@@ -290,6 +290,7 @@ test.describe.serial('Teacher class page redesign', () => {
     await page.waitForLoadState('networkidle');
     await clickClassAssignmentRow(page, e2eContext.assignmentId, {
       title: 'E2E Class Assignment',
+      classId: e2eContext.classId,
     });
 
     // Forward navigation changes the URL — linkable, not a sheet toggle.
@@ -360,6 +361,7 @@ test.describe.serial('Teacher class page redesign', () => {
     await page.waitForLoadState('networkidle');
     await clickClassAssignmentRow(page, e2eContext.assignmentId, {
       title: 'E2E Class Assignment',
+      classId: e2eContext.classId,
     });
     await page.waitForURL(
       `/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`

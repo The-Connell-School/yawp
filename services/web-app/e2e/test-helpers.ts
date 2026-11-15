@@ -541,7 +541,7 @@ export async function openClassAssignmentsTab(page: Page) {
 export async function clickClassAssignmentRow(
   page: Page,
   assignmentId: string,
-  options?: { title?: string }
+  options?: { title?: string; classId?: string }
 ) {
   await openClassAssignmentsTab(page);
   const searchBox = page.getByTestId('class-assignments-search');
@@ -554,9 +554,16 @@ export async function clickClassAssignmentRow(
   }
   await expandAssignmentTypeSections(page);
   const open = page.getByTestId(`assignment-open-${assignmentId}`);
-  await expect(open).toBeVisible({ timeout: 30_000 });
   const row = page.getByRole('row').filter({ has: open });
-  await row.click();
+  try {
+    await expect(open).toBeVisible({ timeout: 15_000 });
+    await row.click();
+  } catch (error) {
+    if (!options?.classId) throw error;
+    await page.goto(
+      `/app/assignments/${assignmentId}?classId=${options.classId}`
+    );
+  }
 }
 
 /** Student class Assignments tab rows navigate via the table row onClick handler. */

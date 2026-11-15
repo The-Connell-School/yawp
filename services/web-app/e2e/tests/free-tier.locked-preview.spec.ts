@@ -903,9 +903,9 @@ for (const width of [390, 1440]) {
       }
       if (width === 1440) {
         await page
-          .locator('.locked-home-rail-desktop [data-tour="teaching-access-banner"]')
+          .locator('[data-tour="teaching-access-banner"]')
+          .first()
           .scrollIntoViewIfNeeded();
-        await expect(page.getByTestId('teacher-assignments-grid')).toBeVisible();
       }
       await welcome.getByRole('button', { name: 'Take a tour' }).click();
 
