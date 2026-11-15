@@ -417,6 +417,12 @@ export function DocumentEditorV2Page() {
       ? allComments
       : activeComments
     : activeComments;
+  const showDesktopMarginComments =
+    !isMobile &&
+    (desktopCommentsOpen ||
+      (isViewingAsTeacher && !isOwnTeacherPreview) ||
+      commentsState.pendingDraft != null ||
+      visibleComments.length > 0);
   const studentName =
     data.doc.membership.user.name?.trim() || 'Unknown student';
   const cannotSubmitEmpty = !editorSubmittable;
@@ -986,11 +992,12 @@ export function DocumentEditorV2Page() {
                     commentsState.setPendingDraft(draft);
                     if (!isMobile) setDesktopCommentsOpen(true);
                   }}
-                  onCommentCreated={(c) => commentsState.addComment(c as any)}
+                  onCommentCreated={(c) => {
+                    commentsState.addComment(c as any);
+                    if (!isMobile) setDesktopCommentsOpen(true);
+                  }}
                   marginComments={
-                    !isMobile &&
-                    (desktopCommentsOpen ||
-                      (isViewingAsTeacher && !isOwnTeacherPreview)) ? (
+                    showDesktopMarginComments ? (
                       <TeacherPasteReport
                         key={data.doc.id}
                         enabled={isViewingAsTeacher}
