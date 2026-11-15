@@ -2401,3 +2401,16 @@ ul.free-tier-qa-answer:not(.free-tier-qa-privacy-list) {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* Lesson Deck Kit, spec v4.1: Fraunces Bold (SOFT 100, WONK 1) for a deck's
+   titles and headlines. Served from the app, the same file PowerPoint and
+   the PDFs embed, so every renderer hangs the same letters. */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    url('/lesson-planner/fonts/Fraunces-Bold.woff2') format('woff2'),
+    url('/lesson-planner/fonts/Fraunces-Bold.ttf') format('truetype');
+}

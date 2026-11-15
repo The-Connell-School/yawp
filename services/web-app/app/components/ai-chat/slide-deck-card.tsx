@@ -30,6 +30,7 @@ export function SlideDeckCard({
   deckGallery = false,
   /** Lesson Deck Kit v4: the thumbnails in spec v4. */
   deckKitV4 = false,
+  deckKitV41 = false,
 }: {
   deck: SlideDeck;
   /** Absent while the reply is still unsaved and has no id to present by. */
@@ -58,6 +59,8 @@ export function SlideDeckCard({
   onFit?: (() => void) | null;
   deckGallery?: boolean;
   deckKitV4?: boolean;
+  /** The Lesson Deck Kit, spec v4.1; needs deckKitV4. */
+  deckKitV41?: boolean;
 }) {
   const minutes = deckDurationMinutes(deck);
   const preview = deck.slides.slice(0, 4);
@@ -178,7 +181,7 @@ export function SlideDeckCard({
             }
           >
             {deckGallery ? (
-              <GallerySlideThumbnail deck={withDeckKit(deck, { deckKitV4 })} index={index} width={thumbWidth} />
+              <GallerySlideThumbnail deck={withDeckKit(deck, { deckKitV4, deckKitV41 })} index={index} width={thumbWidth} />
             ) : (
               <>
                 <p className="line-clamp-2 text-[10px] font-semibold leading-tight">

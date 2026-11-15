@@ -53,3 +53,34 @@ describe('GallerySlideCanvas picks the kit from the deck', () => {
     expect(html).not.toContain('kit-v4');
   });
 });
+
+describe('KitV4SlideCanvas (spec v4.1)', () => {
+  const v41: SlideDeck = { ...deck, kit: 'v4.1' };
+
+  test('headlines in Fraunces Bold, with Georgia and Arial for the rest, never italic', () => {
+    const title = renderToStaticMarkup(<KitV4SlideCanvas deck={v41} index={0} />);
+    expect(title).toMatch(/font-family:Fraunces[^"]*font-weight:700[^>]*>(?:<[^>]+>)*Body Paragraphs/);
+    expect(title).toContain('data-theme="kit-v4"');
+    expect(title).toContain('data-kit="v4.1"');
+    const write = renderToStaticMarkup(<KitV4SlideCanvas deck={v41} index={2} />);
+    expect(write).toMatch(/font-family:Fraunces/);
+    expect(write).toContain('Arial');
+    expect(write).not.toContain('italic');
+  });
+
+  test('no running head', () => {
+    for (const index of [1, 2]) {
+      expect(renderToStaticMarkup(<KitV4SlideCanvas deck={v41} index={index} />)).not.toContain('gallery-running-head');
+    }
+    // Spec v4 keeps it, and has no Fraunces.
+    const v4 = renderToStaticMarkup(<KitV4SlideCanvas deck={{ ...deck, kit: 'v4' }} index={1} />);
+    expect(v4).toContain('gallery-running-head');
+    expect(v4).not.toContain('Fraunces');
+    expect(v4).toContain('data-kit="v4"');
+  });
+
+  test('the gallery canvas hands a v4.1 deck to the kit canvas', () => {
+    const html = renderToStaticMarkup(<GallerySlideCanvas deck={v41} index={0} />);
+    expect(html).toContain('data-kit="v4.1"');
+  });
+});

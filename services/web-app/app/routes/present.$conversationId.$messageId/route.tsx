@@ -39,15 +39,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 
   const access = await getLessonPlannerAccess(request);
-  const { deckV2, deckGallery, deckKitV4 } = access.allowed
+  const { deckV2, deckGallery, deckKitV4, deckKitV41 } = access.allowed
     ? await getLessonPlannerReviewFlags(access.membership.organization.id)
-    : { deckV2: false, deckGallery: false, deckKitV4: false };
+    : { deckV2: false, deckGallery: false, deckKitV4: false, deckKitV41: false };
 
   return {
     conversationId,
     lessonTitle,
     // Spec v4 where the school has it: every gallery slide below follows the deck.
-    deck: withDeckKit(deck, { deckKitV4 }),
+    deck: withDeckKit(deck, { deckKitV4, deckKitV41 }),
     durationMinutes: deckDurationMinutes(deck),
     // Brian's review (E1): the Yawp! tile template, behind its flag.
     tileTemplate: deckV2,

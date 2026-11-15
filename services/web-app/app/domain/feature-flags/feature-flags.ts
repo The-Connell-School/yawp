@@ -117,6 +117,8 @@ export const LESSON_PLANNER_WRITING_OVERRIDE_FLAG = 'lesson_planner_writing_over
 
 /** The Lesson Deck Kit, spec v4 (Nov 6): cream slides, split panels, labels. Needs the Lesson Deck Kit. */
 export const LESSON_PLANNER_DECK_KIT_V4_FLAG = 'lesson_planner_deck_kit_v4' as const;
+/** The Lesson Deck Kit, spec v4.1 (Nov 11): Fraunces headlines, no running head; needs spec v4. */
+export const LESSON_PLANNER_DECK_KIT_V41_FLAG = 'lesson_planner_deck_kit_v41' as const;
 
 /**
  * The teacher's own deck flags as they apply (Nov 1): keeping the deck needs
@@ -367,6 +369,11 @@ export const FEATURE_FLAGS = {
     label: 'Lesson Planner: Lesson Deck Kit v4',
     description:
       'The Lesson Deck Kit, spec v4 (Nov 6): every slide on cream, color only as a solid panel on split slides or as type, short Arial labels (Look, Talk, Hold this) instead of italic mode words, no rules, small caps, middle dots or roman numerals, a plain painting plate, a quiz template, and colors with no terracotta or brown. Applies to every gallery deck the school opens, in Present, Run the show, PowerPoint, the PDFs and shared links, and the planner writes to the v4 templates. Needs the Lesson Deck Kit. Off: spec v3, as before.',
+  },
+  [LESSON_PLANNER_DECK_KIT_V41_FLAG]: {
+    label: 'Lesson Planner: Lesson Deck Kit v4.1',
+    description:
+      'The Lesson Deck Kit, spec v4.1 (Nov 11), on top of spec v4: titles and headlines in Fraunces Bold (embedded in every PowerPoint export), no running head on any slide, no “Hold this”, “Know this”, “Read” or “Remember” labels, and a title slide that shows the teacher’s name, then the class and date, with no “Yawp! Writing Program” line. Applies to every gallery deck the school opens, in Present, Run the show, PowerPoint, the PDFs and shared links, and the planner writes to the v4.1 instructions. Needs Lesson Deck Kit v4. Off: spec v4, as before.',
   },
   [CLASS_CODE_UNIQUE_FLAG]: {
     label: 'Unique class codes',
