@@ -95,7 +95,7 @@ import {
 } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { assertNotRetiredApHistoryAssignmentType } from '~/utils/retired-ap-history-access.server';
 import { DEV_PANEL_DISMISS_EVENT } from '~/utils/dev-panel-dismiss-event';
-import { clearRadixScrollLockCleanup } from '~/utils/radix-scroll-lock-cleanup';
+import { prepareAppShellForRadixSheet } from '~/utils/radix-scroll-lock-cleanup';
 
 /**
  * Page chrome the class route used to provide while this page was nested
@@ -871,7 +871,7 @@ export default function AssignmentDetailRoute() {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event(DEV_PANEL_DISMISS_EVENT));
     }
-    clearRadixScrollLockCleanup();
+    prepareAppShellForRadixSheet();
     flushSync(() => setIsEditSheetOpen(true));
   };
 
