@@ -282,13 +282,21 @@ test.describe.serial('Teacher dashboard workspace', () => {
         .click();
       await page.waitForURL(/\/app\/documents\?status=needs-grading/);
       await page.waitForLoadState('networkidle');
-      await page.goto(
-        `/app/documents?status=needs-grading&group=none&reset=1&class=${e2eContext.classId}&q=${encodeURIComponent(title.toLowerCase())}`
-      );
-      await page.waitForLoadState('networkidle');
-      await expect(page.getByText(title, { exact: true }).first()).toBeVisible({
-        timeout: 90_000,
-      });
+      const gradingQueueUrl = `/app/documents?status=needs-grading&group=none&reset=1&class=${e2eContext.classId}&assignmentId=${encodeURIComponent(e2eContext.assignmentId)}&q=${encodeURIComponent(title.toLowerCase())}`;
+      await expect
+        .poll(
+          async () => {
+            await page.goto(gradingQueueUrl, { waitUntil: 'domcontentloaded' });
+            await page.waitForLoadState('networkidle');
+            return page
+              .getByText(title, { exact: true })
+              .first()
+              .isVisible()
+              .catch(() => false);
+          },
+          { timeout: 90_000 }
+        )
+        .toBe(true);
     } finally {
       if (documentId) {
         await prisma.submission.deleteMany({ where: { documentId } });

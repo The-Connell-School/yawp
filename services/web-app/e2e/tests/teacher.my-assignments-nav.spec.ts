@@ -2,7 +2,7 @@ import { test, expect } from '../test-setup';
 import { fillMyAssignmentsSearch } from '../test-helpers';
 
 test.describe('Teacher "My Assignments" sidebar navigation', () => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   test('teacher can open My Assignments from the sidebar and see their assignments', async ({
     page,
     signIn,

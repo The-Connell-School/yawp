@@ -1,4 +1,5 @@
 import { Locator, Page, expect } from '@playwright/test';
+import { serializeDocumentWorkFilterIds } from '../app/utils/teacher-document-work-filter-options';
 
 /** Console noise from react-router when a new navigation aborts an in-flight /__manifest fetch. */
 const ABORTED_MANIFEST_PATCH_FIRST_LINE =
@@ -462,6 +463,7 @@ async function setMyAssignmentsSearchQuery(page: Page, query: string) {
   await expect(search).toHaveValue(query);
   // Filtering is live while the popover stays open; avoid re-toggling Filter,
   // which races closed on CI and hides the search field mid-assertion.
+  await page.keyboard.press('Escape');
 }
 
 /** Default seeded E2E class label (`Grade 9th • Period 1st`). */
@@ -512,34 +514,43 @@ export async function fillMyAssignmentsSearch(
   const rowVisibleTimeout = 20_000;
 
   if (options?.assignmentId) {
+    const pollTimeoutMs = 90_000;
     if (!page.url().includes('/app/assignments')) {
       await page.goto('/app/assignments', { waitUntil: 'domcontentloaded' });
     }
     await expect(page.getByTestId('my-assignments-filter')).toBeVisible({
       timeout: 30_000,
     });
-    await expandAssignmentTypeSections(page);
-    if (options.assignmentTypeTitle) {
-      await selectMyAssignmentsTypePill(page, options.assignmentTypeTitle);
-    }
-    if (options?.classId && !trimmed) {
-      await setMyAssignmentsClassFilter(page, classLabel);
-    }
-    if (trimmed) {
-      await setMyAssignmentsSearchQuery(page, query);
-    }
-    const located = await findMyAssignmentRow(page, {
-      assignmentId: options.assignmentId,
-      title: trimmed || undefined,
-    });
-    try {
-      await expect(located).toBeVisible({ timeout: rowVisibleTimeout });
-    } catch (error) {
-      if (!options.classId || options.allowDetailFallback === false) throw error;
-      await page.goto(
-        `/app/assignments/${options.assignmentId}?classId=${options.classId}`
-      );
-    }
+    await expect
+      .poll(
+        async () => {
+          if (!page.url().includes('/app/assignments')) {
+            await page.goto('/app/assignments', {
+              waitUntil: 'domcontentloaded',
+            });
+          }
+          await expect(page.getByTestId('my-assignments-filter')).toBeVisible({
+            timeout: 15_000,
+          });
+          await expandAssignmentTypeSections(page);
+          if (options.assignmentTypeTitle) {
+            await selectMyAssignmentsTypePill(page, options.assignmentTypeTitle);
+          }
+          if (options.classId) {
+            await setMyAssignmentsClassFilter(page, classLabel);
+          }
+          if (trimmed) {
+            await setMyAssignmentsSearchQuery(page, query);
+          }
+          const located = await findMyAssignmentRow(page, {
+            assignmentId: options.assignmentId,
+            title: trimmed || undefined,
+          });
+          return located.isVisible().catch(() => false);
+        },
+        { timeout: pollTimeoutMs }
+      )
+      .toBe(true);
     return;
   }
 
@@ -549,7 +560,7 @@ export async function fillMyAssignmentsSearch(
   if (options?.assignmentTypeTitle) {
     await selectMyAssignmentsTypePill(page, options.assignmentTypeTitle);
   }
-  if (options?.classId && !trimmed) {
+  if (options?.classId) {
     await setMyAssignmentsClassFilter(page, classLabel);
   }
   if (trimmed) {
@@ -582,7 +593,12 @@ async function openTeacherDocumentWorkFilter(page: Page) {
 /** Deep-link class documents (optional status / group / q query filters). */
 export function classDocumentsTabUrl(
   classId: string,
-  params?: { q?: string; documentGroup?: string; status?: string }
+  params?: {
+    q?: string;
+    documentGroup?: string;
+    status?: string;
+    assignmentId?: string;
+  }
 ) {
   const search = new URLSearchParams({
     tab: 'documents',
@@ -590,6 +606,10 @@ export function classDocumentsTabUrl(
     status: params?.status ?? 'all',
   });
   if (params?.q) search.set('q', params.q.trim().toLowerCase());
+  const assignmentParam = params?.assignmentId
+    ? serializeDocumentWorkFilterIds([params.assignmentId])
+    : null;
+  if (assignmentParam) search.set('assignmentId', assignmentParam);
   return `/app/my-classes/${classId}?${search.toString()}`;
 }
 
@@ -644,27 +664,31 @@ export async function waitForClassDocumentTitle(
   page: Page,
   classId: string,
   title: string,
-  timeoutMs = 90_000
+  options?: { assignmentId?: string; timeoutMs?: number }
 ) {
-  await gotoClassDocumentsTab(page, classId);
+  const timeoutMs = options?.timeoutMs ?? 90_000;
+  const tableTitle = () =>
+    page
+      .getByRole('table', { name: /class documents/i })
+      .getByText(title, { exact: true });
+  await gotoClassDocumentsTab(page, classId, {
+    status: 'all',
+    documentGroup: 'none',
+    assignmentId: options?.assignmentId,
+  });
   await expectClassDocumentsTable(page);
   await expect
     .poll(
       async () => {
-        if (
-          await page
-            .getByText(title, { exact: true })
-            .isVisible()
-            .catch(() => false)
-        ) {
+        if (await tableTitle().isVisible().catch(() => false)) {
           return true;
         }
-        await page.reload();
-        await openClassDocumentsTab(page);
-        return page
-          .getByText(title, { exact: true })
-          .isVisible()
-          .catch(() => false);
+        await gotoClassDocumentsTab(page, classId, {
+          status: 'all',
+          documentGroup: 'none',
+          assignmentId: options?.assignmentId,
+        });
+        return tableTitle().isVisible().catch(() => false);
       },
       { timeout: timeoutMs }
     )
@@ -696,7 +720,12 @@ export async function openClassDocumentsTab(page: Page) {
 export async function gotoClassDocumentsTab(
   page: Page,
   classId: string,
-  params?: { q?: string; documentGroup?: string; status?: string }
+  params?: {
+    q?: string;
+    documentGroup?: string;
+    status?: string;
+    assignmentId?: string;
+  }
 ) {
   await page.goto(
     classDocumentsTabUrl(classId, {

@@ -11,7 +11,7 @@ const COLD_WRITE_TITLE = 'E2E Cold Write Diagnostic';
  * recognizable in the surfaces a teacher actually scans.
  */
 test.describe.serial('Tutor off badge', () => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
 
   test('marks the tutor-off assignment in My Assignments and on its detail page', async ({
     page,

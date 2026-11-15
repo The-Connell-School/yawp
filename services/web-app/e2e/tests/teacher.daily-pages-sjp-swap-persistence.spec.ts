@@ -106,6 +106,7 @@ async function seedDailyPagesWork(e2eContext: E2EContext) {
       },
     });
     return {
+      assignmentId: assignment.id,
       assignmentTitle: assignment.title ?? 'SJP swap persistence',
       documentTitle: document.title ?? 'Swap persistence doc',
     };
@@ -196,11 +197,9 @@ test.describe.serial('Daily Pages → SJP swap persistence (spec G)', () => {
       page.locator(`a[href="/app/assignment-types/${sjpTypeId}"]`)
     ).toBeVisible();
 
-    await waitForClassDocumentTitle(
-      page,
-      e2eContext.classId,
-      seeded.documentTitle
-    );
+    await waitForClassDocumentTitle(page, e2eContext.classId, seeded.documentTitle, {
+      assignmentId: seeded.assignmentId,
+    });
     const classDocuments = page.getByRole('table', { name: /class documents/i });
     await expect(classDocuments.getByText(/10\s*\/\s*12/).first()).toBeVisible();
   });

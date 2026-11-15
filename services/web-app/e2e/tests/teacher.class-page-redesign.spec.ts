@@ -97,7 +97,8 @@ test.describe('Teacher class documents lifecycle', () => {
       await waitForClassDocumentTitle(
         page,
         e2eContext.classId,
-        `Lifecycle needs grading ${suffix}`
+        `Lifecycle needs grading ${suffix}`,
+        { assignmentId: e2eContext.assignmentId }
       );
       const table = page.getByRole('table', { name: /class documents/i });
 
@@ -446,11 +447,9 @@ test.describe.serial('Teacher class page redesign', () => {
       documentIds.push(inProgressDoc.id);
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await waitForClassDocumentTitle(
-        page,
-        e2eContext.classId,
-        submittedTitle
-      );
+      await waitForClassDocumentTitle(page, e2eContext.classId, submittedTitle, {
+        assignmentId: e2eContext.assignmentId,
+      });
       await filterClassDocumentsByTitle(page, submittedTitle);
       const documentsTable = page.getByRole('table', { name: /class documents/i });
 
@@ -470,7 +469,9 @@ test.describe.serial('Teacher class page redesign', () => {
       await submittedRow.click();
       await page.waitForURL(/\/app\/submissions\//);
 
-      await waitForClassDocumentTitle(page, e2eContext.classId, inProgressTitle);
+      await waitForClassDocumentTitle(page, e2eContext.classId, inProgressTitle, {
+        assignmentId: e2eContext.assignmentId,
+      });
       const inProgressRow = page
         .getByRole('row', {
           name: new RegExp(inProgressTitle),
