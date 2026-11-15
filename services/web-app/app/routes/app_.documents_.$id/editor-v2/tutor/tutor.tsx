@@ -104,6 +104,7 @@ export const Tutor = ({
   const [isTutorRetrying, setIsTutorRetrying] = useState(false);
   const [tutorError, setTutorError] = useState<string | null>(null);
   const [optimisticMessage, setOptimisticMessage] = useState<{
+    id: string;
     agent: string;
     createdAt: Date;
     content: string;
@@ -196,6 +197,7 @@ export const Tutor = ({
       setTutorError(null);
       setIsTutorRetrying(false);
       setOptimisticMessage({
+        id: `optimistic-user-${Date.now()}`,
         agent: 'user',
         createdAt: new Date(),
         content: response,

@@ -107,10 +107,32 @@ export function DocumentMarginComments({
     return () => ro.disconnect();
   }, [commentIds, anchorTops]);
 
-  const sortIds = [...commentIds]
+  const anchoredIds = [...commentIds]
     .filter((id) => anchorTops[id] !== undefined)
     .sort((a, b) => (anchorTops[a] ?? 0) - (anchorTops[b] ?? 0));
-  const stackedTops = stackMarginCommentTops(sortIds, anchorTops, cardHeights);
+  const orphanIds = commentIds.filter((id) => anchorTops[id] === undefined);
+  const stackedAnchored = stackMarginCommentTops(
+    anchoredIds,
+    anchorTops,
+    cardHeights
+  );
+  let orphanCursor = anchoredIds.reduce(
+    (cursor, id) =>
+      Math.max(
+        cursor,
+        (stackedAnchored[id] ?? anchorTops[id] ?? 0) +
+          (cardHeights[id] ?? 0) +
+          8
+      ),
+    8
+  );
+  const stackedOrphans: Record<string, number> = {};
+  for (const id of orphanIds) {
+    const height = cardHeights[id] ?? 0;
+    stackedOrphans[id] = orphanCursor;
+    orphanCursor += height + 8;
+  }
+  const stackedTops = { ...stackedAnchored, ...stackedOrphans };
 
   return (
     <aside
@@ -120,7 +142,7 @@ export function DocumentMarginComments({
       data-testid="document-margin-comments-aside"
     >
       {commentIds.map((id) => {
-        const top = stackedTops[id] ?? anchorTops[id] ?? 8;
+        const top = stackedTops[id] ?? 8;
         return (
           <div
             key={id}

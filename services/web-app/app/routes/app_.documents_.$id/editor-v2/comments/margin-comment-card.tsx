@@ -111,15 +111,6 @@ export function MarginCommentCard({
         comment.id,
         data.archivedAt ? new Date(data.archivedAt) : null
       );
-      if (data.archivedAt) {
-        contentRoot
-          ?.querySelectorAll<HTMLElement>(
-            `.comment-mark[data-comment-id="${CSS.escape(comment.id)}"]`
-          )
-          .forEach((mark) => {
-            mark.classList.add('comment-mark--resolved');
-          });
-      }
     }
   }, [archiveFetcher.state, archiveFetcher.data, comment.id, onArchiveChange]);
 
@@ -163,13 +154,6 @@ export function MarginCommentCard({
 
   const resolveComment = () => {
     onArchiveChange?.(comment.id, new Date());
-    contentRoot
-      ?.querySelectorAll<HTMLElement>(
-        `.comment-mark[data-comment-id="${CSS.escape(comment.id)}"]`
-      )
-      .forEach((mark) => {
-        mark.classList.add('comment-mark--resolved');
-      });
     archiveFetcher.submit(
       { intent: 'resolve' },
       {

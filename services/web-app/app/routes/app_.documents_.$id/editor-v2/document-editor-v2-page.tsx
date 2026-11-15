@@ -382,6 +382,16 @@ export function DocumentEditorV2Page() {
   });
   const tutor = useTutorState(data.currentCms as any, cmsIdx);
   const commentsState = useCommentsState((data.doc.comments as any[]) ?? []);
+  const { setCommentArchived } = commentsState;
+  const handleCommentArchive = useCallback(
+    (commentId: string, archivedAt: Date | null) => {
+      if (archivedAt) {
+        editorBridgeRef.current?.removeCommentMark(commentId);
+      }
+      setCommentArchived(commentId, archivedAt);
+    },
+    [setCommentArchived]
+  );
   const { clearPendingFocusCommentId, pendingFocusCommentId } = commentsState;
   useEffect(() => {
     if (!pendingFocusCommentId) return;
@@ -628,6 +638,7 @@ export function DocumentEditorV2Page() {
                 defaultValue={data.doc.title}
                 placeholder="Untitled document"
                 readOnly={!isDocumentEditable}
+                suppressHydrationWarning
                 onBlur={(e) => {
                   if (!isDocumentEditable) return;
                   if (e.target.value !== data.doc.title) {
@@ -1042,7 +1053,7 @@ export function DocumentEditorV2Page() {
                         readOnly={commentsReadOnly}
                         onCommentRemoved={commentsState.removeComment}
                         onResponseAdded={commentsState.addResponse}
-                        onArchiveChange={commentsState.setCommentArchived}
+                        onArchiveChange={handleCommentArchive}
                         onCommentCreated={(c) =>
                           commentsState.addComment(c as any)
                         }
@@ -1065,30 +1076,6 @@ export function DocumentEditorV2Page() {
                 />
               </div>
             )}
-            {isMobile && tab === 'comments' ? (
-              <div className="h-full min-w-0 w-full">
-                <TeacherPasteReport
-                  key={`${data.doc.id}-mobile-comments`}
-                  enabled={isViewingAsTeacher}
-                  documentId={data.doc.id}
-                  contentRoot={editorRoot}
-                  onSelectEvent={() => {
-                    changeTab('editor');
-                  }}
-                >
-                  <Comments
-                    variant="sheet"
-                    comments={visibleComments as any}
-                    openCommentCount={activeComments.length}
-                    readOnly={commentsReadOnly}
-                    onCommentRemoved={commentsState.removeComment}
-                    onResponseAdded={commentsState.addResponse}
-                    onArchiveChange={commentsState.setCommentArchived}
-                    autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
-                  />
-                </TeacherPasteReport>
-              </div>
-            ) : null}
           </div>
         {isMobile ? (
           <nav
@@ -1103,7 +1090,10 @@ export function DocumentEditorV2Page() {
                 role="tab"
                 className="doc-editor-mobile-tab"
                 aria-selected={tab === 'tutor'}
-                onClick={() => changeTab('tutor')}
+                onClick={() => {
+                  if (isMobile) setMobileCommentsSheetOpen(false);
+                  changeTab('tutor');
+                }}
               >
                 <Sparkles className="h-4 w-4" aria-hidden />
                 <span>Tutor</span>
@@ -1127,6 +1117,7 @@ export function DocumentEditorV2Page() {
               onClick={() => {
                 if (isMobile) {
                   setMobileCommentsSheetOpen(true);
+                  return;
                 }
                 changeTab('comments');
               }}
@@ -1193,7 +1184,9 @@ export function DocumentEditorV2Page() {
           >
             <SheetContent
               side="bottom"
-              className="h-[min(72vh,560px)] overflow-hidden p-0"
+              includeOverlay={false}
+              showCloseButton={false}
+              className="doc-editor-mobile-comments-sheet z-30 h-[min(60vh,520px)] overflow-hidden border-t p-0"
               data-testid="mobile-comments-sheet"
             >
               <SheetHeader className="sr-only">
@@ -1217,7 +1210,7 @@ export function DocumentEditorV2Page() {
                     readOnly={commentsReadOnly}
                     onCommentRemoved={commentsState.removeComment}
                     onResponseAdded={commentsState.addResponse}
-                    onArchiveChange={commentsState.setCommentArchived}
+                    onArchiveChange={handleCommentArchive}
                     autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
                   />
                 </div>

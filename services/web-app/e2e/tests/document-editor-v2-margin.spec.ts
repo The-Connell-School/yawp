@@ -127,6 +127,46 @@ test.describe('Document editor v2 margin comments', () => {
     }
   });
 
+  test('unanchored margin cards stack below anchored cards', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await helpers.openDocument(
+      `${e2eContext.gradedDocumentId}?tab=editor`,
+      { retry: true }
+    );
+    await expect(page.getByTestId('document-margin-comments-aside')).toBeVisible({
+      timeout: 15_000,
+    });
+    const unanchoredId = e2eContext.v2GradedResolvedCommentId;
+    await page.evaluate((id) => {
+      document
+        .querySelectorAll(`.comment-mark[data-comment-id="${CSS.escape(id)}"]`)
+        .forEach((node) => node.remove());
+    }, unanchoredId);
+    const layout = await page.evaluate(() => {
+      const nodes = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-margin-comment-for]')
+      );
+      return nodes.map((node) => ({
+        id: node.dataset.marginCommentFor,
+        top: Math.round(Number.parseFloat(getComputedStyle(node).top || '0')),
+        height: node.offsetHeight,
+      }));
+    });
+    expect(layout.length).toBeGreaterThan(1);
+    const sorted = [...layout].sort((a, b) => a.top - b.top);
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1]!;
+      const cur = sorted[i]!;
+      expect(cur.top).toBeGreaterThanOrEqual(prev.top + prev.height - 4);
+    }
+  });
+
   test('v2 load does not raise Suspense hydration pageerrors', async ({
     page,
     signIn,
@@ -134,7 +174,11 @@ test.describe('Document editor v2 margin comments', () => {
     helpers,
   }) => {
     const pageErrors: string[] = [];
+    const consoleErrors: string[] = [];
     page.on('pageerror', (err) => pageErrors.push(err.message));
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
+    });
     await signIn('jdoe@brock.software', 'johndoe');
     await page.evaluate(() => window.localStorage.clear());
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -149,5 +193,11 @@ test.describe('Document editor v2 margin comments', () => {
       hydrationPattern.test(message)
     );
     expect(hydrationErrors, hydrationErrors.join('\n')).toEqual([]);
+    const styleHydrationWarnings = consoleErrors.filter((line) =>
+      /Extra attributes from the server:\s*style/i.test(line)
+    );
+    expect(styleHydrationWarnings, styleHydrationWarnings.join('\n')).toEqual(
+      []
+    );
   });
 });

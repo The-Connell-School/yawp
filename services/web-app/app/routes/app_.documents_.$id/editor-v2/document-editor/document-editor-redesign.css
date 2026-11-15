@@ -257,6 +257,11 @@
   padding: 12px;
 }
 
+.doc-editor-mobile-comments-sheet {
+  bottom: calc(52px + env(safe-area-inset-bottom, 0));
+  max-height: min(60vh, 520px);
+}
+
 .doc-editor-mobile-tabbar {
   position: fixed;
   bottom: 0;

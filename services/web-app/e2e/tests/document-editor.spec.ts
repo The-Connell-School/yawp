@@ -10,6 +10,34 @@ const SELECT_ALL_SHORTCUT = process.platform === 'darwin' ? 'Meta+A' : 'Control+
 const COPY_SHORTCUT = process.platform === 'darwin' ? 'Meta+C' : 'Control+C';
 const CUT_SHORTCUT = process.platform === 'darwin' ? 'Meta+X' : 'Control+X';
 
+async function selectWordInEditor(
+  page: import('@playwright/test').Page,
+  word: string
+) {
+  await page.evaluate((target) => {
+    const root = document.querySelector<HTMLElement>(
+      '[contenteditable="true"]'
+    );
+    if (!root) throw new Error('Editor surface not found');
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node: Text | null = null;
+    while ((node = walker.nextNode() as Text | null)) {
+      const text = node.textContent ?? '';
+      const index = text.indexOf(target);
+      if (index === -1) continue;
+      const range = document.createRange();
+      range.setStart(node, index);
+      range.setEnd(node, index + target.length);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      root.dispatchEvent(new Event('selectionchange', { bubbles: true }));
+      return;
+    }
+    throw new Error(`Could not select "${target}" in editor`);
+  }, word);
+}
+
 async function expectExitControlVisible(page: import('@playwright/test').Page) {
   const exitButton = page.getByRole('button', { name: /^exit$/i });
   if ((await exitButton.count()) > 0) {
@@ -739,10 +767,8 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await resolveButton.click();
     await expect(resolveButton).toBeHidden({ timeout: 10_000 });
     await expect(
-      page.locator(
-        `.comment-mark[data-comment-id="${commentId}"].comment-mark--resolved`
-      )
-    ).toHaveCount(1, { timeout: 10_000 });
+      page.locator(`.comment-mark[data-comment-id="${commentId}"]`)
+    ).toHaveCount(0, { timeout: 10_000 });
   });
 
   test('v2 teacher can open a comment draft from text selection', async ({
@@ -813,6 +839,46 @@ test.describe.serial('Document Editor E2E Tests', () => {
         line.includes('useCommentsSelection must be used within')
       )
     ).toBe(false);
+  });
+
+  test('v2 mobile comments sheet shows anchor excerpt and keeps tab bar usable', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    test.setTimeout(90_000);
+    await signIn('jdoe@brock.software', 'johndoe');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await helpers.openDocument(
+      `${e2eContext.editedDocumentId}?tab=editor`,
+      { retry: true }
+    );
+    const editor = helpers.getEditor();
+    await editor.click();
+    await selectWordInEditor(page, 'grammar');
+    await page.getByTestId('editor-add-comment').click();
+    await page.getByTestId('margin-comment-draft-body').fill('Mobile sheet anchor body.');
+    await page.getByTestId('margin-comment-draft-submit').click();
+    const draftId = await page
+      .locator('[data-comment-card]')
+      .last()
+      .getAttribute('data-comment-card');
+    expect(draftId).toBeTruthy();
+    await page.getByTestId('document-mobile-tabbar').getByText('Comments').click();
+    await expect(page.getByTestId('mobile-comments-sheet')).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(
+      page.getByTestId(`comment-anchor-excerpt-${draftId}`)
+    ).toContainText('grammar');
+    await expect(page.getByTestId(`comment-body-${draftId}`)).toContainText(
+      'Mobile sheet anchor body.'
+    );
+    await page.getByTestId('document-mobile-tabbar').getByText('Tutor').click();
+    await expect(page.getByTestId('tutor-module-header')).toBeVisible({
+      timeout: 10_000,
+    });
   });
 
   test('v2 desktop comments panel is closed by default on reload', async ({
