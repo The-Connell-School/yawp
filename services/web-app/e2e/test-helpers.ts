@@ -439,8 +439,18 @@ async function setMyAssignmentsClassFilter(
     .getByRole('button')
     .first();
   await classTrigger.click();
-  const option = page.getByRole('option', { name: classOptionLabel }).first();
-  await option.scrollIntoViewIfNeeded();
+  const classSearch = page.getByPlaceholder('Search classes');
+  await expect(classSearch).toBeVisible({ timeout: 15_000 });
+  const filterText =
+    classOptionLabel instanceof RegExp
+      ? 'Period 1st'
+      : classOptionLabel;
+  await classSearch.fill(filterText);
+  const option = page
+    .locator('[cmdk-item]')
+    .filter({ hasText: classOptionLabel })
+    .first();
+  await expect(option).toBeVisible({ timeout: 15_000 });
   await option.click();
   await page.keyboard.press('Escape');
 }
@@ -454,7 +464,7 @@ async function setMyAssignmentsSearchQuery(page: Page, query: string) {
   // which races closed on CI and hides the search field mid-assertion.
 }
 
-/** Default seeded E2E class label (Grade 9th · Period 1st). */
+/** Default seeded E2E class label (`Grade 9th • Period 1st`). */
 export const E2E_SEEDED_CLASS_LABEL = /Grade 9th.*Period 1st/i;
 
 async function findMyAssignmentRow(
@@ -511,7 +521,7 @@ export async function fillMyAssignmentsSearch(
     if (options.assignmentTypeTitle) {
       await selectMyAssignmentsTypePill(page, options.assignmentTypeTitle);
     }
-    if (options?.classId) {
+    if (options?.classId && !trimmed) {
       await setMyAssignmentsClassFilter(page, classLabel);
     }
     if (trimmed) {
@@ -538,7 +548,7 @@ export async function fillMyAssignmentsSearch(
   if (options?.assignmentTypeTitle) {
     await selectMyAssignmentsTypePill(page, options.assignmentTypeTitle);
   }
-  if (options?.classId) {
+  if (options?.classId && !trimmed) {
     await setMyAssignmentsClassFilter(page, classLabel);
   }
   if (trimmed) {
@@ -560,10 +570,12 @@ export function classDocumentsTabUrl(
   classId: string,
   params?: { q?: string; documentGroup?: string; status?: string }
 ) {
-  const search = new URLSearchParams({ tab: 'documents' });
+  const search = new URLSearchParams({
+    tab: 'documents',
+    documentGroup: params?.documentGroup ?? 'none',
+    status: params?.status ?? 'all',
+  });
   if (params?.q) search.set('q', params.q.trim().toLowerCase());
-  if (params?.documentGroup) search.set('documentGroup', params.documentGroup);
-  if (params?.status) search.set('status', params.status);
   return `/app/my-classes/${classId}?${search.toString()}`;
 }
 
@@ -596,13 +608,17 @@ export async function filterClassDocumentsByTitle(
     await fillTeacherDocumentWorkSearch(page, normalized);
     return;
   }
-  const url = new URL(page.url());
-  url.searchParams.set('tab', 'documents');
-  url.searchParams.set('q', normalized);
-  if (!url.searchParams.has('documentGroup')) {
-    url.searchParams.set('documentGroup', 'none');
+  const match = page.url().match(/\/app\/my-classes\/([^/?]+)/);
+  if (!match?.[1]) {
+    throw new Error('filterClassDocumentsByTitle requires a class detail URL');
   }
-  await page.goto(`${url.pathname}?${url.searchParams.toString()}`);
+  await page.goto(
+    classDocumentsTabUrl(match[1], {
+      q: normalized,
+      status: 'all',
+      documentGroup: 'none',
+    })
+  );
   await openClassDocumentsTab(page);
   await expectClassDocumentsTitleVisible(page, title.trim());
 }

@@ -283,7 +283,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await page.waitForURL(/\/app\/documents\?status=needs-grading/);
       await page.waitForLoadState('networkidle');
       await page.goto(
-        `/app/documents?status=needs-grading&group=none&reset=1&q=${encodeURIComponent(title.toLowerCase())}`
+        `/app/documents?status=needs-grading&group=none&reset=1&class=${e2eContext.classId}&q=${encodeURIComponent(title.toLowerCase())}`
       );
       await page.waitForLoadState('networkidle');
       await expect(page.getByText(title, { exact: true }).first()).toBeVisible({

@@ -1021,7 +1021,7 @@ test('locked assignments tab blocks send and create until approval', async ({
   await openClassAssignmentsTab(page);
   const create = page.getByRole('button', { name: 'New Assignment' });
   await expect(create).toBeVisible();
-  await create.click();
+  await create.click({ force: true });
   // Narrow viewports use a tap tooltip instead of opening the approval sheet.
   await expect(
     page.getByRole('tooltip', {
