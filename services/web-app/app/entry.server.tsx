@@ -18,7 +18,9 @@ import {
   buildSafeErrorForLog,
   buildSafeRouteParamsForLog,
   buildServerErrorRequestContext,
+  routeTemplateForLog,
 } from './utils/server-error-request-context.server';
+import { getBuildMetadata } from './utils/build-metadata.server';
 
 startImpersonationEndDelivery();
 startApprovalDelivery();
@@ -70,8 +72,15 @@ export default function handleRequest(
           // errors encountered during initial shell rendering since they'll
           // reject and get logged in handleDocumentRequest.
           if (shellRendered) {
-            if (!reportImpersonationError(request, entry => console.error(entry))) {
-              console.error('Server streaming render error:', buildSafeErrorForLog(error));
+            if (
+              !reportImpersonationError(request, (entry) =>
+                console.error(entry)
+              )
+            ) {
+              console.error(
+                'Server streaming render error:',
+                buildSafeErrorForLog(error)
+              );
             }
           }
         },
@@ -92,7 +101,8 @@ export const handleError: HandleErrorFunction = async (error, args) => {
     return;
   }
 
-  if (reportImpersonationError(request, entry => console.error(entry))) return;
+  if (reportImpersonationError(request, (entry) => console.error(entry)))
+    return;
 
   console.log('🔥 Error caught by handleError:', buildSafeErrorForLog(error));
 
@@ -118,17 +128,20 @@ export const handleError: HandleErrorFunction = async (error, args) => {
 
     // Log to PostHog in production
     if (posthog) {
-      capturePosthogServerException(
-        posthog,
-        error,
-        userId ?? 'anonymous',
-      );
+      capturePosthogServerException(posthog, error, userId ?? 'anonymous', {
+        route_template: routeTemplateForLog(request, params),
+        http_method: request.method,
+        release_sha: getBuildMetadata().commit,
+      });
     } else {
       throw error;
     }
   } catch (loggingError) {
     // Fallback logging if our error logger fails
-    console.error('❌ Error logging failed:', buildSafeErrorForLog(loggingError));
+    console.error(
+      '❌ Error logging failed:',
+      buildSafeErrorForLog(loggingError)
+    );
     console.error('Original error:', buildSafeErrorForLog(error));
   }
 };

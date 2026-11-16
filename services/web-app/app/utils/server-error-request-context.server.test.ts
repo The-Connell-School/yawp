@@ -7,6 +7,8 @@ import {
   buildServerErrorRequestContext,
   safeErrorTextForClientResponse,
   safeErrorTextForLog,
+  routeTemplateForLog,
+  describeNonErrorForLog,
 } from './server-error-request-context.server';
 
 describe('buildServerErrorRequestContext', () => {
@@ -36,7 +38,7 @@ describe('buildServerErrorRequestContext', () => {
 
   test('buildSafeErrorForLog redacts freeform messages and keeps sanitized stack frames', () => {
     const error = new Error(
-      'join failed for teacher@school.edu token=SECRET-TOKEN https://yawp.school/join?code=ABC123',
+      'join failed for teacher@school.edu token=SECRET-TOKEN https://yawp.school/join?code=ABC123'
     );
     error.stack =
       'Error: join failed\n    at handler (file:///app/join:10:5)\n    at Object.run (file:///yawp.school/path:20:1)';
@@ -67,9 +69,10 @@ describe('buildServerErrorRequestContext', () => {
 
   test('buildSafeStackForLog strips query strings from frame paths', () => {
     const error = new Error('boom');
-    error.stack = 'Error: boom\n    at fn (file:///src/route.tsx?secret=1:10:5)';
+    error.stack =
+      'Error: boom\n    at fn (file:///src/route.tsx?secret=1:10:5)';
     expect(buildSafeStackForLog(error)).toBe(
-      '    at fn (file:///src/route.tsx:10:5)',
+      '    at fn (file:///src/route.tsx:10:5)'
     );
   });
 
@@ -81,20 +84,24 @@ describe('buildServerErrorRequestContext', () => {
       '    at Object.<anonymous> (/workspace/node_modules/@prisma/client/runtime/library.js:112:32)',
     ].join('\n');
     const stack = buildSafeStackForLog(error);
-    expect(stack).toContain('node_modules/@react-router/dev/dist/vite.js:123:4');
-    expect(stack).toContain('node_modules/@prisma/client/runtime/library.js:112:32');
+    expect(stack).toContain(
+      'node_modules/@react-router/dev/dist/vite.js:123:4'
+    );
+    expect(stack).toContain(
+      'node_modules/@prisma/client/runtime/library.js:112:32'
+    );
     expect(stack).not.toContain('***@');
   });
 
   test('buildSafeErrorForLog for Prisma validation errors omits message and sensitive meta text', () => {
     const error = Object.assign(
       new Error(
-        'Invalid `prisma.invitation.create()` invocation for teacher@school.edu token=super-secret /app/route.tsx',
+        'Invalid `prisma.invitation.create()` invocation for teacher@school.edu token=super-secret /app/route.tsx'
       ),
       {
         name: 'PrismaClientValidationError',
         clientVersion: '6.0.0',
-      },
+      }
     );
     error.stack =
       'PrismaClientValidationError: Invalid invocation\n    at /workspace/services/web-app/app/route.tsx:12:3';
@@ -125,9 +132,9 @@ describe('buildServerErrorRequestContext', () => {
   test('buildSafeErrorForLog redacts prisma initialization connection strings', () => {
     const error = Object.assign(
       new Error(
-        "Can't reach database server at `postgresql://yawp:SECRET-PASS@127.0.0.1:5432/yawp`",
+        "Can't reach database server at `postgresql://yawp:SECRET-PASS@127.0.0.1:5432/yawp`"
       ),
-      { name: 'PrismaClientInitializationError' },
+      { name: 'PrismaClientInitializationError' }
     );
     const serialized = JSON.stringify(buildSafeErrorForLog(error));
     expect(serialized).not.toContain('SECRET-PASS');
@@ -138,14 +145,14 @@ describe('buildServerErrorRequestContext', () => {
     expect(
       safeDomainErrorTextForClientResponse(
         new Error('That prompt is too long to save.'),
-        'fallback',
-      ),
+        'fallback'
+      )
     ).toBe('That prompt is too long to save.');
     const redacted = safeDomainErrorTextForClientResponse(
       new Error(
-        'Invalid `prisma.user.findMany()` token=SECRET-TOKEN teacher@school.edu',
+        'Invalid `prisma.user.findMany()` token=SECRET-TOKEN teacher@school.edu'
       ),
-      'Could not complete that request.',
+      'Could not complete that request.'
     );
     expect(redacted).not.toContain('SECRET-TOKEN');
     expect(redacted).not.toContain('teacher@school.edu');
@@ -155,8 +162,8 @@ describe('buildServerErrorRequestContext', () => {
     expect(
       safeDomainErrorTextForClientResponse(
         new Error('   '),
-        'Could not complete that request.',
-      ),
+        'Could not complete that request.'
+      )
     ).toBe('Could not complete that request.');
   });
 
@@ -165,7 +172,7 @@ describe('buildServerErrorRequestContext', () => {
       'Invalid `prisma.user.findMany()` token=SECRET-TOKEN teacher@school.edu';
     const message = safeErrorTextForClientResponse(
       new Error(sensitive),
-      'Something went wrong.',
+      'Something went wrong.'
     );
     expect(message).toBe('Something went wrong.');
     expect(message).not.toContain('prisma');
@@ -174,7 +181,7 @@ describe('buildServerErrorRequestContext', () => {
 
   test('safeErrorTextForLog returns redacted message text', () => {
     const text = safeErrorTextForLog(
-      new Error('delivery failed for teacher@school.edu token=SECRET'),
+      new Error('delivery failed for teacher@school.edu token=SECRET')
     );
     expect(text).toContain('delivery failed');
     expect(text).not.toContain('teacher@school.edu');
@@ -187,12 +194,90 @@ describe('buildServerErrorRequestContext', () => {
         classId: 'class-secret',
         token: 'raw-token',
         submissionId: 'sub-1',
-      }),
+      })
     ).toEqual({ paramKeys: ['classId', 'submissionId', 'token'] });
     const serialized = JSON.stringify(
-      buildSafeRouteParamsForLog({ code: 'JOIN-123', email: 'teacher@school.edu' }),
+      buildSafeRouteParamsForLog({
+        code: 'JOIN-123',
+        email: 'teacher@school.edu',
+      })
     );
     expect(serialized).not.toContain('JOIN-123');
     expect(serialized).not.toContain('teacher@school.edu');
+  });
+});
+
+describe('non-Error throws are described, not "[object Object]"', () => {
+  test('Response', () => {
+    const out = buildSafeErrorForLog(new Response('x', { status: 404 }));
+    expect(out).toEqual({ name: 'ThrownResponse', message: 'HTTP 404' });
+  });
+
+  test('Promise', () => {
+    const p = Promise.resolve(1);
+    expect(describeNonErrorForLog(p).name).toBe('ThrownPromise');
+  });
+
+  test('ErrorResponse-like object uses status', () => {
+    const out = describeNonErrorForLog({
+      status: 403,
+      statusText: 'Forbidden',
+      internal: false,
+      data: 'secret teacher@school.edu',
+    });
+    expect(out.name).toBe('ErrorResponse');
+    expect(out.message).toBe('HTTP 403');
+    expect(JSON.stringify(out)).not.toContain('teacher@school.edu');
+  });
+
+  test('DataWithResponseInit-like object uses init.status', () => {
+    class DataWithResponseInit {
+      type = 'DataWithResponseInit';
+      data = { x: 1 };
+      init = { status: 400 };
+    }
+    const out = describeNonErrorForLog(new DataWithResponseInit());
+    expect(out).toEqual({
+      name: 'ThrownData',
+      message: 'HTTP 400',
+      status: 400,
+    });
+  });
+
+  test('plain object message is redacted', () => {
+    const out = describeNonErrorForLog({
+      message: 'boom for teacher@school.edu',
+    });
+    expect(out.message).toContain('boom');
+    expect(out.message).not.toContain('teacher@school.edu');
+  });
+
+  test('plain object without message lists keys only', () => {
+    const out = describeNonErrorForLog({ code: 'X', token: 'SECRET' });
+    expect(out.message).toBe('non-Error object (Object) keys: code,token');
+    expect(out.message).not.toContain('SECRET');
+  });
+
+  test('primitives still stringify', () => {
+    expect(describeNonErrorForLog('nope')).toEqual({
+      name: 'UnknownError',
+      message: 'nope',
+    });
+  });
+});
+
+describe('routeTemplateForLog', () => {
+  test('replaces param values with keys and drops query', () => {
+    const req = new Request(
+      'https://yawp.school/app/classes/ABC123/documents/cmx9?token=SECRET'
+    );
+    expect(
+      routeTemplateForLog(req, { classCode: 'ABC123', documentId: 'cmx9' })
+    ).toBe('/app/classes/:classCode/documents/:documentId');
+  });
+
+  test('no params keeps path', () => {
+    const req = new Request('https://yawp.school/app/my-documents');
+    expect(routeTemplateForLog(req, {})).toBe('/app/my-documents');
   });
 });
