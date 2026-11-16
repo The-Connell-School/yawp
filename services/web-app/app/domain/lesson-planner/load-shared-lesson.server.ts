@@ -21,6 +21,8 @@ import { orderStackEntries } from './stack-order';
 import { stackTiming } from './stack-timing';
 import { syncAgendaToStack } from './deck-agenda';
 import { STEP_TYPE_LABELS } from './step-types';
+import { studentExitTicket } from './student-exit-ticket';
+import type { StackStep } from './stack-steps';
 
 export type SharedLesson = {
   audience: ShareAudience;
@@ -129,6 +131,11 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
     const row = byId.get(id);
     return Boolean(row?.yawpAssignmentId || row?.yawpCreatedAt);
   };
+  const audience = link.audience as ShareAudience;
+  const sharedContent = (step: StackStep, content: string) =>
+    audience === 'student' && (step.kind === 'exit-ticket' || step.writingName === 'Exit Ticket')
+      ? studentExitTicket(content)
+      : content;
 
   const handouts = includes.has('handouts')
     ? steps.flatMap((step) => {
@@ -138,7 +145,8 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
           row.studentVersion && row.studentVersionKey === studentVersionKey(row.content)
             ? row.studentVersion
             : null;
-        const content = handoutContent(step, fresh);
+        const handout = handoutContent(step, fresh);
+        const content = handout ? sharedContent(step, handout) : null;
         return content
           ? [{ id: step.id, title: step.title, type: step.isWriting ? (step.writingName ?? null) : null, content, lines: answerLinesFor(step) }]
           : [];
@@ -151,7 +159,7 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
           id: step.id,
           title: step.title,
           type: step.writingName ?? STEP_TYPE_LABELS[step.type],
-          content: step.content,
+          content: sharedContent(step, step.content),
           inYawp: madeInYawp(step.id),
         }))
     : [];
@@ -163,7 +171,6 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
   const { deckV2, deckGallery, deckKitV4, deckKitV41 } = deckOutcome?.kind === 'deck'
     ? await getLessonPlannerReviewFlags(conversation.organizationId)
     : { deckV2: false, deckGallery: false, deckKitV4: false, deckKitV41: false };
-  const audience = link.audience as ShareAudience;
 
   return {
     audience,

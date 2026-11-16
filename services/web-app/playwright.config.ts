@@ -7,6 +7,7 @@ export default defineConfig({
   testDir: './e2e',
   // These fixtures use their own local server/configuration and database lifecycle.
   testIgnore: [
+    '**/brian-nov15-fixes.spec.ts',
     '**/free-tier.monthly-dashboard.spec.ts',
     '**/free-tier.welcome-components.spec.ts',
     '**/free-tier.welcome-live.spec.ts',

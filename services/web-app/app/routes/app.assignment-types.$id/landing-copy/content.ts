@@ -172,7 +172,12 @@ const CLASS_STARTER: LandingPage = {
           `**Tutor on or off?** You choose in the Assignment Builder. With the tutor on, students get feedback on what they wrote and encouragement to write a little more. ${TUTOR_NEVER_WRITES} Turn it off when you just want them writing on their own.`
         ),
         p(
-          '**Grading is about effort.** Any real attempt earns full credit, a thin one earns partial credit, and a blank page earns none.'
+          '**Grading is about effort.** Use these three bands:'
+        ),
+        ul(
+          '**Full credit:** Any real attempt.',
+          '**Partial credit:** A thin attempt.',
+          '**No credit:** A blank page.'
         ),
       ],
     },
@@ -240,7 +245,7 @@ const PREWRITING: LandingPage = {
       heading: 'How to Teach It',
       blocks: [
         p(
-          'Pre-writing is Lesson 2 of the Thesis-Driven Essay course. Download the slide deck, and watch the short tutorial video before you teach it.'
+          'Pre-writing is the first step of any major essay assignment. Download the slide deck, and watch the short tutorial video before you teach it.'
         ),
         { type: 'lesson', slug: 'pre-writing' },
       ],

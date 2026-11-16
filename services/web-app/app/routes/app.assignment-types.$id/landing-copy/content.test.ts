@@ -133,7 +133,12 @@ describe("Brian's pages, word for word", () => {
     expect(paragraphs(section('class-starter', 'how-it-works').blocks)).toEqual([
       'Click **New** above to write a prompt, or pick one from the Prompt Library below.',
       '**Tutor on or off?** You choose in the Assignment Builder. With the tutor on, students get feedback on what they wrote and encouragement to write a little more. It will never write for them. Turn it off when you just want them writing on their own.',
-      '**Grading is about effort.** Any real attempt earns full credit, a thin one earns partial credit, and a blank page earns none.',
+      '**Grading is about effort.** Use these three bands:',
+    ]);
+    expect(bullets(section('class-starter', 'how-it-works').blocks)).toEqual([
+      '**Full credit:** Any real attempt.',
+      '**Partial credit:** A thin attempt.',
+      '**No credit:** A blank page.',
     ]);
     // Nov 11: the library intro sits at the top of the library, not loose
     // under the How it works box.
@@ -184,6 +189,9 @@ describe("Brian's pages, word for word", () => {
   });
 
   test('Pre-Writing (Kevin and Brian, Nov 11)', () => {
+    expect(paragraphs(section('prewriting', 'how-to-teach-it').blocks)).toEqual([
+      'Pre-writing is the first step of any major essay assignment. Download the slide deck, and watch the short tutorial video before you teach it.',
+    ]);
     expect(page('prewriting').description).toEqual([
       {
         type: 'paragraph',
@@ -324,7 +332,7 @@ describe('every page', () => {
 
   describe('How to Teach It on the step pages (Kevin, Nov 5; not Brian’s copy)', () => {
     test.each([
-      ['prewriting', 'pre-writing', 'Pre-writing is Lesson 2 of the Thesis-Driven Essay course'],
+      ['prewriting', 'pre-writing', 'Pre-writing is the first step of any major essay assignment'],
       ['thesis-statement', 'thesis-statement', 'Developing a thesis statement is Lesson 3 of the Thesis-Driven Essay course'],
     ] as const)('%s opens with How to Teach It and its lesson', (key, slug, lead) => {
       const sections = page(key).sections;

@@ -157,13 +157,13 @@ describe("Brian's Nov 3 round 2", () => {
     expect(classes.some((c) => c.startsWith('bg-['))).toBe(true);
   });
 
-  it('text on the cream page is the dark text color; text in the light boxes keeps its softer color', () => {
+  it('text on the cream page is dark; box copy uses a readable gray in light mode and keeps dark mode', () => {
     const tone = (el: Element | null) => {
       const classes = el?.className.split(/\s+/) ?? [];
       return classes.includes('text-foreground')
         ? 'dark'
-        : classes.includes('text-muted-foreground')
-          ? 'soft'
+        : classes.includes('text-[#4A4A4A]') && classes.includes('dark:text-muted-foreground')
+          ? 'readable-gray'
           : 'other';
     };
     // The description, beside the image.
@@ -186,7 +186,7 @@ describe("Brian's Nov 3 round 2", () => {
     open(toggle(root, 'How it works'));
     const panel = root.querySelectorAll('[data-testid="landing-section-how-it-works"] p');
     expect(panel.length).toBe(4);
-    for (const p of panel) expect(tone(p)).toBe('soft');
+    for (const p of panel) expect(tone(p)).toBe('readable-gray');
     act(() => activeRoot?.unmount());
     activeRoot = null;
 
@@ -194,7 +194,7 @@ describe("Brian's Nov 3 round 2", () => {
       <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} />
     );
     const paragraph = tde.querySelector('[data-testid="how-to-teach-spotlight"] p');
-    expect(tone(paragraph)).toBe('soft');
+    expect(tone(paragraph)).toBe('readable-gray');
   });
 });
 
@@ -600,7 +600,7 @@ describe('The step pages’ own lesson row (Kevin, Nov 5; Brian, Nov 6: deck and
     open(hide);
     expect(root.querySelector('[data-testid="yawp-lesson"]')).toBeNull();
     expect(root.querySelector('[data-testid="how-to-teach-preview"]')?.textContent).toContain(
-      'Lesson 2 of the Thesis-Driven Essay course'
+      'the first step of any major essay assignment'
     );
   });
 });

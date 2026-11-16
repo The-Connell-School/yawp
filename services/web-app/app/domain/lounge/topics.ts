@@ -1,7 +1,8 @@
 /**
  * Teacher's Lounge topics. Staff-curated product areas, so the Yawp team can
  * triage and module pages can later filter the feed to themselves. Keys are
- * stored on LoungePost.topic; never rename one, only add.
+ * stored on LoungePost.topic; never rename one. Retired topics can be removed
+ * from these options while their existing posts remain readable.
  */
 export const LOUNGE_TOPICS = [
   { key: 'writing-lessons', label: 'Writing Lessons' },
@@ -10,7 +11,6 @@ export const LOUNGE_TOPICS = [
   { key: 'grading', label: 'Grading & Rubrics' },
   { key: 'reporter', label: 'Reporter' },
   { key: 'lesson-planner', label: 'Lesson Planner' },
-  { key: 'ap-history', label: 'AP History' },
   { key: 'classroom-routines', label: 'Classroom Routines' },
   { key: 'other', label: 'Something else' },
 ] as const;

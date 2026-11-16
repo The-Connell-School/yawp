@@ -19,8 +19,8 @@ export const LOUNGE_TEAM_MENTION_ID = 'yawp-team';
  * A token's label as shown. A team mention written when the brand was spelled
  * "YAWP!" keeps that label in the stored body; it reads with today's spelling.
  */
-function shownLabel(label: string, userId: string): string {
-  return userId === LOUNGE_TEAM_MENTION_ID && isLoungeTeamAccountName(label) ? LOUNGE_TEAM_ACCOUNT_NAME : label;
+function shownLabel(label: string): string {
+  return isLoungeTeamAccountName(label) ? LOUNGE_TEAM_ACCOUNT_NAME : label;
 }
 
 export function mentionsTeam(body: string): boolean {
@@ -54,7 +54,7 @@ export function splitMentions(body: string): MentionPart[] {
   for (const match of body.matchAll(TOKEN)) {
     const index = match.index ?? 0;
     if (index > last) parts.push({ type: 'text', text: body.slice(last, index) });
-    parts.push({ type: 'mention', userId: match[2], label: shownLabel(match[1], match[2]) });
+    parts.push({ type: 'mention', userId: match[2], label: shownLabel(match[1]) });
     last = index + match[0].length;
   }
   if (last < body.length) parts.push({ type: 'text', text: body.slice(last) });
@@ -63,7 +63,7 @@ export function splitMentions(body: string): MentionPart[] {
 
 /** The body with each token shown as "@Name", for emails and previews. */
 export function plainTextWithMentions(body: string): string {
-  return body.replace(TOKEN, (_whole, label: string, userId: string) => `@${shownLabel(label, userId)}`);
+  return body.replace(TOKEN, (_whole, label: string) => `@${shownLabel(label)}`);
 }
 
 /**

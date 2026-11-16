@@ -102,17 +102,18 @@ export function PostToClass({
         <p className="mt-1 text-xs text-[var(--sv-muted)]">
           One link to a student page with the slides, handouts and Short Response prompt.
         </p>
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           <Button
             type="button"
             variant="secondary"
             data-testid="share-copy"
+            className="h-auto min-h-10 max-w-full whitespace-normal py-2"
             disabled={fetcher.state !== 'idle'}
             onClick={() => share('copy')}
           >
             <Copy size={14} /> {copied ? 'Link copied' : 'Copy link'}
           </Button>
-          <Button type="button" variant="secondary" data-testid="share-classroom" onClick={() => share('classroom')}>
+          <Button type="button" variant="secondary" data-testid="share-classroom" className="h-auto min-h-10 max-w-full whitespace-normal py-2" onClick={() => share('classroom')}>
             Share to Google Classroom
           </Button>
         </div>
