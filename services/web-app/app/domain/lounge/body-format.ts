@@ -1,6 +1,6 @@
 /**
  * A numbered line's lead: "1. Protect your students." in "1. Protect your
- * students. No names, …". The House Rules (and any numbered list the YAWP!
+ * students. No names, …". The House Rules (and any numbered list the Yawp!
  * team posts) set it in bold so each rule reads like a header (Brian's
  * review, Nov 11 2026).
  *

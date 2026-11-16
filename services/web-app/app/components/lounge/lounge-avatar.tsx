@@ -5,7 +5,7 @@ const SIZES = { sm: 'h-6 w-6 text-[10px]', md: 'h-9 w-9 text-xs', lg: 'h-11 w-11
 
 /**
  * Initials in a circle. Decorative: the name always appears next to it, so
- * screen readers skip it. The YAWP! team uses the page's ink, which flips
+ * screen readers skip it. The Yawp! team uses the page's ink, which flips
  * with the theme; everyone else keeps a stable muted tone.
  */
 export function LoungeAvatar({

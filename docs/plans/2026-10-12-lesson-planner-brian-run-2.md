@@ -36,7 +36,7 @@ should go in.
    (item 4, quote: "The function of the stack is to build an outline of my
    lesson with everything that's going to happen"); add everything then refine
    (3); drag to reorder (1); remove from the list (2); auto-save (6); "Create
-   this assignment in YAWP!" on writing items right in the stack (5); the deck
+   this assignment in Yawp!" on writing items right in the stack (5); the deck
    as the last step (7); no filters (36); no internal codes (17, 21, 26). Kevin
    adds: show the stack live beside the chat while planning (39).
 3. **Fit the period.** The plan and the deck both ran long for 50 minutes
@@ -54,7 +54,7 @@ should go in.
 Plus the chat flow: the class starter swap must come back as clickable
 choices with three buttons and no FW codes (20–22); class starter prompts
 bundled into one block (log line 54); framings bundled in the plan view (55);
-"you don't have to use all of these" not seen (26); "YAWP!" everywhere (18);
+"you don't have to use all of these" not seen (26); "Yawp!" everywhere (18);
 plainer wording on the replace-edits dialog.
 
 **Keep, do not touch:** the planner's voice and the engagement answer
@@ -336,7 +336,7 @@ N materials in order, idempotent on repeat, respects hand-edit conflicts (409
 with the list of conflicting slots). E2E: Add everything → stack list shows
 one row per step and per framing, each removable.
 
-### A5. Writing items: "Create this assignment in YAWP!" from the stack
+### A5. Writing items: "Create this assignment in Yawp!" from the stack
 
 Item 5. Handouts are fine as an option, not the default for writing items.
 
@@ -346,7 +346,7 @@ Item 5. Handouts are fine as an option, not the default for writing items.
   loader `app.lesson-planner/route.tsx` L197–210 into a shared server helper).
 - For `class-starter`, `daily-pages` and `exit-ticket` materials, the stack
   card shows **"Create this {Class Starter | Daily Pages | exit ticket} in
-  YAWP!"** using `dailyPagesCreateHref` / `exitTicketCreateHref`. The exit
+  Yawp!"** using `dailyPagesCreateHref` / `exitTicketCreateHref`. The exit
   ticket's config is re-derived from the source reply with
   `artifactFromAssistantReply(sourceMessage.content, blockKey)`; if the source
   is gone, fall back to a prompt-only create link.
@@ -449,7 +449,7 @@ Items 7, 19, 35, 37, 38, and the dialog wording.
   controls: **"Send this lesson to a student who missed class"** →
   `?build=makeup`, canned message in `suggestions.ts`: "Make a make-up handout
   from my stack for a student who was absent today. Tell them to go to their
-  Assignments in YAWP! and complete the class starter and Daily Pages
+  Assignments in Yawp! and complete the class starter and Daily Pages
   assignments." Extend the allow-list at `app.lesson-planner/route.tsx` L603.
   Wording and placement are Brian and Kevin's call; this is the default.
 - Replace-edits dialog (`app.lesson-planner/route.tsx` L536): "You edited this
@@ -612,7 +612,7 @@ Items 16, log lines 59, 64; and branding on the closing slide.
   Minutes live in `minutes`, which the teacher sees and students do not."
   Default decision; Brian's item 16 is open, so this is the recommended answer
   and easy to reverse.
-- Closing slide text at L201 becomes "Exit ticket: open it in YAWP! before you
+- Closing slide text at L201 becomes "Exit ticket: open it in Yawp! before you
   go" (E6).
 
 **Tests first.** `build-system-prompt.test.ts` for each rule.
@@ -636,7 +636,7 @@ becomes conditional.
 
 ### D1. A concise plan, not a transcript
 
-Items 28, 29, 32. Brian's reference: the YAWP! pre-writing lesson plan, three
+Items 28, 29, 32. Brian's reference: the Yawp! pre-writing lesson plan, three
 pages: Overview, Goals, Teacher will, Materials, numbered Instructions,
 closing. Each part gets a short summary and its function.
 
@@ -655,7 +655,7 @@ closing. Each part gets a short summary and its function.
   changes. Deterministic fallback when the model call fails or the flag is
   off: first sentence of each entry, no function line.
 - **Materials** lists each handout, class starter, exit ticket and the deck by
-  title only ("Class starter: 'Carry' prompt (YAWP! assignment)"). Writing
+  title only ("Class starter: 'Carry' prompt (Yawp! assignment)"). Writing
   prompts are **not** reproduced in full; the handout export has them.
 - **Framings** (item 32): only framings in the stack appear, as one
   instruction each if the teacher kept several, with its function; never all
@@ -775,18 +775,18 @@ Wave-1 "partly fixed". Today `FOLLOW_ON_SUGGESTIONS` are pinned unless the
 piece is already in the stack. Keep; after B2 the "Trim" chip joins them when
 the plan is over time. No other change.
 
-### E6. "YAWP!" everywhere
+### E6. "Yawp!" everywhere
 
 Item 18. Brian: caps with an exclamation point, everywhere, for now.
 
 **Fix.**
 - Prompt (version bump), in "Who you are": "The product's name is written
-  YAWP! (all caps, exclamation point) every time, in prose, on slides and in
+  Yawp! (all caps, exclamation point) every time, in prose, on slides and in
   handouts." Rewrite teacher- or student-facing prompt text: L201, L537, L781,
   and the "Yawp renders/validates" lines that the model tends to echo (L358–371,
   L401–414, L528–547). Internal comments can stay.
-- UI strings: `planning-progress.ts` L74 ("Looking things up in YAWP!"),
-  `assistant-markdown.tsx` L164, PDF `Creator` and pptx `company` → "YAWP!".
+- UI strings: `planning-progress.ts` L74 ("Looking things up in Yawp!"),
+  `assistant-markdown.tsx` L164, PDF `Creator` and pptx `company` → "Yawp!".
 - Add a unit test that scans `build-system-prompt.ts` output and the
   teacher-facing string tables for `/\bYawp\b(?!!)/` and `/\bYAWP\b(?!!)/`
   and fails on a hit, so it stays fixed.

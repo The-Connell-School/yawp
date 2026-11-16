@@ -491,7 +491,7 @@ export default function TeacherTrainingModuleRoute() {
                 <CardHeader>
                   <CardTitle>Teach this lesson</CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    Present the slides on YAWP!, or make your own copy in Google
+                    Present the slides on Yawp!, or make your own copy in Google
                     Slides or PowerPoint to edit. The lesson plan goes with them.
                   </p>
                 </CardHeader>

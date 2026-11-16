@@ -105,7 +105,7 @@ describe("Brian's pages, word for word", () => {
       'Have your own prompt? Click **New** above to create it in the Assignment Builder. Or choose one from our library: filter by subject, text, or grade level, click a prompt, and edit it however you like in the Assignment Builder.'
     );
     const philosophy = section('thesis-driven-essay', 'philosophy');
-    expect(philosophy.heading).toBe('YAWP! philosophy on essay prompts');
+    expect(philosophy.heading).toBe('Yawp! philosophy on essay prompts');
     expect(paragraphs(philosophy.blocks)).toEqual([
       "We've found that students write their best essays about something they actually care about, so many of our prompts are open on purpose and encourage students to choose their own adventure within a topic. You'll enjoy reading 75 essays with 75 different angles a lot more than 75 essays answering the same narrow question. Still, some students and teachers prefer a tighter, more specific scope, and that's OK too! Either way, help students find their personal connection to the topic. If a student is stuck, send them to the emotional charge: what they loved, what grabbed them, what made them upset.",
     ]);
@@ -116,7 +116,7 @@ describe("Brian's pages, word for word", () => {
     });
     expect(landingPagePlainText(page('thesis-driven-essay'))).not.toContain('Note:');
     expect(landingPagePlainText(page('thesis-driven-essay'))).toContain(
-      'YAWP! philosophy on essay prompts'
+      'Yawp! philosophy on essay prompts'
     );
     expect(page('thesis-driven-essay').library).toBe('thesis');
   });
@@ -208,7 +208,7 @@ describe("Brian's pages, word for word", () => {
       tutorial: { lesson: 'pre-writing', linkText: 'Watch the short tutorial video' },
     });
     const philosophy = section('prewriting', 'philosophy');
-    expect(philosophy.heading).toBe('YAWP! philosophy on essay prompts');
+    expect(philosophy.heading).toBe('Yawp! philosophy on essay prompts');
     expect(paragraphs(philosophy.blocks)).toEqual([
       "We've found that students write their best essays about something they actually care about, so many of our prompts are open on purpose and let students choose their own adventure within a topic. That's exactly what pre-writing is for. Still, some students and teachers prefer a tighter, more specific scope, and that's OK too! Either way, help students find their personal connection to the topic. If a student is stuck, send them to the emotional charge: what they loved, what grabbed them, what made them upset.",
     ]);

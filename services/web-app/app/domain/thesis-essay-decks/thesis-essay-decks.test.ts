@@ -33,7 +33,7 @@ describe('THESIS_ESSAY_DECKS', () => {
     }
   });
 
-  test('spells YAWP! with its exclamation point', () => {
+  test('spells Yawp! with its exclamation point', () => {
     expect(JSON.stringify(THESIS_ESSAY_DECKS).match(/YAWP(?!!)/g) ?? []).toEqual([]);
   });
 });
@@ -135,7 +135,7 @@ describe('THESIS_ESSAY_MATERIALS', () => {
 describe('the three ways to use a deck', () => {
   const thesis = THESIS_ESSAY_DECKS[2];
 
-  test('presents on YAWP! at its own address', () => {
+  test('presents on Yawp! at its own address', () => {
     expect(presentHref(thesis)).toBe('/present/thesis-essay/lesson-3-thesis-statement');
   });
 
@@ -170,7 +170,7 @@ describe('deckForTrainingModule', () => {
   const COURSE = 'The Thesis-Driven Essay';
 
   test('matches each lesson module of the Thesis-Driven Essay training to its deck', () => {
-    expect(deckForTrainingModule(COURSE, 'Lesson 1: Introduce Students to YAWP!')?.slug).toBe('lesson-1-day-1');
+    expect(deckForTrainingModule(COURSE, 'Lesson 1: Introduce Students to Yawp!')?.slug).toBe('lesson-1-day-1');
     expect(deckForTrainingModule(COURSE, 'Lesson 2: Pre-writing')?.slug).toBe('lesson-2-pre-writing');
     expect(deckForTrainingModule(COURSE, 'Lesson 3: Developing a Thesis Statement')?.slug).toBe(
       'lesson-3-thesis-statement'
@@ -208,7 +208,7 @@ describe('deckLinks', () => {
     expect(links[0].href).toBe(
       '/present/thesis-essay/lesson-1-day-1?from=%2Fapp%2Fteacher-trainings%2Ft1%2Fmodules%2Fm1'
     );
-    expect(links[0].label).toBe('Lesson 1 · Introduce Students to YAWP!');
+    expect(links[0].label).toBe('Lesson 1 · Introduce Students to Yawp!');
     expect(links[4].label).toBe('Student sign-up handout');
   });
 

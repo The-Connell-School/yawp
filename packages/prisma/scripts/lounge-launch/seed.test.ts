@@ -54,7 +54,7 @@ describe('Faculty Lounge launch content', () => {
     expect(hasLaunchPlaceholder(HOPPER.find((p) => p.seedKey === 'hopper:lessons-learned')!.body)).toBe(true);
   });
 
-  test('the six launch questions come from the YAWP! team and each has an answer from Brian', () => {
+  test('the six launch questions come from the Yawp! team and each has an answer from Brian', () => {
     expect(LAUNCH_QUESTIONS).toHaveLength(6);
     for (const q of LAUNCH_QUESTIONS) {
       expect(q).toMatchObject({ author: 'team', kind: 'QUESTION' });

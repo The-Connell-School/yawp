@@ -13,7 +13,7 @@ const KIND_PILL = {
 
 /**
  * One post in the feed, as its own card on the Lounge's cream page: avatar,
- * a serif title, one preview line (the YAWP! team's answer when there is
+ * a serif title, one preview line (the Yawp! team's answer when there is
  * one), the post's tags, and a quiet meta line. Questions carry no pill;
  * Shares and Wins do (a post can be both a question and a share).
  *

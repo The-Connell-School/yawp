@@ -292,7 +292,7 @@ export const THESIS_DECK: HybridDeck = {
         [0.74, 0.375],
       ],
       notes:
-        'Today’s YAWP! editor on the Thesis Statement step, with a sample observation, analysis and thesis typed in. The Tutor’s instructions are on the left; when students have a draft thesis, they can ask the Tutor for feedback.',
+        'Today’s Yawp! editor on the Thesis Statement step, with a sample observation, analysis and thesis typed in. The Tutor’s instructions are on the left; when students have a draft thesis, they can ask the Tutor for feedback.',
     },
     ...oaSlides(true),
     {
@@ -425,7 +425,7 @@ export const THESIS_DECK: HybridDeck = {
     },
     {
       layout: 'closer',
-      eyebrow: 'YAWP!',
+      eyebrow: 'Yawp!',
       line: 'Next time: introductions.',
       notes:
         'Before next class, read through the theses and comment. Everyone needs a working thesis before they start the introduction; absent students can catch up with the Tutor.',

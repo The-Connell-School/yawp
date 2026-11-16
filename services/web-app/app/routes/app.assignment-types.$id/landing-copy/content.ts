@@ -96,7 +96,7 @@ const ul = (...items: string[]): LandingBlock => ({ type: 'bullets', items });
 
 const TUTOR_NEVER_WRITES = 'It will never write for them.';
 
-const PHILOSOPHY_HEADING = 'YAWP! philosophy on essay prompts';
+const PHILOSOPHY_HEADING = 'Yawp! philosophy on essay prompts';
 
 /** "First time teaching it?" on the step pages, its tutorial one click away. */
 const firstTimeTeaching = (lesson: YawpLessonSlug): LandingBlock => ({

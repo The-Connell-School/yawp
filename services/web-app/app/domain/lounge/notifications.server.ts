@@ -3,7 +3,7 @@
  * request that caused it: callers fire and forget, and every failure is
  * logged and swallowed.
  *
- * Questions for the YAWP! team go to LOUNGE_STAFF_NOTIFY_EMAILS (comma
+ * Questions for the Yawp! team go to LOUNGE_STAFF_NOTIFY_EMAILS (comma
  * separated). Contact Us messages go to LOUNGE_CONTACT_EMAILS, falling back
  * to the same list. When unset they still wait in the admin inbox.
  */

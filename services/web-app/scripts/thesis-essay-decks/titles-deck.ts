@@ -4,7 +4,7 @@
  * Brian's "Titles and Formatting Slide Deck.pptx" (20 slides), in the hybrid
  * look, plus a current screenshot of a finished essay in the editor. His
  * finishing-touches slide was written for a word processor (font size 12,
- * single-space); it now says what to do in the YAWP! editor. This lesson has
+ * single-space); it now says what to do in the Yawp! editor. This lesson has
  * no lesson plan, so the notes come from the Lesson 7 training video.
  */
 import type { HybridDeck } from './deck-types';
@@ -99,17 +99,17 @@ export const TITLES_DECK: HybridDeck = {
     },
     {
       layout: 'steps',
-      eyebrow: 'Finishing touches in YAWP!',
+      eyebrow: 'Finishing touches in Yawp!',
       title: 'Finishing touches',
       accent: 'teal',
       items: [
         '==Clean up.== Delete your pre-writing, your observation and analysis notes, and headings like “Introduction.” Only the essay stays.',
         '==Title it.== Type your title on the first line, then use the toolbar to ==center== and ==italicize== it.',
-        '==Keep it simple.== YAWP! sets the font for you. Paragraphs stay left-aligned (only the title is centered), with an empty line between them.',
+        '==Keep it simple.== Yawp! sets the font for you. Paragraphs stay left-aligned (only the title is centered), with an empty line between them.',
         '==Read it, then Submit.== Read it once from the top, ask the Tutor for feedback if you want, then click ==Submit.==',
       ],
       notes:
-        'Brian: "Be normal with your formatting. This is not the place to be creative." Some students like to center everything or pick fancy fonts; don’t. If you have your own formatting standard, use it. Then celebrate: ask students for a reflection on the process, or have them highlight their favorite part of their essay and add a comment saying why. Share the work: within the class, with other teachers or administrators. (The YAWP! program can also publish a class’s essays as a printed book.)',
+        'Brian: "Be normal with your formatting. This is not the place to be creative." Some students like to center everything or pick fancy fonts; don’t. If you have your own formatting standard, use it. Then celebrate: ask students for a reflection on the process, or have them highlight their favorite part of their essay and add a comment saying why. Share the work: within the class, with other teachers or administrators. (The Yawp! program can also publish a class’s essays as a printed book.)',
     },
     {
       layout: 'figure',
@@ -130,11 +130,11 @@ export const TITLES_DECK: HybridDeck = {
         [0.893, 0.06],
       ],
       notes:
-        'A finished essay in today’s YAWP! editor, ready to submit.',
+        'A finished essay in today’s Yawp! editor, ready to submit.',
     },
     {
       layout: 'closer',
-      eyebrow: 'YAWP!',
+      eyebrow: 'Yawp!',
       line: 'You wrote a thesis-driven essay. Celebrate it!',
       notes:
         'They wrote a critical, thesis-driven essay that could stand up in any high school or college classroom. Good work! Celebrate it: a reflection on the process, a favorite line read aloud, or sharing the essays beyond the class.',

@@ -34,7 +34,7 @@ export const BODY_DECK: HybridDeck = {
       title: 'Body Paragraphs',
       subtitle: 'Let your thesis be your guide',
       notes:
-        'A turning point: with a solid intro ending on a strong thesis, students start to realize they’re actually writing a great essay. Before class, read their intros and comment; some will need a transition sentence linking the intro to the thesis. Start class with them opening their YAWP! docs and rereading their intro and thesis. A little show-and-tell helps: have a few students read theirs aloud. Being read gives them a sense of audience, and that lifts them up.',
+        'A turning point: with a solid intro ending on a strong thesis, students start to realize they’re actually writing a great essay. Before class, read their intros and comment; some will need a transition sentence linking the intro to the thesis. Start class with them opening their Yawp! docs and rereading their intro and thesis. A little show-and-tell helps: have a few students read theirs aloud. Being read gives them a sense of audience, and that lifts them up.',
     },
     REVIEW_DIVIDER,
     ...reviewQuiz(5),
@@ -193,11 +193,11 @@ export const BODY_DECK: HybridDeck = {
         [0.16, 0.947],
       ],
       notes:
-        'Today’s YAWP! editor on the Body Paragraphs step. Students start with the first element of their thesis only. Work the room, read paragraphs, encourage; you’ll see confidence rise as the essays take shape. Celebrate it.',
+        'Today’s Yawp! editor on the Body Paragraphs step. Students start with the first element of their thesis only. Work the room, read paragraphs, encourage; you’ll see confidence rise as the essays take shape. Celebrate it.',
     },
     {
       layout: 'closer',
-      eyebrow: 'YAWP!',
+      eyebrow: 'Yawp!',
       line: 'Next time: conclusions.',
       notes:
         'Body paragraphs can take several class periods. Before next class, read what students have and comment; check every paragraph calls back to one part of its thesis.',

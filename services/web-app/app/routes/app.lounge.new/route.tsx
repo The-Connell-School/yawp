@@ -436,7 +436,7 @@ function AttachFromYawp({
 
   return (
     <div className="relative flex flex-col gap-2">
-      <span className="text-sm text-muted-foreground">Attached from YAWP!</span>
+      <span className="text-sm text-muted-foreground">Attached from Yawp!</span>
       <input type="hidden" name="attachAssignmentId" value={selectedId ?? ''} />
       {selected ? (
         <div className="flex items-center gap-3 rounded-xl border bg-background px-3 py-2.5">
@@ -465,14 +465,14 @@ function AttachFromYawp({
           onClick={() => setOpen((value) => !value)}
           className="inline-flex min-h-11 items-center gap-2 self-start rounded-lg border border-dashed border-muted-foreground/50 px-4 text-[15px] hover:bg-secondary"
         >
-          Attach from YAWP!
+          Attach from Yawp!
         </button>
       )}
       {open && !selected ? (
         <div
           ref={panelRef}
           role="dialog"
-          aria-label="Attach from YAWP!"
+          aria-label="Attach from Yawp!"
           className="absolute left-0 top-full z-20 mt-1 w-full max-w-md overflow-hidden rounded-xl border bg-background shadow-lg"
         >
           <p className="border-b px-4 py-2 text-sm font-medium text-muted-foreground">

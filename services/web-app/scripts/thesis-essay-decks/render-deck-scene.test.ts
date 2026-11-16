@@ -62,10 +62,10 @@ for (const { file, deck } of DECKS) {
       }
     });
 
-    it('stamps the YAWP! wordmark and slide number on every slide', () => {
+    it('stamps the Yawp! wordmark and slide number on every slide', () => {
       scene.slides.forEach((slide, index) => {
         const master = slide.elements.filter((e) => e.master).map(textOf);
-        expect(master).toEqual(['YAWP!', String(index + 1)]);
+        expect(master).toEqual(['Yawp!', String(index + 1)]);
       });
     });
   });

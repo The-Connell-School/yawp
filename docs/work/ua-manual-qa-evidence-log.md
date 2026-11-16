@@ -128,10 +128,10 @@ Video review notes:
 
 | Video/module | Captions present | Transcript present | Important on-screen instructions/examples not spoken or written? | Decision |
 |---|---|---|---|---|
-| Welcome to YAWP! | Yes | Yes | Yes: title cards, dashboard screenshots, document/tutor screenshots, feedback examples | Expanded transcript visual notes in production |
+| Welcome to Yawp! | Yes | Yes | Yes: title cards, dashboard screenshots, document/tutor screenshots, feedback examples | Expanded transcript visual notes in production |
 | Critical Writing in the Age of AI | Yes | Yes | Yes: text cards and YAWP tutor/document screenshots | Expanded transcript visual notes in production |
 | Introduction to Lesson Plan Modules | Yes | Yes | Yes: video is primarily text cards with music | Expanded transcript visual notes in production |
-| Lesson 1: Introduce Students to YAWP! | Yes | Yes | Yes: slide text, sample essay, class discussion prompts, document/tutor screenshot | Expanded transcript visual notes in production |
+| Lesson 1: Introduce Students to Yawp! | Yes | Yes | Yes: slide text, sample essay, class discussion prompts, document/tutor screenshot | Expanded transcript visual notes in production |
 | Lesson 2: Pre-writing | Yes | Yes | Yes: slide text, prompt text, picture-analysis prompts, diagrams, examples | Expanded transcript visual notes in production |
 | Lesson 3: Developing a Thesis Statement | Yes | Yes | Yes: slide text, thesis examples, diagrams, writing-activity instructions | Expanded transcript visual notes in production |
 | Lesson 4: Introduction Paragraph | Yes | Yes | Yes: ordering exercises, introduction examples, writing-activity directions | Expanded transcript visual notes in production |

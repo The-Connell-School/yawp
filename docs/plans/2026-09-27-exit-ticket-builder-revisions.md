@@ -1,6 +1,6 @@
 # Exit Ticket builder revisions (proposed changes for the Lesson Planner PR)
 
-Target: The-Connell-School/yawp#374 ("The YAWP! Lesson Planner", branch
+Target: The-Connell-School/yawp#374 ("The Yawp! Lesson Planner", branch
 `claude/brave-brown-7unauw`), which carries the Exit Ticket assignment type and
 its Lesson Planner hand-off.
 

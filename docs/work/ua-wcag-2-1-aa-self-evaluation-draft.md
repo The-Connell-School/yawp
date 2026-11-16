@@ -9,7 +9,7 @@ remaining manual-status wording is updated for send time.
 
 ## Scope
 
-Product: YAWP! Writing Program Services
+Product: Yawp! Writing Program Services
 
 Flows in scope for UA review:
 
@@ -24,7 +24,7 @@ Flows in scope for UA review:
 
 ## Summary posture
 
-YAWP! should be represented as substantially remediated and under active WCAG
+Yawp! should be represented as substantially remediated and under active WCAG
 2.1 AA evaluation, not as fully conformant without qualification. Automated
 testing has passed on representative flows, and multiple issues found during
 that testing have been fixed. Automated keyboard-smoke and reflow-proxy

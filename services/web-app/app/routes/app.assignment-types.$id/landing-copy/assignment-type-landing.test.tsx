@@ -300,16 +300,16 @@ describe('Section consistency (Kevin and Brian, Nov 11: the Thesis Statement pag
     }
   );
 
-  it('Pre-Writing reads When to use it, How it works, then the YAWP! philosophy box', () => {
+  it('Pre-Writing reads When to use it, How it works, then the Yawp! philosophy box', () => {
     const root = render(<LandingSections page={LANDING_PAGES.prewriting} modules={[]} />);
     expect(headings(root)).toEqual([
       'How to Teach It',
       'When to use it',
       'How it works',
-      'YAWP! philosophy on essay prompts',
+      'Yawp! philosophy on essay prompts',
     ]);
     expect(root.textContent).not.toContain('Have your own prompt');
-    open(toggle(root, 'YAWP! philosophy on essay prompts'));
+    open(toggle(root, 'Yawp! philosophy on essay prompts'));
     const box = root.querySelector('[data-testid="landing-section-philosophy"]')!;
     expect(box.textContent).toContain('students write their best essays');
     expect(box.textContent).not.toContain('Note:');
@@ -343,7 +343,7 @@ describe('Section consistency (Kevin and Brian, Nov 11: the Thesis Statement pag
     expect(unlinked.querySelectorAll('a')).toHaveLength(0);
   });
 
-  it('The Thesis-Driven Essay has the YAWP! philosophy in its own box after How to Teach It, closed', () => {
+  it('The Thesis-Driven Essay has the Yawp! philosophy in its own box after How to Teach It, closed', () => {
     const root = render(
       <LandingSections page={LANDING_PAGES['thesis-driven-essay']} modules={[]} />
     );
@@ -356,8 +356,8 @@ describe('Section consistency (Kevin and Brian, Nov 11: the Thesis Statement pag
       root.querySelector('[data-testid="course-lesson"] [data-testid="landing-section-philosophy"]')
     ).toBeNull();
     const box = root.querySelector('[data-testid="landing-section-philosophy"]')!;
-    expect(box.querySelector('h2')?.textContent).toBe('YAWP! philosophy on essay prompts');
-    const button = toggle(root, 'YAWP! philosophy on essay prompts')!;
+    expect(box.querySelector('h2')?.textContent).toBe('Yawp! philosophy on essay prompts');
+    const button = toggle(root, 'Yawp! philosophy on essay prompts')!;
     expect(button.getAttribute('aria-expanded')).toBe('false');
     expect(box.textContent).not.toContain('75 essays');
     open(button);
@@ -401,7 +401,7 @@ describe('LandingSections', () => {
       'When to use it',
       'What makes a good exit ticket',
       'What makes a strong thesis',
-      'YAWP! philosophy on essay prompts',
+      'Yawp! philosophy on essay prompts',
     ]);
     for (const page of Object.values(LANDING_PAGES)) {
       const root = render(<LandingSections page={page} modules={THESIS_MODULES} />);

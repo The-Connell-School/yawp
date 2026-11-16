@@ -2,10 +2,10 @@
  * The hybrid look for the Thesis-Driven Essay lesson decks.
  *
  * Two parents:
- * - The lesson planner's YAWP! tile template (PR #437, `tile-theme.ts` and
+ * - The lesson planner's Yawp! tile template (PR #437, `tile-theme.ts` and
  *   `lesson-pptx-tile.server.ts`): a warm cream page, raised paper tiles with
  *   a faint border and soft shadow, a mono eyebrow over a serif title, and a
- *   small YAWP! wordmark with the slide number at the foot.
+ *   small Yawp! wordmark with the slide number at the foot.
  * - Brian's original teacher decks: bright teal, sunshine, orange, coral and
  *   pink bubbles, white line icons in coloured circles, yellow highlighter on
  *   the words that matter.

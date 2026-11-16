@@ -11,7 +11,7 @@
  */
 import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
-import { LOUNGE_TEAM_ACCOUNT_NAME, loungeByline, type LoungeDisplayNameStyleKey } from './display-name';
+import { LOUNGE_TEAM_ACCOUNT_NAME, LOUNGE_TEAM_ACCOUNT_NAMES, isLoungeTeamAccountName, loungeByline, type LoungeDisplayNameStyleKey } from './display-name';
 import { LOUNGE_TEAM_MENTION_ID, mentionedUserIds, mentionsTeam, plainTextWithMentions } from './mentions';
 import { sortByTop } from './ranking';
 import { assignmentShareSnapshot } from './shares';
@@ -53,16 +53,16 @@ export type LoungeViewer = { userId: string; isStaff: boolean };
 export type LoungeSort = 'new' | 'top' | 'unanswered';
 export type LoungeByline = { name: string; detail: string | null };
 
-/** Initials in a circle: the YAWP! team in ink, everyone else in a stable tone. */
+/** Initials in a circle: the Yawp! team in ink, everyone else in a stable tone. */
 export type LoungeAvatar = { initials: string; tone: string; isStaff: boolean };
 
 const LOUNGE_STAFF_TONE = '#2A2824';
 
 function isTeamAccount(name: string | null | undefined): boolean {
-  return (name ?? '').trim() === LOUNGE_TEAM_ACCOUNT_NAME;
+  return isLoungeTeamAccountName(name);
 }
 
-/** "Brian", or "YAWP! team" for the shared team account. */
+/** "Brian", or "Yawp! team" for the shared team account. */
 function staffFirstName(name: string | null | undefined): string | null {
   return isTeamAccount(name) ? LOUNGE_TEAM_ACCOUNT_NAME : firstNameOf(name);
 }
@@ -231,14 +231,14 @@ export type LoungePostSummary = {
   isPrivate: boolean;
   isOwn: boolean;
   isEdited: boolean;
-  /** Draft or scheduled for later; only the YAWP! team ever sees these. */
+  /** Draft or scheduled for later; only the Yawp! team ever sees these. */
   isUnpublished: boolean;
   isDraft: boolean;
   attachment: { id: string; title: string; typeTitle: string; useCount: number } | null;
   avatar: LoungeAvatar;
-  /** One line for the feed: the YAWP! team's first answer, else the post body. */
+  /** One line for the feed: the Yawp! team's first answer, else the post body. */
   preview: string | null;
-  /** First name of whoever on the YAWP! team answered first. */
+  /** First name of whoever on the Yawp! team answered first. */
   answeredBy: string | null;
 };
 
@@ -696,7 +696,7 @@ export async function createLoungeReply(params: {
         ).map((user) => user.id)
       )
     : new Set<string>();
-  // "@YAWP! team" from a teacher asks the team, like checking "Ask the YAWP! team".
+  // "@Yawp! team" from a teacher asks the team, like checking "Ask the Yawp! team".
   const teamMentioned = !viewer.isStaff && mentionsTeam(input.body);
   const now = new Date();
 
@@ -1021,7 +1021,7 @@ export type LoungeUnpublishedItem = {
   author: LoungeByline;
 };
 
-/** Drafts and scheduled posts, soonest first, for the YAWP! team. */
+/** Drafts and scheduled posts, soonest first, for the Yawp! team. */
 export async function listLoungeUnpublished(now: Date = new Date()): Promise<LoungeUnpublishedItem[]> {
   const rows = await prisma.loungePost.findMany({
     where: { deletedAt: null, OR: [{ draft: true }, { createdAt: { gt: now } }] },
@@ -1192,9 +1192,9 @@ const TEAM_CANDIDATE: LoungeMentionCandidate = {
 };
 
 /**
- * Who the @ picker offers: "YAWP! team" (the whole team), Brian by first
+ * Who the @ picker offers: "Yawp! team" (the whole team), Brian by first
  * name, then teachers already in this thread. Other staff are reached
- * through "@YAWP! team", not by name. Never the viewer.
+ * through "@Yawp! team", not by name. Never the viewer.
  */
 export async function listMentionCandidates(
   viewer: LoungeViewer,
@@ -1354,7 +1354,7 @@ export async function listPinnedLoungePosts(
     excerpt: excerptOf(row.body),
     author: bylineFor(row.author, row.organization?.name, row.author.isAdmin),
     avatar: avatarOf(row.author),
-    authorFirstName: staffFirstName(row.author.name) ?? 'the YAWP! team',
+    authorFirstName: staffFirstName(row.author.name) ?? 'the Yawp! team',
     authorIsStaff: row.author.isAdmin,
     replyCount: row._count.replies,
     videoDurationSeconds: row.videoDurationSeconds,
@@ -1365,9 +1365,9 @@ export async function listPinnedLoungePosts(
 export type LoungeHost = { userId: string; name: string; firstName: string; avatar: LoungeAvatar };
 
 /**
- * The person the Lounge is "from" (Brian): whoever on the YAWP! team wrote
+ * The person the Lounge is "from" (Brian): whoever on the Yawp! team wrote
  * the oldest post still pinned, which is the welcome letter. Teachers can
- * @mention the host by name; everyone else on the team through "@YAWP! team".
+ * @mention the host by name; everyone else on the team through "@Yawp! team".
  */
 export async function getLoungeHost(): Promise<LoungeHost | null> {
   const now = new Date();
@@ -1378,7 +1378,7 @@ export async function getLoungeHost(): Promise<LoungeHost | null> {
       hiddenAt: null,
       visibility: 'COMMUNITY',
       pinnedAt: { not: null },
-      author: { isAdmin: true, NOT: { name: LOUNGE_TEAM_ACCOUNT_NAME } },
+      author: { isAdmin: true, NOT: { name: { in: LOUNGE_TEAM_ACCOUNT_NAMES } } },
     },
     orderBy: { pinnedAt: 'asc' },
     select: { author: { select: { id: true, name: true, isAdmin: true } } },

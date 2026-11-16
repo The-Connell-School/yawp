@@ -36,7 +36,7 @@ which implemented spec v1.
 
 | # | What | |
 | --- | --- | --- |
-| B1 | **Section order**: kicker ("YAWP! LESSON PLAN · UNIT"), title + subtitle (same as the deck), info lines (*Step*, *Slide deck*, *Platform*), Overview (shaded box, lesson-color bar), Goals ("Students will…" / "The teacher will…" table), **Standards covered** (empty bordered box, "[ Add the standards this lesson covers ]"), Materials (always names the deck and yawp.school access), Lesson steps. | |
+| B1 | **Section order**: kicker ("Yawp! LESSON PLAN · UNIT"), title + subtitle (same as the deck), info lines (*Step*, *Slide deck*, *Platform*), Overview (shaded box, lesson-color bar), Goals ("Students will…" / "The teacher will…" table), **Standards covered** (empty bordered box, "[ Add the standards this lesson covers ]"), Materials (always names the deck and yawp.school access), Lesson steps. | |
 | B2 | **Steps**: phases (*Before class · Opening activity · The lesson · Writing activity · After class*, only when the lesson has distinct parts); steps numbered straight through, number in italic lesson color then a short bold serif title (2–6 words); a **Slides** line naming the deck slides to have up (by headline, never numbers); sub-steps as real lists (a., b. in the lesson color; i., ii. in gray); one or two callouts per lesson; script quotes; "Optional:" in italic; answers in parentheses. | |
 | B3 | **Type and color**: Georgia and Arial; the deck's primary color; ink #1B1B1B, body #2E2B27, stone #6F6A63, rule #D8D0C1, callout fill #F7F4F0, header fill #E9E3D9; title 26pt, subtitle 13, section 15, step 12, body 10, info 9, footer 7.5. | |
 | B4 | **The file**: .docx, US Letter, 0.75in margins; built-in heading styles, real list numbering, the page number as a field; headings and step titles kept with the text after them; tables in fixed twip widths with clear shading; colored text, never highlighting. Footer "… Writing Program \| [Lesson] lesson plan \| Page N". | |
@@ -63,8 +63,8 @@ which implemented spec v1.
   color. Off, nothing changes. It stays off in production and on in previews.
 - **Brand in mixed case stays "Yawp!"** (main's Oct 20 sweep), so the plan
   footer reads "Yawp! Writing Program" and the exit button "Open Yawp! →
-  Exit ticket". All-caps lines ("YAWP! LESSON PLAN") read the same either
-  way. *Question for Brian: the kit writes "YAWP!" in mixed case.*
+  Exit ticket". All-caps lines ("Yawp! LESSON PLAN") read the same either
+  way. *Question for Brian: the kit writes "Yawp!" in mixed case.*
 - **Fonts on screen and in PDFs.** Word and PowerPoint name Georgia and
   Arial (as the spec says). In the browser, Georgia and Arial come first,
   with Gelasio and Arimo (open fonts with the same metrics) behind them for

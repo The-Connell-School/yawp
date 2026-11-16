@@ -19,7 +19,7 @@ const ASSIGNMENT_TYPE_DATA = {
   position: 50,
 } as const;
 
-// The assignment-level General Tutor Instructions. Every YAWP! Tutor starts
+// The assignment-level General Tutor Instructions. Every Yawp! Tutor starts
 // here, which is why it is the universal block verbatim.
 const ASSIGNMENT_TYPE_TUTOR_INSTRUCTIONS = {
   tutorInstructions: UNIVERSAL_TUTOR_BLOCK,

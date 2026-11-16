@@ -9,12 +9,12 @@ Subject: Re: Proposed agreement with University of Alabama
 
 Hi Mary Anne,
 
-Thank you for asking. YAWP! includes AI-assisted writing tutoring and grading
-feedback features that are integrated into the YAWP! product workflow. Students
-and teachers interact with YAWP!'s tutor and grading tools, not with a standalone
+Thank you for asking. Yawp! includes AI-assisted writing tutoring and grading
+feedback features that are integrated into the Yawp! product workflow. Students
+and teachers interact with Yawp!'s tutor and grading tools, not with a standalone
 public chatbot.
 
-Based on our current production infrastructure configuration, YAWP!'s primary
+Based on our current production infrastructure configuration, Yawp!'s primary
 large language model provider is Anthropic, using a Claude Sonnet model
 configured as `claude-sonnet-4-6`. OpenAI is also configured in the application
 as an outage fallback provider for limited retry/fallback scenarios, with the
@@ -27,8 +27,8 @@ The AI functionality is used to support:
 - teacher grading-assistant feedback;
 - assignment/PDF extraction and related teacher setup workflows where enabled.
 
-YAWP! controls the application workflow, user authentication, and product data
-storage. AI calls are made from YAWP!'s server-side application as part of those
+Yawp! controls the application workflow, user authentication, and product data
+storage. AI calls are made from Yawp!'s server-side application as part of those
 features. We can provide additional security, data-processing, and vendor
 handling details through UA's security and compliance review process.
 

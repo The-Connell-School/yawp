@@ -1,6 +1,6 @@
 # How-to guides ("See how it works" pages)
 
-Every major YAWP! feature gets a short how-to guide. It opens from a **See how it works** button on the feature's own page, and teachers can share it with an administrator or a department.
+Every major Yawp! feature gets a short how-to guide. It opens from a **See how it works** button on the feature's own page, and teachers can share it with an administrator or a department.
 
 These rules come from Brian's review of the first guide, for the Lesson Planner (see PR #374, `/app/lesson-planner/how-it-works`).
 

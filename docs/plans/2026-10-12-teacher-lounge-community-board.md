@@ -84,15 +84,15 @@ PUT from https://yawp.school and the App Runner URL, which covers the app.
 ### Round 3 (2026-10-16): Brian's launch notes ("Seeding the Faculty Lounge")
 
 - **Name.** With the community on, the Lounge is the **Faculty Lounge** (nav,
-  header, emails) and the team is the **YAWP! team**. Off, it stays
+  header, emails) and the team is the **Yawp! team**. Off, it stays
   Teacher's Lounge. One constant (`LOUNGE_NAME` in
   `app/domain/lounge/launch.ts`) if we change our minds.
 - **Welcome box.** A teacher's first visit to any Lounge page opens Brian's
   welcome text and seven House Rules. "Enter the Lounge" stays off until
   "I agree to follow the Lounge's House Rules." is checked. The optional
-  "YAWP! may share my posts, with my name removed…" consent is stored
+  "Yawp! may share my posts, with my name removed…" consent is stored
   (`LoungeProfile.shareConsentAt`) and can be changed in Lounge settings,
-  which also hold the email switch. The YAWP! team skips the box.
+  which also hold the email switch. The Yawp! team skips the box.
 - **Names.** Always first name, last initial, and school. The identity-card
   choice is gone; old profiles keep their stored style but it is ignored.
 - **Student writing** is allowed with the name taken off (replaces the 10/9
@@ -104,7 +104,7 @@ PUT from https://yawp.school and the App Runner URL, which covers the app.
   environment setting.
 - **Pins.** Several pinned posts show above the feed, oldest pin first, so
   the welcome post leads and the House Rules follow.
-- **Drafts and scheduling.** The YAWP! team can post now, save a draft, or
+- **Drafts and scheduling.** The Yawp! team can post now, save a draft, or
   schedule a time. Teachers never see a draft or a scheduled post before it
   goes live, and nobody is notified until then. The inbox lists drafts and
   scheduled posts with Publish now and a date picker, flags bracketed
@@ -113,7 +113,7 @@ PUT from https://yawp.school and the App Runner URL, which covers the app.
   post went live show "edited".
 - **Launch content.** `packages/prisma/scripts/lounge-launch/content.ts` holds
   Brian's text word for word: the welcome post and House Rules (pinned), Q1
-  to Q6 asked by Kevin with Brian's answers as YAWP! team replies, the Wins
+  to Q6 asked by Kevin with Brian's answers as Yawp! team replies, the Wins
   and Assignment Share threads, and the hopper (revision policy, "is it
   really theirs", Tutor off, the essay stack, Lessons Learned) as drafts to
   release about weekly. Seeding is create-only by seed key, so it never
@@ -126,7 +126,7 @@ PUT from https://yawp.school and the App Runner URL, which covers the app.
   LOUNGE_SEED_BRIAN_EMAIL=… bun run seed-lounge-launch --yes    # create
   ```
 
-  Both accounts must be YAWP! team (admin) accounts. Not seeded, because the
+  Both accounts must be Yawp! team (admin) accounts. Not seeded, because the
   notes do not have the text yet: Brian's own first reply under the welcome
   post, his first posts in Wins and Assignment Share, and his answers to the
   hopper questions. Lessons Learned is seeded with his bracketed notes and
@@ -140,14 +140,14 @@ plan is `2026-10-17-faculty-lounge-look-a.md`. A restyle only: no schema,
 route, or behavior changes.
 
 - **Masthead** in the content column replaces the page band: "Teachers
-  using YAWP!", a serif Faculty Lounge, Community · Trainings, and the
+  using Yawp!", a serif Faculty Lounge, Community · Trainings, and the
   settings, Contact Us, and New post buttons. The Trainings tab shares it.
 - **Featured block** on the unfiltered first page: the oldest pin as a
   letter (Brian's welcome), the next as a dark panel (House Rules), more
-  pins as small cards, and the YAWP! team's faces (admins who have written
+  pins as small cards, and the Yawp! team's faces (admins who have written
   here, up to six).
 - **Feed rows**: avatar (initials; the team in ink, everyone else in a
-  stable tone), serif title, one preview line (the YAWP! team's first answer,
+  stable tone), serif title, one preview line (the Yawp! team's first answer,
   else the body), and "Brian answered" by first name. Sorts read Latest /
   Most helpful / Unanswered; topic chips list topics with posts. Query
   params are unchanged.
@@ -156,17 +156,17 @@ route, or behavior changes.
 - **Type**: Cormorant Garamond for titles (already loaded for the public
   pages), Roboto for everything else.
 
-### Round 5 (2026-10-17): Brian and the YAWP! team
+### Round 5 (2026-10-17): Brian and the Yawp! team
 
-- **Mentions.** The @ picker offers "YAWP! team" and Brian, then teachers
-  in the thread; other staff are not offered by name. "@YAWP! team" is a
+- **Mentions.** The @ picker offers "Yawp! team" and Brian, then teachers
+  in the thread; other staff are not offered by name. "@Yawp! team" is a
   group mention (token id `yawp-team`) that asks the team like the Ask
   checkbox: the thread goes to the inbox and `LOUNGE_STAFF_NOTIFY_EMAILS`
   is emailed.
 - **Brian** is whoever on the team wrote the oldest pinned post (the
-  welcome letter). The team box reads "Ask Brian or the YAWP! team".
+  welcome letter). The team box reads "Ask Brian or the Yawp! team".
 - **Team account.** Q1–Q6 and the hopper questions are posted from a shared
-  "YAWP! team" account (`yawp-team@lounge.invalid`, no password). The seed
+  "Yawp! team" account (`yawp-team@lounge.invalid`, no password). The seed
   command needs only `LOUNGE_SEED_BRIAN_EMAIL` and creates the account with
   `--yes`.
 - **Trainings.** Course cards count module resources too, and a course

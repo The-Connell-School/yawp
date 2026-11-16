@@ -6,8 +6,8 @@
  *   LOUNGE_SEED_BRIAN_EMAIL=... bun run seed-lounge-launch --yes    # creates it
  *
  * Create-only by seed key: posts already there (and any edits made to them
- * in the app) are never touched. Brian must be a YAWP! team account. The
- * launch questions are posted from the shared "YAWP! team" account, which
+ * in the app) are never touched. Brian must be a Yawp! team account. The
+ * launch questions are posted from the shared "Yawp! team" account, which
  * --yes creates if it is missing (no password; see team-account.ts). The
  * hopper goes in as drafts for the team to finish and schedule.
  */
@@ -18,7 +18,7 @@ import { LOUNGE_TEAM_ACCOUNT, ensureLoungeTeamAccount, findLoungeTeamAccount } f
 
 const brianEmail = process.env.LOUNGE_SEED_BRIAN_EMAIL?.trim().toLowerCase();
 if (!brianEmail) {
-  console.error("Set LOUNGE_SEED_BRIAN_EMAIL to Brian's YAWP! team account.");
+  console.error("Set LOUNGE_SEED_BRIAN_EMAIL to Brian's Yawp! team account.");
   process.exit(1);
 }
 const confirmed = process.argv.includes('--yes');
@@ -30,7 +30,7 @@ try {
     select: { id: true, isAdmin: true },
   });
   if (!brian) throw new Error(`No account for Brian (${brianEmail}).`);
-  if (!brian.isAdmin) throw new Error(`Brian (${brianEmail}) is not on the YAWP! team (isAdmin).`);
+  if (!brian.isAdmin) throw new Error(`Brian (${brianEmail}) is not on the Yawp! team (isAdmin).`);
 
   const team = await findLoungeTeamAccount(prisma);
   console.log(
