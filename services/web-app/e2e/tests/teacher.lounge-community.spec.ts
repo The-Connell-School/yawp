@@ -77,11 +77,13 @@ test.describe.serial("Faculty Lounge community board", () => {
     await expect(page.getByRole('heading', { name: 'Faculty Lounge' })).toBeVisible();
     await expect(page.getByText('No posts yet')).toBeVisible();
 
-    // The course grid is one tab away, and the nav still reads as the Lounge there.
-    await page.getByRole('link', { name: 'Trainings' }).click();
-    await expect(page).toHaveURL(/\/app\/teacher-trainings$/);
+    // Community is the only Faculty Lounge tab. Trainings stay in the database.
+    await expect(page.getByRole('link', { name: 'Trainings' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Community' })).toBeVisible();
-    await page.getByRole('link', { name: 'Community' }).click();
+    await expect(page.getByRole('heading', { name: 'Faculty Lounge' })).toHaveCSS(
+      'font-family',
+      /Fraunces/
+    );
 
     // No all-caps eyebrows ("TEACHERS USING Yawp!") over the masthead.
     await expect(page.getByText('Teachers using Yawp!')).toHaveCount(0);

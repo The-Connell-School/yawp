@@ -1743,6 +1743,35 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
   font-weight: 600;
   letter-spacing: -0.005em;
 }
+/* Faculty Lounge page title only. Fraunces Bold is the same self-hosted file
+   the Lesson Deck Kit embeds (public/lesson-planner/fonts). The fallback face
+   copies Fraunces's em metrics (ascender 1956, descender 510, unitsPerEm 2000)
+   so a swap does not move the line. The lounge route also preloads the woff2. */
+@font-face {
+  font-family: 'Fraunces Heading Fallback';
+  src: local('Georgia');
+  font-weight: 700;
+  font-style: normal;
+  size-adjust: 100%;
+  ascent-override: 97.8%;
+  descent-override: 25.5%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Fraunces Heading';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    url('/lesson-planner/fonts/Fraunces-Bold.woff2') format('woff2'),
+    url('/lesson-planner/fonts/Fraunces-Bold.ttf') format('truetype');
+}
+.faculty-lounge-heading {
+  font-family: 'Fraunces Heading', 'Fraunces Heading Fallback', Georgia, serif;
+  font-weight: 700;
+  font-synthesis: none;
+  letter-spacing: -0.02em;
+}
 .lounge-accent {
   color: hsl(var(--lounge-accent-text));
 }

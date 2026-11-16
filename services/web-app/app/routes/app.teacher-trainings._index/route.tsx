@@ -1,6 +1,7 @@
 import {
   type LoaderFunctionArgs,
   data as dataResponse,
+  redirect,
   useLoaderData,
   useNavigate,
 } from 'react-router';
@@ -9,7 +10,7 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { prisma } from '~/utils/db.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { isLoungeCommunityEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { LoungeMasthead } from '~/components/lounge/lounge-masthead';
+import { facultyLoungeTrainingsHome } from '~/domain/teacher-trainings/faculty-lounge-trainings';
 import { trainingCardCounts } from '~/utils/teacher-training-counts';
 import { redirectIfTeacherLoungeTemporarilyDisabled } from '~/domain/teacher-lounge/teacher-lounge-temporary-disable.server';
 
@@ -28,6 +29,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   if (profile.role !== "TEACHER") {
     throw new Response('Teacher profile required', { status: 403 });
+  }
+
+  const viewer = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isAdmin: true },
+  });
+  const communityEnabled =
+    Boolean(viewer?.isAdmin) ||
+    (await isLoungeCommunityEnabled(profile.organization.id));
+  if (communityEnabled) {
+    throw redirect(facultyLoungeTrainingsHome(true));
   }
 
   const assignmentCounts = await prisma.orgMembership.findUnique({
@@ -63,44 +75,26 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: { createdAt: 'desc' },
   });
 
-  const viewer = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isAdmin: true },
-  });
-  const communityEnabled =
-    Boolean(viewer?.isAdmin) ||
-    (await isLoungeCommunityEnabled(profile.organization.id));
-
-  return dataResponse({ teacherTrainings, communityEnabled });
+  return dataResponse({ teacherTrainings });
 }
 
 export default function TeacherTrainingsRoute() {
-  const { teacherTrainings, communityEnabled } = useLoaderData<typeof loader>();
+  const { teacherTrainings } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
-      {communityEnabled ? (
-        <LoungeMasthead active="trainings" />
-      ) : (
-        <div className="flex w-full justify-between border-b bg-secondary">
-          <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-            <div className="flex flex-col">
-              <h2>Teacher's Lounge</h2>
-              <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
-                Enjoy your courses and resources.
-              </p>
-            </div>
+      <div className="flex w-full justify-between border-b bg-secondary">
+        <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
+          <div className="flex flex-col">
+            <h2>Teacher's Lounge</h2>
+            <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
+              Enjoy your courses and resources.
+            </p>
           </div>
         </div>
-      )}
-      <div
-        className={
-          communityEnabled
-            ? 'mx-auto w-full max-w-[960px] px-4 pb-14 pt-7 sm:px-8'
-            : 'mx-auto w-full max-w-screen-lg p-3 sm:p-5'
-        }
-      >
+      </div>
+      <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
         <div className="flex flex-1 flex-col">
           <div className="flex-1 overflow-y-auto">
             {teacherTrainings.length === 0 ? (
