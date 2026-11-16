@@ -58,7 +58,9 @@ export function buildSafeStackForLog(error: unknown): string | undefined {
   return frames.join('\n');
 }
 
-function safeCauseForLog(error: Error): { name: string; code?: string } | undefined {
+function safeCauseForLog(
+  error: Error
+): { name: string; code?: string } | undefined {
   const cause = (error as Error & { cause?: unknown }).cause;
   if (!(cause instanceof Error)) {
     if (isRecord(cause) && typeof cause.name === 'string') {
@@ -84,7 +86,7 @@ function safeCauseForLog(error: Error): { name: string; code?: string } | undefi
 /** Stable client JSON copy — never forwards raw exception text to browsers. */
 export function safeErrorTextForClientResponse(
   _error: unknown,
-  fallback: string,
+  fallback: string
 ): string {
   return fallback;
 }
@@ -92,7 +94,7 @@ export function safeErrorTextForClientResponse(
 /** Teacher-safe validation copy from a typed domain error, with freeform redaction. */
 export function safeDomainErrorTextForClientResponse(
   error: Error,
-  fallback: string,
+  fallback: string
 ): string {
   const redacted = redactFreeformMessage(error.message).trim();
   return redacted || fallback;
@@ -110,12 +112,116 @@ export function safeErrorTextForLog(error: unknown): string {
   return safe.name;
 }
 
+/**
+ * Thrown non-Error values (Response, React Router ErrorResponse/data(), plain
+ * objects, Promises) used to stringify to "[object Object]", which made every
+ * such server error one unreadable PostHog cluster. Describe them by shape:
+ * status codes, a redacted string `message`, or sorted keys only (never values).
+ */
+export function describeNonErrorForLog(error: unknown): {
+  name: string;
+  message: string;
+  status?: number;
+} {
+  if (typeof Response !== 'undefined' && error instanceof Response) {
+    return {
+      name: 'ThrownResponse',
+      message: `HTTP ${error.status}`,
+      status: error.status,
+    };
+  }
+  if (
+    error instanceof Promise ||
+    (isRecord(error) &&
+      typeof (error as { then?: unknown }).then === 'function')
+  ) {
+    return {
+      name: 'ThrownPromise',
+      message: 'Promise thrown or rejected without await',
+    };
+  }
+  if (isRecord(error)) {
+    const record = error as Record<string, unknown>;
+    const status =
+      typeof record.status === 'number' ? record.status : undefined;
+    const ctor =
+      typeof (record as { constructor?: { name?: unknown } }).constructor
+        ?.name === 'string'
+        ? (record as { constructor: { name: string } }).constructor.name
+        : '';
+    const name =
+      ctor === 'ErrorResponseImpl' || 'internal' in record
+        ? 'ErrorResponse'
+        : ctor === 'DataWithResponseInit'
+          ? 'ThrownData'
+          : 'UnknownError';
+    if (typeof record.message === 'string' && record.message.trim()) {
+      return {
+        name,
+        message: redactFreeformMessage(record.message),
+        ...(status !== undefined ? { status } : {}),
+      };
+    }
+    const init = isRecord(record.init) ? record.init : undefined;
+    const initStatus =
+      init && typeof init.status === 'number' ? init.status : undefined;
+    const effectiveStatus = status ?? initStatus;
+    if (effectiveStatus !== undefined) {
+      return {
+        name,
+        message: `HTTP ${effectiveStatus}`,
+        status: effectiveStatus,
+      };
+    }
+    const keys = Object.keys(record).sort().slice(0, 8);
+    return {
+      name,
+      message: keys.length
+        ? `non-Error object (${ctor || 'Object'}) keys: ${keys.join(',')}`
+        : `non-Error object (${ctor || 'Object'})`,
+    };
+  }
+  return {
+    name: 'UnknownError',
+    message: redactFreeformMessage(String(error)),
+  };
+}
+
+/**
+ * Route shape for error tracking: path segments whose value equals a route
+ * param are replaced with `:key`, so class codes / tokens never leave the box.
+ */
+export function routeTemplateForLog(
+  request: Request,
+  params: Record<string, string | undefined> | undefined
+): string {
+  const path = requestPathWithoutQuery(request);
+  const byValue = new Map<string, string>();
+  for (const [key, value] of Object.entries(params ?? {})) {
+    if (value) byValue.set(value, key);
+  }
+  return path
+    .split('/')
+    .map((segment) => {
+      if (!segment) return segment;
+      let decoded = segment;
+      try {
+        decoded = decodeURIComponent(segment);
+      } catch {
+        // keep raw segment
+      }
+      const key = byValue.get(decoded);
+      return key ? `:${key}` : segment;
+    })
+    .join('/');
+}
+
 export function buildSafeErrorForLog(error: unknown) {
   if (!(error instanceof Error)) {
-    return {
-      name: 'UnknownError',
-      message: redactFreeformMessage(String(error)),
-    };
+    const described = describeNonErrorForLog(error);
+    // Status (when any) is already in the message ("HTTP 404"); keep the
+    // original { name, message } shape so callers' inferred types are unchanged.
+    return { name: described.name, message: described.message };
   }
 
   if (isPrismaClientError(error)) {
@@ -175,7 +281,7 @@ export function buildServerErrorRequestContext(request: Request) {
 
 /** Route param values may hold class codes, tokens, or emails — log sorted keys only. */
 export function buildSafeRouteParamsForLog(
-  params: Record<string, string | undefined> | undefined,
+  params: Record<string, string | undefined> | undefined
 ) {
   if (!params) {
     return { paramKeys: [] as string[] };
