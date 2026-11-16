@@ -1,6 +1,5 @@
 import {
   data as dataResponse,
-  Link,
   useLoaderData,
   useLocation,
   type LoaderFunctionArgs,
@@ -8,7 +7,7 @@ import {
 import { Outlet } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
-import { Button } from '~/components/ui/button';
+import { ScrollTabBar } from '~/components/ui/scroll-tab-bar';
 import { BookOpen, Building2, Users, GraduationCap } from 'lucide-react';
 import {
   requireAdmin,
@@ -20,22 +19,22 @@ const tabs = [
   {
     label: 'Classes',
     to: '/app/organization/classes',
-    icon: <BookOpen size={16} className="opacity-75 mr-1" />,
+    icon: <BookOpen className="opacity-75" />,
   },
   {
     label: 'Schools',
     to: '/app/organization/schools',
-    icon: <Building2 size={16} className="opacity-75 mr-1" />,
+    icon: <Building2 className="opacity-75" />,
   },
   {
     label: 'Teachers',
     to: '/app/organization/teachers',
-    icon: <Users size={16} className="opacity-75 mr-1" />,
+    icon: <Users className="opacity-75" />,
   },
   {
     label: 'Students',
     to: '/app/organization/students',
-    icon: <GraduationCap size={16} className="opacity-75 mr-1" />,
+    icon: <GraduationCap className="opacity-75" />,
   },
 ];
 
@@ -57,24 +56,12 @@ export default function Route() {
     <main className="flex flex-col h-screen">
       <div className="py-2 md:py-4 px-3 md:px-6 border-b">
         <h1 className="mb-3 text-2xl md:text-3xl">{organization.name}</h1>
-        <div
-          className="flex gap-1 overflow-x-auto no-scrollbar"
+        <ScrollTabBar
+          tabs={tabs}
+          activeTo={currentTab?.to}
+          ariaLabel="Organization sections"
           data-tour="organization-tabs"
-        >
-          {tabs.map((tab) => (
-            <Button
-              key={tab.to}
-              variant={currentTab?.to === tab.to ? 'secondary' : 'ghost'}
-              size="sm"
-              asChild
-            >
-              <Link to={tab.to}>
-                {tab.icon}
-                {tab.label}
-              </Link>
-            </Button>
-          ))}
-        </div>
+        />
       </div>
       <div className="flex-grow overflow-auto" data-tour="organization-content">
         <Outlet />
