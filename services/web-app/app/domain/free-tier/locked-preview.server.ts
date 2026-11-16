@@ -295,7 +295,9 @@ export async function ensureLockedPreviewClassroomForUser(userId: string) {
   if (!application) return null;
   if (!(await isFeatureFlagEnabled(FREE_TIER_FLAG, application.organizationId)))
     return null;
-  const result = await provisionFreeClassroom(application.id);
+  const result = await provisionFreeClassroom(application.id, {
+    alwaysProvision: true,
+  });
   const organizationId =
     result.status === 'provisioned' || result.status === 'already_provisioned'
       ? result.organizationId

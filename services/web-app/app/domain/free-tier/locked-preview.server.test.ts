@@ -17,10 +17,14 @@ let provisionResult: { status: string; organizationId?: string } = {
   status: 'already_provisioned',
   organizationId: 'org-a',
 };
+const provisionFreeClassroom = mock(
+  async (_applicationId: string, _options?: { alwaysProvision?: boolean }) =>
+    provisionResult
+);
 let teacherMembership: any = null;
 let cookieMembershipId = '';
 mock.module('./provision-free-classroom.server', () => ({
-  provisionFreeClassroom: mock(async () => provisionResult),
+  provisionFreeClassroom,
 }));
 mock.module('./locked-preview-class-seed.server', () => ({
   ensureLockedPreviewSampleAssignments: mock(async () => {}),
@@ -71,7 +75,24 @@ afterEach(() => {
   resetLockedPreviewMembershipMocks();
 });
 
-beforeEach(() => resetLockedPreviewMembershipMocks());
+beforeEach(() => {
+  resetLockedPreviewMembershipMocks();
+  provisionFreeClassroom.mockClear();
+});
+
+test('ensureLockedPreviewClassroomForUser provisions with alwaysProvision even for MANUAL_REVIEW', async () => {
+  application = {
+    id: 'app-manual',
+    status: 'MANUAL_REVIEW',
+    organizationId: null,
+  };
+  provisionResult = { status: 'provisioned', organizationId: 'org-preview' };
+  teacherMembership = null;
+  await ensureLockedPreviewClassroomForUser('teacher');
+  expect(provisionFreeClassroom).toHaveBeenCalledWith('app-manual', {
+    alwaysProvision: true,
+  });
+});
 
 test('ensureLockedPreviewClassroomForUser repairs teacher membership when org is already provisioned', async () => {
   application = { id: 'app-a', status: 'SENT', organizationId: 'org-a' };

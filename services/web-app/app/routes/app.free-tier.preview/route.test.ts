@@ -65,6 +65,19 @@ describe('app.free-tier.preview loader', () => {
     );
   });
 
+  test('MANUAL_REVIEW reaches /app when locked preview provisioning succeeds', async () => {
+    findFirst.mockResolvedValue({ status: 'MANUAL_REVIEW' });
+    ensureLockedPreviewClassroomForUser.mockResolvedValue({
+      status: 'provisioned',
+      organizationId: 'org-preview',
+    });
+    const res = (await load()) as Response;
+    expect(res.headers.get('location')).toBe('/app');
+    expect(ensureLockedPreviewClassroomForUser).toHaveBeenCalledWith(
+      'teacher-1'
+    );
+  });
+
   test('returns 404 when free-tier flag is off', async () => {
     requireFreeTierEnabled.mockRejectedValue({
       type: 'DataWithResponseInit',
