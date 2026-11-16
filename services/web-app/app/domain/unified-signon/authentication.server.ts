@@ -10,6 +10,7 @@ import { setMembershipId } from '~/cookies/membership-id.server';
 import {
   enforceFreeTierTeacherGate,
   loadFreeTierGateApplication,
+  resolveFreeTierPostAuthenticationDestination,
 } from '~/domain/free-tier/free-tier-gate.server';
 import {
   enrollExistingStudentByCode,
@@ -207,6 +208,7 @@ export async function finishAuthentication(
   let trialDestination: string | null = null;
   if (!user.mustChangePassword) {
     const application = await loadFreeTierGateApplication(userId);
+    let gateRedirect: string | null = null;
     try {
       await enforceFreeTierTeacherGate({
         userId,
@@ -216,8 +218,13 @@ export async function finishAuthentication(
     } catch (response) {
       if (!(response instanceof Response) || !response.headers.get('Location'))
         throw response;
-      trialDestination = response.headers.get('Location');
+      gateRedirect = response.headers.get('Location');
     }
+    trialDestination = resolveFreeTierPostAuthenticationDestination({
+      application,
+      activeMembershipCount: membershipChosen ? 1 : memberships.length,
+      gateRedirect,
+    });
   }
   const destination = postAuthenticationDestination({
     mustChangePassword: user.mustChangePassword,

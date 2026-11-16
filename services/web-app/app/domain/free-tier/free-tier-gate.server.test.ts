@@ -5,7 +5,10 @@ mock.module('~/domain/feature-flags/feature-flags.server', () => ({
   isFeatureFlagEnabled: mock(async () => freeTierFlagEnabled),
 }));
 
-const { enforceFreeTierTeacherGate } = await import('./free-tier-gate.server');
+const {
+  enforceFreeTierTeacherGate,
+  resolveFreeTierPostAuthenticationDestination,
+} = await import('./free-tier-gate.server');
 
 function app(overrides: Partial<{
   status: string;
@@ -128,6 +131,41 @@ describe('enforceFreeTierTeacherGate', () => {
       application: row,
     });
     expect(result).toBe(row);
+  });
+
+  test('post-auth pending applicants without membership route to pending, others stay inactive', () => {
+    const pending = app({
+      status: 'SENT',
+      adminApprovals: [{ adminName: 'P', adminEmail: 'p@school.edu' }],
+    });
+    expect(
+      resolveFreeTierPostAuthenticationDestination({
+        application: pending,
+        activeMembershipCount: 0,
+        gateRedirect: null,
+      })
+    ).toBe('/app/free-tier/pending');
+    expect(
+      resolveFreeTierPostAuthenticationDestination({
+        application: pending,
+        activeMembershipCount: 1,
+        gateRedirect: null,
+      })
+    ).toBeNull();
+    expect(
+      resolveFreeTierPostAuthenticationDestination({
+        application: null,
+        activeMembershipCount: 0,
+        gateRedirect: null,
+      })
+    ).toBeNull();
+    expect(
+      resolveFreeTierPostAuthenticationDestination({
+        application: pending,
+        activeMembershipCount: 0,
+        gateRedirect: '/app/free-tier/status',
+      })
+    ).toBe('/app/free-tier/status');
   });
 
   test('ACCOUNT_CREATED redirects to onboarding', async () => {
