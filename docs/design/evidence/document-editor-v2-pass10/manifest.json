@@ -1,0 +1,191 @@
+{
+  "baseUrl": "https://pr-963.preview.yawp.school",
+  "documentId": "previewdoceditv2qa0001",
+  "gradedDocumentId": "previewdoceditv2graded01",
+  "pairs": [
+    {
+      "slug": "student-desktop-1440",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/student-desktop-1440-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/student-desktop-1440-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/student-desktop-1440-side-by-side.png",
+      "diffPath": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/student-desktop-1440-diff.png",
+      "diffPercent": 6.74
+    },
+    {
+      "slug": "mobile-390",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/mobile-390-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/mobile-390-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/mobile-390-side-by-side.png",
+      "diffPath": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/mobile-390-diff.png",
+      "diffPercent": 14.42
+    },
+    {
+      "slug": "tutor-panel",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/tutor-panel-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/tutor-panel-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/tutor-panel-side-by-side.png",
+      "diffPath": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/tutor-panel-diff.png",
+      "diffPercent": 14.15
+    },
+    {
+      "slug": "comments-margin",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/comments-margin-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/comments-margin-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/comments-margin-side-by-side.png",
+      "diffPath": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/comments-margin-diff.png",
+      "diffPercent": 6.58
+    },
+    {
+      "slug": "comments-reply-resolved",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/comments-reply-resolved-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/comments-reply-resolved-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/comments-reply-resolved-side-by-side.png",
+      "diffPath": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/comments-reply-resolved-diff.png",
+      "diffPercent": 7.57
+    },
+    {
+      "slug": "chrome-toolbar-prompt",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/chrome-toolbar-prompt-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/chrome-toolbar-prompt-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/chrome-toolbar-prompt-side-by-side.png",
+      "diffPath": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/chrome-toolbar-prompt-diff.png",
+      "diffPercent": 2.64
+    },
+    {
+      "slug": "top-bar",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/top-bar-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/top-bar-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/top-bar-side-by-side.png",
+      "diffPath": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/top-bar-diff.png",
+      "diffPercent": 10.66
+    },
+    {
+      "slug": "teacher-view-only",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/teacher-view-only-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/teacher-view-only-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/teacher-view-only-side-by-side.png",
+      "diffPath": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/teacher-view-only-diff.png",
+      "diffPercent": 5.53
+    },
+    {
+      "slug": "view-only",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/view-only-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/view-only-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/view-only-side-by-side.png",
+      "diffPath": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/view-only-diff.png",
+      "diffPercent": 4.98
+    },
+    {
+      "slug": "loading",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/loading-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/loading-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/loading-side-by-side.png",
+      "diffPath": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/loading-diff.png",
+      "diffPercent": 4.29
+    },
+    {
+      "slug": "empty",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/empty-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/empty-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/empty-side-by-side.png",
+      "diffPath": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/empty-diff.png",
+      "diffPercent": 2.36
+    },
+    {
+      "slug": "error",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/error-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/error-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/error-side-by-side.png",
+      "diffPath": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/error-diff.png",
+      "diffPercent": 11.29
+    },
+    {
+      "slug": "saving",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/saving-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/saving-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/saving-side-by-side.png",
+      "diffPath": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/saving-diff.png",
+      "diffPercent": 10.74
+    },
+    {
+      "slug": "submitted",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/submitted-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/submitted-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/submitted-side-by-side.png",
+      "diffPath": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass10/submitted-diff.png",
+      "diffPercent": 10.77
+    }
+  ],
+  "diffTable": [
+    {
+      "state": "student-desktop-1440",
+      "diffPercent": 6.74,
+      "notes": "review"
+    },
+    {
+      "state": "mobile-390",
+      "diffPercent": 14.42,
+      "notes": "review"
+    },
+    {
+      "state": "tutor-panel",
+      "diffPercent": 14.15,
+      "notes": "review"
+    },
+    {
+      "state": "comments-margin",
+      "diffPercent": 6.58,
+      "notes": "review"
+    },
+    {
+      "state": "comments-reply-resolved",
+      "diffPercent": 7.57,
+      "notes": "review"
+    },
+    {
+      "state": "chrome-toolbar-prompt",
+      "diffPercent": 2.64,
+      "notes": "ok"
+    },
+    {
+      "state": "top-bar",
+      "diffPercent": 10.66,
+      "notes": "review"
+    },
+    {
+      "state": "teacher-view-only",
+      "diffPercent": 5.53,
+      "notes": "review"
+    },
+    {
+      "state": "view-only",
+      "diffPercent": 4.98,
+      "notes": "review"
+    },
+    {
+      "state": "loading",
+      "diffPercent": 4.29,
+      "notes": "review"
+    },
+    {
+      "state": "empty",
+      "diffPercent": 2.36,
+      "notes": "ok"
+    },
+    {
+      "state": "error",
+      "diffPercent": 11.29,
+      "notes": "review"
+    },
+    {
+      "state": "saving",
+      "diffPercent": 10.74,
+      "notes": "review"
+    },
+    {
+      "state": "submitted",
+      "diffPercent": 10.77,
+      "notes": "review"
+    }
+  ]
+}

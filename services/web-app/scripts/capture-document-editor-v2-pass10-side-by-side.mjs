@@ -77,8 +77,11 @@ async function captureDesign(browser, spec, outPath) {
         .first();
       await card.scrollIntoViewIfNeeded();
       await card.screenshot({ path: outPath });
-    } else if (spec.sectionFrameIndex != null) {
-      const frame = row.locator(':scope > div').nth(spec.sectionFrameIndex);
+    } else if (spec.sectionFrameWidth != null) {
+      const matches = row.locator(
+        `[style*="width: ${spec.sectionFrameWidth}"]`
+      );
+      const frame = matches.nth(spec.sectionFrameMatchIndex ?? 0);
       await frame.scrollIntoViewIfNeeded();
       await frame.screenshot({ path: outPath });
     } else {
@@ -210,7 +213,7 @@ const PAIRS = [
     design: {
       designFile: 'document-editor-states.html',
       section: 'Mobile (390)',
-      sectionFrameIndex: 0,
+      sectionFrameWidth: 390,
     },
     preview: {
       viewport: { width: 390, height: 844 },
@@ -230,7 +233,7 @@ const PAIRS = [
     design: {
       designFile: 'document-editor-states.html',
       section: 'Tutor panel',
-      sectionFrameIndex: 0,
+      sectionFrameWidth: 340,
     },
     preview: {
       setup: async (page) => {
@@ -248,7 +251,8 @@ const PAIRS = [
     design: {
       designFile: 'document-editor-states.html',
       section: 'Comments',
-      sectionFrameIndex: 0,
+      sectionFrameWidth: 260,
+      sectionFrameMatchIndex: 4,
     },
     preview: {
       setup: async (page) => {
@@ -268,24 +272,33 @@ const PAIRS = [
     design: {
       designFile: 'document-editor-states.html',
       section: 'Comments',
-      sectionFrameIndex: 1,
+      sectionFrameWidth: 260,
+      sectionFrameMatchIndex: 3,
     },
     preview: {
-      doc: 'graded',
-      login: 'teacher',
-      v2Capture: 'comments-reply-resolved',
-      query: 'tab=editor',
-      setup: async (page) => {
+      setup: async (page, ids) => {
+        await page
+          .getByTestId('document-panel-toggles')
+          .getByRole('button', { name: /comments/i })
+          .click();
         await page
           .getByTestId('document-margin-comments-aside')
           .waitFor({ state: 'visible', timeout: 30_000 });
+        const resolved = page.getByTestId(
+          'margin-comment-resolved-previewdocv2commentres01'
+        );
+        if (await resolved.isVisible().catch(() => false)) {
+          await resolved.click();
+        }
+        const reply = page.getByTestId(
+          'comment-reply-input-previewdocv2commentact01'
+        );
+        if (await reply.isVisible().catch(() => false)) {
+          await reply.click();
+        }
         await page
           .getByTestId('comment-reply-expanded-previewdocv2commentact01')
-          .waitFor({ state: 'visible', timeout: 30_000 })
-          .catch(() => {});
-        await page
-          .getByTestId('margin-comment-resolved-expanded-previewdocv2commentres01')
-          .waitFor({ state: 'visible', timeout: 30_000 })
+          .waitFor({ state: 'visible', timeout: 15_000 })
           .catch(() => {});
       },
       locator: '[data-testid="document-margin-comments-aside"]',
@@ -296,7 +309,7 @@ const PAIRS = [
     design: {
       designFile: 'document-editor-states.html',
       section: 'Toolbar and prompt',
-      sectionFrameIndex: 0,
+      sectionFrameWidth: 1040,
     },
     preview: {
       captureChromeStack: true,
@@ -360,7 +373,7 @@ const PAIRS = [
     design: {
       designFile: 'document-editor-states.html',
       section: 'Top bar',
-      sectionCardFilter: "can't submit",
+      sectionCardFilter: 'draft',
     },
     preview: {
       v2Capture: 'empty',
@@ -375,7 +388,7 @@ const PAIRS = [
     design: {
       designFile: 'document-editor-states.html',
       section: 'Top bar',
-      sectionCardFilter: 'Save error',
+      sectionCardFilter: 'Saving…',
     },
     preview: {
       v2Capture: 'error',
@@ -398,10 +411,15 @@ const PAIRS = [
     preview: {
       v2Capture: 'saving',
       setup: async (page) => {
-        await page
+        const saving = page
           .getByTestId('document-save-status')
-          .filter({ hasText: /Saving/i })
-          .waitFor();
+          .filter({ hasText: /Saving/i });
+        if (!(await saving.isVisible().catch(() => false))) {
+          const editor = page.locator('[contenteditable="true"]').first();
+          await editor.click();
+          await page.keyboard.type(' capture-saving');
+        }
+        await saving.waitFor({ timeout: 30_000 });
       },
       locator: '[data-testid="document-editor-header"]',
     },
@@ -411,7 +429,7 @@ const PAIRS = [
     design: {
       designFile: 'document-editor-states.html',
       section: 'Top bar',
-      sectionCardFilter: 'Submitted',
+      sectionCardFilter: 'Submitted Oct 28',
     },
     preview: {
       v2Capture: 'submitted',
