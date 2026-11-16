@@ -34,7 +34,7 @@ bun run scripts/capture-document-editor-v2-pass8-side-by-side.mjs
 | Tutor Ready! | Missing stable `data-testid` for e2e | **fixed** (`tutor-ready-button`) |
 | Save status (saving/synced) | No test hook for states board “Saving…” row | **fixed** (`document-save-status` + e2e) |
 | Pass 4 tutor micro-spacing | No visual regression vs states board | **remaining** (tokens/CSS already match export; no diff in pass 8 sweep) |
-| Pass 4 automated loading/error/submitted on preview | Preview DB document discovery without overlay | **remaining** (blocked on preview deploy + `DOCUMENT_ID`; scripts extended) |
+| Pass 4 automated loading/error/submitted on preview | Preview seat 1 has no documents (`/app/my-documents` empty) | **remaining** (pass `DOCUMENT_ID=` or seed a doc; discovery scripts hardened) |
 | Full states board (every figcaption) | Not every figcaption auto-cropped yet | **remaining** (design full-board PNG captured; per-figma clip follow-up optional) |
 
 ## Test coverage added (pass 8)
@@ -45,7 +45,7 @@ bun run scripts/capture-document-editor-v2-pass8-side-by-side.mjs
 
 ## CI
 
-- Pending green run after code push (Sign-on + E2E shards include new states spec on shard 2).
+- Green: https://github.com/The-Connell-School/yawp/actions/runs/43780805820 (head `c4d676c67cb9791e03489a9caad0ee85f1e46372`)
 
 ## Flags / prod
 
