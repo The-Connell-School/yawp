@@ -1066,7 +1066,12 @@ jobs:
             app/routes/free._index/route.loader.test.ts \
             app/routes/api.preview.qa.free-tier-manifest/route.test.ts \
             app/routes/app.free-tier.onboarding/route.test.tsx \
+            app/routes/app.free-tier.onboarding/route.hold-copy.test.tsx \
             app/routes/app.free-tier.onboarding/route.self-admin.test.tsx \
+            app/domain/free-tier/staff-approval-follow-up.server.test.ts \
+            app/utils/safe-login-email.test.ts \
+            app/routes/free.join/route.test.tsx \
+            app/routes/app.free-tier.pending/route.manual-review-copy.test.tsx \
             app/domain/free-tier/admin-email.test.ts \
             app/domain/free-tier/admin-email-rules.server.test.ts \
             app/routes/app.free-tier.pending/route.test.tsx \
