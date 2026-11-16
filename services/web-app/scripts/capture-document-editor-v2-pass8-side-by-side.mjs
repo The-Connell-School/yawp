@@ -12,10 +12,10 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { enterPreviewAccess } from '../../../scripts/preview/smoke-login.mjs';
 import {
+  DEFAULT_PREVIEW_V2_QA_DOCUMENT_ID,
+  loginPreviewQaStudent,
   openPreviewV2Document,
   resolvePreviewDocumentId,
-  waitForDevLoginShell,
-  DEFAULT_PREVIEW_V2_QA_DOCUMENT_ID,
 } from './document-editor-v2-preview-discovery.mjs';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '../../..');
@@ -101,11 +101,10 @@ async function captureDesign(browser, pair) {
 async function capturePreview(browser, pair, docId) {
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   await passGate(context);
+  await loginPreviewQaStudent(context, BASE, { email: STUDENT_EMAIL });
   const page = await context.newPage();
   page._docId = docId;
   await page.setViewportSize(pair.previewViewport);
-  await page.goto(`${BASE}/auth/dev-login`, { waitUntil: 'networkidle' });
-  await waitForDevLoginShell(page);
   await pair.afterLogin(page);
   const path = join(EVIDENCE, `${pair.slug}-preview.png`);
   await page.screenshot({ path, fullPage: false });
@@ -138,9 +137,8 @@ async function main() {
   if (!docId) {
     const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
     await passGate(ctx);
+    await loginPreviewQaStudent(ctx, BASE, { email: STUDENT_EMAIL });
     const probe = await ctx.newPage();
-    await probe.goto(`${BASE}/auth/dev-login`, { waitUntil: 'networkidle' });
-    await waitForDevLoginShell(probe);
     docId = await resolvePreviewDocumentId(probe, BASE, {
       preferredId: DEFAULT_PREVIEW_V2_QA_DOCUMENT_ID,
     });

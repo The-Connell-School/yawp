@@ -37,6 +37,7 @@ Preview seed: `packages/prisma/scripts/seed-preview-document-editor-v2-qa.ts` (s
 | --- | --- | --- |
 | Design exports in repo | Pass 8 Claude exports not versioned | **fixed** (`docs/design/document-editor-v2/*`) |
 | Preview capture document discovery | My Documents links use `/app/submissions/`; scripts only scanned `/app/documents/` | **fixed** (pass 9 discovery + preview QA seed) |
+| Preview capture login persona | PR seat 1 dev-login grid has no Sam Student; Casey is not doc owner | **fixed** (`loginPreviewQaStudent` POST `dev.student@yawp.local`) |
 | Resolved collapsed row | Glass chrome + `#1F7CDA` Show link + 12px meta | **fixed** |
 | Tutor Ready! | Missing stable `data-testid` for e2e | **fixed** (`tutor-ready-button`) |
 | Save status (saving/synced) | No test hook for states board “Saving…” row | **fixed** (`document-save-status` + e2e) |

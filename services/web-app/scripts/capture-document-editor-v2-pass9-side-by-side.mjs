@@ -14,10 +14,13 @@ import { enterPreviewAccess } from '../../../scripts/preview/smoke-login.mjs';
 import {
   DEFAULT_PREVIEW_V2_QA_DOCUMENT_ID,
   DEFAULT_PREVIEW_V2_QA_GRADED_DOCUMENT_ID,
+  loginPreviewQaStudent,
   openPreviewV2Document,
   resolvePreviewDocumentId,
-  waitForDevLoginShell,
 } from './document-editor-v2-preview-discovery.mjs';
+
+const STUDENT_EMAIL =
+  process.env.PREVIEW_STUDENT_EMAIL?.trim() || 'dev.student@yawp.local';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '../../..');
 const DESIGN_DIR = join(ROOT, 'docs/design/document-editor-v2');
@@ -87,19 +90,17 @@ async function stitchSideBySide(slug, designPath, previewPath) {
   return out;
 }
 
-async function captureStudentScene(browser, docId, slug, setup) {
+async function captureStudentScene(browser, docId, slug, setup, options = {}) {
+  const viewport = options.viewport ?? { width: 1440, height: 900 };
+  const docQuery = options.docQuery ?? '';
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   await passGate(context);
+  await loginPreviewQaStudent(context, BASE, { email: STUDENT_EMAIL });
   const page = await context.newPage();
-  await page.goto(`${BASE}/auth/dev-login`, { waitUntil: 'networkidle' });
-  await waitForDevLoginShell(page);
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await openPreviewV2Document(page, BASE, docId);
+  await page.setViewportSize(viewport);
+  await openPreviewV2Document(page, BASE, docId, docQuery);
   if (setup) await setup(page);
   const path = join(EVIDENCE, `${slug}-preview.png`);
-  if (slug === 'mobile-390') {
-    await page.setViewportSize({ width: 390, height: 844 });
-  }
   await page.screenshot({ path, fullPage: false });
   await cp(path, join(ARTIFACTS, `${slug}-preview.png`));
   await context.close();
@@ -135,9 +136,20 @@ const PAIRS = [
     designViewport: { width: 390, height: 844 },
     designClip: { x: 0, y: 0, width: 390, height: 900 },
     capture: (browser, docId) =>
-      captureStudentScene(browser, docId, 'mobile-390', async (page) => {
-        await page.getByTestId('document-mobile-tabbar').getByRole('button', { name: /editor/i }).click();
-      }),
+      captureStudentScene(
+        browser,
+        docId,
+        'mobile-390',
+        async (page) => {
+          const editorTab = page
+            .getByTestId('document-mobile-tabbar')
+            .getByRole('button', { name: /editor/i });
+          if (await editorTab.isVisible().catch(() => false)) {
+            await editorTab.click();
+          }
+        },
+        { viewport: { width: 390, height: 844 }, docQuery: '?tab=editor' }
+      ),
   },
   {
     slug: 'tutor-panel',
@@ -191,9 +203,8 @@ async function main() {
 
   const probeContext = await browser.newContext({ ignoreHTTPSErrors: true });
   await passGate(probeContext);
+  await loginPreviewQaStudent(probeContext, BASE, { email: STUDENT_EMAIL });
   const probe = await probeContext.newPage();
-  await probe.goto(`${BASE}/auth/dev-login`, { waitUntil: 'networkidle' });
-  await waitForDevLoginShell(probe);
   const docId = await resolvePreviewDocumentId(probe, BASE, {
     preferredId: process.env.DOCUMENT_ID?.trim() || DEFAULT_PREVIEW_V2_QA_DOCUMENT_ID,
     gradedId:

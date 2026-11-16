@@ -5,13 +5,13 @@ import { mkdir, writeFile, cp } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { enterPreviewAccess, runLoginSmoke } from '../../../scripts/preview/smoke-login.mjs';
+import { enterPreviewAccess } from '../../../scripts/preview/smoke-login.mjs';
 import {
   DEFAULT_PREVIEW_V2_QA_DOCUMENT_ID,
   DEFAULT_PREVIEW_V2_QA_GRADED_DOCUMENT_ID,
+  loginPreviewQaStudent,
   openPreviewV2Document,
   resolvePreviewDocumentId,
-  waitForDevLoginShell,
 } from './document-editor-v2-preview-discovery.mjs';
 
 const BASE = process.env.PREVIEW_BASE_URL?.replace(/\/$/, '');
@@ -49,24 +49,8 @@ async function passGate(context) {
   );
 }
 
-async function loginStudent(page) {
-  await page.goto(`${BASE}/auth/dev-login`, { waitUntil: 'networkidle' });
-  try {
-    await waitForDevLoginShell(page);
-    return;
-  } catch {
-    await runLoginSmoke({
-      baseUrl: BASE,
-      email: STUDENT_EMAIL,
-      password: STUDENT_PASSWORD,
-      accessCode: ACCESS_CODE,
-    });
-    await page.goto(`${BASE}/auth/login`, { waitUntil: 'networkidle' });
-    await page.getByLabel(/email/i).fill(STUDENT_EMAIL);
-    await page.locator('input[type="password"]').fill(STUDENT_PASSWORD);
-    await page.getByRole('button', { name: /^log in$/i }).click();
-    await page.waitForURL(/\/app(\/|$)/, { timeout: 60_000 });
-  }
+async function loginStudent(context) {
+  await loginPreviewQaStudent(context, BASE, { email: STUDENT_EMAIL });
 }
 
 async function loginTeacher(page) {
@@ -99,8 +83,8 @@ async function main() {
   const gradedDocId =
     process.env.GRADED_DOCUMENT_ID?.trim() || DEFAULT_PREVIEW_V2_QA_GRADED_DOCUMENT_ID;
 
+  await loginStudent(context);
   const probe = await context.newPage();
-  await loginStudent(probe);
   try {
     await openPreviewV2Document(probe, BASE, documentId);
   } catch (error) {
@@ -119,7 +103,6 @@ async function main() {
 
   {
     const page = await context.newPage();
-    await loginStudent(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await openPreviewV2Document(page, BASE, documentId);
     captures.push(await shot(page, '01-student-desktop'));
@@ -143,7 +126,6 @@ async function main() {
 
   {
     const page = await context.newPage();
-    await loginStudent(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await openPreviewV2Document(page, BASE, documentId, '?tab=editor');
     captures.push(await shot(page, '06-mobile-390'));
@@ -152,7 +134,6 @@ async function main() {
 
   {
     const page = await context.newPage();
-    await loginStudent(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await openPreviewV2Document(page, BASE, documentId);
     const editor = page.locator('[contenteditable="true"]').first();
@@ -165,7 +146,6 @@ async function main() {
 
   {
     const page = await context.newPage();
-    await loginStudent(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await openPreviewV2Document(page, BASE, documentId);
     const submit = page.getByTestId('document-submit-button');
