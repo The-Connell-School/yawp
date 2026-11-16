@@ -90,6 +90,30 @@ describe('Daily Pages to Short Response migration', () => {
     expect(migrationSql).toContain(`"altText" = '${image.altText}'`);
   });
 
+  /**
+   * Cards are served by row id and cached for a year as immutable, so a
+   * picture swapped under the same id never reaches a browser that has the
+   * old one. The follow-up migration moves the row to a new id.
+   */
+  test('the card moves to a new id, so its cached URL is left behind', () => {
+    const sql = readFileSync(
+      join(
+        import.meta.dirname,
+        '../migrations/20261116090000_short_response_card_fresh_url/migration.sql'
+      ),
+      'utf8'
+    );
+    const image = assignmentTypeImages.find(
+      (row) => row.assignmentTypeId === shortResponse.id
+    )!;
+    expect(image.id).not.toBe('cmlikzgcf000d0ql226d1hxji');
+    expect(sql).toContain('UPDATE "AssignmentTypeImage"');
+    expect(sql).toContain(`"id" = '${image.id}'`);
+    expect(sql).toContain(`AND img."id" <> '${image.id}'`);
+    expect(sql).toContain(`t."kind" = 'daily_pages'`);
+    expect(sql).not.toMatch(/"blob"|INSERT INTO|DELETE FROM/);
+  });
+
   test('no card in the fixture still says Class Starter', () => {
     const md5s = assignmentTypeImages.map((row) =>
       artworkMd5(Buffer.from(row.blob.base64, 'base64'))
