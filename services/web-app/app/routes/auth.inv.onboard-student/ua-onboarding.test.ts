@@ -15,6 +15,10 @@ const tx = {
   freeTierApplication: { findFirst: mock() },
   orgMembership: prisma.orgMembership,
   session: prisma.session,
+  invitation: {
+    findFirst: mock(async () => null),
+    delete: mock(async () => ({})),
+  },
 };
 const transaction = mock(async (run: (client: typeof tx) => unknown) =>
   run(tx)
@@ -70,6 +74,8 @@ beforeEach(() => {
   transaction.mockClear();
   tx.organization.findUnique.mockReset();
   tx.freeTierApplication.findFirst.mockReset();
+  tx.invitation.findFirst.mockReset().mockResolvedValue(null);
+  tx.invitation.delete.mockReset().mockResolvedValue({});
   isFeatureFlagEnabled.mockReset();
   isFeatureFlagEnabled.mockResolvedValue(false);
   tx.organization.findUnique.mockResolvedValue({ plan: 'FREE_CLASSROOM' });
