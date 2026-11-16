@@ -12,6 +12,8 @@ export function SaveStatusIndicator({ status, onLoginClick }: Props) {
       return (
         <span
           role="status"
+          data-testid="document-save-status"
+          data-sync-status="synced"
           className="flex items-center gap-1 text-xs text-muted-foreground"
         >
           <Check className="h-3 w-3" aria-hidden />
@@ -20,21 +22,33 @@ export function SaveStatusIndicator({ status, onLoginClick }: Props) {
       );
     case 'saving':
       return (
-        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <span
+          data-testid="document-save-status"
+          data-sync-status="saving"
+          className="flex items-center gap-1 text-xs text-muted-foreground"
+        >
           <Loader2 className="h-3 w-3 animate-spin" />
           Saving...
         </span>
       );
     case 'offline':
       return (
-        <span className="flex items-center gap-1 text-xs text-yellow-600">
+        <span
+          data-testid="document-save-status"
+          data-sync-status="offline"
+          className="flex items-center gap-1 text-xs text-yellow-600"
+        >
           <CloudOff className="h-3 w-3" />
           Saved locally
         </span>
       );
     case 'auth-expired':
       return (
-        <span className="flex items-center gap-1 text-xs text-destructive">
+        <span
+          data-testid="document-save-status"
+          data-sync-status="auth-expired"
+          className="flex items-center gap-1 text-xs text-destructive"
+        >
           <AlertCircle className="h-3 w-3" />
           Session expired ·{' '}
           <button
@@ -48,7 +62,11 @@ export function SaveStatusIndicator({ status, onLoginClick }: Props) {
       );
     case 'error':
       return (
-        <span className="flex items-center gap-1 text-xs text-destructive">
+        <span
+          data-testid="document-save-status"
+          data-sync-status="error"
+          className="flex items-center gap-1 text-xs text-destructive"
+        >
           <AlertCircle className="h-3 w-3" />
           Save error · retrying...
         </span>

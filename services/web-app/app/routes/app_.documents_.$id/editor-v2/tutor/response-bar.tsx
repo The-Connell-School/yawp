@@ -114,6 +114,7 @@ export const ResponseBar = ({
           variant={isReady ? 'default' : 'secondary'}
           size={isReady ? 'lg' : 'default'}
           block={isReady}
+          data-testid={isReady ? 'tutor-ready-button' : undefined}
           className={cn(
             'flex items-center gap-1',
             isReady ? 'doc-editor-tutor-ready-btn w-full' : 'text-lg'
