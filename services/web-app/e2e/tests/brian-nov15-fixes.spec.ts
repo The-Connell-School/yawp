@@ -1,5 +1,13 @@
 import { test, expect } from '@playwright/test';
 
+test('Class Starter homepage names exactly three grading bands', async ({ page }) => {
+  await page.goto('/e2e/fixtures/brian-fixes/index.html?landing=class-starter');
+  await page.getByRole('button', { name: 'Show How it works', exact: true }).click();
+  const box = page.getByTestId('landing-section-how-it-works');
+  await expect(box.locator('li strong')).toHaveText(['Full credit:', 'Partial credit:', 'No credit:']);
+  await expect(box).not.toContainText(/Absent|Hardly there|Showed up|All in/);
+});
+
 for (const width of [1280, 390, 320]) {
   test(`Post to your class buttons contain their labels at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });

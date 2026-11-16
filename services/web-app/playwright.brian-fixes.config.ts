@@ -19,6 +19,7 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
+    env: { TMPDIR: process.env.TMPDIR || '/tmp' },
     command: `bun x --no-install vite --config vite.free-tier-welcome.config.ts --port ${port} --host 127.0.0.1 --strictPort`,
     url: `http://127.0.0.1:${port}/e2e/fixtures/brian-fixes/index.html`,
     reuseExistingServer: false,
