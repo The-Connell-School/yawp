@@ -22,6 +22,8 @@ const {
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForAnyScope,
   isAssignmentTypeAvailableForEveryScope,
+  HIDE_AP_HISTORY_CLASS_ASSIGNMENT_WHERE,
+  HIDE_AP_HISTORY_DOCUMENT_WHERE,
 } = await import('./assignment-type-access.server');
 
 const scope = {
@@ -322,5 +324,32 @@ describe('retired AP History (Nov 14 2026)', () => {
         { systemKey: { not: 'ap_history_essay' } },
       ]);
     }
+  });
+});
+
+// Prisma compiles these to LEFT JOINs. Without the `not: null` guard,
+// `systemKey = ap_history_essay` is NULL for every type with no system key and
+// NOT (NULL) hid every class assignment and assignment document on prod.
+describe('AP History list filters keep types with no system key', () => {
+  const expected = {
+    NOT: {
+      assignment: {
+        is: {
+          assignmentType: {
+            is: {
+              systemKey: { equals: 'ap_history_essay', not: null },
+            },
+          },
+        },
+      },
+    },
+  } as const;
+
+  test('class assignment filter only matches a non-null AP History key', () => {
+    expect(HIDE_AP_HISTORY_CLASS_ASSIGNMENT_WHERE).toEqual(expected);
+  });
+
+  test('document filter only matches a non-null AP History key', () => {
+    expect(HIDE_AP_HISTORY_DOCUMENT_WHERE).toEqual(expected);
   });
 });
