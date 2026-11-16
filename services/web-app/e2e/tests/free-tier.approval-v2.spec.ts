@@ -144,7 +144,7 @@ for (const width of [1280, 390])
     await expect(additionalAdmin).toBeVisible();
     const explore = page.getByRole('link', { name: 'Explore my classroom' });
     await expect(explore).toBeVisible();
-    await expect(explore).toHaveAttribute('href', '/app');
+    await expect(explore).toHaveAttribute('href', '/app/free-tier/preview');
     await explore.click();
     await expect(page).toHaveURL(/\/app$/);
     await expect(page.getByTestId('app._index')).toBeVisible();

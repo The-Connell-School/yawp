@@ -10,6 +10,7 @@ import {
   Link,
 } from 'react-router';
 import { useEffect, useState } from 'react';
+import { LOCKED_PREVIEW_PATH } from '~/domain/free-tier/locked-preview';
 import { userHasPendingFreeTierTeachingLock } from '~/domain/free-tier/locked-preview.server';
 import { isClassPreparationEnabled } from '~/domain/free-tier/class-preparation.server';
 import { needsClassPreparation } from '~/domain/free-tier/class-preparation';
@@ -267,7 +268,8 @@ function LockedPreviewExploreButton({ disabled = false }: { disabled?: boolean }
       aria-disabled={disabled ? true : undefined}
     >
       <Link
-        to="/app"
+        to={LOCKED_PREVIEW_PATH}
+        reloadDocument
         tabIndex={disabled ? -1 : undefined}
         aria-disabled={disabled ? true : undefined}
         onClick={
@@ -358,7 +360,9 @@ export default function FreeTierPendingRoute() {
                 asChild
                 className="h-auto p-0 text-sm underline"
               >
-                <Link to="/app">Explore my classroom</Link>
+                <Link to={LOCKED_PREVIEW_PATH} reloadDocument>
+                  Explore my classroom
+                </Link>
               </Button>
             ) : null}
             <FreeTierSignOut />
