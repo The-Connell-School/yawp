@@ -37,6 +37,24 @@ export async function loadFreeTierGateApplication(
   });
 }
 
+/** After sign-in, pending applicants without an active membership need the waiting
+ * page even when locked preview would let the same account browse /app. */
+export function resolveFreeTierPostAuthenticationDestination(args: {
+  application: FreeTierGateApplication | null;
+  activeMembershipCount: number;
+  gateRedirect: string | null;
+}): string | null {
+  if (args.gateRedirect) return args.gateRedirect;
+  if (args.activeMembershipCount > 0 || !args.application) return null;
+  if (
+    args.application.status === 'SENT' ||
+    args.application.status === 'MANUAL_REVIEW'
+  ) {
+    return '/app/free-tier/pending';
+  }
+  return null;
+}
+
 export async function enforceFreeTierTeacherGate(args: {
   userId: string;
   pathname: string;
