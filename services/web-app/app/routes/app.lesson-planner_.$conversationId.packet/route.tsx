@@ -773,6 +773,7 @@ function LessonPacketRouteV2() {
                         deckV2={reviewFlags.deckV2}
                         deckGallery={reviewFlags.deckGallery}
                         deckKitV4={reviewFlags.deckKitV4}
+                        deckKitV41={reviewFlags.deckKitV41}
                         periodMinutes={periodMinutes}
                       />
                     )}
@@ -798,6 +799,7 @@ function SectionContent({
   deckV2 = false,
   deckGallery = false,
   deckKitV4 = false,
+  deckKitV41 = false,
   periodMinutes = null,
 }: {
   section: {
@@ -813,6 +815,8 @@ function SectionContent({
   deckV2?: boolean;
   deckGallery?: boolean;
   deckKitV4?: boolean;
+  /** The Lesson Deck Kit, spec v4.1; needs deckKitV4. */
+  deckKitV41?: boolean;
   periodMinutes?: number | null;
 }) {
   // The packet already took the deck out of the prose and parsed it, so there
@@ -843,6 +847,7 @@ function SectionContent({
             periodMinutes={deckV2 ? periodMinutes : null}
             deckGallery={deckGallery}
             deckKitV4={deckKitV4}
+            deckKitV41={deckKitV41}
           />
         </div>
       ) : null}

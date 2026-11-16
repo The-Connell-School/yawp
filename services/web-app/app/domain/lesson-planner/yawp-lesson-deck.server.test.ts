@@ -28,7 +28,8 @@ describe('storing Brian’s deck for a teacher’s copy', () => {
   test('stores each picture as the copy’s own, then hands back the deck block', async () => {
     const block = await storeYawpLessonDeck(tx, { lesson, conversationId: 'conv-1', membershipId: 'teacher-1' });
     expect(block).not.toBeNull();
-    expect(created.length).toBe(8);
+    // Seven pictures on eight slides: the painting hangs more than once.
+    expect(created.length).toBe(7);
     for (const row of created) {
       expect(row).toMatchObject({ conversationId: 'conv-1', membershipId: 'teacher-1' });
       expect(row.uploadId).toBeUndefined();

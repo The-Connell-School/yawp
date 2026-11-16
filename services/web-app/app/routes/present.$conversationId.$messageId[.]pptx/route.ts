@@ -32,14 +32,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   // Brian's review (E1): the Yawp! tile template, behind its flag.
   const access = await getLessonPlannerAccess(request);
-  const { deckV2, deckGallery, deckKitV4 } = access.allowed
+  const { deckV2, deckGallery, deckKitV4, deckKitV41 } = access.allowed
     ? await getLessonPlannerReviewFlags(access.membership.organization.id)
-    : { deckV2: false, deckGallery: false, deckKitV4: false };
+    : { deckV2: false, deckGallery: false, deckKitV4: false, deckKitV41: false };
   // The teacher's own pictures go in the file with the deck (Nov 1).
   const pictures = await loadDeckPictureFiles([deck], access.allowed ? access.membership.id : null);
   // The Lesson Deck Kit, behind its own flag.
   const pptx = deckGallery
-    ? await renderDeckPptxGallery(withDeckKit(deck, { deckKitV4 }), { pictures })
+    ? await renderDeckPptxGallery(withDeckKit(deck, { deckKitV4, deckKitV41 }), { pictures })
     : deckV2
     ? await renderDeckPptxTile(deck, { pictures })
     : await renderDeckPptx(deck, { pictures });

@@ -2269,3 +2269,73 @@ describe('buildLessonPlannerSystemPrompt — Short Response, not Daily Pages', (
     expect(prompt).toContain('search_short_form_prompts');
   });
 });
+
+describe('planner prompt — the Lesson Deck Kit, spec v4.1', () => {
+  const textOf = (flags: { deckKitV4: boolean; deckKitV41: boolean; deckGallery?: boolean }, teacherName: string | null = 'Ms. Okafor') =>
+    buildLessonPlannerSystemPromptBlocks({ teacherName, organizationName: 'School', deckGallery: flags.deckGallery ?? true, deckKitV4: flags.deckKitV4, deckKitV41: flags.deckKitV41 })
+      .map((block) => block.text)
+      .join('\n');
+  const v41 = textOf({ deckKitV4: true, deckKitV41: true });
+  const v4 = textOf({ deckKitV4: true, deckKitV41: false });
+  /** The deck section only: the rest of the prompt is not about slides. */
+  const section = (text: string) => text.slice(text.indexOf('Gallery deck (Yawp! Lesson Deck Kit'));
+
+  test('names the spec, and says it replaces every earlier one', () => {
+    expect(v41).toContain('Lesson Deck Kit, spec v4.1');
+    expect(v41).toContain('replaces v4, v3 and every earlier version');
+    expect(v4).not.toContain('spec v4.1');
+  });
+
+  test('never asks for a label that tells students how to treat the content', () => {
+    const deck = section(v41);
+    expect(deck).toContain('Never use a label that tells students how to treat the content');
+    for (const banned of ['"Hold this"', '"Know this"']) {
+      // Named once, as what not to write; never as a template’s label.
+      expect(deck.split(banned).length - 1).toBe(1);
+    }
+    expect(deck).toContain('- big_idea — no label');
+    expect(deck).toContain('- notes — no label');
+    expect(deck).toContain('- read — no label');
+    expect(deck).not.toContain('to flag something to keep');
+    // Spec v4 is unchanged.
+    expect(section(v4)).toContain('- big_idea — "Hold this"');
+  });
+
+  test('the title slide: the teacher’s name from the session, then class and date, no program line', () => {
+    const deck = section(v41);
+    expect(deck).toContain('`teacher`: "Ms. Okafor"');
+    expect(deck).toContain('class and date');
+    expect(deck).toContain('Never write "Yawp! Writing Program"');
+    const anon = section(textOf({ deckKitV4: true, deckKitV41: true }, null));
+    expect(anon).toContain('leave `teacher` out');
+    expect(anon).not.toContain('`teacher`: "');
+  });
+
+  test('no running head: the lesson’s name is on the title slide only', () => {
+    expect(section(v41)).toContain('There is no running head');
+  });
+
+  test('Fraunces Bold for titles and headlines, Georgia and Arial for the rest', () => {
+    const deck = section(v41);
+    expect(deck).toContain('Fraunces Bold');
+    expect(deck).toContain('Georgia');
+    expect(deck).toContain('Arial');
+    expect(section(v4)).not.toContain('Fraunces');
+  });
+
+  test('keeps the v4 rules it does not change', () => {
+    const deck = section(v41);
+    expect(deck).toContain('No terracotta, clay, brick or brown');
+    expect(deck).toContain('Question n of N');
+    expect(deck).toContain('numbers, never roman numerals');
+    expect(deck).toContain('#2F5873, #1E3A5F');
+    expect(deck).toContain('Over 40 words, split the slide');
+  });
+
+  test('needs spec v4: with v4 off, the spec v3 section as before', () => {
+    const v3 = textOf({ deckKitV4: false, deckKitV41: true });
+    expect(v3).toContain('italic mode word');
+    expect(v3).not.toContain('Lesson Deck Kit, spec v4');
+    expect(textOf({ deckKitV4: true, deckKitV41: true, deckGallery: false })).not.toContain('Lesson Deck Kit, spec v4');
+  });
+});
