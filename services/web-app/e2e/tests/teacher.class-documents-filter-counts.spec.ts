@@ -113,8 +113,10 @@ test.describe('Teacher class documents filter counts', () => {
 
       expect(unfilteredAllCount).toBe(unfilteredRowCount);
       expect(filteredAllCount).toBe(filteredRowCount);
-      // Practice docs without class work stay out of the student-scoped list.
-      expect(filteredRowCount).toBe(3);
+      // Eric's 3 practice docs plus his 2 submitted class assignment docs.
+      // (#952 lowered this to 3 when the AP History filter hid every
+      // assignment document; the 2 class docs must stay visible.)
+      expect(filteredRowCount).toBe(5);
     } finally {
       if (documentIds.length > 0) {
         await prisma.submission

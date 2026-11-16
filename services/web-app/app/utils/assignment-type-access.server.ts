@@ -15,22 +15,31 @@ export const RETIRED_ASSIGNMENT_TYPE_WHERE = {
   ],
 } satisfies Prisma.AssignmentTypeWhereInput;
 
-/** List UIs hide AP History assignments; rows stay in the database. */
-export const HIDE_AP_HISTORY_CLASS_ASSIGNMENT_WHERE = {
-  NOT: {
-    assignment: {
-      assignmentType: { systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY },
+/**
+ * Matches only an assignment whose type is AP History, and never evaluates to
+ * SQL NULL. Prisma compiles these relation filters to LEFT JOINs, so a plain
+ * `systemKey = ap_history_essay` is NULL for every type with no system key
+ * (Short Response, Class Starter, every org type), and `NOT (NULL)` drops the
+ * row. That hid every class assignment and every assignment document on prod
+ * (Nov 15 2026). The `not: null` guard turns those rows into FALSE, so the
+ * outer NOT keeps them and still hides AP History.
+ */
+const AP_HISTORY_ASSIGNMENT_WHERE = {
+  assignmentType: {
+    is: {
+      systemKey: { equals: AP_HISTORY_ASSIGNMENT_TYPE_KEY, not: null },
     },
   },
+} satisfies Prisma.AssignmentWhereInput;
+
+/** List UIs hide AP History assignments; rows stay in the database. */
+export const HIDE_AP_HISTORY_CLASS_ASSIGNMENT_WHERE = {
+  NOT: { assignment: { is: AP_HISTORY_ASSIGNMENT_WHERE } },
 } satisfies Prisma.ClassAssignmentWhereInput;
 
 /** List UIs hide student/teacher documents tied to AP History assignments. */
 export const HIDE_AP_HISTORY_DOCUMENT_WHERE = {
-  NOT: {
-    assignment: {
-      assignmentType: { systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY },
-    },
-  },
+  NOT: { assignment: { is: AP_HISTORY_ASSIGNMENT_WHERE } },
 } satisfies Prisma.DocumentWhereInput;
 
 export type AssignmentTypeAccessScope = {

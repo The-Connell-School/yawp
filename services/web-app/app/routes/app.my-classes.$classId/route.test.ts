@@ -1159,7 +1159,11 @@ describe('class detail loader for students', () => {
       archivedAt: null,
       NOT: {
         assignment: {
-          assignmentType: { systemKey: 'ap_history_essay' },
+          is: {
+            assignmentType: {
+              is: { systemKey: { equals: 'ap_history_essay', not: null } },
+            },
+          },
         },
       },
       OR: [

@@ -150,7 +150,11 @@ describe('My Assignments loader', () => {
     expect(findManyWhere).toMatchObject({
       NOT: {
         assignment: {
-          assignmentType: { systemKey: 'ap_history_essay' },
+          is: {
+            assignmentType: {
+              is: { systemKey: { equals: 'ap_history_essay', not: null } },
+            },
+          },
         },
       },
     });
