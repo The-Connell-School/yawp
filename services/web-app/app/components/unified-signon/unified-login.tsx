@@ -11,6 +11,7 @@ import type {
   SignonState,
   SignonTransport,
 } from '~/domain/unified-signon/contracts';
+import { loginInitialStateFromSearch } from '~/utils/safe-login-email';
 
 export function UnifiedLogin({
   entry,
@@ -59,18 +60,7 @@ export function UnifiedLogin({
   return (
     <UnifiedSignon
       key={`${entry.initialState?.flowToken ?? 'entry'}:${entry.initialState?.screen ?? 'entry'}`}
-      initialState={
-        entry.initialState ?? {
-          screen: 'entry',
-          error: search.has('googleError')
-            ? "We couldn't connect to Google. Try again, or use your email below."
-            : undefined,
-          variant:
-            search.get('message') === 'existing_account'
-              ? 'existing-account'
-              : undefined,
-        }
-      }
+      initialState={loginInitialStateFromSearch(search, entry.initialState)}
       redirectTo={entry.redirectTo}
       googleAvailable={entry.googleAvailable}
       googleVisible={entry.googleVisible ?? true}

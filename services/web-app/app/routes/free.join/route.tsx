@@ -28,13 +28,36 @@ import {
   FreeTierTextInput,
 } from '../free-tier/FreeTierAuthCard';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
+import {
+  loginPathWithEmail,
+  safeLoginEmailPrefill,
+} from '~/utils/safe-login-email';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
   const token = new URL(request.url).searchParams.get('t') ?? '';
   if (!token) return { ok: false as const, reason: 'missing' as const };
   const peek = await peekSignedLink({ token, expectedPurpose: 'RELEASE' });
-  if (!peek.ok) return { ok: false as const, reason: peek.reason };
+  if (!peek.ok) {
+    if (peek.reason === 'used') {
+      const email = peek.applicationId
+        ? (
+            await prisma.freeTierApplication.findUnique({
+              where: { id: peek.applicationId },
+              select: { email: true },
+            })
+          )?.email
+        : null;
+      const safeEmail = safeLoginEmailPrefill(email);
+      return {
+        ok: false as const,
+        reason: 'used' as const,
+        email: safeEmail,
+        signInHref: loginPathWithEmail(safeEmail),
+      };
+    }
+    return { ok: false as const, reason: peek.reason };
+  }
   const app = await prisma.freeTierApplication.findUnique({
     where: { id: peek.applicationId },
     select: { email: true, name: true, status: true, releaseEmailCopyVersion: true },
@@ -101,6 +124,20 @@ export default function FreeJoinRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   if (!data.ok) {
+    if (data.reason === 'used') {
+      return (
+        <FreeTierAuthCard title="This invite was already used" icon={<CircleAlert />}>
+          <p className="text-sm text-muted-foreground">
+            {data.email
+              ? `This invite link was already used to create an account for ${data.email}. Sign in to open your classroom.`
+              : 'This invite link was already used. Sign in to open your classroom.'}
+          </p>
+          <FreeTierButton asChild>
+            <a href={data.signInHref}>Sign in</a>
+          </FreeTierButton>
+        </FreeTierAuthCard>
+      );
+    }
     return (
       <FreeTierAuthCard title="This invite link isn't valid" icon={<CircleAlert />}>
         <p className="text-sm text-muted-foreground">
