@@ -754,6 +754,7 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/seed-preview-signon-qa.ts \
         services/web-app/app/utils/preview-email-capture.server.ts \
         packages/prisma/scripts/seed-preview-teacher-notes-qa.ts \
+        packages/prisma/scripts/seed-preview-document-editor-v2-qa.ts \
         packages/prisma/scripts/local-dev/preview-teacher-notes-qa.ts \
         packages/prisma/scripts/assets/class-starter.jpg \
         packages/prisma/scripts/assets/prewriting.jpg \
@@ -920,6 +921,9 @@ run_tooling_if_needed() {
   fi
   if [[ "$DATA_MODE" == "seed" && -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-teacher-notes-qa.ts" ]]; then
     tooling_command+=' && bun run seed-preview-teacher-notes-qa'
+  fi
+  if [[ "$DATA_MODE" == "seed" && -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-document-editor-v2-qa.ts" ]]; then
+    tooling_command+=' && (bun run seed-preview-document-editor-v2-qa || { echo "Warning: preview document editor v2 QA seed failed; continuing deploy (non-fatal)." >&2; true; })'
   fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/assignment-type-release-gate.ts" ]]; then
     tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'

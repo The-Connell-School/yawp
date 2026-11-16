@@ -42,6 +42,7 @@
     "seed-preview-seats": "bun run scripts/seed-preview-seats.ts",
     "seed-lounge-launch": "bun run scripts/seed-lounge-launch.ts",
     "seed-preview-teacher-notes-qa": "bun run scripts/seed-preview-teacher-notes-qa.ts",
+    "seed-preview-document-editor-v2-qa": "bun run scripts/seed-preview-document-editor-v2-qa.ts",
     "seed-preview-planner-qa": "bun run scripts/seed-preview-planner-qa.ts",
     "ensure-class-insights-local": "bun run scripts/local-dev/ensure-class-insights-enabled.ts",
     "ensure-intern-qa-teachers": "bun run scripts/local-dev/run-ensure-intern-qa-teachers.ts",
