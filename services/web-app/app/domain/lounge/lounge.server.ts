@@ -15,7 +15,7 @@ import { LOUNGE_TEAM_ACCOUNT_NAME, LOUNGE_TEAM_ACCOUNT_NAMES, isLoungeTeamAccoun
 import { LOUNGE_TEAM_MENTION_ID, mentionedUserIds, mentionsTeam, plainTextWithMentions } from './mentions';
 import { sortByTop } from './ranking';
 import { assignmentShareSnapshot } from './shares';
-import { loungeTopicLabel, type LoungePostKindKey } from './topics';
+import { isLoungeTopic, loungeTopicLabel, type LoungePostKindKey } from './topics';
 import { resolveLoungePostTags, type LoungePostTags } from './tags';
 import type { LoungePostInput, LoungeReplyInput } from './validation';
 import { baseVideoContentType, type LoungeVideo } from './video';
@@ -1412,7 +1412,9 @@ export async function listLoungeTopicCounts(
     const { topics } = resolveLoungePostTags(row);
     for (const topic of topics.length > 0 ? topics : ['other']) counts.set(topic, (counts.get(topic) ?? 0) + 1);
   }
-  return Array.from(counts, ([topic, count]) => ({ topic, label: loungeTopicLabel(topic), count })).sort(
+  return Array.from(counts)
+    .filter(([topic]) => isLoungeTopic(topic))
+    .map(([topic, count]) => ({ topic, label: loungeTopicLabel(topic), count })).sort(
     (a, b) => b.count - a.count || a.label.localeCompare(b.label)
   );
 }

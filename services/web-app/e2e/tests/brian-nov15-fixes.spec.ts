@@ -1,5 +1,13 @@
 import { test, expect } from '@playwright/test';
 
+test('Lounge topic options and old post tags omit retired AP History', async ({ page }) => {
+  await page.goto('/e2e/fixtures/brian-fixes/index.html?lounge');
+  await expect(page.getByRole('checkbox', { name: 'Grading & Rubrics', exact: true })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'AP History', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('list', { name: 'Tags', exact: true })).toHaveText('HistoryGrading & Rubrics');
+  await expect(page.locator('a[href*="ap-history"]')).toHaveCount(0);
+});
+
 const LANDING_KEYS = ['thesis-driven-essay', 'class-starter', 'exit-ticket', 'prewriting',
   'thesis-statement', 'daily-pages', 'five-paragraph-essay', 'act-writing', 'welcome-to-yawp'];
 
