@@ -20,7 +20,7 @@ import { enforceAuthenticatedUserAndIp } from '~/utils/rate-limit.server';
 
 /**
  * Contact Us, pinned at the top of the Lounge: a private note straight to
- * the YAWP! team (House Rule 7). It never posts in the Lounge. Who gets the
+ * the Yawp! team (House Rule 7). It never posts in the Lounge. Who gets the
  * email is LOUNGE_CONTACT_EMAILS, so it can go to Brian, Brock, or both.
  */
 export async function loader({ request }: LoaderFunctionArgs) {

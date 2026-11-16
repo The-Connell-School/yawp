@@ -45,7 +45,7 @@ suite('Faculty Lounge launch features against the database', () => {
     ids.maria = await makeUser('Maria Santos');
     ids.devin = await makeUser('Devin Reyes');
     ids.brian = await makeUser('Brian Connell', true);
-    ids.team = await makeUser('YAWP! team', true);
+    ids.team = await makeUser('Yawp! team', true);
   });
 
   afterAll(async () => {
@@ -164,22 +164,22 @@ suite('Faculty Lounge launch features against the database', () => {
     const q1Row = feedRows.find((p) => p.id === idFor('launch:q1-routine'));
     expect(q1Row?.preview).toStartWith('Use the Class Starter to build reps.');
     expect(q1Row?.answeredBy).toBe('Brian');
-    // The launch questions come from the YAWP! team, not from one person.
-    expect(q1Row?.author).toEqual({ name: 'YAWP! team', detail: null });
+    // The launch questions come from the Yawp! team, not from one person.
+    expect(q1Row?.author).toEqual({ name: 'Yawp! team', detail: null });
     expect(q1Row?.avatar).toMatchObject({ initials: 'Y!', isStaff: true });
     const wins = feedRows.find((p) => p.id === idFor('launch:wins'));
     expect(wins).toMatchObject({ preview: expect.stringContaining('Share a sample of student work'), answeredBy: null });
 
     const [welcome] = (await lounge.listPinnedLoungePosts(maria())).filter((p) => p.id === idFor('launch:welcome'));
     expect(welcome.excerpt).toStartWith("Every school's faculty lounge has its own personality");
-    expect(welcome.author).toEqual({ name: 'Brian Connell', detail: 'YAWP! team' });
+    expect(welcome.author).toEqual({ name: 'Brian Connell', detail: 'Yawp! team' });
     expect(welcome.avatar).toMatchObject({ initials: 'BC', isStaff: true });
 
     const thread = await lounge.getLoungeThread(maria(), idFor('launch:q1-routine'));
     expect(thread?.staffReplies[0].avatar).toMatchObject({ initials: 'BC', isStaff: true });
   });
 
-  test('teachers can @mention Brian or the YAWP! team, not each staff member', async () => {
+  test('teachers can @mention Brian or the Yawp! team, not each staff member', async () => {
     const kevin = await makeUser('Kevin Gregorio', true);
     const host = await lounge.getLoungeHost();
     expect(host).toMatchObject({ userId: ids.brian, firstName: 'Brian' });
@@ -195,20 +195,20 @@ suite('Faculty Lounge launch features against the database', () => {
 
     const candidates = await lounge.listMentionCandidates(maria(), postId);
     expect(candidates.slice(0, 2)).toEqual([
-      { userId: 'yawp-team', label: 'YAWP! team', detail: 'Brian and the team' },
-      { userId: ids.brian, label: 'Brian', detail: 'YAWP! team' },
+      { userId: 'yawp-team', label: 'Yawp! team', detail: 'Brian and the team' },
+      { userId: ids.brian, label: 'Brian', detail: 'Yawp! team' },
     ]);
     const offered = candidates.map((c) => c.userId);
     expect(offered).toContain(ids.devin);
     expect(offered).not.toContain(kevin);
     expect(offered).not.toContain(ids.team);
 
-    // "@YAWP! team" asks the team: it lands in the inbox and emails the team.
+    // "@Yawp! team" asks the team: it lands in the inbox and emails the team.
     const { notifications } = await lounge.createLoungeReply({
       viewer: devin(),
       organizationId: ids.org,
       postId,
-      input: { body: 'Any ideas @[YAWP! team](user:yawp-team)?', videoUrl: null },
+      input: { body: 'Any ideas @[Yawp! team](user:yawp-team)?', videoUrl: null },
     });
     expect(notifications.map((n) => n.kind)).toContain('staff-request');
     expect((await lounge.listLoungeStaffInbox()).waiting.map((w) => w.id)).toContain(postId);
@@ -217,7 +217,7 @@ suite('Faculty Lounge launch features against the database', () => {
       viewer: maria(),
       organizationId: ids.org,
       membershipId: null,
-      input: { ...base, title: `Team mention ${stamp}`, body: 'Help @[YAWP! team](user:yawp-team)' },
+      input: { ...base, title: `Team mention ${stamp}`, body: 'Help @[Yawp! team](user:yawp-team)' },
     });
     expect((await lounge.getLoungeThread(maria(), asked))?.post.staffStatus).toBe('OPEN');
 

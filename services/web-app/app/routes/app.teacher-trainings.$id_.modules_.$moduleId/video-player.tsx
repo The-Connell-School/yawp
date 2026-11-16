@@ -18,6 +18,7 @@ export default function VideoPlayer({
   onUpdateProgress,
   teacherTrainingId,
   captionTrack,
+  poster,
 }: {
   videoLink: string;
   moduleId: string;
@@ -27,6 +28,8 @@ export default function VideoPlayer({
   onUpdateProgress: (currentTime: number) => void;
   teacherTrainingId: string;
   captionTrack?: VideoCaptionTrackConfig | null;
+  /** A still shown until the video plays, where it has one. */
+  poster?: string | null;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoEnded, setVideoEnded] = useState(false);
@@ -92,6 +95,7 @@ export default function VideoPlayer({
         ref={videoRef}
         className="w-full h-full z-10"
         controls
+        poster={poster ?? undefined}
         onEnded={() => setVideoEnded(true)}
         onLoadedMetadata={() => {
           if (videoRef.current && !videoStarted) {

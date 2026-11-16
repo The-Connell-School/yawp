@@ -40,6 +40,10 @@ import { getTeacherTrainingProgressPercent } from '~/utils/teacher-training-prog
 import { getTeacherTrainingMediaAccessibilityResources } from '~/utils/teacher-training-media-accessibility';
 import { getTeacherTrainingPlaybackUrl } from '~/utils/teacher-training-video-link.server';
 import { redirectIfTeacherLoungeTemporarilyDisabled } from '~/domain/teacher-lounge/teacher-lounge-temporary-disable.server';
+import {
+  tutorialsForTrainingModule,
+  withLessonTutorial,
+} from '~/domain/teacher-trainings/lounge-lesson-tutorials';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -127,9 +131,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Module not found', { status: 404 });
   }
 
-  const playbackUrl = await getTeacherTrainingPlaybackUrl(
-    currentModule.videoS3Key
+  // A lesson of the Thesis-Driven Essay course plays Brian's tutorial for it,
+  // which comes with the app, in place of the older video uploaded to the
+  // module. Its length and the teacher's progress follow the tutorial.
+  const lessonTutorials = tutorialsForTrainingModule(
+    teacherTraining.title,
+    currentModule.title
   );
+  const playbackUrl =
+    lessonTutorials[0]?.src ??
+    (await getTeacherTrainingPlaybackUrl(currentModule.videoS3Key));
+  const taughtModule = withLessonTutorial(teacherTraining.title, currentModule);
 
   // A Thesis-Driven Essay lesson carries its deck (present, Google Slides,
   // PowerPoint) and lesson plan, as the assignment's Modules do (#452).
@@ -141,15 +153,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       : [];
 
   return dataResponse({
-    teacherTraining,
-    currentModule: currentModule
-      ? {
-          ...currentModule,
-          videoLink: playbackUrl ?? null,
-        }
-      : currentModule,
+    teacherTraining: {
+      ...teacherTraining,
+      teacherTrainingModules: teacherTraining.teacherTrainingModules.map(
+        (module) => withLessonTutorial(teacherTraining.title, module)
+      ),
+    },
+    currentModule: {
+      ...taughtModule,
+      videoLink: playbackUrl ?? null,
+    },
+    lessonTutorials,
     membershipId: profile.id,
-    currentSession: currentModule.teacherTrainingModuleSessions[0] || null,
+    currentSession: taughtModule.teacherTrainingModuleSessions[0] || null,
     thesisDeckLinks,
   });
 }
@@ -187,7 +203,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         ? { assignedTeachers: { some: { id: profile.id } } }
         : {}),
     },
-    select: { id: true },
+    select: { id: true, title: true },
   });
   if (!courseAccess) {
     throw new Response('Teacher course not found', { status: 404 });
@@ -197,11 +213,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const videoTimestamp = Number(formData.get('videoTimestamp'));
     const module = await prisma.teacherTrainingModule.findFirst({
       where: { id: params.moduleId!, teacherTrainingId: params.id },
-      select: { id: true, videoDuration: true },
+      select: { id: true, title: true, videoDuration: true },
     });
     if (!module) {
       throw new Response('Module not found', { status: 404 });
     }
+    // Watching is counted against the video the teacher is shown: Brian's
+    // tutorial where the lesson has one.
+    const videoDuration = withLessonTutorial(courseAccess.title, module).videoDuration;
     const session = await prisma.teacherTrainingModuleSession.findUnique({
       where: {
         teacherTrainingModuleId_membershipId: {
@@ -224,7 +243,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: {
           videoTimestamp: Math.min(
             Math.max(videoTimestamp, session.videoTimestamp),
-            module.videoDuration || 0
+            videoDuration || 0
           ),
           updatedAt: new Date(),
         },
@@ -285,8 +304,16 @@ function formatTime(seconds: number): string {
 }
 
 export default function TeacherTrainingModuleRoute() {
-  const { teacherTraining, currentModule, currentSession, thesisDeckLinks } =
-    useLoaderData<typeof loader>();
+  const {
+    teacherTraining,
+    currentModule,
+    currentSession,
+    thesisDeckLinks,
+    lessonTutorials,
+  } = useLoaderData<typeof loader>();
+  // Brian's tutorial for this lesson, where it has one, and any that follow
+  // it (Body paragraphs has a second, on supporting quotes).
+  const [lessonTutorial, ...moreTutorials] = lessonTutorials;
   const fetcher = useFetcher();
 
   const currentModuleIndex = teacherTraining.teacherTrainingModules.findIndex(
@@ -308,19 +335,25 @@ export default function TeacherTrainingModuleRoute() {
     currentSession?.videoTimestamp,
     currentModule.videoDuration
   );
-  const { captionResource, transcriptResource } =
-    getTeacherTrainingMediaAccessibilityResources(currentModule.resources);
+  const uploaded = getTeacherTrainingMediaAccessibilityResources(
+    currentModule.resources
+  );
   const primaryResources = currentModule.resources.filter(
     (resource) =>
-      resource.id !== captionResource?.id &&
-      resource.id !== transcriptResource?.id
+      resource.id !== uploaded.captionResource?.id &&
+      resource.id !== uploaded.transcriptResource?.id
   );
-  const captionTrack = captionResource
-    ? {
-        src: `/api/teacher-training-module-resource/${captionResource.id}`,
-        label: 'English captions',
-        srcLang: 'en',
-      }
+  // The uploaded captions and transcript are of the uploaded video. With a
+  // tutorial playing, its own captions take their place and the old
+  // transcript is not offered: it is of a video the teacher no longer sees.
+  const captionsHref = lessonTutorial
+    ? lessonTutorial.captions
+    : uploaded.captionResource
+      ? `/api/teacher-training-module-resource/${uploaded.captionResource.id}`
+      : null;
+  const transcriptResource = lessonTutorial ? null : uploaded.transcriptResource;
+  const captionTrack = captionsHref
+    ? { src: captionsHref, label: 'English captions', srcLang: 'en' }
     : null;
 
   return (
@@ -358,6 +391,7 @@ export default function TeacherTrainingModuleRoute() {
                       nextModuleId={nextModuleId}
                       initialCurrentTime={currentSession?.videoTimestamp || 0}
                       captionTrack={captionTrack}
+                      poster={lessonTutorial?.poster}
                       onUpdateProgress={(currentTime) => {
                         const formData = new FormData();
                         formData.append('intent', 'updateProgress');
@@ -418,12 +452,46 @@ export default function TeacherTrainingModuleRoute() {
               </CardContent>
             </Card>
 
+            {moreTutorials.length > 0 && (
+              <div className="space-y-6" data-testid="teacher-training-more-tutorials">
+                {moreTutorials.map((tutorial) => (
+                  <Card key={tutorial.src} className="bg-muted">
+                    <CardHeader>
+                      <CardTitle>{tutorial.title}</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Also for this lesson · about {tutorial.minutes} min
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      <video
+                        className="aspect-video w-full rounded-lg bg-black"
+                        controls
+                        playsInline
+                        preload="metadata"
+                        poster={tutorial.poster}
+                        aria-label={`${tutorial.title}: tutorial video`}
+                        src={tutorial.src}
+                      >
+                        <track
+                          kind="captions"
+                          src={tutorial.captions}
+                          srcLang="en"
+                          label="English captions"
+                          default
+                        />
+                      </video>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
             {thesisDeckLinks.length > 0 && (
               <Card data-testid="teacher-training-thesis-deck">
                 <CardHeader>
                   <CardTitle>Teach this lesson</CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    Present the slides on YAWP!, or make your own copy in Google
+                    Present the slides on Yawp!, or make your own copy in Google
                     Slides or PowerPoint to edit. The lesson plan goes with them.
                   </p>
                 </CardHeader>
@@ -434,7 +502,7 @@ export default function TeacherTrainingModuleRoute() {
             )}
 
             {(primaryResources.length > 0 ||
-              captionResource ||
+              captionsHref ||
               transcriptResource) && (
               <div className="space-y-3">
                 {primaryResources.length > 0 && (
@@ -480,7 +548,7 @@ export default function TeacherTrainingModuleRoute() {
                   </Card>
                 )}
 
-                {(captionResource || transcriptResource) && (
+                {(captionsHref || transcriptResource) && (
                   <section
                     aria-labelledby="teacher-training-media-accessibility-heading"
                     className="px-1 text-xs text-muted-foreground/80"
@@ -496,10 +564,10 @@ export default function TeacherTrainingModuleRoute() {
                       <span className="font-medium text-muted-foreground/80">
                         Media accessibility
                       </span>
-                      {captionResource ? (
+                      {captionsHref ? (
                         <a
                           className="rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                          href={`/api/teacher-training-module-resource/${captionResource.id}`}
+                          href={captionsHref}
                           download
                         >
                           Captions
@@ -601,11 +669,16 @@ export default function TeacherTrainingModuleRoute() {
                         </Link>
 
                         <DropdownMenu>
-                          <DropdownMenuTrigger>
+                          {/* asChild: the trigger is this button, not a
+                              button around it. A button inside a button is
+                              not valid HTML, so the browser moved it and the
+                              page failed to hydrate. */}
+                          <DropdownMenuTrigger asChild>
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-6 w-6 p-0"
+                              aria-label="Module options"
                             >
                               <MoreVertical className="h-4 w-4" />
                             </Button>

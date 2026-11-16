@@ -33,7 +33,7 @@ describe('buildLoungeEmail', () => {
       { kind: 'staff-request', postId: 'p9', postTitle: 'Rubric', actorName: 'Maria S.', excerpt: 'Help', isPrivate: true },
       origin
     );
-    expect(email.subject).toBe('Private question for the YAWP! team: "Rubric"');
+    expect(email.subject).toBe('Private question for the Yawp! team: "Rubric"');
     expect(email.text).toContain('https://yawp.school/app/admin/lounge?post=p9');
   });
 

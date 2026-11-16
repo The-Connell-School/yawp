@@ -67,7 +67,10 @@ import { Comments } from './comments';
 import { MarginCommentsRail } from './comments/margin-comments-rail';
 import { TeacherPasteReport } from '~/components/teacher-paste-report';
 import { CommentsSelectionProvider } from './comments/selection-context';
-import { DocumentEditor } from './document-editor/document-editor';
+import {
+  DocumentEditor,
+  EditorLoadingShell,
+} from './document-editor/document-editor';
 import type { EditorBridge } from './document-editor/use-editor-sync';
 import { Tutor } from './tutor/tutor';
 import { DocumentHistory } from './document-history/document-history';
@@ -108,10 +111,15 @@ import {
   getGenericAssignmentPromptForEditor,
   isTutorEnabledForAssignment,
 } from '../route';
+import { parseDocumentEditorV2Capture } from '~/domain/document-editor/document-editor-v2-capture.shared';
 import './document-editor/document-editor-redesign.css';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
+
+/** Matches preview QA seed (`preview-document-editor-v2-qa.ts`). */
+const PREVIEW_QA_ACTIVE_COMMENT_ID = 'previewdocv2commentact01';
+const PREVIEW_QA_RESOLVED_COMMENT_ID = 'previewdocv2commentres01';
 
 function escapePrintHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => {
@@ -219,7 +227,30 @@ export function DocumentEditorV2Page() {
   useEffect(() => {
     scheduleAfterHydration(() => setUiMounted(true));
   }, []);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const v2Capture = data.v2CaptureAllowed
+    ? parseDocumentEditorV2Capture(searchParams.get('v2Capture'))
+    : null;
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(() =>
+    v2Capture === 'saving'
+      ? 'saving'
+      : v2Capture === 'error'
+        ? 'error'
+        : 'synced'
+  );
+  const handleSyncStatusChange = useCallback(
+    (status: SyncStatus) => {
+      if (v2Capture === 'saving' || v2Capture === 'error') return;
+      setSyncStatus(status);
+    },
+    [v2Capture]
+  );
+  const saveStatusForUi: SyncStatus =
+    v2Capture === 'saving'
+      ? 'saving'
+      : v2Capture === 'error'
+        ? 'error'
+        : syncStatus;
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
   const [mobileTutorSheetOpen, setMobileTutorSheetOpen] = useState(false);
   const [mobileCommentsSheetOpen, setMobileCommentsSheetOpen] = useState(false);
@@ -280,7 +311,6 @@ export function DocumentEditorV2Page() {
     }
     return label || null;
   }, [data.doc.classAssignment?.class]);
-  const [searchParams, setSearchParams] = useSearchParams();
   const fallbackCmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
   const cmsIdx =
     typeof data.currentCmsIdx === 'number' && data.currentCmsIdx >= 0
@@ -314,6 +344,11 @@ export function DocumentEditorV2Page() {
     isOwnTeacherPreview,
     setDesktopCommentsOpen,
   ]);
+  useEffect(() => {
+    if (v2Capture === 'comments-reply-resolved') {
+      setDesktopCommentsOpen(true);
+    }
+  }, [v2Capture, setDesktopCommentsOpen]);
   const showSubmitControls = !isViewingAsTeacher || isOwnTeacherPreview;
   const isDocumentOwner = user.id === data.doc.membership.userId;
   // Students and teachers in "Try it" preview edit; grading teachers view-only.
@@ -349,8 +384,10 @@ export function DocumentEditorV2Page() {
   const studentList = isViewingAsTeacher ? submissions : activeSubmissions;
   const submissionCountForBadge = activeSubmissions.length;
 
-  const isSubmitted = activeSubmissions.length > 0;
-  const hasAnySubmissionRecord = submissions.length > 0;
+  const isSubmitted =
+    v2Capture === 'submitted' ? true : activeSubmissions.length > 0;
+  const hasAnySubmissionRecord =
+    v2Capture === 'submitted' ? true : submissions.length > 0;
   const gradedCount = activeSubmissions.filter((s) => s.releasedAt).length;
   const versionNumber = activeSubmissions.length + 1;
   const submissionPreview = data.submissionPreview ?? null;
@@ -486,7 +523,8 @@ export function DocumentEditorV2Page() {
       commentsState.pendingDraft != null);
   const studentName =
     data.doc.membership.user.name?.trim() || 'Unknown student';
-  const cannotSubmitEmpty = !editorSubmittable;
+  const cannotSubmitEmpty =
+    v2Capture === 'empty' ? true : !editorSubmittable;
   const isSubmitting = submit.isSubmitting;
   const submitActionDisabled = isSubmitting || cannotSubmitEmpty;
 
@@ -609,11 +647,35 @@ export function DocumentEditorV2Page() {
     submissionToUnsubmit,
   ]);
 
+  if (v2Capture === 'loading') {
+    return (
+      <main
+        className="doc-editor-frame flex h-screen w-screen flex-col overflow-hidden"
+        data-document-editor-version="v2"
+        data-v2-capture="loading"
+      >
+        <header
+          className="doc-editor-header"
+          data-testid="document-editor-header"
+        >
+          <div className="doc-editor-header__title-block">
+            <span className="text-sm font-medium text-[#0f172a]">
+              {data.doc.title}
+            </span>
+            <SaveStatusIndicator status="synced" />
+          </div>
+        </header>
+        <EditorLoadingShell />
+      </main>
+    );
+  }
+
   return (
     <>
       <main
         className="doc-editor-frame flex h-screen w-screen flex-col overflow-hidden"
         data-document-editor-version="v2"
+        {...(v2Capture ? { 'data-v2-capture': v2Capture } : {})}
       >
         {showGuidedTour ? (
           <GuidedTour {...data.guidedTours!} />
@@ -676,7 +738,7 @@ export function DocumentEditorV2Page() {
                     ·
                   </span>
                 ) : null}
-                <SaveStatusIndicator status={syncStatus} />
+                <SaveStatusIndicator status={saveStatusForUi} />
               </div>
             </div>
           </div>
@@ -1021,12 +1083,14 @@ export function DocumentEditorV2Page() {
                   pageWidth={pageWidth}
                   onPageWidthChange={setPageWidth}
                   snapshotContent={
-                    viewingSubmission
-                      ? {
-                          html: submissionPreview!.html,
-                          text: submissionPreview!.text,
-                        }
-                      : null
+                    v2Capture === 'empty'
+                      ? { html: '<p></p>', text: '' }
+                      : viewingSubmission
+                        ? {
+                            html: submissionPreview!.html,
+                            text: submissionPreview!.text,
+                          }
+                        : null
                   }
                   submissionViewBanner={
                     viewingSubmission ? (
@@ -1048,7 +1112,7 @@ export function DocumentEditorV2Page() {
                     ) : null
                   }
                   onBridgeReady={handleEditorBridgeReady}
-                  onSyncStatusChange={setSyncStatus}
+                  onSyncStatusChange={handleSyncStatusChange}
                   onSubmittableContentChange={handleSubmittableContentChange}
                   onCommentDraft={(draft) => {
                     commentsState.setPendingDraft(draft);
@@ -1078,7 +1142,14 @@ export function DocumentEditorV2Page() {
                           }
                         }}
                         autoFocusReplyCommentId={
-                          commentsState.pendingFocusCommentId
+                          v2Capture === 'comments-reply-resolved'
+                            ? PREVIEW_QA_ACTIVE_COMMENT_ID
+                            : commentsState.pendingFocusCommentId
+                        }
+                        initialResolvedExpandedCommentId={
+                          v2Capture === 'comments-reply-resolved'
+                            ? PREVIEW_QA_RESOLVED_COMMENT_ID
+                            : null
                         }
                       />
                     ) : null

@@ -89,14 +89,14 @@ test.describe.serial('Faculty Lounge launch', () => {
     await expect(pinned.getByRole('link')).toHaveText([/Welcome to the Faculty Lounge/, /House Rules for the Lounge/]);
     // The Letter look: Brian's welcome as a letter, the team's faces beside it.
     await expect(pinned.getByText(/Every school's faculty lounge has its own personality/)).toBeVisible();
-    await expect(pinned.getByRole('heading', { name: 'Ask Admin or the YAWP! team' })).toBeVisible();
-    await expect(pinned.getByText('@YAWP! team')).toBeVisible();
+    await expect(pinned.getByRole('heading', { name: 'Ask Admin or the Yawp! team' })).toBeVisible();
+    await expect(pinned.getByText('@Yawp! team')).toBeVisible();
     // A question that is all title previews Brian's answer, and says who answered.
-    const q1 = page.getByRole('article').filter({ hasText: "What's the best way to use YAWP!" });
+    const q1 = page.getByRole('article').filter({ hasText: "What's the best way to use Yawp!" });
     await expect(q1.getByText(/^Use the Class Starter to build reps\./)).toBeVisible();
     await expect(q1.getByText('Admin answered')).toBeVisible();
-    // The launch questions are asked by the YAWP! team, not by one staff member.
-    await expect(q1.getByText('YAWP! team', { exact: true })).toBeVisible();
+    // The launch questions are asked by the Yawp! team, not by one staff member.
+    await expect(q1.getByText('Yawp! team', { exact: true })).toBeVisible();
     // Drafts in the hopper stay out of the feed.
     await expect(page.getByRole('link', { name: HOPPER_TITLE })).toHaveCount(0);
 
@@ -109,9 +109,9 @@ test.describe.serial('Faculty Lounge launch', () => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/lounge');
     await page
-      .getByRole('link', { name: "What's the best way to use YAWP! to make writing a regular part of our class routine?" })
+      .getByRole('link', { name: "What's the best way to use Yawp! to make writing a regular part of our class routine?" })
       .click();
-    const answers = page.getByRole('region', { name: 'Answers from the YAWP! team' });
+    const answers = page.getByRole('region', { name: 'Answers from the Yawp! team' });
     await expect(answers.getByText(/Use the Class Starter to build reps\./)).toBeVisible();
     await expect(answers.getByText("Admin's answer")).toBeVisible();
     await expect(page.getByTestId('lounge-post-body')).toHaveCount(0);
@@ -162,13 +162,13 @@ test.describe.serial('Faculty Lounge launch', () => {
     await expect(page.getByLabel(/Yawp! may share my posts, with my name removed/)).not.toBeChecked();
   });
 
-  test('Contact Us reaches the YAWP! team inbox, not the Lounge', async ({ page, signIn, e2eContext }) => {
+  test('Contact Us reaches the Yawp! team inbox, not the Lounge', async ({ page, signIn, e2eContext }) => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/lounge');
     await page.getByRole('link', { name: 'Contact Us' }).click();
     await page.getByLabel('Message').fill(CONTACT_MESSAGE);
     await page.getByRole('button', { name: 'Send' }).click();
-    await expect(page.getByText(/Thanks\. The YAWP! team will get back to you by email\./)).toBeVisible();
+    await expect(page.getByText(/Thanks\. The Yawp! team will get back to you by email\./)).toBeVisible();
 
     await logout(page);
     await signIn(e2eContext.adminEmail, ADMIN_PASSWORD);
@@ -194,7 +194,7 @@ test.describe.serial('Faculty Lounge launch', () => {
     await expect(page.getByRole('alert')).toContainText('Fill in the [bracketed] notes');
 
     await lessons.getByRole('link', { name: HOPPER_TITLE }).click();
-    await expect(page.getByText('Draft. Only the YAWP! team can see this.')).toBeVisible();
+    await expect(page.getByText('Draft. Only the Yawp! team can see this.')).toBeVisible();
     await page.getByRole('button', { name: 'Edit post' }).click();
     const body = page.getByLabel('Edit details');
     const text = (await body.inputValue())
@@ -222,7 +222,7 @@ test.describe.serial('Faculty Lounge launch', () => {
     await expect(post.getByText('edited')).toHaveCount(0);
   });
 
-  test('the YAWP! team schedules a post for later from the composer', async ({ page, signIn, e2eContext }) => {
+  test('the Yawp! team schedules a post for later from the composer', async ({ page, signIn, e2eContext }) => {
     await signIn(e2eContext.adminEmail, ADMIN_PASSWORD);
     await page.goto('/app/lounge/new');
     await page.getByLabel('Title').fill('How do you get through a stack of essays?');

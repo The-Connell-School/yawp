@@ -65,7 +65,7 @@ the log. Items done above are marked "above".
 | 5 | Share emails: confirm preview, guarantee production, on-screen sent/failed, examples | Above, plus a three-state result: **sent**, **preview** (no email from a preview) or **failed** (red, with the link to send yourself). Examples: `2026-10-22-lesson-emails.png` |
 | 6 | One writing number, listed by step name | Above. The meter, the shared pages and the summary read "From Class Starter · Exit Ticket" (what students write) |
 | 7 | What counts as writing; older lessons re-tagged on open | Above. Writing is worked out each time a stack loads, so older lessons count paper writing as soon as they open |
-| 8 | Yawp! everywhere, before NCTE | Above, plus: capitals no longer turn the name into YAWP! (kickers, running heads, eyebrows and slide labels in the app, the kit plan PDF and Word file, and PowerPoint), the kit kicker reads "Yawp! LESSON PLAN", the LTI line item is "Yawp! essay", and the planner and share rewrites are told the rule. The logo is unchanged |
+| 8 | Yawp! everywhere, before NCTE | Above, plus: capitals no longer turn the name into Yawp! (kickers, running heads, eyebrows and slide labels in the app, the kit plan PDF and Word file, and PowerPoint), the kit kicker reads "Yawp! LESSON PLAN", the LTI line item is "Yawp! essay", and the planner and share rewrites are told the rule. The logo is unchanged |
 | 9 | The sub gets the actual slides | Above (slides on the page), plus **Present the slides** full screen from the sub's page |
 
 ### Should fix

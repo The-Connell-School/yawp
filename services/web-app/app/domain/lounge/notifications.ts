@@ -38,8 +38,8 @@ export function buildLoungeEmail(
   let link: string;
   if (notification.kind === 'staff-request') {
     subject = notification.isPrivate
-      ? `Private question for the YAWP! team: "${title}"`
-      : `New question for the YAWP! team: "${title}"`;
+      ? `Private question for the Yawp! team: "${title}"`
+      : `New question for the Yawp! team: "${title}"`;
     link = `${origin}/app/admin/lounge?post=${encodeURIComponent(notification.postId)}`;
   } else {
     link = `${origin}/app/lounge/${encodeURIComponent(notification.postId)}`;
@@ -54,11 +54,11 @@ export function buildLoungeEmail(
     notification.kind === 'staff-request'
       ? `${notification.actorName} asked in the Faculty Lounge:`
       : `${notification.actorName} wrote:`;
-  const text = [lead, '', notification.excerpt, '', `Open it in YAWP!: ${link}`].join('\n');
+  const text = [lead, '', notification.excerpt, '', `Open it in Yawp!: ${link}`].join('\n');
   const html = [
     `<p>${escapeHtml(lead)}</p>`,
     `<blockquote style="margin:0;padding-left:12px;border-left:3px solid #D2714F;color:#3C3828">${escapeHtml(notification.excerpt)}</blockquote>`,
-    `<p><a href="${escapeHtml(link)}">Open it in YAWP!</a></p>`,
+    `<p><a href="${escapeHtml(link)}">Open it in Yawp!</a></p>`,
   ].join('\n');
   return { subject, text, html };
 }

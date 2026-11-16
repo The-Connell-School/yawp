@@ -1,0 +1,18 @@
+{
+  "baseUrl": "https://pr-963.preview.yawp.school",
+  "documentId": "previewdoceditv2qa0001",
+  "pairs": [
+    {
+      "slug": "student-desktop-1440",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass8/student-desktop-1440-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass8/student-desktop-1440-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass8/student-desktop-1440-side-by-side.png"
+    },
+    {
+      "slug": "mobile-390",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass8/mobile-390-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass8/mobile-390-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass8/mobile-390-side-by-side.png"
+    }
+  ]
+}

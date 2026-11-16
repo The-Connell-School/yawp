@@ -15,7 +15,7 @@ training video.
 
 | # | Lesson | Old deck | Slides | Review slides | New slides | Lesson plan | Video | Status |
 | --- | --- | --- | ---: | ---: | ---: | --- | ---: | --- |
-| 1 | Introduce Students to YAWP! | Day 1 Intro to YAWP! | 13 | 0 | 13 | Yes | 17 min | **Done** |
+| 1 | Introduce Students to Yawp! | Day 1 Intro to Yawp! | 13 | 0 | 13 | Yes | 17 min | **Done** |
 | 2 | Pre-Writing | Pre-Writing | 23 | 0 | 23 | Yes | 31 min | **Done** |
 | 3 | Developing a Thesis Statement | How to Write a Thesis Statement | 44 | 6 | 38 | Yes | 20 min | **Done** |
 | 4 | Introduction Paragraph | Introduction Paragraph | 23 | 8 | 15 | Yes | 17 min | **Done** |
@@ -25,7 +25,7 @@ training video.
 | | **Remaining** | | **151** | **50** | **101** | | | |
 
 "Review slides" are the quiz that opens Lessons 3 to 7 (next section). "New
-slides" is what is actually new in each deck, counting its YAWP! title and
+slides" is what is actually new in each deck, counting its Yawp! title and
 closer slides.
 
 ## The big finding: a third of the work is one quiz
@@ -61,7 +61,7 @@ be built once:
 
 | Shared piece | Used in |
 | --- | --- |
-| YAWP! title slide and YAWP! closer slide | Every deck |
+| Yawp! title slide and Yawp! closer slide | Every deck |
 | **Critical Essay Form** diagram (`critical-essay-form.png`, already in assets) | L1, L2, L3, L5 |
 | **"Bored in the USA"** sample essay (by Haley, a student): the intro, body paragraphs and conclusion appear as slide text | L1 (read it), L4 (its intro is the "Rhetorical Question" example), L5 (body paragraphs), L6 (conclusion), L7 (its title) |
 | The **running example thesis**: "When schools fail to prioritize creativity in teaching, school becomes boring for both students and teachers, resulting in a lack of shared motivation, excitement, and accomplishment." | L3 (built from observation + analysis), L4 (all four example intros end with it), L5 (broken into body paragraphs), L6 (its conclusion) |
@@ -82,13 +82,13 @@ remaining decks need **6 more**:
 | `oa` | Observation on one tile, analysis points on another, and (optionally) the thesis they combine into underneath | L3 (slides 26–32) |
 | `thesis-parts` | A thesis with each part highlighted in its own colour, and the parts listed as numbered body paragraphs | L5 (slides 17–18), L3 (slide 43) |
 | `passage` | A long passage (a sample intro, body paragraph or conclusion) with the thesis in italics or highlighted, and a label | L1, L4, L5, L6 |
-| `closer` | The YAWP! logo slide Brian ends most decks with | L3–L7 |
+| `closer` | The Yawp! logo slide Brian ends most decks with | L3–L7 |
 
 Everything else maps onto a layout that already exists.
 
 ## Deck by deck
 
-### Lesson 1: Day 1 Intro to YAWP! (13 slides)
+### Lesson 1: Day 1 Intro to Yawp! (13 slides)
 
 The first day: a game, who Brian is, what "yawp" means, a sample essay,
 and signing up for the site. Brian's video is 17 min; the lesson plan is
@@ -96,10 +96,10 @@ one page.
 
 | Old slides | Content | Hybrid layout |
 | --- | --- | --- |
-| 1 | YAWP! title | `title` |
+| 1 | Yawp! title | `title` |
 | 2, 5 | 2 Truths and a Lie: the rules, Brian's three statements, then "Your turn" | `compare` (Truths / Lie) and `statement` |
 | 3, 4 | "I am Brian Connell" with two personal photos (Brian and his twin as kids; Brian in the 1990s) | `photo`, **see question 1** |
-| 6 | YAWP! divider | `section` |
+| 6 | Yawp! divider | `section` |
 | 7 | Whitman: "I sound my barbaric yawp over the roofs of the world." | `quote` |
 | 8 | Why do we write? (three reasons) | `steps` |
 | 9, 10 | Sample essay "Bored in the USA" and class discussion questions | `section` + `steps`, or `passage` for the intro |
@@ -108,7 +108,7 @@ one page.
 | 13 | Screenshot of the Welcome exercise in the old editor | `figure` with a **new screenshot** |
 
 **Screenshots to take:** the sign-in page, "Create an account", the student
-dashboard, and a new document in the "Welcome to YAWP!" course. The Student
+dashboard, and a new document in the "Welcome to Yawp!" course. The Student
 Sign-up Process PDF in the resources shows the old flow (teacher class code,
 email link); it needs checking against today's free-tier join flow before
 we put it on a slide.
@@ -124,7 +124,7 @@ combine into a thesis; then a second half on cutting the verb "to be".
 
 | Old slides | Content | Hybrid layout |
 | --- | --- | --- |
-| 1 | YAWP! title | `title` |
+| 1 | Yawp! title | `title` |
 | 2–7 | Review quiz (3 questions) | `quiz` ×6 (shared) |
 | 8, 9 | Elephant in a street in North Bengal: what do you see? then the caption | `photo` ×2 (same pattern as Pre-Writing's Fallen Man); new asset `elephant.png` |
 | 10 | Quick review: what do we need before we can write? | `statement` |
@@ -140,7 +140,7 @@ combine into a thesis; then a second half on cutting the verb "to be".
 | 30–32 | Combine O & A to form a thesis ×3 | `oa` with thesis ×3 |
 | 33 | Observation + Analysis = Complex Thesis | `equation` (already built) |
 | 34, 35 | Don't start without a thesis; Thesis review (3 rules) | `statement`, `steps` |
-| 36 | YAWP! divider (second half) | `section` |
+| 36 | Yawp! divider (second half) | `section` |
 | 37–40 | Avoid the verb "to be": example, change, before/after | `statement`, `example`, `compare` |
 | 41–43 | But wait, there's more: weeding the garden; the thesis grows | `statement`, `example`, `thesis-parts` |
 | 44 | WHOA, DID YOU SEE THAT? | `statement` |
@@ -156,7 +156,7 @@ theses after class" step) plus a 20-minute video.
 
 | Old slides | Content | Hybrid layout |
 | --- | --- | --- |
-| 1 | YAWP! title | `title` |
+| 1 | Yawp! title | `title` |
 | 2–9 | Review quiz (4 questions) | `quiz` ×8 (shared) |
 | 10, 11 | Put 7 terms in order (city, continent, …) and the reveal | `ordering` ×2 |
 | 12, 13 | Put 5 sentences in order (Iron Man) and the reveal | `ordering` ×2 |
@@ -165,7 +165,7 @@ theses after class" step) plus a 20-minute video.
 | 17 | Four introduction styles | `steps` (4 tiles) |
 | 18–21 | Example intros: story, rhetorical question, quotation/fact, definition | `passage` ×4 |
 | 22 | Writing activity: choose a style and begin | `prompt` |
-| 23 | YAWP! closer | `closer` |
+| 23 | Yawp! closer | `closer` |
 
 **Screenshots to take:** the editor on the "Introduction" step.
 
@@ -176,7 +176,7 @@ rule" trick and the first-person "I" policy note) plus the video.
 
 | Old slides | Content | Hybrid layout |
 | --- | --- | --- |
-| 1 | YAWP! title | `title` |
+| 1 | Yawp! title | `title` |
 | 2–11 | Review quiz (5 questions) | `quiz` ×10 (shared) |
 | 12 | Critical Essay Form | `figure` |
 | 13–15 | "Supporting Paragraphs" divider; everything must support the thesis; the thesis tells you where to go | `section`, `statement` ×2 |
@@ -201,7 +201,7 @@ video with the full house analogy.
 
 | Old slides | Content | Hybrid layout |
 | --- | --- | --- |
-| 1 | YAWP! title | `title` |
+| 1 | Yawp! title | `title` |
 | 2–13 | Review quiz (6 questions, ending with True/False and "FALSE!") | `quiz` ×12 (shared) |
 | 14 | "Conclusion Paragraph" divider | `section` |
 | 15, 16 | Myth: restate the thesis / Fact: that makes you seem like an alien | `compare` or `quote` ×2 (Brian used purple quote slides here) |
@@ -212,7 +212,7 @@ video with the full house analogy.
 | 24 | Suggested conclusion structure (5 steps) | `steps` (shared with L7) |
 | 25 | The full sample conclusion | `passage` |
 | 26 | "House Analogy" divider | `section` |
-| 27 | YAWP! closer | `closer` |
+| 27 | Yawp! closer | `closer` |
 
 **Screenshots to take:** the editor on the "Conclusion" step.
 
@@ -225,7 +225,7 @@ The smallest amount of new content, but the whole quiz.
 
 | Old slides | Content | Hybrid layout |
 | --- | --- | --- |
-| 1 | YAWP! title | `title` |
+| 1 | Yawp! title | `title` |
 | 2 | "Course Review" divider | `section` |
 | 3–14 | Review quiz (all 6 questions) | `quiz` ×12 (shared) |
 | 15 | Suggested conclusion structure | `steps` (shared with L6) |
@@ -268,7 +268,7 @@ quick once its questions are answered.
 2. **Sign-up** shows the current free-tier join flow.
 3. **House analogy** becomes a slide a teacher can actually use, not a
    title they have to tell from memory.
-4. **Finishing touches** is written for the YAWP! editor, not Google Docs.
+4. **Finishing touches** is written for the Yawp! editor, not Google Docs.
 5. **One PR** for all seven decks (#452).
 6. **Put the decks in the module** (Kevin, later the same day): each deck
    now sits inside its step in the Thesis-Driven Essay's Modules, behind the
@@ -295,7 +295,7 @@ quick once its questions are answered.
      (including "Unlocked and Loaded: How Easy Gun Access Puts Children at
      Risk"), and whether Consolas (the mono labels) looks right in Google
      Slides.
-9. **Three ways to use a deck** (Kevin, 2026-10-17): Present on YAWP!
+9. **Three ways to use a deck** (Kevin, 2026-10-17): Present on Yawp!
    (the main button: exactly as designed, every time), a Google Slides copy,
    and the PowerPoint download, for teachers who want to edit. Keynote is not
    a target. The presenter draws the same slides as the .pptx, from the same
@@ -327,7 +327,7 @@ quick once its questions are answered.
    **Recommendation:** a `steps` slide with the four stops, words in notes.
 4. **Finishing-touches formatting (Lesson 7, slide 20).** "12pt, black,
    left-aligned, single-spaced" reads like Google Docs instructions. Does
-   it apply in the YAWP! editor, or should the slide say "delete your
+   it apply in the Yawp! editor, or should the slide say "delete your
    pre-writing, add a title, click Submit"?
 5. **One PR per deck, or all in #452?** One PR per deck keeps each review
    small (one `.pptx`, one content file, maybe a layout or two). All in

@@ -36,6 +36,10 @@ import {
   seedPreviewTeacherNotesQa,
   shouldRunPreviewTeacherNotesQaSeed,
 } from './seed-preview-teacher-notes-qa';
+import {
+  seedPreviewDocumentEditorV2Qa,
+  shouldRunPreviewDocumentEditorV2QaSeed,
+} from './seed-preview-document-editor-v2-qa';
 
 assertLocalSeedTarget();
 
@@ -98,6 +102,13 @@ try {
       await seedPreviewTeacherNotesQa(prisma);
     } catch (error) {
       console.error('seed-preview-teacher-notes-qa: failed (non-fatal)', error);
+    }
+  }
+  if (shouldRunPreviewDocumentEditorV2QaSeed()) {
+    try {
+      await seedPreviewDocumentEditorV2Qa(prisma);
+    } catch (error) {
+      console.error('seed-preview-document-editor-v2-qa: failed (non-fatal)', error);
     }
   }
   for (const seat of seats) {

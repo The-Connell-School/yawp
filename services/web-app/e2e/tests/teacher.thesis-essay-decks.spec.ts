@@ -99,7 +99,7 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
     await page.getByRole('button', { name: 'Modules' }).click();
     await expect(page.getByText(/each module has its slide deck, to present here/i)).toBeVisible();
     // Day 1 has no step of its own, so its materials sit above the list.
-    await expect(page.getByText(/introduce YAWP! on Day 1/i)).toBeVisible();
+    await expect(page.getByText(/introduce Yawp! on Day 1/i)).toBeVisible();
     await expect(
       page.getByRole('link', { name: /powerpoint: lesson 1 · introduce students to yawp!/i })
     ).toHaveAttribute('href', '/api/thesis-essay-deck/lesson-1-day-1');
@@ -154,7 +154,7 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
     expect((await plan.body()).subarray(0, 5).toString()).toBe('%PDF-');
   });
 
-  test('presents a deck on YAWP!, slide by slide with notes, and closes back to the page', async ({
+  test('presents a deck on Yawp!, slide by slide with notes, and closes back to the page', async ({
     page,
     signIn,
     e2eContext,

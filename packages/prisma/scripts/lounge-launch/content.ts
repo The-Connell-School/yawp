@@ -4,7 +4,7 @@
  * plain-text display. Each item has a stable seedKey so seeding twice never
  * duplicates or overwrites anything (edits made in the app are kept).
  *
- * Authors: "brian" is Brian's own account; "team" is the shared "YAWP! team"
+ * Authors: "brian" is Brian's own account; "team" is the shared "Yawp! team"
  * account (no password, nobody signs in as it), so the launch questions come
  * from the team rather than one person.
  */
@@ -22,7 +22,7 @@ export type LaunchPost = {
   pin?: boolean;
   /** Saved as a draft for the team to finish and schedule from the inbox. */
   draft?: boolean;
-  /** Brian's answer, posted as a YAWP! team reply. */
+  /** Brian's answer, posted as a Yawp! team reply. */
   answer?: { seedKey: string; body: string };
 };
 
@@ -39,7 +39,7 @@ And some of them are the best rooms in the building. You grab a cup of coffee an
 
 Teaching writing is hard. Nobody hands us the craft on day one. Most of us piece it together over years of trial and error. Some teachers figure it out, but plenty of good ones get worn down and settle for whatever gets them through the semester. Whether you’re a new teacher navigating the confusion or a veteran with tried and tested plans, let’s be here for each other so we can give our students what they need to become great writers.
 
-The second kind of lounge is what we're after: a place to talk shop, to ask questions, to share lessons, to get inspired, and to inspire others. A place to connect with teachers outside your own building, to recharge a little, and to become better writing teachers together. The YAWP! team (Eric, Kevin, Bryant, and I) will be in here too, to answer questions and share what we've seen using YAWP! with our own students and teachers. But this lounge is yours, so jump in, claim your spot! Start by telling us who you are, where you teach, and why you decided to try YAWP! this year.
+The second kind of lounge is what we're after: a place to talk shop, to ask questions, to share lessons, to get inspired, and to inspire others. A place to connect with teachers outside your own building, to recharge a little, and to become better writing teachers together. The Yawp! team (Eric, Kevin, Bryant, and I) will be in here too, to answer questions and share what we've seen using Yawp! with our own students and teachers. But this lounge is yours, so jump in, claim your spot! Start by telling us who you are, where you teach, and why you decided to try Yawp! this year.
 
 — Brian C.`,
 };
@@ -65,7 +65,7 @@ export const HOUSE_RULES: LaunchPost = {
 
 6. Keep it about teaching. No selling, no promotions, no recruiting for your side hustle.
 
-7. Something broken or wrong? Use the Contact Us button at the top of the Lounge to reach the YAWP! team directly. We'll take care of it faster than a thread will.`,
+7. Something broken or wrong? Use the Contact Us button at the top of the Lounge to reach the Yawp! team directly. We'll take care of it faster than a thread will.`,
 };
 
 export const LAUNCH_QUESTIONS: LaunchPost[] = [
@@ -74,11 +74,11 @@ export const LAUNCH_QUESTIONS: LaunchPost[] = [
     author: 'team',
     kind: 'QUESTION',
     topic: 'classroom-routines',
-    title: "What's the best way to use YAWP! to make writing a regular part of our class routine?",
+    title: "What's the best way to use Yawp! to make writing a regular part of our class routine?",
     body: '',
     answer: {
       seedKey: 'launch:q1-routine:brian',
-      body: `Use the Class Starter to build reps. The first five to ten minutes of class, every day if you can. Send your class the assignment, set a timer, and let them write. The Class Starter is graded on showing up and thinking, not on polish, so the stakes are low and the habit builds fast. After a week, students walk in and open YAWP! without being told.
+      body: `Use the Class Starter to build reps. The first five to ten minutes of class, every day if you can. Send your class the assignment, set a timer, and let them write. The Class Starter is graded on showing up and thinking, not on polish, so the stakes are low and the habit builds fast. After a week, students walk in and open Yawp! without being told.
 
 The routine is the key. Writing becomes normal when it happens at the same time every day, and low stakes, accessible, fun writing (for a relatively easy grade) makes students comfortable and gradually builds confidence. Then, when you ask them to write the more advanced essay, it’s less daunting. How do you fit writing into your class periods?`,
     },
@@ -150,7 +150,7 @@ As for whether students read them: they read comments when they have to do somet
       seedKey: 'launch:q5-ai-first-day:brian',
       body: `I'm honest with them. I tell them AI exists, they all know how to use it, and pretending otherwise would be silly. Then I tell them what we're doing in this class: we're going to use AI as a coach, not a ghostwriter.
 
-I tell them why. Writing is how you figure out what you think. If something else does the writing, it also does the thinking, and you walk away with nothing. The YAWP! Tutor won't write for you. If you ask it to, it'll tell you it's not that kind of guy. But it will help you think, ask you good questions, and help you get your own ideas onto the page.
+I tell them why. Writing is how you figure out what you think. If something else does the writing, it also does the thinking, and you walk away with nothing. The Yawp! Tutor won't write for you. If you ask it to, it'll tell you it's not that kind of guy. But it will help you think, ask you good questions, and help you get your own ideas onto the page.
 
 And I tell them most of our writing happens in the room, with me there. I'm not trying to catch anybody. I'm trying to help them get better. What do you tell your students about AI?`,
     },
@@ -160,7 +160,7 @@ And I tell them most of our writing happens in the room, with me there. I'm not 
     author: 'team',
     kind: 'QUESTION',
     topic: 'other',
-    title: 'How do you explain YAWP! to other adults: parents, administrators, colleagues?',
+    title: 'How do you explain Yawp! to other adults: parents, administrators, colleagues?',
     body: '',
     answer: {
       seedKey: 'launch:q6-explaining-yawp:brian',
@@ -204,7 +204,7 @@ export const HOPPER: LaunchPost[] = [
     kind: 'QUESTION',
     topic: 'grading',
     draft: true,
-    title: 'What is your revision policy, and how do you use YAWP! to do it?',
+    title: 'What is your revision policy, and how do you use Yawp! to do it?',
     body: '',
   },
   {

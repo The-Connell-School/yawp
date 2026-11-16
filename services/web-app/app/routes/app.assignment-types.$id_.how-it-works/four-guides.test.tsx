@@ -49,6 +49,8 @@ const GUIDE_BACK = { backTo: PAGE, backLabel: 'Back to assignment type' };
 const GUIDES: {
   name: string;
   media: string;
+  /** Brian's tutorial for the lesson, with sound: it has captions. */
+  captions?: string;
   accent: string;
   element: (v2: boolean) => ReactElement;
 }[] = [
@@ -62,7 +64,8 @@ const GUIDES: {
   },
   {
     name: 'Pre-Writing',
-    media: '/img/prewriting-guide/overview.mp4',
+    media: '/courses/thesis-driven-essay/tutorials/02-pre-writing.mp4',
+    captions: '/courses/thesis-driven-essay/tutorials/02-pre-writing.vtt',
     accent: GUIDE_ACCENTS.navy,
     element: (v2) => (
       <WritingStepGuide
@@ -78,7 +81,8 @@ const GUIDES: {
   },
   {
     name: 'Thesis Statement',
-    media: '/img/thesis-statement-guide/overview.mp4',
+    media: '/courses/thesis-driven-essay/tutorials/03-thesis-statement.mp4',
+    captions: '/courses/thesis-driven-essay/tutorials/03-thesis-statement.vtt',
     accent: GUIDE_ACCENTS.petrol,
     element: (v2) => (
       <WritingStepGuide
@@ -112,6 +116,10 @@ for (const guide of GUIDES) {
       expect(video.compareDocumentPosition(howTo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       // Nothing else plays before it: it is the first video on the page.
       expect(root.querySelector('video')).toBe(video as HTMLVideoElement);
+      // Brian's tutorials talk, so they carry captions; the tours are silent.
+      expect(video.querySelector('track[kind="captions"]')?.getAttribute('src') ?? null).toBe(
+        guide.captions ?? null
+      );
     });
 
     it('How to Teach It is a white card, open on arrival, and Hide folds it to a preview', () => {

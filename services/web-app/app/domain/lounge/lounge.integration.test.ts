@@ -115,7 +115,7 @@ suite('Teacher Lounge against the database', () => {
     const thread = await lounge.getLoungeThread(devin(), postId);
     expect(thread?.staffReplies).toHaveLength(1);
     expect(thread?.staffReplies[0]).toMatchObject({
-      author: { name: 'Brian Connell', detail: 'YAWP! team' },
+      author: { name: 'Brian Connell', detail: 'Yawp! team' },
       videoUrl: 'https://www.loom.com/share/abc',
     });
     expect(thread?.replies).toHaveLength(0);
@@ -218,7 +218,7 @@ suite('Teacher Lounge against the database', () => {
     expect(await lounge.getLoungeThread(maria(), postId)).toBeNull();
   });
 
-  test('mention candidates are the YAWP! team first, then people in the thread', async () => {
+  test('mention candidates are the Yawp! team first, then people in the thread', async () => {
     const { postId } = await lounge.createLoungePost({
       viewer: maria(),
       organizationId: ids.orgA,
@@ -227,7 +227,7 @@ suite('Teacher Lounge against the database', () => {
     });
     await lounge.createLoungeReply({ viewer: devin(), organizationId: ids.orgB, postId, input: { body: 'Me', videoUrl: null } });
     const candidates = await lounge.listMentionCandidates(maria(), postId);
-    expect(candidates[0]).toMatchObject({ userId: 'yawp-team', label: 'YAWP! team' });
+    expect(candidates[0]).toMatchObject({ userId: 'yawp-team', label: 'Yawp! team' });
     const devinIndex = candidates.findIndex((c) => c.userId === ids.devin);
     expect(devinIndex).toBeGreaterThan(0);
     expect(candidates[devinIndex]).toMatchObject({ label: 'Devin R.', detail: `St. Ignatius ${stamp}` });

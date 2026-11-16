@@ -62,16 +62,7 @@ export type LandingBlock =
    * The Thesis-Driven Essay course: each lesson with its slide deck and its
    * tutorial video (see thesis-essay-course.ts). `lead` sits directly above it.
    */
-  | {
-      type: 'course';
-      lead?: string;
-      /**
-       * A closed box under a lesson's row, for what a teacher should know
-       * when they get to that lesson (the YAWP! philosophy on essay prompts,
-       * under Pre-writing).
-       */
-      lessonNotes?: Partial<Record<YawpLessonSlug, LandingSection>>;
-    }
+  | { type: 'course'; lead?: string }
   /**
    * One lesson of the course on its own, for the page of the step it teaches
    * (Pre-Writing, Thesis Statement): its slide deck and its tutorial video.
@@ -112,7 +103,7 @@ const ul = (...items: string[]): LandingBlock => ({ type: 'bullets', items });
 
 const TUTOR_NEVER_WRITES = 'It will never write for them.';
 
-const PHILOSOPHY_HEADING = 'YAWP! philosophy on essay prompts';
+const PHILOSOPHY_HEADING = 'Yawp! philosophy on essay prompts';
 
 /** "First time teaching it?" on the step pages, its tutorial one click away. */
 const firstTimeTeaching = (lesson: YawpLessonSlug): LandingBlock => ({
@@ -139,21 +130,19 @@ const THESIS_DRIVEN_ESSAY: LandingPage = {
         {
           type: 'course',
           lead: '**Teach these steps in order! (Did we mention that?)**',
-          // Kevin and Brian, Nov 11: Brian's note on prompts, as its own box
-          // under Pre-writing, the lesson where students take a prompt and
-          // find what they care about in it.
-          lessonNotes: {
-            'pre-writing': {
-              id: 'philosophy',
-              heading: PHILOSOPHY_HEADING,
-              blocks: [
-                p(
-                  "We've found that students write their best essays about something they actually care about, so many of our prompts are open on purpose and encourage students to choose their own adventure within a topic. You'll enjoy reading 75 essays with 75 different angles a lot more than 75 essays answering the same narrow question. Still, some students and teachers prefer a tighter, more specific scope, and that's OK too! Either way, help students find their personal connection to the topic. If a student is stuck, send them to the emotional charge: what they loved, what grabbed them, what made them upset."
-                ),
-              ],
-            },
-          },
         },
+      ],
+    },
+    // Brian's note on prompts, its own box under How to Teach It and above
+    // the library, as on the Pre-Writing page (Kevin, Nov 15; it was a box
+    // under the Pre-writing lesson's row).
+    {
+      id: 'philosophy',
+      heading: PHILOSOPHY_HEADING,
+      blocks: [
+        p(
+          "We've found that students write their best essays about something they actually care about, so many of our prompts are open on purpose and encourage students to choose their own adventure within a topic. You'll enjoy reading 75 essays with 75 different angles a lot more than 75 essays answering the same narrow question. Still, some students and teachers prefer a tighter, more specific scope, and that's OK too! Either way, help students find their personal connection to the topic. If a student is stuck, send them to the emotional charge: what they loved, what grabbed them, what made them upset."
+        ),
       ],
     },
   ],
@@ -670,14 +659,7 @@ export function landingPagePlainText(page: LandingPage): string {
     .flatMap((block) => {
       if (block.type === 'paragraph') return [block.text];
       if (block.type === 'bullets') return block.items;
-      const notes =
-        block.type === 'course'
-          ? Object.values(block.lessonNotes ?? {}).flatMap((note) => [
-              note!.heading,
-              ...note!.blocks.flatMap((b) => (b.type === 'paragraph' ? [b.text] : [])),
-            ])
-          : [];
-      return [...(block.lead ? [block.lead] : []), ...notes];
+      return block.lead ? [block.lead] : [];
     })
     .map(stripMarkup)
     .filter(Boolean)

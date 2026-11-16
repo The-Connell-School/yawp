@@ -126,7 +126,7 @@ function newDoc(title: string): Doc {
     bufferPages: true,
     info: {
       Title: title,
-      Author: 'YAWP! Writing Program',
+      Author: 'Yawp! Writing Program',
       CreationDate: FIXED_DATE,
       ModDate: FIXED_DATE,
     },
@@ -324,7 +324,7 @@ function sourceNote(doc: Doc, text: string): void {
     .text(text, MARGIN.left, y + 8, { width: WIDTH, lineGap: 1.5 });
 }
 
-/** The YAWP! wordmark, the lesson and the page number at every page's foot. */
+/** The Yawp! wordmark, the lesson and the page number at every page's foot. */
 function footers(doc: Doc, label: string): void {
   const range = doc.bufferedPageRange();
   for (let i = range.start; i < range.start + range.count; i++) {
@@ -333,7 +333,7 @@ function footers(doc: Doc, label: string): void {
     const bottom = doc.page.margins.bottom;
     doc.page.margins.bottom = 0;
     const y = PAGE.height - 38;
-    doc.font(FONT.serifBold).fontSize(9).fillColor(hex(T.terracotta)).text('YAWP!', MARGIN.left, y, { lineBreak: false });
+    doc.font(FONT.serifBold).fontSize(9).fillColor(hex(T.terracotta)).text('Yawp!', MARGIN.left, y, { lineBreak: false });
     doc
       .font(FONT.body)
       .fontSize(8)
@@ -377,11 +377,11 @@ export function renderLessonPlan(plan: LessonPlan, deck: HybridDeck): Promise<Ui
  * class-code flow.
  */
 export function renderSignUpHandout(): Promise<Uint8Array> {
-  const doc = newDoc('Join your class on YAWP!');
+  const doc = newDoc('Join your class on Yawp!');
   header(
     doc,
     'Thesis-Driven Essay · Day 1 · Student handout',
-    'Join your class on YAWP!',
+    'Join your class on Yawp!',
     'You’ll write your essay on **yawp.school**. Joining takes about a minute, and you don’t need an email address.'
   );
 
@@ -406,7 +406,7 @@ export function renderSignUpHandout(): Promise<Uint8Array> {
       text: 'Choose a **handle**: it’s how you log in. 3 to 30 characters: letters, numbers, dots, underscores and hyphens.',
     },
     { text: 'Choose a **password** and type it twice.' },
-    { text: 'Click **Join class.** Already have a YAWP! account? Log in from the same page instead.' },
+    { text: 'Click **Join class.** Already have a Yawp! account? Log in from the same page instead.' },
   ];
   doc.x = MARGIN.left;
   const right = MARGIN.left + listW;

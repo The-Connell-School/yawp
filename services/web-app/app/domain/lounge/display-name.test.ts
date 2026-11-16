@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { loungeByline, loungeDisplayName } from './display-name';
+import { isLoungeTeamAccountName, loungeByline, loungeDisplayName } from './display-name';
 
 describe('loungeDisplayName', () => {
   test('first name and last initial by default', () => {
@@ -44,16 +44,32 @@ describe('loungeByline', () => {
     ).toEqual({ name: 'Maria S.', detail: null });
   });
 
-  test('the YAWP! team always shows full name and "YAWP! team"', () => {
+  test('the Yawp! team always shows full name and "Yawp! team"', () => {
     expect(
       loungeByline({ name: 'Brian Connell', style: 'FIRST_NAME_ONLY', schoolName: 'The Connell School', isStaff: true })
-    ).toEqual({ name: 'Brian Connell', detail: 'YAWP! team' });
+    ).toEqual({ name: 'Brian Connell', detail: 'Yawp! team' });
   });
 
-  test('the YAWP! team account reads as just "YAWP! team", with no repeat after it', () => {
-    expect(loungeByline({ name: 'YAWP! team', style: null, schoolName: null, isStaff: true })).toEqual({
-      name: 'YAWP! team',
+  test('the Yawp! team account reads as just "Yawp! team", with no repeat after it', () => {
+    expect(loungeByline({ name: 'Yawp! team', style: null, schoolName: null, isStaff: true })).toEqual({
+      name: 'Yawp! team',
       detail: null,
     });
+  });
+
+  test('a team account still stored with the old spelling reads as "Yawp! team"', () => {
+    expect(loungeByline({ name: 'YAWP! team', style: null, schoolName: null, isStaff: true })).toEqual({
+      name: 'Yawp! team',
+      detail: null,
+    });
+  });
+});
+
+describe('isLoungeTeamAccountName', () => {
+  test('matches the team account in either spelling, and nobody else', () => {
+    expect(isLoungeTeamAccountName('Yawp! team')).toBe(true);
+    expect(isLoungeTeamAccountName(' YAWP! team ')).toBe(true);
+    expect(isLoungeTeamAccountName('Brian Connell')).toBe(false);
+    expect(isLoungeTeamAccountName(null)).toBe(false);
   });
 });

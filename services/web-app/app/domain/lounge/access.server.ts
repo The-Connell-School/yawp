@@ -51,7 +51,7 @@ export function safeLoungeReturnPath(value: string | null | undefined): string {
 
 /**
  * requireLoungeAccess, plus the first-visit welcome box: a teacher who has
- * not agreed to the House Rules is sent there first, once. The YAWP! team
+ * not agreed to the House Rules is sent there first, once. The Yawp! team
  * skips it.
  */
 export async function requireLoungeMember(request: Request): Promise<LoungeAccess> {

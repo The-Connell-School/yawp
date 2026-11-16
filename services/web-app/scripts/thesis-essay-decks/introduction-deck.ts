@@ -186,11 +186,11 @@ export const INTRODUCTION_DECK: HybridDeck = {
         [0.16, 0.947],
       ],
       notes:
-        'Today’s YAWP! editor on the Introduction step with a sample introduction leading into its thesis. Students are always amazed how fast the intro comes once they know their options.',
+        'Today’s Yawp! editor on the Introduction step with a sample introduction leading into its thesis. Students are always amazed how fast the intro comes once they know their options.',
     },
     {
       layout: 'closer',
-      eyebrow: 'YAWP!',
+      eyebrow: 'Yawp!',
       line: 'Next time: body paragraphs.',
       notes:
         'Before next class, read through the introductions and comment. Some will need a transition sentence linking the intro to the thesis; help with that.',

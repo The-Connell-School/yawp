@@ -2,7 +2,7 @@ import type { ThesisDeckLink } from '~/domain/thesis-essay-decks/thesis-essay-de
 import { cn } from '~/utils/misc';
 
 const THESIS_LINK_TEXT: Record<ThesisDeckLink['kind'], { prefix: string; type: string }> = {
-  present: { prefix: 'Present', type: 'on YAWP!' },
+  present: { prefix: 'Present', type: 'on Yawp!' },
   'google-slides': { prefix: 'Google Slides', type: 'make a copy' },
   deck: { prefix: 'PowerPoint', type: '.pptx' },
   'lesson-plan': { prefix: 'Lesson plan', type: '.pdf' },

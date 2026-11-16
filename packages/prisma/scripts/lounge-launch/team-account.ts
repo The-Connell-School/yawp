@@ -1,15 +1,15 @@
 import type { PrismaClient } from '../../generated/prisma';
 
 /**
- * The shared "YAWP! team" account the launch questions are posted from, so
+ * The shared "Yawp! team" account the launch questions are posted from, so
  * they read as coming from the team rather than one person. It has no
  * password and an address that cannot receive mail (.invalid), so nobody can
  * sign in as it or reset its password. It is an admin only so the Lounge
- * shows it as the YAWP! team.
+ * shows it as the Yawp! team.
  */
 export const LOUNGE_TEAM_ACCOUNT = {
   email: 'yawp-team@lounge.invalid',
-  name: 'YAWP! team',
+  name: 'Yawp! team',
 } as const;
 
 type UserPrisma = Pick<PrismaClient, 'user'>;

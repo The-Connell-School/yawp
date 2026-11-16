@@ -1401,7 +1401,7 @@ export default function AppAssignmentTypesIdRoute() {
                 ) : null}
                 {data.thesisDecks?.dayOne.length ? (
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
-                    <span>Before the first module: introduce YAWP! on Day 1.</span>
+                    <span>Before the first module: introduce Yawp! on Day 1.</span>
                     <ThesisDeckLinks links={data.thesisDecks.dayOne} />
                   </div>
                 ) : null}

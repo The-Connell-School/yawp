@@ -7,7 +7,7 @@ import { cn } from '~/utils/misc';
  * A post or reply body: plain text with line breaks kept and mentions shown
  * as "@Name". An empty body (a question that is all title) renders nothing.
  *
- * With `boldNumberedLeads` (posts from the YAWP! team, like the House Rules),
+ * With `boldNumberedLeads` (posts from the Yawp! team, like the House Rules),
  * each numbered line's first sentence is bold, so a list of rules reads as
  * headers rather than one wall of text.
  */
