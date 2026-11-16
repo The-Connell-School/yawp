@@ -392,7 +392,7 @@ hung it on almost every deck.
   Core standards are present". State standards wait for onboarding.
 - **Try uploads on the preview** with a real chapter and handout: the model
   path cannot run in e2e.
-- **For Brian:** the kit writes the brand as "YAWP!" in mixed case, while
+- **For Brian:** the kit writes the brand as "Yawp!" in mixed case, while
   the app writes "Yawp!" (the Oct 20 sweep). The plan footer and the exit
   button follow the app for now. The kit's artifact link and its
   `lesson-plan/` folder could not be opened from here, so the plan was

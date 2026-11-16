@@ -151,7 +151,7 @@ export const LOUNGE_COMMUNITY_FLAG = 'teacher_lounge_community' as const;
 
 /**
  * Thesis-Driven Essay slide decks and lesson plans (#452). On: each lesson
- * offers its deck three ways (present on YAWP!, copy to Google Slides,
+ * offers its deck three ways (present on Yawp!, copy to Google Slides,
  * download for PowerPoint) and its lesson plan, in the assignment type's
  * Modules and in the Faculty Lounge's Thesis-Driven Essay training; Day 1
  * adds the student handouts. Off: both pages are as before, and the deck,
@@ -388,7 +388,7 @@ export const FEATURE_FLAGS = {
   [THESIS_ESSAY_DECKS_FLAG]: {
     label: 'Thesis-Driven Essay slide decks',
     description:
-      "Each Thesis-Driven Essay lesson offers its slide deck (present on YAWP!, Google Slides, PowerPoint) and lesson plan, in the assignment's Modules and in the Faculty Lounge's Thesis-Driven Essay training. Off: both pages are as before and the deck pages return 404.",
+      "Each Thesis-Driven Essay lesson offers its slide deck (present on Yawp!, Google Slides, PowerPoint) and lesson plan, in the assignment's Modules and in the Faculty Lounge's Thesis-Driven Essay training. Off: both pages are as before and the deck pages return 404.",
   },
   [DEMO_FEEDBACK_FLAG]: {
     label: 'Demo feedback widget',

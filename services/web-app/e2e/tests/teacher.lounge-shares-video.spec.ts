@@ -100,14 +100,14 @@ test.describe.serial("Faculty Lounge shares and Brian's videos", () => {
     await page.getByRole('group', { name: 'Post type' }).getByRole('checkbox', { name: 'Share' }).check();
     await page.getByRole('group', { name: 'Module or topic' }).getByRole('checkbox', { name: 'Writing Lessons' }).check();
 
-    await page.getByRole('button', { name: 'Attach from YAWP!' }).click();
-    const picker = page.getByRole('dialog', { name: 'Attach from YAWP!' });
+    await page.getByRole('button', { name: 'Attach from Yawp!' }).click();
+    const picker = page.getByRole('dialog', { name: 'Attach from Yawp!' });
     await picker.getByRole('button', { name: /Conclusion checklist/ }).click();
     await expect(picker).toHaveCount(0);
     await expect(page.getByText('Conclusion checklist', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Post', exact: true }).click();
 
-    const card = page.getByRole('region', { name: 'Shared from YAWP!' });
+    const card = page.getByRole('region', { name: 'Shared from Yawp!' });
     await expect(card.getByText('Conclusion checklist', { exact: true })).toBeVisible();
     await expect(card.getByText('Shared from your assignments')).toBeVisible();
     await expect(card.getByRole('button', { name: 'Use in my class' })).toHaveCount(0);
@@ -124,7 +124,7 @@ test.describe.serial("Faculty Lounge shares and Brian's videos", () => {
     await expect(row.getByText(/Conclusion checklist/)).toBeVisible();
     await row.getByRole('link', { name: SHARE_TITLE }).click();
 
-    const card = page.getByRole('region', { name: 'Shared from YAWP!' });
+    const card = page.getByRole('region', { name: 'Shared from Yawp!' });
     await card.getByText('Preview').click();
     await expect(card.getByText(SHARED_PROMPT)).toBeVisible();
     await card.getByRole('button', { name: 'Use in my class' }).click();
@@ -157,7 +157,7 @@ test.describe.serial("Faculty Lounge shares and Brian's videos", () => {
     await page.getByRole('button', { name: 'Use this video' }).click();
     await expect(page.getByText(/Video ready/)).toBeVisible({ timeout: 20_000 });
     await page.getByLabel('Title on the video (optional)').fill('One lesson, two thesis shapes');
-    await page.getByLabel('Reply as the YAWP! team').fill('Teach them together. Argument first, then flip it.');
+    await page.getByLabel('Reply as the Yawp! team').fill('Teach them together. Argument first, then flip it.');
     await page.getByRole('button', { name: 'Post reply' }).click();
     await expect(page.getByText('Nothing waiting. Nice.')).toBeVisible();
 
@@ -168,7 +168,7 @@ test.describe.serial("Faculty Lounge shares and Brian's videos", () => {
     await expect(row.getByText('Admin answered on video')).toBeVisible();
     await row.getByRole('link', { name: QUESTION_TITLE }).click();
 
-    const answers = page.getByRole('region', { name: 'Answers from the YAWP! team' });
+    const answers = page.getByRole('region', { name: 'Answers from the Yawp! team' });
     await expect(answers.getByText('One lesson, two thesis shapes')).toBeVisible();
     const video = answers.locator('video');
     await expect(video).toHaveAttribute('src', /\/api\/lounge\/video-local\?key=lounge%2Fvideos%2F/);

@@ -46,42 +46,85 @@ beforeEach(() => {
   findThesisEssayCourse.mockReset().mockResolvedValue({
     courseId: 'course-1',
     coursePath: '/app/teacher-trainings/course-1',
-    videoModules: { 2: 'm7' },
+    videoModules: { 2: 'm7', 8: 'm13' },
   });
   prisma.teacherTrainingModule.findFirst.mockReset().mockResolvedValue({
-    title: 'Lesson 2: Pre-writing',
-    videoS3Key: 'lounge/l2.mp4',
+    title: 'Lesson 8: Review my Essay (optional)',
+    videoS3Key: 'lounge/l8.mp4',
     videoDuration: 500,
   });
-  getTeacherTrainingPlaybackUrl.mockReset().mockResolvedValue('https://videos.example/l2.mp4?sig');
+  getTeacherTrainingPlaybackUrl.mockReset().mockResolvedValue('https://videos.example/l8.mp4?sig');
 });
 
+const TUTORIALS = '/courses/thesis-driven-essay/tutorials';
+
 describe('a lesson’s tutorial video on the assignment type’s page', () => {
-  test('plays the Lounge module’s video for that lesson, under the type’s own access', async () => {
+  test('plays Brian’s video for that lesson from the app, under the type’s own access', async () => {
     expect(await open('2')).toEqual({
       pagePath: '/app/assignment-types/at-1',
       lessonNumber: 2,
       lessonTitle: 'Pre-writing',
-      moduleTitle: 'Lesson 2: Pre-writing',
-      videoUrl: 'https://videos.example/l2.mp4?sig',
-      minutes: 8,
+      moduleTitle: null,
+      videos: [
+        {
+          title: 'Pre-writing',
+          src: `${TUTORIALS}/02-pre-writing.mp4`,
+          poster: `${TUTORIALS}/02-pre-writing.jpg`,
+          captions: `${TUTORIALS}/02-pre-writing.vtt`,
+          minutes: 14,
+        },
+      ],
+      minutes: 14,
     });
     expect(assignmentTypeAvailableForTeacher).toHaveBeenCalledWith({
       assignmentTypeId: 'at-1',
       membershipId: 'teacher-1',
       organizationId: 'org-1',
     });
-    expect(prisma.teacherTrainingModule.findFirst.mock.calls[0][0].where).toEqual({ id: 'm7', teacherTrainingId: 'course-1' });
-    expect(getTeacherTrainingPlaybackUrl).toHaveBeenCalledWith('lounge/l2.mp4');
+    // His video comes with the app: the Lounge is not asked, even though it
+    // has an older video for this lesson.
+    expect(findThesisEssayCourse).not.toHaveBeenCalled();
+    expect(getTeacherTrainingPlaybackUrl).not.toHaveBeenCalled();
   });
 
-  test('a video that cannot be signed leaves the page up with a note', async () => {
+  test('Body paragraphs has two: the paragraphs, then supporting quotes', async () => {
+    const page = await open('5');
+    expect(page.videos.map((video) => [video.title, video.src])).toEqual([
+      ['Body paragraphs', `${TUTORIALS}/05-body-paragraphs.mp4`],
+      ['Supporting quotes', `${TUTORIALS}/05-supporting-quotes.mp4`],
+    ]);
+    expect(page.minutes).toBe(16);
+  });
+
+  test('a lesson Brian has not recorded plays its Lounge module’s video', async () => {
+    expect(await open('8')).toEqual({
+      pagePath: '/app/assignment-types/at-1',
+      lessonNumber: 8,
+      lessonTitle: 'Review my essay',
+      moduleTitle: 'Lesson 8: Review my Essay (optional)',
+      videos: [
+        {
+          title: 'Review my essay',
+          src: 'https://videos.example/l8.mp4?sig',
+          poster: null,
+          captions: null,
+          minutes: 8,
+        },
+      ],
+      minutes: 8,
+    });
+    expect(prisma.teacherTrainingModule.findFirst.mock.calls[0][0].where).toEqual({ id: 'm13', teacherTrainingId: 'course-1' });
+    expect(getTeacherTrainingPlaybackUrl).toHaveBeenCalledWith('lounge/l8.mp4');
+  });
+
+  test('a Lounge video that cannot be signed leaves the page up with a note', async () => {
     getTeacherTrainingPlaybackUrl.mockResolvedValue(null);
-    expect((await open('2')).videoUrl).toBeNull();
+    expect((await open('8')).videos).toEqual([]);
   });
 
-  test('a lesson with no video module is a 404; so is a number off the course', async () => {
-    expect((await thrown(open('3'))).status).toBe(404);
+  test('a lesson with no video anywhere is a 404; so is a number off the course', async () => {
+    findThesisEssayCourse.mockResolvedValue(null);
+    expect((await thrown(open('8'))).status).toBe(404);
     expect((await thrown(open('9'))).status).toBe(404);
     expect((await thrown(open('x'))).status).toBe(404);
   });

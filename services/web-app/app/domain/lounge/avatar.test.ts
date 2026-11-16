@@ -36,7 +36,7 @@ describe('avatarToneFor', () => {
 });
 
 describe('previewFor', () => {
-  test("the YAWP! team's answer comes first, so all-title questions show Brian's answer", () => {
+  test("the Yawp! team's answer comes first, so all-title questions show Brian's answer", () => {
     expect(previewFor({ body: '', staffReplyBody: 'Use the Class Starter to build reps.' })).toBe(
       'Use the Class Starter to build reps.'
     );

@@ -42,13 +42,13 @@ now and follow up with the public URL once it is deployed.
 
 ## Draft reply Brian can send to Rachel
 
-Subject: Re: YAWP! accessibility status
+Subject: Re: Yawp! accessibility status
 
 Hi Rachel,
 
 Thank you again for outlining UA's accessibility review questions. We do not
 currently have a completed VPAT/Accessibility Conformance Report, so we are
-providing a WCAG 2.1 Level AA status evaluation for the YAWP! product scope UA
+providing a WCAG 2.1 Level AA status evaluation for the Yawp! product scope UA
 is reviewing, along with answers to your vendor questions below.
 
 The current review scope includes login, student writing and editor workflows,
@@ -58,18 +58,18 @@ training content if that content is included in UA's implementation.
 
 ## Accessibility webpages
 
-We have prepared product accessibility documentation for YAWP! and are preparing
+We have prepared product accessibility documentation for Yawp! and are preparing
 it for public posting. Until that public page is live, we are sharing the
 substance of the accessibility status directly in this response and can provide
 the URL once it is deployed.
 
 ## VPAT / WCAG 2.1 AA evaluation
 
-YAWP! does not currently have a completed VPAT/ACR. Instead, we are providing a
+Yawp! does not currently have a completed VPAT/ACR. Instead, we are providing a
 WCAG 2.1 Level AA self-evaluation/status response for the product version UA
 would use.
 
-Current summary: YAWP! has completed automated axe testing on representative
+Current summary: Yawp! has completed automated axe testing on representative
 login, student, teacher, grading, and Teacher's Lounge flows using WCAG 2.1 A
 and AA checks. Issues found during that audit were remediated, including color
 contrast, accessible names for controls, editor naming, and Teacher's Lounge
@@ -101,7 +101,7 @@ not yet been fully evaluated.
 
 ## Audio/video, captions, transcripts, and audio descriptions
 
-Student writing workflows in YAWP! do not require audio or video playback.
+Student writing workflows in Yawp! do not require audio or video playback.
 
 Teacher's Lounge training videos may be included in implementations. Those
 videos now support caption and transcript resources in the product. Active
@@ -116,7 +116,7 @@ transcript, and visual-content review.
 
 ## Accessible output
 
-YAWP!'s primary student and teacher output is browser-rendered HTML. We are not
+Yawp!'s primary student and teacher output is browser-rendered HTML. We are not
 claiming that browser print/save-as-PDF output is a guaranteed tagged PDF export
 unless a specific export path is separately tested or enhanced.
 
@@ -148,7 +148,7 @@ credentials in email.
 
 Known limitations we are not overstating:
 
-- YAWP! does not yet have a completed VPAT/ACR.
+- Yawp! does not yet have a completed VPAT/ACR.
 - Full screen-reader coverage is not final; current evidence includes
   automated checks and representative macOS VoiceOver smoke testing.
 - A human keyboard-only walkthrough of every dynamic workflow is not yet

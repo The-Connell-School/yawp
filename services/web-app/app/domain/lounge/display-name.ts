@@ -1,5 +1,17 @@
 /** The name of the shared, sign-in-less account the team posts launch questions from. */
-export const LOUNGE_TEAM_ACCOUNT_NAME = 'YAWP! team';
+export const LOUNGE_TEAM_ACCOUNT_NAME = 'Yawp! team';
+/**
+ * The account's name before the brand was spelled Yawp!. An account created
+ * then keeps this name in the database (the seed never renames it), so it is
+ * still recognised, and shown with the current spelling.
+ */
+export const LOUNGE_TEAM_ACCOUNT_LEGACY_NAME = 'YAWP! team';
+export const LOUNGE_TEAM_ACCOUNT_NAMES = [LOUNGE_TEAM_ACCOUNT_NAME, LOUNGE_TEAM_ACCOUNT_LEGACY_NAME];
+
+/** Whether a stored user name is the shared team account's, in either spelling. */
+export function isLoungeTeamAccountName(name: string | null | undefined): boolean {
+  return LOUNGE_TEAM_ACCOUNT_NAMES.includes((name ?? '').trim());
+}
 
 export type LoungeDisplayNameStyleKey =
   | 'FULL_NAME'
@@ -25,7 +37,7 @@ export function loungeDisplayName(
 /**
  * The name and the grey detail after it ("Maria S." · "Cristo Rey"). Teachers
  * always appear as first name and last initial (Brian's launch rule); the
- * stored style is kept for old rows but no longer chosen. The YAWP! team
+ * stored style is kept for old rows but no longer chosen. The Yawp! team
  * appears by full name.
  */
 export function loungeByline(params: {
@@ -35,9 +47,9 @@ export function loungeByline(params: {
   isStaff: boolean;
 }): { name: string; detail: string | null } {
   if (params.isStaff) {
-    const name = loungeDisplayName(params.name, 'FULL_NAME');
-    // The shared team account is already called "YAWP! team".
-    return { name, detail: name === LOUNGE_TEAM_ACCOUNT_NAME ? null : 'YAWP! team' };
+    // The shared team account is already called "Yawp! team".
+    if (isLoungeTeamAccountName(params.name)) return { name: LOUNGE_TEAM_ACCOUNT_NAME, detail: null };
+    return { name: loungeDisplayName(params.name, 'FULL_NAME'), detail: LOUNGE_TEAM_ACCOUNT_NAME };
   }
   return {
     name: loungeDisplayName(params.name, DEFAULT_LOUNGE_DISPLAY_NAME_STYLE),

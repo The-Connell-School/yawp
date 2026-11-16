@@ -33,11 +33,11 @@ Generated output:
 Covered modules:
 
 - Meet Your Instructor
-- Welcome to YAWP!
+- Welcome to Yawp!
 - How to be a Happy Teacher
 - Critical Writing in the Age of AI
 - Introduction to Lesson Plan Modules
-- Lesson 1: Introduce Students to YAWP!
+- Lesson 1: Introduce Students to Yawp!
 - Lesson 2: Pre-writing
 - Lesson 3: Developing a Thesis Statement
 - Lesson 4: Introduction Paragraph

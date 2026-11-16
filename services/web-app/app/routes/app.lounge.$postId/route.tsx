@@ -273,7 +273,7 @@ function FormErrors({ errors }: { errors?: Record<string, string | undefined> })
   );
 }
 
-/** One reply: a YAWP! team answer (accented) or a teacher's reply. Authors can edit their own. */
+/** One reply: a Yawp! team answer (accented) or a teacher's reply. Authors can edit their own. */
 
 /** Avatar, name, and a quiet second line: school or team, when, edited. */
 function AuthorLine({
@@ -303,7 +303,7 @@ function AuthorLine({
 const QUIET_ACTION = 'inline-flex min-h-11 items-center rounded-md px-2 text-sm text-muted-foreground hover:text-foreground';
 
 /**
- * One reply. A YAWP! team answer is its own card with a "<name>'s answer"
+ * One reply. A Yawp! team answer is its own card with a "<name>'s answer"
  * badge; a teacher's reply is an avatar row. Authors can edit their own.
  */
 function ReplyItem({
@@ -614,7 +614,7 @@ function ShareCard({ share, isOwn }: { share: ShareView; isOwn: boolean }) {
   const used = `used by ${share.useCount} ${share.useCount === 1 ? 'teacher' : 'teachers'}`;
   return (
     <section
-      aria-label="Shared from YAWP!"
+      aria-label="Shared from Yawp!"
       className="flex flex-col gap-3 rounded-xl border bg-background px-4 py-3.5"
     >
       <div className="flex items-start gap-3">

@@ -27,7 +27,7 @@ export function buildApHistoryAssignmentTypeCreateInput(
       'Curated AP U.S., European, and World History DBQ and LEQ practice with AP rubric coaching.',
     position: 50,
     // The assignment-level General Tutor Instructions box: the universal
-    // YAWP! Tutor character, which every module's guidance sits underneath.
+    // Yawp! Tutor character, which every module's guidance sits underneath.
     tutorInstructions: UNIVERSAL_TUTOR_BLOCK,
     ownerOrgId: organizationId,
     organizationAssignments: {

@@ -4,8 +4,10 @@ import { setFeatureFlag, setLessonPlannerReviewFlag } from '../feature-flags';
 import { ensureWritingStepType } from '../fixtures/writing-step-types';
 
 // How to Teach It (Brian, Nov 6): each course row is the slide deck to
-// download and the tutorial video to watch, which opens that lesson's module
-// in the Teachers' Lounge course. No lesson plan link. The ready-built stack
+// download and the tutorial video to watch. The video is Brian's own
+// recording for the lesson (Nov 14), which comes with the app; a lesson he
+// has not recorded falls back to its module in the Teachers' Lounge course.
+// No lesson plan link. The ready-built stack
 // (Kevin, Nov 5) stays reachable at /app/lesson-planner/yawp/<slug> behind
 // `assignment-type-lesson-plans`, unlinked.
 
@@ -105,17 +107,39 @@ test.describe.serial('How to Teach It: slide decks, tutorial videos, and the unl
       'href',
       `/app/assignment-types/${e2eContext.thesisEssayAssignmentTypeId}/tutorial/2`
     );
-    // Lessons without a video module in the course have no video link.
-    await expect(course.getByRole('link', { name: 'Body paragraphs: tutorial video' })).toHaveCount(0);
+    // Every lesson Brian recorded has a link, whatever the Lounge course holds.
+    await expect(course.getByRole('link', { name: 'Body paragraphs: tutorial video' })).toHaveAttribute(
+      'href',
+      `/app/assignment-types/${e2eContext.thesisEssayAssignmentTypeId}/tutorial/5`
+    );
 
-    // The tutorial plays on the type's own page (the Lounge's pages are off
-    // for most teachers), named for the lesson. No S3 here, so the video
-    // itself is the "not available" note rather than a player.
+    // The tutorial plays on the type's own page, named for the lesson: his
+    // video, served by the app, with its poster and captions.
     await tutorial.click();
     await expect(page).toHaveURL(new RegExp(`/app/assignment-types/${e2eContext.thesisEssayAssignmentTypeId}/tutorial/2$`));
     await expect(page.getByRole('heading', { level: 1, name: 'Pre-writing' })).toBeVisible();
     await expect(page.getByText(`Lesson 2 of The Thesis-Driven Essay course`)).toBeVisible();
+    const video = page.getByTestId('tutorial-video');
+    await expect(video).toHaveCount(1);
+    await expect(video).toHaveAttribute('src', '/courses/thesis-driven-essay/tutorials/02-pre-writing.mp4');
+    await expect(video).toHaveAttribute('poster', '/courses/thesis-driven-essay/tutorials/02-pre-writing.jpg');
+    await expect(video.locator('track[kind="captions"]')).toHaveAttribute(
+      'src',
+      '/courses/thesis-driven-essay/tutorials/02-pre-writing.vtt'
+    );
+    await expect(page.getByTestId('tutorial-unavailable')).toHaveCount(0);
+    // The browser can load it: the app serves a real MP4 and its captions.
+    await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.readyState)).toBeGreaterThan(0);
+    const captions = await page.request.get('/courses/thesis-driven-essay/tutorials/02-pre-writing.vtt');
+    expect(captions.status()).toBe(200);
+    expect(await captions.text()).toMatch(/^WEBVTT/);
     expect(lounge.modules[2]).toBeTruthy();
+
+    // Body paragraphs is taught over two days, so its page has both videos.
+    await page.goto(`/app/assignment-types/${e2eContext.thesisEssayAssignmentTypeId}/tutorial/5`);
+    await expect(page.getByTestId('tutorial-video')).toHaveCount(2);
+    await expect(page.getByTestId('tutorial').nth(0)).toContainText('Body paragraphs');
+    await expect(page.getByTestId('tutorial').nth(1)).toContainText('Supporting quotes');
   });
 
   test('Pre-Writing gets its own How to Teach It, with Lesson 2’s deck and video', async ({

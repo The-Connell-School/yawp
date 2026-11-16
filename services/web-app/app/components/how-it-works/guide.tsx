@@ -92,12 +92,14 @@ export function GuidePage({
 export type GuideVideo = {
   src: string;
   poster: string;
-  /** What the video shows, for anyone who can't watch it. It has no sound. */
+  /** What the video shows, for anyone who can't watch it. */
   label: string;
   width: number;
   height: number;
   /** The line under it: how it was made. */
   note?: string;
+  /** Its captions (WebVTT), for a video with someone talking. A tour has no sound and none. */
+  captions?: string;
 };
 
 export function GuideHero({
@@ -257,8 +259,9 @@ export function GuideClip({
 }
 
 /**
- * The overview video at the top of a guide: a short tour of the feature with
- * no sound, made from demo classes until Brian records his own. Unlike the
+ * The overview video at the top of a guide: Brian's tutorial for the lesson
+ * where he has recorded one (it talks, so it has captions), and otherwise a
+ * short tour of the feature with no sound, made from demo classes. Unlike the
  * clips it never plays on its own: the teacher presses play.
  */
 export function GuideOverviewVideo({
@@ -268,6 +271,7 @@ export function GuideOverviewVideo({
   width,
   height,
   note = 'A quick tour, recorded in Yawp! with demo classes. No sound.',
+  captions,
 }: GuideVideo) {
   const accent = useAccent();
   return (
@@ -284,6 +288,9 @@ export function GuideOverviewVideo({
           aria-label={label}
         >
           <source src={src} type="video/mp4" />
+          {captions ? (
+            <track kind="captions" src={captions} srcLang="en" label="English" default />
+          ) : null}
         </video>
       </GuideCard>
       <figcaption className={cn('text-xs', accent ? BODY : 'text-muted-foreground')}>

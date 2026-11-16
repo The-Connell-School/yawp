@@ -1,3 +1,4 @@
+import { withLessonTutorial } from '~/domain/teacher-trainings/lounge-lesson-tutorials';
 import {
   type LoaderFunctionArgs,
   data as dataResponse,
@@ -87,7 +88,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const communityEnabled =
     Boolean(viewer?.isAdmin) || (await isLoungeCommunityEnabled(profile.organization.id));
 
-  return dataResponse({ teacherTraining, communityEnabled });
+  // Lessons of the Thesis-Driven Essay course run as long as Brian's
+  // tutorials, which the module pages play in place of the uploaded videos.
+  return dataResponse({
+    teacherTraining: {
+      ...teacherTraining,
+      teacherTrainingModules: teacherTraining.teacherTrainingModules.map((module) =>
+        withLessonTutorial(teacherTraining.title, module)
+      ),
+    },
+    communityEnabled,
+  });
 }
 
 function formatDuration(seconds: number | null): string {

@@ -86,10 +86,10 @@ teacher makes every call, and nothing regenerates forever.
    have to use all of it. Give it a quick read first, then add the pieces
    you want to your stack, or take the whole thing." No more "I have
    everything I need." *(Brian 3)*
-4. **"Create this assignment in YAWP!" on every writing step**: class
+4. **"Create this assignment in Yawp!" on every writing step**: class
    starter (with a pick when there are three prompts), Daily Pages, exit
    ticket, quick writes, Thesis Essay modules. Once created it reads
-   "Created in YAWP! · Open." *(Brian 4)*
+   "Created in Yawp! · Open." *(Brian 4)*
 5. **Short, real titles** for Daily Pages and other prompt-based steps
    ("Daily Pages: What one item reveals"). *(Brian 11)*
 6. **Picks up wherever the teacher starts.** The planner doesn't ask again
@@ -219,7 +219,7 @@ next lesson. Writing minutes add up across lessons later. *(Kevin 5, 7)*
     - "Sub-ready lesson plan" (step by step, with exact times and what to
       say)
     - "Handouts to print" (ready to copy before first period)
-    - "Slide deck link" (opens without a YAWP! login)
+    - "Slide deck link" (opens without a Yawp! login)
     - "Class roster for Period 3" (off by default)
   - The special instructions box says "Shows up at the top of their plan,
     before anything else."
@@ -287,7 +287,7 @@ next lesson. Writing minutes add up across lessons later. *(Kevin 5, 7)*
 | Commentary leak | The last plan step runs to the end of the reply. So the model's "Total: …" line (asked for at `build-system-prompt.ts` L401) and its closing question (L355) end up inside Closing. | `plan-steps.ts` L70–78, 108 |
 | Add to stack in chat | Fenced blocks have cards with a toggle. Prose steps (the hook) are plain markdown with no button; they can be filed only from the "Steps in this plan" list. | `routes/app.lesson-planner/route.tsx` L1427–1532, 1639–1685 |
 | "In the stack" status | A client-only `Set` of `messageId:blockKey` tokens, seeded by the loader and reset only when the conversation changes. A removal on the stack page doesn't reach an open chat. A step and the block inside it are two tokens, so adding one doesn't mark the other. | route.tsx L384, 400–414, 650 |
-| Create in YAWP! | Class starter, Daily Pages and exit ticket only. There is no Thesis Essay mapping. **Nothing records that an assignment was created.** | `stack-create-link.ts` L26–65; `yawp-catalog.server.ts` L327–346; `routes/app.assignment-types.$id/route.tsx` L770 |
+| Create in Yawp! | Class starter, Daily Pages and exit ticket only. There is no Thesis Essay mapping. **Nothing records that an assignment was created.** | `stack-create-link.ts` L26–65; `yawp-catalog.server.ts` L327–346; `routes/app.assignment-types.$id/route.tsx` L770 |
 | Handouts | Only `audience === 'student'` pieces qualify: class starter, Daily Pages, exit ticket and student `yawp-material`. Steps, framings and practice are teacher-only. | `student-handout.ts` L36–73 |
 | Lesson plan doc | `buildLessonPlanDoc` always appends a Closing section, even when the last instruction is a Closing step. Step titles are bold list runs, not headings. | `lesson-plan-doc.ts` L253–307; `lesson-plan-render.server.ts` L72, 166 |
 | Opening line | "I have everything I need. Here's the plan." is model text. The prompt already forbids preambles (L541–543); nothing enforces it. | `build-system-prompt.ts` |
@@ -314,7 +314,7 @@ next lesson. Writing minutes add up across lessons later. *(Kevin 5, 7)*
 
 | Flag | Covers | Depends on |
 | --- | --- | --- |
-| `lesson_planner_stack_v2` (existing, off in prod) | Chat-side fixes: Add to stack on every segment, synced status, framing line, Create in YAWP! on every writing step, short titles, correct times, the commentary strip | none |
+| `lesson_planner_stack_v2` (existing, off in prod) | Chat-side fixes: Add to stack on every segment, synced status, framing line, Create in Yawp! on every writing step, short titles, correct times, the commentary strip | none |
 | `lesson_planner_stack_v3` (new) | The redesigned stack page, Add a piece panel, stack chat, fixes, writing meter, Finish line, Take it to class | stack v2 |
 | `lesson_planner_share` (new) | Post to your class and Send this lesson | stack v3 |
 | `lesson_planner_run_show` (new) | Run the show | stack v3 |
@@ -338,12 +338,12 @@ when its parent is off.
 - `label String?`: for example "Module 1" for a Thesis Essay module.
 - `hasHandout Boolean?`: null means derive it (student-facing or writing).
 - `yawpAssignmentId String?` and `yawpCreatedAt DateTime?`: set when
-  "Create in YAWP!" finishes, for the "Created in YAWP! · Open" state and
+  "Create in Yawp!" finishes, for the "Created in Yawp! · Open" state and
   for isWriting.
 - **isWriting is not stored.** It is derived on read (`isWritingStep`):
   true when the step has `yawpAssignmentId`, or its kind is one of
   class-starter, daily-pages, exit-ticket or thesis-module. The brief says
-  "any step tied to a YAWP! writing assignment counts". A class starter is
+  "any step tied to a Yawp! writing assignment counts". A class starter is
   tied by kind before it is created, so the meter is right from the first
   add. **Decision K5.**
 
@@ -525,7 +525,7 @@ and the handout panel has no absent-student link.
   - Add everything files only what's missing (keep-all already skips by
     slot; the test adds the step/block overlap case).
 - **1.3 Framing line** (P1).
-- **1.4 Create in YAWP! on every writing step** (Brian 4).
+- **1.4 Create in Yawp! on every writing step** (Brian 4).
   - Extend `stack-create-link.ts` to exit tickets written as prose inside a
     Closing step (filed as their own exit-ticket piece by 0.2's split),
     quick writes (a `step` with a writing prompt → Daily Pages type), and
@@ -536,7 +536,7 @@ and the handout panel has no absent-student link.
   - The return trip: the assignment create flow already has `fromLesson`.
     Add `fromMaterial=<id>`. On save, write `yawpAssignmentId` /
     `yawpCreatedAt` (M1) and redirect back.
-  - The button becomes "Created in YAWP! · Open", in chat and on the stack.
+  - The button becomes "Created in Yawp! · Open", in chat and on the stack.
   - Tests: unit for link building; route test for the write-back; e2e for
     the three states.
 - **1.5 Picks up wherever the teacher starts** (P4). Prompt tests only;
@@ -594,7 +594,7 @@ for v1 (the app has none on this page).
   down, remove (the existing 6 s undo). Opened: an excerpt (first ~240
   chars of the student-facing text), "Has a handout", Edit this step (the
   existing rich editor in a sheet), "Rework it in the planner" (back to the
-  chat with a prefilled message naming the step), and Create in YAWP! for
+  chat with a prefilled message naming the step), and Create in Yawp! for
   writing steps. Drag uses the existing native DnD from `stack-list.tsx`.
 - **2.7 Insert points and the Add a piece panel** (Kevin 2).
   - A hover "+" line between cards (also reachable by keyboard on focus)
@@ -832,8 +832,8 @@ spec with all flags off) and typecheck clean, then a preview for Brian.
   organization.
 - **K5. When a step counts as writing**: default by kind (class starter,
   Daily Pages, exit ticket, Thesis Essay module), even before it's created
-  in YAWP!, plus any step with a created YAWP! assignment. A quick write
-  written as prose counts once it's created in YAWP!, or right away if the
+  in Yawp!, plus any step with a created Yawp! assignment. A quick write
+  written as prose counts once it's created in Yawp!, or right away if the
   planner tags it `{type: daily_pages}`.
 - **K6. "Tomorrow" and "next lesson"**: lessons carry a class label, not a
   class id. Default: the carry-over goes to the next lesson created for the
@@ -861,7 +861,7 @@ spec with all flags off) and typecheck clean, then a preview for Brian.
 - Default handout checks for a hook: checked or not?
 - Does Run the show's countdown feel calm enough?
 - Wave 2 items still unchecked: internal codes hidden, swap flow, stack deck
-  card Edit, YAWP! spelling everywhere, the stack side panel while
+  card Edit, Yawp! spelling everywhere, the stack side panel while
   chatting.
 
 ## How it will be checked

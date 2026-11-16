@@ -144,7 +144,7 @@ describe('AP History module (section) seed data', () => {
   });
 
   test('every section declares the register mode the universal tutor block reads', () => {
-    // The Universal YAWP! Tutor Instructions leave DRAFTING vs POLISHED to the
+    // The Universal Yawp! Tutor Instructions leave DRAFTING vs POLISHED to the
     // course-builder, per module. Every canonical section must answer it, or
     // the tutor is left guessing whether mechanics feedback is in scope.
     expect(

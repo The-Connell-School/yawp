@@ -18,6 +18,9 @@ const prisma = {
   setting: {
     findUnique: mock(),
   },
+  user: {
+    findUnique: mock(),
+  },
   accessListEntry: {
     findFirst: mock(),
     findUnique: mock(),
@@ -27,6 +30,7 @@ const prisma = {
 mock.module('~/utils/db.server', () => ({ prisma }));
 
 const {
+  isTeacherLoungeNavVisibleForMember,
   isTeacherLoungeTemporarilyDisabledForUser,
   redirectIfTeacherLoungeTemporarilyDisabled,
 } = await import('./teacher-lounge-temporary-disable.server');
@@ -64,6 +68,7 @@ function mockAllowlistEmail(email: string) {
 function resetMocks() {
   mock.module('~/utils/db.server', () => ({ prisma }));
   prisma.setting.findUnique.mockReset();
+  prisma.user.findUnique.mockReset().mockResolvedValue({ email: 'other.teacher@example.com' });
   prisma.accessListEntry.findFirst.mockReset();
   prisma.accessListEntry.findUnique.mockReset();
   mockLoungeOff();
@@ -176,5 +181,50 @@ describe('redirectIfTeacherLoungeTemporarilyDisabled', () => {
         email: SEEDED_ALLOWLIST_EMAILS[0],
       })
     ).resolves.toBeUndefined();
+  });
+});
+
+// The app shell asks this for the sidebar's Teacher's Lounge item. The item
+// went missing for everyone when the shell stopped asking (#941), flag on or
+// off, so the rule lives here where it can be tested.
+describe("isTeacherLoungeNavVisibleForMember (the sidebar's Teacher's Lounge item)", () => {
+  beforeEach(resetMocks);
+
+  const teacher = { userId: 'user-1', role: 'TEACHER', orgId: 'org-1' } as const;
+
+  function mockLoungeOnForEveryone() {
+    prisma.setting.findUnique.mockImplementation(({ where }: { where: { name: string } }) =>
+      Promise.resolve(
+        where.name === TEACHER_LOUNGE_SETTING
+          ? { value: serializeFeatureFlagValue({ mode: 'everyone', orgIds: [] }) }
+          : null
+      )
+    );
+  }
+
+  test('hidden for a teacher while the Lounge is off', async () => {
+    expect(await isTeacherLoungeNavVisibleForMember(teacher)).toBe(false);
+  });
+
+  test('shown to every teacher once the Lounge is on (as in a PR preview)', async () => {
+    mockLoungeOnForEveryone();
+    expect(await isTeacherLoungeNavVisibleForMember(teacher)).toBe(true);
+  });
+
+  test('shown to a teacher on the access list while the Lounge is off, found by their email', async () => {
+    prisma.user.findUnique.mockResolvedValue({ email: SEEDED_ALLOWLIST_EMAILS[1] });
+    mockAllowlistEmail(SEEDED_ALLOWLIST_EMAILS[1]);
+    expect(await isTeacherLoungeNavVisibleForMember(teacher)).toBe(true);
+    expect(prisma.user.findUnique.mock.calls[0][0]).toEqual({
+      where: { id: 'user-1' },
+      select: { email: true },
+    });
+  });
+
+  test('never shown to a student, and nothing is looked up for one', async () => {
+    mockLoungeOnForEveryone();
+    expect(await isTeacherLoungeNavVisibleForMember({ ...teacher, role: 'STUDENT' })).toBe(false);
+    expect(prisma.setting.findUnique).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 });

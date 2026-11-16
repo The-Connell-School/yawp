@@ -16,6 +16,20 @@ function publicFile(href: string) {
   return join(PUBLIC_DIR, href);
 }
 
+/** An MP4's length, read from its movie header (the `mvhd` box). */
+function mp4Seconds(file: Buffer): number {
+  const at = file.indexOf('mvhd', 0, 'latin1');
+  expect(at).toBeGreaterThan(0);
+  const body = at + 4;
+  const version = file.readUInt8(body);
+  // After version and flags: created and modified (4 bytes each, 8 in
+  // version 1), then the timescale and the duration in that timescale.
+  if (version === 1) {
+    return Number(file.readBigUInt64BE(body + 24)) / file.readUInt32BE(body + 20);
+  }
+  return file.readUInt32BE(body + 16) / file.readUInt32BE(body + 12);
+}
+
 describe('The Thesis-Driven Essay course', () => {
   test("has Brian's eight lessons, in order, titled as in his mock-up", () => {
     expect(THESIS_ESSAY_COURSE_TITLE).toBe('The Thesis-Driven Essay course');
@@ -104,9 +118,67 @@ describe('The Thesis-Driven Essay course', () => {
     const hrefs = THESIS_ESSAY_COURSE.flatMap((lesson) => [
       ...lesson.decks.map((deck) => deck.href),
       ...(lesson.lessonPlan ? [lesson.lessonPlan.href] : []),
+      ...lesson.tutorials.flatMap((tutorial) => [tutorial.src, tutorial.poster, tutorial.captions]),
     ]);
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });
+});
+
+// Brian's tutorial videos (Nov 14): one per lesson, recorded for the teacher,
+// served from public/ beside the decks. They took the place of the generated
+// tours and of the older Teachers' Lounge videos.
+describe("Brian's tutorial videos", () => {
+  test('lessons 1–7 each have one, Body paragraphs a second on supporting quotes, and 8 none', () => {
+    expect(THESIS_ESSAY_COURSE.map((lesson) => lesson.tutorials.map((tutorial) => tutorial.title))).toEqual([
+      ['Introducing the thesis-driven essay'],
+      ['Pre-writing'],
+      ['Developing a thesis statement'],
+      ['Introduction paragraph'],
+      ['Body paragraphs', 'Supporting quotes'],
+      ['The conclusion'],
+      ['Titles and formatting'],
+      [],
+    ]);
+  });
+
+  const tutorials = THESIS_ESSAY_COURSE.flatMap((lesson) => lesson.tutorials);
+
+  test.each(tutorials.map((tutorial) => [tutorial.title, tutorial]))(
+    '%s: a real MP4 in public/, small enough to keep in the repository',
+    (_title, tutorial) => {
+      expect(tutorial.src).toMatch(/^\/courses\/thesis-driven-essay\/tutorials\/0\d-[a-z-]+\.mp4$/);
+      const path = publicFile(tutorial.src);
+      // An MP4 opens with an ftyp box.
+      expect(readFileSync(path).subarray(4, 8).toString('latin1')).toBe('ftyp');
+      // GitHub refuses a file over 100 MB; these are compressed well under it.
+      expect(statSync(path).size).toBeGreaterThan(1_000_000);
+      expect(statSync(path).size).toBeLessThan(40_000_000);
+      expect(tutorial.minutes).toBeGreaterThanOrEqual(4);
+      expect(tutorial.minutes).toBeLessThanOrEqual(15);
+    }
+  );
+
+  // The Lounge counts a lesson as watched when the teacher reaches `seconds`,
+  // so it has to be the file's real length, rounded down as an upload's is.
+  test.each(tutorials.map((tutorial) => [tutorial.title, tutorial]))(
+    '%s: `seconds` is how long the file really runs, and `minutes` rounds it',
+    (_title, tutorial) => {
+      expect(tutorial.seconds).toBe(Math.floor(mp4Seconds(readFileSync(publicFile(tutorial.src)))));
+      expect(tutorial.minutes).toBe(Math.round(tutorial.seconds / 60));
+    }
+  );
+
+  test.each(tutorials.map((tutorial) => [tutorial.title, tutorial]))(
+    '%s: a poster and captions beside it',
+    (_title, tutorial) => {
+      expect(tutorial.poster).toBe(tutorial.src.replace(/\.mp4$/, '.jpg'));
+      expect([...readFileSync(publicFile(tutorial.poster)).subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
+      expect(tutorial.captions).toBe(tutorial.src.replace(/\.mp4$/, '.vtt'));
+      const captions = readFileSync(publicFile(tutorial.captions), 'utf8');
+      expect(captions.startsWith('WEBVTT')).toBe(true);
+      expect(captions.match(/-->/g)!.length).toBeGreaterThan(50);
+    }
+  );
 });
 
 // The decks are in the Lesson Deck Kit, spec v4.1 (Nov 11): Fraunces Bold for

@@ -1,7 +1,7 @@
 /**
- * Lesson 1 of the Thesis-Driven Essay: Introduce Students to YAWP! (Day 1).
+ * Lesson 1 of the Thesis-Driven Essay: Introduce Students to Yawp! (Day 1).
  *
- * Brian's "Day 1 Intro to YAWP! Slide Deck.pptx" (13 slides), in the hybrid
+ * Brian's "Day 1 Intro to Yawp! Slide Deck.pptx" (13 slides), in the hybrid
  * look. His own Two Truths and a Lie slides stay as they are; their notes
  * tell teachers to make their own the same way, or delete them. His last
  * slide (a screenshot of the old sign-up and Welcome exercise) is now three
@@ -15,16 +15,16 @@ const MAKE_YOUR_OWN =
   'These are Brian’s own slides, left as an example. Make your own the same way: three statements about you, two true and one believable lie, and a photo or two that make you human (self-deprecating works best). Or delete these slides and play the game without them.';
 
 export const DAY_ONE_DECK: HybridDeck = {
-  title: 'Introduce Students to YAWP!',
+  title: 'Introduce Students to Yawp!',
   subtitle: 'Thesis-Driven Essay · Lesson 1',
   slides: [
     {
       layout: 'title',
       eyebrow: 'Thesis-Driven Essay · Lesson 1',
       title: 'Day 1',
-      subtitle: 'Introduce students to YAWP!',
+      subtitle: 'Introduce students to Yawp!',
       notes:
-        'A light day of definition and context: what we are doing and why. Brian takes a full class period; you can also fold it into another lesson. Goals: students understand the purpose of YAWP!, read a sample essay, and create their YAWP! accounts. Have the sample essay (“Bored in the USA,” or your own) printed or shared, and your class’s join link ready.',
+        'A light day of definition and context: what we are doing and why. Brian takes a full class period; you can also fold it into another lesson. Goals: students understand the purpose of Yawp!, read a sample essay, and create their Yawp! accounts. Have the sample essay (“Bored in the USA,” or your own) printed or shared, and your class’s join link ready.',
     },
     {
       layout: 'steps',
@@ -73,7 +73,7 @@ export const DAY_ONE_DECK: HybridDeck = {
       layout: 'section',
       eyebrow: 'What is a yawp?',
       kicker: 'What is a yawp?',
-      title: 'YAWP!',
+      title: 'Yawp!',
       line: 'Writing Program',
       notes: 'Now introduce the program itself.',
     },
@@ -150,7 +150,7 @@ export const DAY_ONE_DECK: HybridDeck = {
       title: 'Share your class’s join link',
       accent: 'teal',
       items: [
-        'Open your class in YAWP! and go to its ==Students== tab',
+        'Open your class in Yawp! and go to its ==Students== tab',
         'Copy the ==join link==, or put the QR code up on the board',
         'Students open it on their device and create an account',
         'No email needed: just a ==handle== and a password',
@@ -183,7 +183,7 @@ export const DAY_ONE_DECK: HybridDeck = {
     {
       layout: 'figure',
       eyebrow: 'You’re in',
-      title: 'Your YAWP! dashboard',
+      title: 'Your Yawp! dashboard',
       image: 'yawp-student-dashboard.png',
       accent: 'coral',
       callouts: [
@@ -197,7 +197,7 @@ export const DAY_ONE_DECK: HybridDeck = {
     },
     {
       layout: 'closer',
-      eyebrow: 'YAWP!',
+      eyebrow: 'Yawp!',
       line: 'Next time: pre-writing.',
       notes:
         'Before students leave, make sure everyone has joined your class and started the assignment. Collect any forgotten handles now; it saves time next class.',

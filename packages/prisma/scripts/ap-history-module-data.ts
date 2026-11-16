@@ -22,7 +22,7 @@ import { formatRegisterModeDirective } from './universal-tutor-block';
 
 export type ApHistoryEssayType = 'dbq' | 'leq';
 
-// Which register the Universal YAWP! Tutor Instructions put the student in for
+// Which register the Universal Yawp! Tutor Instructions put the student in for
 // this section. The universal block defines both modes and defers the choice
 // to the course-builder, per module; this is where AP History makes it.
 // Mirrors TutorRegisterMode in

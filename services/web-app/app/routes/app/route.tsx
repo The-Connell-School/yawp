@@ -269,6 +269,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
         organizationId: profile.organization.id,
       })
     : ({ variant: 'none' } satisfies TeachingAccessShellState);
+  // The sidebar hides Teacher's Lounge unless told to show it: the Lounge is
+  // on for this teacher's school, or they are on its access list.
+  const { isTeacherLoungeNavVisibleForMember } =
+    await import('~/domain/teacher-lounge/teacher-lounge-temporary-disable.server');
+  const teacherLoungeNavVisible = await isTeacherLoungeNavVisibleForMember({
+    userId,
+    role: profile.role,
+    orgId: profile.organization.id,
+  });
   return data({
     mockAdminAvailable,
     freeAccountUsage: await readFreeAccountUsage(
@@ -283,6 +292,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
     guidedTours,
     teachingAccess,
+    teacherLoungeNavVisible,
   });
 }
 
@@ -316,6 +326,11 @@ export default function Route() {
     shellData;
   const freeAccountUsage =
     'freeAccountUsage' in shellData ? shellData.freeAccountUsage : null;
+  // Missing on the early free-tier and mock-admin returns: hidden there.
+  const teacherLoungeNavVisible =
+    'teacherLoungeNavVisible' in shellData
+      ? shellData.teacherLoungeNavVisible
+      : false;
   const teachingLockedNav =
     teachingAccess.variant === 'locked' ||
     teachingAccess.variant === 'loading';
@@ -501,6 +516,7 @@ export default function Route() {
               freeAccountUsage ? freeTierSidebarSections() : FLAT_SIDEBAR_SECTIONS
             }
             user={user}
+            teacherLoungeNavVisible={teacherLoungeNavVisible}
             navExpanded={navExpanded}
             pathname={location.pathname}
             isAppNavLinkActive={isAppNavLinkActive}

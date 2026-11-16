@@ -162,7 +162,7 @@ A replacement for the folder list. It keeps drag and drop, rename and Move to (n
 - **Stack:** "This lesson is set" offers **Save to unit** when the lesson is in no unit.
 
 ### Writing time
-The same rule the stack already uses (YAWP! writing assignments, plus plainly-writing steps). Unit totals add every day.
+The same rule the stack already uses (Yawp! writing assignments, plus plainly-writing steps). Unit totals add every day.
 
 ---
 

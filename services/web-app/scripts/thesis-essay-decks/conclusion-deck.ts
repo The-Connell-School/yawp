@@ -184,8 +184,8 @@ export const CONCLUSION_DECK: HybridDeck = {
         [0.36, 0.415],
       ],
       notes:
-        'Today’s YAWP! editor on the Conclusion Paragraph step. This part usually goes fast: once body paragraphs are done they’re in the home stretch. As you work the room, watch the rhetorical questions. Some will be too simple or lead nowhere; help them find a relevant question that springboards their final thoughts. For many students this is the first conclusion like this they have ever built.',
+        'Today’s Yawp! editor on the Conclusion Paragraph step. This part usually goes fast: once body paragraphs are done they’re in the home stretch. As you work the room, watch the rhetorical questions. Some will be too simple or lead nowhere; help them find a relevant question that springboards their final thoughts. For many students this is the first conclusion like this they have ever built.',
     },
-    { layout: 'closer', eyebrow: 'YAWP!', line: 'Next time: titles and finishing touches.', notes: 'Students who finish can reread their whole essay from the top.' },
+    { layout: 'closer', eyebrow: 'Yawp!', line: 'Next time: titles and finishing touches.', notes: 'Students who finish can reread their whole essay from the top.' },
   ],
 };

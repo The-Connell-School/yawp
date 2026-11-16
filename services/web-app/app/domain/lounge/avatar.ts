@@ -33,7 +33,7 @@ export function avatarToneFor(userId: string): LoungeAvatarTone {
 export const LOUNGE_PREVIEW_MAX = 160;
 
 /**
- * One line under a feed row: the YAWP! team's first answer if there is one
+ * One line under a feed row: the Yawp! team's first answer if there is one
  * (so a question that is all title shows Brian's answer), else the post's
  * own body, else nothing.
  */

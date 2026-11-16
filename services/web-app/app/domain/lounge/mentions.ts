@@ -1,3 +1,5 @@
+import { LOUNGE_TEAM_ACCOUNT_NAME, isLoungeTeamAccountName } from './display-name';
+
 /**
  * @mentions are stored inside the plain-text body as tokens,
  * `@[Brian Connell](user:<id>)`, inserted by the mention picker. Storing the
@@ -7,11 +9,19 @@
 const TOKEN = /@\[([^[\]()\n]{1,80})\]\(user:([A-Za-z0-9_-]{1,64})\)/g;
 
 /**
- * "@YAWP! team" is a mention of the whole team rather than one person. It
+ * "@Yawp! team" is a mention of the whole team rather than one person. It
  * uses the same token with this reserved id (never a real user id), and asks
- * the team the way "Ask the YAWP! team" does.
+ * the team the way "Ask the Yawp! team" does.
  */
 export const LOUNGE_TEAM_MENTION_ID = 'yawp-team';
+
+/**
+ * A token's label as shown. A team mention written when the brand was spelled
+ * "YAWP!" keeps that label in the stored body; it reads with today's spelling.
+ */
+function shownLabel(label: string, userId: string): string {
+  return userId === LOUNGE_TEAM_MENTION_ID && isLoungeTeamAccountName(label) ? LOUNGE_TEAM_ACCOUNT_NAME : label;
+}
 
 export function mentionsTeam(body: string): boolean {
   for (const match of body.matchAll(TOKEN)) {
@@ -44,7 +54,7 @@ export function splitMentions(body: string): MentionPart[] {
   for (const match of body.matchAll(TOKEN)) {
     const index = match.index ?? 0;
     if (index > last) parts.push({ type: 'text', text: body.slice(last, index) });
-    parts.push({ type: 'mention', userId: match[2], label: match[1] });
+    parts.push({ type: 'mention', userId: match[2], label: shownLabel(match[1], match[2]) });
     last = index + match[0].length;
   }
   if (last < body.length) parts.push({ type: 'text', text: body.slice(last) });
@@ -53,7 +63,7 @@ export function splitMentions(body: string): MentionPart[] {
 
 /** The body with each token shown as "@Name", for emails and previews. */
 export function plainTextWithMentions(body: string): string {
-  return body.replace(TOKEN, (_whole, label: string) => `@${label}`);
+  return body.replace(TOKEN, (_whole, label: string, userId: string) => `@${shownLabel(label, userId)}`);
 }
 
 /**

@@ -19,7 +19,7 @@ function safeReturn(from: string | null): string {
 }
 
 /**
- * A Thesis-Driven Essay deck, presented on YAWP! exactly as designed: the
+ * A Thesis-Driven Essay deck, presented on Yawp! exactly as designed: the
  * same slides as the PowerPoint download, drawn from the same source. The
  * same gate as the downloads: teachers only, only while the flag is on.
  */

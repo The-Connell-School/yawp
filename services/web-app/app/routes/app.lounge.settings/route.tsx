@@ -79,7 +79,7 @@ export default function LoungeSettingsRoute() {
             </div>
           </Form>
         ) : (
-          <p className="mt-4 text-muted-foreground">Nothing to set here for the YAWP! team.</p>
+          <p className="mt-4 text-muted-foreground">Nothing to set here for the Yawp! team.</p>
         )}
       </div>
     </section>

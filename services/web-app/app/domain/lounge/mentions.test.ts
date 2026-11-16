@@ -42,12 +42,12 @@ describe('mention tokens', () => {
   });
 });
 
-describe('the YAWP! team group mention', () => {
+describe('the Yawp! team group mention', () => {
   test('is a token like any other, and is found without a user lookup', () => {
-    const body = `Can someone help? ${mentionToken('YAWP! team', LOUNGE_TEAM_MENTION_ID)} thanks`;
+    const body = `Can someone help? ${mentionToken('Yawp! team', LOUNGE_TEAM_MENTION_ID)} thanks`;
     expect(mentionsTeam(body)).toBe(true);
-    expect(plainTextWithMentions(body)).toBe('Can someone help? @YAWP! team thanks');
-    expect(mentionsTeam('Ask the YAWP! team')).toBe(false);
+    expect(plainTextWithMentions(body)).toBe('Can someone help? @Yawp! team thanks');
+    expect(mentionsTeam('Ask the Yawp! team')).toBe(false);
     expect(mentionsTeam(mentionToken('Brian', 'u1'))).toBe(false);
   });
 });
@@ -98,5 +98,25 @@ describe('encodeMentions / decodeMentions', () => {
     const decoded = decodeMentions(encoded);
     expect(decoded).toEqual({ text: 'Hi @Brian Connell!', mentions: [brian] });
     expect(encodeMentions(decoded.text, decoded.mentions)).toBe(encoded);
+  });
+});
+
+describe('a team mention written before the brand was spelled Yawp!', () => {
+  const body = `Help? ${mentionToken('YAWP! team', LOUNGE_TEAM_MENTION_ID)} thanks`;
+
+  test('still asks the team, and reads with the current spelling', () => {
+    expect(mentionsTeam(body)).toBe(true);
+    expect(plainTextWithMentions(body)).toBe('Help? @Yawp! team thanks');
+    expect(splitMentions(body)[1]).toEqual({ type: 'mention', userId: LOUNGE_TEAM_MENTION_ID, label: 'Yawp! team' });
+  });
+
+  test('opens for editing and saves back as the same mention', () => {
+    const { text, mentions } = decodeMentions(body);
+    expect(text).toBe('Help? @Yawp! team thanks');
+    expect(mentionsTeam(encodeMentions(text, mentions))).toBe(true);
+  });
+
+  test('a person whose label has the old spelling is left as written', () => {
+    expect(plainTextWithMentions(mentionToken('YAWP! team', 'user_1'))).toBe('@YAWP! team');
   });
 });

@@ -204,6 +204,20 @@ describe('the overview video at the top of a guide (Kevin, Nov 10)', () => {
     expect(root.querySelector('video source')?.getAttribute('src')).toBe(VIDEO.src);
   });
 
+  it('has no caption track on a silent tour', () => {
+    const root = render(<GuideOverviewVideo {...VIDEO} />);
+    expect(root.querySelector('track')).toBeNull();
+  });
+
+  it('offers captions when the video has them (Brian’s tutorials, which talk)', () => {
+    const root = render(<GuideOverviewVideo {...VIDEO} captions="/courses/x/tutorial.vtt" />);
+    const track = root.querySelector('video track')!;
+    expect(track.getAttribute('kind')).toBe('captions');
+    expect(track.getAttribute('src')).toBe('/courses/x/tutorial.vtt');
+    expect(track.getAttribute('srclang')).toBe('en');
+    expect(track.hasAttribute('default')).toBe(true);
+  });
+
   it('sits in a white card with a soft shadow on an accented page', () => {
     const root = render(
       <GuidePage backTo="/app" backLabel="Back" accent={FOREST}>

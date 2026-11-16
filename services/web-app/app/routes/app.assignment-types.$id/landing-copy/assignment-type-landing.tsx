@@ -1,4 +1,4 @@
-import { Fragment, useId, useState, type ReactNode } from 'react';
+import { Fragment, useId, useState } from 'react';
 import { Link } from 'react-router';
 import { ChevronDown, CirclePlay, Presentation } from 'lucide-react';
 
@@ -18,10 +18,11 @@ import {
 import { YAWP_LESSONS } from '~/domain/lesson-planner/yawp-lessons';
 
 /**
- * Each lesson's tutorial video, by lesson number: its module in the
- * Teachers' Lounge course, where this teacher can open it. A lesson with no
- * entry shows no video link (Brian, Nov 6: the rows are the slide deck and
- * the video, nothing else).
+ * Each lesson's tutorial page, by lesson number: Brian's own video for the
+ * lesson, or its module in the Teachers' Lounge course where he has not
+ * recorded one and this teacher can open it. A lesson with no entry shows no
+ * video link (Brian, Nov 6: the rows are the slide deck and the video,
+ * nothing else).
  */
 export type LessonVideos = Record<number, string>;
 type LessonLinks = { lessonVideos: LessonVideos };
@@ -103,14 +104,11 @@ function CourseLessonRow({
   title,
   decks,
   tutorialHref,
-  note,
 }: {
   index: number | null;
   title: string;
   decks: CourseDeck[];
   tutorialHref: string | null;
-  /** A closed box under the row (the YAWP! philosophy, under Pre-writing). */
-  note?: ReactNode;
 }) {
   return (
     <li data-testid="course-lesson" className="py-3">
@@ -158,7 +156,6 @@ function CourseLessonRow({
         </span>
       </span>
       </div>
-      {note ? <div className={cn('mt-3', index !== null && 'sm:pl-7')}>{note}</div> : null}
     </li>
   );
 }
@@ -191,28 +188,15 @@ function ThesisEssayCourse({
           {THESIS_ESSAY_COURSE_TITLE}
         </h3>
         <ol className="flex flex-col divide-y">
-          {THESIS_ESSAY_COURSE.map((lesson, index) => {
-            const note = lesson.yawpLesson ? block.lessonNotes?.[lesson.yawpLesson] : undefined;
-            return (
-              <CourseLessonRow
-                key={lesson.title}
-                index={index + 1}
-                title={lesson.title}
-                decks={lesson.decks}
-                tutorialHref={lessonVideos[index + 1] ?? null}
-                note={
-                  note ? (
-                    <BoxedSection
-                      section={note}
-                      lessonVideos={lessonVideos}
-                      defaultExpanded={false}
-                      nested
-                    />
-                  ) : null
-                }
-              />
-            );
-          })}
+          {THESIS_ESSAY_COURSE.map((lesson, index) => (
+            <CourseLessonRow
+              key={lesson.title}
+              index={index + 1}
+              title={lesson.title}
+              decks={lesson.decks}
+              tutorialHref={lessonVideos[index + 1] ?? null}
+            />
+          ))}
         </ol>
       </div>
     </div>
@@ -383,10 +367,6 @@ export const SPOTLIGHT_BOX = [
   'dark:border-border dark:bg-white/[0.04]',
 ].join(' ');
 
-/** A box inside a box (under a course lesson): flat, so only the outer one lifts. */
-const NESTED_BOX =
-  'rounded-xl border border-[#E4DCCF] bg-white/70 px-4 py-3 dark:border-border dark:bg-white/[0.03]';
-
 /**
  * One section in its own box, the heading and the Show/Hide button inside it
  * (Kevin and Brian, Nov 11, modeled on How to Teach It). How to Teach It
@@ -400,7 +380,6 @@ export function BoxedSection({
   lessonVideos,
   defaultExpanded,
   preview: showPreview = false,
-  nested = false,
   className,
 }: {
   section: LandingSection;
@@ -408,8 +387,6 @@ export function BoxedSection({
   defaultExpanded: boolean;
   /** Closed, show a two-line preview of the first paragraph. */
   preview?: boolean;
-  /** Inside another box (a course lesson's note): a flat box and an h4. */
-  nested?: boolean;
   className?: string;
 } & LessonLinks) {
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -422,7 +399,6 @@ export function BoxedSection({
       )
     : undefined;
   const label = expanded ? 'Hide' : 'Show';
-  const Heading = nested ? 'h4' : 'h2';
   const isHowToTeach = section.id === 'how-to-teach-it';
   return (
     <section
@@ -430,15 +406,12 @@ export function BoxedSection({
       data-testid={isHowToTeach ? 'how-to-teach-spotlight' : `landing-section-${section.id}`}
       data-landing-box=""
       data-tour={section.id === 'how-it-works' ? 'type-directions' : undefined}
-      className={cn(nested ? NESTED_BOX : SPOTLIGHT_BOX, className)}
+      className={cn(SPOTLIGHT_BOX, className)}
     >
       <div className="flex items-center justify-between gap-4">
-        <Heading
-          id={headingId}
-          className={nested ? 'text-sm font-semibold sm:text-base' : 'text-lg font-semibold sm:text-xl'}
-        >
+        <h2 id={headingId} className="text-lg font-semibold sm:text-xl">
           {section.heading}
-        </Heading>
+        </h2>
         <button
           type="button"
           aria-expanded={expanded}
@@ -451,8 +424,7 @@ export function BoxedSection({
           <span
             aria-hidden
             className={cn(
-              'flex items-center justify-center rounded-full border border-[#E4DCCF] bg-[#F3F1EC] text-foreground transition-colors group-hover:bg-[#ECE8E0] dark:border-border dark:bg-white/[0.06]',
-              nested ? 'h-8 w-8' : 'h-10 w-10'
+              'flex h-10 w-10 items-center justify-center rounded-full border border-[#E4DCCF] bg-[#F3F1EC] text-foreground transition-colors group-hover:bg-[#ECE8E0] dark:border-border dark:bg-white/[0.06]'
             )}
           >
             <ChevronDown

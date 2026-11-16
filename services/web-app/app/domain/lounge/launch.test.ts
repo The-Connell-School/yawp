@@ -9,9 +9,9 @@ import {
 } from './launch';
 
 describe('names', () => {
-  test('the community is the Faculty Lounge, run by the YAWP! team', () => {
+  test('the community is the Faculty Lounge, run by the Yawp! team', () => {
     expect(LOUNGE_NAME).toBe('Faculty Lounge');
-    expect(LOUNGE_TEAM_NAME).toBe('YAWP! team');
+    expect(LOUNGE_TEAM_NAME).toBe('Yawp! team');
   });
 });
 

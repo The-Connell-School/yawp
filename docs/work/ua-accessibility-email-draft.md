@@ -6,12 +6,12 @@ account readiness is confirmed.
 
 To: Rachel Thompson <rsthompson2@ua.edu>
 
-Subject: YAWP! accessibility documentation and evaluation access
+Subject: Yawp! accessibility documentation and evaluation access
 
 Hi Rachel,
 
 Thank you again for outlining UA's accessibility review questions. We have
-prepared a WCAG 2.1 Level AA self-evaluation for the current YAWP! product
+prepared a WCAG 2.1 Level AA self-evaluation for the current Yawp! product
 scope and a public accessibility page for the product:
 
 https://yawp.school/accessibility
@@ -25,7 +25,7 @@ content is included in implementation.
 
 Current status in brief:
 
-- YAWP! has completed automated WCAG 2.1 A/AA axe testing across representative
+- Yawp! has completed automated WCAG 2.1 A/AA axe testing across representative
   login, student, teacher, grading, and Teacher's Lounge flows.
 - We remediated issues found during that pass, including color contrast,
   accessible names for controls, editor naming, and several Teacher's Lounge
