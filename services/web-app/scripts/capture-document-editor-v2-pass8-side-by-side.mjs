@@ -10,10 +10,13 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { enterPreviewAccess } from '../../../scripts/preview/smoke-login.mjs';
 import {
-  enterPreviewAccess,
-  runLoginSmoke,
-} from '../../../scripts/preview/smoke-login.mjs';
+  openPreviewV2Document,
+  resolvePreviewDocumentId,
+  waitForDevLoginShell,
+  DEFAULT_PREVIEW_V2_QA_DOCUMENT_ID,
+} from './document-editor-v2-preview-discovery.mjs';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '../../..');
 const DESIGN_DIR = join(ROOT, 'docs/design/document-editor-v2');
@@ -67,20 +70,9 @@ async function passGate(context) {
   );
 }
 
-async function loginDev(page) {
-  await page.goto(`${BASE}/auth/dev-login`, { waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: /casey student/i }).click();
-  await page.waitForURL(/\/app(\/|$)/, { timeout: 60_000 });
-}
-
 async function openDoc(page, query = '') {
   const docId = page._docId;
-  await page.goto(`${BASE}/app/documents/${docId}${query}?editor=v2`, {
-    waitUntil: 'networkidle',
-  });
-  await page
-    .locator('[data-document-editor-version="v2"]')
-    .waitFor({ state: 'visible', timeout: 45_000 });
+  await openPreviewV2Document(page, BASE, docId, query);
 }
 
 async function captureDesign(browser, pair) {
@@ -112,18 +104,8 @@ async function capturePreview(browser, pair, docId) {
   const page = await context.newPage();
   page._docId = docId;
   await page.setViewportSize(pair.previewViewport);
-  try {
-    await loginDev(page);
-  } catch (err) {
-    console.warn('dev-login failed, using password login', err);
-    await runLoginSmoke({
-      baseUrl: BASE,
-      email: STUDENT_EMAIL,
-      password: process.env.PREVIEW_STUDENT_PASSWORD ?? 'yawp-dev',
-      accessCode: ACCESS_CODE,
-    });
-    await page.goto(`${BASE}/app`, { waitUntil: 'networkidle' });
-  }
+  await page.goto(`${BASE}/auth/dev-login`, { waitUntil: 'networkidle' });
+  await waitForDevLoginShell(page);
   await pair.afterLogin(page);
   const path = join(EVIDENCE, `${pair.slug}-preview.png`);
   await page.screenshot({ path, fullPage: false });
@@ -147,34 +129,6 @@ async function stitchSideBySide(slug, designPath, previewPath) {
   return out;
 }
 
-async function discoverDocumentId(page) {
-  const tryParse = (href) => href?.match(/\/app\/documents\/([^/?#]+)/)?.[1] ?? null;
-  await page.goto(`${BASE}/app/my-documents`, { waitUntil: 'networkidle' });
-  let href = await page
-    .locator('a[href*="/app/documents/"]')
-    .first()
-    .getAttribute('href')
-    .catch(() => null);
-  const fromList = tryParse(href);
-  if (fromList) return fromList;
-  await page.goto(`${BASE}/app`, { waitUntil: 'networkidle' });
-  const classTab = await page
-    .locator('a[href*="tab=documents"]')
-    .first()
-    .getAttribute('href')
-    .catch(() => null);
-  if (classTab) {
-    await page.goto(`${BASE}${classTab}`, { waitUntil: 'networkidle' });
-    href = await page
-      .locator('a[href*="/app/documents/"]')
-      .first()
-      .getAttribute('href');
-    const id = tryParse(href);
-    if (id) return id;
-  }
-  throw new Error('No document link on preview /app');
-}
-
 async function main() {
   if (!BASE) throw new Error('PREVIEW_BASE_URL is required');
   await mkdir(EVIDENCE, { recursive: true });
@@ -185,18 +139,11 @@ async function main() {
     const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
     await passGate(ctx);
     const probe = await ctx.newPage();
-    try {
-      await loginDev(probe);
-    } catch {
-      await runLoginSmoke({
-        baseUrl: BASE,
-        email: STUDENT_EMAIL,
-        password: 'yawp-dev',
-        accessCode: ACCESS_CODE,
-      });
-      await probe.goto(`${BASE}/app`, { waitUntil: 'networkidle' });
-    }
-    docId = await discoverDocumentId(probe);
+    await probe.goto(`${BASE}/auth/dev-login`, { waitUntil: 'networkidle' });
+    await waitForDevLoginShell(probe);
+    docId = await resolvePreviewDocumentId(probe, BASE, {
+      preferredId: DEFAULT_PREVIEW_V2_QA_DOCUMENT_ID,
+    });
     await ctx.close();
     console.log('discovered document', docId);
   }

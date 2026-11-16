@@ -626,6 +626,7 @@ jobs:
           bun test ./services/web-app/app/domain/grading/grading-assistant-invocation.test.ts
           bun test ./services/web-app/app/domain/grading/grading-prompt-shape.test.ts
           bun test ./packages/prisma/scripts/seed-preview-teacher-notes-qa.test.ts
+          bun test ./packages/prisma/scripts/seed-preview-document-editor-v2-qa.test.ts
           cd services/web-app
           bun test app/domain/assignment-types/assignment-type-grading-config.server.test.ts
           bun test app/domain/assignment-types/assignment-type-grading-config.qa431-legacy.server.test.ts

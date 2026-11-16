@@ -32,6 +32,16 @@ const V2_ONLY_COMPONENTS = [
 const REPO_ROOT = join(import.meta.dir, '../../../../../..');
 
 describe('document editor v2 design contract', () => {
+  test('preview document editor v2 QA constants are committed', () => {
+    const constants = join(
+      REPO_ROOT,
+      'packages/prisma/scripts/local-dev/preview-document-editor-v2-qa.ts'
+    );
+    expect(existsSync(constants)).toBe(true);
+    const text = readFileSync(constants, 'utf8');
+    expect(text).toContain('previewdoceditv2qa0001');
+  });
+
   test('Claude Design exports are committed under docs/design/document-editor-v2', () => {
     const designDir = join(REPO_ROOT, 'docs/design/document-editor-v2');
     expect(existsSync(join(designDir, 'document-editor.html'))).toBe(true);
