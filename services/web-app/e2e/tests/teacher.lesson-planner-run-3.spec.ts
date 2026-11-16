@@ -1247,6 +1247,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
       signIn,
       e2eContext,
     }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
       const { conversationId } = await seedConversation(e2eContext, [
         { role: 'user', content: 'Three warm-ups' },
         { role: 'assistant', content: OPTIONS_REPLY },
