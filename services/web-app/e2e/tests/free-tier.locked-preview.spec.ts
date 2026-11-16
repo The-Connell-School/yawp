@@ -398,7 +398,7 @@ for (const width of [390, 1440]) {
     ).toBeVisible();
     await capture(page, `waiting-${width}`);
     const exploreLink = page.getByRole('link', { name: 'Explore my classroom' });
-    await expect(exploreLink).toHaveAttribute('href', '/app');
+    await expect(exploreLink).toHaveAttribute('href', '/app/free-tier/preview');
     await exploreLink.click();
     await expectLockedAppHome(page);
     await expect(page).not.toHaveURL(/free-tier\/preview/);

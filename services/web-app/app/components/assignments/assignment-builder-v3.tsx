@@ -703,6 +703,9 @@ export function AssignmentBuilderV3({
               <label htmlFor="abv3-prompt" className="abv3-field-label">
                 Prompt
               </label>
+              <p className="abv3-field-label-muted -mt-1 mb-1.5 text-xs">
+                what students will see
+              </p>
               <div className="abv3-input-wrap">
                 <textarea
                   id="abv3-prompt"
