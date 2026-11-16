@@ -606,7 +606,13 @@
 
 .doc-editor-comment-resolved-row {
   background: rgba(255, 253, 249, 0.62);
-  box-shadow: 0 0 0 1px rgba(31, 53, 50, 0.06);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.6),
+    0 0 0 1px rgba(31, 53, 50, 0.06),
+    0 12px 32px rgba(31, 53, 50, 0.1);
 }
 
 .doc-editor-comment-resolve {
