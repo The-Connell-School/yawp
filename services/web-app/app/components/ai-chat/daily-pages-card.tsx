@@ -37,6 +37,7 @@ export function DailyPagesCard({
   disabled = false,
   created = null,
   pieceRef = null,
+  optionCard = false,
 }: {
   exercise: DailyPagesExercise;
   /** Null when this org does not have Daily Pages — then it is just a prompt. */
@@ -70,6 +71,8 @@ export function DailyPagesCard({
    * it is recorded once for the chat and the stack (Oct 24 handoff, task 1).
    */
   pieceRef?: string | null;
+  /** Class-starter option in Brian's grid — prompt and Add only. */
+  optionCard?: boolean;
 }) {
   const isStarter = exercise.kind === 'class-starter';
   const targetTypeId =
@@ -85,9 +88,14 @@ export function DailyPagesCard({
     <div
       data-testid="daily-pages-card"
       data-exercise-kind={exercise.kind}
-      className="mt-3 overflow-hidden rounded-xl border border-primary/25 bg-primary/[0.03]"
+      data-added={added ? 'true' : 'false'}
+      className={cn(
+        optionCard
+          ? 'lp-daily-option'
+          : 'mt-3 overflow-hidden rounded-xl border border-primary/25 bg-primary/[0.03]'
+      )}
     >
-      <div className="flex items-center gap-2 border-b border-primary/15 px-4 py-2.5">
+      <div className={cn('flex items-center gap-2 border-b border-primary/15 px-4 py-2.5', optionCard && 'sr-only')}>
         <PenLine size={15} className="shrink-0 text-primary" />
         <span className="text-sm font-medium">
           {/* Never "warm-up" for Daily Pages: the opening minutes are what a
@@ -108,7 +116,7 @@ export function DailyPagesCard({
             <Button
               type="button"
               size="sm"
-              variant={added ? 'outline-primary' : 'outline-primary'}
+              variant={added ? 'default' : 'outline-primary'}
               disabled={disabled}
               onClick={() => onToggle(!added)}
               data-testid="daily-pages-stack-toggle"

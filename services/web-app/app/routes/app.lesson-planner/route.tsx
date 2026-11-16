@@ -75,6 +75,7 @@ import {
   type IntakeClass,
 } from '~/components/ai-chat/lesson-intake-card';
 import {
+  LESSON_PLANNER_MARKDOWN_CLASS,
   MarkdownContent,
   printAssistantMessage,
 } from '~/components/ai-chat/assistant-markdown';
@@ -1131,7 +1132,7 @@ export default function LessonPlannerRoute() {
 
   return (
     <DeckPicturesProvider pictures={deckPictures}>
-    <section className="flex h-full w-full">
+    <section className="lesson-planner-chat flex h-full w-full">
       <LessonRail
         lessons={conversations}
         activeId={conversationId ?? null}
@@ -1146,7 +1147,7 @@ export default function LessonPlannerRoute() {
       />
 
       {/* Chat */}
-      <div className="flex h-full min-w-0 flex-1 flex-col">
+      <div className="lp-chat-column flex h-full min-w-0 flex-1 flex-col">
         {freeTierB2 ? (
           <div className="free-tier-b2-page-shell shrink-0 !pb-0 !pt-4">
             <FreeTierLockedPageHeader
@@ -1220,13 +1221,10 @@ export default function LessonPlannerRoute() {
             ) : null}
           </div>
         ) : (
-        <div className="border-b bg-secondary px-4 py-3">
-          <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
-            <Lightbulb size={20} className="shrink-0 text-primary" />
+        <div className="lp-chat-header">
+          <div className="mx-auto flex w-full max-w-[1000px] flex-wrap items-center justify-between gap-4">
             <div className="min-w-0 flex-1">
-              <h2 className="text-lg font-semibold leading-none">
-                Yawp! Lesson Planner
-              </h2>
+              <h1 className="leading-none">Lesson Planner</h1>
               {/* A day opened out of a unit is one lesson inside a larger arc,
                   and the way back to the map has to be visible from inside it —
                   otherwise a teacher lands in day 3 with no way home. */}
@@ -1249,14 +1247,8 @@ export default function LessonPlannerRoute() {
                     Back to the unit map
                   </button>
                 </p>
-              ) : (
-                <p className="hidden text-sm text-muted-foreground sm:block">
-                  Talk through a lesson for your actual students.
-                </p>
-              )}
+              ) : null}
             </div>
-            {/* The way into the guide stays in the header, where a teacher who
-                is new here looks first, and shrinks to its icon on a phone. */}
             <SeeHowItWorksLink to="/app/lesson-planner/how-it-works" data-tour="planner-guide" />
             <div className="flex shrink-0 items-center gap-2 md:hidden">
               {/* "Switch lesson", not "Your lessons": the rail's link to the
@@ -1307,17 +1299,12 @@ export default function LessonPlannerRoute() {
 
         <div
           ref={transcriptRef}
-          className="no-scrollbar flex-1 overflow-y-auto px-4 py-6"
+          className="lp-transcript no-scrollbar flex-1 overflow-y-auto"
         >
           <div
             className={cn(
-              'mx-auto flex w-full flex-col gap-4',
-              // Nothing said yet: the box is the page, so it sits up in the
-              // middle of the room rather than pinned to the floor under an
-              // empty transcript. Not vertically centred — the tiles run
-              // taller than a laptop viewport, and centring a column that
-              // overflows puts its own heading above the scroll.
-              hasMessages ? 'max-w-3xl' : 'max-w-4xl py-6 sm:py-10'
+              'lp-transcript-inner mx-auto flex w-full flex-col',
+              !hasMessages && 'max-w-4xl py-6 sm:py-10'
             )}
           >
             {freeUsage?.monthly && freeUsage.reporter ? (
@@ -1402,11 +1389,11 @@ export default function LessonPlannerRoute() {
                 <PlanningProgressBar progress={progress} />
               ) : (
                 <div
-                  className="flex items-center gap-2 text-sm text-muted-foreground"
+                  className="lp-status-planning flex items-center"
                   role="status"
                   aria-live="polite"
                 >
-                  <Loader2 size={16} className="animate-spin" />
+                  <Loader2 size={18} className="animate-spin text-[#1F4A39]" />
                   Planning the lesson…
                 </div>
               )
@@ -1416,10 +1403,10 @@ export default function LessonPlannerRoute() {
 
         {keptCount > 0 && conversationId ? (
           <div
-            className="border-t bg-primary/5 px-4 py-2"
+            className="lp-packet-bar border-t px-4 py-2"
             data-testid="lesson-packet-bar"
           >
-            <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-x-3 gap-y-1">
+            <div className="mx-auto flex w-full max-w-[1000px] flex-wrap items-center gap-x-3 gap-y-1">
               <FileText size={16} className="shrink-0 text-primary" />
               <p className="text-sm">
                 <strong>
@@ -1455,8 +1442,8 @@ export default function LessonPlannerRoute() {
         {/* Once there is a transcript the box belongs under it. Before that it
             is rendered inside the empty state, in the middle of the page. */}
         {hasMessages ? (
-          <div className="border-t bg-background px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
-            <div className="mx-auto w-full max-w-3xl pr-12">
+          <div className="lp-composer-dock">
+            <div className="mx-auto w-full">
               <MadeNotice className="mb-2" />
               <LessonComposer
                 value={input}
@@ -1521,9 +1508,8 @@ function LessonComposer({
     <form
       data-tour="planner-composer"
       className={cn(
-        'flex w-full items-end gap-2',
-        hero &&
-          'rounded-2xl border bg-background p-2 shadow-[0_12px_40px_-24px_rgba(0,0,0,0.45)] focus-within:border-primary/40'
+        'lp-composer flex w-full items-end gap-2',
+        hero && 'lp-composer--hero'
       )}
       onSubmit={(event) => {
         event.preventDefault();
@@ -1551,10 +1537,10 @@ function LessonComposer({
         }
         aria-label="Message the Lesson Planner"
         className={cn(
-          'w-full flex-1 resize-none max-sm:text-base',
+          'lp-composer-input w-full flex-1 resize-none max-sm:text-base',
           hero
-            ? 'max-h-56 min-h-[76px] border-0 bg-transparent text-base shadow-none focus-visible:ring-0'
-            : 'max-h-40 min-h-[44px]'
+            ? 'max-h-56 min-h-[76px] border-0 bg-transparent shadow-none focus-visible:ring-0'
+            : 'max-h-40 min-h-[3.5rem]'
         )}
         disabled={disabled}
       />
@@ -1564,9 +1550,9 @@ function LessonComposer({
         size="icon"
         disabled={disabled || value.trim().length === 0}
         aria-label="Send message"
-        className={cn(hero && 'mb-1 mr-1 h-10 w-10 rounded-xl')}
+        className={cn('lp-composer-send', hero && 'mb-0.5 mr-0.5')}
       >
-        <Send size={hero ? 20 : 18} />
+        <Send size={20} />
       </Button>
     </form>
   );
@@ -1612,7 +1598,7 @@ function LessonPlannerEmptyState({
   return (
     <div className="flex flex-col items-center gap-8">
       <div className="flex w-full max-w-3xl flex-col items-center gap-5 text-center">
-        <h3 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+        <h3 className="lp-empty-title text-center">
           What are we teaching?
         </h3>
         <p className="max-w-lg text-sm text-muted-foreground">
@@ -1869,7 +1855,7 @@ function MessageBubble({
   if (message.role === 'user') {
     return (
       <div className="flex justify-end" data-role="user">
-        <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground shadow-sm">
+        <div className="lp-user-bubble whitespace-pre-wrap">
           {message.displayText ? (
             <>
               <span data-testid="user-display">{message.displayText}</span>
@@ -1983,7 +1969,11 @@ function MessageBubble({
     offerStarterSwap: stackV2 && offersStarter && !isSwapReply,
   });
 
-  const renderPart = (part: ReplyPart, index: number) => {
+  const renderPart = (
+    part: ReplyPart,
+    index: number,
+    { optionCard = false }: { optionCard?: boolean } = {}
+  ) => {
     const key = `${message.id ?? 'pending'}:${index}`;
     if (part.kind === 'markdown') {
       const raw = teacherFacingMarkdown(linkMaterialTitles(part.text, materials));
@@ -1992,7 +1982,11 @@ function MessageBubble({
       if (!planSteps.length) {
         return (
           <div key={key} className={index > 0 ? 'mt-3' : undefined}>
-            <MarkdownContent content={text} codeAsText />
+            <MarkdownContent
+              content={text}
+              codeAsText
+              markdownClassName={LESSON_PLANNER_MARKDOWN_CLASS}
+            />
           </div>
         );
       }
@@ -2004,7 +1998,14 @@ function MessageBubble({
         <div key={key} className={index > 0 ? 'mt-3' : undefined}>
           {chunks.map((chunk, chunkIndex) => {
             if (chunk.kind === 'markdown') {
-              return <MarkdownContent key={chunkIndex} content={chunk.text} codeAsText />;
+              return (
+                <MarkdownContent
+                  key={chunkIndex}
+                  content={chunk.text}
+                  codeAsText
+                  markdownClassName={LESSON_PLANNER_MARKDOWN_CLASS}
+                />
+              );
             }
             const step = planSteps[chunk.index]!;
             const keys = segmentKeys(step.key);
@@ -2014,11 +2015,12 @@ function MessageBubble({
                 data-testid="plan-segment"
                 // Each step its own section, easy to find at a glance (Kevin's
                 // notes): a number, a title that reads as a heading, the time.
-                className="mt-5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border/70 pt-4"
+                className="lp-plan-segment flex"
               >
                 <StepHeading line={chunk.heading} number={chunk.index + 1} />
                 {keys.length && !choiceSteps.has(step.key) ? (
                   <SegmentToggle
+                    letterpress
                     isIn={segmentInStack(message.id!, keys, addedMaterials)}
                     disabled={disabled}
                     onToggle={(add) => toggleSegment(keys, add)}
@@ -2026,7 +2028,7 @@ function MessageBubble({
                 ) : choiceSteps.has(step.key) ? (
                   // Every numbered step says where it stands (Brian's run 4):
                   // a choice is added by picking one of its options below.
-                  <span data-testid="segment-choice" className="text-xs font-semibold text-muted-foreground">
+                  <span data-testid="segment-choice" className="lp-segment-choice">
                     {[...addedMaterials].some((token) =>
                       optionKeysUnder(step.key).some((key) => token === `${message.id}:${key}`)
                     )
@@ -2066,6 +2068,7 @@ function MessageBubble({
               : null
           }
           disabled={disabled}
+          optionCard={optionCard}
         />
       );
     }
@@ -2139,18 +2142,23 @@ function MessageBubble({
   };
 
   return (
-    <div className="flex gap-3" data-role="assistant">
-      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-primary/15">
-        <Lightbulb size={16} />
+    <div className="lp-assistant-row flex" data-role="assistant">
+      <div
+        className="lp-avatar flex shrink-0 items-center justify-center"
+        aria-hidden
+      >
+        <Lightbulb size={22} strokeWidth={2} />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="rounded-2xl rounded-tl-sm border border-border/60 bg-card px-4 py-3 text-foreground shadow-sm">
+        <div
+          className={cn(
+            'lp-assistant-sheet',
+            framePlan && 'lp-assistant-sheet--plan'
+          )}
+        >
           {framePlan ? (
             // Brian's run 3 (item 3): a full lesson says what to do with it.
-            <p
-              data-testid="plan-framing"
-              className="mb-3 rounded-lg bg-primary/5 px-3 py-2 text-sm text-foreground"
-            >
+            <p data-testid="plan-framing" className="lp-plan-framing">
               {FULL_LESSON_FRAMING}
             </p>
           ) : null}
@@ -2163,8 +2171,14 @@ function MessageBubble({
               renderPart(parts[group.index]!, group.index)
             ) : (
               // Options side by side, paged with arrows (Kevin's notes).
-              <OptionRow key={`${message.id ?? 'pending'}:options:${group.indexes[0]}`} label={group.label}>
-                {group.indexes.map((index) => renderPart(parts[index]!, index))}
+              <OptionRow
+                key={`${message.id ?? 'pending'}:options:${group.indexes[0]}`}
+                label={group.label}
+                layout="grid"
+              >
+                {group.indexes.map((index) =>
+                  renderPart(parts[index]!, index, { optionCard: true })
+                )}
               </OptionRow>
             )
           )}
@@ -2305,7 +2319,7 @@ function MessageBubble({
           // write — can go in the stack, not only the writing assignments.
           <div
             data-testid="plan-steps"
-            className="mt-2 rounded-xl border border-border/60 bg-card px-3 py-2"
+            className="lp-plan-steps-summary mt-2 rounded-xl border px-3 py-2"
           >
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Steps in this plan
@@ -2507,21 +2521,15 @@ function StepHeading({ line, number }: { line: string; number: number }) {
   const { level, title, minutes } = readStepHeading(line);
   const Tag = level === 3 ? 'h3' : 'h2';
   return (
-    <div className="flex min-w-0 items-center gap-2.5">
-      <span
-        aria-hidden
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
-      >
+    <div className="flex min-w-0 flex-wrap items-center gap-3">
+      <span aria-hidden className="lp-step-number inline-flex items-center justify-center">
         {number}
       </span>
-      <Tag data-testid="plan-step-title" className="min-w-0 text-base font-semibold leading-snug text-foreground">
+      <Tag data-testid="plan-step-title" className="lp-step-title min-w-0 leading-snug">
         {title}
       </Tag>
       {minutes ? (
-        <span
-          data-testid="plan-step-minutes"
-          className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground"
-        >
+        <span data-testid="plan-step-minutes" className="lp-step-minutes shrink-0 tabular-nums">
           {minutes} min
         </span>
       ) : null}

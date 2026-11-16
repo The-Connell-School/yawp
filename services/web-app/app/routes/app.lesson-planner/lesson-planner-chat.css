@@ -1,0 +1,358 @@
+/* Brian's Lesson Planner chat — letterpress / cream sheet (lp-chat.html) */
+
+.lesson-planner-chat {
+  --lp-cream: #f6f2e9;
+  --lp-ink: #1d1d1b;
+  --lp-muted: #3b3a36;
+  --lp-green: #1f4a39;
+  --lp-green-dark: #1a3d30;
+  --lp-border: #e4ddcd;
+  --lp-border-soft: #eee8db;
+  --lp-input: #d9d2c2;
+  --lp-callout: #fbf7ee;
+  --lp-callout-edge: #e8c062;
+  --lp-mint: #eef3ef;
+  --lp-hint: #6b675e;
+  --lp-bulb: #f2dca8;
+  --lp-sheet-shadow: 0 1px 3px rgba(40, 30, 10, 0.05);
+}
+
+.lesson-planner-chat .lp-chat-column {
+  background: var(--lp-cream);
+  color: var(--lp-ink);
+}
+
+.lesson-planner-chat .lp-chat-header {
+  flex-shrink: 0;
+  padding: 1.5rem 2.5rem 0.75rem;
+}
+
+@media (max-width: 639px) {
+  .lesson-planner-chat .lp-chat-header {
+    padding: 1.25rem 1rem 0.5rem;
+  }
+}
+
+.lesson-planner-chat .lp-chat-header h1,
+.lesson-planner-chat .lp-chat-header h2 {
+  margin: 0;
+  font-size: 2.125rem;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--lp-ink);
+  letter-spacing: -0.01em;
+}
+
+@media (max-width: 639px) {
+  .lesson-planner-chat .lp-chat-header h1,
+  .lesson-planner-chat .lp-chat-header h2 {
+    font-size: 1.625rem;
+  }
+}
+
+.lesson-planner-chat .lp-transcript {
+  padding: 1.5rem 2.5rem 1.75rem;
+}
+
+@media (max-width: 639px) {
+  .lesson-planner-chat .lp-transcript {
+    padding: 1rem 1rem 1.25rem;
+  }
+}
+
+.lesson-planner-chat .lp-transcript-inner {
+  max-width: 62.5rem; /* 1000px */
+  margin-inline: auto;
+  gap: 1.375rem; /* 22px */
+}
+
+.lesson-planner-chat .lp-user-bubble {
+  max-width: 78%;
+  border-radius: 1rem;
+  background: var(--lp-green);
+  color: #fff;
+  padding: 0.875rem 1.375rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.5;
+  box-shadow: none;
+}
+
+.lesson-planner-chat .lp-assistant-row {
+  gap: 0.875rem;
+  align-items: flex-start;
+}
+
+.lesson-planner-chat .lp-avatar {
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-top: 0;
+  border-radius: 9999px;
+  background: var(--lp-green);
+  color: var(--lp-bulb);
+  box-shadow: 0 2px 6px rgba(31, 74, 57, 0.25);
+}
+
+.lesson-planner-chat .lp-avatar svg {
+  width: 1.375rem;
+  height: 1.375rem;
+  stroke: var(--lp-bulb);
+}
+
+.lesson-planner-chat .lp-assistant-sheet {
+  border-radius: 1rem;
+  border: 1px solid var(--lp-border);
+  background: #fff;
+  color: var(--lp-muted);
+  box-shadow: var(--lp-sheet-shadow);
+  padding: 1rem 1.375rem;
+  font-size: 1.0625rem;
+  line-height: 1.55;
+}
+
+.lesson-planner-chat .lp-assistant-sheet.lp-assistant-sheet--plan {
+  padding: 1.375rem 1.625rem;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.lesson-planner-chat .lp-plan-framing {
+  margin-bottom: 0;
+  border-radius: 0.5rem;
+  border: 0;
+  border-left: 4px solid var(--lp-callout-edge);
+  background: var(--lp-callout);
+  padding: 0.875rem 1.125rem;
+  font-size: 1rem;
+  color: var(--lp-muted);
+}
+
+.lesson-planner-chat .lp-plan-segment {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--lp-border-soft);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.lesson-planner-chat .lp-step-number {
+  min-width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9999px;
+  background: #fff;
+  border: 1.5px solid var(--lp-green);
+  color: var(--lp-green-dark);
+  font-size: 1rem;
+  font-weight: 800;
+  box-shadow: none;
+}
+
+.lesson-planner-chat .lp-step-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--lp-ink);
+}
+
+.lesson-planner-chat .lp-step-minutes {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--lp-green-dark);
+  background: var(--lp-mint);
+  border-radius: 9999px;
+  padding: 0.125rem 0.625rem;
+}
+
+.lesson-planner-chat .lp-segment-choice {
+  margin-left: auto;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--lp-hint);
+}
+
+.lesson-planner-chat .lp-composer-dock {
+  border-top: 0;
+  background: transparent;
+  padding: 0.5rem 2.5rem max(1.75rem, env(safe-area-inset-bottom));
+}
+
+@media (max-width: 639px) {
+  .lesson-planner-chat .lp-composer-dock {
+    padding: 0.5rem 1rem max(1rem, env(safe-area-inset-bottom));
+  }
+}
+
+.lesson-planner-chat .lp-composer-dock > div {
+  max-width: 62.5rem;
+  padding-right: 0;
+}
+
+.lesson-planner-chat .lp-composer {
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.lesson-planner-chat .lp-composer .lp-composer-input {
+  min-height: 3.5rem;
+  border-radius: 0.875rem;
+  border: 1.5px solid var(--lp-input);
+  background: #fff;
+  font-size: 1.0625rem;
+  padding: 0.75rem 1.125rem;
+  box-shadow: none;
+}
+
+.lesson-planner-chat .lp-composer .lp-composer-input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px hsl(var(--ring));
+  border-color: var(--lp-green);
+}
+
+.lesson-planner-chat .lp-composer-send {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.lesson-planner-chat .lp-composer [aria-label='Add your own document'] {
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-bottom: 0;
+  border-radius: 9999px;
+  color: #3a3a36;
+  background: transparent;
+}
+
+.lesson-planner-chat .lp-composer.lp-composer--hero {
+  border-radius: 1rem;
+  border: 1.5px solid var(--lp-input);
+  background: #fff;
+  padding: 0.5rem 0.5rem 0.5rem 0.25rem;
+  box-shadow: var(--lp-sheet-shadow);
+}
+
+.lesson-planner-chat .lp-empty-title {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--lp-ink);
+}
+
+@media (max-width: 639px) {
+  .lesson-planner-chat .lp-empty-title {
+    font-size: 1.625rem;
+  }
+}
+
+.lesson-planner-chat .lp-status-planning {
+  gap: 0.5rem;
+  font-size: 1rem;
+  color: var(--lp-hint);
+}
+
+.lesson-planner-chat .lp-packet-bar {
+  border-color: var(--lp-border-soft);
+  background: #fff;
+}
+
+.lesson-planner-chat [data-testid='option-row'] .lp-option-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding-left: 0;
+}
+
+@media (min-width: 640px) {
+  .lesson-planner-chat [data-testid='option-row'] .lp-option-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding-left: 3rem;
+  }
+}
+
+.lesson-planner-chat [data-testid='option-row'] .lp-option-grid > * {
+  width: 100%;
+  max-width: none;
+}
+
+.lesson-planner-chat .lp-daily-option {
+  margin-top: 0;
+  border-radius: 0.75rem;
+  border: 1px solid var(--lp-border);
+  background: #fff;
+  overflow: hidden;
+}
+
+.lesson-planner-chat .lp-daily-option[data-added='true'] {
+  border: 1.5px solid var(--lp-green);
+  background: #f4f8f5;
+}
+
+.lesson-planner-chat .lp-daily-option > div:first-child {
+  display: none;
+}
+
+.lesson-planner-chat .lp-daily-option blockquote {
+  border: 0;
+  padding: 1rem;
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--lp-ink);
+}
+
+.lesson-planner-chat .lp-daily-option > div:last-child {
+  border: 0;
+  background: transparent;
+  padding: 0 1rem 1rem;
+}
+
+.lesson-planner-chat .lp-reply-actions {
+  margin-top: 0.75rem;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.lesson-planner-chat .lp-plan-steps-summary {
+  border-color: var(--lp-border);
+  background: #fff;
+  border-radius: 0.75rem;
+}
+
+.lesson-planner-chat .lp-markdown {
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: var(--lp-muted);
+}
+
+.lesson-planner-chat .lp-markdown h1 {
+  margin-top: 0.5rem;
+  font-size: 1.375rem;
+  font-weight: 800;
+  color: var(--lp-ink);
+}
+
+.lesson-planner-chat .lp-markdown h2 {
+  margin-top: 0.5rem;
+  font-size: 1.375rem;
+  font-weight: 800;
+  color: var(--lp-ink);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.lesson-planner-chat .lp-markdown h3 {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--lp-ink);
+  text-transform: none;
+}
+
+.lesson-planner-chat .lp-markdown p {
+  margin: 0.35rem 0;
+}
+
+.lesson-planner-chat .lp-markdown strong {
+  color: var(--lp-ink);
+}

@@ -12,16 +12,19 @@ export function SegmentToggle({
   disabled,
   onToggle,
   className,
+  letterpress = false,
 }: {
   isIn: boolean;
   minutes?: number | null;
   disabled?: boolean;
   onToggle: (next: boolean) => void;
   className?: string;
+  /** Letterpress pill buttons on the Lesson Planner chat redesign. */
+  letterpress?: boolean;
 }) {
   return (
     <span className={cn('inline-flex items-center gap-2', className)}>
-      {minutes != null ? (
+      {minutes != null && !letterpress ? (
         <span className="text-xs tabular-nums text-muted-foreground">{minutes} min</span>
       ) : null}
       <button
@@ -31,14 +34,21 @@ export function SegmentToggle({
         aria-pressed={isIn}
         title={isIn ? 'In your lesson. Click to remove it.' : undefined}
         onClick={() => onToggle(!isIn)}
-        className={cn(
-          'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition disabled:opacity-50',
-          isIn
-            ? 'bg-primary/10 text-primary hover:bg-primary/15'
-            : 'border border-primary/40 text-primary hover:bg-primary/5'
-        )}
+        className={
+          letterpress
+            ? cn(
+                'btn btn--sm',
+                isIn ? 'btn--primary' : 'btn--outline-primary'
+              )
+            : cn(
+                'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition disabled:opacity-50',
+                isIn
+                  ? 'bg-primary/10 text-primary hover:bg-primary/15'
+                  : 'border border-primary/40 text-primary hover:bg-primary/5'
+              )
+        }
       >
-        {isIn ? <BookmarkCheck size={12} /> : <BookmarkPlus size={12} />}
+        {letterpress ? null : isIn ? <BookmarkCheck size={12} /> : <BookmarkPlus size={12} />}
         {isIn ? 'In your lesson' : 'Add to lesson'}
       </button>
     </span>
