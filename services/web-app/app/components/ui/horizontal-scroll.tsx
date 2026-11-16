@@ -11,9 +11,9 @@ import { cn } from '~/utils/misc';
 import { revealFilterPill } from './filter-pills-overflow';
 import { useFilterPillsOverflow } from './use-filter-pills-overflow';
 
-const HorizontalScrollRevealContext = createContext<(element: HTMLElement) => void>(
-  () => {}
-);
+const HorizontalScrollRevealContext = createContext<
+  (element: HTMLElement | null) => void
+>(() => {});
 
 export function useHorizontalScrollReveal() {
   return useContext(HorizontalScrollRevealContext);

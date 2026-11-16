@@ -92,12 +92,12 @@ export function useFilterPillsOverflow(optionCount: number) {
   );
 
   const revealTab = useCallback(
-    (button: HTMLButtonElement | null) => {
+    (element: HTMLElement | null) => {
       const track = trackRef.current;
-      if (!track || !button) return;
+      if (!track || !element) return;
       revealFilterPill(
         track,
-        button,
+        element,
         getFilterPillScrollBehavior(prefersReducedMotion)
       );
     },
