@@ -233,7 +233,7 @@ test('FreeAssignmentTiles locked tiles link to How It Works guides', () => {
   );
 });
 
-test('FreeAssignmentTiles locked pending hides create control and uses text-only tiles', () => {
+test('FreeAssignmentTiles locked pending keeps the illustrated cards and hides create', () => {
   const html = renderToStaticMarkup(
     <StaticRouter location="/app">
       <FreeAssignmentTiles
@@ -250,7 +250,12 @@ test('FreeAssignmentTiles locked pending hides create control and uses text-only
   );
   expect(html).not.toContain('preview-assignment-creation-disabled');
   expect(html).not.toContain('Create assignment');
-  expect(html).not.toContain('/api/image/course/');
+  expect(html).not.toContain('data-testid="dashboard-assignment-tile-create"');
+  expect(html).toContain('src="/api/image/course/img-1"');
+  expect(html).toContain('src="/api/image/course/img-2"');
+  expect(html).toContain('src="/api/image/course/img-3"');
+  expect(html).toContain('aria-label="Locked"');
+  expect(html).toContain('aria-label="New Class Starter assignment"');
   expect(html).toContain('data-testid="assignment-type-tile-name"');
   expect(html).not.toContain('data-testid="assignment-type-tile-meta"');
   expect(html).not.toContain('Unlimited');
