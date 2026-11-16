@@ -148,14 +148,31 @@ async function stitchSideBySide(slug, designPath, previewPath) {
 }
 
 async function discoverDocumentId(page) {
-  await page.goto(`${BASE}/app`, { waitUntil: 'networkidle' });
-  const href = await page
+  const tryParse = (href) => href?.match(/\/app\/documents\/([^/?#]+)/)?.[1] ?? null;
+  await page.goto(`${BASE}/app/my-documents`, { waitUntil: 'networkidle' });
+  let href = await page
     .locator('a[href*="/app/documents/"]')
     .first()
-    .getAttribute('href');
-  const match = href?.match(/\/app\/documents\/([^/?#]+)/);
-  if (!match) throw new Error('No document link on /app');
-  return match[1];
+    .getAttribute('href')
+    .catch(() => null);
+  const fromList = tryParse(href);
+  if (fromList) return fromList;
+  await page.goto(`${BASE}/app`, { waitUntil: 'networkidle' });
+  const classTab = await page
+    .locator('a[href*="tab=documents"]')
+    .first()
+    .getAttribute('href')
+    .catch(() => null);
+  if (classTab) {
+    await page.goto(`${BASE}${classTab}`, { waitUntil: 'networkidle' });
+    href = await page
+      .locator('a[href*="/app/documents/"]')
+      .first()
+      .getAttribute('href');
+    const id = tryParse(href);
+    if (id) return id;
+  }
+  throw new Error('No document link on preview /app');
 }
 
 async function main() {

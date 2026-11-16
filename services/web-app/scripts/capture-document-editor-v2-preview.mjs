@@ -23,8 +23,8 @@ const OUT =
   join(fileURLToPath(new URL('.', import.meta.url)), '../../../artifacts/document-editor-v2-preview');
 
 const STUDENT_EMAIL =
-  process.env.PREVIEW_STUDENT_EMAIL?.trim() || 'jdoe@brock.software';
-const STUDENT_PASSWORD = process.env.PREVIEW_STUDENT_PASSWORD ?? 'johndoe';
+  process.env.PREVIEW_STUDENT_EMAIL?.trim() || 'dev.student@yawp.local';
+const STUDENT_PASSWORD = process.env.PREVIEW_STUDENT_PASSWORD ?? 'yawp-dev';
 const TEACHER_EMAIL =
   process.env.PREVIEW_TEACHER_EMAIL?.trim() || 'teacher.e2e@yawp.test';
 const TEACHER_PASSWORD = process.env.PREVIEW_TEACHER_PASSWORD ?? 'teacher-e2e-password';
@@ -102,15 +102,38 @@ async function openDoc(page, docId, query = '') {
 }
 
 async function discoverDocumentId(page) {
+  const tryParse = (href) => {
+    if (!href) return null;
+    const match = href.match(/\/app\/documents\/([^/?#]+)/);
+    return match?.[1] ?? null;
+  };
+
+  const scan = async () => {
+    const href = await page
+      .locator('a[href*="/app/documents/"]')
+      .first()
+      .getAttribute('href')
+      .catch(() => null);
+    return tryParse(href);
+  };
+
+  await page.goto(`${BASE}/app/my-documents`, { waitUntil: 'networkidle' });
+  let id = await scan();
+  if (id) return id;
+
   await page.goto(`${BASE}/app`, { waitUntil: 'networkidle' });
-  const href = await page
-    .locator('a[href*="/app/documents/"]')
+  const classDocHref = await page
+    .locator('a[href*="tab=documents"]')
     .first()
-    .getAttribute('href');
-  if (!href) throw new Error('No /app/documents/ link found after login');
-  const match = href.match(/\/app\/documents\/([^/?#]+)/);
-  if (!match) throw new Error(`Could not parse document id from ${href}`);
-  return match[1];
+    .getAttribute('href')
+    .catch(() => null);
+  if (classDocHref) {
+    await page.goto(`${BASE}${classDocHref}`, { waitUntil: 'networkidle' });
+    id = await scan();
+    if (id) return id;
+  }
+
+  throw new Error('No /app/documents/ link found after login');
 }
 
 async function main() {
