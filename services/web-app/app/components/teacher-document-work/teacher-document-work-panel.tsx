@@ -946,7 +946,8 @@ function DocumentWorkGroupSelect({
       }
     >
       <SelectTrigger
-        className={cn('h-9 rounded-full bg-background', triggerClassName)}
+        buttonVariant="outline"
+        className={triggerClassName}
         data-testid={
           testIds?.groupSelect ?? 'teacher-document-work-group-select'
         }
@@ -1167,13 +1168,8 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
         >
           <Popover>
             <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 gap-2 rounded-full"
-              >
-                <Filter className="size-4 shrink-0" />
+              <Button type="button" variant="outline">
+                <Filter aria-hidden />
                 Filter
                 {activeFilterCount > 0 ? (
                   <Badge variant="secondary" size="sm">
@@ -1190,7 +1186,7 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
             </PopoverContent>
           </Popover>
           {props.headerActions}
-          <DocumentWorkGroupSelect {...props} triggerClassName="w-[10.5rem]" />
+          <DocumentWorkGroupSelect {...props} />
           {/* Actions sit at the far right, after the view controls. */}
           <DocumentWorkActionsMenu actions={props.actions} />
         </div>
@@ -1231,7 +1227,6 @@ function DocumentWorkSelectionToolbar({
           type="button"
           size="sm"
           variant="outline"
-          className="h-8 rounded-full px-3"
           disabled={!onClearSelection}
           onClick={onClearSelection}
         >
@@ -1254,12 +1249,11 @@ function DocumentWorkActionsMenu({
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
-          size="sm"
-          className="h-9 gap-2 rounded-full"
+          variant="primary"
           data-testid="teacher-document-work-actions"
         >
           Actions
-          <ChevronDown className="size-4 shrink-0" aria-hidden="true" />
+          <ChevronDown aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">

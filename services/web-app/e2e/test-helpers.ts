@@ -915,7 +915,7 @@ export async function clickClassDocumentsStatusTab(
         });
         return;
       } catch {
-        // Chip can sit under overflow chevrons until the track scrolls.
+        // The chip can still be off-screen until the track scrolls.
       }
     }
     const scrollRight = page.getByTestId(

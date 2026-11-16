@@ -28,23 +28,91 @@ export function getFilterPillScrollBehavior(
   return prefersReducedMotion ? 'auto' : 'smooth';
 }
 
-function scrollOffsetToRevealChildFully(
+/**
+ * Scroll offset that reveals a pill inside the track.
+ * The first pill always returns to 0 so a leading inset cannot be scrolled
+ * away under a scroll arrow (that left the "All" label clipped on load).
+ */
+export function filterPillScrollLeftToReveal({
+  scrollLeft,
+  clientWidth,
+  childOffsetLeft,
+  childWidth,
+  isFirst,
+  align = 'nearest',
+  epsilon = FILTER_PILLS_SCROLL_EPSILON,
+}: {
+  scrollLeft: number;
+  clientWidth: number;
+  childOffsetLeft: number;
+  childWidth: number;
+  isFirst: boolean;
+  /** `start` pins the item to the leading edge so a neighbor is not left half-visible. */
+  align?: 'nearest' | 'start';
+  epsilon?: number;
+}): number {
+  if (isFirst) return 0;
+
+  const childRight = childOffsetLeft + childWidth;
+  const fullyVisible =
+    childOffsetLeft >= scrollLeft - epsilon &&
+    childRight <= scrollLeft + clientWidth + epsilon;
+  if (fullyVisible) return scrollLeft;
+  if (align === 'start' || childOffsetLeft < scrollLeft) {
+    return Math.max(0, childOffsetLeft);
+  }
+  return Math.max(0, childRight - clientWidth);
+}
+
+/** Child position in the scroll container's content coordinates. */
+export function positionInScrollContainer(
   container: HTMLElement,
   child: HTMLElement
+) {
+  const containerRect = container.getBoundingClientRect();
+  const childRect = child.getBoundingClientRect();
+  return {
+    left: childRect.left - containerRect.left + container.scrollLeft,
+    width: childRect.width,
+  };
+}
+
+function scrollOffsetToRevealChildFully(
+  container: HTMLElement,
+  child: HTMLElement,
+  align: 'nearest' | 'start' = 'nearest'
 ): number {
-  const { clientWidth, scrollLeft } = container;
-  const childLeft = child.offsetLeft;
-  const childRight = childLeft + child.offsetWidth;
+  const { left, width } = positionInScrollContainer(container, child);
+  return filterPillScrollLeftToReveal({
+    scrollLeft: container.scrollLeft,
+    clientWidth: container.clientWidth,
+    childOffsetLeft: left,
+    childWidth: width,
+    isFirst: child === container.firstElementChild,
+    align,
+  });
+}
 
-  if (childLeft >= scrollLeft && childRight <= scrollLeft + clientWidth) {
-    return scrollLeft;
+function scrollTrackTo(container: HTMLElement, left: number, behavior: ScrollBehavior) {
+  if (left === container.scrollLeft) return;
+  if (behavior === 'auto' || left === 0) {
+    container.scrollLeft = left;
+    return;
   }
+  container.scrollTo({ left, behavior });
+}
 
-  if (childLeft < scrollLeft) {
-    return childLeft;
-  }
-
-  return Math.max(0, childRight - clientWidth);
+export function revealFilterPill(
+  container: HTMLElement,
+  child: HTMLElement,
+  behavior: ScrollBehavior,
+  align: 'nearest' | 'start' = 'nearest'
+) {
+  scrollTrackTo(
+    container,
+    scrollOffsetToRevealChildFully(container, child, align),
+    behavior
+  );
 }
 
 /**
@@ -68,13 +136,14 @@ export function scrollToNextHiddenFilterPill(
 
   if (direction === 'right') {
     for (const child of children) {
-      const childLeft = child.offsetLeft;
-      const childRight = childLeft + child.offsetWidth;
+      const { left: childLeft, width } = positionInScrollContainer(container, child);
+      const childRight = childLeft + width;
       if (childRight > visibleRight + epsilon) {
-        container.scrollTo({
-          left: scrollOffsetToRevealChildFully(container, child),
-          behavior,
-        });
+        scrollTrackTo(
+          container,
+          scrollOffsetToRevealChildFully(container, child),
+          behavior
+        );
         return;
       }
     }
@@ -83,16 +152,17 @@ export function scrollToNextHiddenFilterPill(
 
   for (let index = children.length - 1; index >= 0; index -= 1) {
     const child = children[index]!;
-    const childLeft = child.offsetLeft;
-    const childRight = childLeft + child.offsetWidth;
+    const { left: childLeft, width } = positionInScrollContainer(container, child);
+    const childRight = childLeft + width;
     const partiallyClippedOnLeft =
       childLeft < visibleLeft + epsilon &&
       childRight > visibleLeft + epsilon;
     if (childLeft < visibleLeft - epsilon || partiallyClippedOnLeft) {
-      container.scrollTo({
-        left: scrollOffsetToRevealChildFully(container, child),
-        behavior,
-      });
+      scrollTrackTo(
+        container,
+        scrollOffsetToRevealChildFully(container, child),
+        behavior
+      );
       return;
     }
   }

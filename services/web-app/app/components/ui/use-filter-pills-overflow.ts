@@ -8,6 +8,7 @@ import {
 import {
   computeHorizontalScrollOverflow,
   getFilterPillScrollBehavior,
+  revealFilterPill,
   scrollToNextHiddenFilterPill,
   type HorizontalScrollOverflowState,
 } from './filter-pills-overflow';
@@ -33,8 +34,17 @@ export function useFilterPillsOverflow(optionCount: number) {
     }
 
     const { scrollLeft, scrollWidth, clientWidth } = track;
-    setOverflow(
-      computeHorizontalScrollOverflow(scrollLeft, scrollWidth, clientWidth)
+    const next = computeHorizontalScrollOverflow(
+      scrollLeft,
+      scrollWidth,
+      clientWidth
+    );
+    setOverflow((current) =>
+      current.hasOverflow === next.hasOverflow &&
+      current.canScrollLeft === next.canScrollLeft &&
+      current.canScrollRight === next.canScrollRight
+        ? current
+        : next
     );
   }, []);
 
@@ -83,12 +93,13 @@ export function useFilterPillsOverflow(optionCount: number) {
 
   const revealTab = useCallback(
     (button: HTMLButtonElement | null) => {
-      if (!button) return;
-      button.scrollIntoView({
-        block: 'nearest',
-        inline: 'nearest',
-        behavior: getFilterPillScrollBehavior(prefersReducedMotion),
-      });
+      const track = trackRef.current;
+      if (!track || !button) return;
+      revealFilterPill(
+        track,
+        button,
+        getFilterPillScrollBehavior(prefersReducedMotion)
+      );
     },
     [prefersReducedMotion]
   );

@@ -96,9 +96,35 @@ describe('FilterPills overflow affordances', () => {
     expect(list?.getAttribute('data-has-overflow')).toBe('true');
     expect(list?.getAttribute('data-can-scroll-right')).toBe('true');
     expect(list?.getAttribute('data-can-scroll-left')).toBe('false');
+    const scrollRight = container.querySelector<HTMLElement>(
+      '[data-testid="overflow-status-chips-scroll-right"]'
+    );
+    expect(scrollRight).toBeTruthy();
+    expect(scrollRight?.className.includes('absolute')).toBe(false);
+    expect(track?.contains(scrollRight!)).toBe(false);
     expect(
-      container.querySelector('[data-testid="overflow-status-chips-scroll-right"]')
-    ).toBeTruthy();
+      container.querySelector('[data-testid="overflow-status-chips-scroll-left"]')
+    ).toBeNull();
+    const fadeRight = container.querySelector<HTMLElement>(
+      '[data-testid="overflow-status-chips-fade-right"]'
+    );
+    expect(fadeRight).toBeTruthy();
+    expect(fadeRight?.className.includes('absolute')).toBe(false);
+    expect(track?.contains(fadeRight!)).toBe(false);
+    expect(track?.textContent).toContain('All');
+
+    track!.scrollLeft = 80;
+    await act(async () => {
+      track?.dispatchEvent(new Event('scroll'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const scrollLeft = container.querySelector<HTMLElement>(
+      '[data-testid="overflow-status-chips-scroll-left"]'
+    );
+    expect(scrollLeft).toBeTruthy();
+    expect(scrollLeft?.className.includes('absolute')).toBe(false);
+    expect(track?.contains(scrollLeft!)).toBe(false);
 
     track!.scrollLeft = 320;
     await act(async () => {
