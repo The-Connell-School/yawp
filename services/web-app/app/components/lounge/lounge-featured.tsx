@@ -16,7 +16,7 @@ function replies(count: number) {
 /**
  * The top of the feed: the oldest pinned post as a letter (Brian's
  * welcome), the next as a dark panel (the House Rules), any others as
- * small cards, and how to reach Brian and the YAWP! team. Each card is one
+ * small cards, and how to reach Brian and the Yawp! team. Each card is one
  * link on its title, stretched over the whole card.
  */
 export function LoungeFeatured({
@@ -121,8 +121,8 @@ export function LoungeFeatured({
         <div className="flex flex-col gap-3 rounded-2xl border bg-popover px-5 py-4">
           <h2 className="text-[15px] font-medium text-foreground">
             {host
-              ? `Ask ${host.firstName} or the YAWP! team`
-              : 'Ask the YAWP! team'}
+              ? `Ask ${host.firstName} or the Yawp! team`
+              : 'Ask the Yawp! team'}
           </h2>
           <div className="flex items-center">
             {host ? (
@@ -146,7 +146,7 @@ export function LoungeFeatured({
               </span>
             ) : null}
             {host ? ' or ' : null}
-            <span className="font-medium text-foreground">@YAWP! team</span> in
+            <span className="font-medium text-foreground">@Yawp! team</span> in
             any post or reply.
           </p>
         </div>

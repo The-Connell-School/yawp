@@ -4,9 +4,11 @@ import { setFeatureFlag } from '../feature-flags';
 import { ensureWritingStepType } from '../fixtures/writing-step-types';
 
 // The four How It Works pages, finalized (Kevin, Nov 10): each opens with its
-// overview video under the headline, then How to Teach It, collapsible, on a
-// white card, behind `assignment-type-landing-v2`. Exit Ticket's guide is new
-// and exists only with the flag on.
+// video under the headline, then How to Teach It, collapsible, on a white
+// card, behind `assignment-type-landing-v2`. Pre-Writing and Thesis Statement
+// open with Brian's tutorial for the lesson (Nov 14); Class Starter and Exit
+// Ticket with a silent tour of the app. Exit Ticket's guide is new and exists
+// only with the flag on.
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 
@@ -15,6 +17,8 @@ type Guide = {
   typeId: (ctx: E2EContext) => Promise<string>;
   heading: RegExp;
   video: string;
+  /** Brian's tutorial for the lesson talks, so it has captions; a tour has no sound. */
+  captions?: string;
 };
 
 const GUIDES: Guide[] = [
@@ -28,13 +32,15 @@ const GUIDES: Guide[] = [
     name: 'Pre-Writing',
     typeId: (ctx) => ensureWritingStepType(ctx.organizationId, 'prewriting'),
     heading: /teach prewriting/i,
-    video: '/img/prewriting-guide/overview.mp4',
+    video: '/courses/thesis-driven-essay/tutorials/02-pre-writing.mp4',
+    captions: '/courses/thesis-driven-essay/tutorials/02-pre-writing.vtt',
   },
   {
     name: 'Thesis Builder',
     typeId: (ctx) => ensureWritingStepType(ctx.organizationId, 'thesis_statement'),
     heading: /teach thesis builder/i,
-    video: '/img/thesis-statement-guide/overview.mp4',
+    video: '/courses/thesis-driven-essay/tutorials/03-thesis-statement.mp4',
+    captions: '/courses/thesis-driven-essay/tutorials/03-thesis-statement.vtt',
   },
   {
     name: 'Exit Ticket',
@@ -73,6 +79,12 @@ test.describe.serial('How It Works: the four pages, finalized', () => {
       const served = await page.request.get(guide.video);
       expect(served.status()).toBe(200);
       expect(served.headers()['content-type']).toContain('video/mp4');
+      if (guide.captions) {
+        await expect(video.locator('track[kind="captions"]')).toHaveAttribute('src', guide.captions);
+        expect((await page.request.get(guide.captions)).status()).toBe(200);
+      } else {
+        await expect(video.locator('track')).toHaveCount(0);
+      }
 
       // How to Teach It comes right after it, open; Hide folds it, Show
       // brings it back.

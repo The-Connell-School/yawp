@@ -142,7 +142,7 @@ for (const { file, deck } of DECKS) {
       for (const slide of deck.slides) expect(slide.notes.trim().length).toBeGreaterThan(20);
     });
 
-    it('spells YAWP! with its exclamation point', () => {
+    it('spells Yawp! with its exclamation point', () => {
       expect(JSON.stringify(deck).match(/YAWP(?!!)/g) ?? []).toEqual([]);
     });
 

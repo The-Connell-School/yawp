@@ -35,15 +35,7 @@ describe('the Thesis-Driven Essay course in the Teachers’ Lounge', () => {
       coursePath: '/app/teacher-trainings/course-1',
       videoModules: { 1: 'm6', 2: 'm7', 3: 'm8', 8: 'm13' },
     });
-    // The rows link to the type's own tutorial page, never into the Lounge.
-    expect(tutorialHrefs('at-1', course)).toEqual({
-      1: '/app/assignment-types/at-1/tutorial/1',
-      2: '/app/assignment-types/at-1/tutorial/2',
-      3: '/app/assignment-types/at-1/tutorial/3',
-      8: '/app/assignment-types/at-1/tutorial/8',
-    });
     expect(tutorialHref('at-1', 2)).toBe('/app/assignment-types/at-1/tutorial/2');
-    expect(tutorialHrefs('at-1', null)).toEqual({});
     // Only modules with a video, in order, by the course's title.
     const args = prisma.teacherTraining.findFirst.mock.calls[0][0];
     expect(args.where.title).toEqual({ equals: 'The Thesis-Driven Essay', mode: 'insensitive' });
@@ -63,5 +55,22 @@ describe('the Thesis-Driven Essay course in the Teachers’ Lounge', () => {
   test('no course, no links', async () => {
     prisma.teacherTraining.findFirst.mockResolvedValue(null);
     expect(await findThesisEssayCourse('teacher-1')).toBeNull();
+  });
+});
+
+describe('the "Watch tutorial" links on How to Teach It', () => {
+  const page = (lesson: number) => `/app/assignment-types/at-1/tutorial/${lesson}`;
+  const brians = { 1: page(1), 2: page(2), 3: page(3), 4: page(4), 5: page(5), 6: page(6), 7: page(7) };
+
+  test('every lesson with one of Brian’s videos has a link, Lounge course or not', () => {
+    // A free-tier teacher has no Lounge course and still gets the videos.
+    expect(tutorialHrefs('at-1', null)).toEqual(brians);
+    expect(tutorialHrefs('at-1', { courseId: 'c', coursePath: '/app/teacher-trainings/c', videoModules: {} })).toEqual(brians);
+  });
+
+  test('a lesson without one (Review my essay) keeps its Lounge video, where the teacher has it', () => {
+    const course = { courseId: 'c', coursePath: '/app/teacher-trainings/c', videoModules: { 2: 'm7', 8: 'm13' } };
+    // Each row links to the type's own tutorial page, never into the Lounge.
+    expect(tutorialHrefs('at-1', course)).toEqual({ ...brians, 8: page(8) });
   });
 });

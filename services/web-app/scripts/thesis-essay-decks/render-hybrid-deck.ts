@@ -2,7 +2,7 @@
  * Renders a hybrid Thesis-Driven Essay deck to PowerPoint.
  *
  * Built the way the lesson planner's tile renderer is (PR #437,
- * `lesson-pptx-tile.server.ts`): one 16:9 master with the YAWP! wordmark and
+ * `lesson-pptx-tile.server.ts`): one 16:9 master with the Yawp! wordmark and
  * slide number, a mono eyebrow over a serif title, content on raised paper
  * tiles. Brian's decks add the colour: accent bands and numerals cycle his
  * teal, sunshine, coral, orange and pink; his icon bubbles and confetti dots
@@ -52,18 +52,18 @@ const ASSET_ALT: Record<AssetImage, string> = {
   'fallen-man.jpg': 'A busy city street where a man has fallen on the pavement.',
   'elephant.jpg': 'An elephant.',
   'critical-essay-form.png': 'The critical essay form: introduction, body paragraphs and conclusion.',
-  'yawp-editor-prewriting.png': 'The YAWP! editor on the Pre-writing step.',
-  'yawp-editor-thesis.png': 'The YAWP! editor on the Thesis Statement step.',
-  'yawp-editor-introduction.png': 'The YAWP! editor on the Introduction step.',
-  'yawp-editor-body.png': 'The YAWP! editor on the Body Paragraphs step.',
-  'yawp-editor-conclusion.png': 'The YAWP! editor on the Conclusion step.',
-  'yawp-editor-final.png': 'The YAWP! editor with a finished, titled essay.',
+  'yawp-editor-prewriting.png': 'The Yawp! editor on the Pre-writing step.',
+  'yawp-editor-thesis.png': 'The Yawp! editor on the Thesis Statement step.',
+  'yawp-editor-introduction.png': 'The Yawp! editor on the Introduction step.',
+  'yawp-editor-body.png': 'The Yawp! editor on the Body Paragraphs step.',
+  'yawp-editor-conclusion.png': 'The Yawp! editor on the Conclusion step.',
+  'yawp-editor-final.png': 'The Yawp! editor with a finished, titled essay.',
   'brian-twins.jpg': 'A childhood photo of Brian.',
   'brian-1990s.jpg': 'A photo of Brian from the 1990s.',
   'yawp-join-link-card.png': "The class's join link and QR code on the Students tab.",
-  'yawp-join-page.png': 'The YAWP! "Create your student account" page.',
-  'yawp-student-dashboard.png': 'The YAWP! student dashboard after joining.',
-  'yawp-my-documents.png': 'The My Documents list in YAWP!.',
+  'yawp-join-page.png': 'The Yawp! "Create your student account" page.',
+  'yawp-student-dashboard.png': 'The Yawp! student dashboard after joining.',
+  'yawp-my-documents.png': 'The My Documents list in Yawp!.',
 };
 
 const LAYOUT = { name: 'YAWP_HYBRID_16x9', width: 13.333, height: 7.5 };
@@ -384,7 +384,7 @@ function addTitleSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 't
     line: { color: T.paper, width: 0 },
     shadow: { type: 'outer', color: T.ink, opacity: 0.18, blur: 14, offset: 4, angle: 90 },
   });
-  slide.addText('YAWP!', {
+  slide.addText('Yawp!', {
     x: cx,
     y: cy + 1.0,
     w: d,
@@ -663,7 +663,7 @@ function addStepsSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 's
   });
 }
 
-/** Steps as a numbered 2-column list, with a real YAWP! screenshot under them. */
+/** Steps as a numbered 2-column list, with a real Yawp! screenshot under them. */
 function addStepsWithStrip(
   slide: PptxSlide,
   spec: Extract<HybridSlide, { layout: 'steps' }>,
@@ -1555,7 +1555,7 @@ function addCloserSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: '
     line: { color: T.paper, width: 0 },
     shadow: { type: 'outer', color: T.ink, opacity: 0.18, blur: 14, offset: 4, angle: 90 },
   });
-  slide.addText('YAWP!', {
+  slide.addText('Yawp!', {
     x: cx,
     y: cy + 1.25,
     w: d,
@@ -1699,12 +1699,12 @@ export async function renderHybridDeck(deck: HybridDeck): Promise<Uint8Array> {
   pptx.layout = LAYOUT.name;
   pptx.title = deck.title;
   pptx.subject = deck.subtitle;
-  pptx.company = 'YAWP!';
+  pptx.company = 'Yawp!';
 
   pptx.defineSlideMaster({
     title: MASTER,
     background: { color: T.cream },
-    objects: [{ text: { text: 'YAWP!', options: WORDMARK } }],
+    objects: [{ text: { text: 'Yawp!', options: WORDMARK } }],
     slideNumber: SLIDE_NUMBER,
   });
 
@@ -1834,7 +1834,7 @@ export function renderDeckScene(deck: HybridDeck): DeckScene {
       background: recorder.background?.color ?? T.cream,
       elements: [
         ...recorder.elements,
-        sceneText('YAWP!', WORDMARK, true),
+        sceneText('Yawp!', WORDMARK, true),
         sceneText(String(index + 1), { ...SLIDE_NUMBER, margin: 0 }, true),
       ],
       notes: recorder.notes,

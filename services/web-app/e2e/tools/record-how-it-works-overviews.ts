@@ -5,6 +5,11 @@
  * page, making an assignment, a student writing it, and the teacher's side,
  * with a caption for each step. They stand in until Brian records his own.
  *
+ * Brian has recorded Pre-Writing and Thesis Statement (Nov 14): those pages
+ * now open with his tutorial (overview-videos.ts), so a plain run records
+ * only Class Starter and Exit Ticket. Their tours can still be recorded by
+ * name with HOW_IT_WORKS_ONLY, but nothing shows the files.
+ *
  * Not part of any test run. With the e2e dev server up on :5173:
  *   bunx playwright test -c playwright.how-it-works-overviews.config.ts
  * It writes public/img/<type>-guide/overview.mp4 and overview.jpg (needs
@@ -29,9 +34,9 @@ const BASE_URL = 'http://127.0.0.1:5173';
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 const STUDENT_PASSWORD = 'johndoe';
 const CLASS_NAME = /Grade 9th/;
-/** HOW_IT_WORKS_ONLY=exit-ticket,prewriting re-records just those. */
-const ONLY = process.env.HOW_IT_WORKS_ONLY?.split(',') ?? null;
-const want = (key: string) => !ONLY || ONLY.includes(key);
+/** The pages that still open with a tour. HOW_IT_WORKS_ONLY=exit-ticket,prewriting records just those. */
+const ONLY = process.env.HOW_IT_WORKS_ONLY?.split(',') ?? ['class-starter', 'exit-ticket'];
+const want = (key: string) => ONLY.includes(key);
 
 type StorageState = Awaited<ReturnType<Awaited<ReturnType<Browser['newContext']>>['storageState']>>;
 

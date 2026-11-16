@@ -230,7 +230,7 @@ classes:
 | Course | Classes linked |
 |---|---|
 | The Thesis-Driven Essay | ~65 classes |
-| Welcome to YAWP! | ~42 classes |
+| Welcome to Yawp! | ~42 classes |
 | Daily Pages | ~6 classes |
 | The 5-Paragraph Essay | ~2 classes |
 | E2E Course | 1 class |

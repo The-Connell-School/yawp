@@ -46,50 +46,50 @@ export const THESIS_ESSAY_DECKS: readonly ThesisEssayDeck[] = [
   {
     slug: 'lesson-1-day-1',
     lesson: 1,
-    title: 'Introduce Students to YAWP!',
-    downloadName: 'YAWP! Lesson 1 - Introduce Students to YAWP!.pptx',
+    title: 'Introduce Students to Yawp!',
+    downloadName: 'Yawp! Lesson 1 - Introduce Students to Yawp!.pptx',
     stepTitles: [],
   },
   {
     slug: 'lesson-2-pre-writing',
     lesson: 2,
     title: 'Pre-Writing',
-    downloadName: 'YAWP! Lesson 2 - Pre-Writing.pptx',
+    downloadName: 'Yawp! Lesson 2 - Pre-Writing.pptx',
     stepTitles: ['prewriting', 'prewrite'],
   },
   {
     slug: 'lesson-3-thesis-statement',
     lesson: 3,
     title: 'Thesis Statement',
-    downloadName: 'YAWP! Lesson 3 - Thesis Statement.pptx',
+    downloadName: 'Yawp! Lesson 3 - Thesis Statement.pptx',
     stepTitles: ['thesis statement', 'thesis'],
   },
   {
     slug: 'lesson-4-introduction',
     lesson: 4,
     title: 'Introduction Paragraph',
-    downloadName: 'YAWP! Lesson 4 - Introduction Paragraph.pptx',
+    downloadName: 'Yawp! Lesson 4 - Introduction Paragraph.pptx',
     stepTitles: ['introduction paragraph', 'introduction'],
   },
   {
     slug: 'lesson-5-body-paragraphs',
     lesson: 5,
     title: 'Body Paragraphs',
-    downloadName: 'YAWP! Lesson 5 - Body Paragraphs.pptx',
+    downloadName: 'Yawp! Lesson 5 - Body Paragraphs.pptx',
     stepTitles: ['body paragraphs', 'body paragraph'],
   },
   {
     slug: 'lesson-6-conclusion',
     lesson: 6,
     title: 'Conclusion Paragraph',
-    downloadName: 'YAWP! Lesson 6 - Conclusion Paragraph.pptx',
+    downloadName: 'Yawp! Lesson 6 - Conclusion Paragraph.pptx',
     stepTitles: ['conclusion paragraph', 'conclusion'],
   },
   {
     slug: 'lesson-7-titles',
     lesson: 7,
     title: 'Titles and Formatting',
-    downloadName: 'YAWP! Lesson 7 - Titles and Formatting.pptx',
+    downloadName: 'Yawp! Lesson 7 - Titles and Formatting.pptx',
     stepTitles: ['title your essay', 'titling your essay', 'titles and formatting'],
   },
 ];
@@ -143,7 +143,7 @@ export const SIGN_UP_HANDOUT: ThesisEssayMaterial = {
   slug: 'student-sign-up',
   kind: 'handout',
   fileName: 'student-sign-up.pdf',
-  downloadName: 'YAWP! Day 1 - Student Sign-up.pdf',
+  downloadName: 'Yawp! Day 1 - Student Sign-up.pdf',
   contentType: PDF_CONTENT_TYPE,
   label: 'Student sign-up handout',
 };
@@ -153,7 +153,7 @@ export const SAMPLE_ESSAY_HANDOUT: ThesisEssayMaterial = {
   slug: 'sample-essay-bored-in-the-usa',
   kind: 'handout',
   fileName: 'sample-essay-bored-in-the-usa.pdf',
-  downloadName: 'YAWP! Day 1 - Sample Essay - Bored in the USA.pdf',
+  downloadName: 'Yawp! Day 1 - Sample Essay - Bored in the USA.pdf',
   contentType: PDF_CONTENT_TYPE,
   label: 'Sample essay handout (“Bored in the USA”)',
 };
@@ -189,10 +189,10 @@ export function deckLabel(deck: ThesisEssayDeck): string {
 }
 
 // ---------------------------------------------------------------------------
-// The three ways to use a deck: present it on YAWP!, copy it into Google
+// The three ways to use a deck: present it on Yawp!, copy it into Google
 // Slides, or download it for PowerPoint (`deckHref`).
 
-/** Where a teacher presents a deck on YAWP!, exactly as designed. */
+/** Where a teacher presents a deck on Yawp!, exactly as designed. */
 export function presentHref(deck: ThesisEssayDeck): string {
   return `/present/thesis-essay/${deck.slug}`;
 }
@@ -250,7 +250,7 @@ export interface ThesisDeckLink {
 }
 
 /**
- * A lesson's buttons, in order: present its deck on YAWP!, copy it into
+ * A lesson's buttons, in order: present its deck on Yawp!, copy it into
  * Google Slides, download it for PowerPoint, its lesson plan, then any
  * handouts. Only what is there: `available` material slugs on disk,
  * `presentable` decks with a scene, and a Google master copy. Presenting

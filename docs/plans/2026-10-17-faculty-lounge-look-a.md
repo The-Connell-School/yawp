@@ -9,7 +9,7 @@ Mockup: the "Faculty Lounge: three looks" canvas, artboards A (feed) and A (thre
 The Lounge keeps every behavior it has today and gets a new face. The page
 band with tabs becomes a masthead inside the content column. Brian's pinned
 welcome post renders as a letter at the top, with the House Rules beside it
-as a dark panel and the YAWP! team's faces underneath. Feed rows get an
+as a dark panel and the Yawp! team's faces underneath. Feed rows get an
 avatar, a serif title, and one preview line (Brian's answer when there is
 one). The thread page puts Brian's answer in its own white card with a
 "Brian's answer" badge, and replies become avatar rows. Nothing moves in the
@@ -27,7 +27,7 @@ database and no route changes its URL.
   (#2A2824) for the dark panel and the serif titles, and six muted avatar
   tones. No new accent.
 - **Avatars.** Initials in a circle, color picked from the six tones by a
-  stable hash of the user id. The YAWP! team is always ink on cream. No
+  stable hash of the user id. The Yawp! team is always ink on cream. No
   photos in this round.
 - **Pinned posts.** The first pinned post (oldest pin) is the letter: title,
   author, a 280-character excerpt, and the reply count. The second is the
@@ -35,15 +35,15 @@ database and no route changes its URL.
   post (Brian's weekly prompt) stacks under the dark panel as a small cream
   card. One pinned post alone spans the full width. None: no featured
   section, the feed starts at the filter row.
-- **The team block.** "The YAWP! team" with the faces of admins who have
+- **The team block.** "The Yawp! team" with the faces of admins who have
   posted or replied in the Lounge, up to six. No teacher count.
-- **Preview line on a feed row.** In this order: the first YAWP! team
+- **Preview line on a feed row.** In this order: the first Yawp! team
   reply's first 160 characters; else the post body's first 160 characters;
   else nothing. Shares show the attachment line instead of a preview.
   Questions that are all title (the launch questions) therefore show Brian's
   answer, which is the point.
 - **Answered marker.** "Brian answered" using the answering admin's first
-  name, "YAWP! team answered" if the name is missing. Video answers keep the
+  name, "Yawp! team answered" if the name is missing. Video answers keep the
   camera icon: "Brian answered on video".
 - **Sorts and topics.** The sort tabs read Latest / Most helpful /
   Unanswered (keys stay `new` / `top` / `unanswered`, so links keep
@@ -55,7 +55,7 @@ database and no route changes its URL.
   trainings page shares the masthead with "Trainings" current.
 - **Thread.** Eyebrow "Question · Topic", serif title, avatar byline, the
   action row (helpful, reply, pin, edit, delete, report) as quiet pill
-  buttons. YAWP! team answers render as a white card with the "Brian's
+  buttons. Yawp! team answers render as a white card with the "Brian's
   answer" badge, the body at 17px, and the video player inside the card.
   Replies are avatar rows separated by hairlines. The reply box keeps the
   mention picker and the staff video recorder. Draft and scheduled banners,
@@ -75,7 +75,7 @@ Each step is a commit with its tests, e2e first for anything on screen.
 `app/domain/lounge/lounge.server.ts`
 
 - `LoungePostSummary` gains `preview: string | null` and
-  `answeredBy: string | null` (first name of the first YAWP! team reply's
+  `answeredBy: string | null` (first name of the first Yawp! team reply's
   author). The summary select adds `body` and, on the staff replies
   sub-select, `body` plus `author.name`, ordered by `createdAt asc`.
 - `LoungePinnedPost` gains `excerpt`, `author: LoungeByline`, `kind`.
@@ -119,7 +119,7 @@ action is unchanged.
 E2E first: `teacher.faculty-lounge-launch.spec.ts` gains a test that the
 first visit after the welcome box shows the letter with Brian's name, the
 House Rules panel, the team block with Brian, and Q1's row previewing
-"Use the Class Starter". Existing assertions that read "YAWP! team
+"Use the Class Starter". Existing assertions that read "Yawp! team
 answered" change to the admin's first name ("Admin answered" in e2e).
 
 ### 4. Thread route
@@ -128,7 +128,7 @@ answered" change to the admin's first name ("Admin answered" in e2e).
 avatar rows, and pill actions. All intents, forms, and banners stay.
 
 E2E: the existing thread assertions already use region names ("Answers
-from the YAWP! team", "Replies"); keep those names on the new markup so the
+from the Yawp! team", "Replies"); keep those names on the new markup so the
 specs stay green, and add one check that Brian's answer card carries the
 "Brian's answer" badge.
 

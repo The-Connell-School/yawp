@@ -11,7 +11,7 @@ export function hasLaunchPlaceholder(body: string): boolean {
 
 export type LoungeLaunchSeedOptions = {
   brianUserId: string;
-  /** The shared YAWP! team account (see team-account.ts). */
+  /** The shared Yawp! team account (see team-account.ts). */
   teamUserId: string;
   now?: Date;
   posts?: LaunchPost[];

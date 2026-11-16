@@ -41,6 +41,28 @@ export async function isTeacherLoungeTemporarilyDisabledForUser({
   return true;
 }
 
+/**
+ * Whether the sidebar shows the Teacher's Lounge item for this member: a
+ * teacher the Lounge is on for (the flag, or the access list by their id or
+ * email). The app shell asks on every page and hands the answer to the
+ * sidebar, which hides the item unless told to show it.
+ */
+export async function isTeacherLoungeNavVisibleForMember({
+  userId,
+  role,
+  orgId,
+}: {
+  userId: string;
+  role: string;
+  orgId?: string | null;
+}): Promise<boolean> {
+  if (role !== 'TEACHER') return false;
+  if (await isTeacherLoungeEnabledForOrg(orgId)) return true;
+  const email =
+    (await prisma.user.findUnique({ where: { id: userId }, select: { email: true } }))?.email ?? null;
+  return isOnAccessList(TEACHER_LOUNGE_ACCESS_LIST_KEY, { userId, email });
+}
+
 export async function redirectIfTeacherLoungeTemporarilyDisabled(input: {
   userId?: string | null;
   email?: string | null;

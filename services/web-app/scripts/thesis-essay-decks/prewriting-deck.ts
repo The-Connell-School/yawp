@@ -197,7 +197,7 @@ export const PREWRITING_DECK: HybridDeck = {
     {
       layout: 'steps',
       eyebrow: 'Your turn',
-      title: 'Open YAWP! and start pre-writing',
+      title: 'Open Yawp! and start pre-writing',
       accent: 'teal',
       items: [
         'Sign in to ==yawp.school==',
@@ -230,7 +230,7 @@ export const PREWRITING_DECK: HybridDeck = {
         [0.16, 0.947],
       ],
       notes:
-        'This is today’s YAWP! editor with a sample pre-write in it. Point to each part of the screen: the Tutor’s pre-writing instructions, the assignment prompt above the page, comments on the right. If you can, project your own screen with a student document open.',
+        'This is today’s Yawp! editor with a sample pre-write in it. Point to each part of the screen: the Tutor’s pre-writing instructions, the assignment prompt above the page, comments on the right. If you can, project your own screen with a student document open.',
     },
     {
       layout: 'statement',
@@ -309,7 +309,7 @@ export const PREWRITING_DECK: HybridDeck = {
     },
     {
       layout: 'closer',
-      eyebrow: 'YAWP!',
+      eyebrow: 'Yawp!',
       line: 'Next time: thesis statements.',
       notes:
         'Leave this up as they pack up. Next lesson they turn today’s diamond into a thesis statement.',

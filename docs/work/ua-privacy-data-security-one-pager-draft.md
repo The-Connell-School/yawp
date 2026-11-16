@@ -32,23 +32,23 @@ Relevant UA sources:
 
 ## Short answer for UA
 
-YAWP! is a hosted classroom writing platform. Student and teacher data is stored
-inside YAWP!'s application database and supporting AWS-hosted services. AI
-features are integrated into server-side YAWP! workflows; students and teachers
-interact with YAWP!, not with a standalone public chatbot.
+Yawp! is a hosted classroom writing platform. Student and teacher data is stored
+inside Yawp!'s application database and supporting AWS-hosted services. AI
+features are integrated into server-side Yawp! workflows; students and teachers
+interact with Yawp!, not with a standalone public chatbot.
 
 Current production configuration uses Anthropic Claude Sonnet
 `claude-sonnet-4-6` as the primary large language model. OpenAI is configured as
 an outage fallback provider when fallback is enabled and credentials are
 available.
 
-YAWP! controls authentication, authorization, product workflow, and product data
+Yawp! controls authentication, authorization, product workflow, and product data
 storage. Vendor security review should be handled through UA's contract/security
-review process; YAWP! can provide additional security answers as requested.
+review process; Yawp! can provide additional security answers as requested.
 
 ## Data handled
 
-YAWP! may process:
+Yawp! may process:
 
 - teacher account information;
 - student account information;
@@ -79,7 +79,7 @@ Evidence in code:
 
 Claim:
 
-YAWP! uses authenticated sessions and role/membership checks to control access
+Yawp! uses authenticated sessions and role/membership checks to control access
 to app workflows. Admin, teacher, and student access should be represented based
 on actual configured roles and memberships.
 
@@ -100,7 +100,7 @@ Evidence in infrastructure:
 
 Claim:
 
-YAWP! production infrastructure uses AWS-hosted application, database, object
+Yawp! production infrastructure uses AWS-hosted application, database, object
 storage, and secrets-management services. Database credentials and third-party
 API keys are not hard-coded into application source.
 
@@ -135,8 +135,8 @@ Evidence in infrastructure/code:
 
 Claim:
 
-AI calls are made server-side as part of YAWP! tutoring, grading, and setup
-workflows. YAWP!'s current infrastructure identifies Anthropic Claude Sonnet as
+AI calls are made server-side as part of Yawp! tutoring, grading, and setup
+workflows. Yawp!'s current infrastructure identifies Anthropic Claude Sonnet as
 the primary model, with OpenAI configured as a fallback path.
 
 Do not claim provider data-use/training terms until the applicable Anthropic and
@@ -156,7 +156,7 @@ Evidence in code:
 
 Claim:
 
-YAWP! uses analytics/error telemetry where configured. Input masking is enabled
+Yawp! uses analytics/error telemetry where configured. Input masking is enabled
 for session recording. Confirm production telemetry configuration before making
 any more specific retention or data-sharing claim.
 

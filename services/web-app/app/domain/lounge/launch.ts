@@ -4,7 +4,7 @@
  * teacher agrees to on their first visit.
  */
 export const LOUNGE_NAME = 'Faculty Lounge';
-export const LOUNGE_TEAM_NAME = 'YAWP! team';
+export const LOUNGE_TEAM_NAME = 'Yawp! team';
 
 export const LOUNGE_WELCOME_INTRO =
   'Welcome to the Faculty Lounge, a place where we ask questions, share ideas, and connect with each other. To keep this the good kind of faculty lounge, we follow a few House Rules:';
@@ -16,7 +16,7 @@ export const LOUNGE_HOUSE_RULES = [
   { title: 'Give each other grace.', detail: 'Every classroom is different. Consider where others are coming from.' },
   { title: 'Vent if you need to, but lean toward solutions.', detail: 'Don’t just dump and run.' },
   { title: 'Keep it about teaching.', detail: 'No selling, no promotions.' },
-  { title: 'Something broken or wrong?', detail: 'Use the Contact Us button to reach the YAWP! Team directly.' },
+  { title: 'Something broken or wrong?', detail: 'Use the Contact Us button to reach the Yawp! Team directly.' },
 ] as const;
 
 export const LOUNGE_RULES_CONSENT_LABEL = 'I agree to follow the Lounge’s House Rules.';
@@ -28,7 +28,7 @@ type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
 export type LoungeSchedule = { draft: boolean; publishAt: Date | null };
 
-/** The YAWP! team's choice when posting: now, as a draft, or at a set time. */
+/** The Yawp! team's choice when posting: now, as a draft, or at a set time. */
 export function parseLoungeSchedule(input: Record<string, unknown>, now: Date): Result<LoungeSchedule> {
   const mode = typeof input.publishMode === 'string' ? input.publishMode : 'now';
   if (mode === 'draft') return { ok: true, value: { draft: true, publishAt: null } };

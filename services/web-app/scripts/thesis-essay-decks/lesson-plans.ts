@@ -42,30 +42,30 @@ export interface LessonPlan {
 }
 
 const ADAPTED =
-  'Adapted from Brian Connell’s lesson plan for the YAWP! Writing Program, with slide numbers for the new deck.';
+  'Adapted from Brian Connell’s lesson plan for the Yawp! Writing Program, with slide numbers for the new deck.';
 
 const LAPTOPS = 'Student laptops/chromebooks and access to yawp.school';
 
 const DAY_ONE: LessonPlan = {
   deck: 'lesson-1-day-1',
-  title: 'Lesson Plan Day 1: Introduce Students to YAWP!',
+  title: 'Lesson Plan Day 1: Introduce Students to Yawp!',
   overview:
-    'In this lesson, students will be introduced to the YAWP! assignment and create their YAWP! accounts.',
+    'In this lesson, students will be introduced to the Yawp! assignment and create their Yawp! accounts.',
   studentGoals: [
-    'Understand the purpose and philosophy of the YAWP! assignment',
+    'Understand the purpose and philosophy of the Yawp! assignment',
     'Read a sample essay',
-    'Create their YAWP! accounts and join your class',
+    'Create their Yawp! accounts and join your class',
   ],
   teacherGoals: [
-    'Explain YAWP!',
+    'Explain Yawp!',
     'Facilitate brief discussion on sample essay',
-    'Lead students through joining your class on YAWP!',
+    'Lead students through joining your class on Yawp!',
   ],
   materials: [
     'Slide deck',
     'Sample essay handout (“Bored in the USA”), one per student',
     LAPTOPS,
-    'Before class: your class set up in YAWP!, with the Thesis-Driven Essay assigned',
+    'Before class: your class set up in Yawp!, with the Thesis-Driven Essay assigned',
   ],
   sections: [
     {
@@ -82,11 +82,11 @@ const DAY_ONE: LessonPlan = {
           ],
         },
         {
-          text: '**Define YAWP!**',
+          text: '**Define Yawp!**',
           steps: [
             {
               text: 'Using Walt Whitman’s quote, define the term “yawp” for the students.',
-              see: [['YAWP!', 'What do you think “yawp” means?']],
+              see: [['Yawp!', 'What do you think “yawp” means?']],
             },
             {
               text: 'Using the slides, discuss why we write. This creates shared context and understanding of “What’s the point of this?”',
@@ -108,7 +108,7 @@ const DAY_ONE: LessonPlan = {
           text: '**Onboard students to yawp.school.** The website is simply “yawp.school”: there is no “www” or “.com.”',
           steps: [
             {
-              text: 'Open your class in YAWP! and go to its **Students** tab. Share the **join link**, or put its QR code up on the board. (The class code shown there is for your reference; it isn’t enough to join.)',
+              text: 'Open your class in Yawp! and go to its **Students** tab. Share the **join link**, or put its QR code up on the board. (The class code shown there is for your reference; it isn’t enough to join.)',
               see: ['Share your class’s join link'],
             },
             {
@@ -120,14 +120,14 @@ const DAY_ONE: LessonPlan = {
             },
             {
               text: 'Once they’re in, have students open the class from their dashboard and start the Thesis-Driven Essay, which creates their document. Next class they open the same document (not a new one) and begin pre-writing.',
-              see: ['Your YAWP! dashboard'],
+              see: ['Your Yawp! dashboard'],
             },
           ],
         },
       ],
     },
   ],
-  source: `${ADAPTED} Step 4 is updated for today’s join flow; the old plan’s “Welcome to YAWP!” course and Welcome Exercise are retired.`,
+  source: `${ADAPTED} Step 4 is updated for today’s join flow; the old plan’s “Welcome to Yawp!” course and Welcome Exercise are retired.`,
 };
 
 const PRE_WRITING: LessonPlan = {
@@ -191,7 +191,7 @@ const PRE_WRITING: LessonPlan = {
         },
         {
           text: '**Writing Activity:** students should log onto yawp.school and open their documents. Make sure that students are on the **Pre-Write** module before they begin pre-writing.',
-          see: [['Open YAWP! and start pre-writing', 'Figure out your specific topic']],
+          see: [['Open Yawp! and start pre-writing', 'Figure out your specific topic']],
           steps: [
             { text: 'Ask students if they have any questions before they begin their own pre-write on the prompt.' },
             {
@@ -430,7 +430,7 @@ const INTRODUCTION: LessonPlan = {
               ],
             },
             {
-              text: 'Students should hopefully be pretty active in writing their intros. As they do, they’ll surely want immediate feedback from you as well as the YAWP! Tutor: work the room and stay as active as possible with this feedback.',
+              text: 'Students should hopefully be pretty active in writing their intros. As they do, they’ll surely want immediate feedback from you as well as the Yawp! Tutor: work the room and stay as active as possible with this feedback.',
             },
           ],
         },
@@ -463,7 +463,7 @@ const BODY: LessonPlan = {
           see: [['Quick Review', 'Which of the following would probably NOT show up in your body paragraphs?#2']],
         },
         {
-          text: 'Begin class by asking students to open their YAWP! docs and look at their existing intros/thesis statements.',
+          text: 'Begin class by asking students to open their Yawp! docs and look at their existing intros/thesis statements.',
           steps: [
             {
               text: 'Refresh their memory about what they did last week (writing intros that prepare the reader to understand their thesis statement). Ask them, “Where does your thesis statement go in your introductory paragraph?” (Answer: the final sentence; feel free to add the disclaimer that this isn’t always the case, and it’s not a hard and fast rule, but for purposes of this essay, that’s where the thesis statement will go.)',
@@ -677,7 +677,7 @@ const TITLES: LessonPlan = {
             },
             { text: '**Title it:** title on the first line, centered and in italics, using the toolbar.' },
             {
-              text: '**Keep it simple:** “Be normal with your formatting. This is not the place to be creative.” YAWP! sets the font; paragraphs stay left-aligned (only the title is centered), with an empty line between them. If you have your own formatting standards, use them.',
+              text: '**Keep it simple:** “Be normal with your formatting. This is not the place to be creative.” Yawp! sets the font; paragraphs stay left-aligned (only the title is centered), with an empty line between them. If you have your own formatting standards, use them.',
             },
             {
               text: '**Read it, then Submit:** read it once from the top, ask the Tutor for feedback if they want, then click Submit.',
@@ -693,7 +693,7 @@ const TITLES: LessonPlan = {
           text: 'You and your students have been in this together, so feel good about what you’ve done. Ask students for some reflections on the process, or have them highlight their favorite part of their essay and explain why in a comment.',
         },
         {
-          text: 'Share the work: within the class, or, once you’ve read and graded it, with other English teachers or administrators. The YAWP! Writing Program can also publish a class’s essays as a printed book for students, parents and administrators.',
+          text: 'Share the work: within the class, or, once you’ve read and graded it, with other English teachers or administrators. The Yawp! Writing Program can also publish a class’s essays as a printed book for students, parents and administrators.',
         },
       ],
     },

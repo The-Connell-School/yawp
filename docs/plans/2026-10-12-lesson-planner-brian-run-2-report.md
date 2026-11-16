@@ -54,7 +54,7 @@ everyone.
 - "Add everything to the stack" files every step and block as its own piece,
   in order. An older whole-lesson item can be "Split into pieces".
 - Class starters, Daily Pages and exit tickets say what they are and offer
-  "Create this … in YAWP!" from the stack.
+  "Create this … in Yawp!" from the stack.
 - Library codes (FW-021 and the like) never show: not in the stack, the
   PDF, chat prose, chips or swap options. Filed starters keep the id as data
   (new nullable `promptId`).
@@ -81,7 +81,7 @@ border, no band on the class starter. Slide text is editable on the slide and
 stays in sync with the form. The footer mark can be the wordmark (default),
 faded, or none.
 
-**The lesson plan (28-32).** A concise plan in the shape of the YAWP!
+**The lesson plan (28-32).** A concise plan in the shape of the Yawp!
 pre-writing plan: Overview, Goals, Teacher will, Materials, numbered
 Instructions with what happens and why, Closing. One model call per version
 of the stack writes the summaries (cached; falls back to first sentences).
@@ -91,7 +91,7 @@ full packet beside it. No logo.
 **Chat (18, 20-22, 26).** "Swap out the class starter prompt" is pinned
 under a starter; the reply shows each prompt with Add to stack, "Replace
 existing class starter with this one" and "Create class starter assignment".
-A bundled starter block becomes one card per prompt. "YAWP!" everywhere,
+A bundled starter block becomes one card per prompt. "Yawp!" everywhere,
 with a test that fails on any other spelling. "You don't have to use all of
 these" shows under plans written as bold timed steps too.
 

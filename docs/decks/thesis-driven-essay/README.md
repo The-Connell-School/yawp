@@ -4,20 +4,20 @@ New versions of all seven of Brian's Teacher Training slide decks for the
 Thesis-Driven Essay. Each keeps every one of Brian's slides and his words,
 in a hybrid look:
 
-- **From the lesson planner's YAWP! tile template (PR #437):** a cream page,
-  raised paper tiles, a mono eyebrow over a serif title, and the small YAWP!
+- **From the lesson planner's Yawp! tile template (PR #437):** a cream page,
+  raised paper tiles, a mono eyebrow over a serif title, and the small Yawp!
   wordmark and slide number at the foot.
 - **From Brian's original decks:** his teal, sunshine, coral, orange and pink;
   white line icons in coloured bubbles; confetti dots; yellow highlighter on
   the words that matter.
 
 New in every deck: speaker notes on every slide (from Brian's lesson plans and
-training videos), and current screenshots of the YAWP! app on that lesson's
+training videos), and current screenshots of the Yawp! app on that lesson's
 step.
 
 | Lesson | Deck | Slides | Preview | Lesson plan |
 | --- | --- | ---: | --- | --- |
-| 1 · Introduce Students to YAWP! | [`lesson-1-day-1.pptx`](../../../services/web-app/resources/thesis-essay-decks/lesson-1-day-1.pptx) | 16 | [preview](lesson-1-day-1-preview.jpg) | [`lesson-1-day-1-lesson-plan.pdf`](../../../services/web-app/resources/thesis-essay-decks/lesson-1-day-1-lesson-plan.pdf) (2 pp.) |
+| 1 · Introduce Students to Yawp! | [`lesson-1-day-1.pptx`](../../../services/web-app/resources/thesis-essay-decks/lesson-1-day-1.pptx) | 16 | [preview](lesson-1-day-1-preview.jpg) | [`lesson-1-day-1-lesson-plan.pdf`](../../../services/web-app/resources/thesis-essay-decks/lesson-1-day-1-lesson-plan.pdf) (2 pp.) |
 | 2 · Pre-Writing | [`lesson-2-pre-writing.pptx`](../../../services/web-app/resources/thesis-essay-decks/lesson-2-pre-writing.pptx) | 24 | [preview](lesson-2-pre-writing-preview.jpg) | [`lesson-2-pre-writing-lesson-plan.pdf`](../../../services/web-app/resources/thesis-essay-decks/lesson-2-pre-writing-lesson-plan.pdf) (3 pp.) |
 | 3 · Thesis Statement | [`lesson-3-thesis-statement.pptx`](../../../services/web-app/resources/thesis-essay-decks/lesson-3-thesis-statement.pptx) | 47 | [preview](lesson-3-thesis-statement-preview.jpg) | [`lesson-3-thesis-statement-lesson-plan.pdf`](../../../services/web-app/resources/thesis-essay-decks/lesson-3-thesis-statement-lesson-plan.pdf) (3 pp.) |
 | 4 · Introduction Paragraph | [`lesson-4-introduction.pptx`](../../../services/web-app/resources/thesis-essay-decks/lesson-4-introduction.pptx) | 25 | [preview](lesson-4-introduction-preview.jpg) | [`lesson-4-introduction-lesson-plan.pdf`](../../../services/web-app/resources/thesis-essay-decks/lesson-4-introduction-lesson-plan.pdf) (2 pp.) |
@@ -56,7 +56,7 @@ names the slides it uses ("Slides 3–5"). They change only where the decks
 did:
 
 - **Day 1:** onboarding is today's join flow (the class's join link or QR
-  code, then a handle and password), not the retired "Welcome to YAWP!"
+  code, then a handle and password), not the retired "Welcome to Yawp!"
   course. It also tells teachers to make their own Two Truths reveal slides.
 - **Lessons 3–6:** the optional review quiz; Lesson 3 also covers the
   optional "to be" section.
@@ -84,7 +84,7 @@ each lesson inside its step in **Modules** (Pre-writing → Lesson 2, Thesis
 Statement → Lesson 3, …), with Day 1 above the list. Each deck comes three
 ways (Kevin, 2026-10-17):
 
-1. **Present** on YAWP! (`/present/thesis-essay/:slug`), the main button. It
+1. **Present** on Yawp! (`/present/thesis-essay/:slug`), the main button. It
    always looks exactly as designed: the slides are drawn on the page from
    `<deck>.scene.json`, which the generator writes from the same drawing as
    the .pptx (a test checks they hold the same shapes, text and pictures,
@@ -111,7 +111,7 @@ off the page is unchanged.
 
 ### Google Slides master copies
 
-For each deck: upload its .pptx to the YAWP! Google Drive, open it with
+For each deck: upload its .pptx to the Yawp! Google Drive, open it with
 Google Slides (File → Save as Google Slides), check every slide against the
 preview here and fix anything the import changed, then share it as "Anyone
 with the link: Viewer". Put its file id (the part of the link after `/d/`) in

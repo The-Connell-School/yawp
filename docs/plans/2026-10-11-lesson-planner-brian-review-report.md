@@ -21,7 +21,7 @@ unchanged.
 | --- | --- |
 | `lesson_planner_intake_v2` | The new intake: real classes, a length per class, one decision per step |
 | `lesson_planner_stack_v2` | The stack changes: add any piece, remove from the stack screen, build from the stack |
-| `lesson_planner_deck_v2` | The YAWP! deck template and the deck editor |
+| `lesson_planner_deck_v2` | The Yawp! deck template and the deck editor |
 
 Each flag can be off, on for everyone, or on for chosen schools, through the
 internal feature-flag API like the existing ones. Turn one on for the demo
@@ -149,13 +149,13 @@ Built from Brian's twelve points:
 
 ## 5. Slide decks — flag `lesson_planner_deck_v2`
 
-**Brian said:** build a real YAWP! template in the class-tile style;
+**Brian said:** build a real Yawp! template in the class-tile style;
 beautiful, not decorative; no site artwork; replace the little footer mark;
 "Save to PowerPoint / Edit / Present"; easy slide deletion; edits replace the
 original.
 
 **What we did:**
-- **The YAWP! tile template.**
+- **The Yawp! tile template.**
   - Colours come from the app itself: cream page, paper cards, terracotta.
   - Serif titles, with a small mono label above each giving the step and
     its minutes ("YOUR TURN · 8 MIN").
@@ -164,7 +164,7 @@ original.
   - Each slide type has its own design: title, class starter or prompt
     card, big framing question, numbered reading-plan tiles, side-by-side
     quote comparison, quote card, notes, and closing.
-  - A small "YAWP!" wordmark and slide numbers replace the footer mark.
+  - A small "Yawp!" wordmark and slide numbers replace the footer mark.
   - The same look in **PowerPoint** and **Present**. The PowerPoint file is
     still ordinary text boxes, so teachers can keep editing it there.
 - **Deck card buttons:** **Save to PowerPoint · Edit · Present**. The "In

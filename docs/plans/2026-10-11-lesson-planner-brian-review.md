@@ -466,7 +466,7 @@ follow-on.
 
 ---
 
-## E. Slide decks: a YAWP! template, and editing
+## E. Slide decks: a Yawp! template, and editing
 
 ### E1. Deck design system
 

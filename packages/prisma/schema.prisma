@@ -1651,7 +1651,7 @@ model LessonPlanUnitGroup {
   @@index([courseId])
 }
 
-/// A YAWP! Lesson Planner chat session. Owned by a teacher (OrgMembership) and
+/// A Yawp! Lesson Planner chat session. Owned by a teacher (OrgMembership) and
 /// scoped to their organization. Holds an ordered transcript of planner
 /// messages. `originClassAssignmentId` records the Class Summary next step the
 /// session was opened from, when the teacher came in through that seam.
@@ -2756,7 +2756,7 @@ model LoungeProfile {
   displayNameStyle     LoungeDisplayNameStyle @default(FIRST_NAME_LAST_INITIAL)
   guidelinesAcceptedAt DateTime               @db.Timestamptz(6)
   emailNotifications   Boolean                @default(true)
-  /// Optional consent from the welcome box: YAWP! may share this teacher's
+  /// Optional consent from the welcome box: Yawp! may share this teacher's
   /// posts, with their name removed. Null means no; changeable in settings.
   shareConsentAt       DateTime?              @db.Timestamptz(6)
 }
@@ -2790,7 +2790,7 @@ model LoungePost {
   hiddenAt         DateTime?            @db.Timestamptz(6)
   hiddenByUserId   String?
   deletedAt        DateTime?            @db.Timestamptz(6)
-  /// Not posted yet: visible only to the YAWP! team until published.
+  /// Not posted yet: visible only to the Yawp! team until published.
   draft            Boolean              @default(false)
   /// Scheduled: hidden from teachers until this time. Null posts immediately.
   publishAt        DateTime?            @db.Timestamptz(6)
@@ -2909,7 +2909,7 @@ model LoungeReport {
   @@index([postId])
 }
 
-/// A message from the Lounge's Contact Us button, straight to the YAWP!
+/// A message from the Lounge's Contact Us button, straight to the Yawp!
 /// team. Shows in the admin Lounge inbox until someone marks it handled.
 model LoungeContactMessage {
   id               String    @id @default(cuid())
