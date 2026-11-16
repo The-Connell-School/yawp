@@ -39,6 +39,10 @@ import {
   ensureFreeTierProductionApprovalHooks,
   getApprovalHooks,
 } from '~/domain/free-tier/approval-hooks.server';
+import {
+  sendStaffApprovalCongratulationsIfNeeded,
+  supersedePendingAdminRequests,
+} from '~/domain/free-tier/staff-approval-follow-up.server';
 import type { FreeTierApplicationStatus } from '@app/prisma';
 import { readApprovalHistories, readApprovalEmailLog, persistedApprovalFollowUpFilter } from './internal-approval-history.server';
 import { BELOW_HS_TAG } from '~/domain/free-tier/grade-gate';
@@ -770,6 +774,7 @@ async function transition(args: {
     await tx.freeTierApprovalDecision.create({
       data: { applicationId: args.id, decision: args.decision, reason: args.reason ?? null, decidedByEmail: args.decidedByEmail },
     });
+    if (args.to === 'APPROVED') await supersedePendingAdminRequests(tx, args.id);
     if (args.audit) await recordTesterAudit(tx, args.audit, args.id, { previousStatus: app.status, status: args.to, reason: args.reason ?? null });
     return {
       status: 200 as const,
@@ -901,6 +906,9 @@ export async function decideApplication(args: {
     const app = result.app;
     if (args.decision === 'APPROVED') {
       await runHookSafely('onApplicationApproved', () => getApprovalHooks().onApplicationApproved(app));
+      await runHookSafely('staffApprovalCongratulations', async () => {
+        await sendStaffApprovalCongratulationsIfNeeded(app);
+      });
     } else {
       await runHookSafely('onApplicationRejected', () => getApprovalHooks().onApplicationRejected(app, args.reason ?? 'Rejected'));
     }
