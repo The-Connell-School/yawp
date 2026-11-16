@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yawp! Button · Letterpress</title>
+<style>
+/* Yawp! Button — Letterpress
+   Source of truth for the new button. All values are tokens; change them here, not in components.
+   Surfaces: cream page (#F8F5EE family) and white cards. Not designed for dark surfaces yet. */
+
+:root {
+  /* Brand green (yawp.school) */
+  --btn-primary-bg: #1f4d3a;            /* hsl(155 43% 21%) */
+  --btn-primary-bg-hover: #245a44;      /* hsl(155 43% 25%) */
+  --btn-primary-bg-active: #1b4433;     /* hsl(155 43% 19%) */
+  --btn-primary-fg: #fffcf2;            /* cream, 9.4:1 on default */
+  --btn-primary-rim: #11291f;           /* hsl(155 43% 12%) */
+
+  /* Secondary (outline) */
+  --btn-secondary-bg: #ffffff;
+  --btn-secondary-bg-hover: #f1ede3;    /* sand */
+  --btn-secondary-bg-active: #e9e4d7;
+  --btn-secondary-fg: #1b1b1b;
+  --btn-secondary-rim: #aaa79c;         /* input border */
+
+  /* Ghost */
+  --btn-ghost-fg: #1b1b1b;
+  --btn-ghost-bg-hover: #ece7da;
+  --btn-ghost-bg-active: #e3ddce;
+
+  /* Destructive */
+  --btn-danger-bg: #9c3a2e;             /* hsl(7 55% 40%) */
+  --btn-danger-bg-hover: #ab4134;
+  --btn-danger-bg-active: #8d3429;
+  --btn-danger-fg: #fffcf2;             /* 6.6:1 */
+  --btn-danger-rim: #5c2119;
+
+  /* Link */
+  --btn-link-fg: #1f4d3a;
+
+  /* Shared */
+  --btn-radius: 9999px;
+  --btn-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --btn-weight: 600;
+  --btn-focus-ring: hsl(210 75% 49%);   /* existing app ring */
+  --btn-focus-gap: #fffdf9;             /* matches cream/white surfaces */
+  --btn-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  --btn-press-edge: inset 0 -2px 0 rgba(0, 0, 0, 0.28);
+  --btn-pressed-inset: inset 0 2px 3px rgba(0, 0, 0, 0.22);
+  --btn-duration: 120ms;
+  --btn-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Sizes: height / horizontal padding / font / icon / gap */
+  --btn-sm-h: 32px; --btn-sm-px: 12px; --btn-sm-fs: 13px; --btn-sm-icon: 14px;
+  --btn-md-h: 36px; --btn-md-px: 16px; --btn-md-fs: 14px; --btn-md-icon: 16px;
+  --btn-lg-h: 44px; --btn-lg-px: 20px; --btn-lg-fs: 15px; --btn-lg-icon: 18px;
+}
+
+.btn {
+  --h: var(--btn-md-h); --px: var(--btn-md-px); --fs: var(--btn-md-fs); --icon: var(--btn-md-icon);
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: var(--h); min-width: var(--h); padding: 0 var(--px);
+  border: 0; border-radius: var(--btn-radius);
+  font: var(--btn-weight) var(--fs)/1 var(--btn-font);
+  letter-spacing: 0.005em; white-space: nowrap; text-decoration: none;
+  cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--btn-duration) var(--btn-ease),
+              box-shadow var(--btn-duration) var(--btn-ease),
+              transform 60ms var(--btn-ease), color var(--btn-duration) var(--btn-ease);
+}
+.btn svg { width: var(--icon); height: var(--icon); flex-shrink: 0; }
+
+/* Sizes */
+.btn--sm { --h: var(--btn-sm-h); --px: var(--btn-sm-px); --fs: var(--btn-sm-fs); --icon: var(--btn-sm-icon); gap: 6px; }
+.btn--lg { --h: var(--btn-lg-h); --px: var(--btn-lg-px); --fs: var(--btn-lg-fs); --icon: var(--btn-lg-icon); }
+.btn--block { display: flex; width: 100%; }
+.btn--icon { padding: 0; width: var(--h); }
+
+/* Primary — Letterpress green */
+.btn--primary {
+  background: var(--btn-primary-bg); color: var(--btn-primary-fg);
+  box-shadow: inset 0 0 0 1px var(--btn-primary-rim), var(--btn-highlight), var(--btn-press-edge);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.3);
+}
+.btn--primary:hover, .btn--primary.is-hover { background: var(--btn-primary-bg-hover); }
+.btn--primary:active, .btn--primary.is-active {
+  background: var(--btn-primary-bg-active);
+  box-shadow: inset 0 0 0 1px var(--btn-primary-rim), var(--btn-pressed-inset);
+  transform: translateY(1px);
+}
+
+/* Secondary — outline Letterpress */
+.btn--secondary {
+  background: var(--btn-secondary-bg); color: var(--btn-secondary-fg);
+  box-shadow: inset 0 0 0 1px var(--btn-secondary-rim), inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+}
+.btn--secondary:hover, .btn--secondary.is-hover { background: var(--btn-secondary-bg-hover); }
+.btn--secondary:active, .btn--secondary.is-active {
+  background: var(--btn-secondary-bg-active);
+  box-shadow: inset 0 0 0 1px var(--btn-secondary-rim), inset 0 2px 2px rgba(0, 0, 0, 0.08);
+  transform: translateY(1px);
+}
+
+/* Ghost */
+.btn--ghost { background: transparent; color: var(--btn-ghost-fg); }
+.btn--ghost:hover, .btn--ghost.is-hover { background: var(--btn-ghost-bg-hover); }
+.btn--ghost:active, .btn--ghost.is-active { background: var(--btn-ghost-bg-active); transform: translateY(1px); }
+
+/* Destructive */
+.btn--danger {
+  background: var(--btn-danger-bg); color: var(--btn-danger-fg);
+  box-shadow: inset 0 0 0 1px var(--btn-danger-rim), var(--btn-highlight), var(--btn-press-edge);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.3);
+}
+.btn--danger:hover, .btn--danger.is-hover { background: var(--btn-danger-bg-hover); }
+.btn--danger:active, .btn--danger.is-active {
+  background: var(--btn-danger-bg-active);
+  box-shadow: inset 0 0 0 1px var(--btn-danger-rim), var(--btn-pressed-inset);
+  transform: translateY(1px);
+}
+
+/* Link */
+.btn--link {
+  height: auto; min-width: 0; padding: 0; border-radius: 4px;
+  background: none; color: var(--btn-link-fg); font-weight: 500;
+  text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px;
+}
+.btn--link:hover, .btn--link.is-hover { text-decoration-thickness: 2px; }
+
+/* Focus (keyboard only) */
+.btn:focus-visible, .btn.is-focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--btn-focus-gap), 0 0 0 4px var(--btn-focus-ring);
+}
+.btn--primary:focus-visible, .btn--primary.is-focus {
+  box-shadow: inset 0 0 0 1px var(--btn-primary-rim), var(--btn-highlight), var(--btn-press-edge),
+              0 0 0 2px var(--btn-focus-gap), 0 0 0 4px var(--btn-focus-ring);
+}
+.btn--secondary:focus-visible, .btn--secondary.is-focus {
+  box-shadow: inset 0 0 0 1px var(--btn-secondary-rim), 0 0 0 2px var(--btn-focus-gap), 0 0 0 4px var(--btn-focus-ring);
+}
+.btn--danger:focus-visible, .btn--danger.is-focus {
+  box-shadow: inset 0 0 0 1px var(--btn-danger-rim), var(--btn-highlight), var(--btn-press-edge),
+              0 0 0 2px var(--btn-focus-gap), 0 0 0 4px var(--btn-focus-ring);
+}
+
+/* Disabled — use aria-disabled so the button stays focusable for its tooltip */
+.btn:disabled, .btn[aria-disabled="true"] {
+  cursor: not-allowed; opacity: 0.45; transform: none !important; text-shadow: none;
+}
+.btn--primary:disabled, .btn--primary[aria-disabled="true"],
+.btn--danger:disabled, .btn--danger[aria-disabled="true"] {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+.btn--primary:disabled:hover, .btn--primary[aria-disabled="true"]:hover { background: var(--btn-primary-bg); }
+.btn--secondary:disabled:hover, .btn--secondary[aria-disabled="true"]:hover { background: var(--btn-secondary-bg); }
+.btn--ghost:disabled:hover, .btn--ghost[aria-disabled="true"]:hover { background: transparent; }
+.btn--danger:disabled:hover, .btn--danger[aria-disabled="true"]:hover { background: var(--btn-danger-bg); }
+
+/* Loading — label changes to the -ing form, spinner leads, width never shrinks */
+.btn[aria-busy="true"], .btn[aria-busy="true"][aria-disabled="true"] { cursor: progress; opacity: 1; }
+.btn[aria-busy="true"] .btn__spinner { animation: btn-spin 0.8s linear infinite; }
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+
+/* Success (transient, 2 s) — e.g. Copied, Saved */
+.btn.is-success.btn--secondary { background: #eef5f0; color: #1f4d3a; box-shadow: inset 0 0 0 1px #9cc0ad; }
+.btn.is-success.btn--primary { background: var(--btn-primary-bg-active); }
+
+@media (prefers-reduced-motion: reduce) {
+  .btn { transition: none; }
+  .btn:active, .btn.is-active { transform: none; }
+  .btn[aria-busy="true"] .btn__spinner { animation-duration: 2.4s; }
+}
+@media (forced-colors: active) {
+  .btn { border: 1px solid ButtonText; }
+  .btn:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+}
+
+html, body { margin: 0; background: #f8f5ee; }
+
+.sheet { max-width: 1120px; margin: 0 auto; padding: 56px 40px 80px; color: #2f2b23; font-family: var(--btn-font); }
+.intro h1 { margin: 0; font: 600 34px/1.15 Georgia, "Times New Roman", serif; color: #14201b; }
+.intro p { margin: 12px 0 0; max-width: 62ch; font-size: 16px; line-height: 1.6; color: #4b463d; }
+section { margin-top: 48px; }
+h2 { margin: 0 0 14px; font: 600 22px/1.2 Georgia, "Times New Roman", serif; color: #14201b; }
+.muted { color: #5c584f; } .small { font-size: 13px; line-height: 1.45; display: block; margin-top: 2px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; background: #fff; border-radius: 12px; box-shadow: 0 0 0 1px #d4d1c7; }
+.matrix th, .matrix td { padding: 16px 14px; text-align: left; vertical-align: middle; border-top: 1px solid #ebe7dc; }
+.matrix thead th { border-top: 0; font-size: 12px; font-weight: 600; color: #5c584f; }
+.matrix tbody th { width: 220px; font-weight: 400; } .matrix tbody th b { display: block; font-size: 15px; color: #14201b; }
+.spec th, .spec td { padding: 10px 14px; text-align: left; font-size: 13px; line-height: 1.45; border-top: 1px solid #ebe7dc; vertical-align: top; }
+.spec thead th { border-top: 0; font-weight: 600; color: #5c584f; }
+code { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: #14201b; }
+.sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-right: 6px; vertical-align: -2px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+.row { display: flex; align-items: center; gap: 24px; padding: 14px 0; border-top: 1px solid #ebe7dc; } .row:first-child { border-top: 0; }
+.rowlabel { width: 260px; flex-shrink: 0; } .rowlabel b { color: #14201b; }
+.group { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.patterns { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.pattern { display: flex; flex-direction: column; gap: 10px; padding: 18px; border-radius: 14px; background: #fff; box-shadow: 0 0 0 1px #d4d1c7; } .pattern b { color: #14201b; }
+.tutorfoot { display: flex; gap: 8px; padding: 12px; border-radius: 10px; background: #f6f3ea; }
+.anatomy { display: flex; gap: 40px; align-items: center; flex-wrap: wrap; padding: 28px; border-radius: 14px; background: #fff; box-shadow: 0 0 0 1px #d4d1c7; }
+.anat-btn { padding: 28px 36px; border-radius: 12px; background: #f6f3ea; } .anat-btn .btn { transform: scale(1.6); transform-origin: center; }
+.anat-list { margin: 0; padding-left: 20px; max-width: 560px; font-size: 14px; line-height: 1.6; } .anat-list b { color: #14201b; }
+.rules { margin: 0; padding-left: 20px; max-width: 70ch; font-size: 15px; line-height: 1.65; }
+
+</style>
+</head>
+<body>
+<main class="sheet">
+<header class="intro"><h1>Button</h1><p>The Yawp! button is printed, not floating: a flat brand-green fill with a fine rim and a pressed-in bottom edge, like type set into paper. It replaces the terracotta, coral and gold buttons across the app. One look, five variants, three sizes, every state below.</p></header>
+<section><h2>Anatomy</h2><div class="anatomy"><div class="anat-btn"><button type="button" class="btn btn--primary btn--lg">Submit essay</button></div><ol class="anat-list">
+<li><b>Fill</b> · brand green #1f4d3a, flat. No gradient.</li><li><b>Rim</b> · 1 px inside edge in a darker green, so it holds its shape on white and cream.</li>
+<li><b>Top highlight</b> · 1 px light line inside the top edge, 12 % white. Reads as paper catching light.</li><li><b>Pressed-in edge</b> · 2 px darker line inside the bottom edge. This is the letterpress feel: stamped into the page, not raised off it.</li>
+<li><b>Label</b> · 600 weight, cream, faint 1 px dark text shadow. Pill radius at every size.</li></ol></div></section>
+<section><h2>Variants and states</h2><p class="muted">Hover, focus and pressed are shown with state classes here; in code they come from :hover, :focus-visible and :active.</p><div class="scroll"><table class="matrix"><thead><tr><th></th><th scope="col">Default</th><th scope="col">Hover</th><th scope="col">Keyboard focus</th><th scope="col">Pressed</th><th scope="col">Disabled</th><th scope="col">Loading</th></tr></thead><tbody><tr><th scope="row"><b>Primary</b><span class="muted small">The one main action on a screen: Submit, Ready!, Grade, Create assignment, Save changes.</span></th><td><button type="button" class="btn btn--primary">Submit</button></td><td><button type="button" class="btn btn--primary is-hover">Submit</button></td><td><button type="button" class="btn btn--primary is-focus">Submit</button></td><td><button type="button" class="btn btn--primary is-active">Submit</button></td><td><button type="button" class="btn btn--primary" aria-disabled="true">Submit</button></td><td><button type="button" class="btn btn--primary" aria-busy="true" aria-disabled="true"><svg aria-hidden="true" class="btn__spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>Submitting…</button></td></tr><tr><th scope="row"><b>Secondary</b><span class="muted small">Everything else that is a real action: Copy link, Duplicate, Edit, Cancel in forms.</span></th><td><button type="button" class="btn btn--secondary">Copy link</button></td><td><button type="button" class="btn btn--secondary is-hover">Copy link</button></td><td><button type="button" class="btn btn--secondary is-focus">Copy link</button></td><td><button type="button" class="btn btn--secondary is-active">Copy link</button></td><td><button type="button" class="btn btn--secondary" aria-disabled="true">Copy link</button></td><td><button type="button" class="btn btn--secondary" aria-busy="true" aria-disabled="true"><svg aria-hidden="true" class="btn__spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>Copying…</button></td></tr><tr><th scope="row"><b>Ghost</b><span class="muted small">Low-emphasis actions inside dense UI: toolbar items, Cancel next to a primary, close and more buttons.</span></th><td><button type="button" class="btn btn--ghost">Cancel</button></td><td><button type="button" class="btn btn--ghost is-hover">Cancel</button></td><td><button type="button" class="btn btn--ghost is-focus">Cancel</button></td><td><button type="button" class="btn btn--ghost is-active">Cancel</button></td><td><button type="button" class="btn btn--ghost" aria-disabled="true">Cancel</button></td><td><span class=muted>Not used</span></td></tr><tr><th scope="row"><b>Destructive</b><span class="muted small">Only for the confirming step of something that cannot be undone. Never the first click.</span></th><td><button type="button" class="btn btn--danger">Delete</button></td><td><button type="button" class="btn btn--danger is-hover">Delete</button></td><td><button type="button" class="btn btn--danger is-focus">Delete</button></td><td><button type="button" class="btn btn--danger is-active">Delete</button></td><td><button type="button" class="btn btn--danger" aria-disabled="true">Delete</button></td><td><button type="button" class="btn btn--danger" aria-busy="true" aria-disabled="true"><svg aria-hidden="true" class="btn__spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>Deleting…</button></td></tr><tr><th scope="row"><b>Link</b><span class="muted small">Navigation inside text or headers. Not for actions that change data.</span></th><td><button type="button" class="btn btn--link">View all</button></td><td><button type="button" class="btn btn--link is-hover">View all</button></td><td><button type="button" class="btn btn--link is-focus">View all</button></td><td><button type="button" class="btn btn--link is-active">View all</button></td><td><button type="button" class="btn btn--link" aria-disabled="true">View all</button></td><td><span class=muted>Not used</span></td></tr></tbody></table></div></section>
+<section><h2>Sizes</h2><div class="row"><div class="rowlabel"><b>Medium · 36 px</b><span class="muted small">Default everywhere on desktop.</span></div><div class="group"><button type="button" class="btn btn--primary">Submit</button><button type="button" class="btn btn--secondary"><svg aria-hidden="true" class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>Copy link</button><button type="button" class="btn btn--ghost">Cancel</button></div></div><div class="row"><div class="rowlabel"><b>Small · 32 px</b><span class="muted small">Dense bars: top bar, toolbars, table rows, comment cards.</span></div><div class="group"><button type="button" class="btn btn--primary btn--sm">Submit</button><button type="button" class="btn btn--secondary btn--sm"><svg aria-hidden="true" class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>Copy link</button><button type="button" class="btn btn--ghost btn--sm">Cancel</button></div></div><div class="row"><div class="rowlabel"><b>Large · 44 px</b><span class="muted small">Mobile primary actions, the Tutor Ready!, empty states. Meets the 44 px touch target.</span></div><div class="group"><button type="button" class="btn btn--primary btn--lg">Submit</button><button type="button" class="btn btn--secondary btn--lg"><svg aria-hidden="true" class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>Copy link</button><button type="button" class="btn btn--ghost btn--lg">Cancel</button></div></div></section>
+<section><h2>Icons</h2><div class="row"><div class="rowlabel"><b>Leading icon</b><span class="muted small">Icon says what happens; label still required.</span></div><div class="group"><button type="button" class="btn btn--secondary"><svg aria-hidden="true" class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>Copy link</button><button type="button" class="btn btn--danger"><svg aria-hidden="true" class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>Delete</button></div></div>
+<div class="row"><div class="rowlabel"><b>Trailing icon</b><span class="muted small">Only for "go somewhere next".</span></div><div class="group"><button type="button" class="btn btn--primary">Set up groups<svg aria-hidden="true" class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></button></div></div>
+<div class="row"><div class="rowlabel"><b>Icon only</b><span class="muted small">Always has aria-label and a tooltip with the same words.</span></div><div class="group"><button type="button" class="btn btn--secondary btn--icon" aria-label="More actions" title="More actions"><svg aria-hidden="true" class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></button><button type="button" class="btn btn--ghost btn--icon" aria-label="Close" title="Close"><svg aria-hidden="true" class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button></div></div></section>
+<section><h2>In context</h2><div class="patterns"><div class="pattern"><b>Form footer</b><span class="muted small">Primary first, then Cancel as secondary. Left-aligned in full-page forms, right-aligned in dialogs and sheets.</span><div class="group"><button type="button" class="btn btn--primary">Create assignment</button><button type="button" class="btn btn--secondary">Cancel</button></div></div>
+<div class="pattern"><b>Top bar</b><span class="muted small">Small size. One primary at the far right.</span><div class="group"><button type="button" class="btn btn--ghost btn--sm btn--icon" aria-label="More"><svg aria-hidden="true" class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></button><button type="button" class="btn btn--primary btn--sm">Submit</button></div></div>
+<div class="pattern"><b>Tutor footer</b><span class="muted small">Large, full width. Next stays disabled until Ready! is done.</span><div class="tutorfoot"><button type="button" class="btn btn--primary btn--lg" style="flex:1">Ready!</button><button type="button" class="btn btn--secondary btn--lg btn--icon" aria-label="Next step" aria-disabled="true"><svg aria-hidden="true" class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></button></div></div>
+<div class="pattern"><b>Confirm a destructive action</b><span class="muted small">The destructive button only appears inside the confirm step, next to a secondary Cancel.</span><div class="group"><button type="button" class="btn btn--secondary">Cancel</button><button type="button" class="btn btn--danger">Delete assignment</button></div></div>
+<div class="pattern"><b>Transient success</b><span class="muted small">After it works, the label switches to the past tense with a check for 2 s, then returns.</span><div class="group"><button type="button" class="btn btn--secondary is-success"><svg aria-hidden="true" class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>Copied</button><button type="button" class="btn btn--primary is-success"><svg aria-hidden="true" class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>Saved</button></div></div></div></section>
+<section><h2>Try it</h2><p class="muted">Each runs the real sequence: loading, success for 2 s, back to idle.</p><div class="group">
+<button type="button" class="btn btn--primary" data-demo="save" data-busy="Saving…" data-done="Saved">Save changes</button>
+<button type="button" class="btn btn--secondary" data-demo="copy" data-done="Copied"><svg aria-hidden="true" class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>Copy link</button>
+<button type="button" class="btn btn--primary btn--lg" data-demo="submit" data-busy="Submitting…" data-done="Submitted">Submit essay</button></div><p class="muted small" id="live" role="status" aria-live="polite" style="min-height:1em"></p></section>
+<section><h2>Motion and state timing</h2><div class="scroll"><table class="spec"><thead><tr><th>Moment</th><th>What changes</th><th>Duration</th><th>Easing</th><th>Notes</th></tr></thead><tbody><tr><td><b>Hover</b></td><td>background-color</td><td>120 ms</td><td>cubic-bezier(0.2, 0, 0, 1)</td><td>Fill lightens one step. Nothing moves.</td></tr><tr><td><b>Press (mouse down / Enter / Space)</b></td><td>transform + box-shadow</td><td>60 ms in, 120 ms out</td><td>same</td><td>Moves down 1 px; bottom edge becomes a small inner shadow.</td></tr><tr><td><b>Keyboard focus</b></td><td>box-shadow</td><td>instant</td><td>—</td><td>2 px gap + 2 px ring (existing app ring). Mouse clicks never show it (:focus-visible).</td></tr><tr><td><b>Loading</b></td><td>label + spinner</td><td>instant swap</td><td>spinner 0.8 s/turn</td><td>Label becomes the -ing form ("Saving…"). Width is locked to the widest label so nothing jumps. aria-busy="true".</td></tr><tr><td><b>Success</b></td><td>label + icon</td><td>instant swap</td><td>held 2 s</td><td>Past tense + check ("Copied", "Saved"), then back. role="status" announces it.</td></tr><tr><td><b>Disabled</b></td><td>opacity</td><td>instant</td><td>—</td><td>45 % opacity, no edge, no press. Keep focusable with aria-disabled when it needs a tooltip saying why.</td></tr><tr><td><b>Reduced motion</b></td><td>—</td><td>—</td><td>—</td><td>No 1 px press movement, no transitions; spinner slows to 2.4 s.</td></tr></tbody></table></div></section>
+<section><h2>Tokens</h2><div class="scroll"><table class="spec"><thead><tr><th>Token</th><th>Value</th><th>Use</th></tr></thead><tbody><tr><td><code>--btn-primary-bg</code></td><td><span class="sw" style="background: #1f4d3a"></span><code>#1f4d3a</code></td><td>Primary fill (yawp.school green)</td></tr><tr><td><code>--btn-primary-bg-hover</code></td><td><span class="sw" style="background: #245a44"></span><code>#245a44</code></td><td>Primary hover</td></tr><tr><td><code>--btn-primary-bg-active</code></td><td><span class="sw" style="background: #1b4433"></span><code>#1b4433</code></td><td>Primary pressed</td></tr><tr><td><code>--btn-primary-fg</code></td><td><span class="sw" style="background: #fffcf2"></span><code>#fffcf2</code></td><td>Primary text, 9.4:1</td></tr><tr><td><code>--btn-primary-rim</code></td><td><span class="sw" style="background: #11291f"></span><code>#11291f</code></td><td>1 px rim</td></tr><tr><td><code>--btn-secondary-bg</code></td><td><span class="sw" style="background: #ffffff"></span><code>#ffffff</code></td><td>Secondary fill</td></tr><tr><td><code>--btn-secondary-bg-hover</code></td><td><span class="sw" style="background: #f1ede3"></span><code>#f1ede3</code></td><td>Secondary hover (sand)</td></tr><tr><td><code>--btn-secondary-rim</code></td><td><span class="sw" style="background: #aaa79c"></span><code>#aaa79c</code></td><td>Secondary rim</td></tr><tr><td><code>--btn-ghost-bg-hover</code></td><td><span class="sw" style="background: #ece7da"></span><code>#ece7da</code></td><td>Ghost hover</td></tr><tr><td><code>--btn-danger-bg</code></td><td><span class="sw" style="background: #9c3a2e"></span><code>#9c3a2e</code></td><td>Destructive fill</td></tr><tr><td><code>--btn-danger-fg</code></td><td><span class="sw" style="background: #fffcf2"></span><code>#fffcf2</code></td><td>Destructive text, 6.6:1</td></tr><tr><td><code>--btn-focus-ring</code></td><td><span class="sw" style="background: hsl(210 75% 49%)"></span><code>hsl(210 75% 49%)</code></td><td>Focus ring (existing)</td></tr><tr><td><code>--btn-radius</code></td><td><code>9999px</code></td><td>Pill on every size</td></tr></tbody></table></div></section>
+<section><h2>Rules</h2><ul class="rules"><li>One primary button per screen or panel. If two actions both look primary, one of them is secondary.</li><li>Labels are verbs that say what happens: "Create assignment", not "Submit form". The success label uses the same verb ("Saved" after "Save changes").</li><li>Sentence case, no trailing arrows in text. Use the trailing arrow icon only for "go to the next place".</li><li>Disabled buttons explain themselves: keep them focusable (aria-disabled) and give a tooltip with the reason.</li><li>Never colour-only meaning: destructive buttons also say what they destroy ("Delete assignment").</li><li>Gold, terracotta and coral are no longer button colours. Coral stays for small accents only where it already lives.</li></ul></section>
+</main>
+<script>var SPIN='<svg aria-hidden="true" class="btn__spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>', CHECK='<svg aria-hidden="true" class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>';</script>
+<script>
+document.querySelectorAll('[data-demo]').forEach(function(btn){
+  var idle=btn.innerHTML, mode=btn.getAttribute('data-demo');
+  btn.addEventListener('click',function(){
+    if(btn.getAttribute('aria-busy')==='true'||btn.classList.contains('is-success'))return;
+    var w=btn.offsetWidth; btn.style.minWidth=w+'px';
+    if(mode==='copy'){ done(); return; }
+    btn.setAttribute('aria-busy','true'); btn.setAttribute('aria-disabled','true');
+    btn.innerHTML=SPIN+btn.getAttribute('data-busy');
+    setTimeout(function(){ btn.removeAttribute('aria-busy'); btn.removeAttribute('aria-disabled'); done(); },1100);
+    function done(){ btn.classList.add('is-success'); btn.innerHTML=CHECK+btn.getAttribute('data-done');
+      document.getElementById('live').textContent=btn.getAttribute('data-done');
+      setTimeout(function(){ btn.classList.remove('is-success'); btn.innerHTML=idle; btn.style.minWidth=''; },2000); }
+  });
+});
+</script>
+</body>
+</html>

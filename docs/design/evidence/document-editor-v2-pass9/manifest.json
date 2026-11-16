@@ -1,0 +1,43 @@
+{
+  "baseUrl": "https://pr-963.preview.yawp.school",
+  "documentId": "previewdoceditv2qa0001",
+  "gradedDocumentId": "previewdoceditv2graded01",
+  "pairs": [
+    {
+      "slug": "student-desktop-1440",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/student-desktop-1440-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/student-desktop-1440-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/student-desktop-1440-side-by-side.png"
+    },
+    {
+      "slug": "mobile-390",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/mobile-390-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/mobile-390-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/mobile-390-side-by-side.png"
+    },
+    {
+      "slug": "tutor-panel",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/tutor-panel-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/tutor-panel-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/tutor-panel-side-by-side.png"
+    },
+    {
+      "slug": "comments-margin",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/comments-margin-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/comments-margin-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/comments-margin-side-by-side.png"
+    },
+    {
+      "slug": "chrome-toolbar-prompt",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/chrome-toolbar-prompt-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/chrome-toolbar-prompt-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/chrome-toolbar-prompt-side-by-side.png"
+    },
+    {
+      "slug": "teacher-view-only",
+      "design": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/teacher-view-only-design.png",
+      "preview": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/teacher-view-only-preview.png",
+      "sideBySide": "/agent/repos/yawp/docs/design/evidence/document-editor-v2-pass9/teacher-view-only-side-by-side.png"
+    }
+  ]
+}
