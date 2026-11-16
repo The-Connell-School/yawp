@@ -95,17 +95,25 @@ async function main() {
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   await passGate(context);
 
-  const probe = await context.newPage();
-  await loginStudent(probe);
-  const documentId = await resolvePreviewDocumentId(probe, BASE, {
-    preferredId: DOCUMENT_ID || DEFAULT_PREVIEW_V2_QA_DOCUMENT_ID,
-    gradedId: process.env.GRADED_DOCUMENT_ID?.trim() || DEFAULT_PREVIEW_V2_QA_GRADED_DOCUMENT_ID,
-  });
-  await probe.close();
-  console.log('document id', documentId);
-
+  let documentId = DOCUMENT_ID || DEFAULT_PREVIEW_V2_QA_DOCUMENT_ID;
   const gradedDocId =
     process.env.GRADED_DOCUMENT_ID?.trim() || DEFAULT_PREVIEW_V2_QA_GRADED_DOCUMENT_ID;
+
+  const probe = await context.newPage();
+  await loginStudent(probe);
+  try {
+    await openPreviewV2Document(probe, BASE, documentId);
+  } catch (error) {
+    console.warn(
+      `QA document ${documentId} unavailable; discovering a document (${error instanceof Error ? error.message : error})`
+    );
+    documentId = await resolvePreviewDocumentId(probe, BASE, {
+      preferredId: documentId,
+      gradedId: gradedDocId,
+    });
+  }
+  await probe.close();
+  console.log('document id', documentId);
 
   const captures = [];
 
