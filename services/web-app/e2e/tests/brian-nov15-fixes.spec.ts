@@ -1,5 +1,45 @@
 import { test, expect } from '@playwright/test';
 
+const LANDING_KEYS = ['thesis-driven-essay', 'class-starter', 'exit-ticket', 'prewriting',
+  'thesis-statement', 'daily-pages', 'five-paragraph-essay', 'act-writing', 'welcome-to-yawp'];
+
+for (const width of [1280, 390]) {
+  for (const key of LANDING_KEYS) {
+    test(`${key} box text is readable in light mode and keeps dark mode at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto(`/e2e/fixtures/brian-fixes/index.html?landing=${key}`);
+      const labels = await page.getByRole('button', { name: /^Show / })
+        .evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label')!));
+      for (const name of labels) await page.getByRole('button', { name, exact: true }).click();
+      await page.mouse.move(0, 0);
+      const muted = page.locator('[data-landing-box] [class*="text-muted-foreground"], [data-landing-box] [class*="text-[#4A4A4A]"]');
+      expect(await muted.count()).toBeGreaterThan(0);
+      for (const text of await muted.all()) await expect(text).toHaveCSS('color', 'rgb(74, 74, 74)');
+
+      const darkColor = await page.evaluate(() => {
+        document.documentElement.classList.add('dark');
+        const sample = document.createElement('span');
+        sample.style.color = 'hsl(var(--muted-foreground))';
+        document.body.appendChild(sample);
+        const color = getComputedStyle(sample).color;
+        sample.remove();
+        return color;
+      });
+      for (const text of await muted.all()) await expect(text).toHaveCSS('color', darkColor);
+    });
+  }
+}
+
+test('at 390px the thesis philosophy box follows How to Teach It outside the course', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/e2e/fixtures/brian-fixes/index.html?landing=thesis-driven-essay');
+  const boxes = page.locator('[data-landing-box]');
+  await expect(boxes).toHaveCount(2);
+  await expect(boxes.nth(0)).toHaveAttribute('data-testid', 'how-to-teach-spotlight');
+  await expect(boxes.nth(1)).toHaveAttribute('data-testid', 'landing-section-philosophy');
+  await expect(page.getByTestId('thesis-essay-course').getByTestId('landing-section-philosophy')).toHaveCount(0);
+});
+
 test('Pre-writing is the first step of any major essay, including the collapsed preview', async ({ page }) => {
   await page.goto('/e2e/fixtures/brian-fixes/index.html?landing=prewriting');
   const box = page.getByTestId('how-to-teach-spotlight');

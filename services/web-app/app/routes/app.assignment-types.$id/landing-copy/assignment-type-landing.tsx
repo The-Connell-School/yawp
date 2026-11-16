@@ -27,6 +27,8 @@ import { YAWP_LESSONS } from '~/domain/lesson-planner/yawp-lessons';
 export type LessonVideos = Record<number, string>;
 type LessonLinks = { lessonVideos: LessonVideos };
 
+const BOX_TEXT_CLASS = 'text-[#4A4A4A] dark:text-muted-foreground';
+
 /**
  * Inline markup used by the landing copy: **bold** and *italic*. Nothing else
  * is interpreted, so copy can carry quotes, dashes and ellipses as written.
@@ -77,7 +79,7 @@ function Steps({
             data-testid="how-to-teach-step"
             className="flex items-baseline gap-2 px-3 py-2.5 text-sm"
           >
-            <span className="w-5 shrink-0 text-right tabular-nums text-muted-foreground">
+            <span className={cn('w-5 shrink-0 text-right tabular-nums', BOX_TEXT_CLASS)}>
               {index + 1}.
             </span>
             <span data-step-title className="font-medium">
@@ -91,7 +93,7 @@ function Steps({
 }
 
 const COURSE_LINK_CLASS =
-  'inline-flex items-center gap-1.5 whitespace-nowrap rounded-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  cn('inline-flex items-center gap-1.5 whitespace-nowrap rounded-sm underline-offset-4 hover:text-foreground dark:hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', BOX_TEXT_CLASS);
 
 /**
  * One lesson's row, as Brian drew it and then pared it down (Nov 6): its
@@ -115,7 +117,7 @@ function CourseLessonRow({
       <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <span className="flex items-baseline gap-3 text-base">
         {index !== null ? (
-          <span className="w-4 shrink-0 tabular-nums text-muted-foreground">{index}</span>
+          <span className={cn('w-4 shrink-0 tabular-nums', BOX_TEXT_CLASS)}>{index}</span>
         ) : null}
         <span data-lesson-title>{title}</span>
       </span>
@@ -271,13 +273,13 @@ function ParagraphText({
 /**
  * Where copy sits, which sets its color (Brian, Nov 3). On the cream page it
  * is the dark text color; inside a light box (How to Teach It, an opened
- * drop-down) it keeps the softer gray the How to Teach It box already uses.
+ * drop-down) it is a readable gray. Dark mode keeps its existing muted color.
  */
 type Tone = 'page' | 'box';
 
 const TONE_CLASS: Record<Tone, string> = {
   page: 'text-foreground',
-  box: 'text-muted-foreground',
+  box: BOX_TEXT_CLASS,
 };
 
 function Block({
@@ -418,7 +420,7 @@ export function BoxedSection({
           aria-controls={expanded ? bodyId : undefined}
           aria-label={`${label} ${section.heading}`}
           onClick={() => setExpanded((open) => !open)}
-          className="group flex shrink-0 items-center gap-3 rounded-full text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={cn('group flex shrink-0 items-center gap-3 rounded-full text-sm hover:text-foreground dark:hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', BOX_TEXT_CLASS)}
         >
           {label}
           <span
