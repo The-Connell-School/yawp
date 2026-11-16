@@ -1,6 +1,6 @@
 # Document editor v2 — pass 8/9 gap list
 
-Branch: `cursor/document-editor-v2-pass8-parity-dde8` (head `dbdf90e3` after pass 9 evidence)  
+Branch: `cursor/document-editor-v2-pass8-parity-dde8` (head `2b4ee87b` after pass 9 evidence)  
 Preview: `https://pr-963.preview.yawp.school` (`?editor=v2` for staff; preview defaults v2 on)  
 Design sources: `docs/design/document-editor-v2/document-editor.html`, `document-editor-states.html`
 
