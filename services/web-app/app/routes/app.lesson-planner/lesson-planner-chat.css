@@ -1,6 +1,8 @@
-/* Brian's Lesson Planner chat — letterpress / cream sheet (lp-chat.html) */
+/* Brian's Lesson Planner chat — letterpress / cream sheet (lp-chat.html).
+   Tokens sit on :root so Reporter suggestion chips can use the same
+   white sheet, border, and shadow. */
 
-.lesson-planner-chat {
+:root {
   --lp-cream: #f6f2e9;
   --lp-ink: #1d1d1b;
   --lp-muted: #3b3a36;
