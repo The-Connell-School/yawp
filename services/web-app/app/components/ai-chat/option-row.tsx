@@ -8,7 +8,16 @@ import { Children, useCallback, useEffect, useRef, useState, type ReactNode } fr
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '~/utils/misc';
 
-export function OptionRow({ label, children }: { label: string; children: ReactNode }) {
+export function OptionRow({
+  label,
+  children,
+  layout = 'carousel',
+}: {
+  label: string;
+  children: ReactNode;
+  /** Grid matches Brian's finished-lesson layout; carousel keeps the older row. */
+  layout?: 'carousel' | 'grid';
+}) {
   const items = Children.toArray(children);
   const track = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState(0);
@@ -36,6 +45,28 @@ export function OptionRow({ label, children }: { label: string; children: ReactN
     row.scrollTo({ left: card.offsetLeft - row.offsetLeft, behavior: 'smooth' });
     setAt(index);
   };
+
+  if (layout === 'grid') {
+    return (
+      <div data-testid="option-row" className="mt-3">
+        <p className="sr-only">
+          {label} · {items.length} options
+        </p>
+        <div className="lp-option-grid">
+          {items.map((item, index) => (
+            <div
+              key={index}
+              data-testid="option-row-item"
+              aria-label={`Option ${index + 1} of ${items.length}`}
+              className="[&>*]:mt-0"
+            >
+              {item}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div data-testid="option-row" className="mt-3">

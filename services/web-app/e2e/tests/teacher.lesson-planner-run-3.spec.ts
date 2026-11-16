@@ -1242,7 +1242,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await expect(page.getByTestId('daily-pages-create').locator('svg')).toHaveCount(0);
     });
 
-    test('options sit side by side, paged with arrows, each with its own buttons', async ({
+    test('options sit side by side in a row, each with its own buttons', async ({
       page,
       signIn,
       e2eContext,
@@ -1255,19 +1255,15 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await page.goto(`/app/lesson-planner?c=${conversationId}`);
       const row = page.getByTestId('option-row');
       await expect(row).toHaveCount(1);
-      await expect(row).toContainText('Class starter options');
       await expect(row.getByTestId('daily-pages-card')).toHaveCount(3);
       await expect(row.getByTestId('daily-pages-create')).toHaveCount(3);
-      await expect(row.getByTestId('option-row-position')).toHaveText('1 of 3');
-      await expect(row.getByTestId('option-prev')).toBeDisabled();
       // One row, not three cards stacked: the cards share a top edge.
       const tops = await row.getByTestId('daily-pages-card').evaluateAll((cards) =>
         cards.map((card) => Math.round(card.getBoundingClientRect().top))
       );
       expect(new Set(tops).size).toBe(1);
       await page.waitForLoadState('networkidle');
-      await row.getByTestId('option-next').click();
-      await expect(row.getByTestId('option-row-position')).toHaveText('2 of 3');
+      await expect(row.getByTestId('daily-pages-stack-toggle')).toHaveCount(3);
     });
 
     test('cards added out of order land in the reply’s order, with their step’s time', async ({

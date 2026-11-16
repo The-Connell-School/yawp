@@ -11,6 +11,29 @@ import { toast } from 'sonner';
 import { cn } from '~/utils/misc';
 
 // Scoped styling for rendered Markdown (no typography plugin in this app).
+/** Markdown in the Lesson Planner chat (Brian's cream sheet design). */
+export const LESSON_PLANNER_MARKDOWN_CLASS = cn(
+  'lp-markdown text-[17px] leading-relaxed text-[#3B3A36]',
+  '[&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
+  '[&_h1]:mb-2 [&_h1]:mt-3 [&_h1]:text-[22px] [&_h1]:font-extrabold [&_h1]:text-[#1D1D1B]',
+  '[&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-[22px] [&_h2]:font-extrabold [&_h2]:text-[#1D1D1B] [&_h2]:normal-case [&_h2]:tracking-normal',
+  '[&_h3]:mb-1 [&_h3]:mt-3 [&_h3]:text-lg [&_h3]:font-extrabold [&_h3]:text-[#1D1D1B] [&_h3]:normal-case [&_h3]:tracking-normal',
+  '[&_p]:my-1.5',
+  '[&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5',
+  '[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5',
+  '[&_li]:my-1',
+  '[&_strong]:font-bold [&_strong]:text-[#1D1D1B]',
+  '[&_a]:font-semibold [&_a]:text-link [&_a]:underline [&_a]:underline-offset-2',
+  '[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-[#E8C062] [&_blockquote]:pl-3',
+  '[&_code]:rounded [&_code]:bg-foreground/[0.06] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-sm',
+  '[&_.md-table]:my-3 [&_.md-table]:w-full [&_.md-table]:overflow-x-auto [&_.md-table]:rounded-xl [&_.md-table]:border [&_.md-table]:border-[#E4DDCD]',
+  '[&_table]:w-full [&_table]:border-collapse [&_table]:text-sm',
+  '[&_thead]:bg-[#FBF7EE]',
+  '[&_th]:whitespace-nowrap [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:text-xs [&_th]:font-bold [&_th]:uppercase [&_th]:text-[#6B675E]',
+  '[&_tbody_tr]:border-t [&_tbody_tr]:border-[#EEE8DB]',
+  '[&_td]:px-3 [&_td]:py-2 [&_td]:align-top'
+);
+
 export const MARKDOWN_CLASS = cn(
   'text-sm leading-relaxed text-foreground/90',
   '[&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
@@ -111,10 +134,12 @@ export function markdownToSafeHtml(content: string, options: { codeAsText?: bool
 export function MarkdownContent({
   content,
   codeAsText = false,
+  markdownClassName = MARKDOWN_CLASS,
 }: {
   content: string;
   /** Inline code reads as plain words (the lesson planner's teacher-facing text). */
   codeAsText?: boolean;
+  markdownClassName?: string;
 }) {
   const [html, setHtml] = useState<string | null>(null);
 
@@ -128,7 +153,7 @@ export function MarkdownContent({
 
   return (
     <div
-      className={MARKDOWN_CLASS}
+      className={markdownClassName}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

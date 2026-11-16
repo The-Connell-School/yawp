@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&display=swap');
 @import './components/ui/button.css';
+@import './routes/app.lesson-planner/lesson-planner-chat.css';
 
 @tailwind base;
 @tailwind components;
