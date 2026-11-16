@@ -444,7 +444,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
     if (!REPLACEABLE_KINDS.has(material.kind)) {
       return dataResponse(
-        { error: 'Only a class starter or Daily Pages prompt can be swapped in.' },
+        { error: 'Only a class starter or Short Response prompt can be swapped in.' },
         { status: 400 }
       );
     }

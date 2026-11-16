@@ -64,7 +64,7 @@ export function suggestedPieces({
           material.title
             .replace(MINUTES_IN_TITLE, '')
             .trim()
-            .replace(/^(?:Class Starter|Daily Pages|Exit ticket|Writing practice)\s*:\s*/i, '') ||
+            .replace(/^(?:Class Starter|Daily Pages|Short Response|Exit ticket|Writing practice)\s*:\s*/i, '') ||
           material.title,
         type,
         minutes: material.minutes ?? null,

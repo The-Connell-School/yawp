@@ -18,7 +18,7 @@ function optionKind(part: ReplyPart): { key: string; label: string } | null {
     case 'daily-pages':
       return part.exercise.kind === 'class-starter'
         ? { key: 'class-starter', label: 'Class starter options' }
-        : { key: `daily-pages:${part.exercise.kind}`, label: 'Daily Pages options' };
+        : { key: `daily-pages:${part.exercise.kind}`, label: 'Short Response options' };
     case 'exit-ticket':
       return { key: 'exit-ticket', label: 'Exit ticket options' };
     case 'practice':

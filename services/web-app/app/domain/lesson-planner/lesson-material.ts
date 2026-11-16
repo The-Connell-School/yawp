@@ -80,7 +80,7 @@ export const MATERIAL_KIND_LABELS: Record<ArtifactKind, string> = {
   notes: 'Notes',
   slides: 'Slides',
   'class-starter': 'Class Starter',
-  'daily-pages': 'Daily Pages',
+  'daily-pages': 'Short Response',
   step: 'Lesson step',
   practice: 'Writing practice',
 };

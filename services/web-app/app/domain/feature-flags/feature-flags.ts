@@ -403,12 +403,12 @@ export const FEATURE_FLAGS = {
   [TEACHER_PROMPT_GENERATOR_FLAG]: {
     label: 'Teacher prompt generator',
     description:
-      'Shows New → Generate a prompt and the LLM drafting sheet on assignment types that support it (Class Starter, Daily Pages, Exit Ticket, Thesis-Driven Essay). Default off on production; on by default on demo and PR previews.',
+      'Shows New → Generate a prompt and the LLM drafting sheet on assignment types that support it (Class Starter, Short Response, Exit Ticket, Thesis-Driven Essay). Default off on production; on by default on demo and PR previews.',
   },
   [ASSIGNMENT_TYPE_LANDING_V2_FLAG]: {
     label: 'Assignment type pages: teacher-facing copy',
     description:
-      "Brian's new landing page for each assignment type (Class Starter, Exit Ticket, Pre-Writing, Thesis Statement, Daily Pages, AP History, and the other built-in types): a short description, How it works, and the Prompt Library intro, with no Modules block on one-step types. Off: the old pages. Default off on production; on by default on demo and PR previews.",
+      "Brian's new landing page for each assignment type (Class Starter, Exit Ticket, Pre-Writing, Thesis Statement, Short Response, AP History, and the other built-in types): a short description, How it works, and the Prompt Library intro, with no Modules block on one-step types. Off: the old pages. Default off on production; on by default on demo and PR previews.",
   },
   [ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG]: {
     label: 'Assignment type pages: Thesis-Driven Essay',
@@ -443,7 +443,7 @@ export const FEATURE_FLAGS = {
   [ASSIGNMENTS_GROUPED_BY_TYPE_FLAG]: {
     label: 'Assignments grouped by type',
     description:
-      'My Assignments and each class’s Assignments tab show one collapsible section per assignment type (Exit Ticket, Daily Pages, The Thesis-Driven Essay…), with the same headings and counts as the grouped Documents page. Search, sort and delete work inside the sections. Off: one flat, paginated table. No data changes either way.',
+      'My Assignments and each class’s Assignments tab show one collapsible section per assignment type (Exit Ticket, Short Response, The Thesis-Driven Essay…), with the same headings and counts as the grouped Documents page. Search, sort and delete work inside the sections. Off: one flat, paginated table. No data changes either way.',
   },
   [DOCUMENT_EDITOR_V2_FLAG]: {
     label: 'Document editor v2',

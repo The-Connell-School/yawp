@@ -153,7 +153,7 @@ describe('buildLessonPlannerSystemPrompt — teaching out of Yawp', () => {
   test('tells the planner to build lessons out of Yawp itself', () => {
     const lower = prompt.toLowerCase();
     for (const surface of [
-      'daily pages',
+      'short response',
       'quick writing lesson',
       "teacher's lounge",
       'assignment',
@@ -218,7 +218,7 @@ describe('buildLessonPlannerSystemPrompt — teaching out of Yawp', () => {
     const lower = prompt.toLowerCase();
     // The old blanket ban on naming Yawp material is gone — it must now cite
     // real catalog items and only those.
-    expect(lower).toContain('never name a daily pages prompt');
+    expect(lower).toContain('never name a short response prompt');
     expect(lower).toContain('did not come back from a tool');
   });
 
@@ -623,7 +623,7 @@ describe('buildLessonPlannerSystemPrompt — only claim what it has read', () =>
 
   test('keeps the rule off the sources it really can read', () => {
     expect(prompt).toContain(
-      'Quick Writing Lessons and Daily Pages prompts come back as real text'
+      'Quick Writing Lessons and Short Response prompts come back as real text'
     );
   });
 });
@@ -1145,7 +1145,7 @@ describe('buildLessonPlannerSystemPrompt — handing back several pieces at once
  * happen at the bell at all, and often works better after the reading than
  * before it.
  */
-describe('buildLessonPlannerSystemPrompt — class starter vs Daily Pages', () => {
+describe('buildLessonPlannerSystemPrompt — class starter vs Short Response', () => {
   const prompt = buildLessonPlannerSystemPrompt({
     teacherName: 'Ms. Rivera',
     organizationName: 'Connell School',
@@ -1154,7 +1154,7 @@ describe('buildLessonPlannerSystemPrompt — class starter vs Daily Pages', () =
 
   test('names both exercises as separate things', () => {
     expect(lower).toContain('class starter');
-    expect(lower).toContain('daily pages');
+    expect(lower).toContain('short response');
   });
 
   test('says what a class starter is for and how long it runs', () => {
@@ -1163,8 +1163,8 @@ describe('buildLessonPlannerSystemPrompt — class starter vs Daily Pages', () =
     expect(prompt).toMatch(/class starter[\s\S]{0,400}\b3–5 minutes\b/i);
   });
 
-  test('says Daily Pages costs real class time', () => {
-    expect(prompt).toMatch(/daily pages[\s\S]{0,400}\b10–15 minutes\b/i);
+  test('says a Short Response costs real class time', () => {
+    expect(prompt).toMatch(/short response[\s\S]{0,400}\b10–15 minutes\b/i);
   });
 
   test('stops treating Daily Pages as automatically the opener', () => {
@@ -1188,7 +1188,7 @@ describe('buildLessonPlannerSystemPrompt — class starter vs Daily Pages', () =
       /class starter[\s\S]{0,600}search_daily_pages_prompts/i
     );
     expect(prompt).toMatch(
-      /daily pages[\s\S]{0,600}search_short_form_prompts/i
+      /short response[\s\S]{0,600}search_short_form_prompts/i
     );
   });
 
@@ -1727,7 +1727,7 @@ describe("planner prompt — Brian's run 3", () => {
 
   test('every step heading carries its minutes and a type tag', () => {
     expect(prompt).toContain('{type: read_aloud}');
-    expect(prompt).toContain('including a framing note and a Daily Pages reflection');
+    expect(prompt).toContain('including a framing note and a Short Response');
   });
 
   test('no written total and nothing after the last step but the rule and one question', () => {
@@ -2244,6 +2244,29 @@ describe('planner prompt — the Lesson Deck Kit, spec v4', () => {
       .map((block) => block.text)
       .join('\n');
     expect(none).not.toContain('Lesson Deck Kit, spec v4');
+  });
+});
+
+/**
+ * Daily Pages is called Short Response now (Brian, Nov 15). The planner says
+ * the new name to the teacher; the block fence, the kind value and the tool
+ * names are identifiers and keep theirs.
+ */
+describe('buildLessonPlannerSystemPrompt — Short Response, not Daily Pages', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: 'Ms. Rivera',
+    organizationName: 'Connell School',
+  });
+
+  test('never calls the exercise Daily Pages', () => {
+    expect(prompt).not.toMatch(/daily pages/i);
+    expect(prompt).toContain('A SHORT RESPONSE is a real piece of reflective writing');
+  });
+
+  test('keeps the identifiers the parsers read', () => {
+    expect(prompt).toContain('yawp-daily-pages');
+    expect(prompt).toContain('kind: daily-pages');
+    expect(prompt).toContain('search_short_form_prompts');
   });
 });
 

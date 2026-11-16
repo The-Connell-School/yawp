@@ -154,6 +154,7 @@ import {
 } from './landing-copy/assignment-type-landing';
 import {
   enabledLandingPageKey,
+  landingPageHeading,
   LANDING_PAGES,
   resolveLandingPageKey,
 } from './landing-copy/content';
@@ -1077,6 +1078,11 @@ export default function AppAssignmentTypesIdRoute() {
   ]);
 
   const showThesisLibrary = data.thesisPromptLibrary != null;
+  // Daily Pages reads Short Response on Brian's page (Nov 15).
+  const pageHeading = landingPageHeading(
+    data.landingPageKey,
+    data.assignmentType.title
+  );
   const landingPage = data.landingPageKey
     ? LANDING_PAGES[data.landingPageKey]
     : null;
@@ -1329,12 +1335,12 @@ export default function AppAssignmentTypesIdRoute() {
           {data.assignmentType.image ? (
             <img
               src={`/api/image/course/${data.assignmentType.image.id}`}
-              alt={data.assignmentType.title}
+              alt={pageHeading}
               className="h-auto w-screen min-w-[170px] max-w-[250px] rounded-lg object-cover"
             />
           ) : null}
           <div className="flex flex-col gap-3">
-            <h1 className="text-3xl font-bold">{data.assignmentType.title}</h1>
+            <h1 className="text-3xl font-bold">{pageHeading}</h1>
             {landingPage ? (
               <LandingDescription page={landingPage} />
             ) : (

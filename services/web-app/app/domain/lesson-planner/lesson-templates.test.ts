@@ -13,7 +13,7 @@ const SLOTS = slotsFromSteps([
 
 describe('lesson templates (stack page redesign)', () => {
   test('the shape, with repeats folded', () => {
-    expect(templateShape(SLOTS)).toBe('Class Starter → Context → Read aloud → Daily Pages → Closing');
+    expect(templateShape(SLOTS)).toBe('Class Starter → Context → Read aloud → Short Response → Closing');
   });
 
   test('the shape keeps the order and timing, and its writing share', () => {

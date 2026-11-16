@@ -146,13 +146,20 @@ describe("share pages name the writing by type (Brian's round 3, 1.7–1.9)", ()
     const { handoutHeading } = await import('./lesson-share');
     expect(handoutHeading('Franklin’s self-made method', 'Daily Pages')).toBe('Daily Pages: Franklin’s self-made method');
     expect(handoutHeading('Daily Pages: the method', 'Daily Pages')).toBe('Daily Pages: the method');
+    // A title saved before the rename says it the old way: one prefix, the new name.
+    expect(handoutHeading('Daily Pages: the method', 'Short Response')).toBe('Short Response: the method');
+    expect(handoutHeading('the method', 'Short Response')).toBe('Short Response: the method');
+    expect(handoutHeading('Short Response: the method', 'Short Response')).toBe('Short Response: the method');
     expect(handoutHeading('The excerpt', null)).toBe('The excerpt');
   });
 
   test('a prompt is any writing step of a Yawp! assignment type, the exit ticket included (round 4)', async () => {
     const { isSharedPrompt } = await import('./lesson-share');
     expect(isSharedPrompt({ kind: 'class-starter', isWriting: true, writingName: 'Class Starter' })).toBe(true);
-    expect(isSharedPrompt({ kind: 'daily-pages', isWriting: true, writingName: 'Daily Pages' })).toBe(true);
+    expect(isSharedPrompt({ kind: 'daily-pages', isWriting: true, writingName: 'Short Response' })).toBe(true);
+    // A step whose type is only in its name, from before the rename and after.
+    expect(isSharedPrompt({ kind: 'step', isWriting: true, writingName: 'Daily Pages' })).toBe(true);
+    expect(isSharedPrompt({ kind: 'step', isWriting: true, writingName: 'Short Response' })).toBe(true);
     expect(isSharedPrompt({ kind: 'exit-ticket', isWriting: true, writingName: 'Exit Ticket' })).toBe(true);
     // A closing step that is an exit ticket.
     expect(isSharedPrompt({ kind: 'step', isWriting: true, writingName: 'Exit Ticket' })).toBe(true);

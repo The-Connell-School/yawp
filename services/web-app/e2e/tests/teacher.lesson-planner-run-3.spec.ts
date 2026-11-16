@@ -132,8 +132,8 @@ test.describe("Lesson Planner — Brian's third run", () => {
       const times = outline.locator('li > span:first-child');
       await expect(times).toHaveCount(8);
       for (const time of await times.all()) await expect(time).toHaveText(/\d+ min/);
-      // A short, real title for Daily Pages, never the prompt cut mid-word.
-      await expect(outline).toContainText('Daily Pages: O’Brien lists what every soldier carries');
+      // A short, real title for a Short Response, never the prompt cut mid-word.
+      await expect(outline).toContainText('Short Response: O’Brien lists what every soldier carries');
       await expect(outline).not.toContainText('…');
     });
 
@@ -392,7 +392,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await expect(page.getByTestId('time-status')).toHaveText('Right on time');
       await expect(page.getByTestId('time-block')).toHaveCount(8);
       await expect(page.getByTestId('writing-strip')).toContainText('26% of class is writing · 13 min');
-      await expect(page.getByTestId('writing-strip')).toContainText('From Class Starter · Daily Pages · Exit Ticket');
+      await expect(page.getByTestId('writing-strip')).toContainText('From Class Starter · Short Response · Exit Ticket');
       const cards = page.getByTestId('run-card');
       await expect(cards).toHaveCount(8);
       await expect(cards.nth(1).getByTestId('run-card-start')).toHaveText('05');
@@ -995,7 +995,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
         if ((await tile.getAttribute('aria-pressed')) !== 'true') await tile.click();
         await expect(row).toBeVisible({ timeout: 1_000 });
       }).toPass({ timeout: 15_000 });
-      await expect(row).toContainText('Class Starter → Activity → Context → Read aloud → Daily Pages → Closing · 50 min');
+      await expect(row).toContainText('Class Starter → Activity → Context → Read aloud → Short Response → Closing · 50 min');
       await expect(row).toContainText('26% writing');
       await row.click();
       await expect(page.getByTestId('template-chip')).toHaveText(/Using your template: Read & write day/);

@@ -48,7 +48,7 @@ export type StackCreateLink = {
 
 const CREATE_TYPE_NAMES: Record<CreateType, string> = {
   'class-starter': 'Class Starter',
-  'daily-pages': 'Daily Pages',
+  'daily-pages': 'Short Response',
   prewriting: 'Pre-Writing',
   'thesis-statement': 'Thesis Statement',
   'exit-ticket': 'Exit Ticket',
@@ -257,7 +257,7 @@ function createLinkFor({
       label:
         kind === 'class-starter'
           ? 'Create this class starter in Yawp!'
-          : 'Create this Daily Pages prompt in Yawp!',
+          : 'Create this Short Response prompt in Yawp!',
       href: dailyPagesCreateHref(typeId, prompt, conversationId),
     };
   }

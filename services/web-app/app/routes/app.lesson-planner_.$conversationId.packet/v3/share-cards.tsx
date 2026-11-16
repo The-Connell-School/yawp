@@ -100,7 +100,7 @@ export function PostToClass({
           Post to your class
         </h2>
         <p className="mt-1 text-xs text-[var(--sv-muted)]">
-          One link to a student page with the slides, handouts and Daily Pages prompt.
+          One link to a student page with the slides, handouts and Short Response prompt.
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Button

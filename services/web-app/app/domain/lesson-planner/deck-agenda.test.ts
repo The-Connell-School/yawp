@@ -56,6 +56,17 @@ describe("the agenda slide keeps the stack's times (Brian's round 3, 1.4)", () =
     expect(synced.slides[1]!.agenda!.map((item) => item.minutes)).toEqual([10, 15]);
   });
 
+  test('an agenda written after the rename matches the same way', () => {
+    const synced = syncAgendaToStack(
+      deckWith([
+        { title: 'Short Response', minutes: 8 },
+        { title: 'Close reading', minutes: 16 },
+      ]),
+      STACK
+    );
+    expect(synced.slides[1]!.agenda!.map((item) => item.minutes)).toEqual([10, 15]);
+  });
+
   test('an item with no step keeps its own minutes; other slides are untouched', () => {
     const deck = deckWith([{ title: 'Gallery walk', minutes: 6 }, { title: 'Closing', minutes: 4 }]);
     const synced = syncAgendaToStack(deck, STACK);

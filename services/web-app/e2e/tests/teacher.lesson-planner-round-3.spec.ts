@@ -221,13 +221,14 @@ test.describe("Brian's round 3 (Oct 25)", () => {
     await expect(visitor.getByTestId('shared-in-yawp')).toContainText('Franklin’s self-made method');
     // 1.7: one heading per prompt, by type, under a plural heading.
     await expect(visitor.getByTestId('shared-prompts-heading')).toHaveText('The writing prompts');
-    await expect(visitor.getByTestId('shared-prompt-type')).toHaveText(['Class Starter', 'Daily Pages']);
+    await expect(visitor.getByTestId('shared-prompt-type')).toHaveText(['Class Starter', 'Short Response']);
     // 1.8: handouts from writing prompts say their type.
     await expect(visitor.getByTestId('shared-handout').first()).toContainText('Class Starter: The version of yourself');
-    await expect(visitor.getByTestId('shared-handout').nth(1)).toContainText('Daily Pages: Franklin’s self-made method');
+    await expect(visitor.getByTestId('shared-handout').nth(1)).toContainText('Short Response: Franklin’s self-made method');
     // 1.4: the agenda slide reads the stack's 15 and 10, not 16 and 8.
     const agenda = visitor.getByTestId('shared-slide').nth(1);
     await expect(agenda).toContainText('Close reading discussion (15 min)');
+    // The agenda is the deck's own saved text, written before the rename.
     await expect(agenda).toContainText('Daily Pages (10 min)');
     await stranger.close();
   });

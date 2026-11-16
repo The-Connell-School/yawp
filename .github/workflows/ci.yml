@@ -1212,6 +1212,7 @@ jobs:
             app/domain/lesson-planner/branding.test.ts \
             app/components/lesson-planner/stack-list.test.ts \
             app/domain/lesson-planner/step-types.test.ts \
+            app/domain/lesson-planner/short-response-rename.test.ts \
             app/domain/lesson-planner/stack-timing.test.ts \
             app/domain/lesson-planner/short-title.test.ts \
             app/domain/lesson-planner/fileable-material.test.ts \

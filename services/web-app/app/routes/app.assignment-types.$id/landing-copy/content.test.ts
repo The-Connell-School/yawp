@@ -6,6 +6,7 @@ import {
   type LandingPage,
   type LandingPageKey,
   enabledLandingPageKey,
+  landingPageHeading,
   landingPagePlainText,
   resolveLandingPageKey,
 } from './content';
@@ -40,6 +41,9 @@ describe('resolveLandingPageKey', () => {
     [{ title: 'Prewriting', kind: 'prewriting' }, 'prewriting'],
     [{ title: 'Thesis Statement', kind: 'thesis_statement' }, 'thesis-statement'],
     [{ title: 'Daily Pages', kind: 'daily_pages' }, 'daily-pages'],
+    // Renamed Short Response (Brian, Nov 15). The type's own title may follow.
+    [{ title: 'Short Response', kind: 'daily_pages' }, 'daily-pages'],
+    [{ title: ' short response ' }, 'daily-pages'],
     [{ title: 'AP History Essays', systemKey: 'ap_history_essay' }, 'ap-history'],
     [{ title: 'The 5-Paragraph Essay' }, 'five-paragraph-essay'],
     [{ title: 'ACT Writing Section ' }, 'act-writing'],
@@ -376,5 +380,34 @@ describe('every page', () => {
         }
       }
     }
+  });
+});
+
+// Brian, Nov 15: Daily Pages is now Short Response. Class Starter and Exit
+// Ticket took over the daily writing, so the old name confuses teachers.
+describe('Short Response (previously Daily Pages)', () => {
+  const shortResponse = LANDING_PAGES['daily-pages'];
+
+  test('the description is Brian’s, word for word', () => {
+    expect(paragraphs(shortResponse.description)).toEqual([
+      'Students write one or two paragraphs that argue, explain, analyze, or reflect on a specific passage, question, or topic. More than a Class Starter, less than an essay.',
+    ]);
+  });
+
+  test('the page never says Daily Pages', () => {
+    expect(landingPagePlainText(shortResponse)).not.toMatch(/daily pages/i);
+    expect(shortResponse.libraryNote ?? '').not.toMatch(/daily pages/i);
+  });
+
+  test('the heading reads Short Response while the type is still titled Daily Pages', () => {
+    expect(landingPageHeading('daily-pages', 'Daily Pages')).toBe('Short Response');
+    expect(landingPageHeading('daily-pages', ' daily pages ')).toBe('Short Response');
+    expect(landingPageHeading('daily-pages', 'Short Response')).toBe('Short Response');
+  });
+
+  test('a title a school chose, and every other page, is left alone', () => {
+    expect(landingPageHeading('daily-pages', 'Friday Journal')).toBe('Friday Journal');
+    expect(landingPageHeading('class-starter', 'Class Starter')).toBe('Class Starter');
+    expect(landingPageHeading(null, 'Daily Pages')).toBe('Daily Pages');
   });
 });

@@ -84,7 +84,7 @@ test.describe.serial('the teacher chooses the assignment type on Create', () => 
     await card.getByTestId('create-as-other-type').click();
     const options = page.getByTestId('create-as-option');
     await expect(options).toHaveCount(1);
-    await expect(options.first()).toHaveText('Daily Pages');
+    await expect(options.first()).toHaveText('Short Response');
     await expect(options.first()).toHaveAttribute('href', new RegExp(`^/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}\\?`));
     await expect(options.first()).toHaveAttribute('href', /newPrompt=what\+do\+you\+already\+think/);
 

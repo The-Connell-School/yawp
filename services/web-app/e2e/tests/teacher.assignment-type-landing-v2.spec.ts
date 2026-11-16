@@ -65,6 +65,42 @@ test.describe.serial('Assignment type landing pages (v2)', () => {
     );
   });
 
+  // Brian, Nov 15: Daily Pages is now Short Response. The seeded type is still
+  // titled Daily Pages, as it is in production, and the page must not say so.
+  test('Short Response (previously Daily Pages): the new name and description, and no "Daily Pages" on the page', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await setFeatureFlag('assignment-type-landing-v2', true);
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(
+      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+    );
+
+    await expect(
+      page.getByRole('heading', { name: 'Short Response', level: 1 })
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        'Students write one or two paragraphs that argue, explain, analyze, or reflect on a specific passage, question, or topic. More than a Class Starter, less than an essay.'
+      )
+    ).toBeVisible();
+
+    // Open what is closed on arrival, so its copy is on the page too.
+    await page
+      .getByTestId('landing-section-how-it-works')
+      .getByRole('button', { name: 'Show How it works' })
+      .click();
+    await page.getByRole('button', { name: /Prompt Library/i }).click();
+    await expect(page.getByPlaceholder('Search prompts')).toBeVisible();
+
+    // The page itself, not the app shell around it.
+    await expect(page.locator('[data-tour-variant="daily_pages"]')).not.toContainText(
+      /daily pages/i
+    );
+  });
+
   test('Pre-Writing: boxed sections in order, How to Teach It open, the Yawp! philosophy box, nothing loose', async ({
     page,
     e2eContext,

@@ -22,11 +22,11 @@ describe('stackTiming', () => {
     expect(timing.leftover).toBe(0);
   });
 
-  test('writing: 10 of 50 minutes is 20%, from Class Starter + Daily Pages', () => {
+  test('writing: 10 of 50 minutes is 20%, from Class Starter + Short Response', () => {
     const timing = stackTiming(DAY_ONE, 50);
     expect(timing.writingMinutes).toBe(10);
     expect(timing.writingPercent).toBe(20);
-    expect(timing.writingSources).toBe('Class Starter · Daily Pages');
+    expect(timing.writingSources).toBe('Class Starter · Short Response');
   });
 
   test('writing % is over the planned total when the stack runs longer', () => {

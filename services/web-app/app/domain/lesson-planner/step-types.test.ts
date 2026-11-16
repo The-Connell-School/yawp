@@ -44,6 +44,7 @@ describe('isWritingStep: set from Yawp!, never by the teacher', () => {
     expect(isWritingStep({ kind: 'step', stepType: 'class_starter' })).toBe(true);
     expect(isWritingStep({ kind: 'step', stepType: 'daily_pages' })).toBe(true);
     expect(step('Daily Pages', 'Ten minutes, any prompt.')).toBe(true);
+    expect(step('Short Response', 'Ten minutes, any prompt.')).toBe(true);
     expect(step('Thesis workshop')).toBe(true);
     expect(step('Exit ticket')).toBe(true);
     expect(step('Five-paragraph essay: draft the body')).toBe(true);

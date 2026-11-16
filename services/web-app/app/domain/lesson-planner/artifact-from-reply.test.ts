@@ -68,10 +68,10 @@ describe("class starters and Daily Pages go in the stack (Brian's review, B1)", 
     expect(material!.title.startsWith('Class Starter:')).toBe(true);
   });
 
-  test('files a Daily Pages reflection as Daily Pages', () => {
+  test('files a Daily Pages reflection as a Short Response', () => {
     const material = artifactFromAssistantReply(reply, 'dp:2');
     expect(material!.kind).toBe('daily-pages');
-    expect(material!.title.startsWith('Daily Pages:')).toBe(true);
+    expect(material!.title.startsWith('Short Response:')).toBe(true);
   });
 
   test('gives every prompt its own slot, so three options are three pieces', () => {
