@@ -25,6 +25,7 @@ type CommentProps = Comment & {
   onResponseAdded?: (commentId: string, response: unknown) => void;
   onArchiveChange?: (commentId: string, archivedAt: Date | null) => void;
   autoFocusReply?: boolean;
+  initialResolvedExpanded?: boolean;
 };
 
 export const Comment = ({
@@ -36,6 +37,7 @@ export const Comment = ({
   onResponseAdded,
   onArchiveChange,
   autoFocusReply = false,
+  initialResolvedExpanded = false,
   ...comment
 }: CommentProps) => {
   const resolvedTestIdPrefix =
@@ -52,6 +54,7 @@ export const Comment = ({
         testIdPrefix={
           layout === 'margin' ? 'margin-comment-resolved' : 'comments-sheet-resolved'
         }
+        initialExpanded={initialResolvedExpanded}
         onDelete={onDelete}
         onResponseAdded={onResponseAdded}
         onArchiveChange={onArchiveChange}

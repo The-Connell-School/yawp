@@ -8,6 +8,7 @@ type Props = CommentType & {
   readOnly?: boolean;
   surface?: 'margin' | 'sheet';
   testIdPrefix?: string;
+  initialExpanded?: boolean;
   onDelete?: (commentId: string) => void;
   onResponseAdded?: (commentId: string, response: unknown) => void;
   onArchiveChange?: (commentId: string, archivedAt: Date | null) => void;
@@ -16,9 +17,10 @@ type Props = CommentType & {
 export function MarginCommentResolvedRow({
   surface = 'margin',
   testIdPrefix = 'margin-comment-resolved',
+  initialExpanded = false,
   ...props
 }: Props) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(initialExpanded);
   const authorUser = (
     props.membership as { user?: { name: string | null; email: string | null } }
   )?.user;
