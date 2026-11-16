@@ -600,7 +600,7 @@ describe('The step pages’ own lesson row (Kevin, Nov 5; Brian, Nov 6: deck and
     open(hide);
     expect(root.querySelector('[data-testid="yawp-lesson"]')).toBeNull();
     expect(root.querySelector('[data-testid="how-to-teach-preview"]')?.textContent).toContain(
-      'Lesson 2 of the Thesis-Driven Essay course'
+      'the first step of any major essay assignment'
     );
   });
 });

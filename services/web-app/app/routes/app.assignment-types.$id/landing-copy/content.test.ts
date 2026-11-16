@@ -189,6 +189,9 @@ describe("Brian's pages, word for word", () => {
   });
 
   test('Pre-Writing (Kevin and Brian, Nov 11)', () => {
+    expect(paragraphs(section('prewriting', 'how-to-teach-it').blocks)).toEqual([
+      'Pre-writing is the first step of any major essay assignment. Download the slide deck, and watch the short tutorial video before you teach it.',
+    ]);
     expect(page('prewriting').description).toEqual([
       {
         type: 'paragraph',
@@ -329,7 +332,7 @@ describe('every page', () => {
 
   describe('How to Teach It on the step pages (Kevin, Nov 5; not Brian’s copy)', () => {
     test.each([
-      ['prewriting', 'pre-writing', 'Pre-writing is Lesson 2 of the Thesis-Driven Essay course'],
+      ['prewriting', 'pre-writing', 'Pre-writing is the first step of any major essay assignment'],
       ['thesis-statement', 'thesis-statement', 'Developing a thesis statement is Lesson 3 of the Thesis-Driven Essay course'],
     ] as const)('%s opens with How to Teach It and its lesson', (key, slug, lead) => {
       const sections = page(key).sections;

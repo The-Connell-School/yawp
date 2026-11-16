@@ -1,5 +1,14 @@
 import { test, expect } from '@playwright/test';
 
+test('Pre-writing is the first step of any major essay, including the collapsed preview', async ({ page }) => {
+  await page.goto('/e2e/fixtures/brian-fixes/index.html?landing=prewriting');
+  const box = page.getByTestId('how-to-teach-spotlight');
+  await expect(box).toContainText('Pre-writing is the first step of any major essay assignment.');
+  await expect(box).not.toContainText('Lesson 2 of the Thesis-Driven Essay course');
+  await page.getByRole('button', { name: 'Hide How to Teach It', exact: true }).click();
+  await expect(page.getByTestId('how-to-teach-preview')).toContainText('the first step of any major essay assignment');
+});
+
 test('Class Starter homepage names exactly three grading bands', async ({ page }) => {
   await page.goto('/e2e/fixtures/brian-fixes/index.html?landing=class-starter');
   await page.getByRole('button', { name: 'Show How it works', exact: true }).click();

@@ -245,7 +245,7 @@ const PREWRITING: LandingPage = {
       heading: 'How to Teach It',
       blocks: [
         p(
-          'Pre-writing is Lesson 2 of the Thesis-Driven Essay course. Download the slide deck, and watch the short tutorial video before you teach it.'
+          'Pre-writing is the first step of any major essay assignment. Download the slide deck, and watch the short tutorial video before you teach it.'
         ),
         { type: 'lesson', slug: 'pre-writing' },
       ],
