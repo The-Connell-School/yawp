@@ -114,9 +114,36 @@ describe('The Thesis-Driven Essay course', () => {
     }
   });
 
+  test('the first lesson hands out the rubric and a sample essay (Michael, Nov 16); no other lesson has handouts', () => {
+    expect(THESIS_ESSAY_COURSE.map((lesson) => lesson.handouts.map((handout) => handout.label))).toEqual([
+      ['Rubric', 'Sample essay'],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+    ]);
+    expect(THESIS_ESSAY_COURSE[0]!.handouts.map((handout) => handout.fileName)).toEqual([
+      'Yawp! Thesis-Driven Essay Rubric.pdf',
+      'Sample Essay - Bored in the USA.pdf',
+    ]);
+  });
+
+  test('every handout is a real PDF in public/', () => {
+    for (const handout of THESIS_ESSAY_COURSE.flatMap((lesson) => lesson.handouts)) {
+      const path = publicFile(handout.href);
+      expect(handout.href.endsWith('.pdf')).toBe(true);
+      expect(handout.fileName.endsWith('.pdf')).toBe(true);
+      expect(readFileSync(path).subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    }
+  });
+
   test('no file is linked twice', () => {
     const hrefs = THESIS_ESSAY_COURSE.flatMap((lesson) => [
       ...lesson.decks.map((deck) => deck.href),
+      ...lesson.handouts.map((handout) => handout.href),
       ...(lesson.lessonPlan ? [lesson.lessonPlan.href] : []),
       ...lesson.tutorials.flatMap((tutorial) => [tutorial.src, tutorial.poster, tutorial.captions]),
     ]);

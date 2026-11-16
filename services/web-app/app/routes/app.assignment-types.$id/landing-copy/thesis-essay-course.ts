@@ -15,6 +15,10 @@
 // his slides cropped off, and the captions are Loom's, made by machine. To
 // update one, replace its three files and its length in seconds.
 //
+// The first lesson also hands out Yawp!'s grading rubric for the essay and a
+// sample essay, "Bored in the USA" (Michael, Nov 16), as PDFs beside the
+// decks. To update one, replace the file and keep its name.
+//
 // Body paragraphs takes two class periods: the body paragraphs deck, then the
 // supporting quotes deck ("Step four, continued").
 
@@ -33,6 +37,11 @@ export type CourseFile = {
 
 export type CourseDeck = CourseFile & {
   /** "Slide deck", or what sets a lesson's second deck apart. */
+  label: string;
+};
+
+export type CourseHandout = CourseFile & {
+  /** What it is, as the link reads: "Rubric", "Sample essay". */
   label: string;
 };
 
@@ -55,6 +64,8 @@ export type CourseLesson = {
   title: string;
   lessonPlan: CourseFile | null;
   decks: CourseDeck[];
+  /** PDFs for the class, listed under the deck(s). */
+  handouts: CourseHandout[];
   /** Brian's tutorial video(s) for the teacher. None: no "Watch tutorial". */
   tutorials: CourseTutorial[];
   /**
@@ -71,6 +82,12 @@ const plan = (file: string, fileName: string): CourseFile => ({
 });
 
 const deck = (file: string, fileName: string, label = 'Slide deck'): CourseDeck => ({
+  href: `${DIR}/${file}`,
+  fileName,
+  label,
+});
+
+const handout = (file: string, fileName: string, label: string): CourseHandout => ({
   href: `${DIR}/${file}`,
   fileName,
   label,
@@ -96,6 +113,10 @@ export const THESIS_ESSAY_COURSE: CourseLesson[] = [
       'Lesson Plan - Introduce Students to Yawp!.pdf'
     ),
     decks: [deck('01-introduction-to-yawp.pptx', 'Introduction to Yawp!.pptx')],
+    handouts: [
+      handout('01-thesis-driven-essay-rubric.pdf', 'Yawp! Thesis-Driven Essay Rubric.pdf', 'Rubric'),
+      handout('01-sample-essay-bored-in-the-usa.pdf', 'Sample Essay - Bored in the USA.pdf', 'Sample essay'),
+    ],
     tutorials: [
       tutorial('01-introducing-the-thesis-driven-essay', 'Introducing the thesis-driven essay', 788),
     ],
@@ -105,6 +126,7 @@ export const THESIS_ESSAY_COURSE: CourseLesson[] = [
     title: 'Pre-writing',
     lessonPlan: plan('02-lesson-plan-pre-writing.pdf', 'Lesson Plan - Pre-writing.pdf'),
     decks: [deck('02-pre-writing.pptx', 'Pre-Writing.pptx')],
+    handouts: [],
     tutorials: [tutorial('02-pre-writing', 'Pre-writing', 827)],
     yawpLesson: 'pre-writing',
   },
@@ -117,6 +139,7 @@ export const THESIS_ESSAY_COURSE: CourseLesson[] = [
     decks: [
       deck('03-develop-your-thesis-statement.pptx', 'Develop Your Thesis Statement.pptx'),
     ],
+    handouts: [],
     tutorials: [tutorial('03-thesis-statement', 'Developing a thesis statement', 768)],
     yawpLesson: 'thesis-statement',
   },
@@ -127,6 +150,7 @@ export const THESIS_ESSAY_COURSE: CourseLesson[] = [
       'Lesson Plan - Introduction Paragraph.pdf'
     ),
     decks: [deck('04-introduction-paragraph.pptx', 'Introduction Paragraph.pptx')],
+    handouts: [],
     tutorials: [tutorial('04-introduction-paragraph', 'Introduction paragraph', 636)],
     yawpLesson: 'introduction-paragraph',
   },
@@ -140,6 +164,7 @@ export const THESIS_ESSAY_COURSE: CourseLesson[] = [
       deck('05-body-paragraphs.pptx', 'Body Paragraphs.pptx'),
       deck('05-supporting-quotes.pptx', 'Supporting Quotes.pptx', 'Supporting quotes'),
     ],
+    handouts: [],
     tutorials: [
       tutorial('05-body-paragraphs', 'Body paragraphs', 651),
       tutorial('05-supporting-quotes', 'Supporting quotes', 297),
@@ -153,6 +178,7 @@ export const THESIS_ESSAY_COURSE: CourseLesson[] = [
       'Lesson Plan - Conclusion Paragraph.pdf'
     ),
     decks: [deck('06-conclusion-paragraph.pptx', 'Conclusion Paragraph.pptx')],
+    handouts: [],
     tutorials: [tutorial('06-conclusion-paragraph', 'The conclusion', 567)],
     yawpLesson: 'conclusion-paragraph',
   },
@@ -160,6 +186,7 @@ export const THESIS_ESSAY_COURSE: CourseLesson[] = [
     title: 'Titling your essay',
     lessonPlan: null,
     decks: [deck('07-titles-and-formatting.pptx', 'Titles and Formatting.pptx')],
+    handouts: [],
     tutorials: [tutorial('07-titles-and-formatting', 'Titles and formatting', 336)],
     yawpLesson: null,
   },
@@ -167,6 +194,7 @@ export const THESIS_ESSAY_COURSE: CourseLesson[] = [
     title: 'Review my essay',
     lessonPlan: null,
     decks: [],
+    handouts: [],
     tutorials: [],
     yawpLesson: null,
   },
