@@ -21,19 +21,19 @@ test.describe.serial('Daily Pages about section', () => {
     );
 
     await expect(
-      page.getByRole('heading', { name: 'About Daily Pages' })
+      page.getByRole('heading', { name: 'About Short Response' })
     ).toBeVisible();
     await expect(
       page.getByText('Daily Pages is short academic paragraph practice.')
     ).toBeVisible();
 
     for (const section of [
-      'What a Daily Pages entry is',
+      'What a Short Response is',
       'What it is not',
       'How it is graded',
       'Using it with a class',
       'Writing your own prompt',
-      'How the Daily Pages library works',
+      'How the Short Response library works',
     ]) {
       await expect(page.getByRole('button', { name: section })).toHaveAttribute(
         'aria-expanded',
@@ -117,7 +117,7 @@ test.describe.serial('Daily Pages about section', () => {
     );
 
     await page
-      .getByRole('button', { name: 'How the Daily Pages library works' })
+      .getByRole('button', { name: 'How the Short Response library works' })
       .click();
 
     await expect(page.getByText('Browse the prompts below')).toBeVisible();
@@ -137,7 +137,7 @@ test.describe.serial('Daily Pages about section', () => {
     );
 
     await expect(
-      page.getByRole('heading', { name: 'About Daily Pages' })
+      page.getByRole('heading', { name: 'About Short Response' })
     ).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Writing your own prompt' })

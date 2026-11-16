@@ -29,13 +29,22 @@ function words(text: string): Set<string> {
   );
 }
 
+/**
+ * Names a type went by before, so a deck written then still finds its steps.
+ * Short Response was Daily Pages until Nov 15 (Brian).
+ */
+const FORMER_TYPE_NAMES: Partial<Record<StepType, string[]>> = {
+  daily_pages: ['daily pages'],
+};
+
 /** How well an agenda line names a step: shared words, and its type said out loud. */
 function score(item: string, step: AgendaStep): number {
   const said = words(item);
   let shared = 0;
   for (const word of words(step.title)) if (said.has(word)) shared += 1;
-  const type = STEP_TYPE_LABELS[step.type].toLowerCase();
-  return shared + (item.toLowerCase().includes(type) ? 2 : 0);
+  const line = item.toLowerCase();
+  const names = [STEP_TYPE_LABELS[step.type].toLowerCase(), ...(FORMER_TYPE_NAMES[step.type] ?? [])];
+  return shared + (names.some((name) => line.includes(name)) ? 2 : 0);
 }
 
 /** Each agenda line's step, or null. A step answers one line at most. */

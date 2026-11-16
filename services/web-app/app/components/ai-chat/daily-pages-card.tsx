@@ -128,7 +128,7 @@ export function DailyPagesCard({
               data-testid="daily-pages-replace"
             >
               <Repeat size={14} />
-              Replace existing {isStarter ? 'class starter' : 'Daily Pages prompt'} with
+              Replace existing {isStarter ? 'class starter' : 'Short Response prompt'} with
               this one
             </Button>
           ) : null}
@@ -143,7 +143,7 @@ export function DailyPagesCard({
               )}
             >
               {onReplace
-                ? `Create ${targetLabel === 'Class Starter' ? 'class starter' : 'Daily Pages'} assignment`
+                ? `Create ${targetLabel === 'Class Starter' ? 'class starter' : 'Short Response'} assignment`
                 : `Create this ${targetLabel} exercise for your class`}
             </Link>
           </Button>

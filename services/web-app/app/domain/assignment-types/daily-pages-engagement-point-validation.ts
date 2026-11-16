@@ -24,7 +24,7 @@ export function dailyPagesEngagementPointValueError({
     return null;
   }
   if (pointValue < MIN_DAILY_PAGES_ENGAGEMENT_POINT_TOTAL) {
-    return `Point value must be at least ${MIN_DAILY_PAGES_ENGAGEMENT_POINT_TOTAL} for Daily Pages engagement grading.`;
+    return `Point value must be at least ${MIN_DAILY_PAGES_ENGAGEMENT_POINT_TOTAL} for Short Response engagement grading.`;
   }
   return null;
 }

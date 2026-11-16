@@ -191,7 +191,7 @@ export function lessonEmail({
 export const POST_ITEMS: Array<{ item: ShareItem; label: string }> = [
   { item: 'deck', label: 'Slide deck' },
   { item: 'handouts', label: 'Lesson handouts' },
-  { item: 'daily-pages', label: 'Daily Pages prompt' },
+  { item: 'daily-pages', label: 'Short Response prompt' },
 ];
 
 export function parseShareItems(raw: string | null | undefined): ShareItem[] {
@@ -291,6 +291,9 @@ export function writingPromptsHeading(count: number): string {
 /** A handout from a writing prompt is headed by its type (Brian's round 3, 1.8). */
 export function handoutHeading(title: string, type: string | null): string {
   if (!type || title.toLowerCase().startsWith(type.toLowerCase())) return title;
+  // Short Response was Daily Pages until Nov 15 (Brian): a title saved then
+  // carries the old name, which the new one replaces rather than stacks on.
+  if (type === 'Short Response') title = title.replace(/^Daily Pages\s*:\s*/i, '');
   return `${type}: ${title}`;
 }
 
@@ -307,6 +310,8 @@ export function inYawpLead(audience: ShareAudience): string {
 /** The Yawp! assignment types a share page shows as a prompt. */
 const PROMPT_TYPES = new Set([
   'Class Starter',
+  'Short Response',
+  // What the type was called before Nov 15; a step may still carry it.
   'Daily Pages',
   'Exit Ticket',
   'Thesis Essay',

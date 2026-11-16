@@ -13,12 +13,12 @@ const ID = String.raw`(?:FW-\d+|sf-[a-z0-9]+(?:-[a-z0-9]+)*)`;
 
 /** "_Class Starter prompt FW-021_", the footer filed starters used to carry. */
 const FOOTER = new RegExp(
-  String.raw`\n*^_?(?:Class Starter|Daily Pages)\s+prompt\s+${ID}_?\s*$`,
+  String.raw`\n*^_?(?:Class Starter|Daily Pages|Short Response)\s+prompt\s+${ID}_?\s*$`,
   'gim'
 );
 /** "Daily Pages prompt FW-001: " — the label and id in front of a quote. */
 const LABELLED = new RegExp(
-  String.raw`\b(?:Class Starter|Daily Pages)\s+prompt\s+${ID}\s*[:—–-]?\s*`,
+  String.raw`\b(?:Class Starter|Daily Pages|Short Response)\s+prompt\s+${ID}\s*[:—–-]?\s*`,
   'gi'
 );
 /** "prompt FW-093" on its own: the prompt stays, the code goes. */

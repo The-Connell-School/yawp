@@ -132,7 +132,7 @@ export const LESSON_PLANNER_CATALOG_TOOLS: ReporterTool[] = [
   {
     name: 'search_short_form_prompts',
     description:
-      "Search Yawp!'s Daily Pages prompt library — short prompts written to be GRADED. Every one asks for the backing as well as the opinion (a reason, a case, a quotation, a counterexample) and says what a finished answer looks like, because Daily Pages is scored on Depth and Development of Thought. Filter by the text or unit the class is reading, theme, grade band, the shape of thinking the prompt sets up, cognitive move, or whether it needs a source text at all. Use this whenever the lesson calls for a written response a student will be graded on — usually after the reading or before a discussion, not at the bell. Put the prompt id you chose in the `id:` line of its yawp-daily-pages block, never in prose. For an ungraded warm-up, call search_daily_pages_prompts instead.",
+      "Search Yawp!'s Short Response prompt library — short prompts written to be GRADED. Every one asks for the backing as well as the opinion (a reason, a case, a quotation, a counterexample) and says what a finished answer looks like, because Daily Pages is scored on Depth and Development of Thought. Filter by the text or unit the class is reading, theme, grade band, the shape of thinking the prompt sets up, cognitive move, or whether it needs a source text at all. Use this whenever the lesson calls for a written response a student will be graded on — usually after the reading or before a discussion, not at the bell. Put the prompt id you chose in the `id:` line of its yawp-daily-pages block, never in prose. For an ungraded warm-up, call search_daily_pages_prompts instead.",
     input_schema: {
       type: 'object',
       properties: {
@@ -251,7 +251,7 @@ export const LESSON_PLANNER_CATALOG_TOOLS: ReporterTool[] = [
   {
     name: 'list_assignment_types',
     description:
-      'List the assignment types this teacher can actually assign to a class (Daily Pages, the course essays their school has enabled). Use it to end a lesson on the real Yawp! assignment the students will write.',
+      'List the assignment types this teacher can actually assign to a class (Short Response, the course essays their school has enabled). Use it to end a lesson on the real Yawp! assignment the students will write.',
     input_schema: {
       type: 'object',
       properties: {},
@@ -330,7 +330,7 @@ async function handleCatalogToolCall(
         libraryHref: '/app/assignment-types',
         note: prompts.length
           ? 'Quote the prompt exactly, and put its id only in the `id:` line of its yawp-daily-pages block.'
-          : 'No graded short-form prompt matches those filters. Loosen them and search again, or write one yourself and put it in a yawp-daily-pages block with kind: daily-pages. Never substitute a freewrite prompt from search_daily_pages_prompts: those are written to be ungraded, and Daily Pages would score one for depth it never asked for. Do not tell the teacher the library came up empty.',
+          : 'No graded short-form prompt matches those filters. Loosen them and search again, or write one yourself and put it in a yawp-daily-pages block with kind: daily-pages. Never substitute a freewrite prompt from search_daily_pages_prompts: those are written to be ungraded, and a Short Response would score one for depth it never asked for. Do not tell the teacher the library came up empty.',
       };
     }
     case 'list_writing_lessons': {

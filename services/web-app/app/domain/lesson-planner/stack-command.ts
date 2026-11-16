@@ -156,7 +156,7 @@ export function checkOps(
   line: string
 ): StackOp[] {
   const byId = new Map(steps.map((step) => [step.id, step]));
-  const namesWriting = /\b(writ|daily pages|class starter|starter|exit ticket|thesis|journal)/i.test(line);
+  const namesWriting = /\b(writ|daily pages|short response|class starter|starter|exit ticket|thesis|journal)/i.test(line);
   return ops.flatMap((op): StackOp[] => {
     const step = byId.get(op.stepId);
     if (!step) return [];
@@ -183,7 +183,7 @@ export const STACK_COMMAND_SYSTEM = [
   '  {"op":"remove","stepId":"…"}',
   '- Change only what the teacher asked for. Never touch another step. Never cut or shorten a writing step unless the teacher names it.',
   '- pieces: when the teacher asks for something new ("a quick pair activity after the read aloud"), one to three new pieces, each {"title","minutes","type","text"} with type one of class_starter, activity, context, read_aloud, daily_pages, thesis_essay, closing. Do not add them to ops; the teacher adds the one they want.',
-  '- writing: on any piece where students write (an exit ticket, a class starter, Daily Pages, a reflection, a pre-write, a quick write), add "writing": one of exit_ticket, class_starter, daily_pages, quick_write, and make "text" exactly what students are asked, nothing else. It is created as a Yawp! assignment the teacher sends to the class. Never set students writing on a sticky note, an index card or scrap paper.',
+  '- writing: on any piece where students write (an exit ticket, a class starter, a Short Response, a reflection, a pre-write, a quick write), add "writing": one of exit_ticket, class_starter, daily_pages, quick_write, and make "text" exactly what students are asked, nothing else. It is created as a Yawp! assignment the teacher sends to the class. Never set students writing on a sticky note, an index card or scrap paper.',
   '- toPlanner: true, with no ops and no pieces, when the line is a question or a bigger change that belongs in the planner chat (why something works, rethink the lesson). Then reply "That’s one for the planner."',
   '- Write the product name as Yawp!. Never write a library prompt id.',
 ].join('\n');

@@ -47,7 +47,7 @@ type Meta = {
 const STUDENT_KINDS = new Set(['class-starter', 'daily-pages', 'exit-ticket', 'handout', 'sample']);
 const TITLE_MINUTES = /\s*\(\s*\d+[^)]*min[^)]*\)\s*$/i;
 // The type chip already says what it is; the title says which one.
-const TYPE_PREFIX = /^(?:Class Starter|Daily Pages|Exit ticket|Writing practice)\s*:\s*/i;
+const TYPE_PREFIX = /^(?:Class Starter|Daily Pages|Short Response|Exit ticket|Writing practice)\s*:\s*/i;
 
 function excerptOf(markdown: string): string {
   // Clean words, never raw marks (Kevin, Oct 25, note 7).

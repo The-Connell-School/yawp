@@ -346,7 +346,7 @@ describe('the words a model reaches for when it names the exercise', () => {
     }
   );
 
-  test.each(['reflection', 'Daily Page', 'dp'])(
+  test.each(['reflection', 'Daily Page', 'dp', 'Short Response', 'short-response', 'short responses'])(
     'reads "%s" as Daily Pages',
     (written) => {
       const { exercises } = readDailyPagesExercises(

@@ -2852,7 +2852,7 @@ test.describe('Yawp! Lesson Planner', () => {
       'data-exercise-kind',
       'daily-pages'
     );
-    await expect(reflection).toContainText('Daily Pages');
+    await expect(reflection).toContainText('Short Response');
     // A reflection after the reading is not a warm-up, and the card must not
     // call it one: that is the very line the two exercises are split along.
     await expect(reflection).not.toContainText(/warm-up/i);

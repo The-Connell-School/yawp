@@ -17,7 +17,7 @@ test.describe.serial('Daily Pages short-form prompt library', () => {
     );
 
     await expect(
-      page.getByRole('heading', { name: 'About Daily Pages' })
+      page.getByRole('heading', { name: 'About Short Response' })
     ).toBeVisible();
     await expect(
       page.getByRole('heading', { name: 'How Class Starter works' })
@@ -74,7 +74,7 @@ test.describe.serial('Daily Pages short-form prompt library', () => {
     );
 
     await expect(
-      page.getByRole('heading', { name: 'About Daily Pages' })
+      page.getByRole('heading', { name: 'About Short Response' })
     ).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: /Prompt Library/i })

@@ -228,7 +228,7 @@ test.describe("Brian's round 4 (Oct 28)", () => {
     const visitor = await stranger.newPage();
     await visitor.goto(url);
     await expect(visitor.getByTestId('shared-prompts-heading')).toHaveText('The writing prompts');
-    await expect(visitor.getByTestId('shared-prompt-type')).toHaveText(['Class Starter', 'Daily Pages', 'Exit Ticket']);
+    await expect(visitor.getByTestId('shared-prompt-type')).toHaveText(['Class Starter', 'Short Response', 'Exit Ticket']);
     await expect(visitor.getByTestId('shared-prompt').nth(2)).toContainText('is Gatsby telling the truth?');
     await stranger.close();
   });

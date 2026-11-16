@@ -20,7 +20,7 @@ describe("stackCreateLink (Brian's run 2, A5)", () => {
     expect(link?.href).toContain('back=stack');
   });
 
-  test('a Daily Pages prompt goes to Daily Pages, without any old id footer', () => {
+  test('a Short Response prompt goes to Short Response, without any old id footer', () => {
     const link = stackCreateLink({
       kind: 'daily-pages',
       content: 'Explain your claim.\n\n_Daily Pages prompt sf-ev-03_',
@@ -29,7 +29,7 @@ describe("stackCreateLink (Brian's run 2, A5)", () => {
       typeIds,
       conversationId: 'plan-1',
     });
-    expect(link?.label).toBe('Create this Daily Pages prompt in Yawp!');
+    expect(link?.label).toBe('Create this Short Response prompt in Yawp!');
     expect(link?.href).toContain('/app/assignment-types/dp-type?');
     expect(decodeURIComponent(link!.href)).not.toContain('sf-ev-03');
   });
@@ -217,7 +217,7 @@ describe("the teacher's say on the type (Kevin, Nov 6): a smart default, and eve
     // The alternatives: every other prompt type, the same prompt, the same way back.
     expect(link.options!.map((option) => [option.type, option.name])).toEqual([
       ['class-starter', 'Class Starter'],
-      ['daily-pages', 'Daily Pages'],
+      ['daily-pages', 'Short Response'],
       ['thesis-statement', 'Thesis Statement'],
     ]);
     for (const option of link.options!) {

@@ -1,4 +1,5 @@
-// Teacher-facing Daily Pages copy. Grading claims match the engagement rubric.
+// Teacher-facing copy for Short Response, the type that was Daily Pages until
+// Nov 15. Grading claims match the engagement rubric.
 
 import {
   DAILY_PAGES_ENGAGEMENT_TIER_LABELS,
@@ -6,12 +7,12 @@ import {
 } from '~/domain/assignment-types/daily-pages-engagement-rubric';
 import { dailyPagesEngagementTierBands } from '~/domain/assignment-types/daily-pages-engagement-tier-bands';
 
-export const ABOUT_HEADING = 'About Daily Pages';
+export const ABOUT_HEADING = 'About Short Response';
 
 export const ABOUT_LEDE =
-  'Daily Pages is low-stakes writing practice: bell ringers, exit tickets, journal reflections. The grading assistant measures engagement — whether students showed up, put real thoughts on the page, and built a relationship with writing. It never measures grammar, spelling, syntax, organization, polish, or correctness of the content.';
+  'In a Short Response, students write one or two paragraphs that argue, explain, analyze, or reflect on a specific passage, question, or topic. More than a Class Starter, less than an essay. The grading assistant measures engagement — whether students showed up, put real thoughts on the page, and built a relationship with writing. It never measures grammar, spelling, syntax, organization, polish, or correctness of the content.';
 
-export const WHAT_IT_IS_HEADING = 'What a Daily Pages entry is';
+export const WHAT_IT_IS_HEADING = 'What a Short Response is';
 
 export const WHAT_IT_IS: string[] = [
   'Open-ended writing tied to your prompt (or to the act of writing itself when no prompt is attached).',
@@ -27,7 +28,7 @@ export const WHAT_IT_IS_NOT: { claim: string; detail: string }[] = [
   {
     claim: 'Not a formal essay paragraph.',
     detail:
-      'Class Starter and Daily Pages both value engagement, but Daily Pages is the assignment type schools use for daily engagement grading at scale. For open-ended “start class” writing with the same rubric, use Class Starter.',
+      'Class Starter and Short Response both value engagement, but Short Response is the assignment type schools use for daily engagement grading at scale. For open-ended “start class” writing with the same rubric, use Class Starter.',
   },
   {
     claim: 'Not a reading check.',
@@ -37,7 +38,7 @@ export const WHAT_IT_IS_NOT: { claim: string; detail: string }[] = [
   {
     claim: 'Not a grammar exercise.',
     detail:
-      'Grammar and syntax are never scored or highlighted on Daily Pages.',
+      'Grammar and syntax are never scored or highlighted on Short Response.',
   },
 ];
 

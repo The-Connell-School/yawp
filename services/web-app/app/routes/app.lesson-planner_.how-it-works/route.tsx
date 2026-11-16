@@ -650,7 +650,7 @@ export default function LessonPlannerHowItWorksRoute() {
                   },
                   {
                     title: 'How much is writing',
-                    body: 'A meter shows how much of class students spend writing: class starters, exit tickets, Daily Pages, thesis work and reflections, in Yawp! or on paper. It is the one number everywhere, on what you send too.',
+                    body: 'A meter shows how much of class students spend writing: class starters, exit tickets, short responses, thesis work and reflections, in Yawp! or on paper. It is the one number everywhere, on what you send too.',
                   },
                   {
                     title: 'Change it in a line',
