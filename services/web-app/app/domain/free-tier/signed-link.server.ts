@@ -156,6 +156,8 @@ export type ConsumeLinkResult =
   | {
       ok: false;
       reason: 'invalid' | 'expired' | 'used' | 'purpose_mismatch' | 'superseded';
+      /** Set when a genuine token was already claimed, so the holder can sign in. */
+      applicationId?: string;
     };
 
 function parseSignedLinkToken(
@@ -369,7 +371,7 @@ export async function peekSignedLink(args: {
     ) {
       return { ok: false, reason: 'superseded' };
     }
-    return { ok: false, reason: 'used' };
+    return { ok: false, reason: 'used', applicationId: row.applicationId };
   }
   if (
     args.expectedPurpose === 'ADMIN_APPROVE' &&

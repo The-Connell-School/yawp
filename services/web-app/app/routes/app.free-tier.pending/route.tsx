@@ -49,6 +49,9 @@ import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate
 import { Button } from '~/components/ui/button';
 import { yawpE2eForwardShouldFail } from '~/domain/free-tier/e2e-stub.server';
 
+export const MANUAL_REVIEW_PENDING_COPY =
+  'Yawp! will review your request and email you when it is ready.';
+
 const FORWARD_ERROR_REASONS = new Set([
   'validation',
   'same_as_teacher',
@@ -464,7 +467,9 @@ export default function FreeTierPendingRoute() {
                 ? approvalV2.firstSentAt
                   ? `Sent to ${current.adminName} on ${approvalSentDate(approvalV2.firstSentAt)}.`
                   : `Your request to ${current.adminName} is queued.`
-                : 'We will email you when your request is ready.'}
+                : app?.status === 'MANUAL_REVIEW'
+                  ? MANUAL_REVIEW_PENDING_COPY
+                  : 'We will email you when your request is ready.'}
             </p>
             {app?.status === 'SENT' && current ? (
               <p className="text-sm text-muted-foreground">
@@ -554,6 +559,10 @@ export default function FreeTierPendingRoute() {
     >
       {pending && app?.status === 'SENT' ? (
         <p className="text-sm text-muted-foreground">Sent to {adminName}.</p>
+      ) : app?.status === 'MANUAL_REVIEW' ? (
+        <p className="text-sm text-muted-foreground">
+          {MANUAL_REVIEW_PENDING_COPY}
+        </p>
       ) : (
         <p className="text-sm text-muted-foreground">
           We will email you when your request is ready.

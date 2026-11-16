@@ -37,6 +37,13 @@ mock.module('~/domain/free-tier/approval-hooks.server', () => ({
     onApplicationRejected: rejected,
   }),
 }));
+mock.module('~/domain/free-tier/staff-approval-follow-up.server', () => ({
+  supersedePendingAdminRequests: async () => {},
+  sendStaffApprovalCongratulationsIfNeeded: async () => ({
+    ok: true as const,
+    skipped: true as const,
+  }),
+}));
 const { decideApplication, reopenApplication } =
   await import('~/utils/internal-free-tier-http.server');
 const { releaseBatch } = await import('~/domain/free-tier/service.server');

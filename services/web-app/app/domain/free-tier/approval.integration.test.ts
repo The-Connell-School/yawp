@@ -178,6 +178,81 @@ suite('approval queue and actions', () => {
     }
   });
 
+  test('staff approve sends one congratulations email and closes the pending admin request', async () => {
+    const saved = {
+      PRIMARY_APP_URL: process.env.PRIMARY_APP_URL,
+      FREE_TIER_LINK_HMAC_SECRET: process.env.FREE_TIER_LINK_HMAC_SECRET,
+      RESEND_API_KEY: process.env.RESEND_API_KEY,
+      RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
+      EMAIL_PROVIDER: process.env.EMAIL_PROVIDER,
+    };
+    process.env.PRIMARY_APP_URL = saved.PRIMARY_APP_URL || 'https://yawp.test';
+    process.env.FREE_TIER_LINK_HMAC_SECRET =
+      saved.FREE_TIER_LINK_HMAC_SECRET || 'integration-test-free-tier-link-secret-key';
+    delete process.env.RESEND_API_KEY;
+    delete process.env.RESEND_FROM_EMAIL;
+    process.env.EMAIL_PROVIDER = 'resend';
+    try {
+      const a = await makeApp('staff-approve-mail', 'MANUAL_REVIEW');
+      const approval = await prisma.freeTierAdminApproval.create({
+        data: {
+          applicationId: a.id,
+          adminName: 'Patel',
+          adminEmail: 'patel@other.edu',
+          status: 'PENDING',
+          emailCopyVersionHash: 'test',
+          needsManualFollowUp: true,
+        },
+      });
+      await prisma.freeTierApprovalDelivery.create({
+        data: {
+          approvalId: approval.id,
+          kind: 'teacher_followup',
+          sequence: 0,
+          state: 'QUEUED',
+          availableAt: new Date(),
+          payload: 'queued',
+        },
+      });
+      const res = await post(approveHttp, a.id, 'approve');
+      expect(res.status).toBe(200);
+      const row = await prisma.freeTierAdminApproval.findUniqueOrThrow({
+        where: { id: approval.id },
+      });
+      expect(row).toMatchObject({
+        status: 'SUPERSEDED',
+        needsManualFollowUp: false,
+        autoRemindersStopped: true,
+        stopReason: 'approved',
+        firstSentAt: null,
+        nextAutoReminderAt: null,
+        nextTeacherFollowUpAt: null,
+      });
+      expect(
+        await prisma.freeTierApprovalDelivery.findFirstOrThrow({
+          where: { approvalId: approval.id },
+        })
+      ).toMatchObject({ state: 'CANCELLED', error: 'approved' });
+      const logs = await prisma.freeTierEmailLog.findMany({
+        where: { applicationId: a.id, kind: 'congratulations', success: true },
+      });
+      expect(logs.map((log) => log.toEmail)).toEqual([a.email]);
+      const again = await post(approveHttp, a.id, 'approve');
+      expect(again.status).toBe(200);
+      expect((await again.json()).idempotent).toBe(true);
+      expect(
+        await prisma.freeTierEmailLog.count({
+          where: { applicationId: a.id, kind: 'congratulations', success: true },
+        })
+      ).toBe(1);
+    } finally {
+      for (const [name, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+    }
+  });
+
   test('approve does not spend another budget slot for an already-counted application', async () => {
     const previousEnv = process.env.FREE_TIER_BUDGET_ENVIRONMENT;
     const previousBudget = process.env.FREE_TIER_PREVIEW_BUDGET_USD;
