@@ -555,7 +555,9 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
       env={data.ENV}
       contrastPreference={contrastPreference}
     >
-      {data.devPanelEnabled && !data.internalImpersonation ? (
+      {data.devPanelEnabled &&
+      !data.internalImpersonation &&
+      location.pathname !== '/auth/login' ? (
         <DevPanelMount
           envBadge={data.devPanelEnvBadge}
           previewAccessGateEnabled={data.previewAccessGateEnabled}

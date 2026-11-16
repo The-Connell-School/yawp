@@ -17,6 +17,7 @@ type Props = {
   onDraftCommitted?: () => void;
   onDraftCancel?: () => void;
   autoFocusReplyCommentId?: string | null;
+  initialResolvedExpandedCommentId?: string | null;
 };
 
 export function MarginCommentsRail({
@@ -31,6 +32,7 @@ export function MarginCommentsRail({
   onDraftCommitted,
   onDraftCancel,
   autoFocusReplyCommentId,
+  initialResolvedExpandedCommentId,
 }: Props) {
   const { contentRoot, scrollRoot } = useEditorChrome();
 
@@ -73,6 +75,9 @@ export function MarginCommentsRail({
             onResponseAdded={onResponseAdded}
             onArchiveChange={onArchiveChange}
             autoFocusReply={autoFocusReplyCommentId === comment.id}
+            initialResolvedExpanded={
+              initialResolvedExpandedCommentId === comment.id
+            }
           />
         );
       }}

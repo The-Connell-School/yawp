@@ -1,0 +1,14 @@
+{
+  "baseUrl": "https://pr-963.preview.yawp.school",
+  "documentId": "previewdoceditv2qa0001",
+  "gradedDocumentId": "previewdoceditv2graded01",
+  "captures": [
+    "/agent/repos/yawp/artifacts/document-editor-v2-preview/01-student-desktop.png",
+    "/agent/repos/yawp/artifacts/document-editor-v2-preview/03-comments-margin.png",
+    "/agent/repos/yawp/artifacts/document-editor-v2-preview/04-teacher-view.png",
+    "/agent/repos/yawp/artifacts/document-editor-v2-preview/05-comments-reply-resolved.png",
+    "/agent/repos/yawp/artifacts/document-editor-v2-preview/06-mobile-390.png",
+    "/agent/repos/yawp/artifacts/document-editor-v2-preview/07-saving-state.png",
+    "/agent/repos/yawp/artifacts/document-editor-v2-preview/08-submitted-state.png"
+  ]
+}

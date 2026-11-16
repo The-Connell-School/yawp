@@ -29,7 +29,48 @@ const V2_ONLY_COMPONENTS = [
   'document-editor/editor-bar.tsx',
 ];
 
+const REPO_ROOT = join(import.meta.dir, '../../../../../..');
+
 describe('document editor v2 design contract', () => {
+  test('v2 capture fixture module is committed', () => {
+    const capture = join(
+      REPO_ROOT,
+      'services/web-app/app/domain/document-editor/document-editor-v2-capture.shared.ts'
+    );
+    expect(existsSync(capture)).toBe(true);
+    const text = readFileSync(capture, 'utf8');
+    expect(text).toContain('v2Capture');
+    expect(text).toContain('comments-reply-resolved');
+  });
+
+  test('preview document editor v2 QA constants are committed', () => {
+    const constants = join(
+      REPO_ROOT,
+      'packages/prisma/scripts/local-dev/preview-document-editor-v2-qa.ts'
+    );
+    expect(existsSync(constants)).toBe(true);
+    const text = readFileSync(constants, 'utf8');
+    expect(text).toContain('previewdoceditv2qa0001');
+  });
+
+  test('Claude Design exports are committed under docs/design/document-editor-v2', () => {
+    const designDir = join(REPO_ROOT, 'docs/design/document-editor-v2');
+    expect(existsSync(join(designDir, 'document-editor.html'))).toBe(true);
+    expect(existsSync(join(designDir, 'document-editor-states.html'))).toBe(true);
+    expect(existsSync(join(designDir, 'button.css'))).toBe(true);
+    expect(existsSync(join(designDir, 'IMPLEMENTATION.md'))).toBe(true);
+  });
+
+  test('resolved comment row uses states-board glass chrome', () => {
+    const css = readFileSync(
+      join(V2_ROOT, 'document-editor/document-editor-redesign.css'),
+      'utf8'
+    );
+    expect(css).toContain('.doc-editor-comment-resolved-row');
+    expect(css).toContain('backdrop-filter: blur(16px)');
+    expect(css).toContain('0 12px 32px rgba(31, 53, 50, 0.1)');
+  });
+
   test('redesign CSS exposes tokens from the Student editor export', () => {
     const css = readFileSync(
       join(V2_ROOT, 'document-editor/document-editor-redesign.css'),

@@ -286,7 +286,10 @@ export function Editor({
           scrollRoot,
         }}
       >
-      <div className="flex h-full w-full min-w-0 flex-col overflow-hidden md:h-full">
+      <div
+        className="flex h-full w-full min-w-0 flex-col overflow-hidden md:h-full"
+        data-testid="document-editor-workspace-chrome"
+      >
         {editor ? (
           <Bar
             editor={editor}

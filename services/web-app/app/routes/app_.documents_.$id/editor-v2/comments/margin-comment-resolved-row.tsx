@@ -8,6 +8,7 @@ type Props = CommentType & {
   readOnly?: boolean;
   surface?: 'margin' | 'sheet';
   testIdPrefix?: string;
+  initialExpanded?: boolean;
   onDelete?: (commentId: string) => void;
   onResponseAdded?: (commentId: string, response: unknown) => void;
   onArchiveChange?: (commentId: string, archivedAt: Date | null) => void;
@@ -16,9 +17,10 @@ type Props = CommentType & {
 export function MarginCommentResolvedRow({
   surface = 'margin',
   testIdPrefix = 'margin-comment-resolved',
+  initialExpanded = false,
   ...props
 }: Props) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(initialExpanded);
   const authorUser = (
     props.membership as { user?: { name: string | null; email: string | null } }
   )?.user;
@@ -48,13 +50,18 @@ export function MarginCommentResolvedRow({
         setExpanded(true);
       }}
     >
-      <Check className="h-3.5 w-3.5 shrink-0 text-[hsl(142_50%_35%)]" aria-hidden />
-      <span className="text-[hsl(50_2.4%_36%)]">Resolved</span>
-      <span className="text-[hsl(50_2.4%_36%)]">·</span>
-      <span className="min-w-0 flex-1 truncate font-medium text-[#1b1b1b]">
+      <Check
+        className="h-[13px] w-[13px] shrink-0 text-[hsl(142_50%_35%)]"
+        aria-hidden
+      />
+      <span className="text-[12px] text-[hsl(50_2.4%_36%)]">Resolved</span>
+      <span className="text-[12px] text-[hsl(50_2.4%_36%)]">·</span>
+      <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-[#1b1b1b]">
         {authorName}
       </span>
-      <span className="shrink-0 font-semibold text-[hsl(210_50%_30%)]">Show</span>
+      <span className="ml-auto shrink-0 text-[12px] font-semibold text-[#1F7CDA]">
+        Show
+      </span>
     </button>
   );
 }

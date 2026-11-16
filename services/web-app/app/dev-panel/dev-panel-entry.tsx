@@ -1,4 +1,4 @@
-import { DevPanelMount as DevPanelMountImpl } from './dev-panel-mount';
+import { lazy, Suspense } from 'react';
 import type { DevPanelEnvBadge } from './dev-panel-types';
 
 type DevPanelMountProps = {
@@ -7,12 +7,21 @@ type DevPanelMountProps = {
   previewAccessSeatLabel: string | null;
 };
 
+const LazyDevPanelMount = lazy(() =>
+  import('./dev-panel-mount').then((module) => ({
+    default: module.DevPanelMount,
+  }))
+);
+
 export function DevPanelMount(props: DevPanelMountProps) {
   if (typeof __YAWP_DEV_PANEL_BUILD__ === 'undefined' || !__YAWP_DEV_PANEL_BUILD__) {
     return null;
   }
-  // Eager import (no React.lazy/Suspense): a hydrating Suspense sibling was
-  // receiving Outlet updates from document routes and tripping React’s hydration
-  // pageerror in Playwright. Production swaps this module for a stub via Vite.
-  return <DevPanelMountImpl {...props} />;
+  // Lazy-load the panel so /auth/login and other routes do not eagerly execute
+  // dev-panel client effects during unified-signon fetcher flows (#958 regression).
+  return (
+    <Suspense fallback={null}>
+      <LazyDevPanelMount {...props} />
+    </Suspense>
+  );
 }

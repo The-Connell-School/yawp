@@ -107,6 +107,7 @@ import {
   shouldClearDocumentEditorV2ForceCookie,
   shouldSetDocumentEditorV2ForceCookie,
 } from '~/domain/document-editor/document-editor-v2-gate.server';
+import { isDocumentEditorV2CaptureAllowed } from '~/domain/document-editor/document-editor-v2-capture.server';
 import {
   GuidedTour,
   startPageTour,
@@ -594,6 +595,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     {
     documentEditorV2,
     documentEditorStaffOptOut,
+    v2CaptureAllowed: isDocumentEditorV2CaptureAllowed(),
     guidedTours,
     doc: {
       ...doc,

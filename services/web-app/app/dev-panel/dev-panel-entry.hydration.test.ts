@@ -3,12 +3,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 describe('DevPanelMount hydration', () => {
-  test('mounts eagerly without React.lazy Suspense', () => {
+  test('lazy-loads dev panel mount without a static dev-panel-mount import', () => {
     const source = readFileSync(join(import.meta.dir, 'dev-panel-entry.tsx'), 'utf8');
-    expect(source).toContain('./dev-panel-mount');
-    expect(source).not.toMatch(/\blazy\s*\(/);
-    expect(source).not.toContain('<Suspense');
-    expect(source).not.toContain('useAfterHydration');
-    expect(source).not.toContain('useEffect');
+    expect(source).toMatch(/\blazy\s*\(/);
+    expect(source).toContain('<Suspense');
+    expect(source).not.toMatch(
+      /import\s+\{[^}]*DevPanelMount[^}]*\}\s+from\s+['"]\.\/dev-panel-mount['"]/
+    );
   });
 });
