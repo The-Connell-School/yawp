@@ -24,10 +24,8 @@ const ARTIFACTS = '/opt/cursor/artifacts';
 
 const STUDENT_EMAIL =
   process.env.PREVIEW_STUDENT_EMAIL?.trim() || 'dev.student@yawp.local';
-const STUDENT_PASSWORD = process.env.PREVIEW_STUDENT_PASSWORD ?? 'yawp-dev';
 const TEACHER_EMAIL =
   process.env.PREVIEW_TEACHER_EMAIL?.trim() || 'dev.teacher@yawp.local';
-const TEACHER_PASSWORD = process.env.PREVIEW_TEACHER_PASSWORD ?? 'yawp-dev';
 
 async function passGate(context) {
   if (!ACCESS_CODE) throw new Error('PREVIEW_ACCESS_CODE is required');
@@ -49,12 +47,8 @@ async function passGate(context) {
   );
 }
 
-async function loginStudent(context) {
-  await loginPreviewQaStudent(context, BASE, { email: STUDENT_EMAIL });
-}
-
 async function loginTeacher(page) {
-  await page.goto(`${BASE}/auth/dev-login`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/auth/dev-login`, { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: /alex teacher/i }).click();
   await page
     .getByText(/Welcome, Alex Teacher/i)
@@ -62,9 +56,15 @@ async function loginTeacher(page) {
     .catch(() => page.waitForURL(/\/app/, { timeout: 60_000 }));
 }
 
-async function shot(page, name) {
+async function shot(page, name, options = {}) {
   const path = join(OUT, `${name}.png`);
-  await page.screenshot({ path, fullPage: false });
+  if (options.locator) {
+    await page.locator(options.locator).first().screenshot({ path });
+  } else if (options.clip) {
+    await page.screenshot({ path, clip: options.clip });
+  } else {
+    await page.screenshot({ path, fullPage: false });
+  }
   await cp(path, join(ARTIFACTS, `preview-${name}.png`)).catch(() => {});
   console.log('saved', path);
   return path;
@@ -83,13 +83,13 @@ async function main() {
   const gradedDocId =
     process.env.GRADED_DOCUMENT_ID?.trim() || DEFAULT_PREVIEW_V2_QA_GRADED_DOCUMENT_ID;
 
-  await loginStudent(context);
+  await loginPreviewQaStudent(context, BASE, { email: STUDENT_EMAIL });
   const probe = await context.newPage();
   try {
     await openPreviewV2Document(probe, BASE, documentId);
   } catch (error) {
     console.warn(
-      `QA document ${documentId} unavailable; discovering a document (${error instanceof Error ? error.message : error})`
+      `QA document ${documentId} unavailable; discovering (${error instanceof Error ? error.message : error})`
     );
     documentId = await resolvePreviewDocumentId(probe, BASE, {
       preferredId: documentId,
@@ -106,10 +106,20 @@ async function main() {
     await page.setViewportSize({ width: 1440, height: 900 });
     await openPreviewV2Document(page, BASE, documentId);
     captures.push(await shot(page, '01-student-desktop'));
-    await page.getByTestId('document-panel-toggles').getByRole('button', { name: /tutor/i }).click();
-    await shot(page, '02-tutor-panel');
-    await page.getByTestId('document-panel-toggles').getByRole('button', { name: /comments/i }).click();
-    captures.push(await shot(page, '03-comments-margin'));
+    await page
+      .getByTestId('document-panel-toggles')
+      .getByRole('button', { name: /tutor/i })
+      .click();
+    captures.push(await shot(page, '02-tutor-panel', { locator: '.doc-editor-tutor' }));
+    await page
+      .getByTestId('document-panel-toggles')
+      .getByRole('button', { name: /comments/i })
+      .click();
+    captures.push(
+      await shot(page, '03-comments-margin', {
+        locator: '[data-testid="document-margin-comments-aside"]',
+      })
+    );
     await page.close();
   }
 
@@ -119,8 +129,27 @@ async function main() {
     await page.setViewportSize({ width: 1440, height: 900 });
     await openPreviewV2Document(page, BASE, gradedDocId, '?tab=editor');
     captures.push(await shot(page, '04-teacher-view'));
-    await page.getByRole('button', { name: /show old comments/i }).click().catch(() => {});
-    captures.push(await shot(page, '05-comments-reply-resolved'));
+    await page.close();
+  }
+
+  {
+    const page = await context.newPage();
+    await loginTeacher(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openPreviewV2Document(
+      page,
+      BASE,
+      gradedDocId,
+      '?tab=editor&v2Capture=comments-reply-resolved'
+    );
+    await page
+      .getByTestId('document-margin-comments-aside')
+      .waitFor({ state: 'visible', timeout: 30_000 });
+    captures.push(
+      await shot(page, '05-comments-reply-resolved', {
+        locator: '[data-testid="document-margin-comments-aside"]',
+      })
+    );
     await page.close();
   }
 
@@ -135,26 +164,29 @@ async function main() {
   {
     const page = await context.newPage();
     await page.setViewportSize({ width: 1440, height: 900 });
-    await openPreviewV2Document(page, BASE, documentId);
-    const editor = page.locator('[contenteditable="true"]').first();
-    await editor.click();
-    await page.keyboard.type(' Saving pulse');
-    await page.getByTestId('document-save-status').getAttribute('data-sync-status');
-    captures.push(await shot(page, '07-saving-state'));
+    await openPreviewV2Document(page, BASE, documentId, '?v2Capture=saving');
+    await page
+      .getByTestId('document-save-status')
+      .filter({ hasText: /Saving/i })
+      .waitFor({ timeout: 15_000 });
+    captures.push(
+      await shot(page, '07-saving-state', {
+        locator: '[data-testid="document-editor-header"]',
+      })
+    );
     await page.close();
   }
 
   {
     const page = await context.newPage();
     await page.setViewportSize({ width: 1440, height: 900 });
-    await openPreviewV2Document(page, BASE, documentId);
-    const submit = page.getByTestId('document-submit-button');
-    if (await submit.isVisible()) {
-      await submit.click();
-      await page.getByTestId('document-finalize-submit').click().catch(() => {});
-      await page.waitForTimeout(1500);
-    }
-    captures.push(await shot(page, '08-submitted-state'));
+    await openPreviewV2Document(page, BASE, documentId, '?v2Capture=submitted');
+    await page.getByTestId('document-actions-menu').waitFor({ timeout: 30_000 });
+    captures.push(
+      await shot(page, '08-submitted-state', {
+        locator: '[data-testid="document-editor-header"]',
+      })
+    );
     await page.close();
   }
 
