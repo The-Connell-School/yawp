@@ -32,6 +32,17 @@ const V2_ONLY_COMPONENTS = [
 const REPO_ROOT = join(import.meta.dir, '../../../../../..');
 
 describe('document editor v2 design contract', () => {
+  test('v2 capture fixture module is committed', () => {
+    const capture = join(
+      REPO_ROOT,
+      'services/web-app/app/domain/document-editor/document-editor-v2-capture.shared.ts'
+    );
+    expect(existsSync(capture)).toBe(true);
+    const text = readFileSync(capture, 'utf8');
+    expect(text).toContain('v2Capture');
+    expect(text).toContain('comments-reply-resolved');
+  });
+
   test('preview document editor v2 QA constants are committed', () => {
     const constants = join(
       REPO_ROOT,

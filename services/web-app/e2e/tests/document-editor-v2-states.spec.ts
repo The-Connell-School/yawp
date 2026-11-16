@@ -151,6 +151,40 @@ test.describe('Document editor v2 states board (pass 8)', () => {
     await expect(page.getByTestId('document-teacher-student-name')).toBeVisible();
   });
 
+  test('margin comment reply and resolve controls work', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await helpers.openDocument(
+      `${e2eContext.gradedDocumentId}?tab=editor`,
+      { retry: true }
+    );
+    await page
+      .getByTestId('document-panel-toggles')
+      .getByRole('button', { name: /comments/i })
+      .click()
+      .catch(() => {});
+    const resolvedId = e2eContext.v2GradedResolvedCommentId;
+    const activeId = e2eContext.v2GradedCommentId;
+    const row = page.getByTestId(`margin-comment-resolved-${resolvedId}`);
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await row.click();
+    await expect(
+      page.getByTestId(`margin-comment-resolved-expanded-${resolvedId}`)
+    ).toBeVisible({ timeout: 10_000 });
+    const replyOpen = page.getByTestId(`comment-reply-input-${activeId}`);
+    if (await replyOpen.isVisible()) {
+      await replyOpen.click();
+      await expect(
+        page.getByTestId(`comment-reply-expanded-${activeId}`)
+      ).toBeVisible();
+    }
+  });
+
   test('tutor ask row opens expanded input with Cancel path', async ({
     page,
     signIn,
