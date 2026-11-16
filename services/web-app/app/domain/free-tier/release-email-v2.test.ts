@@ -64,6 +64,14 @@ test('v2 teacher reminder and approved emails follow the copy rules', () => {
   );
   expect(teacher).toContain('Request approval from a different administrator');
   expect(approved).toContain('Hi Jordan,');
+  expect(approved).toContain('A quick thank-you to Dr. Lee might be nice, too.');
+  expect(
+    renderCongratulationsEmailV2Body({
+      teacherName: 'Jordan Smith',
+      adminName: 'Yawp!',
+      signInUrl: 'https://example.test/login',
+    })
+  ).not.toContain('A quick thank-you');
   for (const text of [teacher, approved]) {
     expect(text).not.toMatch(/\bAI\b/);
     expect(text).not.toMatch(/Yawp(?!!)/);

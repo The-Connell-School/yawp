@@ -212,6 +212,12 @@ ${plainTextEmailFooter(
 export const CONGRATULATIONS_V2_SUBJECT =
   'You\'re approved! Your Yawp! classroom is ready';
 
+/** Staff approvals sign the email as Yawp!, so the administrator thank-you is omitted. */
+export function congratulationsThankYouLine(adminName: string) {
+  if (adminName.trim() === 'Yawp!') return '';
+  return `\nA quick thank-you to ${adminName} might be nice, too.\n`;
+}
+
 export function renderCongratulationsEmailV2Body(args: {
   teacherName: string;
   adminName: string;
@@ -225,9 +231,7 @@ ${args.adminName} approved your classroom, so all free features are now unlocked
 Next, add your students. It takes about five minutes with your class in the room.
 
 ${plainTextButton('Add students', args.signInUrl)}
-
-A quick thank-you to ${args.adminName} might be nice, too.
-
+${congratulationsThankYouLine(args.adminName)}
 ${BRIAN_SIGNATURE}
 
 ${plainTextEmailFooter(
