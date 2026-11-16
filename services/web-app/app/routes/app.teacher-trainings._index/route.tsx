@@ -31,13 +31,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     throw new Response('Teacher profile required', { status: 403 });
   }
 
-  const viewer = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isAdmin: true },
-  });
-  const communityEnabled =
-    Boolean(viewer?.isAdmin) ||
-    (await isLoungeCommunityEnabled(profile.organization.id));
+  const communityEnabled = await isLoungeCommunityEnabled(profile.organization.id);
   if (communityEnabled) {
     throw redirect(facultyLoungeTrainingsHome(true));
   }

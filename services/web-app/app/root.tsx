@@ -340,9 +340,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         })
       : false;
   const loungeCommunityEnabled = userId
-    ? user?.isAdmin
-      ? true
-      : await isLoungeCommunityEnabled(membership?.organizationId ?? null)
+    ? await isLoungeCommunityEnabled(membership?.organizationId ?? null)
     : false;
 
   return data(

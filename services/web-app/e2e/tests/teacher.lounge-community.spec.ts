@@ -73,6 +73,28 @@ test.describe.serial("Faculty Lounge community board", () => {
     await expect(page).toHaveURL(/\/app\/teacher-trainings$/);
   });
 
+  test('flag off: Yawp team staff see the course grid, not the community', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLoungeCommunityFlag(false);
+    await signIn(e2eContext.adminEmail, ADMIN_PASSWORD);
+    await expect(page.getByRole('link', { name: 'Faculty Lounge' })).toHaveCount(0);
+    await page.getByRole('link', { name: "Teacher's Lounge" }).first().click();
+    await expect(page).toHaveURL(/\/app\/teacher-trainings$/);
+    await expect(page.getByRole('heading', { name: "Teacher's Lounge" })).toBeVisible();
+
+    for (const path of ['/app/lounge', '/app/lounge/new', '/app/lounge/welcome']) {
+      const response = await page.goto(path);
+      expect(response?.status()).toBe(404);
+    }
+
+    const trainingsIndex = await page.goto('/app/teacher-trainings');
+    expect(trainingsIndex?.status()).toBe(200);
+    await expect(page).toHaveURL(/\/app\/teacher-trainings$/);
+  });
+
   test('flag on: the trainings index opens the community feed', async ({
     page,
     signIn,

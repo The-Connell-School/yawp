@@ -85,9 +85,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   // Trainings stay reachable at their own URL. With the community on, Back
   // returns to the Faculty Lounge feed; otherwise to the course grid.
-  const viewer = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
-  const communityEnabled =
-    Boolean(viewer?.isAdmin) || (await isLoungeCommunityEnabled(profile.organization.id));
+  const communityEnabled = await isLoungeCommunityEnabled(profile.organization.id);
 
   // Lessons of the Thesis-Driven Essay course run as long as Brian's
   // tutorials, which the module pages play in place of the uploaded videos.
