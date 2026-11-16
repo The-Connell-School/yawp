@@ -1,7 +1,6 @@
 import { auditMovedToInternal } from '~/utils/admin-audit-migration.server';
 import {
   data as dataResponse,
-  Link,
   useLoaderData,
   useLocation,
   type LoaderFunctionArgs,
@@ -9,7 +8,7 @@ import {
 import { Outlet } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
-import { Button } from '~/components/ui/button';
+import { ScrollTabBar } from '~/components/ui/scroll-tab-bar';
 import {
   User,
   GraduationCap,
@@ -28,52 +27,52 @@ export const adminTabs = [
   {
     label: 'Tester feedback (moved)',
     to: '/app/tester/feedback',
-    icon: <MessageSquare size={16} className="opacity-75 mr-1" />,
+    icon: <MessageSquare className="opacity-75" />,
   },
   {
     label: 'General',
     to: '/app/admin/general',
-    icon: <Settings size={16} className="opacity-75 mr-1" />,
+    icon: <Settings className="opacity-75" />,
   },
   {
     label: 'Organizations',
     to: '/app/admin/organizations',
-    icon: <User size={16} className="opacity-75 mr-1" />,
+    icon: <User className="opacity-75" />,
   },
   {
     label: 'Assignment Types',
     to: '/app/admin/assignments',
-    icon: <ClipboardList size={16} className="opacity-75 mr-1" />,
+    icon: <ClipboardList className="opacity-75" />,
   },
   {
     label: 'Teacher Courses',
     to: '/app/admin/teacher-trainings',
-    icon: <GraduationCap size={16} className="opacity-75 mr-1" />,
+    icon: <GraduationCap className="opacity-75" />,
   },
   {
     label: 'Grading Evaluations',
     to: '/app/admin/ai-evaluations',
-    icon: <FlaskConical size={16} className="opacity-75 mr-1" />,
+    icon: <FlaskConical className="opacity-75" />,
   },
   {
     label: 'Lounge',
     to: '/app/admin/lounge',
-    icon: <MessagesSquare size={16} className="opacity-75 mr-1" />,
+    icon: <MessagesSquare className="opacity-75" />,
   },
   {
     label: 'Audit',
     to: '/app/admin/audit',
-    icon: <ScrollText size={16} className="opacity-75 mr-1" />,
+    icon: <ScrollText className="opacity-75" />,
   },
   {
     label: 'Free tier',
     to: '/app/admin/free-tier',
-    icon: <User size={16} className="opacity-75 mr-1" />,
+    icon: <User className="opacity-75" />,
   },
   {
     label: 'Access & flags',
     to: '/app/admin/access-flags',
-    icon: <Flag size={16} className="opacity-75 mr-1" />,
+    icon: <Flag className="opacity-75" />,
   },
 ];
 
@@ -104,23 +103,15 @@ export default function Route() {
     <main className="flex flex-col h-screen">
       <div className="py-2 md:py-4 px-3 md:px-6 border-b">
         <h1 className="mb-3 text-2xl md:text-3xl">{currentTab?.label}</h1>
-        <div className="flex gap-1 overflow-x-auto no-scrollbar">
-          {visibleTabs.map((tab) => (
-            <Button
-              key={tab.to}
-              variant={currentTab?.to === tab.to ? 'secondary' : 'ghost'}
-              size="sm"
-              asChild
-            >
-              <Link to={tab.to}>
-                {tab.icon}
-                {tab.to === '/app/admin/audit' && auditMoved
-                  ? 'Audit (moved)'
-                  : tab.label}
-              </Link>
-            </Button>
-          ))}
-        </div>
+        <ScrollTabBar
+          tabs={visibleTabs}
+          activeTo={currentTab?.to}
+          ariaLabel="Admin sections"
+          testId="admin-section-tabs"
+          labelFor={(tab) =>
+            tab.to === '/app/admin/audit' && auditMoved ? 'Audit (moved)' : tab.label
+          }
+        />
       </div>
       <div className="flex-grow overflow-auto pb-24">
         <Outlet />
