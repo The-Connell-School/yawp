@@ -1264,7 +1264,7 @@ suite(
       },
     });
     try {
-      await prisma.invitation.create({
+      const invitation = await prisma.invitation.create({
         data: {
           type: 'onboard-teacher',
           target: email,
@@ -1286,6 +1286,9 @@ suite(
       expect(verified.response.headers.get('location')).toBe(
         '/auth/inv/onboard-teacher'
       );
+      expect(
+        await prisma.invitation.count({ where: { id: invitation.id } })
+      ).toBe(1);
       const { loader, action } =
         await import('~/routes/auth.inv.onboard-teacher/route');
       const entry = await loader({
@@ -1322,6 +1325,9 @@ suite(
           },
         })
       ).toBe(1);
+      expect(
+        await prisma.invitation.count({ where: { id: invitation.id } })
+      ).toBe(0);
     } finally {
       await prisma.school.delete({ where: { id: second } });
     }

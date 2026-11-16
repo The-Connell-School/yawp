@@ -840,7 +840,6 @@ function BrianSignOff() {
 }
 
 function LinkFallback({ url }: { url: string }) {
-  const safe = escapeHtml(url);
   return (
     <table
       role="presentation"
@@ -869,7 +868,7 @@ function LinkFallback({ url }: { url: string }) {
               href={url}
               style={{ color: EMAIL_LINK, textDecoration: 'underline' }}
             >
-              {safe}
+              {url}
             </a>
           </td>
         </tr>

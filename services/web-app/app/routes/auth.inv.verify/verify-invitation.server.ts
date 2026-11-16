@@ -26,12 +26,14 @@ import {
   VerifyInvitationSchema,
   type VerifyInvitationInput,
 } from './verify-invitation.schema';
+import {
+  redirectIfInvitationAlreadyFulfilled,
+  type VerifyInvitationResult,
+} from './redirect-consumed-invitation.server';
+
+export type { VerifyInvitationResult };
 
 type VerifyInput = VerifyInvitationInput;
-
-export type VerifyInvitationResult =
-  | { ok: true; response: Response }
-  | { ok: false; fieldErrors: Record<string, string> };
 
 async function invitationForTarget(type: string, normalizedTarget: string) {
   return prisma.invitation.findFirst({
@@ -56,7 +58,8 @@ async function invitationForTarget(type: string, normalizedTarget: string) {
 }
 
 export async function verifyInvitationCredentials(
-  input: VerifyInput
+  input: VerifyInput,
+  options?: { request?: Request | null }
 ): Promise<VerifyInvitationResult> {
   const { target, type } = input;
   const normalizedTarget = normalizeEmail(target);
@@ -64,6 +67,12 @@ export async function verifyInvitationCredentials(
   const invitation = await invitationForTarget(type, normalizedTarget);
 
   if (!invitation) {
+    const fulfilled = await redirectIfInvitationAlreadyFulfilled({
+      request: options?.request ?? null,
+      type,
+      normalizedTarget,
+    });
+    if (fulfilled) return fulfilled;
     return { ok: false, fieldErrors: { code: 'Invalid code.' } };
   }
 
@@ -158,8 +167,6 @@ export async function completeVerifiedInvitation({
       };
     }
 
-    await prisma.invitation.delete({ where: { id: invitation.id } });
-
     invitationCookie.set('klassId', klassId);
     invitationCookie.set('klassIds', klassIds);
     invitationCookie.set('schoolId', schoolId);
@@ -202,12 +209,11 @@ export async function completeVerifiedInvitation({
       },
     });
 
-    await prisma.invitation.delete({ where: { id: invitation.id } });
-
     if (existingUser) {
       let membership: OrgMembership;
       if (existingUser.memberships.length > 0) {
         if (existingUser.memberships[0].role === 'TEACHER') {
+          await prisma.invitation.delete({ where: { id: invitation.id } });
           return {
             ok: true,
             response: await redirectWithToast(
@@ -243,6 +249,8 @@ export async function completeVerifiedInvitation({
           },
         });
       }
+
+      await prisma.invitation.delete({ where: { id: invitation.id } });
 
       return {
         ok: true,
@@ -299,8 +307,6 @@ export async function completeVerifiedInvitation({
       },
     });
 
-    await prisma.invitation.delete({ where: { id: invitation.id } });
-
     if (existingUser) {
       let membership: OrgMembership;
       if (existingUser.memberships.length > 0) {
@@ -319,6 +325,8 @@ export async function completeVerifiedInvitation({
           },
         });
       }
+
+      await prisma.invitation.delete({ where: { id: invitation.id } });
 
       return {
         ok: true,
@@ -382,7 +390,7 @@ export async function verifyInvitationFromQuery(
   });
   if (!parsed.success) return null;
 
-  const result = await verifyInvitationCredentials(parsed.data);
+  const result = await verifyInvitationCredentials(parsed.data, { request });
   if (result.ok) return result.response;
   return null;
 }
@@ -418,7 +426,7 @@ export async function verifyInvitationAction({ request }: ActionFunctionArgs) {
     }
   }
 
-  const result = await verifyInvitationCredentials(data);
+  const result = await verifyInvitationCredentials(data, { request });
   if (result.ok) return result.response;
   return validationError({ fieldErrors: result.fieldErrors });
 }

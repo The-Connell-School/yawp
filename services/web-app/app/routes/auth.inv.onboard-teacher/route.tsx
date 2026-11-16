@@ -29,6 +29,7 @@ import { setMembershipId } from '~/cookies/membership-id.server';
 import { clearSchoolYearScope } from '~/cookies/school-year.server';
 import { combineHeaders } from '~/utils/misc';
 import { normalizeEmail } from '~/utils/normalize-email';
+import { deleteOnboardingInvitationInTx } from '~/routes/auth.inv.verify/consume-onboarding-invitation.server';
 
 const GoogleSchema = z.object({
   name: NameSchema,
@@ -125,27 +126,33 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const hashedPassword = await getPasswordHash(data.password);
 
-  const membership = await prisma.orgMembership.create({
-    data: {
-      user: {
-        create: {
-          email,
-          name: data.name,
-          password: { create: { hash: hashedPassword } },
+  const { membership, session } = await prisma.$transaction(async (tx) => {
+    const membership = await tx.orgMembership.create({
+      data: {
+        user: {
+          create: {
+            email,
+            name: data.name,
+            password: { create: { hash: hashedPassword } },
+          },
         },
+        organization: { connect: { id: organizationId } },
+        role: 'TEACHER',
+        schools: { connect: [{ id: data.schoolId }] },
       },
-      organization: { connect: { id: organizationId } },
-      role: 'TEACHER',
-      schools: { connect: [{ id: data.schoolId }] },
-    },
-  });
+    });
 
-  const session = await prisma.session.create({
-    data: {
-      expirationDate: getSessionExpirationDate(),
-      user: { connect: { id: membership.userId } },
-    },
-    select: { id: true, expirationDate: true },
+    const session = await tx.session.create({
+      data: {
+        expirationDate: getSessionExpirationDate(),
+        user: { connect: { id: membership.userId } },
+      },
+      select: { id: true, expirationDate: true },
+    });
+
+    await deleteOnboardingInvitationInTx(tx, 'onboard-teacher', email);
+
+    return { membership, session };
   });
 
   const cookies = request.headers.get('cookie');
