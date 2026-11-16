@@ -82,6 +82,8 @@ export const LESSON_PLANNER_REVIEW_FLAG_SETTINGS = [
   'feature_flag.lesson_planner_writing_override',
   // The Lesson Deck Kit, spec v4 (Nov 6).
   'feature_flag.lesson_planner_deck_kit_v4',
+  // The Lesson Deck Kit, spec v4.1 (Nov 11): needs spec v4.
+  'feature_flag.lesson_planner_deck_kit_v41',
 ] as const;
 
 /**

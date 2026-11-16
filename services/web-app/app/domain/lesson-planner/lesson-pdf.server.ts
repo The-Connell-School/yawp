@@ -25,7 +25,7 @@ import { PICTURE_PLACEHOLDER } from './deck-pictures';
 import type { DeckPictureFiles } from './deck-pictures.server';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { registerKitFonts } from './kit-fonts.server';
+import { registerKitDisplayFont, registerKitFonts } from './kit-fonts.server';
 
 /** The kit's ink and stone (lesson plan spec v1, "Type and color"). */
 const KIT_PLAN_COLORS_HEX = { ink: '#1B1B1B', stone: '#6F6A63' } as const;
@@ -81,12 +81,12 @@ export type HandoutKit = { color: string };
 /** The handout style for a lesson, from its deck's primary color; null with the kit off. */
 export function handoutKit(
   packet: LessonPacket,
-  flags: { deckGallery: boolean; deckKitV4?: boolean }
+  flags: { deckGallery: boolean; deckKitV4?: boolean; deckKitV41?: boolean }
 ): HandoutKit | null {
   if (!flags.deckGallery) return null;
   const found = packet.sections.find((section) => section.deck)?.deck ?? null;
   // In spec v4, the deck's v4 primary; with no deck, the v4 house pine.
-  const deck = found ? withDeckKit(found, { deckKitV4: Boolean(flags.deckKitV4) }) : null;
+  const deck = found ? withDeckKit(found, { deckKitV4: Boolean(flags.deckKitV4), deckKitV41: Boolean(flags.deckKitV41) }) : null;
   if (deck) return { color: galleryAccent(deck) };
   return { color: flags.deckKitV4 ? KIT_V4_HOUSE_PALETTE[0] : deckColors({}, null)[0]! };
 }
@@ -504,7 +504,11 @@ function drawKitV4Face(
   const serif = styleOf(doc).serif?.regular ?? 'Times-Roman';
   const sans = styleOf(doc).fonts.body;
   const sansBold = styleOf(doc).fonts.bold;
-  const fontOf = (run: KitV4Run) => (run.face === 'serif' ? serif : run.bold ? sansBold : sans);
+  // Spec v4.1 headlines: Fraunces Bold, registered only for a deck that uses it.
+  const display = layout.elements.some((element) => element.kind === 'text' && element.paras.some((para) => para.runs.some((run) => run.face === 'display')))
+    ? registerKitDisplayFont(doc)
+    : serif;
+  const fontOf = (run: KitV4Run) => (run.face === 'display' ? display : run.face === 'serif' ? serif : run.bold ? sansBold : sans);
 
   doc.save();
   doc.rect(box.x, box.y, box.w, box.h).fill(layout.background);

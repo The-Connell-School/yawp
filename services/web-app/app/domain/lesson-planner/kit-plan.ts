@@ -126,14 +126,17 @@ export function buildKitPlan({
   doc,
   entries,
   deckKitV4 = false,
+  deckKitV41 = false,
 }: {
   doc: LessonPlanDoc;
   entries: LessonPlanEntry[];
   /** The school draws its decks in spec v4: the plan takes the v4 colors. */
   deckKitV4?: boolean;
+  /** The Lesson Deck Kit, spec v4.1; needs deckKitV4. */
+  deckKitV41?: boolean;
 }): KitPlan {
   const found = deckFrom(entries);
-  const deck = found ? withDeckKit(found, { deckKitV4 }) : null;
+  const deck = found ? withDeckKit(found, { deckKitV4, deckKitV41 }) : null;
   // The deck's own colors, in whichever kit it is drawn (v4 included).
   const colors = deck ? galleryColors(deck) : deckColors({}, null);
   const accent = colors[0]!.replace('#', '').toUpperCase();

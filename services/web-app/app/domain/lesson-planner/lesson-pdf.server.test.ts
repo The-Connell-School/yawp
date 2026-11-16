@@ -732,3 +732,27 @@ describe('renderSlidesPdf — a deck drawn in spec v4', () => {
     expect(drawn).toMatch(/0\.12156\d* 0\.20784\d* 0\.19607\d* scn\nf/);
   });
 });
+
+describe('renderSlidesPdf — a deck drawn in spec v4.1', () => {
+  const slides = [
+    { layout: 'title', title: 'Body Paragraphs', subtitle: 'Build on your thesis', teacher: 'Ms. Okafor', course: 'English 10', speakerNotes: 'Open.' },
+    { layout: 'steps', title: 'Draft your topic sentence', bullets: ['Reread your thesis'], minutes: 6, speakerNotes: 'Go.' },
+    { layout: 'exit', title: 'Before you go', body: 'Bring your draft.', button: 'Exit ticket', speakerNotes: 'Close.' },
+  ];
+  const v41 = { title: 'Body Paragraphs', kit: 'v4.1', slides };
+
+  test('embeds Fraunces Bold for the headlines; spec v4 does not', async () => {
+    const raw = Buffer.from(await renderSlidesPdf({ lessonTitle: 'Body Paragraphs', deck: v41 as never })).toString('latin1');
+    expect(raw).toMatch(/\/FontName \/[A-Z]{6}\+Fraunces-Bold/);
+    const before = Buffer.from(await renderSlidesPdf({ lessonTitle: 'Body Paragraphs', deck: { ...v41, kit: 'v4' } as never })).toString('latin1');
+    expect(before).not.toContain('Fraunces');
+  });
+
+  test('prints the title slide’s teacher, and every slide’s words', async () => {
+    const text = pdfText(await renderSlidesPdf({ lessonTitle: 'Body Paragraphs', deck: v41 as never }));
+    expect(text).toContain('Ms. Okafor');
+    expect(text).toContain('English 10');
+    expect(text).toContain('Draft your topic sentence');
+    expect(text).toContain('Exit ticket: open it in Yawp!');
+  });
+});

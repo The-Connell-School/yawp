@@ -883,8 +883,17 @@ function buildDeckGallerySection(on: boolean, recentArt: RecentArt[] = []): stri
  * The gallery deck in the Lesson Deck Kit, spec v4 (Nov 6). Same slots as
  * spec v3, so a deck written either way draws in both; what changes is how
  * the slides look and what the planner is asked to write.
+ *
+ * With `v41`, spec v4.1 (Nov 11), which replaces v4: Fraunces Bold titles
+ * and headlines, no running head, no label that tells students how to treat
+ * the content, and a title slide that names the teacher, then the class and
+ * date. The teacher's name comes from the session; without it the line is
+ * left out.
  */
-function buildDeckKitV4Section(recentArt: RecentArt[] = []): string[] {
+function buildDeckKitV4Section(
+  recentArt: RecentArt[] = [],
+  { v41 = false, teacherName = null }: { v41?: boolean; teacherName?: string | null } = {}
+): string[] {
   const art = selectableDeckArt()
     .map(
       (work) =>
@@ -893,19 +902,31 @@ function buildDeckKitV4Section(recentArt: RecentArt[] = []): string[] {
     .join('; ');
   return [
     '',
-    'Gallery deck (Yawp! Lesson Deck Kit, spec v4): every deck should feel like a quiet, well-made book with one painting inside it. Every slide is cream; there are no dark or full-color slides. Color appears only as a solid panel on one side of a split slide (Yawp! draws it) or as type. Students should always be able to tell what they are being asked to do from across the room.',
-    'Labels, not mode words: a short label above the headline, in Arial, sentence case, no period ("Look", "Talk", "Hold this"). Yawp! draws each template’s own label; set `mode` only when a truer one fits ("Combine"), without a period, or `"mode": "none"` to leave it off. Use a label when the task changes, to mark a step, to flag something to keep, or to close; Yawp! drops one that repeats the headline or only decorates (Think, Begin, Also).',
+    `Gallery deck (Yawp! Lesson Deck Kit, spec ${v41 ? 'v4.1, which replaces v4, v3 and every earlier version of these instructions' : 'v4'}): every deck should feel like a quiet, well-made book with one painting inside it${v41 ? ': cream paper, serif reading text, wide margins, everything left-aligned' : ''}. Every slide is cream; there are no dark or full-color slides. Color appears only as a solid panel on one side of a split slide (Yawp! draws it) or as type. Students should always be able to tell what they are being asked to do from across the room.`,
+    ...(v41
+      ? [
+          'Type: Yawp! sets titles and headlines in Fraunces Bold, everything else a student reads as an idea in Georgia (list numerals too), and labels, instructions, credits and facts in Arial. Size carries the hierarchy: never ask for italics or bold for emphasis.',
+          'Labels, not mode words: a short label above the headline, in Arial, sentence case, no period ("Look", "Talk", "Write"). Yawp! draws each template’s own label; set `mode` only when a truer one fits ("Combine", "Your turn", "Example"), without a period, or `"mode": "none"` to leave it off. Use a label when the task changes (Look, Talk, Write), to mark a step (Step 1), or to close (Before you go). Never use a label that tells students how to treat the content ("Hold this", "Know this", "Read", "Remember"): just give them the content, and Yawp! drops such a label if you write one. It also drops one that repeats the headline or only decorates (Think, Begin, Also).',
+          'There is no running head: the lesson’s name appears on the title slide only, so never repeat it on another slide.',
+        ]
+      : [
+          'Labels, not mode words: a short label above the headline, in Arial, sentence case, no period ("Look", "Talk", "Hold this"). Yawp! draws each template’s own label; set `mode` only when a truer one fits ("Combine"), without a period, or `"mode": "none"` to leave it off. Use a label when the task changes, to mark a step, to flag something to keep, or to close; Yawp! drops one that repeats the headline or only decorates (Think, Begin, Also).',
+        ]),
     'Use these templates:',
-    '- title — no label. `title` 3 words or fewer, `subtitle` 5 or fewer, optional `course` ("English 10, Period 3"). The painting hangs beside it as a plain plate.',
+    v41
+      ? `- title — no label. \`title\` 3 words or fewer, \`subtitle\` 5 or fewer, which Yawp! sets in the deck color. Under them go the teacher’s name, then the class and date: ${
+          teacherName ? `\`teacher\`: ${JSON.stringify(teacherName)}` : 'leave `teacher` out, since you do not have the teacher’s name, and Yawp! leaves the line out'
+        }; \`course\` is the class and date ("English 10, November 12"), with only what you know of them, and left out when you know neither. Never write "Yawp! Writing Program" on the title slide. The unit sits above the title, and the painting hangs beside it as a plain plate.`
+      : '- title — no label. `title` 3 words or fewer, `subtitle` 5 or fewer, optional `course` ("English 10, Period 3"). The painting hangs beside it as a plain plate.',
     '- agenda — no label; Yawp! sets the headline "Today". Needs `agenda`: 3–6 items `{ "title", "minutes" }`, one per step of the plan; `body` is the one-line description of the session under "Today".',
     '- steps — "Do", on a split slide: `title` and `minutes` on the panel, 2–4 numbered `bullets` on cream, 18 words or fewer each.',
     '- discuss — "Talk", on a split slide: `title`, `grouping` ("Pairs") and `minutes` on the panel; one `question` of 18 words or fewer and an optional `stem` (a sentence starter) on cream.',
-    '- big_idea — "Hold this", beside a strip of the painting. One statement of 28 words or fewer in `body`; optional `followUp`, one line Yawp! sets in the deck color.',
+    `- big_idea — ${v41 ? 'no label' : '"Hold this"'}, beside a strip of the painting. One statement of 28 words or fewer in \`body\`; optional \`followUp\`, one line Yawp! sets in the deck color.`,
     '- write — "Write". The prompt in `body`, 40 words or fewer; `routine` ("Class starter" or "Short Response"); `minutes` or `seconds`, which Yawp! sets as a large timer.',
-    '- notes — "Know this", on a split slide: `title` on the panel; `timeline` (3–5 `{ "year", "caption" }`, captions 6 words or fewer) and/or `facts` (up to 3) on cream.',
+    `- notes — ${v41 ? 'no label' : '"Know this"'}, on a split slide: \`title\` on the panel; \`timeline\` (3–5 \`{ "year", "caption" }\`, captions 6 words or fewer) and/or \`facts\` (up to 3) on cream.`,
     '- divider — names the stage, only in decks over 10 slides: a verb `title` ("We draft."), an optional `subtitle` for one detail line. When it starts a stage of the writing process give `processStep` (1 pre-writing, 2 thesis, 3 introduction, 4 body paragraphs, 5 conclusion, 6 title and format) and it reads "Step 4"; otherwise `part` as a number ("2").',
-    '- read — "Read", on a split slide: `title` and the instruction (`body`) on the panel; 3 or fewer `tasks` `{ "verb", "text" }`, each led by a verb, on cream. Optional `work`, `page`.',
-    '- look — "Look": the painting as large as it goes, uncropped, with a narrow column beside it. Needs `question`; optional `seconds`, `routine` ("See, think, wonder"), `followUp`. Use it whenever students must study the image.',
+    `- read — ${v41 ? 'no label' : '"Read"'}, on a split slide: \`title\` and the instruction (\`body\`) on the panel; 3 or fewer \`tasks\` \`{ "verb", "text" }\`, each led by a verb, on cream. Optional \`work\`, \`page\`.`,
+    `- look — "Look": the painting as large as it goes, uncropped, with a narrow column beside it${v41 ? ', so keep the `question` to 14 words or fewer' : ''}. Needs \`question\`; optional \`seconds\`, \`routine\` ("See, think, wonder"), \`followUp\`. Use it whenever students must study the image.`,
     '- excerpt — "Annotate": the passage on cream as printed, 40–90 words, only text the teacher supplied or a tool returned, with `author`, `work`, `page`; `tasks` or `bullets` (what to mark) on the panel.',
     '- quiz — a discuss slide with `choices` (2–5 short answers) and no `answer` is a quiz question; Yawp! labels it "Question n of N". To reveal it, repeat the same slide right after it with `answer` (the number of the right choice): Yawp! puts a light band in the deck color behind it and greys the rest. Never mark the answer in the text.',
     '- exit — "Before you go". Always last. `body` the statement or stem; optional `followUp`; `button` names what students open in Yawp! ("Exit ticket"), set as a line, "Exit ticket: open it in Yawp!"; optional `nextLesson`.',
@@ -945,6 +966,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   template = null,
   deckGallery = false,
   deckKitV4 = false,
+  deckKitV41 = false,
   sources = [],
   lessonPictures = [],
   deckChoices,
@@ -976,6 +998,8 @@ export function buildLessonPlannerSystemPromptBlocks({
   deckGallery?: boolean;
   /** The Lesson Deck Kit, spec v4 (needs deckGallery). After the cache breakpoint. */
   deckKitV4?: boolean;
+  /** The Lesson Deck Kit, spec v4.1; needs deckKitV4. */
+  deckKitV41?: boolean;
   /** The teacher's own documents for this lesson (Oct 21). */
   sources?: LessonUpload[];
   /** The lesson's own pictures, from its deck or the slide editor (Kevin, Nov 6). */
@@ -1000,7 +1024,9 @@ export function buildLessonPlannerSystemPromptBlocks({
         ]
       : []),
     ...buildTemplateSection(template),
-    ...(deckGallery && deckKitV4 ? buildDeckKitV4Section(recentArt) : buildDeckGallerySection(deckGallery, recentArt)),
+    ...(deckGallery && deckKitV4
+      ? buildDeckKitV4Section(recentArt, { v41: deckKitV41, teacherName })
+      : buildDeckGallerySection(deckGallery, recentArt)),
     ...buildSourcesSection(sources, deckChoices, { onStack }),
     ...buildLessonPicturesSection(lessonPictures),
   ].join('\n');

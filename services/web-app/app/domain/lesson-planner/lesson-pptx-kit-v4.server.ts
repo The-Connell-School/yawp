@@ -8,10 +8,15 @@
  * transparency or rules. Georgia and Arial only, as the theme fonts too.
  * Every word is a real text box in reading order, and a column's label,
  * headline and body share one box so they push each other down.
+ *
+ * Spec v4.1 adds Fraunces Bold for titles and headlines: it is the theme's
+ * heading font, and the file carries it (pptx-embed-font.server.ts) so it
+ * shows on a computer that does not have it installed.
  */
 import PptxGenJS from 'pptxgenjs';
 import { addPptxPicture, type DeckPictureFiles } from './deck-pictures.server';
-import { KIT_V4, layoutKitV4Slide, type KitV4Element } from './deck-kit-v4';
+import { KIT_V4, isKitV41, layoutKitV4Slide, type KitV4Element, type KitV4Run } from './deck-kit-v4';
+import { KIT_DISPLAY_TYPEFACE, embedPptxBoldFont, kitDisplayFontFile } from './pptx-embed-font.server';
 import type { SlideDeck } from './slide-deck';
 import { notesWithMinutes } from './tile-theme';
 import { galleryImageData } from './lesson-pptx-gallery.server';
@@ -19,6 +24,7 @@ import { galleryImageData } from './lesson-pptx-gallery.server';
 const LAYOUT = { name: 'YAWP_KIT_V4_16x9', width: 13.333, height: 7.5 };
 const SERIF = 'Georgia';
 const SANS = 'Arial';
+const FACES: Record<KitV4Run['face'], string> = { display: KIT_DISPLAY_TYPEFACE, serif: SERIF, sans: SANS };
 const hex = (color: string) => color.replace('#', '').toUpperCase();
 /** A kit pixel in inches. */
 const px = (value: number) => (value * LAYOUT.width) / 1280;
@@ -61,11 +67,11 @@ function drawElement(
           runs.push({
             text: run.text,
             options: {
-              fontFace: run.face === 'serif' ? SERIF : SANS,
+              fontFace: FACES[run.face],
               fontSize: pt(run.size),
               color: hex(run.color),
-              // Georgia is never bold, and nothing is italic.
-              bold: run.face === 'sans' && Boolean(run.bold),
+              // Fraunces is always bold, Georgia never, and nothing is italic.
+              bold: run.face === 'display' || (run.face === 'sans' && Boolean(run.bold)),
               italic: false,
               ...(last && p < element.paras.length - 1 ? { breakLine: true } : {}),
               ...(last ? { paraSpaceAfter: pt(para.after ?? 0) } : {}),
@@ -94,7 +100,8 @@ export async function renderDeckPptxKitV4(
   const pptx = new PptxGenJS();
   pptx.defineLayout(LAYOUT);
   pptx.layout = LAYOUT.name;
-  pptx.theme = { headFontFace: SERIF, bodyFontFace: SANS };
+  const v41 = isKitV41(deck);
+  pptx.theme = { headFontFace: v41 ? KIT_DISPLAY_TYPEFACE : SERIF, bodyFontFace: SANS };
   pptx.title = deck.title;
   if (deck.subtitle) pptx.subject = deck.subtitle;
   pptx.company = 'Yawp!';
@@ -112,6 +119,10 @@ export async function renderDeckPptxKitV4(
     slide.addNotes(notesWithMinutes(spec.speakerNotes, spec.minutes));
   });
 
-  const written = await pptx.write({ outputType: 'nodebuffer' });
-  return new Uint8Array(written as Buffer);
+  const written = new Uint8Array((await pptx.write({ outputType: 'nodebuffer' })) as Buffer);
+  if (!v41) return written;
+  // Where the font file is missing the deck still exports: PowerPoint then
+  // shows Fraunces only where it is installed.
+  const ttf = kitDisplayFontFile();
+  return ttf ? embedPptxBoldFont(written, { typeface: KIT_DISPLAY_TYPEFACE, ttf }) : written;
 }

@@ -195,3 +195,75 @@ describe('renderDeckPptxGallery (Deck spec v4)', () => {
     expect(parts.get('ppt/slides/slide1.xml')).toContain('i="1"');
   });
 });
+
+describe('renderDeckPptxGallery (Deck spec v4.1)', () => {
+  const v41: SlideDeck = {
+    ...deck,
+    kit: 'v4.1',
+    slides: [
+      { ...deck.slides[0]!, teacher: 'Ms. Okafor', course: 'English 9, November 12' },
+      deck.slides[1]!,
+      { layout: 'steps', title: 'Draft your topic sentence', bullets: ['Reread your thesis', 'Pick one reason'], minutes: 6, ...notes },
+      ...deck.slides.slice(2),
+    ],
+  };
+  const slides = (parts: Map<string, string>) => v41.slides.map((_, index) => parts.get(`ppt/slides/slide${index + 1}.xml`)!);
+
+  test('Fraunces Bold for titles and headlines; Georgia never bold; nothing else but Arial', async () => {
+    const parts = pptxParts(await renderDeckPptxGallery(v41));
+    const all = slides(parts).join('');
+    const faces = new Set([...all.matchAll(/typeface="([^"]+)"/g)].map((match) => match[1]));
+    expect([...faces].sort()).toEqual(['Arial', 'Fraunces', 'Georgia']);
+    const runs = [...all.matchAll(/<a:rPr[^>]*>(?:(?!<\/a:rPr>).)*<\/a:rPr>/gs)].map((match) => match[0]);
+    const fraunces = runs.filter((run) => run.includes('typeface="Fraunces"'));
+    expect(fraunces.length).toBeGreaterThan(0);
+    for (const run of fraunces) expect(run).toContain(' b="1"');
+    for (const run of runs.filter((run) => run.includes('typeface="Georgia"'))) expect(run).not.toContain(' b="1"');
+    expect(all).not.toContain('i="1"');
+    // The title, in Fraunces.
+    expect(parts.get('ppt/slides/slide1.xml')).toMatch(/typeface="Fraunces"[\s\S]*?<a:t>The weight of things<\/a:t>/);
+  });
+
+  test('Fraunces Bold is embedded in the file, and is the theme’s heading font', async () => {
+    const bytes = await renderDeckPptxGallery(v41);
+    const parts = pptxParts(bytes);
+    expect(parts.has('ppt/fonts/Fraunces-bold.fntdata')).toBe(true);
+    const presentation = parts.get('ppt/presentation.xml')!;
+    expect(presentation).toMatch(/<p:embeddedFontLst><p:embeddedFont><p:font typeface="Fraunces"\/><p:bold r:id="(rId\d+)"\/><\/p:embeddedFont><\/p:embeddedFontLst>/);
+    expect(presentation).toContain('embedTrueTypeFonts="1"');
+    // The whole font, not only the characters on the slides, so a headline can be retyped.
+    expect(presentation).not.toContain('saveSubsetFonts="1"');
+    // In schema order: after the notes size, before the default text style.
+    expect(presentation.indexOf('<p:notesSz')).toBeLessThan(presentation.indexOf('<p:embeddedFontLst>'));
+    expect(presentation.indexOf('<p:embeddedFontLst>')).toBeLessThan(presentation.indexOf('<p:defaultTextStyle>'));
+    const id = presentation.match(/<p:bold r:id="(rId\d+)"/)![1]!;
+    const rels = parts.get('ppt/_rels/presentation.xml.rels')!;
+    expect(rels).toContain(`Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/font" Target="fonts/Fraunces-bold.fntdata"`);
+    expect(rels.match(new RegExp(`Id="${id}"`, 'g'))).toHaveLength(1);
+    expect(parts.get('[Content_Types].xml')).toContain('<Default Extension="fntdata" ContentType="application/x-fontdata"/>');
+    expect(parts.get('ppt/theme/theme1.xml')).toMatch(/<a:majorFont><a:latin typeface="Fraunces"/);
+  });
+
+  test('no running head: the lesson’s name is on the title slide only', async () => {
+    const parts = pptxParts(await renderDeckPptxGallery(v41));
+    expect(slideText(parts, 1)).toContain('The weight of things');
+    for (let number = 2; number <= v41.slides.length; number += 1) {
+      expect(slideText(parts, number)).not.toContain('The weight of things');
+    }
+  });
+
+  test('the title slide names the teacher, then the class and date', async () => {
+    const text = slideText(pptxParts(await renderDeckPptxGallery(v41)), 1);
+    expect(text).toContain('The Things They Carried');
+    expect(text.indexOf('Ms. Okafor')).toBeGreaterThan(text.indexOf('What we carry'));
+    expect(text.indexOf('English 9, November 12')).toBeGreaterThan(text.indexOf('Ms. Okafor'));
+    expect(text).not.toContain('Writing Program');
+  });
+
+  test('a spec v4 deck exports as before: Georgia and Arial, no embedded font', async () => {
+    const parts = pptxParts(await renderDeckPptxGallery({ ...v41, kit: 'v4' }));
+    expect([...parts.keys()].some((name) => name.startsWith('ppt/fonts/'))).toBe(false);
+    expect(parts.get('ppt/presentation.xml')).not.toContain('embeddedFontLst');
+    expect(slides(parts).join('')).not.toContain('Fraunces');
+  });
+});

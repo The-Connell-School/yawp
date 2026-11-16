@@ -35,6 +35,24 @@ function fontPath(file: string): string | null {
   return null;
 }
 
+const DISPLAY_NAME = 'kit-display';
+const withDisplay = new WeakSet<object>();
+
+/**
+ * Fraunces Bold on a PDF (spec v4.1 titles and headlines), registered the
+ * first time a document needs it. It is open (SIL Open Font License), so the
+ * PDF carries Fraunces itself; where the file is missing, Times Bold.
+ */
+export function registerKitDisplayFont(pdf: InstanceType<typeof PDFDocument>): string {
+  const path = fontPath('Fraunces-Bold.ttf');
+  if (!path) return 'Times-Bold';
+  if (!withDisplay.has(pdf)) {
+    pdf.registerFont(DISPLAY_NAME, path);
+    withDisplay.add(pdf);
+  }
+  return DISPLAY_NAME;
+}
+
 /** Registers the kit's fonts on a PDF and returns the names to use. */
 export function registerKitFonts(pdf: InstanceType<typeof PDFDocument>): KitPdfFonts {
   const names = {} as KitPdfFonts;

@@ -144,8 +144,12 @@ const slideSchema = z
     answer: z.coerce.number().int().min(1).max(5).optional(),
     // The exit slide's Yawp! button ("Open Yawp! → Exit ticket").
     button: z.string().trim().min(1).max(40).optional(),
-    // The title slide's course line ("English 9").
+    // The title slide's course line ("English 9"); in deck spec v4.1, the
+    // class and date ("English 10, November 12").
     course: z.string().trim().min(1).max(80).optional(),
+    // Deck spec v4.1: the teacher's name on the title slide, when the planner
+    // has it from the session. Left out, the line is left out.
+    teacher: z.string().trim().min(1).max(80).optional(),
     // Which of the deck's colors (1-based) this slide uses, for a section
     // that keeps its own color.
     color: z.coerce.number().int().min(1).max(3).optional(),
@@ -221,12 +225,13 @@ const deckSchema = z.object({
 });
 
 export type Slide = z.infer<typeof slideSchema>;
-/** The look a gallery deck is drawn in: absent for spec v3, `v4` for spec v4. */
-export type DeckKit = 'v4';
+/** The look a gallery deck is drawn in: absent for spec v3, `v4` for spec v4, `v4.1` for spec v4.1. */
+export type DeckKit = 'v4' | 'v4.1';
 export type SlideDeck = z.infer<typeof deckSchema> & {
   /**
    * Render-only: set where the deck is loaded for drawing, from the school's
-   * `lesson_planner_deck_kit_v4` flag (`withDeckKit`). Never in the schema, so
+   * `lesson_planner_deck_kit_v4` and `lesson_planner_deck_kit_v41` flags
+   * (`withDeckKit`). Never in the schema, so
    * the planner cannot set it and a saved deck never stores it.
    */
   kit?: DeckKit;
