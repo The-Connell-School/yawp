@@ -593,6 +593,7 @@ export async function approvalDetail(request: Request) {
       gradeLevel: true,
       acquisitionTokenId: true,
       releasedAt: true,
+      notes: true,
       approvalDecisions: {
         orderBy: { createdAt: 'asc' },
         select: { id: true, createdAt: true, decision: true, reason: true, decidedByEmail: true },
