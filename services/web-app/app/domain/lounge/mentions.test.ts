@@ -116,7 +116,13 @@ describe('a team mention written before the brand was spelled Yawp!', () => {
     expect(mentionsTeam(encodeMentions(text, mentions))).toBe(true);
   });
 
-  test('a person whose label has the old spelling is left as written', () => {
-    expect(plainTextWithMentions(mentionToken('YAWP! team', 'user_1'))).toBe('@YAWP! team');
+  test('a legacy team account mentioned by its real user id also uses the current brand', () => {
+    const stored = mentionToken('YAWP! team', 'user_1');
+    expect(plainTextWithMentions(stored)).toBe('@Yawp! team');
+    expect(splitMentions(stored)).toEqual([{ type: 'mention', userId: 'user_1', label: 'Yawp! team' }]);
+    const decoded = decodeMentions(stored);
+    expect(encodeMentions(decoded.text, decoded.mentions)).toBe(mentionToken('Yawp! team', 'user_1'));
+    expect(mentionedUserIds(stored)).toEqual(['user_1']);
+    expect(mentionsTeam(stored)).toBe(false);
   });
 });
