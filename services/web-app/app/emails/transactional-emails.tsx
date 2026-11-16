@@ -235,11 +235,13 @@ export function TeacherApprovedEmail(props: {
         ]}
       />
       <PillButton label="Add students" href={props.addStudentsUrl} />
-      <EmailBodyBlocks
-        paragraphs={[
-          <>A quick thank-you to {props.adminName} might be nice, too.</>,
-        ]}
-      />
+      {props.adminName.trim() === 'Yawp!' ? null : (
+        <EmailBodyBlocks
+          paragraphs={[
+            <>A quick thank-you to {props.adminName} might be nice, too.</>,
+          ]}
+        />
+      )}
     </YawpEmailLayout>
   );
 }

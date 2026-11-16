@@ -29,6 +29,17 @@ export type ProvisionFreeClassroomResult =
   | { status: 'pending_user' }
   | { status: 'routed_to_school_onboarding' };
 
+export type ProvisionFreeClassroomOptions = {
+  /**
+   * Staff approval is an explicit decision. Provision the free classroom even
+   * when the teacher's domain matches a paid school, and record that match
+   * for internal follow-up. Never joins the paid school.
+   */
+  alwaysProvision?: boolean;
+};
+
+export type PaidSchoolMatch = { id: string; name: string };
+
 function emailDomain(email: string) {
   const at = email.lastIndexOf('@');
   if (at < 0) return null;
@@ -54,6 +65,52 @@ export async function teacherEmailDomainMatchesSchoolOrg(
     ) AS exists
   `;
   return Boolean(rows[0]?.exists);
+}
+
+/** Paid school orgs that already have a teacher on this email domain. */
+export async function paidSchoolOrgsForTeacherDomain(
+  domain: string,
+  client: SchoolDomainLookupClient = prisma
+): Promise<PaidSchoolMatch[]> {
+  if (!domain || isConsumerEmailDomain(domain)) return [];
+  const rows = await client.$queryRaw<PaidSchoolMatch[]>`
+    SELECT DISTINCT o.id, o.name
+    FROM "OrgMembership" om
+    JOIN "User" u ON u.id = om."userId"
+    JOIN "Organization" o ON o.id = om."organizationId"
+    WHERE om.role = 'TEACHER'
+      AND o.plan = 'SCHOOL'::"OrganizationPlan"
+      AND lower(split_part(u.email, '@', 2)) = ${domain}
+    ORDER BY o.name
+  `;
+  return rows;
+}
+
+/** Internal note. Idempotent: the same sentence is not appended twice. */
+export function paidSchoolDomainMatchNote(matches: PaidSchoolMatch[]) {
+  const schools = matches
+    .map((match) => ({ id: match.id, name: match.name.trim() }))
+    .filter((match) => match.name);
+  if (!schools.length) return null;
+  const label = (school: { name: string }) => school.name;
+  if (schools.length === 1) {
+    return `Teacher's domain matches paid school ${label(schools[0]!)}.`;
+  }
+  if (schools.length === 2) {
+    return `Teacher's domain matches paid schools ${label(schools[0]!)} and ${label(schools[1]!)}.`;
+  }
+  const names = schools.map(label);
+  return `Teacher's domain matches paid schools ${names.slice(0, -1).join(', ')}, and ${names.at(-1)}.`;
+}
+
+export function appendPaidSchoolDomainNote(
+  notes: string | null | undefined,
+  signal: string | null
+) {
+  if (!signal) return notes ?? null;
+  if (notes?.includes(signal)) return notes;
+  const current = notes?.trim();
+  return current ? `${current}\n${signal}` : signal;
 }
 
 function schoolCodeFromName(schoolName: string, applicationId: string) {
@@ -95,8 +152,114 @@ async function linkBundleAssignmentTypes(
   return types;
 }
 
+type StarterClassApplication = {
+  userId: string;
+  organizationId: string | null;
+  starterClassName: string | null;
+  starterClassGrade: string | null;
+};
+
+async function createStarterClass(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  args: {
+    organizationId: string;
+    schoolId: string;
+    membershipId: string;
+    application: StarterClassApplication;
+    alwaysProvision: boolean;
+  }
+) {
+  const prepared = parseClassPreparation(
+    args.application.starterClassName ?? '',
+    args.application.starterClassGrade ?? ''
+  );
+  const usePrepared =
+    prepared.ok &&
+    (args.alwaysProvision ||
+      (await isClassPreparationEnabled(
+        args.application.userId,
+        args.application.organizationId
+      )));
+  const classCode = await resolveClassCode(tx, generateClassCode(), {
+    generated: true,
+  });
+  const classArtKey = await pickClassArtKeyForOrganization(args.organizationId);
+  await tx.class.create({
+    data: {
+      schoolId: args.schoolId,
+      schoolYear: currentSchoolYear(),
+      title: usePrepared && prepared.ok ? prepared.className : 'My Class',
+      ...(usePrepared && prepared.ok ? { grade: prepared.grade } : {}),
+      code: classCode,
+      cardGradientKey: generateClassCardGradientKey(classCode),
+      classArtKey,
+      teachers: { connect: { id: args.membershipId } },
+    },
+  });
+}
+
+async function ensureFreeTeacherClassroom(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  application: StarterClassApplication & {
+    id: string;
+    schoolName: string;
+    organizationId: string;
+  }
+) {
+  let school = await tx.school.findFirst({
+    where: { organizationId: application.organizationId },
+    select: { id: true },
+  });
+  if (!school) {
+    school = await tx.school.create({
+      data: {
+        organizationId: application.organizationId,
+        name: application.schoolName,
+        code: schoolCodeFromName(application.schoolName, application.id),
+      },
+      select: { id: true },
+    });
+  }
+  let membership = await tx.orgMembership.findFirst({
+    where: {
+      userId: application.userId,
+      organizationId: application.organizationId,
+      role: 'TEACHER',
+    },
+    select: { id: true },
+  });
+  if (!membership) {
+    membership = await tx.orgMembership.create({
+      data: {
+        userId: application.userId,
+        organizationId: application.organizationId,
+        role: 'TEACHER',
+        isOrgOwner: true,
+        schools: { connect: { id: school.id } },
+      },
+      select: { id: true },
+    });
+  }
+  const existingClass = await tx.class.findFirst({
+    where: {
+      isArchived: false,
+      teachers: { some: { id: membership.id } },
+    },
+    select: { id: true },
+  });
+  if (existingClass) return;
+  await createStarterClass(tx, {
+    organizationId: application.organizationId,
+    schoolId: school.id,
+    membershipId: membership.id,
+    application,
+    alwaysProvision: true,
+  });
+}
+
 export async function provisionFreeClassroom(
-  applicationId: string
+  applicationId: string,
+  options: ProvisionFreeClassroomOptions = {}
 ): Promise<ProvisionFreeClassroomResult> {
   const result = await prisma.$transaction(async (tx): Promise<ProvisionFreeClassroomResult> => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_provision:' || ${applicationId}))`;
@@ -109,6 +272,7 @@ export async function provisionFreeClassroom(
         schoolName: true,
         starterClassName: true,
         starterClassGrade: true,
+        notes: true,
         userId: true,
         organizationId: true,
       },
@@ -118,6 +282,25 @@ export async function provisionFreeClassroom(
     }
 
     if (application.organizationId) {
+      if (options.alwaysProvision && application.userId) {
+        const domain = emailDomain(application.email);
+        const domainNote = paidSchoolDomainMatchNote(
+          domain ? await paidSchoolOrgsForTeacherDomain(domain, tx) : []
+        );
+        if (domainNote && !application.notes?.includes(domainNote)) {
+          await tx.freeTierApplication.update({
+            where: { id: application.id },
+            data: {
+              notes: appendPaidSchoolDomainNote(application.notes, domainNote),
+            },
+          });
+        }
+        await ensureFreeTeacherClassroom(tx, {
+          ...application,
+          userId: application.userId,
+          organizationId: application.organizationId,
+        });
+      }
       return {
         status: 'already_provisioned',
         organizationId: application.organizationId,
@@ -129,23 +312,35 @@ export async function provisionFreeClassroom(
     }
 
     const domain = emailDomain(application.email);
-    if (
-      domain &&
-      !isConsumerEmailDomain(domain) &&
-      (await teacherEmailDomainMatchesSchoolOrg(domain))
-    ) {
-      return { status: 'routed_to_school_onboarding' };
-    }
+    const domainMatches =
+      options.alwaysProvision && domain
+        ? await paidSchoolOrgsForTeacherDomain(domain, tx)
+        : [];
+    const domainNote = paidSchoolDomainMatchNote(domainMatches);
+    if (!options.alwaysProvision) {
+      if (
+        domain &&
+        !isConsumerEmailDomain(domain) &&
+        (await teacherEmailDomainMatchesSchoolOrg(domain, tx))
+      ) {
+        return { status: 'routed_to_school_onboarding' };
+      }
 
-    const existingSchoolMembership = await tx.orgMembership.findFirst({
-      where: {
-        userId: application.userId,
-        organization: { plan: 'SCHOOL', id: { not: 'default-org' } },
-      },
-      select: { id: true },
-    });
-    if (existingSchoolMembership) {
-      return { status: 'routed_to_school_onboarding' };
+      const existingSchoolMembership = await tx.orgMembership.findFirst({
+        where: {
+          userId: application.userId,
+          organization: { plan: 'SCHOOL', id: { not: 'default-org' } },
+        },
+        select: { id: true },
+      });
+      if (existingSchoolMembership) {
+        return { status: 'routed_to_school_onboarding' };
+      }
+    } else if (domainNote && !application.notes?.includes(domainNote)) {
+      await tx.freeTierApplication.update({
+        where: { id: application.id },
+        data: { notes: appendPaidSchoolDomainNote(application.notes, domainNote) },
+      });
     }
 
     const now = new Date();
@@ -184,21 +379,17 @@ export async function provisionFreeClassroom(
       select: { id: true },
     });
 
-    const prepared = parseClassPreparation(application.starterClassName ?? '', application.starterClassGrade ?? '');
-    const usePrepared = prepared.ok && await isClassPreparationEnabled(application.userId, application.organizationId);
-    const classCode = await resolveClassCode(tx, generateClassCode(), { generated: true });
-    const classArtKey = await pickClassArtKeyForOrganization(org.id);
-    await tx.class.create({
-      data: {
-        schoolId: school.id,
-        schoolYear: currentSchoolYear(),
-        title: usePrepared && prepared.ok ? prepared.className : 'My Class',
-        ...(usePrepared && prepared.ok ? { grade: prepared.grade } : {}),
-        code: classCode,
-        cardGradientKey: generateClassCardGradientKey(classCode),
-        classArtKey,
-        teachers: { connect: { id: membership.id } },
+    await createStarterClass(tx, {
+      organizationId: org.id,
+      schoolId: school.id,
+      membershipId: membership.id,
+      application: {
+        userId: application.userId,
+        organizationId: application.organizationId,
+        starterClassName: application.starterClassName,
+        starterClassGrade: application.starterClassGrade,
       },
+      alwaysProvision: Boolean(options.alwaysProvision),
     });
 
     await linkBundleAssignmentTypes(tx, org.id);
@@ -270,11 +461,13 @@ export async function retryFreeClassroomProvisioningForUser(userId: string) {
     select: { id: true },
   });
   if (!application) return null;
-  return provisionFreeClassroom(application.id);
+  return provisionFreeClassroom(application.id, { alwaysProvision: true });
 }
 
 export async function provisionFreeClassroomFromApproval(applicationId: string) {
-  const result = await provisionFreeClassroom(applicationId);
+  const result = await provisionFreeClassroom(applicationId, {
+    alwaysProvision: true,
+  });
   if (result.status === 'routed_to_school_onboarding') {
     console.info('free_tier_provision_routed_to_school', { applicationId });
   }
