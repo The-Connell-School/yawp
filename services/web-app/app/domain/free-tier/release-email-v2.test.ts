@@ -64,7 +64,23 @@ test('v2 teacher reminder and approved emails follow the copy rules', () => {
   );
   expect(teacher).toContain('Request approval from a different administrator');
   expect(approved).toContain('Hi Jordan,');
+  expect(approved).toContain(
+    'Your administrator approved your classroom, so all free features are now unlocked.'
+  );
+  expect(approved).toContain(
+    'Head over to your classroom to make your first assignment and add your students!'
+  );
+  expect(approved).toContain('Take me to Yawp!');
   expect(approved).toContain('A quick thank-you to Dr. Lee might be nice, too.');
+  expect(
+    renderCongratulationsEmailV2Body({
+      teacherName: 'Jordan Smith',
+      adminName: 'Yawp!',
+      signInUrl: 'https://example.test/app',
+    })
+  ).toContain(
+    'Yawp! approved your classroom, so all free features are now unlocked.'
+  );
   expect(
     renderCongratulationsEmailV2Body({
       teacherName: 'Jordan Smith',

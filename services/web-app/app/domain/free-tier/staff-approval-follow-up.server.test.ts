@@ -194,7 +194,7 @@ test('staff approve emails the teacher once, logs it, and closes the admin reque
   expect(sendEmail).toHaveBeenCalledTimes(1);
   const message = sendEmail.mock.calls[0]![0];
   expect(message.to).toBe('teacher@school.edu');
-  expect(message.text).toContain('https://yawp.test/auth/login');
+  expect(message.text).toContain('https://yawp.test/app');
   expect(message.text).toContain('Yawp! approved Yawp! for your classroom');
   expect(emailLogs).toEqual([
     expect.objectContaining({

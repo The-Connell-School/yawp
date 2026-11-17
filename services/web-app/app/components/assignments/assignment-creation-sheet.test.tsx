@@ -583,7 +583,8 @@ describe('AssignmentCreationSheetContent', () => {
       controlById('assignment-create-change-grading').click();
     });
 
-    expectText('Grading assistance');
+    expectText('Grading Assistant');
+    expectText('Set the level based on your students.');
     expectText('Beginner');
     expectText('Intermediate');
     expectText('Advanced');
@@ -633,7 +634,8 @@ describe('AssignmentCreationSheetContent', () => {
     });
 
     expectText('Point value');
-    expectText('Grading assistance');
+    expectText('Grading Assistant');
+    expectText('Set the level based on your students.');
     expectNoText('Customize Grading');
     expect(controlById('assignment-create-point-value')).toHaveProperty(
       'readOnly',
@@ -1790,7 +1792,8 @@ describe('AssignmentCreationSheetContent', () => {
         document.getElementById('assignment-create-grading-mode-step')
       ).toBeNull();
       // Strictness is still the teacher's call.
-      expectText('Grading assistance');
+      expectText('Grading Assistant');
+      expectText('Set the level based on your students.');
     });
 
     it('opens graded when the lesson planner planned a graded ticket', () => {

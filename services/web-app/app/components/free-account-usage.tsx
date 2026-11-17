@@ -391,6 +391,20 @@ function FreeTierCarouselTile({
       ? 'site-license-locked-assignment-tile'
       : dashboardAssignmentTileTestId;
 
+  if (siteLicense && !teachingLocked) {
+    return (
+      <Link
+        to={`/app/assignment-types/${assignmentTypeId}`}
+        data-testid={testId}
+        aria-label={`${label}. Comes with a school site license.`}
+        className={shellClass}
+      >
+        {image}
+        {caption}
+      </Link>
+    );
+  }
+
   const guideOnly = teachingLocked || siteLicense;
   const hasHowItWorksGuide =
     siteLicenseTileKey != null

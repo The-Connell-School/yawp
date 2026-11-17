@@ -36,6 +36,7 @@ import { isTeachingApprovalRequiredActionData } from '~/domain/free-tier/teachin
 import { toDateInputValue } from '~/utils/date-only';
 import { assignmentBuilderV3ShowGroupProjectToggle } from '~/domain/assignments/assignment-builder-v3-group-project';
 import { resolvePostCreateAssignmentNavigation } from '~/domain/assignments/post-create-assignment-navigation';
+import { playYawp } from '~/domain/lesson-planner/celebration';
 import {
   canBrowserHistoryGoBack,
   handleHistoryBackClick,
@@ -340,6 +341,9 @@ export function AssignmentBuilderV3({
         canGoBack: canBrowserHistoryGoBack(),
       });
       setDirty(false);
+      if (destination.kind === 'navigate' && destination.url.includes('firstAssignment=')) {
+        playYawp();
+      }
       if (destination.kind === 'back') {
         void navigate(-1);
       } else {
@@ -1080,10 +1084,11 @@ function SnapshotAdvancedGrading({
             </div>
           </div>
           <div>
-            <span className="abv3-field-label">Grading assistance</span>
+            <span className="abv3-field-label">Grading Assistant</span>
+            <p className="abv3-helper">Set the level based on your students.</p>
             <div
               role="group"
-              aria-label="Grading assistance"
+              aria-label="Grading Assistant"
               className="abv3-segment"
             >
               {gradingAssistantStrictnessOptions.map((option) => (

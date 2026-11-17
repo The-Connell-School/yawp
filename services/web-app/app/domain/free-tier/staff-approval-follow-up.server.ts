@@ -58,7 +58,7 @@ export async function sendStaffApprovalCongratulationsIfNeeded(app: {
   });
   if (existing) return { ok: true as const, skipped: true as const };
   try {
-    const signInUrl = `${freeTierPublicAppOrigin()}/auth/login`;
+    const signInUrl = `${freeTierPublicAppOrigin()}/app`;
     return await sendFreeTierCongratulationsEmail({
       applicationId: app.id,
       teacherEmail: app.email,

@@ -212,6 +212,22 @@ ${plainTextEmailFooter(
 export const CONGRATULATIONS_V2_SUBJECT =
   'You\'re approved! Your Yawp! classroom is ready';
 
+export const APPROVED_CLASSROOM_NEXT_STEP =
+  'Head over to your classroom to make your first assignment and add your students!';
+
+export const APPROVED_CLASSROOM_BUTTON_LABEL = 'Take me to Yawp!';
+
+/**
+ * Staff approvals are signed Yawp!. A school administrator's approval says so
+ * without naming them in the lead, because the button takes the teacher home.
+ */
+export function approvedClassroomLead(adminName: string) {
+  if (adminName.trim() === 'Yawp!') {
+    return 'Yawp! approved your classroom, so all free features are now unlocked.';
+  }
+  return 'Your administrator approved your classroom, so all free features are now unlocked.';
+}
+
 /** Staff approvals sign the email as Yawp!, so the administrator thank-you is omitted. */
 export function congratulationsThankYouLine(adminName: string) {
   if (adminName.trim() === 'Yawp!') return '';
@@ -226,11 +242,11 @@ export function renderCongratulationsEmailV2Body(args: {
   const origin = defaultTransactionalEmailOrigin();
   return `Hi ${firstName(args.teacherName)},
 
-${args.adminName} approved your classroom, so all free features are now unlocked.
+${approvedClassroomLead(args.adminName)}
 
-Next, add your students. It takes about five minutes with your class in the room.
+${APPROVED_CLASSROOM_NEXT_STEP}
 
-${plainTextButton('Add students', args.signInUrl)}
+${plainTextButton(APPROVED_CLASSROOM_BUTTON_LABEL, args.signInUrl)}
 ${congratulationsThankYouLine(args.adminName)}
 ${BRIAN_SIGNATURE}
 
