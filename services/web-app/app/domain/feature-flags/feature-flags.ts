@@ -142,10 +142,10 @@ export const CLASS_CODE_UNIQUE_FLAG = 'classcode-unique' as const;
 
 /**
  * Teacher's Lounge community board. On for a school: the Teacher's Lounge nav
- * item opens the community feed (/app/lounge), with the existing course grid
- * one tab away at its old URL. Off: the nav item opens the course grid as
- * before and every /app/lounge route returns 404. Posts are never deleted by
- * turning it off.
+ * item opens the community feed (/app/lounge), and /app/teacher-trainings
+ * redirects there; training courses and modules keep their own URLs. Off: the
+ * nav item opens the course grid as before, and every /app/lounge route returns
+ * 404. Posts are never deleted by turning it off.
  */
 export const LOUNGE_COMMUNITY_FLAG = 'teacher_lounge_community' as const;
 

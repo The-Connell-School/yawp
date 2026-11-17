@@ -79,6 +79,13 @@ export const middleware = [internalImpersonationMiddleware, previewAccessMiddlew
 export const links: LinksFunction = () => {
   return [
     { rel: 'preload', href: appCssUrl, as: 'style' },
+    {
+      rel: 'preload',
+      href: '/lesson-planner/fonts/Fraunces-Bold.woff2',
+      as: 'font',
+      type: 'font/woff2',
+      crossOrigin: 'anonymous',
+    },
     { rel: 'mask-icon', href: '/favicons/mask-icon.svg' },
     {
       rel: 'alternate icon',
@@ -333,9 +340,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         })
       : false;
   const loungeCommunityEnabled = userId
-    ? user?.isAdmin
-      ? true
-      : await isLoungeCommunityEnabled(membership?.organizationId ?? null)
+    ? await isLoungeCommunityEnabled(membership?.organizationId ?? null)
     : false;
 
   return data(

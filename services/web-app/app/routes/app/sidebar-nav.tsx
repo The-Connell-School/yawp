@@ -131,8 +131,8 @@ const LOUNGE_COMMUNITY_PATH = '/app/lounge';
 
 /**
  * With the Lounge community flag on, the existing Lounge item becomes the
- * Faculty Lounge: it opens the community feed and stays highlighted on the course grid, which
- * keeps its URL one tab away. Off: the item is untouched.
+ * Faculty Lounge: it opens the community feed and stays highlighted on a
+ * training course, which keeps its own URL. Off: the item is untouched.
  */
 export function applyLoungeCommunityLink(
   sections: SidebarNavSection[],

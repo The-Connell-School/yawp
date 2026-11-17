@@ -15,6 +15,7 @@ import { redirectIfTeacherLoungeTemporarilyDisabled } from '~/domain/teacher-lou
 import { cn } from '~/utils/misc';
 import { isLoungeCommunityEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { LOUNGE_NAME } from '~/domain/lounge/launch';
+import { facultyLoungeTrainingsHome } from '~/domain/teacher-trainings/faculty-lounge-trainings';
 import {
   getTeacherTrainingProgressPercent,
   isTeacherTrainingModuleComplete,
@@ -82,11 +83,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Teacher training not found', { status: 404 });
   }
 
-  // Trainings live in the Lounge: with the community on it is the Faculty
-  // Lounge's Trainings tab, otherwise the Teacher's Lounge page itself.
-  const viewer = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
-  const communityEnabled =
-    Boolean(viewer?.isAdmin) || (await isLoungeCommunityEnabled(profile.organization.id));
+  // Trainings stay reachable at their own URL. With the community on, Back
+  // returns to the Faculty Lounge feed; otherwise to the course grid.
+  const communityEnabled = await isLoungeCommunityEnabled(profile.organization.id);
 
   // Lessons of the Thesis-Driven Essay course run as long as Brian's
   // tutorials, which the module pages play in place of the uploaded videos.
@@ -178,7 +177,7 @@ export default function TeacherTrainingRoute() {
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <Button variant="outline" asChild>
-              <Link to="/app/teacher-trainings">
+              <Link to={facultyLoungeTrainingsHome(communityEnabled)}>
                 <ChevronLeft className="mr-2 h-4 w-4" />
                 {communityEnabled ? `Back to the ${LOUNGE_NAME}` : "Back to Teacher's Lounge"}
               </Link>

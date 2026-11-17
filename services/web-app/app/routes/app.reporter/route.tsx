@@ -43,6 +43,7 @@ import {
   MarkdownContent,
   printAssistantMessage,
 } from '~/components/ai-chat/assistant-markdown';
+import { ReporterSuggestionChips } from './suggestion-chips';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -587,19 +588,11 @@ function ReporterEmptyState({
           answer questions and build reports. Try one of these, or just ask.
         </p>
       </div>
-      <div className="grid w-full max-w-xl grid-cols-1 gap-2 sm:grid-cols-2">
-        {prompts.map((prompt) => (
-          <button
-            key={prompt.id}
-            type="button"
-            disabled={disabled}
-            onClick={() => onPick(prompt.prompt)}
-            className="rounded-xl border bg-background p-3 text-left text-sm hover:border-primary hover:bg-primary/5 disabled:opacity-50"
-          >
-            <span className="font-medium">{prompt.label}</span>
-          </button>
-        ))}
-      </div>
+      <ReporterSuggestionChips
+        prompts={prompts}
+        onPick={onPick}
+        disabled={disabled}
+      />
     </div>
   );
 }

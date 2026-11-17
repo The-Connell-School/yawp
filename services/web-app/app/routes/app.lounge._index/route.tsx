@@ -1,5 +1,6 @@
 import {
   type ActionFunctionArgs,
+  type LinksFunction,
   type LoaderFunctionArgs,
   data,
   Link,
@@ -22,6 +23,17 @@ import {
 import { formatLoungeTime } from '~/domain/lounge/time';
 import { isLoungeTopic, loungeTopicLabel } from '~/domain/lounge/topics';
 import { cn } from '~/utils/misc';
+
+/** Preload Fraunces so the page title can paint in it without a later swap. */
+export const links: LinksFunction = () => [
+  {
+    rel: 'preload',
+    href: '/lesson-planner/fonts/Fraunces-Bold.woff2',
+    as: 'font',
+    type: 'font/woff2',
+    crossOrigin: 'anonymous',
+  },
+];
 
 const SORTS: Array<{ key: LoungeSort; label: string }> = [
   { key: 'new', label: 'Latest' },
@@ -95,7 +107,6 @@ export default function LoungeFeedRoute() {
   return (
     <section data-lounge-page className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <LoungeMasthead
-        active="community"
         action={
           <Link
             to="/app/lounge/new"

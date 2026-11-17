@@ -42,13 +42,10 @@ import {
   siteLicenseLockedTileHasHowItWorksGuide,
 } from '~/domain/assignment-types/assignment-type-how-it-works';
 import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
-import { SiteLicenseLockButton } from '~/components/site-license-lock-button';
 import {
   assignmentTypeTileMetaTestId,
   assignmentTypeTileNameTestId,
-  dashboardAssignmentTileClassName,
   dashboardAssignmentTileTestId,
-  DashboardAssignmentTileFooter,
 } from '~/components/assignment-type-tile-layout';
 import {
   FreeTierAssignmentCarouselControls,
@@ -403,39 +400,12 @@ function FreeTierCarouselTile({
           kind: assignmentTypeKind ?? null,
         });
 
-  if (teachingLocked) {
-    const footer = (
-      <DashboardAssignmentTileFooter
-        label={label}
-        meta={meta}
-        metaClassName={metaClassName}
-        trailing={<SiteLicenseLockButton />}
-      />
-    );
-    if (hasHowItWorksGuide) {
-      return (
-        <Link
-          to={assignmentTypeHowItWorksPath(assignmentTypeId)}
-          data-testid={testId}
-          aria-label={`New ${label} assignment`}
-          className={dashboardAssignmentTileClassName()}
-        >
-          {footer}
-        </Link>
-      );
-    }
-    return (
-      <div
-        data-testid={testId}
-        className={dashboardAssignmentTileClassName('cursor-default')}
-      >
-        {footer}
-      </div>
-    );
-  }
-
   if (guideOnly && hasHowItWorksGuide) {
-    const ariaLabel = `${label}, ${meta}. See how it works`;
+    // Locked preview keeps the "New … assignment" name the dashboard already
+    // uses; the card is the illustrated one, and it opens How it works.
+    const ariaLabel = teachingLocked
+      ? `New ${label} assignment`
+      : `${label}, ${meta}. See how it works`;
     return (
       <Link
         to={assignmentTypeHowItWorksPath(assignmentTypeId)}

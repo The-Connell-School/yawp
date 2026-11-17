@@ -256,19 +256,18 @@ test.describe.serial('Faculty Lounge launch', () => {
     await expect(edited.getByText('edited')).toBeVisible();
   });
 
-  test('a training opens from the Trainings tab and leads back to the Faculty Lounge', async ({
+  test('a training still opens at its URL and leads back to the Faculty Lounge', async ({
     page,
     signIn,
     e2eContext,
   }) => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
-    await page.goto('/app/lounge');
-    await page.getByRole('link', { name: 'Trainings' }).click();
-    await page.getByText('E2E Teacher Lounge', { exact: true }).click();
-    await expect(page).toHaveURL(/\/app\/teacher-trainings\/[^/]+$/);
+    await page.goto(`/app/teacher-trainings/${e2eContext.teacherTrainingId}`);
+    await expect(page.getByRole('heading', { name: 'E2E Teacher Lounge' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Back to Dashboard' })).toHaveCount(0);
     await page.getByRole('link', { name: 'Back to the Faculty Lounge' }).click();
-    await expect(page).toHaveURL(/\/app\/teacher-trainings$/);
+    await expect(page).toHaveURL(/\/app\/lounge$/);
     await expect(page.getByRole('heading', { name: 'Faculty Lounge', level: 1 })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Trainings' })).toHaveCount(0);
   });
 });

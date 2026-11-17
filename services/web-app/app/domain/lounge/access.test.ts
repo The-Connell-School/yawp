@@ -21,10 +21,13 @@ describe('decideLoungeAccess', () => {
     expect(decideLoungeAccess({ role: 'TEACHER', isActive: false, isAdmin: false, flagOn: true }).allowed).toBe(false);
   });
 
-  test('the Yawp team always can, as staff, whatever their school flag says', () => {
-    expect(decideLoungeAccess({ role: 'STUDENT', isActive: true, isAdmin: true, flagOn: false })).toEqual({
+  test('the Yawp team is staff when the flag is on, and blocked when it is off', () => {
+    expect(decideLoungeAccess({ role: 'TEACHER', isActive: true, isAdmin: true, flagOn: true })).toEqual({
       allowed: true,
       isStaff: true,
     });
+    expect(decideLoungeAccess({ role: 'TEACHER', isActive: true, isAdmin: true, flagOn: false }).allowed).toBe(
+      false,
+    );
   });
 });

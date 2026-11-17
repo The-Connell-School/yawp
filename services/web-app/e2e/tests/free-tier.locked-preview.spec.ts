@@ -424,7 +424,7 @@ for (const width of [390, 1440]) {
     );
     await expect(
       page.getByTestId('free-assignment-tiles').locator('img')
-    ).toHaveCount(0);
+    ).toHaveCount(5);
     await expect(page.getByTestId('free-account-checklist')).toHaveCount(0);
     await expect(page.getByTestId('teacher-grading-grid')).toHaveCount(0);
     await expect(page.getByTestId('preview-assignment-creation-disabled')).toHaveCount(

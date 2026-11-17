@@ -1,7 +1,8 @@
 /**
- * Who may use the Teacher's Lounge community. Teachers with an active
- * membership at a school the flag is on for; the Yawp team (admins) always,
- * as staff. Students never.
+ * Who may use the Teacher's Lounge community. Active teachers at a school
+ * where `teacher_lounge_community` is on; Yawp team accounts post as staff
+ * when the flag is on for their school. Students never. The flag alone gates
+ * access—there is no admin bypass when it is off.
  */
 export function decideLoungeAccess(params: {
   role: 'TEACHER' | 'STUDENT' | string | null | undefined;
@@ -9,7 +10,6 @@ export function decideLoungeAccess(params: {
   isAdmin: boolean;
   flagOn: boolean;
 }): { allowed: boolean; isStaff: boolean } {
-  if (params.isAdmin) return { allowed: true, isStaff: true };
   const allowed = params.role === 'TEACHER' && params.isActive && params.flagOn;
-  return { allowed, isStaff: false };
+  return { allowed, isStaff: allowed && params.isAdmin };
 }

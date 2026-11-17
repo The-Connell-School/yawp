@@ -55,9 +55,61 @@ test.describe.serial("Faculty Lounge community board", () => {
     await expect(page).toHaveURL(/\/app\/teacher-trainings$/);
     await expect(page.getByRole('heading', { name: "Teacher's Lounge" })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Community' })).toHaveCount(0);
+    await expect(page.getByText('No posts yet')).toHaveCount(0);
 
-    const response = await page.goto('/app/lounge');
-    expect(response?.status()).toBe(404);
+    for (const path of ['/app/lounge', '/app/lounge/new', '/app/lounge/welcome']) {
+      const response = await page.goto(path);
+      expect(response?.status()).toBe(404);
+    }
+
+    const trainingsIndex = await page.goto('/app/teacher-trainings');
+    expect(trainingsIndex?.status()).toBe(200);
+    await expect(page).toHaveURL(/\/app\/teacher-trainings$/);
+    await expect(page.getByRole('heading', { name: "Teacher's Lounge" })).toBeVisible();
+
+    await page.goto(`/app/teacher-trainings/${e2eContext.teacherTrainingId}`);
+    await expect(page.getByRole('heading', { name: 'E2E Teacher Lounge' })).toBeVisible();
+    await page.getByRole('link', { name: "Back to Teacher's Lounge" }).click();
+    await expect(page).toHaveURL(/\/app\/teacher-trainings$/);
+  });
+
+  test('flag off: Yawp team staff see the course grid, not the community', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLoungeCommunityFlag(false);
+    await signIn(e2eContext.adminEmail, ADMIN_PASSWORD);
+    await expect(page.getByRole('link', { name: 'Faculty Lounge' })).toHaveCount(0);
+    await page.getByRole('link', { name: "Teacher's Lounge" }).first().click();
+    await expect(page).toHaveURL(/\/app\/teacher-trainings$/);
+    await expect(page.getByRole('heading', { name: "Teacher's Lounge" })).toBeVisible();
+
+    for (const path of ['/app/lounge', '/app/lounge/new', '/app/lounge/welcome']) {
+      const response = await page.goto(path);
+      expect(response?.status()).toBe(404);
+    }
+
+    const trainingsIndex = await page.goto('/app/teacher-trainings');
+    expect(trainingsIndex?.status()).toBe(200);
+    await expect(page).toHaveURL(/\/app\/teacher-trainings$/);
+  });
+
+  test('flag on: the trainings index opens the community feed', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLoungeCommunityFlag(true);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto('/app/teacher-trainings');
+    await expect(page).toHaveURL(/\/app\/lounge(\/welcome)?$/);
+    if (page.url().includes('/welcome')) {
+      await page.getByLabel('I agree to follow the Lounge’s House Rules.').check();
+      await page.getByRole('button', { name: 'Enter the Lounge' }).click();
+    }
+    await expect(page).toHaveURL(/\/app\/lounge$/);
+    await expect(page.getByRole('heading', { name: 'Faculty Lounge', level: 1 })).toBeVisible();
   });
 
   test('a teacher agrees to the House Rules, then asks the Yawp! team a question', async ({
@@ -77,11 +129,13 @@ test.describe.serial("Faculty Lounge community board", () => {
     await expect(page.getByRole('heading', { name: 'Faculty Lounge' })).toBeVisible();
     await expect(page.getByText('No posts yet')).toBeVisible();
 
-    // The course grid is one tab away, and the nav still reads as the Lounge there.
-    await page.getByRole('link', { name: 'Trainings' }).click();
-    await expect(page).toHaveURL(/\/app\/teacher-trainings$/);
+    // Community is the only Faculty Lounge tab. Trainings stay in the database.
+    await expect(page.getByRole('link', { name: 'Trainings' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Community' })).toBeVisible();
-    await page.getByRole('link', { name: 'Community' }).click();
+    await expect(page.getByRole('heading', { name: 'Faculty Lounge' })).toHaveCSS(
+      'font-family',
+      /Fraunces/
+    );
 
     // No all-caps eyebrows ("TEACHERS USING Yawp!") over the masthead.
     await expect(page.getByText('Teachers using Yawp!')).toHaveCount(0);
