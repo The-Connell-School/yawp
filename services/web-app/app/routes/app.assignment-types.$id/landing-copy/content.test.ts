@@ -9,6 +9,7 @@ import {
   landingPageHeading,
   landingPagePlainText,
   resolveLandingPageKey,
+  stepDescription,
 } from './content';
 
 function page(key: LandingPageKey): LandingPage {
@@ -417,5 +418,83 @@ describe('Short Response (previously Daily Pages)', () => {
     expect(landingPageHeading('daily-pages', 'Friday Journal')).toBe('Friday Journal');
     expect(landingPageHeading('class-starter', 'Class Starter')).toBe('Class Starter');
     expect(landingPageHeading(null, 'Daily Pages')).toBe('Daily Pages');
+  });
+});
+
+describe('5-Paragraph Essay How to Teach It (Brian, Nov 17)', () => {
+  const howToTeach = () => section('five-paragraph-essay', 'how-to-teach-it');
+
+  test('keeps the heading and opens with his note, word for word', () => {
+    expect(howToTeach().heading).toBe('How to Teach It');
+    expect(paragraphs(howToTeach().blocks).slice(0, 2)).toEqual([
+      'Most English teachers already have a way of teaching the five-paragraph essay, and Yawp! is built to work alongside yours. As you teach the process, students work through the steps below in their documents, and the Yawp! Tutor coaches them through each one: pre-writing, a three-point thesis, an introduction, three body paragraphs, a conclusion, a title, and a final review.',
+      'New to this essay, or want fresh slides and ideas on how to teach it? Head to the Lesson Planner and ask it to build you a lesson on pre-writing, body paragraphs, or the whole 5-paragraph essay.',
+    ]);
+  });
+
+  test('"Lesson Planner" in the second paragraph is the planner link', () => {
+    const block = howToTeach().blocks[1]!;
+    expect(block.type).toBe('paragraph');
+    if (block.type !== 'paragraph') return;
+    expect(block.plannerLink).toBe('Lesson Planner');
+    expect(block.text).toContain(block.plannerLink!);
+  });
+
+  test('the rest of the block is as it was, the steps last', () => {
+    const blocks = howToTeach().blocks;
+    expect(paragraphs(blocks).slice(2)).toEqual([
+      'Teach the steps below in order. Each one builds on the last: students find a focus, write a thesis, and build paragraphs that prove it.',
+    ]);
+    expect(blocks.at(-1)?.type).toBe('steps');
+  });
+
+  const steps = () => {
+    const block = howToTeach().blocks.find((b) => b.type === 'steps');
+    if (!block || block.type !== 'steps') throw new Error('no steps');
+    return block;
+  };
+  const describe5 = (title: string) => stepDescription(steps(), title);
+
+  test.each([
+    ['Pre-Writing', 'Students write freely on your prompt for at least five minutes.'],
+    ['Pre-writing', 'Students write freely on your prompt for at least five minutes.'],
+    ['Thesis Statement', 'Students turn their position and three points into one thesis sentence.'],
+    ['Writing your Thesis Statement', 'Students turn their position and three points into one thesis sentence.'],
+    ['Introduction', 'Students write an introduction with three parts'],
+    ['Introduction Paragraph', 'Students write an introduction with three parts'],
+    ['Body Paragraph 1', 'Students write the paragraph for their first point'],
+    ['Body Paragraph One', 'Students write the paragraph for their first point'],
+    ['Body Paragraph 2', 'Students write the paragraph for their second point'],
+    ['Body Paragraph #3', 'Students write the paragraph for their third point'],
+    ['Conclusion', 'Students write a conclusion in three parts'],
+    ['Conclusion Paragraph', 'Students write a conclusion in three parts'],
+    ['Title', 'Students title their essay'],
+    ['Title your Essay', 'Students title their essay'],
+    ['Review My Essay', 'Students clean up their document and check the essay in two passes.'],
+    ['Review My Essay! ', 'Students clean up their document and check the essay in two passes.'],
+  ])('%s gets its description', (title, start) => {
+    expect(describe5(title)).toStartWith(start);
+  });
+
+  test('a module it has no description for gets none', () => {
+    expect(describe5('Welcome to Yawp! ')).toBeNull();
+    // One combined body module is not any single body paragraph.
+    expect(describe5('Body Paragraphs')).toBeNull();
+    expect(describe5('Peer Review')).toBeNull();
+  });
+
+  test('the longer descriptions are his, word for word', () => {
+    expect(describe5('Body Paragraph 1')).toBe(
+      'Students write the paragraph for their first point while the Tutor coaches them through the traditional structure: topic sentence, concrete detail, two sentences of commentary, and a concluding sentence (more is welcome). It accepts common names for each part (general sentence, evidence, analysis, closing sentence) and pushes hardest on commentary, the part students skip most.'
+    );
+    expect(describe5('Review My Essay')).toBe(
+      'Students clean up their document and check the essay in two passes. First, the Tutor reviews it against the rubric (Thesis and Focus, Support and Explanation, and Organization), naming what\'s working and giving one fix at a time. Then it covers spelling and grammar, helping students find and fix errors without correcting them itself. It never gives or predicts a score.'
+    );
+  });
+
+  test('ACT Writing steps carry no descriptions', () => {
+    const act = section('act-writing', 'how-to-teach-it').blocks.find((b) => b.type === 'steps');
+    if (!act || act.type !== 'steps') throw new Error('no steps');
+    expect(stepDescription(act, 'Introduction')).toBeNull();
   });
 });
