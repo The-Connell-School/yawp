@@ -115,9 +115,7 @@ describe('verifyInvitationCredentials', () => {
         '/auth/inv/onboard-student'
       );
     }
-    expect(prisma.invitation.delete).toHaveBeenCalledWith({
-      where: { id: 'inv-1' },
-    });
+    expect(prisma.invitation.delete).not.toHaveBeenCalled();
   });
 
   test('sends existing student invitees to sign in without consuming the invitation', async () => {
@@ -145,6 +143,68 @@ describe('verifyInvitationCredentials', () => {
       expect(result.response.headers.get('location')).toContain('/auth/login');
     }
     expect(prisma.invitation.delete).not.toHaveBeenCalled();
+  });
+
+  test('prepares a new teacher invite without consuming it', async () => {
+    prisma.invitation.findFirst.mockResolvedValue({
+      id: 'inv-teacher',
+      expiresAt: new Date(Date.now() + 60_000),
+      metadata: JSON.stringify({ organizationId: 'org-1' }),
+      algorithm: 'SHA-256',
+      secret: 'secret',
+      period: 3600,
+      charSet: 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789',
+      digits: 6,
+    });
+    verifyTOTP.mockResolvedValue({ delta: 0 });
+    prisma.user.findFirst.mockResolvedValue(null);
+
+    const result = await verifyInvitationCredentials({
+      type: 'onboard-teacher',
+      target: 'new-teacher@example.com',
+      code: 'GOOD12',
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.response.headers.get('location')).toBe(
+        '/auth/inv/onboard-teacher'
+      );
+    }
+    expect(prisma.invitation.delete).not.toHaveBeenCalled();
+  });
+
+  test('consumes a teacher invite when an existing user accepts', async () => {
+    prisma.invitation.findFirst.mockResolvedValue({
+      id: 'inv-teacher',
+      expiresAt: new Date(Date.now() + 60_000),
+      metadata: JSON.stringify({ organizationId: 'org-1' }),
+      algorithm: 'SHA-256',
+      secret: 'secret',
+      period: 3600,
+      charSet: 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789',
+      digits: 6,
+    });
+    verifyTOTP.mockResolvedValue({ delta: 0 });
+    prisma.user.findFirst.mockResolvedValue({
+      id: 'user-1',
+      memberships: [],
+    });
+    prisma.orgMembership.create.mockResolvedValue({
+      id: 'member-1',
+      userId: 'user-1',
+    });
+
+    const result = await verifyInvitationCredentials({
+      type: 'onboard-teacher',
+      target: 'existing@example.com',
+      code: 'GOOD12',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(prisma.invitation.delete).toHaveBeenCalledWith({
+      where: { id: 'inv-teacher' },
+    });
   });
 });
 
@@ -176,5 +236,29 @@ describe('verifyInvitationFromQuery', () => {
     );
 
     expect(response?.headers.get('location')).toBe('/auth/inv/onboard-student');
+    expect(prisma.invitation.delete).not.toHaveBeenCalled();
+  });
+
+  test('GET on a teacher invite link can be opened twice before onboarding', async () => {
+    prisma.invitation.findFirst.mockResolvedValue({
+      id: 'inv-teacher',
+      expiresAt: new Date(Date.now() + 60_000),
+      metadata: JSON.stringify({ organizationId: 'org-1' }),
+      algorithm: 'SHA-256',
+      secret: 'secret',
+      period: 3600,
+      charSet: 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789',
+      digits: 6,
+    });
+    verifyTOTP.mockResolvedValue({ delta: 0 });
+    const url =
+      'https://yawp.school/auth/inv/verify?type=onboard-teacher&target=teacher%40example.com&code=GOOD12';
+
+    const first = await verifyInvitationFromQuery(new Request(url));
+    const second = await verifyInvitationFromQuery(new Request(url));
+
+    expect(first?.headers.get('location')).toBe('/auth/inv/onboard-teacher');
+    expect(second?.headers.get('location')).toBe('/auth/inv/onboard-teacher');
+    expect(prisma.invitation.delete).not.toHaveBeenCalled();
   });
 });

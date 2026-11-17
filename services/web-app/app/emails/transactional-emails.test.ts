@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { buildAdminApprovalDesignedEmail } from './build-free-tier-emails.server';
 import {
   buildClassInviteEmail,
+  buildOrgTeacherInviteEmail,
   buildResetPasswordEmail,
   buildSignInCodeEmail,
   buildWelcomeVerifyEmail,
@@ -98,6 +99,24 @@ describe('transactional email renders', () => {
     });
     assertBrand(email);
     expect(email.html).toContain('Verify and get started</a>');
+  });
+
+  test('teacher invite fallback URL is escaped once in HTML', async () => {
+    const acceptUrl =
+      'https://yawp.test/auth/inv/verify?type=onboard-teacher&target=teacher%40school.edu&code=ABC123';
+    const email = await buildOrgTeacherInviteEmail({
+      firstName: 'Jordan',
+      inviterName: 'Ms. Whitaker',
+      schoolName: 'Lincoln High',
+      acceptUrl,
+    });
+    expect(email.html).toContain(
+      'type=onboard-teacher&amp;target=teacher%40school.edu&amp;code=ABC123'
+    );
+    expect(email.html).not.toContain('&amp;amp;');
+    expect(email.html).toContain(
+      'href="https://yawp.test/auth/inv/verify?type=onboard-teacher&amp;target=teacher%40school.edu&amp;code=ABC123"'
+    );
   });
 
   test('11 class invite', async () => {

@@ -30,6 +30,7 @@ import { normalizeEmail } from '~/utils/normalize-email';
 import { formatClassGradePeriod } from '~/utils/class-display';
 import { combineHeaders } from '~/utils/misc';
 import { requireUaOrganizationId } from '~/utils/ua-partner.server';
+import { deleteOnboardingInvitationInTx } from '~/routes/auth.inv.verify/consume-onboarding-invitation.server';
 
 export const GenericSchema = z
   .object({
@@ -198,6 +199,7 @@ export async function action({ request }: ActionFunctionArgs) {
       },
       select: { id: true, expirationDate: true },
     });
+    await deleteOnboardingInvitationInTx(tx, 'onboard-student', email);
     return { membership, session };
   });
 
