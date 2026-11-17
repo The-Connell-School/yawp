@@ -7,6 +7,7 @@ import {
   classArtKeyFromLegacyPoolIndex,
   getClassArtByIndex,
   getClassArtByKey,
+  resolveClassArtSelection,
 } from '../../../services/web-app/app/utils/class-art.ts';
 import {
   assignedKeyForClass,
@@ -34,14 +35,32 @@ function classRow({
 }
 
 describe('class art legacy pool keys', () => {
-  test('maps every shipped classArtIndex to a valid stable key', () => {
+  test('maps every shipped classArtIndex to a stable key that still resolves unless retired', () => {
+    // Artwork removed from the library. Classes that held one of these keys
+    // fall back to another piece via resolveClassArtSelection.
+    const retiredArtworkKeys = new Set(['ohara-koson-cranes']);
     for (let index = 0; index < LEGACY_CLASS_ART_KEY_BY_POOL_INDEX.length; index++) {
       const key = classArtKeyFromLegacyPoolIndex(index);
       expect(key).toBe(LEGACY_CLASS_ART_KEY_BY_POOL_INDEX[index]);
-      expect(getClassArtByKey(key!)).toEqual(getClassArtByIndex(index));
+      const artworkKey = key!.split('::')[0];
+      if (retiredArtworkKeys.has(artworkKey)) {
+        expect(getClassArtByKey(key!)).toBeNull();
+      } else {
+        expect(getClassArtByKey(key!)?.key).toBe(key);
+      }
     }
   });
 
+  test('a class holding a retired artwork key falls back to a library artwork', () => {
+    const art = resolveClassArtSelection({
+      classArtKey: 'ohara-koson-cranes::center-10pct',
+      legacyClassArtIndex: null,
+      seed: 'class-with-retired-art',
+    });
+    expect(art.artworkKey).not.toBe('ohara-koson-cranes');
+    expect(getClassArtByKey(art.key)).not.toBeNull();
+  });
+  
   test('uses artwork slug and slugified crop position in the key', () => {
     expect(
       buildClassArtKey('paul-klee-castle-and-sun', 'center 40%')

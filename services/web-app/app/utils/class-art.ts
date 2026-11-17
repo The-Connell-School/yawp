@@ -114,11 +114,6 @@ const CLASS_ART_LIBRARY_RAW: readonly ClassArtLibraryEntry[] = [
     positions: ['center 10%', 'center 40%', 'center 85%'],
   },
   {
-    src: '/img/class-art/ohara-koson-cranes.jpg',
-    credit: 'Ohara Koson — Two White Cranes, public domain',
-    positions: ['center 10%', 'center 40%', 'center 85%'],
-  },
-  {
     src: '/img/class-art/ohara-koson-kingfisher.jpg',
     credit: 'Ohara Koson — Kingfisher on a Branch, public domain',
     positions: ['center 10%', 'center 40%', 'center 85%'],

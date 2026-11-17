@@ -21,7 +21,6 @@ ARTWORKS: dict[str, str] = {
     "hiroshige-sudden-shower": "Hiroshige, Sudden shower over Shin-Ōhashi bridge and Atake, 1857.jpg",
     "hiroshige-plum-garden": "Ando Hiroshige - Plum Garden, Kameido - Google Art Project.jpg",
     "hokusai-chrysanthemums": "葛飾北斎画 菊に雀-Sparrows and Chrysanthemums MET DP151594.jpg",
-    "ohara-koson-cranes": "Koson - two-white-cranes.jpg",
     "cezanne-mont-sainte-victoire": "La Montagne Sainte-Victoire vue de la carrière Bibémus, par Paul Cézanne.jpg",
     "franz-marc-blue-horse": "Marc, Franz - Blue Horse I - Google Art Project.jpg",
     "paul-klee-senecio": "Paul Klee, 1922, Senecio, oil on gauze, 40.3 × 37.4 cm, Kunstmuseum Basel.jpg",
