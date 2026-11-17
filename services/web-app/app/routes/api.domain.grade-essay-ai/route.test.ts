@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { rubricKeys } from '~/domain/grading/rubric';
 
 const prisma = {
@@ -2751,13 +2751,14 @@ describe('api.domain.grade-essay-ai', () => {
       expect(call.messages[0].content).toContain('90');
     });
 
-    test('scales a 10-point assignment and rejects a score in its scaled gap', async () => {
+    test('scales a 10-point assignment and clamps a score in its scaled gap', async () => {
       const response = await gradeRevisedDailyPages(7, 10, 'current');
       expect((response as any).data.score).toBe('7/10');
       prisma.submission.update.mockClear();
-      const invalid = await gradeRevisedDailyPages(9, 10, 'current');
-      expect((invalid as any).init?.status).toBe(502);
-      expect(prisma.submission.update).not.toHaveBeenCalled();
+      const clamped = await gradeRevisedDailyPages(9, 10, 'current');
+      expect((clamped as any).data.success).toBe(true);
+      expect((clamped as any).data.overallScore).toBe(8);
+      expect(prisma.submission.update).toHaveBeenCalled();
     });
 
     test('12-point totals expose Brian tier bands (0–7 / 8–9 / 10 / 12) to the model', async () => {
@@ -2781,10 +2782,12 @@ describe('api.domain.grade-essay-ai', () => {
       expect((response as any).data).toMatchObject({ score: '20/30', rubricConfig: { maxScore: 30, step: 10 } });
     });
 
-    test.each([27, 28, 29])('rejects %i in a gap between authored tiers instead of rounding it', async (score) => {
+    test.each([27, 28, 29])('clamps %i in a gap between authored tiers to the nearest allowed band', async (score) => {
       const response = await gradeRevisedDailyPages(score);
-      expect((response as any).init?.status).toBe(502);
-      expect(prisma.submission.update).not.toHaveBeenCalled();
+      expect((response as any).data.success).toBe(true);
+      const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(stored.rubricScores.engagement_with_prompt.score).not.toBe(score);
+      expect(prisma.submission.update).toHaveBeenCalled();
     });
   });
 
@@ -3289,6 +3292,163 @@ describe('api.domain.grade-essay-ai', () => {
         reason: 'invalid_output',
         usedPointsFallback: true,
       });
+    });
+  });
+
+  describe('malformed model output salvage', () => {
+    const warnSpy = mock(() => {});
+    const originalWarn = console.warn;
+
+    beforeEach(() => {
+      warnSpy.mockReset();
+      console.warn = warnSpy as typeof console.warn;
+    });
+
+    test('clamps an out-of-band rubric score instead of returning 502', async () => {
+      const badJson = buildRubricResponseJson(
+        Object.fromEntries(
+          rubricKeys.map((key) => [key, key === 'thesis_and_content' ? 9 : 3])
+        ) as Record<(typeof rubricKeys)[number], number>
+      );
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce(badJson)
+        .mockResolvedValueOnce(badJson)
+        .mockResolvedValueOnce(buildOverallCommentJson())
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+      prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-salvage-1' }));
+      const form = new FormData();
+      form.append('submissionId', 'sub-salvage-1');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+      const payload = (response as { data: Record<string, unknown> }).data;
+
+      expect((response as { init?: { status?: number } }).init?.status ?? 200).toBe(200);
+      expect(payload.success).toBe(true);
+      expect(
+        (payload.rubricScores as Record<string, { score: number }>).thesis_and_content
+          .score
+      ).toBe(5);
+    });
+
+    test('salvages missing overallComment via the writer or fallback comment', async () => {
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce(buildRubricCategoriesJson())
+        .mockResolvedValueOnce(buildOverallCommentJson())
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+      prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-salvage-2' }));
+      const form = new FormData();
+      form.append('submissionId', 'sub-salvage-2');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+      const payload = (response as { data: Record<string, unknown> }).data;
+
+      expect(payload.success).toBe(true);
+      expect(payload.overallComment).toBe(
+        'Jordan, this draft has clear progress and focus.'
+      );
+    });
+
+    test('clamps sub-minimum and half-point scores before persisting grades', async () => {
+      const badJson = JSON.stringify({
+        categories: rubricKeys.map((key) => ({
+          key,
+          score: key === 'thesis_and_content' ? -1 : 3.5,
+          comment: `Comment for ${key}`,
+        })),
+        overallComment: 'Jordan, this draft has clear progress and focus.',
+      });
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce(badJson)
+        .mockResolvedValueOnce(badJson)
+        .mockResolvedValueOnce(buildOverallCommentJson())
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+      prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-salvage-half' }));
+      const form = new FormData();
+      form.append('submissionId', 'sub-salvage-half');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+      const payload = (response as { data: Record<string, unknown> }).data;
+      const rubricScores = payload.rubricScores as Record<string, { score: number }>;
+
+      expect(payload.success).toBe(true);
+      expect(rubricScores.thesis_and_content.score).toBe(1);
+      expect(rubricScores.evidence_and_support.score).toBe(4);
+    });
+
+    test('falls back when the overall-comment writer returns invalid JSON', async () => {
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce(buildRubricCategoriesJson())
+        .mockResolvedValueOnce(JSON.stringify({ overallComment: '' }))
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+      prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-salvage-3' }));
+      const form = new FormData();
+      form.append('submissionId', 'sub-salvage-3');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+      const payload = (response as { data: Record<string, unknown> }).data;
+
+      expect(payload.success).toBe(true);
+      expect(payload.overallComment).toBe('Jordan, thank you for sharing your work.');
+      expect(
+        warnSpy.mock.calls.some(
+          (call: unknown[]) =>
+            call[0] === 'grading_ai_parse_failed' &&
+            (call[1] as { stage?: string } | undefined)?.stage ===
+              'overall-comment'
+        )
+      ).toBe(true);
+    });
+
+    test('logs grading_ai_parse_failed and returns 502 for unrecoverable output', async () => {
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce(JSON.stringify([]))
+        .mockResolvedValueOnce(JSON.stringify([]));
+
+      prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-salvage-4' }));
+      const form = new FormData();
+      form.append('submissionId', 'sub-salvage-4');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+
+      expect((response as { init?: { status?: number } }).init?.status).toBe(502);
+      expect(
+        warnSpy.mock.calls.some(
+          (call: unknown[]) => call[0] === 'grading_ai_parse_failed'
+        )
+      ).toBe(true);
+    });
+
+    afterEach(() => {
+      console.warn = originalWarn;
     });
   });
 

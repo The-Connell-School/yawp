@@ -74,6 +74,14 @@ import { gradingAssistantResponseHasVisibleContent } from '~/domain/grading/grad
 import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
 import { preprocessGradingAssistantCategoriesInput } from '~/domain/grading/grading-assistant-category-filter';
 import { expandGradingAssistantCategoriesInput } from '~/domain/grading/grading-assistant-categories-normalize';
+import {
+  extractOverallCommentFromUnknown,
+  logGradingAiParseFailed,
+  neutralOverallCommentFallback,
+  salvageGradingAssistantCategories,
+  serializeZodIssuesForLog,
+  type GradingAiParseFailureStage,
+} from '~/domain/grading/grading-assistant-response-salvage';
 import { inferHolisticTupleFromCategoryScores } from '~/domain/grading/holistic-tier-from-categories';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
@@ -1423,36 +1431,171 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       : [resolvedGradingConfig.instructions.rubricInstructions, resolvedGradingConfig.instructions.scoreInstructions]),
   ].filter(Boolean).join('\n\n');
 
+  const gradingParseLogBase = () => ({
+    rubricKeyCount: rubricKeys.length,
+    scoringMode: resolvedGradingConfig.scoringMode ?? 'weighted_categories',
+    gradingMode: resolvedGradingConfig.gradingMode ?? null,
+    grammarHighlightMode: displayOptions.grammarHighlight,
+    modelStopReason: null as string | null,
+    modelOutputTokens: null as number | null,
+  });
+
+  const logParseFailure = (
+    stage: GradingAiParseFailureStage,
+    extras: {
+      zodIssues?: z.ZodIssue[];
+      salvageReason?: string;
+    } = {}
+  ) => {
+    logGradingAiParseFailed({
+      stage,
+      ...gradingParseLogBase(),
+      zodIssues: serializeZodIssuesForLog(extras.zodIssues),
+      salvageReason: extras.salvageReason,
+    });
+  };
+
   const buildAiResponseFromCategories = async (
     categories: z.infer<typeof AiCategoriesSchema>,
-    teacherNote: string | null
+    teacherNote: string | null,
+    overallCommentOverride?: string | null
   ) => {
-    const overallCommentResponseText = await getGradingLlmCompletion({
-      model,
-      system: `You write the overall feedback sentence for a grading assistant. Return ONLY valid JSON with the schema:\n{\n  "overallComment": string\n}\nRules:\n- overallComment must start with "${studentFirstName},".\n- Keep it warm, professional, and cohesive.\n- Do not include markdown or explanation.\n- ${overallCommentWriterRules(teacherNotesEnabled)}`,
-      messages: [
-        {
-          role: 'user',
-          content: `Authored grading constraints:\n${authoredGradingConstraints}\n\n${compiledInvocation.userMessage}\n\nRubric category feedback:\n${JSON.stringify(categories)}`,
+    const normalizedOverallCommentOverride =
+      typeof overallCommentOverride === 'string' && overallCommentOverride.trim()
+        ? overallCommentOverride.trim()
+        : null;
+    if (normalizedOverallCommentOverride) {
+      return {
+        categories,
+        overallComment: normalizedOverallCommentOverride,
+        teacherNote,
+      };
+    }
+
+    let overallComment = neutralOverallCommentFallback(studentFirstName);
+    try {
+      const overallCommentResponseText = await getGradingLlmCompletion({
+        model,
+        system: `You write the overall feedback sentence for a grading assistant. Return ONLY valid JSON with the schema:\n{\n  "overallComment": string\n}\nRules:\n- overallComment must start with "${studentFirstName},".\n- Keep it warm, professional, and cohesive.\n- Do not include markdown or explanation.\n- ${overallCommentWriterRules(teacherNotesEnabled)}`,
+        messages: [
+          {
+            role: 'user',
+            content: `Authored grading constraints:\n${authoredGradingConstraints}\n\n${compiledInvocation.userMessage}\n\nRubric category feedback:\n${JSON.stringify(categories)}`,
+          },
+        ],
+        maxTokens: 600,
+        temperature: 0.2,
+        metadata: {
+          feature: 'grading',
+          kind: 'overall-comment',
+          ...gradingAiContextMetadata,
         },
-      ],
-      maxTokens: 300,
-      temperature: 0.2,
-      metadata: {
-        feature: 'grading',
-        kind: 'overall-comment',
-        ...gradingAiContextMetadata,
-      },
-    });
-    const parsedOverallComment = AiOverallCommentSchema.parse(
-      parseFirstJsonValue(overallCommentResponseText)
-    );
+      });
+      const parsedOverallComment = AiOverallCommentSchema.safeParse(
+        parseFirstJsonValue(overallCommentResponseText)
+      );
+      if (parsedOverallComment.success) {
+        overallComment = parsedOverallComment.data.overallComment;
+      } else {
+        logParseFailure('overall-comment', {
+          zodIssues: parsedOverallComment.error.issues,
+        });
+      }
+    } catch (error) {
+      if (isGradingRequestDeadlineError(error)) throw error;
+      if (isLlmFallbackRetrySignal(error)) throw error;
+      logParseFailure('overall-comment', {
+        salvageReason:
+          error instanceof Error ? error.message.slice(0, 120) : 'unknown',
+      });
+    }
 
     return {
       categories,
-      overallComment: parsedOverallComment.overallComment,
+      overallComment,
       teacherNote,
     };
+  };
+
+  const buildAiResponseFromSalvagedCategories = async ({
+    sources,
+    teacherNote,
+    overallCommentOverride,
+    stage,
+  }: {
+    sources: unknown[];
+    teacherNote: string | null;
+    overallCommentOverride?: string | null;
+    stage: GradingAiParseFailureStage;
+  }) => {
+    const salvaged = salvageGradingAssistantCategories({
+      sources,
+      rubricCategories,
+      minScore,
+      maxScore,
+      gradingMode: resolvedGradingConfig.gradingMode,
+      categoryFeedbackEnabled,
+      grammarHighlightMode: displayOptions.grammarHighlight,
+    });
+
+    if (salvaged.missingKeys.length > 0) {
+      const missingKeys = salvaged.missingKeys;
+      const partialCategories = salvaged.categories;
+      const missingCategoryRepairText = await getGradingLlmCompletion({
+        model,
+        system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n{\n  "categories": [{ "key": string, "score": number, "comment": string }]\n}\nRules:\n- Return exactly one category for each missing rubric key.\n- Use only these missing keys: ${missingKeys.join(', ')}.\n- Every score must fall inside one declared band for its category.\n- overallComment must start with "${studentFirstName},".\n${repairPrivateObservationRules ? `${repairPrivateObservationRules}\n` : ''}- Do not include markdown or explanation.`,
+        messages: [
+          {
+            role: 'user',
+            content: `Authored grading constraints:\n${authoredGradingConstraints}\n\n${compiledInvocation.userMessage}\n\nCategory-specific score bands:\n${promptShape.rubricText}\n\nAlready-valid categories:\n${JSON.stringify(partialCategories)}\n\nMissing rubric keys: ${missingKeys.join(', ')}`,
+          },
+        ],
+        maxTokens: Math.min(
+          rubricEvaluationMaxTokens,
+          250 * missingKeys.length + 400
+        ),
+        temperature: 0.1,
+        metadata: {
+          feature: 'grading',
+          kind: 'rubric-missing-category-repair',
+          ...gradingAiContextMetadata,
+        },
+      });
+      const repairJson = parseFirstJsonValue(missingCategoryRepairText);
+      const repairSources = [...sources, repairJson];
+      const repairedSalvage = salvageGradingAssistantCategories({
+        sources: repairSources,
+        rubricCategories,
+        minScore,
+        maxScore,
+        gradingMode: resolvedGradingConfig.gradingMode,
+        categoryFeedbackEnabled,
+        grammarHighlightMode: displayOptions.grammarHighlight,
+      });
+      if (repairedSalvage.missingKeys.length > 0) {
+        logParseFailure('missing-category-repair', {
+          salvageReason: `still_missing:${repairedSalvage.missingKeys.join(',')}`,
+        });
+        return null;
+      }
+      salvaged.categories = repairedSalvage.categories;
+    }
+
+    const validated = AiCategoriesSchema.safeParse(salvaged.categories);
+    if (!validated.success) {
+      logParseFailure(stage, { zodIssues: validated.error.issues });
+      return null;
+    }
+
+    const overallFromSources = sources
+      .map((source) => extractOverallCommentFromUnknown(source))
+      .find((comment) => comment);
+    const built = await buildAiResponseFromCategories(
+      validated.data,
+      teacherNote,
+      overallCommentOverride ?? overallFromSources ?? null
+    );
+    return built;
   };
 
   const extractCategories = (
@@ -1550,31 +1693,82 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       ) as typeof built;
     }
 
+    const initialValidation = AiResponseSchema.safeParse(parsedJson);
+    if (!initialValidation.success) {
+      logParseFailure('initial', { zodIssues: initialValidation.error.issues });
+    }
+    const repairValidation = AiResponseSchema.safeParse(repairedParsedJson);
+    if (!repairValidation.success) {
+      logParseFailure('repair', { zodIssues: repairValidation.error.issues });
+    }
+
+    const salvageTeacherNote = teacherNotesEnabled && isRecord(parsedJson)
+      ? normalizeTeacherNote(parsedJson.teacherNote)
+      : teacherNotesEnabled && isRecord(repairedParsedJson)
+        ? normalizeTeacherNote(repairedParsedJson.teacherNote)
+        : null;
+
+    const salvaged = await buildAiResponseFromSalvagedCategories({
+      sources: [parsedJson, repairedParsedJson],
+      teacherNote: salvageTeacherNote,
+      stage: 'salvage',
+    });
+    if (salvaged) {
+      return withPreservedHolisticFields(
+        salvaged,
+        repairedParsedJson,
+        parsedJson
+      ) as typeof salvaged;
+    }
+
     throw new Error('Malformed grading assistant response');
   };
 
   let parsed: z.infer<typeof AiResponseSchema>;
   try {
     parsed = await parseAiResponse(responseText);
-    const clampedCategories = applyGrammarHighlightScoreClamp({
-      categories: parsed.categories.map((category) => ({
-        ...category,
-        grammarImpairsMeaning:
-          typeof category.grammarImpairsMeaning === 'boolean'
-            ? category.grammarImpairsMeaning
-            : undefined,
-      })),
-      rubricCategories,
-      minScore,
-      maxScore,
-      display: displayOptions,
-    });
-    parsed = { ...parsed, categories: clampedCategories };
+    try {
+      const clampedCategories = applyGrammarHighlightScoreClamp({
+        categories: parsed.categories.map((category) => ({
+          ...category,
+          grammarImpairsMeaning:
+            typeof category.grammarImpairsMeaning === 'boolean'
+              ? category.grammarImpairsMeaning
+              : undefined,
+        })),
+        rubricCategories,
+        minScore,
+        maxScore,
+        display: displayOptions,
+      });
+      parsed = { ...parsed, categories: clampedCategories };
+    } catch (clampError) {
+      logParseFailure('clamp', {
+        salvageReason:
+          clampError instanceof Error
+            ? clampError.message.slice(0, 120)
+            : 'clamp_failed',
+      });
+      throw clampError;
+    }
   } catch (error) {
     if (isGradingRequestDeadlineError(error)) {
       return gradingDeadlineResponse();
     }
     if (isLlmFallbackRetrySignal(error)) return retryResponse();
+    if (
+      error instanceof Error &&
+      error.message === 'Malformed grading assistant response'
+    ) {
+      logParseFailure('salvage', {
+        salvageReason: 'unrecoverable_after_salvage',
+      });
+    } else if (!(error instanceof Response)) {
+      logParseFailure('initial', {
+        salvageReason:
+          error instanceof Error ? error.message.slice(0, 120) : 'unknown',
+      });
+    }
     return dataResponse(
       {
         success: false,
