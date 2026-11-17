@@ -129,7 +129,11 @@ export const EXIT_TICKET_SUBMIT_FOR_GRADE_DEFAULT = false;
  * writing is not a hundred-point assignment, and the product default of 100
  * would quietly make one lesson check outweigh an essay.
  */
-export const EXIT_TICKET_DEFAULT_POINT_VALUE = 5;
+/** Default for new exit tickets while legacy four-band grading is active. */
+export const EXIT_TICKET_DEFAULT_POINT_VALUE = 10;
+
+/** Default point total under the Reflection / Check assistants when v2 grading is on. */
+export const EXIT_TICKET_V2_DEFAULT_POINT_VALUE = 5;
 
 /** Notes, not lesson plans: long enough for a paragraph each. */
 export const EXIT_TICKET_LESSON_NOTE_MAX_LENGTH = 1000;

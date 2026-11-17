@@ -232,7 +232,7 @@ const defaultRubricConfigsByKind: Record<string, AssignmentTypeRubricConfig> = {
     promptConfig: EXIT_TICKET_PROMPT_CONFIG,
     outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
     calibrationNotes:
-      'Exit Tickets use the 2026-11-17 assistant: Reflection is full credit or none, Check for understanding is full, partial, or none. The four-band rubric is retired.',
+      'Exit Tickets judge understanding only, scored inside written bands so the grade honors the point value, with overall feedback and no grammar highlighting.',
     rubricIncomplete: false,
     defaultLabel: 'Exit Ticket understanding',
   },

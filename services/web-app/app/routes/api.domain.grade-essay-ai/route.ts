@@ -18,12 +18,14 @@ import {
   parseStoredExitTicketConfig,
 } from '~/domain/assignment-types/exit-ticket';
 import {
-  applyExitTicketGradingAssistant,
   clampExitTicketScore,
   exitTicketGradingAssistantPart,
   exitTicketPersistedGrade,
   resolveExitTicketPointTotal,
 } from '~/domain/assignment-types/exit-ticket-grading-assistant';
+import { applyExitTicketGradingWhenV2Enabled } from '~/domain/assignment-types/exit-ticket-grading-v2-config';
+import { isExitTicketGradingV2RolloutEnabled } from '~/domain/assignment-types/exit-ticket-grading-v2-gate.server';
+import { buildExitTicketGradingContext } from '~/domain/assignment-types/exit-ticket-rubric';
 import {
   buildGalsClaimsGradingContext,
   GALS_CLAIMS_ASSIGNMENT_TYPE_KIND,
@@ -954,11 +956,18 @@ export async function action({ request }: ActionFunctionArgs) {
   const isExitTicket =
     (submission.document.assignmentType?.kind ?? null) ===
     EXIT_TICKET_ASSIGNMENT_TYPE_KIND;
-  const exitTicketPointTotal = resolveExitTicketPointTotal(
-    submission.document.assignment?.pointValue
-  );
-  const exitTicketPart = exitTicketGradingAssistantPart(exitTicketConfig);
-  const resolvedGradingConfig = applyExitTicketGradingAssistant(
+  const exitTicketGradingV2 =
+    isExitTicket && (await isExitTicketGradingV2RolloutEnabled());
+  const exitTicketPointTotal = exitTicketGradingV2
+    ? resolveExitTicketPointTotal(submission.document.assignment?.pointValue, {
+        v2Grading: true,
+      })
+    : null;
+  const exitTicketPart = exitTicketGradingV2
+    ? exitTicketGradingAssistantPart(exitTicketConfig)
+    : null;
+  const resolvedGradingConfig = applyExitTicketGradingWhenV2Enabled(
+    exitTicketGradingV2,
     scaleDailyPagesForAssignment(
       await resolveAssignmentTypeGradingConfig({
         assignmentTypeId: submission.document.assignmentTypeId,
@@ -1076,7 +1085,9 @@ export async function action({ request }: ActionFunctionArgs) {
   const gradingContext =
     assignmentTypeKind === GALS_CLAIMS_ASSIGNMENT_TYPE_KIND
       ? buildGalsClaimsGradingContext(submission.text)
-      : null;
+      : isExitTicket && !exitTicketGradingV2
+        ? buildExitTicketGradingContext(exitTicketConfig)
+        : null;
 
   const model = process.env.AI_MODEL ?? DEFAULT_ANTHROPIC_MODEL;
   // llmRetry=fallback is the client half of the provider-failover handshake
@@ -1775,7 +1786,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       });
       throw clampError;
     }
-    if (isExitTicket) {
+    if (isExitTicket && exitTicketGradingV2 && exitTicketPart != null && exitTicketPointTotal != null) {
       parsed = {
         ...parsed,
         categories: parsed.categories.map((category) => ({
@@ -1822,7 +1833,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       score: item.score,
       comment: item.comment,
       isAi: true,
-      ...(isExitTicket ? { pointTotal: exitTicketPointTotal } : {}),
+      ...(isExitTicket && exitTicketGradingV2 && exitTicketPointTotal != null
+        ? { pointTotal: exitTicketPointTotal }
+        : {}),
     };
     return acc;
   }, {});
@@ -2113,7 +2126,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   let recordedScore: string | null = score;
   let recordedPercentage: number | null = numericPercentage;
   let recordedLetter: string | null = letterGrade;
-  if (isExitTicket) {
+  if (isExitTicket && exitTicketGradingV2 && exitTicketPointTotal != null) {
     const recorded = exitTicketPersistedGrade({
       submitForGrade: submission.document.assignment?.submitForGrade === true,
       earned: overallScore,

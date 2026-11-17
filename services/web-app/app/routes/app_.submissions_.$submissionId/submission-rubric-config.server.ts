@@ -1,5 +1,6 @@
 import { scaleDailyPagesForAssignment } from '~/domain/assignment-types/daily-pages-assignment-points';
-import { applyExitTicketGradingAssistant } from '~/domain/assignment-types/exit-ticket-grading-assistant';
+import { applyExitTicketGradingWhenV2Enabled } from '~/domain/assignment-types/exit-ticket-grading-v2-config';
+import { isExitTicketGradingV2RolloutEnabled } from '~/domain/assignment-types/exit-ticket-grading-v2-gate.server';
 import {
   DAILY_PAGES_ENGAGEMENT_CATEGORY_KEY,
   usesDailyPagesEngagementPointScaling,
@@ -184,7 +185,9 @@ export async function resolveRubricConfigForSubmission({
     );
 
   if (!activeConfig || snapshotNeedsDailyPagesBandRefresh) {
-    const assignmentTypeConfig = applyExitTicketGradingAssistant(
+    const exitTicketGradingV2 = await isExitTicketGradingV2RolloutEnabled();
+    const assignmentTypeConfig = applyExitTicketGradingWhenV2Enabled(
+      exitTicketGradingV2,
       scaleDailyPagesForAssignment(
         await resolveAssignmentTypeGradingConfig({
           assignmentTypeId,

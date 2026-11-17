@@ -37,6 +37,7 @@ import type { RubricCategory } from './assignment-type-rubric.shared';
 import {
   EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
   EXIT_TICKET_DEFAULT_POINT_VALUE,
+  EXIT_TICKET_V2_DEFAULT_POINT_VALUE,
   composeExitTicketPrompt,
   exitTicketKind,
   type ExitTicketConfig,
@@ -161,9 +162,15 @@ const CHECK_FOCUS_LABELS: Record<ExitTicketFocus, string> = {
 
 const NOT_PROVIDED = 'Not provided.';
 
-/** Whole-number point total. Anything else is the default of 5. */
+export type ResolveExitTicketPointTotalOptions = {
+  /** When true, missing totals fall back to the v2 assistant default (5). */
+  v2Grading?: boolean;
+};
+
+/** Whole-number point total. Invalid values use the legacy (10) or v2 (5) default. */
 export function resolveExitTicketPointTotal(
-  pointValue: number | null | undefined
+  pointValue: number | null | undefined,
+  options: ResolveExitTicketPointTotalOptions = {}
 ): number {
   if (
     typeof pointValue === 'number' &&
@@ -172,7 +179,9 @@ export function resolveExitTicketPointTotal(
   ) {
     return pointValue;
   }
-  return EXIT_TICKET_DEFAULT_POINT_VALUE;
+  return options.v2Grading
+    ? EXIT_TICKET_V2_DEFAULT_POINT_VALUE
+    : EXIT_TICKET_DEFAULT_POINT_VALUE;
 }
 
 /** Which assistant runs. A ticket with no config is a reflection. */
@@ -245,7 +254,9 @@ export function buildExitTicketGradingAssistantPrompt(
   input: ExitTicketGradingAssistantPromptInput = {}
 ): string {
   const part = exitTicketGradingAssistantPart(input.config);
-  const pointTotal = resolveExitTicketPointTotal(input.pointValue);
+  const pointTotal = resolveExitTicketPointTotal(input.pointValue, {
+    v2Grading: true,
+  });
   const question = exitTicketStudentQuestion(input.config, input.studentPrompt);
   const graded = input.submitForGrade !== false;
   const lines = [
@@ -287,7 +298,7 @@ export function clampExitTicketScore(
   part: ExitTicketGradingAssistantPart,
   pointTotal: number
 ): number {
-  const total = resolveExitTicketPointTotal(pointTotal);
+  const total = resolveExitTicketPointTotal(pointTotal, { v2Grading: true });
   if (!Number.isFinite(raw)) return 0;
   const bounded = Math.min(total, Math.max(0, Math.round(raw)));
   if (part === 'check') return bounded;
@@ -328,7 +339,7 @@ export function exitTicketPersistedGrade({
       letterGrade: null,
     };
   }
-  const total = resolveExitTicketPointTotal(pointTotal);
+  const total = resolveExitTicketPointTotal(pointTotal, { v2Grading: true });
   const points = Math.min(total, Math.max(0, Math.round(earned)));
   return {
     comment,
@@ -342,7 +353,7 @@ export function exitTicketPersistedGrade({
 
 /** One category, scored in whole points. No four-band scale. */
 export function exitTicketPointsCategory(pointTotal: number): RubricCategory {
-  const total = resolveExitTicketPointTotal(pointTotal);
+  const total = resolveExitTicketPointTotal(pointTotal, { v2Grading: true });
   return {
     key: 'understanding',
     label: 'Understanding',
@@ -380,7 +391,9 @@ export function applyExitTicketGradingAssistant<T extends ExitTicketGradingConfi
   if (config.assignmentTypeKind !== EXIT_TICKET_ASSIGNMENT_TYPE_KIND) {
     return config;
   }
-  const pointTotal = resolveExitTicketPointTotal(input.pointValue);
+  const pointTotal = resolveExitTicketPointTotal(input.pointValue, {
+    v2Grading: true,
+  });
   const instructions = buildExitTicketGradingAssistantPrompt({
     ...input,
     pointValue: pointTotal,
