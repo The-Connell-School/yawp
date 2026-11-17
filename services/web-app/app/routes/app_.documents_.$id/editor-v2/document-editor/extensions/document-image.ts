@@ -1,6 +1,6 @@
 import { Node, mergeAttributes } from '@tiptap/core';
-import { Fragment } from 'prosemirror-model';
-import { Plugin, PluginKey } from 'prosemirror-state';
+import { Fragment } from '@tiptap/pm/model';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
 import {
   carriesFiles,
   filesFromDataTransfer,

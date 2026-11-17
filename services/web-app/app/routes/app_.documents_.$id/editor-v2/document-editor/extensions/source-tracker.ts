@@ -1,5 +1,5 @@
 import { Extension } from '@tiptap/core';
-import { Plugin, PluginKey } from 'prosemirror-state';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { RECOVERY_SOURCE } from '../use-pm-tripwire';
 
 export const USER_SOURCE_META = 'yawp-pm-source';

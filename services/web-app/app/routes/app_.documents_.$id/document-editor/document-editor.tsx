@@ -7,6 +7,7 @@ import { formatDateOnly } from '~/utils/date-only';
 import { documentStore } from '~/utils/document-store';
 import type { SyncStatus } from '~/utils/sync-service';
 import { Editor } from './editor';
+import { normalizeDocumentEditorHtml } from './normalize-document-html';
 import type { EditorBridge } from './use-editor-sync';
 
 const PROMPT_EXPANDED_MAX_HEIGHT = 'calc(50vh - 28px)';
@@ -92,7 +93,7 @@ export function DocumentEditor({
         ) : (
           <Editor
             docId={docId}
-            initialHtml={hydrated.html}
+            initialHtml={normalizeDocumentEditorHtml(hydrated.html)}
             initialRevision={initialRevision}
             isEditable={isEditable}
             canUploadImages={canUploadImages}

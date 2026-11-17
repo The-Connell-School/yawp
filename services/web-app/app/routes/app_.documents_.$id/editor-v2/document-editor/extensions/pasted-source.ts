@@ -1,5 +1,5 @@
 import { Mark } from '@tiptap/core';
-import { Plugin, PluginKey, type Transaction } from 'prosemirror-state';
+import { Plugin, PluginKey, type Transaction } from '@tiptap/pm/state';
 
 export const PASTED_SOURCE_CLASS = 'pasted-source-mark';
 

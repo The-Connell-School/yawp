@@ -1,5 +1,5 @@
 import { Extension, Mark } from '@tiptap/core';
-import { Plugin, PluginKey } from 'prosemirror-state';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
 
 export interface CommentOptions {
   HTMLAttributes: Record<string, any>;

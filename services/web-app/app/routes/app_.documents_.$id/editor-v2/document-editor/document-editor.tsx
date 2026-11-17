@@ -3,6 +3,7 @@ import { scheduleAfterHydration } from '~/utils/schedule-after-hydration';
 import { documentStore } from '~/utils/document-store';
 import type { SyncStatus } from '~/utils/sync-service';
 import { Editor } from './editor';
+import { normalizeDocumentEditorHtml } from '../../document-editor/normalize-document-html';
 import type { EditorBridge } from './use-editor-sync';
 import type { AssignmentPrompt } from './assignment-prompt-banner';
 import type { PageWidthMode } from './toolbar-controls';
@@ -165,7 +166,7 @@ export function DocumentEditor({
                 : docId
             }
             docId={docId}
-            initialHtml={hydrated.html}
+            initialHtml={normalizeDocumentEditorHtml(hydrated.html)}
             initialRevision={initialRevision}
             isEditable={isEditable && hydrated.source !== 'snapshot'}
             teacherCommenting={teacherCommenting}
