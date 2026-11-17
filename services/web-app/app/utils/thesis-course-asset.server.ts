@@ -1,14 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const webAppRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../..'
-);
-
+// Production `start.sh` and local dev both run with cwd at `services/web-app`.
 const THESIS_COURSE_PUBLIC_ROOT = path.join(
-  webAppRoot,
+  process.cwd(),
   'public/courses/thesis-driven-essay'
 );
 

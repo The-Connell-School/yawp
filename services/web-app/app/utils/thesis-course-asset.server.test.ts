@@ -1,15 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   resolveThesisCourseAssetAbsolutePath,
   thesisCourseAssetMimeType,
 } from './thesis-course-asset.server';
 
-const webAppRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../..'
-);
+const webAppRoot = process.cwd();
 
 describe('thesis course asset resolution', () => {
   test('resolves an existing deck under public/courses', () => {
