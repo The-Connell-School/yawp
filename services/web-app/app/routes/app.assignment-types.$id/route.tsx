@@ -157,6 +157,7 @@ import {
 } from './landing-copy/assignment-type-landing';
 import {
   enabledLandingPageKey,
+  landingPageFor,
   landingPageHeading,
   LANDING_PAGES,
   resolveLandingPageKey,
@@ -1160,7 +1161,9 @@ export default function AppAssignmentTypesIdRoute() {
     data.assignmentType.title
   );
   const landingPage = data.landingPageKey
-    ? LANDING_PAGES[data.landingPageKey]
+    ? landingPageFor(data.landingPageKey, {
+        exitTicketNoTutor: data.exitTicketRevisedBuilderEnabled,
+      })
     : null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
@@ -1454,7 +1457,9 @@ export default function AppAssignmentTypesIdRoute() {
         ) : null}
         {/* Brian's landing page replaces every block from here to the
             library: the old directions and the Modules accordion. */}
-        {!landingPage && data.showAboutExitTicket ? <AboutExitTicket /> : null}
+        {!landingPage && data.showAboutExitTicket ? (
+          <AboutExitTicket noTutor={data.exitTicketRevisedBuilderEnabled} />
+        ) : null}
         {!landingPage && data.promptLibrary ? (
           <div data-tour="type-directions">
             <TeacherDirections variant={data.promptLibrary.variant} />

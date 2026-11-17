@@ -37,6 +37,7 @@ import {
   exitTicketActivityKind,
   exitTicketV3DraftFromConfig,
   exitTicketV3DraftInput,
+  EXIT_TICKET_NO_TUTOR_LINE,
   EXIT_TICKET_REVISED_DEFAULT_POINT_VALUE,
   exitTicketRevisedDraftFromConfig,
   exitTicketRevisedDraftInput,
@@ -89,10 +90,7 @@ import {
   type ExitTicketGradingDraft,
 } from './exit-ticket-builder';
 import { ExitTicketBuilderV3 } from './exit-ticket-builder-v3';
-import {
-  EXIT_TICKET_NO_TUTOR_LINE,
-  ExitTicketBuilderRevised,
-} from './exit-ticket-builder-revised';
+import { ExitTicketBuilderRevised } from './exit-ticket-builder-revised';
 import { cn } from '~/utils/misc';
 import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';

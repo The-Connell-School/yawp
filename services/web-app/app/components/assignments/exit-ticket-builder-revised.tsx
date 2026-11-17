@@ -32,13 +32,6 @@ import {
 } from '~/domain/assignment-types/exit-ticket';
 import { WhyDisclosure } from './exit-ticket-builder';
 
-/**
- * Where the tutor toggle was, on an Exit Ticket (Brian, Nov 17). The Exit
- * Ticket page says the same thing.
- */
-export const EXIT_TICKET_NO_TUTOR_LINE =
-  'Exit tickets have no tutor. Students offer a quick reflection, a question, or their understanding of a concept. This is something they can do on their own without tutor support.';
-
 const GUIDE_STEPS = [
   'Reflection or check?',
   'What students will answer',

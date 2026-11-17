@@ -128,3 +128,11 @@ describe('the exit ticket about section', () => {
     expect(body.textContent).not.toContain(SCORING_MODES[1]!.detail);
   });
 });
+
+describe('AboutExitTicket with the revised builder (Brian, Nov 17)', () => {
+  it('drops the section about turning the tutor on: exit tickets have none', () => {
+    activeRoot = render(<AboutExitTicket noTutor />);
+    expect(document.body.textContent).not.toContain(TUTOR_HEADING);
+    expect(document.body.textContent).toContain(TWO_WAYS_HEADING);
+  });
+});

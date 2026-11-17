@@ -1674,6 +1674,13 @@ export const EXIT_TICKET_REVISED_PROMPT_VERSION = 2 as const;
 export const EXIT_TICKET_REVISED_DEFAULT_POINT_VALUE =
   EXIT_TICKET_V2_DEFAULT_POINT_VALUE;
 
+/**
+ * Where the tutor toggle was, and on the Exit Ticket page: exit tickets made
+ * with the revised builder have no tutor.
+ */
+export const EXIT_TICKET_NO_TUTOR_LINE =
+  'Exit tickets have no tutor. Students offer a quick reflection, a question, or their understanding of a concept. This is something they can do on their own without tutor support.';
+
 /** How every revised ticket ends. Replaces both older endings. */
 export const EXIT_TICKET_IDEAS_NOTE =
   'Ideas matter more than grammar or polish.';
