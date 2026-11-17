@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import {
+  freeClassroomSiteLicenseLockedBrowseAllowed,
   resolveSiteLicenseLockedAssignmentTiles,
   siteLicenseLockedAssignmentTilesForOrganization,
 } from './site-license-locked-assignment-tiles';
@@ -110,4 +111,28 @@ test('org-owned act_writing kind does not become the locked act tile', () => {
   expect(tiles.find((tile) => tile.key === 'act_writing')?.assignmentTypeId).toBe(
     'platform-act'
   );
+});
+
+test('free classroom teachers may browse locked site-license types without entitlement', () => {
+  expect(
+    freeClassroomSiteLicenseLockedBrowseAllowed('FREE_CLASSROOM', {
+      title: 'The Thesis-Driven Essay',
+      kind: null,
+      systemKey: null,
+    })
+  ).toBe(true);
+  expect(
+    freeClassroomSiteLicenseLockedBrowseAllowed('SCHOOL', {
+      title: 'The Thesis-Driven Essay',
+      kind: null,
+      systemKey: null,
+    })
+  ).toBe(false);
+  expect(
+    freeClassroomSiteLicenseLockedBrowseAllowed('FREE_CLASSROOM', {
+      title: 'Class Starter',
+      kind: 'class_starter',
+      systemKey: null,
+    })
+  ).toBe(false);
 });

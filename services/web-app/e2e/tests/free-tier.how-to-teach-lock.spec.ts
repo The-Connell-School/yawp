@@ -29,11 +29,23 @@ test.describe('free tier: locked assignment type How to Teach It', () => {
 
     await signIn(FREE_TEACHER_EMAIL, FREE_TEACHER_PASSWORD);
     await page.goto(`/app/assignment-types/${type!.id}`);
+    await expect(page.getByRole('link', { name: 'See how it works' })).toBeVisible();
+    await page.getByRole('link', { name: 'See how it works' }).click();
+    await expect(page).toHaveURL(/\/how-it-works$/);
     await expect(page.getByTestId('how-to-teach-site-license-locked')).toBeVisible();
-    await page.getByTestId('how-to-teach-site-license-locked').click();
-    await expect(page.getByTestId('how-to-teach-license-popover')).toContainText(
-      'Comes with a school site license.'
+
+    await page.goto(`/app/assignment-types/${type!.id}`);
+    await expect(page.getByTestId('how-to-teach-site-license-locked')).toBeVisible();
+    const lockedSection = page.getByTestId('how-to-teach-site-license-locked');
+    await lockedSection.click();
+    const popover = page.getByTestId('how-to-teach-license-popover');
+    await expect(popover).toContainText('Comes with a school site license.');
+    await expect(popover).toBeInViewport();
+
+    const tutorial = await page.request.get(
+      `/app/assignment-types/${type!.id}/tutorial/2`
     );
+    expect(tutorial.status()).toBe(403);
     const response = await page.request.get(
       '/courses/thesis-driven-essay/02-pre-writing.pptx'
     );
