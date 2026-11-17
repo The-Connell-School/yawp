@@ -148,6 +148,7 @@ describe('internal feature-flag endpoints', () => {
       'exit-ticket-builder-v3',
       'exit-ticket-class-summary',
       'assignments-grouped-by-type',
+      'exit-ticket-grading-v2',
       'document-editor-v2',
     ]);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
@@ -253,6 +254,7 @@ describe('internal feature-flag endpoints', () => {
       'exit-ticket-builder-v3',
       'exit-ticket-class-summary',
       'assignments-grouped-by-type',
+      'exit-ticket-grading-v2',
       'document-editor-v2',
     ]);
   });
