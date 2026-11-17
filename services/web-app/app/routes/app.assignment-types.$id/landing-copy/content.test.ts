@@ -6,6 +6,7 @@ import {
   type LandingPage,
   type LandingPageKey,
   enabledLandingPageKey,
+  landingPageFor,
   landingPageHeading,
   landingPagePlainText,
   resolveLandingPageKey,
@@ -418,6 +419,35 @@ describe('Short Response (previously Daily Pages)', () => {
     expect(landingPageHeading('daily-pages', 'Friday Journal')).toBe('Friday Journal');
     expect(landingPageHeading('class-starter', 'Class Starter')).toBe('Class Starter');
     expect(landingPageHeading(null, 'Daily Pages')).toBe('Daily Pages');
+  });
+});
+
+describe('landingPageFor (Brian, Nov 17)', () => {
+  const NO_TUTOR =
+    'Exit tickets have no tutor. Students offer a quick reflection, a question, or their understanding of a concept. This is something they can do on their own without tutor support.';
+
+  test('with the revised builder, the Exit Ticket page says there is no tutor', () => {
+    const how = landingPageFor('exit-ticket', { exitTicketNoTutor: true })
+      .sections.find((s) => s.id === 'how-it-works')!;
+    const text = paragraphs(how.blocks);
+    expect(text).toContain(NO_TUTOR);
+    expect(text.some((t) => t.includes('Tutor off or on?'))).toBe(false);
+    // In the same place: after the two types, before grading.
+    expect(text.indexOf(NO_TUTOR)).toBe(
+      text.findIndex((t) => t.startsWith('**Grading is optional.**')) - 1
+    );
+  });
+
+  test('without it, the page is unchanged', () => {
+    expect(landingPageFor('exit-ticket', { exitTicketNoTutor: false })).toBe(
+      LANDING_PAGES['exit-ticket']
+    );
+  });
+
+  test('every other page is unchanged either way', () => {
+    expect(landingPageFor('daily-pages', { exitTicketNoTutor: true })).toBe(
+      LANDING_PAGES['daily-pages']
+    );
   });
 });
 

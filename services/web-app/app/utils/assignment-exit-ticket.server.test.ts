@@ -486,3 +486,80 @@ describe('a v3 builder post', () => {
     ).toBe('bands');
   });
 });
+
+describe('a revised builder post (Brian, Nov 17)', () => {
+  const QUESTION = 'Quote one line that shows Holden is an unreliable narrator.';
+  const KEY = 'A direct quote from page one.';
+
+  test('stores the teacher’s question, the key and the minimum, and composes the prompt', () => {
+    const result = parseAssignmentExitTicket(
+      formDataFor({
+        exitTicketPromptVersion: '2',
+        exitTicketKind: 'check',
+        exitTicketMode: 'specific',
+        exitTicketFocus: 'understand-text',
+        exitTicketPromptText: QUESTION,
+        exitTicketCorrectAnswer: KEY,
+        exitTicketMinSentences: '2',
+        submitForGrade: 'true',
+        pointValue: '5',
+        prompt: 'whatever the browser sent',
+      })
+    );
+    if (!result.success) throw new Error(result.message);
+    expect(result.value.prompt).toBe(
+      `${QUESTION}\n\nWrite at least 2 sentences.\n\nIdeas matter more than grammar or polish.`
+    );
+    expect(result.value.exitTicketConfigJson).toMatchObject({
+      promptVersion: 2,
+      kind: 'check',
+      focus: 'understand-text',
+      promptText: QUESTION,
+      correctAnswer: KEY,
+      grading: { basis: 'bands', minSentences: 2 },
+    });
+  });
+
+  test('refuses a check without its key', () => {
+    const result = parseAssignmentExitTicket(
+      formDataFor({
+        exitTicketPromptVersion: '2',
+        exitTicketKind: 'check',
+        exitTicketMode: 'specific',
+        exitTicketFocus: 'explain-concept',
+        exitTicketPromptText: QUESTION,
+      })
+    );
+    expect(result).toEqual({
+      success: false,
+      message: 'Add the correct answer or key points.',
+    });
+  });
+
+  test('a graded reflection is completion only', () => {
+    const result = parseAssignmentExitTicket(
+      formDataFor({
+        exitTicketPromptVersion: '2',
+        exitTicketKind: 'reflection',
+        exitTicketMode: 'basic',
+        exitTicketReflectionPrompt: 'interesting',
+        submitForGrade: 'true',
+        pointValue: '5',
+      })
+    );
+    if (!result.success) throw new Error(result.message);
+    expect(result.value.exitTicketConfigJson.grading).toEqual({
+      basis: 'completion',
+    });
+  });
+
+  test('is graded in bands, like every quick-builder ticket', () => {
+    expect(
+      exitTicketGradingModeFor({
+        assignmentTypeKind: 'exit_ticket',
+        formData: formDataFor({ exitTicketPromptVersion: '2' }),
+        gradingMode: 'step',
+      })
+    ).toBe('bands');
+  });
+});

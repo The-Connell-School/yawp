@@ -132,6 +132,7 @@ const {
   getGenericAssignmentPromptForEditor,
   getRenderableApHistorySnapshot,
   isTutorEnabledForAssignment,
+  withExitTicketTutorOff,
   loader,
   shouldRenderDbqWorkspace,
   shouldShowGenericAssignmentPrompt,
@@ -824,5 +825,31 @@ describe('isTutorEnabledForAssignment', () => {
 
   test('is disabled only when tutorEnabled is explicitly false', () => {
     expect(isTutorEnabledForAssignment({ tutorEnabled: false })).toBe(false);
+  });
+});
+
+describe('withExitTicketTutorOff (Brian, Nov 17)', () => {
+  const exitTicket = {
+    tutorEnabled: true,
+    assignmentType: { kind: 'exit_ticket', systemKey: null },
+  };
+
+  test('an exit ticket has no tutor once the revised builder is on', () => {
+    expect(
+      isTutorEnabledForAssignment(withExitTicketTutorOff(exitTicket, true))
+    ).toBe(false);
+  });
+
+  test('an exit ticket keeps its stored setting while it is off', () => {
+    expect(withExitTicketTutorOff(exitTicket, false)).toBe(exitTicket);
+  });
+
+  test('every other assignment keeps its stored setting', () => {
+    const essay = {
+      tutorEnabled: true,
+      assignmentType: { kind: 'essay', systemKey: null },
+    };
+    expect(withExitTicketTutorOff(essay, true)).toBe(essay);
+    expect(withExitTicketTutorOff(null, true)).toBeNull();
   });
 });

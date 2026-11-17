@@ -37,8 +37,19 @@ export function parseAssignmentExitTicket(
   // The v3 builder posts an activity; it is held to its own (lighter) rules
   // and, like the quick builder, its grading is read from the gradebook field.
   const fromV3Builder = formData.has('exitTicketActivity');
-  const fromQuickBuilder = fromV3Builder || formData.has('exitTicketKind');
+  // The revised builder (Brian, Nov 17) posts a prompt version, its own
+  // question, and the correct answer or key points.
+  const fromRevisedBuilder = formData.has('exitTicketPromptVersion');
+  const fromQuickBuilder =
+    fromV3Builder || fromRevisedBuilder || formData.has('exitTicketKind');
   const parsed = parseExitTicketConfigInput({
+    ...(fromRevisedBuilder
+      ? {
+          promptVersion: formData.get('exitTicketPromptVersion')?.toString(),
+          promptText: formData.get('exitTicketPromptText')?.toString(),
+          correctAnswer: formData.get('exitTicketCorrectAnswer')?.toString(),
+        }
+      : {}),
     ...(fromV3Builder
       ? {
           activity: formData.get('exitTicketActivity')?.toString(),
@@ -161,7 +172,9 @@ export function exitTicketGradingModeFor({
 }): AssignmentGradingMode {
   if (
     isExitTicketAssignmentType({ kind: assignmentTypeKind }) &&
-    (formData.has('exitTicketKind') || formData.has('exitTicketActivity'))
+    (formData.has('exitTicketKind') ||
+      formData.has('exitTicketActivity') ||
+      formData.has('exitTicketPromptVersion'))
   ) {
     return 'bands';
   }

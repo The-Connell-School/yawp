@@ -84,7 +84,15 @@ function AboutSection({
  * bands and the form's questions want to be open at the same time, and the
  * notes section is the one people reread while filling the form in.
  */
-export function AboutExitTicket() {
+export function AboutExitTicket({
+  noTutor = false,
+}: {
+  /**
+   * With the revised builder (exit-ticket-grading-v2) exit tickets have no
+   * tutor, so the section on when to turn it on would mislead.
+   */
+  noTutor?: boolean;
+} = {}) {
   const quick = true;
   const twoWaysIntro = quick ? QUICK_BUILDER_COPY.twoWaysIntro : TWO_WAYS_INTRO;
   const twoWays = quick ? QUICK_BUILDER_COPY.twoWays : TWO_WAYS;
@@ -197,24 +205,26 @@ export function AboutExitTicket() {
           </ul>
         </AboutSection>
 
-        <AboutSection value="tutor" heading={TUTOR_HEADING}>
-          <p className="text-sm text-muted-foreground">{TUTOR_NOTE}</p>
-          <p className="mt-3 text-sm text-muted-foreground">
-            <span className="font-medium text-foreground/80">
-              {TUTOR_WHY_ON_LEAD}
-            </span>{' '}
-            {TUTOR_WHY_ON}
-          </p>
-          <p className="mb-2 mt-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {TUTOR_BEHAVIOUR_LEAD}
-          </p>
-          <ul className="list-disc space-y-1.5 pl-5 text-sm text-foreground/80">
-            {TUTOR_BEHAVIOUR.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-          <p className="mt-3 text-sm text-muted-foreground">{TUTOR_TRADE}</p>
-        </AboutSection>
+        {noTutor ? null : (
+          <AboutSection value="tutor" heading={TUTOR_HEADING}>
+            <p className="text-sm text-muted-foreground">{TUTOR_NOTE}</p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground/80">
+                {TUTOR_WHY_ON_LEAD}
+              </span>{' '}
+              {TUTOR_WHY_ON}
+            </p>
+            <p className="mb-2 mt-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {TUTOR_BEHAVIOUR_LEAD}
+            </p>
+            <ul className="list-disc space-y-1.5 pl-5 text-sm text-foreground/80">
+              {TUTOR_BEHAVIOUR.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            <p className="mt-3 text-sm text-muted-foreground">{TUTOR_TRADE}</p>
+          </AboutSection>
+        )}
       </Accordion>
     </section>
   );

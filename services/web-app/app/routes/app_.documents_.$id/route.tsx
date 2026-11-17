@@ -1,4 +1,6 @@
 import { invariant } from '@epic-web/invariant';
+import { isExitTicketAssignmentType } from '~/domain/assignment-types/exit-ticket';
+import { isExitTicketGradingV2RolloutEnabled } from '~/domain/assignment-types/exit-ticket-grading-v2-gate.server';
 import {
   type LoaderFunctionArgs,
   type ShouldRevalidateFunctionArgs,
@@ -312,7 +314,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           promptAttachmentName: true,
           apHistorySnapshot: true,
           tutorEnabled: true,
-          assignmentType: { select: { systemKey: true } },
+          assignmentType: { select: { systemKey: true, kind: true } },
         },
       },
       classAssignment: {
@@ -599,6 +601,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     guidedTours,
     doc: {
       ...doc,
+      assignment: withExitTicketTutorOff(
+        doc.assignment,
+        isExitTicketAssignmentType({
+          kind: doc.assignment?.assignmentType?.kind,
+        })
+          ? await isExitTicketGradingV2RolloutEnabled()
+          : false
+      ),
       submissions: submissionsForResponse,
       membership: ownerMembership,
       assignmentModuleSessions: orderedModuleSessions,
@@ -774,6 +784,27 @@ export function isTutorEnabledForAssignment(
   assignment: { tutorEnabled?: boolean } | null | undefined
 ): boolean {
   return assignment?.tutorEnabled !== false;
+}
+
+/**
+ * Exit tickets have no tutor once the revised builder is on (Brian, Nov 17),
+ * including tickets made before it with the tutor switched on. The stored
+ * setting is left alone, so switching the flag off brings it back.
+ */
+export function withExitTicketTutorOff<
+  T extends {
+    tutorEnabled?: boolean;
+    assignmentType?: { kind?: string | null } | null;
+  },
+>(assignment: T | null, exitTicketsHaveNoTutor: boolean): T | null {
+  if (
+    !assignment ||
+    !exitTicketsHaveNoTutor ||
+    !isExitTicketAssignmentType({ kind: assignment.assignmentType?.kind })
+  ) {
+    return assignment;
+  }
+  return { ...assignment, tutorEnabled: false };
 }
 
 import { DocumentEditorV1Page } from './editor-v1/document-editor-v1-page';

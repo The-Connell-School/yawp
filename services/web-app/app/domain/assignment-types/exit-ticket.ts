@@ -517,6 +517,12 @@ export function exitTicketCriteriaNoteKeys({
 type ExitTicketConfigBase = {
   schemaVersion: typeof EXIT_TICKET_CONFIG_SCHEMA_VERSION;
   /**
+   * Written by the revised builder (Brian, 2026-11-17) only. Selects the
+   * revised wording when the prompt is composed. Absent on every older
+   * ticket, which composes exactly as it always did.
+   */
+  promptVersion?: typeof EXIT_TICKET_REVISED_PROMPT_VERSION;
+  /**
    * v3 builder only: what the students do, and the prompt the teacher wrote.
    * Written beside the legacy fields, never instead of them, so a reader that
    * predates v3 still has a whole ticket. `activity` always agrees with
@@ -865,6 +871,9 @@ function exitTicketEnding(config: ExitTicketConfig): string {
 }
 
 export function composeExitTicketPrompt(config: ExitTicketConfig): string {
+  if (config.promptVersion === EXIT_TICKET_REVISED_PROMPT_VERSION) {
+    return composeRevisedExitTicketPrompt(config);
+  }
   if (config.activity && config.promptText) {
     return [
       config.promptText,
@@ -898,6 +907,8 @@ export type ExitTicketConfigParseResult =
   | { success: false; message: string };
 
 export type ExitTicketConfigInput = {
+  /** Posted by the revised builder only; selects the revised parse. */
+  promptVersion?: string | number | null;
   /** Posted by the v3 builder only; its presence selects the v3 parse. */
   activity?: string | null;
   promptText?: string | null;
@@ -978,6 +989,12 @@ function withLessonNotes<T extends ExitTicketConfig>(
 export function parseExitTicketConfigInput(
   input: ExitTicketConfigInput
 ): ExitTicketConfigParseResult {
+  if (
+    input.promptVersion?.toString().trim() ===
+    String(EXIT_TICKET_REVISED_PROMPT_VERSION)
+  ) {
+    return parseRevisedConfigInput(input);
+  }
   if (input.activity?.toString().trim()) return parseV3ConfigInput(input);
 
   const rawKind = input.kind?.toString().trim() ?? '';
@@ -1129,6 +1146,10 @@ export function parseStoredExitTicketConfig(
   const correctAnswerField = correctAnswer
     ? { correctAnswer }
     : {};
+  const revised = record.promptVersion === EXIT_TICKET_REVISED_PROMPT_VERSION;
+  const revisedField = revised
+    ? { promptVersion: EXIT_TICKET_REVISED_PROMPT_VERSION }
+    : {};
 
   if (record.mode === 'basic') {
     const reflectionPrompt = parseStoredReflectionPrompt(
@@ -1137,6 +1158,7 @@ export function parseStoredExitTicketConfig(
     return withLessonNotes(
       {
         schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+        ...revisedField,
         mode: 'basic',
         ...(storedKind === 'reflection' ? { kind: storedKind } : {}),
         ...parseStoredV3Fields(record, 'basic'),
@@ -1161,9 +1183,11 @@ export function parseStoredExitTicketConfig(
   return withLessonNotes(
     {
       schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      ...revisedField,
       mode: 'specific',
       ...(storedKind === 'check' ? { kind: storedKind } : {}),
       ...parseStoredV3Fields(record, 'specific'),
+      ...(revised ? parseStoredRevisedPromptText(record) : {}),
       focus: option.value,
       topic,
       answerType:
@@ -1624,5 +1648,371 @@ function draftFromConfigFields(
     starter: null,
     topic,
     answerType,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The revised builder (Brian, 2026-11-17).
+//
+// One Exit Ticket, built the same way on the free tier and on main, and
+// switched on with the Grading Assistant it was written for
+// (exit-ticket-grading-v2). A reflection is one of two stock questions, each
+// inviting a question, or the teacher's own. A check is the teacher's whole
+// question plus the correct answer or key points; what it checks for no
+// longer changes the prompt, it is passed to the Grading Assistant. Every
+// ticket ends with EXIT_TICKET_IDEAS_NOTE.
+//
+// Stored at schemaVersion 1 beside the fields older readers need (a topic,
+// an answer type, the key in lessonNotes.mustMention), so switching the flag
+// off reads every ticket made under it.
+// ---------------------------------------------------------------------------
+
+/** `promptVersion` on a ticket the revised builder made. */
+export const EXIT_TICKET_REVISED_PROMPT_VERSION = 2 as const;
+
+/** The point total a revised ticket starts at. */
+export const EXIT_TICKET_REVISED_DEFAULT_POINT_VALUE =
+  EXIT_TICKET_V2_DEFAULT_POINT_VALUE;
+
+/**
+ * Where the tutor toggle was, and on the Exit Ticket page: exit tickets made
+ * with the revised builder have no tutor.
+ */
+export const EXIT_TICKET_NO_TUTOR_LINE =
+  'Exit tickets have no tutor. Students offer a quick reflection, a question, or their understanding of a concept. This is something they can do on their own without tutor support.';
+
+/** How every revised ticket ends. Replaces both older endings. */
+export const EXIT_TICKET_IDEAS_NOTE =
+  'Ideas matter more than grammar or polish.';
+
+/** Every stock reflection invites a question; "Still wondering" is retired. */
+export const EXIT_TICKET_REFLECTION_QUESTION_LINE =
+  'Still have a question about today’s lesson? Ask it here too.';
+
+export const EXIT_TICKET_REVISED_LEARNED_PROMPT =
+  'Tell me in your own words what you learned today. Don’t just name the topic — explain what you understand now that you didn’t understand at the start of class.';
+
+export const EXIT_TICKET_REVISED_INTERESTING_PROMPT =
+  'What was the most interesting thing from today’s lesson? Explain what it was and why it stuck with you.';
+
+export type ExitTicketRevisedReflectionId = 'learned' | 'interesting' | 'custom';
+
+export const EXIT_TICKET_REVISED_REFLECTION_OPTIONS: {
+  id: ExitTicketRevisedReflectionId;
+  label: string;
+  /** Absent only for the teacher's own question. */
+  prompt?: string;
+}[] = [
+  {
+    id: 'learned',
+    label: 'What I learned',
+    prompt: EXIT_TICKET_REVISED_LEARNED_PROMPT,
+  },
+  {
+    id: 'interesting',
+    label: 'Most interesting',
+    prompt: EXIT_TICKET_REVISED_INTERESTING_PROMPT,
+  },
+  { id: 'custom', label: 'Write your own' },
+];
+
+export type ExitTicketRevisedFocus = 'explain-concept' | 'understand-text';
+
+/** "Ask a question" is retired; the other two keep their helper lines. */
+export const EXIT_TICKET_REVISED_FOCUS_OPTIONS: {
+  value: ExitTicketRevisedFocus;
+  label: string;
+  helperText: string;
+}[] = (['explain-concept', 'understand-text'] as const).map((value) => {
+  const option = exitTicketFocusOption(value)!;
+  return { value, label: option.label, helperText: option.helperText };
+});
+
+export const EXIT_TICKET_REVISED_QUESTION_PLACEHOLDER =
+  'e.g., Look at the first page of The Catcher in the Rye. Quote one line that shows Holden is an unreliable narrator, and explain how it shows that.';
+
+export const EXIT_TICKET_CORRECT_ANSWER_FIELD_COPY = {
+  label: 'Correct answer or key points',
+  helperText:
+    'What a correct response needs to include. Students don’t see this. Spelling and wording don’t count against them.',
+  placeholder:
+    'e.g., A direct quote from page one; Holden exaggerates, contradicts himself, or admits he lies.',
+} as const;
+
+function isRevisedFocus(value: string): value is ExitTicketRevisedFocus {
+  return value === 'explain-concept' || value === 'understand-text';
+}
+
+/** "Write at least 3 sentences." The line students see for a minimum. */
+function minimumLengthLine(grading: ExitTicketGrading | undefined): string | null {
+  const count = (n: number, noun: string) =>
+    `Write at least ${n} ${noun}${n === 1 ? '' : 's'}.`;
+  if (grading?.minSentences) return count(grading.minSentences, 'sentence');
+  if (grading?.minWords) return count(grading.minWords, 'word');
+  return null;
+}
+
+function composeRevisedExitTicketPrompt(config: ExitTicketConfig): string {
+  if (config.mode === 'basic') {
+    const reflection = config.reflectionPrompt;
+    if (reflection?.id === 'custom') {
+      return `${reflection.text}\n\n${EXIT_TICKET_IDEAS_NOTE}`;
+    }
+    const stock =
+      reflection?.id === 'interesting'
+        ? EXIT_TICKET_REVISED_INTERESTING_PROMPT
+        : EXIT_TICKET_REVISED_LEARNED_PROMPT;
+    return [stock, EXIT_TICKET_REFLECTION_QUESTION_LINE, EXIT_TICKET_IDEAS_NOTE].join(
+      '\n\n'
+    );
+  }
+  return [
+    config.promptText || config.topic,
+    minimumLengthLine(config.grading),
+    EXIT_TICKET_IDEAS_NOTE,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join('\n\n');
+}
+
+function parseStoredRevisedPromptText(
+  record: Record<string, unknown>
+): { promptText?: string } {
+  if (typeof record.promptText !== 'string') return {};
+  const promptText = normalizeExitTicketPromptText(record.promptText);
+  return promptText ? { promptText } : {};
+}
+
+function parseRevisedConfigInput(
+  input: ExitTicketConfigInput
+): ExitTicketConfigParseResult {
+  const kind =
+    parseExitTicketKind(input.kind?.toString().trim() ?? null) ??
+    (input.mode?.toString().trim() === 'specific' ? 'check' : null) ??
+    (input.mode?.toString().trim() === 'basic' ? 'reflection' : null);
+  if (!kind) return { success: false, message: 'Exit ticket type is invalid.' };
+
+  const base = {
+    schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+    promptVersion: EXIT_TICKET_REVISED_PROMPT_VERSION,
+  };
+  const graded = input.graded === true;
+
+  if (kind === 'reflection') {
+    const id = input.reflectionPrompt?.toString().trim() || 'learned';
+    if (!EXIT_TICKET_REVISED_REFLECTION_OPTIONS.some((o) => o.id === id)) {
+      return { success: false, message: 'Choose a reflection prompt.' };
+    }
+    const reflection = parseReflectionPromptInput({
+      reflectionPrompt: id,
+      reflectionPromptText: input.reflectionPromptText,
+    });
+    if (!reflection.success) return reflection;
+    return {
+      success: true,
+      config: {
+        ...base,
+        mode: 'basic',
+        kind: 'reflection',
+        ...(reflection.reflectionPrompt
+          ? { reflectionPrompt: reflection.reflectionPrompt }
+          : {}),
+        // Full credit or none. Nothing else is asked or stored.
+        ...(graded ? { grading: { basis: 'completion' as const } } : {}),
+      },
+    };
+  }
+
+  const focus = input.focus?.toString().trim() ?? '';
+  if (!isRevisedFocus(focus)) {
+    return {
+      success: false,
+      message: 'Choose what this exit ticket is checking for.',
+    };
+  }
+
+  const promptText = normalizeExitTicketPromptText(
+    input.promptText?.toString() ?? ''
+  );
+  if (!promptText) {
+    return {
+      success: false,
+      message: 'Write the question students will answer.',
+    };
+  }
+  if (promptText.length > EXIT_TICKET_PROMPT_TEXT_MAX_LENGTH) {
+    return {
+      success: false,
+      message: `Keep your question under ${EXIT_TICKET_PROMPT_TEXT_MAX_LENGTH} characters.`,
+    };
+  }
+
+  const correct = parseCorrectAnswerInput(input.correctAnswer);
+  if (!correct.success) return correct;
+  if (!correct.correctAnswer) {
+    return { success: false, message: 'Add the correct answer or key points.' };
+  }
+
+  let grading: ExitTicketGrading | undefined;
+  if (graded) {
+    const minWords = parseMinimum(
+      input.minWords,
+      EXIT_TICKET_MIN_WORDS_MAX,
+      'words'
+    );
+    if (!minWords.success) return minWords;
+    const minSentences = parseMinimum(
+      input.minSentences,
+      EXIT_TICKET_MIN_SENTENCES_MAX,
+      'sentences'
+    );
+    if (!minSentences.success) return minSentences;
+    if (minWords.value !== undefined && minSentences.value !== undefined) {
+      return {
+        success: false,
+        message: 'Set a minimum in words or in sentences, not both.',
+      };
+    }
+    grading = {
+      basis: 'bands',
+      ...(minWords.value !== undefined ? { minWords: minWords.value } : {}),
+      ...(minSentences.value !== undefined
+        ? { minSentences: minSentences.value }
+        : {}),
+    };
+  }
+
+  return {
+    success: true,
+    config: {
+      ...base,
+      mode: 'specific',
+      kind: 'check',
+      focus,
+      promptText,
+      // Older readers: a topic to name the ticket by, a right-answer check,
+      // and the key where the legacy grader looks for it.
+      topic: legacyTopicFor(promptText),
+      answerType: 'objective',
+      correctAnswer: correct.correctAnswer,
+      lessonNotes: {
+        mainPoints: '',
+        mustMention: correct.correctAnswer.slice(
+          0,
+          EXIT_TICKET_LESSON_NOTE_MAX_LENGTH
+        ),
+        watchFor: '',
+      },
+      ...(grading ? { grading } : {}),
+    },
+  };
+}
+
+/** What the revised builder edits. Strings, because they are inputs. */
+export type ExitTicketRevisedDraft = {
+  kind: ExitTicketKind;
+  reflectionPromptId: ExitTicketRevisedReflectionId;
+  reflectionPromptText: string;
+  focus: ExitTicketRevisedFocus;
+  promptText: string;
+  correctAnswer: string;
+  minWords: string;
+  minSentences: string;
+};
+
+export function emptyExitTicketRevisedDraft(
+  patch: Partial<ExitTicketRevisedDraft> = {}
+): ExitTicketRevisedDraft {
+  return {
+    kind: 'reflection',
+    reflectionPromptId: 'learned',
+    reflectionPromptText: '',
+    focus: 'explain-concept',
+    promptText: '',
+    correctAnswer: '',
+    minWords: '',
+    minSentences: '',
+    ...patch,
+  };
+}
+
+/** What the draft posts, for the same parser the server runs. */
+export function exitTicketRevisedDraftInput(
+  draft: ExitTicketRevisedDraft,
+  graded: boolean
+): ExitTicketConfigInput {
+  if (draft.kind === 'reflection') {
+    return {
+      promptVersion: String(EXIT_TICKET_REVISED_PROMPT_VERSION),
+      kind: 'reflection',
+      reflectionPrompt: draft.reflectionPromptId,
+      reflectionPromptText:
+        draft.reflectionPromptId === 'custom' ? draft.reflectionPromptText : null,
+      graded,
+    };
+  }
+  return {
+    promptVersion: String(EXIT_TICKET_REVISED_PROMPT_VERSION),
+    kind: 'check',
+    focus: draft.focus,
+    promptText: draft.promptText,
+    correctAnswer: draft.correctAnswer,
+    graded,
+    minWords: graded ? draft.minWords : null,
+    minSentences: graded ? draft.minSentences : null,
+  };
+}
+
+/**
+ * Any ticket, as the revised builder opens it: a new one, a revised one, or
+ * one an older builder or the Lesson Planner wrote. Retired choices open on
+ * the nearest one that is left.
+ */
+export function exitTicketRevisedDraftFromConfig(
+  config: ExitTicketConfig | null | undefined
+): ExitTicketRevisedDraft {
+  if (!config) return emptyExitTicketRevisedDraft();
+  const grading = config.grading;
+  const minimums = {
+    minWords: grading?.minWords ? String(grading.minWords) : '',
+    minSentences: grading?.minSentences ? String(grading.minSentences) : '',
+  };
+
+  if (config.mode === 'basic') {
+    // A v3 reflection keeps its own question when it wrote one.
+    if (config.activity === 'reflect' && config.promptText && !config.starter) {
+      return emptyExitTicketRevisedDraft({
+        reflectionPromptId: 'custom',
+        reflectionPromptText: config.promptText,
+      });
+    }
+    const reflection = config.reflectionPrompt;
+    if (reflection?.id === 'custom') {
+      return emptyExitTicketRevisedDraft({
+        reflectionPromptId: 'custom',
+        reflectionPromptText: reflection.text,
+      });
+    }
+    const starter = config.starter ?? reflection?.id;
+    return emptyExitTicketRevisedDraft({
+      reflectionPromptId: starter === 'interesting' ? 'interesting' : 'learned',
+    });
+  }
+
+  const focus: ExitTicketRevisedFocus =
+    config.focus === 'understand-text' ? 'understand-text' : 'explain-concept';
+  const option = exitTicketFocusOption(config.focus);
+  const promptText =
+    config.promptText ||
+    (option
+      ? option.template.replace('{topic}', normalizeTopic(config.topic))
+      : config.topic);
+  return emptyExitTicketRevisedDraft({
+    kind: 'check',
+    focus,
+    promptText,
+    correctAnswer:
+      config.correctAnswer ?? config.lessonNotes?.mustMention ?? '',
+    ...minimums,
   });
 }

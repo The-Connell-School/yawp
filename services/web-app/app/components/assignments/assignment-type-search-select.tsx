@@ -80,7 +80,9 @@ export function AssignmentTypeSearchSelect({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-[min(320px,var(--radix-popover-trigger-width))] p-0"
+        // Above the creation sheet this opens in, which sits over the
+        // default popover layer.
+        className="z-[70] w-[min(320px,var(--radix-popover-trigger-width))] p-0"
         align="start"
       >
         <Command>

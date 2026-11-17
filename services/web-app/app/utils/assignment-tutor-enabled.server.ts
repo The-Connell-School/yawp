@@ -11,6 +11,12 @@ export type ParseAssignmentTutorEnabledResult =
 export function parseAssignmentTutorEnabled(
   formData: FormData
 ): ParseAssignmentTutorEnabledResult {
+  // Exit tickets from the revised builder have no tutor (Brian, Nov 17):
+  // students show what they can do on their own. Only that builder posts a
+  // prompt version, so every other form is read as it always was.
+  if (formData.has('exitTicketPromptVersion')) {
+    return { success: true, value: false };
+  }
   const values = formData
     .getAll('tutorEnabled')
     .map((value) => value.toString().trim().toLowerCase())

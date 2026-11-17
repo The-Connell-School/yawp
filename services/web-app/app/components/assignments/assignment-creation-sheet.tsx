@@ -37,6 +37,11 @@ import {
   exitTicketActivityKind,
   exitTicketV3DraftFromConfig,
   exitTicketV3DraftInput,
+  EXIT_TICKET_NO_TUTOR_LINE,
+  EXIT_TICKET_REVISED_DEFAULT_POINT_VALUE,
+  exitTicketRevisedDraftFromConfig,
+  exitTicketRevisedDraftInput,
+  type ExitTicketRevisedDraft,
   type ExitTicketConfig,
   type ExitTicketV3Draft,
   exitTicketFocusOption,
@@ -85,6 +90,7 @@ import {
   type ExitTicketGradingDraft,
 } from './exit-ticket-builder';
 import { ExitTicketBuilderV3 } from './exit-ticket-builder-v3';
+import { ExitTicketBuilderRevised } from './exit-ticket-builder-revised';
 import { cn } from '~/utils/misc';
 import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
@@ -386,6 +392,13 @@ export type AssignmentCreationSheetProps = {
    */
   exitTicketBuilderV3Enabled?: boolean;
   /**
+   * The revised exit ticket builder (Brian, Nov 17), switched on with the
+   * Grading Assistant it was written for (flag `exit-ticket-grading-v2`).
+   * Wins over the v3 builder, so the older wording cannot come back while
+   * it is on. Off renders whichever builder rendered before.
+   */
+  exitTicketRevisedBuilderEnabled?: boolean;
+  /**
    * A stored ticket's whole config, for the v3 builder to reopen exactly,
    * activity and prompt included. The quick builder reads the fields above.
    */
@@ -521,6 +534,55 @@ export function initialExitTicketV3Draft({
   );
 }
 
+/**
+ * What the revised builder opens on: a stored ticket as it was made, a
+ * planned one from the fields the planner passes, or a new one. Retired
+ * choices open on the nearest one that is left.
+ */
+export function initialExitTicketRevisedDraft({
+  config,
+  mode,
+  reflectionPrompt,
+  focus,
+  topic,
+  lessonNotes,
+  grading,
+}: {
+  config: ExitTicketConfig | null;
+  mode: ExitTicketMode;
+  reflectionPrompt: ExitTicketReflectionPrompt | null;
+  focus: ExitTicketFocus;
+  topic: string;
+  lessonNotes: ExitTicketLessonNotes | null;
+  grading: ExitTicketGrading | null;
+}): ExitTicketRevisedDraft {
+  if (config) return exitTicketRevisedDraftFromConfig(config);
+  const notes = lessonNotes ? { lessonNotes } : {};
+  const graded = grading ? { grading } : {};
+  if (mode === 'specific') {
+    return topic.trim()
+      ? exitTicketRevisedDraftFromConfig({
+          schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+          mode: 'specific',
+          focus,
+          topic,
+          answerType: 'objective',
+          ...notes,
+          ...graded,
+        })
+      : exitTicketRevisedDraftFromConfig(null);
+  }
+  return exitTicketRevisedDraftFromConfig(
+    reflectionPrompt
+      ? {
+          schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+          mode: 'basic',
+          reflectionPrompt,
+        }
+      : null
+  );
+}
+
 const EMPTY_LESSON_NOTES: ExitTicketLessonNotes = {
   mainPoints: '',
   mustMention: '',
@@ -578,9 +640,12 @@ export function initialGradingFor({
   initialPointValue,
   plannedGradebook = null,
   assignmentTypeContext = {},
+  revisedExitTicket = false,
 }: {
   isEditing: boolean;
   isExitTicket: boolean;
+  /** The revised builder starts a ticket at 5 points, not 10. */
+  revisedExitTicket?: boolean;
   initialSubmitForGrade: boolean;
   initialPointValue: number | null | undefined;
   /** A planned ticket's own choice, which beats the exit ticket default. */
@@ -600,16 +665,18 @@ export function initialGradingFor({
       }),
     };
   }
+  const defaultPointValue = revisedExitTicket
+    ? EXIT_TICKET_REVISED_DEFAULT_POINT_VALUE
+    : EXIT_TICKET_DEFAULT_POINT_VALUE;
   if (plannedGradebook) {
     return {
       submitForGrade: plannedGradebook.submitForGrade,
-      pointValue:
-        plannedGradebook.pointValue ?? EXIT_TICKET_DEFAULT_POINT_VALUE,
+      pointValue: plannedGradebook.pointValue ?? defaultPointValue,
     };
   }
   return {
     submitForGrade: EXIT_TICKET_SUBMIT_FOR_GRADE_DEFAULT,
-    pointValue: EXIT_TICKET_DEFAULT_POINT_VALUE,
+    pointValue: defaultPointValue,
   };
 }
 
@@ -765,6 +832,7 @@ export function AssignmentCreationSheetContent({
   initialExitTicketTopic = '',
   initialExitTicketLessonNotes = null,
   exitTicketBuilderV3Enabled = false,
+  exitTicketRevisedBuilderEnabled = false,
   initialExitTicketConfig = null,
   initialPostAt,
   initialDueAt,
@@ -808,6 +876,7 @@ export function AssignmentCreationSheetContent({
       assignmentTypes,
       initialSelectedTypeId
     ),
+    revisedExitTicket: exitTicketRevisedBuilderEnabled,
   });
   const [submitForGrade, setSubmitForGrade] = useState(
     initialGrading.submitForGrade
@@ -897,6 +966,19 @@ export function AssignmentCreationSheetContent({
       answerType: initialExitTicketAnswerType,
     });
   const [v3Draft, setV3Draft] = useState<ExitTicketV3Draft>(v3DraftFromProps);
+  const revisedDraftFromProps = () =>
+    initialExitTicketRevisedDraft({
+      config: initialExitTicketConfig,
+      mode: initialExitTicketMode,
+      reflectionPrompt: initialExitTicketReflectionPrompt,
+      focus: initialExitTicketFocus,
+      topic: initialExitTicketTopic,
+      lessonNotes: initialExitTicketLessonNotes,
+      grading: initialExitTicketGrading,
+    });
+  const [revisedDraft, setRevisedDraft] = useState<ExitTicketRevisedDraft>(
+    revisedDraftFromProps
+  );
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [extractionTruncated, setExtractionTruncated] = useState(false);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -950,8 +1032,11 @@ export function AssignmentCreationSheetContent({
   // the ordinary prompt box, so an exit ticket type can exist before this does.
   const isExitTicket = isExitTicketAssignmentType(selectedType);
   const isQuickExitTicket = isExitTicket;
+  // The revised builder replaces both older forms when its flag is on.
+  const isRevisedExitTicket = isExitTicket && exitTicketRevisedBuilderEnabled;
   // The v3 builder replaces the quick builder's form when its flag is on.
-  const isV3ExitTicket = isExitTicket && exitTicketBuilderV3Enabled;
+  const isV3ExitTicket =
+    isExitTicket && exitTicketBuilderV3Enabled && !isRevisedExitTicket;
   const v3IsCheck =
     isV3ExitTicket && exitTicketActivityKind(v3Draft.activity) === 'check';
   // Bands, never steps, for the quick builder: the exit ticket rubric is one
@@ -1049,8 +1134,18 @@ export function AssignmentCreationSheetContent({
   const quickExitTicketPrompt = quickExitTicketConfig.success
     ? composeExitTicketPrompt(quickExitTicketConfig.config)
     : '';
+  const revisedConfig = parseExitTicketConfigInput(
+    exitTicketRevisedDraftInput(revisedDraft, submitForGrade)
+  );
+  const revisedPrompt = revisedConfig.success
+    ? composeExitTicketPrompt(revisedConfig.config)
+    : '';
   // Empty means the form is not answered yet, which also blocks submission.
-  const exitTicketPrompt = isV3ExitTicket ? v3Prompt : quickExitTicketPrompt;
+  const exitTicketPrompt = isRevisedExitTicket
+    ? revisedPrompt
+    : isV3ExitTicket
+      ? v3Prompt
+      : quickExitTicketPrompt;
   const selectedAssignmentType = assignmentTypes.find(
     (type) => type.id === assignmentTypeId
   );
@@ -1157,6 +1252,7 @@ export function AssignmentCreationSheetContent({
         assignmentTypes,
         resetTypeId
       ),
+      revisedExitTicket: exitTicketRevisedBuilderEnabled,
     });
     setSubmitForGrade(grading.submitForGrade);
     setPointValue(pointValueFieldValue(grading.pointValue));
@@ -1206,6 +1302,7 @@ export function AssignmentCreationSheetContent({
         : ''
     );
     setV3Draft(v3DraftFromProps());
+    setRevisedDraft(revisedDraftFromProps());
     setAttachmentFile(null);
     setRemoveAttachment(false);
     setExtractionTruncated(false);
@@ -1236,6 +1333,7 @@ export function AssignmentCreationSheetContent({
     initialExitTicketGrading,
     initialExitTicketGradebook,
     initialExitTicketConfig,
+    exitTicketRevisedBuilderEnabled,
     editingAssignment,
     initialPostAt,
     initialDueAt,
@@ -1544,6 +1642,7 @@ export function AssignmentCreationSheetContent({
                   assignmentTypes,
                   nextTypeId
                 ),
+                revisedExitTicket: exitTicketRevisedBuilderEnabled,
               });
               setSubmitForGrade(grading.submitForGrade);
               setPointValue(pointValueFieldValue(grading.pointValue));
@@ -1796,7 +1895,25 @@ export function AssignmentCreationSheetContent({
           </div>
         )}
 
-        {isV3ExitTicket ? (
+        {isRevisedExitTicket ? (
+          <div className="space-y-4">
+            <ExitTicketBuilderRevised
+              draft={revisedDraft}
+              onDraftChange={(patch) =>
+                setRevisedDraft((current) => ({ ...current, ...patch }))
+              }
+              graded={submitForGrade}
+              onGradedChange={setSubmitForGrade}
+              pointValue={pointValue}
+              onPointValueChange={setPointValue}
+              preview={revisedPrompt}
+              disabled={isSaving}
+            />
+            {/* Recomposed server-side from the answers; posted for any
+              handler that still expects a prompt field. */}
+            <input type="hidden" name="prompt" value={exitTicketPrompt} />
+          </div>
+        ) : isV3ExitTicket ? (
           <div className="space-y-4">
             <ExitTicketBuilderV3
               draft={v3Draft}
@@ -2160,12 +2277,14 @@ export function AssignmentCreationSheetContent({
         {/* The quick builder keeps a default exit ticket to one screen:
             everything a teacher rarely changes waits in here, still posting
             its value, until they open it. */}
+        {/* The revised builder has nothing to tuck away here: the tutor
+            line is all that is left, and it is there to be read. */}
         <MoreOptions
-          enabled={isQuickExitTicket}
+          enabled={isQuickExitTicket && !isRevisedExitTicket}
           open={moreOptionsOpen}
           onOpenChange={setMoreOptionsOpen}
         >
-          {isQuickExitTicket && !isV3ExitTicket ? (
+          {isQuickExitTicket && !isV3ExitTicket && !isRevisedExitTicket ? (
             <div className="pt-4">
               <ExitTicketLessonNotesSection
                 criteriaKeys={criteriaNoteKeys}
@@ -2184,57 +2303,70 @@ export function AssignmentCreationSheetContent({
             shown read-only rather than hidden. Nothing named tutorEnabled is
             submitted while editing, which is what tells the server to leave
             the stored value alone. */}
-          <div className="pt-6">
-            {isEditing ? null : (
-              <BooleanFormValue name="tutorEnabled" value={tutorEnabled} />
-            )}
-            <div className="flex items-center gap-2.5">
-              <Checkbox
-                id="assignment-create-tutor-enabled"
-                checked={tutorEnabled}
-                onCheckedChange={(checked) => setTutorEnabled(checked === true)}
-                disabled={isSaving || isEditing}
-                className="size-4 shrink-0"
-              />
-              <Label
-                htmlFor="assignment-create-tutor-enabled"
-                className={
-                  isEditing
-                    ? 'font-normal leading-none text-muted-foreground'
-                    : 'cursor-pointer font-normal leading-none'
-                }
-              >
-                Tutor enabled
-              </Label>
-              {tutorEnabled ? null : (
-                <span className="rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                  Cold write
-                </span>
+          {isRevisedExitTicket ? (
+            // No tutor on an exit ticket (Brian, Nov 17): the toggle is gone
+            // and this says why. The server stores it off either way.
+            <div className="pt-6">
+              {isEditing ? null : (
+                <BooleanFormValue name="tutorEnabled" value={false} />
               )}
+              <p className="text-sm text-muted-foreground">
+                {EXIT_TICKET_NO_TUTOR_LINE}
+              </p>
             </div>
-            <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-              {isEditing
-                ? 'The tutor cannot be switched on or off after an assignment is created — students may already be working with it. Duplicate the assignment to give a class a version with the other setting.'
-                : isV3ExitTicket
-                  ? 'It starts off, because an exit ticket shows what students understand on their own. Turn it on for a class that tends to hand in six words. It will ask them to say more without giving away the answer or writing for them.'
-                  : isQuickExitTicket
-                    ? 'Off by default for exit tickets.'
-                    : isExitTicket
-                      ? 'Off by default for an exit ticket: it checks what students understand on their own, and a tutor in the document would answer the question for them. Turn it on if you want them to have help.'
-                      : "The tutor is on by default. Turning it off removes it from students' documents — the digital equivalent of an in-class essay. Assigning one now and then shows what a student can do unaided, and gives the Reporter a baseline to measure independent growth against."}
-            </p>
-            {isQuickExitTicket && !isV3ExitTicket && !isEditing ? (
-              <div className="mt-1 pl-[calc(1rem+0.625rem)]">
-                <WhyDisclosure>
-                  <p>
-                    An exit ticket checks what students understand on their own,
-                    and a tutor in the document would answer the question for
-                    them. Turn it on if you want them to have help.
-                  </p>
-                </WhyDisclosure>
+          ) : (
+            <div className="pt-6">
+              {isEditing ? null : (
+                <BooleanFormValue name="tutorEnabled" value={tutorEnabled} />
+              )}
+              <div className="flex items-center gap-2.5">
+                <Checkbox
+                  id="assignment-create-tutor-enabled"
+                  checked={tutorEnabled}
+                  onCheckedChange={(checked) => setTutorEnabled(checked === true)}
+                  disabled={isSaving || isEditing}
+                  className="size-4 shrink-0"
+                />
+                <Label
+                  htmlFor="assignment-create-tutor-enabled"
+                  className={
+                    isEditing
+                      ? 'font-normal leading-none text-muted-foreground'
+                      : 'cursor-pointer font-normal leading-none'
+                  }
+                >
+                  Tutor enabled
+                </Label>
+                {tutorEnabled ? null : (
+                  <span className="rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    Cold write
+                  </span>
+                )}
               </div>
-            ) : null}
-          </div>
+              <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+                {isEditing
+                  ? 'The tutor cannot be switched on or off after an assignment is created — students may already be working with it. Duplicate the assignment to give a class a version with the other setting.'
+                  : isV3ExitTicket
+                    ? 'It starts off, because an exit ticket shows what students understand on their own. Turn it on for a class that tends to hand in six words. It will ask them to say more without giving away the answer or writing for them.'
+                    : isQuickExitTicket
+                      ? 'Off by default for exit tickets.'
+                      : isExitTicket
+                        ? 'Off by default for an exit ticket: it checks what students understand on their own, and a tutor in the document would answer the question for them. Turn it on if you want them to have help.'
+                        : "The tutor is on by default. Turning it off removes it from students' documents — the digital equivalent of an in-class essay. Assigning one now and then shows what a student can do unaided, and gives the Reporter a baseline to measure independent growth against."}
+              </p>
+              {isQuickExitTicket && !isV3ExitTicket && !isEditing ? (
+                <div className="mt-1 pl-[calc(1rem+0.625rem)]">
+                  <WhyDisclosure>
+                    <p>
+                      An exit ticket checks what students understand on their own,
+                      and a tutor in the document would answer the question for
+                      them. Turn it on if you want them to have help.
+                    </p>
+                  </WhyDisclosure>
+                </div>
+              ) : null}
+            </div>
+          )}
 
           {/* Graded for grammar and syntax. Shown only for assignment types whose
             rubric grades grammar, because the toggle only ever turns it off.

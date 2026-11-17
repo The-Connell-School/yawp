@@ -51,4 +51,24 @@ describe('parseAssignmentTutorEnabled', () => {
       message: 'Tutor enabled value is invalid.',
     });
   });
+
+  test('the revised Exit Ticket builder never turns the tutor on (Brian, Nov 17)', () => {
+    const formData = new FormData();
+    formData.set('tutorEnabled', 'true');
+    formData.set('exitTicketPromptVersion', '2');
+    expect(parseAssignmentTutorEnabled(formData)).toEqual({
+      success: true,
+      value: false,
+    });
+  });
+
+  test('older exit ticket forms keep whatever they posted', () => {
+    const formData = new FormData();
+    formData.set('tutorEnabled', 'true');
+    formData.set('exitTicketKind', 'reflection');
+    expect(parseAssignmentTutorEnabled(formData)).toEqual({
+      success: true,
+      value: true,
+    });
+  });
 });
