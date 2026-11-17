@@ -1462,7 +1462,10 @@ export default function AppAssignmentTypesIdRoute() {
           <ApHistoryTeacherDirections />
         ) : null}
         {!landingPage && showTeachIt ? (
-          <HowToTeachIt modules={data.assignmentType.assignmentModules} />
+          <HowToTeachIt
+            modules={data.assignmentType.assignmentModules}
+            assetsLocked={data.siteLicenseBrowse}
+          />
         ) : !landingPage && showModules ? (
           <Accordion type="single" collapsible data-tour="type-modules">
             <AccordionItem value="modules">

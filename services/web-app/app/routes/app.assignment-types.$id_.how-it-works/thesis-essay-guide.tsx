@@ -35,6 +35,7 @@ import {
 import { guideAccentFor } from '~/components/how-it-works/guide-accents';
 import { TransferChart } from './transfer-chart';
 import { THESIS_ESSAY_COURSE } from '../app.assignment-types.$id/landing-copy/thesis-essay-course';
+import { LockHowToTeachControl } from '~/components/free-tier/site-license-how-to-teach-lock';
 
 const MEDIA = '/img/thesis-essay-guide';
 
@@ -115,12 +116,14 @@ export function ThesisEssayGuide({
   pagePath,
   teachingLocked = false,
   coursePath,
+  howToTeachAssetsLocked = false,
 }: {
   backTo: string;
   backLabel: string;
   pagePath: string;
   teachingLocked?: boolean;
   coursePath: string | null;
+  howToTeachAssetsLocked?: boolean;
 }) {
   return (
     <GuidePage
@@ -190,7 +193,15 @@ export function ThesisEssayGuide({
             statement, and how to organize the essay. A short video for you
             comes with each one, so you learn how to teach it, too.
           </GuideCopy>
-          {coursePath ? <GuideLink to={coursePath}>Open the course</GuideLink> : null}
+          {coursePath ? (
+            howToTeachAssetsLocked ? (
+              <LockHowToTeachControl>
+                <GuideLink to={coursePath}>Open the course</GuideLink>
+              </LockHowToTeachControl>
+            ) : (
+              <GuideLink to={coursePath}>Open the course</GuideLink>
+            )
+          ) : null}
         </GuideRow>
 
         <GuideRow

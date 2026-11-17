@@ -39,4 +39,24 @@ test.describe('free tier: locked assignment type How to Teach It', () => {
     );
     expect(response.status()).toBe(403);
   });
+
+  test('how-it-works GuideHowToTeach is locked for thesis-driven essay', async ({
+    page,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const type = await prisma.assignmentType.findFirst({
+      where: {
+        archivedAt: null,
+        title: { equals: 'The Thesis-Driven Essay', mode: 'insensitive' },
+      },
+      select: { id: true },
+    });
+    await prisma.$disconnect();
+    if (!type) test.skip();
+
+    await signIn(FREE_TEACHER_EMAIL, FREE_TEACHER_PASSWORD);
+    await page.goto(`/app/assignment-types/${type!.id}/how-it-works`);
+    await expect(page.getByTestId('how-to-teach-site-license-locked')).toBeVisible();
+  });
 });

@@ -21,16 +21,19 @@ const WHITE_CARD = [
 export function GuideHowToTeach({
   guideKey,
   lessonVideos = {},
+  howToTeachAssetsLocked = false,
 }: {
   guideKey: GuideHowToTeachKey;
   /** Each lesson's tutorial page, by lesson number, where this teacher can open it. */
   lessonVideos?: LessonVideos;
+  howToTeachAssetsLocked?: boolean;
 }) {
   return (
     <HowToTeachSection
       section={guideHowToTeachSection(guideKey)}
       lessonVideos={lessonVideos}
       className={WHITE_CARD}
+      howToTeachAssetsLocked={howToTeachAssetsLocked}
     />
   );
 }

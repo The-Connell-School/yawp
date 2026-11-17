@@ -504,9 +504,7 @@ describe('production deployment contract', () => {
     const startScript = readRepoFile('services/web-app/start.sh');
 
     expect(dockerfile).toContain('mkdir -p services/web-app/node_modules');
-    expect(startScript).toContain(
-      '../../node_modules/@react-router/serve/bin.js'
-    );
+    expect(startScript).toContain('server/express.ts');
   });
 
   test('Docker runtime image exposes client assets for root-level serve commands', () => {
@@ -536,9 +534,18 @@ describe('production deployment contract', () => {
     const startScript = readRepoFile('services/web-app/start.sh');
 
     expect(startScript).toContain('cd "$(dirname "$0")"');
-    expect(startScript).toContain('@react-router/serve/bin.js');
-    expect(startScript).toContain('exec bun "$serve_bin"');
+    expect(startScript).toContain('server/express.ts');
+    expect(startScript).toContain('exec bun ./server/express.ts');
     expect(startScript).not.toContain('bun run web-app:start');
+  });
+
+  test('production express serves public course assets only after the site-license gate', () => {
+    const expressEntry = readRepoFile('services/web-app/server/express.ts');
+    const gate = expressEntry.indexOf('siteLicenseCourseAssetExpressMiddleware');
+    const publicStatic = expressEntry.indexOf("express.static('public'");
+    expect(gate).toBeGreaterThan(-1);
+    expect(publicStatic).toBeGreaterThan(-1);
+    expect(gate).toBeLessThan(publicStatic);
   });
 
   test('Vite dev redirects bare /app before static middleware handles the app directory', () => {
@@ -1191,9 +1198,9 @@ describe('PR preview deployment contract', () => {
     const compose = readRepoFile('scripts/preview/render-compose.mjs');
 
     expect(routerConfig).toContain('v8_middleware: true');
-    expect(rootRoute).toContain(
-      'export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware]'
-    );
+    expect(rootRoute).toContain('siteLicenseCourseAssetMiddleware');
+    expect(rootRoute).toContain('previewAccessMiddleware');
+    expect(rootRoute).toContain('uaPartnerMiddleware');
     expect(gate).toContain("process.env.PREVIEW_ACCESS_GATE === 'on'");
     expect(gate).toContain('isDemoEnvironment');
     expect(gate).toContain("'/api/healthcheck'");
