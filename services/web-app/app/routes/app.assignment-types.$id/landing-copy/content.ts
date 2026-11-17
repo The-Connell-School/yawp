@@ -25,6 +25,7 @@
 // School-authored types (anything `resolveLandingPageKey` does not know) keep
 // the old page: their description and modules are theirs, not ours.
 
+import { EXIT_TICKET_NO_TUTOR_LINE } from '~/domain/assignment-types/exit-ticket';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
 import type { YawpLessonSlug } from '~/domain/lesson-planner/yawp-lessons';
@@ -647,6 +648,35 @@ export function enabledLandingPageKey(
   if (!key || !flags.v2) return null;
   if (key === 'thesis-driven-essay' && !flags.thesisEssay) return null;
   return key;
+}
+
+/**
+ * The page as a teacher gets it. With the revised exit ticket builder
+ * (exit-ticket-grading-v2), exit tickets have no tutor, so the Exit Ticket
+ * page says so where it used to say when to turn it on (Brian, Nov 17).
+ */
+export function landingPageFor(
+  key: LandingPageKey,
+  { exitTicketNoTutor }: { exitTicketNoTutor: boolean }
+): LandingPage {
+  const page = LANDING_PAGES[key];
+  if (key !== 'exit-ticket' || !exitTicketNoTutor) return page;
+  return {
+    ...page,
+    sections: page.sections.map((section) =>
+      section.id !== 'how-it-works'
+        ? section
+        : {
+            ...section,
+            blocks: section.blocks.map((block) =>
+              block.type === 'paragraph' &&
+              block.text.startsWith('**Tutor off or on?**')
+                ? p(EXIT_TICKET_NO_TUTOR_LINE)
+                : block
+            ),
+          }
+    ),
+  };
 }
 
 const stripMarkup = (text: string) => text.replace(/\*\*|\*/g, '');

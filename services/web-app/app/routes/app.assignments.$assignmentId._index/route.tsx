@@ -11,6 +11,7 @@ import { loadExitTicketResponses } from '~/domain/assignment-types/exit-ticket-c
 import { EXIT_TICKET_SEED_STEP } from '~/domain/lesson-planner/lesson-seed';
 import { Prisma } from '@app/prisma';
 import { isLessonPlannerEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { isExitTicketGradingV2RolloutEnabled } from '~/domain/assignment-types/exit-ticket-grading-v2-gate.server';
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import {
   type LoaderFunctionArgs,
@@ -346,6 +347,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return {
     found: true as const,
     classInsightsEnabled,
+    // The revised exit ticket builder ships with the Grading Assistant it was
+    // written for, so an edit reopens a ticket in the form that made it.
+    exitTicketRevisedBuilderEnabled:
+      await isExitTicketGradingV2RolloutEnabled(),
     assignmentTypes: assignmentTypeOptions,
     activeClassId: active.classId,
     // Group setup is per class, because the roster is: one assignment pushed to
@@ -1169,6 +1174,8 @@ export default function AssignmentDetailRoute() {
               : null
           }
           initialExitTicketGrading={assignment.exitTicket?.grading ?? null}
+          initialExitTicketConfig={assignment.exitTicket ?? null}
+          exitTicketRevisedBuilderEnabled={data.exitTicketRevisedBuilderEnabled}
         />
 
       </div>
