@@ -31,7 +31,7 @@ const LEGACY_EXIT_TICKET_CONFIG = {
   promptConfigSnapshot: {
     gradingInstructionsOverride: 'Score inside these bands.',
   },
-} as const;
+};
 
 describe('applyExitTicketGradingWhenV2Enabled', () => {
   test('with the global flag off, keeps the stored four-band rubric intact', () => {
