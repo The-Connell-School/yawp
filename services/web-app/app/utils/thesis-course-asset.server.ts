@@ -1,11 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-// Production `start.sh` and local dev both run with cwd at `services/web-app`.
-const THESIS_COURSE_PUBLIC_ROOT = path.join(
-  process.cwd(),
-  'public/courses/thesis-driven-essay'
-);
+function thesisCourseAssetRoot() {
+  // `@react-router/serve` serves `public/` statically, so production keeps gated
+  // files outside that tree. Dev and tests continue to read from `public/courses`.
+  const relative =
+    process.env.NODE_ENV === 'production'
+      ? 'gated-course-assets/thesis-driven-essay'
+      : 'public/courses/thesis-driven-essay';
+  return path.join(process.cwd(), relative);
+}
 
 const MIME_TYPES: Record<string, string> = {
   '.pdf': 'application/pdf',
@@ -32,8 +36,9 @@ export function resolveThesisCourseAssetAbsolutePath(relativeSplat: string) {
   if (!normalized || normalized === '.' || normalized.includes('..')) {
     return null;
   }
-  const absolute = path.resolve(THESIS_COURSE_PUBLIC_ROOT, normalized);
-  const relativeToRoot = path.relative(THESIS_COURSE_PUBLIC_ROOT, absolute);
+  const root = thesisCourseAssetRoot();
+  const absolute = path.resolve(root, normalized);
+  const relativeToRoot = path.relative(root, absolute);
   if (relativeToRoot.startsWith('..') || path.isAbsolute(relativeToRoot)) {
     return null;
   }

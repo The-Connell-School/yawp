@@ -554,7 +554,8 @@ describe('production deployment contract', () => {
     );
     expect(dockerfile).toContain('COPY --from=build /app/node_modules ./node_modules');
     expect(startScript).toContain('@react-router/serve/bin.js');
-    expect(dockerfile).toContain(
+    expect(dockerfile).toContain('gated-course-assets/thesis-driven-essay');
+    expect(dockerfile).not.toContain(
       'COPY --from=build /app/services/web-app/public/courses ./services/web-app/public/courses'
     );
   });
@@ -566,7 +567,7 @@ describe('production deployment contract', () => {
 
     expect(packageJson).toContain('strip-thesis-course-client-static.ts');
     expect(viteConfig).toContain('yawp-site-license-course-asset-dev-gate');
-    expect(webAppDockerfile).toContain('public/courses');
+    expect(webAppDockerfile).toContain('gated-course-assets/thesis-driven-essay');
   });
 
   test('Vite dev redirects bare /app before static middleware handles the app directory', () => {
