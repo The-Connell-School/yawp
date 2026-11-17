@@ -64,14 +64,16 @@ function MetadataRow({
   label,
   children,
   stacked = false,
+  tourId,
 }: {
   label: string;
   children: ReactNode;
   stacked?: boolean;
+  tourId?: string;
 }) {
   if (stacked) {
     return (
-      <div className="px-4 py-3">
+      <div className="px-4 py-3" data-tour={tourId}>
         <dt className="text-muted-foreground">{label}</dt>
         <dd className="mt-2 min-w-0">{children}</dd>
       </div>
@@ -79,7 +81,10 @@ function MetadataRow({
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 px-4 py-3">
+    <div
+      className="flex items-center justify-between gap-3 px-4 py-3"
+      data-tour={tourId}
+    >
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="min-w-0 text-right font-medium text-foreground">{children}</dd>
     </div>
@@ -106,7 +111,7 @@ function AssignmentMetadataSection({
         {assignment.assignmentType ? (
           <MetadataRow label="Type">{assignment.assignmentType.title}</MetadataRow>
         ) : null}
-        <MetadataRow label="Documents">
+        <MetadataRow label="Documents" tourId="assignment-documents">
           <AssignmentDocumentsPill
             documentCount={assignment.documentCount}
             onClick={() => onViewDocuments()}
@@ -121,7 +126,7 @@ function AssignmentMetadataSection({
           <MetadataRow label="Point value">{assignment.pointValue ?? 100}</MetadataRow>
         ) : null}
         <MetadataRow label="View only">{metadataYesNo(isViewOnly)}</MetadataRow>
-        <MetadataRow label="Prompt" stacked>
+        <MetadataRow label="Prompt" stacked tourId="assignment-prompt">
           <div className="space-y-3">
             <AssignmentPromptPreview prompt={assignment.prompt} />
             {assignment.promptAttachmentName ? (

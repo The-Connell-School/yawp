@@ -523,6 +523,25 @@ test.describe.serial('Free tier guided tour', () => {
     expect(await tourOutcome('dashboard')).toBeNull();
   });
 
+  test("offers Don't show again after a page was skipped once", async ({ page }) => {
+    await logInAsFreeTeacher(page);
+    await page.goto('/app/my-classes');
+    await expect(page.getByTestId('guided-tour-welcome')).toBeVisible();
+    await expect(page.getByTestId('guided-tour-dont-show-again')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Skip' }).click();
+    await expect(page.getByTestId('guided-tour-welcome')).toHaveCount(0);
+    await page.goto('/app');
+    await page.goto('/app/my-classes');
+    await expect(page.getByTestId('guided-tour-welcome')).toBeVisible();
+    await expect(page.getByTestId('guided-tour-dont-show-again')).toBeVisible();
+    await page.getByTestId('guided-tour-dont-show-again').click();
+    await expect(page.getByTestId('guided-tour-welcome')).toHaveCount(0);
+    await page.goto('/app/assignments');
+    await expect(page.getByTestId('guided-tour-welcome')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Tour this page' }).click();
+    await expect(page.getByTestId('guided-tour-spotlight')).toBeVisible();
+  });
+
   test('no tour when the free_tier flag is off', async ({ page }) => {
     await logInAsFreeTeacher(page);
     await setFreeTierFlag(false);

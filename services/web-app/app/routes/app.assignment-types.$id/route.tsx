@@ -1441,6 +1441,7 @@ export default function AppAssignmentTypesIdRoute() {
             page={landingPage}
             modules={data.assignmentType.assignmentModules}
             lessonVideos={data.landingVideos}
+            howToTeachAssetsLocked={data.siteLicenseBrowse}
           />
         ) : null}
         {/* Brian's landing page replaces every block from here to the

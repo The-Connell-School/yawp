@@ -582,7 +582,10 @@ export function ClassInsightsPanel({
   };
 
   return (
-    <section className="@container overflow-hidden rounded-xl border bg-white shadow-sm dark:bg-card dark:shadow-none">
+    <section
+      className="@container overflow-hidden rounded-xl border bg-white shadow-sm dark:bg-card dark:shadow-none"
+      data-tour="assignment-class-summary"
+    >
       {/* Header band */}
       <div className="flex flex-col items-stretch gap-3 border-b bg-gradient-to-r from-primary/[0.07] to-transparent p-4 @xl:flex-row @xl:items-start @xl:justify-between">
         <div className="flex min-w-0 gap-3">
