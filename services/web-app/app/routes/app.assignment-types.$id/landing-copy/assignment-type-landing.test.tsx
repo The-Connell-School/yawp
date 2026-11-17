@@ -493,8 +493,30 @@ describe('LandingSections', () => {
     expect(video.getAttribute('aria-label')).toBe('Pre-writing: tutorial video');
     // No lesson plan link of any kind: not the PDF, not the planner.
     expect([...root.querySelectorAll('a')].filter((a) => /lesson plan/i.test(a.textContent ?? ''))).toHaveLength(0);
-    expect(root.querySelectorAll('a[href$=".pdf"]')).toHaveLength(0);
+    const pdfs = [...root.querySelectorAll('a[href$=".pdf"]')].map((a) => a.getAttribute('href'));
+    expect(pdfs.filter((href) => href?.includes('lesson-plan'))).toEqual([]);
     expect(root.querySelectorAll('a[href^="/app/lesson-planner/yawp/"]')).toHaveLength(0);
+
+    // The first lesson hands out the rubric and a sample essay, as PDFs,
+    // under its deck (Michael, Nov 16).
+    const intro = rows[0]!;
+    expect([...intro.querySelectorAll('a')].map((a) => a.textContent)).toEqual([
+      'Slide deck',
+      'Rubric',
+      'Sample essay',
+    ]);
+    const rubric = [...intro.querySelectorAll('a')].find((a) => a.textContent === 'Rubric')!;
+    expect(rubric.getAttribute('href')).toBe('/courses/thesis-driven-essay/01-thesis-driven-essay-rubric.pdf');
+    expect(rubric.getAttribute('download')).toBe('Yawp! Thesis-Driven Essay Rubric.pdf');
+    expect(rubric.getAttribute('aria-label')).toBe('Introduce students to Yawp!: rubric (PDF)');
+    const sample = [...intro.querySelectorAll('a')].find((a) => a.textContent === 'Sample essay')!;
+    expect(sample.getAttribute('href')).toBe('/courses/thesis-driven-essay/01-sample-essay-bored-in-the-usa.pdf');
+    expect(sample.getAttribute('download')).toBe('Sample Essay - Bored in the USA.pdf');
+    expect(sample.getAttribute('aria-label')).toBe('Introduce students to Yawp!: sample essay (PDF)');
+    // Handouts sit in the deck column, under the deck, so the videos still line up.
+    expect(
+      [...intro.querySelector('[data-course-column="slide-deck"]')!.querySelectorAll('a')].map((a) => a.textContent)
+    ).toEqual(['Slide deck', 'Rubric', 'Sample essay']);
 
     // Body paragraphs has both of its decks, and its video.
     expect([...rows[4]!.querySelectorAll('a')].map((a) => a.textContent)).toEqual([

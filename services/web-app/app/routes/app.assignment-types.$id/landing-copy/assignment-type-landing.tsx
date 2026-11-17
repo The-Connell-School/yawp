@@ -1,6 +1,6 @@
 import { Fragment, useId, useState } from 'react';
 import { Link } from 'react-router';
-import { ChevronDown, CirclePlay, Presentation } from 'lucide-react';
+import { ChevronDown, CirclePlay, FileText, Presentation } from 'lucide-react';
 
 import { cn } from '~/utils/misc';
 
@@ -14,6 +14,7 @@ import {
   THESIS_ESSAY_COURSE,
   THESIS_ESSAY_COURSE_TITLE,
   type CourseDeck,
+  type CourseHandout,
 } from './thesis-essay-course';
 import { YAWP_LESSONS } from '~/domain/lesson-planner/yawp-lessons';
 
@@ -99,17 +100,20 @@ const COURSE_LINK_CLASS =
  * One lesson's row, as Brian drew it and then pared it down (Nov 6): its
  * number and title, then two fixed columns, the slide deck(s) to download and
  * the tutorial video to watch, so links line up down the card. A lesson
- * without one simply has no link for it.
+ * without one simply has no link for it. Handouts (the first lesson's rubric
+ * and sample essay, Michael, Nov 16) go under the deck(s), in its column.
  */
 function CourseLessonRow({
   index,
   title,
   decks,
+  handouts = [],
   tutorialHref,
 }: {
   index: number | null;
   title: string;
   decks: CourseDeck[];
+  handouts?: CourseHandout[];
   tutorialHref: string | null;
 }) {
   return (
@@ -141,6 +145,18 @@ function CourseLessonRow({
             >
               <Presentation className="h-4 w-4" aria-hidden />
               {deck.label}
+            </a>
+          ))}
+          {handouts.map((handout) => (
+            <a
+              key={handout.href}
+              href={handout.href}
+              download={handout.fileName}
+              aria-label={`${title}: ${handout.label.toLowerCase()} (PDF)`}
+              className={COURSE_LINK_CLASS}
+            >
+              <FileText className="h-4 w-4" aria-hidden />
+              {handout.label}
             </a>
           ))}
         </span>
@@ -196,6 +212,7 @@ function ThesisEssayCourse({
               index={index + 1}
               title={lesson.title}
               decks={lesson.decks}
+              handouts={lesson.handouts}
               tutorialHref={lessonVideos[index + 1] ?? null}
             />
           ))}
@@ -234,6 +251,7 @@ function YawpLessonBlock({
             index={null}
             title={lesson.title}
             decks={inCourse?.decks ?? [{ ...lesson.deck, label: 'Slide deck' }]}
+            handouts={inCourse?.handouts}
             tutorialHref={lessonVideos[lesson.lessonNumber] ?? null}
           />
         </ul>

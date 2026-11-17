@@ -250,7 +250,7 @@ test.describe.serial('Assignment type landing pages (v2)', () => {
     await page.getByRole('button', { name: 'Show How to Teach It' }).click();
     await expect(course.getByTestId('course-lesson')).toHaveCount(8);
 
-    // The rows are the slide deck and the tutorial video, nothing else (Brian, Nov 6).
+    // The rows are the slide deck and the tutorial video (Brian, Nov 6), and no lesson plan.
     await expect(course.getByRole('link', { name: /lesson plan/i })).toHaveCount(0);
 
     // A slide deck downloads as a PowerPoint file.
@@ -265,6 +265,23 @@ test.describe.serial('Assignment type landing pages (v2)', () => {
         name: 'Body paragraphs: supporting quotes slide deck (PowerPoint)',
       })
     ).toBeVisible();
+
+    // The first lesson also hands out the grading rubric and a sample essay
+    // (Michael, Nov 16), as PDFs, under its deck.
+    const rubricDownload = page.waitForEvent('download');
+    await course
+      .getByRole('link', { name: 'Introduce students to Yawp!: rubric (PDF)' })
+      .click();
+    expect((await rubricDownload).suggestedFilename()).toBe(
+      'Yawp! Thesis-Driven Essay Rubric.pdf'
+    );
+    const sampleDownload = page.waitForEvent('download');
+    await course
+      .getByRole('link', { name: 'Introduce students to Yawp!: sample essay (PDF)' })
+      .click();
+    expect((await sampleDownload).suggestedFilename()).toBe(
+      'Sample Essay - Bored in the USA.pdf'
+    );
 
     await expect(page.getByRole('button', { name: 'Modules' })).toHaveCount(0);
     await expect(
