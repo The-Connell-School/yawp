@@ -77,6 +77,7 @@ import { ExitTicketPromptGenerator } from './exit-ticket-prompt-generator/exit-t
 import type { GeneratedExitTicketOption } from './exit-ticket-prompt-generator/prompt-generator';
 import { isTeacherPromptGeneratorEnabled } from '~/domain/teacher-prompt-generator/gate.server';
 import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
+import { isExitTicketGradingV2RolloutEnabled } from '~/domain/assignment-types/exit-ticket-grading-v2-gate.server';
 import { isHowToTeachItEnabled } from '~/domain/assignment-types/how-to-teach-it.server';
 import {
   normalizeTeachLink,
@@ -782,6 +783,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const exitTicketBuilderV3Enabled = isTeacher
     ? await isExitTicketBuilderV3Enabled(profile.organization.id)
     : false;
+  // The revised builder ships with the Grading Assistant it was written for.
+  const exitTicketRevisedBuilderEnabled = isTeacher
+    ? await isExitTicketGradingV2RolloutEnabled()
+    : false;
   const howToTeachItEnabled = isTeacher
     ? await isHowToTeachItEnabled(profile.organization.id)
     : false;
@@ -820,6 +825,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     landingPageKey,
     landingVideos,
     exitTicketBuilderV3Enabled,
+    exitTicketRevisedBuilderEnabled,
     howToTeachItEnabled,
     siteLicenseBrowse,
   });
@@ -1324,6 +1330,9 @@ export default function AppAssignmentTypesIdRoute() {
                 initialPrompt={libraryPrompt}
                 plannedExitTicket={plannedExitTicket}
                 exitTicketBuilderV3Enabled={data.exitTicketBuilderV3Enabled}
+                exitTicketRevisedBuilderEnabled={
+                  data.exitTicketRevisedBuilderEnabled
+                }
                 titleRequired={showThesisLibrary}
                 apHistoryEntry={apHistoryEntry}
                 teachingLocked={creationLocked}

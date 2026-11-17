@@ -67,6 +67,8 @@ type Props = {
   plannedExitTicket?: ExitTicketPrefill | null;
   /** The v3 exit ticket builder; off renders the quick builder. */
   exitTicketBuilderV3Enabled?: boolean;
+  /** The revised exit ticket builder (with exit-ticket-grading-v2). */
+  exitTicketRevisedBuilderEnabled?: boolean;
   titleRequired?: boolean;
   apHistoryEntry?: {
     externalKey: string;
@@ -97,6 +99,7 @@ export function CreateAssignmentSheet({
   initialPrompt = '',
   plannedExitTicket = null,
   exitTicketBuilderV3Enabled = false,
+  exitTicketRevisedBuilderEnabled = false,
   titleRequired = false,
   apHistoryEntry = null,
   teachingLocked = false,
@@ -144,6 +147,7 @@ export function CreateAssignmentSheet({
         onCreated={onCreated}
         entryPoint="assignment-type"
         exitTicketBuilderV3Enabled={exitTicketBuilderV3Enabled}
+        exitTicketRevisedBuilderEnabled={exitTicketRevisedBuilderEnabled}
         fixedAssignmentTypeId={assignmentTypeId}
         assignmentTypes={[
           {

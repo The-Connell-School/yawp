@@ -558,7 +558,7 @@ describe('a revised builder post (Brian, Nov 17)', () => {
       exitTicketGradingModeFor({
         assignmentTypeKind: 'exit_ticket',
         formData: formDataFor({ exitTicketPromptVersion: '2' }),
-        gradingMode: 'steps',
+        gradingMode: 'step',
       })
     ).toBe('bands');
   });
