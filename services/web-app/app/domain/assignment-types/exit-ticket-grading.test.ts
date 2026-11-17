@@ -75,10 +75,10 @@ describe('a graded reflection', () => {
     });
   });
 
-  test('must say whether it is completion or quality', () => {
-    expect(parse({ kind: 'reflection', graded: true })).toEqual({
-      success: false,
-      message: 'Choose how this reflection is graded.',
+  test('omitting the old completion or quality choice defaults to completion', () => {
+    expect(parse({ kind: 'reflection', graded: true })).toMatchObject({
+      success: true,
+      config: { grading: { basis: 'completion' } },
     });
   });
 

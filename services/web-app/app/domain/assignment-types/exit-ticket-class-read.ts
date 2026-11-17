@@ -60,9 +60,25 @@ function understandingScore(rubricScores: unknown): number | null {
   const entry = (rubricScores as Record<string, unknown>)[
     EXIT_TICKET_UNDERSTANDING_CATEGORY_KEY
   ];
-  return readRubricEntryScore(
+  const score = readRubricEntryScore(
     entry as Parameters<typeof readRubricEntryScore>[0]
   );
+  if (score === null) return null;
+  // New assistant scores are points out of the ticket total. Older scores are
+  // already on the 0–100 band scale and have no pointTotal.
+  if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+    const pointTotal = (entry as { pointTotal?: unknown }).pointTotal;
+    if (
+      typeof pointTotal === 'number' &&
+      Number.isInteger(pointTotal) &&
+      pointTotal > 0 &&
+      score >= 0 &&
+      score <= pointTotal
+    ) {
+      return Math.round((score / pointTotal) * 100);
+    }
+  }
+  return score;
 }
 
 /**

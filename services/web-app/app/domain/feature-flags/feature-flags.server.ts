@@ -32,6 +32,7 @@ import {
   ASSIGNMENT_TYPE_LESSON_PLANS_FLAG,
   HOW_TO_TEACH_IT_FLAG,
   DOCUMENT_EDITOR_V2_FLAG,
+  EXIT_TICKET_GRADING_V2_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
   type FeatureFlagKey,
@@ -91,7 +92,8 @@ function runtimeDefaultOn(key: FeatureFlagKey, env: Record<string, string | unde
     key === ASSIGNMENT_TYPE_LANDING_THESIS_ESSAY_FLAG ||
     key === ASSIGNMENT_TYPE_LESSON_PLANS_FLAG ||
     key === HOW_TO_TEACH_IT_FLAG ||
-    key === DOCUMENT_EDITOR_V2_FLAG
+    key === DOCUMENT_EDITOR_V2_FLAG ||
+    key === EXIT_TICKET_GRADING_V2_FLAG
   );
 }
 
@@ -236,18 +238,21 @@ export async function isFeatureFlagEnabled(
       return false;
     }
   }
-  if (key === DOCUMENT_EDITOR_V2_FLAG) {
+  if (
+    key === DOCUMENT_EDITOR_V2_FLAG ||
+    key === EXIT_TICKET_GRADING_V2_FLAG
+  ) {
     if (isNonProductionDefaultOnDeployment(process.env)) return true;
     try {
       const row = await prisma.setting.findUnique({
-        where: { name: featureFlagSettingName(DOCUMENT_EDITOR_V2_FLAG) },
+        where: { name: featureFlagSettingName(key) },
         select: { value: true },
       });
       const parsed = parseFeatureFlagValue(row?.value);
       return parsed.mode === 'everyone';
     } catch (error) {
       console.error('feature_flag_read_failed', {
-        key: DOCUMENT_EDITOR_V2_FLAG,
+        key,
         error: buildSafeErrorForLog(error),
       });
       return false;

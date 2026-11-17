@@ -13,7 +13,18 @@ import { DEFAULT_ANTHROPIC_MODEL } from '~/config/default-anthropic-model';
 import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
-import { parseStoredExitTicketConfig } from '~/domain/assignment-types/exit-ticket';
+import {
+  EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
+  parseStoredExitTicketConfig,
+} from '~/domain/assignment-types/exit-ticket';
+import {
+  clampExitTicketScore,
+  exitTicketGradingAssistantPart,
+  exitTicketPersistedGrade,
+  resolveExitTicketPointTotal,
+} from '~/domain/assignment-types/exit-ticket-grading-assistant';
+import { applyExitTicketGradingWhenV2Enabled } from '~/domain/assignment-types/exit-ticket-grading-v2-config';
+import { isExitTicketGradingV2RolloutEnabled } from '~/domain/assignment-types/exit-ticket-grading-v2-gate.server';
 import { buildExitTicketGradingContext } from '~/domain/assignment-types/exit-ticket-rubric';
 import {
   buildGalsClaimsGradingContext,
@@ -778,6 +789,7 @@ export async function action({ request }: ActionFunctionArgs) {
             apHistorySnapshot: true,
             prompt: true,
             pointValue: true,
+            submitForGrade: true,
             exitTicketConfigJson: true,
           },
         },
@@ -938,14 +950,39 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const resolvedGradingConfig = scaleDailyPagesForAssignment(
-    await resolveAssignmentTypeGradingConfig({
-      assignmentTypeId: submission.document.assignmentTypeId,
-      assignmentId: submission.document.assignment?.id,
-      assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
-      assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
-    }),
-    submission.document.assignment?.pointValue,
+  const exitTicketConfig = parseStoredExitTicketConfig(
+    submission.document.assignment?.exitTicketConfigJson
+  );
+  const isExitTicket =
+    (submission.document.assignmentType?.kind ?? null) ===
+    EXIT_TICKET_ASSIGNMENT_TYPE_KIND;
+  const exitTicketGradingV2 =
+    isExitTicket && (await isExitTicketGradingV2RolloutEnabled());
+  const exitTicketPointTotal = exitTicketGradingV2
+    ? resolveExitTicketPointTotal(submission.document.assignment?.pointValue, {
+        v2Grading: true,
+      })
+    : null;
+  const exitTicketPart = exitTicketGradingV2
+    ? exitTicketGradingAssistantPart(exitTicketConfig)
+    : null;
+  const resolvedGradingConfig = applyExitTicketGradingWhenV2Enabled(
+    exitTicketGradingV2,
+    scaleDailyPagesForAssignment(
+      await resolveAssignmentTypeGradingConfig({
+        assignmentTypeId: submission.document.assignmentTypeId,
+        assignmentId: submission.document.assignment?.id,
+        assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+        assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
+      }),
+      submission.document.assignment?.pointValue,
+    ),
+    {
+      config: exitTicketConfig,
+      studentPrompt: submission.document.assignment?.prompt,
+      pointValue: submission.document.assignment?.pointValue,
+      submitForGrade: submission.document.assignment?.submitForGrade,
+    }
   );
   const requestedStrictnessLevel = data.gradingAssistantStrictnessLevel
     ? parseGradingAssistantStrictnessLevel(data.gradingAssistantStrictnessLevel)
@@ -1048,11 +1085,9 @@ export async function action({ request }: ActionFunctionArgs) {
   const gradingContext =
     assignmentTypeKind === GALS_CLAIMS_ASSIGNMENT_TYPE_KIND
       ? buildGalsClaimsGradingContext(submission.text)
-      : buildExitTicketGradingContext(
-          parseStoredExitTicketConfig(
-            submission.document.assignment?.exitTicketConfigJson
-          )
-        );
+      : isExitTicket && !exitTicketGradingV2
+        ? buildExitTicketGradingContext(exitTicketConfig)
+        : null;
 
   const model = process.env.AI_MODEL ?? DEFAULT_ANTHROPIC_MODEL;
   // llmRetry=fallback is the client half of the provider-failover handshake
@@ -1751,6 +1786,19 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       });
       throw clampError;
     }
+    if (isExitTicket && exitTicketGradingV2 && exitTicketPart != null && exitTicketPointTotal != null) {
+      parsed = {
+        ...parsed,
+        categories: parsed.categories.map((category) => ({
+          ...category,
+          score: clampExitTicketScore(
+            category.score,
+            exitTicketPart,
+            exitTicketPointTotal
+          ),
+        })),
+      };
+    }
   } catch (error) {
     if (isGradingRequestDeadlineError(error)) {
       return gradingDeadlineResponse();
@@ -1785,6 +1833,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       score: item.score,
       comment: item.comment,
       isAi: true,
+      ...(isExitTicket && exitTicketGradingV2 && exitTicketPointTotal != null
+        ? { pointTotal: exitTicketPointTotal }
+        : {}),
     };
     return acc;
   }, {});
@@ -2071,6 +2122,27 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     ltiPassbackPercentage = adjusted.numericPercentage;
   }
 
+  let recordedOverallScore: number | null = overallScore;
+  let recordedScore: string | null = score;
+  let recordedPercentage: number | null = numericPercentage;
+  let recordedLetter: string | null = letterGrade;
+  if (isExitTicket && exitTicketGradingV2 && exitTicketPointTotal != null) {
+    const recorded = exitTicketPersistedGrade({
+      submitForGrade: submission.document.assignment?.submitForGrade === true,
+      earned: overallScore,
+      pointTotal: exitTicketPointTotal,
+      comment: parsed.overallComment,
+      teacherNote: parsed.teacherNote ?? null,
+    });
+    recordedOverallScore = recorded.overallScore;
+    recordedScore = recorded.gradebookScore;
+    recordedPercentage = recorded.numericPercentage;
+    recordedLetter = recorded.letterGrade;
+    if (submission.document.assignment?.submitForGrade !== true) {
+      ltiPassbackPercentage = null;
+    }
+  }
+
   // Grammar/syntax highlighting has always run for every non-AP-History
   // rubric, so a rubric whose categories say nothing about it keeps running it.
   // Only a rubric that explicitly opts every category out skips the pass.
@@ -2208,11 +2280,11 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     message: 'Grading Assistant suggestions generated.',
     ...(teacherNotesEnabled ? { teacherNote: parsed.teacherNote } : {}),
     rubricScores,
-    overallScore,
+    overallScore: recordedOverallScore,
     overallComment,
-    numericPercentage,
-    letterGrade,
-    score,
+    numericPercentage: recordedPercentage,
+    letterGrade: recordedLetter,
+    score: recordedScore,
     grammarIssues,
     rubricConfig,
     gradingAssistantStrictnessLevel,
@@ -2237,11 +2309,11 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   const now = new Date();
   const gradeData = {
     rubricScores: rubricScores as Prisma.InputJsonValue,
-    overallScore,
+    overallScore: recordedOverallScore,
     overallComment,
-    numericPercentage,
-    letterGrade,
-    score,
+    numericPercentage: recordedPercentage,
+    letterGrade: recordedLetter,
+    score: recordedScore,
     ...(grammarIssues !== null ? { grammarIssues } : {}),
     aiMeta: {
       model,
@@ -2271,7 +2343,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
                 typeof (parsed as any).overallPoints === 'number'
                   ? (parsed as any).overallPoints
                   : null,
-              storedPoints: overallScore,
+              storedPoints: recordedOverallScore,
               totalPoints:
                 submission.document.assignment?.pointValue ??
                 resolvedGradingConfig.rubricTotalPoints ??
@@ -2338,11 +2410,11 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
               // restores, including after a reload.
               output: {
                 rubricScores,
-                overallScore,
+                overallScore: recordedOverallScore,
                 overallComment,
-                numericPercentage,
-                letterGrade,
-                score,
+                numericPercentage: recordedPercentage,
+                letterGrade: recordedLetter,
+                score: recordedScore,
                 grammarIssues,
                 gradingAssistantStrictnessLevel,
               },

@@ -244,6 +244,14 @@ export const EXIT_TICKET_CLASS_SUMMARY_FLAG = 'exit-ticket-class-summary' as con
 export const ASSIGNMENTS_GROUPED_BY_TYPE_FLAG = 'assignments-grouped-by-type' as const;
 
 /**
+ * Exit ticket grading with the Reflection / Check for understanding assistants
+ * (whole points, not the four-band rubric). Global only: off or everyone — no
+ * per-school targeting. Default off on production; demo and PR previews default
+ * on for QA.
+ */
+export const EXIT_TICKET_GRADING_V2_FLAG = 'exit-ticket-grading-v2' as const;
+
+/**
  * Student document editor v2 (glass chrome, margin comments, tutor header).
  * Global only: off or everyone — no per-school targeting. Default off on
  * production; demo and PR previews default on for QA.
@@ -444,6 +452,11 @@ export const FEATURE_FLAGS = {
     label: 'Assignments grouped by type',
     description:
       'My Assignments and each class’s Assignments tab show one collapsible section per assignment type (Exit Ticket, Short Response, The Thesis-Driven Essay…), with the same headings and counts as the grouped Documents page. Search, sort and delete work inside the sections. Off: one flat, paginated table. No data changes either way.',
+  },
+  [EXIT_TICKET_GRADING_V2_FLAG]: {
+    label: 'Exit ticket grading v2',
+    description:
+      'Grades exit tickets with the Reflection and Check for understanding assistants (whole points out of the assignment total). Global only: off or everyone — no school targeting. Off on production by default; demo and PR previews default on.',
   },
   [DOCUMENT_EDITOR_V2_FLAG]: {
     label: 'Document editor v2',

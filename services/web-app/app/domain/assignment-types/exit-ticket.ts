@@ -129,7 +129,11 @@ export const EXIT_TICKET_SUBMIT_FOR_GRADE_DEFAULT = false;
  * writing is not a hundred-point assignment, and the product default of 100
  * would quietly make one lesson check outweigh an essay.
  */
+/** Default for new exit tickets while legacy four-band grading is active. */
 export const EXIT_TICKET_DEFAULT_POINT_VALUE = 10;
+
+/** Default point total under the Reflection / Check assistants when v2 grading is on. */
+export const EXIT_TICKET_V2_DEFAULT_POINT_VALUE = 5;
 
 /** Notes, not lesson plans: long enough for a paragraph each. */
 export const EXIT_TICKET_LESSON_NOTE_MAX_LENGTH = 1000;
@@ -299,10 +303,8 @@ export type ExitTicketFocusOption = {
   /** `{topic}` is replaced with what the teacher typed. */
   template: string;
   /**
-   * How the grader should read the rubric bands for this focus. The bands are
-   * the shared spine — explains it, partly there, names it only, no evidence —
-   * and this says what each one means when the ticket is checking for this
-   * particular kind of understanding. Never shown to the student.
+   * Retired 2026-11-17. The grading assistant does not read this. Kept so the
+   * current builder and its tests still typecheck. Do not paste it into a prompt.
    */
   gradingCriteria: string;
 };
@@ -398,8 +400,7 @@ export type ExitTicketReflectionPromptOption = {
   /** What students read. Absent only for the teacher's own prompt. */
   prompt?: string;
   /**
-   * How the grader should read the shared bands for this prompt. Absent for
-   * the default, which is read against the prompt alone, as it always was.
+   * Retired 2026-11-17. The grading assistant does not read this.
    */
   gradingCriteria?: string;
 };
@@ -473,6 +474,13 @@ export const EXIT_TICKET_MIN_SENTENCES_MAX = 20;
 export const EXIT_TICKET_ASSESS_FOR_MAX_LENGTH = 300;
 
 /**
+ * "Correct answer or key points" (Brian, 2026-11-17). Students never see it.
+ * Optional in storage: tickets made before the field existed still grade.
+ * JSON key: `correctAnswer`. See exit-ticket-grading-assistant.ts.
+ */
+export const EXIT_TICKET_CORRECT_ANSWER_MAX_LENGTH = 2000;
+
+/**
  * What the teacher said a graded ticket is graded on. Stored only on a graded
  * ticket; an ungraded one is read for feedback against the prompt and notes.
  */
@@ -524,6 +532,11 @@ type ExitTicketConfigBase = {
   lessonNotes?: ExitTicketLessonNotes;
   /** Present only on a ticket the teacher chose to grade. */
   grading?: ExitTicketGrading;
+  /**
+   * Check for understanding: the correct answer or key points. Students never
+   * see it. Absent on older tickets and on reflections.
+   */
+  correctAnswer?: string;
 };
 
 export type ExitTicketConfig =
@@ -636,16 +649,23 @@ function parseGradingInput(
 
   let basis: ExitTicketGradingBasis = 'bands';
   if (kind === 'reflection') {
+    // The 2026-11-17 builder no longer asks completion vs quality. A posted
+    // choice is kept; an omitted one is completion, which is full credit or
+    // none. An unrecognised choice is still a bug.
     const posted = input.gradingBasis?.toString().trim() ?? '';
-    if (!(EXIT_TICKET_GRADING_BASES as readonly string[]).includes(posted)) {
+    if (
+      posted &&
+      !(EXIT_TICKET_GRADING_BASES as readonly string[]).includes(posted)
+    ) {
       return {
         success: false,
         message: 'Choose how this reflection is graded.',
       };
     }
-    basis = posted as ExitTicketGradingBasis;
+    basis = posted ? (posted as ExitTicketGradingBasis) : 'completion';
   } else if (answerType === 'objective') {
-    if (!lessonNotes?.mustMention) {
+    const correctAnswer = normalizeCorrectAnswer(input.correctAnswer);
+    if (!lessonNotes?.mustMention && !correctAnswer) {
       return {
         success: false,
         message: 'Add the correct answer so this can be graded.',
@@ -701,6 +721,39 @@ function parseStoredGrading(value: unknown): ExitTicketGrading | null {
     ...(minSentences !== undefined ? { minSentences } : {}),
     ...(assessFor ? { assessFor } : {}),
   };
+}
+
+/** The teacher's key. Blank is "not set". Newlines stay; they are a list. */
+function normalizeCorrectAnswer(
+  value: string | null | undefined
+): string {
+  return (value ?? '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .trim();
+}
+
+function parseCorrectAnswerInput(
+  value: string | null | undefined
+): { success: true; correctAnswer?: string } | { success: false; message: string } {
+  const text = normalizeCorrectAnswer(value);
+  if (!text) return { success: true };
+  if (text.length > EXIT_TICKET_CORRECT_ANSWER_MAX_LENGTH) {
+    return {
+      success: false,
+      message: `Keep the correct answer or key points under ${EXIT_TICKET_CORRECT_ANSWER_MAX_LENGTH} characters.`,
+    };
+  }
+  return { success: true, correctAnswer: text };
+}
+
+function withCorrectAnswer<T extends ExitTicketConfig>(
+  config: T,
+  correctAnswer: string | undefined
+): T {
+  return correctAnswer ? { ...config, correctAnswer } : config;
 }
 
 /** Whitespace tidied, wording untouched: this is the teacher's sentence. */
@@ -872,6 +925,11 @@ export type ExitTicketConfigInput = {
   lessonMainPoints?: string | null;
   lessonMustMention?: string | null;
   lessonWatchFor?: string | null;
+  /**
+   * Check for understanding. The correct answer or key points. Students never
+   * see it. Absent from every client that predates the 2026-11-17 builder.
+   */
+  correctAnswer?: string | null;
 };
 
 type LessonNotesParseResult =
@@ -943,6 +1001,9 @@ export function parseExitTicketConfigInput(
   const notes = parseLessonNotesInput(input);
   if (!notes.success) return notes;
 
+  const correct = parseCorrectAnswerInput(input.correctAnswer);
+  if (!correct.success) return correct;
+
   if (!rawMode || rawMode === 'basic') {
     const reflection = parseReflectionPromptInput(input);
     if (!reflection.success) return reflection;
@@ -955,17 +1016,20 @@ export function parseExitTicketConfigInput(
     if (!grading.success) return grading;
     return {
       success: true,
-      config: withLessonNotes(
-        {
-          schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
-          mode: 'basic',
-          ...(kind ? { kind: 'reflection' as const } : {}),
-          ...(reflection.reflectionPrompt
-            ? { reflectionPrompt: reflection.reflectionPrompt }
-            : {}),
-          ...(grading.grading ? { grading: grading.grading } : {}),
-        },
-        notes
+      config: withCorrectAnswer(
+        withLessonNotes(
+          {
+            schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+            mode: 'basic',
+            ...(kind ? { kind: 'reflection' as const } : {}),
+            ...(reflection.reflectionPrompt
+              ? { reflectionPrompt: reflection.reflectionPrompt }
+              : {}),
+            ...(grading.grading ? { grading: grading.grading } : {}),
+          },
+          notes
+        ),
+        correct.correctAnswer
       ),
     };
   }
@@ -992,7 +1056,19 @@ export function parseExitTicketConfigInput(
     };
   }
 
-  const answerType = exitTicketAnswerType(input.answerType?.toString().trim());
+  const rawAnswer = input.answerType?.toString().trim() ?? '';
+  const postedAnswer = rawAnswer ? exitTicketAnswerType(rawAnswer) : null;
+  if (rawAnswer && !postedAnswer) {
+    return {
+      success: false,
+      message: 'Say whether there is a desired response.',
+    };
+  }
+  // The new check form always has a key and no longer asks yes/no. An omitted
+  // answer type with a key is a right-answer check. Omitting both still has
+  // to be answered, which is every older client.
+  const answerType =
+    postedAnswer ?? (correct.correctAnswer ? 'objective' : null);
   if (!answerType) {
     return {
       success: false,
@@ -1010,17 +1086,20 @@ export function parseExitTicketConfigInput(
 
   return {
     success: true,
-    config: withLessonNotes(
-      {
-        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
-        mode: 'specific',
-        ...(kind ? { kind: 'check' as const } : {}),
-        focus: option.value,
-        topic,
-        answerType,
-        ...(grading.grading ? { grading: grading.grading } : {}),
-      },
-      notes
+    config: withCorrectAnswer(
+      withLessonNotes(
+        {
+          schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+          mode: 'specific',
+          ...(kind ? { kind: 'check' as const } : {}),
+          focus: option.value,
+          topic,
+          answerType,
+          ...(grading.grading ? { grading: grading.grading } : {}),
+        },
+        notes
+      ),
+      correct.correctAnswer
     ),
   };
 }
@@ -1046,6 +1125,10 @@ export function parseStoredExitTicketConfig(
   );
   const storedGrading = parseStoredGrading(record.grading);
   const gradingField = storedGrading ? { grading: storedGrading } : {};
+  const correctAnswer = parseStoredCorrectAnswer(record.correctAnswer);
+  const correctAnswerField = correctAnswer
+    ? { correctAnswer }
+    : {};
 
   if (record.mode === 'basic') {
     const reflectionPrompt = parseStoredReflectionPrompt(
@@ -1059,6 +1142,7 @@ export function parseStoredExitTicketConfig(
         ...parseStoredV3Fields(record, 'basic'),
         ...(reflectionPrompt ? { reflectionPrompt } : {}),
         ...gradingField,
+        ...correctAnswerField,
       },
       notes
     );
@@ -1087,9 +1171,17 @@ export function parseStoredExitTicketConfig(
           typeof record.answerType === 'string' ? record.answerType : null
         ) ?? EXIT_TICKET_ANSWER_TYPE_FALLBACK,
       ...gradingField,
+      ...correctAnswerField,
     },
     notes
   );
+}
+
+function parseStoredCorrectAnswer(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const text = normalizeCorrectAnswer(value);
+  if (!text || text.length > EXIT_TICKET_CORRECT_ANSWER_MAX_LENGTH) return null;
+  return text;
 }
 
 /**
@@ -1260,6 +1352,8 @@ function parseV3ConfigInput(
 
   const notes = parseLessonNotesInput(input);
   if (!notes.success) return notes;
+  const correct = parseCorrectAnswerInput(input.correctAnswer);
+  if (!correct.success) return correct;
 
   let grading: ExitTicketGrading | undefined;
   if (input.graded === true) {
@@ -1303,16 +1397,19 @@ function parseV3ConfigInput(
     const reflectionPrompt = legacyReflectionPrompt(starter, promptText);
     return {
       success: true,
-      config: withLessonNotes(
-        {
-          schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
-          mode: 'basic',
-          kind: 'reflection',
-          ...v3,
-          ...(reflectionPrompt ? { reflectionPrompt } : {}),
-          ...gradingField,
-        },
-        notes
+      config: withCorrectAnswer(
+        withLessonNotes(
+          {
+            schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+            mode: 'basic',
+            kind: 'reflection',
+            ...v3,
+            ...(reflectionPrompt ? { reflectionPrompt } : {}),
+            ...gradingField,
+          },
+          notes
+        ),
+        correct.correctAnswer
       ),
     };
   }
@@ -1323,19 +1420,22 @@ function parseV3ConfigInput(
 
   return {
     success: true,
-    config: withLessonNotes(
-      {
-        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
-        mode: 'specific',
-        kind: 'check',
-        ...v3,
-        focus:
-          exitTicketActivityOption(activity)?.legacyFocus ?? 'explain-concept',
-        topic: topic || legacyTopicFor(promptText),
-        answerType,
-        ...gradingField,
-      },
-      notes
+    config: withCorrectAnswer(
+      withLessonNotes(
+        {
+          schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+          mode: 'specific',
+          kind: 'check',
+          ...v3,
+          focus:
+            exitTicketActivityOption(activity)?.legacyFocus ?? 'explain-concept',
+          topic: topic || legacyTopicFor(promptText),
+          answerType,
+          ...gradingField,
+        },
+        notes
+      ),
+      correct.correctAnswer
     ),
   };
 }

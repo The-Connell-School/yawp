@@ -17,7 +17,8 @@ describe('defaultPointValueForNewAssignment', () => {
     expect(CLASS_STARTER_DEFAULT_POINT_VALUE).toBe(10);
   });
 
-  test('Exit Ticket defaults to 10 points', () => {
+  test('Exit Ticket defaults to 10 points until grading v2 ships', () => {
+    expect(EXIT_TICKET_DEFAULT_POINT_VALUE).toBe(10);
     expect(
       defaultPointValueForNewAssignment({ kind: 'exit_ticket' })
     ).toBe(EXIT_TICKET_DEFAULT_POINT_VALUE);

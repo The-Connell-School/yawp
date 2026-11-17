@@ -23,6 +23,7 @@ const {
   FREE_TIER_FLAG,
   TEACHER_PROMPT_GENERATOR_FLAG,
   DOCUMENT_EDITOR_V2_FLAG,
+  EXIT_TICKET_GRADING_V2_FLAG,
   TEACHER_LOUNGE_FLAG,
   EXIT_TICKET_BUILDER_V3_FLAG,
   EXIT_TICKET_CLASS_SUMMARY_FLAG,
@@ -431,6 +432,7 @@ describe('feature flags (server)', () => {
       EXIT_TICKET_BUILDER_V3_FLAG,
       EXIT_TICKET_CLASS_SUMMARY_FLAG,
       ASSIGNMENTS_GROUPED_BY_TYPE_FLAG,
+      EXIT_TICKET_GRADING_V2_FLAG,
       DOCUMENT_EDITOR_V2_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
@@ -490,6 +492,7 @@ describe('feature flags (server)', () => {
       EXIT_TICKET_BUILDER_V3_FLAG,
       EXIT_TICKET_CLASS_SUMMARY_FLAG,
       ASSIGNMENTS_GROUPED_BY_TYPE_FLAG,
+      EXIT_TICKET_GRADING_V2_FLAG,
       DOCUMENT_EDITOR_V2_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });

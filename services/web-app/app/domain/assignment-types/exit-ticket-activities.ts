@@ -56,7 +56,7 @@ export type ExitTicketActivityOption = {
   /** Null when the ticket ends with the teacher's own words. */
   closer: string | null;
   legacyFocus: ExitTicketLegacyFocus | null;
-  /** How the grader reads the shared bands for this activity. */
+  /** Retired 2026-11-17. The grading assistant does not read this. */
   gradingCriteria: string;
 };
 
