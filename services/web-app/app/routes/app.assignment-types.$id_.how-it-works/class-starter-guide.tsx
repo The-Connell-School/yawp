@@ -58,6 +58,7 @@ export function ClassStarterGuide({
   pagePath,
   teachingLocked = false,
   v2 = false,
+  howToTeachAssetsLocked = false,
 }: {
   backTo: string;
   backLabel: string;
@@ -69,6 +70,7 @@ export function ClassStarterGuide({
    * (Kevin, Nov 10). Off: the page as it was.
    */
   v2?: boolean;
+  howToTeachAssetsLocked?: boolean;
 }) {
   const strong = (text: string) => (
     <strong className="text-foreground">{text}</strong>
@@ -94,7 +96,12 @@ export function ClassStarterGuide({
         video={v2 ? GUIDE_OVERVIEW_VIDEOS['class-starter'] : null}
       />
 
-      {v2 ? <GuideHowToTeach guideKey="class-starter" /> : null}
+      {v2 ? (
+        <GuideHowToTeach
+          guideKey="class-starter"
+          howToTeachAssetsLocked={howToTeachAssetsLocked}
+        />
+      ) : null}
 
       <GuideSection
         id="guide-library"

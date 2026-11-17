@@ -6,6 +6,7 @@ import {
   AccordionTrigger,
 } from '~/components/ui/accordion';
 import { isExternalTeachLink } from '~/domain/assignment-types/how-to-teach-it';
+import { SiteLicenseHowToTeachLockedSection } from '~/components/free-tier/site-license-how-to-teach-lock';
 
 export type HowToTeachItModule = {
   id: string;
@@ -54,11 +55,31 @@ function TeachLink({
  * module is one teaching step: open it to read what students do and how the
  * tutor helps, and go straight to that step's lesson and tutorial video.
  */
-export function HowToTeachIt({ modules }: { modules: HowToTeachItModule[] }) {
+export function HowToTeachIt({
+  modules,
+  assetsLocked = false,
+}: {
+  modules: HowToTeachItModule[];
+  assetsLocked?: boolean;
+}) {
   // A link column only appears once some step has that link; inside it, every
   // row keeps the slot so the chevrons and links line up down the list.
   const lessonColumn = modules.some((module) => module.lessonUrl);
   const videoColumn = modules.some((module) => module.tutorialVideoUrl);
+  if (assetsLocked) {
+    return (
+      <SiteLicenseHowToTeachLockedSection heading="How to Teach It">
+        <p className="text-sm text-muted-foreground">
+          These are the steps your students work through.
+        </p>
+        <ul className="mt-2 list-inside list-disc text-sm text-muted-foreground">
+          {modules.map((module) => (
+            <li key={module.id}>{module.title}</li>
+          ))}
+        </ul>
+      </SiteLicenseHowToTeachLockedSection>
+    );
+  }
   return (
     <section className="pb-6" data-testid="how-to-teach-it" data-tour="type-how-to-teach">
       <h2 className="text-base font-semibold">How to Teach It</h2>

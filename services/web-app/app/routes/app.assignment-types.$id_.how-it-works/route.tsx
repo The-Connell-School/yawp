@@ -19,6 +19,7 @@ import { getAssignmentTypeLandingFlags } from '~/domain/assignment-types/landing
 import { LOCKED_PREVIEW_APP_HOME } from '~/domain/free-tier/locked-preview';
 import { userHasPendingFreeTierTeachingLock } from '~/domain/free-tier/locked-preview.server';
 import { assignmentTypeMatchesSiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
+import { isAssignmentTypeHowToTeachLockedForTeacher } from '~/domain/free-tier/site-license-how-to-teach.server';
 import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
 import {
   findThesisEssayCourse,
@@ -69,6 +70,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
   if (!available && !lockedPreviewGuideBrowse) throw redirect(LOCKED_PREVIEW_APP_HOME);
 
+  const howToTeachAssetsLocked = await isAssignmentTypeHowToTeachLockedForTeacher({
+    organizationPlan: profile.organization.plan,
+    assignmentTypeId: assignmentType.id,
+  });
+
   const { v2 } = await getAssignmentTypeLandingFlags(profile.organization.id);
   const lockedPreviewBack = () =>
     teachingLocked ? LOCKED_PREVIEW_APP_HOME : pagePath;
@@ -87,6 +93,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       pagePath,
       teachingLocked,
       v2,
+      howToTeachAssetsLocked,
       lesson: await getLessonMaterialsForAssignmentType(
         assignmentType.kind,
         profile.id
@@ -98,7 +105,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
   if (assignmentType.kind === EXIT_TICKET_ASSIGNMENT_TYPE_KIND) {
     if (!v2) throw redirect(pagePath);
-    return { guide: 'exit-ticket' as const, pagePath };
+    return {
+      guide: 'exit-ticket' as const,
+      pagePath,
+      howToTeachAssetsLocked,
+    };
   }
   const titleGuide = howItWorksGuideFor(assignmentType.title);
   if (titleGuide === 'class-starter') {
@@ -109,6 +120,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       pagePath,
       teachingLocked,
       v2,
+      howToTeachAssetsLocked,
     };
   }
   if (titleGuide === 'daily-pages') {
@@ -127,6 +139,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     pagePath,
     teachingLocked,
     coursePath: course?.coursePath ?? null,
+    howToTeachAssetsLocked,
   };
 }
 
@@ -144,6 +157,7 @@ export default function HowItWorksRoute() {
         lesson={data.lesson}
         v2={data.v2}
         lessonVideos={data.lessonVideos}
+        howToTeachAssetsLocked={data.howToTeachAssetsLocked}
       />
     );
   }
@@ -155,11 +169,17 @@ export default function HowItWorksRoute() {
         pagePath={data.pagePath}
         teachingLocked={data.teachingLocked}
         v2={data.v2}
+        howToTeachAssetsLocked={data.howToTeachAssetsLocked}
       />
     );
   }
   if (data.guide === 'exit-ticket') {
-    return <ExitTicketGuide pagePath={data.pagePath} />;
+    return (
+      <ExitTicketGuide
+        pagePath={data.pagePath}
+        howToTeachAssetsLocked={data.howToTeachAssetsLocked}
+      />
+    );
   }
   return (
     <ThesisEssayGuide
@@ -168,6 +188,7 @@ export default function HowItWorksRoute() {
       pagePath={data.pagePath}
       teachingLocked={data.teachingLocked}
       coursePath={data.coursePath}
+      howToTeachAssetsLocked={data.howToTeachAssetsLocked}
     />
   );
 }

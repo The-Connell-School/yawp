@@ -70,11 +70,17 @@ import {
   previewAccessMiddleware,
 } from './utils/preview-access.server.ts';
 import { uaPartnerMiddleware } from './utils/ua-partner.server.ts';
+import { siteLicenseCourseAssetMiddleware } from './utils/site-license-course-asset-middleware.server';
 import { isLessonPlannerEnabledForOrganization } from './utils/lesson-planner/lesson-planner-access.server.ts';
 import { isLoungeCommunityEnabled } from './domain/feature-flags/feature-flags.server.ts';
 import { getRootMembershipWhere } from './utils/root-membership-filter.server.ts';
 
-export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware];
+export const middleware = [
+  internalImpersonationMiddleware,
+  siteLicenseCourseAssetMiddleware,
+  previewAccessMiddleware,
+  uaPartnerMiddleware,
+];
 
 export const links: LinksFunction = () => {
   return [

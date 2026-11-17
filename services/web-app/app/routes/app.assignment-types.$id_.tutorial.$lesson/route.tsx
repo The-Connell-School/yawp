@@ -12,6 +12,7 @@ import { Link, redirect, data, useLoaderData, type LoaderFunctionArgs } from 're
 import { ChevronLeft } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { assignmentTypeAvailableForTeacher } from '~/domain/assignment-types/available-for-teacher.server';
+import { isAssignmentTypeHowToTeachLockedForTeacher } from '~/domain/free-tier/site-license-how-to-teach.server';
 import { findThesisEssayCourse } from '~/domain/teacher-trainings/thesis-essay-course.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -46,6 +47,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     organizationId: profile.organization.id,
   });
   if (!available) throw redirect('/app');
+  if (
+    await isAssignmentTypeHowToTeachLockedForTeacher({
+      organizationPlan: profile.organization.plan,
+      assignmentTypeId,
+    })
+  ) {
+    throw data({ error: 'Comes with a school site license.' }, { status: 403 });
+  }
 
   const lesson = THESIS_ESSAY_COURSE[lessonNumber - 1]!;
   const page = { pagePath, lessonNumber, lessonTitle: lesson.title };

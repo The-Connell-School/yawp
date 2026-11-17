@@ -9,9 +9,9 @@
     "seed": "bun run prisma/seed.ts"
   },
   "scripts": {
-    "build": "react-router build",
+    "build": "react-router build && bun scripts/strip-thesis-course-client-static.ts",
     "dev": "react-router dev",
-    "start": "react-router-serve ./build/server/index.js",
+    "start": "bun ../../node_modules/@react-router/serve/bin.js ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
     "test": "bun test app/",
     "test:e2e": "bun run test:e2e:smoke",

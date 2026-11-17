@@ -1444,6 +1444,7 @@ export default function AppAssignmentTypesIdRoute() {
             lessonPlannerHref={
               lessonPlannerEnabled ? '/app/lesson-planner' : undefined
             }
+            howToTeachAssetsLocked={data.siteLicenseBrowse}
           />
         ) : null}
         {/* Brian's landing page replaces every block from here to the
@@ -1464,7 +1465,10 @@ export default function AppAssignmentTypesIdRoute() {
           <ApHistoryTeacherDirections />
         ) : null}
         {!landingPage && showTeachIt ? (
-          <HowToTeachIt modules={data.assignmentType.assignmentModules} />
+          <HowToTeachIt
+            modules={data.assignmentType.assignmentModules}
+            assetsLocked={data.siteLicenseBrowse}
+          />
         ) : !landingPage && showModules ? (
           <Accordion type="single" collapsible data-tour="type-modules">
             <AccordionItem value="modules">

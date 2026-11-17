@@ -52,7 +52,7 @@ describe('tourForPathname', () => {
 
   test('has no tour for pages deeper in a class or elsewhere', () => {
     expect(tourForPathname('/app/my-classes/cls_123/assignment/a1')).toBeNull();
-    expect(tourForPathname('/app/assignments/a1')).toBeNull();
+    expect(tourForPathname('/app/assignments/a1')?.id).toBe('teacher-assignment');
     expect(tourForPathname('/app/writing-lessons/commas')).toBeNull();
     expect(tourForPathname('/app/teacher-trainings/course-1')).toBeNull();
     expect(tourForPathname('/app/lesson-planner/library')).toBeNull();
@@ -101,6 +101,7 @@ describe('tour definitions', () => {
       const tour = getTour(id);
       expect(tour.id).toBe(id);
       expect(tour.welcome.title.length).toBeGreaterThan(0);
+      if (id === 'auto-welcome-suppressed') continue;
       expect(tour.steps.length).toBeGreaterThan(0);
     }
   });

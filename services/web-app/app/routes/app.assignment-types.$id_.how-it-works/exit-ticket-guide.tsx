@@ -76,7 +76,13 @@ function goodTicketTips(): { lead: string; rest: string }[] {
   });
 }
 
-export function ExitTicketGuide({ pagePath }: { pagePath: string }) {
+export function ExitTicketGuide({
+  pagePath,
+  howToTeachAssetsLocked = false,
+}: {
+  pagePath: string;
+  howToTeachAssetsLocked?: boolean;
+}) {
   return (
     <GuidePage
       backTo={pagePath}
@@ -90,7 +96,10 @@ export function ExitTicketGuide({ pagePath }: { pagePath: string }) {
         video={GUIDE_OVERVIEW_VIDEOS['exit-ticket']}
       />
 
-      <GuideHowToTeach guideKey="exit-ticket" />
+      <GuideHowToTeach
+        guideKey="exit-ticket"
+        howToTeachAssetsLocked={howToTeachAssetsLocked}
+      />
 
       <GuideSection
         id="guide-how"
