@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  EXIT_TICKET_DEFAULT_POINT_VALUE,
+  EXIT_TICKET_V2_DEFAULT_POINT_VALUE,
   exitTicketFocusOption,
   parseExitTicketConfigInput,
   parseStoredExitTicketConfig,
@@ -214,13 +214,13 @@ describe('exit ticket grading assistant prompt', () => {
 });
 
 describe('exit ticket score clamping', () => {
-  test('the point total defaults to 5', () => {
-    expect(EXIT_TICKET_DEFAULT_POINT_VALUE).toBe(5);
-    expect(resolveExitTicketPointTotal(null)).toBe(5);
-    expect(resolveExitTicketPointTotal(undefined)).toBe(5);
-    expect(resolveExitTicketPointTotal(0)).toBe(5);
-    expect(resolveExitTicketPointTotal(1.5)).toBe(5);
-    expect(resolveExitTicketPointTotal(12)).toBe(12);
+  test('the v2 point total defaults to 5', () => {
+    expect(EXIT_TICKET_V2_DEFAULT_POINT_VALUE).toBe(5);
+    expect(resolveExitTicketPointTotal(null, { v2Grading: true })).toBe(5);
+    expect(resolveExitTicketPointTotal(undefined, { v2Grading: true })).toBe(5);
+    expect(resolveExitTicketPointTotal(0, { v2Grading: true })).toBe(5);
+    expect(resolveExitTicketPointTotal(1.5, { v2Grading: true })).toBe(5);
+    expect(resolveExitTicketPointTotal(12, { v2Grading: true })).toBe(12);
   });
 
   test('a reflection is only full credit or none', () => {
