@@ -170,9 +170,17 @@ function prefersReducedMotion() {
   );
 }
 
-/** In-page with layout, even if clipped horizontally (wide dashboard grids). */
+/**
+ * On the page enough to point at. A box with a real rect has to be in the
+ * viewport horizontally, so a phone's closed sidebar is skipped. A box that
+ * reports no rect but still has layout (a carousel before it paints) still
+ * counts.
+ */
 function isPresentForTour(el: HTMLElement | null): el is HTMLElement {
-  return targetHasLayout(el) || isShown(el);
+  if (!el) return false;
+  const rect = el.getBoundingClientRect();
+  if (rect.width > 0 && rect.height > 0) return isShown(el);
+  return el.offsetWidth > 0 && el.offsetHeight > 0;
 }
 
 function targetExistsInDom(target: string | null) {
