@@ -155,6 +155,7 @@ export const Bar = ({
           <button
             type="button"
             data-testid="editor-add-comment"
+            data-tour="doc-comment-button"
             aria-label="Add comment"
             onClick={() => beginCommentDraftFromEditor(editor, onCommentDraft)}
             className={cn(COMMAND_STYLE, {

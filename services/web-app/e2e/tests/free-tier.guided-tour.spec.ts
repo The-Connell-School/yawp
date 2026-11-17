@@ -201,38 +201,44 @@ test.describe.serial('Free tier guided tour', () => {
     await expect(page.getByTestId('guided-tour-spotlight')).toBeVisible();
     await shot(page, 'spotlight');
 
-    // Three steps, dashboard only: the class, the assignment tiles, grading.
-    await expect(step).toContainText('Step 1 of 3');
+    // Class, assignment tiles, grading, then the whole sidebar.
+    await expect(step).toContainText('Step 1 of 4');
     await expect(step.getByRole('heading', { name: 'Your class' })).toBeVisible();
     await expect(
       page.locator('[data-tour="dashboard-classes"]')
     ).toHaveAttribute('data-tour-active', 'true');
 
     await step.getByRole('button', { name: 'Next' }).click();
-    await expect(step).toContainText('Step 2 of 3');
+    await expect(step).toContainText('Step 2 of 4');
     await expect(step.getByRole('heading', { name: 'Assignment types' })).toBeVisible();
-    await expect(step).toContainText('New assignment');
-    // The free classroom tiles, not a centered fallback card.
+    await expect(step).toContainText('+ sign');
     await expect(
-      page.getByTestId('free-assignment-tiles')
+      page.locator('[data-tour="dashboard-assignments"]')
     ).toHaveAttribute('data-tour-active', 'true');
     await shot(page, 'spotlight-assignments');
     await step.getByRole('button', { name: 'Previous step' }).click();
-    await expect(step).toContainText('Step 1 of 3');
+    await expect(step).toContainText('Step 1 of 4');
     await step.getByRole('button', { name: 'Next' }).click();
 
     await step.getByRole('button', { name: 'Next' }).click();
-    await expect(step).toContainText('Step 3 of 3');
+    await expect(step).toContainText('Step 3 of 4');
     await expect(step.getByRole('heading', { name: 'Grading' })).toBeVisible();
     await expect(
       page.locator('[data-tour="dashboard-grading"]')
     ).toHaveAttribute('data-tour-active', 'true');
-    // The sidebar is not part of the first tour.
     await expect(page.locator('[data-tour="app-nav"]')).not.toHaveAttribute(
       'data-tour-active',
       'true'
     );
     await shot(page, 'spotlight-grading');
+
+    await step.getByRole('button', { name: 'Next' }).click();
+    await expect(step).toContainText('Step 4 of 4');
+    await expect(step.getByRole('heading', { name: 'Your sidebar' })).toBeVisible();
+    await expect(page.locator('[data-tour="app-nav"]')).toHaveAttribute(
+      'data-tour-active',
+      'true'
+    );
 
     await step.getByRole('button', { name: 'Finish' }).click();
     await expect(step).toBeHidden();

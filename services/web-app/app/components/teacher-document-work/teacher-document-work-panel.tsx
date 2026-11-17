@@ -661,6 +661,7 @@ export function TeacherDocumentWorkPanel({
           <TableRow>
             {selectableRowsEnabled ? (
               <TableHead
+                data-tour="documents-select"
                 className={cn(
                   'w-10 pl-4 pr-1',
                   compactHeadClassName(compactRows)
@@ -907,7 +908,7 @@ function DocumentWorkStatusPills({
 >) {
   return (
     <FilterPills
-      ariaLabel="Filter by status"
+      ariaLabel="View by status"
       testId={testIds?.statusChips ?? 'teacher-document-work-status-chips'}
       value={filters.status}
       onChange={(status) => onFiltersChange({ status })}
@@ -1251,6 +1252,7 @@ function DocumentWorkActionsMenu({
           type="button"
           variant="primary"
           data-testid="teacher-document-work-actions"
+          data-tour="documents-actions"
         >
           Actions
           <ChevronDown aria-hidden="true" />

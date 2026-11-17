@@ -73,7 +73,7 @@ function Steps({
           <RichText text={block.lead} />
         </p>
       ) : null}
-      <ol className="divide-y rounded-lg border" data-tour="type-modules">
+      <ol className="divide-y rounded-lg border">
         {modules.map((module, index) => (
           <li
             key={module.id}
@@ -200,7 +200,6 @@ function ThesisEssayCourse({
       <div
         className="mt-2 border-t border-[#E4DCCF] pt-5 dark:border-border"
         data-testid="thesis-essay-course"
-        data-tour="type-modules"
       >
         <h3 className="mb-2 text-lg font-semibold sm:text-xl">
           {THESIS_ESSAY_COURSE_TITLE}
@@ -244,7 +243,6 @@ function YawpLessonBlock({
       <div
         className="mt-2 border-t border-[#E4DCCF] pt-2 dark:border-border"
         data-testid="yawp-lesson"
-        data-tour="type-modules"
       >
         <ul className="flex flex-col">
           <CourseLessonRow
@@ -425,7 +423,13 @@ export function BoxedSection({
       aria-labelledby={headingId}
       data-testid={isHowToTeach ? 'how-to-teach-spotlight' : `landing-section-${section.id}`}
       data-landing-box=""
-      data-tour={section.id === 'how-it-works' ? 'type-directions' : undefined}
+      data-tour={
+        section.id === 'how-it-works'
+          ? 'type-directions'
+          : section.id === 'how-to-teach-it'
+            ? 'type-how-to-teach'
+            : undefined
+      }
       className={cn(SPOTLIGHT_BOX, className)}
     >
       <div className="flex items-center justify-between gap-4">

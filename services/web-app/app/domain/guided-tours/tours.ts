@@ -26,6 +26,8 @@ export const TOUR_IDS = [
   'type-class-starter',
   'type-prewriting',
   'type-thesis-statement',
+  'type-exit-ticket',
+  'type-five-paragraph-essay',
   'document',
 ] as const;
 
@@ -49,11 +51,17 @@ export type TourIcon =
   | 'assignment-type'
   | 'document';
 
+export type TourCardSide = 'top' | 'right' | 'bottom' | 'left';
+
 export type TourStep = {
   /** Value of the `data-tour` attribute on the element this step points at. */
   target: string;
+  /** More elements drawn with the same highlight, when one box is not enough. */
+  also?: readonly string[];
   title: string;
   body: string;
+  /** Pin the card to one side of the highlight. */
+  side?: TourCardSide;
 };
 
 export type PageTour = {
@@ -72,19 +80,34 @@ const DOCUMENT_TOUR: PageTour = {
   },
   steps: [
     {
-      target: 'doc-tutor',
-      title: 'The Tutor',
-      body: 'The assignment and its steps sit here. Students can talk an idea through with the Tutor while they write. The thinking and writing stay their own.',
+      target: 'doc-prompt',
+      title: 'Your prompt',
+      body: 'Your assignment prompt always sits at the top of every student document. Students can collapse it with the arrow to give themselves more room to write, which helps with a longer prompt.',
     },
     {
-      target: 'doc-toolbar',
+      target: 'doc-tutor',
+      title: 'The Tutor',
+      body: 'This is the Yawp! Tutor, a guide on the side trained specifically to help students through assignments. Its cardinal rule: it will never write for the student (no matter how they try to woo it!). Students can ask for feedback or use the chat to talk through an idea with the Tutor while they write.',
+    },
+    {
+      target: 'doc-write',
+      also: ['doc-toolbar'],
       title: 'Write here',
       body: 'The page in the middle is the document. The toolbar formats it, and every change saves on its own.',
+      side: 'right',
     },
     {
       target: 'doc-comments',
+      also: ['doc-comment-button'],
       title: 'Comments',
-      body: 'Highlight any text to leave a comment on it. Comments on the writing collect here.',
+      body: 'Highlight any text, then click the comment button in the toolbar to leave a comment. Comments on the writing collect here.',
+      side: 'bottom',
+    },
+    {
+      target: 'doc-paste',
+      title: 'Copy-paste alerts',
+      body: 'If a student pastes text into the document, Yawp! flags it here, so you can see what was typed and what came from somewhere else.',
+      side: 'left',
     },
     {
       target: 'doc-submit',
@@ -122,12 +145,17 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'dashboard-assignments',
         title: 'Assignment types',
-        body: 'Each tile is a type of assignment. Click a tile to see how it works. You can create assignments once your classroom is approved.',
+        body: 'Each tile is a type of assignment. Click a tile to see its page and how it works. You can create assignments once your classroom is approved.',
       },
       {
         target: 'teaching-access-banner',
         title: 'Waiting for approval',
         body: 'This shows where your request stands. After approval, you can add students, create assignments, and grade their work here.',
+      },
+      {
+        target: 'app-nav',
+        title: 'Your sidebar',
+        body: "Everything lives here: your classes, assignments, and documents. Use 'Tour this page' anytime to replay a tour.",
       },
     ],
   },
@@ -149,12 +177,17 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'dashboard-assignments',
         title: 'Assignment types',
-        body: 'Each tile is a type of assignment. Click a tile to see its page and how it works. To make a quick assignment from here, click New assignment.',
+        body: 'Each tile is a type of assignment. Click a tile to see its page and how it works. To make a quick assignment from here, click the + sign.',
       },
       {
         target: 'dashboard-grading',
         title: 'Grading',
         body: 'When your students turn in work, it shows up down here, ready for you to grade.',
+      },
+      {
+        target: 'app-nav',
+        title: 'Your sidebar',
+        body: "Everything lives here: your classes, assignments, and documents. Use 'Tour this page' anytime to replay a tour.",
       },
     ],
   },
@@ -174,7 +207,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'my-classes-create',
         title: 'One class included',
-        body: 'Your free classroom includes one class. Check the student limit shown for your classroom. To start a new class, archive this one or upgrade.',
+        body: 'Your free classroom includes one class of up to 35 students. To add more classes, ask your school about a Yawp! license.',
       },
     ],
   },
@@ -214,7 +247,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'my-assignments-new',
         title: 'Create an assignment',
-        body: 'Start a new assignment from Actions. Choose a type, and Yawp! shows how many of that type your free classroom has left.',
+        body: 'Start a new assignment from Actions. Choose an assignment type and set it up for your class.',
       },
       {
         target: 'my-assignments-list',
@@ -234,7 +267,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'documents-status',
         title: 'Where each document stands',
-        body: 'Filter by In Progress, Needs Grading, Needs Releasing, or Released. The numbers show how many are in each.',
+        body: 'View by In Progress, Needs Grading, Needs Releasing, or Released. The numbers show how many are in each.',
       },
       {
         target: 'documents-tools',
@@ -242,9 +275,16 @@ const TOURS: Record<TourId, PageTour> = {
         body: 'Narrow the list to a student or assignment, group it, and release grades or unsubmit work for the documents you select.',
       },
       {
+        target: 'documents-select',
+        also: ['documents-actions'],
+        title: 'Release or unsubmit',
+        body: 'Check the box next to one or more documents, then use Actions in the upper-right corner to release grades or unsubmit them.',
+        side: 'bottom',
+      },
+      {
         target: 'documents-list',
         title: 'Open a document',
-        body: 'Click any row to read the writing, read feedback that helps students develop their own ideas, and grade it.',
+        body: 'Click to open any document. Depending on its status, you can see a work in progress (including Tutor chats), comment on student writing, or grade and release an assignment.',
       },
     ],
   },
@@ -359,7 +399,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'type-library',
         title: 'Prompt library',
-        body: 'Short on ideas? Open the Prompt Library and pick one; it fills in the assignment for you. New → Generate a prompt makes a fresh one.',
+        body: "Don't have a prompt? Explore our library. Filter by text, theme, grade band, and more!",
       },
       {
         target: 'type-modules',
@@ -382,6 +422,21 @@ const TOURS: Record<TourId, PageTour> = {
         body: 'New → Assignment gives it to your class. Use these assignments to help students practice and develop their own ideas.',
       },
       {
+        target: 'type-how-to-teach',
+        title: 'How to teach it',
+        body: 'Learn how to teach this step of the writing process. Download the slide deck and watch the quick tutorial video!',
+      },
+      {
+        target: 'type-directions',
+        title: 'How it works',
+        body: 'How the prompts work and what tends to get the best writing out of students.',
+      },
+      {
+        target: 'type-library',
+        title: 'Prompt library',
+        body: "Don't have a prompt? Explore our library. Filter by text, subject, grade band, and more!",
+      },
+      {
         target: 'type-modules',
         title: 'The writing process',
         body: 'The steps this assignment walks students through. Open one for an overview of what they will do.',
@@ -398,8 +453,8 @@ const TOURS: Record<TourId, PageTour> = {
     steps: [
       {
         target: 'type-new',
-        title: 'Make one',
-        body: 'New → Assignment gives it to your class. Use these assignments to help students practice and develop their own ideas.',
+        title: 'Make an assignment',
+        body: 'Click New → Assignment to give students room to develop strong, complex thesis statements alongside the Yawp! Tutor.',
       },
       {
         target: 'type-directions',
@@ -407,14 +462,64 @@ const TOURS: Record<TourId, PageTour> = {
         body: 'How the prompts work and what tends to get the best essays out of students.',
       },
       {
+        target: 'type-how-to-teach',
+        title: 'How to teach it',
+        body: 'Learn how to teach this step of the writing process. Download the slide deck and watch the quick tutorial video!',
+      },
+      {
         target: 'type-library',
         title: 'Prompt library',
-        body: 'Pick a ready-made prompt and it fills in the assignment for you, or use New → Generate a prompt.',
+        body: "Don't have a prompt? Explore our library. Filter by text, subject, grade band, and more!",
       },
       {
         target: 'type-modules',
         title: 'The writing process',
         body: 'The steps this assignment walks students through. Open one for an overview of what they will do.',
+      },
+    ],
+  },
+  'type-exit-ticket': {
+    id: 'type-exit-ticket',
+    welcome: {
+      title: 'Welcome to Exit Ticket',
+      body: 'A few minutes at the end of class. Students show what landed today, and you use that to plan tomorrow.',
+      icon: 'assignment-type',
+    },
+    steps: [
+      {
+        target: 'type-new',
+        title: 'Make an assignment',
+        body: 'Click New → Assignment to give your class a short check at the end of the lesson.',
+      },
+      {
+        target: 'type-directions',
+        title: 'How it works',
+        body: 'How an exit ticket is built and what students do with it before they leave.',
+      },
+    ],
+  },
+  'type-five-paragraph-essay': {
+    id: 'type-five-paragraph-essay',
+    welcome: {
+      title: 'Welcome to the 5-Paragraph Essay',
+      body: 'The foundation essay: a thesis, three body paragraphs, and a conclusion. A good fit before the longer essay.',
+      icon: 'assignment-type',
+    },
+    steps: [
+      {
+        target: 'type-new',
+        title: 'Make an assignment',
+        body: 'Click New → Assignment to give your class a 5-paragraph essay prompt.',
+      },
+      {
+        target: 'type-how-to-teach',
+        title: 'How to teach it',
+        body: 'Learn how to teach this step of the writing process. Download the slide deck and watch the quick tutorial video!',
+      },
+      {
+        target: 'type-directions',
+        title: 'How it works',
+        body: 'How the essay is set up, what the Tutor does, and how grading follows the rubric.',
       },
     ],
   },
@@ -426,7 +531,22 @@ const ASSIGNMENT_TYPE_TOURS: Record<string, TourId> = {
   class_starter: 'type-class-starter',
   prewriting: 'type-prewriting',
   thesis_statement: 'type-thesis-statement',
+  exit_ticket: 'type-exit-ticket',
+  five_paragraph_essay: 'type-five-paragraph-essay',
 };
+
+/** Kind when the page has one, otherwise the title used for the 5-paragraph essay. */
+export function assignmentTypeTourVariant(type: {
+  kind?: string | null;
+  title?: string | null;
+}): string | null {
+  if (type.kind && type.kind in ASSIGNMENT_TYPE_TOURS) return type.kind;
+  const title = (type.title ?? '').trim().toLowerCase();
+  if (title === 'the 5-paragraph essay' || title === '5-paragraph essay') {
+    return 'five_paragraph_essay';
+  }
+  return type.kind ?? null;
+}
 
 export function getTour(id: TourId): PageTour {
   return TOURS[id];

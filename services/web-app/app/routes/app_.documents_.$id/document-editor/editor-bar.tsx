@@ -109,6 +109,7 @@ export const Bar = ({
         <Tooltip text="Comment" delayDuration={300}>
           <div
             data-testid="editor-add-comment"
+            data-tour="doc-comment-button"
             onClick={() => {
               if (editor.isActive('comment')) {
                 editor.chain().focus().unsetComment().run();

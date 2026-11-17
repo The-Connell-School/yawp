@@ -60,8 +60,7 @@ export function HowToTeachIt({ modules }: { modules: HowToTeachItModule[] }) {
   const lessonColumn = modules.some((module) => module.lessonUrl);
   const videoColumn = modules.some((module) => module.tutorialVideoUrl);
   return (
-    // `type-modules` is the guided tours' anchor for "The writing process".
-    <section className="pb-6" data-testid="how-to-teach-it" data-tour="type-modules">
+    <section className="pb-6" data-testid="how-to-teach-it" data-tour="type-how-to-teach">
       <h2 className="text-base font-semibold">How to Teach It</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         These are the steps your students work through. Open a step to see what
