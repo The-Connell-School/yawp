@@ -74,6 +74,15 @@ export default defineConfig({
   ],
   resolve: {
     conditions: ['import', 'require'],
+    dedupe: [
+      'prosemirror-model',
+      'prosemirror-state',
+      'prosemirror-view',
+      'prosemirror-transform',
+      'prosemirror-history',
+      'prosemirror-keymap',
+      'prosemirror-commands',
+    ],
   },
   ssr: {
     noExternal: [

@@ -1,5 +1,5 @@
 import { Extension, InputRule } from '@tiptap/core';
-import { closeHistory } from 'prosemirror-history';
+import { closeHistory } from '@tiptap/pm/history';
 
 // Client request (Brian Connell): typing two hyphens in the student essay
 // editor should auto-connect and elongate into an em dash ("--" -> "—").

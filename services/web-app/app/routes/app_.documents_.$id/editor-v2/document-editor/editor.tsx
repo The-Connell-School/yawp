@@ -29,6 +29,7 @@ import { uploadDocumentImage } from './upload-document-image';
 import { usePmTripwire } from './use-pm-tripwire';
 import { useEditorSync, type EditorBridge } from './use-editor-sync';
 import { usePasteAlert } from './use-paste-alert';
+import { normalizeInterBlockBreaks } from '../../document-editor/normalize-document-html';
 import type { SyncStatus } from '~/utils/sync-service';
 import { cn } from '~/utils/misc';
 
@@ -149,6 +150,7 @@ export function Editor({
       handleTextInput: () => !isEditable && teacherCommenting,
       handlePaste: () => !isEditable && teacherCommenting,
       handleDrop: () => !isEditable && teacherCommenting,
+      transformPastedHTML: normalizeInterBlockBreaks,
     },
   });
 
