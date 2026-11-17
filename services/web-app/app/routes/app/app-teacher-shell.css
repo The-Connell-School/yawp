@@ -52,12 +52,24 @@
 .locked-home-welcome {
   margin: 0;
   padding: 0;
+  position: relative;
+  z-index: 1;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   font-family: var(--font-sans);
   font-size: 32px;
   font-weight: 600;
   line-height: 1.15;
   letter-spacing: normal;
   color: #0f172a;
+}
+
+/* Full-width approval card under the heading. Not a second grid column. */
+.locked-home-pending-banner {
+  width: 100%;
+  min-width: 0;
+  position: relative;
+  z-index: 0;
 }
 
 .locked-home-b2.free-dashboard h2 {

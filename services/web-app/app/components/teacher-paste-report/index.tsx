@@ -187,6 +187,7 @@ function AuthorizedTeacherPasteReport({
           <button
             type="button"
             aria-label="Pasted text report"
+            data-tour="doc-paste"
             aria-pressed={open}
             className={`flex flex-1 items-center justify-center gap-1.5 px-2 py-3 text-xs font-semibold ${open ? 'border-b-2 border-blue-600' : 'text-muted-foreground'}`}
             onClick={() => setOpen(true)}

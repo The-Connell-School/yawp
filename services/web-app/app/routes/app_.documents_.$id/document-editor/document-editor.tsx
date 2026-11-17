@@ -125,6 +125,7 @@ function AssignmentPromptBanner({
     <div
       className="shrink-0 border-b bg-amber-50"
       data-testid="assignment-prompt-panel"
+      data-tour="doc-prompt"
     >
       <div
         className="flex items-center justify-between gap-8 py-1 pl-4 pr-2"

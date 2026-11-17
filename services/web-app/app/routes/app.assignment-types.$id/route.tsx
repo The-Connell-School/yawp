@@ -144,6 +144,8 @@ import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/as
 import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
 import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 import { assignmentTypeHasHowItWorksGuide } from '~/domain/assignment-types/assignment-type-how-it-works';
+import { assignmentTypeTourVariant } from '~/domain/guided-tours/tours';
+import { assignmentTypeMatchesSiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { wrapPreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
 import { getAssignmentTypeLandingFlags } from '~/domain/assignment-types/landing-page-gate.server';
@@ -488,7 +490,52 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       },
       orderBy: { position: 'asc' },
     });
-  const assignmentType = assignmentTypes.find((type) => type.id === params.id);
+  let assignmentType =
+    assignmentTypes.find((type) => type.id === params.id) ?? null;
+  let siteLicenseBrowse = false;
+
+  if (
+    !assignmentType &&
+    profile.role === 'TEACHER' &&
+    profile.organization.plan === 'FREE_CLASSROOM'
+  ) {
+    const direct = await prisma.assignmentType.findFirst({
+      where: { id: params.id, archivedAt: null },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        kind: true,
+        rubric: { select: { name: true } },
+        systemKey: true,
+        collaborationSupported: true,
+        ownerOrgId: true,
+        ownerMembershipId: true,
+        image: { select: { id: true } },
+        assignmentModules: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            position: true,
+            lessonUrl: true,
+            tutorialVideoUrl: true,
+          },
+          orderBy: { position: 'asc' },
+        },
+      },
+    });
+    if (
+      direct &&
+      assignmentTypeMatchesSiteLicenseLockedTile(direct)
+    ) {
+      const { ownerOrgId: _ownerOrgId, ownerMembershipId: _ownerMembershipId, ...row } =
+        direct;
+      assignmentType = row;
+      siteLicenseBrowse = true;
+    }
+  }
 
   if (!assignmentType) {
     const direct = await prisma.assignmentType.findUnique({
@@ -502,6 +549,26 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       type: 'error',
       description: 'Assignment type not found',
     });
+  }
+
+  if (
+    !siteLicenseBrowse &&
+    profile.role === 'TEACHER' &&
+    profile.organization.plan === 'FREE_CLASSROOM'
+  ) {
+    const owners = await prisma.assignmentType.findUnique({
+      where: { id: assignmentType.id },
+      select: {
+        title: true,
+        kind: true,
+        systemKey: true,
+        ownerOrgId: true,
+        ownerMembershipId: true,
+      },
+    });
+    siteLicenseBrowse = Boolean(
+      owners && assignmentTypeMatchesSiteLicenseLockedTile(owners)
+    );
   }
 
   if (assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
@@ -754,6 +821,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     landingVideos,
     exitTicketBuilderV3Enabled,
     howToTeachItEnabled,
+    siteLicenseBrowse,
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -894,7 +962,9 @@ export default function AppAssignmentTypesIdRoute() {
       ?.lessonPlannerEnabled ?? false;
   const data = useLoaderData<typeof loader>();
   const isTeacher = user.selectedMembership?.role === 'TEACHER';
-  const { locked: teachingLockedPreview } = useTeachingAccess();
+  const { locked: pendingTeachingLock } = useTeachingAccess();
+  const creationLocked =
+    pendingTeachingLock || data.siteLicenseBrowse === true;
   const hasModules = data.assignmentType.assignmentModules.length > 0;
   const modulesVisible = showModulesAccordion(
     data.assignmentType,
@@ -909,19 +979,19 @@ export default function AppAssignmentTypesIdRoute() {
     useState<CustomEssayType | null>(null);
 
   useEffect(() => {
-    if (!teachingLockedPreview) return;
+    if (!creationLocked) return;
     if (isAssignmentSheetOpen) setIsAssignmentSheetOpen(false);
     if (isPromptGeneratorOpen) setIsPromptGeneratorOpen(false);
     if (customEssayType !== null) setCustomEssayType(null);
   }, [
-    teachingLockedPreview,
+    creationLocked,
     isAssignmentSheetOpen,
     isPromptGeneratorOpen,
     customEssayType,
   ]);
 
   function beginAssignmentCreation() {
-    if (teachingLockedPreview) return;
+    if (creationLocked) return;
     setIsAssignmentSheetOpen(true);
   }
 
@@ -995,7 +1065,7 @@ export default function AppAssignmentTypesIdRoute() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lessonFetcher.state, lessonFetcher.data]);
   useEffect(() => {
-    if (!incomingPrompt || teachingLockedPreview) return;
+    if (!incomingPrompt || creationLocked) return;
     setLibraryPrompt(incomingPrompt);
     setApHistoryEntry(null);
     beginAssignmentCreation();
@@ -1007,7 +1077,7 @@ export default function AppAssignmentTypesIdRoute() {
       },
       { replace: true, preventScrollReset: true }
     );
-  }, [incomingPrompt, setSearchParams, teachingLockedPreview]);
+  }, [incomingPrompt, setSearchParams, creationLocked]);
 
   // The Teacher's Lounge sends a teacher here to reuse another teacher's
   // shared assignment. Same door as the planner's: open the sheet on the
@@ -1066,7 +1136,7 @@ export default function AppAssignmentTypesIdRoute() {
     );
     // A hand-edited link that describes no ticket we can build opens nothing,
     // rather than a sheet answered with something nobody chose.
-    if (!incomingExitTicket || teachingLockedPreview) return;
+    if (!incomingExitTicket || creationLocked) return;
     setPlannedExitTicket(incomingExitTicket);
     setApHistoryEntry(null);
     beginAssignmentCreation();
@@ -1074,7 +1144,7 @@ export default function AppAssignmentTypesIdRoute() {
     incomingExitTicketMode,
     incomingExitTicket,
     setSearchParams,
-    teachingLockedPreview,
+    creationLocked,
   ]);
 
   const showThesisLibrary = data.thesisPromptLibrary != null;
@@ -1102,7 +1172,9 @@ export default function AppAssignmentTypesIdRoute() {
   return (
     <div
       className="no-scrollbar h-full w-full overflow-y-scroll"
-      data-tour-variant={data.assignmentType.kind ?? undefined}
+      data-tour-variant={
+        assignmentTypeTourVariant(data.assignmentType) ?? undefined
+      }
     >
       <div className="mx-auto flex h-full w-full max-w-screen-md flex-col p-3 sm:p-5">
         <div className="mb-4 flex justify-between gap-2">
@@ -1142,7 +1214,7 @@ export default function AppAssignmentTypesIdRoute() {
               {canCreateDirectDocument ? (
                 <>
                   <Form method="post" ref={docFormRef} className="hidden" />
-                  {teachingLockedPreview ? (
+                  {creationLocked ? (
                     wrapPreviewAssignmentCreationControl(
                       true,
                       <Button
@@ -1151,7 +1223,10 @@ export default function AppAssignmentTypesIdRoute() {
                         data-tour="type-new"
                       >
                         New <ChevronDownIcon className="ml-1 h-4 w-4" />
-                      </Button>
+                      </Button>,
+                      data.siteLicenseBrowse
+                        ? 'Comes with a school site license.'
+                        : undefined
                     )
                   ) : (
                     <DropdownMenu>
@@ -1194,13 +1269,16 @@ export default function AppAssignmentTypesIdRoute() {
                 </>
               ) : null}
               {isApHistoryAssignmentType ? (
-                teachingLockedPreview ? (
+                creationLocked ? (
                   wrapPreviewAssignmentCreationControl(
                     true,
                     <Button type="button" className="w-fit">
                       Create assignment{' '}
                       <ChevronDownIcon className="ml-1 h-4 w-4" />
-                    </Button>
+                    </Button>,
+                    data.siteLicenseBrowse
+                      ? 'Comes with a school site license.'
+                      : undefined
                   )
                 ) : (
                   <DropdownMenu>
@@ -1248,7 +1326,7 @@ export default function AppAssignmentTypesIdRoute() {
                 exitTicketBuilderV3Enabled={data.exitTicketBuilderV3Enabled}
                 titleRequired={showThesisLibrary}
                 apHistoryEntry={apHistoryEntry}
-                teachingLocked={teachingLockedPreview}
+                teachingLocked={creationLocked}
                 onCreated={tellLessonCreated}
               />
               {showThesisPromptGenerator ? (
@@ -1257,7 +1335,7 @@ export default function AppAssignmentTypesIdRoute() {
                   onOpenChange={setIsPromptGeneratorOpen}
                   assignmentTypeId={data.assignmentType.id}
                   onUsePrompt={(promptBody) => {
-                    if (teachingLockedPreview) return;
+                    if (creationLocked) return;
                     setApHistoryEntry(null);
                     setPlannedExitTicket(null);
                     setLibraryPrompt(promptBody);
@@ -1271,7 +1349,7 @@ export default function AppAssignmentTypesIdRoute() {
                   onOpenChange={setIsPromptGeneratorOpen}
                   assignmentTypeId={data.assignmentType.id}
                   onUsePrompt={(prompt) => {
-                    if (teachingLockedPreview) return;
+                    if (creationLocked) return;
                     setApHistoryEntry(null);
                     setPlannedExitTicket(null);
                     setLibraryPrompt(prompt);
@@ -1285,7 +1363,7 @@ export default function AppAssignmentTypesIdRoute() {
                   onOpenChange={setIsPromptGeneratorOpen}
                   assignmentTypeId={data.assignmentType.id}
                   onUsePrompt={(prompt) => {
-                    if (teachingLockedPreview) return;
+                    if (creationLocked) return;
                     setApHistoryEntry(null);
                     setPlannedExitTicket(null);
                     setLibraryPrompt(prompt);
@@ -1298,7 +1376,7 @@ export default function AppAssignmentTypesIdRoute() {
                   open={isPromptGeneratorOpen}
                   onOpenChange={setIsPromptGeneratorOpen}
                   onUsePrompt={(option: GeneratedExitTicketOption) => {
-                    if (teachingLockedPreview) return;
+                    if (creationLocked) return;
                     setApHistoryEntry(null);
                     setLibraryPrompt('');
                     setPlannedExitTicket({
@@ -1341,6 +1419,14 @@ export default function AppAssignmentTypesIdRoute() {
           ) : null}
           <div className="flex flex-col gap-3">
             <h1 className="text-3xl font-bold">{pageHeading}</h1>
+            {data.siteLicenseBrowse ? (
+              <p
+                data-testid="site-license-browse-note"
+                className="rounded-lg border bg-muted px-4 py-3 text-sm text-foreground"
+              >
+                Comes with a school site license.
+              </p>
+            ) : null}
             {landingPage ? (
               <LandingDescription page={landingPage} />
             ) : (
@@ -1440,9 +1526,9 @@ export default function AppAssignmentTypesIdRoute() {
               facets={data.promptLibrary.facets}
               optionCounts={data.promptLibrary.optionCounts}
               totalCount={data.promptLibrary.totalCount}
-              assignmentCreationLocked={teachingLockedPreview}
+              assignmentCreationLocked={creationLocked}
               onSelectPrompt={(prompt) => {
-                if (teachingLockedPreview) return;
+                if (creationLocked) return;
                 setApHistoryEntry(null);
                 setLibraryPrompt(prompt);
                 beginAssignmentCreation();
@@ -1451,15 +1537,15 @@ export default function AppAssignmentTypesIdRoute() {
           </div>
         ) : null}
         {data.shortFormPromptLibrary ? (
-          <div className="pb-6">
+          <div className="pb-6" data-tour="type-library">
             <ShortFormPromptsLibrary
               prompts={data.shortFormPromptLibrary.prompts}
               facets={data.shortFormPromptLibrary.facets}
               optionCounts={data.shortFormPromptLibrary.optionCounts}
               totalCount={data.shortFormPromptLibrary.totalCount}
-              assignmentCreationLocked={teachingLockedPreview}
+              assignmentCreationLocked={creationLocked}
               onSelectPrompt={(prompt) => {
-                if (teachingLockedPreview) return;
+                if (creationLocked) return;
                 setApHistoryEntry(null);
                 setLibraryPrompt(prompt);
                 beginAssignmentCreation();
@@ -1475,9 +1561,9 @@ export default function AppAssignmentTypesIdRoute() {
               facets={data.thesisPromptLibrary.facets}
               optionCounts={data.thesisPromptLibrary.optionCounts}
               totalCount={data.thesisPromptLibrary.totalCount}
-              assignmentCreationLocked={teachingLockedPreview}
+              assignmentCreationLocked={creationLocked}
               onSelectPrompt={(prompt) => {
-                if (teachingLockedPreview) return;
+                if (creationLocked) return;
                 setApHistoryEntry(null);
                 setLibraryPrompt(prompt);
                 beginAssignmentCreation();
@@ -1493,9 +1579,9 @@ export default function AppAssignmentTypesIdRoute() {
             <div className="pb-6">
               <ApPromptsLibrary
                 entries={data.apHistoryLibrary.entries}
-                assignmentCreationLocked={teachingLockedPreview}
+                assignmentCreationLocked={creationLocked}
                 onSelectEntry={(entry) => {
-                  if (teachingLockedPreview) return;
+                  if (creationLocked) return;
                   setApHistoryEntry(entry);
                   setLibraryPrompt('');
                   beginAssignmentCreation();

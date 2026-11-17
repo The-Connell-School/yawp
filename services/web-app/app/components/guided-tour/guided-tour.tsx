@@ -31,9 +31,11 @@ import { Button } from '~/components/ui/button';
 import {
   tourForPage,
   type PageTour,
+  type TourCardSide,
   type TourIcon,
   type TourId,
   type TourStatus,
+  type TourStep,
 } from '~/domain/guided-tours/tours';
 import { cn } from '~/utils/misc';
 import { readSkippedTours, writeSkippedTours } from './skipped-tours';
@@ -66,7 +68,13 @@ const WELCOME_DELAY_MS = 400;
 
 type Rect = { top: number; left: number; width: number; height: number };
 
-type ActiveStep = { target: string | null; title: string; body: string };
+type ActiveStep = {
+  target: string | null;
+  also: readonly string[];
+  title: string;
+  body: string;
+  side?: TourCardSide;
+};
 
 type Phase =
   | { kind: 'idle' }
@@ -162,9 +170,17 @@ function prefersReducedMotion() {
   );
 }
 
-/** In-page with layout, even if clipped horizontally (wide dashboard grids). */
+/**
+ * On the page enough to point at. A box with a real rect has to be in the
+ * viewport horizontally, so a phone's closed sidebar is skipped. A box that
+ * reports no rect but still has layout (a carousel before it paints) still
+ * counts.
+ */
 function isPresentForTour(el: HTMLElement | null): el is HTMLElement {
-  return targetHasLayout(el) || isShown(el);
+  if (!el) return false;
+  const rect = el.getBoundingClientRect();
+  if (rect.width > 0 && rect.height > 0) return isShown(el);
+  return el.offsetWidth > 0 && el.offsetHeight > 0;
 }
 
 function targetExistsInDom(target: string | null) {
@@ -172,26 +188,56 @@ function targetExistsInDom(target: string | null) {
   return document.querySelector(`[data-tour="${target}"]`) !== null;
 }
 
+function stepTargets(step: Pick<TourStep, 'target' | 'also'>) {
+  return [step.target, ...(step.also ?? [])];
+}
+
+function stepIsPresent(step: Pick<TourStep, 'target' | 'also'>) {
+  return stepTargets(step).some((target) =>
+    isPresentForTour(findTarget(target))
+  );
+}
+
+function toActiveStep(step: TourStep): ActiveStep {
+  const present = stepTargets(step).filter((target) =>
+    isPresentForTour(findTarget(target))
+  );
+  return {
+    target: present[0] ?? step.target,
+    also: present.slice(1),
+    title: step.title,
+    body: step.body,
+    side: step.side,
+  };
+}
+
 /** Steps whose element is on this page right now; a centered card if none are. */
 function resolveSteps(tour: PageTour): ActiveStep[] {
   for (const step of tour.steps) {
-    findTarget(step.target)?.scrollIntoView({
-      block: 'center',
-      inline: 'center',
-      behavior: 'auto',
-    });
+    for (const target of stepTargets(step)) {
+      findTarget(target)?.scrollIntoView({
+        block: 'center',
+        inline: 'center',
+        behavior: 'auto',
+      });
+    }
   }
-  let shown = tour.steps.filter((step) =>
-    isPresentForTour(findTarget(step.target))
-  );
+  let shown = tour.steps.filter((step) => stepIsPresent(step));
   if (shown.length < 2 && tour.id === 'waiting-preview') {
     const inDom = tour.steps.filter(
       (step) => step.target && targetExistsInDom(step.target)
     );
     if (inDom.length >= 2) shown = inDom;
   }
-  if (shown.length) return shown;
-  return [{ target: null, title: tour.welcome.title, body: tour.welcome.body }];
+  if (shown.length) return shown.map(toActiveStep);
+  return [
+    {
+      target: null,
+      also: [],
+      title: tour.welcome.title,
+      body: tour.welcome.body,
+    },
+  ];
 }
 
 function recordOutcome(tourId: TourId, status: TourStatus) {
@@ -290,9 +336,9 @@ function PageTourController({
   const start = useCallback(() => {
     if (!tour) return;
     for (const step of tour.steps) {
-      if (!step.target) continue;
+      for (const target of stepTargets(step)) {
       const targets = document.querySelectorAll<HTMLElement>(
-        `[data-tour="${step.target}"]`
+        `[data-tour="${target}"]`
       );
       for (const el of targets) {
         if (targetHasLayout(el)) {
@@ -304,6 +350,7 @@ function PageTourController({
             behavior: 'auto',
           });
         }
+      }
       }
     }
     let attempts = 0;
@@ -513,7 +560,7 @@ function TourSpotlight({
 }) {
   const step = steps[index];
   const isLast = index === steps.length - 1;
-  const [rect, setRect] = useState<Rect | null>(null);
+  const [rects, setRects] = useState<Rect[]>([]);
   const nextRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(
     document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -522,44 +569,60 @@ function TourSpotlight({
 
   // Bring the step's element into view and mark it, so it can be styled or
   // checked while it is the one being explained.
+  const highlightTargets = [step.target, ...step.also].filter(
+    (target): target is string => Boolean(target)
+  );
+
   useEffect(() => {
-    const el = findTarget(step.target);
-    if (!el) {
-      setRect(null);
+    const nodes = highlightTargets
+      .map((target) => findTarget(target))
+      .filter((el): el is HTMLElement => Boolean(el));
+    if (!nodes.length) {
+      setRects([]);
       return;
     }
-    el.setAttribute('data-tour-active', 'true');
-    el.scrollIntoView({
+    for (const el of nodes) el.setAttribute('data-tour-active', 'true');
+    nodes[0]?.scrollIntoView({
       block: 'center',
       inline: 'nearest',
       behavior: prefersReducedMotion() ? 'auto' : 'smooth',
     });
-    return () => el.removeAttribute('data-tour-active');
-  }, [step.target]);
+    return () => {
+      for (const el of nodes) el.removeAttribute('data-tour-active');
+    };
+  }, [highlightTargets.join('|')]);
 
   // Follow the element while the page scrolls, resizes, or animates in.
   useEffect(() => {
-    if (!step.target) return;
+    if (!highlightTargets.length) return;
     let frame = 0;
     const measure = () => {
-      const el = findTarget(step.target);
-      const box = el?.getBoundingClientRect();
-      const next = box
-        ? {
+      const next = highlightTargets.flatMap((target) => {
+        const box = findTarget(target)?.getBoundingClientRect();
+        if (!box || box.width <= 0 || box.height <= 0) return [];
+        return [
+          {
             top: box.top - SPOTLIGHT_PADDING,
             left: box.left - SPOTLIGHT_PADDING,
             width: box.width + SPOTLIGHT_PADDING * 2,
             height: box.height + SPOTLIGHT_PADDING * 2,
-          }
-        : null;
-      setRect((prev) => (sameRect(prev, next) ? prev : next));
+          },
+        ];
+      });
+      setRects((prev) =>
+        prev.length === next.length &&
+        prev.every((rect, index) => sameRect(rect, next[index] ?? null))
+          ? prev
+          : next
+      );
       frame = window.requestAnimationFrame(measure);
     };
     measure();
     return () => window.cancelAnimationFrame(frame);
-  }, [step.target]);
+  }, [highlightTargets.join('|')]);
 
-  const placement = stepCardPlacement(rect);
+  const anchor = rects[0] ?? null;
+  const placement = step.side ?? stepCardPlacement(anchor);
 
   return (
     <PopoverPrimitive.Root
@@ -574,11 +637,12 @@ function TourSpotlight({
         aria-hidden="true"
         className={cn(
           'fixed inset-0 z-40 print:hidden',
-          !rect && 'bg-black/45'
+          !anchor && 'bg-black/45'
         )}
       />
-      {rect ? (
+      {rects.map((rect, index) => (
         <div
+          key={`${rect.top}-${rect.left}-${rect.width}-${index}`}
           aria-hidden="true"
           data-testid="guided-tour-spotlight"
           style={{
@@ -587,13 +651,16 @@ function TourSpotlight({
             width: rect.width,
             height: rect.height,
           }}
-          className="pointer-events-none fixed z-40 rounded-xl shadow-[0_0_0_9999px_rgb(0_0_0/0.45)] ring-2 ring-primary transition-all duration-200 motion-reduce:transition-none print:hidden"
+          className={cn(
+            'pointer-events-none fixed z-40 rounded-xl ring-2 ring-primary transition-all duration-200 motion-reduce:transition-none print:hidden',
+            index === 0 && 'shadow-[0_0_0_9999px_rgb(0_0_0/0.45)]'
+          )}
         />
-      ) : null}
+      ))}
       <PopoverPrimitive.Anchor asChild>
         <div
           aria-hidden="true"
-          style={cardAnchorStyle(rect, placement)}
+          style={cardAnchorStyle(anchor, placement)}
           className="pointer-events-none fixed"
         />
       </PopoverPrimitive.Anchor>
@@ -602,7 +669,7 @@ function TourSpotlight({
           data-testid="guided-tour-step"
           aria-labelledby={titleId}
           side={placement === 'corner' ? 'top' : placement}
-          align={!rect ? 'center' : placement === 'corner' ? 'end' : 'start'}
+          align={!anchor ? 'center' : placement === 'corner' ? 'end' : 'start'}
           sideOffset={placement === 'corner' ? 0 : 12}
           collisionPadding={16}
           onOpenAutoFocus={(event) => {

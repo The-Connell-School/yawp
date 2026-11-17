@@ -69,6 +69,10 @@ describe('tourForPage', () => {
     expect(tourForPage(path, 'thesis_statement')?.id).toBe(
       'type-thesis-statement'
     );
+    expect(tourForPage(path, 'exit_ticket')?.id).toBe('type-exit-ticket');
+    expect(tourForPage(path, 'five_paragraph_essay')?.id).toBe(
+      'type-five-paragraph-essay'
+    );
     expect(tourForPage(path, 'class_starter')?.welcome.title).toBe(
       'Welcome to Class Starter'
     );
@@ -77,6 +81,7 @@ describe('tourForPage', () => {
   test('no tour for other types, or before the page says which type it is', () => {
     const path = '/app/assignment-types/at_123';
     expect(tourForPage(path, 'daily_pages')).toBeNull();
+    expect(tourForPage(path, 'act_writing')).toBeNull();
     expect(tourForPage(path, null)).toBeNull();
     expect(
       tourForPage('/app/assignment-types/at_123/how-it-works', 'class_starter')
@@ -171,26 +176,30 @@ describe('validators', () => {
 describe('first dashboard tour', () => {
   const firstTours = ['dashboard', 'waiting-preview'] as const;
 
-  test('an approved teacher sees their class, the assignment tiles, then grading', () => {
+  test('an approved teacher sees their class, the assignment tiles, grading, then the sidebar', () => {
     expect(getTour('dashboard').steps.map((step) => step.target)).toEqual([
       'dashboard-classes',
       'dashboard-assignments',
       'dashboard-grading',
+      'app-nav',
     ]);
+    expect(getTour('dashboard').steps[1].body).toContain('click the + sign');
+    expect(getTour('dashboard').steps[0].target).toBe('dashboard-classes');
   });
 
-  test('a teacher waiting for approval sees their class, the tiles, then the approval banner', () => {
+  test('a teacher waiting for approval sees their class, the tiles, the approval banner, then the sidebar', () => {
     expect(getTour('waiting-preview').steps.map((step) => step.target)).toEqual([
       'dashboard-classes',
       'dashboard-assignments',
       'teaching-access-banner',
+      'app-nav',
     ]);
   });
 
   test('the assignment step explains the tile and quick create for each state', () => {
     const approved = getTour('dashboard').steps[1].body;
     expect(approved).toMatch(/tile/i);
-    expect(approved).toContain('New assignment');
+    expect(approved).toContain('+ sign');
     const waiting = getTour('waiting-preview').steps[1].body;
     expect(waiting).toMatch(/tile/i);
     expect(waiting).toMatch(/approv/i);
@@ -199,7 +208,7 @@ describe('first dashboard tour', () => {
   test('copy is short, plain, and has no em dashes, all-caps eyebrows, or video', () => {
     for (const id of firstTours) {
       const tour = getTour(id);
-      expect(tour.steps.length).toBeLessThanOrEqual(3);
+      expect(tour.steps.length).toBeLessThanOrEqual(4);
       const texts = [
         tour.welcome.title,
         tour.welcome.body,

@@ -262,6 +262,33 @@ test('FreeAssignmentTiles locked pending keeps the illustrated cards and hides c
   expect(html).not.toMatch(/\d+ of \d+ left/);
 });
 
+test('approved free teachers open a site-license tile on its assignment type page', () => {
+  const html = renderToStaticMarkup(
+    <StaticRouter location="/app">
+      <FreeAssignmentTiles
+        usage={usage}
+        siteLicenseLockedAssignmentTiles={[
+          {
+            key: 'thesis_driven_essay',
+            label: 'Thesis-Driven Essay',
+            assignmentTypeId: 'type-thesis-essay',
+            imageId: null,
+          },
+        ]}
+        types={[]}
+        onCreate={() => {}}
+      />
+    </StaticRouter>
+  );
+  expect(html).toContain(
+    'href="/app/assignment-types/type-thesis-essay"'
+  );
+  expect(html).not.toContain(
+    'href="/app/assignment-types/type-thesis-essay/how-it-works"'
+  );
+  expect(html).toContain('Comes with a school site license.');
+});
+
 test('FreeAccountRail is empty while teaching is locked', async () => {
   mock.module('~/components/free-tier/teaching-access-context', () => ({
     useTeachingAccess: () => ({

@@ -455,7 +455,7 @@ export async function completeSchoolAdminApproval(args: {
   if (result.app) {
     await ensureFreeTierProductionApprovalHooks();
     await getApprovalHooks().onApplicationApproved(result.app);
-    const signInUrl = `${freeTierPublicAppOrigin()}/auth/login`;
+    const signInUrl = `${freeTierPublicAppOrigin()}/app`;
     const emailResult = await sendFreeTierCongratulationsEmail({
       applicationId: result.app.id,
       teacherEmail: result.app.email,

@@ -140,6 +140,7 @@ export function DocumentMarginComments({
       aria-label="Comments"
       className="doc-editor-margin"
       data-testid="document-margin-comments-aside"
+      data-tour="doc-comments"
     >
       {commentIds.map((id) => {
         const top = stackedTops[id] ?? 8;

@@ -1,5 +1,10 @@
 import * as React from 'react';
 import {
+  APPROVED_CLASSROOM_BUTTON_LABEL,
+  APPROVED_CLASSROOM_NEXT_STEP,
+  approvedClassroomLead,
+} from '~/domain/free-tier/email-copy';
+import {
   adminApprovalEmailPreheader,
   adminApprovalReminderMutedLead,
   adminApprovalTeacherRerouteLead,
@@ -212,7 +217,10 @@ export function TeacherApprovedEmail(props: {
   const urls = logos(props.origin);
   return (
     <YawpEmailLayout
-      preheader={`${props.adminName} approved your classroom. Next step: add your students.`}
+      preheader={approvedClassroomLead(props.adminName).replace(
+        ', so all free features are now unlocked.',
+        '.'
+      )}
       logoBlackUrl={urls.black}
       logoWhiteUrl={urls.white}
       siteUrl={urls.site}
@@ -225,16 +233,15 @@ export function TeacherApprovedEmail(props: {
         paragraphs={[
           <>Hi {props.firstName},</>,
           <>
-            {props.adminName} approved your classroom, so all free features are now
-            unlocked.
+            {approvedClassroomLead(props.adminName)}
           </>,
-          <>
-            Next, add your students. It takes about five minutes with your class in
-            the room.
-          </>,
+          <>{APPROVED_CLASSROOM_NEXT_STEP}</>,
         ]}
       />
-      <PillButton label="Add students" href={props.addStudentsUrl} />
+      <PillButton
+        label={APPROVED_CLASSROOM_BUTTON_LABEL}
+        href={props.addStudentsUrl}
+      />
       {props.adminName.trim() === 'Yawp!' ? null : (
         <EmailBodyBlocks
           paragraphs={[

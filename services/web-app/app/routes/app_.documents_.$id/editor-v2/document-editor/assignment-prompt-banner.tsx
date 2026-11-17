@@ -38,6 +38,7 @@ export function AssignmentPromptBanner({
     <div
       className="doc-editor-prompt-strip"
       data-testid="assignment-prompt-panel"
+      data-tour="doc-prompt"
     >
       <span className="shrink-0 text-[13px] text-[hsl(50_2.4%_36%)]">
         Assignment prompt

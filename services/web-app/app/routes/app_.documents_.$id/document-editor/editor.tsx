@@ -256,6 +256,7 @@ export function Editor({
         <div
           className="no-scrollbar grow overflow-y-scroll p-5"
           data-testid="document-editor-scroll"
+          data-tour="doc-write"
           key={`${docId}-editor`}
           onMouseDown={focusEditorFromPaneClick}
         >

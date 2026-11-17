@@ -2109,7 +2109,10 @@ export function AssignmentCreationSheetContent({
                       id="assignment-create-grading-assistance"
                       className="text-sm font-medium"
                     >
-                      Grading assistance
+                      Grading Assistant
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Set the level based on your students.
                     </p>
                     <GradingChoiceGroup
                       labelId="assignment-create-grading-assistance"

@@ -90,7 +90,7 @@ const emails = [
         signInUrl: urls.signIn,
       }),
     subject: "You're approved! Your Yawp! classroom is ready",
-    preheader: 'Dr. Ramos approved your classroom',
+    preheader: 'Your administrator approved your classroom',
   },
   {
     id: '05',

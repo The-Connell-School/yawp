@@ -73,11 +73,24 @@ export function stepPiece(piece: ConfettiPiece, seconds: number): ConfettiPiece 
  * Plays "Yaaawp!". It runs off the teacher's click, so the browser lets it
  * make a sound; where it can't, the confetti still flies.
  */
+let yawpStartedAt = 0;
+
 export function playYawp(): void {
   if (typeof window === 'undefined' || typeof Audio === 'undefined') return;
+  yawpStartedAt = Date.now();
   try {
     void new Audio(YAWP_SOUND).play().catch(() => {});
   } catch {
     // No sound is no loss.
   }
+}
+
+/**
+ * The create click starts the sound, then the dashboard opens. A full page
+ * load has no click in this module, so it plays. A client navigation that
+ * already started the sound does not play it twice.
+ */
+export function playYawpUnlessPlaying(): void {
+  if (Date.now() - yawpStartedAt < 4000) return;
+  playYawp();
 }

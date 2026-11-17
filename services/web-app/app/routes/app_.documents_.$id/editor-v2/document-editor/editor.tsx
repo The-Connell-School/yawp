@@ -335,6 +335,7 @@ export function Editor({
               teacherCommenting && 'doc-editor-page--teacher-commenting'
             )}
             data-testid="document-editor-surface"
+            data-tour="doc-write"
           >
             <EditorContent
               editor={editor}
