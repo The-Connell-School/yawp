@@ -242,34 +242,33 @@ describe('parseStoredExitTicketConfig with a reflection prompt', () => {
 });
 
 describe('grading context for reflections', () => {
-  test('still wondering is a reflection, not the retired ask-a-question criteria', () => {
+  test('"still wondering" is read like an ask-a-question check', () => {
     const context = buildExitTicketGradingContext({
       schemaVersion: 1,
       mode: 'basic',
       reflectionPrompt: { id: 'wondering' },
     });
-    expect(context).toContain('EXIT TICKET (REFLECTION)');
-    expect(context).not.toContain(
+    expect(context).toInclude(
       exitTicketFocusOption('ask-question')!.gradingCriteria
     );
   });
 
-  test('a custom prompt is the question when no stored prompt was passed', () => {
+  test('a custom prompt tells the grader to judge against it', () => {
     const context = buildExitTicketGradingContext({
       schemaVersion: 1,
       mode: 'basic',
       reflectionPrompt: { id: 'custom', text: 'What surprised you?' },
     });
-    expect(context).toContain('What surprised you?');
+    expect(context).toInclude('What surprised you?');
   });
 
-  test('the default reflection still gets Part A', () => {
+  test('the default reflection adds nothing, exactly as before', () => {
     expect(
       buildExitTicketGradingContext({
         schemaVersion: 1,
         mode: 'basic',
         kind: 'reflection',
       })
-    ).toContain('There is no partial credit.');
+    ).toBeNull();
   });
 });
