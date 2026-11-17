@@ -626,3 +626,81 @@ describe('The step pages’ own lesson row (Kevin, Nov 5; Brian, Nov 6: deck and
     );
   });
 });
+
+describe('5-Paragraph Essay How to Teach It (Brian, Nov 17)', () => {
+  const FIVE_MODULES = [
+    { id: 'f1', title: 'Pre-Writing' },
+    { id: 'f2', title: 'Thesis Statement' },
+    { id: 'f3', title: 'Body Paragraph 1' },
+    { id: 'f4', title: 'Peer Review' },
+  ];
+  const box = (root: HTMLElement) =>
+    root.querySelector('[data-testid="how-to-teach-spotlight"]')!;
+
+  it('opens with the note and links "Lesson Planner" to the planner', () => {
+    const root = render(
+      <LandingSections
+        page={LANDING_PAGES['five-paragraph-essay']}
+        modules={FIVE_MODULES}
+        lessonPlannerHref="/app/lesson-planner"
+      />
+    );
+    const paragraphs = [...box(root).querySelectorAll('p')];
+    expect(paragraphs[0]!.textContent).toStartWith('Most English teachers already have a way');
+    const link = paragraphs[1]!.querySelector('a')!;
+    expect(link.textContent).toBe('Lesson Planner');
+    expect(link.getAttribute('href')).toBe('/app/lesson-planner');
+    expect(paragraphs[1]!.textContent).toBe(
+      'New to this essay, or want fresh slides and ideas on how to teach it? Head to the Lesson Planner and ask it to build you a lesson on pre-writing, body paragraphs, or the whole 5-paragraph essay.'
+    );
+  });
+
+  it('keeps "Lesson Planner" as plain text for a teacher who cannot open the planner', () => {
+    const root = render(
+      <LandingSections page={LANDING_PAGES['five-paragraph-essay']} modules={FIVE_MODULES} />
+    );
+    expect(box(root).textContent).toContain('Head to the Lesson Planner and ask it');
+    expect(box(root).querySelectorAll('a')).toHaveLength(0);
+  });
+
+  it('each step opens its description when a teacher clicks it', () => {
+    const root = render(
+      <LandingSections page={LANDING_PAGES['five-paragraph-essay']} modules={FIVE_MODULES} />
+    );
+    const rows = [...root.querySelectorAll('[data-testid="how-to-teach-step"]')];
+    expect(rows).toHaveLength(4);
+    expect(root.textContent).not.toContain('Students write freely on your prompt');
+
+    const button = rows[0]!.querySelector('button')!;
+    expect(button.textContent).toContain('Pre-Writing');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    act(() => button.click());
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    const panel = document.getElementById(button.getAttribute('aria-controls')!)!;
+    expect(panel.textContent).toStartWith('Students write freely on your prompt');
+    // Only the clicked step opened.
+    expect(root.textContent).not.toContain('Students write the paragraph for their first point');
+
+    act(() => button.click());
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(root.textContent).not.toContain('Students write freely on your prompt');
+  });
+
+  it('a step with no description stays a plain row', () => {
+    const root = render(
+      <LandingSections page={LANDING_PAGES['five-paragraph-essay']} modules={FIVE_MODULES} />
+    );
+    const rows = [...root.querySelectorAll('[data-testid="how-to-teach-step"]')];
+    expect(rows[3]!.querySelector('button')).toBeNull();
+    expect(rows[3]!.textContent).toContain('Peer Review');
+  });
+
+  it('ACT Writing steps stay plain rows', () => {
+    const root = render(
+      <LandingSections page={LANDING_PAGES['act-writing']} modules={FIVE_MODULES} />
+    );
+    const rows = [...root.querySelectorAll('[data-testid="how-to-teach-step"]')];
+    expect(rows).toHaveLength(4);
+    for (const row of rows) expect(row.querySelector('button')).toBeNull();
+  });
+});
