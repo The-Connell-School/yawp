@@ -32,7 +32,7 @@ export function ClassesAtAGlance({
   const celebrationClassId = firstAssignmentCelebration?.preview?.classId;
 
   return (
-    <div data-testid="teacher-classes-grid" data-tour="dashboard-classes">
+    <div data-testid="teacher-classes-grid">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2>My Classes</h2>
         <div className="flex items-center gap-2">
@@ -90,20 +90,28 @@ export function ClassesAtAGlance({
 
             const nodes: ReactNode[] = [];
 
+            const classTour =
+              index === 0 ? { 'data-tour': 'dashboard-classes' as const } : {};
+
             if (isCelebrationClass) {
               nodes.push(
-                <FirstAssignmentCelebrationAnchor
-                  key={klass.id}
-                  open={firstAssignmentCelebration.open}
-                  preview={firstAssignmentCelebration.preview}
-                  assignmentRowRef={featuredAssignmentRowRef}
-                  onDismiss={firstAssignmentCelebration.onDismiss}
-                >
-                  {card}
-                </FirstAssignmentCelebrationAnchor>
+                <div key={klass.id} {...classTour}>
+                  <FirstAssignmentCelebrationAnchor
+                    open={firstAssignmentCelebration.open}
+                    preview={firstAssignmentCelebration.preview}
+                    assignmentRowRef={featuredAssignmentRowRef}
+                    onDismiss={firstAssignmentCelebration.onDismiss}
+                  >
+                    {card}
+                  </FirstAssignmentCelebrationAnchor>
+                </div>
               );
             } else {
-              nodes.push(<div key={klass.id}>{card}</div>);
+              nodes.push(
+                <div key={klass.id} {...classTour}>
+                  {card}
+                </div>
+              );
             }
 
             if (index === 0 && afterFirstClassTile) {

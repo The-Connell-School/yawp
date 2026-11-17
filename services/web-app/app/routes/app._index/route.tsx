@@ -48,6 +48,9 @@ import {
   schoolYearWhere,
 } from '~/utils/school-year-scope.server';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
+import { TeacherDashboardColumns } from './components/teacher-dashboard-columns';
+import { LessonSetCelebration } from '~/routes/app.lesson-planner_.$conversationId.packet/v3/lesson-set-celebration';
+import { playYawpUnlessPlaying } from '~/domain/lesson-planner/celebration';
 import { TeacherGradingAtAGlance } from './components/teacher-grading-at-a-glance';
 import { formatClassLabel } from '~/utils/class-display';
 import { useNavigateToNewAssignmentPage } from '~/domain/free-tier/navigate-to-new-assignment-page';
@@ -450,6 +453,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 }
 
+function FirstAssignmentYawpCelebration() {
+  const [show, setShow] = useState(true);
+  useEffect(() => {
+    playYawpUnlessPlaying();
+  }, []);
+  if (!show) return null;
+  return <LessonSetCelebration onDone={() => setShow(false)} />;
+}
+
 function teacherFirstName(fullName: string) {
   const part = fullName.trim().split(/\s+/)[0];
   return part || fullName;
@@ -459,7 +471,6 @@ export default function AppRoute() {
   const data = useLoaderData<typeof loader>();
   const freeUsage = useFreeAccountUsage();
   const { locked, loading } = useTeachingAccess();
-  const ContentColumn = 'div';
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const user = useUser();
@@ -603,15 +614,8 @@ export default function AppRoute() {
             <AdvocatePackEntry />
           </div>
         ) : null;
-    const lockedPendingRailMobile = locked ? (
-      <div className="space-y-5" data-testid="free-account-rail">
-        <LockedDashboardPendingCard includeTourAnchor={false} />
-      </div>
-    ) : null;
-    const lockedPendingRailDesktop = locked ? (
-      <div className="space-y-5" data-testid="free-account-rail">
-        <LockedDashboardPendingCard includeTourAnchor />
-      </div>
+    const lockedPendingBanner = locked ? (
+      <LockedDashboardPendingCard includeTourAnchor />
     ) : null;
 
     const gettingStartedTile = !freeUsage ? null : locked ? (
@@ -700,6 +704,12 @@ export default function AppRoute() {
       </>
     );
 
+    const showFirstAssignmentCelebration = Boolean(
+      firstAssignmentCelebrationOpen &&
+        firstAssignmentCelebrationId &&
+        resolvedCelebrationPreview
+    );
+
     return (
       <section
         data-testid="app._index"
@@ -708,62 +718,36 @@ export default function AppRoute() {
           freeTierStandardPageShellClassName()
         )}
       >
-        <div
-          className={cn(
-            'locked-home-b2 free-dashboard w-full pb-24',
-            (freeAccountRail || lockedPendingRailDesktop) &&
-              'locked-home-b2--with-rail'
-          )}
+        <TeacherDashboardColumns
+          pendingBanner={lockedPendingBanner}
+          advocateRail={freeAccountRail}
+          welcome={
+            <h1 className="locked-home-welcome">
+              Welcome, {welcomeName}!
+              <span className="ml-3 inline-flex align-middle">
+                <FirstAssignmentCelebrationReopenButton
+                  syncKey={firstAssignmentCelebrationSyncKey}
+                  onReopen={() => {
+                    const pending =
+                      firstAssignmentCelebrationId ??
+                      readFirstAssignmentCelebrationPending();
+                    if (pending) {
+                      setFirstAssignmentCelebrationId(pending);
+                      setFirstAssignmentCelebrationOpen(true);
+                    }
+                  }}
+                />
+              </span>
+            </h1>
+          }
         >
-          <div className="mx-auto w-full max-w-screen-xl">
-            <div className="locked-home-columns">
-              <ContentColumn className="locked-home-main flex flex-col">
-                <h1 className="locked-home-welcome">
-                  Welcome, {welcomeName}!
-                  <span className="ml-3 inline-flex align-middle">
-                    <FirstAssignmentCelebrationReopenButton
-                      syncKey={firstAssignmentCelebrationSyncKey}
-                      onReopen={() => {
-                        const pending =
-                          firstAssignmentCelebrationId ??
-                          readFirstAssignmentCelebrationPending();
-                        if (pending) {
-                          setFirstAssignmentCelebrationId(pending);
-                          setFirstAssignmentCelebrationOpen(true);
-                        }
-                      }}
-                    />
-                  </span>
-                </h1>
-                {lockedPendingRailMobile ?? freeAccountRail ? (
-                  <aside
-                    className="locked-home-rail-mobile"
-                    aria-label="Your request and next steps"
-                  >
-                    {lockedPendingRailMobile ?? freeAccountRail}
-                  </aside>
-                ) : null}
-                <div className="locked-home-sections flex flex-col gap-4">
-                  {dashboardSections}
-                </div>
-              </ContentColumn>
-              {lockedPendingRailDesktop ?? freeAccountRail ? (
-                <aside
-                  className="locked-home-rail-desktop"
-                  aria-label="Your request and next steps"
-                >
-                  {lockedPendingRailDesktop ?? freeAccountRail}
-                </aside>
-              ) : null}
-            </div>
-          </div>
-        </div>
+          {dashboardSections}
+        </TeacherDashboardColumns>
+        {showFirstAssignmentCelebration && freeUsage ? (
+          <FirstAssignmentYawpCelebration />
+        ) : null}
         <FirstAssignmentCelebrationScrim
-          open={Boolean(
-            firstAssignmentCelebrationOpen &&
-              firstAssignmentCelebrationId &&
-              resolvedCelebrationPreview
-          )}
+          open={showFirstAssignmentCelebration}
           onDismiss={dismissFirstAssignmentCelebration}
         />
       </section>

@@ -96,7 +96,7 @@ async function expectLockedPendingDashboardCard(
 ) {
   const card = page
     .locator(
-      '.locked-home-rail-mobile:visible [data-testid="locked-dashboard-pending-card"], .locked-home-rail-desktop:visible [data-testid="locked-dashboard-pending-card"]'
+      '.locked-home-pending-banner [data-testid="locked-dashboard-pending-card"], .locked-home-rail-mobile:visible [data-testid="locked-dashboard-pending-card"], .locked-home-rail-desktop:visible [data-testid="locked-dashboard-pending-card"]'
     )
     .first();
   await expect(card).toBeVisible();
@@ -497,7 +497,7 @@ for (const width of [390, 1440]) {
       await expect(
         page
           .locator(
-            '.locked-home-rail-mobile:visible [data-testid="locked-dashboard-pending-card"], .locked-home-rail-desktop:visible [data-testid="locked-dashboard-pending-card"]'
+            '.locked-home-pending-banner [data-testid="locked-dashboard-pending-card"], .locked-home-rail-mobile:visible [data-testid="locked-dashboard-pending-card"], .locked-home-rail-desktop:visible [data-testid="locked-dashboard-pending-card"]'
           )
           .first()
       ).not.toContainText('...');
