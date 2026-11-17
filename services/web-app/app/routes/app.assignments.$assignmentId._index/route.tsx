@@ -981,7 +981,10 @@ export default function AssignmentDetailRoute() {
         </div>
 
         <>
-          <div className="mb-6 overflow-hidden rounded-xl border bg-white dark:bg-card">
+          <div
+            className="mb-6 overflow-hidden rounded-xl border bg-white dark:bg-card"
+            data-tour="assignment-header"
+          >
             <div className="flex flex-wrap items-start justify-between gap-4 p-4 sm:p-5">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">

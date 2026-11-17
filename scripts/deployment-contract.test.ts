@@ -528,6 +528,8 @@ describe('production deployment contract', () => {
       'COPY --from=build /app/scripts/preview ./scripts/preview'
     );
     expect(workflow).toContain('Verify production image resolves preview seed imports');
+    expect(workflow).toContain('Boot production image (healthcheck + course gate)');
+    expect(workflow).toContain('/courses/thesis-driven-essay/02-pre-writing.pptx');
     expect(workflow).toContain('seed-free-tier-feature-flag.ts');
     expect(workflow).toContain('free-tier-ship-review-seed-guard.mjs');
   });
@@ -539,6 +541,33 @@ describe('production deployment contract', () => {
     expect(startScript).toContain('@react-router/serve/bin.js');
     expect(startScript).toContain('exec bun "$serve_bin"');
     expect(startScript).not.toContain('bun run web-app:start');
+    expect(startScript).not.toContain('server/express.ts');
+  });
+
+  test('runtime image includes every file path start.sh executes', () => {
+    const startScript = readRepoFile('services/web-app/start.sh');
+    const dockerfile = readRepoFile('services/web-app/Dockerfile');
+
+    expect(startScript).toMatch(/build\/server\/index\.js/);
+    expect(dockerfile).toContain(
+      'COPY --from=build /app/services/web-app/build ./services/web-app/build'
+    );
+    expect(dockerfile).toContain('COPY --from=build /app/node_modules ./node_modules');
+    expect(startScript).toContain('@react-router/serve/bin.js');
+    expect(dockerfile).toContain('gated-course-assets/thesis-driven-essay');
+    expect(dockerfile).not.toContain(
+      'COPY --from=build /app/services/web-app/public/courses ./services/web-app/public/courses'
+    );
+  });
+
+  test('thesis essay course assets are gated in React Router instead of bare static client files', () => {
+    const packageJson = readRepoFile('services/web-app/package.json');
+    const viteConfig = readRepoFile('services/web-app/vite.config.ts');
+    const webAppDockerfile = readRepoFile('services/web-app/Dockerfile');
+
+    expect(packageJson).toContain('strip-thesis-course-client-static.ts');
+    expect(viteConfig).toContain('yawp-site-license-course-asset-dev-gate');
+    expect(webAppDockerfile).toContain('gated-course-assets/thesis-driven-essay');
   });
 
   test('Vite dev redirects bare /app before static middleware handles the app directory', () => {
@@ -1191,9 +1220,9 @@ describe('PR preview deployment contract', () => {
     const compose = readRepoFile('scripts/preview/render-compose.mjs');
 
     expect(routerConfig).toContain('v8_middleware: true');
-    expect(rootRoute).toContain(
-      'export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware]'
-    );
+    expect(rootRoute).toContain('siteLicenseCourseAssetMiddleware');
+    expect(rootRoute).toContain('previewAccessMiddleware');
+    expect(rootRoute).toContain('uaPartnerMiddleware');
     expect(gate).toContain("process.env.PREVIEW_ACCESS_GATE === 'on'");
     expect(gate).toContain('isDemoEnvironment');
     expect(gate).toContain("'/api/healthcheck'");

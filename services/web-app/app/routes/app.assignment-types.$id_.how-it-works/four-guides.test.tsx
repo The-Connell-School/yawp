@@ -199,6 +199,23 @@ describe('with assignment-type-landing-v2 off, the guides stay as they were', ()
     expect(root.querySelector('[data-testid="guide-overview-video"]')).toBeNull();
     expect(root.querySelector('[data-testid="how-to-teach-spotlight"]')).toBeNull();
   });
+
+  it('locks How to Teach It on Pre-Writing when assets are site-license gated', () => {
+    const root = render(
+      <WritingStepGuide
+        {...GUIDE_BACK}
+        kind="prewriting"
+        copy={WRITING_STEP_COPY.prewriting}
+        pagePath={PAGE}
+        lesson={null}
+        v2
+        lessonVideos={VIDEOS}
+        howToTeachAssetsLocked
+      />
+    );
+    expect(root.querySelector('[data-testid="how-to-teach-site-license-locked"]')).not.toBeNull();
+    expect(root.querySelector('[data-testid="how-to-teach-spotlight"]')).toBeNull();
+  });
 });
 
 describe('the Exit Ticket guide', () => {

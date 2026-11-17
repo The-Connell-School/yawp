@@ -257,6 +257,8 @@ function recordOutcome(tourId: TourId, status: TourStatus) {
  */
 export function GuidedTour(props: {
   finishedTourIds: readonly string[];
+  dismissedTourIds?: readonly string[];
+  autoWelcomeSuppressed?: boolean;
   storageScope: string;
   /** Not yet approved: only the waiting tour, on the dashboard. */
   waitingForApproval?: boolean;
@@ -285,12 +287,24 @@ function usePageTour(waitingForApproval: boolean) {
   return tourForPage(location.pathname, variant, { waitingForApproval });
 }
 
+function recordSuppressAutoWelcome() {
+  const body = new FormData();
+  body.set('intent', 'suppress-auto-welcome');
+  void fetch('/api/guided-tours', { method: 'POST', body }).catch(() => {
+    // The card may reappear next visit if this fails.
+  });
+}
+
 function PageTourController({
   finishedTourIds,
+  dismissedTourIds = [],
+  autoWelcomeSuppressed = false,
   storageScope,
   waitingForApproval = false,
 }: {
   finishedTourIds: readonly string[];
+  dismissedTourIds?: readonly string[];
+  autoWelcomeSuppressed?: boolean;
   storageScope: string;
   waitingForApproval?: boolean;
 }) {
@@ -304,22 +318,29 @@ function PageTourController({
   // After "Restart all tours" the server has no rows left, so the list this
   // page loaded with is out of date until the next full load.
   const [restarted, setRestarted] = useState(false);
+  const [autoWelcomeOff, setAutoWelcomeOff] = useState(autoWelcomeSuppressed);
   const tourId = tour?.id ?? null;
   const finished =
     tourId !== null &&
     ((!restarted && finishedTourIds.includes(tourId)) ||
       finishedHere.has(tourId));
+  const offerDontShowAgain =
+    tourId !== null && dismissedTourIds.includes(tourId);
+
+  useEffect(() => {
+    setAutoWelcomeOff(autoWelcomeSuppressed);
+  }, [autoWelcomeSuppressed]);
 
   useEffect(() => {
     setPhase({ kind: 'idle' });
-    if (!tourId || finished) return;
+    if (!tourId || finished || autoWelcomeOff) return;
     const timer = window.setTimeout(
       () => setPhase({ kind: 'welcome' }),
       WELCOME_DELAY_MS
     );
     return () => window.clearTimeout(timer);
     // Only a new page (or a first visit) opens the card.
-  }, [tourId]);
+  }, [tourId, finished, autoWelcomeOff]);
 
   const finish = useCallback(
     (status: TourStatus) => {
@@ -381,6 +402,7 @@ function PageTourController({
     const restart = () => {
       setRestarted(true);
       setFinishedHere(new Set());
+      setAutoWelcomeOff(false);
       writeSkippedTours(storageScope, []);
       if (tourId) setPhase({ kind: 'welcome' });
     };
@@ -390,12 +412,20 @@ function PageTourController({
 
   if (!tour) return null;
 
+  const suppressAutoWelcome = useCallback(() => {
+    setAutoWelcomeOff(true);
+    setPhase({ kind: 'idle' });
+    if (tourId) setFinishedHere((prev) => new Set(prev).add(tourId));
+    recordSuppressAutoWelcome();
+  }, [tourId]);
+
   if (phase.kind === 'welcome') {
     return (
       <WelcomeCard
         tour={tour}
         onTakeTour={start}
         onSkip={() => finish('dismissed')}
+        onDontShowAgain={offerDontShowAgain ? suppressAutoWelcome : undefined}
       />
     );
   }
@@ -421,10 +451,12 @@ function WelcomeCard({
   tour,
   onTakeTour,
   onSkip,
+  onDontShowAgain,
 }: {
   tour: PageTour;
   onTakeTour: () => void;
   onSkip: () => void;
+  onDontShowAgain?: () => void;
 }) {
   const Icon = ICONS[tour.welcome.icon];
   const titleId = `guided-tour-welcome-${tour.id}`;
@@ -458,7 +490,7 @@ function WelcomeCard({
           <p className="mt-1 text-sm text-muted-foreground">
             {tour.welcome.body}
           </p>
-          <div className="mt-4 flex items-center gap-2">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <Button type="button" size="sm" onClick={onTakeTour}>
               <Sparkles size={16} className="mr-1.5" aria-hidden="true" />
               Take a tour
@@ -466,6 +498,17 @@ function WelcomeCard({
             <Button type="button" size="sm" variant="ghost" onClick={onSkip}>
               Skip
             </Button>
+            {onDontShowAgain ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={onDontShowAgain}
+                data-testid="guided-tour-dont-show-again"
+              >
+                Don't show again
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>

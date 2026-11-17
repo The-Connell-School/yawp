@@ -4,6 +4,7 @@ import { isFeatureFlagEnabled, isFreeTierEnabled } from '~/domain/feature-flags/
 import { GUIDED_TOURS_FLAG } from '~/domain/feature-flags/feature-flags';
 import { prisma } from '~/utils/db.server';
 import {
+  AUTO_WELCOME_SUPPRESSED_TOUR_ID,
   guidedToursAvailable,
   isTourId,
   type TourId,
@@ -19,7 +20,29 @@ export async function loadFinishedTourIds(userId: string): Promise<TourId[]> {
     where: { userId, status: 'completed' },
     select: { tourId: true },
   });
-  return rows.map((row) => row.tourId).filter(isTourId);
+  return rows
+    .map((row) => row.tourId)
+    .filter((id): id is TourId => isTourId(id) && id !== AUTO_WELCOME_SUPPRESSED_TOUR_ID);
+}
+
+export async function loadDismissedTourIds(userId: string): Promise<TourId[]> {
+  const rows = await prisma.userTour.findMany({
+    where: { userId, status: 'dismissed' },
+    select: { tourId: true },
+  });
+  return rows
+    .map((row) => row.tourId)
+    .filter((id): id is TourId => isTourId(id) && id !== AUTO_WELCOME_SUPPRESSED_TOUR_ID);
+}
+
+export async function loadAutoWelcomeSuppressed(userId: string) {
+  const row = await prisma.userTour.findUnique({
+    where: {
+      userId_tourId: { userId, tourId: AUTO_WELCOME_SUPPRESSED_TOUR_ID },
+    },
+    select: { status: true },
+  });
+  return row?.status === 'completed';
 }
 
 /** Store how the user left a tour. A finished tour is never marked skipped. */
@@ -61,6 +84,8 @@ export async function loadGuidedTours(
   finishedTourIds: TourId[];
   storageScope: string;
   waitingForApproval: boolean;
+  autoWelcomeSuppressed: boolean;
+  dismissedTourIds: TourId[];
 } | null> {
   const plan = membership.organization?.plan;
   // Only free classroom teachers can see tours; skip the flag read otherwise.
@@ -79,8 +104,15 @@ export async function loadGuidedTours(
   const sessionId = session.get('sessionId');
   if (typeof sessionId !== 'string') return null;
   const storageScope = createHash('sha256').update(`${userId}:${sessionId}`).digest('hex');
+  const [finishedTourIds, dismissedTourIds, autoWelcomeSuppressed] = await Promise.all([
+    loadFinishedTourIds(userId),
+    loadDismissedTourIds(userId),
+    loadAutoWelcomeSuppressed(userId),
+  ]);
   return {
-    finishedTourIds: await loadFinishedTourIds(userId),
+    finishedTourIds,
+    dismissedTourIds,
+    autoWelcomeSuppressed,
     storageScope,
     waitingForApproval: await isWaitingForApproval(userId),
   };

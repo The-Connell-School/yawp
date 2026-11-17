@@ -1,21 +1,35 @@
 import { createHash } from 'node:crypto';
 import { beforeEach, expect, mock, test } from 'bun:test';
 const findMany = mock();
+const findUnique = mock();
 const findApplication = mock();
 let readOnly = false;
 mock.module('~/cookie-session-storages/authentication.server', () => ({ authSessionStorage: { getSession: async () => ({ get: (key: string) => key === 'sessionId' ? 'session-one' : key === 'impersonationMode' && readOnly ? 'read-only' : undefined }) } }));
 const request = new Request('http://localhost/app');
 const isFreeTierEnabled = mock();
 const isFeatureFlagEnabled = mock();
-mock.module('~/utils/db.server', () => ({ prisma: { userTour: { findMany }, freeTierApplication: { findFirst: findApplication } } }));
+mock.module('~/utils/db.server', () => ({
+  prisma: {
+    userTour: { findMany, findUnique },
+    freeTierApplication: { findFirst: findApplication },
+  },
+}));
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({ isFreeTierEnabled, isFeatureFlagEnabled }));
 const { loadGuidedTours, loadWaitingPreviewTours } = await import('./guided-tours.server');
 const teacher = { role: 'TEACHER', organization: { id: 'free', plan: 'FREE_CLASSROOM' } };
 beforeEach(() => {
   readOnly = false;
-  for (const fn of [findMany, findApplication, isFreeTierEnabled, isFeatureFlagEnabled]) fn.mockReset();
+  for (const fn of [findMany, findUnique, findApplication, isFreeTierEnabled, isFeatureFlagEnabled])
+    fn.mockReset();
+  findUnique.mockResolvedValue(null);
   findApplication.mockResolvedValue(null);
-  findMany.mockResolvedValue([{ tourId: 'dashboard' }, { tourId: 'unknown' }]);
+  findMany.mockImplementation(async ({ where }: { where: { status: string } }) => {
+    if (where.status === 'completed') {
+      return [{ tourId: 'dashboard' }, { tourId: 'unknown' }];
+    }
+    if (where.status === 'dismissed') return [];
+    return [];
+  });
   isFreeTierEnabled.mockResolvedValue(true);
   isFeatureFlagEnabled.mockResolvedValue(true);
 });
@@ -36,9 +50,21 @@ test('ineligible memberships never read progress', async () => {
   expect(isFeatureFlagEnabled).not.toHaveBeenCalled();
 });
 test('targets the current organization and reads only the current user completed tours', async () => {
-  expect(await loadGuidedTours('u', teacher, request)).toEqual({ finishedTourIds: ['dashboard'], storageScope: createHash('sha256').update('u:session-one').digest('hex'), waitingForApproval: false });
+  findMany.mockImplementation(async ({ where }: { where: { status: string } }) => {
+    if (where.status === 'completed') return [{ tourId: 'dashboard' }];
+    if (where.status === 'dismissed') return [{ tourId: 'my-classes' }];
+    return [];
+  });
+  expect(await loadGuidedTours('u', teacher, request)).toEqual({
+    finishedTourIds: ['dashboard'],
+    dismissedTourIds: ['my-classes'],
+    autoWelcomeSuppressed: false,
+    storageScope: createHash('sha256').update('u:session-one').digest('hex'),
+    waitingForApproval: false,
+  });
   expect(isFeatureFlagEnabled).toHaveBeenCalledWith('guided-tours', 'free');
   expect(findMany).toHaveBeenCalledWith({ where: { userId: 'u', status: 'completed' }, select: { tourId: true } });
+  expect(findMany).toHaveBeenCalledWith({ where: { userId: 'u', status: 'dismissed' }, select: { tourId: true } });
 });
 
 test('a teacher whose administrator has not approved yet is marked as waiting', async () => {

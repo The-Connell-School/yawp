@@ -22,7 +22,11 @@ mock.module('~/domain/feature-flags/feature-flags.server', () => ({
   isFeatureFlagEnabled,
 }));
 
-const tourWrites: Record<string, string>[] = [{ tourId: 'dashboard', status: 'completed' }, { intent: 'reset' }];
+const tourWrites: Record<string, string>[] = [
+  { tourId: 'dashboard', status: 'completed' },
+  { intent: 'reset' },
+  { intent: 'suppress-auto-welcome' },
+];
 const { action } = await import('./route');
 
 function post(fields: Record<string, string>, method = 'POST') {
@@ -63,6 +67,22 @@ describe('api.guided-tours', () => {
     prisma.userTour.findUnique.mockResolvedValue(null);
     prisma.userTour.upsert.mockResolvedValue({});
     prisma.userTour.createMany.mockResolvedValue({ count: 1 });
+  });
+
+  test('persists auto-welcome suppression', async () => {
+    const response = (await post({ intent: 'suppress-auto-welcome' })) as Response;
+    expect(response.status).toBe(200);
+    expect(prisma.userTour.upsert).toHaveBeenCalledWith({
+      where: {
+        userId_tourId: { userId: 'user-1', tourId: 'auto-welcome-suppressed' },
+      },
+      create: {
+        userId: 'user-1',
+        tourId: 'auto-welcome-suppressed',
+        status: 'completed',
+      },
+      update: { status: 'completed' },
+    });
   });
 
   test('records how a free classroom teacher left a tour', async () => {

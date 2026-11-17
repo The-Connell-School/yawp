@@ -46,6 +46,7 @@ export function WritingStepGuide({
   lesson,
   v2 = false,
   lessonVideos = {},
+  howToTeachAssetsLocked = false,
 }: {
   /** Which step: picks the page's accent (Brian, Nov 5). */
   kind: WritingStepKind;
@@ -59,6 +60,7 @@ export function WritingStepGuide({
   v2?: boolean;
   /** Each lesson's tutorial page, by lesson number, where this teacher can open it. */
   lessonVideos?: LessonVideos;
+  howToTeachAssetsLocked?: boolean;
 }) {
   const guideKey = kind === PREWRITING_ASSIGNMENT_TYPE_KIND ? 'prewriting' : 'thesis-statement';
   return (
@@ -71,10 +73,18 @@ export function WritingStepGuide({
         title={`Teach ${copy.title}`}
         highlight={copy.guideHighlight}
         lede={copy.lede}
-        video={v2 ? GUIDE_OVERVIEW_VIDEOS[guideKey] : null}
+        video={
+          v2 && !howToTeachAssetsLocked ? GUIDE_OVERVIEW_VIDEOS[guideKey] : null
+        }
       />
 
-      {v2 ? <GuideHowToTeach guideKey={guideKey} lessonVideos={lessonVideos} /> : null}
+      {v2 ? (
+        <GuideHowToTeach
+          guideKey={guideKey}
+          lessonVideos={lessonVideos}
+          howToTeachAssetsLocked={howToTeachAssetsLocked}
+        />
+      ) : null}
 
       <GuideSection
         id="guide-how"
@@ -93,6 +103,7 @@ export function WritingStepGuide({
           <LessonMaterialsCard
             lesson={lesson}
             className="rounded-xl border bg-background p-5 shadow-sm md:max-w-md"
+            assetsLocked={howToTeachAssetsLocked}
           />
         ) : null}
       </GuideSection>

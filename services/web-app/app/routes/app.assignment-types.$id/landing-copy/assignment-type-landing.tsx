@@ -2,6 +2,10 @@ import { Fragment, useId, useState } from 'react';
 import { Link } from 'react-router';
 import { ChevronDown, CirclePlay, FileText, Presentation } from 'lucide-react';
 
+import {
+  LockHowToTeachControl,
+  SiteLicenseHowToTeachLockedSection,
+} from '~/components/free-tier/site-license-how-to-teach-lock';
 import { cn } from '~/utils/misc';
 
 import type {
@@ -109,12 +113,14 @@ function CourseLessonRow({
   decks,
   handouts = [],
   tutorialHref,
+  assetsLocked = false,
 }: {
   index: number | null;
   title: string;
   decks: CourseDeck[];
   handouts?: CourseHandout[];
   tutorialHref: string | null;
+  assetsLocked?: boolean;
 }) {
   return (
     <li data-testid="course-lesson" className="py-3">
@@ -135,41 +141,82 @@ function CourseLessonRow({
         )}
       >
         <span data-course-column="slide-deck" className="flex w-40 flex-col gap-1.5">
-          {decks.map((deck) => (
-            <a
-              key={deck.href}
-              href={deck.href}
-              download={deck.fileName}
-              aria-label={`${title}: ${deck.label.toLowerCase()}${deck.label === 'Slide deck' ? '' : ' slide deck'} (PowerPoint)`}
-              className={COURSE_LINK_CLASS}
-            >
-              <Presentation className="h-4 w-4" aria-hidden />
-              {deck.label}
-            </a>
-          ))}
-          {handouts.map((handout) => (
-            <a
-              key={handout.href}
-              href={handout.href}
-              download={handout.fileName}
-              aria-label={`${title}: ${handout.label.toLowerCase()} (PDF)`}
-              className={COURSE_LINK_CLASS}
-            >
-              <FileText className="h-4 w-4" aria-hidden />
-              {handout.label}
-            </a>
-          ))}
+          {decks.map((deck) =>
+            assetsLocked ? (
+              <LockHowToTeachControl key={deck.href}>
+                <a
+                  href={deck.href}
+                  download={deck.fileName}
+                  aria-label={`${title}: ${deck.label.toLowerCase()}${deck.label === 'Slide deck' ? '' : ' slide deck'} (PowerPoint)`}
+                  className={COURSE_LINK_CLASS}
+                >
+                  <Presentation className="h-4 w-4" aria-hidden />
+                  {deck.label}
+                </a>
+              </LockHowToTeachControl>
+            ) : (
+              <a
+                key={deck.href}
+                href={deck.href}
+                download={deck.fileName}
+                aria-label={`${title}: ${deck.label.toLowerCase()}${deck.label === 'Slide deck' ? '' : ' slide deck'} (PowerPoint)`}
+                className={COURSE_LINK_CLASS}
+              >
+                <Presentation className="h-4 w-4" aria-hidden />
+                {deck.label}
+              </a>
+            )
+          )}
+          {handouts.map((handout) =>
+            assetsLocked ? (
+              <LockHowToTeachControl key={handout.href}>
+                <a
+                  href={handout.href}
+                  download={handout.fileName}
+                  aria-label={`${title}: ${handout.label.toLowerCase()} (PDF)`}
+                  className={COURSE_LINK_CLASS}
+                >
+                  <FileText className="h-4 w-4" aria-hidden />
+                  {handout.label}
+                </a>
+              </LockHowToTeachControl>
+            ) : (
+              <a
+                key={handout.href}
+                href={handout.href}
+                download={handout.fileName}
+                aria-label={`${title}: ${handout.label.toLowerCase()} (PDF)`}
+                className={COURSE_LINK_CLASS}
+              >
+                <FileText className="h-4 w-4" aria-hidden />
+                {handout.label}
+              </a>
+            )
+          )}
         </span>
         <span data-course-column="tutorial" className="flex w-32 flex-col">
           {tutorialHref ? (
-            <Link
-              to={tutorialHref}
-              aria-label={`${title}: tutorial video`}
-              className={COURSE_LINK_CLASS}
-            >
-              <CirclePlay className="h-4 w-4" aria-hidden />
-              Watch tutorial
-            </Link>
+            assetsLocked ? (
+              <LockHowToTeachControl>
+                <Link
+                  to={tutorialHref}
+                  aria-label={`${title}: tutorial video`}
+                  className={COURSE_LINK_CLASS}
+                >
+                  <CirclePlay className="h-4 w-4" aria-hidden />
+                  Watch tutorial
+                </Link>
+              </LockHowToTeachControl>
+            ) : (
+              <Link
+                to={tutorialHref}
+                aria-label={`${title}: tutorial video`}
+                className={COURSE_LINK_CLASS}
+              >
+                <CirclePlay className="h-4 w-4" aria-hidden />
+                Watch tutorial
+              </Link>
+            )
           ) : null}
         </span>
       </span>
@@ -185,8 +232,10 @@ function CourseLessonRow({
 function ThesisEssayCourse({
   block,
   lessonVideos,
+  assetsLocked = false,
 }: {
   block: Extract<LandingBlock, { type: 'course' }>;
+  assetsLocked?: boolean;
 } & LessonLinks) {
   return (
     <div className="space-y-3">
@@ -213,6 +262,7 @@ function ThesisEssayCourse({
               decks={lesson.decks}
               handouts={lesson.handouts}
               tutorialHref={lessonVideos[index + 1] ?? null}
+              assetsLocked={assetsLocked}
             />
           ))}
         </ol>
@@ -228,8 +278,10 @@ function ThesisEssayCourse({
 function YawpLessonBlock({
   block,
   lessonVideos,
+  assetsLocked = false,
 }: {
   block: Extract<LandingBlock, { type: 'lesson' }>;
+  assetsLocked?: boolean;
 } & LessonLinks) {
   const lesson = YAWP_LESSONS[block.slug];
   const inCourse = THESIS_ESSAY_COURSE.find((row) => row.yawpLesson === block.slug);
@@ -251,6 +303,7 @@ function YawpLessonBlock({
             decks={inCourse?.decks ?? [{ ...lesson.deck, label: 'Slide deck' }]}
             handouts={inCourse?.handouts}
             tutorialHref={lessonVideos[lesson.lessonNumber] ?? null}
+            assetsLocked={assetsLocked}
           />
         </ul>
       </div>
@@ -265,8 +318,10 @@ function YawpLessonBlock({
 function ParagraphText({
   block,
   lessonVideos,
+  assetsLocked = false,
 }: {
   block: Extract<LandingBlock, { type: 'paragraph' }>;
+  assetsLocked?: boolean;
 } & LessonLinks) {
   const tutorial = block.tutorial;
   const href = tutorial ? lessonVideos[YAWP_LESSONS[tutorial.lesson].lessonNumber] : undefined;
@@ -275,12 +330,23 @@ function ParagraphText({
   return (
     <>
       <RichText text={block.text.slice(0, at)} />
-      <Link
-        to={href}
-        className="font-medium text-foreground underline underline-offset-4 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        {tutorial.linkText}
-      </Link>
+      {assetsLocked ? (
+        <LockHowToTeachControl>
+          <Link
+            to={href}
+            className="font-medium text-foreground underline underline-offset-4 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {tutorial.linkText}
+          </Link>
+        </LockHowToTeachControl>
+      ) : (
+        <Link
+          to={href}
+          className="font-medium text-foreground underline underline-offset-4 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {tutorial.linkText}
+        </Link>
+      )}
       <RichText text={block.text.slice(at + tutorial.linkText.length)} />
     </>
   );
@@ -303,15 +369,21 @@ function Block({
   modules,
   tone,
   lessonVideos,
+  assetsLocked = false,
 }: {
   block: LandingBlock;
   modules: LandingModule[];
   tone: Tone;
+  assetsLocked?: boolean;
 } & LessonLinks) {
   if (block.type === 'paragraph') {
     return (
       <p className={cn('text-sm sm:text-base', TONE_CLASS[tone])}>
-        <ParagraphText block={block} lessonVideos={lessonVideos} />
+        <ParagraphText
+          block={block}
+          lessonVideos={lessonVideos}
+          assetsLocked={assetsLocked}
+        />
       </p>
     );
   }
@@ -327,10 +399,22 @@ function Block({
     );
   }
   if (block.type === 'course') {
-    return <ThesisEssayCourse block={block} lessonVideos={lessonVideos} />;
+    return (
+      <ThesisEssayCourse
+        block={block}
+        lessonVideos={lessonVideos}
+        assetsLocked={assetsLocked}
+      />
+    );
   }
   if (block.type === 'lesson') {
-    return <YawpLessonBlock block={block} lessonVideos={lessonVideos} />;
+    return (
+      <YawpLessonBlock
+        block={block}
+        lessonVideos={lessonVideos}
+        assetsLocked={assetsLocked}
+      />
+    );
   }
   return <Steps block={block} modules={modules} />;
 }
@@ -399,6 +483,7 @@ export function BoxedSection({
   defaultExpanded,
   preview: showPreview = false,
   className,
+  howToTeachAssetsLocked = false,
 }: {
   section: LandingSection;
   modules?: LandingModule[];
@@ -406,6 +491,7 @@ export function BoxedSection({
   /** Closed, show a two-line preview of the first paragraph. */
   preview?: boolean;
   className?: string;
+  howToTeachAssetsLocked?: boolean;
 } & LessonLinks) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const bodyId = useId();
@@ -418,6 +504,25 @@ export function BoxedSection({
     : undefined;
   const label = expanded ? 'Hide' : 'Show';
   const isHowToTeach = section.id === 'how-to-teach-it';
+  if (isHowToTeach && howToTeachAssetsLocked) {
+    return (
+      <SiteLicenseHowToTeachLockedSection
+        heading={section.heading}
+        className={className}
+      >
+        {section.blocks.map((block, index) => (
+          <Block
+            key={index}
+            block={block}
+            modules={modules}
+            tone="box"
+            lessonVideos={lessonVideos}
+            assetsLocked
+          />
+        ))}
+      </SiteLicenseHowToTeachLockedSection>
+    );
+  }
   return (
     <section
       aria-labelledby={headingId}
@@ -469,6 +574,7 @@ export function BoxedSection({
               modules={modules}
               tone="box"
               lessonVideos={lessonVideos}
+              assetsLocked={howToTeachAssetsLocked}
             />
           ))}
         </div>
@@ -494,6 +600,7 @@ export function HowToTeachSection({
   modules = [],
   lessonVideos,
   className,
+  howToTeachAssetsLocked = false,
 }: {
   section: LandingSection;
   modules?: LandingModule[];
@@ -502,6 +609,7 @@ export function HowToTeachSection({
    * card; the landing page keeps the spotlight box.
    */
   className?: string;
+  howToTeachAssetsLocked?: boolean;
 } & LessonLinks) {
   return (
     <BoxedSection
@@ -511,6 +619,7 @@ export function HowToTeachSection({
       defaultExpanded
       preview
       className={className}
+      howToTeachAssetsLocked={howToTeachAssetsLocked}
     />
   );
 }
@@ -519,9 +628,11 @@ function Section({
   section,
   modules,
   lessonVideos,
+  howToTeachAssetsLocked = false,
 }: {
   section: LandingSection;
   modules: LandingModule[];
+  howToTeachAssetsLocked?: boolean;
 } & LessonLinks) {
   if (COLLAPSED_SECTIONS.has(section.id)) {
     return (
@@ -534,7 +645,14 @@ function Section({
     );
   }
   if (section.id === 'how-to-teach-it') {
-    return <HowToTeachSection section={section} modules={modules} lessonVideos={lessonVideos} />;
+    return (
+      <HowToTeachSection
+        section={section}
+        modules={modules}
+        lessonVideos={lessonVideos}
+        howToTeachAssetsLocked={howToTeachAssetsLocked}
+      />
+    );
   }
   return <OpenSection section={section} modules={modules} lessonVideos={lessonVideos} />;
 }
@@ -587,11 +705,13 @@ export function LandingSections({
   page,
   modules,
   lessonVideos = {},
+  howToTeachAssetsLocked = false,
 }: {
   page: LandingPage;
   modules: LandingModule[];
   /** Each lesson's tutorial video, by lesson number, where the teacher can open it. */
   lessonVideos?: LessonVideos;
+  howToTeachAssetsLocked?: boolean;
 }) {
   // Every section is its own box (Nov 11), spaced evenly down the page.
   return (
@@ -602,6 +722,7 @@ export function LandingSections({
           section={section}
           modules={modules}
           lessonVideos={lessonVideos}
+          howToTeachAssetsLocked={howToTeachAssetsLocked}
         />
       ))}
     </div>

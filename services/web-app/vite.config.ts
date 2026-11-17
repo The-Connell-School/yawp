@@ -41,6 +41,24 @@ function previewIngressReactRouterSsrAlias(): Plugin {
   });
 }
 
+function siteLicenseCourseAssetDevGate(): Plugin {
+  return {
+    name: 'yawp-site-license-course-asset-dev-gate',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        void server
+          .ssrLoadModule(
+            '/app/utils/site-license-course-asset-dev-gate.ts'
+          )
+          .then((mod) =>
+            mod.handleSiteLicenseCourseAssetDevGate(req, res, next)
+          )
+          .catch(next);
+      });
+    },
+  };
+}
+
 function redirectBareAppRoute(): Plugin {
   return {
     name: 'yawp-redirect-bare-app-route',
@@ -68,6 +86,7 @@ export default defineConfig({
   plugins: [
     omitDevPanelFromProductionBuild(),
     previewIngressReactRouterSsrAlias(),
+    siteLicenseCourseAssetDevGate(),
     redirectBareAppRoute(),
     reactRouter(),
     tsconfigPaths(),

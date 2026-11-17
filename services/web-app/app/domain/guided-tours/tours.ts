@@ -29,6 +29,9 @@ export const TOUR_IDS = [
   'type-exit-ticket',
   'type-five-paragraph-essay',
   'document',
+  'teacher-assignment',
+  /** Turning off automatic welcome cards on every page; manual replay stays on. */
+  'auto-welcome-suppressed',
 ] as const;
 
 export type TourId = (typeof TOUR_IDS)[number];
@@ -498,6 +501,47 @@ const TOURS: Record<TourId, PageTour> = {
       },
     ],
   },
+  'teacher-assignment': {
+    id: 'teacher-assignment',
+    welcome: {
+      title: 'Your assignment',
+      body: 'Everything about this assignment lives here. Take a quick look around.',
+      icon: 'assignments',
+    },
+    steps: [
+      {
+        target: 'assignment-header',
+        title: 'Your assignment',
+        body: 'Everything about this assignment lives here. Click Try it to see it as a student, Copy link to share it with your class, Duplicate to reuse it, or Edit to change it.',
+      },
+      {
+        target: 'assignment-documents',
+        title: 'Student documents',
+        body: "Each student's work opens from here. Click to see who's writing, who's submitted, and what's ready to grade.",
+      },
+      {
+        target: 'assignment-class-summary',
+        title: 'Class performance summary',
+        body: "Once you've graded a few submissions, Yawp! reads across the whole class and shows you what students did well, where they struggled, and what to teach next.",
+        side: 'right',
+      },
+      {
+        target: 'assignment-prompt',
+        title: 'Prompt',
+        body: 'This is what your students see at the top of every document.',
+        side: 'top',
+      },
+    ],
+  },
+  'auto-welcome-suppressed': {
+    id: 'auto-welcome-suppressed',
+    welcome: {
+      title: 'Tour preferences',
+      body: 'Persists auto-welcome suppression; no welcome card is shown.',
+      icon: 'home',
+    },
+    steps: [],
+  },
   'type-five-paragraph-essay': {
     id: 'type-five-paragraph-essay',
     welcome: {
@@ -612,8 +656,11 @@ export function tourForPathname(pathname: string): PageTour | null {
   if (path === '/app/lesson-planner') return TOURS['lesson-planner'];
   if (/^\/app\/organization(\/[^/]+)?$/.test(path)) return TOURS.organization;
   if (/^\/app\/documents\/[^/]+$/.test(path)) return TOURS.document;
+  if (/^\/app\/assignments\/[^/]+$/.test(path)) return TOURS['teacher-assignment'];
   return null;
 }
+
+export const AUTO_WELCOME_SUPPRESSED_TOUR_ID: TourId = 'auto-welcome-suppressed';
 
 /**
  * Tours are for teachers in a free classroom, and only while the free tier is

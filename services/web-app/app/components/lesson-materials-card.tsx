@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 
 import type { LessonMaterials } from '~/domain/assignment-types/lesson-materials.server';
 import type { LessonMaterialKind } from '~/domain/assignment-types/lesson-materials';
+import { LockHowToTeachControl } from '~/components/free-tier/site-license-how-to-teach-lock';
 
 const ICONS: Record<LessonMaterialKind, typeof FileText> = {
   'lesson-plan': FileText,
@@ -19,9 +20,11 @@ const ICONS: Record<LessonMaterialKind, typeof FileText> = {
 export function LessonMaterialsCard({
   lesson,
   className,
+  assetsLocked = false,
 }: {
   lesson: LessonMaterials;
   className?: string;
+  assetsLocked?: boolean;
 }) {
   return (
     <section
@@ -48,16 +51,22 @@ export function LessonMaterialsCard({
           );
           const linkClass =
             'inline-flex items-center gap-2 py-2 text-sm text-foreground hover:text-link hover:text-link-hover hover:underline underline-offset-4';
+          const link =
+            material.kind === 'video' ? (
+              <Link to={material.href} className={linkClass}>
+                {content}
+              </Link>
+            ) : (
+              <a href={material.href} download className={linkClass}>
+                {content}
+              </a>
+            );
           return (
             <li key={material.href + material.label}>
-              {material.kind === 'video' ? (
-                <Link to={material.href} className={linkClass}>
-                  {content}
-                </Link>
+              {assetsLocked ? (
+                <LockHowToTeachControl>{link}</LockHowToTeachControl>
               ) : (
-                <a href={material.href} download className={linkClass}>
-                  {content}
-                </a>
+                link
               )}
             </li>
           );

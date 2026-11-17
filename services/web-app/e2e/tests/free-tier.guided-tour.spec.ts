@@ -311,6 +311,57 @@ test.describe.serial('Free tier guided tour', () => {
     await expect(welcome).toBeVisible();
   });
 
+  test('standalone assignment page tour anchors empty class performance summary', async ({
+    page,
+  }) => {
+    await logInAsFreeTeacher(page);
+    const prisma = createE2EPrismaClient();
+    let assignmentUrl = '';
+    try {
+      const membership = await prisma.orgMembership.findFirstOrThrow({
+        where: { user: { email: FREE_TEACHER_EMAIL }, role: 'TEACHER' },
+        select: { organizationId: true },
+      });
+      const klass = await prisma.class.findFirstOrThrow({
+        where: {
+          school: { organizationId: membership.organizationId },
+          isArchived: false,
+        },
+      });
+      const classAssignment = await prisma.classAssignment.findFirstOrThrow({
+        where: { classId: klass.id },
+        select: { assignmentId: true },
+      });
+      assignmentUrl = `/app/assignments/${classAssignment.assignmentId}?classId=${klass.id}`;
+    } finally {
+      await prisma.$disconnect();
+    }
+
+    await page.goto(assignmentUrl);
+    await page.setViewportSize({ width: 1130, height: 800 });
+    await shot(page, 'teacher-assignment-welcome-1130');
+
+    const welcome = page.getByTestId('guided-tour-welcome');
+    await expect(welcome.getByRole('heading', { name: 'Your assignment' })).toBeVisible();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await shot(page, 'teacher-assignment-welcome-desktop');
+    await welcome.getByRole('button', { name: 'Take a tour' }).click();
+
+    const step = page.getByTestId('guided-tour-step');
+    await expect(step).toContainText('Step 1 of 4');
+    await step.getByRole('button', { name: 'Next', exact: true }).click();
+    await step.getByRole('button', { name: 'Next', exact: true }).click();
+    await expect(
+      step.getByRole('heading', { name: 'Class performance summary', exact: true })
+    ).toBeVisible();
+    await expect(page.locator('[data-tour="assignment-class-summary"]')).toHaveAttribute(
+      'data-tour-active',
+      'true'
+    );
+    await expect(page.getByTestId('class-insight-panel-subtitle')).toBeVisible();
+    await shot(page, 'teacher-assignment-summary-step-desktop');
+  });
+
   test('class page tour points at the student join link', async ({ page }) => {
     await logInAsFreeTeacher(page);
     await page.goto('/app/my-classes');
@@ -521,6 +572,25 @@ test.describe.serial('Free tier guided tour', () => {
       expect((await page.request.post('/api/guided-tours', { form })).status()).toBe(403);
     }
     expect(await tourOutcome('dashboard')).toBeNull();
+  });
+
+  test("offers Don't show again after a page was skipped once", async ({ page }) => {
+    await logInAsFreeTeacher(page);
+    await page.goto('/app/my-classes');
+    await expect(page.getByTestId('guided-tour-welcome')).toBeVisible();
+    await expect(page.getByTestId('guided-tour-dont-show-again')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Skip' }).click();
+    await expect(page.getByTestId('guided-tour-welcome')).toHaveCount(0);
+    await page.goto('/app');
+    await page.goto('/app/my-classes');
+    await expect(page.getByTestId('guided-tour-welcome')).toBeVisible();
+    await expect(page.getByTestId('guided-tour-dont-show-again')).toBeVisible();
+    await page.getByTestId('guided-tour-dont-show-again').click();
+    await expect(page.getByTestId('guided-tour-welcome')).toHaveCount(0);
+    await page.goto('/app/assignments');
+    await expect(page.getByTestId('guided-tour-welcome')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Tour this page' }).click();
+    await expect(page.getByTestId('guided-tour-spotlight')).toBeVisible();
   });
 
   test('no tour when the free_tier flag is off', async ({ page }) => {

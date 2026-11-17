@@ -8,6 +8,7 @@ import {
   resetTours,
 } from '~/domain/guided-tours/guided-tours.server';
 import {
+  AUTO_WELCOME_SUPPRESSED_TOUR_ID,
   guidedToursAvailable,
   isTourId,
   isTourStatus,
@@ -50,6 +51,10 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   if (formData.get('intent') === 'reset') {
     await resetTours(userId);
+    return Response.json({ ok: true });
+  }
+  if (formData.get('intent') === 'suppress-auto-welcome') {
+    await recordTourOutcome(userId, AUTO_WELCOME_SUPPRESSED_TOUR_ID, 'completed');
     return Response.json({ ok: true });
   }
   const tourId = formData.get('tourId');
