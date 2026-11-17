@@ -208,7 +208,9 @@ describe('How to Teach It spotlight', () => {
       expect({ key, boxed: !!box }).toEqual({ key, boxed: true });
       // The heading, the copy and the lessons are all inside the box.
       expect(box.querySelector('h2')?.textContent).toBe('How to Teach It');
-      expect(box.textContent).toContain('Teach the');
+      expect(box.textContent).toContain(
+        key === 'five-paragraph-essay' ? 'Most English teachers' : 'Teach the'
+      );
       const classes = box.className.split(/\s+/);
       expect(classes).toContain('hover:-translate-y-0.5');
       // Keyboard focus lifts it too, but a mouse click on Hide/Show does not

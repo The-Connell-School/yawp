@@ -554,7 +554,8 @@ const FIVE_PARAGRAPH_ESSAY: LandingPage = {
       id: 'how-to-teach-it',
       heading: 'How to Teach It',
       blocks: [
-        // Brian, Nov 17: his note, word for word, above the block as it was.
+        // Brian, Nov 17: his note, word for word, in place of the old
+        // "Teach the steps below in order" intro, then the steps.
         p(
           'Most English teachers already have a way of teaching the five-paragraph essay, and Yawp! is built to work alongside yours. As you teach the process, students work through the steps below in their documents, and the Yawp! Tutor coaches them through each one: pre-writing, a three-point thesis, an introduction, three body paragraphs, a conclusion, a title, and a final review.'
         ),
@@ -563,14 +564,7 @@ const FIVE_PARAGRAPH_ESSAY: LandingPage = {
           text: 'New to this essay, or want fresh slides and ideas on how to teach it? Head to the Lesson Planner and ask it to build you a lesson on pre-writing, body paragraphs, or the whole 5-paragraph essay.',
           plannerLink: 'Lesson Planner',
         },
-        p(
-          'Teach the steps below in order. Each one builds on the last: students find a focus, write a thesis, and build paragraphs that prove it.'
-        ),
-        {
-          type: 'steps',
-          lead: '**Teach these steps in order.**',
-          descriptions: FIVE_PARAGRAPH_STEP_DESCRIPTIONS,
-        },
+        { type: 'steps', descriptions: FIVE_PARAGRAPH_STEP_DESCRIPTIONS },
       ],
     },
     {

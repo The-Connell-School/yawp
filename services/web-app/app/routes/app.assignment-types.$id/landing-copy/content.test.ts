@@ -440,12 +440,14 @@ describe('5-Paragraph Essay How to Teach It (Brian, Nov 17)', () => {
     expect(block.text).toContain(block.plannerLink!);
   });
 
-  test('the rest of the block is as it was, the steps last', () => {
+  test('the note leads straight into the steps; the old intro lines are gone', () => {
     const blocks = howToTeach().blocks;
-    expect(paragraphs(blocks).slice(2)).toEqual([
-      'Teach the steps below in order. Each one builds on the last: students find a focus, write a thesis, and build paragraphs that prove it.',
-    ]);
-    expect(blocks.at(-1)?.type).toBe('steps');
+    expect(blocks.map((b) => b.type)).toEqual(['paragraph', 'paragraph', 'steps']);
+    const steps = blocks[2]!;
+    expect(steps.type === 'steps' && steps.lead).toBeFalsy();
+    const text = landingPagePlainText(page('five-paragraph-essay'));
+    expect(text).not.toContain('Teach the steps below in order.');
+    expect(text).not.toContain('Teach these steps in order.');
   });
 
   const steps = () => {
