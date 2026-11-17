@@ -4,28 +4,22 @@ import type {
   RubricScoreBand,
   ScoringScaleData,
 } from './assignment-type-rubric.shared';
+import { buildExitTicketGradingAssistantPrompt } from './exit-ticket-grading-assistant';
 import {
-  EXIT_TICKET_LESSON_NOTE_FIELDS,
-  exitTicketActivityKind,
-  exitTicketActivityOption,
-  exitTicketFocusOption,
-  exitTicketReflectionPromptOption,
-  type ExitTicketAnswerType,
+  EXIT_TICKET_DEFAULT_POINT_VALUE,
   type ExitTicketConfig,
-  type ExitTicketGrading,
-  type ExitTicketLessonNotes,
 } from './exit-ticket';
 
 /** Exit Tickets judge one thing, so the rubric has one category. */
 export const EXIT_TICKET_UNDERSTANDING_CATEGORY_KEY = 'understanding';
 
 /**
- * The four things an exit ticket response can be, and the range each is worth.
+ * Retired four-band scale (Brian, 2026-11-17).
  *
- * Written as bands on the scale the grade is actually read in, rather than as
- * a 0-3 scale converted afterwards. A four-step scale mapped linearly onto a
- * percentage puts "partly there" at 67% — a D for a student who understood
- * most of the lesson — which is not a judgment any teacher meant to make.
+ * Grading no longer uses these. They stay so the class read can still bucket
+ * responses that were scored on the old 0–100 scale. A response scored by the
+ * new assistant carries `pointTotal` and is converted before it is bucketed.
+ * Do not paste these descriptions into the grading assistant.
  */
 export const EXIT_TICKET_SCORE_BANDS: RubricScoreBand[] = [
   {
@@ -59,14 +53,16 @@ export const EXIT_TICKET_SCORE_BANDS: RubricScoreBand[] = [
 ];
 
 export const EXIT_TICKET_SCORING_SCALE: ScoringScaleData = {
-  // A valid scale type whose range matches the bands. The bands govern the
-  // grade either way — a band-scored rubric is read on its own scale — but if
-  // the bands were ever stripped this still degrades to a sane 0-100 score.
   type: 'rubric_points',
   minScore: 0,
-  maxScore: 100,
+  maxScore: EXIT_TICKET_DEFAULT_POINT_VALUE,
 };
 
+/**
+ * The type-level default. Grade time replaces this with the assistant for the
+ * ticket in front of it (Reflection or Check for understanding) and with that
+ * ticket's point total. No bands: the score is a whole number of points.
+ */
 export const EXIT_TICKET_RUBRIC: RubricData = {
   categories: [
     {
@@ -74,224 +70,37 @@ export const EXIT_TICKET_RUBRIC: RubricData = {
       label: 'Understanding',
       weight: 1,
       description:
-        'How much of the lesson the student can actually explain in their own words: whether they have made the idea theirs, and how honestly they account for the parts they have not.',
-      bands: EXIT_TICKET_SCORE_BANDS,
-      // One category, so per-category feedback would just repeat the overall.
+        'Points for this exit ticket. Follow the exit ticket grading instructions for what earns them.',
       feedbackEnabled: false,
-      // Five minutes of writing at the end of a lesson is never marked up.
       grammarHighlighting: false,
     },
   ],
 };
 
 export const EXIT_TICKET_PROMPT_CONFIG: PromptConfigData = {
-  gradingInstructions: [
-    'You are reading an exit ticket: a few minutes of writing at the end of a lesson, written to show what the student took away from it.',
-    '',
-    'Judge one thing: understanding. Read for whether the student can explain the idea in their own words, not whether they wrote a lot, wrote neatly, or used the teacher’s vocabulary.',
-    '',
-    'If the teacher supplied notes about the lesson, judge the response against those notes — especially anything listed as what a response should mention. Without notes, judge it against the prompt alone.',
-    '',
-    'Reward honesty. A student who explains what they do understand and then names precisely what still confuses them has given the most useful answer in the stack, and must never be scored below a student who hides confusion behind fluent restatement. Precise self-diagnosis is evidence of understanding. Where the prompt itself asks what is still confusing, the quality of that self-diagnosis is the whole thing you are judging — not whether the student has the right answer.',
-    '',
-    'Do not grade grammar, spelling, punctuation, or length, and do not comment on them.',
-    '',
-    'Score inside these bands, choosing the band from its description first and then a score within it:',
-    ...EXIT_TICKET_SCORE_BANDS.slice()
-      .reverse()
-      .map(
-        (band) =>
-          `- ${band.min}-${band.max}, ${band.label}: ${band.description}`
-      ),
-    '',
-    'Write the overall feedback to the student: name the part they have genuinely got, then the one thing that would take their understanding further. Speak to them, not about them.',
-  ].join('\n'),
+  gradingInstructions:
+    'Use the Exit Ticket Grading Assistant for this ticket’s type. Reflection is full credit or no credit. Check for understanding is full credit, partial credit, or no credit. Report whole points out of the point total.',
 };
 
-/**
- * Everything about this particular ticket that the grader needs and the
- * student never saw: what kind of understanding it is checking for, and
- * whatever the teacher said about the lesson.
- *
- * The rubric stays one category with one set of bands, which is what keeps
- * every exit ticket in a class aggregating into a single class-level read.
- * This is the per-assignment half — it tells the grader how to read those
- * shared bands for this ticket rather than giving the ticket its own rubric.
- *
- * Null when there is nothing to add, which is every basic ticket without
- * notes and every ticket created before any of this existed: the grader then
- * judges against the prompt alone, exactly as it did before.
- */
-/**
- * What the grader is told about whether a wrong answer is even possible here.
- *
- * The whole point of asking the teacher is this paragraph. Without it a model
- * reads every ticket as though there were an answer key behind it, and tells a
- * student their defensible reading is incorrect because it is not the one the
- * teacher had in mind.
- */
-export const EXIT_TICKET_ANSWER_TYPE_GUIDANCE: Record<
-  ExitTicketAnswerType,
-  string
-> = {
-  objective:
-    'The teacher says this has a right answer. A response that contradicts it is wrong, and saying so plainly is part of the feedback — but score the understanding, not the answer: reasoning that is sound and goes wrong late is worth far more than a correct answer with nothing behind it.',
-  subjective:
-    'The teacher says there is no single right answer here. More than one response can be correct, so judge the reasoning and what it is anchored to, never whether the student landed where you or the teacher would have. Do not tell a student they are wrong for an answer that is defensible and supported, however unexpected it is. Only a reading that contradicts the source, or one asserted with nothing behind it, is weak.',
-};
 
 /**
- * How a v3 check with a correct answer is read: for the idea, never for
- * matching the teacher's words or spelling.
+ * The assistant for this ticket. Null when there is no exit ticket config,
+ * which is every other assignment type. The four-band context this used to
+ * build is retired.
  */
-export const EXIT_TICKET_FLEXIBLE_ANSWER_GUIDANCE =
-  'The teacher says this has a correct answer. Read for the idea, not for matching words: credit a response that gets it across in different wording, in a different order, or with a misspelling (a student who writes "Alley" for Allie has named the right person). A response that contradicts the answer is wrong, and the feedback should say so plainly. If the teacher gave no answer, judge correctness from the question.';
-
-/** What a lesson note is called in the v3 form, where it differs. */
-const V3_NOTE_LABELS: Partial<Record<keyof ExitTicketLessonNotes, string>> = {
-  mustMention: 'The correct answer, with the teacher’s context',
-  mainPoints: 'What the teacher wants Yawp! to know',
-};
-
-/** The v3 half of the context: the activity, and how to read an answer. */
-function v3ActivitySections(config: ExitTicketConfig): string[] {
-  const option = config.activity
-    ? exitTicketActivityOption(config.activity)
-    : null;
-  if (!option) return [];
-  const isCheck = exitTicketActivityKind(option.value) === 'check';
-  return [
-    [
-      `What this ticket asks the students to do: ${option.tag.toLowerCase()}.`,
-      `The prompt: "${config.promptText ?? ''}"`,
-      option.gradingCriteria,
-    ].join('\n'),
-    ...(isCheck && config.mode === 'specific'
-      ? [
-          config.answerType === 'objective'
-            ? EXIT_TICKET_FLEXIBLE_ANSWER_GUIDANCE
-            : EXIT_TICKET_ANSWER_TYPE_GUIDANCE.subjective,
-        ]
-      : []),
-  ];
-}
-
-/**
- * How to read a reflection that is not the default one. "Still wondering"
- * asks for a question, so it borrows the ask-a-question criteria rather than
- * restating them: the rule that not knowing is the task, never a failure, has
- * to read identically wherever a ticket asks for a question.
- */
-function reflectionGradingSection(
-  reflectionPrompt: NonNullable<
-    Extract<ExitTicketConfig, { mode: 'basic' }>['reflectionPrompt']
-  >
-): string {
-  if (reflectionPrompt.id === 'custom') {
-    return [
-      `The teacher wrote this reflection question themselves: "${reflectionPrompt.text}"`,
-      'There is no single right answer. Judge whether the response actually answers that question, specifically and in the student’s own words.',
-    ].join('\n');
-  }
-  if (reflectionPrompt.id === 'wondering') {
-    return [
-      'This reflection asks the student for a question they still have.',
-      exitTicketFocusOption('ask-question')?.gradingCriteria ?? '',
-    ].join('\n');
-  }
-  const option = exitTicketReflectionPromptOption(reflectionPrompt.id);
-  return [
-    `This reflection asks: ${option?.label.toLowerCase() ?? 'a reflection'}.`,
-    option?.gradingCriteria ?? '',
-  ].join('\n');
-}
-
-/**
- * What the teacher said to grade on. Every rule here is a band boundary, never
- * a step: a length falls short or it does not, and a short answer is capped at
- * a band rather than docked a point per missing word.
- */
-function gradingSections(grading: ExitTicketGrading): string[] {
-  const sections: string[] = [];
-
-  if (grading.basis === 'completion') {
-    sections.push(
-      'The teacher is grading this for completion. Any good-faith response that engages with the question is complete: score it 100, however brief or unsure it is. Only a response with no evidence — blank, off topic, "idk" — scores 0. Still write the feedback exactly as you would otherwise.'
-    );
-  }
-
-  const lengths = [
-    grading.minWords ? `at least ${grading.minWords} words` : null,
-    grading.minSentences ? `at least ${grading.minSentences} sentences` : null,
-  ].filter(Boolean);
-  if (lengths.length > 0) {
-    sections.push(
-      grading.basis === 'completion'
-        ? `The teacher asked for ${lengths.join(' and ')}. A good-faith response shorter than that is not complete: score it within Names it only, and say in the feedback how much more was asked for.`
-        : `The teacher asked for ${lengths.join(' and ')}. A response shorter than that cannot score above Partly there, however good it is. Meeting the length earns nothing on its own: score the content.`
-    );
-  }
-
-  if (grading.assessFor) {
-    sections.push(
-      `There is no single right answer, so the teacher named what to assess: ${grading.assessFor}. Judge the response on that.`
-    );
-  }
-
-  return sections;
-}
-
 export function buildExitTicketGradingContext(
-  config: ExitTicketConfig | null | undefined
+  config: ExitTicketConfig | null | undefined,
+  extras?: {
+    studentPrompt?: string | null;
+    pointValue?: number | null;
+    submitForGrade?: boolean | null;
+  }
 ): string | null {
-  const sections: string[] = [];
-  // A v3 ticket also carries the legacy fields for older readers; the grader
-  // reads only what the teacher actually answered.
-  const isV3 = Boolean(config?.activity && config.promptText);
-
-  if (config && isV3) {
-    sections.push(...v3ActivitySections(config));
-  }
-
-  if (!isV3 && config?.mode === 'basic' && config.reflectionPrompt) {
-    sections.push(reflectionGradingSection(config.reflectionPrompt));
-  }
-
-  if (!isV3 && config?.mode === 'specific') {
-    const option = exitTicketFocusOption(config.focus);
-    if (option) {
-      sections.push(
-        [
-          `What this ticket is checking for: ${option.label.toLowerCase()}.`,
-          option.gradingCriteria,
-        ].join('\n')
-      );
-    }
-    sections.push(EXIT_TICKET_ANSWER_TYPE_GUIDANCE[config.answerType]);
-  }
-
-  if (config?.grading) {
-    sections.push(...gradingSections(config.grading));
-  }
-
-  const notes = config?.lessonNotes;
-  if (notes) {
-    const lines = EXIT_TICKET_LESSON_NOTE_FIELDS.filter((field) =>
-      notes[field.key]?.trim()
-    ).map(
-      (field) =>
-        `- ${(isV3 && V3_NOTE_LABELS[field.key]) || field.label}: ${notes[field.key].trim()}`
-    );
-
-    if (lines.length > 0) {
-      sections.push(
-        [
-          "The teacher's notes on the lesson this ticket closes. The student did not see these; judge the response against them.",
-          ...lines,
-        ].join('\n')
-      );
-    }
-  }
-
-  return sections.length > 0 ? sections.join('\n\n') : null;
+  if (!config) return null;
+  return buildExitTicketGradingAssistantPrompt({
+    config,
+    studentPrompt: extras?.studentPrompt,
+    pointValue: extras?.pointValue,
+    submitForGrade: extras?.submitForGrade,
+  });
 }

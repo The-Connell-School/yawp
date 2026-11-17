@@ -75,10 +75,10 @@ describe('a graded reflection', () => {
     });
   });
 
-  test('must say whether it is completion or quality', () => {
-    expect(parse({ kind: 'reflection', graded: true })).toEqual({
-      success: false,
-      message: 'Choose how this reflection is graded.',
+  test('omitting the old completion or quality choice defaults to completion', () => {
+    expect(parse({ kind: 'reflection', graded: true })).toMatchObject({
+      success: true,
+      config: { grading: { basis: 'completion' } },
     });
   });
 
@@ -293,40 +293,32 @@ describe('parseStoredExitTicketConfig with grading', () => {
 });
 
 describe('grading context', () => {
-  test('completion: any good-faith attempt earns full marks', () => {
+  test('a reflection is full credit or none, and a length on it is not a criterion', () => {
     const context = buildExitTicketGradingContext({
       schemaVersion: 1,
       mode: 'basic',
-      grading: { basis: 'completion' },
+      grading: { basis: 'completion', minWords: 40, minSentences: 3 },
     });
-    expect(context).toInclude('completion');
-    expect(context).toInclude('score it 100');
+    expect(context).toContain('There is no partial credit.');
+    expect(context).not.toContain('score it 100');
+    expect(context).not.toContain('at least 40 words');
+    expect(context).not.toContain('at least 3 sentences');
   });
 
-  test('a length is a threshold, stated in the teacher’s unit', () => {
-    const words = buildExitTicketGradingContext({
-      schemaVersion: 1,
-      mode: 'basic',
-      grading: { basis: 'bands', minWords: 40 },
-    });
-    expect(words).toInclude('at least 40 words');
-    const sentences = buildExitTicketGradingContext({
-      schemaVersion: 1,
-      mode: 'basic',
-      grading: { basis: 'bands', minSentences: 3 },
-    });
-    expect(sentences).toInclude('at least 3 sentences');
-  });
-
-  test('what to assess is handed to the grader verbatim', () => {
+  test('a check passes the minimum length and does not pass the retired assess-for line', () => {
     const context = buildExitTicketGradingContext({
       schemaVersion: 1,
       mode: 'specific',
       focus: 'understand-text',
       topic: 'the second stanza',
       answerType: 'subjective',
-      grading: { basis: 'bands', assessFor: 'Points to a specific line' },
+      grading: {
+        basis: 'bands',
+        assessFor: 'Points to a specific line',
+        minWords: 40,
+      },
     });
-    expect(context).toInclude('Points to a specific line');
+    expect(context).toContain('Minimum length: at least 40 words.');
+    expect(context).not.toContain('Points to a specific line');
   });
 });

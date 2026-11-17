@@ -71,6 +71,38 @@ describe('buildExitTicketClassRead', () => {
     expect(read.watchFor).toBe('Using the two words interchangeably.');
   });
 
+  test('reads a new point score against the same bands', () => {
+    const read = buildExitTicketClassRead({
+      responses: [
+        response('Ada', 5),
+        {
+          studentName: 'Ben',
+          text: '',
+          rubricScores: { understanding: { score: 5, pointTotal: 5, isAi: true } },
+        },
+        {
+          studentName: 'Cy',
+          text: '',
+          rubricScores: { understanding: { score: 3, pointTotal: 5, isAi: true } },
+        },
+        {
+          studentName: 'Dee',
+          text: '',
+          rubricScores: { understanding: { score: 0, pointTotal: 5, isAi: true } },
+        },
+      ],
+      config: null,
+    });
+    expect(
+      Object.fromEntries(read.bands.map((band) => [band.label, band.count]))
+    ).toEqual({
+      'Explains it': 1,
+      'Partly there': 1,
+      'Names it only': 1,
+      'No evidence': 1,
+    });
+  });
+
   test('is empty but well-formed with no responses', () => {
     const empty = buildExitTicketClassRead({ responses: [], config: null });
     expect(empty.responseCount).toBe(0);
