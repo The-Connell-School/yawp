@@ -504,7 +504,9 @@ describe('production deployment contract', () => {
     const startScript = readRepoFile('services/web-app/start.sh');
 
     expect(dockerfile).toContain('mkdir -p services/web-app/node_modules');
-    expect(startScript).toContain('server/express.ts');
+    expect(startScript).toContain(
+      '../../node_modules/@react-router/serve/bin.js'
+    );
   });
 
   test('Docker runtime image exposes client assets for root-level serve commands', () => {
@@ -526,6 +528,8 @@ describe('production deployment contract', () => {
       'COPY --from=build /app/scripts/preview ./scripts/preview'
     );
     expect(workflow).toContain('Verify production image resolves preview seed imports');
+    expect(workflow).toContain('Boot production image (healthcheck + course gate)');
+    expect(workflow).toContain('/courses/thesis-driven-essay/02-pre-writing.pptx');
     expect(workflow).toContain('seed-free-tier-feature-flag.ts');
     expect(workflow).toContain('free-tier-ship-review-seed-guard.mjs');
   });
@@ -534,18 +538,35 @@ describe('production deployment contract', () => {
     const startScript = readRepoFile('services/web-app/start.sh');
 
     expect(startScript).toContain('cd "$(dirname "$0")"');
-    expect(startScript).toContain('server/express.ts');
-    expect(startScript).toContain('exec bun ./server/express.ts');
+    expect(startScript).toContain('@react-router/serve/bin.js');
+    expect(startScript).toContain('exec bun "$serve_bin"');
     expect(startScript).not.toContain('bun run web-app:start');
+    expect(startScript).not.toContain('server/express.ts');
   });
 
-  test('production express serves public course assets only after the site-license gate', () => {
-    const expressEntry = readRepoFile('services/web-app/server/express.ts');
-    const gate = expressEntry.indexOf('siteLicenseCourseAssetExpressMiddleware');
-    const publicStatic = expressEntry.indexOf("express.static('public'");
-    expect(gate).toBeGreaterThan(-1);
-    expect(publicStatic).toBeGreaterThan(-1);
-    expect(gate).toBeLessThan(publicStatic);
+  test('runtime image includes every file path start.sh executes', () => {
+    const startScript = readRepoFile('services/web-app/start.sh');
+    const dockerfile = readRepoFile('services/web-app/Dockerfile');
+
+    expect(startScript).toMatch(/build\/server\/index\.js/);
+    expect(dockerfile).toContain(
+      'COPY --from=build /app/services/web-app/build ./services/web-app/build'
+    );
+    expect(dockerfile).toContain('COPY --from=build /app/node_modules ./node_modules');
+    expect(startScript).toContain('@react-router/serve/bin.js');
+    expect(dockerfile).toContain(
+      'COPY --from=build /app/services/web-app/public/courses ./services/web-app/public/courses'
+    );
+  });
+
+  test('thesis essay course assets are gated in React Router instead of bare static client files', () => {
+    const packageJson = readRepoFile('services/web-app/package.json');
+    const viteConfig = readRepoFile('services/web-app/vite.config.ts');
+    const webAppDockerfile = readRepoFile('services/web-app/Dockerfile');
+
+    expect(packageJson).toContain('strip-thesis-course-client-static.ts');
+    expect(viteConfig).toContain('yawp-site-license-course-asset-dev-gate');
+    expect(webAppDockerfile).toContain('public/courses');
   });
 
   test('Vite dev redirects bare /app before static middleware handles the app directory', () => {

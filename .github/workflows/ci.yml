@@ -817,6 +817,35 @@ jobs:
             await import('./scripts/preview/free-tier-ship-review-seed-guard.mjs');
           "
 
+      - name: 🐳 Boot production image (healthcheck + course gate)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          SESSION_SECRET: ci-production-image-boot-session-secret
+        run: |
+          set -euo pipefail
+          cid="$(docker run -d --rm --network host \
+            -e DATABASE_URL \
+            -e SESSION_SECRET \
+            -e PORT=18080 \
+            yawp-web-app:ci)"
+          trap 'docker stop "$cid" >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 45); do
+            if curl -sf "http://127.0.0.1:18080/api/healthcheck" >/dev/null; then
+              break
+            fi
+            if [ "$i" -eq 45 ]; then
+              echo "Production image failed to become healthy" >&2
+              docker logs "$cid" || true
+              exit 1
+            fi
+            sleep 2
+          done
+          health="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/healthcheck)"
+          test "$health" = "200"
+          course="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/courses/thesis-driven-essay/02-pre-writing.pptx)"
+          test "$course" = "403"
+
       - name: 🧪 Preview teacher-notes QA seed (integration)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:

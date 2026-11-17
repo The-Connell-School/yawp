@@ -47,6 +47,8 @@ COPY --from=build /app/services/web-app/package.json ./services/web-app/package.
 COPY --from=build /app/services/web-app/start.sh ./services/web-app/start.sh
 # Thesis-Driven Essay lesson decks, served from the assignment type's Modules.
 COPY --from=build /app/services/web-app/resources ./services/web-app/resources
+# Gated thesis-essay downloads and tutorials (served by React Router, not static client).
+COPY --from=build /app/services/web-app/public/courses ./services/web-app/public/courses
 COPY --from=build /app/scripts/preview ./scripts/preview
 
 RUN chmod +x services/web-app/start.sh
