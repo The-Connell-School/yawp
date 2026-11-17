@@ -322,7 +322,9 @@ export function ExitTicketBuilder({
                 <SelectTrigger id="assignment-create-exit-ticket-focus">
                   <SelectValue placeholder="Choose what to check for" />
                 </SelectTrigger>
-                <SelectContent>
+                {/* Above the creation sheet, which sits over the default
+                  popover layer: without it the menu opened out of sight. */}
+                <SelectContent className="z-[70]">
                   {EXIT_TICKET_FOCUS_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
