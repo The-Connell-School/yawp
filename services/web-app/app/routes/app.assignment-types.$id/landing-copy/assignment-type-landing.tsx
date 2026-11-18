@@ -8,11 +8,12 @@ import {
 } from '~/components/free-tier/site-license-how-to-teach-lock';
 import { cn } from '~/utils/misc';
 
-import type {
-  LandingBlock,
-  LandingPage,
-  LandingSection,
-  LandingSectionId,
+import {
+  stepDescription,
+  type LandingBlock,
+  type LandingPage,
+  type LandingSection,
+  type LandingSectionId,
 } from './content';
 import {
   THESIS_ESSAY_COURSE,
@@ -30,7 +31,11 @@ import { YAWP_LESSONS } from '~/domain/lesson-planner/yawp-lessons';
  * nothing else).
  */
 export type LessonVideos = Record<number, string>;
-type LessonLinks = { lessonVideos: LessonVideos };
+type LessonLinks = {
+  lessonVideos: LessonVideos;
+  /** The Lesson Planner, for a teacher who can use it. */
+  lessonPlannerHref?: string;
+};
 
 const BOX_TEXT_CLASS = 'text-[#4A4A4A] dark:text-muted-foreground';
 
@@ -62,6 +67,75 @@ export function RichText({ text }: { text: string }) {
 /** A module, as the route loads it. */
 export type LandingModule = { id: string; title: string };
 
+/**
+ * One step. With a description (the 5-Paragraph Essay, Brian, Nov 17), the
+ * step's title is a button that opens what students do and how the Tutor
+ * helps; without one it is a plain row.
+ */
+function StepRow({
+  number,
+  title,
+  description,
+}: {
+  number: number;
+  title: string;
+  description: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const numberCell = (
+    <span className={cn('w-5 shrink-0 text-right tabular-nums', BOX_TEXT_CLASS)}>
+      {number}.
+    </span>
+  );
+  if (!description) {
+    return (
+      <li
+        data-testid="how-to-teach-step"
+        className="flex items-baseline gap-2 px-3 py-2.5 text-sm"
+      >
+        {numberCell}
+        <span data-step-title className="font-medium">
+          {title}
+        </span>
+      </li>
+    );
+  }
+  return (
+    <li data-testid="how-to-teach-step" className="text-sm">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-baseline gap-2 rounded-lg px-3 py-2.5 text-left hover:bg-black/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-white/[0.04]"
+      >
+        {numberCell}
+        <span data-step-title className="flex-1 font-medium">
+          {title}
+        </span>
+        <ChevronDown
+          aria-hidden
+          className={cn(
+            'h-4 w-4 shrink-0 self-center transition-transform duration-200 motion-reduce:transition-none',
+            BOX_TEXT_CLASS,
+            open && 'rotate-180'
+          )}
+        />
+      </button>
+      {open ? (
+        <p
+          id={panelId}
+          data-testid="how-to-teach-step-description"
+          className={cn('pb-3 pl-10 pr-9', BOX_TEXT_CLASS)}
+        >
+          {description}
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
 function Steps({
   block,
   modules,
@@ -79,18 +153,12 @@ function Steps({
       ) : null}
       <ol className="divide-y rounded-lg border">
         {modules.map((module, index) => (
-          <li
+          <StepRow
             key={module.id}
-            data-testid="how-to-teach-step"
-            className="flex items-baseline gap-2 px-3 py-2.5 text-sm"
-          >
-            <span className={cn('w-5 shrink-0 text-right tabular-nums', BOX_TEXT_CLASS)}>
-              {index + 1}.
-            </span>
-            <span data-step-title className="font-medium">
-              {module.title.trim()}
-            </span>
-          </li>
+            number={index + 1}
+            title={module.title.trim()}
+            description={stepDescription(block, module.title)}
+          />
         ))}
       </ol>
     </div>
@@ -311,43 +379,50 @@ function YawpLessonBlock({
   );
 }
 
+const PARAGRAPH_LINK_CLASS =
+  'font-medium text-foreground underline underline-offset-4 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
 /**
  * A paragraph's text. Where it names a lesson's tutorial, that phrase opens
  * the tutorial for a teacher who can watch it, and is plain text otherwise.
+ * Where it names the Lesson Planner, that phrase opens the planner the same
+ * way.
  */
 function ParagraphText({
   block,
   lessonVideos,
+  lessonPlannerHref,
   assetsLocked = false,
 }: {
   block: Extract<LandingBlock, { type: 'paragraph' }>;
   assetsLocked?: boolean;
 } & LessonLinks) {
   const tutorial = block.tutorial;
-  const href = tutorial ? lessonVideos[YAWP_LESSONS[tutorial.lesson].lessonNumber] : undefined;
-  const at = tutorial ? block.text.indexOf(tutorial.linkText) : -1;
-  if (!tutorial || !href || at < 0) return <RichText text={block.text} />;
+  const link = tutorial
+    ? {
+        text: tutorial.linkText,
+        href: lessonVideos[YAWP_LESSONS[tutorial.lesson].lessonNumber],
+      }
+    : block.plannerLink
+      ? { text: block.plannerLink, href: lessonPlannerHref }
+      : null;
+  const at = link ? block.text.indexOf(link.text) : -1;
+  if (!link?.href || at < 0) return <RichText text={block.text} />;
   return (
     <>
       <RichText text={block.text.slice(0, at)} />
       {assetsLocked ? (
         <LockHowToTeachControl>
-          <Link
-            to={href}
-            className="font-medium text-foreground underline underline-offset-4 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {tutorial.linkText}
+          <Link to={link.href} className={PARAGRAPH_LINK_CLASS}>
+            {link.text}
           </Link>
         </LockHowToTeachControl>
       ) : (
-        <Link
-          to={href}
-          className="font-medium text-foreground underline underline-offset-4 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {tutorial.linkText}
+        <Link to={link.href} className={PARAGRAPH_LINK_CLASS}>
+          {link.text}
         </Link>
       )}
-      <RichText text={block.text.slice(at + tutorial.linkText.length)} />
+      <RichText text={block.text.slice(at + link.text.length)} />
     </>
   );
 }
@@ -369,6 +444,7 @@ function Block({
   modules,
   tone,
   lessonVideos,
+  lessonPlannerHref,
   assetsLocked = false,
 }: {
   block: LandingBlock;
@@ -382,6 +458,7 @@ function Block({
         <ParagraphText
           block={block}
           lessonVideos={lessonVideos}
+          lessonPlannerHref={lessonPlannerHref}
           assetsLocked={assetsLocked}
         />
       </p>
@@ -480,6 +557,7 @@ export function BoxedSection({
   section,
   modules = [],
   lessonVideos,
+  lessonPlannerHref,
   defaultExpanded,
   preview: showPreview = false,
   className,
@@ -574,6 +652,7 @@ export function BoxedSection({
               modules={modules}
               tone="box"
               lessonVideos={lessonVideos}
+              lessonPlannerHref={lessonPlannerHref}
               assetsLocked={howToTeachAssetsLocked}
             />
           ))}
@@ -599,6 +678,7 @@ export function HowToTeachSection({
   section,
   modules = [],
   lessonVideos,
+  lessonPlannerHref,
   className,
   howToTeachAssetsLocked = false,
 }: {
@@ -616,6 +696,7 @@ export function HowToTeachSection({
       section={section}
       modules={modules}
       lessonVideos={lessonVideos}
+      lessonPlannerHref={lessonPlannerHref}
       defaultExpanded
       preview
       className={className}
@@ -628,6 +709,7 @@ function Section({
   section,
   modules,
   lessonVideos,
+  lessonPlannerHref,
   howToTeachAssetsLocked = false,
 }: {
   section: LandingSection;
@@ -640,6 +722,7 @@ function Section({
         section={section}
         modules={modules}
         lessonVideos={lessonVideos}
+        lessonPlannerHref={lessonPlannerHref}
         defaultExpanded={false}
       />
     );
@@ -650,17 +733,26 @@ function Section({
         section={section}
         modules={modules}
         lessonVideos={lessonVideos}
+        lessonPlannerHref={lessonPlannerHref}
         howToTeachAssetsLocked={howToTeachAssetsLocked}
       />
     );
   }
-  return <OpenSection section={section} modules={modules} lessonVideos={lessonVideos} />;
+  return (
+    <OpenSection
+      section={section}
+      modules={modules}
+      lessonVideos={lessonVideos}
+      lessonPlannerHref={lessonPlannerHref}
+    />
+  );
 }
 
 function OpenSection({
   section,
   modules,
   lessonVideos,
+  lessonPlannerHref,
 }: {
   section: LandingSection;
   modules: LandingModule[];
@@ -689,6 +781,7 @@ function OpenSection({
           modules={modules}
           tone="page"
           lessonVideos={lessonVideos}
+          lessonPlannerHref={lessonPlannerHref}
         />
       ))}
     </section>
@@ -705,12 +798,15 @@ export function LandingSections({
   page,
   modules,
   lessonVideos = {},
+  lessonPlannerHref,
   howToTeachAssetsLocked = false,
 }: {
   page: LandingPage;
   modules: LandingModule[];
   /** Each lesson's tutorial video, by lesson number, where the teacher can open it. */
   lessonVideos?: LessonVideos;
+  /** The Lesson Planner, where the teacher can use it; plain text otherwise. */
+  lessonPlannerHref?: string;
   howToTeachAssetsLocked?: boolean;
 }) {
   // Every section is its own box (Nov 11), spaced evenly down the page.
@@ -722,6 +818,7 @@ export function LandingSections({
           section={section}
           modules={modules}
           lessonVideos={lessonVideos}
+          lessonPlannerHref={lessonPlannerHref}
           howToTeachAssetsLocked={howToTeachAssetsLocked}
         />
       ))}

@@ -52,13 +52,20 @@ export type LandingBlock =
        * where they cannot.
        */
       tutorial?: { lesson: YawpLessonSlug; linkText: string };
+      /**
+       * `plannerLink`, which appears word for word in `text`, opens the
+       * Lesson Planner for a teacher who can use it, and is plain text for
+       * one who cannot.
+       */
+      plannerLink?: string;
     }
   | { type: 'bullets'; items: string[] }
   /**
    * The assignment type's modules, one row each and in order. `lead` sits
-   * directly above the rows.
+   * directly above the rows. A module that matches one of `descriptions`
+   * opens that description when a teacher clicks it.
    */
-  | { type: 'steps'; lead?: string }
+  | { type: 'steps'; lead?: string; descriptions?: StepDescription[] }
   /**
    * The Thesis-Driven Essay course: each lesson with its slide deck and its
    * tutorial video (see thesis-essay-course.ts). `lead` sits directly above it.
@@ -70,6 +77,35 @@ export type LandingBlock =
    * `lead` sits above it.
    */
   | { type: 'lesson'; slug: YawpLessonSlug; lead?: string };
+
+/**
+ * What one step asks of students and how the Tutor helps, for the module
+ * whose title `matches`. The modules are the database's, and their titles
+ * vary a little between copies (Pre-writing, Writing your Thesis Statement,
+ * Review My Essay!), so steps are found by title rather than by id.
+ */
+export type StepDescription = { matches: RegExp; text: string };
+
+/** Lowercase, punctuation as spaces, and number words as digits. */
+function normalizeStepTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, ' ')
+    .replace(/\bone\b/g, '1')
+    .replace(/\btwo\b/g, '2')
+    .replace(/\bthree\b/g, '3')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** The description for a module of `block`, or null when none matches. */
+export function stepDescription(
+  block: Extract<LandingBlock, { type: 'steps' }>,
+  title: string
+): string | null {
+  const normalized = normalizeStepTitle(title);
+  return block.descriptions?.find((d) => d.matches.test(normalized))?.text ?? null;
+}
 
 export type LandingSectionId =
   | 'how-to-teach-it'
@@ -463,6 +499,50 @@ const AP_HISTORY: LandingPage = {
   library: 'ap-history',
 };
 
+/**
+ * Brian's descriptions of the 5-Paragraph Essay's steps (Nov 17), word for
+ * word. Each opens when a teacher clicks its module in How to Teach It.
+ */
+const FIVE_PARAGRAPH_STEP_DESCRIPTIONS: StepDescription[] = [
+  {
+    matches: /\bpre-? ?writ/,
+    text: "Students write freely on your prompt for at least five minutes. Then the Tutor guides them as they pick a position and three different points. Messy writing is welcome here, so students shouldn't worry about spelling and grammar.",
+  },
+  {
+    matches: /\bthesis\b/,
+    text: 'Students turn their position and three points into one thesis sentence.',
+  },
+  {
+    matches: /\bintro(duction)?\b/,
+    text: 'Students write an introduction with three parts: a hook, a little background, and the thesis as the last sentence. The Tutor offers four kinds of hooks (a story or scene, a question, a quote, a surprising fact) with short examples unrelated to their topic. For an essay about a text, it makes sure the title and author appear.',
+  },
+  {
+    matches: /\bbody paragraph 1\b/,
+    text: 'Students write the paragraph for their first point while the Tutor coaches them through the traditional structure: topic sentence, concrete detail, two sentences of commentary, and a concluding sentence (more is welcome). It accepts common names for each part (general sentence, evidence, analysis, closing sentence) and pushes hardest on commentary, the part students skip most.',
+  },
+  {
+    matches: /\bbody paragraph 2\b/,
+    text: 'Students write the paragraph for their second point. The Tutor uses the same five-part pattern with lighter reminders and checks for a transition at the start of this paragraph, the end of the last one, or both.',
+  },
+  {
+    matches: /\bbody paragraph 3\b/,
+    text: "Students write the paragraph for their third point. The Tutor takes bigger steps, since students know the pattern by now, and points out what they've learned since the first body paragraph.",
+  },
+  {
+    matches: /\bconclusion\b/,
+    text: 'Students write a conclusion in three parts: the thesis restated in new words, the "so what" (why it matters), and a closing sentence that leaves the reader thinking. The Tutor teaches it the way most teachers do, as an upside-down funnel (or the bottom bun of the hamburger) that starts with the thesis and broadens out. It helps students restate the thesis without copying it, steers them away from "In conclusion," and offers closing-sentence options: a call to action, a prediction, a callback to the hook, or a question.',
+  },
+  {
+    matches: /\btitle\b/,
+    text: "Students title their essay, and the Tutor checks that it's clear and fits the thesis. If students want ideas, it offers a few patterns: name the topic and position, borrow a phrase from the essay, ask a question, or try a two-part title with a colon.",
+  },
+  {
+    // The final review, not any other step that reviews something.
+    matches: /^(final )?review\b/,
+    text: "Students clean up their document and check the essay in two passes. First, the Tutor reviews it against the rubric (Thesis and Focus, Support and Explanation, and Organization), naming what's working and giving one fix at a time. Then it covers spelling and grammar, helping students find and fix errors without correcting them itself. It never gives or predicts a score.",
+  },
+];
+
 const FIVE_PARAGRAPH_ESSAY: LandingPage = {
   key: 'five-paragraph-essay',
   description: [
@@ -475,10 +555,17 @@ const FIVE_PARAGRAPH_ESSAY: LandingPage = {
       id: 'how-to-teach-it',
       heading: 'How to Teach It',
       blocks: [
+        // Brian, Nov 17: his note, word for word, in place of the old
+        // "Teach the steps below in order" intro, then the steps.
         p(
-          'Teach the steps below in order. Each one builds on the last: students find a focus, write a thesis, and build paragraphs that prove it.'
+          'Most English teachers already have a way of teaching the five-paragraph essay, and Yawp! is built to work alongside yours. As you teach the process, students work through the steps below in their documents, and the Yawp! Tutor coaches them through each one: pre-writing, a three-point thesis, an introduction, three body paragraphs, a conclusion, a title, and a final review.'
         ),
-        { type: 'steps', lead: '**Teach these steps in order.**' },
+        {
+          type: 'paragraph',
+          text: 'New to this essay, or want fresh slides and ideas on how to teach it? Head to the Lesson Planner and ask it to build you a lesson on pre-writing, body paragraphs, or the whole 5-paragraph essay.',
+          plannerLink: 'Lesson Planner',
+        },
+        { type: 'steps', descriptions: FIVE_PARAGRAPH_STEP_DESCRIPTIONS },
       ],
     },
     {

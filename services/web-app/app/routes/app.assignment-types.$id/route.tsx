@@ -1453,6 +1453,9 @@ export default function AppAssignmentTypesIdRoute() {
             page={landingPage}
             modules={data.assignmentType.assignmentModules}
             lessonVideos={data.landingVideos}
+            lessonPlannerHref={
+              lessonPlannerEnabled ? '/app/lesson-planner' : undefined
+            }
             howToTeachAssetsLocked={data.siteLicenseBrowse}
           />
         ) : null}
