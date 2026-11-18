@@ -56,11 +56,8 @@ SET
   "gradingCalibrationNotes" = NULL,
   "gradingAssistantVersion" = GREATEST(at."gradingAssistantVersion", 1) + 1,
   "updatedAt" = NOW()
-WHERE at."kind" IS DISTINCT FROM 'claim_evidence_reasoning'
-  AND (
-    at."id" = 'cmwma1a58000301l3jqxcxr3j'
-    OR lower(trim(at."title")) IN ('c-e-r', 'claim-evidence-reasoning', 'claim evidence reasoning')
-  )
+WHERE at."id" = 'cmwma1a58000301l3jqxcxr3j'
+  AND at."kind" IS DISTINCT FROM 'claim_evidence_reasoning'
   AND NOT EXISTS (
     SELECT 1
     FROM "AssignmentType" other

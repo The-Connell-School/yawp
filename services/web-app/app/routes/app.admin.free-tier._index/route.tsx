@@ -2,20 +2,35 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
   data as dataResponse,
+  isRouteErrorResponse,
   Link,
+  useRouteError,
 } from 'react-router';
-import { requireAdmin } from '~/utils/auth.server';
+import { GeneralErrorBoundary } from '~/components/error-boundary';
+import { requireSuperAdmin } from '~/utils/auth.server';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
+
+export function isSuperAdminRequiredRouteError(
+  error: unknown
+): error is { status: 403; data: { requiredRole: 'isSuperAdmin' } } {
+  return (
+    isRouteErrorResponse(error) &&
+    error.status === 403 &&
+    typeof error.data === 'object' &&
+    error.data !== null &&
+    (error.data as { requiredRole?: string }).requiredRole === 'isSuperAdmin'
+  );
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
-  await requireAdmin(request);
+  await requireSuperAdmin(request);
   return dataResponse({ moved: true });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
   await requireFreeTierEnabled();
-  await requireAdmin(request);
+  await requireSuperAdmin(request);
   return dataResponse(
     {
       ok: false,
@@ -50,4 +65,26 @@ export default function AdminFreeTierRoute() {
       </div>
     </div>
   );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  if (isSuperAdminRequiredRouteError(error)) {
+    return (
+      <div
+        className="mx-auto flex max-w-screen-sm flex-col gap-4 p-20"
+        data-testid="admin-free-tier-super-admin-required"
+      >
+        <h2 className="text-2xl font-semibold">You need super admin access</h2>
+        <p className="text-lg text-muted-foreground">
+          Free tier waitlist release and approval operations are limited to Yawp! super admins. Ask a
+          super admin on the team if you need access.
+        </p>
+        <Link to="/app/admin" className="yawp-entry-button yawp-entry-button-secondary text-sm w-fit">
+          Back to admin
+        </Link>
+      </div>
+    );
+  }
+  return <GeneralErrorBoundary />;
 }

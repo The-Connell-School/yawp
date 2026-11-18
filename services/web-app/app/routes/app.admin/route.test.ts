@@ -8,7 +8,7 @@ mock.module('~/utils/auth.server', () => ({
   requireMutableRequest,
 }));
 
-const { adminTabs } = await import('./route');
+const { adminTabs, shouldShowFreeTierAdminTab } = await import('./route');
 
 describe('admin tabs', () => {
   test('marks tester feedback as moved to internal', () => {
@@ -52,5 +52,11 @@ describe('admin tabs', () => {
     );
 
     expect(accessFlagsTab?.label).toBe('Access & flags');
+  });
+
+  test('shows the free tier tab only for super admins when the flag is on', () => {
+    expect(shouldShowFreeTierAdminTab(true, true)).toBe(true);
+    expect(shouldShowFreeTierAdminTab(true, false)).toBe(false);
+    expect(shouldShowFreeTierAdminTab(false, true)).toBe(false);
   });
 });
