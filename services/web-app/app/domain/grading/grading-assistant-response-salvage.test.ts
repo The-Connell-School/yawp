@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { rubricKeys } from '~/domain/grading/rubric';
+import { collectParseableJsonValues } from '~/utils/llm-json.server';
 import {
   salvageGradingAssistantCategories,
   snapScoreToCategory,
@@ -60,6 +61,40 @@ describe('grading-assistant-response-salvage', () => {
     expect(categories[0].score).toBe(5);
     expect(categories[0].comment).toBe('See overall feedback.');
     expect(categories[1].score).toBe(5);
+  });
+
+  test('collects complete category objects from a truncated document', () => {
+    const truncated = `{
+      "categories": [
+        {"key":"${rubricKeys[0]}","score":85,"comment":"Category note."},
+        {"key":"${rubricKeys[1]}","score":92,"comment":"Category note."}
+      ],
+      "overallComment": "cut off`;
+    const values = collectParseableJsonValues(truncated);
+    const { categories, missingKeys } = salvageGradingAssistantCategories({
+      sources: values,
+      rubricCategories: legacyCategories.slice(0, 2),
+      minScore: 0,
+      maxScore: 100,
+      categoryFeedbackEnabled: true,
+    });
+    expect(missingKeys).toEqual([]);
+    expect(categories.map((category) => category.score)).toEqual([85, 92]);
+  });
+
+  test('reads a bare category object left inside truncated JSON', () => {
+    const { categories, missingKeys } = salvageGradingAssistantCategories({
+      sources: [
+        { key: rubricKeys[0], score: 85, comment: 'Category note.' },
+        { key: rubricKeys[1], score: 105, comment: 'Category note.' },
+      ],
+      rubricCategories: legacyCategories.slice(0, 2),
+      minScore: 0,
+      maxScore: 100,
+      categoryFeedbackEnabled: true,
+    });
+    expect(missingKeys).toEqual([]);
+    expect(categories.map((category) => category.score)).toEqual([85, 100]);
   });
 
   test('reports missing rubric keys for targeted repair', () => {

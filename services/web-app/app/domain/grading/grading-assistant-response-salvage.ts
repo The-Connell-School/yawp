@@ -151,7 +151,9 @@ export function extractSalvageableCategoryRows(
     ? value
     : isRecord(value) && Array.isArray(value.categories)
       ? value.categories
-      : null;
+      : isRecord(value) && typeof value.key === 'string'
+        ? [value]
+        : null;
   if (!expanded) return [];
 
   const rows: Array<Record<string, unknown>> = [];
