@@ -122,6 +122,13 @@ export function shouldRevalidate({
   if (currentUrl.pathname !== nextUrl.pathname) {
     return true;
   }
+  // Saving a grade and applying Grading Assistant suggestions both call
+  // revalidator.revalidate() without changing the URL. React Router can pass
+  // defaultShouldRevalidate=false in that case, which would leave gradingQueue
+  // frozen on the pre-grade ungraded list and strand the teacher mid-stack.
+  if (currentUrl.search === nextUrl.search) {
+    return true;
+  }
   return defaultShouldRevalidate;
 }
 
@@ -520,6 +527,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         organizationId: profile.organization.id,
         userId,
         submissionId: submission.id,
+        documentId: submission.documentId,
         scope: gradingQueueScope,
         sort: parseGradingQueueSort(
           url.searchParams.get(GRADING_QUEUE_SORT_PARAM)

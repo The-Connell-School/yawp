@@ -148,9 +148,10 @@ test('dropdown and arrows preserve the class queue and protect unsaved grading',
   await expect(page.getByTestId('submission-lifecycle-release')).toBeVisible();
   await expect(picker).toHaveValue(entries[3].submissionId);
   await expect(picker.locator('option:checked')).toContainText('Current');
+  await expect(picker.locator('option')).toHaveCount(4);
+  await expect(page.getByTestId('grading-queue-next')).toBeDisabled();
   await page.getByTestId('grading-queue-previous').click();
   await expect(picker).toHaveValue(entries[2].submissionId);
-  await expect(picker.locator('option')).toHaveCount(3);
   await expect(page.getByTestId('grading-overall-comment')).toHaveValue('');
   await expect(page.getByTestId('submission-lifecycle-save')).toBeDisabled();
   await expect(page.getByTestId('submission-lifecycle-release')).toHaveCount(0);
@@ -176,6 +177,30 @@ test('dropdown and arrows preserve the class queue and protect unsaved grading',
       'http://yawp.test'
     ).searchParams.get('status')
   ).toBe('needs-grading');
+});
+
+test('after grading, next reaches the following ungraded student and the dropdown stays populated', async ({
+  page,
+  e2eContext,
+  signIn,
+}) => {
+  const { classroom, entries } = await fixture(e2eContext);
+  await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+  const exitTo = `/app/my-classes/${classroom.id}?tab=documents&status=needs-grading`;
+  await page.goto(
+    `/app/submissions/${entries[0].submissionId}?edit=1&exitTo=${encodeURIComponent(exitTo)}&queueSort=student%3Aasc`
+  );
+  const picker = page.getByRole('combobox', {
+    name: 'Choose ungraded submission',
+  });
+  await page.getByTestId('grading-overall-points').fill('91');
+  await page.getByTestId('submission-lifecycle-save').click();
+  await expect(page.getByTestId('submission-lifecycle-release')).toBeVisible();
+  await expect(picker.locator('option')).toHaveCount(4);
+  await page.getByTestId('grading-queue-next').click();
+  await expect(picker).toHaveValue(entries[1].submissionId);
+  await picker.selectOption(entries[3].submissionId);
+  await expect(picker).toHaveValue(entries[3].submissionId);
 });
 
 test('queue stays private for students and active for teachers without a rollout flag', async ({

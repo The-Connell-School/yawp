@@ -31,4 +31,15 @@ describe('app_.submissions_.$submissionId shouldRevalidate', () => {
       )
     ).toBe(false);
   });
+
+  test('revalidates after a same-url grade save or grading assistant run', () => {
+    expect(
+      shouldRevalidate(
+        revalidateArgs(
+          'https://yawp.test/app/submissions/sub-a?edit=1&exitTo=%2Fapp%2Fdocuments%3Fstatus%3Dneeds-grading',
+          'https://yawp.test/app/submissions/sub-a?edit=1&exitTo=%2Fapp%2Fdocuments%3Fstatus%3Dneeds-grading'
+        )
+      )
+    ).toBe(true);
+  });
 });

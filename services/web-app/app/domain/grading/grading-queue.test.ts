@@ -233,7 +233,10 @@ describe('buildGradingQueue', () => {
       scope: parseGradingQueueScope('/app/documents?status=needs-grading')!,
     });
 
-    expect(queue.map((entry) => entry.studentName)).toEqual(['Ana Reyes']);
+    expect(queue.map((entry) => entry.studentName)).toEqual([
+      'Ana Reyes',
+      'Ben Cole',
+    ]);
   });
 
   test('honours class, assignment and free-text filters', () => {
@@ -481,7 +484,7 @@ describe('buildGradingQueueHref', () => {
 
 describe('meeting ungraded dropdown requirements', () => {
   const scope = parseGradingQueueScope('/app/documents')!;
-  test('lists ungraded documents only, preserving multiple papers for one student', () => {
+  test('lists submitted work for navigation, preserving multiple papers for one student', () => {
     const queue = buildGradingQueue({
       scope,
       documents: [
@@ -503,6 +506,8 @@ describe('meeting ungraded dropdown requirements', () => {
     expect(queue.map((entry) => entry.submissionId)).toEqual([
       'sub-a1',
       'sub-a2',
+      'sub-graded',
+      'sub-released',
     ]);
   });
   test('keeps the current graded paper in its original ungraded status-sort position', () => {
@@ -530,5 +535,58 @@ describe('meeting ungraded dropdown requirements', () => {
   });
   test('does not turn an escaped external origin into a teacher queue', () => {
     expect(parseGradingQueueScope('/\\evil.test/app/documents')).toBeNull();
+  });
+
+  test('keeps the graded open paper in the dropdown and aims next at the next ungraded one', () => {
+    const queue = buildGradingQueue({
+      scope: parseGradingQueueScope('/app/documents?status=needs-grading')!,
+      pinnedSubmissionId: 'sub-d2',
+      pinnedDocumentId: 'd2',
+      documents: [
+        doc({ id: 'd1', studentName: 'Ana Reyes' }),
+        doc({
+          id: 'd2',
+          studentName: 'Ben Cole',
+          gradedAt: '2026-09-15T10:00:00Z',
+        }),
+        doc({ id: 'd3', studentName: 'Cara Diaz' }),
+      ],
+    });
+    expect(queue.map((entry) => entry.studentName)).toEqual([
+      'Ana Reyes',
+      'Ben Cole',
+      'Cara Diaz',
+    ]);
+    const neighbors = resolveGradingQueueNeighbors({
+      queue,
+      submissionId: 'sub-d2',
+      documentId: 'd2',
+    });
+    expect(neighbors?.next?.studentName).toBe('Cara Diaz');
+    expect(neighbors?.previous?.studentName).toBe('Ana Reyes');
+  });
+
+  test('pins a not-for-grade assignment while grading feedback-only work', () => {
+    const ben = doc({
+      id: 'd2',
+      studentName: 'Ben Cole',
+      gradedAt: '2026-09-15T10:00:00Z',
+    });
+    ben.assignment = {
+      id: 'reflection',
+      title: 'Reflection',
+      submitForGrade: false,
+      pointValue: 0,
+    };
+    const queue = buildGradingQueue({
+      scope: parseGradingQueueScope('/app/documents?status=needs-grading')!,
+      pinnedSubmissionId: 'sub-d2',
+      pinnedDocumentId: 'd2',
+      documents: [doc({ id: 'd1', studentName: 'Ana Reyes' }), ben],
+    });
+    expect(queue.map((entry) => entry.studentName)).toEqual([
+      'Ana Reyes',
+      'Ben Cole',
+    ]);
   });
 });
