@@ -28,7 +28,7 @@ export default function PrivacyRoute() {
     <PublicLegalPage
       title="Privacy Policy"
       eyebrow="Privacy"
-      updated="October 20, 2026"
+      updated="November 17, 2026"
     >
       <p className="text-lg leading-8 text-muted-foreground">
         Yawp! is a classroom writing platform operated by The Connell School of
@@ -84,6 +84,21 @@ export default function PrivacyRoute() {
           <li>
             To evaluate and improve product reliability, quality, and classroom
             usefulness.
+          </li>
+        </List>
+      </PublicLegalSection>
+
+      <PublicLegalSection title="Our Commitments on Student Data">
+        <List>
+          <li>We never sell student data.</li>
+          <li>
+            We never use student data for advertising or to build advertising
+            profiles.
+          </li>
+          <li>
+            Schools own their student data. At a school&apos;s request, or when
+            its agreement with us ends, we return the school&apos;s student
+            data to it and then delete it within 30 days.
           </li>
         </List>
       </PublicLegalSection>
