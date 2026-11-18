@@ -331,6 +331,7 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
       'five_paragraph_essay',
       'prewriting',
       'thesis_statement',
+      'claim_evidence_reasoning',
     ]) {
       await db.freeClassroomAssignmentKindUsage.upsert({
         where: { organizationId_kind: { organizationId: org, kind } },
@@ -368,7 +369,7 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
       page
         .getByTestId('teacher-assignments-grid')
         .getByRole('link', { name: /New .* assignment/ })
-    ).toHaveCount(5);
+    ).toHaveCount(6);
     for (const link of await page
       .getByTestId('teacher-assignments-grid')
       .getByRole('link', { name: /New .* assignment/ })

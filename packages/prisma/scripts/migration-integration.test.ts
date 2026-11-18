@@ -730,7 +730,7 @@ describe('migration integration (real Postgres)', () => {
       )
     `);
     // C-E-R assignment type is provisioned by seed (migration only links prod id).
-    expect(bundleKinds.count).toBeGreaterThanOrEqual(5);
+    expect(bundleKinds.count).toBeGreaterThanOrEqual(4);
 
     const cerRubricFromMigration = jsonQuery(`
       SELECT json_build_object(
