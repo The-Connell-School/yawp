@@ -4,18 +4,18 @@ import {
   data as dataResponse,
   Link,
 } from 'react-router';
-import { requireSuperAdmin } from '~/utils/auth.server';
+import { requireAdmin } from '~/utils/auth.server';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
-  await requireSuperAdmin(request);
+  await requireAdmin(request);
   return dataResponse({ moved: true });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
   await requireFreeTierEnabled();
-  await requireSuperAdmin(request);
+  await requireAdmin(request);
   return dataResponse(
     {
       ok: false,

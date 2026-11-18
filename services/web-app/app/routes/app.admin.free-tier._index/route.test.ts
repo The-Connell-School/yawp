@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
-const requireSuperAdmin = mock();
+const requireAdmin = mock();
 const requireFreeTierEnabled = mock();
 
 mock.module('~/utils/auth.server', () => ({
-  requireSuperAdmin,
+  requireAdmin,
 }));
 
 mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
@@ -15,20 +15,20 @@ const { action, loader } = await import('./route');
 
 describe('admin free tier moved route', () => {
   beforeEach(() => {
-    requireSuperAdmin.mockReset();
+    requireAdmin.mockReset();
     requireFreeTierEnabled.mockReset();
-    requireSuperAdmin.mockResolvedValue({ id: 'admin-1' });
+    requireAdmin.mockResolvedValue({ id: 'admin-1' });
     requireFreeTierEnabled.mockResolvedValue(undefined);
   });
 
-  test('requires enabled free tier and superadmin but returns moved state only', async () => {
+  test('requires enabled free tier and admin but returns moved state only', async () => {
     const response = await loader({
       request: new Request('https://example.test/app/admin/free-tier'),
       params: {},
     } as never);
 
     expect(requireFreeTierEnabled).toHaveBeenCalledTimes(1);
-    expect(requireSuperAdmin).toHaveBeenCalledTimes(1);
+    expect(requireAdmin).toHaveBeenCalledTimes(1);
     expect(response.data).toEqual({ moved: true });
   });
 
