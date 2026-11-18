@@ -138,13 +138,13 @@ function qrSource(image) {
   return `data:${type};base64,${fs.readFileSync(file).toString('base64')}`;
 }
 
-/** Closing card 3: two QR codes (placeholders until the real ones arrive), the URL, the disclosure. */
+/** Closing card 3: two QR codes (a placeholder when a code has no image), the URL, the disclosure. */
 export function closingQrCard({ codes, url, disclosure }) {
   const tiles = codes.map(({ label, sub, image }, i) => {
     const src = qrSource(image);
     return `<div class="tile rise" style="animation-delay:${0.25 + i * 0.3}s">
       <div class="qr">${src ? `<img src="${src}" alt="QR code: ${escape(label)}">` : '<span>QR code<br>coming soon</span>'}</div>
-      <div class="label">${escape(label)}</div><div class="sub">${escape(sub)}</div>
+      <div class="label">${escape(label)}</div>${sub ? `<div class="sub">${escape(sub)}</div>` : ''}
     </div>`;
   }).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><style>${base}${pine}
@@ -157,7 +157,7 @@ export function closingQrCard({ codes, url, disclosure }) {
     .qr img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
     .qr span { width: 100%; height: 100%; border: 4px dashed #B8C4C0; border-radius: 16px; display: flex; align-items: center; justify-content: center;
       font-size: 24px; font-weight: 600; line-height: 1.3; color: #7A8A85; }
-    .label { margin-top: 22px; font-family: ${HEAD}; font-size: 40px; font-weight: 800; letter-spacing: -0.02em; }
+    .label { margin-top: 24px; max-width: 420px; font-family: ${HEAD}; font-size: 38px; line-height: 1.12; font-weight: 800; letter-spacing: -0.02em; text-wrap: balance; }
     .sub { margin-top: 6px; font-size: 22px; color: #C9D3CF; }
     .url { margin-top: 34px; font-family: ${HEAD}; font-size: 46px; font-weight: 800; color: #D5EBE5; letter-spacing: -0.02em; }
   </style></head><body>

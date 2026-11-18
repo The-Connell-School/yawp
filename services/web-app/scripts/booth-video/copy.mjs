@@ -432,13 +432,12 @@ export const CLOSING_STACK = [
 ];
 export const CLOSING_PUNCHLINE = "It won't write for your students, but it'll help you with everything else.";
 /**
- * The QR codes on the last card. Until Brian sends them, `image` is null and
- * the card shows a labeled placeholder; set it to a PNG path (relative to this
- * folder or absolute) and re-render.
+ * The QR codes on the last card: the free tier (yawp.school/free) and Brian's
+ * booking page. Each `image` is a PNG in this folder.
  */
 export const CLOSING_QR = [
-  { label: 'Sign up free', sub: 'Start with the free tier today.', image: null },
-  { label: 'Book a demo', sub: 'For your school or district.', image: null },
+  { label: 'Try Yawp! free in your classroom.', sub: '', image: 'yawp-free-tier-QR.png' },
+  { label: 'Schedule a demo to learn more!', sub: '', image: 'brian-booking-QR.png' },
 ];
 export const CLOSING_CARD = { url: 'yawp.school' };
 
