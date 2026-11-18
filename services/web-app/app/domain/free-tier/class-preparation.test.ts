@@ -6,9 +6,9 @@ import {
 } from './class-preparation';
 
 test('prefills only supported, unambiguous application grades', () => {
-  for (const grade of ['9', '10', '11', '12', 'mixed'])
+  for (const grade of ['6', '7', '8', '9', '10', '11', '12', 'mixed'])
     expect(classGradePrefill(grade)).toBe(grade);
-  for (const grade of ['', '8', '9–12', 'college', null])
+  for (const grade of ['', '5', '9–12', 'college', null])
     expect(classGradePrefill(grade)).toBe('');
 });
 
@@ -20,7 +20,7 @@ test('validates and bounds class details without silently truncating', () => {
   });
   for (const name of ['', '  ', 'x'.repeat(101), 'Class\u0000'])
     expect(parseClassPreparation(name, '11').ok).toBe(false);
-  for (const grade of ['', '8', '11th', 'mixed extra'])
+  for (const grade of ['', '5', '11th', 'mixed extra'])
     expect(parseClassPreparation('English', grade).ok).toBe(false);
 });
 

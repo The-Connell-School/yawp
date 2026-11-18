@@ -12,7 +12,7 @@ route calls the new writer in this PR; existing signup behavior stays unchanged.
   Require independent review and a manager RDS snapshot before driver merge
   and any production migration. Do not add a second tags migration.
 - Import `BELOW_HS_TAG`, `isBelowHsGrade`, and `withBelowHsTag` from
-  `domain/free-tier/grade-gate`. Supported explicit selections are `K`, `1`–`8`;
+  `domain/free-tier/grade-gate`. Supported explicit decline selections are `K`, `1`–`5`;
   free-text historical grades are never interpreted. `withBelowHsTag` retains
   other tags, does not mutate its input, and adds the tag at most once.
 - Import `recordBelowHsDecline` from `domain/free-tier/grade-gate.server`.

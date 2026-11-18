@@ -90,7 +90,7 @@ export function FreeTierBelowHighSchoolCard({
   return (
     <FreeTierAuthCard status title="Thanks for your interest in Yawp!">
       <p className="text-sm text-muted-foreground">
-        Right now, we’re releasing free classroom licenses to high school teachers only. But Yawp! already works with middle schools and colleges through school and department partnerships, and we’d love to talk about how it could work for your students.
+        Right now, the free Yawp! classroom license is for teachers in grades 6–12. Yawp! already works with elementary schools and colleges through school and department partnerships, and we’d love to talk about how it could work for your students.
       </p>
       <p className="text-sm text-muted-foreground">
         We’ve saved your email, and we’ll let you know if free access opens up for your grade level.
