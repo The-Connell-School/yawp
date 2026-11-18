@@ -38,7 +38,7 @@ for (const width of [1280, 390]) test(`teacher packet, content, copy recovery an
   await expect(packet.getByRole('heading', { name: 'Free classroom trial pitch packet', exact: true })).toBeVisible();
   for (const fragment of [
     '1 teacher seat',
-    '35 student seats',
+    '30 student seats',
     '1 active class',
     'Class Starter',
     'Exit Ticket',

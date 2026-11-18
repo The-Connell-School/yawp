@@ -4,7 +4,7 @@ import { FREE_CLASSROOM_LESSON_PLAN_QUOTA } from '~/utils/entitlements.server';
 const count = mock();
 let v2 = false;
 let limits = {
-  studentSeatCap: 35,
+  studentSeatCap: 30,
   lessonPlannerMonthly: 2,
   reporterMonthly: 2,
   version: 1,

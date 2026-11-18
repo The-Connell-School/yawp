@@ -56,7 +56,7 @@ export function TeacherReleaseEmail(props: {
           <>Hi {props.firstName},</>,
           <>
             Your spot is ready. Your free Yawp! classroom license covers one class of
-            up to 35 students, at no cost to you or your school.
+            up to 30 students, at no cost to you or your school.
           </>,
           <>
             Setup takes about five minutes: create your class, then ask your

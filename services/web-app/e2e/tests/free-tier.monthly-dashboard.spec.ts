@@ -283,7 +283,7 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
     reporterMonthly: number
   ) => {
     const value = JSON.stringify({
-      studentSeatCap: 35,
+      studentSeatCap: 30,
       lessonPlannerMonthly,
       reporterMonthly,
       version: 1,

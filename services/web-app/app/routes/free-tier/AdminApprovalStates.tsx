@@ -334,7 +334,7 @@ export function AdminApprovePageIntro({
           >
             {teacherName}
           </span>{' '}
-          will have a free Yawp! license for one class of up to 35 students.
+          will have a free Yawp! license for one class of up to 30 students.
           There&apos;s no cost to the teacher or the school, no credit card,
           and nothing to purchase.
         </p>

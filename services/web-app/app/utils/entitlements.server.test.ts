@@ -25,8 +25,8 @@ describe('entitlements: shape and caps', () => {
     expect(e.features.reporter).toBe(false);
     expect(e.features.classInsights).toBe(true);
     expect(e.features.lessonPlanQuota).toBe(FREE_CLASSROOM_LESSON_PLAN_QUOTA);
-    expect(e.canAddStudent({ currentStudents: 34 })).toBe(true);
-    expect(e.canAddStudent({ currentStudents: 35 })).toBe(false);
+    expect(e.canAddStudent({ currentStudents: 29 })).toBe(true);
+    expect(e.canAddStudent({ currentStudents: 30 })).toBe(false);
     expect(e.canCreateClass({ currentActiveClasses: 0 })).toBe(true);
     expect(e.canCreateClass({ currentActiveClasses: 1 })).toBe(false);
     expect(e.assignmentQuotaForKind('class_starter')).toBe(
@@ -50,6 +50,7 @@ describe('entitlements: shape and caps', () => {
       'five_paragraph_essay',
       'prewriting',
       'thesis_statement',
+      'claim_evidence_reasoning',
     ]);
     const e = getEntitlementsForPlan('FREE_CLASSROOM');
     expect(e.assignmentQuotaForKind('exit_ticket')).toBe(3);

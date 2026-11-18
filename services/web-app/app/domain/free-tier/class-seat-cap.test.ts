@@ -27,7 +27,7 @@ describe('canAddStudentToFreeClass', () => {
     ).toBe(false);
     expect(
       canAddStudentToFreeClass({
-        currentStudents: 30,
+        currentStudents: 25,
         pendingInvites: 4,
       })
     ).toBe(true);

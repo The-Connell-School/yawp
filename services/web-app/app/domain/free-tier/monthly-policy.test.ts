@@ -4,7 +4,7 @@ let applicationStatus: 'APPROVED' | 'SENT' | 'MANUAL_REVIEW' | null = 'APPROVED'
 mock.module('./limits.server', () => ({
   effectiveFreeTierLimits: async () => ({
     monthly,
-    limits: { studentSeatCap: 35, lessonPlannerMonthly: 5, reporterMonthly: 2 },
+    limits: { studentSeatCap: 30, lessonPlannerMonthly: 5, reporterMonthly: 2 },
   }),
 }));
 const approvalRead = mock(async () =>

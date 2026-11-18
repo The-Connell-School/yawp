@@ -28,6 +28,7 @@ export const TOUR_IDS = [
   'type-thesis-statement',
   'type-exit-ticket',
   'type-five-paragraph-essay',
+  'type-claim-evidence-reasoning',
   'document',
   'teacher-assignment',
   /** Turning off automatic welcome cards on every page; manual replay stays on. */
@@ -210,7 +211,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'my-classes-create',
         title: 'One class included',
-        body: 'Your free classroom includes one class of up to 35 students. To add more classes, ask your school about a Yawp! license.',
+        body: 'Your free classroom includes one class of up to 30 students. To add more classes, ask your school about a Yawp! license.',
       },
     ],
   },
@@ -567,6 +568,31 @@ const TOURS: Record<TourId, PageTour> = {
       },
     ],
   },
+  'type-claim-evidence-reasoning': {
+    id: 'type-claim-evidence-reasoning',
+    welcome: {
+      title: 'Welcome to C-E-R',
+      body: 'Students practice Claim-Evidence-Reasoning: a clear claim, specific evidence, and reasoning that connects them.',
+      icon: 'assignment-type',
+    },
+    steps: [
+      {
+        target: 'type-new',
+        title: 'Make an assignment',
+        body: 'Click New → Assignment to give your class a C-E-R prompt.',
+      },
+      {
+        target: 'type-directions',
+        title: 'How it works',
+        body: 'How students structure a claim, support it with evidence, and explain their reasoning with the Tutor.',
+      },
+      {
+        target: 'type-library',
+        title: 'Prompt library',
+        body: "Don't have a prompt? Explore our library. Filter by text, subject, grade band, and more!",
+      },
+    ],
+  },
   document: DOCUMENT_TOUR,
 };
 
@@ -577,6 +603,7 @@ const ASSIGNMENT_TYPE_TOURS: Record<string, TourId> = {
   thesis_statement: 'type-thesis-statement',
   exit_ticket: 'type-exit-ticket',
   five_paragraph_essay: 'type-five-paragraph-essay',
+  claim_evidence_reasoning: 'type-claim-evidence-reasoning',
 };
 
 /** Kind when the page has one, otherwise the title used for the 5-paragraph essay. */

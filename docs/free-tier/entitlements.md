@@ -5,14 +5,15 @@ Authoritative spec: `FREE_TIER_SPEC.md` v2 — see §5.1 (contents) and §5.3 (e
 - Primitive: `Organization.plan` (default `SCHOOL`). Existing orgs remain unchanged (SCHOOL short-circuits all checks).
 - Plans (initial): `SCHOOL`, `FREE_CLASSROOM`, `FOUNDING_FACULTY`, `CLASSROOM_LICENSE`.
 - FREE_CLASSROOM caps:
-  - Students: 35
+  - Students: 30
   - Teachers: 1
   - Active classes: 1
   - Reporter: gated off
   - Class Insights: on
   - Lesson Planner quota: 5
   - Assignment types (lifetime caps, `FREE_CLASSROOM_ASSIGNMENT_QUOTAS`):
-    Class Starter 12, Prewriting 3, Thesis Statement 3, Exit Ticket 12.
+    Class Starter 12, Prewriting 3, Thesis Statement 3, Exit Ticket 3,
+    5-Paragraph Essay 3, C-E-R 3.
     Exit Ticket was added for launch (Nov 2026). New free classrooms are
     linked to it at provisioning; migration
     `20261111120000_free_classroom_exit_ticket` links existing ones. Only

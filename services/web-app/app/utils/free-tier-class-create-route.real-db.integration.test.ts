@@ -78,7 +78,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         data: {
           name: `Route Class Cap ${plan} ${Date.now()}`,
           plan,
-          numOfStudentSeats: plan === 'FREE_CLASSROOM' ? 35 : 100,
+          numOfStudentSeats: plan === 'FREE_CLASSROOM' ? 30 : 100,
           numOfTeacherSeats: plan === 'FREE_CLASSROOM' ? 1 : 10,
         },
         select: { id: true, plan: true },

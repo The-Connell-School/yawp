@@ -130,7 +130,7 @@ export function renderReleaseEmailV2Body(args: { name: string; joinUrl: string }
   const origin = defaultTransactionalEmailOrigin();
   return `Hi ${firstName(args.name)},
 
-Your spot is ready. Your free Yawp! classroom license covers one class of up to 35 students, at no cost to you or your school.
+Your spot is ready. Your free Yawp! classroom license covers one class of up to 30 students, at no cost to you or your school.
 
 Setup takes about five minutes: create your class, then ask your administrator to approve it. You can explore everything while you wait.
 

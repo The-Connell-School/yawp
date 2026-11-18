@@ -14,7 +14,7 @@ GET returns this initial state without inserting a setting:
 
 ```json
 {
-  "studentSeatCap": 35,
+  "studentSeatCap": 30,
   "lessonPlannerMonthly": 5,
   "reporterMonthly": 2,
   "updatedAt": null,
