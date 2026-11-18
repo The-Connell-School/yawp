@@ -53,3 +53,19 @@ export function evaluateAdminEmailForRuntime(
 }
 
 export const ADMIN_REDIRECT_CHAIN_CAP = 3;
+
+export type ManualReviewHoldReason = Extract<
+  AdminEmailCheckResult,
+  { manualReview: true }
+>['reason'];
+
+export function manualReviewHoldReasonLabel(reason: ManualReviewHoldReason): string {
+  switch (reason) {
+    case 'consumer_domain':
+      return 'The administrator email is on a personal consumer domain (for example Gmail).';
+    case 'domain_mismatch':
+      return "The administrator email domain does not match the teacher's school email domain.";
+    case 'same_as_teacher':
+      return "The administrator email matches the teacher's inbox (including plus-tag variants).";
+  }
+}

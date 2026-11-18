@@ -4,6 +4,7 @@ import {
   evaluateAdminEmail,
   evaluateAdminEmailForRuntime,
   mailboxIdentity,
+  manualReviewHoldReasonLabel,
 } from './admin-email-rules.server';
 import { isConsumerEmailDomain } from './consumer-email-domains';
 
@@ -45,6 +46,12 @@ test('consumer domain set', () => {
 
 test('redirect cap constant', () => {
   expect(ADMIN_REDIRECT_CHAIN_CAP).toBe(3);
+});
+
+test('manualReviewHoldReasonLabel covers each hold reason', () => {
+  expect(manualReviewHoldReasonLabel('consumer_domain')).toContain('consumer');
+  expect(manualReviewHoldReasonLabel('domain_mismatch')).toContain('domain');
+  expect(manualReviewHoldReasonLabel('same_as_teacher')).toContain('teacher');
 });
 
 test('demo sends approval requests without manual review holds', () => {
