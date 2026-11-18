@@ -96,6 +96,7 @@ import {
 import { inferHolisticTupleFromCategoryScores } from '~/domain/grading/holistic-tier-from-categories';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
+  collectParseableJsonValues,
   extractJsonObjectCandidates,
   parseFirstJsonValue,
 } from '~/utils/llm-json.server';
@@ -1245,6 +1246,16 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           { status: 503 }
         );
       }
+      logGradingAiParseFailed({
+        stage: 'initial',
+        rubricKeyCount: apHistoryPointKeysForSnapshot(apHistorySnapshot).length,
+        scoringMode: 'ap_history',
+        gradingMode: null,
+        grammarHighlightMode: null,
+        modelStopReason: null,
+        modelOutputTokens: null,
+        salvageReason: 'ap_history_response_unparseable',
+      });
       return dataResponse(
         {
           success: false,
@@ -1576,28 +1587,41 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     if (salvaged.missingKeys.length > 0) {
       const missingKeys = salvaged.missingKeys;
       const partialCategories = salvaged.categories;
-      const missingCategoryRepairText = await getGradingLlmCompletion({
-        model,
-        system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n{\n  "categories": [{ "key": string, "score": number, "comment": string }]\n}\nRules:\n- Return exactly one category for each missing rubric key.\n- Use only these missing keys: ${missingKeys.join(', ')}.\n- Every score must fall inside one declared band for its category.\n- overallComment must start with "${studentFirstName},".\n${repairPrivateObservationRules ? `${repairPrivateObservationRules}\n` : ''}- Do not include markdown or explanation.`,
-        messages: [
-          {
-            role: 'user',
-            content: `Authored grading constraints:\n${authoredGradingConstraints}\n\n${compiledInvocation.userMessage}\n\nCategory-specific score bands:\n${promptShape.rubricText}\n\nAlready-valid categories:\n${JSON.stringify(partialCategories)}\n\nMissing rubric keys: ${missingKeys.join(', ')}`,
+      let missingCategoryRepairText = '';
+      try {
+        missingCategoryRepairText = await getGradingLlmCompletion({
+          model,
+          system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n{\n  "categories": [{ "key": string, "score": number, "comment": string }]\n}\nRules:\n- Return exactly one category for each missing rubric key.\n- Use only these missing keys: ${missingKeys.join(', ')}.\n- Every score must fall inside one declared band for its category.\n- overallComment must start with "${studentFirstName},".\n${repairPrivateObservationRules ? `${repairPrivateObservationRules}\n` : ''}- Do not include markdown or explanation.`,
+          messages: [
+            {
+              role: 'user',
+              content: `Authored grading constraints:\n${authoredGradingConstraints}\n\n${compiledInvocation.userMessage}\n\nCategory-specific score bands:\n${promptShape.rubricText}\n\nAlready-valid categories:\n${JSON.stringify(partialCategories)}\n\nMissing rubric keys: ${missingKeys.join(', ')}`,
+            },
+          ],
+          maxTokens: Math.min(
+            rubricEvaluationMaxTokens,
+            250 * missingKeys.length + 400
+          ),
+          temperature: 0.1,
+          metadata: {
+            feature: 'grading',
+            kind: 'rubric-missing-category-repair',
+            ...gradingAiContextMetadata,
           },
-        ],
-        maxTokens: Math.min(
-          rubricEvaluationMaxTokens,
-          250 * missingKeys.length + 400
-        ),
-        temperature: 0.1,
-        metadata: {
-          feature: 'grading',
-          kind: 'rubric-missing-category-repair',
-          ...gradingAiContextMetadata,
-        },
-      });
-      const repairJson = parseFirstJsonValue(missingCategoryRepairText);
-      const repairSources = [...sources, repairJson];
+        });
+      } catch (error) {
+        if (isGradingRequestDeadlineError(error)) throw error;
+        if (isLlmFallbackRetrySignal(error)) throw error;
+        if (error instanceof Response) throw error;
+        logParseFailure('missing-category-repair', {
+          salvageReason: 'repair_response_unparseable',
+        });
+        return null;
+      }
+      const repairSources = [
+        ...sources,
+        ...collectParseableJsonValues(missingCategoryRepairText),
+      ];
       const repairedSalvage = salvageGradingAssistantCategories({
         sources: repairSources,
         rubricCategories,
@@ -1664,9 +1688,54 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   const repairPrivateObservationRules =
     gradingRepairPrivateObservationRules(teacherNotesEnabled);
 
+  const teacherNoteFromSources = (sources: unknown[]) => {
+    if (!teacherNotesEnabled) return null;
+    for (const source of sources) {
+      if (!isRecord(source) || !('teacherNote' in source)) continue;
+      return normalizeTeacherNote(source.teacherNote);
+    }
+    return null;
+  };
+
+  // Recover scores from the reply we already have before asking the model to
+  // rewrite it. A truncated repair used to throw here and discard a complete
+  // category set that only needed clamping.
+  const salvageCompleteCategories = async (sources: unknown[]) => {
+    const salvaged = salvageGradingAssistantCategories({
+      sources,
+      rubricCategories,
+      minScore,
+      maxScore,
+      gradingMode: resolvedGradingConfig.gradingMode,
+      categoryFeedbackEnabled,
+      grammarHighlightMode: displayOptions.grammarHighlight,
+    });
+    if (salvaged.missingKeys.length > 0) return null;
+    const validated = AiCategoriesSchema.safeParse(salvaged.categories);
+    if (!validated.success) return null;
+    const overallFromSources = sources
+      .map((source) => extractOverallCommentFromUnknown(source))
+      .find((comment) => comment);
+    const built = await buildAiResponseFromCategories(
+      validated.data,
+      teacherNoteFromSources(sources),
+      overallFromSources ?? null
+    );
+    return withPreservedHolisticFields(built, ...sources);
+  };
+
   const parseAiResponse = async (rawResponseText: string) => {
-    const parsedJson = parseFirstJsonValue(rawResponseText);
-    const parsed = tryParseAiResponse(parsedJson);
+    let parsedJson: unknown = null;
+    try {
+      parsedJson = parseFirstJsonValue(rawResponseText);
+    } catch (error) {
+      if (isGradingRequestDeadlineError(error)) throw error;
+      if (isLlmFallbackRetrySignal(error)) throw error;
+      parsedJson = null;
+    }
+
+    const originalSources = collectParseableJsonValues(rawResponseText);
+    const parsed = parsedJson == null ? null : tryParseAiResponse(parsedJson);
     if (parsed?.overallComment) {
       return withPreservedHolisticFields(parsed, parsedJson) as typeof parsed;
     }
@@ -1678,74 +1747,117 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       return withPreservedHolisticFields(built, parsedJson) as typeof built;
     }
 
-    const repairedResponseText = await getGradingLlmCompletion({
-      model,
-      system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n${buildGradingResponseSchemaText(
-        {
-          minScore,
-          maxScore,
-          categoryFeedbackEnabled,
-          teacherNotesEnabled,
-          scoringMode: resolvedGradingConfig.scoringMode ?? 'weighted_categories',
-          assignmentPointTotal:
-            submission.document.assignment?.pointValue ?? null,
-          grammarHighlightMode: displayOptions.grammarHighlight,
-        }
-      )}\nCategory-specific score bands:\n${promptShape.rubricText}\nRules:\n- Preserve valid category scores${categoryFeedbackEnabled ? '/comments' : ''} from the original output when possible.\n- Every score must fall inside one declared band for its category.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n${repairPrivateObservationRules ? `${repairPrivateObservationRules}\n` : ''}- Do not include markdown or explanation.`,
-      messages: [
-        {
-          role: 'user',
-          content: `Authored grading constraints:\n${authoredGradingConstraints}\n\n${compiledInvocation.userMessage}\n\nOriginal grading response:\n${rawResponseText}`,
+    // A complete document with a bad score still goes through schema repair so
+    // the model can pick a valid score. A truncated document often already
+    // contains every category as a finished object, and repair of that text
+    // truncates again, so recover those objects before another model call.
+    let wholeDocumentParsed = false;
+    try {
+      JSON.parse(rawResponseText.trim());
+      wholeDocumentParsed = true;
+    } catch {
+      wholeDocumentParsed = false;
+    }
+    if (!wholeDocumentParsed) {
+      const recovered = await salvageCompleteCategories(originalSources);
+      if (recovered) return recovered;
+    }
+
+    let repairedResponseText = '';
+    try {
+      repairedResponseText = await getGradingLlmCompletion({
+        model,
+        system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n${buildGradingResponseSchemaText(
+          {
+            minScore,
+            maxScore,
+            categoryFeedbackEnabled,
+            teacherNotesEnabled,
+            scoringMode: resolvedGradingConfig.scoringMode ?? 'weighted_categories',
+            assignmentPointTotal:
+              submission.document.assignment?.pointValue ?? null,
+            grammarHighlightMode: displayOptions.grammarHighlight,
+          }
+        )}\nCategory-specific score bands:\n${promptShape.rubricText}\nRules:\n- Preserve valid category scores${categoryFeedbackEnabled ? '/comments' : ''} from the original output when possible.\n- Every score must fall inside one declared band for its category.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n${repairPrivateObservationRules ? `${repairPrivateObservationRules}\n` : ''}- Do not include markdown or explanation.`,
+        messages: [
+          {
+            role: 'user',
+            content: `Authored grading constraints:\n${authoredGradingConstraints}\n\n${compiledInvocation.userMessage}\n\nOriginal grading response:\n${rawResponseText}`,
+          },
+        ],
+        maxTokens: rubricEvaluationMaxTokens,
+        temperature: 0.1,
+        metadata: {
+          feature: 'grading',
+          kind: 'rubric-schema-repair',
+          ...gradingAiContextMetadata,
         },
-      ],
-      maxTokens: rubricEvaluationMaxTokens,
-      temperature: 0.1,
-      metadata: {
-        feature: 'grading',
-        kind: 'rubric-schema-repair',
-        ...gradingAiContextMetadata,
-      },
-    });
-
-    const repairedParsedJson = parseFirstJsonValue(repairedResponseText);
-    const repairedParsed = tryParseAiResponse(repairedParsedJson);
-    if (repairedParsed?.overallComment) {
-      return withPreservedHolisticFields(
-        repairedParsed,
-        repairedParsedJson,
-        parsedJson
-      ) as typeof repairedParsed;
-    }
-    if (repairedParsed?.categories) {
-      const built = await buildAiResponseFromCategories(
-        repairedParsed.categories,
-        repairedParsed.teacherNote
-      );
-      return withPreservedHolisticFields(
-        built,
-        repairedParsedJson,
-        parsedJson
-      ) as typeof built;
+      });
+    } catch (error) {
+      if (isGradingRequestDeadlineError(error)) throw error;
+      if (isLlmFallbackRetrySignal(error)) throw error;
+      if (error instanceof Response) throw error;
+      logParseFailure('repair', {
+        salvageReason: 'repair_response_unparseable',
+      });
     }
 
-    const initialValidation = AiResponseSchema.safeParse(parsedJson);
-    if (!initialValidation.success) {
-      logParseFailure('initial', { zodIssues: initialValidation.error.issues });
-    }
-    const repairValidation = AiResponseSchema.safeParse(repairedParsedJson);
-    if (!repairValidation.success) {
-      logParseFailure('repair', { zodIssues: repairValidation.error.issues });
+    let repairedParsedJson: unknown = null;
+    if (repairedResponseText) {
+      try {
+        repairedParsedJson = parseFirstJsonValue(repairedResponseText);
+      } catch (error) {
+        if (isGradingRequestDeadlineError(error)) throw error;
+        if (isLlmFallbackRetrySignal(error)) throw error;
+        logParseFailure('repair', {
+          salvageReason: 'repair_response_unparseable',
+        });
+      }
     }
 
-    const salvageTeacherNote = teacherNotesEnabled && isRecord(parsedJson)
-      ? normalizeTeacherNote(parsedJson.teacherNote)
-      : teacherNotesEnabled && isRecord(repairedParsedJson)
-        ? normalizeTeacherNote(repairedParsedJson.teacherNote)
-        : null;
+    if (repairedParsedJson != null) {
+      const repairedParsed = tryParseAiResponse(repairedParsedJson);
+      if (repairedParsed?.overallComment) {
+        return withPreservedHolisticFields(
+          repairedParsed,
+          repairedParsedJson,
+          parsedJson
+        ) as typeof repairedParsed;
+      }
+      if (repairedParsed?.categories) {
+        const built = await buildAiResponseFromCategories(
+          repairedParsed.categories,
+          repairedParsed.teacherNote
+        );
+        return withPreservedHolisticFields(
+          built,
+          repairedParsedJson,
+          parsedJson
+        ) as typeof built;
+      }
+    }
+
+    if (parsedJson == null) {
+      logParseFailure('initial', { salvageReason: 'response_unparseable' });
+    } else {
+      const initialValidation = AiResponseSchema.safeParse(parsedJson);
+      if (!initialValidation.success) {
+        logParseFailure('initial', { zodIssues: initialValidation.error.issues });
+      }
+    }
+    if (repairedParsedJson != null) {
+      const repairValidation = AiResponseSchema.safeParse(repairedParsedJson);
+      if (!repairValidation.success) {
+        logParseFailure('repair', { zodIssues: repairValidation.error.issues });
+      }
+    }
 
     const salvaged = await buildAiResponseFromSalvagedCategories({
-      sources: [parsedJson, repairedParsedJson],
-      teacherNote: salvageTeacherNote,
+      sources: [
+        ...originalSources,
+        ...collectParseableJsonValues(repairedResponseText),
+      ],
+      teacherNote: teacherNoteFromSources([parsedJson, repairedParsedJson]),
       stage: 'salvage',
     });
     if (salvaged) {

@@ -3447,6 +3447,124 @@ describe('api.domain.grade-essay-ai', () => {
       ).toBe(true);
     });
 
+    test('salvages a truncated thesis-band reply before the repair call can fail', async () => {
+      const thesis = await import(
+        '~/domain/rubrics/library/thesis-driven-essay.json'
+      ).then((module) => module.default ?? module);
+      prisma.assignmentType.findUnique.mockResolvedValue(
+        mockAssignmentType({
+          scoringScaleJson: thesis.scoringScale,
+          rubricJson: thesis.rubric,
+          gradingPromptConfigJson: thesis.promptConfig,
+          gradingOutputSchemaJson: thesis.outputSchema,
+        })
+      );
+      const scores = {
+        thesis_and_content: 85,
+        organization_and_structure: 92,
+        evidence_and_support: 74,
+        voice_and_style: 105,
+        grammar_and_mechanics: 60,
+      };
+      const truncated = `{
+        "categories": [
+          ${rubricKeys
+            .map(
+              (key) =>
+                `{"key":"${key}","score":${scores[key]},"comment":"Category note."}`
+            )
+            .join(',\n')}
+        ],
+        "overallComment": "Jordan, this comment was cut off`;
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce(truncated)
+        .mockResolvedValueOnce('not json {{{');
+
+      prisma.submission.findFirst.mockResolvedValue(
+        mockSubmission({ id: 'sub-salvage-truncated' })
+      );
+      const form = new FormData();
+      form.append('submissionId', 'sub-salvage-truncated');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+      const payload = (response as { data: Record<string, unknown> }).data;
+      const rubricScores = payload.rubricScores as Record<
+        string,
+        { score: number }
+      >;
+
+      expect((response as { init?: { status?: number } }).init?.status ?? 200).toBe(
+        200
+      );
+      expect(payload.success).toBe(true);
+      expect(rubricScores.thesis_and_content.score).toBe(85);
+      expect(rubricScores.organization_and_structure.score).toBe(92);
+      expect(rubricScores.evidence_and_support.score).toBe(74);
+      expect(rubricScores.voice_and_style.score).toBe(100);
+      expect(rubricScores.grammar_and_mechanics.score).toBe(60);
+      expect(payload.overallComment).toBe(
+        'Jordan, thank you for sharing your work.'
+      );
+      expect(
+        getLLMCompletion.mock.calls.some(
+          (call: Array<{ metadata?: { kind?: string } }>) =>
+            call[0]?.metadata?.kind === 'rubric-schema-repair' ||
+            call[0]?.metadata?.kind === 'rubric-missing-category-repair'
+        )
+      ).toBe(false);
+    });
+
+    test('salvages out-of-band scores when the repair reply is truncated', async () => {
+      const badJson = JSON.stringify({
+        categories: rubricKeys.map((key) => ({
+          key,
+          score: key === 'thesis_and_content' ? 9 : 3,
+          comment: `Comment for ${key}`,
+        })),
+        overallComment: 'Jordan, this draft has clear progress and focus.',
+      });
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce(badJson)
+        .mockResolvedValueOnce('{"overallComment": "cut off mid repair');
+
+      prisma.submission.findFirst.mockResolvedValue(
+        mockSubmission({ id: 'sub-salvage-repair-truncated' })
+      );
+      const form = new FormData();
+      form.append('submissionId', 'sub-salvage-repair-truncated');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+      const payload = (response as { data: Record<string, unknown> }).data;
+
+      expect((response as { init?: { status?: number } }).init?.status ?? 200).toBe(
+        200
+      );
+      expect(payload.success).toBe(true);
+      expect(
+        (payload.rubricScores as Record<string, { score: number }>)
+          .thesis_and_content.score
+      ).toBe(5);
+      expect(payload.overallComment).toBe(
+        'Jordan, this draft has clear progress and focus.'
+      );
+      expect(
+        getLLMCompletion.mock.calls.some(
+          (call: Array<{ metadata?: { kind?: string } }>) =>
+            call[0]?.metadata?.kind === 'rubric-schema-repair'
+        )
+      ).toBe(true);
+    });
+
     afterEach(() => {
       console.warn = originalWarn;
     });

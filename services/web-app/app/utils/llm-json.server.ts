@@ -95,3 +95,20 @@ export function extractJsonObjectCandidates(text: string): unknown[] {
   }
   return candidates;
 }
+
+/**
+ * Every JSON value we can read from a model reply, including complete objects
+ * nested inside a truncated outer document. The first successful top-level
+ * parse is included when one exists. Callers dedupe.
+ */
+export function collectParseableJsonValues(text: string): unknown[] {
+  if (typeof text !== 'string' || !text.trim()) return [];
+  const values: unknown[] = [];
+  try {
+    values.push(parseFirstJsonValue(text));
+  } catch {
+    // A truncated outer document still often contains complete nested objects.
+  }
+  values.push(...extractJsonObjectCandidates(text));
+  return values;
+}
