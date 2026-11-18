@@ -34,6 +34,12 @@ function PublicLegalHeader() {
           >
             Terms of Service
           </a>
+          <a
+            className="text-muted-foreground hover:text-foreground"
+            href="/accessibility"
+          >
+            Accessibility
+          </a>
         </nav>
       </div>
     </header>

@@ -66,6 +66,7 @@ export default function PitchPacketRoute() {
             <Button variant="outline" size="sm" asChild><Link to="/app/my-classes">Open My Classes</Link></Button>
             <Button variant="link" size="sm" asChild><Link to="/privacy">Privacy policy</Link></Button>
             <Button variant="link" size="sm" asChild><Link to="/terms">Terms of service</Link></Button>
+            <Button variant="link" size="sm" asChild><Link to="/accessibility">Accessibility</Link></Button>
           </div>
           <label htmlFor="packet-text" className="block text-sm font-medium">Plain-text packet</label>
           <textarea id="packet-text" readOnly value={text} rows={12} className="w-full rounded-md border bg-background p-3 text-sm" />

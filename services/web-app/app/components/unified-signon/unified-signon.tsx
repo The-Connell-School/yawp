@@ -1285,6 +1285,8 @@ export function UnifiedSignon({
         <Link to="/terms">Terms</Link>
         <span aria-hidden="true">·</span>
         <Link to="/privacy">Privacy</Link>
+        <span aria-hidden="true">·</span>
+        <Link to="/accessibility">Accessibility</Link>
       </footer>
     </section>
   );

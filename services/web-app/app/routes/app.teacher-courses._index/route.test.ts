@@ -68,7 +68,7 @@ describe('legacy teacher courses route', () => {
     expect(response.headers.get('Location')).toBe('/app');
   });
 
-  test('redirects allowlisted teacher to teacher trainings', async () => {
+  test('redirects allowlisted teachers to the teacher dashboard', async () => {
     findUnique.mockResolvedValue({ email: ALLOWLIST_EMAIL });
     prisma.accessListEntry.findUnique.mockImplementation(
       ({
@@ -85,6 +85,6 @@ describe('legacy teacher courses route', () => {
     } as any);
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('Location')).toBe('/app/teacher-trainings');
+    expect(response.headers.get('Location')).toBe('/app');
   });
 });

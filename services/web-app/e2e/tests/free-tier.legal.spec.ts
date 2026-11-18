@@ -44,7 +44,11 @@ async function capture(page: import('@playwright/test').Page, name: string, stat
   }) + '\n');
 }
 
-for (const [route, title] of [['/privacy', 'Privacy Policy'], ['/terms', 'Terms of Service']]) {
+for (const [route, title] of [
+  ['/privacy', 'Privacy Policy'],
+  ['/terms', 'Terms of Service'],
+  ['/accessibility', 'Accessibility at Yawp!'],
+]) {
   test(`${route} is public without a session`, async ({ page }) => {
     const response = await page.goto(route!);
     expect(response?.status()).toBe(before ? 404 : 200);
@@ -71,7 +75,11 @@ test('signup visibly links to both public legal pages', async ({ page }) => {
     await expect(page.getByRole('link', { name: 'Privacy Policy', exact: true })).toHaveCount(0);
     return;
   }
-  for (const [name, destination] of [['Privacy Policy', '/privacy'], ['Terms of Service', '/terms']]) {
+  for (const [name, destination] of [
+    ['Privacy Policy', '/privacy'],
+    ['Terms of Service', '/terms'],
+    ['Accessibility', '/accessibility'],
+  ]) {
     const link = page.getByRole('link', { name: name!, exact: true });
     await expect(link).toBeVisible();
     await expect(link).toHaveAttribute('href', destination!);
