@@ -12,6 +12,7 @@ import {
   ADMIN_REDIRECT_CHAIN_CAP,
   evaluateAdminEmailForRuntime,
 } from './admin-email-rules.server';
+import { sendManualReviewTeamContact } from './team-contact.server';
 import { adminApprovalEmailCopyVersionHash } from './email-copy.server';
 import {
   mintSignedLink,
@@ -252,6 +253,17 @@ export async function submitAdminDetails(args: {
   });
 
   if (!result.ok) return result;
+  if (result.manualReview && !args.suppressEmailDelivery && rules.manualReview) {
+    await sendManualReviewTeamContact({
+      applicationId: app.id,
+      teacherName: app.name,
+      teacherEmail: app.email,
+      schoolName: app.schoolName,
+      adminName: args.adminName.trim(),
+      adminEmail: result.adminEmail,
+      holdReason: rules.reason,
+    });
+  }
   if (!result.manualReview) {
     const approveUrl = args.suppressEmailDelivery
       ? `/free/admin/approve?t=${encodeURIComponent(result.approveToken)}`
@@ -858,6 +870,17 @@ export async function redirectSchoolAdmin(args: {
 
   if (!result.ok) return result;
   if ('idempotent' in result && result.idempotent) return result;
+  if (rules.manualReview) {
+    await sendManualReviewTeamContact({
+      applicationId: preApp.id,
+      teacherName: preApp.name,
+      teacherEmail: preApp.email,
+      schoolName: preApp.schoolName,
+      adminName: newAdminNameTrim,
+      adminEmail: newEmail,
+      holdReason: rules.reason,
+    });
+  }
   return { ok: true as const };
 }
 

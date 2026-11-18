@@ -7,11 +7,22 @@ import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { assertFreeTierRuntimeConfigured } from './free-tier-config.server';
 import { safeErrorTextForLog } from '~/utils/server-error-request-context.server';
 import type { EmailSendResult } from './email.server';
+import {
+  manualReviewHoldReasonLabel,
+  type ManualReviewHoldReason,
+} from './admin-email-rules.server';
 
 export const TEAM_CONTACT_BELOW_HS_KIND = 'team_contact_below_hs';
 export const TEAM_CONTACT_ADMIN_LEARN_MORE_KIND = 'team_contact_admin_learn_more';
+export const TEAM_CONTACT_MANUAL_REVIEW_KIND = 'team_contact_manual_review';
 export const TEAM_CONTACT_IDEMPOTENCY_MS = 10 * 60 * 1000;
 export const TEAM_CONTACT_ADMIN_LEARN_MORE_COOLDOWN_MS = 30 * 60 * 1000;
+
+export function internalFreeTierReviewQueueUrl(): string | null {
+  const origin = process.env.INTERNAL_PLATFORM_ORIGIN?.trim().replace(/\/$/, '');
+  if (!origin) return null;
+  return `${origin}/free-tier/approvals?status=MANUAL_REVIEW`;
+}
 
 type ApplicationContactFields = {
   id: string;
@@ -166,6 +177,39 @@ export async function sendBelowHsTeamContact(args: {
     kind: TEAM_CONTACT_BELOW_HS_KIND,
     subject: 'Free tier: below-HS teacher wants to talk',
     text,
+  });
+}
+
+export async function sendManualReviewTeamContact(args: {
+  applicationId: string;
+  teacherName: string;
+  teacherEmail: string;
+  schoolName: string;
+  adminName: string;
+  adminEmail: string;
+  holdReason: ManualReviewHoldReason;
+}): Promise<EmailSendResult> {
+  const reviewQueueUrl = internalFreeTierReviewQueueUrl();
+  const text = [
+    'A free-tier administrator approval request was held for manual review.',
+    '',
+    `Teacher: ${args.teacherName}`,
+    `Teacher email: ${args.teacherEmail}`,
+    `School: ${args.schoolName}`,
+    `Administrator entered: ${args.adminName}`,
+    `Administrator email: ${args.adminEmail}`,
+    '',
+    `Hold reason: ${manualReviewHoldReasonLabel(args.holdReason)}`,
+    '',
+    `Application ID: ${args.applicationId}`,
+    ...(reviewQueueUrl ? ['', `Internal review queue: ${reviewQueueUrl}`] : []),
+  ].join('\n');
+  return deliverTeamContactEmail({
+    applicationId: args.applicationId,
+    kind: TEAM_CONTACT_MANUAL_REVIEW_KIND,
+    subject: 'Free tier: administrator approval held for manual review',
+    text,
+    idempotencyMs: TEAM_CONTACT_IDEMPOTENCY_MS,
   });
 }
 

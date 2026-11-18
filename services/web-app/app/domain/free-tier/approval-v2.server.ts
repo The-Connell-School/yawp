@@ -58,6 +58,7 @@ import {
   ADMIN_REDIRECT_CHAIN_CAP,
 } from './admin-email-rules.server';
 import { resolveFreeTierRuntimeEnvironment } from './usage-budget.server';
+import { sendManualReviewTeamContact } from './team-contact.server';
 import { forwardApprovalSchema } from './approval-waiting';
 import { selfAdminEmailError } from './admin-email';
 import {
@@ -376,7 +377,7 @@ export async function forwardApprovalRequest(args: {
       ...fail('validation'),
       fieldErrors: parsed.error.flatten().fieldErrors,
     };
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     await lockApprovalApplication(tx, args.applicationId);
     const app = await tx.freeTierApplication.findUnique({
       where: { id: args.applicationId },
@@ -541,8 +542,32 @@ export async function forwardApprovalRequest(args: {
       ok: true as const,
       queued: true as const,
       adminName: newAdminName,
+      ...(rules.manualReview
+        ? {
+            manualReviewTeamContact: {
+              applicationId: app.id,
+              teacherName: app.name,
+              teacherEmail: app.email,
+              schoolName: app.schoolName,
+              adminName: newAdminName,
+              adminEmail: newAdminEmail,
+              holdReason: rules.reason,
+            },
+          }
+        : {}),
     };
   });
+  if (result.ok && 'manualReviewTeamContact' in result && result.manualReviewTeamContact) {
+    await sendManualReviewTeamContact(result.manualReviewTeamContact);
+  }
+  if (result.ok && 'queued' in result) {
+    return {
+      ok: true as const,
+      queued: true as const,
+      adminName: result.adminName,
+    };
+  }
+  return result;
 }
 
 /** Token authorization is rechecked inside the locked mutation. */
