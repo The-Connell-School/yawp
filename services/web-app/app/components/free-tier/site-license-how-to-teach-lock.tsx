@@ -10,6 +10,7 @@ import {
 import { Lock } from 'lucide-react';
 import {
   Popover,
+  PopoverAnchor,
   PopoverContent,
 } from '~/components/ui/popover';
 import { SITE_LICENSE_HOW_TO_TEACH_LOCK_MESSAGE } from '~/domain/free-tier/site-license-how-to-teach';
@@ -51,9 +52,14 @@ export function LockHowToTeachControl({
   });
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <span className="inline-flex">{lockedChild}</span>
+      <PopoverAnchor asChild>
+        <span className="inline-flex">{lockedChild}</span>
+      </PopoverAnchor>
       <PopoverContent
-        side="top"
+        side="bottom"
+        align="center"
+        collisionPadding={16}
+        avoidCollisions
         className="w-auto max-w-xs px-3 py-2 text-sm"
         data-testid="how-to-teach-license-popover"
       >
@@ -81,33 +87,37 @@ export function SiteLicenseHowToTeachLockedSection({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <section
-        aria-labelledby={headingId}
-        data-testid="how-to-teach-site-license-locked"
-        data-tour="type-how-to-teach"
-        data-landing-box=""
-        className={cn(SPOTLIGHT_BOX, className)}
-        onClickCapture={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          setOpen(true);
-        }}
-      >
-        <div className="flex items-center justify-between gap-4">
-          <h2
-            id={headingId}
-            className="flex items-center gap-2 text-lg font-semibold sm:text-xl"
-          >
-            {heading}
-            <Lock className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-          </h2>
-          <span className="text-sm text-muted-foreground">Locked</span>
-        </div>
-        <div className="mt-3 flex flex-col gap-3 opacity-75">{children}</div>
-      </section>
+      <PopoverAnchor asChild>
+        <section
+          aria-labelledby={headingId}
+          data-testid="how-to-teach-site-license-locked"
+          data-tour="type-how-to-teach"
+          data-landing-box=""
+          className={cn(SPOTLIGHT_BOX, className)}
+          onClickCapture={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen(true);
+          }}
+        >
+          <div className="flex items-center justify-between gap-4">
+            <h2
+              id={headingId}
+              className="flex items-center gap-2 text-lg font-semibold sm:text-xl"
+            >
+              {heading}
+              <Lock className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            </h2>
+            <span className="text-sm text-muted-foreground">Locked</span>
+          </div>
+          <div className="mt-3 flex flex-col gap-3 opacity-75">{children}</div>
+        </section>
+      </PopoverAnchor>
       <PopoverContent
-        side="top"
+        side="bottom"
         align="center"
+        collisionPadding={16}
+        avoidCollisions
         className="w-auto max-w-xs px-3 py-2 text-sm"
         data-testid="how-to-teach-license-popover"
       >

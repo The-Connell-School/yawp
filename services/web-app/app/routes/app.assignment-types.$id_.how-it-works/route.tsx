@@ -18,7 +18,10 @@ import { EXIT_TICKET_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/exit
 import { getAssignmentTypeLandingFlags } from '~/domain/assignment-types/landing-page-gate.server';
 import { LOCKED_PREVIEW_APP_HOME } from '~/domain/free-tier/locked-preview';
 import { userHasPendingFreeTierTeachingLock } from '~/domain/free-tier/locked-preview.server';
-import { assignmentTypeMatchesSiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
+import {
+  assignmentTypeMatchesSiteLicenseLockedTile,
+  freeClassroomSiteLicenseLockedBrowseAllowed,
+} from '~/domain/free-tier/site-license-locked-assignment-tiles';
 import { isAssignmentTypeHowToTeachLockedForTeacher } from '~/domain/free-tier/site-license-how-to-teach.server';
 import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
 import {
@@ -61,14 +64,22 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         systemKey: assignmentType.systemKey,
       }));
 
+  const siteLicenseGuideBrowse = freeClassroomSiteLicenseLockedBrowseAllowed(
+    profile.organization.plan,
+    assignmentType
+  );
+
   // The same access check as the assignment type page — except pending teachers
-  // browsing How It Works for bundle or site-license tiles.
+  // browsing How It Works for bundle or site-license tiles, and approved free
+  // teachers browsing locked site-license types.
   const available = await assignmentTypeAvailableForTeacher({
     assignmentTypeId,
     membershipId: profile.id,
     organizationId: profile.organization.id,
   });
-  if (!available && !lockedPreviewGuideBrowse) throw redirect(LOCKED_PREVIEW_APP_HOME);
+  if (!available && !lockedPreviewGuideBrowse && !siteLicenseGuideBrowse) {
+    throw redirect(LOCKED_PREVIEW_APP_HOME);
+  }
 
   const howToTeachAssetsLocked = await isAssignmentTypeHowToTeachLockedForTeacher({
     organizationPlan: profile.organization.plan,

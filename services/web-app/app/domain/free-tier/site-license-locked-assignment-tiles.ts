@@ -175,6 +175,20 @@ export function siteLicenseLockedAssignmentTilesForOrganization(
 }
 
 /** Whether an assignment type appears as a site-license-only locked carousel tile. */
+/** Approved (and pending) free teachers may open locked site-license type pages without entitlement. */
+export function freeClassroomSiteLicenseLockedBrowseAllowed(
+  organizationPlan: OrganizationPlan,
+  type: Pick<
+    AssignmentTypeCatalogRow,
+    'title' | 'kind' | 'systemKey' | 'ownerOrgId' | 'ownerMembershipId'
+  >
+) {
+  return (
+    organizationPlan === 'FREE_CLASSROOM' &&
+    assignmentTypeMatchesSiteLicenseLockedTile(type)
+  );
+}
+
 export function assignmentTypeMatchesSiteLicenseLockedTile(
   type: Pick<
     AssignmentTypeCatalogRow,

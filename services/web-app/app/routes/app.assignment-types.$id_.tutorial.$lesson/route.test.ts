@@ -3,13 +3,20 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const requireUserId = mock();
 const requireMembership = mock();
 const assignmentTypeAvailableForTeacher = mock();
+const isAssignmentTypeHowToTeachLockedForTeacher = mock();
 const findThesisEssayCourse = mock();
 const getTeacherTrainingPlaybackUrl = mock();
-const prisma = { teacherTrainingModule: { findFirst: mock() } };
+const prisma = {
+  teacherTrainingModule: { findFirst: mock() },
+  assignmentType: { findFirst: mock() },
+};
 
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/domain/assignment-types/available-for-teacher.server', () => ({ assignmentTypeAvailableForTeacher }));
+mock.module('~/domain/free-tier/site-license-how-to-teach.server', () => ({
+  isAssignmentTypeHowToTeachLockedForTeacher,
+}));
 mock.module('~/domain/teacher-trainings/thesis-essay-course.server', () => ({ findThesisEssayCourse, tutorialHrefs: () => ({}), tutorialHref: () => '' }));
 mock.module('~/utils/teacher-training-video-link.server', () => ({ getTeacherTrainingPlaybackUrl }));
 
@@ -19,7 +26,20 @@ afterAll(() => {
   mock.restore();
 });
 
-const teacher = { id: 'teacher-1', role: 'TEACHER', organization: { id: 'org-1' } };
+const teacher = {
+  id: 'teacher-1',
+  role: 'TEACHER',
+  organization: { id: 'org-1', plan: 'FREE_CLASSROOM' },
+};
+
+const thesisType = {
+  id: 'at-1',
+  title: 'The Thesis-Driven Essay',
+  kind: null,
+  systemKey: null,
+  ownerOrgId: null,
+  ownerMembershipId: null,
+};
 
 function open(lesson: string, id = 'at-1') {
   return loader({
@@ -43,6 +63,8 @@ beforeEach(() => {
   requireUserId.mockReset().mockResolvedValue('user-1');
   requireMembership.mockReset().mockResolvedValue(teacher);
   assignmentTypeAvailableForTeacher.mockReset().mockResolvedValue(true);
+  isAssignmentTypeHowToTeachLockedForTeacher.mockReset().mockResolvedValue(false);
+  prisma.assignmentType.findFirst.mockReset().mockResolvedValue(thesisType);
   findThesisEssayCourse.mockReset().mockResolvedValue({
     courseId: 'course-1',
     coursePath: '/app/teacher-trainings/course-1',
@@ -130,10 +152,26 @@ describe('a lesson’s tutorial video on the assignment type’s page', () => {
   });
 
   test('a type this teacher cannot open goes back to the app, as the guide does', async () => {
+    prisma.assignmentType.findFirst.mockResolvedValue({
+      id: 'at-1',
+      title: 'Class Starter',
+      kind: 'class_starter',
+      systemKey: null,
+      ownerOrgId: null,
+      ownerMembershipId: null,
+    });
     assignmentTypeAvailableForTeacher.mockResolvedValue(false);
     const response = await thrown(open('2'));
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('/app');
+  });
+
+  test('free classroom how-to-teach lock returns 403 before the availability redirect', async () => {
+    assignmentTypeAvailableForTeacher.mockResolvedValue(false);
+    isAssignmentTypeHowToTeachLockedForTeacher.mockResolvedValue(true);
+    const response = await thrown(open('2'));
+    expect(response.status).toBe(403);
+    expect(assignmentTypeAvailableForTeacher).not.toHaveBeenCalled();
   });
 
   test('a student goes back to the app', async () => {

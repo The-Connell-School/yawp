@@ -12,6 +12,7 @@ import { Link, redirect, data, useLoaderData, type LoaderFunctionArgs } from 're
 import { ChevronLeft } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { assignmentTypeAvailableForTeacher } from '~/domain/assignment-types/available-for-teacher.server';
+import { freeClassroomSiteLicenseLockedBrowseAllowed } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 import { isAssignmentTypeHowToTeachLockedForTeacher } from '~/domain/free-tier/site-license-how-to-teach.server';
 import { findThesisEssayCourse } from '~/domain/teacher-trainings/thesis-essay-course.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
@@ -41,12 +42,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   if (!Number.isInteger(lessonNumber) || lessonNumber < 1 || lessonNumber > THESIS_ESSAY_COURSE.length) {
     throw data({ error: 'No such lesson.' }, { status: 404 });
   }
-  const available = await assignmentTypeAvailableForTeacher({
-    assignmentTypeId,
-    membershipId: profile.id,
-    organizationId: profile.organization.id,
+
+  const assignmentType = await prisma.assignmentType.findFirst({
+    where: { id: assignmentTypeId, archivedAt: null },
+    select: {
+      id: true,
+      title: true,
+      kind: true,
+      systemKey: true,
+      ownerOrgId: true,
+      ownerMembershipId: true,
+    },
   });
-  if (!available) throw redirect('/app');
+  if (!assignmentType) throw redirect('/app');
+
   if (
     await isAssignmentTypeHowToTeachLockedForTeacher({
       organizationPlan: profile.organization.plan,
@@ -55,6 +64,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   ) {
     throw data({ error: 'Comes with a school site license.' }, { status: 403 });
   }
+
+  const siteLicenseBrowse = freeClassroomSiteLicenseLockedBrowseAllowed(
+    profile.organization.plan,
+    assignmentType
+  );
+  const available = await assignmentTypeAvailableForTeacher({
+    assignmentTypeId,
+    membershipId: profile.id,
+    organizationId: profile.organization.id,
+  });
+  if (!available && !siteLicenseBrowse) throw redirect('/app');
 
   const lesson = THESIS_ESSAY_COURSE[lessonNumber - 1]!;
   const page = { pagePath, lessonNumber, lessonTitle: lesson.title };
