@@ -214,6 +214,33 @@ export type ClearReleaseInput = { key: string; actorEmail: string; reason: strin
 
 /** The revision Yawp Internal released for a catalog key (see rubric-release.server.ts). */
 export type PublicRelease = { revisionId: string; version: number; fingerprint: string; releasedAt: string };
+
+/** One row in `GET /api/internal/v1/rubric-catalog` (`rubrics[]`). */
+export type RubricCatalogSummary = {
+  key: string;
+  source: 'library' | 'assignment-type';
+  name: string;
+  title: string;
+  editable: boolean;
+  readOnlyReason: string | null;
+  seededFromCode: boolean;
+  currentVersion: number | null;
+  versionCount: number;
+  liveMatchesVersion: boolean;
+  /** SHA-256 of the rubric's current live content (`contentFingerprint`); matches `GET .../item` `live.fingerprint`. */
+  liveFingerprint: string;
+  lastEditedAt: string | null;
+  lastEditedBy: string | null;
+  categoryCount: number;
+  scale: ReturnType<typeof scaleOf>;
+  assignmentTypes: { id: string; title: string | null; archived: boolean }[];
+  organizations: { id: string; name: string }[];
+  assignmentCount: number;
+  assignmentsOnCurrentVersion: number;
+  assignmentsOnOlderVersions: number;
+  assignmentsUnpinned: number;
+  release: PublicRelease | null;
+};
 const releaseSelect = { catalogKey: true, rubricRevisionId: true, releasedAt: true, rubricRevision: { select: { version: true, fingerprint: true } } } as const;
 type ReleaseRow = { catalogKey: string; rubricRevisionId: string; releasedAt: Date; rubricRevision: { version: number; fingerprint: string } };
 const publicRelease = (row: ReleaseRow): PublicRelease => ({
@@ -291,6 +318,7 @@ export class RubricCatalog {
         seededFromCode: args.source === 'library' && STARTER_NAMES.has(args.name),
         currentVersion: current?.version ?? null, versionCount: history.length,
         liveMatchesVersion: current !== null,
+        liveFingerprint: contentFingerprint(args.content),
         lastEditedAt: (latest?.createdAt ?? args.fallbackEditedAt)?.toISOString() ?? null,
         lastEditedBy: latest?.createdBy ?? null,
         categoryCount: rubricCategoriesArrayFromSchemaJson(args.content).length, scale: scaleOf(args.content),
