@@ -111,6 +111,32 @@ test('dispatchUnifiedLogin accepts the public HTTPS Origin on production HTTP in
   expect(unifiedAction).toHaveBeenCalledTimes(1);
 });
 
+test('dispatchUnifiedLogin accepts UA partner Origin on production HTTP ingress', async () => {
+  process.env.YAWP_ENVIRONMENT = 'production';
+  process.env.PRIMARY_APP_URL = 'https://yawp.school';
+  unifiedAction.mockResolvedValue(Response.json({ state: { screen: 'entry' } }));
+
+  const response = (await dispatchUnifiedLogin(
+    actionArgs(
+      new URLSearchParams({
+        intent: 'resolve',
+        identifier: 'student@crimson.ua.edu',
+      }),
+      new Request('http://ua.yawp.school/auth/login.data', {
+        method: 'POST',
+        headers: { Origin: 'https://ua.yawp.school' },
+        body: new URLSearchParams({
+          intent: 'resolve',
+          identifier: 'student@crimson.ua.edu',
+        }),
+      })
+    )
+  )) as unknown as Response;
+
+  expect(response.status).toBe(200);
+  expect(unifiedAction).toHaveBeenCalledTimes(1);
+});
+
 test('dispatchUnifiedLogin rejects a foreign Origin on production HTTP ingress', async () => {
   process.env.YAWP_ENVIRONMENT = 'production';
   process.env.PRIMARY_APP_URL = 'https://yawp.school';

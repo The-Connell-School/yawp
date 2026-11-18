@@ -1,4 +1,4 @@
-import { signonRequestOrigin } from './origin.server';
+import { signonBrowserOriginAllowed } from './origin.server';
 import { safeRedirect } from 'remix-utils/safe-redirect';
 import { getUserId, requireAnonymous } from '~/utils/auth.server';
 import type { ActionFunctionArgs } from 'react-router';
@@ -100,8 +100,7 @@ export async function dispatchUnifiedLogin(args: ActionFunctionArgs) {
   const { FlowError, withFlow, assertCurrentIdentity } =
     await import('./flow.server');
   try {
-    const origin = args.request.headers.get('Origin');
-    if (origin && origin !== signonRequestOrigin(args.request))
+    if (!signonBrowserOriginAllowed(args.request))
       throw new FlowError('Invalid request origin.', 403);
     const { requireMutableRequest } = await import('~/utils/auth.server');
     await requireMutableRequest(args.request);
