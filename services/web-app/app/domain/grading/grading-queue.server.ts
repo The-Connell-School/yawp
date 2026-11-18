@@ -66,7 +66,7 @@ export function loadGradingQueueNeighbors(
   params: GradingQueueLoaderParams & {
     mode?: 'grading';
     submissionId: string;
-    documentId?: never;
+    documentId?: string;
   }
 ): Promise<GradingQueueNeighbors | null>;
 export function loadGradingQueueNeighbors(
@@ -286,9 +286,14 @@ export async function loadGradingQueueNeighbors(params: GradingQueueLoaderParams
     scope,
     sort: params.sort ?? undefined,
     pinnedSubmissionId: submissionId,
+    pinnedDocumentId: documentId ?? null,
   });
 
-  return resolveGradingQueueNeighbors({ queue, submissionId: submissionId! });
+  return resolveGradingQueueNeighbors({
+    queue,
+    submissionId: submissionId!,
+    documentId: documentId ?? null,
+  });
 }
 
 export async function loadDocumentNavigationNeighbors(params: {

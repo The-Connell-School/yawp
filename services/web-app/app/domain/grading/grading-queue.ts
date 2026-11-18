@@ -273,22 +273,45 @@ function toQueueEntry(
   };
 }
 
+function isGradingNavigationStatus(status: TeacherDocumentStatus) {
+  return status !== 'in-progress';
+}
+
+function isPinnedGradingDocument(
+  document: TeacherDocumentWorkRow,
+  pinnedSubmissionId: string | null,
+  pinnedDocumentId: string | null
+) {
+  return (
+    (pinnedSubmissionId !== null &&
+      document.latestSubmission?.id === pinnedSubmissionId) ||
+    (pinnedDocumentId !== null && document.id === pinnedDocumentId)
+  );
+}
+
 /**
  * Orders the papers a teacher can flip between from the grading header.
  *
- * `pinnedSubmissionId` keeps the open paper in the queue even once it stops
- * matching the list's status filter. Without it, releasing a grade off a
- * "Needs Grading" list would drop the paper the teacher is standing on and
- * take both arrows with it — exactly when they want to move to the next one.
+ * `pinnedSubmissionId` / `pinnedDocumentId` keep the open paper in the queue
+ * even once it stops matching the list's status filter. Without them, saving a
+ * grade off a "Needs Grading" list would drop the paper the teacher is standing
+ * on and take both arrows with it — exactly when they want to move to the next
+ * one.
  */
 export function buildGradingQueue(params: {
   documents: TeacherDocumentWorkRow[];
   scope: GradingQueueScope;
   sort?: DocumentWorkSort;
   pinnedSubmissionId?: string | null;
+  pinnedDocumentId?: string | null;
   collator?: Intl.Collator;
 }): GradingQueueEntry[] {
-  const { documents, scope, pinnedSubmissionId = null } = params;
+  const {
+    documents,
+    scope,
+    pinnedSubmissionId = null,
+    pinnedDocumentId = null,
+  } = params;
   const sort = params.sort ?? DEFAULT_DOCUMENT_WORK_SORT;
   const collator =
     params.collator ?? new Intl.Collator(undefined, { sensitivity: 'base' });
@@ -300,27 +323,25 @@ export function buildGradingQueue(params: {
   );
 
   const matching = withinScope.filter((document) => {
-    if (document.assignment?.submitForGrade === false) return false;
-    if (
-      pinnedSubmissionId &&
-      document.latestSubmission?.id === pinnedSubmissionId
-    )
+    if (isPinnedGradingDocument(document, pinnedSubmissionId, pinnedDocumentId))
       return true;
+    if (document.assignment?.submitForGrade === false) return false;
+    const status = getTeacherDocumentStatus(document.latestSubmission);
+    if (!isGradingNavigationStatus(status)) return false;
     if (
-      scope.filters.status !== 'all' &&
-      scope.filters.status !== 'needs-grading'
-    )
-      return false;
-    return (
-      getTeacherDocumentStatus(document.latestSubmission) === 'needs-grading'
-    );
+      scope.filters.status === 'all' ||
+      scope.filters.status === 'needs-grading'
+    ) {
+      return true;
+    }
+    return status === scope.filters.status;
   });
 
   // Completing the current paper must not move it past the next ungraded
   // paper when sorting by status/graded date. Its displayed status remains real.
   const byId = new Map(matching.map((document) => [document.id, document]));
   const forSort = matching.map((document) =>
-    document.latestSubmission?.id === pinnedSubmissionId
+    isPinnedGradingDocument(document, pinnedSubmissionId, pinnedDocumentId)
       ? {
           ...document,
           latestSubmission: {
@@ -337,24 +358,46 @@ export function buildGradingQueue(params: {
         }
       : document
   );
-  return sortTeacherDocumentWorkRows({ documents: forSort, sort, collator })
+  return sortTeacherDocumentWorkRows({
+    documents: forSort as TeacherDocumentWorkRow[],
+    sort,
+    collator,
+  })
     .map((document) => toQueueEntry(byId.get(document.id)!))
     .filter((entry): entry is GradingQueueEntry => entry !== null);
+}
+
+function findNearestUngradedNeighbor<T extends { status: TeacherDocumentStatus }>(
+  queue: T[],
+  startIndex: number,
+  direction: -1 | 1
+): T | null {
+  for (
+    let index = startIndex + direction;
+    index >= 0 && index < queue.length;
+    index += direction
+  ) {
+    if (queue[index].status === 'needs-grading') return queue[index];
+  }
+  return null;
 }
 
 export function resolveGradingQueueNeighbors(params: {
   queue: GradingQueueEntry[];
   submissionId: string;
+  documentId?: string | null;
 }): GradingQueueNeighbors | null {
   const index = params.queue.findIndex(
-    (entry) => entry.submissionId === params.submissionId
+    (entry) =>
+      entry.submissionId === params.submissionId ||
+      (params.documentId != null && entry.documentId === params.documentId)
   );
   if (index === -1) return null;
 
   return {
     entries: params.queue,
-    previous: params.queue[index - 1] ?? null,
-    next: params.queue[index + 1] ?? null,
+    previous: findNearestUngradedNeighbor(params.queue, index, -1),
+    next: findNearestUngradedNeighbor(params.queue, index, 1),
     position: index + 1,
     total: params.queue.length,
   };
@@ -396,10 +439,11 @@ export function buildDocumentNavigationQueue(params: {
   const matching = withinScope.filter((document) => {
     if (document.id === (params.pinnedDocumentId ?? null)) return true;
     if (params.scope.filters.status === 'all') return true;
-    return (
-      getTeacherDocumentStatus(document.latestSubmission) ===
-      params.scope.filters.status
-    );
+    const status = getTeacherDocumentStatus(document.latestSubmission);
+    if (params.scope.filters.status === 'needs-grading') {
+      return isGradingNavigationStatus(status);
+    }
+    return status === params.scope.filters.status;
   });
   return sortTeacherDocumentWorkRows({
     documents: matching,
