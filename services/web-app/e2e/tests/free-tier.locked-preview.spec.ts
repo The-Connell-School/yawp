@@ -545,7 +545,7 @@ for (const width of [390, 1440]) {
     );
     await expect(
       page.getByTestId('free-assignment-tiles').locator('img')
-    ).toHaveCount(10);
+    ).toHaveCount(11);
     if (width === 390) {
       await capture(page, 'dashboard-approved-390');
     }

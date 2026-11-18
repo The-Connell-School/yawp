@@ -13,7 +13,13 @@ const baseFlag = 'feature_flag.free_tier';
 const paths = ['free', 'waitlist', 'token'] as const;
 let saved: any[] = [];
 let index = 0;
-const input = (suffix: string, gradeLevel: unknown = '7') => ({ name: 'Teacher', email: `${prefix}-${suffix}@example.edu`, schoolName: 'Local High', location: 'Here', gradeLevel });
+const input = (suffix: string, gradeLevel: unknown = '5') => ({
+  name: 'Teacher',
+  email: `${prefix}-${suffix}@example.edu`,
+  schoolName: 'Local High',
+  location: 'Here',
+  gradeLevel,
+});
 async function flag(value: string | null) {
   if (value === null) await prisma.setting.deleteMany({ where: { name: flagName } });
   else await prisma.setting.upsert({ where: { name: flagName }, create: { name: flagName, value }, update: { value } });
