@@ -215,15 +215,15 @@ const redeem = (reserved: Awaited<ReturnType<typeof reservedStudent>>) =>
   prisma.$transaction(tx => acceptStudentInvitation(tx, reserved.flow(), reserved.member.userId));
 
 for (const expiring of [false, true]) {
-  local(`verified ${expiring ? 'expiring' : 'non-expiring'} invitation redeems its reserved 35th seat`, async () => {
+  local(`verified ${expiring ? 'expiring' : 'non-expiring'} invitation redeems its reserved 30th seat`, async () => {
     await approvedClass();
-    for (let i = 0; i < 34; i++) await student(`reserved-${expiring}-${i}`);
+    for (let i = 0; i < 29; i++) await student(`reserved-${expiring}-${i}`);
     const reserved = await reservedStudent(`reserved-${expiring}`, expiring ? new Date(Date.now() + 60000) : null);
     const unrelated = await student(`unrelated-${expiring}`, false);
     expect(await enrollStudentInClassWithSeatCap({ membershipId: unrelated.id, classId, organizationId: orgId }))
       .toMatchObject({ ok: false, code: 'class_full' });
     expect(await redeem(reserved)).toBe(reserved.member.id);
-    expect(await seatCount()).toBe(35);
+    expect(await seatCount()).toBe(30);
     expect(await prisma.invitation.findUnique({ where: { id: reserved.invite.id } })).toBeNull();
     expect(await enrollStudentInClassWithSeatCap({ membershipId: unrelated.id, classId, organizationId: orgId }))
       .toMatchObject({ ok: false, code: 'class_full' });
@@ -262,10 +262,10 @@ local('flag-off invitation redemption keeps the default capacity behavior', asyn
   await setting(v2Flag, 'false');
   // Configured v2 limits cannot affect flag-off redemption.
   await updateFreeTierLimits({ version: 0, studentSeatCap: 1 }, 'staff@example.test');
-  for (let i = 0; i < 34; i++) await student(`legacy-reserved-${i}`);
+  for (let i = 0; i < 29; i++) await student(`legacy-reserved-${i}`);
   const reserved = await reservedStudent('legacy-reserved');
   expect(await redeem(reserved)).toBe(reserved.member.id);
-  expect(await seatCount()).toBe(35);
+  expect(await seatCount()).toBe(30);
 });
 local('a concurrent unrelated admission cannot steal a reserved seat', async () => {
   await approvedClass();
@@ -331,7 +331,7 @@ local('flag-off, targeted organizations, base access and paid seats retain rollo
   const write = await call(request('PUT', { version: 1, studentSeatCap: 2 }));
   expect(write.status).toBe(404);
   await setting(baseFlag, 'false'); expect(await check()).toMatchObject({ ok: true });
-  expect((await effectiveFreeTierLimits(orgId)).limits.studentSeatCap).toBe(35);
+  expect((await effectiveFreeTierLimits(orgId)).limits.studentSeatCap).toBe(30);
   await setting(baseFlag, 'true'); await setting(v2Flag, 'true');
   await prisma.organization.update({ where: { id: orgId }, data: { plan: 'SCHOOL' } });
   try { expect(await check()).toMatchObject({ ok: true }); }

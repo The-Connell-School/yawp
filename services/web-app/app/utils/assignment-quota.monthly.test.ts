@@ -30,6 +30,7 @@ for (const kind of [
   'five_paragraph_essay',
   'prewriting',
   'thesis_statement',
+  'claim_evidence_reasoning',
 ])
   test(`${kind} remains creatable above old cap, with lifetime compatibility writes`, async () => {
     await assertCanCreateAssignmentOfKindInTransaction(tx, organization, kind);

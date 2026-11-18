@@ -288,9 +288,9 @@ suite('existing student enrollment with PostgreSQL', () => {
     const source = await fixture('SCHOOL'),
       target = await fixture();
     const actors = await Promise.all(
-      Array.from({ length: 36 }, () => student(source.org.id))
+      Array.from({ length: 32 }, () => student(source.org.id))
     );
-    for (const actor of actors.slice(0, 34))
+    for (const actor of actors.slice(0, 29))
       await db.orgMembership.create({
         data: {
           userId: actor.userId,
@@ -299,10 +299,9 @@ suite('existing student enrollment with PostgreSQL', () => {
           classesAsStudent: { connect: { id: target.klass.id } },
         },
       });
+  const racers = actors.slice(29, 31);
     const results = await Promise.all(
-      actors
-        .slice(34)
-        .map((actor) =>
+      racers.map((actor) =>
           enrollExistingStudentByCode({ ...actor, code: target.klass.code })
         )
     );
@@ -314,8 +313,8 @@ suite('existing student enrollment with PostgreSQL', () => {
           role: 'STUDENT',
         },
       })
-    ).toBe(35);
-    const loser = actors[results[0]!.ok ? 35 : 34]!;
+    ).toBe(30);
+    const loser = racers[results[0]!.ok ? 1 : 0]!;
     expect(
       await db.orgMembership.findUnique({
         where: {

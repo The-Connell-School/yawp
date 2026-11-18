@@ -30,7 +30,7 @@ const { loader, action } = await import('~/routes/api.internal.v1.free-tier.limi
 const saved = { ...process.env };
 const secret = 'local-limits-unit-test-secret-32-characters';
 const url = 'https://yawp.test/api/internal/v1/free-tier/limits';
-const defaults = { studentSeatCap: 35, lessonPlannerMonthly: 5, reporterMonthly: 2,
+const defaults = { studentSeatCap: 30, lessonPlannerMonthly: 5, reporterMonthly: 2,
   updatedAt: null, updatedByEmail: null, version: 0,
   bounds: { studentSeatCap: [1, 200], lessonPlannerMonthly: [0, 100], reporterMonthly: [0, 100] } };
 function request(method = 'GET', body?: unknown, signedBody?: string) {

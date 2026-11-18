@@ -26,7 +26,7 @@ test('explicit v2 email copy renders Brian\'s release copy and subject without d
   const text = renderReleaseEmailBody(args);
   expect(renderReleaseEmailSubject(args)).toBe(SUBJECT);
   expect(text).toContain('Your spot is ready.');
-  expect(text).toContain('one class of up to 35 students');
+  expect(text).toContain('one class of up to 30 students');
   expect(text).toContain(application.joinUrl);
   expect(text).toContain('expires in 30 days');
   expect(text).toContain('Founder, Yawp! Writing Program');

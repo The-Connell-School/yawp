@@ -76,7 +76,7 @@ export function ClassPreparationForm({
                 <option value="">Choose a grade</option>
                 {CLASS_GRADES.map((value) => (
                   <option key={value} value={value}>
-                    {value === 'mixed' ? 'Mixed high school grades' : value}
+                    {value === 'mixed' ? 'Mixed grades' : value}
                   </option>
                 ))}
               </select>

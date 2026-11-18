@@ -723,12 +723,21 @@ describe('migration integration (real Postgres)', () => {
             'exit_ticket',
             'five_paragraph_essay',
             'prewriting',
-            'thesis_statement'
+            'thesis_statement',
+            'claim_evidence_reasoning'
           )
         )
       )
     `);
-    expect(bundleKinds.count).toBeGreaterThanOrEqual(3);
+    // C-E-R assignment type is provisioned by seed (migration only links prod id).
+    expect(bundleKinds.count).toBeGreaterThanOrEqual(4);
+
+    const cerRubricFromMigration = jsonQuery(`
+      SELECT json_build_object(
+        'exists', EXISTS (SELECT 1 FROM "Rubric" WHERE "name" = 'c-e-r')
+      )
+    `);
+    expect(cerRubricFromMigration.exists).toBe(true);
 
     const usageTable = jsonQuery(`
       SELECT json_build_object(
@@ -748,6 +757,24 @@ describe('migration integration (real Postgres)', () => {
     );
     expect(seedOnce.status).toBe(0);
 
+    const bundleKindsAfterSeed = jsonQuery(`
+      SELECT json_build_object(
+        'count', (
+          SELECT COUNT(*)::int
+          FROM "AssignmentType"
+          WHERE "kind" IN (
+            'class_starter',
+            'exit_ticket',
+            'five_paragraph_essay',
+            'prewriting',
+            'thesis_statement',
+            'claim_evidence_reasoning'
+          )
+        )
+      )
+    `);
+    expect(bundleKindsAfterSeed.count).toBeGreaterThanOrEqual(6);
+
     const moduleCount = jsonQuery(`
       SELECT json_build_object(
         'count', (
@@ -759,12 +786,13 @@ describe('migration integration (real Postgres)', () => {
             'exit_ticket',
             'five_paragraph_essay',
             'prewriting',
-            'thesis_statement'
+            'thesis_statement',
+            'claim_evidence_reasoning'
           )
         )
       )
     `);
-    expect(moduleCount.count).toBeGreaterThanOrEqual(5);
+    expect(moduleCount.count).toBeGreaterThanOrEqual(6);
 
     const imageCount = jsonQuery(`
       SELECT json_build_object(
@@ -777,12 +805,13 @@ describe('migration integration (real Postgres)', () => {
             'exit_ticket',
             'five_paragraph_essay',
             'prewriting',
-            'thesis_statement'
+            'thesis_statement',
+            'claim_evidence_reasoning'
           )
         )
       )
     `);
-    expect(imageCount.count).toBeGreaterThanOrEqual(5);
+    expect(imageCount.count).toBeGreaterThanOrEqual(6);
 
     const seedTwice = run(
       'bun',

@@ -6,6 +6,7 @@ export const FREE_CLASSROOM_ASSIGNMENT_QUOTAS = {
   five_paragraph_essay: 3,
   prewriting: 3,
   thesis_statement: 3,
+  claim_evidence_reasoning: 3,
 } as const;
 
 export type FreeClassroomAssignmentQuotaKind =
@@ -18,6 +19,7 @@ export const FREE_CLASSROOM_BUNDLE_KIND_ORDER = [
   'five_paragraph_essay',
   'prewriting',
   'thesis_statement',
+  'claim_evidence_reasoning',
 ] as const satisfies readonly FreeClassroomAssignmentQuotaKind[];
 
 export const FREE_CLASSROOM_ASSIGNMENT_KINDS = [

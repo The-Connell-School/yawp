@@ -50,7 +50,7 @@ test('free-tier flag on shows five dashboard tiles and locked tiles in picker', 
   await loginFreeTeacher(page);
   await page.goto('/app');
   const tiles = page.getByTestId('teacher-assignments-grid');
-  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(5);
+  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(6);
   await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
     0
   );

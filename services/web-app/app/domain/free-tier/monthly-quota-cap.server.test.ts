@@ -18,21 +18,21 @@ test('monthlyQuotaCapEnforcesNewUsage treats max bound as unmetered', () => {
 test('reporter and lesson planner helpers read configured limits', () => {
   expect(
     reporterMonthlyQuotaEnforced({
-      studentSeatCap: 35,
+      studentSeatCap: 30,
       lessonPlannerMonthly: 5,
       reporterMonthly: 2,
     })
   ).toBe(true);
   expect(
     reporterMonthlyQuotaEnforced({
-      studentSeatCap: 35,
+      studentSeatCap: 30,
       lessonPlannerMonthly: 100,
       reporterMonthly: 100,
     })
   ).toBe(false);
   expect(
     lessonPlannerMonthlyQuotaEnforced({
-      studentSeatCap: 35,
+      studentSeatCap: 30,
       lessonPlannerMonthly: 100,
       reporterMonthly: 2,
     })

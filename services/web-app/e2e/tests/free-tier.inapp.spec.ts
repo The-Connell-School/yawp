@@ -637,7 +637,7 @@ for (const width of [1440, 390]) {
         where: { id: klass.id },
         data: { students: { set: [] } },
       });
-      for (let n = 0; n < 35; n++) {
+      for (let n = 0; n < 30; n++) {
         const user = await db.user.create({
           data: {
             name: `Local student ${n + 1}`,

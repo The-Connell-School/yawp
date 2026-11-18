@@ -22,6 +22,14 @@ import {
 } from 'lucide-react';
 import { requireAdmin } from '~/utils/auth.server';
 import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { prisma } from '~/utils/db.server';
+
+export function shouldShowFreeTierAdminTab(
+  freeTierEnabled: boolean,
+  canAccessFreeTierAdmin: boolean
+) {
+  return freeTierEnabled && canAccessFreeTierAdmin;
+}
 
 export const adminTabs = [
   {
@@ -79,19 +87,27 @@ export const adminTabs = [
 export const handle: BreadcrumbHandle = { breadcrumb: 'Admin' };
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  await requireAdmin(request);
+  const admin = await requireAdmin(request);
+  const viewer = await prisma.user.findFirst({
+    where: { id: admin.id },
+    select: { isSuperAdmin: true },
+  });
   return dataResponse({
     freeTierEnabled: await isFreeTierEnabled(),
     auditMoved: auditMovedToInternal(),
+    canAccessFreeTierAdmin: Boolean(viewer?.isSuperAdmin),
   });
 }
 
 export default function Route() {
-  const { freeTierEnabled, auditMoved } = useLoaderData<typeof loader>();
+  const { freeTierEnabled, auditMoved, canAccessFreeTierAdmin } =
+    useLoaderData<typeof loader>();
   const location = useLocation();
   const pathname = location.pathname;
-  const visibleTabs = adminTabs.filter(
-    (tab) => tab.to !== '/app/admin/free-tier' || freeTierEnabled
+  const visibleTabs = adminTabs.filter((tab) =>
+    tab.to === '/app/admin/free-tier'
+      ? shouldShowFreeTierAdminTab(freeTierEnabled, canAccessFreeTierAdmin)
+      : true
   );
   const currentTab =
     pathname.startsWith('/app/admin/assignments') ||

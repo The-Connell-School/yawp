@@ -7,5 +7,8 @@ export function isPublicOnboardingV2Enabled() {
 }
 
 export function isSupportedSignupGrade(grade: string) {
-  return isBelowHsGrade(grade) || ['9', '10', '11', '12'].includes(grade);
+  return (
+    isBelowHsGrade(grade) ||
+    ['6', '7', '8', '9', '10', '11', '12'].includes(grade)
+  );
 }

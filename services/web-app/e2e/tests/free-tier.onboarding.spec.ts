@@ -379,7 +379,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
         name: 'FT Archived Org',
         plan: 'FREE_CLASSROOM',
         planActivatedAt: new Date(),
-        numOfStudentSeats: 35,
+        numOfStudentSeats: 30,
         numOfTeacherSeats: 1,
       },
     });

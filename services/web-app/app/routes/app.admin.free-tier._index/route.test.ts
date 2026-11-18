@@ -17,11 +17,11 @@ describe('admin free tier moved route', () => {
   beforeEach(() => {
     requireSuperAdmin.mockReset();
     requireFreeTierEnabled.mockReset();
-    requireSuperAdmin.mockResolvedValue({ id: 'admin-1' });
+    requireSuperAdmin.mockResolvedValue({ id: 'super-admin-1' });
     requireFreeTierEnabled.mockResolvedValue(undefined);
   });
 
-  test('requires enabled free tier and superadmin but returns moved state only', async () => {
+  test('requires enabled free tier and super admin but returns moved state only', async () => {
     const response = await loader({
       request: new Request('https://example.test/app/admin/free-tier'),
       params: {},

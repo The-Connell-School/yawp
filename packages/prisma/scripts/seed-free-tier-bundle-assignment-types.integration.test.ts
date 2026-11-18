@@ -21,9 +21,24 @@ test.skipIf(!url)('missing bundle is seeded once and repeated runs preserve unre
             'five_paragraph_essay',
             'prewriting',
             'thesis_statement',
+            'claim_evidence_reasoning',
           ],
         },
       },
+    });
+    await db.rubric.upsert({
+      where: { name: 'c-e-r' },
+      create: {
+        name: 'c-e-r',
+        title: 'C-E-R',
+        schemaJson: {
+          name: 'c-e-r',
+          title: 'C-E-R',
+          scoringScale: { type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 },
+          rubric: { categories: [] },
+        },
+      },
+      update: {},
     });
     const baselineCount = await db.assignmentType.count();
     const baselineModules = await db.assignmentModule.count();
@@ -38,7 +53,7 @@ test.skipIf(!url)('missing bundle is seeded once and repeated runs preserve unre
       orgs: await db.organization.findMany(),
     });
     const first = await snapshot();
-    expect(first.types).toHaveLength(baselineCount + 5);
+    expect(first.types).toHaveLength(baselineCount + 6);
     expect(first.modules).toBeGreaterThanOrEqual(baselineModules + 3);
     expect(first.images).toBeGreaterThanOrEqual(baselineImages + 3);
     expect(first.orgs).toEqual(baselineOrgs);
@@ -51,9 +66,15 @@ test.skipIf(!url)('missing bundle is seeded once and repeated runs preserve unre
         'five_paragraph_essay',
         'prewriting',
         'thesis_statement',
+        'claim_evidence_reasoning',
       ].includes(t.kind ?? '')
-    ))
-      expect(row.rubricJson).toBeTruthy();
+    )) {
+      if (row.kind === 'claim_evidence_reasoning') {
+        expect(row.rubricId).toBeTruthy();
+      } else {
+        expect(row.rubricJson).toBeTruthy();
+      }
+    }
     await seedFreeTierBundleAssignmentTypes(db);
     expect(await snapshot()).toEqual(first);
   } finally { await db.$disconnect(); }

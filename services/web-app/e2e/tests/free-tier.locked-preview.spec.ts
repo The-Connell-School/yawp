@@ -318,7 +318,7 @@ async function expectFreeDashboardAssignmentTiles(
   options?: { teachingApproved?: boolean }
 ) {
   const tiles = page.getByTestId('free-assignment-tiles');
-  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(5);
+  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(6);
   await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
     options?.teachingApproved ? 5 : 0
   );
@@ -424,7 +424,7 @@ for (const width of [390, 1440]) {
     );
     await expect(
       page.getByTestId('free-assignment-tiles').locator('img')
-    ).toHaveCount(5);
+    ).toHaveCount(6);
     await expect(page.getByTestId('free-account-checklist')).toHaveCount(0);
     await expect(page.getByTestId('teacher-grading-grid')).toHaveCount(0);
     await expect(page.getByTestId('preview-assignment-creation-disabled')).toHaveCount(
@@ -545,7 +545,7 @@ for (const width of [390, 1440]) {
     );
     await expect(
       page.getByTestId('free-assignment-tiles').locator('img')
-    ).toHaveCount(10);
+    ).toHaveCount(11);
     if (width === 390) {
       await capture(page, 'dashboard-approved-390');
     }

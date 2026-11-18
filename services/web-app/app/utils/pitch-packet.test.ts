@@ -11,7 +11,7 @@ test('packet shares the visible section content, current entitlement limits and 
   const sections = pitchPacketSections(report, limits);
   const text = pitchPacketText(sections);
   for (const section of sections) for (const line of [section.heading, ...section.paragraphs, ...section.items]) expect(text).toContain(line);
-  for (const line of ['1 teacher seat', '35 student seats', '1 active class', 'Evaluation checklist', 'Submitted writing: 3', CLASSROOM_REPORT_SCOPE, ...CLASSROOM_REPORT_RULES, 'not evidence of learning gains']) expect(text).toContain(line);
+  for (const line of ['1 teacher seat', '30 student seats', '1 active class', 'Evaluation checklist', 'Submitted writing: 3', CLASSROOM_REPORT_SCOPE, ...CLASSROOM_REPORT_RULES, 'not evidence of learning gains']) expect(text).toContain(line);
   expect(text).not.toMatch(/\/app\/|@|student name|automatic upgrade|\$|days|learning gains guaranteed/i);
 });
 

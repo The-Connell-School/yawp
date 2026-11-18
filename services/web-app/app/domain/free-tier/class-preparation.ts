@@ -1,4 +1,13 @@
-export const CLASS_GRADES = ['9', '10', '11', '12', 'mixed'] as const;
+export const CLASS_GRADES = [
+  '6',
+  '7',
+  '8',
+  '9',
+  '10',
+  '11',
+  '12',
+  'mixed',
+] as const;
 export const MAX_CLASS_NAME = 100;
 
 export function classGradePrefill(value: string | null | undefined): string {
@@ -17,7 +26,7 @@ export function parseClassPreparation(className: string, grade: string) {
         ? 'Enter a class name with 1–100 characters.'
         : undefined,
     grade: !classGradePrefill(grade)
-      ? 'Choose 9, 10, 11, 12, or mixed grades.'
+      ? 'Choose a grade from 6 through 12, or mixed grades.'
       : undefined,
   };
   if (errors.className || errors.grade) return { ok: false as const, errors };

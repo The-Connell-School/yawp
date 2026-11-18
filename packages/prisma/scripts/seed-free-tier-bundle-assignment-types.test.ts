@@ -46,6 +46,7 @@ describe('seed-free-tier-bundle-assignment-types connection', () => {
 describe('seedFreeTierBundleAssignmentTypes', () => {
   test('creates parent assignment types separately from module rows', async () => {
     const createdTypes = new Map<string, { id: string; kind: string }>();
+    let cerLibraryRubric: { id: string } | null = null;
     const prisma = {
       assignmentType: {
         upsert: mock(() => {
@@ -54,6 +55,12 @@ describe('seedFreeTierBundleAssignmentTypes', () => {
         findUnique: mock(
           ({ where }: { where: { kind?: string; id?: string } }) => {
             if (where.kind) return createdTypes.get(where.kind) ?? null;
+            if (where.id) {
+              const byKind = [...createdTypes.values()].find(
+                (row) => row.id === where.id
+              );
+              return byKind ? { rubricId: null } : null;
+            }
             return null;
           }
         ),
@@ -99,6 +106,15 @@ describe('seedFreeTierBundleAssignmentTypes', () => {
       },
       organizationAssignmentType: {
         upsert: mock(() => ({})),
+      },
+      rubric: {
+        findUnique: mock(({ where }: { where: { name?: string } }) =>
+          where.name === 'c-e-r' ? cerLibraryRubric : null
+        ),
+        create: mock(() => {
+          cerLibraryRubric = { id: 'c-e-r-rubric-id' };
+          return cerLibraryRubric;
+        }),
       },
     } as unknown as PrismaClient;
 

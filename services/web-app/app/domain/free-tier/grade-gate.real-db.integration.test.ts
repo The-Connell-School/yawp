@@ -15,7 +15,7 @@ const baseFlag = 'feature_flag.free_tier';
 const savedEnv = { ...process.env };
 let savedFlags: any[] = [];
 const input = (suffix: string) => ({ name: 'Test Teacher', email: `${prefix}-${suffix}@example.test`,
-  schoolName: 'Demo', location: 'Here', gradeLevel: '7' });
+  schoolName: 'Demo', location: 'Here', gradeLevel: '5' });
 async function v2(value: string) {
   await prisma.setting.upsert({ where: { name: flag }, create: { name: flag, value }, update: { value } });
 }

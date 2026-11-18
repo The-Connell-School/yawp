@@ -342,7 +342,7 @@ export async function requireSuperAdmin(request: Request) {
       {
         error: 'Unauthorized',
         requiredRole: 'isSuperAdmin',
-        message: 'Unauthorized: required role: isSuperAdmin',
+        message: 'You need super admin access',
       },
       { status: 403 }
     );

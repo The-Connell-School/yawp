@@ -73,6 +73,9 @@ describe('tourForPage', () => {
     expect(tourForPage(path, 'five_paragraph_essay')?.id).toBe(
       'type-five-paragraph-essay'
     );
+    expect(tourForPage(path, 'claim_evidence_reasoning')?.id).toBe(
+      'type-claim-evidence-reasoning'
+    );
     expect(tourForPage(path, 'class_starter')?.welcome.title).toBe(
       'Welcome to Class Starter'
     );

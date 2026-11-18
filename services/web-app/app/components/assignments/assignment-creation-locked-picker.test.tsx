@@ -18,7 +18,7 @@ import {
 
 const usage: FreeAccountUsage = {
   ...buildFreeAccountUsage({
-    seatCap: 35,
+    seatCap: 30,
     lessonPlanCap: 5,
     assignmentCaps: {
       class_starter: 12,
@@ -26,6 +26,7 @@ const usage: FreeAccountUsage = {
       five_paragraph_essay: 3,
       prewriting: 3,
       thesis_statement: 3,
+      claim_evidence_reasoning: 3,
     },
     students: 0,
     pendingInvites: 0,

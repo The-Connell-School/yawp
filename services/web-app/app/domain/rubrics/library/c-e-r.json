@@ -1,0 +1,40 @@
+{
+  "name": "c-e-r",
+  "title": "C-E-R",
+  "scoringScale": {
+    "type": "weighted_1_5",
+    "minScore": 1,
+    "maxScore": 5,
+    "step": 1
+  },
+  "rubric": {
+    "categories": [
+      {
+        "key": "claim",
+        "label": "Claim",
+        "weight": 0.34,
+        "description": "A clear, arguable claim that answers the prompt and tells the reader what the student thinks."
+      },
+      {
+        "key": "evidence",
+        "label": "Evidence",
+        "weight": 0.33,
+        "description": "Specific evidence from the text or task that supports the claim and is explained, not just quoted."
+      },
+      {
+        "key": "reasoning",
+        "label": "Reasoning",
+        "weight": 0.33,
+        "description": "Analysis that connects the evidence to the claim and shows why it proves the point."
+      }
+    ]
+  },
+  "promptConfig": {
+    "gradingInstructions": "Grade this C-E-R (Claim-Evidence-Reasoning) response on claim, evidence, and reasoning. Anchor your read in the assignment prompt when it is available. Reward clear thinking and specific support; do not expect full essay structure."
+  },
+  "outputSchema": {
+    "responseShape": "categories_overall_comment",
+    "schemaVersion": 1
+  },
+  "calibrationNotes": "C-E-R (Claim-Evidence-Reasoning): grade claim, evidence, and reasoning as distinct moves."
+}

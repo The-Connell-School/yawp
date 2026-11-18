@@ -101,7 +101,7 @@ describe('free tier real Postgres integration', () => {
       data: {
         name: `One Class Race ${Date.now()}`,
         plan: 'FREE_CLASSROOM',
-        numOfStudentSeats: 35,
+        numOfStudentSeats: 30,
         numOfTeacherSeats: 1,
       },
       select: { id: true, plan: true },

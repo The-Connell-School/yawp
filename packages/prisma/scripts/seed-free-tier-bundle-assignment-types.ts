@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 /**
- * Creates and maintains the five free-classroom bundle assignment types
- * (Class Starter, Exit Ticket, 5-Paragraph Essay, Pre-writing, Thesis Builder).
+ * Creates and maintains the six free-classroom bundle assignment types
+ * (Class Starter, Exit Ticket, 5-Paragraph Essay, Pre-writing, Thesis Builder, C-E-R).
  * Does not link them to school org catalogs — FREE_CLASSROOM orgs receive them
  * via provisioning and the idempotent org-grant backfill below.
  *
@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 
-import type { PrismaClient } from '../generated/prisma';
+import { Prisma, type PrismaClient } from '../generated/prisma';
 import { syncSeedArtwork, type SeedArtwork } from './assignment-type-artwork';
 import { createPrismaClient } from './local-dev/connection';
 import {
@@ -55,6 +55,17 @@ import {
   THESIS_STATEMENT_RUBRIC,
   THESIS_STATEMENT_SCORING_SCALE,
 } from '../../../services/web-app/app/domain/assignment-types/thesis-statement-assignment-type';
+import {
+  C_E_R_LIBRARY_RUBRIC_NAME,
+  C_E_R_LIBRARY_RUBRIC_TITLE,
+  CLAIM_EVIDENCE_REASONING_ASSIGNMENT_TYPE_KIND,
+  CLAIM_EVIDENCE_REASONING_PROD_ASSIGNMENT_TYPE_ID,
+} from '../../../services/web-app/app/domain/assignment-types/claim-evidence-reasoning-assignment-type';
+
+const C_E_R_LIBRARY_RUBRIC_SCHEMA_PATH = join(
+  import.meta.dir,
+  '../../../services/web-app/app/domain/rubrics/library/c-e-r.json'
+);
 
 const PREWRITING_KIND = 'prewriting';
 const THESIS_STATEMENT_KIND = 'thesis_statement';
@@ -88,6 +99,22 @@ const instructions = JSON.parse(
 
 const PREWRITING_MODULE_ID = 'clxiepcvs0005h87l762r5xoh';
 const THESIS_MODULE_ID = 'clxiepcvs0006h87l1cb28bwn';
+
+const CLAIM_EVIDENCE_REASONING_MODULE = {
+  title: 'C-E-R',
+  position: 1,
+  description:
+    'Build a short argument with a claim, evidence, and reasoning.',
+  steps: [
+    {
+      title: 'Write',
+      prompt:
+        'Write a C-E-R response: state your claim, support it with evidence, and explain your reasoning.',
+      position: 1,
+      showChatButton: true,
+    },
+  ],
+} as const;
 
 function moduleFromProd(moduleId: string) {
   const mod = modules.find((row) => row.id === moduleId);
@@ -277,6 +304,11 @@ export const BUNDLE_TILE_IMAGES: Record<
     altText:
       'A scratchy ink drawing of a dog in a beret and striped shirt saying yawp! in a speech bubble, on torn white paper.',
   },
+  [CLAIM_EVIDENCE_REASONING_ASSIGNMENT_TYPE_KIND]: {
+    file: 'claim-evidence-reasoning.jpg',
+    altText:
+      'Course artwork for the C-E-R (Claim-Evidence-Reasoning) assignment type.',
+  },
 };
 
 /**
@@ -364,6 +396,7 @@ export async function assertFreeTierBundleAssignmentTypeParity(
       id: true,
       kind: true,
       rubricJson: true,
+      rubricId: true,
       assignmentModules: { select: { id: true } },
     },
   });
@@ -371,7 +404,8 @@ export async function assertFreeTierBundleAssignmentTypeParity(
     throw new Error('free_tier_bundle_types_missing');
   }
   for (const type of types) {
-    if (!type.rubricJson || type.assignmentModules.length === 0) {
+    const hasRubric = Boolean(type.rubricJson || type.rubricId);
+    if (!hasRubric || type.assignmentModules.length === 0) {
       throw new Error(`free_tier_bundle_type_incomplete:${type.kind}`);
     }
     const image = await prisma.assignmentTypeImage.findUnique({
@@ -592,6 +626,135 @@ async function ensureFiveParagraphEssayBundleType(prisma: PrismaClient) {
   return assignmentType;
 }
 
+/** Dev/CI: create the library rubric when migration did not (prod keeps Brian's published row). */
+async function ensureCErLibraryRubric(prisma: PrismaClient) {
+  const existing = await prisma.rubric.findUnique({
+    where: { name: C_E_R_LIBRARY_RUBRIC_NAME },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+  const schemaJson = JSON.parse(
+    readFileSync(C_E_R_LIBRARY_RUBRIC_SCHEMA_PATH, 'utf8')
+  );
+  const created = await prisma.rubric.create({
+    data: {
+      name: C_E_R_LIBRARY_RUBRIC_NAME,
+      title: C_E_R_LIBRARY_RUBRIC_TITLE,
+      schemaJson,
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+async function linkAssignmentTypeToLibraryRubric(
+  prisma: PrismaClient,
+  assignmentTypeId: string,
+  rubricName: string
+) {
+  const rubric = await prisma.rubric.findUnique({
+    where: { name: rubricName },
+    select: { id: true },
+  });
+  if (!rubric) {
+    throw new Error(`free_tier_bundle_rubric_missing:${rubricName}`);
+  }
+  const existing = await prisma.assignmentType.findUnique({
+    where: { id: assignmentTypeId },
+    select: { rubricId: true },
+  });
+  if (existing?.rubricId === rubric.id) return;
+  await prisma.assignmentType.update({
+    where: { id: assignmentTypeId },
+    data: {
+      rubricId: rubric.id,
+      rubricJson: Prisma.DbNull,
+      scoringScaleJson: Prisma.DbNull,
+      gradingPromptConfigJson: Prisma.DbNull,
+      gradingOutputSchemaJson: Prisma.DbNull,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: { increment: 1 },
+    },
+  });
+}
+
+async function ensureClaimEvidenceReasoningBundleType(prisma: PrismaClient) {
+  const title = 'C-E-R';
+  const description =
+    'Short argument writing with a claim, evidence, and reasoning.';
+  const kind = CLAIM_EVIDENCE_REASONING_ASSIGNMENT_TYPE_KIND;
+  let assignmentType = await prisma.assignmentType.findUnique({
+    where: { kind },
+    select: { id: true, kind: true },
+  });
+  if (!assignmentType) {
+    const byProdId = await prisma.assignmentType.findUnique({
+      where: { id: CLAIM_EVIDENCE_REASONING_PROD_ASSIGNMENT_TYPE_ID },
+      select: { id: true, kind: true },
+    });
+    if (byProdId) {
+      assignmentType = await prisma.assignmentType.update({
+        where: { id: byProdId.id },
+        data: { kind, title, description, position: 56 },
+        select: { id: true, kind: true },
+      });
+    } else {
+      const byTitle = await prisma.assignmentType.findFirst({
+        where: {
+          title: { equals: title, mode: 'insensitive' },
+          ownerOrgId: null,
+          ownerMembershipId: null,
+        },
+        select: { id: true, kind: true },
+      });
+      if (byTitle) {
+        assignmentType = await prisma.assignmentType.update({
+          where: { id: byTitle.id },
+          data: { kind, title, description, position: 56 },
+          select: { id: true, kind: true },
+        });
+      } else {
+        assignmentType = await prisma.assignmentType.create({
+          data: {
+            id: CLAIM_EVIDENCE_REASONING_PROD_ASSIGNMENT_TYPE_ID,
+            kind,
+            title,
+            description,
+            position: 56,
+          },
+          select: { id: true, kind: true },
+        });
+      }
+    }
+  } else {
+    await prisma.assignmentType.update({
+      where: { id: assignmentType.id },
+      data: { title, description, position: 56 },
+    });
+  }
+
+  const moduleCount = await prisma.assignmentModule.count({
+    where: { assignmentTypeId: assignmentType.id },
+  });
+  if (moduleCount === 0) {
+    await ensureAssignmentModules(prisma, assignmentType.id, {
+      title: CLAIM_EVIDENCE_REASONING_MODULE.title,
+      position: CLAIM_EVIDENCE_REASONING_MODULE.position,
+      description: CLAIM_EVIDENCE_REASONING_MODULE.description,
+      steps: [...CLAIM_EVIDENCE_REASONING_MODULE.steps],
+    });
+  }
+
+  await ensureCErLibraryRubric(prisma);
+  await linkAssignmentTypeToLibraryRubric(
+    prisma,
+    assignmentType.id,
+    C_E_R_LIBRARY_RUBRIC_NAME
+  );
+  await ensureBundleTypeImage(prisma, assignmentType.id, kind);
+  return assignmentType;
+}
+
 /** Idempotent: every FREE_CLASSROOM org receives every bundle type grant. */
 export async function backfillFreeClassroomBundleOrganizationGrants(
   prisma: PrismaClient
@@ -682,6 +845,9 @@ export async function seedFreeTierBundleAssignmentTypes(prisma: PrismaClient) {
     moduleId: THESIS_MODULE_ID,
   });
 
+  const claimEvidenceReasoning =
+    await ensureClaimEvidenceReasoningBundleType(prisma);
+
   await assertFreeTierBundleAssignmentTypeParity(prisma);
   await backfillFreeClassroomBundleOrganizationGrants(prisma);
 
@@ -691,6 +857,7 @@ export async function seedFreeTierBundleAssignmentTypes(prisma: PrismaClient) {
     fiveParagraphEssay,
     prewriting,
     thesis,
+    claimEvidenceReasoning,
   };
 }
 

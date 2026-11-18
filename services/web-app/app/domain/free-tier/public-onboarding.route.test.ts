@@ -54,7 +54,16 @@ for (const path of paths) {
     expect(decline).not.toHaveBeenCalled();
     expect(path === 'token' ? redeem : submit).toHaveBeenCalledWith(expect.objectContaining({ gradeLevel: grade, email: 'teacher@example.edu' }), expect.objectContaining({ onboardingV2: true }));
   });
-  for (const grade of ['K', '1', '8']) test(`${path}: explicit ${grade} records decline before admission`, async () => {
+  for (const grade of ['6', '7', '8'])
+    test(`${path}: explicit ${grade} admits with onboarding v2`, async () => {
+      expect((await post(path, grade)).body.ok).toBe(true);
+      expect(decline).not.toHaveBeenCalled();
+      expect(path === 'token' ? redeem : submit).toHaveBeenCalledWith(
+        expect.objectContaining({ gradeLevel: grade, email: 'teacher@example.edu' }),
+        expect.objectContaining({ onboardingV2: true })
+      );
+    });
+  for (const grade of ['K', '1', '5']) test(`${path}: explicit ${grade} records decline before admission`, async () => {
     expect((await post(path, grade)).body).toEqual(path === 'free' ? { ok: true, declined: true } : { ok: true });
     expect(decline).toHaveBeenCalledWith(expect.objectContaining({ gradeLevel: grade, email: 'teacher@example.edu', ...(path === 'token' ? { token: 'event' } : {}) }));
     expect(submit).not.toHaveBeenCalled(); expect(redeem).not.toHaveBeenCalled(); expect(mail).not.toHaveBeenCalled();
@@ -90,13 +99,17 @@ for (const path of ['waitlist', 'token'] as const) {
   });
 }
 test('form token decline passes only validated credential, never calls admission/mail', async () => {
-  expect((await post('free', '7', { intent: 'redeem', token: 'event' })).body).toEqual({ ok: true, declined: true });
+  expect((await post('free', '5', { intent: 'redeem', token: 'event' })).body).toEqual({
+    ok: true,
+    declined: true,
+  });
   expect(decline).toHaveBeenCalledWith(expect.objectContaining({ token: 'event' }));
-  expect(redeem).not.toHaveBeenCalled(); expect(mail).not.toHaveBeenCalled();
+  expect(redeem).not.toHaveBeenCalled();
+  expect(mail).not.toHaveBeenCalled();
 });
 test('a failed decline write never shows the decline confirmation', async () => {
   decline.mockResolvedValueOnce(Response.json({ error: 'flag_off' }, { status: 409 }));
-  expect((await post('free', '7')).body.ok).toBe(false);
+  expect((await post('free', '5')).body.ok).toBe(false);
   expect(submit).not.toHaveBeenCalled();
 });
 

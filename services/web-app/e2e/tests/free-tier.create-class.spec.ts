@@ -333,17 +333,20 @@ for (const width of [1280, 390]) {
 test('missing and unsupported grades require an explicit choice', async ({
   page,
 }) => {
-  for (const grade of ['', '8', '9–12']) {
+  for (const grade of ['', '5', '9–12']) {
     const { user } = await fixture(grade);
     await login(page, user.email!);
     await expect(page.getByLabel('Grade')).toHaveValue('');
     await expect(page.getByLabel('Grade').locator('option')).toHaveText([
       'Choose a grade',
+      '6',
+      '7',
+      '8',
       '9',
       '10',
       '11',
       '12',
-      'Mixed high school grades',
+      'Mixed grades',
     ]);
   }
 });

@@ -1,6 +1,6 @@
 /** Defaults remain available to existing entitlement callers during rollout. */
 export const DEFAULT_FREE_TIER_LIMITS = {
-  studentSeatCap: 35,
+  studentSeatCap: 30,
   lessonPlannerMonthly: 5,
   reporterMonthly: 2,
 } as const;
