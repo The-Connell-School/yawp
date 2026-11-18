@@ -20,7 +20,7 @@ test('privacy policy states student data commitments above automated feedback', 
     'We never use student data for advertising or to build advertising profiles.'
   );
   expect(html).toContain(
-    "Schools own their student data. At a school's request, or when its agreement with us ends, we return the school's student data to it and then delete it within 30 days."
+    "Schools own their student data. At a school's request, or when its agreement with us ends, we will work with the school to return its student data and then delete it."
   );
   expect(html).toContain('Last updated November 17, 2026.');
   expect(html).not.toMatch(/Yawp(?!!)/);
