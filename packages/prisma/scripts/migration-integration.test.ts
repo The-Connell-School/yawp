@@ -729,7 +729,15 @@ describe('migration integration (real Postgres)', () => {
         )
       )
     `);
-    expect(bundleKinds.count).toBeGreaterThanOrEqual(6);
+    // C-E-R assignment type is provisioned by seed (migration only links prod id).
+    expect(bundleKinds.count).toBeGreaterThanOrEqual(5);
+
+    const cerRubricFromMigration = jsonQuery(`
+      SELECT json_build_object(
+        'exists', EXISTS (SELECT 1 FROM "Rubric" WHERE "name" = 'c-e-r')
+      )
+    `);
+    expect(cerRubricFromMigration.exists).toBe(true);
 
     const usageTable = jsonQuery(`
       SELECT json_build_object(
@@ -748,6 +756,24 @@ describe('migration integration (real Postgres)', () => {
       { PATH: PATH_WITH_ROOT_BIN, NODE_PATH: NODE_PATH_WITH_ROOT }
     );
     expect(seedOnce.status).toBe(0);
+
+    const bundleKindsAfterSeed = jsonQuery(`
+      SELECT json_build_object(
+        'count', (
+          SELECT COUNT(*)::int
+          FROM "AssignmentType"
+          WHERE "kind" IN (
+            'class_starter',
+            'exit_ticket',
+            'five_paragraph_essay',
+            'prewriting',
+            'thesis_statement',
+            'claim_evidence_reasoning'
+          )
+        )
+      )
+    `);
+    expect(bundleKindsAfterSeed.count).toBeGreaterThanOrEqual(6);
 
     const moduleCount = jsonQuery(`
       SELECT json_build_object(

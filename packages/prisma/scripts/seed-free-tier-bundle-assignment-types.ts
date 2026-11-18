@@ -57,9 +57,15 @@ import {
 } from '../../../services/web-app/app/domain/assignment-types/thesis-statement-assignment-type';
 import {
   C_E_R_LIBRARY_RUBRIC_NAME,
+  C_E_R_LIBRARY_RUBRIC_TITLE,
   CLAIM_EVIDENCE_REASONING_ASSIGNMENT_TYPE_KIND,
   CLAIM_EVIDENCE_REASONING_PROD_ASSIGNMENT_TYPE_ID,
 } from '../../../services/web-app/app/domain/assignment-types/claim-evidence-reasoning-assignment-type';
+
+const C_E_R_LIBRARY_RUBRIC_SCHEMA_PATH = join(
+  import.meta.dir,
+  '../../../services/web-app/app/domain/rubrics/library/c-e-r.json'
+);
 
 const PREWRITING_KIND = 'prewriting';
 const THESIS_STATEMENT_KIND = 'thesis_statement';
@@ -620,6 +626,27 @@ async function ensureFiveParagraphEssayBundleType(prisma: PrismaClient) {
   return assignmentType;
 }
 
+/** Dev/CI: create the library rubric when migration did not (prod keeps Brian's published row). */
+async function ensureCErLibraryRubric(prisma: PrismaClient) {
+  const existing = await prisma.rubric.findUnique({
+    where: { name: C_E_R_LIBRARY_RUBRIC_NAME },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+  const schemaJson = JSON.parse(
+    readFileSync(C_E_R_LIBRARY_RUBRIC_SCHEMA_PATH, 'utf8')
+  );
+  const created = await prisma.rubric.create({
+    data: {
+      name: C_E_R_LIBRARY_RUBRIC_NAME,
+      title: C_E_R_LIBRARY_RUBRIC_TITLE,
+      schemaJson,
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
 async function linkAssignmentTypeToLibraryRubric(
   prisma: PrismaClient,
   assignmentTypeId: string,
@@ -718,6 +745,7 @@ async function ensureClaimEvidenceReasoningBundleType(prisma: PrismaClient) {
     });
   }
 
+  await ensureCErLibraryRubric(prisma);
   await linkAssignmentTypeToLibraryRubric(
     prisma,
     assignmentType.id,
