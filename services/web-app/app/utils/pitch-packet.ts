@@ -1,3 +1,4 @@
+import { freeClassroomBundlePitchList } from '~/domain/free-tier/inapp-usage';
 import { classroomReportSummary, type ClassroomActivityReport } from './classroom-report';
 
 export type PacketSection = { heading: string; paragraphs: string[]; items: string[] };
@@ -18,7 +19,7 @@ export function pitchPacketSections(
       heading: 'What the current free classroom includes',
       paragraphs: [
         `${limits.teacherSeats} teacher seat, up to ${limits.studentSeats} student seats and ${limits.activeClasses} active class.`,
-        'The free assignment bundle includes Class Starter, Exit Ticket, 5-Paragraph Essay, Pre-writing, and Thesis Builder assignments, with per-type creation limits. Teachers can manage their class roster, assign work and review submitted writing.',
+        `The free assignment bundle includes ${freeClassroomBundlePitchList()} assignments, with per-type creation limits. Teachers can manage their class roster, assign work and review submitted writing.`,
       ],
       items: ['Plan a small classroom evaluation within the available allowances. Check the remaining assignment allowances in the assignment picker before assigning work.', 'This packet describes the current free classroom. It does not quote pricing or promise future access or an upgrade.'],
     },

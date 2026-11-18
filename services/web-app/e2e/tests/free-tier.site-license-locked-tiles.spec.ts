@@ -41,7 +41,7 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
-test('free-tier flag on shows five dashboard tiles and locked tiles in picker', async ({
+test('free-tier flag on shows six dashboard tiles and locked tiles in picker', async ({
   page,
 }) => {
   await flag('free_tier', true);

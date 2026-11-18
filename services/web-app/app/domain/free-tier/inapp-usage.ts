@@ -17,6 +17,15 @@ export const FREE_ASSIGNMENT_LABELS: Record<string, string> = {
 export const FREE_CLASSROOM_BUNDLE_TILE_LABELS = FREE_CLASSROOM_BUNDLE_KIND_ORDER.map(
   (kind) => FREE_ASSIGNMENT_LABELS[kind]
 );
+
+/** Ordered bundle type names for pitch packet and other prose (regular hyphens). */
+export function freeClassroomBundlePitchList(): string {
+  const labels = FREE_CLASSROOM_BUNDLE_TILE_LABELS.map((label) =>
+    label.replaceAll('\u2011', '-')
+  );
+  if (labels.length <= 1) return labels[0] ?? '';
+  return `${labels.slice(0, -1).join(', ')}, and ${labels.at(-1)}`;
+}
 export function buildFreeAccountUsage(input: {
   monthly?: boolean;
   seatCap: number;

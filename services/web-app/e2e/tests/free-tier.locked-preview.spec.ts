@@ -286,7 +286,7 @@ async function capture(page: import('@playwright/test').Page, state: string) {
   }
 }
 
-/** Pending and approved free dashboards expose the five entitled bundle kinds. */
+/** Pending and approved free dashboards expose the six entitled bundle kinds. */
 async function openLockedEntitledHowItWorks(
   page: import('@playwright/test').Page,
   label: string
