@@ -4,6 +4,25 @@
     "@typescript-eslint",
     "unused-imports"
   ],
+  "overrides": [
+    {
+      "files": ["services/web-app/**/*.{tsx,jsx}"],
+      "plugins": ["react", "react-hooks"],
+      "settings": {
+        "react": {
+          "version": "detect"
+        }
+      },
+      "parserOptions": {
+        "ecmaFeatures": {
+          "jsx": true
+        }
+      },
+      "rules": {
+        "react-hooks/rules-of-hooks": "error"
+      }
+    }
+  ],
   "extends": [
     "eslint:recommended",
     "plugin:@typescript-eslint/recommended",
