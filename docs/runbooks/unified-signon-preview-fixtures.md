@@ -185,7 +185,7 @@ with existing master access when running the hosted seed-mode target.
   not expose a mutation endpoint or accept posted auth context.
 - Full class: `QA-FULL-101` has 35 active pending invitations, each with
   `studentClassId=preview-signon-qa-full-class`; resolve shows full.
-- Seat race: `QA-RACE-101` has 34 pending reservations. Open two independent normal
+- Seat race: `QA-RACE-101` has 29 pending reservations (one seat left at the 30-student cap). Open two independent normal
   browser flows while one seat remains; complete handle signup in the first,
   then submit the second stale registration. The second must report full and
   create no account. A completed race uses the remaining seat; use a clean

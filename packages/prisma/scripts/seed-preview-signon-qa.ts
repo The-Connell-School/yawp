@@ -334,9 +334,10 @@ export async function seedPreviewSignonQa(
         { partner: 'ua', organizationId: qaId('partner') },
         'partner'
       );
+      // Match free-classroom cap (30): full class at cap, race class one seat short.
       for (const [key, count] of [
-        ['full', 35],
-        ['race', 34],
+        ['full', 30],
+        ['race', 29],
       ] as const)
         for (let i = 0; i < count; i++) {
           await invite(
