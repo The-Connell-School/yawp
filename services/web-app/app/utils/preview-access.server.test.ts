@@ -323,6 +323,9 @@ describe('preview access gate', () => {
       '/terms',
       '/terms/',
       '/terms.data',
+      '/accessibility',
+      '/accessibility/',
+      '/accessibility.data',
     ]) {
       for (const method of ['GET', 'HEAD']) {
         const response = await previewAccessMiddleware(
@@ -335,10 +338,11 @@ describe('preview access gate', () => {
         ).toBeNull();
       }
     }
-    expect(next).toHaveBeenCalledTimes(12);
+    expect(next).toHaveBeenCalledTimes(18);
     for (const [path, method] of [
       ['/privacy', 'POST'],
       ['/terms', 'POST'],
+      ['/accessibility', 'POST'],
       ['/privacy/private', 'GET'],
       ['/free', 'GET'],
       ['/app', 'GET'],
@@ -349,7 +353,8 @@ describe('preview access gate', () => {
       );
       expect(response?.status).not.toBe(200);
     }
-    expect(next).toHaveBeenCalledTimes(12);
+    // Blocked paths return early without invoking the downstream handler.
+    expect(next).toHaveBeenCalledTimes(18);
   });
 
   test('lets Yawp Internal reach the rubric catalog without a preview cookie', async () => {

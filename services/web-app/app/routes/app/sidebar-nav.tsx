@@ -93,12 +93,6 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
         requires: writingPracticeEnabled,
       },
       {
-        to: '/app/teacher-trainings',
-        label: "Teacher's Lounge",
-        icon: icons.lounge,
-        requires: teacher,
-      },
-      {
         to: '/app/reporter',
         label: 'Reporter',
         icon: requiredAppSidebarIcon('/app/reporter'),

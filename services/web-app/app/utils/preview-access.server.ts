@@ -764,7 +764,7 @@ export function createPreviewAccessMiddleware(
     // Do not grant a seat or extend activity for these anonymous requests.
     if (
       ['GET', 'HEAD'].includes(request.method) &&
-      /^\/(privacy|terms)(?:\/|\.data)?$/.test(pathname)
+      /^\/(privacy|terms|accessibility)(?:\/|\.data)?$/.test(pathname)
     ) return next();
     if (isOpenPath(pathname)) return next();
 

@@ -5,7 +5,7 @@ const MASTER_CODE = 'brave-otter-4193';
 test('admin creates a persistent seeded preview seat and retrieves its code', async ({
   page,
 }) => {
-  await page.goto('/accessibility');
+  await page.goto('/info?gate-e2e=1');
   await page.locator('#preview-access-code').fill(MASTER_CODE);
   await page.getByRole('button', { name: 'Open preview' }).click();
 
@@ -46,7 +46,7 @@ test('admin creates a persistent seeded preview seat and retrieves its code', as
   await expect(page.locator('[data-preview-access-screen]')).toHaveCount(0);
   // Entering a code with no returnTo lands on `/`, which takes the root loader's public
   // fast path and renders no dev bar. Go somewhere the bar exists before opening it.
-  await page.goto('/accessibility');
+  await page.goto('/info?gate-e2e=1');
   await page
     .getByRole('button', {
       name: /Open dev login menu\.$/,

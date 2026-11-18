@@ -44,7 +44,11 @@ async function capture(page: import('@playwright/test').Page, name: string, stat
   }) + '\n');
 }
 
-for (const [route, title] of [['/privacy', 'Privacy Policy'], ['/terms', 'Terms of Service']]) {
+for (const [route, title] of [
+  ['/privacy', 'Privacy Policy'],
+  ['/terms', 'Terms of Service'],
+  ['/accessibility', 'Accessibility at Yawp!'],
+]) {
   test(`${route} is public without a session`, async ({ page }) => {
     const response = await page.goto(route!);
     expect(response?.status()).toBe(before ? 404 : 200);
@@ -71,13 +75,19 @@ test('signup visibly links to both public legal pages', async ({ page }) => {
     await expect(page.getByRole('link', { name: 'Privacy Policy', exact: true })).toHaveCount(0);
     return;
   }
-  for (const [name, destination] of [['Privacy Policy', '/privacy'], ['Terms of Service', '/terms']]) {
-    const link = page.getByRole('link', { name: name!, exact: true });
+  for (const [linkName, destination, pageHeading] of [
+    ['Privacy Policy', '/privacy', 'Privacy Policy'],
+    ['Terms of Service', '/terms', 'Terms of Service'],
+    ['Accessibility', '/accessibility', 'Accessibility at Yawp!'],
+  ]) {
+    const link = page.getByRole('link', { name: linkName!, exact: true });
     await expect(link).toBeVisible();
     await expect(link).toHaveAttribute('href', destination!);
     await link.click();
     await expect(page).toHaveURL(new RegExp(`${destination}$`));
-    await expect(page.getByRole('heading', { name: name!, exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: pageHeading!, exact: true })
+    ).toBeVisible();
     await page.goBack();
     await expect(page.getByRole('button', { name: 'Join the waitlist', exact: true })).toBeVisible();
   }

@@ -7,7 +7,11 @@ import { expect, test } from '@playwright/test';
 
 const ACCESS_CODE = 'brave-otter-4193';
 const MASTER_ACCESS_CODE = 'yawp-rocks';
-const ORIGINAL_PATH = '/accessibility?gate-e2e=1';
+// `/accessibility` is a public legal read; use a gated marketing page for gate e2e.
+const ORIGINAL_PATH = '/info?gate-e2e=1';
+const PREVIEW_ACCESS_RETURN =
+  /\/auth\/preview-access\?returnTo=%2Finfo%3Fgate-e2e%3D1$/;
+const POST_PREVIEW_HEADING = 'Transform Your Students’ Writing';
 
 async function enterPreview(page: import('@playwright/test').Page) {
   await page.goto(ORIGINAL_PATH);
@@ -102,11 +106,9 @@ test.describe('in-app preview access gate', () => {
     await expect(
       page.getByRole('heading', { name: 'Choose an organization' })
     ).toBeVisible();
-    await expect(page).toHaveURL(
-      /\/auth\/preview-access\?returnTo=%2Faccessibility%3Fgate-e2e%3D1$/
-    );
+    await expect(page).toHaveURL(PREVIEW_ACCESS_RETURN);
     await expect(
-      page.getByRole('heading', { name: 'Accessibility at Yawp!' })
+      page.getByRole('heading', { name: POST_PREVIEW_HEADING })
     ).not.toBeVisible();
     expect(requestedDevLoginPages).toEqual([]);
     expect(
@@ -124,7 +126,7 @@ test.describe('in-app preview access gate', () => {
 
     await expect(page).toHaveURL(ORIGINAL_PATH);
     await expect(
-      page.getByRole('heading', { name: 'Accessibility at Yawp!' })
+      page.getByRole('heading', { name: POST_PREVIEW_HEADING })
     ).toBeVisible();
     await page
       .getByRole('button', {
@@ -176,7 +178,7 @@ test.describe('in-app preview access gate', () => {
     expect(navigationResponse?.status()).toBe(200);
     expect(navigationResponse?.headers()['www-authenticate']).toBeUndefined();
     await expect(page).toHaveURL(
-      /\/auth\/preview-access\?returnTo=%2Faccessibility%3Fgate-e2e%3D1$/
+      PREVIEW_ACCESS_RETURN
     );
     await expect(page).toHaveTitle('Preview Access | Yawp!');
     await expect(page.locator('[data-preview-access-screen]')).toBeVisible();
@@ -184,7 +186,7 @@ test.describe('in-app preview access gate', () => {
       page.getByRole('heading', { name: 'Find your Yawp!' })
     ).toBeVisible();
     await expect(
-      page.getByRole('heading', { name: 'Accessibility at Yawp!' })
+      page.getByRole('heading', { name: POST_PREVIEW_HEADING })
     ).not.toBeVisible();
 
     await expect
@@ -244,7 +246,7 @@ test.describe('in-app preview access gate', () => {
 
     await page.goto(ORIGINAL_PATH);
     await expect(page).toHaveURL(
-      /\/auth\/preview-access\?returnTo=%2Faccessibility%3Fgate-e2e%3D1$/
+      PREVIEW_ACCESS_RETURN
     );
     await expect(page.locator('[data-preview-access-screen]')).toBeVisible();
 
@@ -253,7 +255,7 @@ test.describe('in-app preview access gate', () => {
 
     await expect(page).toHaveURL(ORIGINAL_PATH);
     await expect(
-      page.getByRole('heading', { name: 'Accessibility at Yawp!' })
+      page.getByRole('heading', { name: POST_PREVIEW_HEADING })
     ).toBeVisible();
     await expect(
       page.locator('[data-preview-access-screen]')
@@ -270,7 +272,7 @@ test.describe('in-app preview access gate', () => {
     await page.reload();
     await expect(page).toHaveURL(ORIGINAL_PATH);
     await expect(
-      page.getByRole('heading', { name: 'Accessibility at Yawp!' })
+      page.getByRole('heading', { name: POST_PREVIEW_HEADING })
     ).toBeVisible();
 
     await page
@@ -291,11 +293,11 @@ test.describe('in-app preview access gate', () => {
 
     await page.goto(ORIGINAL_PATH);
     await expect(page).toHaveURL(
-      /\/auth\/preview-access\?returnTo=%2Faccessibility%3Fgate-e2e%3D1$/
+      PREVIEW_ACCESS_RETURN
     );
     await expect(page.locator('[data-preview-access-screen]')).toBeVisible();
     await expect(
-      page.getByRole('heading', { name: 'Accessibility at Yawp!' })
+      page.getByRole('heading', { name: POST_PREVIEW_HEADING })
     ).not.toBeVisible();
   });
 });

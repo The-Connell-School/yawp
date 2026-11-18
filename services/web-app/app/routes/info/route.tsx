@@ -23,6 +23,7 @@ const demoUrl = 'https://app.usemotion.com/meet/brian-connell/ryxkqvr';
 const loginUrl = '/auth/login';
 const accessibilityUrl = '/accessibility';
 const privacyUrl = '/privacy';
+const termsUrl = '/terms';
 const contactUrl =
   'mailto:yawp@theconnellschool.com?subject=Yawp!%20Writing%20Program';
 const connellUrl = 'https://www.theconnellschool.com/';
@@ -327,8 +328,9 @@ export default function IndexRoute() {
       <footer className="yawp-footer">
         <p>
           <a href={contactUrl}>Contact</a>
-          <a href="/accessibility">Accessibility</a>
+          <a href={termsUrl}>Terms</a>
           <a href={privacyUrl}>Privacy</a>
+          <a href="/accessibility">Accessibility</a>
           <a href={connellUrl} target="_blank" rel="noreferrer">
             The Connell School of Writing
           </a>
@@ -346,12 +348,16 @@ export default function IndexRoute() {
         >
           <span>{itemNumber}</span>
           <span className="yawp-footer-divider" aria-hidden="true" />
-          <a className="yawp-footer-meta-link" href={accessibilityUrl}>
-            Accessibility
+          <a className="yawp-footer-meta-link" href={termsUrl}>
+            Terms
           </a>
           <span className="yawp-footer-divider" aria-hidden="true" />
           <a className="yawp-footer-meta-link" href={privacyUrl}>
             Privacy
+          </a>
+          <span className="yawp-footer-divider" aria-hidden="true" />
+          <a className="yawp-footer-meta-link" href={accessibilityUrl}>
+            Accessibility
           </a>
         </p>
       </footer>

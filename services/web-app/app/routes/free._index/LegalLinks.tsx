@@ -18,6 +18,16 @@ export function FreeTierLegalLinks() {
       >
         Privacy
       </a>
+      <span className="px-3" aria-hidden="true">
+        ·
+      </span>
+      <a
+        className="underline underline-offset-2"
+        href="/accessibility"
+        aria-label="Accessibility"
+      >
+        Accessibility
+      </a>
     </p>
   );
 }

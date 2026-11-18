@@ -8,7 +8,9 @@ describe('FreeTierLegalLinks', () => {
 
     expect(html).toContain('href="/terms"');
     expect(html).toContain('href="/privacy"');
+    expect(html).toContain('href="/accessibility"');
     expect(html).toContain('Terms');
     expect(html).toContain('Privacy Policy');
+    expect(html).toContain('Accessibility');
   });
 });

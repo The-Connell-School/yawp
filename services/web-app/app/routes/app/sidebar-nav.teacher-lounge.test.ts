@@ -34,10 +34,10 @@ describe("Teacher's Lounge sidebar (temporarily disabled)", () => {
     );
   });
 
-  test('shows Teacher\'s Lounge when the app loader enables nav visibility', () => {
+  test('does not show the removed course grid nav even when visibility is enabled', () => {
     expect(
       visibleDestinations(teacherUser(), { teacherLoungeNavVisible: true })
-    ).toContain('/app/teacher-trainings');
+    ).not.toContain('/app/teacher-trainings');
   });
 });
 

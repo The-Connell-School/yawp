@@ -541,7 +541,8 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         data.requestInfo.path === '/' ||
         data.requestInfo.path === '/info' ||
         data.requestInfo.path === '/privacy' ||
-        data.requestInfo.path === '/terms';
+        data.requestInfo.path === '/terms' ||
+        data.requestInfo.path === '/accessibility';
       const shouldIdentifyUser =
         Boolean(data.user?.id) &&
         !(publicLandingPath && !data.devPanelEnabled);

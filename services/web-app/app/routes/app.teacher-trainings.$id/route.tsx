@@ -2,6 +2,7 @@ import { withLessonTutorial } from '~/domain/teacher-trainings/lounge-lesson-tut
 import {
   type LoaderFunctionArgs,
   data as dataResponse,
+  redirect,
   useLoaderData,
 } from 'react-router';
 import { Link } from 'react-router';
@@ -16,6 +17,7 @@ import { cn } from '~/utils/misc';
 import { isLoungeCommunityEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { LOUNGE_NAME } from '~/domain/lounge/launch';
 import { facultyLoungeTrainingsHome } from '~/domain/teacher-trainings/faculty-lounge-trainings';
+import { TEACHER_LOUNGE_DISABLED_HOME } from '~/domain/teacher-lounge/teacher-lounge-temporary-disable';
 import {
   getTeacherTrainingProgressPercent,
   isTeacherTrainingModuleComplete,
@@ -37,6 +39,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   if (profile.role !== "TEACHER") {
     throw new Response('Teacher profile required', { status: 403 });
+  }
+
+  const loungeCommunityEnabled = await isLoungeCommunityEnabled(
+    profile.organization.id
+  );
+  if (!loungeCommunityEnabled) {
+    throw redirect(TEACHER_LOUNGE_DISABLED_HOME);
   }
 
   const assignmentCounts = await prisma.orgMembership.findUnique({
@@ -85,8 +94,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   // Trainings stay reachable at their own URL. With the community on, Back
   // returns to the Faculty Lounge feed; otherwise to the course grid.
-  const communityEnabled = await isLoungeCommunityEnabled(profile.organization.id);
-
   // Lessons of the Thesis-Driven Essay course run as long as Brian's
   // tutorials, which the module pages play in place of the uploaded videos.
   return dataResponse({
@@ -96,7 +103,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         withLessonTutorial(teacherTraining.title, module)
       ),
     },
-    communityEnabled,
+    communityEnabled: loungeCommunityEnabled,
   });
 }
 

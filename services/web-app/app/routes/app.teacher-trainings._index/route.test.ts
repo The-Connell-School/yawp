@@ -15,25 +15,8 @@ const userFindUnique = mock(async ({ select }: { select?: Record<string, boolean
   return null;
 });
 
-const teacherTrainingFindMany = mock(async () => [
-  {
-    id: 'course-1',
-    title: 'E2E Teacher Lounge',
-    description: 'Test course',
-    teacherTrainingModules: [],
-    resources: [],
-    image: null,
-  },
-]);
-
 const prisma = {
   user: { findUnique: userFindUnique },
-  orgMembership: {
-    findUnique: mock(async () => ({
-      _count: { assignedTeacherTrainings: 0 },
-    })),
-  },
-  teacherTraining: { findMany: teacherTrainingFindMany },
 };
 
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
@@ -50,7 +33,6 @@ const { loader } = await import('./route');
 describe('teacher trainings index', () => {
   beforeEach(() => {
     isLoungeCommunityEnabled.mockReset();
-    teacherTrainingFindMany.mockClear();
     isLoungeCommunityEnabled.mockResolvedValue(false);
   });
 
@@ -62,15 +44,14 @@ describe('teacher trainings index', () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get('Location')).toBe('/app/lounge');
-    expect(teacherTrainingFindMany).not.toHaveBeenCalled();
   });
 
-  test('community off: still loads the course grid', async () => {
+  test('community off: redirects teachers to the dashboard', async () => {
     const response = await loader({
       request: new Request('http://test/app/teacher-trainings'),
-    } as never);
+    } as never).catch((error) => error);
 
-    expect(response.data.teacherTrainings).toHaveLength(1);
-    expect(response.data.teacherTrainings[0].id).toBe('course-1');
+    expect(response.status).toBe(302);
+    expect(response.headers.get('Location')).toBe('/app');
   });
 });
