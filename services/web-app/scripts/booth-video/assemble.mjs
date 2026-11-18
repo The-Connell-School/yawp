@@ -3,7 +3,7 @@
  * 1920×1080 H.264 at 30 fps, yuv420p, with a silent stereo track (some TV USB
  * players won't start a file that has no audio) and +faststart.
  *
- *   node scripts/booth-video/assemble.mjs --clips <dir> --out yawp-ncte-booth.mp4
+ *   node scripts/booth-video/assemble.mjs --clips <dir> --out yawp-demo.mp4
  *
  * Clips are joined in filename order (record.mjs numbers them). The file starts
  * on the opening card and ends on the closing card, so it loops cleanly.
@@ -15,7 +15,7 @@ import path from 'node:path';
 const args = process.argv.slice(2);
 const opt = (name) => { const i = args.indexOf(`--${name}`); return i === -1 ? undefined : args[i + 1]; };
 const clipsDir = opt('clips');
-const out = opt('out') ?? 'yawp-ncte-booth.mp4';
+const out = opt('out') ?? 'yawp-demo.mp4';
 const fade = Number(opt('fade') ?? 0.5);
 if (!clipsDir) throw new Error('--clips <dir> is required');
 

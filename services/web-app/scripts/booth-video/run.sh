@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Records the NCTE booth video from scratch. See README.md in this folder.
+# Records the Yawp! demo video (first made for the NCTE booth) from scratch. See README.md in this folder.
 #
 #   bash services/web-app/scripts/booth-video/run.sh [output.mp4]
 #
@@ -15,10 +15,10 @@ if [[ -n "${BOOTH_APP_ROOT:-}" && "$(realpath "$BOOTH_APP_ROOT")" != "$ROOT" ]];
   APP_ROOT="$(realpath "$BOOTH_APP_ROOT")"
   mkdir -p "$APP_ROOT/services/web-app/scripts/booth-video"
   cp -R "$HERE/." "$APP_ROOT/services/web-app/scripts/booth-video/"
-  BOOTH_APP_ROOT= exec bash "$APP_ROOT/services/web-app/scripts/booth-video/run.sh" "$(realpath -m "${1:-$ROOT/yawp-ncte-booth.mp4}")"
+  BOOTH_APP_ROOT= exec bash "$APP_ROOT/services/web-app/scripts/booth-video/run.sh" "$(realpath -m "${1:-$ROOT/yawp-demo.mp4}")"
 fi
 WEB="$ROOT/services/web-app"
-OUT="$(realpath -m "${1:-$ROOT/yawp-ncte-booth.mp4}")"
+OUT="$(realpath -m "${1:-$ROOT/yawp-demo.mp4}")"
 WORK="${BOOTH_WORK_DIR:-${TMPDIR:-/tmp}/booth-video}"
 STAND_IN_PORT="${BOOTH_STAND_IN_PORT:-5199}"
 

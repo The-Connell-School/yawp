@@ -34,7 +34,7 @@ const PURPLE = { accent: '#7B4FB0', tint: '#F4EEF9', text: '#7B4FB0' }; // writi
 // a clear emerald instead. Gold's tint reads as tan and coral as orange, so
 // neither is a ground here.
 const EMERALD = { accent: '#2E9E6B', tint: '#D7F0E3', text: '#17603F' };
-export const SECTION_COLORS = [BLUE, TEAL, PINK, EMERALD, BLUE, PURPLE, TEAL, PINK];
+export const SECTION_COLORS = [BLUE, TEAL, PINK, EMERALD, BLUE, PURPLE, PINK];
 const STRIPE = [BLUE, TEAL, PURPLE, PINK, EMERALD].map((c, i) => `${c.accent} ${i * 20}% ${(i + 1) * 20}%`).join(', ');
 const HEAD = `'Bricolage Grotesque', 'Instrument Sans', system-ui, sans-serif`;
 const BODY = `'Instrument Sans', Roboto, system-ui, sans-serif`;

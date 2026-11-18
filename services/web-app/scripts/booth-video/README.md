@@ -1,21 +1,20 @@
-# NCTE booth video
+# Yawp! demo video
 
-A silent, looping, ~6-minute 1080p MP4 of the real app, for the Yawp! booth.
-Plan and storyboard: `docs/plans/2026-10-22-ncte-booth-video.md`.
-
-```bash
-bash services/web-app/scripts/booth-video/run.sh yawp-ncte-booth.mp4
-```
-
-To record against another checkout (the new stack lives in the Lesson Planner
-branch, The-Connell-School/yawp#437), point `BOOTH_APP_ROOT` at a git worktree
-of it; this folder is copied there and run from it:
+A silent, looping, ~5½-minute 1080p MP4 of the real app. First made for the
+NCTE booth (plan: `docs/plans/2026-10-22-ncte-booth-video.md` on the
+`claude/eloquent-goodall-u4vcht` branch); since Nov 18 it records against
+current `main` and has seven sections (Writing Practice is no longer in it).
 
 ```bash
-git worktree add ../yawp-437 origin/claude/beautiful-gates-i8db40
-(cd ../yawp-437 && bun install)
-BOOTH_APP_ROOT=../yawp-437 bash services/web-app/scripts/booth-video/run.sh yawp-ncte-booth.mp4
+bash services/web-app/scripts/booth-video/run.sh yawp-demo.mp4
 ```
+
+To record against another checkout, point `BOOTH_APP_ROOT` at a git worktree
+of it; this folder is copied there and run from it.
+
+`seed-booth.ts` turns on the Lesson Planner flags and the prompt generator for
+the demo organization. Some of them default off on production, so check them
+against the live site's flag settings before saying a screen is live.
 
 `run.sh` **wipes and re-seeds the local dev database**, starts the app, records
 every section in a 1920×1080 X display and joins the clips. It takes about ten

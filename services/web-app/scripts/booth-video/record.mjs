@@ -91,7 +91,15 @@ const segments = {
     await s.scrollTo(tutorRow, { ms: 1200 });
     await s.callout(tutorRow, { ...VO.assign.tutorCallout, side: 'left', holdMs: 5000 });
     await s.clearCallout();
-    await s.click(page.getByRole('button', { name: 'Create Assignment' }), { after: 900 });
+    await s.click(page.getByRole('button', { name: 'Create Assignment' }), { after: 0 });
+    // The share link reads as it does on the live site, not the local server.
+    await page.getByText('Share with students').first().waitFor({ timeout: 15000 }).catch(() => {});
+    await page.evaluate((origin) => {
+      for (const input of document.querySelectorAll('input')) {
+        if (input.value.startsWith(origin)) input.value = input.value.replace(origin, 'https://yawp.school');
+      }
+    }, new URL(process.env.BOOTH_BASE_URL ?? 'http://localhost:5190').origin);
+    await sleep(900);
     await s.dockCaption(null);
     await s.caption(VO.assign.sent);
     await rec.stop();
@@ -528,36 +536,6 @@ segments.planner = async () => {
   await s.clearCaption();
 };
 
-segments.practice = async () => {
-  await titleCard(SECTIONS.practice);
-  await as(copy.TEACHER.email);
-  await go(page, '/app/writing-lessons');
-  await s.dockCaption(null);
-  await s.chapter(SECTIONS.practice, TOTAL_SECTIONS, SECTION_COLORS[SECTIONS.practice.n - 1].accent);
-  await rec.start('practice');
-  await s.caption(VO.practice.library, { hold: false });
-  await sleep(900);
-  await s.click(page.getByRole('button', { name: /Grammar & Mechanics/ }).first(), { after: 1200 });
-  await s.click('[data-testid="writing-lesson-card-fixing-comma-splices"]', { after: 0 });
-  await page.waitForURL(/writing-lessons\/fixing-comma-splices/);
-  await page.waitForLoadState('networkidle');
-  await s.caption(VO.practice.lesson, { hold: false });
-  await sleep(2700);
-  await s.caption(VO.practice.exercise, { hold: false });
-  await s.click(page.getByRole('button', { name: /Try the practice/ }).or(page.getByRole('link', { name: /Try the practice/ })).first(), { after: 0 });
-  await page.waitForURL(/writing-lessons\/practice/);
-  await page.waitForLoadState('networkidle');
-  await sleep(800);
-  await s.click(page.locator('label, [role="radio"], button').filter({ hasText: copy.PRACTICE_QUESTIONS.questions[0].choices[1] }).first(), { after: 600 });
-  await s.click(page.getByRole('button', { name: 'Check my answer' }), { after: 0 });
-  const correct = page.getByText('Correct!').first();
-  await correct.waitFor({ timeout: 15000 });
-  await s.scrollTo(correct, { ms: 800 });
-  await sleep(2200);
-  await rec.stop();
-  await s.clearCaption();
-};
-
 segments.reporter = async () => {
   await titleCard(SECTIONS.reporter);
   await as(copy.TEACHER.email);
@@ -623,7 +601,7 @@ segments.close = async () => {
   await rec.stop();
 };
 
-const order = ['open', 'assign', 'student', 'grading', 'revision', 'summary', 'planner', 'practice', 'reporter', 'close'];
+const order = ['open', 'assign', 'student', 'grading', 'revision', 'summary', 'planner', 'reporter', 'close'];
 try {
   for (const name of order) {
     if (only && !only.includes(name)) continue;

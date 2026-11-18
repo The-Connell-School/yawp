@@ -14,7 +14,7 @@ import { chromium } from 'playwright';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const BASE_URL = process.env.BOOTH_BASE_URL ?? 'http://localhost:5190';
-const CHROMIUM = process.env.BOOTH_CHROMIUM ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROMIUM = process.env.BOOTH_CHROMIUM ?? (fs.existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : '/opt/pw-browsers/chromium-1194/chrome-linux/chrome');
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** How long captions and callouts stay up, relative to reading time (BOOTH_PACE). */

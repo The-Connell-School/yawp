@@ -235,7 +235,7 @@ export const CLASS_SUMMARY = {
     },
     {
       title: 'Fix comma splices after quotations',
-      detail: 'A ten-minute mini-lesson on the splices that appear when students connect a quote to their claim, followed by the Fixing Comma Splices practice set.',
+      detail: 'A ten-minute mini-lesson on the splices that appear when students connect a quote to their claim, with each student repairing one splice in their own essay.',
       rubricCategory: 'grammar_and_mechanics',
     },
     {
@@ -291,12 +291,12 @@ Project the explanation and the first example only, about 4 minutes of it.
 2. Take three answers. Receive each one warmly; a student who picks a weaker word is still looking closely, so ask what that word adds.
 3. Land on this: the analysis names the word and says what it does.
 
-## Worked example (8 min) {type: activity}
+## Worked example (15 min) {type: activity}
 
 \`\`\`yawp-material
 kind: sample
 title: Two ways to use the same quote
-minutes: 8
+minutes: 15
 type: activity
 ---
 ## Version A
@@ -310,22 +310,12 @@ Bradbury opens with Montag at ease in his work: "It was a pleasure to burn." The
 Circle the word each version leans on. Which one proves something?
 \`\`\`
 
-## Writing Practice: Analysis (10 min) {type: activity}
-
-\`\`\`yawp-practice
-lessons: analysis
-problems: 6
-title: Make the quote do the work
----
-For each quote, write one sentence that names a word and explains what it proves.
-\`\`\`
-
-## Repair your essay (12 min) {type: thesis_essay}
+## Repair your essay (15 min) {type: thesis_essay}
 
 \`\`\`yawp-material
 kind: handout
 title: Repair your essay: one quote, done right
-minutes: 12
+minutes: 15
 type: thesis_essay
 ---
 ## Repair your essay
@@ -377,13 +367,13 @@ ${JSON.stringify({
   slides: [
     { layout: 'title', title: "The Quote's Work", subtitle: 'Claim, quote, so what', course: 'English 10 · Period 3', speakerNotes: 'Let the painting sit while they settle.', minutes: 0 },
     { layout: 'write', title: 'A line that stuck', routine: 'Class starter', body: 'Think of one sentence from a book, a song or a show that stayed with you. Why that sentence?', minutes: 5, step: 1, speakerNotes: 'Start the timer as the bell rings.' },
-    { layout: 'agenda', title: "Today's program", agenda: [{ title: 'A line that stuck', minutes: 5 }, { title: 'The quote sandwich', minutes: 10 }, { title: 'Two versions, one quote', minutes: 8 }, { title: 'Writing Practice', minutes: 10 }, { title: 'Repair your essay', minutes: 12 }, { title: 'Exit ticket', minutes: 5 }], speakerNotes: 'Walk the six steps in one breath.', minutes: 0 },
+    { layout: 'agenda', title: "Today's program", agenda: [{ title: 'A line that stuck', minutes: 5 }, { title: 'The quote sandwich', minutes: 10 }, { title: 'Two versions, one quote', minutes: 15 }, { title: 'Repair your essay', minutes: 15 }, { title: 'Exit ticket', minutes: 5 }], speakerNotes: 'Walk the five steps in one breath.', minutes: 0 },
     { layout: 'look', title: 'What is being replaced?', question: 'A steam tug tows an old warship to be broken up. What is the painting saying about the new?', seconds: 60, followUp: 'Which detail made you say that?', minutes: 3, step: 2, speakerNotes: 'One minute of looking before anyone speaks. Bridge to Bradbury: the new thing wins, and something is lost.' },
     { layout: 'divider', title: 'Body paragraphs', processStep: 4, minutes: 0, step: 2, speakerNotes: 'Today is about the middle of the essay: the evidence.' },
     { layout: 'big_idea', title: 'The quote sandwich', body: '~~1|Claim~~, then ~~2|quote~~, then ~~3|so what~~: name the word that does the work and say what it does.', accentWord: 'word', minutes: 7, step: 2, speakerNotes: 'Build the three layers on the board.' },
-    { layout: 'discuss', title: 'Which word works?', question: "Which word in 'It was a pleasure to burn' carries Montag's attitude?", choices: ['It', 'pleasure', 'burn'], answer: 2, grouping: 'Pairs', stem: 'The word ___ shows that…', minutes: 8, step: 3, speakerNotes: 'One minute in pairs, then reveal.' },
-    { layout: 'steps', title: 'Repair your essay', bullets: ['Find one quote that sits on its own', 'Underline the word that does the most work', 'Add two sentences: what it means, what it proves'], minutes: 12, step: 5, speakerNotes: 'Circulate.' },
-    { layout: 'exit', title: 'Before you go', body: 'Name one word in your quote and say what it proves.', button: 'Exit ticket', minutes: 5, step: 6, speakerNotes: 'Students open the exit ticket in Yawp!.' },
+    { layout: 'discuss', title: 'Which word works?', question: "Which word in 'It was a pleasure to burn' carries Montag's attitude?", choices: ['It', 'pleasure', 'burn'], answer: 2, grouping: 'Pairs', stem: 'The word ___ shows that…', minutes: 15, step: 3, speakerNotes: 'One minute in pairs, then reveal.' },
+    { layout: 'steps', title: 'Repair your essay', bullets: ['Find one quote that sits on its own', 'Underline the word that does the most work', 'Add two sentences: what it means, what it proves'], minutes: 15, step: 4, speakerNotes: 'Circulate.' },
+    { layout: 'exit', title: 'Before you go', body: 'Name one word in your quote and say what it proves.', button: 'Exit ticket', minutes: 5, step: 5, speakerNotes: 'Students open the exit ticket in Yawp!.' },
   ],
 })}
 \`\`\`
@@ -398,9 +388,8 @@ English 10 · Period 3 spent a 50-minute period on one skill their Fahrenheit 45
 ## How the period ran
 - **Class starter (5 min):** a quick write on a line that stayed with them.
 - **Mini-lesson (10 min):** the quote sandwich: claim, quote, so what.
-- **Worked example (8 min):** two uses of the same quote, compared.
-- **Writing Practice (10 min):** six analysis items in Yawp!.
-- **Repair your essay (12 min):** each student rewrote one paragraph of their own essay.
+- **Worked example (15 min):** two uses of the same quote, compared.
+- **Repair your essay (15 min):** each student rewrote one paragraph of their own essay.
 - **Exit ticket (5 min):** one word, and what it proves.
 
 ## Why this lesson
@@ -411,8 +400,7 @@ Today we worked on making a quote do the work in your Fahrenheit 451 essay: name
 
 ## What to do
 1. Read the quote sandwich: **claim**, **quote**, **so what**.
-2. Do the six Writing Practice items in Yawp!.
-3. Pick one paragraph of your essay where a quote sits on its own, and add two sentences after it.
+2. Pick one paragraph of your essay where a quote sits on its own, and add two sentences after it.
 
 Bring your two new sentences to class tomorrow.`,
   sub: `## Class starter (5 min)
@@ -424,50 +412,6 @@ Put claim, quote, so what on the board and read the first Analysis example aloud
 
 ## Talking about it at dinner
 - Ask which word in their favorite quote does the most work.`,
-};
-
-// ---------------------------------------------------------------------------
-// Section 7: writing practice (ACT-style questions for Fixing Comma Splices)
-// ---------------------------------------------------------------------------
-
-export const PRACTICE_QUESTIONS = {
-  questions: [
-    {
-      sentence: 'Montag hides the books behind the air-conditioning grille, he knows Beatty will come looking for them.',
-      underline: 'grille, he knows',
-      choices: ['grille, he knows', 'grille; he knows', 'grille he knows', 'grille, knowing he knows'],
-      correctChoiceIndex: 1,
-      explanation: 'Both sides are complete sentences. A comma alone can\'t join them; a semicolon can.',
-    },
-    {
-      sentence: 'Clarisse asks Montag if he is happy, the question stays with him all night.',
-      underline: 'happy, the question',
-      choices: ['happy, the question', 'happy. The question', 'happy the question', 'happy, and so the question it'],
-      correctChoiceIndex: 1,
-      explanation: 'Two complete sentences need a period, a semicolon, or a comma with a conjunction.',
-    },
-    {
-      sentence: 'Faber is afraid to help at first, he finally agrees to teach Montag.',
-      underline: 'first, he finally',
-      choices: ['first, he finally', 'first, but he finally', 'first he finally', 'first, finally he'],
-      correctChoiceIndex: 1,
-      explanation: 'Adding the conjunction "but" after the comma correctly joins the two complete sentences.',
-    },
-    {
-      sentence: 'The Hound never sleeps, it waits in the firehouse for its next target.',
-      underline: 'sleeps, it waits',
-      choices: ['sleeps, it waits', 'sleeps; it waits', 'sleeps it waits', 'sleeps, waits it'],
-      correctChoiceIndex: 1,
-      explanation: 'A semicolon joins two closely related complete sentences.',
-    },
-    {
-      sentence: 'Mildred turns up the parlor walls, the noise fills every room of the house.',
-      underline: 'walls, the noise',
-      choices: ['walls, the noise', 'walls, and the noise', 'walls the noise', 'walls, noise'],
-      correctChoiceIndex: 1,
-      explanation: 'A comma plus "and" correctly joins two complete sentences.',
-    },
-  ],
 };
 
 // ---------------------------------------------------------------------------
@@ -505,8 +449,7 @@ export const SECTIONS = {
   revision: { n: 4, title: 'Revision.', sub: 'Feedback becomes a better essay, not just a grade.' },
   summary: { n: 5, title: 'What your class needs next.', sub: 'Class Summaries read every essay so you can see the whole class.' },
   planner: { n: 6, title: 'Plan the lesson.', sub: 'From what your class needs to tomorrow\'s plan.' },
-  practice: { n: 7, title: 'Writing practice.', sub: 'Short lessons and exercises, ready to assign.' },
-  reporter: { n: 8, title: 'Reports on growth.', sub: 'See how every student is growing as a writer, all year.' },
+  reporter: { n: 7, title: 'Reports on growth.', sub: 'See how every student is growing as a writer, all year.' },
 };
 
 export const TOTAL_SECTIONS = Object.keys(SECTIONS).length;
@@ -570,11 +513,6 @@ export const VO = {
     deck: { title: 'The slide deck, built from your stack', body: 'Present it, edit it, or download it for PowerPoint.' },
     send: { title: 'Send the lesson', body: 'To an administrator, a sub, or a student who missed class.' },
   },
-  practice: {
-    library: 'Quick writing lessons for grammar and composition.',
-    lesson: 'Each one teaches a single move, with practice ready to assign.',
-    exercise: 'Students practice and get instant feedback.',
-  },
   reporter: {
     anything: 'Run a report on anything: a class, a student, an assignment, a skill.',
     askCallout: { title: 'Ask in plain English', body: 'Type the report you want, the way you\'d ask a colleague.' },
@@ -590,7 +528,7 @@ export const VO = {
 export const DISCLOSURE = 'Demo does not contain real student data.';
 
 // ---------------------------------------------------------------------------
-// Section 8: Reporter
+// Section 7: Reporter
 
 export const REPORTER_REQUEST = 'Growth report for Maya Thompson';
 
@@ -629,7 +567,7 @@ export function reporterReport(latest = { percentage: 83, letter: 'B' }) {
 
 ## Suggested Next Steps
 
-- Assign *Fixing Comma Splices* and check her next draft for them.
+- Teach a short lesson on comma splices and check her next draft for them.
 - Give a second cold write before the marking period ends, to see how much has transferred.
 
 \`\`\`suggestions

@@ -12,7 +12,6 @@ import {
   GRADING_ASSISTANT,
   GRAMMAR_ISSUES,
   LESSON_PLAN,
-  PRACTICE_QUESTIONS,
   PROMPT_GENERATOR_REPLY,
   reporterReport,
   SHARE,
@@ -114,23 +113,6 @@ export const rules = [
       if (!r.lastMessageIsToolResult) return { tool: 'get_student_growth', input: { student: STUDENT.name } };
       return reporterReport(latestGrade(r.lastUser));
     },
-  },
-  {
-    name: 'act-practice',
-    when: (r) => r.system.startsWith('You write ACT English'),
-    reply: () => json(PRACTICE_QUESTIONS),
-  },
-  {
-    name: 'practice-feedback',
-    when: (r) => r.system.startsWith('You are a warm, sharp writing tutor'),
-    reply: () =>
-      json({
-        status: 'strong',
-        summary: 'Your semicolon joins two complete thoughts correctly, and the sentence still sounds like you.',
-        strengths: ['Both halves are complete sentences, so the semicolon fits.', 'You kept the meaning of the original.'],
-        focus: ['Try the same fix with a period, and notice how the rhythm changes.'],
-        encouragement: 'That is exactly the move. Keep going.',
-      }),
   },
 ];
 
