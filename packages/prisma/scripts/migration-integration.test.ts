@@ -723,12 +723,13 @@ describe('migration integration (real Postgres)', () => {
             'exit_ticket',
             'five_paragraph_essay',
             'prewriting',
-            'thesis_statement'
+            'thesis_statement',
+            'claim_evidence_reasoning'
           )
         )
       )
     `);
-    expect(bundleKinds.count).toBeGreaterThanOrEqual(3);
+    expect(bundleKinds.count).toBeGreaterThanOrEqual(6);
 
     const usageTable = jsonQuery(`
       SELECT json_build_object(
@@ -759,12 +760,13 @@ describe('migration integration (real Postgres)', () => {
             'exit_ticket',
             'five_paragraph_essay',
             'prewriting',
-            'thesis_statement'
+            'thesis_statement',
+            'claim_evidence_reasoning'
           )
         )
       )
     `);
-    expect(moduleCount.count).toBeGreaterThanOrEqual(5);
+    expect(moduleCount.count).toBeGreaterThanOrEqual(6);
 
     const imageCount = jsonQuery(`
       SELECT json_build_object(
@@ -777,12 +779,13 @@ describe('migration integration (real Postgres)', () => {
             'exit_ticket',
             'five_paragraph_essay',
             'prewriting',
-            'thesis_statement'
+            'thesis_statement',
+            'claim_evidence_reasoning'
           )
         )
       )
     `);
-    expect(imageCount.count).toBeGreaterThanOrEqual(5);
+    expect(imageCount.count).toBeGreaterThanOrEqual(6);
 
     const seedTwice = run(
       'bun',

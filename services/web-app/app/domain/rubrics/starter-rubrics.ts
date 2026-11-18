@@ -3,6 +3,7 @@ import type { RubricSchema } from './rubric-schema';
 import dailyPagesEngagementSchema from './library/daily-pages-engagement.json';
 import strodeEng101Essay1Schema from './library/strode-eng101-essay-1-description.json';
 import galsClaimsSchema from './library/gals-claims.json';
+import cErSchema from './library/c-e-r.json';
 import strodeEng101Essay2AutobiographySchema from './library/strode-eng101-essay-2-autobiography.json';
 import {
   THESIS_DRIVEN_ESSAY,
@@ -109,4 +110,6 @@ export const STARTER_RUBRICS: RubricSchema[] = [
   strodeEng101Essay2AutobiographySchema as RubricSchema,
   // GALS Claims (Brian Connell 2026-11-02)
   galsClaimsSchema as RubricSchema,
+  // C-E-R (Claim-Evidence-Reasoning)
+  cErSchema as RubricSchema,
 ];

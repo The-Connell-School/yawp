@@ -53,6 +53,12 @@ import {
   STRODE_AUTOBIOGRAPHY_RUBRIC,
   STRODE_AUTOBIOGRAPHY_SCORING_SCALE,
 } from './strode-autobiography-rubric';
+import {
+  CLAIM_EVIDENCE_REASONING_ASSIGNMENT_TYPE_KIND,
+  CLAIM_EVIDENCE_REASONING_PROMPT_CONFIG,
+  CLAIM_EVIDENCE_REASONING_RUBRIC,
+  CLAIM_EVIDENCE_REASONING_SCORING_SCALE,
+} from './claim-evidence-reasoning-assignment-type';
 
 export const MODULE_RUBRIC_RELATIONSHIPS = [
   'primary',
@@ -211,6 +217,18 @@ const galsClaimsConfig: AssignmentTypeRubricConfig = {
   defaultLabel: 'GALS Claims',
 };
 
+const claimEvidenceReasoningConfig: AssignmentTypeRubricConfig = {
+  source: 'assignment-type',
+  scoringScale: CLAIM_EVIDENCE_REASONING_SCORING_SCALE,
+  rubric: CLAIM_EVIDENCE_REASONING_RUBRIC,
+  promptConfig: CLAIM_EVIDENCE_REASONING_PROMPT_CONFIG,
+  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+  calibrationNotes:
+    'C-E-R (Claim-Evidence-Reasoning): grade claim, evidence, and reasoning as distinct moves.',
+  rubricIncomplete: false,
+  defaultLabel: 'C-E-R',
+};
+
 const strodeAutobiographyConfig: AssignmentTypeRubricConfig = {
   source: 'strode-autobiography-default',
   scoringScale: STRODE_AUTOBIOGRAPHY_SCORING_SCALE,
@@ -239,6 +257,7 @@ const defaultRubricConfigsByKind: Record<string, AssignmentTypeRubricConfig> = {
   [PREWRITING_ASSIGNMENT_TYPE_KIND]: prewritingConfig,
   [THESIS_STATEMENT_ASSIGNMENT_TYPE_KIND]: thesisStatementConfig,
   [GALS_CLAIMS_ASSIGNMENT_TYPE_KIND]: galsClaimsConfig,
+  [CLAIM_EVIDENCE_REASONING_ASSIGNMENT_TYPE_KIND]: claimEvidenceReasoningConfig,
   [STRODE_AUTOBIOGRAPHY_ASSIGNMENT_TYPE_KIND]: strodeAutobiographyConfig,
 };
 
