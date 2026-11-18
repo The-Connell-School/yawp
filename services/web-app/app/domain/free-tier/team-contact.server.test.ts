@@ -24,9 +24,11 @@ const {
   adminLearnMoreInCooldown,
   sendBelowHsTeamContact,
   sendAdminLearnMoreTeamContact,
+  sendManualReviewTeamContact,
   TEAM_CONTACT_ADMIN_LEARN_MORE_COOLDOWN_MS,
   TEAM_CONTACT_ADMIN_LEARN_MORE_KIND,
   TEAM_CONTACT_BELOW_HS_KIND,
+  TEAM_CONTACT_MANUAL_REVIEW_KIND,
 } = await import('./team-contact.server');
 
 describe('team-contact.server', () => {
@@ -150,6 +152,60 @@ describe('team-contact.server', () => {
     });
     expect(result).toEqual({ ok: true, learnMoreSent: true });
     expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['consumer_domain', 'personal consumer domain'],
+    ['domain_mismatch', 'does not match'],
+    ['same_as_teacher', 'matches the teacher'],
+  ] as const)('sendManualReviewTeamContact includes hold reason %s', async (holdReason, snippet) => {
+    process.env.INTERNAL_PLATFORM_ORIGIN = 'https://internal.yawp.school';
+    const result = await sendManualReviewTeamContact({
+      applicationId: 'app-mr',
+      teacherName: 'Taylor',
+      teacherEmail: 't@school.edu',
+      schoolName: 'LHS',
+      adminName: 'Pat',
+      adminEmail: 'pat@example.com',
+      holdReason,
+    });
+    expect(result.ok).toBe(true);
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'hello@yawp.school',
+        text: expect.stringContaining(snippet),
+      })
+    );
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: expect.stringContaining('Internal review queue: https://internal.yawp.school/free-tier/approvals?status=MANUAL_REVIEW'),
+      })
+    );
+    sendEmail.mockClear();
+    delete process.env.INTERNAL_PLATFORM_ORIGIN;
+  });
+
+  test('sendManualReviewTeamContact dedupes within ten minutes', async () => {
+    findFirstLog.mockResolvedValueOnce({ id: 'log-mr' } as never);
+    const result = await sendManualReviewTeamContact({
+      applicationId: 'app-mr',
+      teacherName: 'Taylor',
+      teacherEmail: 't@school.edu',
+      schoolName: 'LHS',
+      adminName: 'Pat',
+      adminEmail: 'pat@example.com',
+      holdReason: 'consumer_domain',
+    });
+    expect(result.ok).toBe(true);
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(findFirstLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          applicationId: 'app-mr',
+          kind: TEAM_CONTACT_MANUAL_REVIEW_KIND,
+        }),
+      })
+    );
   });
 
   test('sendAdminLearnMoreTeamContact sends with application context', async () => {
