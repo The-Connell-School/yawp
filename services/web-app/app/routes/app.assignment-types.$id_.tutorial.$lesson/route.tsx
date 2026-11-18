@@ -8,11 +8,24 @@
  * its module from the Teachers' Lounge course instead; the Lounge's pages are
  * temporarily disabled for most teachers, so that video is served here too.
  */
-import { Link, redirect, data, useLoaderData, type LoaderFunctionArgs } from 'react-router';
+import {
+  Link,
+  redirect,
+  data,
+  isRouteErrorResponse,
+  useLoaderData,
+  useRouteError,
+  type LoaderFunctionArgs,
+} from 'react-router';
 import { ChevronLeft } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { assignmentTypeAvailableForTeacher } from '~/domain/assignment-types/available-for-teacher.server';
+import { TutorialSiteLicenseLockedView } from '~/components/free-tier/tutorial-site-license-locked';
+import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { freeClassroomSiteLicenseLockedBrowseAllowed } from '~/domain/free-tier/site-license-locked-assignment-tiles';
+import {
+  SITE_LICENSE_HOW_TO_TEACH_LOCK_MESSAGE,
+} from '~/domain/free-tier/site-license-how-to-teach';
 import { isAssignmentTypeHowToTeachLockedForTeacher } from '~/domain/free-tier/site-license-how-to-teach.server';
 import { findThesisEssayCourse } from '~/domain/teacher-trainings/thesis-essay-course.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
@@ -62,7 +75,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       assignmentTypeId,
     })
   ) {
-    throw data({ error: 'Comes with a school site license.' }, { status: 403 });
+    throw data(
+      {
+        reason: 'site_license_how_to_teach' as const,
+        message: SITE_LICENSE_HOW_TO_TEACH_LOCK_MESSAGE,
+        pagePath,
+      },
+      { status: 403 }
+    );
   }
 
   const siteLicenseBrowse = freeClassroomSiteLicenseLockedBrowseAllowed(
@@ -111,6 +131,37 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? [{ title: lesson.title, src: videoUrl, poster: null, captions: null, minutes }]
     : [];
   return { ...page, moduleTitle: module.title as string | null, videos, minutes };
+}
+
+type TutorialSiteLicenseLockErrorData = {
+  reason: 'site_license_how_to_teach';
+  message: typeof SITE_LICENSE_HOW_TO_TEACH_LOCK_MESSAGE;
+  pagePath: string;
+};
+
+export function isTutorialSiteLicenseLockError(
+  error: unknown
+): error is { data: TutorialSiteLicenseLockErrorData; status: 403 } {
+  return (
+    isRouteErrorResponse(error) &&
+    error.status === 403 &&
+    typeof error.data === 'object' &&
+    error.data !== null &&
+    (error.data as TutorialSiteLicenseLockErrorData).reason ===
+      'site_license_how_to_teach'
+  );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  if (isTutorialSiteLicenseLockError(error)) {
+    return (
+      <TutorialSiteLicenseLockedView
+        assignmentTypePagePath={error.data.pagePath}
+      />
+    );
+  }
+  return <GeneralErrorBoundary />;
 }
 
 export default function LessonTutorialRoute() {
