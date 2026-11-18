@@ -353,7 +353,8 @@ describe('preview access gate', () => {
       );
       expect(response?.status).not.toBe(200);
     }
-    expect(next).toHaveBeenCalledTimes(24);
+    // Blocked paths return early without invoking the downstream handler.
+    expect(next).toHaveBeenCalledTimes(18);
   });
 
   test('lets Yawp Internal reach the rubric catalog without a preview cookie', async () => {
