@@ -215,9 +215,9 @@ const redeem = (reserved: Awaited<ReturnType<typeof reservedStudent>>) =>
   prisma.$transaction(tx => acceptStudentInvitation(tx, reserved.flow(), reserved.member.userId));
 
 for (const expiring of [false, true]) {
-  local(`verified ${expiring ? 'expiring' : 'non-expiring'} invitation redeems its reserved 35th seat`, async () => {
+  local(`verified ${expiring ? 'expiring' : 'non-expiring'} invitation redeems its reserved 30th seat`, async () => {
     await approvedClass();
-    for (let i = 0; i < 34; i++) await student(`reserved-${expiring}-${i}`);
+    for (let i = 0; i < 29; i++) await student(`reserved-${expiring}-${i}`);
     const reserved = await reservedStudent(`reserved-${expiring}`, expiring ? new Date(Date.now() + 60000) : null);
     const unrelated = await student(`unrelated-${expiring}`, false);
     expect(await enrollStudentInClassWithSeatCap({ membershipId: unrelated.id, classId, organizationId: orgId }))
