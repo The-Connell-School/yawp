@@ -358,7 +358,11 @@ export function buildGradingQueue(params: {
         }
       : document
   );
-  return sortTeacherDocumentWorkRows({ documents: forSort, sort, collator })
+  return sortTeacherDocumentWorkRows({
+    documents: forSort as TeacherDocumentWorkRow[],
+    sort,
+    collator,
+  })
     .map((document) => toQueueEntry(byId.get(document.id)!))
     .filter((entry): entry is GradingQueueEntry => entry !== null);
 }
