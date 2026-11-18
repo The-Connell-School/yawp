@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import fixture from './__fixtures__/prod-rubric-catalog.json';
 import {
   NEW_LIBRARY_RUBRIC_EXPECTED_FINGERPRINT,
+  RubricCatalog,
   canonicalJson,
   contentFingerprint,
   parseCatalogKey,
@@ -57,6 +58,25 @@ describe('rubric catalog with production rubric content', () => {
     expect(duplicate.ok).toBe(false);
     if (!duplicate.ok) expect(duplicate.issues.some((issue) => issue.path === '/rubric/categories/1/key')).toBe(true);
     expect(validateEditable({ ...editable, rubric: { categories: [] } }, rubric.name).ok).toBe(false);
+  });
+
+  test('list liveFingerprint matches the single-rubric live fingerprint', async () => {
+    const library = fixture.libraryRubrics[0]!;
+    const rubricId = 'rubric-test-id';
+    const schemaJson = library.schemaJson;
+    const empty = [] as const;
+    const catalog = new RubricCatalog({
+      rubric: { findMany: async () => [{ id: rubricId, name: library.name, title: library.title, schemaJson, currentRevisionId: null, createdAt: new Date('2026-01-01T00:00:00.000Z'), updatedAt: new Date('2026-01-01T00:00:00.000Z') }], findUnique: async () => ({ id: rubricId, name: library.name, title: library.title, schemaJson, currentRevisionId: null }) },
+      rubricRevision: { findMany: async () => empty },
+      assignmentType: { findMany: async () => empty },
+      assignment: { groupBy: async () => empty },
+      rubricRelease: { findMany: async () => empty },
+    } as any);
+    const listed = await catalog.list();
+    const summary = listed.rubrics.find((row) => row.key === library.name);
+    expect(summary?.liveFingerprint).toBe(contentFingerprint(schemaJson));
+    const detail = await catalog.get(library.name);
+    expect(summary?.liveFingerprint).toBe(detail.live.fingerprint);
   });
 
   test('keys, fingerprints and canonical JSON are stable', () => {
