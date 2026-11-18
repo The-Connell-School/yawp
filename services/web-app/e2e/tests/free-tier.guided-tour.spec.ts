@@ -429,6 +429,7 @@ test.describe.serial('Free tier guided tour', () => {
     '5-Paragraph Essay',
     'Pre-writing',
     'Thesis Builder',
+    'C-E-R',
   ]) {
     test(`clicking into ${type} shows that type's tour`, async ({ page }) => {
       await logInAsFreeTeacher(page);
