@@ -410,14 +410,14 @@ function PageTourController({
     return () => window.removeEventListener(RESET_EVENT, restart);
   }, [tourId]);
 
-  if (!tour) return null;
-
   const suppressAutoWelcome = useCallback(() => {
     setAutoWelcomeOff(true);
     setPhase({ kind: 'idle' });
     if (tourId) setFinishedHere((prev) => new Set(prev).add(tourId));
     recordSuppressAutoWelcome();
   }, [tourId]);
+
+  if (!tour) return null;
 
   if (phase.kind === 'welcome') {
     return (
