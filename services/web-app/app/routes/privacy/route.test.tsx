@@ -2,6 +2,30 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test } from 'bun:test';
 import PrivacyRoute from './route';
 
+function visibleText(html: string) {
+  return html
+    .replace(/&#x27;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'");
+}
+
+test('privacy policy states student data commitments above automated feedback', () => {
+  const html = visibleText(renderToStaticMarkup(<PrivacyRoute />));
+  const commitments = html.indexOf('Our Commitments on Student Data');
+  const automated = html.indexOf('>Automated Feedback<');
+  expect(commitments).toBeGreaterThan(-1);
+  expect(automated).toBeGreaterThan(commitments);
+  expect(html).toContain('We never sell student data.');
+  expect(html).toContain(
+    'We never use student data for advertising or to build advertising profiles.'
+  );
+  expect(html).toContain(
+    "Schools own their student data. At a school's request, or when its agreement with us ends, we will work with the school to return its student data and then delete it."
+  );
+  expect(html).toContain('Last updated November 17, 2026.');
+  expect(html).not.toMatch(/Yawp(?!!)/);
+});
+
 test('privacy policy includes privacy laws and agreements from Advocate Pack alignment', () => {
   const html = renderToStaticMarkup(<PrivacyRoute />);
   expect(html).toContain('id="privacy-laws"');
