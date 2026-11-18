@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import {
   adaptPreviewIngressRequest,
+  signonBrowserOriginAllowed,
   signonRequestOrigin,
 } from './origin.server';
 
@@ -133,6 +134,76 @@ describe('signonRequestOrigin', () => {
       headers: { Origin: 'https://demo.yawp.school' },
     });
     expect(signonRequestOrigin(request)).toBe('https://demo.yawp.school');
+  });
+});
+
+describe('signonBrowserOriginAllowed', () => {
+  test('allows missing Origin and Origin: null like React Router CSRF', () => {
+    process.env.YAWP_ENVIRONMENT = 'production';
+    process.env.PRIMARY_APP_URL = 'https://yawp.school';
+    const request = new Request('http://ua.yawp.school/auth/login.data', {
+      method: 'POST',
+    });
+    expect(signonBrowserOriginAllowed(request)).toBe(true);
+    expect(
+      signonBrowserOriginAllowed(
+        new Request(request, { headers: { Origin: 'null' } })
+      )
+    ).toBe(true);
+  });
+
+  test('allows trusted partner Origin when adapter origin is PRIMARY_APP_URL', () => {
+    process.env.YAWP_ENVIRONMENT = 'production';
+    process.env.PRIMARY_APP_URL = 'https://yawp.school';
+    const request = new Request('http://ua.yawp.school/auth/login.data', {
+      method: 'POST',
+      headers: { Origin: 'https://ua.yawp.school' },
+    });
+    expect(signonRequestOrigin(request)).toBe('https://yawp.school');
+    expect(signonBrowserOriginAllowed(request)).toBe(true);
+  });
+
+  test('allows canonical yawp.school Origin on App Runner HTTP ingress', () => {
+    process.env.YAWP_ENVIRONMENT = 'production';
+    process.env.PRIMARY_APP_URL = 'https://yawp.school';
+    const request = new Request(
+      'http://abc123.us-east-1.awsapprunner.com/auth/login.data',
+      {
+        method: 'POST',
+        headers: {
+          host: 'abc123.us-east-1.awsapprunner.com',
+          Origin: 'https://yawp.school',
+        },
+      }
+    );
+    expect(signonBrowserOriginAllowed(request)).toBe(true);
+  });
+
+  test('rejects foreign and malformed Origin values', () => {
+    process.env.YAWP_ENVIRONMENT = 'production';
+    process.env.PRIMARY_APP_URL = 'https://yawp.school';
+    const base = new Request('http://yawp.school/auth/login.data', {
+      method: 'POST',
+    });
+    for (const origin of [
+      'https://evil.example',
+      'http://yawp.school',
+      'garbage',
+      'https://yawp.school/auth/login',
+    ]) {
+      const request = new Request(base, { headers: { Origin: origin } });
+      expect(signonBrowserOriginAllowed(request)).toBe(false);
+    }
+  });
+
+  test('rejects preview host Origins outside preview deployments', () => {
+    process.env.YAWP_ENVIRONMENT = 'production';
+    process.env.PRIMARY_APP_URL = 'https://yawp.school';
+    const request = new Request('http://yawp.school/auth/login.data', {
+      method: 'POST',
+      headers: { Origin: 'https://pr-867.preview.yawp.school' },
+    });
+    expect(signonBrowserOriginAllowed(request)).toBe(false);
   });
 });
 

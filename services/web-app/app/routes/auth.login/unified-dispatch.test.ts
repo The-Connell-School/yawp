@@ -210,7 +210,6 @@ test('preview Google start reaches the real unavailable-provider outcome without
 for (const origin of [
   'https://evil.example',
   'http://pr-565.preview.yawp.school',
-  'null',
   'garbage',
   `${publicOrigin}/path`,
   `${publicOrigin}, https://evil.example`,
@@ -253,6 +252,35 @@ test('configured origin cannot authorize another request host', async () => {
     ).status
   ).toBe(403);
 });
+test('production HTTP ingress accepts the UA partner Origin on the partner host', async () => {
+  process.env.YAWP_ENVIRONMENT = 'production';
+  process.env.PRIMARY_APP_URL = 'https://yawp.school';
+  const response = (await action(
+    args(
+      new Request('http://ua.yawp.school/auth/login.data', {
+        method: 'POST',
+        headers: {
+          host: 'ua.yawp.school',
+          Origin: 'https://ua.yawp.school',
+        },
+        body: new URLSearchParams({
+          intent: 'resolve',
+          identifier: 'student@crimson.ua.edu',
+        }),
+      })
+    )
+  )) as Response;
+  expect(response.status).toBe(200);
+  expect(unifiedAction).toHaveBeenCalled();
+});
+
+test('preview treats Origin: null like missing Origin', async () => {
+  enablePreview();
+  const response = (await action(args(proxyRequest('null')))) as Response;
+  expect(response.status).toBe(200);
+  expect(unifiedAction).toHaveBeenCalled();
+});
+
 test('production HTTP ingress accepts the configured public HTTPS Origin', async () => {
   process.env.YAWP_ENVIRONMENT = 'production';
   process.env.PRIMARY_APP_URL = 'https://yawp.school';
