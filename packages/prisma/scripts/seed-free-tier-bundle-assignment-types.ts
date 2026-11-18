@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 
-import type { PrismaClient } from '../generated/prisma';
+import { Prisma, type PrismaClient } from '../generated/prisma';
 import { syncSeedArtwork, type SeedArtwork } from './assignment-type-artwork';
 import { createPrismaClient } from './local-dev/connection';
 import {
@@ -641,10 +641,10 @@ async function linkAssignmentTypeToLibraryRubric(
     where: { id: assignmentTypeId },
     data: {
       rubricId: rubric.id,
-      rubricJson: null,
-      scoringScaleJson: null,
-      gradingPromptConfigJson: null,
-      gradingOutputSchemaJson: null,
+      rubricJson: Prisma.DbNull,
+      scoringScaleJson: Prisma.DbNull,
+      gradingPromptConfigJson: Prisma.DbNull,
+      gradingOutputSchemaJson: Prisma.DbNull,
       gradingCalibrationNotes: null,
       gradingAssistantVersion: { increment: 1 },
     },
