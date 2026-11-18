@@ -796,11 +796,14 @@ describe('worktree local setup contract', () => {
 
   test('demo feedback browser CI cleanup stays cwd-safe after cd into web-app', () => {
     const workflow = readRepoFile('.github/workflows/ci.yml');
+    const cleanup = readRepoFile('scripts/ci/demo-feedback-worktree-cleanup.sh');
 
     expect(workflow).toContain('REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"');
     expect(workflow).toContain(
       '"$REPO_ROOT/scripts/ci/demo-feedback-worktree-cleanup.sh"'
     );
+    expect(cleanup).toContain('EXPECTED_CONTAINER="yawp-${WORKTREE_NAME}-postgres"');
+    expect(cleanup).toContain('docker rm -f "$EXPECTED_CONTAINER"');
   });
 
   test('worktree setup backfills class art keys before local seed verification', () => {

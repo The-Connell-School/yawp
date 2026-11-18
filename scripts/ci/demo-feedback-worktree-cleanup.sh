@@ -5,12 +5,19 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
+WORKTREE_NAME="$(
+  python3 -c 'import hashlib,pathlib,re,sys; p=sys.argv[1]; print(re.sub(r"[^a-z0-9-]", "-", pathlib.Path(p).name.lower())[:40] + "-" + hashlib.sha256(p.encode()).hexdigest()[:12])' "$ROOT"
+)"
+EXPECTED_CONTAINER="yawp-${WORKTREE_NAME}-postgres"
+
 PORTS=("$@")
 if [[ ${#PORTS[@]} -eq 0 ]]; then
   PORTS=(54489 54490 5489 5490)
 fi
 
 "$ROOT/bin/project" dev stop --json >/dev/null 2>&1 || true
+
+docker rm -f "$EXPECTED_CONTAINER" >/dev/null 2>&1 || true
 
 if [[ -f .worktree-local/config.env ]]; then
   # shellcheck disable=SC1091

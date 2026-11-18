@@ -98,10 +98,13 @@ ensure_postgres() {
   release_postgres_host_port
 
   if docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
-    local mapped_port
+    local mapped_port running
     mapped_port="$(docker port "$CONTAINER_NAME" 5432/tcp 2>/dev/null | head -1 | sed 's/.*://' || true)"
+    running="$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || true)"
     if [[ -n "$mapped_port" && "$mapped_port" != "$PG_PORT" ]]; then
-      docker rm -f "$CONTAINER_NAME" >/dev/null
+      docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+    elif [[ -z "$mapped_port" && "$running" != "true" ]]; then
+      docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
     fi
   fi
 
@@ -111,7 +114,7 @@ ensure_postgres() {
     fi
   else
     local attempt
-    for attempt in 1 2; do
+    for attempt in 1 2 3; do
       if docker run -d \
         --name "$CONTAINER_NAME" \
         --restart unless-stopped \
@@ -123,9 +126,10 @@ ensure_postgres() {
         postgres:16 >/dev/null 2>&1; then
         break
       fi
-      if [[ "$attempt" -eq 1 ]]; then
+      if [[ "$attempt" -lt 3 ]]; then
         docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
         release_postgres_host_port
+        sleep 1
       else
         echo "Failed to start Postgres container on host port ${PG_PORT}." >&2
         exit 1
