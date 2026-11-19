@@ -212,6 +212,37 @@ test.describe.serial('The deck studio', () => {
     expect(saved?.slides[0]?.title).toBe('Body Paragraphs');
   });
 
+  test('Backspace on an emptied first line: the next line takes its place, with its own words', async ({ page, signIn, e2eContext }) => {
+    for (const flag of STUDIO_FLAGS) await setLessonPlannerReviewFlag(flag, true);
+    const { conversationId, assistantId } = await seedConversation(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner/${conversationId}/deck/${assistantId}`);
+    await page.getByRole('button', { name: /^Slide 2:/ }).click();
+    const slide = page.getByTestId('deck-studio-slide');
+
+    const first = slide.getByRole('textbox', { name: 'Line 1' });
+    await first.click();
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.press('Backspace');
+    await page.keyboard.press('Backspace');
+    await expect(first).toBeFocused();
+    await expect(first).toHaveText('Pick one reason');
+    await expect(slide.getByRole('textbox', { name: 'Line 2' })).toHaveCount(0);
+    // The caret is at the end of that line: typing adds to it.
+    await page.keyboard.type(' today');
+    await expect(first).toHaveText('Pick one reason today');
+    // The last step stays: a steps slide needs one.
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.press('Backspace');
+    await page.keyboard.press('Backspace');
+    await page.getByLabel('Notes for you').click();
+    await expect(first).toHaveText('Pick one reason today');
+
+    await page.getByTestId('deck-editor-save').click();
+    await expect(page).toHaveURL(new RegExp(`/app/lesson-planner\\?c=${conversationId}`));
+    expect((await savedDeck(conversationId))?.slides[1]?.bullets).toEqual(['Pick one reason today']);
+  });
+
   test('More options still holds the layout and the rest; delete a slide and undo', async ({ page, signIn, e2eContext }) => {
     for (const flag of STUDIO_FLAGS) await setLessonPlannerReviewFlag(flag, true);
     const { conversationId, assistantId } = await seedConversation(e2eContext);

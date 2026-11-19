@@ -80,7 +80,7 @@ export function DeckStudio({
   const [undo, setUndo] = useState<{ deck: SlideDeck; title: string } | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The box to put the caret in once the slide is drawn again.
-  const [focus, setFocus] = useState<{ key: string; select: 'all' | 'end' } | null>(null);
+  const [focus, setFocus] = useState<{ source: KitV4Source; select: 'all' | 'end' } | null>(null);
   const [pointing, setPointing] = useState<DeckPointing | null>(null);
   const [picture, setPicture] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const stage = useRef<HTMLDivElement>(null);
@@ -120,8 +120,12 @@ export function DeckStudio({
 
   useEffect(() => {
     if (!focus) return;
-    const box = stage.current?.querySelector<HTMLElement>(`[data-source="${focus.key}"]`);
+    const box = stage.current?.querySelector<HTMLElement>(`[data-source="${sourceKey(focus.source)}"]`);
     if (box) {
+      // A box the caret was already in keeps what was typed there; after a
+      // line is removed it stands for the next line, so it takes that line's words.
+      const words = sourceText(latest.current, Math.min(selected, latest.current.slides.length - 1), focus.source);
+      if (words !== undefined && box.textContent !== words) box.textContent = words;
       box.focus();
       const range = document.createRange();
       range.selectNodeContents(box);
@@ -131,6 +135,8 @@ export function DeckStudio({
       selection?.addRange(range);
     }
     setFocus(null);
+    // Only a new place for the caret runs this, never the deck changing under it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus]);
 
   const edit = useMemo<KitV4SlideEdit>(
@@ -140,13 +146,13 @@ export function DeckStudio({
         const added = insertSlideListItem(latest.current, at, source);
         if (!added) return;
         put(added.deck);
-        if (added.focus) setFocus({ key: sourceKey(added.focus), select: 'all' });
+        if (added.focus) setFocus({ source: added.focus, select: 'all' });
       },
       onRemove: (source) => {
         const removed = removeSlideListItem(latest.current, at, source);
         if (!removed) return;
         put(removed.deck);
-        if (removed.focus) setFocus({ key: sourceKey(removed.focus), select: 'end' });
+        if (removed.focus) setFocus({ source: removed.focus, select: 'end' });
       },
       onFocus: (source: KitV4Source | null) => {
         // Leaving a box keeps what was pointed at: the next click is often the chat.

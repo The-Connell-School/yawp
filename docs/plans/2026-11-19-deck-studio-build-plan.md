@@ -269,7 +269,7 @@ Slides are numbered as in the deck that was sent (1-based).
 
 | Operation | Fields |
 | --- | --- |
-| `replace_slide` | `slide`, `with` (a whole slide in the deck schema) |
+| `replace_slide` | `slide`, `with` (a whole slide in the deck schema; its notes, minutes and step stay when left out) |
 | `add_slide` | `after` (0 for the start), `with` |
 | `remove_slide` | `slide` |
 | `move_slide` | `slide`, `after` |
@@ -283,12 +283,20 @@ Checks before anything is applied (`checkDeckOps`):
 
 - Every slide number exists; at most 20 operations; the deck keeps at least
   one slide and at most 40.
-- A replaced slide keeps its `image` and `step` unless the new slide names a
-  picture already in the deck. A picture id that is not in the deck is
-  dropped.
-- With a selection, only operations on that slide are kept.
+- A replaced picture slide keeps its picture unless the new slide names
+  another picture already in the deck. A picture id that is not in the deck
+  is dropped; a slide that is no longer a picture slide lets its picture go.
+- An unknown slide number fails the whole answer: all of it applies or none
+  of it does.
 - The resulting deck passes `validateSlideDeck`. If it does not, nothing is
   applied and the reply says so.
+
+A selection is not enforced on the server. The model is told the line is
+about the part pointed at and to leave everything else alone unless the line
+plainly asks for more; the change list shows the teacher exactly what moved,
+and Undo puts it back. Enforcing it would refuse "cut the vocabulary slide"
+from a teacher who had clicked a headline a minute earlier. Pointing ends
+when the teacher changes slides, sends a pointed line, or closes the chip.
 
 ### 5.3 Prompt
 

@@ -1,9 +1,8 @@
-import { afterAll, describe, expect, mock, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 import type { SlideDeck } from './slide-deck';
 
-mock.module('./planner-completion.server', () => ({ plannerComplete: mock() }));
+// The model call is handed in (`complete`), so nothing here is mocked for other files.
 const { runDeckCommand } = await import('./deck-command.server');
-afterAll(() => mock.restore());
 
 const DECK: SlideDeck = {
   title: 'Sudan before the novel',

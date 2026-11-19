@@ -6,21 +6,13 @@ const getLessonPlannerReviewFlags = mock();
 const runDeckCommand = mock();
 const prisma = { lessonPlanConversation: { findFirst: mock() } };
 
-class AiRateLimitError extends Error {
-  constructor(public retryAfterSeconds: number) {
-    super('rate limited');
-  }
-}
 mock.module('~/utils/auth.server', () => ({ requireMutableRequest, requireUserId: mock(), requireMembership: mock() }));
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/lesson-planner/lesson-planner-access.server', () => ({ requireLessonPlannerAccess }));
-mock.module('~/utils/lesson-planner/lesson-planner-admission.server', () => ({
-  lessonPlannerRateLimitMessage: () => 'You have asked a lot in the last hour. Try again in a few minutes.',
-}));
-mock.module('~/utils/ai-admission.server', () => ({ AiRateLimitError, aiAdmissionErrorResponse: () => null }));
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({ getLessonPlannerReviewFlags }));
 mock.module('~/domain/lesson-planner/deck-command.server', () => ({ runDeckCommand }));
 
+const { AiRateLimitError } = await import('~/utils/ai-admission.server');
 const { action } = await import('./route');
 afterAll(() => mock.restore());
 
@@ -87,10 +79,11 @@ describe('api.domain.lesson-planner.deck-command', () => {
   });
 
   test('over the hourly limit: 429 with when to come back; any other failure: try again', async () => {
-    runDeckCommand.mockRejectedValue(new AiRateLimitError(120));
+    runDeckCommand.mockRejectedValue(new AiRateLimitError(120, 'membership'));
     const limited = await post({});
     expect(limited.init?.status).toBe(429);
-    expect(limited.data?.error).toContain('Try again in a few minutes');
+    expect(limited.init?.headers).toMatchObject({ 'Retry-After': '120' });
+    expect(String(limited.data?.error)).toMatch(/minute/);
     runDeckCommand.mockRejectedValue(new Error('timeout'));
     const failed = await post({});
     expect(failed.init?.status).toBe(503);
