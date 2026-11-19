@@ -722,3 +722,40 @@ describe('picture slides: the teacher’s own pictures (Nov 1)', () => {
   });
 });
 
+
+describe('a quiz question, however the model writes it (bot test, Nov 19)', () => {
+  const deckOf = (slide: Record<string, unknown>) => parseSlideDeck(fenced({ title: 'Deck', slides: [{ title: 'Check', speakerNotes: 'Ask for hands.', ...slide }] }));
+
+  test('"layout": "quiz" is a discuss slide with its choices and its answer, not a deck that fails', () => {
+    const slide = deckOf({ layout: 'quiz', question: 'What do the images share?', choices: ['Fragile', 'Decay', 'Nature'], answer: 2 })!.deck.slides[0]!;
+    expect(slide).toMatchObject({ layout: 'discuss', question: 'What do the images share?', choices: ['Fragile', 'Decay', 'Nature'], answer: 2 });
+    for (const layout of ['Quiz', 'multiple-choice', 'multiple_choice', 'mcq']) {
+      expect(deckOf({ layout, question: 'Q?', choices: ['A1', 'B1'] })!.deck.slides[0]!.layout).toBe('discuss');
+    }
+  });
+
+  test('a quiz slide with its question only in the title still has a question', () => {
+    const slide = deckOf({ layout: 'quiz', title: 'Which fix is correct?', choices: ['A semicolon', 'A comma'] })!.deck.slides[0]!;
+    expect(slide).toMatchObject({ layout: 'discuss', question: 'Which fix is correct?' });
+  });
+
+  test('options are choices; letters typed in front come off, since the slide draws its own', () => {
+    const slide = deckOf({ layout: 'discuss', question: 'Q?', options: ['A) Fragile', 'b. Decay', '(C) Nature', 'D: Recovered'] })!.deck.slides[0]!;
+    expect(slide.choices).toEqual(['Fragile', 'Decay', 'Nature', 'Recovered']);
+    // A choice that only starts with a capital and a word is left alone.
+    expect(deckOf({ layout: 'discuss', question: 'Q?', choices: ['A semicolon', 'A comma and "and"'] })!.deck.slides[0]!.choices).toEqual(['A semicolon', 'A comma and "and"']);
+  });
+
+  test('the answer as a letter, as the choice’s own words, or as a number in a string', () => {
+    const answer = (value: unknown, key = 'answer') => deckOf({ layout: 'discuss', question: 'Q?', choices: ['Fragile', 'Decay', 'Nature'], [key]: value })!.deck.slides[0]!.answer;
+    expect(answer('B')).toBe(2);
+    expect(answer('c)')).toBe(3);
+    expect(answer('Decay')).toBe(2);
+    expect(answer('2')).toBe(2);
+    expect(answer(3, 'correctAnswer')).toBe(3);
+    expect(answer('B', 'correct')).toBe(2);
+    // An answer that names no choice is left off: the question is still a question.
+    expect(answer('Something else')).toBeUndefined();
+    expect(answer(9)).toBeUndefined();
+  });
+});
