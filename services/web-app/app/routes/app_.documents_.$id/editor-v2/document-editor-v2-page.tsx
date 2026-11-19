@@ -19,7 +19,7 @@ import {
   EllipsisVertical,
   MoreHorizontal,
   PenLine,
-  Sparkles,
+  MessageSquareText,
   Printer,
   Compass,
   MessageCircle,
@@ -1176,7 +1176,7 @@ export function DocumentEditorV2Page() {
                   changeTab('tutor');
                 }}
               >
-                <Sparkles className="h-4 w-4" aria-hidden />
+                <MessageSquareText className="h-4 w-4" aria-hidden />
                 <span>Tutor</span>
               </button>
             ) : null}
@@ -1220,7 +1220,7 @@ export function DocumentEditorV2Page() {
             data-testid="mobile-tutor-peek"
             onClick={() => setMobileTutorSheetOpen(true)}
           >
-            <Sparkles className="h-4 w-4 shrink-0" aria-hidden />
+            <MessageSquareText className="h-4 w-4 shrink-0" aria-hidden />
             <span className="truncate">Tutor · tap to continue</span>
             <span className="doc-editor-mobile-peek-chevron" aria-hidden>
               ›

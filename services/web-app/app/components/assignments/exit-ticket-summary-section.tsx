@@ -1,5 +1,5 @@
 import { useFetcher } from 'react-router';
-import { Loader2, Sparkles } from 'lucide-react';
+import { ClipboardList, Loader2 } from 'lucide-react';
 import {
   EXIT_TICKET_RETEACH_LABELS,
   EXIT_TICKET_SUMMARY_MIN_RESPONSES,
@@ -45,7 +45,7 @@ export function ExitTicketSummarySection({
       className="space-y-3 rounded-md border bg-background p-3"
     >
       <div className="flex items-center gap-2">
-        <Sparkles size={14} className="shrink-0 text-primary" />
+        <ClipboardList size={14} className="shrink-0 text-primary" />
         <p className="text-sm font-medium">Summary</p>
         {stored ? (
           <span

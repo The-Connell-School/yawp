@@ -6,7 +6,7 @@ import {
   MonitorPlay,
   PenLine,
   Play,
-  Sparkles,
+  BookOpen,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import {
@@ -309,7 +309,7 @@ function PracticeLaunchPanel({
               data-testid="composition-topic-active"
               className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2"
             >
-              <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+              <BookOpen className="h-4 w-4 shrink-0 text-primary" />
               <span className="text-sm text-foreground">
                 Practicing with <span className="font-medium">{topic}</span>
               </span>
