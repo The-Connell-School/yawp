@@ -322,4 +322,54 @@ describe('words that did not fit (bot test, Nov 19)', () => {
     expect(run.size).toBeLessThanOrEqual(30);
     expect(passageHeight(run)).toBeLessThanOrEqual(500);
   });
+
+  const LONG_CHOICE = 'King invokes St. Augustine to signal shared Christian values, making it harder for the clergymen to dismiss his position as outside their tradition.';
+  const choiceRows = (choices: string[], kit: 'v4' | 'v4.1' = 'v4.1', extra: Partial<Slide> = {}) => {
+    const of = deck([slide({ layout: 'discuss', title: 'Quiz', question: 'Which sentence is analysis rather than identification?', choices, ...extra })], { kit });
+    const elements = layoutKitV4Slide(of, 0).elements;
+    return choices.map((choice) => {
+      const box = elements.find((element) => element.kind === 'text' && element.paras.some((para) => para.runs.some((run) => run.text === choice)));
+      if (!box || box.kind !== 'text') throw new Error(`no row for ${choice}`);
+      const size = box.paras[0]!.runs.find((run) => run.text === choice)!.size;
+      return { y: box.y, h: box.h, size, letter: box.paras[0]!.runs[0]!.size, text: choice };
+    });
+  };
+  // A row is 1120 wide less its letter. The first line is as tall as the letter; the canvas sets lines at 1.35.
+  const rowNeeds = (row: { text: string; size: number; letter: number }) =>
+    row.letter * 1.35 + (Math.max(1, Math.ceil((row.text.length * row.size * 0.5) / 1060)) - 1) * row.size * 1.35;
+
+  test('a quiz choice that runs to a second line gets a row tall enough to hold it', () => {
+    for (const kit of ['v4', 'v4.1'] as const) {
+      const rows = choiceRows(['King uses an allusion to St. Augustine in paragraph 14.', LONG_CHOICE, 'King quotes St. Augustine.', 'King references several authorities.'], kit);
+      for (const row of rows) expect(row.h).toBeGreaterThanOrEqual(rowNeeds(row));
+      // Rows sit one under the other, and the last ends on the slide.
+      rows.slice(1).forEach((row, i) => expect(row.y).toBeGreaterThanOrEqual(rows[i]!.y + rows[i]!.h));
+      expect(rows.at(-1)!.y + rows.at(-1)!.h).toBeLessThanOrEqual(720 - 40);
+    }
+  });
+
+  test('five long choices are set smaller until they all fit on the slide', () => {
+    const many = Array.from({ length: 5 }, (_, i) => `${i + 1}. ${LONG_CHOICE}`);
+    for (const kit of ['v4', 'v4.1'] as const) {
+      const rows = choiceRows(many, kit);
+      expect(rows[0]!.size).toBeLessThan(28);
+      for (const row of rows) expect(row.h).toBeGreaterThanOrEqual(rowNeeds(row));
+      expect(rows.at(-1)!.y + rows.at(-1)!.h).toBeLessThanOrEqual(720 - 40);
+    }
+  });
+
+  test('short choices are set as before: 28 point, in rows of 64', () => {
+    const rows = choiceRows(['The sky is blue', 'Gatsby is lonely', 'Page 4']);
+    expect(rows.map((row) => [row.size, row.h])).toEqual([[28, 64], [28, 64], [28, 64]]);
+    expect(rows[1]!.y - rows[0]!.y).toBe(64);
+  });
+
+  test('the answer’s band is as tall as its row', () => {
+    const of = deck([slide({ layout: 'discuss', title: 'Quiz', question: 'Which is analysis?', choices: ['Short one', LONG_CHOICE], answer: 2 })], { kit: 'v4.1' });
+    const elements = layoutKitV4Slide(of, 0).elements;
+    const band = elements.find((element) => element.kind === 'rect' && element.role === 'band')!;
+    const row = elements.find((element) => element.kind === 'text' && element.paras.some((para) => para.runs.some((run) => run.text === LONG_CHOICE)))!;
+    expect([band.y, band.h]).toEqual([row.y, row.h]);
+    expect(band.h).toBeGreaterThan(64);
+  });
 });
