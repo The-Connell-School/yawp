@@ -5,6 +5,10 @@ preview for PR 996 (main plus the deck studio, every review flag on, the live
 model the previews use). Focus: building and changing slide decks. Screenshots
 are in `artifacts/lesson-planner-bot-test/`.
 
+> **Later the same day:** findings 2, 3 and 4 and the studio chat's four
+> problems were fixed and checked again on the preview. The results are in
+> "After the fixes" at the end. The findings below are as first written.
+
 ## What the bots did
 
 - Ten lessons, grades 6 to 12, 40 to 90 minutes: Of Mice and Men, King's
@@ -191,3 +195,51 @@ show only in the slide list and can be changed only under "More options".
   plans, class-data lookups, Run the show, sharing.
 - More than two teachers at once, phones, Firefox.
 - Whether the facts on the slides are right.
+
+## After the fixes (same day, same preview, same bots)
+
+Fixed on the branch and checked again with the live model:
+
+| Finding | Before | After |
+| --- | --- | --- |
+| 2. Quiz requests break the deck | 3 of 3 came back as a deck that would not open | 2 of 2 new requests gave a deck with real quiz slides (4 and 2 of them); the third bot's earlier broken deck now opens as written |
+| 3. "Writing the lesson" | Sent after the writing was done | Sent about 6 seconds in; "Checking the slides" shows when a deck is being repaired |
+| 4. Text cut off | "Foreshadowin", and a poem missing its first line | Both slides measured again: nothing clipped |
+| Studio chat | 5 of 8 requests right | See below |
+
+The studio chat, the same eight requests:
+
+- "Fewer words on every slide" now applies: 11 slides changed in 9.8 s.
+- A quiz question and its answer slide land next to each other.
+- "Move the exit slide" is done, with a line saying what it costs.
+- A request it cannot do (a photo of Langston Hughes) says why.
+- Pointed edits still change only the part pointed at.
+
+What the second pass turned up:
+
+- **A long quiz choice ran under the next choice** (the MLK deck, a choice of
+  two lines). Fixed: a row is as tall as its choice, and a slide of long
+  choices steps down a size until they fit. Measured again in Present on the
+  same deck: nothing clipped.
+- **"Add a check for understanding" got a question back** ("Which part of
+  the lesson should the check follow?") once the chat was told to stop
+  guessing. Fixed in the prompt: when the teacher says what they want and
+  leaves the how to it, it chooses and says what it chose. Run again on three
+  decks: each got one quiz question with its answer slide behind it, in 7 to
+  10 s.
+- **Then it guessed too much.** "Fix the second one" set slide 2's minutes to
+  the agenda's total. Fixed in the prompt: a line that does not say what
+  should be different gets a one-sentence question and no change. Run again:
+  it asks what to fix on slide 2, and "Fewer words on every slide", "Add a
+  check for understanding" and a pointed edit still act.
+- **The first progress line arrives late.** "Thinking about your lesson"
+  reaches the browser together with the next line, about 6 seconds in:
+  something between the app and the browser holds the first line back. Not
+  fixed.
+- Compare slides' headlines measure 4 pixels over their box. Nothing is
+  visibly cut. Not changed.
+
+Still open from the list above: finding 1 (every deck written twice; the
+reasons are in the production log's `deckFailure`, which the preview does not
+expose), 5, 6, 7 and 8.
+
