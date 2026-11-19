@@ -38,15 +38,30 @@ const titles = (deck: SlideDeck) => deck.slides.map((s) => s.title);
 describe('readDeckCommandResult: the model’s answer, read leniently', () => {
   test('one JSON object, with prose or a fence around it', () => {
     const answer = 'Here you go:\n```json\n{"reply": "Done.", "ops": [{"op": "remove_slide", "slide": 5}]}\n```';
-    expect(readDeckCommandResult(answer)).toEqual({ reply: 'Done.', ops: [{ op: 'remove_slide', slide: 5 }] });
+    expect(readDeckCommandResult(answer)).toEqual({ reply: 'Done.', ops: [{ op: 'remove_slide', slide: 5 }], dropped: 0 });
   });
 
-  test('no ops is an answer too; anything else is not', () => {
-    expect(readDeckCommandResult('{"reply": "I can’t draw pictures here."}')).toEqual({ reply: 'I can’t draw pictures here.', ops: [] });
-    expect(readDeckCommandResult('Sure!')).toBeNull();
+  test('no ops is an answer too, and so is an answer in plain words', () => {
+    expect(readDeckCommandResult('{"reply": "I can’t draw pictures here."}')).toEqual({ reply: 'I can’t draw pictures here.', ops: [], dropped: 0 });
+    expect(readDeckCommandResult('{"reply": "Which slide do you mean?", "ops": null}')).toEqual({ reply: 'Which slide do you mean?', ops: [], dropped: 0 });
+    // No JSON at all: the model saying why it changed nothing (live test, Nov 19).
+    expect(readDeckCommandResult('I can’t add photos, only pictures already in the deck.')).toEqual({ reply: 'I can’t add photos, only pictures already in the deck.', ops: [], dropped: 0 });
+    expect(readDeckCommandResult('')).toBeNull();
     expect(readDeckCommandResult('{"reply": "", "ops": []}')).toBeNull();
-    expect(readDeckCommandResult('{"reply": "x", "ops": [{"op": "delete_everything"}]}')).toBeNull();
-    expect(readDeckCommandResult(`{"reply": "x", "ops": [${Array(21).fill('{"op":"remove_slide","slide":1}').join(',')}]}`)).toBeNull();
+    expect(readDeckCommandResult('{"reply": "x", "ops": [}')).toBeNull();
+  });
+
+  test('an operation that cannot be read is left out and counted; the ones that can be are kept', () => {
+    const mixed = readDeckCommandResult('{"reply": "Done.", "ops": [{"op": "delete_everything"}, {"op": "remove_slide", "slide": 2}, {"op": "replace_slide", "slide": "x", "with": {}}]}');
+    expect(mixed).toEqual({ reply: 'Done.', ops: [{ op: 'remove_slide', slide: 2 }], dropped: 2 });
+    // More than twenty is twenty.
+    const many = readDeckCommandResult(`{"reply": "x", "ops": [${Array(25).fill('{"op":"remove_slide","slide":1}').join(',')}]}`)!;
+    expect(many.ops).toHaveLength(20);
+    expect(many.dropped).toBe(5);
+    // Operations with no word to the teacher still get one.
+    expect(readDeckCommandResult('{"ops": [{"op": "remove_slide", "slide": 2}]}')!.reply).toBe('Done.');
+    // A reply that runs on is cut, not turned down.
+    expect(readDeckCommandResult(`{"reply": "${'word '.repeat(200)}"}`)!.reply.length).toBeLessThanOrEqual(400);
   });
 });
 
@@ -56,6 +71,33 @@ describe('applyDeckOps: slides are named by their number in the deck that was se
     expect(deck.slides[2]).toMatchObject({ question: 'Who controls a country that lives on one river?', speakerNotes: 'Say this.', minutes: 5, step: 1 });
     expect(titles(deck)).toEqual(titles(DECK));
     expect(changes).toEqual([{ slide: 3, kind: 'changed', title: 'Why the Nile?' }]);
+  });
+
+  test('only the fields that change: the rest of the slide stays, and null takes a field off', () => {
+    const { deck, changes } = apply([{ op: 'replace_slide', slide: 3, with: { question: 'Who rules a country that lives on one river?' } }]);
+    expect(deck.slides[2]).toMatchObject({ layout: 'discuss', title: 'Why the Nile?', question: 'Who rules a country that lives on one river?', minutes: 5, step: 1, speakerNotes: 'Say this.' });
+    expect(changes).toEqual([{ slide: 3, kind: 'changed', title: 'Why the Nile?' }]);
+    const without = apply([{ op: 'replace_slide', slide: 3, with: { minutes: null, title: 'The river' } }]);
+    expect(without.deck.slides[2]!.minutes).toBeUndefined();
+    expect(without.deck.slides[2]).toMatchObject({ title: 'The river', question: 'Why would the river matter to an empire?' });
+    // A list is replaced whole, as given.
+    const list = apply([{ op: 'replace_slide', slide: 5, with: { bullets: ['Condominium'] } }]);
+    expect(list.deck.slides[4]).toMatchObject({ layout: 'bullets', title: 'Words to know', bullets: ['Condominium'], minutes: 4 });
+  });
+
+  test('a slide that becomes another kind of slide starts again: its old fields do not linger', () => {
+    const { deck } = apply([{ op: 'replace_slide', slide: 5, with: { layout: 'big_idea', body: 'Two words carry the whole lesson.' } }]);
+    expect(deck.slides[4]).toMatchObject({ layout: 'big_idea', title: 'Words to know', body: 'Two words carry the whole lesson.', minutes: 4, speakerNotes: 'Say this.' });
+    expect(deck.slides[4]!.bullets).toBeUndefined();
+  });
+
+  test('several slides added at once go in together, in order: a quiz question and then its answer', () => {
+    const question = { layout: 'discuss', title: 'Check', question: 'What did Britain and Egypt share?', choices: ['A flag', 'The rule of Sudan'], speakerNotes: 'Hands up.' };
+    const { deck, changes } = apply([{ op: 'add_slide', after: 3, with: [question, { ...question, answer: 2 }] }]);
+    expect(titles(deck)).toEqual(['Sudan before the novel', 'Today', 'Why the Nile?', 'Check', 'Check', 'Read the map', 'Words to know', 'Before you go']);
+    expect(deck.slides[3]!.answer).toBeUndefined();
+    expect(deck.slides[4]!.answer).toBe(2);
+    expect(changes.map((change) => [change.slide, change.kind])).toEqual([[4, 'added'], [5, 'added']]);
   });
 
   test('remove, add and replace in one answer: every number is the original’s', () => {
@@ -162,6 +204,12 @@ describe('what the model is told', () => {
   test('the system prompt names every operation and carries the kit’s rules', () => {
     const system = deckCommandSystem({ kitRules: 'Gallery deck (Yawp! Lesson Deck Kit, spec v4.1)…' });
     for (const op of ['replace_slide', 'add_slide', 'remove_slide', 'move_slide', 'set_deck']) expect(system).toContain(op);
+    // What the live test of Nov 19 showed it needed to be told.
+    expect(system).toContain('only the fields that change');
+    expect(system).toContain('set to null is taken off');
+    expect(system).toContain('"with" is a list of them');
+    expect(system).toContain('Never count a slide you are adding');
+    expect(system).toContain('Never refuse a change to their own deck');
     expect(system).toContain('spec v4.1');
     expect(system).toContain('speakerNotes');
     expect(deckCommandSystem({ kitRules: null })).not.toContain('Lesson Deck Kit');

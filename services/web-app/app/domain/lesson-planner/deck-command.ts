@@ -20,7 +20,8 @@ const NEW_SLIDE = z.record(z.unknown());
 
 export const DECK_OPS = z.discriminatedUnion('op', [
   z.object({ op: z.literal('replace_slide'), slide: SLIDE_NUMBER, with: NEW_SLIDE }),
-  z.object({ op: z.literal('add_slide'), after: AFTER, with: NEW_SLIDE }),
+  // One new slide, or several in a row (a quiz question and its answer).
+  z.object({ op: z.literal('add_slide'), after: AFTER, with: z.union([NEW_SLIDE, z.array(NEW_SLIDE).min(1).max(8)]) }),
   z.object({ op: z.literal('remove_slide'), slide: SLIDE_NUMBER }),
   z.object({ op: z.literal('move_slide'), slide: SLIDE_NUMBER, after: AFTER }),
   z.object({
@@ -33,24 +34,51 @@ export const DECK_OPS = z.discriminatedUnion('op', [
 
 export type DeckOp = z.infer<typeof DECK_OPS>;
 
-export const DECK_COMMAND_RESULT = z.object({
-  reply: z.string().trim().min(1).max(400),
-  ops: z.array(DECK_OPS).max(20).default([]),
-});
+const MAX_OPS = 20;
+const MAX_REPLY = 400;
 
-export type DeckCommandResult = z.infer<typeof DECK_COMMAND_RESULT>;
+export type DeckCommandResult = {
+  reply: string;
+  ops: DeckOp[];
+  /** Operations the answer held that could not be read, and so were left out. */
+  dropped: number;
+};
 
-/** The model's answer: one JSON object, whatever prose or fence is around it. */
+const clipReply = (text: string) => (text.length > MAX_REPLY ? `${text.slice(0, MAX_REPLY - 1).trimEnd()}…` : text);
+
+/**
+ * The model's answer, read leniently (live test, Nov 19): one JSON object,
+ * whatever prose or fence is around it. Operations that cannot be read are
+ * left out and counted, not allowed to cost the ones that can. An answer in
+ * plain words, with no JSON at all, is the model saying why it changed
+ * nothing, and is passed on as that.
+ */
 export function readDeckCommandResult(text: string): DeckCommandResult | null {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
-  if (start < 0 || end <= start) return null;
+  if (start < 0) {
+    const words = text.replace(/```/g, '').trim();
+    return words ? { reply: clipReply(words), ops: [], dropped: 0 } : null;
+  }
+  // JSON that was begun and not finished is not an answer.
+  if (end <= start) return null;
+  let raw: unknown;
   try {
-    const parsed = DECK_COMMAND_RESULT.safeParse(JSON.parse(text.slice(start, end + 1)));
-    return parsed.success ? parsed.data : null;
+    raw = JSON.parse(text.slice(start, end + 1));
   } catch {
     return null;
   }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const answer = raw as { reply?: unknown; ops?: unknown };
+  const listed = Array.isArray(answer.ops) ? answer.ops : [];
+  const ops: DeckOp[] = [];
+  for (const item of listed.slice(0, MAX_OPS)) {
+    const parsed = DECK_OPS.safeParse(item);
+    if (parsed.success) ops.push(parsed.data);
+  }
+  const reply = typeof answer.reply === 'string' ? answer.reply.trim() : '';
+  if (!reply && !listed.length) return null;
+  return { reply: clipReply(reply || 'Done.'), ops, dropped: listed.length - ops.length };
 }
 
 /** One line of "here is what changed". `slide` is its number now (0 for the deck itself; a removed slide's old number). */
@@ -119,21 +147,29 @@ export function applyDeckOps(sent: SlideDeck, ops: DeckOp[]): DeckOpsOutcome {
     if (op.op === 'replace_slide') {
       const entry = find(op.slide);
       if (!entry) return unknown(op.slide);
-      const next = normalizeSlideFields(op.with);
       const was = entry.slide;
-      entry.slide = {
-        ...next,
-        // What the teacher did not ask about stays: the notes, the minutes, the step.
-        speakerNotes: next.speakerNotes ?? was.speakerNotes,
-        ...(next.minutes === undefined && was.minutes !== undefined ? { minutes: was.minutes } : {}),
-        ...(next.step === undefined && was.step !== undefined ? { step: was.step } : {}),
-        image: next.layout === 'picture' ? (picture(next.image) ?? was.image) : undefined,
-      };
+      // `with` holds the fields that change (live test, Nov 19: a model asked
+      // to tighten every slide sends only the words it tightened). A field
+      // set to null is taken off; a field left out stays as it was.
+      const removed = Object.entries(op.with).filter(([, value]) => value === null).map(([key]) => key);
+      const given = Object.fromEntries(Object.entries(op.with).filter(([, value]) => value !== null));
+      // With no layout named, the slide keeps its own: nothing is guessed from the fields.
+      const next = normalizeSlideFields('layout' in given ? given : { ...given, layout: was.layout });
+      // A slide that becomes another kind of slide starts again from what every slide has.
+      const kept = next.layout === was.layout ? was : { title: was.title, speakerNotes: was.speakerNotes, minutes: was.minutes, step: was.step, image: was.image };
+      const merged: Record<string, unknown> = { ...kept, ...next };
+      for (const key of removed) delete merged[key];
+      merged.image = merged.layout === 'picture' ? (picture(next.image) ?? was.image) : undefined;
+      entry.slide = merged;
     } else if (op.op === 'add_slide') {
       const at = placeAfter(op.after);
       if (at === null) return unknown(op.after);
-      const next = normalizeSlideFields(op.with);
-      entries.splice(at, 0, { number: null, slide: { ...next, image: picture(next.image) }, original: null, removed: false, moved: false });
+      // Several at once go in together, in the order given.
+      const added = (Array.isArray(op.with) ? op.with : [op.with]).map((slide) => {
+        const next = normalizeSlideFields(slide);
+        return { number: null, slide: { ...next, image: picture(next.image) }, original: null, removed: false, moved: false };
+      });
+      entries.splice(at, 0, ...added);
     } else if (op.op === 'remove_slide') {
       const entry = find(op.slide);
       if (!entry) return unknown(op.slide);
@@ -231,15 +267,17 @@ export function deckCommandSystem({ kitRules }: { kitRules: string | null }): st
     '{"reply": "one or two short sentences to the teacher", "ops": [ ... ]}',
     '',
     'The operations:',
-    '- {"op": "replace_slide", "slide": N, "with": { the whole slide as it should be now }}',
-    '- {"op": "add_slide", "after": N, "with": { the whole new slide }}   ("after": 0 puts it first)',
+    '- {"op": "replace_slide", "slide": N, "with": { only the fields that change }}   (a field left out stays as it is; a field set to null is taken off)',
+    '- {"op": "add_slide", "after": N, "with": { the whole new slide }}   ("after": 0 puts it first; to add several slides in a row, "with" is a list of them, in order)',
     '- {"op": "remove_slide", "slide": N}',
     '- {"op": "move_slide", "slide": N, "after": M}',
     '- {"op": "set_deck", "title": "...", "subtitle": "...", "unit": "..."}   (only the ones that change)',
     '',
     'Rules:',
-    '- N and M are always the slide numbers in the deck as it was given to you, even when the same answer adds or removes slides.',
-    '- A slide in "with" is written in the deck’s own schema, with the same field names as the slides you were given. Write every field the slide should have afterwards. Leave speakerNotes, minutes, step and image as they were unless the teacher asked to change them. A new slide needs speakerNotes: one or two sentences the teacher can say.',
+    '- N and M are always the slide numbers in the deck as it was given to you, even when the same answer adds or removes slides. Never count a slide you are adding: a quiz question and the slide that shows its answer are one add_slide with a list of two slides, not two operations.',
+    '- Fields are written in the deck’s own schema, with the same field names as the slides you were given. For replace_slide give only what changes: to change a question, {"question": "..."} is the whole of "with". To make a slide another kind of slide, give the new layout and every field that layout needs. A new slide is written whole and needs speakerNotes: one or two sentences the teacher can say.',
+    '- A change to many slides (fewer words on every slide) is one replace_slide for each slide, each with only the fields you rewrote.',
+    '- The deck is the teacher’s. When they plainly ask for something the writing rules below advise against (the exit slide somewhere other than last, more words than a slide should carry), do it, and say in reply in a few words what it costs. Never refuse a change to their own deck.',
     '- Change only what the teacher asked for. A slide they did not ask about gets no operation. Do not tidy, reword or reorder anything else.',
     '- When the teacher is pointing at one part of a slide, their line is about that part. Change that part and leave the rest of that slide, and every other slide, exactly as it is, unless the line plainly asks about something else.',
     '- Keep to the limits: a title 90 characters, a body or question 320, a list line 200, 40 slides. One idea per slide; words that do not fit belong in speakerNotes.',
