@@ -219,11 +219,19 @@ What the second pass turned up:
 
 - **A long quiz choice ran under the next choice** (the MLK deck, a choice of
   two lines). Fixed: a row is as tall as its choice, and a slide of long
-  choices steps down a size until they fit.
+  choices steps down a size until they fit. Measured again in Present on the
+  same deck: nothing clipped.
 - **"Add a check for understanding" got a question back** ("Which part of
   the lesson should the check follow?") once the chat was told to stop
-  guessing. Fixed in the prompt: it asks only when it cannot tell which slide
-  is meant, otherwise it chooses and says what it chose.
+  guessing. Fixed in the prompt: when the teacher says what they want and
+  leaves the how to it, it chooses and says what it chose. Run again on three
+  decks: each got one quiz question with its answer slide behind it, in 7 to
+  10 s.
+- **Then it guessed too much.** "Fix the second one" set slide 2's minutes to
+  the agenda's total. Fixed in the prompt: a line that does not say what
+  should be different gets a one-sentence question and no change. Run again:
+  it asks what to fix on slide 2, and "Fewer words on every slide", "Add a
+  check for understanding" and a pointed edit still act.
 - **The first progress line arrives late.** "Thinking about your lesson"
   reaches the browser together with the next line, about 6 seconds in:
   something between the app and the browser holds the first line back. Not
