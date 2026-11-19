@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { PanelLeftClose, Send, Sparkles } from 'lucide-react';
+import { MessageSquareText, PanelLeftClose, Send } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { DBQ_PHASES } from './types';
 import type { ChatMessage } from './types';
@@ -32,7 +32,7 @@ export function TutorChatStripe({
       <header className="shrink-0 border-b px-3 py-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <Sparkles size={14} className="text-primary" />
+            <MessageSquareText size={14} className="text-primary" />
             <h2 className="text-sm font-semibold">Tutor</h2>
           </div>
           {onCollapse ? (

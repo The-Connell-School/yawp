@@ -3,7 +3,6 @@ import {
   FileText,
   MessageSquareText,
   PanelLeftOpen,
-  Sparkles,
 } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import { EditorColumn } from './editor-column';
@@ -295,7 +294,7 @@ function CollapsedTutorRail({ onExpand }: { onExpand: () => void }) {
       >
         <PanelLeftOpen size={16} />
       </button>
-      <Sparkles size={16} className="text-primary" />
+      <MessageSquareText size={16} className="text-primary" />
       <span
         className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground"
         style={{ writingMode: 'vertical-rl' }}

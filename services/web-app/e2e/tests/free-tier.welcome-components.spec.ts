@@ -22,8 +22,8 @@ for (const width of [1280, 390]) {
         await name.blur();
         await expect(page.locator('input[name="name"]')).toHaveCount(1);
       } else if (state === 'v2-decline') {
-        await expect(page.getByRole('status')).toContainText('high school');
-        await expect(page.getByText(/site license/)).toBeVisible();
+        await expect(page.getByRole('status')).toContainText('grades 6–12');
+        await expect(page.getByText(/elementary schools and colleges/)).toBeVisible();
         await expect(page.getByRole('button', { name: 'Talk with our team' })).toBeVisible();
         await expect(page.getByRole('link', { name: 'hello@yawp.school' })).toHaveCount(0);
       } else if (state === 'v2-event-confirmation') {

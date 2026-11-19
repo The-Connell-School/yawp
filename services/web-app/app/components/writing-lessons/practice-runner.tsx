@@ -6,7 +6,6 @@ import {
   MessageSquareText,
   PartyPopper,
   RotateCcw,
-  Sparkles,
 } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useFetcher } from 'react-router';
@@ -504,7 +503,7 @@ export function PracticeRunner({
                         data-testid="composition-mastered"
                         className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900"
                       >
-                        <Sparkles className="h-4 w-4 shrink-0" />
+                        <CheckCircle2 className="h-4 w-4 shrink-0" />
                         Mastered — nice work.
                       </div>
                     ) : (

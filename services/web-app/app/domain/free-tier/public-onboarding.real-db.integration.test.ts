@@ -137,6 +137,26 @@ for (const path of ['free', 'token'] as const) {
     expect((await prisma.acquisitionToken.findUniqueOrThrow({ where: { id: event.id } })).uses).toBe(0);
   });
 }
+for (const gradeLevel of ['6', '7', '8'] as const) {
+  local(`waitlist grade ${gradeLevel} creates LEAD like high school (no below-hs decline)`, async () => {
+    await flag('true');
+    const fields = input(`ms-${gradeLevel}`, gradeLevel);
+    const result = await post('waitlist', fields);
+    expect(result.body).toEqual({ ok: true });
+    const row = await prisma.freeTierApplication.findUniqueOrThrow({
+      where: { email: fields.email },
+    });
+    expect(row).toMatchObject({
+      status: 'LEAD',
+      gradeLevel,
+      userId: null,
+      organizationId: null,
+    });
+    expect(row.tags).not.toContain('below-hs');
+    expect(row.status).not.toBe('REJECTED');
+  });
+}
+
 local('organic first-write provenance stays organic after a later event decline', async () => {
   await flag('true');
   const fields = input('organic-first');

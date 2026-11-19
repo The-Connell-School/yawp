@@ -15,7 +15,9 @@ mock.module('~/utils/rate-limit.server', () => ({
 mock.module('~/domain/free-tier/public-onboarding.server', () => ({
   isPublicOnboardingV2Enabled: async () => false,
   isSupportedSignupGrade: (grade: string) =>
-    ['9', '10', '11', '12'].includes(grade),
+    ['6', '7', '8', '9', '10', '11', '12', 'K', '1', '2', '3', '4', '5'].includes(
+      grade
+    ),
 }));
 const { readOrMintScanDedupeCookie } = await import('~/domain/free-tier/acquisition-token-scan.server');
 const { action } = await import('./route');
