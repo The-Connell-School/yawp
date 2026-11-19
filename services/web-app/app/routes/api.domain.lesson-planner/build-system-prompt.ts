@@ -890,7 +890,7 @@ function buildDeckGallerySection(on: boolean, recentArt: RecentArt[] = []): stri
  * date. The teacher's name comes from the session; without it the line is
  * left out.
  */
-function buildDeckKitV4Section(
+export function buildDeckKitV4Section(
   recentArt: RecentArt[] = [],
   { v41 = false, teacherName = null }: { v41?: boolean; teacherName?: string | null } = {}
 ): string[] {

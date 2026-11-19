@@ -1340,6 +1340,10 @@ jobs:
             app/routes/api.domain.lesson-planner.library/route.test.ts \
             app/domain/lesson-planner/deck-art.test.ts \
             app/domain/lesson-planner/deck-edit.test.ts \
+            app/domain/lesson-planner/deck-on-slide.test.ts \
+            app/domain/lesson-planner/deck-command.test.ts \
+            app/domain/lesson-planner/deck-command.server.test.ts \
+            app/routes/api.domain.lesson-planner.deck-command/route.test.ts \
             app/domain/lesson-planner/exit-ticket-block-quick.test.ts \
             app/domain/lesson-planner/exit-ticket-block.test.ts \
             app/domain/lesson-planner/lesson-ask.test.ts \

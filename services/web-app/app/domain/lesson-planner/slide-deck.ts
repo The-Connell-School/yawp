@@ -429,6 +429,15 @@ function normalizeSlide(raw: unknown): unknown {
   return slide;
 }
 
+/**
+ * One slide with the field names the model reaches for read as the schema's
+ * own (`notes` is `speakerNotes`, `items` is `bullets`), before it is checked.
+ */
+export function normalizeSlideFields(raw: unknown): Record<string, unknown> {
+  const slide = normalizeSlide(raw);
+  return slide && typeof slide === 'object' && !Array.isArray(slide) ? (slide as Record<string, unknown>) : {};
+}
+
 function normalizeDeck(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
   const deck = raw as Record<string, unknown>;

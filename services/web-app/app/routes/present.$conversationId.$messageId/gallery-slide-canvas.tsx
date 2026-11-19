@@ -27,7 +27,7 @@ import {
 import type { SlideDeck } from '~/domain/lesson-planner/slide-deck';
 import { BrandSafe } from '~/components/brand/brand-safe';
 import { isKitV4 } from '~/domain/lesson-planner/deck-kit-v4';
-import { KitV4SlideCanvas } from './kit-v4-slide-canvas';
+import { KitV4SlideCanvas, type KitV4SlideEdit } from './kit-v4-slide-canvas';
 
 /** Georgia and Arial first; these only stand in where a machine lacks them. */
 export const GALLERY_FONTS_HREF = GALLERY_FALLBACK_FONTS_HREF;
@@ -73,9 +73,18 @@ function band(color: string): string {
   return `rgb(${mix(r!, pr)}, ${mix(g!, pg)}, ${mix(b!, pb)})`;
 }
 
-export function GallerySlideCanvas({ deck, index }: { deck: SlideDeck; index: number }) {
+export function GallerySlideCanvas({
+  deck,
+  index,
+  edit,
+}: {
+  deck: SlideDeck;
+  index: number;
+  /** The deck studio (Nov 19): a spec v4 slide's words are typed in place. Spec v3 is never typed on. */
+  edit?: KitV4SlideEdit;
+}) {
   // Spec v4 where the school has it (the deck is marked where it is loaded).
-  if (isKitV4(deck)) return <KitV4SlideCanvas deck={deck} index={index} />;
+  if (isKitV4(deck)) return <KitV4SlideCanvas deck={deck} index={index} edit={edit} />;
   const plan = planGalleryDeck(deck)[index];
   if (!plan) return null;
   const colors = galleryColors(deck);
