@@ -18,6 +18,7 @@ import {
   type DeckSelection,
 } from './deck-command';
 import { plannerComplete, type PlannerAccess } from './planner-completion.server';
+import { resolveDeckPlaces } from './context-slides.server';
 import type { SlideDeck } from './slide-deck';
 
 export type DeckCommandOutcome = {
@@ -69,5 +70,6 @@ export async function runDeckCommand({
 
   const outcome = applyDeckOps(deck, result.ops);
   if (!outcome.ok || !outcome.changes.length) return { reply: outcome.ok ? result.reply : COULD_NOT, applied: false, changes: [] };
-  return { reply: result.reply, applied: true, deck: outcome.deck, changes: outcome.changes };
+  // A map's places are found before the deck goes back to the page (Nov 19).
+  return { reply: result.reply, applied: true, deck: resolveDeckPlaces(outcome.deck), changes: outcome.changes };
 }

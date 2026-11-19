@@ -220,6 +220,8 @@ const FIELDS_BY_LAYOUT = [
   'compare: title, left { label, text }, right { label, text }',
   'picture: title, image (only an id already in the deck), body or question',
   'a quiz question is any slide with choices (2 to 5 lines) and answer (the right one, from 1); its question is question',
+  'timeline: title, body (one line that frames it), events [{ date, title, detail, track }] (2 to 8, in order), tracks (two row names, when events carry track 1 or 2)',
+  'map: title, body, places [{ name, where, label, note }] (1 to 8; name is the modern name, where its country or US state; never lat, lon or found, which Yawp! writes), route (true joins them in order), shade (up to 4 countries by today’s names), shadeLabel',
 ];
 
 /** The editor's job, the operations, the schema in brief, and the kit's writing rules for the school's deck spec. */

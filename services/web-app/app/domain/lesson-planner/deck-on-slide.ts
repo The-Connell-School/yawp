@@ -31,6 +31,7 @@ const TEXT_LIMITS: Record<string, number> = {
   mode: 24,
   button: 40,
   nextLesson: 90,
+  shadeLabel: 60,
 };
 const DECK_LIMITS: Record<string, number> = { title: 90, subtitle: 200, unit: 80 };
 const COLUMN_LIMITS: Record<string, number> = { label: 40, text: 320 };
@@ -62,6 +63,22 @@ const LISTS: Record<string, ListSpec> = {
     focusKey: 'text',
     label: (n, key) => (key === 'verb' ? `Task ${n} verb` : `Task ${n}`),
   },
+  // A timeline slide's events and a map slide's places (Nov 19).
+  events: {
+    max: 8,
+    parts: { date: 24, title: 60, detail: 220 },
+    blank: () => ({ date: 'Year', title: 'What happened' }),
+    focusKey: 'title',
+    label: (n, key) => (key === 'date' ? `Event ${n} date` : key === 'detail' ? `Event ${n} sentence` : `Event ${n}`),
+  },
+  places: {
+    max: 8,
+    parts: { name: 60, label: 40, note: 200, where: 60 },
+    blank: () => ({ name: 'Place' }),
+    focusKey: 'name',
+    label: (n, key) => (key === 'note' ? `Place ${n} sentence` : `Place ${n}`),
+  },
+  tracks: { max: 2, limit: 30, blank: () => 'Row', label: (n) => `Row ${n} name` },
   timeline: {
     max: 5,
     parts: { year: 14, caption: 70 },
@@ -89,6 +106,7 @@ const TEXT_LABELS: Record<string, string> = {
   mode: 'Label',
   button: 'Button',
   nextLesson: 'Next lesson',
+  shadeLabel: 'What is shaded',
 };
 const DECK_LABELS: Record<string, string> = { title: 'Deck title', subtitle: 'Deck subtitle', unit: 'Unit' };
 

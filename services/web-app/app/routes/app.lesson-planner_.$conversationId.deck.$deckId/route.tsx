@@ -37,6 +37,7 @@ import {
   withSlidePicture,
 } from '~/domain/lesson-planner/deck-edit';
 import { saveEditedDeck } from '~/domain/lesson-planner/deck-edit.server';
+import { resolveDeckPlaces } from '~/domain/lesson-planner/context-slides.server';
 import type { Slide, SlideDeck } from '~/domain/lesson-planner/slide-deck';
 import { TileSlideCanvas } from '~/routes/present.$conversationId.$messageId/tile-slide-canvas';
 import { closeHref } from '~/domain/lesson-planner/lesson-return';
@@ -117,7 +118,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const saved = await saveEditedDeck({
     conversationId: conversation.id,
     deckId: params.deckId!,
-    deck: checked.deck,
+    // A map slide's places are found again on the way in (Nov 19): what is
+    // stored is where Yawp! put them, never what a page sent.
+    deck: resolveDeckPlaces(checked.deck),
   });
   if (!saved) throw new Response('Not Found', { status: 404 });
   return redirect(deckEditorReturnTo(conversation.id, request.url));

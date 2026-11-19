@@ -35,6 +35,8 @@ export type KitV4SlideEdit = {
   onRemove?: (source: KitV4Source) => void;
   /** The box the teacher is in; null when they leave it. */
   onFocus?: (source: KitV4Source | null) => void;
+  /** The teacher left a box, after what they typed there was written. */
+  onLeave?: (source: KitV4Source) => void;
   /** A click on the slide's own picture. */
   onPicture?: () => void;
 };
@@ -129,6 +131,7 @@ function EditableWords({ words, source, edit }: { words: string; source: KitV4So
         if (text !== words) edit.onText(source, text);
         // Put back what the deck holds, whatever it made of that.
         leave();
+        edit.onLeave?.(source);
       }}
       onKeyDown={(event) => {
         const node = event.currentTarget;

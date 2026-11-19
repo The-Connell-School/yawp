@@ -1341,6 +1341,15 @@ jobs:
             app/domain/lesson-planner/deck-art.test.ts \
             app/domain/lesson-planner/deck-edit.test.ts \
             app/domain/lesson-planner/deck-on-slide.test.ts \
+            app/domain/lesson-planner/context-slides.test.ts \
+            app/domain/lesson-planner/context-slides-kit.test.ts \
+            app/domain/lesson-planner/context-slides.server.test.ts \
+            app/routes/api.domain.lesson-planner.places/route.test.ts \
+            'app/routes/api.lesson-planner-map[.]svg/route.test.ts' \
+            app/domain/geo/topojson.test.ts \
+            app/domain/geo/map-view.test.ts \
+            app/domain/geo/places.server.test.ts \
+            app/domain/geo/map-drawing.server.test.ts \
             app/domain/lesson-planner/deck-command.test.ts \
             app/domain/lesson-planner/deck-command.server.test.ts \
             app/routes/api.domain.lesson-planner.deck-command/route.test.ts \

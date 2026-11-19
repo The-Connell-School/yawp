@@ -948,6 +948,22 @@ export function buildDeckKitV4Section(
 }
 
 /**
+ * Background for a text (Kevin, Nov 19): the two slides a teacher steps
+ * through when introducing a book. Only for a school with
+ * `lesson_planner_context_tools`, on top of the kit's v4 templates.
+ */
+export function buildContextToolsSection(): string[] {
+  return [
+    '',
+    'Background for a text: when a lesson introduces a book, a poem, a speech or a period, and what happened or where it happened is what students need before they read, the deck can carry two more templates. Use one only when the lesson calls for it; most lessons need neither, and no deck needs more than one of each.',
+    '- timeline — events on a line. `title` (what the timeline is of), an optional `body` (one line that frames it), and `events`: 4 to 8 `{ "date", "title", "detail" }` in order. `date` is as short as it can be ("1899", "April 1963", "1930s"). `title` is 6 words or fewer. `detail` is one sentence a student can read from the back of the room; in class the teacher steps through the events with the arrows and each one’s sentence is shown as it comes up. When two things run side by side (the world and the author’s life, the history and the novel), name the two rows in `tracks` (["In Sudan", "The novel"]) and give each event `"track": 1` or `"track": 2`.',
+    '- map — places on a real map that Yawp! draws from its own map data. `title`, an optional `body`, and `places`: 2 to 6 `{ "name", "where", "label", "note" }`. `name` is the place’s own modern name as an atlas prints it ("Khartoum", "Salinas", "Istanbul"); `where` is its country, or its state for a town in the United States ("Sudan", "California"), and is always given; `label` only when the text calls the place something else ("Constantinople"); `note` is one sentence on why this place matters to the text. The teacher steps through the places in the order you give them. `"route": true` joins them in that order, for a journey. `shade` is up to 4 countries by today’s names to fill in the deck color, with `shadeLabel` saying what they are together ("Sudan in 1956"). The map shows today’s borders, so never write as if it shows old ones.',
+    'Never write a position: no `lat`, `lon`, `view` or `found`. Yawp! finds each place by its name and puts the pin there; a place it cannot find (a village, a place the author made up) is left off the map, so name the nearest real town instead and say so in its `note`.',
+    'Only dates and places you are sure of. A wrong year or a pin in the wrong town is taught to thirty students: leave out an event you would have to guess at, and say in `speakerNotes` what the teacher should check. These two templates take the place of a `notes` slide with a timeline; do not use both for the same events. Neither has a label.',
+  ];
+}
+
+/**
  * System prompt blocks for Anthropic prompt caching. The large stable prefix
  * is cached; the short personalized intro and per-lesson inventory sit after
  * the breakpoint.
@@ -967,6 +983,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   deckGallery = false,
   deckKitV4 = false,
   deckKitV41 = false,
+  contextTools = false,
   sources = [],
   lessonPictures = [],
   deckChoices,
@@ -976,6 +993,8 @@ export function buildLessonPlannerSystemPromptBlocks({
 }: {
   teacherName: string | null;
   organizationName: string;
+  /** Timelines and maps for introducing a text (Nov 19; needs deckKitV4). After the cache breakpoint. */
+  contextTools?: boolean;
   lessonInventory?: LessonInventoryEntry[];
   /** A day lesson's place in its week's framework (Brian's run 5, round 2). */
   weekContext?: string[];
@@ -1027,6 +1046,7 @@ export function buildLessonPlannerSystemPromptBlocks({
     ...(deckGallery && deckKitV4
       ? buildDeckKitV4Section(recentArt, { v41: deckKitV41, teacherName })
       : buildDeckGallerySection(deckGallery, recentArt)),
+    ...(deckGallery && deckKitV4 && contextTools ? buildContextToolsSection() : []),
     ...buildSourcesSection(sources, deckChoices, { onStack }),
     ...buildLessonPicturesSection(lessonPictures),
   ].join('\n');

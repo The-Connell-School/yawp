@@ -18,6 +18,7 @@ import { ChevronLeft, Loader2, Save } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { DeckPicturesProvider } from '~/components/lesson-planner/slide-picture';
 import { useActiveTime } from '~/components/lesson-planner/use-active-time';
+import { slideSteps, withSlideFocus } from '~/domain/lesson-planner/context-slides';
 import { deleteSlide, updateSlide, withoutSlidePicture, withSlidePicture } from '~/domain/lesson-planner/deck-edit';
 import type { KitV4Source } from '~/domain/lesson-planner/deck-kit-v4';
 import {
@@ -34,6 +35,20 @@ import { GALLERY_FONTS_HREF, GallerySlideCanvas } from '~/routes/present.$conver
 import type { KitV4SlideEdit } from '~/routes/present.$conversationId.$messageId/kit-v4-slide-canvas';
 import { DeckChat, type DeckPointing } from './deck-chat';
 import { DeletedSlideToast, SlideFields, SlideRail, uploadSlidePicture } from './editor-parts';
+
+/** A map slide's places as Yawp! found them, so a wrong match shows. */
+function mapNote(slide: Slide): string {
+  const places = slide.places ?? [];
+  const found = places.filter((place) => place.found).map((place) => place.found);
+  const missing = places.filter((place) => place.lat === undefined).map((place) => place.label ?? place.name);
+  return [
+    found.length ? `On the map: ${found.join('; ')}.` : null,
+    missing.length ? `Not found: ${missing.join(', ')}. Rename to a nearby town, or add where it is (“Salinas, California”).` : null,
+    'Borders are today’s.',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
 
 /** How long a deleted slide can still be brought back. */
 const UNDO_MS = 8000;
@@ -82,6 +97,8 @@ export function DeckStudio({
   // The box to put the caret in once the slide is drawn again.
   const [focus, setFocus] = useState<{ source: KitV4Source; select: 'all' | 'end' } | null>(null);
   const [pointing, setPointing] = useState<DeckPointing | null>(null);
+  // On a timeline or a map: the event or place in focus, as in Present. Undefined: the overview.
+  const [step, setStep] = useState<number | undefined>(undefined);
   const [picture, setPicture] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const stage = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -105,6 +122,33 @@ export function DeckStudio({
   function select(index: number) {
     setSelected(index);
     setPointing(null);
+    setStep(undefined);
+  }
+
+  /** A map slide's places, found again after a name changed (Nov 19): the pin moves, or comes off the map. */
+  async function findPlaces(index: number) {
+    const asked = latest.current.slides[index];
+    if (!asked || asked.layout !== 'map') return;
+    const { focus: _focus, ...slide } = asked;
+    try {
+      const response = await fetch('/api/domain/lesson-planner/places', { method: 'POST', body: new URLSearchParams({ slide: JSON.stringify(slide) }) });
+      const body = (await response.json().catch(() => ({}))) as { places?: NonNullable<Slide['places']>; view?: Slide['view'] | null };
+      if (!response.ok || !body.places) return;
+      change((current) => {
+        const now = current.slides[index];
+        // Only if the names are still the ones that were asked about.
+        if (!now || now.layout !== 'map' || JSON.stringify(now.places?.map((place) => [place.name, place.where])) !== JSON.stringify(body.places!.map((place) => [place.name, place.where]))) return current;
+        // What the teacher typed since stays; the positions are Yawp!'s.
+        const places = now.places!.map((place, i) => {
+          const { lat: _lat, lon: _lon, found: _found, ...typed } = place;
+          const { lat, lon, found } = body.places![i]!;
+          return lat === undefined || lon === undefined ? typed : { ...typed, lat, lon, ...(found ? { found } : {}) };
+        });
+        return { ...current, slides: current.slides.map((old, i) => (i === index ? { ...old, places, view: body.view ?? undefined } : old)) };
+      });
+    } catch {
+      // The pin stays where it was; saving finds the places again.
+    }
   }
 
   function remove(index: number) {
@@ -166,6 +210,9 @@ export function DeckStudio({
           text: sourceText(latest.current, at, source) ?? '',
         });
       },
+      onLeave: (source) => {
+        if (source.field === 'places' && source.key === 'name') void findPlaces(at);
+      },
       onPicture: pictureUploads ? () => fileInput.current?.click() : undefined,
     }),
     // `change` and `put` only touch refs and setters.
@@ -191,6 +238,7 @@ export function DeckStudio({
     }
   }
 
+  const steps = slideSteps(slide);
   const patch = (fields: Partial<Slide>) => change((current) => updateSlide(current, at, fields));
 
   return (
@@ -262,6 +310,22 @@ export function DeckStudio({
                   </span>
                 ) : null}
               </p>
+              {steps ? (
+                // A timeline or a map: what Present steps through with the arrows, and what to check.
+                <div data-testid="deck-studio-steps" className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+                  <Button type="button" variant={step === undefined ? 'default' : 'outline'} size="sm" onClick={() => setStep(undefined)}>
+                    All of it
+                  </Button>
+                  {Array.from({ length: steps }, (_, i) => (
+                    <Button key={i} type="button" variant={step === i ? 'default' : 'outline'} size="sm" aria-label={`${slide.layout === 'map' ? 'Place' : 'Event'} ${i + 1}`} onClick={() => setStep(i)}>
+                      {i + 1}
+                    </Button>
+                  ))}
+                  <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+                    {slide.layout === 'map' ? mapNote(slide) : 'In Present the arrows show these one at a time. Yawp! wrote the dates from memory: check them before class.'}
+                  </span>
+                </div>
+              ) : null}
               {picture.error ? (
                 <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
                   {picture.error}
@@ -269,7 +333,7 @@ export function DeckStudio({
               ) : null}
 
               <div ref={stage} data-testid="deck-studio-slide" className="aspect-[16/9] w-full overflow-hidden rounded-xl shadow-sm ring-1 ring-black/5">
-                <GallerySlideCanvas key={at} deck={deck} index={at} edit={edit} />
+                <GallerySlideCanvas key={at} deck={withSlideFocus(deck, at, step)} index={at} edit={edit} />
               </div>
               <input
                 ref={fileInput}
