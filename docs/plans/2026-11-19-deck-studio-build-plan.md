@@ -9,6 +9,37 @@ with the whole thing, and edit one part by hand), and the mockup
 Code facts below were read at `0ebddc0` (main, Nov 18). Paths are relative to
 `services/web-app/app/` unless they start with a top-level folder.
 
+## Status, Nov 19
+
+Phases 1 and 2 are built on `claude/ecstatic-noether-o53v08`, with both flags
+off by default. Phases 3 to 6 are not started.
+
+Checked:
+
+- Unit tests for the new code: on-slide edits, color-mark parts, the canvas,
+  the chat's operations, its server call and its route.
+- Browser tests (Chromium), 68 passing: the new
+  `teacher.lesson-planner-deck-studio.spec.ts` (9 tests), and the existing
+  review, run 2, own deck, kit v4 and kit v4.1 suites, which cover the old
+  editor, Present and PowerPoint.
+- The kit's layout, compared before and after the sources were added, for 29
+  slides in v4 and v4.1, with and without a painting: identical apart from
+  the new `source` property.
+- Typecheck (`./bin/project verify --profile prepush`).
+
+Not checked:
+
+- A real answer from the model. The browser tests answer the chat's request
+  themselves and the unit tests hand in the model's text, as every planner
+  test does. The prompt needs a pass on a preview with real decks before
+  `lesson_planner_deck_chat` goes on for a school.
+- A click on a slide's picture through to the new picture. The button is
+  drawn (unit test) and the upload route has its own tests; no browser test
+  joins them.
+- Firefox, and a phone-width screen.
+
+Screenshots of the built screen: `artifacts/deck-studio/`.
+
 ## 1. What we are building
 
 One place to work on a deck, with two ways to change it:
