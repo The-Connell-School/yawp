@@ -258,3 +258,68 @@ describe('spec v4.1: the page', () => {
     });
   });
 });
+
+describe('words that did not fit (bot test, Nov 19)', () => {
+  const panelHeadline = (title: string, kit: 'v4' | 'v4.1') => {
+    const of = deck([slide({ layout: 'steps', title, bullets: ['One', 'Two'] })], { kit });
+    return runsOf(layoutKitV4Slide(of, 0).elements).find((run) => run.text === title)!;
+  };
+  // The panel's text box is 380 wide. Fraunces Bold runs about 0.6 of its size a letter; Georgia about 0.55.
+  const longestWordWidth = (run: { text: string; size: number; face: string }) =>
+    Math.max(...run.text.split(/\s+/).map((word) => word.length)) * run.size * (run.face === 'display' ? 0.6 : 0.55);
+
+  test('a long word in a panel headline is set small enough to fit on a line: "Foreshadowing", not "Foreshadowin"', () => {
+    for (const kit of ['v4', 'v4.1'] as const) {
+      for (const title of ['Foreshadowing hunt', 'Counterarguments', 'Characterization']) {
+        expect(longestWordWidth(panelHeadline(title, kit))).toBeLessThanOrEqual(380);
+      }
+    }
+    expect(panelHeadline('Foreshadowing hunt', 'v4.1').size).toBe(44);
+  });
+
+  test('a headline of short words is set as large as before', () => {
+    expect(panelHeadline('Read the map', 'v4.1').size).toBe(58);
+    expect(panelHeadline('Draft your topic sentence', 'v4.1').size).toBe(50);
+    expect(panelHeadline('Read the map', 'v4').size).toBe(60);
+  });
+
+  const HARLEM = [
+    'What happens to a dream deferred?',
+    '',
+    'Does it dry up',
+    'like a raisin in the sun?',
+    'Or fester like a sore—',
+    'And then run?',
+    'Does it stink like rotten meat?',
+    'Or crust and sugar over—',
+    'like a syrupy sweet?',
+    '',
+    'Maybe it just sags',
+    'like a heavy load.',
+    '',
+    'Or does it explode?',
+  ].join('\n');
+  const passage = (body: string, kit: 'v4' | 'v4.1' = 'v4.1') => {
+    const of = deck([slide({ layout: 'excerpt', title: 'Annotate', body, author: 'Langston Hughes', work: 'Harlem' })], { kit });
+    return runsOf(layoutKitV4Slide(of, 0).elements).find((run) => run.text === body)!;
+  };
+  // The cream column is 660 wide and 560 tall, with the credit line under the passage.
+  const passageHeight = (run: { text: string; size: number }) =>
+    run.text.split('\n').reduce((lines, line) => lines + Math.max(1, Math.ceil((line.length * run.size * 0.52) / 660)), 0) * run.size * 1.45;
+
+  test('a poem is set by its lines, so its first line and its last are on the slide', () => {
+    for (const kit of ['v4', 'v4.1'] as const) {
+      const run = passage(HARLEM, kit);
+      expect(run.size).toBeLessThan(30);
+      expect(passageHeight(run)).toBeLessThanOrEqual(500);
+    }
+  });
+
+  test('a short passage is set as large as before; a long one steps down until it fits', () => {
+    expect(passage('It was a long time ago, and the river was the only road there was.').size).toBe(30);
+    const long = Array.from({ length: 90 }, (_, i) => (i % 7 ? 'river' : 'independence')).join(' ');
+    const run = passage(long.slice(0, 320));
+    expect(run.size).toBeLessThanOrEqual(30);
+    expect(passageHeight(run)).toBeLessThanOrEqual(500);
+  });
+});
