@@ -104,3 +104,67 @@ export function planningProgressForTool(
 export function planningProgressWriting(): PlanningProgress {
   return { label: 'Writing the lesson', fraction: WRITING_FRACTION };
 }
+
+/** A deck that did not validate is being written again (the repair pass): up to a minute more. */
+export function planningProgressCheckingDeck(): PlanningProgress {
+  return { label: 'Checking the slides', fraction: 0.9 };
+}
+
+/**
+ * How long after the last lookup (or after the turn starts, with none) the
+ * model is taken to be writing. Lookups come within a few seconds of each
+ * other; the writing takes most of a minute.
+ */
+export const WRITING_AFTER_MS = 6_000;
+
+/**
+ * What to say when, through one turn (bot test, Nov 19).
+ *
+ * The model's reply comes back whole, so nothing announces that it has
+ * stopped looking things up and started writing. "Writing the lesson" used to
+ * be sent once the writing was finished, and a teacher watched "Looking
+ * through the Teacher's Lounge" for a minute. Here it is said a few seconds
+ * after the last lookup returns, or after the start when there is none; a
+ * later lookup takes the line back; and the bar never moves backwards.
+ */
+export function planningProgressClock(report: (progress: PlanningProgress) => void, { afterMs = WRITING_AFTER_MS }: { afterMs?: number } = {}) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let furthest = 0;
+  let last = '';
+  const say = (progress: PlanningProgress) => {
+    furthest = Math.max(furthest, progress.fraction);
+    // The same line twice is one line.
+    if (progress.label === last) return;
+    last = progress.label;
+    report({ label: progress.label, fraction: furthest });
+  };
+  const wait = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => say(planningProgressWriting()), afterMs);
+  };
+  const stop = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+  };
+  wait();
+  return {
+    /** A lookup is starting: said before it runs. */
+    lookup(name: string, input: unknown, round: number) {
+      stop();
+      say(planningProgressForTool(name, input, round));
+    },
+    /** A lookup came back: the model is thinking again, and soon writing. */
+    lookedUp: wait,
+    /** The reply is in hand. */
+    writing() {
+      stop();
+      say(planningProgressWriting());
+    },
+    /** The deck is being written a second time. */
+    checkingDeck() {
+      stop();
+      say(planningProgressCheckingDeck());
+    },
+    stop,
+  };
+}
