@@ -211,6 +211,7 @@ describe('what the model is told', () => {
     expect(system).toContain('Never count a slide you are adding');
     expect(system).toContain('Never refuse a change to their own deck');
     expect(system).toContain('choose, make the change, and say in reply what you chose');
+    expect(system).toContain('or what they want different about it');
     expect(system).toContain('spec v4.1');
     expect(system).toContain('speakerNotes');
     expect(deckCommandSystem({ kitRules: null })).not.toContain('Lesson Deck Kit');
