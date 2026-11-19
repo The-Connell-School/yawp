@@ -524,3 +524,15 @@ the render test and shape inheritance can each move them by a week.
   row. A separate fix.
 - Turning on `lesson_planner_deck_kit_v41` for schools (Brock's list).
 - Google Slides import or export.
+
+## 14. Follow-ups
+
+- **Revamp the Lesson Planner's "How it works" page** (Kevin, Nov 19).
+  `routes/app.lesson-planner_.how-it-works/route.tsx` still describes the
+  planner before the deck studio: its Slides section ("A deck you can put on
+  the wall") covers building and presenting a deck, and says nothing about
+  typing on the slide or asking Yawp! to change it. The hero is a drawn
+  slide from an Of Mice and Men lesson in the older look. Scope and copy to
+  be set with Brian; whatever it says about the studio and the chat should
+  only show where those flags are on, as the page already does for the
+  gallery deck.
