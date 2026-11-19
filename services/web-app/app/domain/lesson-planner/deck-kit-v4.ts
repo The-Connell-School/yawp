@@ -522,6 +522,28 @@ const PASSAGE_WIDTH = 660;
 const PASSAGE_HEIGHT = 500;
 const PASSAGE_LEADING = 1.45;
 
+/** A quiz choice's row is the slide's width less its letter. */
+const CHOICE_WIDTH = 1060;
+const CHOICE_LEADING = 1.35;
+
+/**
+ * The quiz's rows (bot test, Nov 19: a long choice ran under the next one).
+ * Short choices are set as they always were, 28 point in rows of 64. A choice
+ * that runs to another line gets a taller row, and when the rows together
+ * would leave the slide, every choice steps down a size until they fit.
+ */
+function quizRows(choices: string[], room: number): { size: number; heights: number[]; height: number } {
+  const at = (size: number) => {
+    const heights = choices.map((choice) => {
+      const lines = Math.max(1, Math.ceil((choice.length * size * 0.5) / CHOICE_WIDTH));
+      return Math.round((size + 6) * CHOICE_LEADING + (lines - 1) * size * CHOICE_LEADING + 18);
+    });
+    return { size, heights, height: heights.reduce((sum, h) => sum + h, 0) };
+  };
+  const sizes = [28, 24, 22, 20, 18];
+  return sizes.map(at).find((rows) => rows.height <= room) ?? at(18);
+}
+
 /**
  * The size a passage is set in: 30, or 26 for a long one, and then down until
  * it fits by its lines as well as its words. A poem is short in words and
@@ -916,23 +938,25 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
       const question = slide.question ?? slide.body ?? slide.title;
       const choices = (slide.choices ?? []).slice(0, 5);
       const size = Math.min(promptSize(question), 54);
-      const rowH = 64;
       const questionH = size >= 54 ? 150 : 120;
-      const total = 34 + questionH + 24 + rowH * choices.length;
+      const rows = quizRows(choices, (v41 ? 624 : 584) - 34 - questionH - 24);
+      const total = 34 + questionH + 24 + rows.height;
       const top = v41 ? Math.max(48, (H - total) / 2) : Math.max(96, (H - total) / 2 + 16);
       pushRunningHead(MARGIN);
       elements.push(column({ x: MARGIN, y: top, w: W - MARGIN * 2, h: 34 + questionH }, [para([label(color)], 14), para(mark(question, (t, c) => head(t, size, c), on(askFrom)), 0, 1.12)], 'bottom'));
       const reveal = plan.quiz?.reveal && slide.answer ? slide.answer : null;
+      let y = top + 34 + questionH + 24;
       choices.forEach((choice, i) => {
-        const y = top + 34 + questionH + 24 + i * rowH;
+        const rowH = rows.heights[i]!;
         const right = reveal === i + 1;
         const greyed = reveal !== null && !right;
         if (right) elements.push({ kind: 'rect', role: 'band', fill: kitV4Band(color), x: MARGIN - 20, y, w: W - MARGIN * 2 + 40, h: rowH });
         elements.push(
           column({ x: MARGIN, y, w: W - MARGIN * 2, h: rowH }, [
-            para([serif('abcde'[i]!, 34, greyed ? KIT_V4.grey : color), sans('   ', 28, KIT_V4.ink), ...mark(choice, (t, c) => sans(t, 28, greyed ? KIT_V4.grey : c), on('choices', { index: i }))]),
+            para([serif('abcde'[i]!, rows.size + 6, greyed ? KIT_V4.grey : color), sans('   ', rows.size, KIT_V4.ink), ...mark(choice, (t, c) => sans(t, rows.size, greyed ? KIT_V4.grey : c), on('choices', { index: i }))]),
           ])
         );
+        y += rowH;
       });
       return out();
     }
