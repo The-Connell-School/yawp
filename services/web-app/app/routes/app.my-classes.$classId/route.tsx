@@ -1131,8 +1131,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           ],
         },
       },
-      // A teacher-unsubmitted submission is withdrawn, not just archived —
-      // exclude it from the class's document/grading views entirely.
+      // Withdrawn submissions are not active work; in-progress docs with only
+      // withdrawn submissions are loaded separately via the drafts query below.
       unsubmittedAt: null,
     },
     select: {
@@ -1218,7 +1218,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         classDocumentScope,
         { deletedAt: null },
         { archivedAt: null },
-        { submissions: { none: {} } },
+        { submissions: { none: { unsubmittedAt: null } } },
         HIDE_AP_HISTORY_DOCUMENT_WHERE,
       ],
     },
