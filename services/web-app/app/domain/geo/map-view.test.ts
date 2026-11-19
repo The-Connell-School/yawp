@@ -25,7 +25,7 @@ describe('fitMapView', () => {
 
   test('one town gets a region around it, not a dot', () => {
     const view = fitMapView([KHARTOUM])!;
-    expect(view.e - view.w).toBeGreaterThan(8);
+    expect(view.e - view.w).toBeGreaterThan(5);
     expect(mapPoint(view, 32.53, 15.55).x).toBeCloseTo(0.5, 1);
     expect(mapPoint(view, 32.53, 15.55).y).toBeCloseTo(0.5, 1);
   });

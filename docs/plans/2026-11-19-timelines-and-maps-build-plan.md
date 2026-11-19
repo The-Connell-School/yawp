@@ -9,6 +9,56 @@ so a timeline or a map is edited on the slide and by chat like any other
 slide. Paths are relative to `services/web-app/app/` unless they start with a
 top-level folder.
 
+## Status, Nov 19
+
+Phases 1 and 2 are built on `claude/context-tools-timeline-map` (on top of
+the deck studio branch), behind `lesson_planner_context_tools`, off by
+default. Phase 3 is not started. Screenshots: `artifacts/timelines-and-maps/`.
+
+Checked:
+
+- Unit tests: the schema, the stepped-slide helpers, the timeline and map in
+  the kit's layout, the map data against real geography (Khartoum is inside
+  Sudan's shape, a river runs past it), the place finder (two towns of one
+  name, former names, a place that is not there), the map picture, both new
+  routes, the planner's prompt, and a PDF and a PowerPoint made from a deck
+  holding both slides.
+- Existing slide layouts, compared before and after: unchanged.
+- Browser tests (Chromium), 36 passing: the new
+  `teacher.lesson-planner-context-tools.spec.ts` (Present steps through a
+  timeline and a map; the map's picture loads and nothing outside Yawp! is
+  asked for it; the studio types on an event, adds one, renames a place and
+  its pin moves; the older look shows lists), with the deck studio, kit v4,
+  kit v4.1 and editor suites.
+- Typecheck.
+
+Not checked:
+
+- **The planner writing these slides.** No model was called: the prompt
+  section is tested for what it says, not for what a model does with it.
+  It needs a pass on a preview with the flag on, like the bot test of
+  Nov 19.
+- **The PowerPoint file opened in PowerPoint, Google Slides or Keynote.**
+  The file holds the map as an SVG picture; whether each app draws it was
+  not looked at.
+- The PDF by eye (it is tested to draw the map's paths, not for how it looks).
+- Firefox, and a phone-width screen.
+
+Known limits of what is built:
+
+- A map has no state or province lines, so a map inside one country (the
+  Salinas valley) is a coast, rivers and pins.
+- Towns close together have their names pushed apart; each pin carries its
+  number to say which is which.
+- A shared lesson's page does not show the map's picture, which is served
+  to signed-in planner users only (as teachers' own pictures are).
+- On the slide a teacher can change an event's or a place's words. Whether
+  a route is drawn, what is shaded and a place's `where` change by asking
+  Yawp! in the studio's chat, or by typing "Salinas, California" as the
+  name.
+- PowerPoint and the PDF carry the overview of a stepped slide, not one
+  slide per step (phase 3).
+
 ## 1. What we are building
 
 Two new kinds of slide the planner can write when a lesson introduces a text:

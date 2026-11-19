@@ -56,8 +56,8 @@ export function fitMapView(areas: MapView[], aspect: number = MAP_BOX.w / MAP_BO
   let bottom = mercator(Math.min(...areas.map((area) => area.s)));
   const toDegrees = 180 / Math.PI;
 
-  // Never tighter than about 8 degrees across, then a margin on every side.
-  const MIN_SPAN = 8;
+  // Never tighter than about 5 degrees across (a valley and its coast), then a margin on every side.
+  const MIN_SPAN = 5;
   if (e - w < MIN_SPAN) {
     const middle = (w + e) / 2;
     w = middle - MIN_SPAN / 2;

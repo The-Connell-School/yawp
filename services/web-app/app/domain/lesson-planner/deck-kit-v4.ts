@@ -1012,12 +1012,14 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
           const px = point.x * MAP_BOX.w;
           const py = point.y * MAP_BOX.h;
           const dim = focus !== undefined && focus !== i;
-          const size = focus === i ? 24 : 16;
+          // A pin carries its place's number, the one beside its name in the list, so towns close together can be told apart.
+          const size = focus === i ? 30 : 24;
           elements.push({ kind: 'rect', role: 'mark', step: i, fill: dim ? KIT_V4_DIM : focus === i ? KIT_V4.ink : color, x: px - size / 2, y: py - size / 2, w: size, h: size });
+          elements.push({ kind: 'text', role: 'body', valign: 'middle', x: px - 4.5, y: py - size / 2, w: 14, h: size, paras: [para([sans(String(i + 1), 15, KIT_V4.white, true)])] });
           // Its name on a cream plate beside the pin: to the left near the map's right edge, and below a name already there.
           const name = nameOf(place);
           const w = Math.min(280, name.length * 10.5 + 20);
-          const x = px + 18 + w <= MAP_BOX.w - 8 ? px + 18 : px - 18 - w;
+          const x = px + 22 + w <= MAP_BOX.w - 8 ? px + 22 : px - 22 - w;
           let y = Math.max(6, Math.min(MAP_BOX.h - 36, py - 15));
           for (let tries = 0; tries < 4 && plates.some((taken) => x < taken.x + taken.w && taken.x < x + w && y < taken.y + taken.h && taken.y < y + 30); tries += 1) y += 34;
           plates.push({ x, y, w, h: 30 });
