@@ -19,6 +19,7 @@ import { KIT_V4, isKitV41, layoutKitV4Slide, type KitV4Element, type KitV4Run } 
 import { KIT_DISPLAY_TYPEFACE, embedPptxBoldFont, kitDisplayFontFile } from './pptx-embed-font.server';
 import type { SlideDeck } from './slide-deck';
 import { notesWithMinutes } from './tile-theme';
+import { mapSvg } from '~/domain/geo/map-drawing.server';
 import { galleryImageData } from './lesson-pptx-gallery.server';
 
 const LAYOUT = { name: 'YAWP_KIT_V4_16x9', width: 13.333, height: 7.5 };
@@ -53,6 +54,16 @@ function drawElement(
         sizing: { type: element.fit, w: box.w, h: box.h },
         altText: element.alt || undefined,
       });
+      return;
+    }
+    case 'map': {
+      // The map as Present shows it (Nov 19): an SVG picture, which PowerPoint 2019 and 365 draw.
+      try {
+        const svg = mapSvg(element.spec);
+        slide.addImage({ data: `image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`, ...box, altText: element.alt });
+      } catch {
+        // Map data that cannot be read: the slide is made without its map.
+      }
       return;
     }
     case 'picture':

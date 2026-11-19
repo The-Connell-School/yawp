@@ -23,6 +23,8 @@ import { deckArt } from './deck-art';
 import { KIT_V4_HOUSE_PALETTE, KIT_V4_WIDTH, isKitV4, layoutKitV4Slide, withDeckKit, type KitV4Run } from './deck-kit-v4';
 import { PICTURE_PLACEHOLDER } from './deck-pictures';
 import type { DeckPictureFiles } from './deck-pictures.server';
+import { buildMapDrawing } from '~/domain/geo/map-drawing.server';
+import type { MapSpec } from '~/domain/geo/map-view';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { registerKitDisplayFont, registerKitFonts } from './kit-fonts.server';
@@ -486,6 +488,29 @@ function drawSlideFace(
  * bands, the painting plain, and every word in the serif or the sans, never
  * italic. Vector, so it prints sharp and its words stay searchable.
  */
+/** A map slide's map (Nov 19): the same paths Present shows, drawn into the slide's box. */
+function drawMapFace(doc: PDFKit.PDFDocument, spec: MapSpec, box: { x: number; y: number; w: number; h: number }) {
+  try {
+    const drawing = buildMapDrawing(spec);
+    doc.save();
+    doc.rect(box.x, box.y, box.w, box.h).clip();
+    doc.rect(box.x, box.y, box.w, box.h).fill(drawing.background);
+    doc.translate(box.x, box.y).scale(box.w / drawing.width, box.h / drawing.height);
+    for (const layer of drawing.layers) {
+      doc.path(layer.d).lineWidth(layer.width ?? 1).lineJoin('round');
+      if (layer.dash) doc.dash(layer.dash[0], { space: layer.dash[1] });
+      else doc.undash();
+      if (layer.fill && layer.stroke) doc.fillAndStroke(layer.fill, layer.stroke, layer.evenOdd ? 'even-odd' : 'non-zero');
+      else if (layer.fill) doc.fill(layer.fill, layer.evenOdd ? 'even-odd' : 'non-zero');
+      else if (layer.stroke) doc.stroke(layer.stroke);
+    }
+    doc.restore();
+  } catch {
+    // Map data that cannot be read: the slide is drawn without its map.
+    doc.restore();
+  }
+}
+
 function drawKitV4Face(
   doc: Doc,
   deck: SlideDeck,
@@ -549,6 +574,11 @@ function drawKitV4Face(
         doc.save().lineWidth(0.6).dash(3, { space: 2 }).strokeColor('#5A5A5A').rect(r.x, r.y, r.w, r.h).stroke().undash().restore();
         doc.font(sans).fontSize(7).fillColor('#5A5A5A').text(PICTURE_PLACEHOLDER, r.x + 6, r.y + r.h / 2 - 10, { width: r.w - 12, align: 'center' });
       }
+      continue;
+    }
+
+    if (element.kind === 'map') {
+      drawMapFace(doc, element.spec, r);
       continue;
     }
 

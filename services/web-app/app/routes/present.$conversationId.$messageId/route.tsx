@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { deckDurationMinutes } from '~/domain/lesson-planner/slide-deck';
+import { nextFocus, slideSteps, withSlideFocus } from '~/domain/lesson-planner/context-slides';
 import { loadLessonDeck } from '~/domain/lesson-planner/load-deck.server';
 import { useShowChannel } from '~/components/lesson-planner/show-channel';
 import { cn } from '~/utils/misc';
@@ -93,11 +94,29 @@ function PresentDeck() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // A timeline or a map is stepped through (Nov 19): the arrows move through
+  // its events or places one at a time, and only then on to the next slide.
+  const [focus, setFocus] = useState<number | undefined>(undefined);
+  const position = useRef({ index, focus });
+  position.current = { index, focus };
+  // Any other way to a slide (Home, the dots, Run the show) arrives at its overview.
+  useEffect(() => setFocus(undefined), [index]);
+
   const go = useCallback(
-    (delta: number) =>
-      setIndex((current) => Math.min(total - 1, Math.max(0, current + delta))),
-    [total]
+    (delta: number) => {
+      const { index: at, focus: now } = position.current;
+      const next = nextFocus(deck.slides[at]!, now, delta > 0 ? 1 : -1);
+      if (next !== 'leave') {
+        setFocus(next);
+        return;
+      }
+      const to = Math.min(total - 1, Math.max(0, at + delta));
+      // At either end of the deck there is nowhere to go: what is in focus stays.
+      if (to !== at) setIndex(to);
+    },
+    [deck.slides, total]
   );
+  const steps = slideSteps(slide);
 
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
@@ -155,7 +174,7 @@ function PresentDeck() {
 
   const canvas = (shown: number) =>
     galleryTemplate ? (
-      <GallerySlideCanvas deck={deck} index={shown} />
+      <GallerySlideCanvas deck={shown === index ? withSlideFocus(deck, index, focus) : deck} index={shown} onStep={shown === index ? setFocus : undefined} />
     ) : tileTemplate ? (
       <TileSlideCanvas slide={deck.slides[shown]!} />
     ) : (
@@ -277,7 +296,7 @@ function PresentDeck() {
             className="aspect-[16/9] w-full max-w-[min(100%,calc((100vh-8rem)*16/9))] overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200 print:hidden"
           >
             {galleryTemplate ? (
-              <GallerySlideCanvas deck={deck} index={index} />
+              <GallerySlideCanvas deck={withSlideFocus(deck, index, focus)} index={index} onStep={setFocus} />
             ) : tileTemplate ? (
               <TileSlideCanvas slide={slide} />
             ) : (
@@ -364,6 +383,12 @@ function PresentDeck() {
           ))}
         </div>
 
+        {steps ? (
+          // A timeline or a map: where the arrows are inside the slide.
+          <p className="shrink-0 text-sm tabular-nums text-slate-500" aria-live="polite" data-testid="slide-step">
+            {focus === undefined ? `${steps} to step through` : `${focus + 1} of ${steps}`}
+          </p>
+        ) : null}
         <p
           className="shrink-0 text-sm tabular-nums text-slate-500"
           aria-live="polite"

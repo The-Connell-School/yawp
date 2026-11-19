@@ -1,0 +1,113 @@
+import { describe, expect, test } from 'bun:test';
+import { mapPoint } from './map-view';
+import { findCountry, findPlace, placeKey, resolveDeckPlaces } from './places.server';
+import type { Slide, SlideDeck } from '~/domain/lesson-planner/slide-deck';
+
+const near = (found: { lat: number; lon: number } | null, lat: number, lon: number) => {
+  expect(found).not.toBeNull();
+  expect(Math.abs(found!.lat - lat)).toBeLessThan(0.3);
+  expect(Math.abs(found!.lon - lon)).toBeLessThan(0.3);
+};
+
+describe('findPlace', () => {
+  test('the places the bot lessons needed, each where it is', () => {
+    near(findPlace('Khartoum', 'Sudan'), 15.55, 32.53);
+    near(findPlace('London', 'United Kingdom'), 51.51, -0.13);
+    near(findPlace('Cairo'), 30.04, 31.24);
+    near(findPlace('Birmingham', 'Alabama'), 33.52, -86.8);
+    expect(findPlace('Khartoum', 'Sudan')!.found).toBe('Khartoum, Sudan');
+    expect(findPlace('Birmingham', 'Alabama')!.found).toBe('Birmingham, Alabama, United States of America');
+  });
+
+  test('two towns of one name: where says which, and without it the largest', () => {
+    near(findPlace('Birmingham'), 52.48, -1.9);
+    near(findPlace('Birmingham', 'England'), 52.48, -1.9);
+    near(findPlace('Salinas', 'California'), 36.68, -121.66);
+    near(findPlace('Soledad', 'California, United States'), 36.42, -121.33);
+    near(findPlace('Monroeville', 'Alabama'), 31.53, -87.32);
+    // "Name, Place" in the name itself works the same.
+    near(findPlace('Monroeville, Alabama'), 31.53, -87.32);
+  });
+
+  test('accents, case and "the" do not matter; a former name finds the city of today', () => {
+    expect(placeKey('  São Paulo ')).toBe('sao paulo');
+    expect(placeKey('The Hague')).toBe('hague');
+    near(findPlace('sao paulo'), -23.55, -46.64);
+    const istanbul = findPlace('Constantinople');
+    near(istanbul, 41.01, 28.95);
+    expect(istanbul!.found).toBe('Istanbul, Turkey');
+    near(findPlace('Leningrad'), 59.94, 30.31);
+    near(findPlace('New York'), 40.71, -74.01);
+  });
+
+  test('a country by its name is the country, at its mainland', () => {
+    const sudan = findPlace('Sudan');
+    expect(sudan!.found).toBe('Sudan (the country)');
+    expect(sudan!.lat).toBeGreaterThan(9);
+    expect(sudan!.lat).toBeLessThan(22);
+    expect(sudan!.lon).toBeGreaterThan(22);
+    expect(sudan!.lon).toBeLessThan(38);
+    // France is in Europe, whatever islands it has.
+    const france = findPlace('France')!;
+    expect(france.lat).toBeGreaterThan(41);
+    expect(france.lon).toBeGreaterThan(-6);
+    expect(france.lon).toBeLessThan(10);
+    expect(findCountry('South Sudan')?.shape).toBe('S. Sudan');
+    expect(findCountry('Burma')?.name).toBe('Myanmar');
+    expect(findCountry('Narnia')).toBeNull();
+  });
+
+  test('a place the list does not have, or a town that is not in the country named, is not found', () => {
+    expect(findPlace('Maycomb', 'Alabama')).toBeNull();
+    expect(findPlace('Khartoum', 'France')).toBeNull();
+    expect(findPlace('')).toBeNull();
+    expect(findPlace(' , ')).toBeNull();
+  });
+});
+
+describe('resolveDeckPlaces', () => {
+  const map: Slide = {
+    layout: 'map',
+    title: 'The narrator’s journey',
+    shade: ['Sudan', 'South Sudan'],
+    places: [
+      // A position the planner wrote: in the Atlantic. It is thrown away.
+      { name: 'Khartoum', where: 'Sudan', lat: 0, lon: -30, found: 'I made this up' },
+      { name: 'Wad Hamid', where: 'Sudan' },
+      { name: 'London', where: 'United Kingdom' },
+    ],
+    view: { w: 0, s: 0, e: 1, n: 1 },
+    speakerNotes: 'n',
+  } as Slide;
+  const deck: SlideDeck = { title: 'D', kit: 'v4.1', slides: [{ layout: 'title', title: 'T', speakerNotes: 'n' } as Slide, map] };
+
+  test('positions are Yawp!’s own, whatever the planner wrote; a place not found has none', () => {
+    const resolved = resolveDeckPlaces(deck);
+    const [khartoum, village, london] = resolved.slides[1]!.places!;
+    near(khartoum as never, 15.55, 32.53);
+    expect(khartoum!.found).toBe('Khartoum, Sudan');
+    expect(village).toEqual({ name: 'Wad Hamid', where: 'Sudan' });
+    near(london as never, 51.51, -0.13);
+    expect(resolved.kit).toBe('v4.1');
+    expect(resolved.slides[0]).toBe(deck.slides[0]!);
+  });
+
+  test('the view frames the places and the shaded countries', () => {
+    const view = resolveDeckPlaces(deck).slides[1]!.view!;
+    for (const [lon, lat] of [[32.53, 15.55], [-0.13, 51.51], [31.58, 4.85]]) {
+      const point = mapPoint(view, lon!, lat!);
+      expect(point.x).toBeGreaterThan(0);
+      expect(point.x).toBeLessThan(1);
+      expect(point.y).toBeGreaterThan(0);
+      expect(point.y).toBeLessThan(1);
+    }
+  });
+
+  test('a deck with no map is not touched; a map with nothing found has no view', () => {
+    const plain: SlideDeck = { title: 'D', slides: [deck.slides[0]!] };
+    expect(resolveDeckPlaces(plain)).toBe(plain);
+    const lost = resolveDeckPlaces({ title: 'D', slides: [{ ...map, shade: undefined, places: [{ name: 'Maycomb' }] } as Slide] });
+    expect(lost.slides[0]!.view).toBeUndefined();
+    expect(lost.slides[0]!.places).toEqual([{ name: 'Maycomb' }]);
+  });
+});

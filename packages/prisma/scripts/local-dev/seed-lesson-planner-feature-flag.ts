@@ -88,6 +88,8 @@ export const LESSON_PLANNER_REVIEW_FLAG_SETTINGS = [
   'feature_flag.lesson_planner_deck_studio',
   // Ask Yawp! in the deck studio (Nov 19): needs the deck studio.
   'feature_flag.lesson_planner_deck_chat',
+  // Timelines and maps for introducing a text (Nov 19): needs spec v4.
+  'feature_flag.lesson_planner_context_tools',
 ] as const;
 
 /**

@@ -160,6 +160,8 @@ describe('parseSlideDeck', () => {
       if (layout === 'notes') slide.facts = ['One fact.'];
       if (layout === 'read') slide.tasks = [{ verb: 'Circle', text: 'names' }];
       if (layout === 'picture') slide.image = 'cmh0elephant0000abcd';
+      if (layout === 'timeline') slide.events = [{ date: '1899', title: 'One' }, { date: '1956', title: 'Two' }];
+      if (layout === 'map') slide.places = [{ name: 'Khartoum' }];
       const parsed = parseSlideDeck(fenced({ title: 'Deck', slides: [slide] }));
       expect(parsed?.deck.slides[0]!.layout).toBe(layout);
     }

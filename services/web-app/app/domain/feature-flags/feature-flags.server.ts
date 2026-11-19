@@ -22,6 +22,7 @@ import {
   LESSON_PLANNER_DECK_KIT_V41_FLAG,
   LESSON_PLANNER_DECK_STUDIO_FLAG,
   LESSON_PLANNER_DECK_CHAT_FLAG,
+  LESSON_PLANNER_CONTEXT_TOOLS_FLAG,
   deckUploadFlags,
   LESSON_PLANNER_TEACH_NOTES_FLAG,
   LESSON_PLANNER_LIBRARY_V2_FLAG,
@@ -323,6 +324,7 @@ export async function getLessonPlannerReviewFlags(
     deckKitV41,
     deckStudio,
     deckChat,
+    contextTools,
   ] = await Promise.all([
     isFeatureFlagEnabled(LESSON_PLANNER_INTAKE_V2_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_STACK_V2_FLAG, orgId),
@@ -346,6 +348,7 @@ export async function getLessonPlannerReviewFlags(
     isFeatureFlagEnabled(LESSON_PLANNER_DECK_KIT_V41_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_DECK_STUDIO_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_DECK_CHAT_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_CONTEXT_TOOLS_FLAG, orgId),
   ]);
   const deckFlags = deckUploadFlags({ uploads, uploadPictures, teachMySlides, refreshMyDeck });
   // The panel shows the stack v2 list; without stack v2 it has nothing to show.
@@ -376,6 +379,8 @@ export async function getLessonPlannerReviewFlags(
     deckStudio: deckStudio && deckKitV4 && deckGallery && deckV2,
     // The chat lives in the studio.
     deckChat: deckChat && deckStudio && deckKitV4 && deckGallery && deckV2,
+    // A timeline and a map are drawn by the kit's v4 layout.
+    contextTools: contextTools && deckKitV4 && deckGallery && deckV2,
   };
 }
 
@@ -421,6 +426,8 @@ export type LessonPlannerReviewFlags = {
   deckStudio: boolean;
   /** Ask Yawp! in the deck studio (Nov 19); needs deckStudio. */
   deckChat: boolean;
+  /** Timelines and maps for introducing a text (Nov 19); needs deckKitV4. */
+  contextTools: boolean;
 };
 
 /** Yawp! Lesson Planner for teachers at the given school. */

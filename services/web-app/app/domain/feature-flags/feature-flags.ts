@@ -123,6 +123,8 @@ export const LESSON_PLANNER_DECK_KIT_V41_FLAG = 'lesson_planner_deck_kit_v41' as
 export const LESSON_PLANNER_DECK_STUDIO_FLAG = 'lesson_planner_deck_studio' as const;
 /** Ask Yawp! in the deck studio (Nov 19): a line changes the deck, with Undo. Needs the deck studio. */
 export const LESSON_PLANNER_DECK_CHAT_FLAG = 'lesson_planner_deck_chat' as const;
+/** Timelines and maps for introducing a text (Nov 19): two slide layouts the planner can write. Needs Lesson Deck Kit v4. */
+export const LESSON_PLANNER_CONTEXT_TOOLS_FLAG = 'lesson_planner_context_tools' as const;
 
 /**
  * The teacher's own deck flags as they apply (Nov 1): keeping the deck needs
@@ -396,6 +398,11 @@ export const FEATURE_FLAGS = {
     label: 'Lesson Planner: ask Yawp! in the deck studio',
     description:
       'In the deck studio (Nov 19), a teacher can ask Yawp! to change the deck in their own words, or point at one part of a slide and ask about only that. Yawp! changes the slides in the editor, lists what changed, and offers Undo; nothing is saved until the teacher saves. Each request is one model call on the planner’s hourly limit. Needs the deck studio. Off: no chat in the studio.',
+  },
+  [LESSON_PLANNER_CONTEXT_TOOLS_FLAG]: {
+    label: 'Lesson Planner: timelines and maps',
+    description:
+      'For a lesson that introduces a text (Nov 19), the planner can write two more kinds of slide: a timeline (four to eight events, in one row or two) and a map (real country shapes, with places Yawp! finds in its own place list, an optional route and shaded countries). In Present the arrows step through the events or places one at a time. Both are edited on the slide and by chat where the deck studio is on. Map data is bundled: nothing is sent to a map service. Needs Lesson Deck Kit v4. Off: the planner is not told these layouts exist; a deck that already has one is still drawn.',
   },
   [CLASS_CODE_UNIQUE_FLAG]: {
     label: 'Unique class codes',

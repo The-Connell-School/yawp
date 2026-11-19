@@ -9,6 +9,7 @@ import type { Slide, SlideDeck } from './slide-deck';
 import { resolveDeckArt } from './deck-art';
 import { deckColors, slideColor } from './deck-colors';
 import { isKitV4, kitV4Colors } from './deck-kit-v4';
+import { legacyContextSlide } from './context-slides';
 
 /** The kit's twelve templates, plus compare for a classic two-column slide. */
 export type GalleryTemplate =
@@ -192,7 +193,9 @@ function modeFor(template: GalleryTemplate, slide: Slide, previous: string | nul
 export function planGalleryDeck(deck: SlideDeck): GallerySlidePlan[] {
   const art = resolveDeckArt(deck.art);
   const colors = galleryColors(deck);
-  const templates = deck.slides.map(galleryTemplate);
+  // Spec v3 has no line or map to draw: a timeline or a map is its list (Nov 19).
+  const slides = deck.slides.map(legacyContextSlide);
+  const templates = slides.map(galleryTemplate);
   const lastExit = templates.lastIndexOf('exit');
 
   // Which slides hang the painting large.
@@ -209,7 +212,7 @@ export function planGalleryDeck(deck: SlideDeck): GallerySlidePlan[] {
   }
 
   const plan: GallerySlidePlan[] = [];
-  deck.slides.forEach((slide, index) => {
+  slides.forEach((slide, index) => {
     const template = templates[index]!;
     let ground = GALLERY_TEMPLATES[template].ground;
     if (ground === 'accent' && index !== lastExit) ground = 'paper';

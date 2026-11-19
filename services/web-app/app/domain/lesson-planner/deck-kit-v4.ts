@@ -31,6 +31,7 @@ import { resolveDeckArt, type DeckArt } from './deck-art';
 import { contrastRatio, normalizedHex, splitColorMarks } from './deck-colors';
 import { galleryTemplate, withoutLessonNumber, type GalleryTemplate } from './deck-gallery';
 import { pictureSlideText } from './deck-pictures';
+import { MAP_BOX, fitMapView, inMapView, mapImageSrc, mapPoint, pointArea, type MapSpec } from '~/domain/geo/map-view';
 
 /** Spec v4 color tokens. */
 export const KIT_V4 = {
@@ -45,6 +46,9 @@ export const KIT_V4 = {
   gold: '#E8C062',
   pine: '#1F3532',
 } as const;
+
+/** What is not in focus on a stepped slide (a timeline, a map): there, and out of the way. */
+const KIT_V4_DIM = '#A29D91';
 
 /** Decks with no art: Pine, Indigo, Olive, Plum, Maroon (Maroon replaces Ember). */
 export const KIT_V4_HOUSE_PALETTE = ['#1F3532', '#2F5873', '#56602F', '#7A4560', '#6E1A26'] as const;
@@ -165,7 +169,8 @@ export function kitV4Band(color: string): string {
 
 // The plan ----------------------------------------------------------------
 
-export type KitV4Template = GalleryTemplate | 'quiz';
+/** The gallery's templates, a quiz, and the two that give a text its background (Nov 19). */
+export type KitV4Template = GalleryTemplate | 'quiz' | 'timeline' | 'map';
 
 export type KitV4Plan = {
   slide: Slide;
@@ -196,6 +201,8 @@ const DEFAULT_LABELS: Record<KitV4Template, string | null> = {
   exit: 'Before you go',
   compare: null,
   quiz: null,
+  timeline: null,
+  map: null,
 };
 
 /** Labels that only decorate. */
@@ -270,6 +277,7 @@ function labelFor(template: KitV4Template, slide: Slide, previous: string | null
 }
 
 function templateOf(slide: Slide): KitV4Template {
+  if (slide.layout === 'timeline' || slide.layout === 'map') return slide.layout;
   if (slide.choices?.length) return 'quiz';
   return galleryTemplate(slide);
 }
@@ -384,16 +392,26 @@ export type KitV4Para = {
 type Box = { x: number; y: number; w: number; h: number };
 
 export type KitV4Element =
-  | (Box & { kind: 'rect'; fill: string; role: 'panel' | 'band' })
+  | (Box & {
+      kind: 'rect';
+      fill: string;
+      /** A split slide's panel, a quiz answer's band, a timeline's line or mark or a map's pin, a name's plate on a map. */
+      role: 'panel' | 'band' | 'mark' | 'plate';
+      /** On a stepped slide: the event or place a click on this puts in focus. */
+      step?: number;
+    })
   | (Box & {
       kind: 'text';
       paras: KitV4Para[];
       valign: 'top' | 'middle' | 'bottom';
       align?: 'left' | 'right';
       role?: 'running-head' | 'credit' | 'timer' | 'body';
+      step?: number;
     })
   | (Box & { kind: 'art'; src: string; fit: 'contain' | 'cover'; alt: string })
-  | (Box & { kind: 'picture'; id: string });
+  | (Box & { kind: 'picture'; id: string })
+  /** A map's countries, water and route, drawn by Yawp! from its own map data (Nov 19). */
+  | (Box & { kind: 'map'; src: string; alt: string; spec: MapSpec });
 
 export type KitV4SlideLayout = {
   template: KitV4Template;
@@ -474,7 +492,10 @@ function runningHead(deck: SlideDeck, x: number, right = KIT_V4_WIDTH - MARGIN):
   };
 }
 
-function column(box: Box, paras: KitV4Para[], valign: 'top' | 'middle' | 'bottom' = 'middle'): KitV4Element {
+/** A box of words. */
+export type KitV4Text = Extract<KitV4Element, { kind: 'text' }>;
+
+function column(box: Box, paras: KitV4Para[], valign: 'top' | 'middle' | 'bottom' = 'middle'): KitV4Text {
   return { kind: 'text', role: 'body', valign, ...box, paras: paras.filter((p) => p.runs.length) };
 }
 
@@ -895,6 +916,170 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
       if (art) {
         elements.push({ kind: 'art', src: art.src, fit: 'contain', alt: '', x: 880, y: 200, w: 320, h: 250 });
         elements.push(credit(art, { x: 880, y: 466, w: 320, h: 60 }));
+      }
+      return out();
+    }
+
+    case 'timeline': {
+      const events = (slide.events ?? []).slice(0, 8);
+      const focus = slide.focus !== undefined && events[slide.focus] ? slide.focus : undefined;
+      const inFocus = focus === undefined ? undefined : events[focus]!;
+      // Two rows when the slide names them: the world above the line, the book below.
+      const twoRows = Boolean(slide.tracks) && events.some((event) => event.track === 2);
+      const side = (event: (typeof events)[number], i: number) => (twoRows ? (event.track === 2 ? 'below' : 'above') : i % 2 ? 'below' : 'above');
+      elements.push(column({ x: MARGIN, y: 48, w: W - MARGIN * 2, h: 92 }, [para([from(head(slide.title, slide.title.length > 34 ? 40 : 48, KIT_V4.ink), on('title'))], 0, 1.05)], 'bottom'));
+      // Under the headline: the event in focus, in a sentence; with none, the slide's own line.
+      if (inFocus) {
+        const words = inFocus.detail ?? inFocus.title;
+        elements.push(
+          column(
+            { x: MARGIN, y: 152, w: W - MARGIN * 2 - 120, h: 108 },
+            [para([from(serif(words, words.length > 150 ? 24 : 28, KIT_V4.ink), on('events', { index: focus!, key: inFocus.detail ? 'detail' : 'title' }))], 0, 1.3)],
+            'top'
+          )
+        );
+      } else if (slide.body) {
+        elements.push(column({ x: MARGIN, y: 152, w: W - MARGIN * 2 - 120, h: 108 }, [para([from(sans(slide.body, 22, v41 ? KIT_V4.grey : KIT_V4.body), on('body'))], 0, 1.3)], 'top'));
+      }
+      const AXIS = 456;
+      // With two rows, their names sit at the line's left end.
+      const start = MARGIN + (twoRows ? 170 : 0);
+      const step = (W - MARGIN - start) / (events.length + 1);
+      elements.push({ kind: 'rect', role: 'mark', fill: color, x: MARGIN, y: AXIS, w: W - MARGIN * 2, h: 6 });
+      if (twoRows && slide.tracks) {
+        slide.tracks.forEach((name, row) => {
+          elements.push({
+            kind: 'text',
+            role: 'body',
+            valign: row ? 'top' : 'bottom',
+            x: MARGIN,
+            y: row ? AXIS + 26 : AXIS - 20 - 60,
+            w: 150,
+            h: 60,
+            paras: [para([from(sans(name, 17, KIT_V4.grey, true), on('tracks', { index: row }))], 0, 1.2)],
+          });
+        });
+      }
+      events.forEach((event, i) => {
+        const where = side(event, i);
+        // Its words run as far as the next event on its own side of the line.
+        let next = events.length + 1;
+        for (let j = i + 1; j < events.length; j += 1) {
+          if (side(events[j]!, j) === where) {
+            next = j;
+            break;
+          }
+        }
+        const x = start + i * step;
+        const dim = focus !== undefined && focus !== i;
+        elements.push({ kind: 'rect', role: 'mark', step: i, fill: dim ? KIT_V4_DIM : focus === i ? KIT_V4.ink : color, x, y: AXIS - 6, w: 18, h: 18 });
+        elements.push({
+          ...column(
+            { x, y: where === 'above' ? AXIS - 22 - 160 : AXIS + 30, w: Math.min(400, (next - i) * step - 24), h: 160 },
+            [
+              para([from(serif(event.date, 30, dim ? KIT_V4_DIM : color), on('events', { index: i, key: 'date' }))], 4, 1.1),
+              para([from(sans(event.title, 20, dim ? KIT_V4_DIM : KIT_V4.ink, true), on('events', { index: i, key: 'title' }))], 6, 1.25),
+              // Few events and none in focus: each one's sentence fits beside it.
+              para([focus === undefined && events.length <= 4 && event.detail ? from(sans(event.detail, 16, KIT_V4.grey), on('events', { index: i, key: 'detail' })) : null], 0, 1.3),
+            ],
+            where === 'above' ? 'bottom' : 'top'
+          ),
+          step: i,
+        });
+      });
+      return out();
+    }
+
+    case 'map': {
+      const places = (slide.places ?? []).slice(0, 8);
+      const focus = slide.focus !== undefined && places[slide.focus] ? slide.focus : undefined;
+      const located = places.filter((place) => place.lat !== undefined && place.lon !== undefined);
+      // The view Yawp! wrote with the places' positions; without one, a frame around the places it has.
+      const view = slide.view ?? fitMapView(located.map((place) => pointArea(place.lon!, place.lat!)));
+      const nameOf = (place: (typeof places)[number]) => place.label ?? place.name;
+      if (view) {
+        const spec: MapSpec = {
+          view,
+          shade: slide.shade ?? [],
+          color,
+          route: slide.route ? located.map((place) => [place.lon!, place.lat!] as [number, number]) : [],
+        };
+        elements.push({ kind: 'map', x: 0, y: 0, w: MAP_BOX.w, h: MAP_BOX.h, src: mapImageSrc(spec), alt: `Map: ${places.map(nameOf).join(', ')}`, spec });
+        const plates: Box[] = [];
+        places.forEach((place, i) => {
+          if (place.lat === undefined || place.lon === undefined || !inMapView(view, place.lon, place.lat)) return;
+          const point = mapPoint(view, place.lon, place.lat);
+          const px = point.x * MAP_BOX.w;
+          const py = point.y * MAP_BOX.h;
+          const dim = focus !== undefined && focus !== i;
+          const size = focus === i ? 24 : 16;
+          elements.push({ kind: 'rect', role: 'mark', step: i, fill: dim ? KIT_V4_DIM : focus === i ? KIT_V4.ink : color, x: px - size / 2, y: py - size / 2, w: size, h: size });
+          // Its name on a cream plate beside the pin: to the left near the map's right edge, and below a name already there.
+          const name = nameOf(place);
+          const w = Math.min(280, name.length * 10.5 + 20);
+          const x = px + 18 + w <= MAP_BOX.w - 8 ? px + 18 : px - 18 - w;
+          let y = Math.max(6, Math.min(MAP_BOX.h - 36, py - 15));
+          for (let tries = 0; tries < 4 && plates.some((taken) => x < taken.x + taken.w && taken.x < x + w && y < taken.y + taken.h && taken.y < y + 30); tries += 1) y += 34;
+          plates.push({ x, y, w, h: 30 });
+          elements.push({ kind: 'rect', role: 'plate', step: i, fill: KIT_V4.cream, x, y, w, h: 30 });
+          elements.push({
+            kind: 'text',
+            role: 'body',
+            step: i,
+            valign: 'middle',
+            x: x + 10,
+            y,
+            w: w - 14,
+            h: 30,
+            paras: [para([from(sans(name, 17, dim ? KIT_V4.grey : KIT_V4.ink, true), on('places', { index: i, key: place.label ? 'label' : 'name' }))])],
+          });
+        });
+      }
+      const x = view ? MAP_BOX.w + 44 : MARGIN;
+      const inFocus = focus === undefined ? undefined : places[focus]!;
+      elements.push(
+        column(
+          { x, y: 56, w: W - 44 - x, h: 590 },
+          [
+            para([from(head(slide.title, slide.title.length > 22 ? 36 : 44, KIT_V4.ink), on('title'))], 14, 1.08),
+            // What the shaded countries are, in the color they are shaded in.
+            para([slide.shadeLabel ? from(sans(slide.shadeLabel, 18, color, true), on('shadeLabel')) : null], 16, 1.25),
+            para([focus === undefined && slide.body ? from(sans(slide.body, 20, v41 ? KIT_V4.grey : KIT_V4.body), on('body')) : null], 18, 1.3),
+            // The place in focus, in a sentence.
+            para([inFocus?.note ? from(serif(inFocus.note, 24, KIT_V4.ink), on('places', { index: focus!, key: 'note' })) : null], 22, 1.3),
+            ...places.flatMap((place, i) => {
+              const dim = focus !== undefined && focus !== i;
+              const offMap = place.lat === undefined || place.lon === undefined;
+              return [
+                para(
+                  [
+                    serif(String(i + 1), 24, dim ? KIT_V4_DIM : color),
+                    // In the list a place goes by the same name as on the map.
+                    sans(`   ${nameOf(place)}`, 20, dim ? KIT_V4_DIM : KIT_V4.ink, focus === i),
+                    offMap ? sans('   not on the map', 15, KIT_V4.grey) : null,
+                  ],
+                  focus === undefined && places.length <= 3 && place.note ? 4 : 10,
+                  1.25
+                ),
+                // Few places and none in focus: each one's sentence fits under it.
+                para([focus === undefined && places.length <= 3 && place.note ? from(sans(place.note, 16, KIT_V4.grey), on('places', { index: i, key: 'note' })) : null], 12, 1.3),
+              ];
+            }),
+          ],
+          'top'
+        )
+      );
+      if (view) {
+        elements.push({
+          kind: 'text',
+          role: 'credit',
+          valign: 'bottom',
+          x,
+          y: 656,
+          w: W - 44 - x,
+          h: 40,
+          paras: [para([sans('Map: Natural Earth. Places: GeoNames. Borders are today’s.', 13, KIT_V4.grey)])],
+        });
       }
       return out();
     }

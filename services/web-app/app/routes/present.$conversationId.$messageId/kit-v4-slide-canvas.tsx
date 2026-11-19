@@ -39,6 +39,26 @@ export type KitV4SlideEdit = {
   onPicture?: () => void;
 };
 
+/** Present, on a stepped slide (a timeline, a map): a click on an event or a place puts it in focus. */
+export type KitV4SlideStep = (step: number) => void;
+
+/** What makes a box a button for its step, when the slide is stepped through. */
+function stepProps(step: number | undefined, onStep: KitV4SlideStep | undefined) {
+  if (step === undefined || !onStep) return {};
+  return {
+    role: 'button',
+    tabIndex: 0,
+    'data-step': step,
+    onClick: () => onStep(step),
+    onKeyDown: (event: { key: string; preventDefault: () => void; stopPropagation: () => void }) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      event.stopPropagation();
+      onStep(step);
+    },
+  } as const;
+}
+
 /** A kit pixel, at whatever size the slide is drawn. */
 const u = (px: number) => `calc(${px} * 100cqw / 1280)`;
 
@@ -193,11 +213,23 @@ function Para({ para, align, snug, edit }: { para: KitV4Para; align?: 'left' | '
   );
 }
 
-function Element({ element, snug, edit }: { element: KitV4Element; snug: boolean; edit?: KitV4SlideEdit }) {
+function Element({ element, snug, edit, onStep }: { element: KitV4Element; snug: boolean; edit?: KitV4SlideEdit; onStep?: KitV4SlideStep }) {
   const box: CSSProperties = { position: 'absolute', left: u(element.x), top: u(element.y), width: u(element.w), height: u(element.h) };
   switch (element.kind) {
     case 'rect':
-      return <div aria-hidden data-kit-role={element.role} data-testid={element.role === 'band' ? 'gallery-answer' : undefined} style={{ ...box, background: element.fill }} />;
+      return (
+        <div
+          aria-hidden
+          data-kit-role={element.role}
+          data-testid={element.role === 'band' ? 'gallery-answer' : undefined}
+          data-step={element.step}
+          onClick={element.step !== undefined && onStep ? () => onStep(element.step!) : undefined}
+          style={{ ...box, background: element.fill, cursor: element.step !== undefined && onStep ? 'pointer' : undefined }}
+        />
+      );
+    case 'map':
+      // The countries, water and route, drawn by Yawp! from its own map data; the pins are the boxes over it.
+      return <img src={element.src} alt={element.alt} data-testid="slide-map" draggable={false} style={{ ...box, objectFit: 'fill' }} />;
     case 'art':
       return (
         <img
@@ -238,7 +270,10 @@ function Element({ element, snug, edit }: { element: KitV4Element; snug: boolean
       return (
         <div
           data-testid={element.role === 'credit' ? 'gallery-credit' : element.role === 'running-head' ? 'gallery-running-head' : undefined}
+          {...stepProps(element.step, onStep)}
+          aria-label={element.step !== undefined && onStep ? element.paras.flatMap((para) => para.runs.map((run) => run.text)).join(' ') : undefined}
           style={{
+            cursor: element.step !== undefined && onStep ? 'pointer' : undefined,
             ...box,
             display: 'flex',
             flexDirection: 'column',
@@ -255,7 +290,18 @@ function Element({ element, snug, edit }: { element: KitV4Element; snug: boolean
   }
 }
 
-export function KitV4SlideCanvas({ deck, index, edit }: { deck: SlideDeck; index: number; edit?: KitV4SlideEdit }) {
+export function KitV4SlideCanvas({
+  deck,
+  index,
+  edit,
+  onStep,
+}: {
+  deck: SlideDeck;
+  index: number;
+  edit?: KitV4SlideEdit;
+  /** Present: a click on a timeline's event or a map's place puts it in focus. */
+  onStep?: KitV4SlideStep;
+}) {
   if (!deck.slides[index]) return null;
   const layout = layoutKitV4Slide(deck, index);
   const v41 = isKitV41(deck);
@@ -270,7 +316,7 @@ export function KitV4SlideCanvas({ deck, index, edit }: { deck: SlideDeck; index
       style={{ background: layout.background, fontFamily: KIT_V4_FONTS.sans }}
     >
       {layout.elements.map((element, i) => (
-        <Element key={i} element={element} snug={v41} edit={edit} />
+        <Element key={i} element={element} snug={v41} edit={edit} onStep={onStep} />
       ))}
     </div>
   );

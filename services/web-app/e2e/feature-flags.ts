@@ -158,6 +158,7 @@ export type LessonPlannerReviewFlag = Extract<
   | 'lesson_planner_deck_kit_v41'
   | 'lesson_planner_deck_studio'
   | 'lesson_planner_deck_chat'
+  | 'lesson_planner_context_tools'
 >;
 
 export async function setLessonPlannerReviewFlag(

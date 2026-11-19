@@ -41,6 +41,8 @@ export const LAYOUT_LABELS: Record<Slide['layout'], string> = {
   excerpt: 'Annotate',
   exit: 'Before you go',
   picture: 'Your picture',
+  timeline: 'Timeline',
+  map: 'Map',
 };
 
 const lines = (value: string) =>

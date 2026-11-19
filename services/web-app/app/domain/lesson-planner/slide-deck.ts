@@ -49,6 +49,10 @@ export const GALLERY_SLIDE_LAYOUTS = [
   'look',
   'excerpt',
   'exit',
+  // Background for a text (Nov 19): events on a line, and places on a real
+  // map. Drawn by the kit's v4 layout; every older look draws them as a list.
+  'timeline',
+  'map',
 ] as const;
 
 export const SLIDE_LAYOUTS = [...CLASSIC_SLIDE_LAYOUTS, ...GALLERY_SLIDE_LAYOUTS] as const;
@@ -159,6 +163,48 @@ const slideSchema = z
     // A picture from the teacher's own deck, by its id (Nov 1). Only an id:
     // it goes into a URL, so anything else is dropped before validation.
     image: z.string().regex(PICTURE_ID).optional(),
+    // A timeline slide's events (Nov 19), in order. With two rows, `track`
+    // says which row an event sits in and `tracks` names the rows.
+    events: z
+      .array(
+        z.object({
+          date: z.string().trim().min(1).max(24),
+          title: z.string().trim().min(1).max(60),
+          detail: z.string().trim().min(1).max(220).optional(),
+          track: z.coerce.number().int().min(1).max(2).optional(),
+        })
+      )
+      .min(2)
+      .max(8)
+      .optional(),
+    tracks: z.array(z.string().trim().min(1).max(30)).length(2).optional(),
+    // A map slide's places (Nov 19). The planner names a place; Yawp! finds
+    // it in its own place list and writes `lat`, `lon` and `found` (what it
+    // matched). A position the planner writes is thrown away
+    // (resolveDeckPlaces), so a pin is never where a model guessed.
+    places: z
+      .array(
+        z.object({
+          name: z.string().trim().min(1).max(60),
+          where: z.string().trim().min(1).max(60).optional(),
+          label: z.string().trim().min(1).max(40).optional(),
+          note: z.string().trim().min(1).max(200).optional(),
+          lat: z.number().min(-90).max(90).optional(),
+          lon: z.number().min(-180).max(180).optional(),
+          found: z.string().trim().min(1).max(120).optional(),
+        })
+      )
+      .min(1)
+      .max(8)
+      .optional(),
+    // Join the places in order: a journey.
+    route: z.boolean().optional(),
+    // Countries shaded in the deck color, by today's names, and what the
+    // slide calls them together ("Anglo-Egyptian Sudan").
+    shade: z.array(z.string().trim().min(1).max(60)).max(4).optional(),
+    shadeLabel: z.string().trim().min(1).max(60).optional(),
+    // The area the map shows, written by Yawp! with the places' positions.
+    view: z.object({ w: z.number(), s: z.number(), e: z.number(), n: z.number() }).optional(),
   })
   // Deliberately not .strict(): one stray key should not cost the teacher the
   // whole deck. Unknown fields are dropped, required ones still enforced.
@@ -189,6 +235,8 @@ const slideSchema = z
     if (slide.layout === 'read') {
       needs('tasks', 'tasks', Boolean(slide.tasks?.length || slide.bullets?.length));
     }
+    if (slide.layout === 'timeline') needs('events', 'at least two events', Boolean(slide.events?.length));
+    if (slide.layout === 'map') needs('places', 'at least one place', Boolean(slide.places?.length));
     if (slide.layout === 'picture') needs('image', 'the id of one of the teacher’s pictures', Boolean(slide.image));
     if (slide.layout === 'compare' && (!slide.left || !slide.right)) {
       context.addIssue({
@@ -224,10 +272,18 @@ const deckSchema = z.object({
   slides: z.array(slideSchema).min(1).max(MAX_SLIDES),
 });
 
-export type Slide = z.infer<typeof slideSchema>;
+export type Slide = z.infer<typeof slideSchema> & {
+  /**
+   * Render-only: the event or place in focus on a stepped slide (a timeline,
+   * a map), set where the slide is drawn (Present, the studio). Never in the
+   * schema, so the planner cannot set it and a saved deck never stores it.
+   */
+  focus?: number;
+};
 /** The look a gallery deck is drawn in: absent for spec v3, `v4` for spec v4, `v4.1` for spec v4.1. */
 export type DeckKit = 'v4' | 'v4.1';
-export type SlideDeck = z.infer<typeof deckSchema> & {
+export type SlideDeck = Omit<z.infer<typeof deckSchema>, 'slides'> & {
+  slides: Slide[];
   /**
    * Render-only: set where the deck is loaded for drawing, from the school's
    * `lesson_planner_deck_kit_v4` and `lesson_planner_deck_kit_v41` flags
@@ -578,7 +634,9 @@ export function validateSlideDeck(json: string): SlideDeckValidation {
 /** A validated deck written back out as the block the renderer reads. */
 export function fenceSlideDeck(deck: SlideDeck): string {
   // The kit is how this school draws the deck, not part of it: never stored.
-  const { kit: _kit, ...stored } = deck;
+  const { kit: _kit, ...rest } = deck;
+  // Nor is which event or place a stepped slide has in focus.
+  const stored = { ...rest, slides: rest.slides.map(({ focus: _focus, ...slide }) => slide) };
   return `\`\`\`${SLIDE_DECK_FENCE}\n${JSON.stringify(stored, null, 2)}\n\`\`\``;
 }
 
@@ -730,6 +788,14 @@ export function classicSlide(slide: Slide): ClassicSlide {
       return as('quote', { attribution: slide.attribution ?? slide.author });
     case 'exit':
       return as('closing');
+    case 'timeline':
+      return as('bullets', { bullets: (slide.events ?? []).slice(0, 7).map((event) => `${event.date}: ${event.title}`) });
+    case 'map':
+      return as('bullets', {
+        bullets: (slide.places ?? [])
+          .slice(0, 7)
+          .map((place) => `${place.label ?? place.name}${place.note ? `: ${place.note}` : ''}`.slice(0, 200)),
+      });
     default:
       return as('statement');
   }
