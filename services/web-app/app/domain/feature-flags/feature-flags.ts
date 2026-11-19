@@ -119,6 +119,10 @@ export const LESSON_PLANNER_WRITING_OVERRIDE_FLAG = 'lesson_planner_writing_over
 export const LESSON_PLANNER_DECK_KIT_V4_FLAG = 'lesson_planner_deck_kit_v4' as const;
 /** The Lesson Deck Kit, spec v4.1 (Nov 11): Fraunces headlines, no running head; needs spec v4. */
 export const LESSON_PLANNER_DECK_KIT_V41_FLAG = 'lesson_planner_deck_kit_v41' as const;
+/** The deck studio (Nov 19): edit a v4 or v4.1 deck right on the slide. Needs Lesson Deck Kit v4. */
+export const LESSON_PLANNER_DECK_STUDIO_FLAG = 'lesson_planner_deck_studio' as const;
+/** Ask Yawp! in the deck studio (Nov 19): a line changes the deck, with Undo. Needs the deck studio. */
+export const LESSON_PLANNER_DECK_CHAT_FLAG = 'lesson_planner_deck_chat' as const;
 
 /**
  * The teacher's own deck flags as they apply (Nov 1): keeping the deck needs
@@ -382,6 +386,16 @@ export const FEATURE_FLAGS = {
     label: 'Lesson Planner: Lesson Deck Kit v4.1',
     description:
       'The Lesson Deck Kit, spec v4.1 (Nov 11), on top of spec v4: titles and headlines in Fraunces Bold (embedded in every PowerPoint export), no running head on any slide, no “Hold this”, “Know this”, “Read” or “Remember” labels, and a title slide that shows the teacher’s name, then the class and date, with no “Yawp! Writing Program” line. Applies to every gallery deck the school opens, in Present, Run the show, PowerPoint, the PDFs and shared links, and the planner writes to the v4.1 instructions. Needs Lesson Deck Kit v4. Off: spec v4, as before.',
+  },
+  [LESSON_PLANNER_DECK_STUDIO_FLAG]: {
+    label: 'Lesson Planner: deck studio (edit on the slide)',
+    description:
+      'The deck editor for Lesson Deck Kit v4 and v4.1 decks (Nov 19): the teacher clicks the words on the slide and types, adds or removes a list line with Enter and Backspace, and clicks a picture to swap it. The slide keeps the kit’s design as it changes. Notes and minutes sit in one strip under the slide; the fields are under “More options”, closed. Saving is unchanged. Needs Lesson Deck Kit v4. Off: the editor with the fields under the slide, as before.',
+  },
+  [LESSON_PLANNER_DECK_CHAT_FLAG]: {
+    label: 'Lesson Planner: ask Yawp! in the deck studio',
+    description:
+      'In the deck studio (Nov 19), a teacher can ask Yawp! to change the deck in their own words, or point at one part of a slide and ask about only that. Yawp! changes the slides in the editor, lists what changed, and offers Undo; nothing is saved until the teacher saves. Each request is one model call on the planner’s hourly limit. Needs the deck studio. Off: no chat in the studio.',
   },
   [CLASS_CODE_UNIQUE_FLAG]: {
     label: 'Unique class codes',
