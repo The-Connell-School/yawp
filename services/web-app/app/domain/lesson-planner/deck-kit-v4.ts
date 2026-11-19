@@ -503,6 +503,39 @@ function column(box: Box, paras: KitV4Para[], valign: 'top' | 'middle' | 'bottom
 const OPEN_IN_YAWP = ': open it in Yawp!';
 const NEXT_TIME = 'Next time: ';
 
+/** A split slide's panel holds 380 pixels of headline. */
+const PANEL_TEXT_WIDTH = 380;
+const PANEL_HEADLINE_SIZES = [60, 58, 52, 50, 44, 38, 32, 28];
+
+/**
+ * The size, no larger than `size`, at which a headline's longest word fits on
+ * one line of the panel. `perLetter` is a letter's width as a share of the
+ * type size: about 0.6 for Fraunces Bold, 0.55 for Georgia.
+ */
+function fitLongestWord(text: string, size: number, perLetter: number): number {
+  const longest = Math.max(...text.split(/\s+/).map((word) => word.length));
+  return PANEL_HEADLINE_SIZES.find((candidate) => candidate <= size && longest * candidate * perLetter <= PANEL_TEXT_WIDTH) ?? PANEL_HEADLINE_SIZES.at(-1)!;
+}
+
+/** An excerpt slide's passage has a column 660 wide and, over its credit line, about 500 tall. */
+const PASSAGE_WIDTH = 660;
+const PASSAGE_HEIGHT = 500;
+const PASSAGE_LEADING = 1.45;
+
+/**
+ * The size a passage is set in: 30, or 26 for a long one, and then down until
+ * it fits by its lines as well as its words. A poem is short in words and
+ * long in lines (bot test, Nov 19: "Harlem" lost its first line off the top).
+ */
+function passageSize(passage: string): number {
+  const start = passage.split(/\s+/).length > 70 ? 26 : 30;
+  const fits = (size: number) => {
+    const lines = passage.split('\n').reduce((count, line) => count + Math.max(1, Math.ceil((line.length * size * 0.52) / PASSAGE_WIDTH)), 0);
+    return lines * size * PASSAGE_LEADING <= PASSAGE_HEIGHT;
+  };
+  return [30, 26, 22, 20, 18].find((size) => size <= start && fits(size)) ?? 18;
+}
+
 /** Label on cream: Arial bold 24 in the deck color. On a panel: gold. */
 const labelRun = (label: string | null, color: string) => (label ? sans(label, 24, color, true) : null);
 
@@ -566,8 +599,12 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
   const tasksFrom = (i: number, key: 'verb' | 'text') =>
     slide.tasks?.length ? on('tasks', key === 'verb' ? { index: i, key, trail: 1 } : { index: i, key }) : on('bullets', { index: i });
   // Fraunces Bold sets wider than Georgia, so v4.1 steps down sooner.
+  // And then down until its longest word fits on a line of the panel (bot
+  // test, Nov 19: "Foreshadowing hunt" was drawn as "Foreshadowin").
   const panelHeadline = (text: string) =>
-    v41 ? display(text, text.length <= 18 ? 58 : text.length <= 40 ? 50 : 44, KIT_V4.white) : serif(text, text.length <= 22 ? 60 : 52, KIT_V4.white);
+    v41
+      ? display(text, fitLongestWord(text, text.length <= 18 ? 58 : text.length <= 40 ? 50 : 44, 0.6), KIT_V4.white)
+      : serif(text, fitLongestWord(text, text.length <= 22 ? 60 : 52, 0.55), KIT_V4.white);
   const mark = (text: string, make: (text: string, color: string) => KitV4Run, source?: KitV4Source, base: string = KIT_V4.ink) =>
     marked(text, colors, make, base, source);
 
@@ -752,7 +789,7 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
           ),
         ],
         [
-          para([from(serif(passage, passage.split(/\s+/).length > 70 ? 26 : 30, KIT_V4.ink), on('body'))], 26, 1.45),
+          para([from(serif(passage, passageSize(passage), KIT_V4.ink), on('body'))], 26, 1.45),
           para([
             who ? from(sans(who, 18, KIT_V4.ink, true), on(slide.author != null ? 'author' : 'attribution')) : null,
             slide.work ? from(sans(`${who ? ', ' : ''}${slide.work}`, 18, KIT_V4.grey), on('work', { lead: who ? 2 : 0 })) : null,

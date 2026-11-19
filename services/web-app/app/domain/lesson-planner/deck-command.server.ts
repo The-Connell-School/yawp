@@ -31,6 +31,18 @@ export type DeckCommandOutcome = {
 
 const COULD_NOT = 'I couldn’t make that change. Try saying it another way, or change it on the slide.';
 
+/**
+ * Nothing changed, and why is written down for whoever reads the logs: the
+ * shape of the failure (a slide number, a field's rule), never the teacher's
+ * words or the deck's. The LLM log for this feature is metadata only, so
+ * without this line a failed request leaves no trace of its cause.
+ */
+function couldNot(why: string): DeckCommandOutcome {
+  // eslint-disable-next-line no-console
+  console.error(`[lesson-planner] deck command changed nothing: ${why.slice(0, 300)}`);
+  return { reply: COULD_NOT, applied: false, changes: [] };
+}
+
 export async function runDeckCommand({
   request,
   access,
@@ -61,15 +73,21 @@ export async function runDeckCommand({
     user: deckCommandUserMessage({ deck, line, periodMinutes, selection }),
     feature: 'lesson-planner-deck-command',
     route: 'routes/api.domain.lesson-planner.deck-command',
-    maxTokens: 6_000,
-    deadlineMs: 60_000,
+    // A change to every slide of a long deck is a long answer.
+    maxTokens: 8_000,
+    deadlineMs: 90_000,
   });
   const result = readDeckCommandResult(answer);
-  if (!result) return { reply: COULD_NOT, applied: false, changes: [] };
-  if (!result.ops.length) return { reply: result.reply, applied: false, changes: [] };
+  if (!result) return couldNot('the answer could not be read');
+  if (!result.ops.length) {
+    // It said it would change something, and nothing it wrote could be read.
+    if (result.dropped) return couldNot(`none of ${result.dropped} operations could be read`);
+    return { reply: result.reply, applied: false, changes: [] };
+  }
 
   const outcome = applyDeckOps(deck, result.ops);
-  if (!outcome.ok || !outcome.changes.length) return { reply: outcome.ok ? result.reply : COULD_NOT, applied: false, changes: [] };
+  if (!outcome.ok) return couldNot(outcome.reason);
+  if (!outcome.changes.length) return { reply: result.reply, applied: false, changes: [] };
   // A map's places are found before the deck goes back to the page (Nov 19).
   return { reply: result.reply, applied: true, deck: resolveDeckPlaces(outcome.deck), changes: outcome.changes };
 }

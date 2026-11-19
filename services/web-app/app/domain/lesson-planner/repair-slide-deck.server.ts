@@ -50,6 +50,7 @@ Rules you have to satisfy:
 - compare slides need "left" and "right", each { "label": string, "text": string }.
 - quote slides may add "attribution". Any slide may add "minutes" as a number.
 - Gallery slides keep their layout (agenda, discuss, big_idea, write, notes, divider, read, look, excerpt, exit): agenda needs "agenda" ([{ "title", "minutes" }], up to 6); discuss and look need "question"; big_idea, write, excerpt and exit need "body"; notes needs "timeline" (up to 5 { "year", "caption" }) or "facts" (up to 3 strings); read needs "tasks" (3 or fewer { "verb", "text" }). "processStep" is 1 to 6; "choices" is 2 to 5 strings and "answer" the number of one of them; "button" is at most 40 characters; "color" is 1, 2 or 3. Keep "course", "mode" and any ~~N|text~~ color marks as written. Keep the deck's "unit", "colors" (at most three hex colors), "accent" and "art" as they are.
+- A quiz question is a discuss slide with "choices" (2 to 5 short strings, no letters typed in front) and, only on the slide that shows the answer, "answer" (the number of the right choice, from 1). There is no "quiz" layout. Keep the choices as "choices": never move them into the body.
 - Keep the wording short enough to read from the back of a room; move the talking into speakerNotes.
 
 Return only the corrected JSON object for the whole deck — { "title": ..., "slides": [ ... ] }. No explanation, no apology, no commentary before or after it.`;

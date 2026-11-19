@@ -207,6 +207,8 @@ function Para({ para, align, snug, edit }: { para: KitV4Para; align?: 'left' | '
         lineHeight: para.leading ?? (largest >= 44 ? 1.1 : 1.35),
         textAlign: align ?? 'left',
         whiteSpace: 'pre-wrap',
+        // A word longer than its box breaks onto the next line; it is never cut off at the edge.
+        overflowWrap: 'anywhere',
       }}
     >
       {para.runs.map((run, i) => (

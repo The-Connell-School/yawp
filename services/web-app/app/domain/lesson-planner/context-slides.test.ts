@@ -61,6 +61,15 @@ describe('the schema takes a timeline and a map', () => {
     expect(parseSlideDeck(fenceSlideDeck(focused))!.deck.slides[0]!.focus).toBeUndefined();
   });
 
+  test('"timeline" as a model’s old word for a notes slide is still a notes slide', () => {
+    const old = { title: 'Old', slides: [{ layout: 'timeline', title: 'Know', facts: ['Drafted at 21'], speakerNotes: 'n' }, { layout: 'Timeline', title: 'Dates', timeline: [{ year: '1899', caption: 'Rule together' }], speakerNotes: 'n' }] };
+    const read = validateSlideDeck(JSON.stringify(old));
+    expect(read.ok && read.deck.slides.map((slide) => slide.layout)).toEqual(['notes', 'notes']);
+    // With events, it is the timeline.
+    const now = validateSlideDeck(JSON.stringify({ title: 'New', slides: [TIMELINE] }));
+    expect(now.ok && now.deck.slides[0]!.layout).toBe('timeline');
+  });
+
   test('every deck written before these layouts still validates', () => {
     const old = { title: 'Old', slides: [{ layout: 'notes', title: 'Know', timeline: [{ year: '1899', caption: 'Rule together' }], speakerNotes: 'n' }] };
     expect(validateSlideDeck(JSON.stringify(old)).ok).toBe(true);

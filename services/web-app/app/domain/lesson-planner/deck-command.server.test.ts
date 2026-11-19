@@ -64,14 +64,39 @@ describe('runDeckCommand', () => {
     expect(await run('{"reply": "I can’t make pictures here."}').outcome).toEqual({ reply: 'I can’t make pictures here.', applied: false, changes: [] });
   });
 
-  test('an answer that cannot be read, or would break the deck, leaves it alone', async () => {
-    const unreadable = await run('I would love to help!').outcome;
-    expect(unreadable.applied).toBe(false);
-    expect(unreadable.reply).toContain('couldn’t make that change');
+  test('an answer in plain words is the model saying why: it is passed on, and nothing changes', async () => {
+    expect(await run('I can’t add photos here, only pictures already in the deck.').outcome).toEqual({
+      reply: 'I can’t add photos here, only pictures already in the deck.',
+      applied: false,
+      changes: [],
+    });
+  });
+
+  test('an answer that would break the deck, or names a slide that is not there, leaves it alone and says so', async () => {
     const broken = await run('{"reply": "Done.", "ops": [{"op": "replace_slide", "slide": 2, "with": {"layout": "big_idea", "title": "Idea"}}]}').outcome;
-    expect(broken).toEqual({ reply: unreadable.reply, applied: false, changes: [] });
+    expect(broken.applied).toBe(false);
+    expect(broken.reply).toContain('couldn’t make that change');
     const missing = await run('{"reply": "Done.", "ops": [{"op": "remove_slide", "slide": 9}]}').outcome;
-    expect(missing.applied).toBe(false);
+    expect(missing).toEqual(broken);
+    // It said "Done" and nothing it wrote could be read: not done.
+    const unreadable = await run('{"reply": "Done.", "ops": [{"op": "tidy_everything"}]}').outcome;
+    expect(unreadable).toEqual(broken);
+    expect(await run('{"reply": ').outcome).toEqual(broken);
+  });
+
+  test('a change to every slide, each with only what changed: applied, and the rest of each slide kept', async () => {
+    const answer = JSON.stringify({
+      reply: 'Tightened all three.',
+      ops: [
+        { op: 'replace_slide', slide: 1, with: { title: 'Sudan first' } },
+        { op: 'replace_slide', slide: 2, with: { question: 'Why the river?' } },
+        { op: 'replace_slide', slide: 3, with: { bullets: ['Condominium: shared rule'] } },
+      ],
+    });
+    const outcome = await run(answer, { line: 'Fewer words on every slide' }).outcome;
+    expect(outcome.applied).toBe(true);
+    expect(outcome.changes).toHaveLength(3);
+    expect(outcome.deck!.slides[1]).toMatchObject({ layout: 'discuss', title: 'Why the Nile?', question: 'Why the river?', speakerNotes: 'Listen.' });
   });
 
   test('ops that change nothing are not a change', async () => {

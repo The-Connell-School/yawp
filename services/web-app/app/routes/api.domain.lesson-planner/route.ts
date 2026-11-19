@@ -83,8 +83,7 @@ import {
 import { computeIpHash } from '~/utils/ai-usage-log.server';
 import {
   PLANNING_PROGRESS_START,
-  planningProgressForTool,
-  planningProgressWriting,
+  planningProgressClock,
   type PlanningProgress,
 } from '~/domain/lesson-planner/planning-progress';
 
@@ -680,6 +679,9 @@ export async function action({ request }: ActionFunctionArgs) {
     ): Promise<TurnOutcome> {
       let reply: string;
       let toolRound = 0;
+      // What the teacher is told while they wait: the lookup in hand, then
+      // "Writing the lesson" once the lookups have stopped (bot test, Nov 19).
+      const clock = planningProgressClock(report);
       try {
         reply = await getLLMCompletion({
           model: (process.env.AI_MODEL as any) ?? DEFAULT_ANTHROPIC_MODEL,
@@ -699,12 +701,16 @@ export async function action({ request }: ActionFunctionArgs) {
             // Reported before the call, not after: the teacher should see what is
             // being looked up while it is being looked up.
             toolRound += 1;
-            report(planningProgressForTool(name, input, toolRound));
-            // Read from this turn's own documents: never another lesson's.
-            if (name === UPLOAD_TOOL.name) return JSON.stringify(readUploadPart(sources, input));
-            const result = await handleLessonPlannerToolCall(name, input, ctx);
-            for (const link of collectToolLinks(result)) toolLinks.add(link);
-            return result;
+            clock.lookup(name, input, toolRound);
+            try {
+              // Read from this turn's own documents: never another lesson's.
+              if (name === UPLOAD_TOOL.name) return JSON.stringify(readUploadPart(sources, input));
+              const result = await handleLessonPlannerToolCall(name, input, ctx);
+              for (const link of collectToolLinks(result)) toolLinks.add(link);
+              return result;
+            } finally {
+              clock.lookedUp();
+            }
           },
           allowFallbackProvider: false,
           signal: AbortSignal.timeout(PLANNER_REQUEST_DEADLINE_MS),
@@ -720,6 +726,7 @@ export async function action({ request }: ActionFunctionArgs) {
         // that does not exist, and a request that ran out of time all look the
         // same from the outside. No prompt content: only the shape of the error.
         // eslint-disable-next-line no-console
+        clock.stop();
         console.error(
           `[lesson-planner] model call failed: ${describeProviderError(error)}`
         );
@@ -733,10 +740,10 @@ export async function action({ request }: ActionFunctionArgs) {
         };
       }
 
-      // Every tool has returned and the model is writing. This is the long stretch
-      // — a lesson with a deck is thousands of tokens — so it gets its own line
-      // rather than leaving the last lookup on screen for a minute.
-      report(planningProgressWriting());
+      // The reply is in hand. The line has said "Writing the lesson" since a
+      // few seconds after the last lookup; this is for a reply that came
+      // back sooner than that.
+      clock.writing();
 
       // The model writes its deck blind — nothing in the reply tells it whether the
       // JSON validated. Give a rejected deck the errors and one more pass before
@@ -744,6 +751,8 @@ export async function action({ request }: ActionFunctionArgs) {
       const repaired = await repairSlideDeck({
         reply,
         repair: async ({ instruction, reason }) => {
+          // A deck is being written a second time: up to a minute more, and said so.
+          clock.checkingDeck();
           try {
             await reservePlannerAi();
           } catch (admissionError) {

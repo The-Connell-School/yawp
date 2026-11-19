@@ -49,13 +49,17 @@ export const GALLERY_SLIDE_LAYOUTS = [
   'look',
   'excerpt',
   'exit',
-  // Background for a text (Nov 19): events on a line, and places on a real
-  // map. Drawn by the kit's v4 layout; every older look draws them as a list.
-  'timeline',
-  'map',
 ] as const;
 
-export const SLIDE_LAYOUTS = [...CLASSIC_SLIDE_LAYOUTS, ...GALLERY_SLIDE_LAYOUTS] as const;
+/**
+ * Background for a text (Nov 19): events on a line, and places on a real
+ * map. Drawn by the kit's v4 layout; every older look draws them as a list
+ * (`legacyContextSlide`, `classicSlide`). Not gallery templates: the planner
+ * is told of them only with `lesson_planner_context_tools`.
+ */
+export const CONTEXT_SLIDE_LAYOUTS = ['timeline', 'map'] as const;
+
+export const SLIDE_LAYOUTS = [...CLASSIC_SLIDE_LAYOUTS, ...GALLERY_SLIDE_LAYOUTS, ...CONTEXT_SLIDE_LAYOUTS] as const;
 
 export type SlideLayout = (typeof SLIDE_LAYOUTS)[number];
 export type ClassicSlideLayout = (typeof CLASSIC_SLIDE_LAYOUTS)[number];
@@ -314,6 +318,11 @@ const FIELD_ALIASES: Record<string, string> = {
   points: 'bullets',
   time: 'minutes',
   duration: 'minutes',
+  // A quiz question's choices and its answer (bot test, Nov 19).
+  options: 'choices',
+  correct: 'answer',
+  correctAnswer: 'answer',
+  correct_answer: 'answer',
   picture: 'image',
   pictureId: 'image',
   imageId: 'image',
@@ -371,6 +380,14 @@ const LAYOUT_ALIASES: Record<string, SlideLayout> = {
   'exit-ticket': 'closing',
   exit_ticket: 'closing',
   'exit ticket': 'closing',
+  // A quiz question is a discuss slide with choices; there is no quiz layout,
+  // but the kit's instructions list "quiz" beside the layouts and a model
+  // takes it for one (bot test, Nov 19: three decks of three).
+  quiz: 'discuss',
+  'multiple-choice': 'discuss',
+  multiple_choice: 'discuss',
+  'multiple choice': 'discuss',
+  mcq: 'discuss',
   conclusion: 'closing',
   wrapup: 'closing',
   'wrap-up': 'closing',
@@ -424,11 +441,44 @@ function normalizeBullets(raw: unknown): unknown {
     .filter((item) => typeof item !== 'string' || item.length > 0);
 }
 
+// "A) Fragile", "b. Decay", "(C) Nature", "D: Recovered": a quiz slide letters its own choices.
+const TYPED_LETTER = /^\s*\(?[A-Ea-e][.):]\)?\s+/;
+
+/** A quiz question's choices, without letters typed in front of them. */
+function normalizeChoices(raw: unknown): unknown {
+  if (!Array.isArray(raw)) return raw;
+  return raw.map((item) => (typeof item === 'string' ? item.replace(TYPED_LETTER, '').trim() : item)).filter((item) => typeof item !== 'string' || item.length > 0);
+}
+
+/**
+ * The right choice's number, from 1, however it was written: a number, a
+ * letter ("B"), or the choice's own words. One that names no choice is left
+ * off rather than costing the deck: the question is still a question.
+ */
+function normalizeAnswer(raw: unknown, choices: unknown): unknown {
+  const count = Array.isArray(choices) ? choices.length : 0;
+  const within = (n: number) => (Number.isInteger(n) && n >= 1 && n <= count ? n : undefined);
+  if (typeof raw === 'number') return within(raw);
+  if (typeof raw !== 'string') return undefined;
+  const text = raw.trim();
+  if (/^\d+$/.test(text)) return within(Number(text));
+  const letter = /^\(?([A-Ea-e])[.):]?\)?$/.exec(text);
+  if (letter) return within(letter[1]!.toLowerCase().charCodeAt(0) - 96);
+  const key = text.replace(TYPED_LETTER, '').trim().toLowerCase();
+  const at = Array.isArray(choices) ? choices.findIndex((choice) => typeof choice === 'string' && choice.trim().toLowerCase() === key) : -1;
+  return at >= 0 ? at + 1 : undefined;
+}
+
+const QUIZ_NAMES = new Set(['quiz', 'multiple-choice', 'multiple_choice', 'multiple choice', 'mcq']);
+
 /** The layout the slide is, whatever the model called it — or none. */
 function normalizeLayout(slide: Record<string, unknown>): unknown {
   const raw = slide.layout;
   if (typeof raw === 'string') {
     const key = raw.trim().toLowerCase();
+    // "timeline" was a model's word for a notes slide long before it was a
+    // layout of its own (Nov 19): without events, it still is one.
+    if (key === 'timeline' && !Array.isArray(slide.events)) return 'notes';
     if (LAYOUT_SET.has(key)) return key;
     // An unrecognised name is left alone so the schema rejects it by name,
     // rather than being silently turned into some other kind of slide.
@@ -475,7 +525,15 @@ function normalizeSlide(raw: unknown): unknown {
   if (slide.minutes !== undefined) {
     slide.minutes = normalizeMinutes(slide.minutes);
   }
+  // Called a quiz, with its question only in the title: a discuss slide needs it as its question.
+  const calledQuiz = typeof slide.layout === 'string' && QUIZ_NAMES.has(slide.layout.trim().toLowerCase());
   slide.layout = normalizeLayout(slide);
+  if (calledQuiz && slide.question === undefined && slide.body === undefined && typeof slide.title === 'string') slide.question = slide.title;
+  if (slide.choices !== undefined) slide.choices = normalizeChoices(slide.choices);
+  if (slide.answer !== undefined) {
+    slide.answer = normalizeAnswer(slide.answer, slide.choices);
+    if (slide.answer === undefined) delete slide.answer;
+  }
   if (slide.image !== undefined && !(typeof slide.image === 'string' && PICTURE_ID.test(slide.image.trim()))) {
     delete slide.image;
   } else if (typeof slide.image === 'string') {
