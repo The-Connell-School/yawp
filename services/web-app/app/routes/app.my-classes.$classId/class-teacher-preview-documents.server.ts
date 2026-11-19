@@ -121,7 +121,7 @@ export async function loadTeacherPreviewDocumentsForClass({
         ...teacherPreviewDocumentWhere,
         deletedAt: null,
         archivedAt: null,
-        submissions: { none: {} },
+        submissions: { none: { unsubmittedAt: null } },
       },
       select: previewInProgressSelect,
       orderBy: { updatedAt: 'desc' },

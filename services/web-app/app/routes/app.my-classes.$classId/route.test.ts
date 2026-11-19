@@ -207,7 +207,7 @@ describe('class detail loader document visibility', () => {
         expectedScope,
         { deletedAt: null },
         { archivedAt: null },
-        { submissions: { none: {} } },
+        { submissions: { none: { unsubmittedAt: null } } },
         HIDE_AP_HISTORY_DOCUMENT_WHERE,
       ],
     });
@@ -232,6 +232,164 @@ describe('class detail loader document visibility', () => {
       { id: 'submission-1', title: 'Submitted essay' },
     ]);
     expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  function rosterDocumentCountForStudent(
+    studentMembershipId: string,
+    inProgressDocuments: Array<{
+      id: string;
+      membership?: { id: string } | null;
+      group?: { members: Array<{ membershipId: string }> } | null;
+    }>,
+    submissions: Array<{
+      documentId: string;
+      document: {
+        membership?: { id: string } | null;
+        group?: { members: Array<{ membershipId: string }> } | null;
+      };
+    }>
+  ) {
+    return (
+      inProgressDocuments.filter(
+        (doc) =>
+          doc.membership?.id === studentMembershipId ||
+          doc.group?.members.some(
+            (member) => member.membershipId === studentMembershipId
+          )
+      ).length +
+      new Set(
+        submissions
+          .filter(
+            (sub) =>
+              sub.document.membership?.id === studentMembershipId ||
+              sub.document.group?.members.some(
+                (member) => member.membershipId === studentMembershipId
+              )
+          )
+          .map((sub) => sub.documentId)
+      ).size
+    );
+  }
+
+  test('surfaces documents with only a withdrawn submission as in-progress drafts', async () => {
+    const withdrawnOnlyDraft = {
+      id: 'doc-withdrawn-only',
+      title: 'Resumed after unsubmit',
+      updatedAt: new Date('2026-01-01'),
+      membership: { id: 'student-1', user: { name: 'Kenneth', email: 'k@example.test' } },
+      group: null,
+    };
+
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'class-1',
+      grade: '9',
+      period: '2',
+      title: 'SIMMONS5',
+      school: {
+        id: 'school-1',
+        name: 'Tallassee High School',
+        organizationId: 'org-1',
+        organization: { classInsightsEnabled: false, reporterEnabled: false },
+      },
+      students: [
+        {
+          id: 'student-1',
+          user: { name: 'Kenneth', email: 'k@example.test' },
+        },
+      ],
+    });
+    prisma.submission.findMany.mockResolvedValue([]);
+    prisma.document.findMany.mockResolvedValue([withdrawnOnlyDraft]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(data.inProgressDocuments).toEqual([withdrawnOnlyDraft]);
+    expect(data.submissions).toEqual([]);
+    expect(
+      rosterDocumentCountForStudent(
+        'student-1',
+        data.inProgressDocuments,
+        data.submissions
+      )
+    ).toBe(1);
+  });
+
+  test('keeps documents with an active submission out of in-progress drafts', async () => {
+    const activeSubmission = {
+      id: 'submission-active',
+      documentId: 'doc-resubmitted',
+      title: 'Turned in',
+      createdAt: new Date('2026-02-01'),
+      submittedAt: new Date('2026-02-01'),
+      document: {
+        id: 'doc-resubmitted',
+        title: 'Essay',
+        membership: { id: 'student-1', user: { name: 'Kenneth', email: 'k@example.test' } },
+        group: null,
+      },
+    };
+
+    prisma.submission.findMany.mockResolvedValue([activeSubmission]);
+    prisma.document.findMany.mockResolvedValue([]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(data.inProgressDocuments).toEqual([]);
+    expect(data.submissions).toEqual([activeSubmission]);
+    expect(
+      rosterDocumentCountForStudent(
+        'student-1',
+        data.inProgressDocuments,
+        data.submissions
+      )
+    ).toBe(1);
+  });
+
+  test('counts resubmitted work once when an active submission exists after unsubmit', async () => {
+    const activeSubmission = {
+      id: 'submission-resubmit',
+      documentId: 'doc-resubmit',
+      title: 'Resubmitted essay',
+      createdAt: new Date('2026-03-02'),
+      submittedAt: new Date('2026-03-02'),
+      document: {
+        id: 'doc-resubmit',
+        title: 'Essay',
+        membership: { id: 'student-1', user: { name: 'Kenneth', email: 'k@example.test' } },
+        group: null,
+      },
+    };
+
+    prisma.submission.findMany.mockResolvedValue([activeSubmission]);
+    prisma.document.findMany.mockResolvedValue([]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(
+      rosterDocumentCountForStudent(
+        'student-1',
+        data.inProgressDocuments,
+        data.submissions
+      )
+    ).toBe(1);
+    expect(prisma.document.findMany.mock.calls[0][0].where.AND).toContainEqual({
+      submissions: { none: { unsubmittedAt: null } },
+    });
   });
 
   test('loads growth plans even when the organization previously had reporter disabled', async () => {
