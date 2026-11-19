@@ -81,6 +81,9 @@ describe('assignment submissions loader', () => {
       { id: 'submission-1', title: 'Submitted essay' },
     ]);
     expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.submission.findMany.mock.calls[0][0].where.unsubmittedAt).toBe(
+      null
+    );
   });
 
   test('keeps in-progress assignment drafts visible', async () => {
@@ -97,6 +100,26 @@ describe('assignment submissions loader', () => {
       { id: 'draft-1', title: 'Draft essay' },
     ]);
     expect(prisma.document.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.document.findMany.mock.calls[0][0].where.submissions).toEqual({
+      none: { unsubmittedAt: null },
+    });
+  });
+
+  test('excludes withdrawn submissions from submitted and graded assignment tabs', async () => {
+    await loader({
+      request: new Request(
+        'https://example.test/app/my-classes/class-1/assignments/assignment-1?status=graded'
+      ),
+      params: { classId: 'class-1', assignmentId: 'assignment-1' },
+      context: {} as never,
+    } as any);
+
+    expect(prisma.submission.findMany.mock.calls[0][0].where.unsubmittedAt).toBe(
+      null
+    );
+    expect(prisma.submission.count.mock.calls[0][0].where.unsubmittedAt).toBe(
+      null
+    );
   });
 
   test('does not query or expose class insights while the rollout gate is off', async () => {
