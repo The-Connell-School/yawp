@@ -8,7 +8,6 @@
  */
 import {
   CLASS_SUMMARY,
-  COMMA_SPLICE,
   GRADING_ASSISTANT,
   GRAMMAR_ISSUES,
   LESSON_PLAN,
@@ -21,6 +20,8 @@ import {
   TUTOR_REFUSAL,
   TUTOR_REPLY_1,
 } from './copy.mjs';
+import { GRADING_ASSISTANT_V2, TUTOR_REVIEW, TUTOR_THESIS_FEEDBACK } from './copy-student.mjs';
+import { REVISED_ANALYSIS } from './copy.mjs';
 
 const json = (value) => JSON.stringify(value);
 
@@ -49,7 +50,13 @@ export const rules = [
     when: (r) => r.system.includes('student_document_context'),
     reply: (r) => {
       const said = r.lastUser.trim().toLowerCase();
-      if (said.startsWith('give me feedback')) return TUTOR_FEEDBACK;
+      // The draft as the tutor sees it now (the latest document context).
+      const draft = r.transcript.slice(r.transcript.lastIndexOf('<student_document_context'));
+      if (said.includes('review it')) return TUTOR_REVIEW;
+      if (said.startsWith('give me feedback')) {
+        // Pre-writing notes get the first feedback; a bare thesis gets thesis feedback.
+        return draft.includes('Mildred + the Seashells') || !draft.includes('choose noise over thinking') ? TUTOR_FEEDBACK : TUTOR_THESIS_FEEDBACK;
+      }
       if (said.includes('write my thesis') || said.includes('write it for me')) return TUTOR_REFUSAL;
       if (said.includes("it's the people")) return TUTOR_REPLY_1;
       return "Good thinking. Which piece of evidence from the novel best supports that idea? Name it, then tell me what it proves.";
@@ -60,22 +67,25 @@ export const rules = [
     when: (r) => r.system.startsWith('You are a grading assistant.'),
     reply: (r) => {
       const firstName = r.lastUser.match(/Student first name:\s*([^\n]+)/)?.[1]?.trim() ?? 'Maya';
+      // Maya's revision (version 2) earns its own scores.
+      const graded = r.lastUser.includes(REVISED_ANALYSIS.slice(0, 60)) ? GRADING_ASSISTANT_V2 : GRADING_ASSISTANT;
       return json({
-        ...GRADING_ASSISTANT,
-        overallComment: GRADING_ASSISTANT.overallComment.replace(/^Maya,/, `${firstName},`),
+        ...graded,
+        overallComment: graded.overallComment.replace(/^Maya,/, `${firstName},`),
       });
     },
   },
   {
     name: 'grading-overall-comment',
     when: (r) => r.system.startsWith('You write the overall feedback sentence'),
-    reply: () => json({ overallComment: GRADING_ASSISTANT.overallComment }),
+    reply: (r) => json({ overallComment: (r.lastUser.includes(REVISED_ANALYSIS.slice(0, 60)) ? GRADING_ASSISTANT_V2 : GRADING_ASSISTANT).overallComment }),
   },
   {
     name: 'grammar-checker',
     when: (r) => r.system.startsWith('You are the Grammar/Usage Checker'),
-    // Excerpts must appear verbatim in the essay, so only Maya's gets the splice.
-    reply: (r) => json(r.lastUser.includes(COMMA_SPLICE) ? GRAMMAR_ISSUES : { issues: [] }),
+    // Excerpts must appear verbatim in the essay: each issue is reported only
+    // while its words are still there (Maya's essay; fixed ones drop out).
+    reply: (r) => json({ issues: GRAMMAR_ISSUES.issues.filter((issue) => r.lastUser.includes(issue.excerpt)) }),
   },
   {
     name: 'class-summary',

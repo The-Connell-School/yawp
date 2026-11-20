@@ -54,7 +54,10 @@ BOOTH_BASE_URL="$(./bin/project dev start --json | node -e 'let s="";process.std
 export BOOTH_BASE_URL
 
 cd "$WEB"
-xvfb-run -a -s "-screen 0 1920x1080x24" node scripts/booth-video/record.mjs --out "$WORK/clips"
+# BOOTH_CUT=student records the student-and-feedback cut (record-student.mjs).
+RECORDER=record.mjs
+[[ "${BOOTH_CUT:-}" == student ]] && RECORDER=record-student.mjs
+xvfb-run -a -s "-screen 0 1920x1080x24" node "scripts/booth-video/$RECORDER" --out "$WORK/clips"
 node scripts/booth-video/assemble.mjs --clips "$WORK/clips" --out "$OUT"
 
 if grep -q '"rule":"UNSCRIPTED"' "$WORK/model-requests.jsonl"; then

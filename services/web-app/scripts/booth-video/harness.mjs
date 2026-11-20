@@ -176,6 +176,37 @@ export function stage(page) {
         }
       }
     },
+    /**
+     * Selects the first occurrence of `text` inside `root` (a locator), as a
+     * mouse drag would, even when highlights split it across several nodes.
+     */
+    async select(root, text) {
+      await root.evaluate((node, sentence) => {
+        const nodes = [];
+        const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+        for (let t = walker.nextNode(); t; t = walker.nextNode()) nodes.push(t);
+        const flat = nodes.map((t) => t.textContent).join('');
+        const at = flat.indexOf(sentence);
+        if (at === -1) throw new Error(`text not found: ${sentence}`);
+        const locate = (offset, isEnd) => {
+          let seen = 0;
+          for (const t of nodes) {
+            const len = t.textContent.length;
+            if (offset < seen + len || (isEnd && offset === seen + len)) return [t, offset - seen];
+            seen += len;
+          }
+          const last = nodes[nodes.length - 1];
+          return [last, last.textContent.length];
+        };
+        const range = document.createRange();
+        range.setStart(...locate(at, false));
+        range.setEnd(...locate(at + sentence.length, true));
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }, text);
+      await sleep(250);
+    },
     hold: (ms) => sleep(ms),
   };
   return s;
