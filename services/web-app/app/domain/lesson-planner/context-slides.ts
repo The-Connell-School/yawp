@@ -47,8 +47,9 @@ export function nextFocus(slide: Pick<Slide, 'layout' | 'events' | 'places'>, fo
 const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
 
 /**
- * A timeline or a map as a `notes` slide (dated lines, or the places with
- * their notes), for the spec v3 look. Any other slide comes back as itself.
+ * A timeline, a map, a define or a person slide as a `notes` slide (dated
+ * lines, places, words or people, each in a line), for the spec v3 look. Any
+ * other slide comes back as itself.
  */
 export function legacyContextSlide(slide: Slide): Slide {
   if (slide.layout === 'timeline') {
@@ -66,6 +67,14 @@ export function legacyContextSlide(slide: Slide): Slide {
       layout: 'notes',
       facts: (places ?? []).slice(0, 3).map((place) => clip(`${place.label ?? place.name}${place.note ? `: ${place.note}` : ''}`, 200)),
     };
+  }
+  if (slide.layout === 'define') {
+    const { terms, ...rest } = slide;
+    return { ...rest, layout: 'notes', facts: (terms ?? []).slice(0, 3).map((term) => clip(`${term.word}: ${term.definition}`, 200)) };
+  }
+  if (slide.layout === 'person') {
+    const { people, ...rest } = slide;
+    return { ...rest, layout: 'notes', facts: (people ?? []).slice(0, 3).map((person) => clip(`${person.name}: ${person.role}`, 200)) };
   }
   return slide;
 }

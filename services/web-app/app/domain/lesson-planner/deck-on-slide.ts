@@ -79,6 +79,21 @@ const LISTS: Record<string, ListSpec> = {
     label: (n, key) => (key === 'note' ? `Place ${n} sentence` : `Place ${n}`),
   },
   tracks: { max: 2, limit: 30, blank: () => 'Row', label: (n) => `Row ${n} name` },
+  // A define slide's words and a person slide's people (Kevin, Nov 21).
+  terms: {
+    max: 3,
+    parts: { word: 40, definition: 200, example: 200 },
+    blank: () => ({ word: 'Word', definition: 'What it means' }),
+    focusKey: 'word',
+    label: (n, key) => (key === 'definition' ? `Word ${n} meaning` : key === 'example' ? `Word ${n} example` : `Word ${n}`),
+  },
+  people: {
+    max: 4,
+    parts: { name: 60, role: 80, note: 200 },
+    blank: () => ({ name: 'Name', role: 'Who they are' }),
+    focusKey: 'name',
+    label: (n, key) => (key === 'role' ? `Person ${n} role` : key === 'note' ? `Person ${n} sentence` : `Person ${n}`),
+  },
   timeline: {
     max: 5,
     parts: { year: 14, caption: 70 },

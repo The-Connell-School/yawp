@@ -43,6 +43,8 @@ export const LAYOUT_LABELS: Record<Slide['layout'], string> = {
   picture: 'Your picture',
   timeline: 'Timeline',
   map: 'Map',
+  define: 'Words',
+  person: 'People',
 };
 
 const lines = (value: string) =>

@@ -162,6 +162,8 @@ describe('parseSlideDeck', () => {
       if (layout === 'picture') slide.image = 'cmh0elephant0000abcd';
       if (layout === 'timeline') slide.events = [{ date: '1899', title: 'One' }, { date: '1956', title: 'Two' }];
       if (layout === 'map') slide.places = [{ name: 'Khartoum' }];
+      if (layout === 'define') slide.terms = [{ word: 'aristocracy', definition: 'Families who rule by birth.' }];
+      if (layout === 'person') slide.people = [{ name: 'Garibaldi', role: 'General' }];
       const parsed = parseSlideDeck(fenced({ title: 'Deck', slides: [slide] }));
       expect(parsed?.deck.slides[0]!.layout).toBe(layout);
     }

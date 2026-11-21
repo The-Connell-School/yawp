@@ -57,7 +57,7 @@ export const GALLERY_SLIDE_LAYOUTS = [
  * (`legacyContextSlide`, `classicSlide`). Not gallery templates: the planner
  * is told of them only with `lesson_planner_context_tools`.
  */
-export const CONTEXT_SLIDE_LAYOUTS = ['timeline', 'map'] as const;
+export const CONTEXT_SLIDE_LAYOUTS = ['timeline', 'map', 'define', 'person'] as const;
 
 export const SLIDE_LAYOUTS = [...CLASSIC_SLIDE_LAYOUTS, ...GALLERY_SLIDE_LAYOUTS, ...CONTEXT_SLIDE_LAYOUTS] as const;
 
@@ -209,6 +209,33 @@ const slideSchema = z
     shadeLabel: z.string().trim().min(1).max(60).optional(),
     // The area the map shows, written by Yawp! with the places' positions.
     view: z.object({ w: z.number(), s: z.number(), e: z.number(), n: z.number() }).optional(),
+    // A define slide's words (Kevin, Nov 21): the word, what it means in
+    // plain words, and an example from the book's world.
+    terms: z
+      .array(
+        z.object({
+          word: z.string().trim().min(1).max(40),
+          definition: z.string().trim().min(1).max(200),
+          example: z.string().trim().min(1).max(200).optional(),
+        })
+      )
+      .min(1)
+      .max(3)
+      .optional(),
+    // A person slide's people (Kevin, Nov 21): real people and a novel's
+    // characters, each with who they are, and the teacher's picture by id.
+    people: z
+      .array(
+        z.object({
+          name: z.string().trim().min(1).max(60),
+          role: z.string().trim().min(1).max(80),
+          note: z.string().trim().min(1).max(200).optional(),
+          image: z.string().regex(PICTURE_ID).optional(),
+        })
+      )
+      .min(1)
+      .max(4)
+      .optional(),
   })
   // Deliberately not .strict(): one stray key should not cost the teacher the
   // whole deck. Unknown fields are dropped, required ones still enforced.
@@ -241,6 +268,8 @@ const slideSchema = z
     }
     if (slide.layout === 'timeline') needs('events', 'at least two events', Boolean(slide.events?.length));
     if (slide.layout === 'map') needs('places', 'at least one place', Boolean(slide.places?.length));
+    if (slide.layout === 'define') needs('terms', 'at least one word', Boolean(slide.terms?.length));
+    if (slide.layout === 'person') needs('people', 'at least one person', Boolean(slide.people?.length));
     if (slide.layout === 'picture') needs('image', 'the id of one of the teacher’s pictures', Boolean(slide.image));
     if (slide.layout === 'compare' && (!slide.left || !slide.right)) {
       context.addIssue({
@@ -345,6 +374,20 @@ const COLUMN_ALIASES: Record<string, string> = {
  * over a synonym.
  */
 const LAYOUT_ALIASES: Record<string, SlideLayout> = {
+  vocabulary: 'define',
+  vocab: 'define',
+  words: 'define',
+  glossary: 'define',
+  definitions: 'define',
+  definition: 'define',
+  key_terms: 'define',
+  'key-terms': 'define',
+  people: 'person',
+  cast: 'person',
+  characters: 'person',
+  who: 'person',
+  'whos-who': 'person',
+  portrait: 'person',
   bullet: 'bullets',
   list: 'bullets',
   points: 'bullets',
@@ -538,6 +581,14 @@ function normalizeSlide(raw: unknown): unknown {
   if (slide.answer !== undefined) {
     slide.answer = normalizeAnswer(slide.answer, slide.choices);
     if (slide.answer === undefined) delete slide.answer;
+  }
+  // A person's picture is one of the teacher's, by id, or none.
+  if (Array.isArray(slide.people)) {
+    slide.people = slide.people.map((person) => {
+      if (!person || typeof person !== 'object' || Array.isArray(person)) return person;
+      const { image, ...rest } = person as Record<string, unknown>;
+      return typeof image === 'string' && PICTURE_ID.test(image.trim()) ? { ...rest, image: image.trim() } : rest;
+    });
   }
   // The exit slide sets "<button>: open it in Yawp!" and "Next time: <next>"
   // itself, so a model that wrote either out in full put it on screen twice
@@ -864,6 +915,10 @@ export function classicSlide(slide: Slide): ClassicSlide {
       return as('closing');
     case 'timeline':
       return as('bullets', { bullets: (slide.events ?? []).slice(0, 7).map((event) => `${event.date}: ${event.title}`) });
+    case 'define':
+      return as('bullets', { bullets: (slide.terms ?? []).map((term) => `${term.word}: ${term.definition}`.slice(0, 200)) });
+    case 'person':
+      return as('bullets', { bullets: (slide.people ?? []).map((person) => `${person.name}: ${person.role}`.slice(0, 200)) });
     case 'map':
       return as('bullets', {
         bullets: (slide.places ?? [])
@@ -877,6 +932,13 @@ export function classicSlide(slide: Slide): ClassicSlide {
 
 /** The teacher's pictures a deck shows, once each, in order (Nov 1). */
 export function deckPictureIds(deck: Pick<SlideDeck, 'slides'>): string[] {
-  return [...new Set(deck.slides.flatMap((slide) => (slide.image ? [slide.image] : [])))];
+  return [
+    ...new Set(
+      deck.slides.flatMap((slide) => [
+        ...(slide.image ? [slide.image] : []),
+        ...(slide.people ?? []).flatMap((person) => (person.image ? [person.image] : [])),
+      ])
+    ),
+  ];
 }
 

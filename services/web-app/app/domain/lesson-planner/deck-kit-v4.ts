@@ -170,7 +170,7 @@ export function kitV4Band(color: string): string {
 // The plan ----------------------------------------------------------------
 
 /** The gallery's templates, a quiz, and the two that give a text its background (Nov 19). */
-export type KitV4Template = GalleryTemplate | 'quiz' | 'timeline' | 'map';
+export type KitV4Template = GalleryTemplate | 'quiz' | 'timeline' | 'map' | 'define' | 'person';
 
 export type KitV4Plan = {
   slide: Slide;
@@ -203,6 +203,8 @@ const DEFAULT_LABELS: Record<KitV4Template, string | null> = {
   quiz: null,
   timeline: null,
   map: null,
+  define: null,
+  person: null,
 };
 
 /** Labels that only decorate. */
@@ -277,7 +279,7 @@ function labelFor(template: KitV4Template, slide: Slide, previous: string | null
 }
 
 function templateOf(slide: Slide): KitV4Template {
-  if (slide.layout === 'timeline' || slide.layout === 'map') return slide.layout;
+  if (slide.layout === 'timeline' || slide.layout === 'map' || slide.layout === 'define' || slide.layout === 'person') return slide.layout;
   if (slide.choices?.length) return 'quiz';
   return galleryTemplate(slide);
 }
@@ -978,6 +980,78 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
         elements.push({ kind: 'art', src: art.src, fit: 'contain', alt: '', x: 880, y: 200, w: 320, h: 250 });
         elements.push(credit(art, { x: 880, y: 466, w: 320, h: 60 }));
       }
+      return out();
+    }
+
+    case 'define': {
+      // Words for a text's background (Kevin, Nov 21), set like a dictionary:
+      // the word in the deck color, then what it means and an example.
+      const terms = (slide.terms ?? []).slice(0, 3);
+      elements.push(column({ x: MARGIN, y: 48, w: W - MARGIN * 2, h: 92 }, [para([from(head(slide.title, slide.title.length > 34 ? 40 : 48, KIT_V4.ink), on('title'))], 0, 1.05)], 'bottom'));
+      const TOP_ROW = 176;
+      const rowH = (H - TOP_ROW - 56) / Math.max(1, terms.length);
+      const WORD_W = 360;
+      const wordBase = terms.length === 1 ? 64 : terms.length === 2 ? 50 : 42;
+      const meaningSize = terms.length === 1 ? 34 : terms.length === 2 ? 28 : 24;
+      const exampleSize = terms.length === 1 ? 24 : 20;
+      terms.forEach((term, i) => {
+        const y = TOP_ROW + i * rowH;
+        if (i) elements.push({ kind: 'rect', role: 'mark', fill: KIT_V4_DIM, x: MARGIN, y: y - 14, w: W - MARGIN * 2, h: 2 });
+        const longest = Math.max(...term.word.split(/\s+/).map((word) => word.length));
+        const wordSize = Math.max(26, Math.min(wordBase, Math.floor(WORD_W / (longest * 0.62))));
+        elements.push(column({ x: MARGIN, y, w: WORD_W, h: rowH - 28 }, [para([from(display(term.word, wordSize, color), on('terms', { index: i, key: 'word' }))], 0, 1.05)], 'top'));
+        elements.push(
+          column({ x: MARGIN + WORD_W + 40, y: y + 4, w: W - MARGIN * 2 - WORD_W - 40, h: rowH - 28 }, [
+            para([from(serif(term.definition, meaningSize, KIT_V4.ink), on('terms', { index: i, key: 'definition' }))], 10, 1.3),
+            para([term.example ? from(sans(term.example, exampleSize, KIT_V4.grey), on('terms', { index: i, key: 'example' })) : null], 0, 1.35),
+          ], 'top')
+        );
+      });
+      return out();
+    }
+
+    case 'person': {
+      // Who someone is (Kevin, Nov 21): real people and a novel's characters,
+      // each with the teacher's picture where there is one.
+      const people = (slide.people ?? []).slice(0, 4);
+      const pictured = people.some((person) => person.image);
+      elements.push(column({ x: MARGIN, y: 48, w: W - MARGIN * 2, h: 92 }, [para([from(head(slide.title, slide.title.length > 34 ? 40 : 48, KIT_V4.ink), on('title'))], 0, 1.05)], 'bottom'));
+      const TOP_ROW = 176;
+      const areaW = W - MARGIN * 2;
+      const areaH = H - TOP_ROW - 56;
+      // The headline already names a person shown alone: no second line saying it again.
+      const named = (person: (typeof people)[number]) => people.length === 1 && person.name.trim().toLowerCase() === slide.title.trim().toLowerCase();
+      const words = (person: (typeof people)[number], i: number, nameSize: number, textSize: number) => [
+        para([named(person) ? null : from(display(person.name, nameSize, KIT_V4.ink), on('people', { index: i, key: 'name' }))], 8, 1.1),
+        para([from(sans(person.role, Math.max(18, Math.round(textSize * 0.85)), color, true), on('people', { index: i, key: 'role' }))], 14, 1.2),
+        para([person.note ? from(serif(person.note, textSize, KIT_V4.ink), on('people', { index: i, key: 'note' })) : null], 0, 1.3),
+      ];
+      const fit = (name: string, size: number, width: number) => {
+        const longest = Math.max(...name.split(/\s+/).map((word) => word.length));
+        return Math.max(22, Math.min(size, Math.floor(width / (longest * 0.62))));
+      };
+      if (people.length === 1) {
+        const person = people[0]!;
+        const pictureW = person.image ? 480 : 0;
+        if (person.image) elements.push({ kind: 'picture', id: person.image, x: MARGIN, y: TOP_ROW, w: pictureW, h: areaH });
+        const x = MARGIN + (person.image ? pictureW + 48 : 0);
+        const width = Math.min(W - MARGIN - x, person.image ? W : 900);
+        elements.push(column({ x, y: TOP_ROW, w: width, h: areaH }, words(person, 0, fit(person.name, 60, width), person.image ? 28 : 34), 'middle'));
+        return out();
+      }
+      const GAP = 40;
+      const cardW = (areaW - GAP * (people.length - 1)) / people.length;
+      const pictureH = pictured ? (people.length === 2 ? 280 : 230) : 0;
+      // Without pictures the words carry the slide: larger, and in the middle of it.
+      const nameSize = pictured ? (people.length === 2 ? 36 : 28) : people.length === 2 ? 48 : people.length === 3 ? 40 : 34;
+      const textSize = pictured ? (people.length === 2 ? 22 : 19) : people.length === 2 ? 28 : 24;
+      people.forEach((person, i) => {
+        const x = MARGIN + i * (cardW + GAP);
+        if (person.image) elements.push({ kind: 'picture', id: person.image, x, y: TOP_ROW, w: cardW, h: pictureH });
+        // Every card starts at the same line, so the names read across.
+        const y = TOP_ROW + (pictured ? pictureH + 20 : 56);
+        elements.push(column({ x, y, w: cardW, h: TOP_ROW + areaH - y }, words(person, i, fit(person.name, nameSize, cardW), textSize), 'top'));
+      });
       return out();
     }
 
