@@ -39,3 +39,23 @@ describe('buildMapDrawing', () => {
     expect(world).not.toContain('NaN');
   });
 });
+
+describe('a shape across the 180th meridian draws no line across the map (demo pass, Nov 20)', () => {
+  test('Russia’s far east does not cut across a map of Europe', () => {
+    const view = { w: -9.05, s: 40.43, e: 46.63, n: 67.75 };
+    const drawing = buildMapDrawing({ view, shade: [], color: '#2F4858', route: [] });
+    const long: string[] = [];
+    for (const layer of drawing.layers) {
+      for (const sub of layer.d.split('M').filter(Boolean)) {
+        const points = sub.replace(/Z/g, '').split('L').map((pair) => pair.trim().split(/\s+/).map(Number));
+        for (let i = 1; i < points.length; i += 1) {
+          const [x0, y0] = points[i - 1]!;
+          const [x1, y1] = points[i]!;
+          const inside = (y: number) => y > 0 && y < drawing.height;
+          if (Math.abs(x1! - x0!) > drawing.width * 0.4 && Math.abs(y1! - y0!) < 4 && inside(y0!)) long.push(`${x0},${y0} → ${x1},${y1}`);
+        }
+      }
+    }
+    expect(long).toEqual([]);
+  });
+});

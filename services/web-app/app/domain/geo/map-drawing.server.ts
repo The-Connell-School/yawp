@@ -44,7 +44,18 @@ function pathOf(shape: GeoShape, view: MapView, width: number, height: number): 
     let last: [number, number] | null = null;
     let drawn = 0;
     let piece = '';
-    for (const [lon, lat] of part) {
+    // A coast that crosses the 180th meridian jumps from -180 to 180 in one
+    // step; kept continuous, it runs off the edge instead of drawing a line
+    // across the map (Russia's far east over Europe, demo pass Nov 20).
+    let offset = 0;
+    let previous: number | null = null;
+    for (const [rawLon, lat] of part) {
+      if (previous !== null) {
+        if (rawLon + offset - previous > 180) offset -= 360;
+        else if (rawLon + offset - previous < -180) offset += 360;
+      }
+      const lon = rawLon + offset;
+      previous = lon;
       const point = mapPoint(view, lon, lat);
       const x = Math.max(-margin, Math.min(1 + margin, point.x)) * width;
       const y = Math.max(-margin, Math.min(1 + margin, point.y)) * height;
