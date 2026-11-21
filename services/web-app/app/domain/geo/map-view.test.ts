@@ -60,3 +60,12 @@ describe('the map picture’s address', () => {
     expect(readMapSpec(new URLSearchParams('v=20,3,40,24&c=url(x)'))!.color).toBe('#1F3532');
   });
 });
+
+describe('a small region gets a close view (demo pass, Nov 21)', () => {
+  test('four places on Long Island are framed tightly, not across five degrees', () => {
+    const view = fitMapView([pointArea(-73.97, 40.78), pointArea(-73.73, 40.8), pointArea(-73.7, 40.83), pointArea(-73.86, 40.74)])!;
+    expect(view.e - view.w).toBeLessThan(2.6);
+    expect(view.w).toBeLessThan(-73.97);
+    expect(view.e).toBeGreaterThan(-73.7);
+  });
+});
