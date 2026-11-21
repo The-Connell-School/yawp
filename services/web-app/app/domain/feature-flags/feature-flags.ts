@@ -125,6 +125,8 @@ export const LESSON_PLANNER_DECK_STUDIO_FLAG = 'lesson_planner_deck_studio' as c
 export const LESSON_PLANNER_DECK_CHAT_FLAG = 'lesson_planner_deck_chat' as const;
 /** Timelines and maps for introducing a text (Nov 19): two slide layouts the planner can write. Needs Lesson Deck Kit v4. */
 export const LESSON_PLANNER_CONTEXT_TOOLS_FLAG = 'lesson_planner_context_tools' as const;
+/** Pictures that belong (Nov 21): the planner finds openly licensed pictures for a text's background. Needs timelines and maps. */
+export const LESSON_PLANNER_FOUND_PICTURES_FLAG = 'lesson_planner_found_pictures' as const;
 
 /**
  * The teacher's own deck flags as they apply (Nov 1): keeping the deck needs
@@ -403,6 +405,11 @@ export const FEATURE_FLAGS = {
     label: 'Lesson Planner: timelines and maps',
     description:
       'For a lesson that introduces a text (Nov 19), the planner can write two more kinds of slide: a timeline (four to eight events, in one row or two) and a map (real country shapes, with places Yawp! finds in its own place list, an optional route and shaded countries). In Present the arrows step through the events or places one at a time. Both are edited on the slide and by chat where the deck studio is on. Map data is bundled: nothing is sent to a map service. Needs Lesson Deck Kit v4. Off: the planner is not told these layouts exist; a deck that already has one is still drawn.',
+  },
+  [LESSON_PLANNER_FOUND_PICTURES_FLAG]: {
+    label: 'Lesson Planner: pictures that belong',
+    description:
+      'Slides that teach, phase 2 (Nov 21): the planner can search open collections (Wikimedia Commons) for public-domain and openly licensed pictures of the real places, people and times a lesson introduces, and put them on its slides. Yawp! checks each license, keeps a copy with the lesson, and shows its credit on every slide, PowerPoint and PDF; the model never writes a picture address. Film stills and other copyrighted pictures are never fetched: the planner asks the teacher for them. Needs timelines and maps. Off: the planner has no picture search.',
   },
   [CLASS_CODE_UNIQUE_FLAG]: {
     label: 'Unique class codes',

@@ -90,6 +90,8 @@ export const LESSON_PLANNER_REVIEW_FLAG_SETTINGS = [
   'feature_flag.lesson_planner_deck_chat',
   // Timelines and maps for introducing a text (Nov 19): needs spec v4.
   'feature_flag.lesson_planner_context_tools',
+  // Pictures that belong (Nov 21): needs timelines and maps.
+  'feature_flag.lesson_planner_found_pictures',
 ] as const;
 
 /**
