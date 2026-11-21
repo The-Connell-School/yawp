@@ -130,3 +130,34 @@ describe('a map that starts wider than the place (Kevin, Nov 21)', () => {
     expect(wide.n).toBeGreaterThan(47.1);
   });
 });
+
+describe('the names an English class uses (demo pass, Nov 20–21)', () => {
+  test('English and older names find today’s town', () => {
+    const cases: [string, string, string][] = [
+      ['Geneva', 'Switzerland', 'Genève, Switzerland'],
+      ['Mantua', 'Italy', 'Mantova, Italy'],
+      ['Padua', 'Italy', 'Padova, Italy'],
+      ['Syracuse', 'Italy', 'Siracusa, Italy'],
+      ['Cologne', 'Germany', 'Köln, Germany'],
+      ['Archangel', 'Russia', 'Arkhangel’sk, Russia'],
+      ['Ypres', 'Belgium', 'Ieper, Belgium'],
+      ['Auschwitz', 'Poland', 'Oświęcim, Poland'],
+      ['Gleiwitz', 'Poland', 'Gliwice, Poland'],
+      ['Breslau', 'Poland', 'Wrocław, Poland'],
+      ['Königsberg', 'Russia', 'Kaliningrad, Russia'],
+      ['Kiev', 'Ukraine', 'Kyiv, Ukraine'],
+      ['Marseilles', 'France', 'Marseille, France'],
+      ['Leopoldville', 'Democratic Republic of the Congo', 'Kinshasa, Democratic Republic of the Congo'],
+    ];
+    for (const [name, where, found] of cases) expect(findPlace(name, where)?.found).toBe(found);
+  });
+
+  test('a town that really has the English name keeps it', () => {
+    expect(findPlace('Syracuse', 'New York')?.found).toBe('Syracuse, New York, United States of America');
+  });
+
+  test('a transliteration with or without its apostrophe', () => {
+    expect(findPlace('Arkhangelsk', 'Russia')?.found).toBe('Arkhangel’sk, Russia');
+    expect(findPlace('Arkhangel’sk', 'Russia')?.found).toBe('Arkhangel’sk, Russia');
+  });
+});

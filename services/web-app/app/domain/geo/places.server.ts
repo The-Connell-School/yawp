@@ -34,6 +34,46 @@ const FORMER_NAMES: Record<string, string> = {
   'washington d c': 'Washington',
 };
 
+/**
+ * English and older names an English class uses for a town the place list
+ * spells its own way (demo pass, Nov 20–21). Unlike FORMER_NAMES, these are
+ * only tried when the name as written finds nothing, so a real town with the
+ * English name (Syracuse, New York) is still found first.
+ */
+const ENGLISH_NAMES: Record<string, string> = {
+  geneva: 'Genève',
+  mantua: 'Mantova',
+  padua: 'Padova',
+  leghorn: 'Livorno',
+  syracuse: 'Siracusa',
+  cologne: 'Köln',
+  nuremberg: 'Nürnberg',
+  cracow: 'Kraków',
+  krakow: 'Kraków',
+  archangel: 'Arkhangel’sk',
+  antwerp: 'Antwerpen',
+  ghent: 'Gent',
+  bruges: 'Brugge',
+  ypres: 'Ieper',
+  seville: 'Sevilla',
+  salonika: 'Thessaloníki',
+  thessalonica: 'Thessaloníki',
+  auschwitz: 'Oświęcim',
+  gleiwitz: 'Gliwice',
+  breslau: 'Wrocław',
+  konigsberg: 'Kaliningrad',
+  koenigsberg: 'Kaliningrad',
+  lemberg: 'Lviv',
+  lvov: 'Lviv',
+  pressburg: 'Bratislava',
+  kiev: 'Kyiv',
+  dunkirk: 'Dunkerque',
+  marseilles: 'Marseille',
+  leopoldville: 'Kinshasa',
+  stanleyville: 'Kisangani',
+  salisbury: 'Harare',
+};
+
 const US_STATES: Record<string, string> = {
   alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA', colorado: 'CO', connecticut: 'CT', delaware: 'DE',
   florida: 'FL', georgia: 'GA', hawaii: 'HI', idaho: 'ID', illinois: 'IL', indiana: 'IN', iowa: 'IA', kansas: 'KS', kentucky: 'KY',
@@ -51,6 +91,8 @@ export function placeKey(name: string): string {
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
+    // Arkhangel’sk and Arkhangelsk are one name.
+    .replace(/['’ʼ`]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/^the /, '')
     .trim();
@@ -118,8 +160,12 @@ export function findPlace(name: string, where?: string | null): FoundPlace | nul
   const key = placeKey(first);
   const today = FORMER_NAMES[key];
   let rows = placesNamed(today ? placeKey(today) : key);
-  if (country?.iso2) rows = rows.filter((row) => row[1] === country.iso2);
-  if (state) rows = rows.filter((row) => row[1] === 'US' && row[2] === state);
+  const narrow = (list: PlaceRow[]) =>
+    list.filter((row) => (!country?.iso2 || row[1] === country.iso2) && (!state || (row[1] === 'US' && row[2] === state)));
+  rows = narrow(rows);
+  // Nothing by the name as written: the English or older name of a town.
+  const english = ENGLISH_NAMES[key];
+  if (!rows.length && english) rows = narrow(placesNamed(placeKey(english)));
 
   // A country by its own name. With somewhere named, it is a town that is meant.
   const asCountry = hints.length ? null : findCountry(first);
