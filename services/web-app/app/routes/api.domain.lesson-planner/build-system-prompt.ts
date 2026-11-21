@@ -992,6 +992,23 @@ export function buildContextToolsSection(): string[] {
 }
 
 /**
+ * The arc of a lesson (Kevin, Nov 21): open on the theme in the students'
+ * own lives, find out what they know, teach directly in short pieces, then
+ * set the novel beside what they said. With `lesson_planner_context_tools`.
+ */
+export function buildLessonArcSection(): string[] {
+  return [
+    '',
+    'The arc of a lesson. Start with the students, and start with the theme, then bring in the text:',
+    '1. Open on the theme, in the students’ own experience, before any history, author or text. Always on the first day of a unit and in a lesson that introduces a text, and in most other lessons too. For The Leopard: "What do you think it is like to lose power? How does it happen? Have you ever had a way of life and lost it? What happens to someone who loses power, status or popularity?" In the middle of a unit, once its themes are established, a lesson may instead open by asking students to recall what came earlier in the unit. On the first day of a unit this opening comes before everything else, even when a lesson could start with the work itself.',
+    '2. At the start of a unit, find out what they already know: "What do you know about World War II and the Holocaust?", "What do you think Italy was like before it was a country?" The less they are likely to know, the shorter this part: a minute of listing or a quick share, never a long discussion of what they do not know.',
+    '3. Then teach directly: short, punchy pieces of information told straight to them, one idea at a time, the key terms and vocabulary among them. This is where a map, a timeline, the words and the people belong.',
+    '4. Then bring in the text against what the students said: set the novel’s treatment of the theme beside what the students said at the opening ("You said losing power happens slowly. Watch how fast it happens to the Prince."). Give this part time alone to think and write, time to discuss with peers, and the teacher teaching directly, in whatever order fits.',
+    'Name the parts in the plan in this order, each with its minutes, and when there is a deck, its slides follow the same arc.',
+  ];
+}
+
+/**
  * System prompt blocks for Anthropic prompt caching. The large stable prefix
  * is cached; the short personalized intro and per-lesson inventory sit after
  * the breakpoint.
@@ -1074,6 +1091,7 @@ export function buildLessonPlannerSystemPromptBlocks({
     ...(deckGallery && deckKitV4
       ? buildDeckKitV4Section(recentArt, { v41: deckKitV41, teacherName, subjectFirst: contextTools })
       : buildDeckGallerySection(deckGallery, recentArt)),
+    ...(contextTools ? buildLessonArcSection() : []),
     ...(deckGallery && deckKitV4 && contextTools ? buildContextToolsSection() : []),
     ...buildSourcesSection(sources, deckChoices, { onStack }),
     ...buildLessonPicturesSection(lessonPictures),

@@ -40,6 +40,12 @@ Done:
     place names (Geneva, Mantua, Ypres, Auschwitz, Archangel…), names kept
     clear of other pins, and a closer view for several places together.
 
+- **R12, the arc of a lesson** (Kevin, Nov 21, second round): told to the
+  planner with the flag on, for every lesson plan, not only decks: open on
+  the theme in the students' own lives (always on a unit's first day), a short
+  "what do you know", short direct teaching, then the novel against what the
+  students said, with time alone, together and taught.
+
 Not done yet:
 
 - The image-reuse cap and the empty-reading check as code (phase 0 is in the
@@ -187,36 +193,80 @@ quotations the model wrote are marked "check before class" in the studio, as
 timelines already are. Every picture carries its credit and license.
 *Check:* no uncredited picture appears on a slide.
 
+**R12. The arc of a lesson: start with the students and the theme, then
+bring in the text.** Added by Kevin, Nov 21, after reading R1 to R11.
+
+1. *Open on the theme, in the students' own experience.* Always on the first
+   day of a unit, and in most lessons. For *The Leopard*: "What do you think
+   it's like to lose power? How does it happen? Can you relate to ever having
+   a certain way of life and losing it? What do you think happens to someone
+   who loses power or status or popularity?" In the middle of a unit, once
+   the core themes are established, a lesson may open by recalling what came
+   earlier instead.
+2. *At the start of a unit, find out what they know.* "What do you know about
+   WWII or the Holocaust?" or "What do you think Italy was like before it was
+   a country?" The less you think they know, the shorter this part.
+3. *Then teach directly.* Short, punchy pieces of information told to them
+   directly, the key terms and vocabulary among them. This is where the maps,
+   timelines, words and people (R2 to R5) go.
+4. *Then tie the novel to the thematic questions.* Get students to weigh in
+   on the theme, then set the novel's treatment of it beside what they said.
+   This part has individual time to think and write, time to discuss with
+   peers, and time for the teacher to teach directly.
+
+*Check:* the first lesson of a unit opens on a thematic question about the
+students' own lives, followed by a short "what do you know", before any
+direct instruction. The plan names the four parts in order, and the novel
+section refers back to the opening question.
+
 ## 4. What the Leopard day 1 deck should have been
 
-This is the target, slide by slide, so the rules have a picture. Pictures
-marked *teacher* are ones Yawp! can't ship and asks for (R10).
+This is the target, slide by slide, so the rules have a picture. It follows
+R12's arc. Pictures marked *teacher* are ones Yawp! can't ship and asks for
+(R10).
+
+*Open on the theme (R12.1)*
 
 1. Title: *The Leopard*, day 1, over a 19th-century photograph of Palermo.
-2. Today (agenda), as now.
-3. Write: the class starter, as now.
-4. Map: where is Italy? The world, then Europe, then Italy and Sicily.
-5. Map: Italy in 1860, a patchwork. The Kingdom of the Two Sicilies, the
-   Papal States, Piedmont-Sardinia and Austrian Venetia shaded and labeled
-   approximately; Palermo and Turin pinned.
-6. Words: aristocracy, unification and Risorgimento, each with a plain
-   definition and an example from the book's world.
-7. Who: Garibaldi (a public-domain photograph) and the Thousand in red shirts.
-8. Timeline, 1860–1861: Marsala, Palermo, the plebiscite, the Kingdom of
-   Italy. Below the line: the novel opens in May 1860, the plebiscite in
-   Donnafugata, and the novel published in 1958. Two dates open side trips.
-9. Map: Garibaldi's route: Marsala, Calatafimi, Palermo, Naples, Teano.
-10. Who's who in the novel: the Prince of Salina (the Leopard), Tancredi,
-    Angelica and Don Calogero, each a line, each with a film still (*teacher*).
-11. Look: a real Risorgimento painting (Hayez, *The Kiss*, 1859) or the ball
-    scene from the film (*teacher*).
-12. Read: the excerpt on the slide (*teacher* supplies it, or the page), with
-    the circle and underline tasks.
-13. Talk: "Whose progress?", as now.
-14. Before you go: the exit ticket, without the doubled string.
+2. Today (agenda).
+3. Write: "What do you think it's like to lose power? How does it happen?
+   Have you ever had a way of life and lost it?" Four minutes alone, then a
+   few shares. The teacher keeps a list on the board; the class comes back to
+   it.
 
-The Turner can stay as slide 11's alternative or be dropped. It is no longer
-carrying the deck.
+*What do you know (R12.2), short*
+
+4. Talk: "What do you think Italy was like before it was a country?" Two
+   minutes in pairs, then a quick share.
+
+*Teach directly (R12.3)*
+
+5. Map, wide: where is Italy? Italy shaded among its neighbours.
+6. Map: Italy in 1860, a patchwork: Palermo, Naples, Rome and Turin pinned
+   (later, phase 2: the Kingdom of the Two Sicilies, the Papal States and
+   Piedmont-Sardinia shaded approximately).
+7. Words: aristocracy, unification and Risorgimento, each with a plain
+   definition and an example from the book's world.
+8. Who: Garibaldi (a public-domain photograph) and the Thousand in red shirts.
+9. Timeline, 1860–1861: Marsala, Palermo, the plebiscite, the Kingdom of
+   Italy. Below the line: the novel opens in May 1860, the plebiscite in
+   Donnafugata, and the novel published in 1958.
+10. Map: Garibaldi's route: Marsala, Calatafimi, Palermo, Naples, Teano.
+
+*The novel against what they said (R12.4)*
+
+11. Who's who in the novel: the Prince of Salina (the Leopard), Tancredi,
+    Angelica and Don Calogero, each a line, each with a film still (*teacher*).
+12. Read: the excerpt on the slide (*teacher* supplies it, or the page), with
+    the circle and underline tasks. Alone.
+13. Talk: "Look at the board: what did we say losing power is like? Is that
+    what happens to the Prince?" Pairs, then the teacher draws it together
+    and names the novel's view ("If we want things to stay as they are,
+    things will have to change").
+14. Before you go: "Unification cost the Sicilian aristocracy ___."
+
+The Turner can be dropped. If it stays, it is one Look slide after the real
+pictures, never the deck's face.
 
 ## 5. Build plan
 
