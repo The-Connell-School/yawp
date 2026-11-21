@@ -11,8 +11,9 @@ top-level folder.
 
 ## Status, Nov 19
 
-Phases 1 and 2 are built on `claude/context-tools-timeline-map` (on top of
-the deck studio branch), behind `lesson_planner_context_tools`, off by
+Phases 1 and 2 are built on `claude/context-tools-timeline-map` (it
+carries the deck studio branch; since Nov 20 its PR targets `main`, so it
+gets its own preview), behind `lesson_planner_context_tools`, off by
 default. Phase 3 is not started. Screenshots: `artifacts/timelines-and-maps/`.
 
 Checked:
@@ -58,6 +59,24 @@ Known limits of what is built:
   name.
 - PowerPoint and the PDF carry the overview of a stepped slide, not one
   slide per step (phase 3).
+
+Found in a demo pass, Nov 20 (decks for Night, Romeo and Juliet, Things
+Fall Apart, Persepolis and Heart of Darkness, presented locally; the
+planner was not called):
+
+- A timeline with six or seven events in two rows breaks a long word
+  mid-word ("Auschwit / z", "Buchenwal / d"): each event's column is the
+  gap between marks, and nothing stops the break inside a word.
+- An event added on the slide in the studio goes to the top row; there is
+  no way to say which row it belongs in.
+- Places close together collide at a wide view: a pin can sit on another
+  place's name (Venice on Verona), or under another pin (Matadi under
+  Kinshasa).
+- Older names are not found: Auschwitz, Gleiwitz, Buchenwald, Ypres,
+  Mantua. The modern names are (Oświęcim, Gliwice, Weimar, Ieper,
+  Mantova), with the older one as the place's label.
+- A thin horizontal line crosses some wide maps of Africa (seen on Africa
+  1914 and the Heart of Darkness map).
 
 ## 1. What we are building
 
