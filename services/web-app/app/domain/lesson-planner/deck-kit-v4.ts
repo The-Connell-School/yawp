@@ -1148,6 +1148,17 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
         };
         elements.push({ kind: 'map', x: 0, y: 0, w: MAP_BOX.w, h: MAP_BOX.h, src: mapImageSrc(spec), alt: `Map: ${places.map(nameOf).join(', ')}`, spec });
         const plates: Box[] = [];
+        // Every pin first, so a name can keep clear of the others (Venice's pin
+        // sat on Verona's name, demo pass Nov 21).
+        const pinBoxes = places.map((place, i) => {
+          if (place.lat === undefined || place.lon === undefined || !inMapView(view, place.lon, place.lat)) return null;
+          const point = mapPoint(view, place.lon, place.lat);
+          const size = focus === i ? 30 : 24;
+          return { x: point.x * MAP_BOX.w - size / 2, y: point.y * MAP_BOX.h - size / 2, w: size, h: size };
+        });
+        const clashes = (box: Box, own: number) =>
+          plates.some((taken) => box.x < taken.x + taken.w && taken.x < box.x + box.w && box.y < taken.y + taken.h && taken.y < box.y + box.h) ||
+          pinBoxes.some((pin, j) => pin !== null && j !== own && box.x < pin.x + pin.w && pin.x < box.x + box.w && box.y < pin.y + pin.h && pin.y < box.y + box.h);
         places.forEach((place, i) => {
           if (place.lat === undefined || place.lon === undefined || !inMapView(view, place.lon, place.lat)) return;
           const point = mapPoint(view, place.lon, place.lat);
@@ -1161,9 +1172,28 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
           // Its name on a cream plate beside the pin: to the left near the map's right edge, and below a name already there.
           const name = nameOf(place);
           const w = Math.min(280, name.length * 10.5 + 20);
-          const x = px + 22 + w <= MAP_BOX.w - 8 ? px + 22 : px - 22 - w;
-          let y = Math.max(6, Math.min(MAP_BOX.h - 36, py - 15));
-          for (let tries = 0; tries < 4 && plates.some((taken) => x < taken.x + taken.w && taken.x < x + w && y < taken.y + taken.h && taken.y < y + 30); tries += 1) y += 34;
+          const inside = (box: Box) => box.x >= 4 && box.x + box.w <= MAP_BOX.w - 4 && box.y >= 4 && box.y + box.h <= MAP_BOX.h - 4;
+          const right = px + 22;
+          const left = px - 22 - w;
+          // Beside the pin, then the other side, then above or below it, then further down.
+          const candidates: Box[] = [
+            { x: right, y: py - 15, w, h: 30 },
+            { x: left, y: py - 15, w, h: 30 },
+            { x: right, y: py + 16, w, h: 30 },
+            { x: right, y: py - 46, w, h: 30 },
+            { x: left, y: py + 16, w, h: 30 },
+            { x: left, y: py - 46, w, h: 30 },
+            { x: px - w / 2, y: py + 18, w, h: 30 },
+            { x: px - w / 2, y: py - 48, w, h: 30 },
+          ];
+          let chosen = candidates.find((box) => inside(box) && !clashes(box, i));
+          if (!chosen) {
+            const x = px + 22 + w <= MAP_BOX.w - 8 ? right : left;
+            let y = Math.max(6, Math.min(MAP_BOX.h - 36, py - 15));
+            for (let tries = 0; tries < 6 && clashes({ x, y, w, h: 30 }, i); tries += 1) y += 34;
+            chosen = { x, y, w, h: 30 };
+          }
+          const { x, y } = chosen;
           plates.push({ x, y, w, h: 30 });
           elements.push({ kind: 'rect', role: 'plate', step: i, fill: KIT_V4.cream, x, y, w, h: 30 });
           elements.push({

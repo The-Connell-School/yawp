@@ -235,3 +235,28 @@ describe('a full timeline never breaks a word (demo pass, Nov 20)', () => {
     }
   });
 });
+
+describe('a name never sits on another place’s pin (demo pass, Nov 21)', () => {
+  test('four towns close together: every name clear of every other pin and name', () => {
+    const veneto = resolveDeckPlaces<SlideDeck>({
+      title: 'Shakespeare’s Italy',
+      kit: 'v4.1',
+      slides: [
+        { layout: 'title', title: 'Italy', speakerNotes: 'n' } as Slide,
+        { layout: 'map', title: 'Shakespeare’s Italy', places: [
+          { name: 'Verona', where: 'Italy' }, { name: 'Venice', where: 'Italy' }, { name: 'Padova', where: 'Italy', label: 'Padua' }, { name: 'Mantova', where: 'Italy', label: 'Mantua' },
+          { name: 'Rome', where: 'Italy' }, { name: 'Messina', where: 'Italy' } ], speakerNotes: 'n' } as Slide,
+      ],
+    });
+    const elements = layoutKitV4Slide(veneto, 1).elements;
+    const pins = elements.filter((element) => element.kind === 'rect' && element.role === 'mark');
+    const plates = elements.filter((element) => element.kind === 'rect' && element.role === 'plate');
+    expect(plates.length).toBe(6);
+    const hits = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    for (const plate of plates) {
+      const own = (plate as { step?: number }).step;
+      for (const pin of pins) if ((pin as { step?: number }).step !== own) expect(hits(plate, pin)).toBe(false);
+      for (const other of plates) if (other !== plate) expect(hits(plate, other)).toBe(false);
+    }
+  });
+});
