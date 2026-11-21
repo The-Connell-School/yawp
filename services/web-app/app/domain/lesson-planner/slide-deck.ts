@@ -510,6 +510,11 @@ function normalizeColumn(raw: unknown): unknown {
   return applyAliases(raw as Record<string, unknown>, COLUMN_ALIASES);
 }
 
+/** "…: open it in Yawp! before you go." and its dashes, at the end of a button. */
+const OPEN_IN_YAWP_TAIL = /\s*[:—–-]?\s*open it in Yawp!?(\s+before you go)?\.?\s*$/i;
+/** "Next time:" and "Tomorrow:", however many, at the start of the next lesson. */
+const NEXT_TIME_LEAD = /^\s*(?:(?:next time|tomorrow|next class|next lesson)\s*[:—–-]\s*)+/i;
+
 function normalizeSlide(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
   const slide = applyAliases(raw as Record<string, unknown>, FIELD_ALIASES);
@@ -533,6 +538,17 @@ function normalizeSlide(raw: unknown): unknown {
   if (slide.answer !== undefined) {
     slide.answer = normalizeAnswer(slide.answer, slide.choices);
     if (slide.answer === undefined) delete slide.answer;
+  }
+  // The exit slide sets "<button>: open it in Yawp!" and "Next time: <next>"
+  // itself, so a model that wrote either out in full put it on screen twice
+  // ("Exit ticket: open it in Yawp!: open it in Yawp!", the Leopard deck, Nov 21).
+  if (typeof slide.button === 'string') {
+    const button = slide.button.replace(OPEN_IN_YAWP_TAIL, '').trim();
+    if (button) slide.button = button;
+  }
+  if (typeof slide.nextLesson === 'string') {
+    const next = slide.nextLesson.replace(NEXT_TIME_LEAD, '').trim();
+    if (next) slide.nextLesson = next;
   }
   if (slide.image !== undefined && !(typeof slide.image === 'string' && PICTURE_ID.test(slide.image.trim()))) {
     delete slide.image;

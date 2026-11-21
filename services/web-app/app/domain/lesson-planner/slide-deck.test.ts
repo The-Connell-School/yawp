@@ -761,3 +761,29 @@ describe('a quiz question, however the model writes it (bot test, Nov 19)', () =
     expect(answer(9)).toBeUndefined();
   });
 });
+
+describe('the exit slide never says a thing twice (the Leopard deck, Nov 21)', () => {
+  const exitDeck = (slide: Record<string, unknown>) => ({
+    title: 'Sicily and the Risorgimento',
+    slides: [{ layout: 'exit', title: 'Before you go', body: 'Unification cost the Sicilian aristocracy ___.', speakerNotes: 'Close.', ...slide }],
+  });
+
+  test('a button the model wrote out in full keeps only what students open', () => {
+    for (const button of ['Exit ticket: open it in Yawp!', 'Exit ticket: open it in Yawp! before you go', 'Exit ticket — open it in Yawp!', 'Exit ticket: Open it in Yawp! before you go.']) {
+      const parsed = parseSlideDeck(fenced(exitDeck({ button })));
+      expect(parsed?.deck?.slides[0]?.button).toBe('Exit ticket');
+    }
+  });
+
+  test('a plain button is left alone', () => {
+    expect(parseSlideDeck(fenced(exitDeck({ button: 'Exit ticket' })))?.deck?.slides[0]?.button).toBe('Exit ticket');
+  });
+
+  test('next lesson drops a "Next time:" or "Tomorrow:" the slide already supplies', () => {
+    for (const nextLesson of ['Tomorrow: the man who wrote the novel', 'Next time: Tomorrow: the man who wrote the novel', 'Next time: the man who wrote the novel']) {
+      const parsed = parseSlideDeck(fenced(exitDeck({ nextLesson })));
+      expect(parsed?.deck?.slides[0]?.nextLesson).toBe('the man who wrote the novel');
+    }
+    expect(parseSlideDeck(fenced(exitDeck({ nextLesson: 'Lampedusa and his palace' })))?.deck?.slides[0]?.nextLesson).toBe('Lampedusa and his palace');
+  });
+});
