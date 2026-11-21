@@ -58,8 +58,34 @@ describe('what the planner is told', () => {
   test('never a position, and only what it is sure of', () => {
     const section = buildContextToolsSection().join('\n');
     expect(section).toContain('Never write a position');
-    expect(section).toContain('Only dates and places you are sure of');
+    expect(section).toContain('Only dates, places, words and people you are sure of');
     expect(section).toContain('today’s borders');
+  });
+});
+
+describe('a context lesson thinks like an English teacher (Kevin, Nov 21)', () => {
+  const section = buildContextToolsSection().join('\n');
+
+  test('it plans the where, when, who, words and world before the deck', () => {
+    expect(section).toContain('Before you write a deck that introduces a text');
+    for (const part of ['Where', 'When', 'Who', 'Which words', 'What it looked like', 'Why it matters to the book']) expect(section).toContain(part);
+  });
+
+  test('a map starts from what students know, and dates go on a timeline', () => {
+    expect(section).toContain('start wider than the place');
+    expect(section).toContain('never as a list of dates');
+  });
+
+  test('the words and the people get slides of their own', () => {
+    expect(section).toContain('define — words');
+    expect(section).toContain('person — people');
+    expect(section).toContain('the novel’s own people');
+  });
+
+  test('it asks for the pictures it cannot supply, and never fills the gap with a metaphor', () => {
+    expect(section).toContain('a still from the film');
+    expect(section).toContain('ask the teacher for it in one line under the deck');
+    expect(section).toContain('Never stand a painting in for a picture of the real place or people');
   });
 });
 
