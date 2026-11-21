@@ -622,11 +622,36 @@ export function normalizeSlideFields(raw: unknown): Record<string, unknown> {
   return slide && typeof slide === 'object' && !Array.isArray(slide) ? (slide as Record<string, unknown>) : {};
 }
 
+/**
+ * The most a context slide holds, and the list it holds them in. A slide the
+ * model filled past it is split into even slides of the same kind (the
+ * Grapes of Wrath deck on the preview, Nov 21, had four words on one define
+ * slide; the whole deck failed, and the repair turned every context slide
+ * into a list).
+ */
+const SPLIT_LISTS: Record<string, { key: string; max: number }> = {
+  define: { key: 'terms', max: 3 },
+  person: { key: 'people', max: 4 },
+  timeline: { key: 'events', max: 8 },
+  map: { key: 'places', max: 8 },
+};
+
+function splitFullSlide(slide: unknown): unknown[] {
+  if (!slide || typeof slide !== 'object' || Array.isArray(slide)) return [slide];
+  const record = slide as Record<string, unknown>;
+  const rule = typeof record.layout === 'string' ? SPLIT_LISTS[record.layout] : undefined;
+  const list = rule ? record[rule.key] : undefined;
+  if (!rule || !Array.isArray(list) || list.length <= rule.max) return [slide];
+  const parts = Math.ceil(list.length / rule.max);
+  const size = Math.ceil(list.length / parts);
+  return Array.from({ length: parts }, (_, i) => ({ ...record, [rule.key]: list.slice(i * size, (i + 1) * size) }));
+}
+
 function normalizeDeck(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
   const deck = raw as Record<string, unknown>;
   if (!Array.isArray(deck.slides)) return raw;
-  const out: Record<string, unknown> = { ...deck, slides: deck.slides.map(normalizeSlide) };
+  const out: Record<string, unknown> = { ...deck, slides: deck.slides.map(normalizeSlide).flatMap(splitFullSlide) };
   if (typeof out.art === 'string' && !resolveDeckArt(out.art)) {
     delete out.art;
   }

@@ -164,3 +164,18 @@ describe('buildDeckRepairInstruction', () => {
     expect(instruction).toContain('compare');
   });
 });
+
+describe('the repair keeps the slides that teach (preview, Nov 21: The Grapes of Wrath)', () => {
+  const instruction = buildDeckRepairInstruction({ json: '{}', reason: 'slides.9.terms: Array must contain at most 3 element(s)' });
+
+  test('it knows the timeline, map, define, person and picture slides, and what each needs', () => {
+    for (const rule of ['timeline needs "events"', 'map needs "places"', 'define needs "terms"', 'person needs "people"', 'picture needs "image"']) expect(instruction).toContain(rule);
+  });
+
+  test('it fixes only what the errors name and never turns a slide into a list', () => {
+    expect(instruction).toContain('Fix only what the errors name');
+    expect(instruction).toContain('Never turn a timeline, map, define, person or picture slide into notes, bullets or a statement');
+    expect(instruction).toContain('split it into two slides of the same kind');
+    expect(instruction).toContain('Keep every "image" id exactly as written');
+  });
+});

@@ -131,3 +131,32 @@ describe('the studio', () => {
     expect(next.slides[1]?.people?.[1]?.name).toBe('Tancredi Falconeri');
   });
 });
+
+describe('a full slide is split, never the whole deck lost (preview, Nov 21: The Grapes of Wrath)', () => {
+  test('four words make two define slides, every word kept', () => {
+    const four = { ...DEFINE, terms: [...DEFINE.terms!, { word: 'handbill', definition: 'A printed flyer promising work in California.' }] } as Slide;
+    const parsed = parseSlideDeck(fenceSlideDeck(deckOf([four])));
+    expect(parsed?.deck).toBeTruthy();
+    const defines = parsed!.deck!.slides.filter((slide) => slide.layout === 'define');
+    expect(defines.length).toBe(2);
+    expect(defines.flatMap((slide) => slide.terms!.map((term) => term.word))).toEqual(['aristocracy', 'unification', 'Risorgimento', 'handbill']);
+    expect(defines[1]!.speakerNotes).toBeTruthy();
+  });
+
+  test('five people make two person slides', () => {
+    const five = { ...PERSON, people: [...PERSON.people!, { name: 'Don Calogero Sedàra', role: 'The mayor' }, { name: 'Father Pirrone', role: 'The family’s priest' }] } as Slide;
+    const people = parseSlideDeck(fenceSlideDeck(deckOf([five])))!.deck!.slides.filter((slide) => slide.layout === 'person');
+    // Split evenly, so neither slide is a lone straggler.
+    expect(people.map((slide) => slide.people!.length)).toEqual([3, 2]);
+  });
+
+  test('nine events make two timelines, and nine places two maps', () => {
+    const events = Array.from({ length: 9 }, (_, i) => ({ date: String(1929 + i), title: `Event ${i + 1}` }));
+    const places = Array.from({ length: 9 }, (_, i) => ({ name: `Town ${i + 1}`, where: 'Oklahoma' }));
+    const parsed = parseSlideDeck(
+      fenceSlideDeck(deckOf([{ layout: 'timeline', title: 'The 1930s', events, speakerNotes: 'n' } as Slide, { layout: 'map', title: 'Route 66', places, speakerNotes: 'n' } as Slide]))
+    )!.deck!;
+    expect(parsed.slides.filter((slide) => slide.layout === 'timeline').map((slide) => slide.events!.length)).toEqual([5, 4]);
+    expect(parsed.slides.filter((slide) => slide.layout === 'map').map((slide) => slide.places!.length)).toEqual([5, 4]);
+  });
+});
