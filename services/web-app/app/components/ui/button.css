@@ -70,6 +70,12 @@
 .btn--lg { --h: var(--btn-lg-h); --px: var(--btn-lg-px); --fs: var(--btn-lg-fs); --icon: var(--btn-lg-icon); }
 .btn--block { display: flex; width: 100%; }
 .btn--icon { padding: 0; width: var(--h); }
+/* Wrap: a long label runs onto more lines and the button grows, never wider than its row. */
+.btn--wrap {
+  height: auto; min-height: var(--h); max-width: 100%;
+  padding-top: 6px; padding-bottom: 6px;
+  white-space: normal; line-height: 1.25; text-align: center; overflow-wrap: anywhere;
+}
 
 /* Primary — Letterpress green */
 .btn--primary {
