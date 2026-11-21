@@ -892,7 +892,20 @@ function buildDeckGallerySection(on: boolean, recentArt: RecentArt[] = []): stri
  */
 export function buildDeckKitV4Section(
   recentArt: RecentArt[] = [],
-  { v41 = false, teacherName = null }: { v41?: boolean; teacherName?: string | null } = {}
+  {
+    v41 = false,
+    teacherName = null,
+    subjectFirst = false,
+  }: {
+    v41?: boolean;
+    teacherName?: string | null;
+    /**
+     * Slides that teach (Kevin, Nov 21): with `lesson_planner_context_tools`,
+     * the deck is about its subject, not a painting, and never ships a reading
+     * slide without its reading.
+     */
+    subjectFirst?: boolean;
+  } = {}
 ): string[] {
   const art = selectableDeckArt()
     .map(
@@ -902,7 +915,11 @@ export function buildDeckKitV4Section(
     .join('; ');
   return [
     '',
-    `Gallery deck (Yawp! Lesson Deck Kit, spec ${v41 ? 'v4.1, which replaces v4, v3 and every earlier version of these instructions' : 'v4'}): every deck should feel like a quiet, well-made book with one painting inside it${v41 ? ': cream paper, serif reading text, wide margins, everything left-aligned' : ''}. Every slide is cream; there are no dark or full-color slides. Color appears only as a solid panel on one side of a split slide (Yawp! draws it) or as type. Students should always be able to tell what they are being asked to do from across the room.`,
+    `Gallery deck (Yawp! Lesson Deck Kit, spec ${v41 ? 'v4.1, which replaces v4, v3 and every earlier version of these instructions' : 'v4'}): every deck should feel like ${
+      subjectFirst
+        ? 'a well-made book about its subject, and the pictures in it come from the subject’s world: its places on a map, its dates on a timeline, its people and its words'
+        : 'a quiet, well-made book with one painting inside it'
+    }${v41 ? ': cream paper, serif reading text, wide margins, everything left-aligned' : ''}. Every slide is cream; there are no dark or full-color slides. Color appears only as a solid panel on one side of a split slide (Yawp! draws it) or as type. Students should always be able to tell what they are being asked to do from across the room.`,
     ...(v41
       ? [
           'Type: Yawp! sets titles and headlines in Fraunces Bold, everything else a student reads as an idea in Georgia (list numerals too), and labels, instructions, credits and facts in Arial. Size carries the hierarchy: never ask for italics or bold for emphasis.',
@@ -937,6 +954,12 @@ export function buildDeckKitV4Section(
     'Colors: give the deck `colors`, two or three mid-dark colors from its painting, the painting’s own v4 colors listed below; the first is the primary (the subtitle, labels, numerals, most panels), the second goes to alternate panels, and a third only for color-coding. No terracotta, clay, brick or brown: prefer the painting’s deep greens, blues, slates, maroons and plums. A slide can pick one with `color` (1, 2 or 3). When a slide teaches the parts of something (the three parts of a thesis, the moves of a conclusion), give each part its color and keep it all the way through, the sample paragraph included, by writing `~~1|the claim~~`, `~~2|the reason~~`, `~~3|the so-what~~` in any text field.',
     `On the deck itself: \`unit\` (the unit's name) and, optionally, \`art\`. The deck and slide titles carry no lesson or day numbers.`,
     `A painting is optional. Choose one only when what it shows (its subject, not just a mood) truly belongs with this lesson's text or idea, and then one work per lesson, chosen by theme, never by class, only from this library: ${art}. Never choose a painting because it is the only one or because it was used before: a deck without a painting is a good deck, in the house colors. Leave \`art\` out unless it fits. The art is shown and credited by Yawp!; never write about it on a slide except a look question. A photograph that is not public domain is fine in the teacher’s own class; say so before a deck is shared.`,
+    ...(subjectFirst
+      ? [
+          'Never use a painting as a metaphor for a lesson’s history or setting (an old warship towed to the breakers standing for a fading aristocracy). A lesson about a time and place shows that time and place instead, with a map, a timeline and the people in it. Yawp! hangs the deck’s painting on the title, beside a big idea, on a look slide and at the exit, so a painting that does not belong is on screen all lesson.',
+          'A read or excerpt slide needs its passage. When the teacher has not given you the passage and no tool returned it, never leave a slide with tasks and no text: give the slide `work` and `page` so students know where to find it, and ask the teacher for the passage in one line under the deck, so it can go on the slide.',
+        ]
+      : []),
     ...(recentArt.length
       ? [
           `Paintings this teacher has used lately: ${recentArt
@@ -1044,7 +1067,7 @@ export function buildLessonPlannerSystemPromptBlocks({
       : []),
     ...buildTemplateSection(template),
     ...(deckGallery && deckKitV4
-      ? buildDeckKitV4Section(recentArt, { v41: deckKitV41, teacherName })
+      ? buildDeckKitV4Section(recentArt, { v41: deckKitV41, teacherName, subjectFirst: contextTools })
       : buildDeckGallerySection(deckGallery, recentArt)),
     ...(deckGallery && deckKitV4 && contextTools ? buildContextToolsSection() : []),
     ...buildSourcesSection(sources, deckChoices, { onStack }),

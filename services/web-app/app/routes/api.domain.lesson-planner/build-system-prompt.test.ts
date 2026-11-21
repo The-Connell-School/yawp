@@ -2339,3 +2339,32 @@ describe('planner prompt — the Lesson Deck Kit, spec v4.1', () => {
     expect(textOf({ deckKitV4: true, deckKitV41: true, deckGallery: false })).not.toContain('Lesson Deck Kit, spec v4');
   });
 });
+
+describe('buildLessonPlannerSystemPrompt — slides that teach (Kevin, Nov 21)', () => {
+  const textOf = (contextTools: boolean) =>
+    buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', deckGallery: true, deckKitV4: true, deckKitV41: true, contextTools })
+      .map((block) => block.text)
+      .join('\n');
+
+  test('with context tools on, the deck is about its subject, not one painting', () => {
+    const on = textOf(true);
+    expect(on).not.toContain('one painting inside it');
+    expect(on).toContain('the pictures in it come from the subject’s world');
+    // Off, the kit reads as it always has.
+    expect(textOf(false)).toContain('one painting inside it');
+  });
+
+  test('a painting is never a metaphor for a lesson’s history, and the model is told where it hangs', () => {
+    const on = textOf(true);
+    expect(on).toContain('Never use a painting as a metaphor');
+    expect(on).toContain('on the title, beside a big idea, on a look slide and at the exit');
+    expect(textOf(false)).not.toContain('Never use a painting as a metaphor');
+  });
+
+  test('a reading slide is never shipped without its reading', () => {
+    const on = textOf(true);
+    expect(on).toContain('A read or excerpt slide needs its passage');
+    expect(on).toContain('ask the teacher for the passage');
+    expect(textOf(false)).not.toContain('A read or excerpt slide needs its passage');
+  });
+});
