@@ -199,6 +199,7 @@ function CardActions({
         <Button
           type="button"
           size="sm"
+          wrap
           variant={added ? 'outline-primary' : 'default'}
           disabled={disabled}
           onClick={() => onToggle(!added)}
@@ -213,7 +214,7 @@ function CardActions({
       {created ? (
         <CreatedInYawp href={created.href} />
       ) : assignmentTypeId ? (
-        <Button asChild size="sm" variant="outline-primary" data-testid="exit-ticket-create">
+        <Button asChild size="sm" wrap variant="outline-primary" data-testid="exit-ticket-create">
           <Link
             to={withPiece(
               exitTicketCreateHref(assignmentTypeId, ticket, conversationId),
