@@ -44,3 +44,14 @@ describe('loading a deck’s pictures', () => {
     expect(pptxImageData(elephant)).toBe('image/png;base64,AQI=');
   });
 });
+
+describe('a found picture’s credit (Nov 21, phase 2)', () => {
+  test('comes with the picture to every screen and file', async () => {
+    prisma.lessonPlanUploadPicture.findMany.mockReset().mockResolvedValue([
+      { id: 'pic1aaaaaaaa', altText: 'Garibaldi', width: 4, height: 3, contentType: 'image/png', blob: new Uint8Array([1, 2]), credit: 'Mathew Brady, Garibaldi, Public domain, via Wikimedia Commons' },
+    ]);
+    expect((await loadDeckPictures([deck], 'teacher-1')).pic1aaaaaaaa?.credit).toBe('Mathew Brady, Garibaldi, Public domain, via Wikimedia Commons');
+    expect(prisma.lessonPlanUploadPicture.findMany.mock.calls[0]?.[0].select.credit).toBe(true);
+    expect((await loadDeckPictureFiles([deck], 'teacher-1')).get('pic1aaaaaaaa')?.credit).toBe('Mathew Brady, Garibaldi, Public domain, via Wikimedia Commons');
+  });
+});

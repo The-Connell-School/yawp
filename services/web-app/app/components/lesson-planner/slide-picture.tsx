@@ -39,7 +39,7 @@ export function SlidePicture({ id, className, tone = 'light' }: { id: string | u
     );
   }
   return (
-    <div data-testid="slide-picture" className={cn('flex h-full w-full items-center justify-center', className)}>
+    <div data-testid="slide-picture" className={cn('relative flex h-full w-full items-center justify-center', className)}>
       <img
         src={pictureSrc(picture.id)}
         alt={picture.altText}
@@ -48,6 +48,16 @@ export function SlidePicture({ id, className, tone = 'light' }: { id: string | u
         onError={() => setFailed(true)}
         className="max-h-full max-w-full object-contain"
       />
+      {picture.credit ? (
+        // A found picture's credit and license (Nov 21), on every screen.
+        <span
+          data-testid="slide-picture-credit"
+          className="pointer-events-none absolute bottom-0 left-0 right-0 truncate bg-black/55 px-[0.6em] py-[0.25em] text-white"
+          style={{ fontSize: 'clamp(0.45rem, 0.85cqw, 0.8rem)', fontFamily: 'ui-sans-serif, system-ui, sans-serif' }}
+        >
+          {picture.credit}
+        </span>
+      ) : null}
     </div>
   );
 }

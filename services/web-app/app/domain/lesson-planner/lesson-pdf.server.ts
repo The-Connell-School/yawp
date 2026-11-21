@@ -21,7 +21,7 @@ import { deckColors, withoutColorMarks } from './deck-colors';
 import { GALLERY_COLORS, galleryAccent, galleryRunningHead, planGalleryDeck, type GallerySlidePlan } from './deck-gallery';
 import { deckArt } from './deck-art';
 import { KIT_V4_HOUSE_PALETTE, KIT_V4_WIDTH, isKitV4, layoutKitV4Slide, withDeckKit, type KitV4Run } from './deck-kit-v4';
-import { PICTURE_PLACEHOLDER } from './deck-pictures';
+import { containBox, PICTURE_PLACEHOLDER } from './deck-pictures';
 import type { DeckPictureFiles } from './deck-pictures.server';
 import { buildMapDrawing } from '~/domain/geo/map-drawing.server';
 import type { MapSpec } from '~/domain/geo/map-view';
@@ -404,6 +404,7 @@ function drawSlideFace(
     if (file && (file.contentType === 'image/png' || file.contentType === 'image/jpeg')) {
       try {
         doc.image(file.data, frame.x, frame.y, { fit: [frame.w, frame.h], align: 'center', valign: 'center' });
+        drawPictureCredit(doc, file, frame, sans, 'center');
         printed = true;
       } catch {
         printed = false;
@@ -566,6 +567,7 @@ function drawKitV4Face(
         try {
           doc.image(file.data, r.x, r.y, { fit: [r.w, r.h], valign: 'center' });
           printed = true;
+          drawPictureCredit(doc, file, r, sans, 'left');
         } catch {
           printed = false;
         }
@@ -791,6 +793,27 @@ export async function renderPacketPdf(
  * The slide deck on its own (Oct 24 handoff, task 4: the slide deck's PDF):
  * each slide, what is on it, and its notes, as the packet prints it.
  */
+/**
+ * A found picture's credit and license (Nov 21), on a dark band along the
+ * foot of the picture as printed: `fit` inside `frame`, centered or from the
+ * left as the picture was placed. The teacher's own pictures have none.
+ */
+function drawPictureCredit(
+  doc: PDFKit.PDFDocument,
+  file: { credit?: string | null; width: number | null; height: number | null },
+  frame: { x: number; y: number; w: number; h: number },
+  font: string,
+  align: 'left' | 'center'
+): void {
+  if (!file.credit) return;
+  const shown = containBox(frame, file);
+  const left = align === 'center' ? shown.x : frame.x;
+  const top = frame.y + (frame.h - shown.h) / 2;
+  const band = Math.min(9, shown.h / 4);
+  doc.save().fillColor('#1B1B1B').fillOpacity(0.6).rect(left, top + shown.h - band, shown.w, band).fill().restore();
+  doc.font(font).fontSize(4.5).fillColor('#FFFFFF').text(file.credit, left + 3, top + shown.h - band + 2.2, { width: shown.w - 6, height: band, lineBreak: false, ellipsis: true });
+}
+
 export async function renderSlidesPdf({
   lessonTitle,
   deck,
