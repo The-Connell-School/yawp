@@ -111,3 +111,22 @@ describe('resolveDeckPlaces', () => {
     expect(lost.slides[0]!.places).toEqual([{ name: 'Maycomb' }]);
   });
 });
+
+describe('a map that starts wider than the place (Kevin, Nov 21)', () => {
+  const mapOf = (wide: boolean) =>
+    resolveDeckPlaces({
+      title: 'Italy',
+      slides: [{ layout: 'map', title: 'Where is Italy?', shade: ['Italy'], places: [{ name: 'Rome', where: 'Italy' }], speakerNotes: 'n', ...(wide ? { wide: true } : {}) } as Slide],
+    }).slides[0]!.view!;
+
+  test('wide shows the country among its neighbours: a much larger area, still around it', () => {
+    const close = mapOf(false);
+    const wide = mapOf(true);
+    expect(wide.e - wide.w).toBeGreaterThan((close.e - close.w) * 1.8);
+    // Still Italy in the middle of it.
+    expect(wide.w).toBeLessThan(6.6);
+    expect(wide.e).toBeGreaterThan(18.5);
+    expect(wide.s).toBeLessThan(36.6);
+    expect(wide.n).toBeGreaterThan(47.1);
+  });
+});

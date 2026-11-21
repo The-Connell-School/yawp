@@ -48,7 +48,7 @@ export function inMapView(view: MapView, lon: number, lat: number): boolean {
  * map box's shape, with room around them. One town alone gets a region
  * around it, never a map zoomed to a dot.
  */
-export function fitMapView(areas: MapView[], aspect: number = MAP_BOX.w / MAP_BOX.h): MapView | null {
+export function fitMapView(areas: MapView[], aspect: number = MAP_BOX.w / MAP_BOX.h, margin: number = 0.14): MapView | null {
   if (!areas.length) return null;
   let w = Math.min(...areas.map((area) => area.w));
   let e = Math.max(...areas.map((area) => area.e));
@@ -68,8 +68,8 @@ export function fitMapView(areas: MapView[], aspect: number = MAP_BOX.w / MAP_BO
     top = middle + MIN_SPAN / 2 / toDegrees;
     bottom = middle - MIN_SPAN / 2 / toDegrees;
   }
-  const padX = (e - w) * 0.14;
-  const padY = (top - bottom) * 0.14;
+  const padX = (e - w) * margin;
+  const padY = (top - bottom) * margin;
   w -= padX;
   e += padX;
   top += padY;

@@ -163,7 +163,9 @@ export function resolveDeckPlaces<T extends SlideDeck>(deck: T): T {
         }),
       ];
       const { view: _view, ...rest } = slide;
-      const view = fitMapView(areas);
+      // A wide map shows the place among its neighbours (Kevin, Nov 21: some
+      // students have never found Italy on a world map).
+      const view = fitMapView(areas, undefined, slide.wide ? 0.75 : 0.14);
       return { ...rest, places, ...(view ? { view } : {}) };
     }),
   };

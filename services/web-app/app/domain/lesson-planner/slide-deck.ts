@@ -207,6 +207,9 @@ const slideSchema = z
     // slide calls them together ("Anglo-Egyptian Sudan").
     shade: z.array(z.string().trim().min(1).max(60)).max(4).optional(),
     shadeLabel: z.string().trim().min(1).max(60).optional(),
+    // Show the places among their neighbours: the first, wider map of a
+    // text's background (Kevin, Nov 21).
+    wide: z.boolean().optional(),
     // The area the map shows, written by Yawp! with the places' positions.
     view: z.object({ w: z.number(), s: z.number(), e: z.number(), n: z.number() }).optional(),
     // A define slide's words (Kevin, Nov 21): the word, what it means in
