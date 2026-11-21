@@ -1107,15 +1107,22 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
         }
         const x = start + i * step;
         const dim = focus !== undefined && focus !== i;
+        const boxW = Math.min(400, (next - i) * step - 24);
+        // A full line leaves each event a narrow box: its words step down until
+        // the longest one fits, never broken mid-word ("Auschwit / z", Nov 20).
+        const fits = (text: string, size: number, least: number) => {
+          const longest = Math.max(...text.split(/\s+/).map((word) => word.length));
+          return Math.max(least, Math.min(size, Math.floor(boxW / (longest * 0.62))));
+        };
         elements.push({ kind: 'rect', role: 'mark', step: i, fill: dim ? KIT_V4_DIM : focus === i ? KIT_V4.ink : color, x, y: AXIS - 6, w: 18, h: 18 });
         elements.push({
           ...column(
-            { x, y: where === 'above' ? AXIS - 22 - 160 : AXIS + 30, w: Math.min(400, (next - i) * step - 24), h: 160 },
+            { x, y: where === 'above' ? AXIS - 22 - 160 : AXIS + 30, w: boxW, h: 160 },
             [
-              para([from(serif(event.date, 30, dim ? KIT_V4_DIM : color), on('events', { index: i, key: 'date' }))], 4, 1.1),
-              para([from(sans(event.title, 20, dim ? KIT_V4_DIM : KIT_V4.ink, true), on('events', { index: i, key: 'title' }))], 6, 1.25),
+              para([from(serif(event.date, fits(event.date, 30, 20), dim ? KIT_V4_DIM : color), on('events', { index: i, key: 'date' }))], 4, 1.1),
+              para([from(sans(event.title, fits(event.title, 20, 14), dim ? KIT_V4_DIM : KIT_V4.ink, true), on('events', { index: i, key: 'title' }))], 6, 1.25),
               // Few events and none in focus: each one's sentence fits beside it.
-              para([focus === undefined && events.length <= 4 && event.detail ? from(sans(event.detail, 16, KIT_V4.grey), on('events', { index: i, key: 'detail' })) : null], 0, 1.3),
+              para([focus === undefined && events.length <= 4 && event.detail ? from(sans(event.detail, fits(event.detail, 16, 12), KIT_V4.grey), on('events', { index: i, key: 'detail' })) : null], 0, 1.3),
             ],
             where === 'above' ? 'bottom' : 'top'
           ),

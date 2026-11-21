@@ -204,3 +204,34 @@ describe('every renderer draws them', () => {
     expect(planKitV4Deck(deck).map((plan) => plan.template)).toEqual(['title', 'timeline', 'timeline', 'map']);
   });
 });
+
+describe('a full timeline never breaks a word (demo pass, Nov 20)', () => {
+  test('the longest word of every event fits its box at its size', () => {
+    const night = {
+      layout: 'timeline',
+      title: 'Sixteen years, one boy',
+      tracks: ['The war in Europe', 'Elie Wiesel'],
+      events: [
+        { date: '1928', track: 2, title: 'Born in Sighet' },
+        { date: '1933', track: 1, title: 'Hitler comes to power' },
+        { date: '1940', track: 1, title: 'Sighet becomes Hungarian' },
+        { date: 'March 1944', track: 1, title: 'Germany occupies Hungary' },
+        { date: 'May 1944', track: 2, title: 'Deported to Auschwitz' },
+        { date: 'April 1945', track: 2, title: 'Liberated at Buchenwald' },
+        { date: '1960', track: 2, title: 'Night appears in English' },
+      ],
+      speakerNotes: 'n',
+    } as Slide;
+    const of = { title: 'Night', kit: 'v4.1', slides: [{ layout: 'title', title: 'Night', speakerNotes: 'n' } as Slide, night] } as SlideDeck;
+    const boxes = layoutKitV4Slide(of, 1).elements.filter((element) => element.kind === 'text' && element.step !== undefined);
+    expect(boxes.length).toBe(7);
+    for (const box of boxes) {
+      if (box.kind !== 'text') continue;
+      for (const run of box.paras.flatMap((para) => para.runs)) {
+        const longest = Math.max(...run.text.split(/\s+/).map((word) => word.length));
+        // A bold sans letter is about 0.62 of its size across.
+        expect(longest * run.size * 0.62).toBeLessThanOrEqual(box.w);
+      }
+    }
+  });
+});
