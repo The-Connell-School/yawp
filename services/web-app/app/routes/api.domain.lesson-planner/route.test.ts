@@ -301,6 +301,24 @@ describe('api.domain.lesson-planner action', () => {
     });
   });
 
+  test('a picture search that fails never fails the lesson: the planner is told, and the turn goes on', async () => {
+    getLessonPlannerReviewFlags.mockResolvedValue({ foundPictures: true });
+    findPicturesForLesson.mockReset().mockRejectedValue(new Error('column "credit" does not exist'));
+    let answer = '';
+    getLLMCompletion.mockImplementation(async (args: { handleToolCall: (name: string, input: Record<string, unknown>) => Promise<string> }) => {
+      answer = await args.handleToolCall('find_pictures', { queries: ['Dust Bowl farm 1936'] });
+      return 'Here is the lesson.';
+    });
+    prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-1', messages: [] });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    const response = await action({ request: formRequest({ message: 'Of Mice and Men, day 1' }) } as any);
+
+    expect(JSON.parse(answer).pictures).toEqual([]);
+    expect(JSON.parse(answer).note).toContain('ask the teacher');
+    expect(jsonResult(response).data.messageId).toBe('msg-assistant');
+  });
+
   test('without the flag, no picture search', async () => {
     getLLMCompletion.mockResolvedValue('ok');
     prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-1', messages: [] });

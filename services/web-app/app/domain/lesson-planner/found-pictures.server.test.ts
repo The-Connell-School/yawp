@@ -173,3 +173,40 @@ describe('findPicturesForLesson', () => {
     expect(result.note).toContain('what the picture should show');
   });
 });
+
+describe('never holding up the lesson (preview, Nov 21: a unit day timed out)', () => {
+  const owner = { membershipId: 'm1', conversationId: null };
+
+  test('every picture a deck needs in one call: the searches run together, a few kept for each', async () => {
+    const { fetcher, calls } = commons([1, 2, 3, 4].map((i) => page(i, `Picture ${i}.jpg`, 'Public domain')));
+    const db = store();
+    const result = await findPicturesForLesson({ queries: ['Dust Bowl farm 1936', 'John Steinbeck photograph', 'Salinas Valley 1930s'] }, owner, { fetch: fetcher, store: db });
+    expect(calls.filter((url) => url.includes('/w/api.php')).length).toBe(3);
+    expect(result.pictures.length).toBe(6);
+    expect(result.pictures.map((picture) => picture.for)).toEqual([
+      'Dust Bowl farm 1936', 'Dust Bowl farm 1936', 'John Steinbeck photograph', 'John Steinbeck photograph', 'Salinas Valley 1930s', 'Salinas Valley 1930s',
+    ]);
+  });
+
+  test('a collection that never answers gives up in seconds, not minutes', async () => {
+    const hangs = ((_url: string | URL | Request, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+      })) as typeof fetch;
+    const started = Date.now();
+    const result = await findPicturesForLesson({ query: 'Palermo' }, owner, { fetch: hangs, store: store(), timeoutMs: 200 });
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(result.pictures).toEqual([]);
+    expect(result.note).toContain('ask the teacher');
+  });
+
+  test('a download that never arrives is skipped, and the others are kept', async () => {
+    const { fetcher } = commons([1, 2].map((i) => page(i, `Picture ${i}.jpg`, 'Public domain')));
+    const oneHangs = ((url: string | URL | Request, init?: RequestInit) =>
+      String(url).includes('Picture%201')
+        ? new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))))
+        : fetcher(url, init)) as typeof fetch;
+    const result = await findPicturesForLesson({ query: 'x' }, owner, { fetch: oneHangs, store: store(), timeoutMs: 200 });
+    expect(result.pictures.length).toBe(1);
+  });
+});

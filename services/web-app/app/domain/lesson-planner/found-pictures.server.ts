@@ -22,6 +22,15 @@ const COMMONS_API = 'https://commons.wikimedia.org/w/api.php';
 /** Wide enough to fill half a projected slide. */
 const MIN_WIDTH = 480;
 const KEEP_PER_SEARCH = 3;
+/** Several things searched at once keep two each: enough to choose from. */
+const KEEP_PER_QUERY = 2;
+const MAX_QUERIES = 4;
+/**
+ * The longest any one request to the collection may take. A lesson turn has
+ * two minutes for everything; a picture is never worth the lesson (a unit
+ * day on the preview timed out, Nov 21).
+ */
+const REQUEST_TIMEOUT_MS = 6_000;
 
 export type FoundCandidate = {
   title: string;
@@ -34,7 +43,7 @@ export type FoundCandidate = {
   sourceUrl: string;
 };
 
-export type KeptPicture = { id: string; shows: string; credit: string; license: string; width: number | null; height: number | null };
+export type KeptPicture = { id: string; for: string; shows: string; credit: string; license: string; width: number | null; height: number | null };
 
 /** Where a kept picture goes: a row like the teacher's own pictures. */
 export type PictureStore = {
@@ -63,13 +72,18 @@ type Fetch = typeof fetch;
 export const FIND_PICTURES_TOOL: ReporterTool = {
   name: 'find_pictures',
   description:
-    'Find openly licensed pictures (public domain, CC0, CC BY, CC BY-SA) of a real person, place, thing or time for a slide: a portrait for a person slide, the real place for a picture slide. Say plainly what the picture should show, in English, with names and dates ("Giuseppe Garibaldi photograph", "Palermo harbour 19th century", "Dust Bowl farm 1936"). Yawp! searches Wikimedia Commons, checks each license, keeps up to three with the lesson and returns their ids, what each shows and its credit. Never use it for a film still, a book cover in copyright or a living person: those come from the teacher.',
+    'Find openly licensed pictures (public domain, CC0, CC BY, CC BY-SA) of a real person, place, thing or time for a slide: a portrait for a person slide, the real place for a picture slide. Say plainly what the picture should show, in English, with names and dates ("Giuseppe Garibaldi photograph", "Palermo harbour 19th century", "Dust Bowl farm 1936"). Ask for every picture the deck needs in one call, in `queries` (up to 4). Yawp! searches Wikimedia Commons, checks each license, keeps a few for each search with the lesson and returns their ids, what each shows and its credit. It takes a few seconds; call it once. Never use it for a film still, a book cover in copyright or a living person: those come from the teacher.',
   input_schema: {
     type: 'object',
     properties: {
-      query: { type: 'string', description: 'What the picture should show, with names and dates.' },
+      queries: {
+        type: 'array',
+        items: { type: 'string' },
+        maxItems: MAX_QUERIES,
+        description: 'Every picture the deck needs, one search each, with names and dates. Ask for them all in one call.',
+      },
+      query: { type: 'string', description: 'One picture, when only one is needed.' },
     },
-    required: ['query'],
   },
 } as ReporterTool;
 
@@ -131,7 +145,10 @@ type CommonsPage = {
 export class PictureSearchBusy extends Error {}
 
 /** Openly licensed pictures matching what a slide needs, best first. */
-export async function searchOpenPictures(query: string, { fetch: fetcher = fetch, limit = 8 }: { fetch?: Fetch; limit?: number } = {}): Promise<FoundCandidate[]> {
+export async function searchOpenPictures(
+  query: string,
+  { fetch: fetcher = fetch, limit = 8, timeoutMs = REQUEST_TIMEOUT_MS }: { fetch?: Fetch; limit?: number; timeoutMs?: number } = {}
+): Promise<FoundCandidate[]> {
   const params = new URLSearchParams({
     action: 'query',
     format: 'json',
@@ -144,7 +161,13 @@ export async function searchOpenPictures(query: string, { fetch: fetcher = fetch
     iiurlwidth: '1280',
     iiextmetadatafilter: 'LicenseShortName|Artist|Credit|ImageDescription|ObjectName',
   });
-  const response = await fetcher(`${COMMONS_API}?${params}`, { headers: { 'user-agent': USER_AGENT } });
+  let response: Response;
+  try {
+    response = await fetcher(`${COMMONS_API}?${params}`, { headers: { 'user-agent': USER_AGENT }, signal: AbortSignal.timeout(timeoutMs) });
+  } catch {
+    // No answer in time, or no connection: the same as busy.
+    throw new PictureSearchBusy('timeout');
+  }
   if (response.status === 429 || response.status >= 500) throw new PictureSearchBusy(String(response.status));
   if (!response.ok) return [];
   const body = (await response.json()) as { query?: { pages?: Record<string, CommonsPage> } };
@@ -178,8 +201,8 @@ export async function searchOpenPictures(query: string, { fetch: fetcher = fetch
   });
 }
 
-async function download(url: string, fetcher: Fetch): Promise<Uint8Array | null> {
-  const response = await fetcher(url, { headers: { 'user-agent': USER_AGENT } });
+async function download(url: string, fetcher: Fetch, timeoutMs: number): Promise<Uint8Array | null> {
+  const response = await fetcher(url, { headers: { 'user-agent': USER_AGENT }, signal: AbortSignal.timeout(timeoutMs) });
   if (!response.ok) return null;
   const declared = Number(response.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > MAX_DECK_PICTURE_BYTES) return null;
@@ -187,54 +210,81 @@ async function download(url: string, fetcher: Fetch): Promise<Uint8Array | null>
   return bytes.byteLength > MAX_DECK_PICTURE_BYTES ? null : bytes;
 }
 
+const BUSY_NOTE =
+  'The picture collection is busy right now. Make the slide anyway, say in its speakerNotes which picture belongs there, and ask the teacher in one line under the deck to add one.';
+
+/** One candidate downloaded, checked and kept with the lesson; null if it is not a picture or did not arrive in time. */
+async function keep(
+  candidate: FoundCandidate,
+  query: string,
+  owner: { membershipId: string; conversationId: string | null },
+  deps: { fetch: Fetch; store: PictureStore; timeoutMs: number }
+): Promise<KeptPicture | null> {
+  const bytes = await download(candidate.imageUrl, deps.fetch, deps.timeoutMs).catch(() => null);
+  if (!bytes) return null;
+  const contentType = sniffPictureType(bytes);
+  if (!contentType) return null;
+  const size = imageDimensions(bytes);
+  const row = await deps.store.create({
+    membershipId: owner.membershipId,
+    conversationId: owner.conversationId,
+    position: 0,
+    slideNumbers: [],
+    altText: cleanAltText(candidate.description),
+    contentType,
+    byteSize: bytes.byteLength,
+    width: size?.width ?? null,
+    height: size?.height ?? null,
+    blob: bytes,
+    origin: 'found',
+    credit: candidate.credit,
+    license: candidate.license,
+    sourceUrl: candidate.sourceUrl,
+  });
+  return { id: row.id, for: query, shows: candidate.description, credit: candidate.credit, license: candidate.license, width: size?.width ?? null, height: size?.height ?? null };
+}
+
 /**
- * The planner's `find_pictures` tool: search, keep up to three with the
- * lesson, and hand back their ids, what each shows and its credit.
+ * The planner's `find_pictures` tool: every picture a deck needs in one call
+ * (`queries`, or one `query`). The searches run together, and each one's
+ * downloads together, every request on a short timeout, so the whole call
+ * takes seconds whatever the collection does. Kept pictures come back with
+ * their ids, what each shows, its credit, and which search it was for.
  */
 export async function findPicturesForLesson(
   input: Record<string, unknown>,
   owner: { membershipId: string; conversationId: string | null },
-  deps: { fetch?: Fetch; store: PictureStore }
+  deps: { fetch?: Fetch; store: PictureStore; timeoutMs?: number }
 ): Promise<{ pictures: KeptPicture[]; note: string }> {
   const fetcher = deps.fetch ?? fetch;
-  const query = typeof input.query === 'string' ? input.query.trim().slice(0, 120) : '';
-  if (!query) return { pictures: [], note: 'Say what the picture should show: a person, a place or a thing, and when ("Giuseppe Garibaldi photograph", "Palermo 19th century").' };
-  let candidates: FoundCandidate[];
-  try {
-    candidates = await searchOpenPictures(query, { fetch: fetcher });
-  } catch {
-    return { pictures: [], note: 'The picture collection is busy right now. Make the slide anyway, say in its speakerNotes which picture belongs there, and ask the teacher in one line under the deck to add one.' };
-  }
-  const pictures: KeptPicture[] = [];
-  for (const candidate of candidates) {
-    if (pictures.length >= KEEP_PER_SEARCH) break;
-    const bytes = await download(candidate.imageUrl, fetcher).catch(() => null);
-    if (!bytes) continue;
-    const contentType = sniffPictureType(bytes);
-    if (!contentType) continue;
-    const size = imageDimensions(bytes);
-    const row = await deps.store.create({
-      membershipId: owner.membershipId,
-      conversationId: owner.conversationId,
-      position: 0,
-      slideNumbers: [],
-      altText: cleanAltText(candidate.description),
-      contentType,
-      byteSize: bytes.byteLength,
-      width: size?.width ?? null,
-      height: size?.height ?? null,
-      blob: bytes,
-      origin: 'found',
-      credit: candidate.credit,
-      license: candidate.license,
-      sourceUrl: candidate.sourceUrl,
-    });
-    pictures.push({ id: row.id, shows: candidate.description, credit: candidate.credit, license: candidate.license, width: size?.width ?? null, height: size?.height ?? null });
-  }
+  const timeoutMs = deps.timeoutMs ?? REQUEST_TIMEOUT_MS;
+  const asked = Array.isArray(input.queries) ? input.queries : [input.query];
+  const queries = [...new Set(asked.filter((query): query is string => typeof query === 'string').map((query) => query.trim().slice(0, 120)).filter(Boolean))].slice(0, MAX_QUERIES);
+  if (!queries.length) return { pictures: [], note: 'Say what the picture should show: a person, a place or a thing, and when ("Giuseppe Garibaldi photograph", "Palermo 19th century").' };
+  const perQuery = queries.length === 1 ? KEEP_PER_SEARCH : KEEP_PER_QUERY;
+  let busy = 0;
+  const results = await Promise.all(
+    queries.map(async (query) => {
+      let candidates: FoundCandidate[];
+      try {
+        candidates = await searchOpenPictures(query, { fetch: fetcher, timeoutMs });
+      } catch {
+        busy += 1;
+        return [];
+      }
+      // A spare or two in case one does not arrive; never more than are kept and one over.
+      const kept = await Promise.all(
+        candidates.slice(0, perQuery + 1).map((candidate) => keep(candidate, query, owner, { fetch: fetcher, store: deps.store, timeoutMs }).catch(() => null))
+      );
+      return kept.filter((picture): picture is KeptPicture => picture !== null).slice(0, perQuery);
+    })
+  );
+  const pictures = results.flat();
+  if (!pictures.length && busy) return { pictures, note: BUSY_NOTE };
   return {
     pictures,
     note: pictures.length
-      ? 'Put the id of the picture that truly shows what the slide is about in its `image` (a picture slide, or a person’s `image`). Yawp! shows its credit; never write the credit or a picture address yourself. Leave out any that do not fit.'
+      ? 'Put the id of the picture that truly shows what the slide is about in its `image` (a picture slide, or a person’s `image`); `for` says which search it came from. Yawp! shows its credit; never write the credit or a picture address yourself. Leave out any that do not fit, and for a search that found nothing, make the slide and ask the teacher for the picture.'
       : 'No openly licensed picture matched. Try a plainer search (the person’s full name, the place’s own name), or make the slide without one and ask the teacher for a picture.',
   };
 }

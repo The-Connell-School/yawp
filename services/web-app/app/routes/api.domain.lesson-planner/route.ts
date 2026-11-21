@@ -88,8 +88,17 @@ import {
   type PlanningProgress,
 } from '~/domain/lesson-planner/planning-progress';
 
-/** Picture searches a turn may make (Nov 21). */
-const MAX_PICTURE_SEARCHES = 6;
+/** Picture calls a turn may make (Nov 21): one asks for every picture a deck needs. */
+const MAX_PICTURE_SEARCHES = 2;
+/**
+ * The most of a turn's two minutes pictures may take, all calls together. A
+ * unit day on the preview timed out while pictures were searched (Nov 21).
+ */
+const PICTURE_BUDGET_MS = 25_000;
+const PICTURES_UNAVAILABLE = JSON.stringify({
+  pictures: [],
+  note: 'Pictures are not available right now. Make the slides anyway, say in each one’s speakerNotes which picture belongs there, and ask the teacher in one line under the deck to add them.',
+});
 const PLANNER_FAILED =
   'The lesson planner could not put that together. Please try again.';
 /**
@@ -676,6 +685,7 @@ export async function action({ request }: ActionFunctionArgs) {
     // attached to it when this turn writes it.
     const foundPictureIds: string[] = [];
     let pictureSearches = 0;
+    let pictureMs = 0;
 
     /**
      * Everything from the model call onwards, as one closure over the setup
@@ -691,6 +701,8 @@ export async function action({ request }: ActionFunctionArgs) {
       // What the teacher is told while they wait: the lookup in hand, then
       // "Writing the lesson" once the lookups have stopped (bot test, Nov 19).
       const clock = planningProgressClock(report);
+      const deadline = AbortSignal.timeout(PLANNER_REQUEST_DEADLINE_MS);
+      const startedAt = Date.now();
       try {
         reply = await getLLMCompletion({
           model: (process.env.AI_MODEL as any) ?? DEFAULT_ANTHROPIC_MODEL,
@@ -716,21 +728,33 @@ export async function action({ request }: ActionFunctionArgs) {
               if (name === UPLOAD_TOOL.name) return JSON.stringify(readUploadPart(sources, input));
               if (name === FIND_PICTURES_TOOL.name) {
                 if (!foundPictures) return JSON.stringify({ error: 'Picture search is not on for this school.' });
-                // A few searches a turn: a deck needs a handful of pictures, not a gallery.
+                // A call or two a turn, inside a budget: a picture is never worth the lesson.
                 pictureSearches += 1;
-                if (pictureSearches > MAX_PICTURE_SEARCHES) return JSON.stringify({ pictures: [], note: 'That is enough searching for one deck. Use the pictures you have, and ask the teacher for any others.' });
-                const found = await findPicturesForLesson(
-                  input,
-                  { membershipId: ctx.membershipId, conversationId: activeConversation?.id ?? null },
-                  {
-                    store: {
-                      create: (data) =>
-                        prisma.lessonPlanUploadPicture.create({ data: { ...data, blob: Buffer.from(data.blob) }, select: { id: true } }),
-                    },
-                  }
-                );
-                foundPictureIds.push(...found.pictures.map((picture) => picture.id));
-                return JSON.stringify(found);
+                if (pictureSearches > MAX_PICTURE_SEARCHES || pictureMs > PICTURE_BUDGET_MS) {
+                  return JSON.stringify({ pictures: [], note: 'That is enough searching for one deck. Use the pictures you have, and ask the teacher for any others.' });
+                }
+                const started = Date.now();
+                try {
+                  const found = await findPicturesForLesson(
+                    input,
+                    { membershipId: ctx.membershipId, conversationId: activeConversation?.id ?? null },
+                    {
+                      store: {
+                        create: (data) =>
+                          prisma.lessonPlanUploadPicture.create({ data: { ...data, blob: Buffer.from(data.blob) }, select: { id: true } }),
+                      },
+                    }
+                  );
+                  foundPictureIds.push(...found.pictures.map((picture) => picture.id));
+                  return JSON.stringify(found);
+                } catch (error) {
+                  // Never the lesson's failure: the planner is told and carries on.
+                  // eslint-disable-next-line no-console
+                  console.error('[lesson-planner] find_pictures failed:', error instanceof Error ? error.name : 'error');
+                  return PICTURES_UNAVAILABLE;
+                } finally {
+                  pictureMs += Date.now() - started;
+                }
               }
               const result = await handleLessonPlannerToolCall(name, input, ctx);
               for (const link of collectToolLinks(result)) toolLinks.add(link);
@@ -740,7 +764,7 @@ export async function action({ request }: ActionFunctionArgs) {
             }
           },
           allowFallbackProvider: false,
-          signal: AbortSignal.timeout(PLANNER_REQUEST_DEADLINE_MS),
+          signal: deadline,
           logPayload: 'metadata-only',
           metadata: {
             feature: 'lesson-planner',
@@ -754,8 +778,12 @@ export async function action({ request }: ActionFunctionArgs) {
         // same from the outside. No prompt content: only the shape of the error.
         // eslint-disable-next-line no-console
         clock.stop();
+        // How long it ran, how many lookups it made, and whether the deadline
+        // ended it, or the lookups ran out: a unit day on the preview failed
+        // after a long wait with only "Error" to show for it (Nov 21).
+        const ranOut = error instanceof Error && /maximum rounds/i.test(error.message);
         console.error(
-          `[lesson-planner] model call failed: ${describeProviderError(error)}`
+          `[lesson-planner] model call failed: ${describeProviderError(error)} · after ${Math.round((Date.now() - startedAt) / 1000)}s · ${toolRound} lookups${deadline.aborted ? ' · deadline reached' : ''}${ranOut ? ' · lookup rounds ran out' : ''}`
         );
         return {
           status: 500,
