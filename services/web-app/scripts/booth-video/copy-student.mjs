@@ -6,7 +6,7 @@
  * Recorded by record-student.mjs (BOOTH_CUT=student bash run.sh). The demo
  * class, the essay and most scripted replies are shared with copy.mjs.
  */
-import { ESSAY, ESSAY_TITLE, GRADING_ASSISTANT, THESIS } from './copy.mjs';
+import { ESSAY, ESSAY_TITLE, THESIS } from './copy.mjs';
 
 export const OPENING_CARD = {
   kicker: 'Yawp! for writing teachers',
@@ -21,9 +21,8 @@ export const SECTIONS = {
   grading: { n: 4, title: 'Grading.', sub: 'The Grading Assistant drafts. You decide.' },
   feedback: { n: 5, title: 'Feedback comes back.', sub: 'Maya sees exactly what to work on.' },
   revision: { n: 6, title: 'Revision.', sub: 'The feedback beside her draft. Every change is hers.' },
-  version2: { n: 7, title: 'Version 2.', sub: 'The revision is graded too. Growth you can see.' },
-  summary: { n: 8, title: 'The whole class.', sub: 'Every essay read, so you know who needs what.' },
-  reporter: { n: 9, title: 'Growth over time.', sub: 'Every student\'s writing, all year.' },
+  summary: { n: 7, title: 'The whole class.', sub: 'Every essay read, so you know who needs what.' },
+  reporter: { n: 8, title: 'Growth over time.', sub: 'Every student\'s writing, all year.' },
 };
 export const TOTAL_SECTIONS = Object.keys(SECTIONS).length;
 
@@ -44,26 +43,6 @@ export const MARGIN_COMMENT =
 
 /** Maya fixes the comma splice in her revision, as the grammar note says. */
 export const SPLICE_FIX = { from: 'even while she sleeps, she never', to: 'even while she sleeps; she never' };
-
-/** The Grading Assistant on version 2: the analysis is there now. */
-export const GRADING_ASSISTANT_V2 = {
-  categories: GRADING_ASSISTANT.categories.map((c) => {
-    if (c.key === 'evidence_and_support') {
-      return {
-        ...c,
-        score: 5,
-        comment:
-          'This is the revision the essay needed. "The noise is not entertainment; it is protection" explains what the Seashells prove instead of restating them, and it ties the evidence straight back to your thesis.',
-      };
-    }
-    if (c.key === 'grammar_and_mechanics') {
-      return { ...c, score: 4, comment: 'The comma splice in paragraph two is fixed. One small item left: add a comma before "and" in your list of three.' };
-    }
-    return c;
-  }),
-  overallComment:
-    "Maya, your revision does exactly what the first round asked for: the Seashells paragraph now explains what the evidence proves, and it's the strongest paragraph in the essay. Keep doing this after every quotation.",
-};
 
 /** Captions (bottom bar) and callouts (tour-style cards), by beat. */
 export const VO = {
@@ -111,23 +90,9 @@ export const VO = {
   },
   revision: {
     open: 'Her graded essay on one side, a fresh draft on the other.',
-    panes: { title: 'Graded version, side by side', body: 'Her teacher\'s highlights stay on the graded copy while she rewrites.' },
-    feedback: 'All of her feedback, one tab away.',
-    gradeTab: { title: 'The grade and the rubric', body: 'Every score and comment, in view while she works.' },
-    comments: 'Her teacher\'s note, next to the draft.',
     rewrite: 'She rewrites the sentence her teacher pointed to.',
-    reviseCallout: { title: 'She rewrites it herself', body: 'The sentence her teacher pointed to becomes the heart of the paragraph.' },
-    grammar: 'Then the grammar notes, one at a time.',
-    splice: 'She fixes the comma splice the note flagged.',
+    splice: 'And fixes the comma splice.',
     submit: 'Version 2, submitted.',
-  },
-  version2: {
-    open: 'Back to Ms. Rivera: Maya\'s revision is in.',
-    run: 'The Grading Assistant reads version 2.',
-    up: { title: 'Evidence/Support: 4 to 5', body: 'The revision earned it, and the comment says exactly why.' },
-    release: 'When it\'s right, release it to Maya.',
-    student: 'Maya sees her new grade.',
-    versions: { title: 'Both versions, kept', body: 'Version 1 and version 2, each with its own grade and feedback.' },
   },
   summary: {
     open: 'Now the whole class: 24 essays on Fahrenheit 451.',

@@ -20,8 +20,7 @@ import {
   TUTOR_REFUSAL,
   TUTOR_REPLY_1,
 } from './copy.mjs';
-import { GRADING_ASSISTANT_V2, TUTOR_REVIEW, TUTOR_THESIS_FEEDBACK } from './copy-student.mjs';
-import { REVISED_ANALYSIS } from './copy.mjs';
+import { TUTOR_REVIEW, TUTOR_THESIS_FEEDBACK } from './copy-student.mjs';
 
 const json = (value) => JSON.stringify(value);
 
@@ -67,18 +66,16 @@ export const rules = [
     when: (r) => r.system.startsWith('You are a grading assistant.'),
     reply: (r) => {
       const firstName = r.lastUser.match(/Student first name:\s*([^\n]+)/)?.[1]?.trim() ?? 'Maya';
-      // Maya's revision (version 2) earns its own scores.
-      const graded = r.lastUser.includes(REVISED_ANALYSIS.slice(0, 60)) ? GRADING_ASSISTANT_V2 : GRADING_ASSISTANT;
       return json({
-        ...graded,
-        overallComment: graded.overallComment.replace(/^Maya,/, `${firstName},`),
+        ...GRADING_ASSISTANT,
+        overallComment: GRADING_ASSISTANT.overallComment.replace(/^Maya,/, `${firstName},`),
       });
     },
   },
   {
     name: 'grading-overall-comment',
     when: (r) => r.system.startsWith('You write the overall feedback sentence'),
-    reply: (r) => json({ overallComment: (r.lastUser.includes(REVISED_ANALYSIS.slice(0, 60)) ? GRADING_ASSISTANT_V2 : GRADING_ASSISTANT).overallComment }),
+    reply: () => json({ overallComment: GRADING_ASSISTANT.overallComment }),
   },
   {
     name: 'grammar-checker',

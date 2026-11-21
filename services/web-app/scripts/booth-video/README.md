@@ -17,7 +17,7 @@ of it; this folder is copied there and run from it.
 | Cut | Command | What it shows |
 |---|---|---|
 | Full tour (default) | `bash .../run.sh yawp-demo.mp4` | Assigning, the student, grading, revision, Class Summary, Lesson Planner, Reporter (`record.mjs`, `copy.mjs`) |
-| Students and feedback | `BOOTH_CUT=student bash .../run.sh yawp-demo-students.mp4` | No Lesson Planner and no setup: the student's document and tutor at every step, what the teacher sees (pasted text, the tutor conversation), grading with a margin comment, the feedback Maya sees, revision as its own section, the regraded version 2 with both versions in her record, Class Summary, a growth report (`record-student.mjs`, `copy-student.mjs`) |
+| Students and feedback | `BOOTH_CUT=student bash .../run.sh yawp-demo-students.mp4` | No Lesson Planner and no setup: the student's document and tutor at every step, what the teacher sees (pasted text, the tutor conversation), grading with a margin comment, the feedback Maya sees, a quick revision, Class Summary, and a growth report to close (`record-student.mjs`, `copy-student.mjs`) |
 
 Both share the demo class, the essay and the scripted replies.
 
