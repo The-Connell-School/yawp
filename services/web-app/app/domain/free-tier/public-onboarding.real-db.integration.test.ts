@@ -92,7 +92,7 @@ for (const path of paths) {
 for (const gradeLevel of ['K', '1', '2', '3', '4'] as const) {
   local(`waitlist grade ${gradeLevel} creates LEAD like every other grade`, async () => {
     await flag('true');
-    const fields = input(`es-${gradeLevel}`, gradeLevel);
+    const fields = input(`es-${gradeLevel.toLowerCase()}`, gradeLevel);
     expect((await post('waitlist', fields)).body).toEqual({ ok: true });
     const row = await prisma.freeTierApplication.findUniqueOrThrow({ where: { email: fields.email } });
     expect(row).toMatchObject({ status: 'LEAD', gradeLevel });
