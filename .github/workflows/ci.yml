@@ -1141,6 +1141,8 @@ jobs:
             app/components/free-account-usage.test.tsx \
             app/components/assignments/assignment-creation-sheet.test.tsx \
             app/components/ai-chat/exit-ticket-card.test.tsx \
+            app/components/ai-chat/daily-pages-card.test.tsx \
+            app/components/ui/button.test.ts \
             app/domain/lesson-planner/deck-kit-v4.test.ts \
             app/domain/lesson-planner/deck-kit-v41.test.ts \
             app/domain/lesson-planner/load-shared-lesson.server.test.ts \
