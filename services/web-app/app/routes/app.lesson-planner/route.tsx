@@ -2170,11 +2170,11 @@ function MessageBubble({
             group.kind === 'single' ? (
               renderPart(parts[group.index]!, group.index)
             ) : (
-              // Options side by side, paged with arrows (Kevin's notes).
+              // Options in a row, one mostly in view, paged with arrows (Kevin's notes; Nov 21)
               <OptionRow
                 key={`${message.id ?? 'pending'}:options:${group.indexes[0]}`}
                 label={group.label}
-                layout="grid"
+                layout="carousel"
               >
                 {group.indexes.map((index) =>
                   renderPart(parts[index]!, index, { optionCard: true })
