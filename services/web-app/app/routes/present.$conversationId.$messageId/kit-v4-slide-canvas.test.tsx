@@ -84,3 +84,56 @@ describe('KitV4SlideCanvas (spec v4.1)', () => {
     expect(html).toContain('data-kit="v4.1"');
   });
 });
+
+describe('KitV4SlideCanvas, typed on (the deck studio)', () => {
+  const v41: SlideDeck = {
+    title: 'Body Paragraphs',
+    kit: 'v4.1',
+    slides: [
+      { layout: 'agenda', title: 'Today', agenda: [{ title: 'Warm up' }, { title: 'Model' }], speakerNotes: 'Open.' },
+      { layout: 'steps', title: 'Draft your topic sentence', bullets: ['Reread your thesis', 'Pick one reason'], minutes: 6, speakerNotes: 'Go.' },
+      { layout: 'picture', title: 'My picture', image: 'abcdefgh12', body: 'What is happening?', speakerNotes: 'Look.' },
+    ],
+  };
+  const edit = { onText: () => {}, onEnter: () => {}, onRemove: () => {}, onPicture: () => {} };
+
+  test('without edit, nothing on the slide can be typed in: Present and thumbnails are as before', () => {
+    for (const index of [0, 1, 2]) {
+      const html = renderToStaticMarkup(<KitV4SlideCanvas deck={v41} index={index} />);
+      expect(html).not.toContain('contenteditable');
+      expect(html).not.toContain('slide-words');
+      expect(html).not.toContain('slide-picture-swap');
+      expect(html).toContain('overflow:hidden');
+    }
+  });
+
+  test('with edit, each field’s words are a labelled text box holding those words', () => {
+    const html = renderToStaticMarkup(<KitV4SlideCanvas deck={v41} index={1} edit={edit} />);
+    expect(html).toMatch(/role="textbox"[^>]*aria-label="Slide title"[^>]*data-source="slide\.title"[^>]*>Draft your topic sentence</);
+    expect(html).toMatch(/aria-label="Line 2"[^>]*data-source="slide\.bullets\.1"[^>]*>Pick one reason</);
+    expect(html).toMatch(/aria-label="Label"[^>]*data-source="slide\.mode"[^>]*>Do</);
+    // The numerals and the minutes line are the layout's: never a text box.
+    expect(html).not.toMatch(/data-source="[^"]*"[^>]*>(?:1|2|6 minutes)</);
+  });
+
+  test('the layout’s own characters around a field stay outside its box', () => {
+    const html = renderToStaticMarkup(<KitV4SlideCanvas deck={v41} index={0} edit={edit} />);
+    expect(html).toMatch(/> {3}<span[^>]*data-source="slide\.agenda\.1\.title"[^>]*>Model</);
+    // "Today" is the template's word.
+    expect(html).not.toMatch(/data-source="[^"]*"[^>]*>Today</);
+  });
+
+  test('the slide’s picture is a button when it can be swapped', () => {
+    const html = renderToStaticMarkup(<KitV4SlideCanvas deck={v41} index={2} edit={edit} />);
+    expect(html).toContain('data-testid="slide-picture-swap"');
+    expect(html).toContain('aria-label="Swap this picture"');
+    const typedOnly = renderToStaticMarkup(<KitV4SlideCanvas deck={v41} index={2} edit={{ onText: () => {} }} />);
+    expect(typedOnly).not.toContain('slide-picture-swap');
+  });
+
+  test('the gallery canvas hands edit to the kit canvas, and never to a spec v3 slide', () => {
+    expect(renderToStaticMarkup(<GallerySlideCanvas deck={v41} index={1} edit={edit} />)).toContain('contenteditable');
+    const v3: SlideDeck = { ...v41, kit: undefined };
+    expect(renderToStaticMarkup(<GallerySlideCanvas deck={v3} index={1} edit={edit} />)).not.toContain('contenteditable');
+  });
+});

@@ -54,6 +54,8 @@ import {
 } from '~/domain/lesson-planner/lesson-links';
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
+import { FIND_PICTURES_TOOL, findPicturesForLesson } from '~/domain/lesson-planner/found-pictures.server';
+import { withResolvedPlaces } from '~/domain/lesson-planner/context-slides.server';
 import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
 import { readLessonLength } from '~/domain/lesson-planner/lesson-length';
 import { asksForDeck } from '~/domain/lesson-planner/suggestions';
@@ -82,11 +84,21 @@ import {
 import { computeIpHash } from '~/utils/ai-usage-log.server';
 import {
   PLANNING_PROGRESS_START,
-  planningProgressForTool,
-  planningProgressWriting,
+  planningProgressClock,
   type PlanningProgress,
 } from '~/domain/lesson-planner/planning-progress';
 
+/** Picture calls a turn may make (Nov 21): one asks for every picture a deck needs. */
+const MAX_PICTURE_SEARCHES = 2;
+/**
+ * The most of a turn's two minutes pictures may take, all calls together. A
+ * unit day on the preview timed out while pictures were searched (Nov 21).
+ */
+const PICTURE_BUDGET_MS = 25_000;
+const PICTURES_UNAVAILABLE = JSON.stringify({
+  pictures: [],
+  note: 'Pictures are not available right now. Make the slides anyway, say in each one’s speakerNotes which picture belongs there, and ask the teacher in one line under the deck to add them.',
+});
 const PLANNER_FAILED =
   'The lesson planner could not put that together. Please try again.';
 /**
@@ -495,6 +507,8 @@ export async function action({ request }: ActionFunctionArgs) {
       deckGallery,
       deckKitV4,
       deckKitV41,
+      contextTools,
+      foundPictures,
       uploads: uploadsOn,
       teachMySlides,
       refreshMyDeck,
@@ -643,6 +657,8 @@ export async function action({ request }: ActionFunctionArgs) {
       deckGallery,
       deckKitV4,
       deckKitV41,
+      contextTools,
+      foundPictures,
       sources,
       lessonPictures,
       deckChoices,
@@ -665,6 +681,11 @@ export async function action({ request }: ActionFunctionArgs) {
     // Every link the reply is allowed to contain came back from a tool on this
     // request. Anything else it writes, it made up.
     const toolLinks = new Set<string>();
+    // Pictures the planner found this turn (Nov 21): kept with the lesson, or
+    // attached to it when this turn writes it.
+    const foundPictureIds: string[] = [];
+    let pictureSearches = 0;
+    let pictureMs = 0;
 
     /**
      * Everything from the model call onwards, as one closure over the setup
@@ -677,6 +698,11 @@ export async function action({ request }: ActionFunctionArgs) {
     ): Promise<TurnOutcome> {
       let reply: string;
       let toolRound = 0;
+      // What the teacher is told while they wait: the lookup in hand, then
+      // "Writing the lesson" once the lookups have stopped (bot test, Nov 19).
+      const clock = planningProgressClock(report);
+      const deadline = AbortSignal.timeout(PLANNER_REQUEST_DEADLINE_MS);
+      const startedAt = Date.now();
       try {
         reply = await getLLMCompletion({
           model: (process.env.AI_MODEL as any) ?? DEFAULT_ANTHROPIC_MODEL,
@@ -691,20 +717,54 @@ export async function action({ request }: ActionFunctionArgs) {
             ipHash: computeIpHash(request),
           },
           maxToolRounds: PLANNER_MAX_TOOL_ROUNDS,
-          tools: sources.length ? [...LESSON_PLANNER_TOOLS, UPLOAD_TOOL] : LESSON_PLANNER_TOOLS,
+          tools: [...LESSON_PLANNER_TOOLS, ...(sources.length ? [UPLOAD_TOOL] : []), ...(foundPictures ? [FIND_PICTURES_TOOL] : [])],
           handleToolCall: async (name, input) => {
             // Reported before the call, not after: the teacher should see what is
             // being looked up while it is being looked up.
             toolRound += 1;
-            report(planningProgressForTool(name, input, toolRound));
-            // Read from this turn's own documents: never another lesson's.
-            if (name === UPLOAD_TOOL.name) return JSON.stringify(readUploadPart(sources, input));
-            const result = await handleLessonPlannerToolCall(name, input, ctx);
-            for (const link of collectToolLinks(result)) toolLinks.add(link);
-            return result;
+            clock.lookup(name, input, toolRound);
+            try {
+              // Read from this turn's own documents: never another lesson's.
+              if (name === UPLOAD_TOOL.name) return JSON.stringify(readUploadPart(sources, input));
+              if (name === FIND_PICTURES_TOOL.name) {
+                if (!foundPictures) return JSON.stringify({ error: 'Picture search is not on for this school.' });
+                // A call or two a turn, inside a budget: a picture is never worth the lesson.
+                pictureSearches += 1;
+                if (pictureSearches > MAX_PICTURE_SEARCHES || pictureMs > PICTURE_BUDGET_MS) {
+                  return JSON.stringify({ pictures: [], note: 'That is enough searching for one deck. Use the pictures you have, and ask the teacher for any others.' });
+                }
+                const started = Date.now();
+                try {
+                  const found = await findPicturesForLesson(
+                    input,
+                    { membershipId: ctx.membershipId, conversationId: activeConversation?.id ?? null },
+                    {
+                      store: {
+                        create: (data) =>
+                          prisma.lessonPlanUploadPicture.create({ data: { ...data, blob: Buffer.from(data.blob) }, select: { id: true } }),
+                      },
+                    }
+                  );
+                  foundPictureIds.push(...found.pictures.map((picture) => picture.id));
+                  return JSON.stringify(found);
+                } catch (error) {
+                  // Never the lesson's failure: the planner is told and carries on.
+                  // eslint-disable-next-line no-console
+                  console.error('[lesson-planner] find_pictures failed:', error instanceof Error ? error.name : 'error');
+                  return PICTURES_UNAVAILABLE;
+                } finally {
+                  pictureMs += Date.now() - started;
+                }
+              }
+              const result = await handleLessonPlannerToolCall(name, input, ctx);
+              for (const link of collectToolLinks(result)) toolLinks.add(link);
+              return result;
+            } finally {
+              clock.lookedUp();
+            }
           },
           allowFallbackProvider: false,
-          signal: AbortSignal.timeout(PLANNER_REQUEST_DEADLINE_MS),
+          signal: deadline,
           logPayload: 'metadata-only',
           metadata: {
             feature: 'lesson-planner',
@@ -717,8 +777,13 @@ export async function action({ request }: ActionFunctionArgs) {
         // that does not exist, and a request that ran out of time all look the
         // same from the outside. No prompt content: only the shape of the error.
         // eslint-disable-next-line no-console
+        clock.stop();
+        // How long it ran, how many lookups it made, and whether the deadline
+        // ended it, or the lookups ran out: a unit day on the preview failed
+        // after a long wait with only "Error" to show for it (Nov 21).
+        const ranOut = error instanceof Error && /maximum rounds/i.test(error.message);
         console.error(
-          `[lesson-planner] model call failed: ${describeProviderError(error)}`
+          `[lesson-planner] model call failed: ${describeProviderError(error)} · after ${Math.round((Date.now() - startedAt) / 1000)}s · ${toolRound} lookups${deadline.aborted ? ' · deadline reached' : ''}${ranOut ? ' · lookup rounds ran out' : ''}`
         );
         return {
           status: 500,
@@ -730,10 +795,10 @@ export async function action({ request }: ActionFunctionArgs) {
         };
       }
 
-      // Every tool has returned and the model is writing. This is the long stretch
-      // — a lesson with a deck is thousands of tokens — so it gets its own line
-      // rather than leaving the last lookup on screen for a minute.
-      report(planningProgressWriting());
+      // The reply is in hand. The line has said "Writing the lesson" since a
+      // few seconds after the last lookup; this is for a reply that came
+      // back sooner than that.
+      clock.writing();
 
       // The model writes its deck blind — nothing in the reply tells it whether the
       // JSON validated. Give a rejected deck the errors and one more pass before
@@ -741,6 +806,8 @@ export async function action({ request }: ActionFunctionArgs) {
       const repaired = await repairSlideDeck({
         reply,
         repair: async ({ instruction, reason }) => {
+          // A deck is being written a second time: up to a minute more, and said so.
+          clock.checkingDeck();
           try {
             await reservePlannerAi();
           } catch (admissionError) {
@@ -774,6 +841,9 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
       reply = repaired.reply;
+      // A map slide's places are found in Yawp!'s own place list (Nov 19): a
+      // pin is never where the model guessed.
+      reply = withResolvedPlaces(reply);
 
       // A link the catalog never handed back goes nowhere, and a teacher finds that
       // out in front of a class. Strip the href and keep the words. Done before the
@@ -847,6 +917,12 @@ export async function action({ request }: ActionFunctionArgs) {
                   select: { id: true },
                 }));
 
+          if (foundPictureIds.length) {
+            await transaction.lessonPlanUploadPicture.updateMany({
+              where: { id: { in: foundPictureIds }, membershipId: ctx.membershipId, conversationId: null, uploadId: null },
+              data: { conversationId: persistedConversation.id },
+            });
+          }
           if (attachUploadIds.length) {
             await transaction.lessonPlanUpload.updateMany({
               where: { id: { in: attachUploadIds }, membershipId: ctx.membershipId, conversationId: null },

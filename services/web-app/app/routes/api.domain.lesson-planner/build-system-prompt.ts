@@ -224,7 +224,7 @@ function buildExitTicketSectionV3(): string[] {
     '- A check examines one thing. When the objective has several parts, use a reflection and say in the plan what to look for, or close on the ticket plus one more piece of evidence and say which part each one shows.',
     '- Put nothing else in the block: no heading, no minutes, no teacher notes, no quotation marks. Where it sits in the lesson and how long it takes belong in the plan above it.',
     '- Do not write the question anywhere else. The teacher sees exactly what students will get before anything is created, and a question reworded elsewhere would be a second ticket.',
-    '- When the same lesson has a deck, its closing slide says "Exit ticket: open it in Yawp! before you go" and does not restate the question.',
+    '- When the same lesson has a deck, its closing slide sends students to the exit ticket in Yawp! (its `button` is just "Exit ticket"; Yawp! adds "open it in Yawp!") and does not restate the question.',
     `- When a full lesson closes on an exit ticket, or the teacher asks for one on its own, offer three, each in its own \`${fence}\` block: a reflection and the two checks that fit this lesson best. When the teacher asked for one specific ticket ("a question about Allie"), give that one.`,
     '- Each card shows its prompt exactly as students will read it, and nothing else. Around the blocks, write at most one line, naming the options by what they ask ("what they still wonder, Allie, or the second stanza"). Do not add notes, rationale, answers or rankings next to them.',
     `- One \`${fence}\` block per check. When a lesson also needs a paper ticket, that is a \`yawp-material\` \`exit-ticket\` block, and you say what each one is for.`,
@@ -304,7 +304,7 @@ function buildExitTicketSection(available: boolean, v3 = false): string[] {
     '- The check still has to check the WHOLE objective. A check examines one thing well; when the objective genuinely has three parts, either use a reflection and say in the plan what to look for, or close on the ticket plus one more piece of evidence, and say which part each one tells you about.',
     '- Put nothing else in the block: no heading, no minutes, no teacher notes, no quotation marks. Where it sits in the lesson and how long it gets belong in the plan above it.',
     '- Do not also write the student-facing wording yourself, except as a `promptText` reflection question. Yawp! composes the prompt from these answers and shows it to the teacher before anything is created, so a sentence you wrote elsewhere would be a second, different ticket.',
-    '- When the same lesson has a deck, its closing slide sends students to the exit ticket in Yawp! — "Exit ticket: open it in Yawp! before you go" — and does not restate the question. A question reworded on a slide is a second, different ticket, and students answer the one they read last.',
+    '- When the same lesson has a deck, its closing slide sends students to the exit ticket in Yawp! (its `button` is just "Exit ticket"; Yawp! adds "open it in Yawp!") and does not restate the question. A question reworded on a slide is a second, different ticket, and students answer the one they read last.',
     '- When a full lesson closes on an exit ticket, offer three exit tickets, one for each focus — `understand-text` (checks understanding of the text), `explain-concept` (asks them to explain a term), and `ask-question` (asks them to ask a question) — each in its own `' +
       EXIT_TICKET_FENCE +
       '` block, so the teacher can pick or stack the one that fits. Name all three in the closing step in one line; do not rank them. For a single exit ticket the teacher asked for on its own, give one.',
@@ -890,9 +890,22 @@ function buildDeckGallerySection(on: boolean, recentArt: RecentArt[] = []): stri
  * date. The teacher's name comes from the session; without it the line is
  * left out.
  */
-function buildDeckKitV4Section(
+export function buildDeckKitV4Section(
   recentArt: RecentArt[] = [],
-  { v41 = false, teacherName = null }: { v41?: boolean; teacherName?: string | null } = {}
+  {
+    v41 = false,
+    teacherName = null,
+    subjectFirst = false,
+  }: {
+    v41?: boolean;
+    teacherName?: string | null;
+    /**
+     * Slides that teach (Kevin, Nov 21): with `lesson_planner_context_tools`,
+     * the deck is about its subject, not a painting, and never ships a reading
+     * slide without its reading.
+     */
+    subjectFirst?: boolean;
+  } = {}
 ): string[] {
   const art = selectableDeckArt()
     .map(
@@ -902,7 +915,11 @@ function buildDeckKitV4Section(
     .join('; ');
   return [
     '',
-    `Gallery deck (Yawp! Lesson Deck Kit, spec ${v41 ? 'v4.1, which replaces v4, v3 and every earlier version of these instructions' : 'v4'}): every deck should feel like a quiet, well-made book with one painting inside it${v41 ? ': cream paper, serif reading text, wide margins, everything left-aligned' : ''}. Every slide is cream; there are no dark or full-color slides. Color appears only as a solid panel on one side of a split slide (Yawp! draws it) or as type. Students should always be able to tell what they are being asked to do from across the room.`,
+    `Gallery deck (Yawp! Lesson Deck Kit, spec ${v41 ? 'v4.1, which replaces v4, v3 and every earlier version of these instructions' : 'v4'}): every deck should feel like ${
+      subjectFirst
+        ? 'a well-made book about its subject, and the pictures in it come from the subject’s world: its places on a map, its dates on a timeline, its people and its words'
+        : 'a quiet, well-made book with one painting inside it'
+    }${v41 ? ': cream paper, serif reading text, wide margins, everything left-aligned' : ''}. Every slide is cream; there are no dark or full-color slides. Color appears only as a solid panel on one side of a split slide (Yawp! draws it) or as type. Students should always be able to tell what they are being asked to do from across the room.`,
     ...(v41
       ? [
           'Type: Yawp! sets titles and headlines in Fraunces Bold, everything else a student reads as an idea in Georgia (list numerals too), and labels, instructions, credits and facts in Arial. Size carries the hierarchy: never ask for italics or bold for emphasis.',
@@ -928,8 +945,8 @@ function buildDeckKitV4Section(
     `- read — ${v41 ? 'no label' : '"Read"'}, on a split slide: \`title\` and the instruction (\`body\`) on the panel; 3 or fewer \`tasks\` \`{ "verb", "text" }\`, each led by a verb, on cream. Optional \`work\`, \`page\`.`,
     `- look — "Look": the painting as large as it goes, uncropped, with a narrow column beside it${v41 ? ', so keep the `question` to 14 words or fewer' : ''}. Needs \`question\`; optional \`seconds\`, \`routine\` ("See, think, wonder"), \`followUp\`. Use it whenever students must study the image.`,
     '- excerpt — "Annotate": the passage on cream as printed, 40–90 words, only text the teacher supplied or a tool returned, with `author`, `work`, `page`; `tasks` or `bullets` (what to mark) on the panel.',
-    '- quiz — a discuss slide with `choices` (2–5 short answers) and no `answer` is a quiz question; Yawp! labels it "Question n of N". To reveal it, repeat the same slide right after it with `answer` (the number of the right choice): Yawp! puts a light band in the deck color behind it and greys the rest. Never mark the answer in the text.',
-    '- exit — "Before you go". Always last. `body` the statement or stem; optional `followUp`; `button` names what students open in Yawp! ("Exit ticket"), set as a line, "Exit ticket: open it in Yawp!"; optional `nextLesson`.',
+    '- A quiz question is a `discuss` slide, never a layout of its own (there is no `"layout": "quiz"`): give the discuss slide `choices` (2–5 short answers, with no letters typed in front) and no `answer`, and it is a quiz question; Yawp! labels it "Question n of N". To reveal it, repeat the same slide right after it with `answer` (the number of the right choice): Yawp! puts a light band in the deck color behind it and greys the rest. Never mark the answer in the text.',
+    '- exit — "Before you go". Always last. `body` the statement or stem; optional `followUp`; `button` names what students open in Yawp! ("Exit ticket"), and Yawp! sets it as "Exit ticket: open it in Yawp!", so write only the name; optional `nextLesson`, the next lesson’s subject only (Yawp! adds "Next time:").',
     'Prefer these to the older layouts: big_idea over statement, write or discuss over prompt, excerpt over quote, exit over closing, notes over bullets.',
     'Rhythm: open with title then agenda, and close with exit. Never the same template twice in a row. Two split slides in a row may share a color.',
     'Prompt type sizes itself: 12 words or fewer is set largest, up to 24 smaller, up to 40 smaller again. Over 40 words, split the slide.',
@@ -937,6 +954,12 @@ function buildDeckKitV4Section(
     'Colors: give the deck `colors`, two or three mid-dark colors from its painting, the painting’s own v4 colors listed below; the first is the primary (the subtitle, labels, numerals, most panels), the second goes to alternate panels, and a third only for color-coding. No terracotta, clay, brick or brown: prefer the painting’s deep greens, blues, slates, maroons and plums. A slide can pick one with `color` (1, 2 or 3). When a slide teaches the parts of something (the three parts of a thesis, the moves of a conclusion), give each part its color and keep it all the way through, the sample paragraph included, by writing `~~1|the claim~~`, `~~2|the reason~~`, `~~3|the so-what~~` in any text field.',
     `On the deck itself: \`unit\` (the unit's name) and, optionally, \`art\`. The deck and slide titles carry no lesson or day numbers.`,
     `A painting is optional. Choose one only when what it shows (its subject, not just a mood) truly belongs with this lesson's text or idea, and then one work per lesson, chosen by theme, never by class, only from this library: ${art}. Never choose a painting because it is the only one or because it was used before: a deck without a painting is a good deck, in the house colors. Leave \`art\` out unless it fits. The art is shown and credited by Yawp!; never write about it on a slide except a look question. A photograph that is not public domain is fine in the teacher’s own class; say so before a deck is shared.`,
+    ...(subjectFirst
+      ? [
+          'Never use a painting as a metaphor for a lesson’s history or setting (an old warship towed to the breakers standing for a fading aristocracy). A lesson about a time and place shows that time and place instead, with a map, a timeline and the people in it. Yawp! hangs the deck’s painting on the title, beside a big idea, on a look slide and at the exit, so a painting that does not belong is on screen all lesson.',
+          'A read or excerpt slide needs its passage. When the teacher has not given you the passage and no tool returned it, never leave a slide with tasks and no text: give the slide `work` and `page` so students know where to find it, and ask the teacher for the passage in one line under the deck, so it can go on the slide.',
+        ]
+      : []),
     ...(recentArt.length
       ? [
           `Paintings this teacher has used lately: ${recentArt
@@ -944,6 +967,46 @@ function buildDeckKitV4Section(
             .join('; ')}. Do not use one of these again unless this lesson is in that same unit.`,
         ]
       : []),
+  ];
+}
+
+/**
+ * Background for a text (Kevin, Nov 19): the two slides a teacher steps
+ * through when introducing a book. Only for a school with
+ * `lesson_planner_context_tools`, on top of the kit's v4 templates.
+ */
+export function buildContextToolsSection({ foundPictures = false }: { foundPictures?: boolean } = {}): string[] {
+  return [
+    '',
+    'Background for a text: when a lesson introduces a book, a poem, a speech or a period, students need its world before they read. Think like the English teacher who knows that world, not like a slide template.',
+    'Before you write a deck that introduces a text, name for yourself what students need to read the opening pages, and build the deck from that list: Where (the places, starting from where they are in the world), When (the dates that matter, and where the story sits among them), Who (the real people, and the novel’s own people students are about to meet), Which words (every term the lesson leans on that a student this age may not know), What it looked like (the place, the people, the clothes, the streets, a still from the film if there is one), and Why it matters to the book (which character or scene each piece of history will help them read). A context deck answers each one on screen; a routine slide (write, talk, exit) does not count as an answer.',
+    'Four templates carry it. No label on any of them.',
+    '- timeline — events on a line. `title` (what the timeline is of), an optional `body` (one line that frames it), and `events`: 4 to 8 `{ "date", "title", "detail" }` in order. `date` is as short as it can be ("1899", "April 1963", "1930s"). `title` is 6 words or fewer, and no word in it longer than 12 letters. `detail` is one sentence a student can read from the back of the room; in class the teacher steps through the events with the arrows and each one’s sentence is shown as it comes up. When two things run side by side (the world and the author’s life, the history and the novel), name the two rows in `tracks` (["In Sudan", "The novel"]) and give each event `"track": 1` or `"track": 2`. Three or more dates go on a timeline, never as a list of dates on another slide.',
+    '- map — places on a real map that Yawp! draws from its own map data. `title`, an optional `body`, and `places`: 2 to 6 `{ "name", "where", "label", "note" }`. `name` is the place’s own modern name as an atlas prints it ("Khartoum", "Salinas", "Istanbul"); `where` is its country, or its state for a town in the United States ("Sudan", "California"), and is always given; `label` only when the text calls the place something else ("Constantinople"); `note` is one sentence on why this place matters to the text. The teacher steps through the places in the order you give them. `"route": true` joins them in that order, for a journey. `shade` is up to 4 countries by today’s names to fill in the deck color, with `shadeLabel` saying what they are together ("Sudan in 1956"). The map shows today’s borders, so never write as if it shows old ones. Many students cannot find the country on a world map: start wider than the place: a first map with the country shaded, one or two pins and `"wide": true`, which shows it among its neighbours, and only then the closer map of where the story happens. A deck may have two maps, the wider one first.',
+    '- define — words. `title` ("Words for 1860") and `terms`: 1 to 3 `{ "word", "definition", "example" }`. `definition` is plain words a student this age knows, 20 words or fewer; `example` is one sentence from the book’s world that uses the word ("The Prince of Salina belongs to Sicily’s aristocracy."). Put the words before the slide that first uses them. More than three words: two define slides, never a longer one.',
+    '- person — people. `title` and `people`: 1 to 4 `{ "name", "role", "note", "image" }`. `role` is who they are in a few words ("General", "The Prince’s nephew"); `note` is one sentence on why they matter here. Use it for the real people a lesson names and for the novel’s own people, introduced before students meet them in the text, a cast of two to four on one slide. `image` is the id of one of the teacher’s own pictures, only when one of them shows this person.',
+    foundPictures
+      ? 'Pictures: for the real people, places and things a context deck shows, call find_pictures once, with every picture the deck needs in `queries` ("Giuseppe Garibaldi photograph", "Palermo 19th century"), and put the id of the one that truly shows it in the slide’s `image` or a person’s `image`. A `picture` slide (`image`, a `title` that says what it shows, and a `question` students answer about it) is how a place or a moment is shown large. Yawp! shows each picture’s credit and license on the slide; never write a credit or a picture address yourself. A still from the film, a book cover in copyright and a living person are never searched for: make the slide, say in its `speakerNotes` which picture goes there, and ask the teacher for it in one line under the deck. Never stand a painting in for a picture of the real place or people.'
+      : 'Pictures: Yawp! has no photographs of its own yet. When a slide wants a picture you cannot give it (a portrait, the real place, a still from the film), make the slide anyway, say in its `speakerNotes` exactly which picture would go there, and ask the teacher for it in one line under the deck, so they can add their own. Never stand a painting in for a picture of the real place or people.',
+    'Never write a position: no `lat`, `lon`, `view` or `found`. Yawp! finds each place by its name and puts the pin there; a place it cannot find (a village, a place the author made up) is left off the map, so name the nearest real town instead and say so in its `note`.',
+    'Only dates, places, words and people you are sure of. A wrong year or a pin in the wrong town is taught to thirty students: leave out an event you would have to guess at, and say in `speakerNotes` what the teacher should check. A timeline takes the place of a `notes` slide with a timeline; do not use both for the same events.',
+  ];
+}
+
+/**
+ * The arc of a lesson (Kevin, Nov 21): open on the theme in the students'
+ * own lives, find out what they know, teach directly in short pieces, then
+ * set the novel beside what they said. With `lesson_planner_context_tools`.
+ */
+export function buildLessonArcSection(): string[] {
+  return [
+    '',
+    'The arc of a lesson. Start with the students, and start with the theme, then bring in the text:',
+    '1. Open on the theme, in the students’ own experience, before any history, author or text. Always on the first day of a unit and in a lesson that introduces a text, and in most other lessons too. For The Leopard: "What do you think it is like to lose power? How does it happen? Have you ever had a way of life and lost it? What happens to someone who loses power, status or popularity?" In the middle of a unit, once its themes are established, a lesson may instead open by asking students to recall what came earlier in the unit. On the first day of a unit this opening comes before everything else, even when a lesson could start with the work itself.',
+    '2. At the start of a unit, find out what they already know: "What do you know about World War II and the Holocaust?", "What do you think Italy was like before it was a country?" The less they are likely to know, the shorter this part: a minute of listing or a quick share, never a long discussion of what they do not know.',
+    '3. Then teach directly: short, punchy pieces of information told straight to them, one idea at a time, the key terms and vocabulary among them. This is where a map, a timeline, the words and the people belong.',
+    '4. Then bring in the text against what the students said: set the novel’s treatment of the theme beside what the students said at the opening ("You said losing power happens slowly. Watch how fast it happens to the Prince."). Give this part time alone to think and write, time to discuss with peers, and the teacher teaching directly, in whatever order fits.',
+    'Name the parts in the plan in this order, each with its minutes, and when there is a deck, its slides follow the same arc.',
   ];
 }
 
@@ -967,6 +1030,8 @@ export function buildLessonPlannerSystemPromptBlocks({
   deckGallery = false,
   deckKitV4 = false,
   deckKitV41 = false,
+  contextTools = false,
+  foundPictures = false,
   sources = [],
   lessonPictures = [],
   deckChoices,
@@ -976,6 +1041,10 @@ export function buildLessonPlannerSystemPromptBlocks({
 }: {
   teacherName: string | null;
   organizationName: string;
+  /** Timelines and maps for introducing a text (Nov 19; needs deckKitV4). After the cache breakpoint. */
+  contextTools?: boolean;
+  /** Pictures that belong (Nov 21): the planner has find_pictures. Needs contextTools. */
+  foundPictures?: boolean;
   lessonInventory?: LessonInventoryEntry[];
   /** A day lesson's place in its week's framework (Brian's run 5, round 2). */
   weekContext?: string[];
@@ -1025,8 +1094,10 @@ export function buildLessonPlannerSystemPromptBlocks({
       : []),
     ...buildTemplateSection(template),
     ...(deckGallery && deckKitV4
-      ? buildDeckKitV4Section(recentArt, { v41: deckKitV41, teacherName })
+      ? buildDeckKitV4Section(recentArt, { v41: deckKitV41, teacherName, subjectFirst: contextTools })
       : buildDeckGallerySection(deckGallery, recentArt)),
+    ...(contextTools ? buildLessonArcSection() : []),
+    ...(deckGallery && deckKitV4 && contextTools ? buildContextToolsSection({ foundPictures }) : []),
     ...buildSourcesSection(sources, deckChoices, { onStack }),
     ...buildLessonPicturesSection(lessonPictures),
   ].join('\n');

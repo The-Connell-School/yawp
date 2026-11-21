@@ -160,6 +160,10 @@ describe('parseSlideDeck', () => {
       if (layout === 'notes') slide.facts = ['One fact.'];
       if (layout === 'read') slide.tasks = [{ verb: 'Circle', text: 'names' }];
       if (layout === 'picture') slide.image = 'cmh0elephant0000abcd';
+      if (layout === 'timeline') slide.events = [{ date: '1899', title: 'One' }, { date: '1956', title: 'Two' }];
+      if (layout === 'map') slide.places = [{ name: 'Khartoum' }];
+      if (layout === 'define') slide.terms = [{ word: 'aristocracy', definition: 'Families who rule by birth.' }];
+      if (layout === 'person') slide.people = [{ name: 'Garibaldi', role: 'General' }];
       const parsed = parseSlideDeck(fenced({ title: 'Deck', slides: [slide] }));
       expect(parsed?.deck.slides[0]!.layout).toBe(layout);
     }
@@ -722,3 +726,66 @@ describe('picture slides: the teacher’s own pictures (Nov 1)', () => {
   });
 });
 
+
+describe('a quiz question, however the model writes it (bot test, Nov 19)', () => {
+  const deckOf = (slide: Record<string, unknown>) => parseSlideDeck(fenced({ title: 'Deck', slides: [{ title: 'Check', speakerNotes: 'Ask for hands.', ...slide }] }));
+
+  test('"layout": "quiz" is a discuss slide with its choices and its answer, not a deck that fails', () => {
+    const slide = deckOf({ layout: 'quiz', question: 'What do the images share?', choices: ['Fragile', 'Decay', 'Nature'], answer: 2 })!.deck.slides[0]!;
+    expect(slide).toMatchObject({ layout: 'discuss', question: 'What do the images share?', choices: ['Fragile', 'Decay', 'Nature'], answer: 2 });
+    for (const layout of ['Quiz', 'multiple-choice', 'multiple_choice', 'mcq']) {
+      expect(deckOf({ layout, question: 'Q?', choices: ['A1', 'B1'] })!.deck.slides[0]!.layout).toBe('discuss');
+    }
+  });
+
+  test('a quiz slide with its question only in the title still has a question', () => {
+    const slide = deckOf({ layout: 'quiz', title: 'Which fix is correct?', choices: ['A semicolon', 'A comma'] })!.deck.slides[0]!;
+    expect(slide).toMatchObject({ layout: 'discuss', question: 'Which fix is correct?' });
+  });
+
+  test('options are choices; letters typed in front come off, since the slide draws its own', () => {
+    const slide = deckOf({ layout: 'discuss', question: 'Q?', options: ['A) Fragile', 'b. Decay', '(C) Nature', 'D: Recovered'] })!.deck.slides[0]!;
+    expect(slide.choices).toEqual(['Fragile', 'Decay', 'Nature', 'Recovered']);
+    // A choice that only starts with a capital and a word is left alone.
+    expect(deckOf({ layout: 'discuss', question: 'Q?', choices: ['A semicolon', 'A comma and "and"'] })!.deck.slides[0]!.choices).toEqual(['A semicolon', 'A comma and "and"']);
+  });
+
+  test('the answer as a letter, as the choice’s own words, or as a number in a string', () => {
+    const answer = (value: unknown, key = 'answer') => deckOf({ layout: 'discuss', question: 'Q?', choices: ['Fragile', 'Decay', 'Nature'], [key]: value })!.deck.slides[0]!.answer;
+    expect(answer('B')).toBe(2);
+    expect(answer('c)')).toBe(3);
+    expect(answer('Decay')).toBe(2);
+    expect(answer('2')).toBe(2);
+    expect(answer(3, 'correctAnswer')).toBe(3);
+    expect(answer('B', 'correct')).toBe(2);
+    // An answer that names no choice is left off: the question is still a question.
+    expect(answer('Something else')).toBeUndefined();
+    expect(answer(9)).toBeUndefined();
+  });
+});
+
+describe('the exit slide never says a thing twice (the Leopard deck, Nov 21)', () => {
+  const exitDeck = (slide: Record<string, unknown>) => ({
+    title: 'Sicily and the Risorgimento',
+    slides: [{ layout: 'exit', title: 'Before you go', body: 'Unification cost the Sicilian aristocracy ___.', speakerNotes: 'Close.', ...slide }],
+  });
+
+  test('a button the model wrote out in full keeps only what students open', () => {
+    for (const button of ['Exit ticket: open it in Yawp!', 'Exit ticket: open it in Yawp! before you go', 'Exit ticket — open it in Yawp!', 'Exit ticket: Open it in Yawp! before you go.']) {
+      const parsed = parseSlideDeck(fenced(exitDeck({ button })));
+      expect(parsed?.deck?.slides[0]?.button).toBe('Exit ticket');
+    }
+  });
+
+  test('a plain button is left alone', () => {
+    expect(parseSlideDeck(fenced(exitDeck({ button: 'Exit ticket' })))?.deck?.slides[0]?.button).toBe('Exit ticket');
+  });
+
+  test('next lesson drops a "Next time:" or "Tomorrow:" the slide already supplies', () => {
+    for (const nextLesson of ['Tomorrow: the man who wrote the novel', 'Next time: Tomorrow: the man who wrote the novel', 'Next time: the man who wrote the novel']) {
+      const parsed = parseSlideDeck(fenced(exitDeck({ nextLesson })));
+      expect(parsed?.deck?.slides[0]?.nextLesson).toBe('the man who wrote the novel');
+    }
+    expect(parseSlideDeck(fenced(exitDeck({ nextLesson: 'Lampedusa and his palace' })))?.deck?.slides[0]?.nextLesson).toBe('Lampedusa and his palace');
+  });
+});

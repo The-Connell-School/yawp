@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   PLANNING_PROGRESS_START,
+  planningProgressClock,
   planningProgressForTool,
   planningProgressWriting,
   type PlanningProgress,
@@ -99,5 +100,72 @@ describe('the fraction the bar is drawn from', () => {
       fractionOf(planningProgressForTool('list_classes',
       {}, 1))
     );
+  });
+});
+
+describe('planningProgressClock: what is said when, through a turn (bot test, Nov 19)', () => {
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const record = () => {
+    const said: PlanningProgress[] = [];
+    return { said, labels: () => said.map((progress) => progress.label), report: (progress: PlanningProgress) => said.push(progress) };
+  };
+
+  test('"Writing the lesson" is said soon after the last lookup, while the model is still writing', async () => {
+    const { labels, report } = record();
+    const clock = planningProgressClock(report, { afterMs: 20 });
+    clock.lookup('list_lounge_materials', {}, 1);
+    clock.lookedUp();
+    expect(labels()).toEqual(["Looking through the Teacher's Lounge"]);
+    await wait(60);
+    // Nothing has finished: the reply is not in hand yet.
+    expect(labels()).toEqual(["Looking through the Teacher's Lounge", 'Writing the lesson']);
+    clock.writing();
+    // The same line is not said twice.
+    expect(labels()).toHaveLength(2);
+    clock.stop();
+  });
+
+  test('with no lookup at all, it is said a moment after the turn starts', async () => {
+    const { labels, report } = record();
+    const clock = planningProgressClock(report, { afterMs: 20 });
+    expect(labels()).toEqual([]);
+    await wait(60);
+    expect(labels()).toEqual(['Writing the lesson']);
+    clock.stop();
+  });
+
+  test('lookups close together keep the line on the lookups, and a late one takes it back', async () => {
+    const { labels, report } = record();
+    const clock = planningProgressClock(report, { afterMs: 40 });
+    clock.lookup('search_daily_pages_prompts', {}, 1);
+    clock.lookedUp();
+    await wait(10);
+    clock.lookup('list_lounge_materials', {}, 2);
+    clock.lookedUp();
+    expect(labels()).toEqual(['Searching Class Starter prompts', "Looking through the Teacher's Lounge"]);
+    await wait(80);
+    clock.lookup('read_lounge_material', {}, 3);
+    expect(labels().slice(-2)).toEqual(['Writing the lesson', 'Reading a Lounge deck']);
+    clock.stop();
+  });
+
+  test('the bar never moves backwards, and a second pass on the deck has its own line', async () => {
+    const { said, labels, report } = record();
+    const clock = planningProgressClock(report, { afterMs: 10 });
+    await wait(40);
+    clock.lookup('list_classes', {}, 1);
+    clock.writing();
+    clock.checkingDeck();
+    expect(labels()).toEqual(['Writing the lesson', 'Looking at your classes', 'Writing the lesson', 'Checking the slides']);
+    for (let i = 1; i < said.length; i += 1) expect(said[i]!.fraction).toBeGreaterThanOrEqual(said[i - 1]!.fraction);
+    expect(said.at(-1)!.fraction).toBeLessThan(1);
+  });
+
+  test('stopped, it says nothing more', async () => {
+    const { labels, report } = record();
+    const clock = planningProgressClock(report, { afterMs: 10 });
+    clock.stop();
+    await wait(40);
+    expect(labels()).toEqual([]);
   });
 });

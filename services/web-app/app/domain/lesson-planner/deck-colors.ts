@@ -85,21 +85,46 @@ export type ColorRun = { text: string; color?: string };
 
 const MARK = /~~(#[0-9a-f]{6}|\d)\|([^~]+)~~/gi;
 
-/** Text with its color marks resolved: `~~2|reason~~`, `~~#2E6B3A|evidence~~`. */
-export function splitColorMarks(text: string, colors: string[]): ColorRun[] {
-  const runs: ColorRun[] = [];
+/** One part of a line: plain, or marked with a deck color number or a hex. */
+export type ColorMarkSegment = { text: string; mark?: string };
+
+/** A line as its parts, in order: the parts `splitColorMarks` draws. */
+export function colorMarkSegments(text: string): ColorMarkSegment[] {
+  const parts: ColorMarkSegment[] = [];
   let cursor = 0;
   for (const match of text.matchAll(MARK)) {
-    if (match.index! > cursor) runs.push({ text: text.slice(cursor, match.index) });
-    const key = match[1]!;
-    const color = key.startsWith('#')
-      ? readableOnPaper(key)
-      : (colors[Number(key) - 1] ?? colors[0]!);
-    runs.push({ text: match[2]!, color });
+    if (match.index! > cursor) parts.push({ text: text.slice(cursor, match.index) });
+    parts.push({ text: match[2]!, mark: match[1]! });
     cursor = match.index! + match[0].length;
   }
-  if (cursor < text.length || !runs.length) runs.push({ text: text.slice(cursor) });
-  return runs;
+  if (cursor < text.length || !parts.length) parts.push({ text: text.slice(cursor) });
+  return parts;
+}
+
+/**
+ * The line with one part rewritten (the deck studio, Nov 19: a teacher types
+ * into one colored word on the slide). Every other part keeps its words and
+ * its mark. A tilde cannot sit inside a mark, so one is never let in; a
+ * marked part left empty takes its mark with it.
+ */
+export function withColorMarkSegment(text: string, segment: number, next: string): string {
+  const parts = colorMarkSegments(text);
+  if (!parts[segment] || next.includes('~')) return text;
+  return parts
+    .map((part, index) => {
+      const words = index === segment ? next : part.text;
+      return part.mark && words ? `~~${part.mark}|${words}~~` : words;
+    })
+    .join('');
+}
+
+/** Text with its color marks resolved: `~~2|reason~~`, `~~#2E6B3A|evidence~~`. */
+export function splitColorMarks(text: string, colors: string[]): ColorRun[] {
+  return colorMarkSegments(text).map((part) => {
+    if (!part.mark) return { text: part.text };
+    const color = part.mark.startsWith('#') ? readableOnPaper(part.mark) : (colors[Number(part.mark) - 1] ?? colors[0]!);
+    return { text: part.text, color };
+  });
 }
 
 /** The same text with its marks taken out, for search, notes and fallbacks. */

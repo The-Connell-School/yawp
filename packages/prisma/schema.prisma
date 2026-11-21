@@ -1968,6 +1968,16 @@ model LessonPlanUploadPicture {
   width          Int?
   height         Int?
   blob           Bytes
+  /// Pictures that belong (Nov 21): 'found' for a picture the planner found in
+  /// an open collection; null for the teacher's own.
+  origin         String?
+  /// Who made it and its license, as Yawp! read them from the collection:
+  /// shown with the picture on every slide, PowerPoint and PDF.
+  credit         String?
+  /// The license's short name ("Public domain", "CC BY-SA 4.0").
+  license        String?
+  /// The page it came from, for the teacher to check.
+  sourceUrl      String?
 
   @@index([uploadId])
   @@index([conversationId])

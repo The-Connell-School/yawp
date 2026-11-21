@@ -109,6 +109,18 @@ describe('ExitTicketCard: a v3 ticket shows only what students read', () => {
   });
 });
 
+describe('ExitTicketCard: buttons wrap their label (Kevin, Nov 21)', () => {
+  test('Add to lesson and Create wrap rather than run past a narrow card', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <ExitTicketCard ticket={ticketFrom(v3Check)} assignmentTypeId="type_1" onToggle={() => {}} />
+      </MemoryRouter>
+    );
+    expect(html).toMatch(/class="[^"]*btn--wrap[^"]*"[^>]*data-testid="exit-ticket-stack-toggle"/);
+    expect(html).toMatch(/class="[^"]*btn--wrap[^"]*"[^>]*data-testid="exit-ticket-create"/);
+  });
+});
+
 describe('ExitTicketCard: a legacy ticket reads as before', () => {
   test('keeps its kind label, grading line and open notes', () => {
     const html = render(

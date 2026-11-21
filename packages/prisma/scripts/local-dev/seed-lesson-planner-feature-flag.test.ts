@@ -86,6 +86,10 @@ describe('ensureLessonPlannerEnabledForPreview', () => {
       'feature_flag.lesson_planner_writing_override',
       'feature_flag.lesson_planner_deck_kit_v4',
       'feature_flag.lesson_planner_deck_kit_v41',
+      'feature_flag.lesson_planner_deck_studio',
+      'feature_flag.lesson_planner_deck_chat',
+      'feature_flag.lesson_planner_context_tools',
+      'feature_flag.lesson_planner_found_pictures',
     ]);
     for (const call of calls) expect(call.create.value).toBe('{"mode":"everyone","orgIds":[]}');
     // The planner is forced on, like free tier; the review flags are

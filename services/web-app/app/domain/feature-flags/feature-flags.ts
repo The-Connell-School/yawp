@@ -119,6 +119,14 @@ export const LESSON_PLANNER_WRITING_OVERRIDE_FLAG = 'lesson_planner_writing_over
 export const LESSON_PLANNER_DECK_KIT_V4_FLAG = 'lesson_planner_deck_kit_v4' as const;
 /** The Lesson Deck Kit, spec v4.1 (Nov 11): Fraunces headlines, no running head; needs spec v4. */
 export const LESSON_PLANNER_DECK_KIT_V41_FLAG = 'lesson_planner_deck_kit_v41' as const;
+/** The deck studio (Nov 19): edit a v4 or v4.1 deck right on the slide. Needs Lesson Deck Kit v4. */
+export const LESSON_PLANNER_DECK_STUDIO_FLAG = 'lesson_planner_deck_studio' as const;
+/** Ask Yawp! in the deck studio (Nov 19): a line changes the deck, with Undo. Needs the deck studio. */
+export const LESSON_PLANNER_DECK_CHAT_FLAG = 'lesson_planner_deck_chat' as const;
+/** Timelines and maps for introducing a text (Nov 19): two slide layouts the planner can write. Needs Lesson Deck Kit v4. */
+export const LESSON_PLANNER_CONTEXT_TOOLS_FLAG = 'lesson_planner_context_tools' as const;
+/** Pictures that belong (Nov 21): the planner finds openly licensed pictures for a text's background. Needs timelines and maps. */
+export const LESSON_PLANNER_FOUND_PICTURES_FLAG = 'lesson_planner_found_pictures' as const;
 
 /**
  * The teacher's own deck flags as they apply (Nov 1): keeping the deck needs
@@ -382,6 +390,26 @@ export const FEATURE_FLAGS = {
     label: 'Lesson Planner: Lesson Deck Kit v4.1',
     description:
       'The Lesson Deck Kit, spec v4.1 (Nov 11), on top of spec v4: titles and headlines in Fraunces Bold (embedded in every PowerPoint export), no running head on any slide, no “Hold this”, “Know this”, “Read” or “Remember” labels, and a title slide that shows the teacher’s name, then the class and date, with no “Yawp! Writing Program” line. Applies to every gallery deck the school opens, in Present, Run the show, PowerPoint, the PDFs and shared links, and the planner writes to the v4.1 instructions. Needs Lesson Deck Kit v4. Off: spec v4, as before.',
+  },
+  [LESSON_PLANNER_DECK_STUDIO_FLAG]: {
+    label: 'Lesson Planner: deck studio (edit on the slide)',
+    description:
+      'The deck editor for Lesson Deck Kit v4 and v4.1 decks (Nov 19): the teacher clicks the words on the slide and types, adds or removes a list line with Enter and Backspace, and clicks a picture to swap it. The slide keeps the kit’s design as it changes. Notes and minutes sit in one strip under the slide; the fields are under “More options”, closed. Saving is unchanged. Needs Lesson Deck Kit v4. Off: the editor with the fields under the slide, as before.',
+  },
+  [LESSON_PLANNER_DECK_CHAT_FLAG]: {
+    label: 'Lesson Planner: ask Yawp! in the deck studio',
+    description:
+      'In the deck studio (Nov 19), a teacher can ask Yawp! to change the deck in their own words, or point at one part of a slide and ask about only that. Yawp! changes the slides in the editor, lists what changed, and offers Undo; nothing is saved until the teacher saves. Each request is one model call on the planner’s hourly limit. Needs the deck studio. Off: no chat in the studio.',
+  },
+  [LESSON_PLANNER_CONTEXT_TOOLS_FLAG]: {
+    label: 'Lesson Planner: timelines and maps',
+    description:
+      'For a lesson that introduces a text (Nov 19), the planner can write two more kinds of slide: a timeline (four to eight events, in one row or two) and a map (real country shapes, with places Yawp! finds in its own place list, an optional route and shaded countries). In Present the arrows step through the events or places one at a time. Both are edited on the slide and by chat where the deck studio is on. Map data is bundled: nothing is sent to a map service. Needs Lesson Deck Kit v4. Off: the planner is not told these layouts exist; a deck that already has one is still drawn.',
+  },
+  [LESSON_PLANNER_FOUND_PICTURES_FLAG]: {
+    label: 'Lesson Planner: pictures that belong',
+    description:
+      'Slides that teach, phase 2 (Nov 21): the planner can search open collections (Wikimedia Commons) for public-domain and openly licensed pictures of the real places, people and times a lesson introduces, and put them on its slides. Yawp! checks each license, keeps a copy with the lesson, and shows its credit on every slide, PowerPoint and PDF; the model never writes a picture address. Film stills and other copyrighted pictures are never fetched: the planner asks the teacher for them. Needs timelines and maps. Off: the planner has no picture search.',
   },
   [CLASS_CODE_UNIQUE_FLAG]: {
     label: 'Unique class codes',

@@ -2339,3 +2339,67 @@ describe('planner prompt — the Lesson Deck Kit, spec v4.1', () => {
     expect(textOf({ deckKitV4: true, deckKitV41: true, deckGallery: false })).not.toContain('Lesson Deck Kit, spec v4');
   });
 });
+
+describe('buildLessonPlannerSystemPrompt — slides that teach (Kevin, Nov 21)', () => {
+  const textOf = (contextTools: boolean) =>
+    buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', deckGallery: true, deckKitV4: true, deckKitV41: true, contextTools })
+      .map((block) => block.text)
+      .join('\n');
+
+  test('with context tools on, the deck is about its subject, not one painting', () => {
+    const on = textOf(true);
+    expect(on).not.toContain('one painting inside it');
+    expect(on).toContain('the pictures in it come from the subject’s world');
+    // Off, the kit reads as it always has.
+    expect(textOf(false)).toContain('one painting inside it');
+  });
+
+  test('a painting is never a metaphor for a lesson’s history, and the model is told where it hangs', () => {
+    const on = textOf(true);
+    expect(on).toContain('Never use a painting as a metaphor');
+    expect(on).toContain('on the title, beside a big idea, on a look slide and at the exit');
+    expect(textOf(false)).not.toContain('Never use a painting as a metaphor');
+  });
+
+  test('a reading slide is never shipped without its reading', () => {
+    const on = textOf(true);
+    expect(on).toContain('A read or excerpt slide needs its passage');
+    expect(on).toContain('ask the teacher for the passage');
+    expect(textOf(false)).not.toContain('A read or excerpt slide needs its passage');
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — the arc of a lesson (Kevin, Nov 21)', () => {
+  const textOf = (contextTools: boolean) =>
+    buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', contextTools })
+      .map((block) => block.text)
+      .join('\n');
+
+  test('it opens on the theme in the students’ own lives, always at the start of a unit', () => {
+    const on = textOf(true);
+    expect(on).toContain('Start with the students, and start with the theme');
+    expect(on).toContain('Always on the first day of a unit');
+    expect(on).toContain('What do you think it is like to lose power?');
+    expect(on).toContain('recall what came earlier in the unit');
+  });
+
+  test('then what they already know, shorter the less they know', () => {
+    const on = textOf(true);
+    expect(on).toContain('find out what they already know');
+    expect(on).toContain('The less they are likely to know, the shorter this part');
+  });
+
+  test('then short, direct teaching, key terms included', () => {
+    expect(textOf(true)).toContain('short, punchy pieces of information');
+  });
+
+  test('then the novel against what the students said, alone, together and taught', () => {
+    const on = textOf(true);
+    expect(on).toContain('set the novel’s treatment of the theme beside what the students said');
+    expect(on).toContain('time alone to think and write, time to discuss with peers, and the teacher teaching directly');
+  });
+
+  test('off, none of it', () => {
+    expect(textOf(false)).not.toContain('Start with the students, and start with the theme');
+  });
+});

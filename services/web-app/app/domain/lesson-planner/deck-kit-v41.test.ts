@@ -258,3 +258,118 @@ describe('spec v4.1: the page', () => {
     });
   });
 });
+
+describe('words that did not fit (bot test, Nov 19)', () => {
+  const panelHeadline = (title: string, kit: 'v4' | 'v4.1') => {
+    const of = deck([slide({ layout: 'steps', title, bullets: ['One', 'Two'] })], { kit });
+    return runsOf(layoutKitV4Slide(of, 0).elements).find((run) => run.text === title)!;
+  };
+  // The panel's text box is 380 wide. Fraunces Bold runs about 0.6 of its size a letter; Georgia about 0.55.
+  const longestWordWidth = (run: { text: string; size: number; face: string }) =>
+    Math.max(...run.text.split(/\s+/).map((word) => word.length)) * run.size * (run.face === 'display' ? 0.6 : 0.55);
+
+  test('a long word in a panel headline is set small enough to fit on a line: "Foreshadowing", not "Foreshadowin"', () => {
+    for (const kit of ['v4', 'v4.1'] as const) {
+      for (const title of ['Foreshadowing hunt', 'Counterarguments', 'Characterization']) {
+        expect(longestWordWidth(panelHeadline(title, kit))).toBeLessThanOrEqual(380);
+      }
+    }
+    expect(panelHeadline('Foreshadowing hunt', 'v4.1').size).toBe(44);
+  });
+
+  test('a headline of short words is set as large as before', () => {
+    expect(panelHeadline('Read the map', 'v4.1').size).toBe(58);
+    expect(panelHeadline('Draft your topic sentence', 'v4.1').size).toBe(50);
+    expect(panelHeadline('Read the map', 'v4').size).toBe(60);
+  });
+
+  const HARLEM = [
+    'What happens to a dream deferred?',
+    '',
+    'Does it dry up',
+    'like a raisin in the sun?',
+    'Or fester like a sore—',
+    'And then run?',
+    'Does it stink like rotten meat?',
+    'Or crust and sugar over—',
+    'like a syrupy sweet?',
+    '',
+    'Maybe it just sags',
+    'like a heavy load.',
+    '',
+    'Or does it explode?',
+  ].join('\n');
+  const passage = (body: string, kit: 'v4' | 'v4.1' = 'v4.1') => {
+    const of = deck([slide({ layout: 'excerpt', title: 'Annotate', body, author: 'Langston Hughes', work: 'Harlem' })], { kit });
+    return runsOf(layoutKitV4Slide(of, 0).elements).find((run) => run.text === body)!;
+  };
+  // The cream column is 660 wide and 560 tall, with the credit line under the passage.
+  const passageHeight = (run: { text: string; size: number }) =>
+    run.text.split('\n').reduce((lines, line) => lines + Math.max(1, Math.ceil((line.length * run.size * 0.52) / 660)), 0) * run.size * 1.45;
+
+  test('a poem is set by its lines, so its first line and its last are on the slide', () => {
+    for (const kit of ['v4', 'v4.1'] as const) {
+      const run = passage(HARLEM, kit);
+      expect(run.size).toBeLessThan(30);
+      expect(passageHeight(run)).toBeLessThanOrEqual(500);
+    }
+  });
+
+  test('a short passage is set as large as before; a long one steps down until it fits', () => {
+    expect(passage('It was a long time ago, and the river was the only road there was.').size).toBe(30);
+    const long = Array.from({ length: 90 }, (_, i) => (i % 7 ? 'river' : 'independence')).join(' ');
+    const run = passage(long.slice(0, 320));
+    expect(run.size).toBeLessThanOrEqual(30);
+    expect(passageHeight(run)).toBeLessThanOrEqual(500);
+  });
+
+  const LONG_CHOICE = 'King invokes St. Augustine to signal shared Christian values, making it harder for the clergymen to dismiss his position as outside their tradition.';
+  const choiceRows = (choices: string[], kit: 'v4' | 'v4.1' = 'v4.1', extra: Partial<Slide> = {}) => {
+    const of = deck([slide({ layout: 'discuss', title: 'Quiz', question: 'Which sentence is analysis rather than identification?', choices, ...extra })], { kit });
+    const elements = layoutKitV4Slide(of, 0).elements;
+    return choices.map((choice) => {
+      const box = elements.find((element) => element.kind === 'text' && element.paras.some((para) => para.runs.some((run) => run.text === choice)));
+      if (!box || box.kind !== 'text') throw new Error(`no row for ${choice}`);
+      const size = box.paras[0]!.runs.find((run) => run.text === choice)!.size;
+      return { y: box.y, h: box.h, size, letter: box.paras[0]!.runs[0]!.size, text: choice };
+    });
+  };
+  // A row is 1120 wide less its letter. The first line is as tall as the letter; the canvas sets lines at 1.35.
+  const rowNeeds = (row: { text: string; size: number; letter: number }) =>
+    row.letter * 1.35 + (Math.max(1, Math.ceil((row.text.length * row.size * 0.5) / 1060)) - 1) * row.size * 1.35;
+
+  test('a quiz choice that runs to a second line gets a row tall enough to hold it', () => {
+    for (const kit of ['v4', 'v4.1'] as const) {
+      const rows = choiceRows(['King uses an allusion to St. Augustine in paragraph 14.', LONG_CHOICE, 'King quotes St. Augustine.', 'King references several authorities.'], kit);
+      for (const row of rows) expect(row.h).toBeGreaterThanOrEqual(rowNeeds(row));
+      // Rows sit one under the other, and the last ends on the slide.
+      rows.slice(1).forEach((row, i) => expect(row.y).toBeGreaterThanOrEqual(rows[i]!.y + rows[i]!.h));
+      expect(rows.at(-1)!.y + rows.at(-1)!.h).toBeLessThanOrEqual(720 - 40);
+    }
+  });
+
+  test('five long choices are set smaller until they all fit on the slide', () => {
+    const many = Array.from({ length: 5 }, (_, i) => `${i + 1}. ${LONG_CHOICE}`);
+    for (const kit of ['v4', 'v4.1'] as const) {
+      const rows = choiceRows(many, kit);
+      expect(rows[0]!.size).toBeLessThan(28);
+      for (const row of rows) expect(row.h).toBeGreaterThanOrEqual(rowNeeds(row));
+      expect(rows.at(-1)!.y + rows.at(-1)!.h).toBeLessThanOrEqual(720 - 40);
+    }
+  });
+
+  test('short choices are set as before: 28 point, in rows of 64', () => {
+    const rows = choiceRows(['The sky is blue', 'Gatsby is lonely', 'Page 4']);
+    expect(rows.map((row) => [row.size, row.h])).toEqual([[28, 64], [28, 64], [28, 64]]);
+    expect(rows[1]!.y - rows[0]!.y).toBe(64);
+  });
+
+  test('the answer’s band is as tall as its row', () => {
+    const of = deck([slide({ layout: 'discuss', title: 'Quiz', question: 'Which is analysis?', choices: ['Short one', LONG_CHOICE], answer: 2 })], { kit: 'v4.1' });
+    const elements = layoutKitV4Slide(of, 0).elements;
+    const band = elements.find((element) => element.kind === 'rect' && element.role === 'band')!;
+    const row = elements.find((element) => element.kind === 'text' && element.paras.some((para) => para.runs.some((run) => run.text === LONG_CHOICE)))!;
+    expect([band.y, band.h]).toEqual([row.y, row.h]);
+    expect(band.h).toBeGreaterThan(64);
+  });
+});

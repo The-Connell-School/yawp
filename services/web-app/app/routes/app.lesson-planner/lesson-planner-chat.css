@@ -278,6 +278,13 @@
   max-width: none;
 }
 
+/* Options carousel (Kevin, Nov 21): sits under its step like the grid did. */
+@media (min-width: 640px) {
+  .lesson-planner-chat [data-testid='option-row'][data-layout='carousel'] {
+    padding-left: 3rem;
+  }
+}
+
 .lesson-planner-chat .lp-daily-option {
   margin-top: 0;
   border-radius: 0.75rem;

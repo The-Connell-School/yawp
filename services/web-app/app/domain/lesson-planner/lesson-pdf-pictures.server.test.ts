@@ -49,3 +49,13 @@ describe('picture slides in the slides PDF', () => {
     expect(await textOf(bytes)).toContain('not shared');
   });
 });
+
+describe('a found picture carries its credit into the PDF (Nov 21, phase 2)', () => {
+  test('the credit is printed with the picture', async () => {
+    const credited: DeckPictureFiles = new Map([
+      ['cmh0elephant0000abcd', { ...PICTURES.get('cmh0elephant0000abcd')!, credit: 'Mathew Brady, Garibaldi, Public domain, via Wikimedia Commons' }],
+    ]);
+    const text = await textOf(await renderSlidesPdf({ lessonTitle: 'Day 1', deck: DECK, pictures: credited }));
+    expect(text).toContain('Mathew Brady, Garibaldi, Public domain, via Wikimedia Commons');
+  });
+});

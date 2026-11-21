@@ -51,7 +51,15 @@ export const GALLERY_SLIDE_LAYOUTS = [
   'exit',
 ] as const;
 
-export const SLIDE_LAYOUTS = [...CLASSIC_SLIDE_LAYOUTS, ...GALLERY_SLIDE_LAYOUTS] as const;
+/**
+ * Background for a text (Nov 19): events on a line, and places on a real
+ * map. Drawn by the kit's v4 layout; every older look draws them as a list
+ * (`legacyContextSlide`, `classicSlide`). Not gallery templates: the planner
+ * is told of them only with `lesson_planner_context_tools`.
+ */
+export const CONTEXT_SLIDE_LAYOUTS = ['timeline', 'map', 'define', 'person'] as const;
+
+export const SLIDE_LAYOUTS = [...CLASSIC_SLIDE_LAYOUTS, ...GALLERY_SLIDE_LAYOUTS, ...CONTEXT_SLIDE_LAYOUTS] as const;
 
 export type SlideLayout = (typeof SLIDE_LAYOUTS)[number];
 export type ClassicSlideLayout = (typeof CLASSIC_SLIDE_LAYOUTS)[number];
@@ -159,6 +167,78 @@ const slideSchema = z
     // A picture from the teacher's own deck, by its id (Nov 1). Only an id:
     // it goes into a URL, so anything else is dropped before validation.
     image: z.string().regex(PICTURE_ID).optional(),
+    // A timeline slide's events (Nov 19), in order. With two rows, `track`
+    // says which row an event sits in and `tracks` names the rows.
+    events: z
+      .array(
+        z.object({
+          date: z.string().trim().min(1).max(24),
+          title: z.string().trim().min(1).max(60),
+          detail: z.string().trim().min(1).max(220).optional(),
+          track: z.coerce.number().int().min(1).max(2).optional(),
+        })
+      )
+      .min(2)
+      .max(8)
+      .optional(),
+    tracks: z.array(z.string().trim().min(1).max(30)).length(2).optional(),
+    // A map slide's places (Nov 19). The planner names a place; Yawp! finds
+    // it in its own place list and writes `lat`, `lon` and `found` (what it
+    // matched). A position the planner writes is thrown away
+    // (resolveDeckPlaces), so a pin is never where a model guessed.
+    places: z
+      .array(
+        z.object({
+          name: z.string().trim().min(1).max(60),
+          where: z.string().trim().min(1).max(60).optional(),
+          label: z.string().trim().min(1).max(40).optional(),
+          note: z.string().trim().min(1).max(200).optional(),
+          lat: z.number().min(-90).max(90).optional(),
+          lon: z.number().min(-180).max(180).optional(),
+          found: z.string().trim().min(1).max(120).optional(),
+        })
+      )
+      .min(1)
+      .max(8)
+      .optional(),
+    // Join the places in order: a journey.
+    route: z.boolean().optional(),
+    // Countries shaded in the deck color, by today's names, and what the
+    // slide calls them together ("Anglo-Egyptian Sudan").
+    shade: z.array(z.string().trim().min(1).max(60)).max(4).optional(),
+    shadeLabel: z.string().trim().min(1).max(60).optional(),
+    // Show the places among their neighbours: the first, wider map of a
+    // text's background (Kevin, Nov 21).
+    wide: z.boolean().optional(),
+    // The area the map shows, written by Yawp! with the places' positions.
+    view: z.object({ w: z.number(), s: z.number(), e: z.number(), n: z.number() }).optional(),
+    // A define slide's words (Kevin, Nov 21): the word, what it means in
+    // plain words, and an example from the book's world.
+    terms: z
+      .array(
+        z.object({
+          word: z.string().trim().min(1).max(40),
+          definition: z.string().trim().min(1).max(200),
+          example: z.string().trim().min(1).max(200).optional(),
+        })
+      )
+      .min(1)
+      .max(3)
+      .optional(),
+    // A person slide's people (Kevin, Nov 21): real people and a novel's
+    // characters, each with who they are, and the teacher's picture by id.
+    people: z
+      .array(
+        z.object({
+          name: z.string().trim().min(1).max(60),
+          role: z.string().trim().min(1).max(80),
+          note: z.string().trim().min(1).max(200).optional(),
+          image: z.string().regex(PICTURE_ID).optional(),
+        })
+      )
+      .min(1)
+      .max(4)
+      .optional(),
   })
   // Deliberately not .strict(): one stray key should not cost the teacher the
   // whole deck. Unknown fields are dropped, required ones still enforced.
@@ -189,6 +269,10 @@ const slideSchema = z
     if (slide.layout === 'read') {
       needs('tasks', 'tasks', Boolean(slide.tasks?.length || slide.bullets?.length));
     }
+    if (slide.layout === 'timeline') needs('events', 'at least two events', Boolean(slide.events?.length));
+    if (slide.layout === 'map') needs('places', 'at least one place', Boolean(slide.places?.length));
+    if (slide.layout === 'define') needs('terms', 'at least one word', Boolean(slide.terms?.length));
+    if (slide.layout === 'person') needs('people', 'at least one person', Boolean(slide.people?.length));
     if (slide.layout === 'picture') needs('image', 'the id of one of the teacher’s pictures', Boolean(slide.image));
     if (slide.layout === 'compare' && (!slide.left || !slide.right)) {
       context.addIssue({
@@ -224,10 +308,18 @@ const deckSchema = z.object({
   slides: z.array(slideSchema).min(1).max(MAX_SLIDES),
 });
 
-export type Slide = z.infer<typeof slideSchema>;
+export type Slide = z.infer<typeof slideSchema> & {
+  /**
+   * Render-only: the event or place in focus on a stepped slide (a timeline,
+   * a map), set where the slide is drawn (Present, the studio). Never in the
+   * schema, so the planner cannot set it and a saved deck never stores it.
+   */
+  focus?: number;
+};
 /** The look a gallery deck is drawn in: absent for spec v3, `v4` for spec v4, `v4.1` for spec v4.1. */
 export type DeckKit = 'v4' | 'v4.1';
-export type SlideDeck = z.infer<typeof deckSchema> & {
+export type SlideDeck = Omit<z.infer<typeof deckSchema>, 'slides'> & {
+  slides: Slide[];
   /**
    * Render-only: set where the deck is loaded for drawing, from the school's
    * `lesson_planner_deck_kit_v4` and `lesson_planner_deck_kit_v41` flags
@@ -258,6 +350,11 @@ const FIELD_ALIASES: Record<string, string> = {
   points: 'bullets',
   time: 'minutes',
   duration: 'minutes',
+  // A quiz question's choices and its answer (bot test, Nov 19).
+  options: 'choices',
+  correct: 'answer',
+  correctAnswer: 'answer',
+  correct_answer: 'answer',
   picture: 'image',
   pictureId: 'image',
   imageId: 'image',
@@ -280,6 +377,20 @@ const COLUMN_ALIASES: Record<string, string> = {
  * over a synonym.
  */
 const LAYOUT_ALIASES: Record<string, SlideLayout> = {
+  vocabulary: 'define',
+  vocab: 'define',
+  words: 'define',
+  glossary: 'define',
+  definitions: 'define',
+  definition: 'define',
+  key_terms: 'define',
+  'key-terms': 'define',
+  people: 'person',
+  cast: 'person',
+  characters: 'person',
+  who: 'person',
+  'whos-who': 'person',
+  portrait: 'person',
   bullet: 'bullets',
   list: 'bullets',
   points: 'bullets',
@@ -315,6 +426,14 @@ const LAYOUT_ALIASES: Record<string, SlideLayout> = {
   'exit-ticket': 'closing',
   exit_ticket: 'closing',
   'exit ticket': 'closing',
+  // A quiz question is a discuss slide with choices; there is no quiz layout,
+  // but the kit's instructions list "quiz" beside the layouts and a model
+  // takes it for one (bot test, Nov 19: three decks of three).
+  quiz: 'discuss',
+  'multiple-choice': 'discuss',
+  multiple_choice: 'discuss',
+  'multiple choice': 'discuss',
+  mcq: 'discuss',
   conclusion: 'closing',
   wrapup: 'closing',
   'wrap-up': 'closing',
@@ -368,11 +487,44 @@ function normalizeBullets(raw: unknown): unknown {
     .filter((item) => typeof item !== 'string' || item.length > 0);
 }
 
+// "A) Fragile", "b. Decay", "(C) Nature", "D: Recovered": a quiz slide letters its own choices.
+const TYPED_LETTER = /^\s*\(?[A-Ea-e][.):]\)?\s+/;
+
+/** A quiz question's choices, without letters typed in front of them. */
+function normalizeChoices(raw: unknown): unknown {
+  if (!Array.isArray(raw)) return raw;
+  return raw.map((item) => (typeof item === 'string' ? item.replace(TYPED_LETTER, '').trim() : item)).filter((item) => typeof item !== 'string' || item.length > 0);
+}
+
+/**
+ * The right choice's number, from 1, however it was written: a number, a
+ * letter ("B"), or the choice's own words. One that names no choice is left
+ * off rather than costing the deck: the question is still a question.
+ */
+function normalizeAnswer(raw: unknown, choices: unknown): unknown {
+  const count = Array.isArray(choices) ? choices.length : 0;
+  const within = (n: number) => (Number.isInteger(n) && n >= 1 && n <= count ? n : undefined);
+  if (typeof raw === 'number') return within(raw);
+  if (typeof raw !== 'string') return undefined;
+  const text = raw.trim();
+  if (/^\d+$/.test(text)) return within(Number(text));
+  const letter = /^\(?([A-Ea-e])[.):]?\)?$/.exec(text);
+  if (letter) return within(letter[1]!.toLowerCase().charCodeAt(0) - 96);
+  const key = text.replace(TYPED_LETTER, '').trim().toLowerCase();
+  const at = Array.isArray(choices) ? choices.findIndex((choice) => typeof choice === 'string' && choice.trim().toLowerCase() === key) : -1;
+  return at >= 0 ? at + 1 : undefined;
+}
+
+const QUIZ_NAMES = new Set(['quiz', 'multiple-choice', 'multiple_choice', 'multiple choice', 'mcq']);
+
 /** The layout the slide is, whatever the model called it — or none. */
 function normalizeLayout(slide: Record<string, unknown>): unknown {
   const raw = slide.layout;
   if (typeof raw === 'string') {
     const key = raw.trim().toLowerCase();
+    // "timeline" was a model's word for a notes slide long before it was a
+    // layout of its own (Nov 19): without events, it still is one.
+    if (key === 'timeline' && !Array.isArray(slide.events)) return 'notes';
     if (LAYOUT_SET.has(key)) return key;
     // An unrecognised name is left alone so the schema rejects it by name,
     // rather than being silently turned into some other kind of slide.
@@ -404,6 +556,11 @@ function normalizeColumn(raw: unknown): unknown {
   return applyAliases(raw as Record<string, unknown>, COLUMN_ALIASES);
 }
 
+/** "…: open it in Yawp! before you go." and its dashes, at the end of a button. */
+const OPEN_IN_YAWP_TAIL = /\s*[:—–-]?\s*open it in Yawp!?(\s+before you go)?\.?\s*$/i;
+/** "Next time:" and "Tomorrow:", however many, at the start of the next lesson. */
+const NEXT_TIME_LEAD = /^\s*(?:(?:next time|tomorrow|next class|next lesson)\s*[:—–-]\s*)+/i;
+
 function normalizeSlide(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
   const slide = applyAliases(raw as Record<string, unknown>, FIELD_ALIASES);
@@ -419,7 +576,34 @@ function normalizeSlide(raw: unknown): unknown {
   if (slide.minutes !== undefined) {
     slide.minutes = normalizeMinutes(slide.minutes);
   }
+  // Called a quiz, with its question only in the title: a discuss slide needs it as its question.
+  const calledQuiz = typeof slide.layout === 'string' && QUIZ_NAMES.has(slide.layout.trim().toLowerCase());
   slide.layout = normalizeLayout(slide);
+  if (calledQuiz && slide.question === undefined && slide.body === undefined && typeof slide.title === 'string') slide.question = slide.title;
+  if (slide.choices !== undefined) slide.choices = normalizeChoices(slide.choices);
+  if (slide.answer !== undefined) {
+    slide.answer = normalizeAnswer(slide.answer, slide.choices);
+    if (slide.answer === undefined) delete slide.answer;
+  }
+  // A person's picture is one of the teacher's, by id, or none.
+  if (Array.isArray(slide.people)) {
+    slide.people = slide.people.map((person) => {
+      if (!person || typeof person !== 'object' || Array.isArray(person)) return person;
+      const { image, ...rest } = person as Record<string, unknown>;
+      return typeof image === 'string' && PICTURE_ID.test(image.trim()) ? { ...rest, image: image.trim() } : rest;
+    });
+  }
+  // The exit slide sets "<button>: open it in Yawp!" and "Next time: <next>"
+  // itself, so a model that wrote either out in full put it on screen twice
+  // ("Exit ticket: open it in Yawp!: open it in Yawp!", the Leopard deck, Nov 21).
+  if (typeof slide.button === 'string') {
+    const button = slide.button.replace(OPEN_IN_YAWP_TAIL, '').trim();
+    if (button) slide.button = button;
+  }
+  if (typeof slide.nextLesson === 'string') {
+    const next = slide.nextLesson.replace(NEXT_TIME_LEAD, '').trim();
+    if (next) slide.nextLesson = next;
+  }
   if (slide.image !== undefined && !(typeof slide.image === 'string' && PICTURE_ID.test(slide.image.trim()))) {
     delete slide.image;
   } else if (typeof slide.image === 'string') {
@@ -429,11 +613,45 @@ function normalizeSlide(raw: unknown): unknown {
   return slide;
 }
 
+/**
+ * One slide with the field names the model reaches for read as the schema's
+ * own (`notes` is `speakerNotes`, `items` is `bullets`), before it is checked.
+ */
+export function normalizeSlideFields(raw: unknown): Record<string, unknown> {
+  const slide = normalizeSlide(raw);
+  return slide && typeof slide === 'object' && !Array.isArray(slide) ? (slide as Record<string, unknown>) : {};
+}
+
+/**
+ * The most a context slide holds, and the list it holds them in. A slide the
+ * model filled past it is split into even slides of the same kind (the
+ * Grapes of Wrath deck on the preview, Nov 21, had four words on one define
+ * slide; the whole deck failed, and the repair turned every context slide
+ * into a list).
+ */
+const SPLIT_LISTS: Record<string, { key: string; max: number }> = {
+  define: { key: 'terms', max: 3 },
+  person: { key: 'people', max: 4 },
+  timeline: { key: 'events', max: 8 },
+  map: { key: 'places', max: 8 },
+};
+
+function splitFullSlide(slide: unknown): unknown[] {
+  if (!slide || typeof slide !== 'object' || Array.isArray(slide)) return [slide];
+  const record = slide as Record<string, unknown>;
+  const rule = typeof record.layout === 'string' ? SPLIT_LISTS[record.layout] : undefined;
+  const list = rule ? record[rule.key] : undefined;
+  if (!rule || !Array.isArray(list) || list.length <= rule.max) return [slide];
+  const parts = Math.ceil(list.length / rule.max);
+  const size = Math.ceil(list.length / parts);
+  return Array.from({ length: parts }, (_, i) => ({ ...record, [rule.key]: list.slice(i * size, (i + 1) * size) }));
+}
+
 function normalizeDeck(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
   const deck = raw as Record<string, unknown>;
   if (!Array.isArray(deck.slides)) return raw;
-  const out: Record<string, unknown> = { ...deck, slides: deck.slides.map(normalizeSlide) };
+  const out: Record<string, unknown> = { ...deck, slides: deck.slides.map(normalizeSlide).flatMap(splitFullSlide) };
   if (typeof out.art === 'string' && !resolveDeckArt(out.art)) {
     delete out.art;
   }
@@ -569,7 +787,9 @@ export function validateSlideDeck(json: string): SlideDeckValidation {
 /** A validated deck written back out as the block the renderer reads. */
 export function fenceSlideDeck(deck: SlideDeck): string {
   // The kit is how this school draws the deck, not part of it: never stored.
-  const { kit: _kit, ...stored } = deck;
+  const { kit: _kit, ...rest } = deck;
+  // Nor is which event or place a stepped slide has in focus.
+  const stored = { ...rest, slides: rest.slides.map(({ focus: _focus, ...slide }) => slide) };
   return `\`\`\`${SLIDE_DECK_FENCE}\n${JSON.stringify(stored, null, 2)}\n\`\`\``;
 }
 
@@ -721,6 +941,18 @@ export function classicSlide(slide: Slide): ClassicSlide {
       return as('quote', { attribution: slide.attribution ?? slide.author });
     case 'exit':
       return as('closing');
+    case 'timeline':
+      return as('bullets', { bullets: (slide.events ?? []).slice(0, 7).map((event) => `${event.date}: ${event.title}`) });
+    case 'define':
+      return as('bullets', { bullets: (slide.terms ?? []).map((term) => `${term.word}: ${term.definition}`.slice(0, 200)) });
+    case 'person':
+      return as('bullets', { bullets: (slide.people ?? []).map((person) => `${person.name}: ${person.role}`.slice(0, 200)) });
+    case 'map':
+      return as('bullets', {
+        bullets: (slide.places ?? [])
+          .slice(0, 7)
+          .map((place) => `${place.label ?? place.name}${place.note ? `: ${place.note}` : ''}`.slice(0, 200)),
+      });
     default:
       return as('statement');
   }
@@ -728,6 +960,13 @@ export function classicSlide(slide: Slide): ClassicSlide {
 
 /** The teacher's pictures a deck shows, once each, in order (Nov 1). */
 export function deckPictureIds(deck: Pick<SlideDeck, 'slides'>): string[] {
-  return [...new Set(deck.slides.flatMap((slide) => (slide.image ? [slide.image] : [])))];
+  return [
+    ...new Set(
+      deck.slides.flatMap((slide) => [
+        ...(slide.image ? [slide.image] : []),
+        ...(slide.people ?? []).flatMap((person) => (person.image ? [person.image] : [])),
+      ])
+    ),
+  ];
 }
 

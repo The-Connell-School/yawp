@@ -7,6 +7,8 @@ import {
   readableOnPaper,
   slideColor,
   splitColorMarks,
+  colorMarkSegments,
+  withColorMarkSegment,
 } from './deck-colors';
 
 describe('contrast and darkening (Deck spec v3: 4.5:1 on paper)', () => {
@@ -107,5 +109,36 @@ describe('paletteFromPixels: two or three colors sampled from a painting', () =>
 
   test('a nearly gray painting still gets one color, from its strongest tint', () => {
     expect(paletteFromPixels([...fill([120, 120, 125], 500), ...fill([140, 110, 90], 50)])).toHaveLength(1);
+  });
+});
+
+describe('colorMarkSegments: the parts of a line, to edit one and keep the rest', () => {
+  test('the same parts splitColorMarks draws, each with its mark', () => {
+    const text = 'A ~~1|claim~~, a ~~2|reason~~ and ~~#2E6B3A|evidence~~.';
+    expect(colorMarkSegments(text)).toEqual([
+      { text: 'A ' },
+      { text: 'claim', mark: '1' },
+      { text: ', a ' },
+      { text: 'reason', mark: '2' },
+      { text: ' and ' },
+      { text: 'evidence', mark: '#2E6B3A' },
+      { text: '.' },
+    ]);
+    expect(colorMarkSegments(text).map((part) => part.text)).toEqual(splitColorMarks(text, ['#9C4A22']).map((run) => run.text));
+    expect(colorMarkSegments('Plain.')).toEqual([{ text: 'Plain.' }]);
+    expect(colorMarkSegments('')).toEqual([{ text: '' }]);
+  });
+
+  test('one part rewritten: the others, and every mark, stay', () => {
+    const text = 'A ~~1|claim~~ and a ~~2|reason~~.';
+    expect(withColorMarkSegment(text, 1, 'strong claim')).toBe('A ~~1|strong claim~~ and a ~~2|reason~~.');
+    expect(withColorMarkSegment(text, 2, ' with a ')).toBe('A ~~1|claim~~ with a ~~2|reason~~.');
+    expect(withColorMarkSegment('Plain.', 0, 'Plainer.')).toBe('Plainer.');
+  });
+
+  test('a marked part emptied takes its mark with it; a tilde never gets in', () => {
+    expect(withColorMarkSegment('A ~~1|claim~~.', 1, '')).toBe('A .');
+    expect(withColorMarkSegment('A ~~1|claim~~.', 1, 'cl~aim')).toBe('A ~~1|claim~~.');
+    expect(withColorMarkSegment('A ~~1|claim~~.', 9, 'x')).toBe('A ~~1|claim~~.');
   });
 });
