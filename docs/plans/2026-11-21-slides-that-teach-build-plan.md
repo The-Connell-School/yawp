@@ -46,13 +46,35 @@ Done:
   "what do you know", short direct teaching, then the novel against what the
   students said, with time alone, together and taught.
 
+- **Phase 2, first slice** (behind `lesson_planner_found_pictures`, off by
+  default, on in previews):
+  - The planner's `find_pictures` tool: Yawp! searches Wikimedia Commons,
+    keeps only public domain, CC0, CC BY and CC BY-SA bitmaps wide enough to
+    project, and stores up to three per search with the lesson (a few searches
+    a turn). On a lesson's first turn they are kept before the lesson exists
+    and attached when it is written.
+  - The picture table gains `origin`, `credit`, `license` and `sourceUrl`
+    (migration `20261121130000_lesson_plan_found_pictures`, all optional).
+  - Every found picture shows its credit and license, read from the
+    collection, never written by the model: on every screen, in the three
+    PowerPoint looks and both PDF paths.
+  - The prompt tells the planner when to search, and that film stills, book
+    covers in copyright and living people still come from the teacher.
+  - Checked against real Commons responses (13 public-domain files and the
+    Wellcome Collection's CC BY scans). The live search could not be run from
+    the build machine (Commons rate-limits it); it needs a pass on the
+    preview.
+
 Not done yet:
 
 - The image-reuse cap and the empty-reading check as code (phase 0 is in the
   prompt only; the checks move to the deck lint in phase 4).
 - Pins of places a few miles apart can still sit on each other (Great Neck
   and Port Washington): this needs pointer lines or finer coast data.
-- Phases 2 to 4.
+- Phase 2's other parts: the studio's "Pictures Yawp! found" review and
+  swap, the fetcher's shared cache and queue, and region maps (Natural Earth
+  first-level regions for approximate historical states).
+- Phases 3 and 4.
 - Not checked: the planner writing these slides with the model (needs the
   preview with the flag on), PowerPoint and the PDF by eye for the two new
   slides.
