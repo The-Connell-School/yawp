@@ -94,6 +94,28 @@ describe('searchOpenPictures', () => {
     expect(found[1]!.credit).toBe('Jane Smith, Garibaldi statue, CC BY-SA 4.0, via Wikimedia Commons');
   });
 
+  test('real Commons metadata: the Credit line when there is no Artist, the file’s type from its name when Commons leaves it out', async () => {
+    const wellcome = page(1, 'Giovanni Aldini, galvanism experiments Wellcome L0007025.jpg', 'CC BY 4.0', {
+      Artist: undefined,
+      Credit: { value: '<a href="//wellcomeimages.org">Wellcome Collection</a>' },
+    });
+    delete (wellcome.imageinfo[0] as { mime?: string }).mime;
+    const { fetcher } = commons([wellcome]);
+    const found = await searchOpenPictures('Aldini galvanism', { fetch: fetcher });
+    expect(found.length).toBe(1);
+    expect(found[0]!.credit).toBe('Wellcome Collection, Giovanni Aldini, galvanism experiments Wellcome L0007025, CC BY 4.0, via Wikimedia Commons');
+  });
+
+  test('a credit that is an address, or an unknown author said twice, reads cleanly', async () => {
+    const { fetcher } = commons([
+      page(1, 'Aldini plate.jpg', 'CC BY 4.0', { Artist: undefined, Credit: { value: '<a href="https://wellcomeimages.org/x">https://wellcomeimages.org/indexplus/obf_images/f7/93/3b.html</a>' } }),
+      page(2, 'Prohibition disposal.jpg', 'Public domain', { Artist: { value: 'Unknown authorUnknown author' } }),
+    ]);
+    const found = await searchOpenPictures('x', { fetch: fetcher });
+    expect(found[0]!.credit).toBe('wellcomeimages.org, Aldini plate, CC BY 4.0, via Wikimedia Commons');
+    expect(found[1]!.credit).toBe('Prohibition disposal, Public domain, via Wikimedia Commons');
+  });
+
   test('a picture too small to project is left out', async () => {
     const small = page(1, 'Tiny.jpg', 'Public domain');
     small.imageinfo[0]!.width = 200;

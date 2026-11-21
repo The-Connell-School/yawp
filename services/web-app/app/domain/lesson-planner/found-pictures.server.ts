@@ -97,6 +97,21 @@ const plain = (html: unknown, max: number) => {
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 };
 
+/** An artist or credit line as a slide shows it: a site's name for an address, nothing for "unknown". */
+function cleanArtist(text: string): string {
+  if (/^https?:\/\//i.test(text)) {
+    try {
+      return new URL(text.replace(/…$/, '')).hostname.replace(/^www\./, '');
+    } catch {
+      return '';
+    }
+  }
+  // "Unknown authorUnknown author": a template said twice.
+  const half = text.length / 2;
+  const once = Number.isInteger(half) && text.slice(0, half) === text.slice(half) ? text.slice(0, half) : text;
+  return /^unknown( author| artist| photographer)?\.?$/i.test(once.trim()) ? '' : once;
+}
+
 type CommonsPage = {
   index?: number;
   title?: string;
@@ -127,7 +142,7 @@ export async function searchOpenPictures(query: string, { fetch: fetcher = fetch
     prop: 'imageinfo',
     iiprop: 'url|size|mime|extmetadata',
     iiurlwidth: '1280',
-    iiextmetadatafilter: 'LicenseShortName|Artist|ImageDescription|ObjectName',
+    iiextmetadatafilter: 'LicenseShortName|Artist|Credit|ImageDescription|ObjectName',
   });
   const response = await fetcher(`${COMMONS_API}?${params}`, { headers: { 'user-agent': USER_AGENT } });
   if (response.status === 429 || response.status >= 500) throw new PictureSearchBusy(String(response.status));
@@ -142,9 +157,12 @@ export async function searchOpenPictures(query: string, { fetch: fetcher = fetch
     const width = info.thumbwidth ?? info.width ?? 0;
     const height = info.thumbheight ?? info.height ?? 0;
     const imageUrl = info.thumburl ?? info.url;
-    if (!license || !imageUrl || width < MIN_WIDTH || !/^image\/(jpeg|png)$/.test(info.mime ?? '')) return [];
+    // Commons does not always say the type; the file's own name does.
+    const type = info.mime ?? (/\.(jpe?g)(\?|$)/i.test(imageUrl ?? '') ? 'image/jpeg' : /\.png(\?|$)/i.test(imageUrl ?? '') ? 'image/png' : '');
+    if (!license || !imageUrl || width < MIN_WIDTH || !/^image\/(jpeg|png)$/.test(type)) return [];
     const title = plain(meta.ObjectName?.value, 100) || (page.title ?? '').replace(/^File:/, '').replace(/\.\w+$/, '');
-    const artist = plain(meta.Artist?.value, 80) || 'Unknown';
+    // Who made it; for a collection's scan with no artist, the collection's credit line.
+    const artist = cleanArtist(plain(meta.Artist?.value, 80)) || cleanArtist(plain(meta.Credit?.value, 200));
     return [
       {
         title,
@@ -153,7 +171,7 @@ export async function searchOpenPictures(query: string, { fetch: fetcher = fetch
         width,
         height,
         license,
-        credit: `${artist}, ${title}, ${license}, via Wikimedia Commons`,
+        credit: [artist, title, license, 'via Wikimedia Commons'].filter(Boolean).join(', '),
         sourceUrl: info.descriptionurl ?? `https://commons.wikimedia.org/wiki/${encodeURIComponent(page.title ?? '')}`,
       },
     ];
