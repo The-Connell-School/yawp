@@ -14,6 +14,43 @@ they start with a top-level folder.
 > exactly the kind of AI generated, lifeless stuff people don't want … we have
 > to design against this tendency."
 
+## Status, Nov 21
+
+Built on `claude/context-tools-timeline-map` (PR #997), behind
+`lesson_planner_context_tools` except where noted. Each change was written
+test first.
+
+Done:
+
+- **Phase 0.** The exit slide's doubled strings are fixed for every deck: a
+  deck is read with "open it in Yawp!" and "Next time:" taken off what the
+  model wrote, and the prompt asks for the name only. With the flag on, the
+  kit's aim is the subject's world, not a painting; a painting is never a
+  metaphor for a lesson's history; and a reading slide without its passage
+  names the page and asks the teacher for it.
+- **Phase 1.**
+  - The context-lesson prompt: where, when, who, which words, what it looked
+    like, and why it matters to the book, planned before the deck.
+  - `define` (words) and `person` (people) slides, drawn by the kit, typed on
+    in the studio, and shown as a list in the older looks.
+  - Wide maps (`"wide": true`) that show a country among its neighbours,
+    before a closer map.
+  - The demo pass's findings: no line across wide maps (coasts on the 180th
+    meridian), no mid-word breaks on a full timeline, 30 English and older
+    place names (Geneva, Mantua, Ypres, Auschwitz, Archangel…), names kept
+    clear of other pins, and a closer view for several places together.
+
+Not done yet:
+
+- The image-reuse cap and the empty-reading check as code (phase 0 is in the
+  prompt only; the checks move to the deck lint in phase 4).
+- Pins of places a few miles apart can still sit on each other (Great Neck
+  and Port Washington): this needs pointer lines or finer coast data.
+- Phases 2 to 4.
+- Not checked: the planner writing these slides with the model (needs the
+  preview with the flag on), PowerPoint and the PDF by eye for the two new
+  slides.
+
 ## 1. What the deck had
 
 | | In the deck |
