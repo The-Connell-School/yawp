@@ -1,8 +1,10 @@
 import { expect, test } from 'bun:test';
 import {
   FREE_ASSIGNMENT_LABELS,
+  FREE_CLASSROOM_BUNDLE_TILE_LABELS,
   formatUsageRenewsLabel,
   freeAssignmentKindUsageMeta,
+  freeClassroomBundlePitchList,
   isLessonPlannerMonthlyExhausted,
 } from './inapp-usage';
 
@@ -73,4 +75,12 @@ test('freeAssignmentKindUsageMeta hides unlimited copy and shows quotas when cap
 
 test('labels Exit Ticket usage', () => {
   expect(FREE_ASSIGNMENT_LABELS.exit_ticket).toBe('Exit Ticket');
+});
+
+test('freeClassroomBundlePitchList names all six bundle kinds for public copy', () => {
+  expect(FREE_CLASSROOM_BUNDLE_TILE_LABELS).toHaveLength(6);
+  expect(FREE_CLASSROOM_BUNDLE_TILE_LABELS).toContain('C-E-R');
+  expect(freeClassroomBundlePitchList()).toBe(
+    'Class Starter, Exit Ticket, 5-Paragraph Essay, Pre-writing, Thesis Builder, and C-E-R'
+  );
 });

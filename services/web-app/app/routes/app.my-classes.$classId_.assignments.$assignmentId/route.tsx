@@ -130,6 +130,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const gradedCount = await prisma.submission.count({
     where: {
       gradedAt: { not: null },
+      unsubmittedAt: null,
       document: {
         classAssignmentId: classAssignment.id,
         deletedAt: null,
@@ -149,6 +150,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     status !== 'in-progress'
       ? await prisma.submission.findMany({
           where: {
+            unsubmittedAt: null,
             document: {
               classAssignmentId: classAssignment.id,
               deletedAt: null,
@@ -193,7 +195,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             classAssignmentId: classAssignment.id,
             deletedAt: null,
             archivedAt: null,
-            submissions: { none: {} },
+            submissions: { none: { unsubmittedAt: null } },
           },
           select: {
             id: true,

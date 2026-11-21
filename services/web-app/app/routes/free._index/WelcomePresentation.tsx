@@ -69,7 +69,7 @@ export function FreeTierSubmissionCard({
   );
 }
 
-/** Render only after the server has durably recorded a below-9 submission. */
+/** Render only after the server has durably recorded an elementary (K–5) decline. */
 export function FreeTierBelowHighSchoolCard({
   applicationId,
 }: {

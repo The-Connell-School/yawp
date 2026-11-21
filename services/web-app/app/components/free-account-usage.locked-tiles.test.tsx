@@ -71,6 +71,13 @@ const usage: FreeAccountUsage = {
       total: 3,
       remaining: 3,
     },
+    {
+      kind: 'claim_evidence_reasoning',
+      label: 'C-E-R',
+      used: 0,
+      total: 3,
+      remaining: 3,
+    },
   ],
   allAssignmentsUsed: false,
   warning: null,
@@ -107,18 +114,24 @@ test('FreeAssignmentTiles renders only entitled free assignment rows on the dash
             kind: 'thesis_statement',
             imageId: 'img-thesis',
           },
+          {
+            id: 'cer',
+            kind: 'claim_evidence_reasoning',
+            imageId: 'img-cer',
+          },
         ]}
         onCreate={() => {}}
       />
     </StaticRouter>
   );
   expect(html).toContain('data-testid="teacher-assignments-grid"');
-  expect(html.match(/data-testid="dashboard-assignment-tile"/g)).toHaveLength(5);
+  expect(html.match(/data-testid="dashboard-assignment-tile"/g)).toHaveLength(6);
   expect(html).toContain('Class Starter');
   expect(html).toContain('Exit Ticket');
   expect(html).toContain('5-Paragraph Essay');
   expect(html).toContain('Pre-writing');
   expect(html).toContain('Thesis Builder');
+  expect(html).toContain('C-E-R');
   expect(html).not.toContain('site-license-locked-assignment-tile');
   expect(html).not.toContain('Daily Pages');
   expect(html).toContain('/api/image/course/img-starter');
@@ -197,6 +210,11 @@ test('FreeAssignmentTiles unlocked tiles link to assignment type home', () => {
             kind: 'thesis_statement',
             imageId: 'img-thesis',
           },
+          {
+            id: 'cer',
+            kind: 'claim_evidence_reasoning',
+            imageId: 'img-cer',
+          },
         ]}
         onCreate={() => {}}
       />
@@ -205,7 +223,8 @@ test('FreeAssignmentTiles unlocked tiles link to assignment type home', () => {
   expect(html).toContain('href="/app/assignment-types/starter"');
   expect(html).toContain('href="/app/assignment-types/pre"');
   expect(html).toContain('href="/app/assignment-types/thesis"');
-  expect(html.match(/data-testid="dashboard-assignment-tile"/g)).toHaveLength(5);
+  expect(html).toContain('href="/app/assignment-types/cer"');
+  expect(html.match(/data-testid="dashboard-assignment-tile"/g)).toHaveLength(6);
   expect(html).not.toMatch(
     /<button[^>]*data-testid="dashboard-assignment-tile"/
   );

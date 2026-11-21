@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { ClipboardCheck, Sparkles } from 'lucide-react';
+import { ClipboardCheck, Compass } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import type { ExitTicketClassRead } from '~/domain/assignment-types/exit-ticket-class-read';
 import type { ExitTicketSummaryPanelData } from '~/domain/assignment-types/exit-ticket-class-summary';
@@ -104,7 +104,7 @@ export function ExitTicketClassReadPanel({
           {planHref ? (
             <Button asChild size="sm" data-testid="exit-ticket-plan-tomorrow">
               <Link to={planHref}>
-                <Sparkles size={13} />
+                <Compass size={13} />
                 Plan tomorrow from this
               </Link>
             </Button>

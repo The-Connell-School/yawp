@@ -1,4 +1,4 @@
-import { PenLine, Sparkles } from 'lucide-react';
+import { BookOpen, PenLine } from 'lucide-react';
 
 /**
  * Many composition prompts are a short scenario that ends with a quoted example
@@ -40,7 +40,7 @@ export function CompositionPrompt({
     >
       <div className="flex items-center gap-2 border-b border-border/60 bg-muted/50 px-4 py-2.5">
         <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary">
-          <Sparkles className="h-3.5 w-3.5" />
+          <BookOpen className="h-3.5 w-3.5" />
         </span>
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           The scenario

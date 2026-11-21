@@ -40,6 +40,25 @@ suite('waitlist', () => {
     expect(row?.status).toBe('LEAD');
   });
 
+  for (const gradeLevel of ['6', '7', '8'] as const) {
+    test(`middle school grade ${gradeLevel} waitlist matches grade-10 LEAD path (no below-hs tag)`, async () => {
+      const suffix = `ms-${gradeLevel}`;
+      await svc!.submitWaitlist(person(suffix, { gradeLevel }));
+      await svc!.submitWaitlist(person(`${suffix}-ref`, { gradeLevel: '10' }));
+      const row = await prisma!.freeTierApplication.findUnique({
+        where: { email: `ft-${run}-${suffix}@school.example` },
+      });
+      const refRow = await prisma!.freeTierApplication.findUnique({
+        where: { email: `ft-${run}-${suffix}-ref@school.example` },
+      });
+      expect(row?.status).toBe('LEAD');
+      expect(refRow?.status).toBe('LEAD');
+      expect(row?.tags.includes('below-hs')).toBe(false);
+      expect(refRow?.tags.includes('below-hs')).toBe(false);
+      expect(row?.gradeLevel).toBe(gradeLevel);
+    });
+  }
+
   test('a resubmission never overwrites the existing applicant (no tampering) and does not throw', async () => {
     await svc!.submitWaitlist(person('b'));
     await svc!.submitWaitlist({ ...person('b'), name: 'Mallory', schoolName: 'Evil High' });

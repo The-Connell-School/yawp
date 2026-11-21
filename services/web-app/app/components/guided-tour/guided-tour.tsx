@@ -20,7 +20,6 @@ import {
   MonitorPlay,
   NotebookPen,
   School,
-  Sparkles,
   Users,
   X,
 } from 'lucide-react';
@@ -492,7 +491,6 @@ function WelcomeCard({
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <Button type="button" size="sm" onClick={onTakeTour}>
-              <Sparkles size={16} className="mr-1.5" aria-hidden="true" />
               Take a tour
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={onSkip}>
