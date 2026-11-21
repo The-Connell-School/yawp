@@ -64,6 +64,7 @@ export const PLANNING_PROGRESS_LABELS: Record<string, string> = {
   search_my_lessons: 'Looking through your saved lessons',
   read_my_lesson: 'Opening one of your lessons',
   read_uploaded_document: 'Reading your document',
+  find_pictures: 'Finding pictures for the slides',
   list_assignment_types: 'Checking what you can assign',
 };
 

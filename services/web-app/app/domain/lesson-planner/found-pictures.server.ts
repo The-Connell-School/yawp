@@ -14,6 +14,7 @@
  */
 import { imageDimensions, sniffPictureType } from '~/domain/office/image-dimensions';
 import { cleanAltText, MAX_DECK_PICTURE_BYTES } from '~/domain/office/pptx-pictures';
+import type { ReporterTool } from '~/domain/reporter/reporter-tools.server';
 
 /** Wikimedia asks every client to say who it is and how to reach it. */
 const USER_AGENT = process.env.PICTURE_FINDER_USER_AGENT ?? 'YawpLessonPlanner/1.0 (https://yawp.school; lesson pictures)';
@@ -39,7 +40,8 @@ export type KeptPicture = { id: string; shows: string; credit: string; license: 
 export type PictureStore = {
   create(data: {
     membershipId: string;
-    conversationId: string;
+    /** Null on a lesson's first turn, before the lesson is written; attached with it. */
+    conversationId: string | null;
     position: number;
     slideNumbers: number[];
     altText: string;
@@ -56,6 +58,20 @@ export type PictureStore = {
 };
 
 type Fetch = typeof fetch;
+
+/** The planner's picture search, offered with `lesson_planner_found_pictures`. */
+export const FIND_PICTURES_TOOL: ReporterTool = {
+  name: 'find_pictures',
+  description:
+    'Find openly licensed pictures (public domain, CC0, CC BY, CC BY-SA) of a real person, place, thing or time for a slide: a portrait for a person slide, the real place for a picture slide. Say plainly what the picture should show, in English, with names and dates ("Giuseppe Garibaldi photograph", "Palermo harbour 19th century", "Dust Bowl farm 1936"). Yawp! searches Wikimedia Commons, checks each license, keeps up to three with the lesson and returns their ids, what each shows and its credit. Never use it for a film still, a book cover in copyright or a living person: those come from the teacher.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      query: { type: 'string', description: 'What the picture should show, with names and dates.' },
+    },
+    required: ['query'],
+  },
+} as ReporterTool;
 
 /** The license's short name when a school may show it; null otherwise. */
 export function openLicense(short: string | null | undefined): string | null {
@@ -159,7 +175,7 @@ async function download(url: string, fetcher: Fetch): Promise<Uint8Array | null>
  */
 export async function findPicturesForLesson(
   input: Record<string, unknown>,
-  owner: { membershipId: string; conversationId: string },
+  owner: { membershipId: string; conversationId: string | null },
   deps: { fetch?: Fetch; store: PictureStore }
 ): Promise<{ pictures: KeptPicture[]; note: string }> {
   const fetcher = deps.fetch ?? fetch;

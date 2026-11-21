@@ -89,6 +89,29 @@ describe('a context lesson thinks like an English teacher (Kevin, Nov 21)', () =
   });
 });
 
+describe('pictures that belong (Nov 21, phase 2)', () => {
+  test('with found pictures on, the planner looks for real pictures and never writes a credit', () => {
+    const on = buildContextToolsSection({ foundPictures: true }).join('\n');
+    expect(on).toContain('call find_pictures');
+    expect(on).toContain('Yawp! shows each picture’s credit');
+    expect(on).toContain('a still from the film');
+    expect(on).not.toContain('Yawp! has no photographs of its own yet');
+  });
+
+  test('off, the planner asks the teacher for every picture', () => {
+    const off = buildContextToolsSection().join('\n');
+    expect(off).toContain('Yawp! has no photographs of its own yet');
+    expect(off).not.toContain('find_pictures');
+  });
+
+  test('the flag reaches the prompt', () => {
+    const text = buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', deckGallery: true, deckKitV4: true, deckKitV41: true, contextTools: true, foundPictures: true })
+      .map((block) => block.text)
+      .join('\n');
+    expect(text).toContain('call find_pictures');
+  });
+});
+
 describe('typed on in the studio', () => {
   const of = deck([TIMELINE, MAP]);
 

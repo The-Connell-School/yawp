@@ -54,6 +54,7 @@ import {
 } from '~/domain/lesson-planner/lesson-links';
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
+import { FIND_PICTURES_TOOL, findPicturesForLesson } from '~/domain/lesson-planner/found-pictures.server';
 import { withResolvedPlaces } from '~/domain/lesson-planner/context-slides.server';
 import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
 import { readLessonLength } from '~/domain/lesson-planner/lesson-length';
@@ -87,6 +88,8 @@ import {
   type PlanningProgress,
 } from '~/domain/lesson-planner/planning-progress';
 
+/** Picture searches a turn may make (Nov 21). */
+const MAX_PICTURE_SEARCHES = 6;
 const PLANNER_FAILED =
   'The lesson planner could not put that together. Please try again.';
 /**
@@ -496,6 +499,7 @@ export async function action({ request }: ActionFunctionArgs) {
       deckKitV4,
       deckKitV41,
       contextTools,
+      foundPictures,
       uploads: uploadsOn,
       teachMySlides,
       refreshMyDeck,
@@ -645,6 +649,7 @@ export async function action({ request }: ActionFunctionArgs) {
       deckKitV4,
       deckKitV41,
       contextTools,
+      foundPictures,
       sources,
       lessonPictures,
       deckChoices,
@@ -667,6 +672,10 @@ export async function action({ request }: ActionFunctionArgs) {
     // Every link the reply is allowed to contain came back from a tool on this
     // request. Anything else it writes, it made up.
     const toolLinks = new Set<string>();
+    // Pictures the planner found this turn (Nov 21): kept with the lesson, or
+    // attached to it when this turn writes it.
+    const foundPictureIds: string[] = [];
+    let pictureSearches = 0;
 
     /**
      * Everything from the model call onwards, as one closure over the setup
@@ -696,7 +705,7 @@ export async function action({ request }: ActionFunctionArgs) {
             ipHash: computeIpHash(request),
           },
           maxToolRounds: PLANNER_MAX_TOOL_ROUNDS,
-          tools: sources.length ? [...LESSON_PLANNER_TOOLS, UPLOAD_TOOL] : LESSON_PLANNER_TOOLS,
+          tools: [...LESSON_PLANNER_TOOLS, ...(sources.length ? [UPLOAD_TOOL] : []), ...(foundPictures ? [FIND_PICTURES_TOOL] : [])],
           handleToolCall: async (name, input) => {
             // Reported before the call, not after: the teacher should see what is
             // being looked up while it is being looked up.
@@ -705,6 +714,24 @@ export async function action({ request }: ActionFunctionArgs) {
             try {
               // Read from this turn's own documents: never another lesson's.
               if (name === UPLOAD_TOOL.name) return JSON.stringify(readUploadPart(sources, input));
+              if (name === FIND_PICTURES_TOOL.name) {
+                if (!foundPictures) return JSON.stringify({ error: 'Picture search is not on for this school.' });
+                // A few searches a turn: a deck needs a handful of pictures, not a gallery.
+                pictureSearches += 1;
+                if (pictureSearches > MAX_PICTURE_SEARCHES) return JSON.stringify({ pictures: [], note: 'That is enough searching for one deck. Use the pictures you have, and ask the teacher for any others.' });
+                const found = await findPicturesForLesson(
+                  input,
+                  { membershipId: ctx.membershipId, conversationId: activeConversation?.id ?? null },
+                  {
+                    store: {
+                      create: (data) =>
+                        prisma.lessonPlanUploadPicture.create({ data: { ...data, blob: Buffer.from(data.blob) }, select: { id: true } }),
+                    },
+                  }
+                );
+                foundPictureIds.push(...found.pictures.map((picture) => picture.id));
+                return JSON.stringify(found);
+              }
               const result = await handleLessonPlannerToolCall(name, input, ctx);
               for (const link of collectToolLinks(result)) toolLinks.add(link);
               return result;
@@ -862,6 +889,12 @@ export async function action({ request }: ActionFunctionArgs) {
                   select: { id: true },
                 }));
 
+          if (foundPictureIds.length) {
+            await transaction.lessonPlanUploadPicture.updateMany({
+              where: { id: { in: foundPictureIds }, membershipId: ctx.membershipId, conversationId: null, uploadId: null },
+              data: { conversationId: persistedConversation.id },
+            });
+          }
           if (attachUploadIds.length) {
             await transaction.lessonPlanUpload.updateMany({
               where: { id: { in: attachUploadIds }, membershipId: ctx.membershipId, conversationId: null },

@@ -975,7 +975,7 @@ export function buildDeckKitV4Section(
  * through when introducing a book. Only for a school with
  * `lesson_planner_context_tools`, on top of the kit's v4 templates.
  */
-export function buildContextToolsSection(): string[] {
+export function buildContextToolsSection({ foundPictures = false }: { foundPictures?: boolean } = {}): string[] {
   return [
     '',
     'Background for a text: when a lesson introduces a book, a poem, a speech or a period, students need its world before they read. Think like the English teacher who knows that world, not like a slide template.',
@@ -985,7 +985,9 @@ export function buildContextToolsSection(): string[] {
     '- map — places on a real map that Yawp! draws from its own map data. `title`, an optional `body`, and `places`: 2 to 6 `{ "name", "where", "label", "note" }`. `name` is the place’s own modern name as an atlas prints it ("Khartoum", "Salinas", "Istanbul"); `where` is its country, or its state for a town in the United States ("Sudan", "California"), and is always given; `label` only when the text calls the place something else ("Constantinople"); `note` is one sentence on why this place matters to the text. The teacher steps through the places in the order you give them. `"route": true` joins them in that order, for a journey. `shade` is up to 4 countries by today’s names to fill in the deck color, with `shadeLabel` saying what they are together ("Sudan in 1956"). The map shows today’s borders, so never write as if it shows old ones. Many students cannot find the country on a world map: start wider than the place: a first map with the country shaded, one or two pins and `"wide": true`, which shows it among its neighbours, and only then the closer map of where the story happens. A deck may have two maps, the wider one first.',
     '- define — words. `title` ("Words for 1860") and `terms`: 1 to 3 `{ "word", "definition", "example" }`. `definition` is plain words a student this age knows, 20 words or fewer; `example` is one sentence from the book’s world that uses the word ("The Prince of Salina belongs to Sicily’s aristocracy."). Put the words before the slide that first uses them. More than three words: two define slides, never a longer one.',
     '- person — people. `title` and `people`: 1 to 4 `{ "name", "role", "note", "image" }`. `role` is who they are in a few words ("General", "The Prince’s nephew"); `note` is one sentence on why they matter here. Use it for the real people a lesson names and for the novel’s own people, introduced before students meet them in the text, a cast of two to four on one slide. `image` is the id of one of the teacher’s own pictures, only when one of them shows this person.',
-    'Pictures: Yawp! has no photographs of its own yet. When a slide wants a picture you cannot give it (a portrait, the real place, a still from the film), make the slide anyway, say in its `speakerNotes` exactly which picture would go there, and ask the teacher for it in one line under the deck, so they can add their own. Never stand a painting in for a picture of the real place or people.',
+    foundPictures
+      ? 'Pictures: for the real people, places and things a context deck shows, call find_pictures with what the picture should show ("Giuseppe Garibaldi photograph", "Palermo 19th century") and put the id of the one that truly shows it in the slide’s `image` or a person’s `image`. A `picture` slide (`image`, a `title` that says what it shows, and a `question` students answer about it) is how a place or a moment is shown large. Yawp! shows each picture’s credit and license on the slide; never write a credit or a picture address yourself. A still from the film, a book cover in copyright and a living person are never searched for: make the slide, say in its `speakerNotes` which picture goes there, and ask the teacher for it in one line under the deck. Never stand a painting in for a picture of the real place or people.'
+      : 'Pictures: Yawp! has no photographs of its own yet. When a slide wants a picture you cannot give it (a portrait, the real place, a still from the film), make the slide anyway, say in its `speakerNotes` exactly which picture would go there, and ask the teacher for it in one line under the deck, so they can add their own. Never stand a painting in for a picture of the real place or people.',
     'Never write a position: no `lat`, `lon`, `view` or `found`. Yawp! finds each place by its name and puts the pin there; a place it cannot find (a village, a place the author made up) is left off the map, so name the nearest real town instead and say so in its `note`.',
     'Only dates, places, words and people you are sure of. A wrong year or a pin in the wrong town is taught to thirty students: leave out an event you would have to guess at, and say in `speakerNotes` what the teacher should check. A timeline takes the place of a `notes` slide with a timeline; do not use both for the same events.',
   ];
@@ -1029,6 +1031,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   deckKitV4 = false,
   deckKitV41 = false,
   contextTools = false,
+  foundPictures = false,
   sources = [],
   lessonPictures = [],
   deckChoices,
@@ -1040,6 +1043,8 @@ export function buildLessonPlannerSystemPromptBlocks({
   organizationName: string;
   /** Timelines and maps for introducing a text (Nov 19; needs deckKitV4). After the cache breakpoint. */
   contextTools?: boolean;
+  /** Pictures that belong (Nov 21): the planner has find_pictures. Needs contextTools. */
+  foundPictures?: boolean;
   lessonInventory?: LessonInventoryEntry[];
   /** A day lesson's place in its week's framework (Brian's run 5, round 2). */
   weekContext?: string[];
@@ -1092,7 +1097,7 @@ export function buildLessonPlannerSystemPromptBlocks({
       ? buildDeckKitV4Section(recentArt, { v41: deckKitV41, teacherName, subjectFirst: contextTools })
       : buildDeckGallerySection(deckGallery, recentArt)),
     ...(contextTools ? buildLessonArcSection() : []),
-    ...(deckGallery && deckKitV4 && contextTools ? buildContextToolsSection() : []),
+    ...(deckGallery && deckKitV4 && contextTools ? buildContextToolsSection({ foundPictures }) : []),
     ...buildSourcesSection(sources, deckChoices, { onStack }),
     ...buildLessonPicturesSection(lessonPictures),
   ].join('\n');
