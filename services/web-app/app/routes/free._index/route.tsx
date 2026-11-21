@@ -18,11 +18,10 @@ import { RATE_LIMITS } from '~/config/rate-limits';
 import { enforceUnauthByIpAndTarget } from '~/utils/rate-limit.server';
 import { z } from 'zod';
 import { readBoundedText } from '~/utils/bounded-body.server';
-import { isBelowHsGrade } from '~/domain/free-tier/grade-gate';
 import { isPublicOnboardingV2Enabled, isSupportedSignupGrade } from '~/domain/free-tier/public-onboarding.server';
 import { normalizeEmail } from '~/domain/free-tier/service.server';
 import { sendBelowHsTeamContact } from '~/domain/free-tier/team-contact.server';
-import { FreeTierWelcomeCard, FreeTierNameField, FreeTierSubmissionCard, FreeTierBelowHighSchoolCard, FreeTierGradeField } from './WelcomePresentation';
+import { FreeTierWelcomeCard, FreeTierNameField, FreeTierSubmissionCard, FreeTierGradeField } from './WelcomePresentation';
 import {
   FreeTierAuthCard,
   FreeTierButton,
@@ -61,12 +60,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     (validity.reason === 'disabled' ||
       validity.reason === 'expired' ||
       validity.reason === 'exhausted');
-  const payload = {
+  // A closed link never blocks anyone: show the normal waitlist form instead.
+  const payload = linkClosed ? {
+    onboardingV2,
+    mode: 'waitlist' as const,
+    tokenValid: null,
+    linkClosed: false as const,
+  } : {
     onboardingV2,
     mode: 'token' as const,
     token,
     tokenValid: validity,
-    linkClosed,
+    linkClosed: false as const,
   };
   if (cookie.setCookie) {
     return data(payload, { headers: { 'Set-Cookie': cookie.setCookie } });
@@ -169,18 +174,7 @@ export async function action({ request }: ActionFunctionArgs) {
     if (!parsed.success) return { ok: false, error: 'invalid' as const };
     if (!isSupportedSignupGrade(parsed.data.gradeLevel)) return { ok: false, error: 'invalid_grade' as const };
     Object.assign(raw, parsed.data);
-    if (isBelowHsGrade(parsed.data.gradeLevel)) {
-      if (intent === 'redeem' && !z.string().min(1).max(500).safeParse(raw.token).success) return { ok: false, error: 'invalid' as const };
-      const result = await (await import('~/domain/free-tier/grade-gate.server')).recordBelowHsDecline({ ...parsed.data, ...(intent === 'redeem' ? { token: raw.token } : {}) });
-      if (!result.ok) return { ok: false, error: 'invalid' as const };
-      const application = await (await import('~/utils/db.server')).prisma.freeTierApplication.findUnique({
-        where: { email: normalizeEmail(parsed.data.email) },
-        select: { id: true },
-      });
-      return application?.id
-        ? { ok: true as const, declined: true as const, applicationId: application.id }
-        : { ok: true as const, declined: true as const };
-    }
+    // Every grade (K–12) joins the waitlist; admins approve from the queue.
   }
 
   if (intent === 'redeem') {
@@ -196,7 +190,14 @@ export async function action({ request }: ActionFunctionArgs) {
       .safeParse(raw);
     if (!parsed.success) return { ok: false, error: 'invalid' as const };
     const result = await redeemToken(parsed.data, { scanDedupeCookie: await readScanDedupeCookie(request), ...(onboardingV2 ? { onboardingV2: true } : {}) });
-    if (!result.ok) return { ok: false, error: result.reason };
+    if (!result.ok) {
+      // A closed, unknown or capped link never blocks anyone: fall back to the
+      // normal waitlist (create-only, pending admin approval).
+      const { token: _token, ...applicant } = parsed.data;
+      if (onboardingV2) await submitWaitlist(applicant, { onboardingV2: true });
+      else await submitWaitlist(applicant);
+      return { ok: true as const };
+    }
     if (result.bypassWaitlist) {
       const { sendReleaseEmailsForApplicationIds } =
         await import('~/domain/free-tier/approval-flow.server');
@@ -238,17 +239,6 @@ export default function FreeTierLandingRoute() {
     ? freeTierSubmitSuccessCopy({ ...fetcher.data, email: submittedEmail })
     : null;
 
-  if (fetcher.data?.ok && 'declined' in fetcher.data && fetcher.data.declined) {
-    return (
-      <FreeTierBelowHighSchoolCard
-        applicationId={
-          'applicationId' in fetcher.data && typeof fetcher.data.applicationId === 'string'
-            ? fetcher.data.applicationId
-            : ''
-        }
-      />
-    );
-  }
   if (data.onboardingV2 && submitted) return <FreeTierSubmissionCard onboardingV2 bypassWaitlist={!!(fetcher.data && 'bypassWaitlist' in fetcher.data && fetcher.data.bypassWaitlist)} email={submittedEmail} />;
 
   const title = data.mode === 'token' && data.linkClosed
@@ -324,22 +314,6 @@ export default function FreeTierLandingRoute() {
             <p className="text-sm text-destructive" role="alert">
               Too many attempts. Please wait and try again.
             </p>
-          ) : null}
-          {fetcher.data?.ok === false &&
-          fetcher.data.error === 'cap_reached' ? (
-            <p className="text-sm text-destructive" role="alert">
-              This free classroom event is full.
-            </p>
-          ) : null}
-          {fetcher.data?.ok === false &&
-          fetcher.data.error === 'budget_exceeded' ? (
-            <p className="text-sm text-destructive" role="alert">
-              This event link is paused because the current free-tier budget has been reached.
-            </p>
-          ) : null}
-          {fetcher.data?.ok === false &&
-          (fetcher.data.error === 'cap_reached' || fetcher.data.error === 'budget_exceeded') ? (
-            <a href="/free" className="text-sm underline">Join the waitlist</a>
           ) : null}
           {data.onboardingV2 && fetcher.data?.ok === false && fetcher.data.error === 'invalid' ? <p role="alert" className="text-sm text-destructive">We couldn’t save your details. Check the form and try again.</p> : null}
           <FreeTierButton type="submit" disabled={data.onboardingV2 && fetcher.state !== 'idle'}>

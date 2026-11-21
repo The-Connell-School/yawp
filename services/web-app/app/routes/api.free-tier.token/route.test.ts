@@ -2,8 +2,10 @@ import { beforeEach, expect, mock, test } from 'bun:test';
 import { z } from 'zod';
 
 const redeemToken = mock(async (): Promise<any> => ({ ok: true, bypassWaitlist: true }));
+const submitWaitlist = mock(async (..._args: any[]): Promise<any> => ({ ok: true }));
 mock.module('~/domain/free-tier/service.server', () => ({
   redeemToken,
+  submitWaitlist,
   redeemInputSchema: z.object({ email: z.string().email(), token: z.string() }).passthrough(),
   normalizeEmail: (email: string) => email.toLowerCase(),
   hashToken: (token: string) => token,
@@ -21,17 +23,19 @@ mock.module('~/domain/free-tier/public-onboarding.server', () => ({
 }));
 const { readOrMintScanDedupeCookie } = await import('~/domain/free-tier/acquisition-token-scan.server');
 const { action } = await import('./route');
-beforeEach(() => redeemToken.mockReset());
+beforeEach(() => { redeemToken.mockReset(); submitWaitlist.mockClear(); });
 
-for (const [reason, status] of [['cap_reached', 409], ['budget_exceeded', 402]] as const) {
-  test(`token HTTP handles ${reason} distinctly and returns no application details`, async () => {
+for (const reason of ['cap_reached', 'budget_exceeded', 'exhausted', 'expired', 'disabled', 'invalid'] as const) {
+  test(`token HTTP falls back to the waitlist on ${reason} and returns no application details`, async () => {
     redeemToken.mockResolvedValue({ ok: false, reason });
     const result = await action({ request: new Request('http://localhost/api/free-tier/token', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ token: 'local-event', email: 'teacher@yawp.local' }),
     }) } as never);
-    expect(result.status).toBe(status);
-    expect(await result.json()).toEqual({ ok: false, reason });
+    expect(result.status).toBe(200);
+    expect(await result.json()).toEqual({ ok: true, bypassWaitlist: false });
+    expect(submitWaitlist).toHaveBeenCalledWith(expect.not.objectContaining({ token: expect.anything() }), undefined);
+    expect(submitWaitlist).toHaveBeenCalledWith(expect.objectContaining({ email: 'teacher@yawp.local' }), undefined);
     expect(result.headers.get('cache-control')).toBe('no-store');
   });
 }

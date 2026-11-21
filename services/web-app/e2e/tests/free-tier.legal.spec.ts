@@ -96,8 +96,6 @@ test('signup visibly links to both public legal pages', async ({ page }) => {
 for (const [name, result, message] of [
   ['waitlist', { ok: true, redeemed: true, bypassWaitlist: false }, "You're on the list"],
   ['bypass', { ok: true, redeemed: true, bypassWaitlist: true }, 'Check your email'],
-  ['cap', { ok: false, error: 'cap_reached' }, 'This free classroom event is full.'],
-  ['budget', { ok: false, error: 'budget_exceeded' }, 'This event link is paused because the current free-tier budget has been reached.'],
 ] as const) {
   test(`signup ${name} presentation with intercepted action (no email or analytics)`, async ({ page }) => {
     test.skip(before || legalOnly, 'After-change UI regression only');
@@ -121,7 +119,6 @@ for (const [name, result, message] of [
     await expect(
       page.getByText(new RegExp(`^${message.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}!?$`))
     ).toBeVisible();
-    if (!result.ok) await expect(page.getByRole('link', { name: 'Join the waitlist', exact: true })).toBeVisible();
     await capture(page, `fixture-${name}`);
   });
 }

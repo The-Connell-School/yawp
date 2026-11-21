@@ -10,6 +10,9 @@ export const FREE_TIER_BUDGET_ACTIVE_STATUSES: FreeTierApplicationStatus[] = [
   'APPROVED',
 ];
 
+/** Effectively unlimited: no realistic count of free-tier teachers reaches it. */
+export const FREE_TIER_UNCAPPED = 1_000_000_000;
+
 export class FreeTierBudgetExceededError extends Error {
   constructor(readonly summary: FreeTierUsageSummary) {
     super('Free-tier budget reached.');
@@ -73,7 +76,10 @@ export function resolveFreeTierRuntimeEnvironment(env: Env = process.env): FreeT
 export function resolveFreeTierBudgetBasis(env: Env = process.env): FreeTierBudgetBasis {
   const environment = resolveFreeTierBudgetEnvironment(env);
   const prefix = environment === 'production' ? 'PRODUCTION' : environment === 'demo' ? 'DEMO' : 'PREVIEW';
-  const budgetUsd = readMoney(env, `FREE_TIER_${prefix}_BUDGET_USD`, readMoney(env, 'FREE_TIER_BUDGET_USD', 250));
+  // Production has no default budget cap on total free-tier activations; set
+  // FREE_TIER_PRODUCTION_BUDGET_USD (or FREE_TIER_BUDGET_USD) to reintroduce one.
+  const defaultBudgetUsd = environment === 'production' ? FREE_TIER_UNCAPPED : 250;
+  const budgetUsd = readMoney(env, `FREE_TIER_${prefix}_BUDGET_USD`, readMoney(env, 'FREE_TIER_BUDGET_USD', defaultBudgetUsd));
   const unitCostUsd = readMoney(env, `FREE_TIER_${prefix}_UNIT_COST_USD`, readMoney(env, 'FREE_TIER_UNIT_COST_USD', 2.5));
   return { environment, budgetUsd, unitCostUsd };
 }

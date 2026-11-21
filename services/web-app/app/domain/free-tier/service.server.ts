@@ -28,12 +28,22 @@ import {
   countFreeTierActiveApplications,
   freeTierBudgetRemainingActivations,
   readFreeTierUsageSummary,
+  resolveFreeTierRuntimeEnvironment,
+  FREE_TIER_UNCAPPED,
 } from './usage-budget.server';
 
-/** Read at call time so ops can change it with an env var and tests can override it. */
+/**
+ * Read at call time so ops can change it with an env var and tests can override it.
+ * Production has no default cap on total free-tier activations: every teacher
+ * can get through the waitlist once an admin approves them. Set
+ * FREE_TIER_RELEASE_CAP to reintroduce one.
+ */
 export function getFreeTierReleaseCap(): number {
-  const n = Number(process.env.FREE_TIER_RELEASE_CAP || '100');
-  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 100;
+  const fallback = resolveFreeTierRuntimeEnvironment() === 'production' ? FREE_TIER_UNCAPPED : 100;
+  const raw = process.env.FREE_TIER_RELEASE_CAP;
+  if (raw === undefined || raw.trim() === '') return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : fallback;
 }
 
 export const waitlistInputSchema = z

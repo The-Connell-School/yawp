@@ -25,7 +25,6 @@ mock.module('./service.server', () => ({ waitlistInputSchema,
   hashToken: (s: string) => s, checkTokenValidity: async () => ({ valid: true }),
   findAcquisitionTokenByCredential: async () => null, recordAcquisitionTokenScan: async () => {},
 }));
-mock.module('./grade-gate.server', () => ({ recordBelowHsDecline: decline }));
 mock.module('./approval-flow.server', () => ({ sendReleaseEmailsForApplicationIds: mail }));
 mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({ requireFreeTierEnabled: enabled }));
 mock.module('~/utils/rate-limit.server', () => ({ enforceUnauthByIpAndTarget: throttle }));
@@ -63,10 +62,13 @@ for (const path of paths) {
         expect.objectContaining({ onboardingV2: true })
       );
     });
-  for (const grade of ['K', '1', '5']) test(`${path}: explicit ${grade} records decline before admission`, async () => {
-    expect((await post(path, grade)).body).toEqual(path === 'free' ? { ok: true, declined: true } : { ok: true });
-    expect(decline).toHaveBeenCalledWith(expect.objectContaining({ gradeLevel: grade, email: 'teacher@example.edu', ...(path === 'token' ? { token: 'event' } : {}) }));
-    expect(submit).not.toHaveBeenCalled(); expect(redeem).not.toHaveBeenCalled(); expect(mail).not.toHaveBeenCalled();
+  for (const grade of ['K', '1', '2', '3', '4', '5']) test(`${path}: explicit ${grade} joins the waitlist like every other grade`, async () => {
+    expect((await post(path, grade)).body).toEqual(path === 'token' ? { ok: true, bypassWaitlist: false } : { ok: true });
+    expect(decline).not.toHaveBeenCalled();
+    expect(path === 'token' ? redeem : submit).toHaveBeenCalledWith(
+      expect.objectContaining({ gradeLevel: grade, email: 'teacher@example.edu' }),
+      expect.objectContaining({ onboardingV2: true })
+    );
   });
   for (const grade of [undefined, '', 'mixed', '7th grade', '9–12', '13', '09', '9,10']) test(`${path}: enabled gate rejects ${String(grade)}`, async () => {
     const result = await post(path, grade);
@@ -98,19 +100,10 @@ for (const path of ['waitlist', 'token'] as const) {
     expect(submit).not.toHaveBeenCalled(); expect(redeem).not.toHaveBeenCalled(); expect(decline).not.toHaveBeenCalled();
   });
 }
-test('form token decline passes only validated credential, never calls admission/mail', async () => {
-  expect((await post('free', '5', { intent: 'redeem', token: 'event' })).body).toEqual({
-    ok: true,
-    declined: true,
-  });
-  expect(decline).toHaveBeenCalledWith(expect.objectContaining({ token: 'event' }));
-  expect(redeem).not.toHaveBeenCalled();
-  expect(mail).not.toHaveBeenCalled();
-});
-test('a failed decline write never shows the decline confirmation', async () => {
-  decline.mockResolvedValueOnce(Response.json({ error: 'flag_off' }, { status: 409 }));
-  expect((await post('free', '5')).body.ok).toBe(false);
-  expect(submit).not.toHaveBeenCalled();
+test('form token signup for an elementary grade redeems the link, never declines', async () => {
+  expect((await post('free', '5', { intent: 'redeem', token: 'event' })).body).toMatchObject({ ok: true, redeemed: true });
+  expect(redeem).toHaveBeenCalledWith(expect.objectContaining({ token: 'event', gradeLevel: '5' }), expect.anything());
+  expect(decline).not.toHaveBeenCalled();
 });
 
 for (const [value, expected] of [['true', true], ['false', false], ['{"mode":"targeted","orgIds":["default-org"]}', false], [null, false]] as const) {

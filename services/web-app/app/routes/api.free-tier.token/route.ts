@@ -1,9 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { z } from 'zod';
-import { isBelowHsGrade } from '~/domain/free-tier/grade-gate';
 import { isPublicOnboardingV2Enabled, isSupportedSignupGrade } from '~/domain/free-tier/public-onboarding.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
-import { checkTokenValidity, hashToken, normalizeEmail, redeemInputSchema, redeemToken } from '~/domain/free-tier/service.server';
+import { checkTokenValidity, hashToken, normalizeEmail, redeemInputSchema, redeemToken, submitWaitlist } from '~/domain/free-tier/service.server';
 import { readScanDedupeCookie } from '~/domain/free-tier/acquisition-token-scan.server';
 import { readBoundedText } from '~/utils/bounded-body.server';
 import { enforceUnauthByIpAndTarget } from '~/utils/rate-limit.server';
@@ -59,12 +58,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!parsed.success) return json({ error: 'Invalid input' }, 400);
   const { middleName: _middleName, ...applicant } = parsed.data as typeof parsed.data & { middleName?: string };
   if (onboardingV2 && !isSupportedSignupGrade(applicant.gradeLevel)) return json({ error: 'Invalid grade' }, 400);
-  if (onboardingV2 && isBelowHsGrade(applicant.gradeLevel)) return (await import('~/domain/free-tier/grade-gate.server')).recordBelowHsDecline(applicant);
   const cookie = await readScanDedupeCookie(request);
   const result = await redeemToken(applicant, { scanDedupeCookie: cookie, ...(onboardingV2 ? { onboardingV2: true } : {}) });
   if (!result.ok) {
-    const map = { invalid: 404, exhausted: 409, expired: 410, disabled: 410, budget_exceeded: 402, cap_reached: 409 } as const;
-    return json({ ok: false, reason: result.reason }, map[result.reason] ?? 400);
+    // A closed, unknown or capped link never blocks anyone: fall back to the
+    // normal waitlist (create-only, pending admin approval).
+    const { token: _token, ...waitlistApplicant } = applicant;
+    await submitWaitlist(waitlistApplicant, onboardingV2 ? { onboardingV2: true } : undefined);
+    return json({ ok: true, bypassWaitlist: false }, 200);
   }
   // Nothing about the application (id, status, whether the email already
   // existed) is returned: that would let anyone holding a QR token probe emails.
