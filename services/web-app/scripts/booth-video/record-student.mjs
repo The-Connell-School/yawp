@@ -389,35 +389,66 @@ const segments = {
     }
 
     await s.caption(VO.feedback.revise, { hold: false });
+    await s.moveTo('[data-testid="submission-revise-essay"]', 800);
+    await sleep(1600);
+    await rec.stop();
+    await s.clearCaption();
+  },
+
+  async revision() {
+    const section = SECTIONS.revision;
+    const state = boothState();
+    await titleCard(section);
+    await enter(section, base.STUDENT.email, `/app/submissions/${state.submissionId}`);
+    await page.evaluate(() => document.fonts.ready);
+    await rec.start('revision');
+    await sleep(500);
     await s.click('[data-testid="submission-revise-essay"]', { after: 0 });
     await page.waitForURL(/\/app\/revise\//);
     await page.waitForLoadState('networkidle');
-    await sleep(1200);
-    await s.click('[data-testid="revision-feedback-tab-comments"]', { after: 1600 });
+    await page.evaluate(() => document.fonts.ready);
+    await sleep(900);
+    await s.dockCaption('[data-testid="revision-draft-pane"]');
+    await s.caption(VO.revision.open, { hold: false });
+    await s.callout('[data-testid="revision-graded-pane"]', { ...VO.revision.panes, side: 'right', dim: false, holdMs: 4600 });
+    await s.clearCallout();
+
+    // The feedback panel: the grade, then her teacher's note.
+    await s.caption(VO.revision.feedback, { hold: false });
+    await s.click('[data-testid="revision-feedback-tab-grade"]', { after: 600 });
+    await s.callout('[data-testid="revision-feedback-panel"]', { ...VO.revision.gradeTab, side: 'right', dim: false, holdMs: 4000 });
+    await s.clearCallout();
+    await s.caption(VO.revision.comments, { hold: false });
+    await s.click('[data-testid="revision-feedback-tab-comments"]', { after: 700 });
+    const note = page.locator('[data-testid="revision-feedback-panel"]').getByText(copy.MARGIN_COMMENT).first();
+    if (await note.count()) await s.click(note, { after: 2200 });
 
     const draft = page.locator('[data-testid="revision-draft-pane"] .ProseMirror');
     await draft.waitFor();
+    await s.caption(VO.revision.rewrite, { hold: false });
     await s.moveTo(draft.getByText(base.WEAK_ANALYSIS, { exact: false }));
     await s.select(draft, base.WEAK_ANALYSIS);
     await sleep(700);
     await page.keyboard.type(base.REVISED_ANALYSIS, { delay: 10 });
     await sleep(400);
-    await s.callout(draft.getByText('protection', { exact: false }), { ...VO.feedback.reviseCallout, dim: false, holdMs: 4400 });
+    await s.callout(draft.getByText('protection', { exact: false }), { ...VO.revision.reviseCallout, dim: false, holdMs: 4400 });
     await s.clearCallout();
 
-    await s.caption(VO.feedback.splice, { hold: false });
+    await s.caption(VO.revision.grammar, { hold: false });
     await s.click('[data-testid="revision-feedback-tab-grammar"]', { after: 1000 });
     const spliceNote = page.locator('[data-testid^="revision-assistant-note-"]').filter({ hasText: 'Comma splice' }).first();
-    if (await spliceNote.count()) await s.click(spliceNote, { after: 900 });
+    if (await spliceNote.count()) await s.click(spliceNote, { after: 1200 });
+    await s.caption(VO.revision.splice, { hold: false });
     await s.moveTo(draft.getByText(copy.SPLICE_FIX.from, { exact: false }), 600);
     await s.select(draft, copy.SPLICE_FIX.from);
     await sleep(500);
     await page.keyboard.type(copy.SPLICE_FIX.to, { delay: 40 });
-    await sleep(900);
+    await sleep(1000);
 
     await s.click('[data-testid="revision-submit"]', { after: 700 });
     await s.click('[data-testid="revision-submit-confirm"]', { after: 900 });
-    await s.caption(VO.feedback.submit);
+    await s.dockCaption(null);
+    await s.caption(VO.revision.submit);
     await rec.stop();
     await s.clearCaption();
   },
@@ -445,7 +476,24 @@ const segments = {
     await s.caption(VO.version2.release, { hold: false });
     await s.click(page.getByRole('button', { name: 'Save', exact: true }).last(), { after: 1000 });
     await s.click(page.getByRole('button', { name: 'Release Grade' }).first(), { after: 600 });
-    await s.click(page.getByRole('alertdialog').getByRole('button', { name: 'Release' }), { after: 2200 });
+    await s.click(page.getByRole('alertdialog').getByRole('button', { name: 'Release' }), { after: 1600 });
+    await rec.stop();
+    await s.clearCaption();
+
+    // Maya's side: the new grade, and both versions in her record.
+    await loginAs(context, base.STUDENT.email);
+    await go(page, `/app/documents/${state.documentId}`);
+    await page.waitForURL(/\/app\/submissions\//);
+    await page.evaluate(() => document.fonts.ready);
+    await s.dockCaption(null);
+    await rec.start('version2-student');
+    await s.caption(VO.version2.student, { hold: false });
+    await sleep(2200);
+    await s.click('[data-testid="submission-version-menu"]', { after: 700 });
+    await s.callout(page.getByRole('menu').first(), { ...VO.version2.versions, side: 'right', dim: false, holdMs: 4800 });
+    await s.clearCallout();
+    await page.keyboard.press('Escape');
+    await sleep(600);
     await rec.stop();
     await s.clearCaption();
   },
@@ -532,7 +580,7 @@ const segments = {
   },
 };
 
-const order = ['open', 'setup', 'document', 'steps', 'teacherSees', 'grading', 'feedback', 'version2', 'summary', 'reporter', 'close'];
+const order = ['open', 'setup', 'document', 'steps', 'teacherSees', 'grading', 'feedback', 'revision', 'version2', 'summary', 'reporter', 'close'];
 try {
   for (const name of order) {
     if (only && !only.includes(name)) continue;
