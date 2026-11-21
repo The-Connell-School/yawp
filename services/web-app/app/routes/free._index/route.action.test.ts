@@ -138,7 +138,7 @@ describe('free._index action', () => {
     });
   });
 
-  test('bypass event token budget failure does not send a release email', async () => {
+  test('bypass event token budget failure falls back to the waitlist without a release email', async () => {
     redeemToken.mockResolvedValueOnce({ ok: false, reason: 'budget_exceeded' });
     const form = new FormData();
     form.set('intent', 'redeem');
@@ -155,9 +155,12 @@ describe('free._index action', () => {
       context: {},
     } as never);
 
-    expect(result).toEqual({ ok: false, error: 'budget_exceeded' });
+    expect(result).toEqual({ ok: true });
+    expect(submitWaitlist).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'invited@school.example', gradeLevel: '10' })
+    );
     expect(sendReleaseEmailsForApplicationIds).not.toHaveBeenCalled();
-  });  test('bypass event token cap-full failure does not send a release email', async () => {
+  });  test('bypass event token cap-full failure falls back to the waitlist without a release email', async () => {
     redeemToken.mockResolvedValueOnce({ ok: false, reason: 'cap_reached' });
     const form = new FormData();
     form.set('intent', 'redeem');
@@ -174,7 +177,10 @@ describe('free._index action', () => {
       context: {},
     } as never);
 
-    expect(result).toEqual({ ok: false, error: 'cap_reached' });
+    expect(result).toEqual({ ok: true });
+    expect(submitWaitlist).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'invited@school.example', gradeLevel: '10' })
+    );
     expect(sendReleaseEmailsForApplicationIds).not.toHaveBeenCalled();
   });
 });

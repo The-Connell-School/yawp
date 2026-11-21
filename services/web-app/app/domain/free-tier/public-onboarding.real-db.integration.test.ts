@@ -65,76 +65,51 @@ afterAll(async () => {
   }
   await prisma.$disconnect();
 });
-describe.serial('public decline by path', () => {
+describe.serial('elementary grades join the waitlist by path', () => {
 for (const path of paths) {
-  local(`${path}: decline has no admission side effects, duplicates preserve first write and later eligible/off cannot admit`, async () => {
+  local(`${path}: grade 5 lands on the waitlist (LEAD) with no account, email or decline`, async () => {
     await flag('true');
-    const event = await fixture(path);
+    const event = await fixture(path, { bypassWaitlist: false });
     const fields = { ...input(path), ...(path === 'waitlist' ? {} : { token: event.code!, intent: 'redeem' }) };
     // JSON token rejects unknown intent, while form owns it.
     if (path === 'token') delete (fields as any).intent;
     const first = await post(path, { ...fields, email: fields.email.toUpperCase() });
-    if (path === 'free') {
-      expect(first.body).toMatchObject({ ok: true, declined: true });
-      expect(typeof (first.body as { applicationId?: string }).applicationId).toBe(
-        'string'
-      );
-    } else {
-      expect(first.body).toEqual({ ok: true });
-    }
+    expect(first.body).toMatchObject({ ok: true });
+    expect(first.body).not.toHaveProperty('declined');
     const row = await prisma.freeTierApplication.findUniqueOrThrow({ where: { email: fields.email } });
-    expect(row).toMatchObject({ status: 'REJECTED', tags: ['below-hs'], userId: null, organizationId: null, releasedAt: null, acquisitionTokenId: path === 'waitlist' ? null : event.id, releaseEmailCopyVersion: null });
+    expect(row).toMatchObject({ status: 'LEAD', gradeLevel: '5', userId: null, organizationId: null, releasedAt: null, acquisitionTokenId: path === 'waitlist' ? null : event.id });
+    expect(row.tags).not.toContain('below-hs');
     expect(await prisma.freeTierEmailLog.count({ where: { applicationId: row.id } })).toBe(0);
     expect(await prisma.freeTierAdminApproval.count({ where: { applicationId: row.id } })).toBe(0);
-    expect(await prisma.freeTierSignedLink.count({ where: { applicationId: row.id } })).toBe(0);
     expect(await prisma.user.count({ where: { email: fields.email } })).toBe(0);
-    const repeats = await Promise.all([post(path, { ...fields, name: 'Changed' }), post(path, fields)]);
-    for (const repeat of repeats)
-      expect(repeat.body).toMatchObject(
-        path === 'free' ? { ok: true, declined: true } : { ok: true }
-      );
-    const promotion = { ...fields, gradeLevel: '11' };
-    expect((await post(path, promotion)).body.ok).toBe(true);
-    await flag('false');
-    const flagOffPost = await post(path, promotion);
-    if (path === 'free') expect(flagOffPost.status).toBe(404);
-    else expect(flagOffPost.body.ok).toBe(true);
+    // Duplicates never overwrite the first write.
+    await post(path, { ...fields, name: 'Changed' });
     expect(await prisma.freeTierApplication.findUniqueOrThrow({ where: { id: row.id } })).toEqual(row);
-    expect((await prisma.acquisitionToken.findUniqueOrThrow({ where: { id: event.id } })).uses).toBe(0);
-    expect((await releaseBatch({ applicationIds: [row.id] })).released).toBe(0);
     expect(transport).not.toHaveBeenCalled();
   });
 }
 });
-for (const path of paths) {
-  local(`${path}: an existing eligible application remains unchanged under a decline submission`, async () => {
+for (const gradeLevel of ['K', '1', '2', '3', '4'] as const) {
+  local(`waitlist grade ${gradeLevel} creates LEAD like every other grade`, async () => {
     await flag('true');
-    const fields = input(path + '-existing');
-    const row = await prisma.freeTierApplication.create({ data: { ...fields, gradeLevel: '11', status: 'INVITED', tags: ['existing'], releasedAt: new Date() } });
-    const event = await fixture(path + '-existing');
-    const body = { ...fields, ...(path === 'waitlist' ? {} : { token: event.code! }), ...(path === 'free' ? { intent: 'redeem' } : {}) };
-    const declined = (await post(path, body)).body;
-    if (path === 'free') {
-      expect(declined).toMatchObject({ ok: true, declined: true });
-      expect(typeof (declined as { applicationId?: string }).applicationId).toBe(
-        'string'
-      );
-    } else {
-      expect(declined).toEqual({ ok: true });
-    }
-    expect(await prisma.freeTierApplication.findUniqueOrThrow({ where: { id: row.id } })).toEqual(row);
-    expect((await prisma.acquisitionToken.findUniqueOrThrow({ where: { id: event.id } })).uses).toBe(0);
+    const fields = input(`es-${gradeLevel}`, gradeLevel);
+    expect((await post('waitlist', fields)).body).toEqual({ ok: true });
+    const row = await prisma.freeTierApplication.findUniqueOrThrow({ where: { email: fields.email } });
+    expect(row).toMatchObject({ status: 'LEAD', gradeLevel });
+    expect(row.tags).not.toContain('below-hs');
   });
 }
 for (const path of ['free', 'token'] as const) {
-  for (const state of ['invalid', 'disabled', 'expired', 'full'] as const) local(`${path}: ${state} credential cannot persist a decline`, async () => {
+  for (const state of ['invalid', 'disabled', 'expired', 'full'] as const) local(`${path}: ${state} credential falls back to the plain waitlist`, async () => {
     await flag('true');
     const event = await fixture(path + state, state === 'disabled' ? { disabledAt: new Date() } : state === 'expired' ? { expiresAt: new Date(0) } : state === 'full' ? { maxUses: 0 } : {});
     const fields = input(path + state);
     const result = await post(path, { ...fields, token: state === 'invalid' ? 'unknown-credential' : event.code!, ...(path === 'free' ? { intent: 'redeem' } : {}) });
-    expect(result.body.ok).not.toBe(true);
-    expect(await prisma.freeTierApplication.count({ where: { email: fields.email } })).toBe(0);
+    expect(result.body.ok).toBe(true);
+    const row = await prisma.freeTierApplication.findUniqueOrThrow({ where: { email: fields.email } });
+    expect(row).toMatchObject({ status: 'LEAD', acquisitionTokenId: null, releasedAt: null, userId: null });
     expect((await prisma.acquisitionToken.findUniqueOrThrow({ where: { id: event.id } })).uses).toBe(0);
+    expect(transport).not.toHaveBeenCalled();
   });
 }
 for (const gradeLevel of ['6', '7', '8'] as const) {
@@ -156,13 +131,3 @@ for (const gradeLevel of ['6', '7', '8'] as const) {
     expect(row.status).not.toBe('REJECTED');
   });
 }
-
-local('organic first-write provenance stays organic after a later event decline', async () => {
-  await flag('true');
-  const fields = input('organic-first');
-  await post('waitlist', fields);
-  const row = await prisma.freeTierApplication.findUniqueOrThrow({ where: { email: fields.email } });
-  const event = await fixture('later-event');
-  await post('token', { ...fields, token: event.code! });
-  expect(await prisma.freeTierApplication.findUniqueOrThrow({ where: { id: row.id } })).toEqual(row);
-});

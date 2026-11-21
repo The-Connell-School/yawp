@@ -673,7 +673,7 @@ function runTestProfile(profile, { json }) {
     }) });
   }
   else if (chosen === "free-tier-welcome-unit") {
-    for (const file of ["app/domain/free-tier/email-copy.server.test.ts", "app/domain/free-tier/release-email-v2.test.ts", "app/domain/free-tier/public-onboarding.route.test.ts", "app/routes/free._index/route.action.test.ts", "app/routes/free._index/route.loader.test.ts", "app/routes/free._index/route.denial.test.tsx", "app/routes/free._index/route.success-copy.test.ts", "app/routes/api.free-tier.token/route.test.ts"]) runWebApp(file, ["test", file]);
+    for (const file of ["app/domain/free-tier/email-copy.server.test.ts", "app/domain/free-tier/release-email-v2.test.ts", "app/domain/free-tier/public-onboarding.route.test.ts", "app/routes/free._index/route.action.test.ts", "app/routes/free._index/route.loader.test.ts", "app/routes/free._index/route.success-copy.test.ts", "app/routes/api.free-tier.token/route.test.ts"]) runWebApp(file, ["test", file]);
   }
   else if (chosen === "free-tier-welcome-db") {
     const local = requireConfig();

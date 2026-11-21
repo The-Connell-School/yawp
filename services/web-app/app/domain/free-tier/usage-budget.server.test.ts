@@ -8,6 +8,7 @@ import {
   FreeTierSpendGuardDeniedError,
   freeTierBudgetRemainingActivations,
   resolveFreeTierBudgetBasis,
+  FREE_TIER_UNCAPPED,
 } from './usage-budget.server';
 
 for (const [label, count, budget, unitCost, denied] of [
@@ -157,5 +158,24 @@ describe('free-tier usage budget', () => {
         FREE_TIER_PREVIEW_UNIT_COST_USD: '1',
       })
     ).rejects.toBeInstanceOf(FreeTierSpendGuardDeniedError);
+  });
+});
+
+describe('production has no hidden activation cap', () => {
+  test('production defaults to an uncapped budget; demo and preview keep $250', () => {
+    expect(resolveFreeTierBudgetBasis({ FREE_TIER_BUDGET_ENVIRONMENT: 'production' }).budgetUsd).toBe(FREE_TIER_UNCAPPED);
+    expect(resolveFreeTierBudgetBasis({ FREE_TIER_BUDGET_ENVIRONMENT: 'demo' }).budgetUsd).toBe(250);
+    expect(resolveFreeTierBudgetBasis({ FREE_TIER_BUDGET_ENVIRONMENT: 'preview' }).budgetUsd).toBe(250);
+    expect(resolveFreeTierBudgetBasis({ NODE_ENV: 'production' }).budgetUsd).toBe(FREE_TIER_UNCAPPED);
+  });
+
+  test('an explicit production budget still applies', () => {
+    expect(resolveFreeTierBudgetBasis({ FREE_TIER_BUDGET_ENVIRONMENT: 'production', FREE_TIER_PRODUCTION_BUDGET_USD: '500' }).budgetUsd).toBe(500);
+  });
+
+  test('a thousand active teachers do not trip the production spend guard by default', async () => {
+    const client = { freeTierApplication: { count: async () => 1000 } };
+    expect((await assertFreeTierSpendAllowed(client as any, { NODE_ENV: 'production' })).overBudget).toBe(false);
+    expect((await assertFreeTierBudgetHeadroom(client as any, { NODE_ENV: 'production' })).overBudget).toBe(false);
   });
 });
