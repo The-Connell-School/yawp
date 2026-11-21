@@ -47,6 +47,11 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   variant?: ButtonVariant;
   size?: ButtonSize;
   block?: boolean;
+  /**
+   * Let a long label run onto more lines (height grows) instead of staying on
+   * one line and spilling past a narrow card.
+   */
+  wrap?: boolean;
   asChild?: boolean;
   loading?: boolean;
   /** @deprecated Use `loading` */
@@ -61,12 +66,14 @@ export function buttonClassNames({
   variant = 'default',
   size = 'default',
   block,
+  wrap,
   success,
   className,
 }: {
   variant?: ButtonVariant;
   size?: ButtonSize;
   block?: boolean;
+  wrap?: boolean;
   success?: boolean;
   className?: string;
 }) {
@@ -78,6 +85,7 @@ export function buttonClassNames({
     variantClass[variant],
     sizeClass[size],
     block && 'btn--block',
+    wrap && 'btn--wrap',
     success && 'is-success',
     className
   );
@@ -102,6 +110,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
     variant = 'default',
     size = 'default',
     block,
+    wrap,
     asChild,
     loading,
     isLoading,
@@ -139,7 +148,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
         else if (ref) ref.current = node;
       }}
       type={asChild ? undefined : (type ?? 'button')}
-      className={buttonClassNames({ variant, size, block, success, className })}
+      className={buttonClassNames({ variant, size, block, wrap, success, className })}
       style={minWidth ? { ...style, minWidth } : style}
       disabled={disabled}
       aria-disabled={inert || undefined}
