@@ -7,7 +7,7 @@ function render(props: Partial<Parameters<typeof DailyPagesCard>[0]> = {}) {
   return renderToStaticMarkup(
     <MemoryRouter>
       <DailyPagesCard
-        exercise={{ kind: 'class-starter', prompt: 'What do people avoid saying out loud?' }}
+        exercise={{ kind: 'class-starter', prompt: 'What do people avoid saying out loud?', promptId: null }}
         assignmentTypeId="daily_1"
         classStarterTypeId="starter_1"
         onToggle={() => {}}
