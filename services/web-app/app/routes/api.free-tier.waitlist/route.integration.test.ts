@@ -108,9 +108,12 @@ suite('/api/free-tier/token', () => {
     expect(JSON.stringify(a)).not.toMatch(/status|applicationId|id"/);
   });
 
-  test('bad token statuses and the GET validator', async () => {
+  test('an unknown token falls back to the waitlist; the GET validator still reports it', async () => {
     const res = await tpost({ ...body('x3'), token: 'does-not-exist' });
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, bypassWaitlist: false });
+    const row = await prisma!.freeTierApplication.findUnique({ where: { email: `ft-${run}-x3@school.example` } });
+    expect(row).toMatchObject({ status: 'LEAD', acquisitionTokenId: null });
     const get = (t: string) => tk!.loader({ request: new Request(`https://yawp.school/api/free-tier/token?token=${t}`, { headers: { 'x-forwarded-for': `${freshIp()}, ${EDGE}` } }), params: {}, context: {} } as never) as Promise<Response>;
     expect((await get('nope')).status).toBe(404);
     expect((await get('')).status).toBe(400);
