@@ -81,7 +81,11 @@ type Fetch = typeof fetch;
 /** Where found pictures are kept: this lesson's, and any kept before for the same subject. */
 export type PictureShelf = {
   /** The newest picture kept for each of these subjects, by anyone: they are open pictures. */
-  findKept(keys: string[]): Promise<Array<{ key: string; id: string }>>;
+  findKept(
+    keys: string[]
+  ): Promise<
+    Array<{ key: string; id: string; credit?: string; altText?: string }>
+  >;
   /** That picture again, as this lesson's own. */
   copy(id: string, owner: Owner): Promise<{ id: string }>;
   create(
@@ -378,7 +382,14 @@ export async function resolveDeckPictures<T extends SlideDeck>(
   const work = (async () => {
     const keys = wanted.map((want) => pictureKey(want.subject));
     // Kept before, for anyone: no request at all.
-    const kept = await deps.shelf.findKept(keys).catch(() => []);
+    // A picture kept before today's rules is held to them again (Night, Nov
+    // 22: a disputed-copyright file and the Auschwitz ramp were on the shelf).
+    const kept = (await deps.shelf.findKept(keys).catch(() => [])).filter(
+      (row) =>
+        !FOR_THE_TEACHER.test(
+          `${row.key} ${row.altText ?? ''} ${row.credit ?? ''}`
+        ) && !/copyright claims?/i.test(row.credit ?? '')
+    );
     await Promise.all(
       kept.map(async (row) => {
         if (ids.has(row.key)) return;

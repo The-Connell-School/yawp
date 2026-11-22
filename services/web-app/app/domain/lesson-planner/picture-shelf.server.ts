@@ -14,10 +14,19 @@ export const pictureShelf: PictureShelf = {
       where: { origin: 'found', subject: { in: keys } },
       orderBy: { createdAt: 'desc' },
       distinct: ['subject'],
-      select: { id: true, subject: true },
+      select: { id: true, subject: true, credit: true, altText: true },
     });
     return rows.flatMap((row) =>
-      row.subject ? [{ key: row.subject, id: row.id }] : []
+      row.subject
+        ? [
+            {
+              key: row.subject,
+              id: row.id,
+              credit: row.credit ?? '',
+              altText: row.altText ?? '',
+            },
+          ]
+        : []
     );
   },
   async copy(id, owner) {

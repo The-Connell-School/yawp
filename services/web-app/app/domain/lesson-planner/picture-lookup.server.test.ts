@@ -301,7 +301,14 @@ function wikipedia(overrides: { pagesStatus?: number; hang?: RegExp } = {}) {
   return { fetcher, calls };
 }
 
-function shelf(kept: Array<{ key: string; id: string }> = []): PictureShelf & {
+function shelf(
+  kept: Array<{
+    key: string;
+    id: string;
+    credit?: string;
+    altText?: string;
+  }> = []
+): PictureShelf & {
   created: Array<Record<string, unknown>>;
   copied: string[];
 } {
@@ -829,6 +836,39 @@ describe('the second look (Nov 22, night)', () => {
     // The article's own picture is never even fetched; the other is stopped by its description.
     expect(calls.some((url) => url.includes('Ramp'))).toBe(false);
     expect(seen).not.toContain('The Holocaust');
+  });
+
+  test('a picture kept before today’s rules is held to them again: never reused, looked up afresh', async () => {
+    const db = shelf([
+      {
+        key: 'giuseppe garibaldi',
+        id: 'ckkept0000001',
+        credit:
+          'Note: one or more third parties have made copyright claims against Wikimedia Commons',
+      },
+      {
+        key: 'mary shelley',
+        id: 'ckkept0000002',
+        altText: 'Prisoners at Auschwitz',
+      },
+      {
+        key: 'allen ginsberg',
+        id: 'ckkept0000003',
+        credit: 'Hans van Dijk, CC0',
+      },
+    ]);
+    const result = await resolveDeckPictures(DECK, owner, {
+      fetch: wikipedia().fetcher,
+      shelf: db,
+    });
+    expect(db.copied).toEqual(['ckkept0000003']);
+    expect(result.counts.reused).toBe(1);
+    // The other two were found again, the way any new picture is.
+    expect(db.created.map((row) => row.subject).sort()).toEqual([
+      'giuseppe garibaldi',
+      'mary shelley',
+      'risorgimento',
+    ]);
   });
 
   test('a look that fails keeps nothing: a picture is kept only on its word (Night, Nov 22)', async () => {
